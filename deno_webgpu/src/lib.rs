@@ -16,7 +16,6 @@ use std::convert::TryFrom;
 use std::rc::Rc;
 pub use wgpu_core;
 pub use wgpu_types;
-use wgpu_types::PowerPreference;
 
 use error::DomExceptionOperationError;
 use error::WebGpuResult;
@@ -202,13 +201,6 @@ fn deserialize_features(features: &wgpu_types::Features) -> Vec<&'static str> {
     return_features
 }
 
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct RequestAdapterArgs {
-    power_preference: Option<wgpu_types::PowerPreference>,
-    force_fallback_adapter: bool,
-}
-
 #[derive(Serialize)]
 #[serde(untagged)]
 pub enum GpuAdapterDeviceOrErr {
@@ -229,7 +221,8 @@ pub struct GpuAdapterDevice {
 #[op]
 pub async fn op_webgpu_request_adapter(
     state: Rc<RefCell<OpState>>,
-    args: RequestAdapterArgs,
+    power_preference: Option<wgpu_types::PowerPreference>,
+    force_fallback_adapter: bool,
 ) -> Result<GpuAdapterDeviceOrErr, AnyError> {
     let mut state = state.borrow_mut();
     check_unstable(&state, "navigator.gpu.requestAdapter");
@@ -250,11 +243,8 @@ pub async fn op_webgpu_request_adapter(
     };
 
     let descriptor = wgpu_core::instance::RequestAdapterOptions {
-        power_preference: match args.power_preference {
-            Some(power_preference) => power_preference,
-            None => PowerPreference::default(),
-        },
-        force_fallback_adapter: args.force_fallback_adapter,
+        power_preference: power_preference.unwrap_or_default(),
+        force_fallback_adapter,
         compatible_surface: None, // windowless
     };
     let res = instance.request_adapter(
@@ -284,15 +274,6 @@ pub async fn op_webgpu_request_adapter(
         limits: adapter_limits,
         is_software: false,
     }))
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct RequestDeviceArgs {
-    adapter_rid: ResourceId,
-    label: Option<String>,
-    required_features: Option<GpuRequiredFeatures>,
-    required_limits: Option<wgpu_types::Limits>,
 }
 
 #[derive(Deserialize)]
@@ -409,19 +390,20 @@ impl From<GpuRequiredFeatures> for wgpu_types::Features {
 #[op]
 pub async fn op_webgpu_request_device(
     state: Rc<RefCell<OpState>>,
-    args: RequestDeviceArgs,
+    adapter_rid: ResourceId,
+    label: Option<String>,
+    required_features: Option<GpuRequiredFeatures>,
+    required_limits: Option<wgpu_types::Limits>,
 ) -> Result<GpuAdapterDevice, AnyError> {
     let mut state = state.borrow_mut();
-    let adapter_resource = state
-        .resource_table
-        .get::<WebGpuAdapter>(args.adapter_rid)?;
+    let adapter_resource = state.resource_table.get::<WebGpuAdapter>(adapter_rid)?;
     let adapter = adapter_resource.0;
     let instance = state.borrow::<Instance>();
 
     let descriptor = wgpu_types::DeviceDescriptor {
-        label: args.label.map(Cow::from),
-        features: args.required_features.map(Into::into).unwrap_or_default(),
-        limits: args.required_limits.map(Into::into).unwrap_or_default(),
+        label: label.map(Cow::from),
+        features: required_features.map(Into::into).unwrap_or_default(),
+        limits: required_limits.map(Into::into).unwrap_or_default(),
     };
 
     let (device, maybe_err) = gfx_select!(adapter => instance.adapter_request_device(

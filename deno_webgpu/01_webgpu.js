@@ -196,7 +196,8 @@
 
       const { err, ...data } = await core.opAsync(
         "op_webgpu_request_adapter",
-        { ...options },
+        options.powerPreference,
+        options.forceFallbackAdapter,
       );
 
       if (err) {
@@ -295,12 +296,10 @@
 
       const { rid, features, limits } = await core.opAsync(
         "op_webgpu_request_device",
-        {
-          adapterRid: this[_adapter].rid,
-          label: descriptor.label,
-          requiredFeatures,
-          requiredLimits,
-        },
+        this[_adapter].rid,
+        descriptor.label,
+        requiredFeatures,
+        requiredLimits,
       );
 
       const inner = new InnerGPUDevice({
@@ -838,10 +837,14 @@
         context: "Argument 1",
       });
       const device = assertDevice(this, { prefix, context: "this" });
-      const { rid, err } = core.opSync("op_webgpu_create_buffer", {
-        deviceRid: device.rid,
-        ...descriptor,
-      });
+      const { rid, err } = core.opSync(
+        "op_webgpu_create_buffer",
+        device.rid,
+        descriptor.label,
+        descriptor.size,
+        descriptor.usage,
+        descriptor.mappedAtCreation,
+      );
       device.pushError(err);
       /** @type {CreateGPUBufferOptions} */
       let options;
@@ -955,10 +958,9 @@
 
       const { rid, err } = core.opSync(
         "op_webgpu_create_bind_group_layout",
-        {
-          deviceRid: device.rid,
-          ...descriptor,
-        },
+        device.rid,
+        descriptor.label,
+        descriptor.entries,
       );
       device.pushError(err);
 
@@ -997,11 +999,12 @@
           return rid;
         },
       );
-      const { rid, err } = core.opSync("op_webgpu_create_pipeline_layout", {
-        deviceRid: device.rid,
-        label: descriptor.label,
+      const { rid, err } = core.opSync(
+        "op_webgpu_create_pipeline_layout",
+        device.rid,
+        descriptor.label,
         bindGroupLayouts,
-      });
+      );
       device.pushError(err);
 
       const pipelineLayout = createGPUPipelineLayout(
@@ -1122,12 +1125,10 @@
       const device = assertDevice(this, { prefix, context: "this" });
       const { rid, err } = core.opSync(
         "op_webgpu_create_shader_module",
-        {
-          deviceRid: device.rid,
-          label: descriptor.label,
-          code: descriptor.code,
-          sourceMap: descriptor.sourceMap,
-        },
+        device.rid,
+        descriptor.label,
+        descriptor.code,
+        descriptor.sourceMap,
       );
       device.pushError(err);
 
@@ -1175,15 +1176,13 @@
 
       const { rid, err } = core.opSync(
         "op_webgpu_create_compute_pipeline",
+        device.rid,
+        descriptor.label,
+        layout,
         {
-          deviceRid: device.rid,
-          label: descriptor.label,
-          layout,
-          compute: {
-            module,
-            entryPoint: descriptor.compute.entryPoint,
-            constants: descriptor.compute.constants,
-          },
+          module,
+          entryPoint: descriptor.compute.entryPoint,
+          constants: descriptor.compute.constants,
         },
       );
       device.pushError(err);
@@ -1294,10 +1293,11 @@
         context: "Argument 1",
       });
       const device = assertDevice(this, { prefix, context: "this" });
-      const { rid, err } = core.opSync("op_webgpu_create_command_encoder", {
-        deviceRid: device.rid,
-        ...descriptor,
-      });
+      const { rid, err } = core.opSync(
+        "op_webgpu_create_command_encoder",
+        device.rid,
+        descriptor.label,
+      );
       device.pushError(err);
 
       const commandEncoder = createGPUCommandEncoder(
@@ -1491,10 +1491,11 @@
           return rid;
         },
       );
-      const { err } = core.opSync("op_webgpu_queue_submit", {
-        queueRid: device.rid,
-        commandBuffers: commandBufferRids,
-      });
+      const { err } = core.opSync(
+        "op_webgpu_queue_submit",
+        device.rid,
+        commandBufferRids,
+      );
       for (const commandBuffer of commandBuffers) {
         commandBuffer[_rid] = undefined;
       }
@@ -1551,13 +1552,11 @@
       });
       const { err } = core.opSync(
         "op_webgpu_write_buffer",
-        {
-          queueRid: device.rid,
-          buffer: bufferRid,
-          bufferOffset,
-          dataOffset,
-          size,
-        },
+        device.rid,
+        bufferRid,
+        bufferOffset,
+        dataOffset,
+        size,
         new Uint8Array(ArrayBufferIsView(data) ? data.buffer : data),
       );
       device.pushError(err);
@@ -1601,19 +1600,17 @@
       });
       const { err } = core.opSync(
         "op_webgpu_write_texture",
+        device.rid,
         {
-          queueRid: device.rid,
-          destination: {
-            texture: textureRid,
-            mipLevel: destination.mipLevel,
-            origin: destination.origin
-              ? normalizeGPUOrigin3D(destination.origin)
-              : undefined,
-            aspect: destination.aspect,
-          },
-          dataLayout,
-          size: normalizeGPUExtent3D(size),
+          texture: textureRid,
+          mipLevel: destination.mipLevel,
+          origin: destination.origin
+            ? normalizeGPUOrigin3D(destination.origin)
+            : undefined,
+          aspect: destination.aspect,
         },
+        dataLayout,
+        normalizeGPUExtent3D(size),
         new Uint8Array(ArrayBufferIsView(data) ? data.buffer : data),
       );
       device.pushError(err);
@@ -1803,13 +1800,11 @@
       const promise = PromisePrototypeThen(
         core.opAsync(
           "op_webgpu_buffer_get_map_async",
-          {
-            bufferRid,
-            deviceRid: device.rid,
-            mode,
-            offset,
-            size: rangeSize,
-          },
+          bufferRid,
+          device.rid,
+          mode,
+          offset,
+          rangeSize,
         ),
         ({ err }) => err,
       );
@@ -1872,11 +1867,9 @@
       const buffer = new ArrayBuffer(rangeSize);
       const { rid } = core.opSync(
         "op_webgpu_buffer_get_mapped_range",
-        {
-          bufferRid,
-          offset,
-          size,
-        },
+        bufferRid,
+        offset,
+        size,
         new Uint8Array(buffer),
       );
 
@@ -1927,10 +1920,12 @@
           throw new DOMException(`${prefix}: invalid state.`, "OperationError");
         }
         for (const [buffer, mappedRid] of mappedRanges) {
-          const { err } = core.opSync("op_webgpu_buffer_unmap", {
+          const { err } = core.opSync(
+            "op_webgpu_buffer_unmap",
             bufferRid,
             mappedRid,
-          }, ...new SafeArrayIterator(write ? [new Uint8Array(buffer)] : []));
+            ...new SafeArrayIterator(write ? [new Uint8Array(buffer)] : []),
+          );
           device.pushError(err);
           if (err) return;
         }
@@ -2452,7 +2447,8 @@
       });
       const { rid, label, err } = core.opSync(
         "op_webgpu_compute_pipeline_get_bind_group_layout",
-        { computePipelineRid, index },
+        computePipelineRid,
+        index,
       );
       device.pushError(err);
 
@@ -2528,7 +2524,8 @@
       });
       const { rid, label, err } = core.opSync(
         "op_webgpu_render_pipeline_get_bind_group_layout",
-        { renderPipelineRid, index },
+        renderPipelineRid,
+        index,
       );
       device.pushError(err);
 
@@ -2723,12 +2720,10 @@
 
       const { rid } = core.opSync(
         "op_webgpu_command_encoder_begin_render_pass",
-        {
-          commandEncoderRid,
-          ...descriptor,
-          colorAttachments,
-          depthStencilAttachment,
-        },
+        commandEncoderRid,
+        descriptor.label,
+        colorAttachments,
+        depthStencilAttachment,
       );
 
       const renderPassEncoder = createGPURenderPassEncoder(
@@ -2760,10 +2755,8 @@
 
       const { rid } = core.opSync(
         "op_webgpu_command_encoder_begin_compute_pass",
-        {
-          commandEncoderRid,
-          ...descriptor,
-        },
+        commandEncoderRid,
+        descriptor.label,
       );
 
       const computePassEncoder = createGPUComputePassEncoder(
@@ -2839,14 +2832,12 @@
 
       const { err } = core.opSync(
         "op_webgpu_command_encoder_copy_buffer_to_buffer",
-        {
-          commandEncoderRid,
-          source: sourceRid,
-          sourceOffset,
-          destination: destinationRid,
-          destinationOffset,
-          size,
-        },
+        commandEncoderRid,
+        sourceRid,
+        sourceOffset,
+        destinationRid,
+        destinationOffset,
+        size,
       );
       device.pushError(err);
     }
@@ -2899,22 +2890,20 @@
 
       const { err } = core.opSync(
         "op_webgpu_command_encoder_copy_buffer_to_texture",
+        commandEncoderRid,
         {
-          commandEncoderRid,
-          source: {
-            ...source,
-            buffer: sourceBufferRid,
-          },
-          destination: {
-            texture: destinationTextureRid,
-            mipLevel: destination.mipLevel,
-            origin: destination.origin
-              ? normalizeGPUOrigin3D(destination.origin)
-              : undefined,
-            aspect: destination.aspect,
-          },
-          copySize: normalizeGPUExtent3D(copySize),
+          ...source,
+          buffer: sourceBufferRid,
         },
+        {
+          texture: destinationTextureRid,
+          mipLevel: destination.mipLevel,
+          origin: destination.origin
+            ? normalizeGPUOrigin3D(destination.origin)
+            : undefined,
+          aspect: destination.aspect,
+        },
+        normalizeGPUExtent3D(copySize),
       );
       device.pushError(err);
     }
@@ -2966,22 +2955,20 @@
       });
       const { err } = core.opSync(
         "op_webgpu_command_encoder_copy_texture_to_buffer",
+        commandEncoderRid,
         {
-          commandEncoderRid,
-          source: {
-            texture: sourceTextureRid,
-            mipLevel: source.mipLevel,
-            origin: source.origin
-              ? normalizeGPUOrigin3D(source.origin)
-              : undefined,
-            aspect: source.aspect,
-          },
-          destination: {
-            ...destination,
-            buffer: destinationBufferRid,
-          },
-          copySize: normalizeGPUExtent3D(copySize),
+          texture: sourceTextureRid,
+          mipLevel: source.mipLevel,
+          origin: source.origin
+            ? normalizeGPUOrigin3D(source.origin)
+            : undefined,
+          aspect: source.aspect,
         },
+        {
+          ...destination,
+          buffer: destinationBufferRid,
+        },
+        normalizeGPUExtent3D(copySize),
       );
       device.pushError(err);
     }
@@ -3033,26 +3020,24 @@
       });
       const { err } = core.opSync(
         "op_webgpu_command_encoder_copy_texture_to_texture",
+        commandEncoderRid,
         {
-          commandEncoderRid,
-          source: {
-            texture: sourceTextureRid,
-            mipLevel: source.mipLevel,
-            origin: source.origin
-              ? normalizeGPUOrigin3D(source.origin)
-              : undefined,
-            aspect: source.aspect,
-          },
-          destination: {
-            texture: destinationTextureRid,
-            mipLevel: destination.mipLevel,
-            origin: destination.origin
-              ? normalizeGPUOrigin3D(destination.origin)
-              : undefined,
-            aspect: source.aspect,
-          },
-          copySize: normalizeGPUExtent3D(copySize),
+          texture: sourceTextureRid,
+          mipLevel: source.mipLevel,
+          origin: source.origin
+            ? normalizeGPUOrigin3D(source.origin)
+            : undefined,
+          aspect: source.aspect,
         },
+        {
+          texture: destinationTextureRid,
+          mipLevel: destination.mipLevel,
+          origin: destination.origin
+            ? normalizeGPUOrigin3D(destination.origin)
+            : undefined,
+          aspect: source.aspect,
+        },
+        normalizeGPUExtent3D(copySize),
       );
       device.pushError(err);
     }
@@ -3089,12 +3074,10 @@
       });
       const { err } = core.opSync(
         "op_webgpu_command_encoder_clear_buffer",
-        {
-          commandEncoderRid,
-          bufferRid,
-          offset,
-          size,
-        },
+        commandEncoderRid,
+        bufferRid,
+        offset,
+        size,
       );
       device.pushError(err);
     }
@@ -3118,10 +3101,8 @@
       });
       const { err } = core.opSync(
         "op_webgpu_command_encoder_push_debug_group",
-        {
-          commandEncoderRid,
-          groupLabel,
-        },
+        commandEncoderRid,
+        groupLabel,
       );
       device.pushError(err);
     }
@@ -3136,9 +3117,7 @@
       });
       const { err } = core.opSync(
         "op_webgpu_command_encoder_pop_debug_group",
-        {
-          commandEncoderRid,
-        },
+        commandEncoderRid,
       );
       device.pushError(err);
     }
@@ -3162,10 +3141,8 @@
       });
       const { err } = core.opSync(
         "op_webgpu_command_encoder_insert_debug_marker",
-        {
-          commandEncoderRid,
-          markerLabel,
-        },
+        commandEncoderRid,
+        markerLabel,
       );
       device.pushError(err);
     }
@@ -3203,11 +3180,9 @@
       });
       const { err } = core.opSync(
         "op_webgpu_command_encoder_write_timestamp",
-        {
-          commandEncoderRid,
-          querySet: querySetRid,
-          queryIndex,
-        },
+        commandEncoderRid,
+        querySetRid,
+        queryIndex,
       );
       device.pushError(err);
     }
@@ -3275,14 +3250,12 @@
       });
       const { err } = core.opSync(
         "op_webgpu_command_encoder_resolve_query_set",
-        {
-          commandEncoderRid,
-          querySet: querySetRid,
-          firstQuery,
-          queryCount,
-          destination: destinationRid,
-          destinationOffset,
-        },
+        commandEncoderRid,
+        querySetRid,
+        firstQuery,
+        queryCount,
+        destinationRid,
+        destinationOffset,
       );
       device.pushError(err);
     }
@@ -3303,10 +3276,11 @@
         prefix,
         context: "this",
       });
-      const { rid, err } = core.opSync("op_webgpu_command_encoder_finish", {
+      const { rid, err } = core.opSync(
+        "op_webgpu_command_encoder_finish",
         commandEncoderRid,
-        ...descriptor,
-      });
+        descriptor.label,
+      );
       device.pushError(err);
       /** @type {number | undefined} */
       this[_rid] = undefined;
@@ -3451,13 +3425,14 @@
         context: "encoder referenced by this",
       });
       const renderPassRid = assertResource(this, { prefix, context: "this" });
-      core.opSync("op_webgpu_render_pass_set_scissor_rect", {
+      core.opSync(
+        "op_webgpu_render_pass_set_scissor_rect",
         renderPassRid,
         x,
         y,
         width,
         height,
-      });
+      );
     }
 
     /**
@@ -3481,10 +3456,11 @@
         context: "encoder referenced by this",
       });
       const renderPassRid = assertResource(this, { prefix, context: "this" });
-      core.opSync("op_webgpu_render_pass_set_blend_constant", {
+      core.opSync(
+        "op_webgpu_render_pass_set_blend_constant",
         renderPassRid,
-        color: normalizeGPUColor(color),
-      });
+        normalizeGPUColor(color),
+      );
     }
 
     /**
@@ -3508,10 +3484,11 @@
         context: "encoder referenced by this",
       });
       const renderPassRid = assertResource(this, { prefix, context: "this" });
-      core.opSync("op_webgpu_render_pass_set_stencil_reference", {
+      core.opSync(
+        "op_webgpu_render_pass_set_stencil_reference",
         renderPassRid,
         reference,
-      });
+      );
     }
 
     beginOcclusionQuery(_queryIndex) {
@@ -3557,11 +3534,12 @@
         resourceContext: "Argument 1",
         selfContext: "this",
       });
-      core.opSync("op_webgpu_render_pass_begin_pipeline_statistics_query", {
+      core.opSync(
+        "op_webgpu_render_pass_begin_pipeline_statistics_query",
         renderPassRid,
-        querySet: querySetRid,
+        querySetRid,
         queryIndex,
-      });
+      );
     }
 
     endPipelineStatisticsQuery() {
@@ -3577,9 +3555,10 @@
         context: "encoder referenced by this",
       });
       const renderPassRid = assertResource(this, { prefix, context: "this" });
-      core.opSync("op_webgpu_render_pass_end_pipeline_statistics_query", {
+      core.opSync(
+        "op_webgpu_render_pass_end_pipeline_statistics_query",
         renderPassRid,
-      });
+      );
     }
 
     /**
@@ -3617,11 +3596,12 @@
         resourceContext: "Argument 1",
         selfContext: "this",
       });
-      core.opSync("op_webgpu_render_pass_write_timestamp", {
+      core.opSync(
+        "op_webgpu_render_pass_write_timestamp",
         renderPassRid,
-        querySet: querySetRid,
+        querySetRid,
         queryIndex,
-      });
+      );
     }
 
     /**
@@ -3655,10 +3635,11 @@
         });
         return rid;
       });
-      core.opSync("op_webgpu_render_pass_execute_bundles", {
+      core.opSync(
+        "op_webgpu_render_pass_execute_bundles",
         renderPassRid,
-        bundles: bundleRids,
-      });
+        bundleRids,
+      );
     }
 
     end() {
@@ -3673,10 +3654,11 @@
         context: "encoder referenced by this",
       });
       const renderPassRid = assertResource(this, { prefix, context: "this" });
-      const { err } = core.opSync("op_webgpu_render_pass_end", {
+      const { err } = core.opSync(
+        "op_webgpu_render_pass_end",
         commandEncoderRid,
         renderPassRid,
-      });
+      );
       device.pushError(err);
       this[_rid] = undefined;
     }
@@ -3720,14 +3702,15 @@
         dynamicOffsetsDataStart = 0;
         dynamicOffsetsDataLength = dynamicOffsetsData.length;
       }
-      core.opSync("op_webgpu_render_pass_set_bind_group", {
+      core.opSync(
+        "op_webgpu_render_pass_set_bind_group",
         renderPassRid,
         index,
-        bindGroup: bindGroupRid,
+        bindGroupRid,
         dynamicOffsetsData,
         dynamicOffsetsDataStart,
         dynamicOffsetsDataLength,
-      });
+      );
     }
 
     /**
@@ -3751,10 +3734,11 @@
         context: "encoder referenced by this",
       });
       const renderPassRid = assertResource(this, { prefix, context: "this" });
-      core.opSync("op_webgpu_render_pass_push_debug_group", {
+      core.opSync(
+        "op_webgpu_render_pass_push_debug_group",
         renderPassRid,
         groupLabel,
-      });
+      );
     }
 
     popDebugGroup() {
@@ -3770,9 +3754,7 @@
         context: "encoder referenced by this",
       });
       const renderPassRid = assertResource(this, { prefix, context: "this" });
-      core.opSync("op_webgpu_render_pass_pop_debug_group", {
-        renderPassRid,
-      });
+      core.opSync("op_webgpu_render_pass_pop_debug_group", renderPassRid);
     }
 
     /**
@@ -3796,10 +3778,11 @@
         context: "encoder referenced by this",
       });
       const renderPassRid = assertResource(this, { prefix, context: "this" });
-      core.opSync("op_webgpu_render_pass_insert_debug_marker", {
+      core.opSync(
+        "op_webgpu_render_pass_insert_debug_marker",
         renderPassRid,
         markerLabel,
-      });
+      );
     }
 
     /**
@@ -3832,10 +3815,11 @@
         resourceContext: "Argument 1",
         selfContext: "this",
       });
-      core.opSync("op_webgpu_render_pass_set_pipeline", {
+      core.opSync(
+        "op_webgpu_render_pass_set_pipeline",
         renderPassRid,
-        pipeline: pipelineRid,
-      });
+        pipelineRid,
+      );
     }
 
     /**
@@ -3885,13 +3869,14 @@
         resourceContext: "Argument 1",
         selfContext: "this",
       });
-      core.opSync("op_webgpu_render_pass_set_index_buffer", {
+      core.opSync(
+        "op_webgpu_render_pass_set_index_buffer",
         renderPassRid,
-        buffer: bufferRid,
+        bufferRid,
         indexFormat,
         offset,
         size,
-      });
+      );
     }
 
     /**
@@ -3941,13 +3926,14 @@
         resourceContext: "Argument 2",
         selfContext: "this",
       });
-      core.opSync("op_webgpu_render_pass_set_vertex_buffer", {
+      core.opSync(
+        "op_webgpu_render_pass_set_vertex_buffer",
         renderPassRid,
         slot,
-        buffer: bufferRid,
+        bufferRid,
         offset,
         size,
-      });
+      );
     }
 
     /**
@@ -3985,13 +3971,14 @@
         context: "encoder referenced by this",
       });
       const renderPassRid = assertResource(this, { prefix, context: "this" });
-      core.opSync("op_webgpu_render_pass_draw", {
+      core.opSync(
+        "op_webgpu_render_pass_draw",
         renderPassRid,
         vertexCount,
         instanceCount,
         firstVertex,
         firstInstance,
-      });
+      );
     }
 
     /**
@@ -4041,14 +4028,15 @@
         context: "encoder referenced by this",
       });
       const renderPassRid = assertResource(this, { prefix, context: "this" });
-      core.opSync("op_webgpu_render_pass_draw_indexed", {
+      core.opSync(
+        "op_webgpu_render_pass_draw_indexed",
         renderPassRid,
         indexCount,
         instanceCount,
         firstIndex,
         baseVertex,
         firstInstance,
-      });
+      );
     }
 
     /**
@@ -4086,11 +4074,12 @@
         resourceContext: "Argument 1",
         selfContext: "this",
       });
-      core.opSync("op_webgpu_render_pass_draw_indirect", {
+      core.opSync(
+        "op_webgpu_render_pass_draw_indirect",
         renderPassRid,
-        indirectBuffer: indirectBufferRid,
+        indirectBufferRid,
         indirectOffset,
-      });
+      );
     }
 
     /**
@@ -4128,11 +4117,12 @@
         resourceContext: "Argument 1",
         selfContext: "this",
       });
-      core.opSync("op_webgpu_render_pass_draw_indexed_indirect", {
+      core.opSync(
+        "op_webgpu_render_pass_draw_indexed_indirect",
         renderPassRid,
-        indirectBuffer: indirectBufferRid,
+        indirectBufferRid,
         indirectOffset,
-      });
+      );
     }
 
     [SymbolFor("Deno.privateCustomInspect")](inspect) {
@@ -4211,10 +4201,11 @@
         resourceContext: "Argument 1",
         selfContext: "this",
       });
-      core.opSync("op_webgpu_compute_pass_set_pipeline", {
+      core.opSync(
+        "op_webgpu_compute_pass_set_pipeline",
         computePassRid,
-        pipeline: pipelineRid,
-      });
+        pipelineRid,
+      );
     }
 
     /**
@@ -4247,12 +4238,13 @@
         context: "encoder referenced by this",
       });
       const computePassRid = assertResource(this, { prefix, context: "this" });
-      core.opSync("op_webgpu_compute_pass_dispatch", {
+      core.opSync(
+        "op_webgpu_compute_pass_dispatch",
         computePassRid,
-        x: workgroupCountX,
-        y: workgroupCountY,
-        z: workgroupCountZ,
-      });
+        workgroupCountX,
+        workgroupCountY,
+        workgroupCountZ,
+      );
     }
 
     /**
@@ -4290,11 +4282,12 @@
         resourceContext: "Argument 1",
         selfContext: "this",
       });
-      core.opSync("op_webgpu_compute_pass_dispatch_indirect", {
-        computePassRid: computePassRid,
-        indirectBuffer: indirectBufferRid,
+      core.opSync(
+        "op_webgpu_compute_pass_dispatch_indirect",
+        computePassRid,
+        indirectBufferRid,
         indirectOffset,
-      });
+      );
     }
 
     /**
@@ -4334,11 +4327,9 @@
       });
       core.opSync(
         "op_webgpu_compute_pass_begin_pipeline_statistics_query",
-        {
-          computePassRid,
-          querySet: querySetRid,
-          queryIndex,
-        },
+        computePassRid,
+        querySetRid,
+        queryIndex,
       );
     }
 
@@ -4355,9 +4346,10 @@
         context: "encoder referenced by this",
       });
       const computePassRid = assertResource(this, { prefix, context: "this" });
-      core.opSync("op_webgpu_compute_pass_end_pipeline_statistics_query", {
+      core.opSync(
+        "op_webgpu_compute_pass_end_pipeline_statistics_query",
         computePassRid,
-      });
+      );
     }
 
     /**
@@ -4395,11 +4387,12 @@
         resourceContext: "Argument 1",
         selfContext: "this",
       });
-      core.opSync("op_webgpu_compute_pass_write_timestamp", {
+      core.opSync(
+        "op_webgpu_compute_pass_write_timestamp",
         computePassRid,
-        querySet: querySetRid,
+        querySetRid,
         queryIndex,
-      });
+      );
     }
 
     end() {
@@ -4414,10 +4407,11 @@
         context: "encoder referenced by this",
       });
       const computePassRid = assertResource(this, { prefix, context: "this" });
-      const { err } = core.opSync("op_webgpu_compute_pass_end", {
+      const { err } = core.opSync(
+        "op_webgpu_compute_pass_end",
         commandEncoderRid,
         computePassRid,
-      });
+      );
       device.pushError(err);
       this[_rid] = undefined;
     }
@@ -4461,14 +4455,15 @@
         dynamicOffsetsDataStart = 0;
         dynamicOffsetsDataLength = dynamicOffsetsData.length;
       }
-      core.opSync("op_webgpu_compute_pass_set_bind_group", {
+      core.opSync(
+        "op_webgpu_compute_pass_set_bind_group",
         computePassRid,
         index,
-        bindGroup: bindGroupRid,
+        bindGroupRid,
         dynamicOffsetsData,
         dynamicOffsetsDataStart,
         dynamicOffsetsDataLength,
-      });
+      );
     }
 
     /**
@@ -4492,10 +4487,11 @@
         context: "encoder referenced by this",
       });
       const computePassRid = assertResource(this, { prefix, context: "this" });
-      core.opSync("op_webgpu_compute_pass_push_debug_group", {
+      core.opSync(
+        "op_webgpu_compute_pass_push_debug_group",
         computePassRid,
         groupLabel,
-      });
+      );
     }
 
     popDebugGroup() {
@@ -4511,9 +4507,7 @@
         context: "encoder referenced by this",
       });
       const computePassRid = assertResource(this, { prefix, context: "this" });
-      core.opSync("op_webgpu_compute_pass_pop_debug_group", {
-        computePassRid,
-      });
+      core.opSync("op_webgpu_compute_pass_pop_debug_group", computePassRid);
     }
 
     /**
@@ -4537,10 +4531,11 @@
         context: "encoder referenced by this",
       });
       const computePassRid = assertResource(this, { prefix, context: "this" });
-      core.opSync("op_webgpu_compute_pass_insert_debug_marker", {
+      core.opSync(
+        "op_webgpu_compute_pass_insert_debug_marker",
         computePassRid,
         markerLabel,
-      });
+      );
     }
 
     [SymbolFor("Deno.privateCustomInspect")](inspect) {
@@ -4649,10 +4644,8 @@
       });
       const { rid, err } = core.opSync(
         "op_webgpu_render_bundle_encoder_finish",
-        {
-          renderBundleEncoderRid,
-          ...descriptor,
-        },
+        renderBundleEncoderRid,
+        descriptor.label,
       );
       device.pushError(err);
       this[_rid] = undefined;
@@ -4701,14 +4694,15 @@
         dynamicOffsetsDataStart = 0;
         dynamicOffsetsDataLength = dynamicOffsetsData.length;
       }
-      core.opSync("op_webgpu_render_bundle_encoder_set_bind_group", {
+      core.opSync(
+        "op_webgpu_render_bundle_encoder_set_bind_group",
         renderBundleEncoderRid,
         index,
-        bindGroup: bindGroupRid,
+        bindGroupRid,
         dynamicOffsetsData,
         dynamicOffsetsDataStart,
         dynamicOffsetsDataLength,
-      });
+      );
     }
 
     /**
@@ -4728,10 +4722,11 @@
         prefix,
         context: "this",
       });
-      core.opSync("op_webgpu_render_bundle_encoder_push_debug_group", {
+      core.opSync(
+        "op_webgpu_render_bundle_encoder_push_debug_group",
         renderBundleEncoderRid,
         groupLabel,
-      });
+      );
     }
 
     popDebugGroup() {
@@ -4743,9 +4738,10 @@
         prefix,
         context: "this",
       });
-      core.opSync("op_webgpu_render_bundle_encoder_pop_debug_group", {
+      core.opSync(
+        "op_webgpu_render_bundle_encoder_pop_debug_group",
         renderBundleEncoderRid,
-      });
+      );
     }
 
     /**
@@ -4765,10 +4761,11 @@
         prefix,
         context: "this",
       });
-      core.opSync("op_webgpu_render_bundle_encoder_push_debug_group", {
+      core.opSync(
+        "op_webgpu_render_bundle_encoder_insert_debug_marker",
         renderBundleEncoderRid,
         markerLabel,
-      });
+      );
     }
 
     /**
@@ -4797,10 +4794,11 @@
         resourceContext: "Argument 1",
         selfContext: "this",
       });
-      core.opSync("op_webgpu_render_bundle_encoder_set_pipeline", {
+      core.opSync(
+        "op_webgpu_render_bundle_encoder_set_pipeline",
         renderBundleEncoderRid,
-        pipeline: pipelineRid,
-      });
+        pipelineRid,
+      );
     }
 
     /**
@@ -4844,13 +4842,14 @@
         resourceContext: "Argument 1",
         selfContext: "this",
       });
-      core.opSync("op_webgpu_render_bundle_encoder_set_index_buffer", {
+      core.opSync(
+        "op_webgpu_render_bundle_encoder_set_index_buffer",
         renderBundleEncoderRid,
-        buffer: bufferRid,
+        bufferRid,
         indexFormat,
         offset,
         size,
-      });
+      );
     }
 
     /**
@@ -4894,13 +4893,14 @@
         resourceContext: "Argument 2",
         selfContext: "this",
       });
-      core.opSync("op_webgpu_render_bundle_encoder_set_vertex_buffer", {
+      core.opSync(
+        "op_webgpu_render_bundle_encoder_set_vertex_buffer",
         renderBundleEncoderRid,
         slot,
-        buffer: bufferRid,
+        bufferRid,
         offset,
         size,
-      });
+      );
     }
 
     /**
@@ -4934,13 +4934,14 @@
         prefix,
         context: "this",
       });
-      core.opSync("op_webgpu_render_bundle_encoder_draw", {
+      core.opSync(
+        "op_webgpu_render_bundle_encoder_draw",
         renderBundleEncoderRid,
         vertexCount,
         instanceCount,
         firstVertex,
         firstInstance,
-      });
+      );
     }
 
     /**
@@ -4986,14 +4987,15 @@
         prefix,
         context: "this",
       });
-      core.opSync("op_webgpu_render_bundle_encoder_draw_indexed", {
+      core.opSync(
+        "op_webgpu_render_bundle_encoder_draw_indexed",
         renderBundleEncoderRid,
         indexCount,
         instanceCount,
         firstIndex,
         baseVertex,
         firstInstance,
-      });
+      );
     }
 
     /**
@@ -5027,11 +5029,12 @@
         resourceContext: "Argument 1",
         selfContext: "this",
       });
-      core.opSync("op_webgpu_render_bundle_encoder_draw_indirect", {
+      core.opSync(
+        "op_webgpu_render_bundle_encoder_draw_indirect",
         renderBundleEncoderRid,
-        indirectBuffer: indirectBufferRid,
+        indirectBufferRid,
         indirectOffset,
-      });
+      );
     }
 
     drawIndexedIndirect(_indirectBuffer, _indirectOffset) {

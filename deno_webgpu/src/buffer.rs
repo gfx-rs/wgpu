@@ -8,7 +8,6 @@ use deno_core::OpState;
 use deno_core::Resource;
 use deno_core::ResourceId;
 use deno_core::ZeroCopyBuf;
-use serde::Deserialize;
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::convert::TryFrom;
@@ -32,33 +31,27 @@ impl Resource for WebGpuBufferMapped {
     }
 }
 
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct CreateBufferArgs {
+#[op]
+pub fn op_webgpu_create_buffer(
+    state: &mut OpState,
     device_rid: ResourceId,
     label: Option<String>,
     size: u64,
     usage: u32,
     mapped_at_creation: bool,
-}
-
-#[op]
-pub fn op_webgpu_create_buffer(
-    state: &mut OpState,
-    args: CreateBufferArgs,
 ) -> Result<WebGpuResult, AnyError> {
     let instance = state.borrow::<super::Instance>();
     let device_resource = state
         .resource_table
-        .get::<super::WebGpuDevice>(args.device_rid)?;
+        .get::<super::WebGpuDevice>(device_rid)?;
     let device = device_resource.0;
 
     let descriptor = wgpu_core::resource::BufferDescriptor {
-        label: args.label.map(Cow::from),
-        size: args.size,
-        usage: wgpu_types::BufferUsages::from_bits(args.usage)
+        label: label.map(Cow::from),
+        size,
+        usage: wgpu_types::BufferUsages::from_bits(usage)
             .ok_or_else(|| type_error("usage is not valid"))?,
-        mapped_at_creation: args.mapped_at_creation,
+        mapped_at_creation,
     };
 
     gfx_put!(device => instance.device_create_buffer(
@@ -68,20 +61,14 @@ pub fn op_webgpu_create_buffer(
   ) => state, WebGpuBuffer)
 }
 
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct BufferGetMapAsyncArgs {
+#[op]
+pub async fn op_webgpu_buffer_get_map_async(
+    state: Rc<RefCell<OpState>>,
     buffer_rid: ResourceId,
     device_rid: ResourceId,
     mode: u32,
     offset: u64,
     size: u64,
-}
-
-#[op]
-pub async fn op_webgpu_buffer_get_map_async(
-    state: Rc<RefCell<OpState>>,
-    args: BufferGetMapAsyncArgs,
 ) -> Result<WebGpuResult, AnyError> {
     let (sender, receiver) = oneshot::channel::<Result<(), AnyError>>();
 
@@ -89,11 +76,11 @@ pub async fn op_webgpu_buffer_get_map_async(
     {
         let state_ = state.borrow();
         let instance = state_.borrow::<super::Instance>();
-        let buffer_resource = state_.resource_table.get::<WebGpuBuffer>(args.buffer_rid)?;
+        let buffer_resource = state_.resource_table.get::<WebGpuBuffer>(buffer_rid)?;
         let buffer = buffer_resource.0;
         let device_resource = state_
             .resource_table
-            .get::<super::WebGpuDevice>(args.device_rid)?;
+            .get::<super::WebGpuDevice>(device_rid)?;
         device = device_resource.0;
 
         let boxed_sender = Box::new(sender);
@@ -116,9 +103,9 @@ pub async fn op_webgpu_buffer_get_map_async(
         // TODO(lucacasonato): error handling
         let maybe_err = gfx_select!(buffer => instance.buffer_map_async(
           buffer,
-          args.offset..(args.offset + args.size),
+          offset..(offset + size),
           wgpu_core::resource::BufferMapOperation {
-            host: match args.mode {
+            host: match mode {
               1 => wgpu_core::device::HostMap::Read,
               2 => wgpu_core::device::HostMap::Write,
               _ => unreachable!(),
@@ -160,33 +147,27 @@ pub async fn op_webgpu_buffer_get_map_async(
     Ok(WebGpuResult::empty())
 }
 
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct BufferGetMappedRangeArgs {
-    buffer_rid: ResourceId,
-    offset: u64,
-    size: Option<u64>,
-}
-
 #[op]
 pub fn op_webgpu_buffer_get_mapped_range(
     state: &mut OpState,
-    args: BufferGetMappedRangeArgs,
-    mut zero_copy: ZeroCopyBuf,
+    buffer_rid: ResourceId,
+    offset: u64,
+    size: Option<u64>,
+    mut buf: ZeroCopyBuf,
 ) -> Result<WebGpuResult, AnyError> {
     let instance = state.borrow::<super::Instance>();
-    let buffer_resource = state.resource_table.get::<WebGpuBuffer>(args.buffer_rid)?;
+    let buffer_resource = state.resource_table.get::<WebGpuBuffer>(buffer_rid)?;
     let buffer = buffer_resource.0;
 
     let (slice_pointer, range_size) = gfx_select!(buffer => instance.buffer_get_mapped_range(
       buffer,
-      args.offset,
-      args.size
+      offset,
+      size
     ))
     .map_err(|e| DomExceptionOperationError::new(&e.to_string()))?;
 
     let slice = unsafe { std::slice::from_raw_parts_mut(slice_pointer, range_size as usize) };
-    zero_copy.copy_from_slice(slice);
+    buf.copy_from_slice(slice);
 
     let rid = state
         .resource_table
@@ -195,32 +176,26 @@ pub fn op_webgpu_buffer_get_mapped_range(
     Ok(WebGpuResult::rid(rid))
 }
 
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct BufferUnmapArgs {
-    buffer_rid: ResourceId,
-    mapped_rid: ResourceId,
-}
-
 #[op]
 pub fn op_webgpu_buffer_unmap(
     state: &mut OpState,
-    args: BufferUnmapArgs,
-    zero_copy: Option<ZeroCopyBuf>,
+    buffer_rid: ResourceId,
+    mapped_rid: ResourceId,
+    buf: Option<ZeroCopyBuf>,
 ) -> Result<WebGpuResult, AnyError> {
     let mapped_resource = state
         .resource_table
-        .take::<WebGpuBufferMapped>(args.mapped_rid)?;
+        .take::<WebGpuBufferMapped>(mapped_rid)?;
     let instance = state.borrow::<super::Instance>();
-    let buffer_resource = state.resource_table.get::<WebGpuBuffer>(args.buffer_rid)?;
+    let buffer_resource = state.resource_table.get::<WebGpuBuffer>(buffer_rid)?;
     let buffer = buffer_resource.0;
 
     let slice_pointer = mapped_resource.0;
     let size = mapped_resource.1;
 
-    if let Some(buffer) = zero_copy {
+    if let Some(buf) = buf {
         let slice = unsafe { std::slice::from_raw_parts_mut(slice_pointer, size) };
-        slice.copy_from_slice(&buffer);
+        slice.copy_from_slice(&buf);
     }
 
     gfx_ok!(buffer => instance.buffer_unmap(buffer))
