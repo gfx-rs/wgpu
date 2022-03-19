@@ -871,12 +871,12 @@ impl Writer {
                             ref other => other,
                         };
                         if let crate::TypeInner::Matrix {
-                            columns,
-                            rows: _,
+                            columns: _,
+                            rows,
                             width,
                         } = *member_array_subty_inner
                         {
-                            let byte_stride = match columns {
+                            let byte_stride = match rows {
                                 crate::VectorSize::Bi => 2 * width,
                                 crate::VectorSize::Tri | crate::VectorSize::Quad => 4 * width,
                             };
