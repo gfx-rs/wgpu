@@ -182,14 +182,15 @@ pub fn op_webgpu_render_pass_execute_bundles(
     render_pass_rid: ResourceId,
     bundles: Vec<u32>,
 ) -> Result<WebGpuResult, AnyError> {
-    let mut render_bundle_ids = vec![];
-
-    for rid in &bundles {
-        let render_bundle_resource = state
-            .resource_table
-            .get::<super::bundle::WebGpuRenderBundle>(*rid)?;
-        render_bundle_ids.push(render_bundle_resource.0);
-    }
+    let bundles = bundles
+        .iter()
+        .map(|rid| {
+            let render_bundle_resource = state
+                .resource_table
+                .get::<super::bundle::WebGpuRenderBundle>(*rid)?;
+            Ok(render_bundle_resource.0)
+        })
+        .collect::<Result<Vec<_>, AnyError>>()?;
 
     let render_pass_resource = state
         .resource_table
@@ -200,8 +201,8 @@ pub fn op_webgpu_render_pass_execute_bundles(
     unsafe {
         wgpu_core::command::render_ffi::wgpu_render_pass_execute_bundles(
             &mut render_pass_resource.0.borrow_mut(),
-            render_bundle_ids.as_ptr(),
-            render_bundle_ids.len(),
+            bundles.as_ptr(),
+            bundles.len(),
         );
     }
 

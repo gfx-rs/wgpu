@@ -177,20 +177,21 @@ pub fn op_webgpu_create_bind_group_layout(
         .get::<super::WebGpuDevice>(device_rid)?;
     let device = device_resource.0;
 
-    let mut processed_entries = vec![];
-
-    for entry in entries {
-        processed_entries.push(wgpu_types::BindGroupLayoutEntry {
-            binding: entry.binding,
-            visibility: wgpu_types::ShaderStages::from_bits(entry.visibility).unwrap(),
-            ty: entry.binding_type.try_into()?,
-            count: None, // native-only
-        });
-    }
+    let entries = entries
+        .into_iter()
+        .map(|entry| {
+            Ok(wgpu_types::BindGroupLayoutEntry {
+                binding: entry.binding,
+                visibility: wgpu_types::ShaderStages::from_bits(entry.visibility).unwrap(),
+                ty: entry.binding_type.try_into()?,
+                count: None, // native-only
+            })
+        })
+        .collect::<Result<Vec<_>, AnyError>>()?;
 
     let descriptor = wgpu_core::binding_model::BindGroupLayoutDescriptor {
         label: label.map(Cow::from),
-        entries: Cow::from(processed_entries),
+        entries: Cow::from(entries),
     };
 
     gfx_put!(device => instance.device_create_bind_group_layout(
@@ -213,16 +214,17 @@ pub fn op_webgpu_create_pipeline_layout(
         .get::<super::WebGpuDevice>(device_rid)?;
     let device = device_resource.0;
 
-    let mut processed_bind_group_layouts = vec![];
-
-    for rid in &bind_group_layouts {
-        let bind_group_layout = state.resource_table.get::<WebGpuBindGroupLayout>(*rid)?;
-        processed_bind_group_layouts.push(bind_group_layout.0);
-    }
+    let bind_group_layouts = bind_group_layouts
+        .into_iter()
+        .map(|rid| {
+            let bind_group_layout = state.resource_table.get::<WebGpuBindGroupLayout>(rid)?;
+            Ok(bind_group_layout.0)
+        })
+        .collect::<Result<Vec<_>, AnyError>>()?;
 
     let descriptor = wgpu_core::binding_model::PipelineLayoutDescriptor {
         label: label.map(Cow::from),
-        bind_group_layouts: Cow::from(processed_bind_group_layouts),
+        bind_group_layouts: Cow::from(bind_group_layouts),
         push_constant_ranges: Default::default(),
     };
 
@@ -257,48 +259,51 @@ pub fn op_webgpu_create_bind_group(
         .get::<super::WebGpuDevice>(device_rid)?;
     let device = device_resource.0;
 
-    let mut processed_entries = vec![];
-
-    for entry in &entries {
-        processed_entries.push(wgpu_core::binding_model::BindGroupEntry {
-            binding: entry.binding,
-            resource: match entry.kind.as_str() {
-                "GPUSampler" => {
-                    let sampler_resource = state
-                        .resource_table
-                        .get::<super::sampler::WebGpuSampler>(entry.resource)?;
-                    wgpu_core::binding_model::BindingResource::Sampler(sampler_resource.0)
-                }
-                "GPUTextureView" => {
-                    let texture_view_resource =
-                        state
+    let entries = entries
+        .into_iter()
+        .map(|entry| {
+            Ok(wgpu_core::binding_model::BindGroupEntry {
+                binding: entry.binding,
+                resource: match entry.kind.as_str() {
+                    "GPUSampler" => {
+                        let sampler_resource = state
                             .resource_table
-                            .get::<super::texture::WebGpuTextureView>(entry.resource)?;
-                    wgpu_core::binding_model::BindingResource::TextureView(texture_view_resource.0)
-                }
-                "GPUBufferBinding" => {
-                    let buffer_resource = state
-                        .resource_table
-                        .get::<super::buffer::WebGpuBuffer>(entry.resource)?;
-                    wgpu_core::binding_model::BindingResource::Buffer(
-                        wgpu_core::binding_model::BufferBinding {
-                            buffer_id: buffer_resource.0,
-                            offset: entry.offset.unwrap_or(0),
-                            size: std::num::NonZeroU64::new(entry.size.unwrap_or(0)),
-                        },
-                    )
-                }
-                _ => unreachable!(),
-            },
-        });
-    }
+                            .get::<super::sampler::WebGpuSampler>(entry.resource)?;
+                        wgpu_core::binding_model::BindingResource::Sampler(sampler_resource.0)
+                    }
+                    "GPUTextureView" => {
+                        let texture_view_resource =
+                            state
+                                .resource_table
+                                .get::<super::texture::WebGpuTextureView>(entry.resource)?;
+                        wgpu_core::binding_model::BindingResource::TextureView(
+                            texture_view_resource.0,
+                        )
+                    }
+                    "GPUBufferBinding" => {
+                        let buffer_resource = state
+                            .resource_table
+                            .get::<super::buffer::WebGpuBuffer>(entry.resource)?;
+                        wgpu_core::binding_model::BindingResource::Buffer(
+                            wgpu_core::binding_model::BufferBinding {
+                                buffer_id: buffer_resource.0,
+                                offset: entry.offset.unwrap_or(0),
+                                size: std::num::NonZeroU64::new(entry.size.unwrap_or(0)),
+                            },
+                        )
+                    }
+                    _ => unreachable!(),
+                },
+            })
+        })
+        .collect::<Result<Vec<_>, AnyError>>()?;
 
     let bind_group_layout = state.resource_table.get::<WebGpuBindGroupLayout>(layout)?;
 
     let descriptor = wgpu_core::binding_model::BindGroupDescriptor {
         label: label.map(Cow::from),
         layout: bind_group_layout.0,
-        entries: Cow::from(processed_entries),
+        entries: Cow::from(entries),
     };
 
     gfx_put!(device => instance.device_create_bind_group(

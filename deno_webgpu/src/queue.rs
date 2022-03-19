@@ -23,14 +23,15 @@ pub fn op_webgpu_queue_submit(
     let queue_resource = state.resource_table.get::<WebGpuQueue>(queue_rid)?;
     let queue = queue_resource.0;
 
-    let mut ids = vec![];
-
-    for rid in &command_buffers {
-        let buffer_resource = state
-            .resource_table
-            .get::<super::command_encoder::WebGpuCommandBuffer>(*rid)?;
-        ids.push(buffer_resource.0);
-    }
+    let ids = command_buffers
+        .iter()
+        .map(|rid| {
+            let buffer_resource = state
+                .resource_table
+                .get::<super::command_encoder::WebGpuCommandBuffer>(*rid)?;
+            Ok(buffer_resource.0)
+        })
+        .collect::<Result<Vec<_>, AnyError>>()?;
 
     let maybe_err = gfx_select!(queue => instance.queue_submit(queue, &ids)).err();
 

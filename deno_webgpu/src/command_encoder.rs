@@ -86,34 +86,35 @@ pub fn op_webgpu_command_encoder_begin_render_pass(
         .resource_table
         .get::<WebGpuCommandEncoder>(command_encoder_rid)?;
 
-    let mut processed_color_attachments = vec![];
+    let color_attachments = color_attachments
+        .into_iter()
+        .map(|color_attachment| {
+            let texture_view_resource = state
+                .resource_table
+                .get::<super::texture::WebGpuTextureView>(color_attachment.view)?;
 
-    for color_attachment in color_attachments {
-        let texture_view_resource = state
-            .resource_table
-            .get::<super::texture::WebGpuTextureView>(color_attachment.view)?;
+            let resolve_target = color_attachment
+                .resolve_target
+                .map(|rid| {
+                    state
+                        .resource_table
+                        .get::<super::texture::WebGpuTextureView>(rid)
+                })
+                .transpose()?
+                .map(|texture| texture.0);
 
-        let resolve_target = color_attachment
-            .resolve_target
-            .map(|rid| {
-                state
-                    .resource_table
-                    .get::<super::texture::WebGpuTextureView>(rid)
+            Ok(wgpu_core::command::RenderPassColorAttachment {
+                view: texture_view_resource.0,
+                resolve_target,
+                channel: wgpu_core::command::PassChannel {
+                    load_op: color_attachment.load_op,
+                    store_op: color_attachment.store_op,
+                    clear_value: color_attachment.clear_value.unwrap_or_default(),
+                    read_only: false,
+                },
             })
-            .transpose()?
-            .map(|texture| texture.0);
-
-        processed_color_attachments.push(wgpu_core::command::RenderPassColorAttachment {
-            view: texture_view_resource.0,
-            resolve_target,
-            channel: wgpu_core::command::PassChannel {
-                load_op: color_attachment.load_op,
-                store_op: color_attachment.store_op,
-                clear_value: color_attachment.clear_value.unwrap_or_default(),
-                read_only: false,
-            },
-        });
-    }
+        })
+        .collect::<Result<Vec<_>, AnyError>>()?;
 
     let mut processed_depth_stencil_attachment = None;
 
@@ -142,7 +143,7 @@ pub fn op_webgpu_command_encoder_begin_render_pass(
 
     let descriptor = wgpu_core::command::RenderPassDescriptor {
         label: label.map(Cow::from),
-        color_attachments: Cow::from(processed_color_attachments),
+        color_attachments: Cow::from(color_attachments),
         depth_stencil_attachment: processed_depth_stencil_attachment.as_ref(),
     };
 
