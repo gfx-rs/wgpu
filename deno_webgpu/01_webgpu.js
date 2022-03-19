@@ -297,7 +297,7 @@
         "op_webgpu_request_device",
         {
           adapterRid: this[_adapter].rid,
-          labe: descriptor.label,
+          label: descriptor.label,
           requiredFeatures,
           requiredLimits,
         },
