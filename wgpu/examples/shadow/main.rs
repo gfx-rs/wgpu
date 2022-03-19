@@ -859,7 +859,6 @@ fn shadow() {
         optional_features: wgpu::Features::default(),
         base_test_parameters: framework::test_common::TestParameters::default()
             .downlevel_flags(wgpu::DownlevelFlags::COMPARISON_SAMPLERS)
-            .backend_failure(wgpu::Backends::GL) // https://github.com/gfx-rs/naga/issues/1747
             .specific_failure(Some(wgpu::Backends::VULKAN), None, Some("V3D"), false), // rpi4 on VK doesn't work: https://gitlab.freedesktop.org/mesa/mesa/-/issues/3916
         tolerance: 2,
         max_outliers: 500, // bounded by rpi4
