@@ -712,7 +712,20 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         let struct_name = &self.names[&NameKey::Type(handle)];
         writeln!(self.out, "struct {} {{", struct_name)?;
 
+        let mut last_offset = 0;
         for (index, member) in members.iter().enumerate() {
+            if member.binding.is_none() && member.offset > last_offset {
+                // using int as padding should work as long as the backend
+                // doesn't support a type that's less than 4 bytes in size
+                // (Error::UnsupportedScalar catches this)
+                let padding = (member.offset - last_offset) / 4;
+                for i in 0..padding {
+                    writeln!(self.out, "{}int _pad{}_{};", back::INDENT, index, i)?;
+                }
+            }
+            let ty_inner = &module.types[member.ty].inner;
+            last_offset = member.offset + ty_inner.size(&module.constants);
+
             // The indentation is only for readability
             write!(self.out, "{}", back::INDENT)?;
 
