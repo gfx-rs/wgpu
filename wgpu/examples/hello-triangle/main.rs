@@ -93,6 +93,7 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                 config.width = size.width;
                 config.height = size.height;
                 surface.configure(&device, &config);
+                window.request_redraw();
             }
             Event::RedrawRequested(_) => {
                 let frame = surface
