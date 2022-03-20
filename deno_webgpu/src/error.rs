@@ -59,14 +59,14 @@ impl WebGpuResult {
     pub fn rid_err<T: Into<WebGpuError>>(rid: ResourceId, err: Option<T>) -> Self {
         Self {
             rid: Some(rid),
-            err: err.map(|e| e.into()),
+            err: err.map(Into::into),
         }
     }
 
     pub fn maybe_err<T: Into<WebGpuError>>(err: Option<T>) -> Self {
         Self {
             rid: None,
-            err: err.map(|e| e.into()),
+            err: err.map(Into::into),
         }
     }
 

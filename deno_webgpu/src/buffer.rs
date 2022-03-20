@@ -190,11 +190,8 @@ pub fn op_webgpu_buffer_unmap(
     let buffer_resource = state.resource_table.get::<WebGpuBuffer>(buffer_rid)?;
     let buffer = buffer_resource.0;
 
-    let slice_pointer = mapped_resource.0;
-    let size = mapped_resource.1;
-
     if let Some(buf) = buf {
-        let slice = unsafe { std::slice::from_raw_parts_mut(slice_pointer, size) };
+        let slice = unsafe { std::slice::from_raw_parts_mut(mapped_resource.0, mapped_resource.1) };
         slice.copy_from_slice(&buf);
     }
 

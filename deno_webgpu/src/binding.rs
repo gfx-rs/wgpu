@@ -7,8 +7,6 @@ use deno_core::Resource;
 use deno_core::ResourceId;
 use serde::Deserialize;
 use std::borrow::Cow;
-use std::convert::TryFrom;
-use std::convert::TryInto;
 
 use super::error::WebGpuResult;
 
@@ -136,11 +134,9 @@ enum GpuBindingType {
     StorageTexture(GpuStorageTextureBindingLayout),
 }
 
-impl TryFrom<GpuBindingType> for wgpu_types::BindingType {
-    type Error = AnyError;
-
-    fn try_from(binding_type: GpuBindingType) -> Result<wgpu_types::BindingType, Self::Error> {
-        let binding_type = match binding_type {
+impl From<GpuBindingType> for wgpu_types::BindingType {
+    fn from(binding_type: GpuBindingType) -> wgpu_types::BindingType {
+        match binding_type {
             GpuBindingType::Buffer(buffer) => wgpu_types::BindingType::Buffer {
                 ty: buffer.r#type.into(),
                 has_dynamic_offset: buffer.has_dynamic_offset,
@@ -159,8 +155,7 @@ impl TryFrom<GpuBindingType> for wgpu_types::BindingType {
                     view_dimension: storage_texture.view_dimension,
                 }
             }
-        };
-        Ok(binding_type)
+        }
     }
 }
 
@@ -180,14 +175,14 @@ pub fn op_webgpu_create_bind_group_layout(
     let entries = entries
         .into_iter()
         .map(|entry| {
-            Ok(wgpu_types::BindGroupLayoutEntry {
+            wgpu_types::BindGroupLayoutEntry {
                 binding: entry.binding,
                 visibility: wgpu_types::ShaderStages::from_bits(entry.visibility).unwrap(),
-                ty: entry.binding_type.try_into()?,
+                ty: entry.binding_type.into(),
                 count: None, // native-only
-            })
+            }
         })
-        .collect::<Result<Vec<_>, AnyError>>()?;
+        .collect::<Vec<_>>();
 
     let descriptor = wgpu_core::binding_model::BindGroupLayoutDescriptor {
         label: label.map(Cow::from),

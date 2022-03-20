@@ -49,15 +49,13 @@ pub fn op_webgpu_create_render_bundle_encoder(
         .get::<super::WebGpuDevice>(args.device_rid)?;
     let device = device_resource.0;
 
-    let depth_stencil = if let Some(format) = args.depth_stencil_format {
-        Some(wgpu_types::RenderBundleDepthStencil {
-            format,
-            depth_read_only: args.depth_read_only,
-            stencil_read_only: args.stencil_read_only,
-        })
-    } else {
-        None
-    };
+    let depth_stencil =
+        args.depth_stencil_format
+            .map(|format| wgpu_types::RenderBundleDepthStencil {
+                format,
+                depth_read_only: args.depth_read_only,
+                stencil_read_only: args.stencil_read_only,
+            });
 
     let descriptor = wgpu_core::command::RenderBundleEncoderDescriptor {
         label: args.label.map(Cow::from),

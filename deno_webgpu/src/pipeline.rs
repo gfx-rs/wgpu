@@ -8,8 +8,6 @@ use deno_core::ResourceId;
 use serde::Deserialize;
 use serde::Serialize;
 use std::borrow::Cow;
-use std::convert::TryFrom;
-use std::convert::TryInto;
 
 use super::error::WebGpuError;
 use super::error::WebGpuResult;
@@ -194,10 +192,9 @@ struct GpuDepthStencilState {
     depth_bias_clamp: f32,
 }
 
-impl TryFrom<GpuDepthStencilState> for wgpu_types::DepthStencilState {
-    type Error = AnyError;
-    fn try_from(state: GpuDepthStencilState) -> Result<wgpu_types::DepthStencilState, AnyError> {
-        Ok(wgpu_types::DepthStencilState {
+impl From<GpuDepthStencilState> for wgpu_types::DepthStencilState {
+    fn from(state: GpuDepthStencilState) -> wgpu_types::DepthStencilState {
+        wgpu_types::DepthStencilState {
             format: state.format,
             depth_write_enabled: state.depth_write_enabled,
             depth_compare: state.depth_compare,
@@ -212,7 +209,7 @@ impl TryFrom<GpuDepthStencilState> for wgpu_types::DepthStencilState {
                 slope_scale: state.depth_bias_slope_scale,
                 clamp: state.depth_bias_clamp,
             },
-        })
+        }
     }
 }
 
@@ -340,7 +337,7 @@ pub fn op_webgpu_create_render_pipeline(
             buffers: Cow::Owned(vertex_buffers),
         },
         primitive: args.primitive.into(),
-        depth_stencil: args.depth_stencil.map(TryInto::try_into).transpose()?,
+        depth_stencil: args.depth_stencil.map(Into::into),
         multisample: args.multisample,
         fragment,
         multiview: None,
