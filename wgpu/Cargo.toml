@@ -121,7 +121,7 @@ smallvec = "1"
 [dev-dependencies]
 bitflags = "1"
 bytemuck = { version = "1.4", features = ["derive"] }
-cgmath = "0.18"
+glam = "0.20.2"
 ddsfile = "0.5"
 log = "0.4"
 # Opt out of noise's "default-features" to avoid "image" feature as a dependency count optimization.
