@@ -721,7 +721,7 @@ impl framework::Example for Example {
             if entity.rotation_speed != 0.0 {
                 let rotation =
                     glam::Mat4::from_rotation_x(entity.rotation_speed * consts::PI / 180.);
-                entity.mx_world = entity.mx_world * rotation;
+                entity.mx_world *= rotation;
             }
             let data = EntityUniforms {
                 model: entity.mx_world.to_cols_array_2d(),
