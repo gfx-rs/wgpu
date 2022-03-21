@@ -179,7 +179,7 @@ impl framework::Example for Skybox {
             screen_size: (config.width, config.height),
             angle_xz: 0.2,
             angle_y: 0.2,
-            dist: 30.0,
+            dist: 20.0,
         };
         let raw_uniforms = camera.to_uniform_data();
         let uniform_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
