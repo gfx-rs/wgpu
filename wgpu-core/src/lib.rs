@@ -83,18 +83,6 @@ impl RefCount {
     fn load(&self) -> usize {
         unsafe { self.0.as_ref() }.load(Ordering::Acquire)
     }
-
-    /// This function exists to allow `Self::rich_drop_outer` and `Drop::drop` to share the same
-    /// logic. To use this safely from outside of `Drop::drop`, the calling function must move
-    /// `Self` into a `ManuallyDrop`.
-    unsafe fn rich_drop_inner(&mut self) -> bool {
-        if self.0.as_ref().fetch_sub(1, Ordering::AcqRel) == 1 {
-            let _ = Box::from_raw(self.0.as_ptr());
-            true
-        } else {
-            false
-        }
-    }
 }
 
 impl Clone for RefCount {
@@ -108,7 +96,9 @@ impl Clone for RefCount {
 impl Drop for RefCount {
     fn drop(&mut self) {
         unsafe {
-            self.rich_drop_inner();
+            if self.0.as_ref().fetch_sub(1, Ordering::AcqRel) == 1 {
+                drop(Box::from_raw(self.0.as_ptr()));
+            }
         }
     }
 }
@@ -116,30 +106,19 @@ impl Drop for RefCount {
 /// Reference count object that tracks multiple references.
 /// Unlike `RefCount`, it's manually inc()/dec() called.
 #[derive(Debug)]
-struct MultiRefCount(ptr::NonNull<AtomicUsize>);
-
-unsafe impl Send for MultiRefCount {}
-unsafe impl Sync for MultiRefCount {}
+struct MultiRefCount(AtomicUsize);
 
 impl MultiRefCount {
     fn new() -> Self {
-        let bx = Box::new(AtomicUsize::new(1));
-        let ptr = Box::into_raw(bx);
-        Self(unsafe { ptr::NonNull::new_unchecked(ptr) })
+        Self(AtomicUsize::new(1))
     }
 
     fn inc(&self) {
-        unsafe { self.0.as_ref() }.fetch_add(1, Ordering::AcqRel);
+        self.0.fetch_add(1, Ordering::AcqRel);
     }
 
     fn dec_and_check_empty(&self) -> bool {
-        unsafe { self.0.as_ref() }.fetch_sub(1, Ordering::AcqRel) == 1
-    }
-}
-
-impl Drop for MultiRefCount {
-    fn drop(&mut self) {
-        let _ = unsafe { Box::from_raw(self.0.as_ptr()) };
+        self.0.fetch_sub(1, Ordering::AcqRel) == 1
     }
 }
 
