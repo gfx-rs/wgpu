@@ -2,8 +2,7 @@
 mod framework;
 
 use bytemuck::{Pod, Zeroable};
-use cgmath::SquareMatrix;
-use std::borrow::Cow;
+use std::{borrow::Cow, f32::consts};
 use wgpu::{util::DeviceExt, AstcBlock, AstcChannel};
 
 const IMAGE_SIZE: u32 = 128;
@@ -33,20 +32,18 @@ const MODEL_CENTER_Y: f32 = 2.0;
 impl Camera {
     fn to_uniform_data(&self) -> [f32; 16 * 3 + 4] {
         let aspect = self.screen_size.0 as f32 / self.screen_size.1 as f32;
-        let mx_projection = cgmath::perspective(cgmath::Deg(45f32), aspect, 1.0, 50.0);
-        let cam_pos = cgmath::Point3::new(
+        let proj = glam::Mat4::perspective_rh(consts::FRAC_PI_4, aspect, 1.0, 50.0);
+        let cam_pos = glam::Vec3::new(
             self.angle_xz.cos() * self.angle_y.sin() * self.dist,
             self.angle_xz.sin() * self.dist + MODEL_CENTER_Y,
             self.angle_xz.cos() * self.angle_y.cos() * self.dist,
         );
-        let mx_view = cgmath::Matrix4::look_at_rh(
+        let view = glam::Mat4::look_at_rh(
             cam_pos,
-            cgmath::Point3::new(0f32, MODEL_CENTER_Y, 0.0),
-            cgmath::Vector3::unit_y(),
+            glam::Vec3::new(0f32, MODEL_CENTER_Y, 0.0),
+            glam::Vec3::Y,
         );
-        let proj = framework::OPENGL_TO_WGPU_MATRIX * mx_projection;
-        let proj_inv = proj.invert().unwrap();
-        let view = framework::OPENGL_TO_WGPU_MATRIX * mx_view;
+        let proj_inv = proj.inverse();
 
         let mut raw = [0f32; 16 * 3 + 4];
         raw[..16].copy_from_slice(&AsRef::<[f32; 16]>::as_ref(&proj)[..]);
@@ -182,7 +179,7 @@ impl framework::Example for Skybox {
             screen_size: (config.width, config.height),
             angle_xz: 0.2,
             angle_y: 0.2,
-            dist: 30.0,
+            dist: 20.0,
         };
         let raw_uniforms = camera.to_uniform_data();
         let uniform_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {

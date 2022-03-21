@@ -176,7 +176,7 @@ impl framework::Example for Example {
         });
 
         let globals = Globals {
-            mvp: cgmath::ortho(
+            mvp: glam::Mat4::orthographic_rh(
                 0.0,
                 config.width as f32,
                 0.0,
@@ -184,7 +184,7 @@ impl framework::Example for Example {
                 -1.0,
                 1.0,
             )
-            .into(),
+            .to_cols_array_2d(),
             size: [BUNNY_SIZE; 2],
             pad: [0.0; 2],
         };

@@ -1,4 +1,4 @@
-use std::{borrow::Cow, iter, mem, num::NonZeroU32, ops::Range, rc::Rc};
+use std::{borrow::Cow, f32::consts, iter, mem, num::NonZeroU32, ops::Range, rc::Rc};
 
 #[path = "../framework.rs"]
 mod framework;
@@ -80,7 +80,7 @@ fn create_plane(size: i8) -> (Vec<Vertex>, Vec<u16>) {
 }
 
 struct Entity {
-    mx_world: cgmath::Matrix4<f32>,
+    mx_world: glam::Mat4,
     rotation_speed: f32,
     color: wgpu::Color,
     vertex_buf: Rc<wgpu::Buffer>,
@@ -91,7 +91,7 @@ struct Entity {
 }
 
 struct Light {
-    pos: cgmath::Point3<f32>,
+    pos: glam::Vec3,
     color: wgpu::Color,
     fov: f32,
     depth: Range<f32>,
@@ -108,20 +108,16 @@ struct LightRaw {
 
 impl Light {
     fn to_raw(&self) -> LightRaw {
-        use cgmath::{Deg, EuclideanSpace, Matrix4, PerspectiveFov, Point3, Vector3};
-
-        let mx_view = Matrix4::look_at_rh(self.pos, Point3::origin(), Vector3::unit_z());
-        let projection = PerspectiveFov {
-            fovy: Deg(self.fov).into(),
-            aspect: 1.0,
-            near: self.depth.start,
-            far: self.depth.end,
-        };
-        let mx_correction = framework::OPENGL_TO_WGPU_MATRIX;
-        let mx_view_proj =
-            mx_correction * cgmath::Matrix4::from(projection.to_perspective()) * mx_view;
+        let view = glam::Mat4::look_at_rh(self.pos, glam::Vec3::ZERO, glam::Vec3::Z);
+        let projection = glam::Mat4::perspective_rh(
+            self.fov * consts::PI / 180.,
+            1.0,
+            self.depth.start,
+            self.depth.end,
+        );
+        let view_proj = projection * view;
         LightRaw {
-            proj: *mx_view_proj.as_ref(),
+            proj: view_proj.to_cols_array_2d(),
             pos: [self.pos.x, self.pos.y, self.pos.z, 1.0],
             color: [
                 self.color.r as f32,
@@ -175,15 +171,14 @@ impl Example {
     };
     const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
 
-    fn generate_matrix(aspect_ratio: f32) -> cgmath::Matrix4<f32> {
-        let mx_projection = cgmath::perspective(cgmath::Deg(45f32), aspect_ratio, 1.0, 20.0);
-        let mx_view = cgmath::Matrix4::look_at_rh(
-            cgmath::Point3::new(3.0f32, -10.0, 6.0),
-            cgmath::Point3::new(0f32, 0.0, 0.0),
-            cgmath::Vector3::unit_z(),
+    fn generate_matrix(aspect_ratio: f32) -> glam::Mat4 {
+        let projection = glam::Mat4::perspective_rh(consts::FRAC_PI_4, aspect_ratio, 1.0, 20.0);
+        let view = glam::Mat4::look_at_rh(
+            glam::Vec3::new(3.0f32, -10.0, 6.0),
+            glam::Vec3::new(0f32, 0.0, 0.0),
+            glam::Vec3::Z,
         );
-        let mx_correction = framework::OPENGL_TO_WGPU_MATRIX;
-        mx_correction * mx_projection * mx_view
+        projection * view
     }
 
     fn create_depth_texture(
@@ -258,32 +253,32 @@ impl framework::Example for Example {
         });
 
         struct CubeDesc {
-            offset: cgmath::Vector3<f32>,
+            offset: glam::Vec3,
             angle: f32,
             scale: f32,
             rotation: f32,
         }
         let cube_descs = [
             CubeDesc {
-                offset: cgmath::vec3(-2.0, -2.0, 2.0),
+                offset: glam::Vec3::new(-2.0, -2.0, 2.0),
                 angle: 10.0,
                 scale: 0.7,
                 rotation: 0.1,
             },
             CubeDesc {
-                offset: cgmath::vec3(2.0, -2.0, 2.0),
+                offset: glam::Vec3::new(2.0, -2.0, 2.0),
                 angle: 50.0,
                 scale: 1.3,
                 rotation: 0.2,
             },
             CubeDesc {
-                offset: cgmath::vec3(-2.0, 2.0, 2.0),
+                offset: glam::Vec3::new(-2.0, 2.0, 2.0),
                 angle: 140.0,
                 scale: 1.1,
                 rotation: 0.3,
             },
             CubeDesc {
-                offset: cgmath::vec3(2.0, 2.0, 2.0),
+                offset: glam::Vec3::new(2.0, 2.0, 2.0),
                 angle: 210.0,
                 scale: 0.9,
                 rotation: 0.4,
@@ -314,9 +309,8 @@ impl framework::Example for Example {
         let index_format = wgpu::IndexFormat::Uint16;
 
         let mut entities = vec![{
-            use cgmath::SquareMatrix;
             Entity {
-                mx_world: cgmath::Matrix4::identity(),
+                mx_world: glam::Mat4::IDENTITY,
                 rotation_speed: 0.0,
                 color: wgpu::Color::WHITE,
                 vertex_buf: Rc::new(plane_vertex_buf),
@@ -328,15 +322,16 @@ impl framework::Example for Example {
         }];
 
         for (i, cube) in cube_descs.iter().enumerate() {
-            use cgmath::{Decomposed, Deg, InnerSpace, Quaternion, Rotation3};
-
-            let transform = Decomposed {
-                disp: cube.offset,
-                rot: Quaternion::from_axis_angle(cube.offset.normalize(), Deg(cube.angle)),
-                scale: cube.scale,
-            };
+            let mx_world = glam::Mat4::from_scale_rotation_translation(
+                glam::Vec3::splat(cube.scale),
+                glam::Quat::from_axis_angle(
+                    cube.offset.normalize(),
+                    cube.angle * consts::PI / 180.,
+                ),
+                cube.offset,
+            );
             entities.push(Entity {
-                mx_world: cgmath::Matrix4::from(transform),
+                mx_world,
                 rotation_speed: cube.rotation,
                 color: wgpu::Color::GREEN,
                 vertex_buf: Rc::clone(&cube_vertex_buf),
@@ -414,7 +409,7 @@ impl framework::Example for Example {
             .collect::<Vec<_>>();
         let lights = vec![
             Light {
-                pos: cgmath::Point3::new(7.0, -5.0, 10.0),
+                pos: glam::Vec3::new(7.0, -5.0, 10.0),
                 color: wgpu::Color {
                     r: 0.5,
                     g: 1.0,
@@ -426,7 +421,7 @@ impl framework::Example for Example {
                 target_view: shadow_target_views[0].take().unwrap(),
             },
             Light {
-                pos: cgmath::Point3::new(-5.0, 7.0, 10.0),
+                pos: glam::Vec3::new(-5.0, 7.0, 10.0),
                 color: wgpu::Color {
                     r: 1.0,
                     g: 0.5,
@@ -603,7 +598,7 @@ impl framework::Example for Example {
 
             let mx_total = Self::generate_matrix(sc_desc.width as f32 / sc_desc.height as f32);
             let forward_uniforms = GlobalUniforms {
-                proj: *mx_total.as_ref(),
+                proj: mx_total.to_cols_array_2d(),
                 num_lights: [lights.len() as u32, 0, 0, 0],
             };
             let uniform_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -724,11 +719,12 @@ impl framework::Example for Example {
         // update uniforms
         for entity in self.entities.iter_mut() {
             if entity.rotation_speed != 0.0 {
-                let rotation = cgmath::Matrix4::from_angle_x(cgmath::Deg(entity.rotation_speed));
-                entity.mx_world = entity.mx_world * rotation;
+                let rotation =
+                    glam::Mat4::from_rotation_x(entity.rotation_speed * consts::PI / 180.);
+                entity.mx_world *= rotation;
             }
             let data = EntityUniforms {
-                model: entity.mx_world.into(),
+                model: entity.mx_world.to_cols_array_2d(),
                 color: [
                     entity.color.r as f32,
                     entity.color.g as f32,
