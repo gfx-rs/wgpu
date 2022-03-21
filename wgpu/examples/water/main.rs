@@ -108,7 +108,7 @@ impl Example {
 
         let flipped_view = glam::Mat4::look_at_rh(
             glam::Vec3::new(CAMERA.x, -CAMERA.y, CAMERA.z),
-            glam::Vec3::new(0f32, 0.0, 0.0),
+            glam::Vec3::ZERO,
             glam::Vec3::Y,
         );
 

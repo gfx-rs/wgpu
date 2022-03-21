@@ -115,7 +115,7 @@ impl Example {
         let projection = glam::Mat4::perspective_rh(consts::FRAC_PI_4, aspect_ratio, 1.0, 10.0);
         let view = glam::Mat4::look_at_rh(
             glam::Vec3::new(1.5f32, -5.0, 3.0),
-            glam::Vec3::new(0f32, 0.0, 0.0),
+            glam::Vec3::ZERO,
             glam::Vec3::Z,
         );
         projection * view
