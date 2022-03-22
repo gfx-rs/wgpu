@@ -84,6 +84,10 @@ fn binary_assignment() {
     a = (_e21 ^ 0);
     let _e24 = a;
     a = (_e24 & 0);
+    let _e27 = a;
+    a = (_e27 + 1);
+    let _e30 = a;
+    a = (_e30 - 1);
     return;
 }
 

@@ -1,12 +1,12 @@
 ; SPIR-V
 ; Version: 1.1
 ; Generator: rspirv
-; Bound: 176
+; Bound: 180
 OpCapability Shader
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
-OpEntryPoint GLCompute %164 "main"
-OpExecutionMode %164 LocalSize 1 1 1
+OpEntryPoint GLCompute %168 "main"
+OpExecutionMode %168 LocalSize 1 1 1
 OpMemberDecorate %23 0 Offset 0
 OpMemberDecorate %23 1 Offset 16
 %2 = OpTypeVoid
@@ -207,21 +207,27 @@ OpStore %142 %160
 %161 = OpLoad  %8  %142
 %162 = OpBitwiseAnd  %8  %161 %11
 OpStore %142 %162
+%163 = OpLoad  %8  %142
+%164 = OpIAdd  %8  %163 %7
+OpStore %142 %164
+%165 = OpLoad  %8  %142
+%166 = OpISub  %8  %165 %7
+OpStore %142 %166
 OpReturn
 OpFunctionEnd
-%164 = OpFunction  %2  None %117
-%163 = OpLabel
-OpBranch %165
-%165 = OpLabel
-%166 = OpFunctionCall  %19  %32
-%167 = OpFunctionCall  %19  %57
-%168 = OpFunctionCall  %8  %73
-%169 = OpVectorShuffle  %22  %27 %27 0 1 2
-%170 = OpFunctionCall  %22  %84 %169
-%171 = OpFunctionCall  %4  %96
-%172 = OpFunctionCall  %2  %116
-%173 = OpFunctionCall  %2  %129
-%174 = OpFunctionCall  %2  %138
-%175 = OpFunctionCall  %2  %145
+%168 = OpFunction  %2  None %117
+%167 = OpLabel
+OpBranch %169
+%169 = OpLabel
+%170 = OpFunctionCall  %19  %32
+%171 = OpFunctionCall  %19  %57
+%172 = OpFunctionCall  %8  %73
+%173 = OpVectorShuffle  %22  %27 %27 0 1 2
+%174 = OpFunctionCall  %22  %84 %173
+%175 = OpFunctionCall  %4  %96
+%176 = OpFunctionCall  %2  %116
+%177 = OpFunctionCall  %2  %129
+%178 = OpFunctionCall  %2  %138
+%179 = OpFunctionCall  %2  %145
 OpReturn
 OpFunctionEnd

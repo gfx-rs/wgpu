@@ -67,6 +67,8 @@ pub enum Token<'a> {
     LogicalOperation(char),
     ShiftOperation(char),
     AssignmentOperation(char),
+    IncrementOperation,
+    DecrementOperation,
     Arrow,
     Unknown(char),
     UnterminatedString,
@@ -142,6 +144,7 @@ pub enum Error<'a> {
         kind: crate::ScalarKind,
         width: u8,
     },
+    BadIncrDecrReferenceType(Span),
     InvalidResolve(ResolveError),
     InvalidForInitializer(Span),
     InvalidGatherComponent(Span, i32),
@@ -196,6 +199,8 @@ impl<'a> Error<'a> {
                                 Token::ShiftOperation(c) => format!("bitshift ('{}{}')", c, c),
                                 Token::AssignmentOperation(c) if c=='<' || c=='>' => format!("bitshift ('{}{}=')", c, c),
                                 Token::AssignmentOperation(c) => format!("operation ('{}=')", c),
+                                Token::IncrementOperation => "increment operation".to_string(),
+                                Token::DecrementOperation => "decrement operation".to_string(),
                                 Token::Arrow => "->".to_string(),
                                 Token::Unknown(c) => format!("unknown ('{}')", c),
                                 Token::UnterminatedString => "unterminated string".to_string(),
@@ -315,6 +320,11 @@ impl<'a> Error<'a> {
             Error::BadTextureSampleType { ref span, kind, width } => ParseError {
                 message: format!("texture sample type must be one of f32, i32 or u32, but found {}", kind.to_wgsl(width)),
                 labels: vec![(span.clone(), "must be one of f32, i32 or u32".into())],
+                notes: vec![],
+            },
+            Error::BadIncrDecrReferenceType(ref span) => ParseError {
+                message: "increment/decrement operation requires reference type to be one of i32 or u32".to_string(),
+                labels: vec![(span.clone(), "must be a reference type of i32 or u32".into())],
                 notes: vec![],
             },
             Error::BadTexture(ref bad_span) => ParseError {
@@ -3252,7 +3262,7 @@ impl Parser {
         Ok((handle, storage_access))
     }
 
-    /// Parse a assignment statement
+    /// Parse an assignment statement (will also parse increment and decrement statements)
     fn parse_assignment_statement<'a, 'out>(
         &mut self,
         lexer: &mut Lexer<'a>,
@@ -3264,11 +3274,11 @@ impl Parser {
         context.emitter.start(context.expressions);
         let reference = self.parse_unary_expression(lexer, context.reborrow())?;
         // The left hand side of an assignment must be a reference.
+        let lhs_span = span_start..lexer.current_byte_offset();
         if !reference.is_reference {
-            let span = span_start..lexer.current_byte_offset();
             return Err(Error::NotReference(
                 "the left-hand side of an assignment",
-                span,
+                lhs_span,
             ));
         }
 
@@ -3295,12 +3305,67 @@ impl Parser {
                     crate::Expression::Load {
                         pointer: reference.handle,
                     },
-                    NagaSpan::from(span_start..lexer.current_byte_offset()),
+                    lhs_span.into(),
                 );
                 let right = self.parse_general_expression(lexer, context.reborrow())?;
                 context
                     .expressions
                     .append(crate::Expression::Binary { op, left, right }, span.into())
+            }
+            (op @ Token::IncrementOperation | op @ Token::DecrementOperation, op_span) => {
+                let op = match op {
+                    Token::IncrementOperation => Bo::Add,
+                    Token::DecrementOperation => Bo::Subtract,
+                    _ => unreachable!(),
+                };
+
+                // prepare the typifier, but work around mutable borrowing...
+                let _ = context.resolve_type(reference.handle)?;
+
+                let ty = context.typifier.get(reference.handle, context.types);
+                let constant_inner = match ty.canonical_form(context.types) {
+                    Some(crate::TypeInner::ValuePointer {
+                        size: None,
+                        kind,
+                        width,
+                        space: _,
+                    }) => crate::ConstantInner::Scalar {
+                        width,
+                        value: match kind {
+                            crate::ScalarKind::Sint => crate::ScalarValue::Sint(1),
+                            crate::ScalarKind::Uint => crate::ScalarValue::Uint(1),
+                            _ => {
+                                return Err(Error::BadIncrDecrReferenceType(lhs_span));
+                            }
+                        },
+                    },
+                    _ => {
+                        return Err(Error::BadIncrDecrReferenceType(lhs_span));
+                    }
+                };
+                let constant = context.constants.append(
+                    crate::Constant {
+                        name: None,
+                        specialization: None,
+                        inner: constant_inner,
+                    },
+                    crate::Span::default(),
+                );
+
+                let left = context.expressions.append(
+                    crate::Expression::Load {
+                        pointer: reference.handle,
+                    },
+                    lhs_span.into(),
+                );
+                let right = context.interrupt_emitter(
+                    crate::Expression::Constant(constant),
+                    crate::Span::default(),
+                );
+                context.expressions.append(
+                    crate::Expression::Binary { op, left, right },
+                    op_span.into(),
+                )
             }
             other => return Err(Error::Unexpected(other, ExpectedToken::SwitchItem)),
         };

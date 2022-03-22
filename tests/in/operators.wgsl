@@ -94,6 +94,8 @@ fn binary_assignment() {
     a %= 1;
     a ^= 0;
     a &= 0;
+    a++;
+    a--;
 }
 
 @stage(compute) @workgroup_size(1)

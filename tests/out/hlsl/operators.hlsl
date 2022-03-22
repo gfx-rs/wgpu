@@ -101,6 +101,10 @@ void binary_assignment()
     a = (_expr21 ^ 0);
     int _expr24 = a;
     a = (_expr24 & 0);
+    int _expr27 = a;
+    a = (_expr27 + 1);
+    int _expr30 = a;
+    a = (_expr30 - 1);
     return;
 }
 

@@ -385,11 +385,20 @@ fn consume_token(mut input: &str, generic: bool) -> (Token<'_>, &str) {
             match chars.next() {
                 Some('>') => (Token::Arrow, chars.as_str()),
                 Some('0'..='9') | Some('.') => consume_number(input),
+                Some('-') => (Token::DecrementOperation, chars.as_str()),
                 Some('=') => (Token::AssignmentOperation(cur), chars.as_str()),
                 _ => (Token::Operation(cur), sub_input),
             }
         }
-        '+' | '*' | '%' | '^' => {
+        '+' => {
+            input = chars.as_str();
+            match chars.next() {
+                Some('+') => (Token::IncrementOperation, chars.as_str()),
+                Some('=') => (Token::AssignmentOperation(cur), chars.as_str()),
+                _ => (Token::Operation(cur), input),
+            }
+        }
+        '*' | '%' | '^' => {
             input = chars.as_str();
             if chars.next() == Some('=') {
                 (Token::AssignmentOperation(cur), chars.as_str())

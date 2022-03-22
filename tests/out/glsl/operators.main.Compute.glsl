@@ -85,6 +85,10 @@ void binary_assignment() {
     a = (_e21 ^ 0);
     int _e24 = a;
     a = (_e24 & 0);
+    int _e27 = a;
+    a = (_e27 + 1);
+    int _e30 = a;
+    a = (_e30 - 1);
     return;
 }
 

@@ -85,7 +85,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let normal = normalize(in.world_normal);
     // accumulate color
     var color: vec3<f32> = c_ambient;
-    for(var i = 0u; i < min(u_globals.num_lights.x, c_max_lights); i += 1u) {
+    for(var i = 0u; i < min(u_globals.num_lights.x, c_max_lights); i++) {
         let light = s_lights[i];
         // project into the light space
         let shadow = fetch_shadow(i, light.proj * in.world_position);
@@ -104,7 +104,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 fn fs_main_without_storage(in: VertexOutput) -> @location(0) vec4<f32> {
     let normal = normalize(in.world_normal);
     var color: vec3<f32> = c_ambient;
-    for(var i = 0u; i < min(u_globals.num_lights.x, c_max_lights); i += 1u) {
+    for(var i = 0u; i < min(u_globals.num_lights.x, c_max_lights); i++) {
         // This line is the only difference from the entrypoint above. It uses the lights
         // uniform instead of the lights storage buffer
         let light = u_lights[i];
