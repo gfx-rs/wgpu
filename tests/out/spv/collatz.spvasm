@@ -57,9 +57,9 @@ OpLoopMerge %22 %24 None
 OpBranch %23
 %23 = OpLabel
 %25 = OpLoad  %4  %13
-%27 = OpULessThanEqual  %26  %25 %5
+%27 = OpUGreaterThan  %26  %25 %5
 OpSelectionMerge %28 None
-OpBranchConditional %27 %29 %28
+OpBranchConditional %27 %28 %29
 %29 = OpLabel
 OpBranch %22
 %28 = OpLabel

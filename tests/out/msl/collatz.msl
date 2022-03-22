@@ -21,7 +21,8 @@ uint collatz_iterations(
     n = n_base;
     while(true) {
         uint _e5 = n;
-        if (_e5 <= 1u) {
+        if (_e5 > 1u) {
+        } else {
             break;
         }
         uint _e8 = n;

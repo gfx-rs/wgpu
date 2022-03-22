@@ -265,6 +265,32 @@ fn parse_loop() {
     parse_str(
         "
         fn main() {
+            var found: bool = false;
+            var i: i32 = 0;
+            while !found {
+                if i == 10 {
+                    found = true;
+                }
+
+                i = i + 1;
+            }
+        }
+    ",
+    )
+    .unwrap();
+    parse_str(
+        "
+        fn main() {
+            while true {
+                break;
+            }
+        }
+    ",
+    )
+    .unwrap();
+    parse_str(
+        "
+        fn main() {
             var a: i32 = 0;
             for(var i: i32 = 0; i < 4; i = i + 1) {
                 a = a + 2;
@@ -418,7 +444,7 @@ fn parse_struct_instantiation() {
         a: f32,
         b: vec3<f32>,
     };
-    
+
     @stage(fragment)
     fn fs_main() {
         var foo: Foo = Foo(0.0, vec3<f32>(0.0, 1.0, 42.0));

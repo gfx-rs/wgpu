@@ -3743,6 +3743,40 @@ impl Parser {
 
                         Some(crate::Statement::Loop { body, continuing })
                     }
+                    "while" => {
+                        let _ = lexer.next();
+                        let mut body = crate::Block::new();
+
+                        let (condition, span) = lexer.capture_span(|lexer| {
+                            emitter.start(context.expressions);
+                            let condition = self.parse_general_expression(
+                                lexer,
+                                context.as_expression(&mut body, &mut emitter),
+                            )?;
+                            lexer.expect(Token::Paren('{'))?;
+                            body.extend(emitter.finish(context.expressions));
+                            Ok(condition)
+                        })?;
+                        let mut reject = crate::Block::new();
+                        reject.push(crate::Statement::Break, NagaSpan::default());
+                        body.push(
+                            crate::Statement::If {
+                                condition,
+                                accept: crate::Block::new(),
+                                reject,
+                            },
+                            NagaSpan::from(span),
+                        );
+
+                        while !lexer.skip(Token::Paren('}')) {
+                            self.parse_statement(lexer, context.reborrow(), &mut body, false)?;
+                        }
+
+                        Some(crate::Statement::Loop {
+                            body,
+                            continuing: crate::Block::new(),
+                        })
+                    }
                     "for" => {
                         let _ = lexer.next();
                         lexer.expect(Token::Paren('('))?;

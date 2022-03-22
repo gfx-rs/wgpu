@@ -125,7 +125,7 @@
                 ),
                 Constant(2),
                 Binary(
-                    op: LessEqual,
+                    op: Greater,
                     left: 6,
                     right: 7,
                 ),
@@ -199,10 +199,10 @@
                         )),
                         If(
                             condition: 8,
-                            accept: [
+                            accept: [],
+                            reject: [
                                 Break,
                             ],
-                            reject: [],
                         ),
                         Emit((
                             start: 8,

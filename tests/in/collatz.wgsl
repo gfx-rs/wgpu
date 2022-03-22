@@ -14,10 +14,7 @@ var<storage,read_write> v_indices: PrimeIndices;
 fn collatz_iterations(n_base: u32) -> u32 {
     var n = n_base;
     var i: u32 = 0u;
-    loop {
-        if n <= 1u {
-            break;
-        }
+    while n > 1u {
         if n % 2u == 0u {
             n = n / 2u;
         }

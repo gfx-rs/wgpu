@@ -12,7 +12,8 @@ fn collatz_iterations(n_base: u32) -> u32 {
     n = n_base;
     loop {
         let _e5 = n;
-        if (_e5 <= 1u) {
+        if (_e5 > 1u) {
+        } else {
             break;
         }
         let _e8 = n;

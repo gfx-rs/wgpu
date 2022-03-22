@@ -9,7 +9,8 @@ uint collatz_iterations(uint n_base)
     n = n_base;
     while(true) {
         uint _expr5 = n;
-        if ((_expr5 <= 1u)) {
+        if ((_expr5 > 1u)) {
+        } else {
             break;
         }
         uint _expr8 = n;
