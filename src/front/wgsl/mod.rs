@@ -3312,12 +3312,13 @@ impl Parser {
                     .expressions
                     .append(crate::Expression::Binary { op, left, right }, span.into())
             }
-            (op @ Token::IncrementOperation | op @ Token::DecrementOperation, op_span) => {
-                let op = match op {
+            token @ (Token::IncrementOperation, _) | token @ (Token::DecrementOperation, _) => {
+                let op = match token.0 {
                     Token::IncrementOperation => Bo::Add,
                     Token::DecrementOperation => Bo::Subtract,
                     _ => unreachable!(),
                 };
+                let op_span = token.1;
 
                 // prepare the typifier, but work around mutable borrowing...
                 let _ = context.resolve_type(reference.handle)?;
