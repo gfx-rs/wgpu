@@ -6,7 +6,7 @@ use std::{borrow::Cow, f32::consts, mem, num::NonZeroU32};
 use wgpu::util::DeviceExt;
 
 const TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
-const MIP_LEVEL_COUNT: u32 = 9;
+const MIP_LEVEL_COUNT: u32 = 10;
 const MIP_PASS_COUNT: u32 = MIP_LEVEL_COUNT - 1;
 
 fn create_texels(size: usize, cx: f32, cy: f32) -> Vec<u8> {
@@ -213,7 +213,7 @@ impl framework::Example for Example {
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
         // Create the texture
-        let size = 1 << MIP_LEVEL_COUNT;
+        let size = 1 << MIP_PASS_COUNT;
         let texels = create_texels(size as usize, -0.8, 0.156);
         let texture_extent = wgpu::Extent3d {
             width: size,
