@@ -758,9 +758,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 .map_err(DeviceError::from)?
                         };
                         log::trace!("Stitching command buffer {:?} before submission", cmb_id);
-                        baked
-                            .initialize_buffer_memory(&mut *trackers, &mut *buffer_guard)
-                            .map_err(|err| QueueSubmitError::DestroyedBuffer(err.0))?;
+                        if !device
+                            .features
+                            .contains(wgt::Features::ALLOCATED_BUFFER_ALREADY_ZERO_FILLED)
+                        {
+                            baked
+                                .initialize_buffer_memory(&mut *trackers, &mut *buffer_guard)
+                                .map_err(|err| QueueSubmitError::DestroyedBuffer(err.0))?;
+                        }
                         baked
                             .initialize_texture_memory(&mut *trackers, &mut *texture_guard, device)
                             .map_err(|err| QueueSubmitError::DestroyedTexture(err.0))?;

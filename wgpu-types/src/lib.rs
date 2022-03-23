@@ -569,6 +569,12 @@ bitflags::bitflags! {
         ///
         /// This is a native-only feature.
         const TEXTURE_COMPRESSION_ASTC_HDR = 1 << 43;
+        /// Skip buffer zero initialization
+        /// Supported Platforms:
+        /// - Metal
+        ///
+        /// This is a native-only feature.
+        const ALLOCATED_BUFFER_ALREADY_ZERO_FILLED = 1 << 44;
     }
 }
 
