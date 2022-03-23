@@ -175,6 +175,33 @@ If you are running this program on native and not in a browser and wish to work 
 Adapter::downlevel_properties or Device::downlevel_properties to get a listing of the features the current \
 platform supports.";
 
+/// Call a `Global` method, dispatching dynamically to the appropriate back end.
+///
+/// Uses of this macro have the form:
+///
+///     gfx_select!(id => global.method(args...))
+///
+/// where `id` is some [`id::Id`] resource id, `global` is a [`hub::Global`],
+/// and `method` is any method on [`Global`] that takes a single generic
+/// parameter that implements [`hal::Api`] (for example,
+/// [`Global::device_create_buffer`]).
+///
+/// The `wgpu-core` crate can support multiple back ends simultaneously (Vulkan,
+/// Metal, etc.), depending on features and availability. Each [`Id`]'s value
+/// indicates which back end its resource belongs to. This macro does a switch
+/// on `id`'s back end, and calls the `Global` method specialized for that back
+/// end.
+///
+/// Internally to `wgpu-core`, most types take the back end (some type that
+/// implements `hal::Api`) as a generic parameter, so their methods are compiled
+/// with full knowledge of which back end they're working with. This macro
+/// serves as the boundary between dynamic `Id` values provided by `wgpu-core`'s
+/// users and the crate's mostly-monomorphized implementation, selecting the
+/// `hal::Api` implementation appropriate to the `Id` value's back end.
+///
+/// [`Global`]: hub::Global
+/// [`Global::device_create_buffer`]: hub::Global::device_create_buffer
+/// [`Id`]: id::Id
 #[macro_export]
 macro_rules! gfx_select {
     ($id:expr => $global:ident.$method:ident( $($param:expr),* )) => {
