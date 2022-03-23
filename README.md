@@ -46,7 +46,7 @@ If you are looking for a wgpu tutorial, look at the following:
 
 ### C/C++
 
-To use wgpu in C/C++, you need [wgpu-native](https://github.com/gfx-rs/wgpu-native). 
+To use wgpu in C/C++, you need [wgpu-native](https://github.com/gfx-rs/wgpu-native).
 
 ### Others
 
@@ -66,21 +66,21 @@ We have a [wiki](https://github.com/gfx-rs/wgpu/wiki) that serves as a knowledge
 
 ## Supported Platforms
 
-   API   |    Windows                    |  Linux & Android          |    macOS & iOS      |
-  -----  | ----------------------------- | ------------------------- | ------------------- |
-  Vulkan | :white_check_mark:            | :white_check_mark:        |                     |
-  Metal  |                               |                           | :white_check_mark:  |
-  DX12   | :white_check_mark: (W10 only) |                           |                     |
-  DX11   | :hammer_and_wrench:           |                           |                     |
-  GLES3  |                               | :ok:                      |                     |
-  Angle  | :ok:                          | :ok:                      | :hammer_and_wrench: |
+   API   |    Windows                     |  Linux & Android          |    macOS & iOS      |
+  -----  | ------------------------------ | ------------------------- | ------------------- |
+  Vulkan | :white_check_mark:             | :white_check_mark:        |                     |
+  Metal  |                                |                           | :white_check_mark:  |
+  DX12   | :white_check_mark: (W10+ only) |                           |                     |
+  DX11   | :hammer_and_wrench:            |                           |                     |
+  GLES3  |                                | :ok:                      |                     |
+  Angle  | :ok:                           | :ok:                      | :hammer_and_wrench: |
 
 :white_check_mark: = First Class Support — :ok: = Best Effort Support — :hammer_and_wrench: = Unsupported, but support in progress
 
 ### Shader Support
 
-wgpu supports shaders in [WGSL](https://gpuweb.github.io/gpuweb/wgsl/), SPIR-V, and GLSL. 
-Both [HLSL](https://github.com/Microsoft/DirectXShaderCompiler) and [GLSL](https://github.com/KhronosGroup/glslang) 
+wgpu supports shaders in [WGSL](https://gpuweb.github.io/gpuweb/wgsl/), SPIR-V, and GLSL.
+Both [HLSL](https://github.com/Microsoft/DirectXShaderCompiler) and [GLSL](https://github.com/KhronosGroup/glslang)
 have compilers to target SPIR-V. All of these shader languages can be used with any backend, we
 will handle all of the conversion. Additionally, support for these shader inputs is not going away.
 
@@ -155,7 +155,7 @@ Or run a part of the integration test suite:
 cargo nextest run -p wgpu -- <name-of-test>
 ```
 
-If you are a user and want a way to help contribute to wgpu, we always need more help writing test cases. 
+If you are a user and want a way to help contribute to wgpu, we always need more help writing test cases.
 
 ### WebGPU Conformance Test Suite
 
