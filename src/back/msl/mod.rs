@@ -233,7 +233,7 @@ impl Options {
 
                 Ok(ResolvedBinding::BuiltIn {
                     built_in,
-                    invariant,
+                    invariant: invariant && matches!(mode, LocationMode::FragmentOutput),
                 })
             }
             crate::Binding::Location {

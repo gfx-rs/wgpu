@@ -27,7 +27,7 @@ struct vertex_Input {
     uint color [[attribute(10)]];
 };
 struct vertex_Output {
-    metal::float4 position [[position, invariant]];
+    metal::float4 position [[position]];
     float varying [[user(loc1), center_perspective]];
     float _point_size [[point_size]];
 };
@@ -53,7 +53,7 @@ struct fragment_Output {
 };
 fragment fragment_Output fragment_(
   fragment_Input varyings_1 [[stage_in]]
-, metal::float4 position [[position, invariant]]
+, metal::float4 position [[position]]
 , bool front_facing [[front_facing]]
 , uint sample_index [[sample_id]]
 , uint sample_mask [[sample_mask]]
@@ -84,7 +84,7 @@ kernel void compute_(
 struct vertex_two_structsInput {
 };
 struct vertex_two_structsOutput {
-    metal::float4 member_3 [[position, invariant]];
+    metal::float4 member_3 [[position]];
     float _point_size [[point_size]];
 };
 vertex vertex_two_structsOutput vertex_two_structs(
