@@ -174,6 +174,7 @@ pub enum QualifierValue {
 pub struct TypeQualifiers<'a> {
     pub span: Span,
     pub storage: (StorageQualifier, Span),
+    pub invariant: Option<Span>,
     pub interpolation: Option<(Interpolation, Span)>,
     pub precision: Option<(Precision, Span)>,
     pub sampling: Option<(Sampling, Span)>,
@@ -186,6 +187,15 @@ pub struct TypeQualifiers<'a> {
 impl<'a> TypeQualifiers<'a> {
     /// Appends `errors` with errors for all unused qualifiers
     pub fn unused_errors(&self, errors: &mut Vec<super::Error>) {
+        if let Some(meta) = self.invariant {
+            errors.push(super::Error {
+                kind: super::ErrorKind::SemanticError(
+                    "Invariant qualifier can only be used in in/out variables".into(),
+                ),
+                meta,
+            });
+        }
+
         if let Some((_, meta)) = self.interpolation {
             errors.push(super::Error {
                 kind: super::ErrorKind::SemanticError(

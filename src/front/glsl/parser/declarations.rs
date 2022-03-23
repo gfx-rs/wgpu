@@ -361,6 +361,14 @@ impl<'source> ParsingContext<'source> {
                             )
                             .map(Some)
                         } else {
+                            if qualifiers.invariant.take().is_some() {
+                                parser.make_variable_invariant(ctx, body, &ty_name, token.meta);
+
+                                qualifiers.unused_errors(&mut parser.errors);
+                                self.expect(parser, TokenValue::Semicolon)?;
+                                return Ok(Some(qualifiers.span));
+                            }
+
                             //TODO: declaration
                             // type_qualifier IDENTIFIER SEMICOLON
                             // type_qualifier IDENTIFIER identifier_list SEMICOLON

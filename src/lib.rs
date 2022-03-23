@@ -748,7 +748,11 @@ pub enum ConstantInner {
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 pub enum Binding {
     /// Built-in shader variable.
-    BuiltIn(BuiltIn),
+    BuiltIn {
+        built_in: BuiltIn,
+        /// can only be `true` for [`BuiltIn::Position`]
+        invariant: bool,
+    },
 
     /// Indexed location.
     ///

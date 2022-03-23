@@ -72,6 +72,7 @@ impl<'a> Iterator for Lexer<'a> {
                     "uniform" => TokenValue::Uniform,
                     "buffer" => TokenValue::Buffer,
                     "shared" => TokenValue::Shared,
+                    "invariant" => TokenValue::Invariant,
                     "flat" => TokenValue::Interpolation(crate::Interpolation::Flat),
                     "noperspective" => TokenValue::Interpolation(crate::Interpolation::Linear),
                     "smooth" => TokenValue::Interpolation(crate::Interpolation::Perspective),

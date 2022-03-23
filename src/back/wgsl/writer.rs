@@ -14,6 +14,7 @@ enum Attribute {
     Binding(u32),
     BuiltIn(crate::BuiltIn),
     Group(u32),
+    Invariant,
     Interpolate(Option<crate::Interpolation>, Option<crate::Sampling>),
     Location(u32),
     Stage(ShaderStage),
@@ -357,6 +358,7 @@ impl<W: Write> Writer<W> {
                 }
                 Attribute::Binding(id) => write!(self.out, "@binding({}) ", id)?,
                 Attribute::Group(id) => write!(self.out, "@group({}) ", id)?,
+                Attribute::Invariant => write!(self.out, "@invariant ")?,
                 Attribute::Interpolate(interpolation, sampling) => {
                     if sampling.is_some() && sampling != Some(crate::Sampling::Center) {
                         write!(
@@ -400,9 +402,9 @@ impl<W: Write> Writer<W> {
         writeln!(self.out)?;
         for (index, member) in members.iter().enumerate() {
             // Skip struct member with unsupported built in
-            if let Some(crate::Binding::BuiltIn(builtin)) = member.binding {
-                if builtin_str(builtin).is_none() {
-                    log::warn!("Skip member with unsupported builtin {:?}", builtin);
+            if let Some(crate::Binding::BuiltIn { built_in, .. }) = member.binding {
+                if builtin_str(built_in).is_none() {
+                    log::warn!("Skip member with unsupported builtin {:?}", built_in);
                     continue;
                 }
             }
@@ -1745,13 +1747,13 @@ impl<W: Write> Writer<W> {
 
                 // Write the comma separated constants
                 for (index, constant) in components.iter().enumerate() {
-                    if let Some(&crate::Binding::BuiltIn(builtin)) =
+                    if let Some(&crate::Binding::BuiltIn { built_in, .. }) =
                         members.and_then(|members| members.get(index)?.binding.as_ref())
                     {
-                        if builtin_str(builtin).is_none() {
+                        if builtin_str(built_in).is_none() {
                             log::warn!(
                                 "Skip constant for struct member with unsupported builtin {:?}",
-                                builtin
+                                built_in
                             );
                             continue;
                         }
@@ -1975,7 +1977,16 @@ fn map_binding_to_attribute(
     scalar_kind: Option<crate::ScalarKind>,
 ) -> Vec<Attribute> {
     match *binding {
-        crate::Binding::BuiltIn(built_in) => vec![Attribute::BuiltIn(built_in)],
+        crate::Binding::BuiltIn {
+            built_in,
+            invariant,
+        } => {
+            if invariant {
+                vec![Attribute::BuiltIn(built_in), Attribute::Invariant]
+            } else {
+                vec![Attribute::BuiltIn(built_in)]
+            }
+        }
         crate::Binding::Location {
             location,
             interpolation,
@@ -2006,9 +2017,10 @@ fn access_to_unsupported_builtin(
     {
         // Let's check that we try to access a struct member with unsupported built-in and skip it.
         if let TypeInner::Struct { ref members, .. } = module.types[pointer_base_handle].inner {
-            if let Some(crate::Binding::BuiltIn(builtin)) = members[index as usize].binding {
-                if builtin_str(builtin).is_none() {
-                    log::warn!("Skip component with unsupported builtin {:?}", builtin);
+            if let Some(crate::Binding::BuiltIn { built_in, .. }) = members[index as usize].binding
+            {
+                if builtin_str(built_in).is_none() {
+                    log::warn!("Skip component with unsupported builtin {:?}", built_in);
                     return true;
                 }
             }

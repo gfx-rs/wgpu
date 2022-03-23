@@ -44,6 +44,7 @@ pub enum TokenValue {
     /// (for example `writeonly` has an associated value of [`crate::StorageAccess::STORE`])
     MemoryQualifier(crate::StorageAccess),
 
+    Invariant,
     Interpolation(Interpolation),
     Sampling(Sampling),
     Precision,

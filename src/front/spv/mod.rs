@@ -203,6 +203,7 @@ struct Decoration {
     array_stride: Option<NonZeroU32>,
     matrix_stride: Option<NonZeroU32>,
     matrix_major: Option<Majority>,
+    invariant: bool,
     interpolation: Option<crate::Interpolation>,
     sampling: Option<crate::Sampling>,
     flags: DecorationFlags,
@@ -232,8 +233,12 @@ impl Decoration {
             Decoration {
                 built_in: Some(built_in),
                 location: None,
+                invariant,
                 ..
-            } => map_builtin(built_in).map(crate::Binding::BuiltIn),
+            } => map_builtin(built_in).map(|built_in| crate::Binding::BuiltIn {
+                built_in,
+                invariant: invariant && built_in == crate::BuiltIn::Position,
+            }),
             Decoration {
                 built_in: None,
                 location: Some(location),
@@ -680,6 +685,9 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             spirv::Decoration::MatrixStride => {
                 inst.expect(base_words + 2)?;
                 dec.matrix_stride = NonZeroU32::new(self.next()?);
+            }
+            spirv::Decoration::Invariant => {
+                dec.invariant = true;
             }
             spirv::Decoration::NoPerspective => {
                 dec.interpolation = Some(crate::Interpolation::Linear);
@@ -1467,10 +1475,10 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                                     span,
                                 );
 
-                                if let Some(crate::Binding::BuiltIn(builtin)) =
+                                if let Some(crate::Binding::BuiltIn { built_in, .. }) =
                                     members[index as usize].binding
                                 {
-                                    self.builtin_usage.insert(builtin);
+                                    self.builtin_usage.insert(built_in);
                                 }
 
                                 AccessExpression {
@@ -4642,7 +4650,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             ExtendedClass::Input => {
                 let mut binding = dec.io_binding()?;
                 let mut unsigned_ty = effective_ty;
-                if let crate::Binding::BuiltIn(built_in) = binding {
+                if let crate::Binding::BuiltIn { built_in, .. } = binding {
                     let needs_inner_uint = match built_in {
                         crate::BuiltIn::BaseInstance
                         | crate::BuiltIn::BaseVertex
@@ -4695,7 +4703,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 // For output interface blocks, this would be a structure.
                 let mut binding = dec.io_binding().ok();
                 let init = match binding {
-                    Some(crate::Binding::BuiltIn(built_in)) => {
+                    Some(crate::Binding::BuiltIn { built_in, .. }) => {
                         match null::generate_default_built_in(
                             Some(built_in),
                             effective_ty,
@@ -4718,7 +4726,9 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                                 .iter()
                                 .map(|member| {
                                     let built_in = match member.binding {
-                                        Some(crate::Binding::BuiltIn(built_in)) => Some(built_in),
+                                        Some(crate::Binding::BuiltIn { built_in, .. }) => {
+                                            Some(built_in)
+                                        }
                                         _ => None,
                                     };
                                     (built_in, member.ty)

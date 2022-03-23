@@ -60,7 +60,7 @@ impl InterfaceKey {
     fn new(binding: Option<&crate::Binding>) -> Self {
         match binding {
             Some(&crate::Binding::Location { location, .. }) => Self::Location(location),
-            Some(&crate::Binding::BuiltIn(bi)) => Self::BuiltIn(bi),
+            Some(&crate::Binding::BuiltIn { built_in, .. }) => Self::BuiltIn(built_in),
             None => Self::Other,
         }
     }
@@ -301,6 +301,36 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         Ok(super::ReflectionInfo { entry_point_names })
     }
 
+    fn write_modifier(&mut self, binding: &crate::Binding) -> BackendResult {
+        match *binding {
+            crate::Binding::BuiltIn {
+                invariant: true, ..
+            } => {
+                write!(self.out, "precise ")?;
+            }
+            crate::Binding::Location {
+                interpolation,
+                sampling,
+                ..
+            } => {
+                if let Some(interpolation) = interpolation {
+                    if let Some(string) = interpolation.to_hlsl_str() {
+                        write!(self.out, "{} ", string)?
+                    }
+                }
+
+                if let Some(sampling) = sampling {
+                    if let Some(string) = sampling.to_hlsl_str() {
+                        write!(self.out, "{} ", string)?
+                    }
+                }
+            }
+            _ => {}
+        }
+
+        Ok(())
+    }
+
     //TODO: we could force fragment outputs to always go through `entry_point_io.output` path
     // if they are struct, so that the `stage` argument here could be omitted.
     fn write_semantic(
@@ -309,7 +339,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         stage: Option<(ShaderStage, Io)>,
     ) -> BackendResult {
         match *binding {
-            crate::Binding::BuiltIn(builtin) => {
+            crate::Binding::BuiltIn {
+                built_in: builtin, ..
+            } => {
                 let builtin_str = builtin.to_hlsl_str()?;
                 write!(self.out, " : {}", builtin_str)?;
             }
@@ -341,6 +373,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         writeln!(self.out, " {{")?;
         for m in members.iter() {
             write!(self.out, "{}", back::INDENT)?;
+            if let Some(ref binding) = m.binding {
+                self.write_modifier(binding)?;
+            }
             self.write_type(module, m.ty)?;
             write!(self.out, " {}", &m.name)?;
             if let Some(ref binding) = m.binding {
@@ -750,24 +785,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     self.write_array_size(module, size)?;
                 }
                 _ => {
-                    // Write interpolation modifier before type
-                    if let Some(crate::Binding::Location {
-                        interpolation,
-                        sampling,
-                        ..
-                    }) = member.binding
-                    {
-                        if let Some(interpolation) = interpolation {
-                            if let Some(string) = interpolation.to_hlsl_str() {
-                                write!(self.out, "{} ", string)?
-                            }
-                        }
-
-                        if let Some(sampling) = sampling {
-                            if let Some(string) = sampling.to_hlsl_str() {
-                                write!(self.out, "{} ", string)?
-                            }
-                        }
+                    // Write modifier before type
+                    if let Some(ref binding) = member.binding {
+                        self.write_modifier(binding)?;
                     }
 
                     if let TypeInner::Matrix { .. } = module.types[member.ty].inner {
@@ -887,6 +907,22 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         func_ctx: &back::FunctionCtx<'_>,
     ) -> BackendResult {
         // Function Declaration Syntax - https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-function-syntax
+
+        // Write modifier
+        if let Some(crate::FunctionResult {
+            binding:
+                Some(
+                    ref binding @ crate::Binding::BuiltIn {
+                        invariant: true, ..
+                    },
+                ),
+            ..
+        }) = func.result
+        {
+            self.write_modifier(binding)?;
+        }
+
+        // Write return type
         if let Some(ref result) = func.result {
             match func_ctx.ty {
                 back::FunctionType::Function(_) => {

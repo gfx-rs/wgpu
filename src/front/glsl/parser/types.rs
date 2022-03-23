@@ -140,7 +140,8 @@ impl<'source> ParsingContext<'source> {
 
     pub fn peek_type_qualifier(&mut self, parser: &mut Parser) -> bool {
         self.peek(parser).map_or(false, |t| match t.value {
-            TokenValue::Interpolation(_)
+            TokenValue::Invariant
+            | TokenValue::Interpolation(_)
             | TokenValue::Sampling(_)
             | TokenValue::PrecisionQualifier(_)
             | TokenValue::Const
@@ -171,6 +172,19 @@ impl<'source> ParsingContext<'source> {
             qualifiers.span.subsume(token.meta);
 
             match token.value {
+                TokenValue::Invariant => {
+                    if qualifiers.invariant.is_some() {
+                        parser.errors.push(Error {
+                            kind: ErrorKind::SemanticError(
+                                "Cannot use more than one invariant qualifier per declaration"
+                                    .into(),
+                            ),
+                            meta: token.meta,
+                        })
+                    }
+
+                    qualifiers.invariant = Some(token.meta);
+                }
                 TokenValue::Interpolation(i) => {
                     if qualifiers.interpolation.is_some() {
                         parser.errors.push(Error {
@@ -235,7 +249,7 @@ impl<'source> ParsingContext<'source> {
                     qualifiers.sampling = Some((s, token.meta));
                 }
                 TokenValue::PrecisionQualifier(p) => {
-                    if qualifiers.interpolation.is_some() {
+                    if qualifiers.precision.is_some() {
                         parser.errors.push(Error {
                             kind: ErrorKind::SemanticError(
                                 "Cannot use more than one precision qualifier per declaration"

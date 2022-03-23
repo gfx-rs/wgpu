@@ -100,7 +100,10 @@ impl ops::Index<crate::ShaderStage> for PerStageMap {
 }
 
 enum ResolvedBinding {
-    BuiltIn(crate::BuiltIn),
+    BuiltIn {
+        built_in: crate::BuiltIn,
+        invariant: bool,
+    },
     Attribute(u32),
     Color(u32),
     User {
@@ -146,6 +149,8 @@ pub enum Error {
     CapabilityNotSupported(crate::valid::Capabilities),
     #[error("address space {0:?} is not supported for target MSL version")]
     UnsupportedAddressSpace(crate::AddressSpace),
+    #[error("attribute '{0}' is not supported for target MSL version")]
+    UnsupportedAttribute(String),
 }
 
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
@@ -218,7 +223,19 @@ impl Options {
         mode: LocationMode,
     ) -> Result<ResolvedBinding, Error> {
         match *binding {
-            crate::Binding::BuiltIn(built_in) => Ok(ResolvedBinding::BuiltIn(built_in)),
+            crate::Binding::BuiltIn {
+                built_in,
+                invariant,
+            } => {
+                if invariant && self.lang_version < (2, 1) {
+                    return Err(Error::UnsupportedAttribute("invariant".to_string()));
+                }
+
+                Ok(ResolvedBinding::BuiltIn {
+                    built_in,
+                    invariant,
+                })
+            }
             crate::Binding::Location {
                 location,
                 interpolation,
@@ -328,8 +345,12 @@ impl ResolvedBinding {
     }
 
     fn try_fmt<W: Write>(&self, out: &mut W) -> Result<(), Error> {
+        write!(out, " [[")?;
         match *self {
-            Self::BuiltIn(built_in) => {
+            Self::BuiltIn {
+                built_in,
+                invariant,
+            } => {
                 use crate::BuiltIn as Bi;
                 let name = match built_in {
                     Bi::Position => "position",
@@ -358,6 +379,10 @@ impl ResolvedBinding {
                     }
                 };
                 write!(out, "{}", name)?;
+
+                if invariant {
+                    write!(out, ", invariant")?;
+                }
             }
             Self::Attribute(index) => write!(out, "attribute({})", index)?,
             Self::Color(index) => write!(out, "color({})", index)?,
@@ -384,12 +409,6 @@ impl ResolvedBinding {
                 }
             }
         }
-        Ok(())
-    }
-
-    fn try_fmt_decorated<W: Write>(&self, out: &mut W) -> Result<(), Error> {
-        write!(out, " [[")?;
-        self.try_fmt(out)?;
         write!(out, "]]")?;
         Ok(())
     }

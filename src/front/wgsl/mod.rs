@@ -1196,6 +1196,7 @@ struct BindingParser {
     built_in: Option<crate::BuiltIn>,
     interpolation: Option<crate::Interpolation>,
     sampling: Option<crate::Sampling>,
+    invariant: bool,
 }
 
 impl BindingParser {
@@ -1227,6 +1228,7 @@ impl BindingParser {
                 }
                 lexer.expect(Token::Paren(')'))?;
             }
+            "invariant" => self.invariant = true,
             _ => return Err(Error::UnknownAttribute(name_span)),
         }
         Ok(())
@@ -1238,9 +1240,10 @@ impl BindingParser {
             self.built_in,
             self.interpolation,
             self.sampling,
+            self.invariant,
         ) {
-            (None, None, None, None) => Ok(None),
-            (Some(location), None, interpolation, sampling) => {
+            (None, None, None, None, false) => Ok(None),
+            (Some(location), None, interpolation, sampling, false) => {
                 // Before handing over the completed `Module`, we call
                 // `apply_default_interpolation` to ensure that the interpolation and
                 // sampling have been explicitly specified on all vertex shader output and fragment
@@ -1251,8 +1254,17 @@ impl BindingParser {
                     sampling,
                 }))
             }
-            (None, Some(bi), None, None) => Ok(Some(crate::Binding::BuiltIn(bi))),
-            (_, _, _, _) => Err(Error::InconsistentBinding(span)),
+            (None, Some(crate::BuiltIn::Position), None, None, true) => {
+                Ok(Some(crate::Binding::BuiltIn {
+                    built_in: crate::BuiltIn::Position,
+                    invariant: true,
+                }))
+            }
+            (None, Some(built_in), None, None, false) => Ok(Some(crate::Binding::BuiltIn {
+                built_in,
+                invariant: false,
+            })),
+            (_, _, _, _, _) => Err(Error::InconsistentBinding(span)),
         }
     }
 }

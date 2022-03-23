@@ -38,7 +38,7 @@ pub(super) fn contains_builtin(
     arena: &UniqueArena<crate::Type>,
     built_in: crate::BuiltIn,
 ) -> bool {
-    if let Some(&crate::Binding::BuiltIn(bi)) = binding {
+    if let Some(&crate::Binding::BuiltIn { built_in: bi, .. }) = binding {
         bi == built_in
     } else if let crate::TypeInner::Struct { ref members, .. } = arena[ty].inner {
         members

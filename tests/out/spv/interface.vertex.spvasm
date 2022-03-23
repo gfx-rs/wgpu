@@ -19,6 +19,7 @@ OpDecorate %24 BuiltIn InstanceIndex
 OpDecorate %26 Location 10
 OpDecorate %26 Flat
 OpDecorate %28 BuiltIn Position
+OpDecorate %28 Invariant
 OpDecorate %30 Location 1
 OpDecorate %32 BuiltIn PointSize
 %2 = OpTypeVoid

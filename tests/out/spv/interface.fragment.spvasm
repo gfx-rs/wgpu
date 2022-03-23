@@ -18,6 +18,7 @@ OpDecorate %16 ArrayStride 4
 OpMemberDecorate %18 0 Offset 0
 OpMemberDecorate %19 0 Offset 0
 OpDecorate %22 BuiltIn FragCoord
+OpDecorate %22 Invariant
 OpDecorate %25 Location 1
 OpDecorate %28 BuiltIn FrontFacing
 OpDecorate %31 BuiltIn SampleId

@@ -336,7 +336,7 @@ impl fmt::Display for VaryingName<'_> {
                 };
                 write!(f, "_{}_location{}", prefix, location,)
             }
-            crate::Binding::BuiltIn(built_in) => {
+            crate::Binding::BuiltIn { built_in, .. } => {
                 write!(f, "{}", glsl_built_in(built_in, self.output))
             }
         }
@@ -1122,6 +1122,13 @@ impl<'a, W: Write> Writer<'a, W> {
                         interpolation,
                         sampling,
                     }) => (location, interpolation, sampling),
+                    Some(&crate::Binding::BuiltIn {
+                        built_in,
+                        invariant: true,
+                    }) => {
+                        writeln!(self.out, "invariant {};", glsl_built_in(built_in, output))?;
+                        return Ok(());
+                    }
                     _ => return Ok(()),
                 };
 
@@ -1772,8 +1779,10 @@ impl<'a, W: Write> Writer<'a, W> {
 
                                     for (index, member) in members.iter().enumerate() {
                                         // TODO: handle builtin in better way
-                                        if let Some(crate::Binding::BuiltIn(builtin)) =
-                                            member.binding
+                                        if let Some(crate::Binding::BuiltIn {
+                                            built_in: builtin,
+                                            ..
+                                        }) = member.binding
                                         {
                                             match builtin {
                                                 crate::BuiltIn::ClipDistance

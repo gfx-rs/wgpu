@@ -6,7 +6,7 @@ struct NagaConstants {
 ConstantBuffer<NagaConstants> _NagaConstants: register(b0, space1);
 
 struct VertexOutput {
-    float4 position : SV_Position;
+    precise float4 position : SV_Position;
     float varying : LOC1;
 };
 
@@ -28,12 +28,12 @@ groupshared uint output[1];
 
 struct VertexOutput_vertex {
     float varying : LOC1;
-    float4 position : SV_Position;
+    precise float4 position : SV_Position;
 };
 
 struct FragmentInput_fragment {
     float varying_1 : LOC1;
-    float4 position_1 : SV_Position;
+    precise float4 position_1 : SV_Position;
     bool front_facing_1 : SV_IsFrontFace;
     uint sample_index_1 : SV_SampleIndex;
     uint sample_mask_1 : SV_Coverage;
@@ -81,7 +81,7 @@ void compute(uint3 global_id : SV_DispatchThreadID, uint3 local_id : SV_GroupThr
     return;
 }
 
-float4 vertex_two_structs(Input1_ in1_, Input2_ in2_) : SV_Position
+precise float4 vertex_two_structs(Input1_ in1_, Input2_ in2_) : SV_Position
 {
     uint index = 2u;
 

@@ -1,5 +1,5 @@
 struct VertexOutput {
-    @builtin(position) position: vec4<f32>,
+    @builtin(position) @invariant position: vec4<f32>,
     @location(1) varying: f32,
 }
 
@@ -39,7 +39,7 @@ fn compute(@builtin(global_invocation_id) global_id: vec3<u32>, @builtin(local_i
 }
 
 @stage(vertex) 
-fn vertex_two_structs(in1_: Input1_, in2_: Input2_) -> @builtin(position) vec4<f32> {
+fn vertex_two_structs(in1_: Input1_, in2_: Input2_) -> @builtin(position) @invariant vec4<f32> {
     var index: u32 = 2u;
 
     let _e9: u32 = index;

@@ -11,24 +11,24 @@ struct FragmentInput {
 };
 
 struct VertexOutput_vert_main {
-    uint flat : LOC0;
-    float linear_ : LOC1;
-    float2 linear_centroid : LOC2;
-    float3 linear_sample : LOC3;
+    nointerpolation uint flat : LOC0;
+    noperspective float linear_ : LOC1;
+    noperspective centroid float2 linear_centroid : LOC2;
+    noperspective sample float3 linear_sample : LOC3;
     float4 perspective : LOC4;
-    float perspective_centroid : LOC5;
-    float perspective_sample : LOC6;
+    centroid float perspective_centroid : LOC5;
+    sample float perspective_sample : LOC6;
     float4 position : SV_Position;
 };
 
 struct FragmentInput_frag_main {
-    uint flat_1 : LOC0;
-    float linear_1 : LOC1;
-    float2 linear_centroid_1 : LOC2;
-    float3 linear_sample_1 : LOC3;
+    nointerpolation uint flat_1 : LOC0;
+    noperspective float linear_1 : LOC1;
+    noperspective centroid float2 linear_centroid_1 : LOC2;
+    noperspective sample float3 linear_sample_1 : LOC3;
     float4 perspective_1 : LOC4;
-    float perspective_centroid_1 : LOC5;
-    float perspective_sample_1 : LOC6;
+    centroid float perspective_centroid_1 : LOC5;
+    sample float perspective_sample_1 : LOC6;
     float4 position_1 : SV_Position;
 };
 

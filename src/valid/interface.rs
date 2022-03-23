@@ -115,7 +115,7 @@ impl VaryingContext<'_> {
 
         let ty_inner = &self.types[self.ty].inner;
         match *binding {
-            crate::Binding::BuiltIn(built_in) => {
+            crate::Binding::BuiltIn { built_in, .. } => {
                 let bit = 1 << built_in as u32;
                 if self.built_in_mask & bit != 0 {
                     return Err(VaryingError::DuplicateBuiltIn(built_in));

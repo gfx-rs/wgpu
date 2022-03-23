@@ -1,7 +1,7 @@
 // Testing various parts of the pipeline interface: locations, built-ins, and entry points
 
 struct VertexOutput {
-    @builtin(position) position: vec4<f32>,
+    @builtin(position) @invariant position: vec4<f32>,
     @location(1) varying: f32,
 }
 
@@ -55,7 +55,7 @@ struct Input2 {
 }
 
 @stage(vertex)
-fn vertex_two_structs(in1: Input1, in2: Input2) -> @builtin(position) vec4<f32> {
+fn vertex_two_structs(in1: Input1, in2: Input2) -> @builtin(position) @invariant vec4<f32> {
     var index = 2u;
     return vec4<f32>(f32(in1.index), f32(in2.index), f32(index), 0.0);
 }

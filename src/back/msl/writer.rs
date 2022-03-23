@@ -2106,13 +2106,19 @@ impl<W: Write> Writer<W> {
 
                         for (index, member) in members.iter().enumerate() {
                             match member.binding {
-                                Some(crate::Binding::BuiltIn(crate::BuiltIn::PointSize)) => {
+                                Some(crate::Binding::BuiltIn {
+                                    built_in: crate::BuiltIn::PointSize,
+                                    ..
+                                }) => {
                                     has_point_size = true;
                                     if !context.pipeline_options.allow_point_size {
                                         continue;
                                     }
                                 }
-                                Some(crate::Binding::BuiltIn(crate::BuiltIn::CullDistance)) => {
+                                Some(crate::Binding::BuiltIn {
+                                    built_in: crate::BuiltIn::CullDistance,
+                                    ..
+                                }) => {
                                     log::warn!("Ignoring CullDistance built-in");
                                     continue;
                                 }
@@ -3355,7 +3361,7 @@ impl<W: Write> Writer<W> {
                     };
                     let resolved = options.resolve_local_binding(binding, in_mode)?;
                     write!(self.out, "{}{} {}", back::INDENT, ty_name, name)?;
-                    resolved.try_fmt_decorated(&mut self.out)?;
+                    resolved.try_fmt(&mut self.out)?;
                     writeln!(self.out, ";")?;
                 }
                 writeln!(self.out, "}};")?;
@@ -3401,7 +3407,10 @@ impl<W: Write> Writer<W> {
                         match *binding {
                             // Point size is only supported in VS of pipelines with
                             // point primitive topology.
-                            crate::Binding::BuiltIn(crate::BuiltIn::PointSize) => {
+                            crate::Binding::BuiltIn {
+                                built_in: crate::BuiltIn::PointSize,
+                                ..
+                            } => {
                                 has_point_size = true;
                                 if !pipeline_options.allow_point_size {
                                     continue;
@@ -3411,7 +3420,10 @@ impl<W: Write> Writer<W> {
                             // But we can't return UnsupportedBuiltIn error to user.
                             // Because otherwise we can't generate msl shader from any glslang SPIR-V shaders.
                             // glslang generates gl_PerVertex struct with gl_CullDistance builtin inside by default.
-                            crate::Binding::BuiltIn(crate::BuiltIn::CullDistance) => {
+                            crate::Binding::BuiltIn {
+                                built_in: crate::BuiltIn::CullDistance,
+                                ..
+                            } => {
                                 log::warn!("Ignoring CullDistance BuiltIn");
                                 continue;
                             }
@@ -3430,14 +3442,8 @@ impl<W: Write> Writer<W> {
                         if let Some(array_len) = array_len {
                             write!(self.out, " [{}]", array_len)?;
                         }
-                        write!(self.out, " [[")?;
                         resolved.try_fmt(&mut self.out)?;
-                        if options.lang_version >= (2, 1)
-                            && *binding == crate::Binding::BuiltIn(crate::BuiltIn::Position)
-                        {
-                            write!(self.out, ", invariant")?;
-                        }
-                        writeln!(self.out, "]];")?;
+                        writeln!(self.out, ";")?;
                     }
 
                     if pipeline_options.allow_point_size
@@ -3483,7 +3489,7 @@ impl<W: Write> Writer<W> {
             let mut flattened_member_names = FastHashMap::default();
             for &(ref name_key, ty, binding) in flattened_arguments.iter() {
                 let binding = match binding {
-                    Some(ref binding @ &crate::Binding::BuiltIn(..)) => binding,
+                    Some(ref binding @ &crate::Binding::BuiltIn { .. }) => binding,
                     _ => continue,
                 };
                 let name = if let NameKey::StructMember(ty, index) = *name_key {
@@ -3511,7 +3517,7 @@ impl<W: Write> Writer<W> {
                     ','
                 };
                 write!(self.out, "{} {} {}", separator, ty_name, name)?;
-                resolved.try_fmt_decorated(&mut self.out)?;
+                resolved.try_fmt(&mut self.out)?;
                 writeln!(self.out)?;
             }
 
@@ -3560,7 +3566,7 @@ impl<W: Write> Writer<W> {
                 write!(self.out, "{} ", separator)?;
                 tyvar.try_fmt(&mut self.out)?;
                 if let Some(resolved) = resolved {
-                    resolved.try_fmt_decorated(&mut self.out)?;
+                    resolved.try_fmt(&mut self.out)?;
                 }
                 if let Some(value) = var.init {
                     let coco = ConstantContext {
@@ -3589,7 +3595,7 @@ impl<W: Write> Writer<W> {
                     "{} constant _mslBufferSizes& _buffer_sizes",
                     separator,
                 )?;
-                resolved.try_fmt_decorated(&mut self.out)?;
+                resolved.try_fmt(&mut self.out)?;
                 writeln!(self.out)?;
             }
 
@@ -3674,7 +3680,9 @@ impl<W: Write> Writer<W> {
                             // have passed it as its own argument and assigned
                             // it a new name.
                             let name = match member.binding {
-                                Some(crate::Binding::BuiltIn(_)) => &flattened_member_names[&key],
+                                Some(crate::Binding::BuiltIn { .. }) => {
+                                    &flattened_member_names[&key]
+                                }
                                 _ => &self.names[&key],
                             };
                             if member_index != 0 {

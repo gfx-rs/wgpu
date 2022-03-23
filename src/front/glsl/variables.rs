@@ -67,7 +67,10 @@ impl Parser {
         let idx = self.entry_args.len();
         self.entry_args.push(EntryArg {
             name: None,
-            binding: Binding::BuiltIn(data.builtin),
+            binding: Binding::BuiltIn {
+                built_in: data.builtin,
+                invariant: false,
+            },
             handle,
             storage: data.storage,
         });
@@ -226,6 +229,25 @@ impl Parser {
         };
 
         self.add_builtin(ctx, body, name, data, meta)
+    }
+
+    pub(crate) fn make_variable_invariant(
+        &mut self,
+        ctx: &mut Context,
+        body: &mut Block,
+        name: &str,
+        meta: Span,
+    ) {
+        if let Some(var) = self.lookup_variable(ctx, body, name, meta) {
+            if let Some(index) = var.entry_arg {
+                if let Binding::BuiltIn { built_in, .. } = self.entry_args[index].binding {
+                    self.entry_args[index].binding = Binding::BuiltIn {
+                        built_in,
+                        invariant: built_in == BuiltIn::Position,
+                    };
+                }
+            }
+        }
     }
 
     pub(crate) fn field_selection(
