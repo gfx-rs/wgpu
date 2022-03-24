@@ -138,7 +138,7 @@ impl super::Instance {
         flags: crate::InstanceFlags,
     ) -> Result<Vec<&'static CStr>, crate::InstanceError> {
         let instance_extensions = entry
-            .enumerate_instance_extension_properties()
+            .enumerate_instance_extension_properties(None)
             .map_err(|e| {
                 log::info!("enumerate_instance_extension_properties: {:?}", e);
                 crate::InstanceError
