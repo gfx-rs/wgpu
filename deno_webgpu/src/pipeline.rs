@@ -8,8 +8,6 @@ use deno_core::ResourceId;
 use serde::Deserialize;
 use serde::Serialize;
 use std::borrow::Cow;
-use std::convert::TryFrom;
-use std::convert::TryInto;
 
 use super::error::WebGpuError;
 use super::error::WebGpuResult;
@@ -39,33 +37,27 @@ impl Resource for WebGpuRenderPipeline {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct GpuProgrammableStage {
+pub struct GpuProgrammableStage {
     module: ResourceId,
     entry_point: String,
     // constants: HashMap<String, GPUPipelineConstantValue>
 }
 
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct CreateComputePipelineArgs {
+#[op]
+pub fn op_webgpu_create_compute_pipeline(
+    state: &mut OpState,
     device_rid: ResourceId,
     label: Option<String>,
     layout: Option<ResourceId>,
     compute: GpuProgrammableStage,
-}
-
-#[op]
-pub fn op_webgpu_create_compute_pipeline(
-    state: &mut OpState,
-    args: CreateComputePipelineArgs,
 ) -> Result<WebGpuResult, AnyError> {
     let instance = state.borrow::<super::Instance>();
     let device_resource = state
         .resource_table
-        .get::<super::WebGpuDevice>(args.device_rid)?;
+        .get::<super::WebGpuDevice>(device_rid)?;
     let device = device_resource.0;
 
-    let pipeline_layout = if let Some(rid) = args.layout {
+    let pipeline_layout = if let Some(rid) = layout {
         let id = state.resource_table.get::<WebGpuPipelineLayout>(rid)?;
         Some(id.0)
     } else {
@@ -74,18 +66,18 @@ pub fn op_webgpu_create_compute_pipeline(
 
     let compute_shader_module_resource = state
         .resource_table
-        .get::<super::shader::WebGpuShaderModule>(args.compute.module)?;
+        .get::<super::shader::WebGpuShaderModule>(compute.module)?;
 
     let descriptor = wgpu_core::pipeline::ComputePipelineDescriptor {
-        label: args.label.map(Cow::from),
+        label: label.map(Cow::from),
         layout: pipeline_layout,
         stage: wgpu_core::pipeline::ProgrammableStageDescriptor {
             module: compute_shader_module_resource.0,
-            entry_point: Cow::from(args.compute.entry_point),
+            entry_point: Cow::from(compute.entry_point),
             // TODO(lucacasonato): support args.compute.constants
         },
     };
-    let implicit_pipelines = match args.layout {
+    let implicit_pipelines = match layout {
         Some(_) => None,
         None => Some(wgpu_core::device::ImplicitPipelineIds {
             root_id: std::marker::PhantomData,
@@ -107,13 +99,6 @@ pub fn op_webgpu_create_compute_pipeline(
     Ok(WebGpuResult::rid_err(rid, maybe_err))
 }
 
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ComputePipelineGetBindGroupLayoutArgs {
-    compute_pipeline_rid: ResourceId,
-    index: u32,
-}
-
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PipelineLayout {
@@ -125,15 +110,16 @@ pub struct PipelineLayout {
 #[op]
 pub fn op_webgpu_compute_pipeline_get_bind_group_layout(
     state: &mut OpState,
-    args: ComputePipelineGetBindGroupLayoutArgs,
+    compute_pipeline_rid: ResourceId,
+    index: u32,
 ) -> Result<PipelineLayout, AnyError> {
     let instance = state.borrow::<super::Instance>();
     let compute_pipeline_resource = state
         .resource_table
-        .get::<WebGpuComputePipeline>(args.compute_pipeline_rid)?;
+        .get::<WebGpuComputePipeline>(compute_pipeline_rid)?;
     let compute_pipeline = compute_pipeline_resource.0;
 
-    let (bind_group_layout, maybe_err) = gfx_select!(compute_pipeline => instance.compute_pipeline_get_bind_group_layout(compute_pipeline, args.index, std::marker::PhantomData));
+    let (bind_group_layout, maybe_err) = gfx_select!(compute_pipeline => instance.compute_pipeline_get_bind_group_layout(compute_pipeline, index, std::marker::PhantomData));
 
     let label =
         gfx_select!(bind_group_layout => instance.bind_group_layout_label(bind_group_layout));
@@ -206,10 +192,9 @@ struct GpuDepthStencilState {
     depth_bias_clamp: f32,
 }
 
-impl TryFrom<GpuDepthStencilState> for wgpu_types::DepthStencilState {
-    type Error = AnyError;
-    fn try_from(state: GpuDepthStencilState) -> Result<wgpu_types::DepthStencilState, AnyError> {
-        Ok(wgpu_types::DepthStencilState {
+impl From<GpuDepthStencilState> for wgpu_types::DepthStencilState {
+    fn from(state: GpuDepthStencilState) -> wgpu_types::DepthStencilState {
+        wgpu_types::DepthStencilState {
             format: state.format,
             depth_write_enabled: state.depth_write_enabled,
             depth_compare: state.depth_compare,
@@ -224,7 +209,7 @@ impl TryFrom<GpuDepthStencilState> for wgpu_types::DepthStencilState {
                 slope_scale: state.depth_bias_slope_scale,
                 clamp: state.depth_bias_clamp,
             },
-        })
+        }
     }
 }
 
@@ -352,7 +337,7 @@ pub fn op_webgpu_create_render_pipeline(
             buffers: Cow::Owned(vertex_buffers),
         },
         primitive: args.primitive.into(),
-        depth_stencil: args.depth_stencil.map(TryInto::try_into).transpose()?,
+        depth_stencil: args.depth_stencil.map(Into::into),
         multisample: args.multisample,
         fragment,
         multiview: None,
@@ -380,25 +365,19 @@ pub fn op_webgpu_create_render_pipeline(
     Ok(WebGpuResult::rid_err(rid, maybe_err))
 }
 
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct RenderPipelineGetBindGroupLayoutArgs {
-    render_pipeline_rid: ResourceId,
-    index: u32,
-}
-
 #[op]
 pub fn op_webgpu_render_pipeline_get_bind_group_layout(
     state: &mut OpState,
-    args: RenderPipelineGetBindGroupLayoutArgs,
+    render_pipeline_rid: ResourceId,
+    index: u32,
 ) -> Result<PipelineLayout, AnyError> {
     let instance = state.borrow::<super::Instance>();
     let render_pipeline_resource = state
         .resource_table
-        .get::<WebGpuRenderPipeline>(args.render_pipeline_rid)?;
+        .get::<WebGpuRenderPipeline>(render_pipeline_rid)?;
     let render_pipeline = render_pipeline_resource.0;
 
-    let (bind_group_layout, maybe_err) = gfx_select!(render_pipeline => instance.render_pipeline_get_bind_group_layout(render_pipeline, args.index, std::marker::PhantomData));
+    let (bind_group_layout, maybe_err) = gfx_select!(render_pipeline => instance.render_pipeline_get_bind_group_layout(render_pipeline, index, std::marker::PhantomData));
 
     let label =
         gfx_select!(bind_group_layout => instance.bind_group_layout_label(bind_group_layout));
