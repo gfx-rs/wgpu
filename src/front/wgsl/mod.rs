@@ -4228,7 +4228,6 @@ impl Parser {
                     type_span,
                 );
                 self.lookup_type.insert(name.to_owned(), ty);
-                lexer.expect(Token::Separator(';'))?;
             }
             (Token::Word("type"), _) => {
                 let name = lexer.next_ident()?;

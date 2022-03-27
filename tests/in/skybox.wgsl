@@ -1,12 +1,12 @@
 struct VertexOutput {
     @builtin(position) position: vec4<f32>,
     @location(0) uv: vec3<f32>,
-};
+}
 
 struct Data {
     proj_inv: mat4x4<f32>,
     view: mat4x4<f32>,
-};
+}
 @group(0) @binding(0)
 var<uniform> r_data: Data;
 

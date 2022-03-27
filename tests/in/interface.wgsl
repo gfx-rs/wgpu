@@ -3,7 +3,7 @@
 struct VertexOutput {
     @builtin(position) position: vec4<f32>,
     @location(1) varying: f32,
-};
+}
 
 @stage(vertex)
 fn vertex(
@@ -19,7 +19,7 @@ struct FragmentOutput {
     @builtin(frag_depth) depth: f32,
     @builtin(sample_mask) sample_mask: u32,
     @location(0) color: f32,
-};
+}
 
 @stage(fragment)
 fn fragment(
@@ -48,11 +48,11 @@ fn compute(
 
 struct Input1 {
     @builtin(vertex_index) index: u32,
-};
+}
 
 struct Input2 {
     @builtin(instance_index) index: u32,
-};
+}
 
 @stage(vertex)
 fn vertex_two_structs(in1: Input1, in2: Input2) -> @builtin(position) vec4<f32> {

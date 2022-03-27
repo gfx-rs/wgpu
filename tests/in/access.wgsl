@@ -2,7 +2,7 @@
 
 struct AlignedWrapper {
 	@align(8) value: i32
-};
+}
 
 struct Bar {
 	matrix: mat4x4<f32>,
@@ -10,7 +10,7 @@ struct Bar {
 	atom: atomic<i32>,
 	arr: array<vec2<u32>, 2>,
 	data: array<AlignedWrapper>,
-};
+}
 
 @group(0) @binding(0)
 var<storage,read_write> bar: Bar;

@@ -9,7 +9,7 @@ struct FragmentInput {
   @location(4) @interpolate(perspective) perspective : vec4<f32>,
   @location(5) @interpolate(perspective, centroid) perspective_centroid : f32,
   @location(6) @interpolate(perspective, sample) perspective_sample : f32,
-};
+}
 
 @stage(vertex)
 fn vert_main() -> FragmentInput {

@@ -9,7 +9,7 @@ struct Foo {
     v3: vec3<f32>,
     // test packed vec3
     v1: f32,
-};
+}
 @group(0) @binding(1)
 var<storage, read_write> alignment: Foo;
 

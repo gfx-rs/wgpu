@@ -5,7 +5,7 @@ struct Globals {
     v: vec4<f32>,
     m: mat3x4<f32>,
     d: array<f32>,
-};
+}
 
 @group(0) @binding(0) var<storage, read_write> globals: Globals;
 
