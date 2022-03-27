@@ -113,7 +113,7 @@ impl Parser {
 
         Ok(match self.module.types[ty].inner {
             TypeInner::Vector { size, kind, width } if vector_size.is_none() => {
-                ctx.implicit_conversion(self, &mut value, meta, kind, width)?;
+                ctx.forced_conversion(self, &mut value, expr_meta, kind, width)?;
 
                 if let TypeInner::Scalar { .. } = *self.resolve_type(ctx, value, expr_meta)? {
                     ctx.add_expression(Expression::Splat { size, value }, meta, body)
@@ -256,7 +256,7 @@ impl Parser {
         // `Expression::As` doesn't support matrix width
         // casts so we need to do some extra work for casts
 
-        ctx.implicit_conversion(self, &mut value, expr_meta, ScalarKind::Float, width)?;
+        ctx.forced_conversion(self, &mut value, expr_meta, ScalarKind::Float, width)?;
         match *self.resolve_type(ctx, value, expr_meta)? {
             TypeInner::Scalar { .. } => {
                 // If a matrix is constructed with a single scalar value, then that
@@ -446,7 +446,7 @@ impl Parser {
         let mut components = Vec::with_capacity(size as usize);
 
         for (mut arg, expr_meta) in args.iter().copied() {
-            ctx.implicit_conversion(self, &mut arg, expr_meta, kind, width)?;
+            ctx.forced_conversion(self, &mut arg, expr_meta, kind, width)?;
 
             if components.len() >= size as usize {
                 break;
@@ -512,10 +512,7 @@ impl Parser {
                 let mut flattened = Vec::with_capacity(columns as usize * rows as usize);
 
                 for (mut arg, meta) in args.iter().copied() {
-                    let scalar_components = scalar_components(&self.module.types[ty].inner);
-                    if let Some((kind, width)) = scalar_components {
-                        ctx.implicit_conversion(self, &mut arg, meta, kind, width)?;
-                    }
+                    ctx.forced_conversion(self, &mut arg, meta, ScalarKind::Float, width)?;
 
                     match *self.resolve_type(ctx, arg, meta)? {
                         TypeInner::Vector { size, .. } => {

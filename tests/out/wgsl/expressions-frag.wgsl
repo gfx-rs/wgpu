@@ -286,7 +286,16 @@ fn testFreestandingConstructor() {
     return;
 }
 
-fn privatePointer(a_18: ptr<function, f32>) {
+fn testNonImplicitCastVectorCast() {
+    var a_18: u32 = 1u;
+    var b_16: vec4<i32>;
+
+    let _e3 = a_18;
+    b_16 = vec4<i32>(i32(_e3));
+    return;
+}
+
+fn privatePointer(a_19: ptr<function, f32>) {
     return;
 }
 

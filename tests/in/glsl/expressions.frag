@@ -113,6 +113,11 @@ void testFreestandingConstructor() {
     vec4(1.0);
 }
 
+void testNonImplicitCastVectorCast() {
+    uint a = 1;
+    ivec4 b = ivec4(a);
+}
+
 float global;
 void privatePointer(inout float a) {}
 

@@ -1279,6 +1279,25 @@ impl Context {
         Ok(())
     }
 
+    pub fn forced_conversion(
+        &mut self,
+        parser: &Parser,
+        expr: &mut Handle<Expression>,
+        meta: Span,
+        kind: ScalarKind,
+        width: crate::Bytes,
+    ) -> Result<()> {
+        if let Some((expr_scalar_kind, expr_width)) =
+            self.expr_scalar_components(parser, *expr, meta)?
+        {
+            if expr_scalar_kind != kind || expr_width != width {
+                self.conversion(expr, meta, kind, width)?;
+            }
+        }
+
+        Ok(())
+    }
+
     pub fn binary_implicit_conversion(
         &mut self,
         parser: &Parser,
