@@ -1,7 +1,7 @@
 struct Foo {
     a: vec4<f32>,
     b: i32,
-};
+}
 
 let v_f32_one: vec4<f32> = vec4<f32>(1.0, 1.0, 1.0, 1.0);
 let v_f32_zero: vec4<f32> = vec4<f32>(0.0, 0.0, 0.0, 0.0);

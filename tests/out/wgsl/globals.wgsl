@@ -1,7 +1,7 @@
 struct Foo {
     v3_: vec3<f32>,
     v1_: f32,
-};
+}
 
 let Foo_2: bool = true;
 

@@ -1,21 +1,21 @@
 struct VertexOutput {
     @builtin(position) position: vec4<f32>,
     @location(1) varying: f32,
-};
+}
 
 struct FragmentOutput {
     @builtin(frag_depth) depth: f32,
     @builtin(sample_mask) sample_mask: u32,
     @location(0) color: f32,
-};
+}
 
 struct Input1_ {
     @builtin(vertex_index) index: u32,
-};
+}
 
 struct Input2_ {
     @builtin(instance_index) index: u32,
-};
+}
 
 var<workgroup> output: array<u32,1>;
 

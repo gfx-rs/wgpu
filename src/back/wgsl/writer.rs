@@ -423,7 +423,7 @@ impl<W: Write> Writer<W> {
             writeln!(self.out)?;
         }
 
-        write!(self.out, "}};")?;
+        write!(self.out, "}}")?;
 
         writeln!(self.out)?;
 

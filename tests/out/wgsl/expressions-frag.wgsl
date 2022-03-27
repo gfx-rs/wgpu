@@ -1,10 +1,10 @@
 struct BST {
     data: i32,
-};
+}
 
 struct FragmentOutput {
     @location(0) o_color: vec4<f32>,
-};
+}
 
 var<private> global: f32;
 var<private> o_color: vec4<f32>;

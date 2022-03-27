@@ -1,24 +1,24 @@
 struct Globals {
     view_proj: mat4x4<f32>,
     num_lights: vec4<u32>,
-};
+}
 
 struct Entity {
     world: mat4x4<f32>,
     color: vec4<f32>,
-};
+}
 
 struct VertexOutput {
     @builtin(position) proj_position: vec4<f32>,
     @location(0) world_normal: vec3<f32>,
     @location(1) world_position: vec4<f32>,
-};
+}
 
 struct Light {
     proj: mat4x4<f32>,
     pos: vec4<f32>,
     color: vec4<f32>,
-};
+}
 
 let c_ambient: vec3<f32> = vec3<f32>(0.05000000074505806, 0.05000000074505806, 0.05000000074505806);
 let c_max_lights: u32 = 10u;

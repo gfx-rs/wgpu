@@ -1,6 +1,6 @@
 struct DynamicArray {
     arr: array<u32>,
-};
+}
 
 @group(0) @binding(0) 
 var<storage, read_write> dynamic_array: DynamicArray;

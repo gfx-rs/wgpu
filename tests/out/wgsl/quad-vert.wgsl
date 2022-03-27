@@ -1,11 +1,11 @@
 struct gl_PerVertex {
     @builtin(position) gl_Position: vec4<f32>,
-};
+}
 
 struct VertexOutput {
     @location(0) member: vec2<f32>,
     @builtin(position) gl_Position: vec4<f32>,
-};
+}
 
 var<private> v_uv: vec2<f32>;
 var<private> a_uv_1: vec2<f32>;

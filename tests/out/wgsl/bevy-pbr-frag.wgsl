@@ -2,51 +2,51 @@ struct PointLight {
     pos: vec4<f32>,
     color: vec4<f32>,
     lightParams: vec4<f32>,
-};
+}
 
 struct DirectionalLight {
     direction: vec4<f32>,
     color: vec4<f32>,
-};
+}
 
 struct CameraViewProj {
     ViewProj: mat4x4<f32>,
-};
+}
 
 struct CameraPosition {
     CameraPos: vec4<f32>,
-};
+}
 
 struct Lights {
     AmbientColor: vec4<f32>,
     NumLights: vec4<u32>,
     PointLights: array<PointLight,10u>,
     DirectionalLights: array<DirectionalLight,1u>,
-};
+}
 
 struct StandardMaterial_base_color {
     base_color: vec4<f32>,
-};
+}
 
 struct StandardMaterial_roughness {
     perceptual_roughness: f32,
-};
+}
 
 struct StandardMaterial_metallic {
     metallic: f32,
-};
+}
 
 struct StandardMaterial_reflectance {
     reflectance: f32,
-};
+}
 
 struct StandardMaterial_emissive {
     emissive: vec4<f32>,
-};
+}
 
 struct FragmentOutput {
     @location(0) o_Target: vec4<f32>,
-};
+}
 
 var<private> v_WorldPosition_1: vec3<f32>;
 var<private> v_WorldNormal_1: vec3<f32>;
