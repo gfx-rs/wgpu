@@ -230,7 +230,9 @@ impl<S: ResourceState> ResourceTracker<S> {
         }
     }
 
-    /// Removes the resource from the tracker if we are holding the last reference.
+    /// Remove the resource from the tracker if it is holding the last reference.
+    ///
+    /// Return `true` if we did remove the resource.
     pub(crate) fn remove_abandoned(&mut self, id: Valid<S::Id>) -> bool {
         let (index, epoch, backend) = id.0.unzip();
         debug_assert_eq!(backend, self.backend);
