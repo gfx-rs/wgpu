@@ -2,6 +2,7 @@
 
 ## v0.9 (TBD)
   - WGSL:
+    - semicolon after struct declaration are now optional
     - commas are used to separate struct members intead of semicolons
     - attributes are declared with `@attrib` instead of `[[attrib]]`
     - `stride` attribute is removed
