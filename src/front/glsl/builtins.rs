@@ -995,6 +995,9 @@ fn inject_standard_builtins(
                     .push(module.add_builtin(args, MacroCall::Clamp(size)))
             }
         }
+        "barrier" => declaration
+            .overloads
+            .push(module.add_builtin(Vec::new(), MacroCall::Barrier)),
         // Add common builtins with floats
         _ => inject_common_builtin(declaration, module, name, 4),
     }
@@ -1587,6 +1590,7 @@ pub enum MacroCall {
     Clamp(Option<VectorSize>),
     BitCast(Sk),
     Derivate(DerivativeAxis),
+    Barrier,
 }
 
 impl MacroCall {
@@ -1993,6 +1997,11 @@ impl MacroCall {
                 Span::default(),
                 body,
             ),
+            MacroCall::Barrier => {
+                ctx.emit_flush(body);
+                body.push(crate::Statement::Barrier(crate::Barrier::all()), meta);
+                return Ok(None);
+            }
         }))
     }
 }
