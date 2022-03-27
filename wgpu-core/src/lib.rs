@@ -50,7 +50,11 @@ use atomic::{AtomicUsize, Ordering};
 
 use std::{borrow::Cow, os::raw::c_char, ptr, sync::atomic};
 
+/// The index of a queue submission.
+///
+/// These are the values stored in `Device::fence`.
 type SubmissionIndex = hal::FenceValue;
+
 type Index = u32;
 type Epoch = u32;
 
@@ -71,6 +75,15 @@ impl<'a> LabelHelpers<'a> for Label<'a> {
 }
 
 /// Reference count object that is 1:1 with each reference.
+///
+/// All the clones of a given `RefCount` point to the same
+/// heap-allocated atomic reference count. When the count drops to
+/// zero, only the count is freed. No other automatic cleanup takes
+/// place; this is just a reference count, not a smart pointer.
+///
+/// `RefCount` values are created only by [`LifeGuard::new`] and by
+/// `Clone`, so every `RefCount` is implicitly tied to some
+/// [`LifeGuard`].
 #[derive(Debug)]
 struct RefCount(ptr::NonNull<AtomicUsize>);
 
@@ -122,10 +135,48 @@ impl MultiRefCount {
     }
 }
 
+/// Information needed to decide when it's safe to free some wgpu-core
+/// resource.
+///
+/// Each type representing a `wgpu-core` resource, like [`Device`],
+/// [`Buffer`], etc., contains a `LifeGuard` which indicates whether
+/// it is safe to free.
+///
+/// A resource may need to be retained for any of several reasons:
+///
+/// - The user may hold a reference to it (via a `wgpu::Buffer`, say).
+///
+/// - Other resources may depend on it (a texture view's backing
+///   texture, for example).
+///
+/// - It may be used by commands sent to the GPU that have not yet
+///   finished execution.
+///
+/// [`Device`]: device::Device
+/// [`Buffer`]: resource::Buffer
 #[derive(Debug)]
 pub struct LifeGuard {
+    /// `RefCount` for the user's reference to this resource.
+    ///
+    /// When the user first creates a `wgpu-core` resource, this `RefCount` is
+    /// created along with the resource's `LifeGuard`. When the user drops the
+    /// resource, we swap this out for `None`. Note that the resource may
+    /// still be held alive by other resources.
+    ///
+    /// Any `Stored<T>` value holds a clone of this `RefCount` along with the id
+    /// of a `T` resource.
     ref_count: Option<RefCount>,
+
+    /// The index of the last queue submission in which the resource
+    /// was used.
+    ///
+    /// Each queue submission is fenced and assigned an index number
+    /// sequentially. Thus, when a queue submission completes, we know any
+    /// resources used in that submission and any lower-numbered submissions are
+    /// no longer in use by the GPU.
     submission_index: AtomicUsize,
+
+    /// The `label` from the descriptor used to create the resource.
     #[cfg(debug_assertions)]
     pub(crate) label: String,
 }
@@ -146,7 +197,10 @@ impl LifeGuard {
         self.ref_count.clone().unwrap()
     }
 
-    /// Returns `true` if the resource is still needed by the user.
+    /// Record that this resource will be used by the queue submission with the
+    /// given index.
+    ///
+    /// Returns `true` if the resource is still held by the user.
     fn use_at(&self, submit_index: SubmissionIndex) -> bool {
         self.submission_index
             .store(submit_index as _, Ordering::Release);

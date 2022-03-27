@@ -273,6 +273,8 @@ pub struct Device<A: hal::Api> {
     pub(crate) trackers: Mutex<TrackerSet>,
     // Life tracker should be locked right after the device and before anything else.
     life_tracker: Mutex<life::LifetimeTracker<A>>,
+    /// Temporary storage for resource management functions. Cleared at the end
+    /// of every call (unless an error occurs).
     temp_suspected: life::SuspectedResources,
     pub(crate) alignments: hal::Alignments,
     pub(crate) limits: wgt::Limits,
@@ -420,6 +422,11 @@ impl<A: HalApi> Device<A> {
         profiling::scope!("maintain", "Device");
         let mut life_tracker = self.lock_life(token);
 
+        // Normally, `temp_suspected` exists only to save heap
+        // allocations: it's cleared at the start of the function
+        // call, and cleared by the end. But `Global::queue_submit` is
+        // fallible; if it exits early, it may leave some resources in
+        // `temp_suspected`.
         life_tracker
             .suspected_resources
             .extend(&self.temp_suspected);
@@ -4861,6 +4868,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         Ok(())
     }
 
+    /// Check `device_id` for freeable resources and completed buffer mappings.
     pub fn device_poll<A: HalApi>(
         &self,
         device_id: id::DeviceId,
@@ -4881,6 +4889,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         Ok(())
     }
 
+    /// Poll all devices belonging to the backend `A`.
+    ///
+    /// If `force_wait` is true, block until all buffer mappings are done.
     fn poll_devices<A: HalApi>(
         &self,
         force_wait: bool,
@@ -4898,6 +4909,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         Ok(())
     }
 
+    /// Poll all devices on all backends.
+    ///
+    /// This is the implementation of `wgpu::Instance::poll_all`.
     pub fn poll_all_devices(&self, force_wait: bool) -> Result<(), WaitIdleError> {
         let mut closures = UserClosures::default();
 
