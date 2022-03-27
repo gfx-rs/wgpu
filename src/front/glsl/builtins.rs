@@ -1999,6 +1999,7 @@ impl MacroCall {
             ),
             MacroCall::Barrier => {
                 ctx.emit_flush(body);
+                ctx.emit_start();
                 body.push(crate::Statement::Barrier(crate::Barrier::all()), meta);
                 return Ok(None);
             }
