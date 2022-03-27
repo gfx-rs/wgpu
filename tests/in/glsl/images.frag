@@ -14,8 +14,8 @@ layout(rgba8, binding = 9) writeonly readonly uniform image2D imgWriteReadOnly;
 
 void testImg1D(in int coord) {
     int size = imageSize(img1D);
-    vec4 c = imageLoad(img1D, coord);
     imageStore(img1D, coord, vec4(2));
+    vec4 c = imageLoad(img1D, coord);
 }
 
 void testImg1DArray(in ivec2 coord) {

@@ -23,11 +23,11 @@ fn testImg1D(coord: i32) {
     coord_1 = coord;
     let _e10 = textureDimensions(img1D);
     size = _e10;
-    let _e13 = coord_1;
-    let _e14 = textureLoad(img1D, _e13);
-    c = _e14;
-    let _e20 = coord_1;
-    textureStore(img1D, _e20, vec4<f32>(f32(2)));
+    let _e16 = coord_1;
+    textureStore(img1D, _e16, vec4<f32>(f32(2)));
+    let _e21 = coord_1;
+    let _e22 = textureLoad(img1D, _e21);
+    c = _e22;
     return;
 }
 

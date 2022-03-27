@@ -1830,6 +1830,7 @@ impl MacroCall {
                     },
                     meta,
                 );
+                ctx.emit_start();
                 return Ok(None);
             }
             MacroCall::MathFunction(fun) => ctx.add_expression(
