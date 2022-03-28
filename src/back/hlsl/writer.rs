@@ -838,8 +838,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     self.out,
                     "{}{}x{}",
                     crate::ScalarKind::Float.to_hlsl_str(width)?,
-                    back::vector_size_str(rows),
                     back::vector_size_str(columns),
+                    back::vector_size_str(rows),
                 )?;
             }
             TypeInner::Image {

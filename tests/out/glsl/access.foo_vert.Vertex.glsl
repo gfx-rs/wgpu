@@ -7,7 +7,7 @@ struct AlignedWrapper {
     int value;
 };
 layout(std430) buffer Bar_block_0Vertex {
-    mat4x4 matrix;
+    mat4x3 matrix;
     mat2x2 matrix_array[2];
     int atom;
     uvec2 arr[2];
@@ -26,7 +26,7 @@ void main() {
     int c[5] = int[5](0, 0, 0, 0, 0);
     float baz = foo;
     foo = 1.0;
-    mat4x4 matrix = _group_0_binding_0_vs.matrix;
+    mat4x3 matrix = _group_0_binding_0_vs.matrix;
     uvec2 arr[2] = _group_0_binding_0_vs.arr;
     float b = _group_0_binding_0_vs.matrix[3][0];
     int a = _group_0_binding_0_vs.data[(uint(_group_0_binding_0_vs.data.length()) - 2u)].value;
@@ -34,7 +34,7 @@ void main() {
     c = int[5](a, int(b), 3, 4, 5);
     c[(vi + 1u)] = 42;
     int value = c[vi];
-    gl_Position = (matrix * vec4(ivec4(value)));
+    gl_Position = vec4((matrix * vec4(ivec4(value))), 2.0);
     gl_Position.yz = vec2(-gl_Position.y, gl_Position.z * 2.0 - gl_Position.w);
     return;
 }

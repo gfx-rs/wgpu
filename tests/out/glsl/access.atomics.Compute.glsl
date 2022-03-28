@@ -9,7 +9,7 @@ struct AlignedWrapper {
     int value;
 };
 layout(std430) buffer Bar_block_0Compute {
-    mat4x4 matrix;
+    mat4x3 matrix;
     mat2x2 matrix_array[2];
     int atom;
     uvec2 arr[2];

@@ -16,7 +16,8 @@ becomes `vec * mat`, etc. This acts as the inverse transpose making the results 
 The only time we don't get this implicit transposition is when reading matrices from Uniforms/Push Constants.
 To deal with this, we add `row_major` to all declarations of matrices in Uniforms/Push Constants.
 
-Finally because all of our matrices are transposed, if you use `mat3x4`, it'll become `float4x3` in HLSL.
+Finally because all of our matrices are transposed, if you use `mat3x4`, it'll become `float3x4` in HLSL
+(HLSL has inverted col/row notation).
 
 [hlsl]: https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl
 */

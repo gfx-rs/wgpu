@@ -25,7 +25,7 @@ float4 foo_vert(uint vi : SV_VertexID) : SV_Position
 
     float baz = foo;
     foo = 1.0;
-    float4x4 matrix_ = float4x4(asfloat(bar.Load4(0+0)), asfloat(bar.Load4(0+16)), asfloat(bar.Load4(0+32)), asfloat(bar.Load4(0+48)));
+    float4x3 matrix_ = float4x3(asfloat(bar.Load3(0+0)), asfloat(bar.Load3(0+16)), asfloat(bar.Load3(0+32)), asfloat(bar.Load3(0+48)));
     uint2 arr[2] = {asuint(bar.Load2(104+0)), asuint(bar.Load2(104+8))};
     float b = asfloat(bar.Load(0+48+0));
     int a = asint(bar.Load(0+(((NagaBufferLengthRW(bar) - 120) / 8) - 2u)*8+120));
@@ -36,18 +36,18 @@ float4 foo_vert(uint vi : SV_VertexID) : SV_Position
     }
     c[(vi + 1u)] = 42;
     int value = c[vi];
-    return mul(float4(int4(value.xxxx)), matrix_);
+    return float4(mul(float4(int4(value.xxxx)), matrix_), 2.0);
 }
 
 float4 foo_frag() : SV_Target0
 {
     bar.Store(8+16+0, asuint(1.0));
     {
-        float4x4 _value2 = float4x4(float4(0.0.xxxx), float4(1.0.xxxx), float4(2.0.xxxx), float4(3.0.xxxx));
-        bar.Store4(0+0, asuint(_value2[0]));
-        bar.Store4(0+16, asuint(_value2[1]));
-        bar.Store4(0+32, asuint(_value2[2]));
-        bar.Store4(0+48, asuint(_value2[3]));
+        float4x3 _value2 = float4x3(float3(0.0.xxx), float3(1.0.xxx), float3(2.0.xxx), float3(3.0.xxx));
+        bar.Store3(0+0, asuint(_value2[0]));
+        bar.Store3(0+16, asuint(_value2[1]));
+        bar.Store3(0+32, asuint(_value2[2]));
+        bar.Store3(0+48, asuint(_value2[3]));
     }
     {
         uint2 _value2[2] = { uint2(0u.xx), uint2(1u.xx) };
