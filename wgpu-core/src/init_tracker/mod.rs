@@ -142,7 +142,7 @@ where
             .partition_point(|r| r.end <= query_range.start);
         self.uninitialized_ranges
             .get(index)
-            .map(|start_range| {
+            .and_then(|start_range| {
                 if start_range.start < query_range.end {
                     let start = start_range.start.max(query_range.start);
                     match self.uninitialized_ranges.get(index + 1) {
@@ -160,7 +160,6 @@ where
                     None
                 }
             })
-            .flatten()
     }
 
     // Drains uninitialized ranges in a query range.

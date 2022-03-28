@@ -374,7 +374,7 @@ impl<A: hal::Api> LifetimeTracker<A> {
             .active
             .iter()
             .position(|a| a.index > last_done)
-            .unwrap_or_else(|| self.active.len());
+            .unwrap_or(self.active.len());
 
         let mut work_done_closures = SmallVec::new();
         for a in self.active.drain(..done_count) {
