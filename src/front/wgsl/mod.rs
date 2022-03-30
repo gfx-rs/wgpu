@@ -3722,7 +3722,7 @@ impl Parser {
                                                 break value;
                                             }
                                         } else {
-                                            lexer.expect(Token::Separator(':'))?;
+                                            lexer.skip(Token::Separator(':'));
                                             break value;
                                         }
                                         cases.push(crate::SwitchCase {
@@ -3742,7 +3742,7 @@ impl Parser {
                                     });
                                 }
                                 (Token::Word("default"), _) => {
-                                    lexer.expect(Token::Separator(':'))?;
+                                    lexer.skip(Token::Separator(':'));
                                     let (fall_through, body) =
                                         self.parse_switch_case_body(lexer, context.reborrow())?;
                                     cases.push(crate::SwitchCase {

@@ -330,6 +330,24 @@ fn parse_switch() {
 }
 
 #[test]
+fn parse_switch_optional_colon_in_case() {
+    parse_str(
+        "
+        fn main() {
+            var pos: f32;
+            switch (3) {
+                case 0, 1 { pos = 0.0; }
+                case 2 { pos = 1.0; fallthrough; }
+                case 3 {}
+                default { pos = 3.0; }
+            }
+        }
+    ",
+    )
+    .unwrap();
+}
+
+#[test]
 fn parse_parentheses_switch() {
     parse_str(
         "
