@@ -157,10 +157,82 @@ fn bad_type_cast() {
             }
         "#,
         r#"error: cannot cast a vec2<f32> to a i32
-  ┌─ wgsl:3:27
+  ┌─ wgsl:3:28
   │
 3 │                 return i32(vec2<f32>(0.0));
-  │                           ^^^^^^^^^^^^^^^^ cannot cast a vec2<f32> to a i32
+  │                            ^^^^^^^^^^^^^^ cannot cast a vec2<f32> to a i32
+
+"#,
+    );
+}
+
+#[test]
+fn type_not_constructible() {
+    check(
+        r#"
+            fn x() {
+                var _ = atomic<i32>(0);
+            }
+        "#,
+        r#"error: type `atomic` is not constructible
+  ┌─ wgsl:3:25
+  │
+3 │                 var _ = atomic<i32>(0);
+  │                         ^^^^^^ type is not constructible
+
+"#,
+    );
+}
+
+#[test]
+fn type_not_inferrable() {
+    check(
+        r#"
+            fn x() {
+                var _ = vec2();
+            }
+        "#,
+        r#"error: type can't be inferred
+  ┌─ wgsl:3:25
+  │
+3 │                 var _ = vec2();
+  │                         ^^^^ type can't be inferred
+
+"#,
+    );
+}
+
+#[test]
+fn unexpected_constructor_parameters() {
+    check(
+        r#"
+            fn x() {
+                var _ = i32(0, 1);
+            }
+        "#,
+        r#"error: unexpected components
+  ┌─ wgsl:3:31
+  │
+3 │                 var _ = i32(0, 1);
+  │                               ^^ unexpected components
+
+"#,
+    );
+}
+
+#[test]
+fn constructor_parameter_type_mismatch() {
+    check(
+        r#"
+            fn x() {
+                var _ = mat2x2<f32>(array(0, 1), vec2(2, 3));
+            }
+        "#,
+        r#"error: invalid type for constructor component at index [0]
+  ┌─ wgsl:3:37
+  │
+3 │                 var _ = mat2x2<f32>(array(0, 1), vec2(2, 3));
+  │                                     ^^^^^^^^^^^ invalid component type
 
 "#,
     );

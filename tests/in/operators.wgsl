@@ -58,6 +58,21 @@ fn constructors() -> f32 {
         0.0, 0.0, 0.0, 1.0,
     );
 
+    // zero value constructors
+    var _ = bool();
+    var _ = i32();
+    var _ = u32();
+    var _ = f32();
+    var _ = vec2<u32>();
+    var _ = mat2x2<f32>();
+    var _ = array<Foo, 3>();
+    var _ = Foo();
+
+    // constructors that infer their type from their parameters
+    var _ = vec2(0u);
+    var _ = mat2x2(vec2(0.), vec2(0.));
+    var _ = array(0, 1, 2, 3);
+
     return foo.a.x;
 }
 

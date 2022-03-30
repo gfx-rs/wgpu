@@ -53,12 +53,29 @@ Foo ConstructFoo(float4 arg0, int arg1) {
 float constructors()
 {
     Foo foo = (Foo)0;
+    bool unnamed = false;
+    int unnamed_1 = 0;
+    uint unnamed_2 = 0u;
+    float unnamed_3 = 0.0;
+    uint2 unnamed_4 = uint2(0u, 0u);
+    float2x2 unnamed_5 = float2x2(float2(0.0, 0.0), float2(0.0, 0.0));
+    Foo unnamed_6[3] = { { float4(0.0, 0.0, 0.0, 0.0), 0 }, { float4(0.0, 0.0, 0.0, 0.0), 0 }, { float4(0.0, 0.0, 0.0, 0.0), 0 } };
+    Foo unnamed_7 = { float4(0.0, 0.0, 0.0, 0.0), 0 };
+    uint2 unnamed_8 = (uint2)0;
+    float2x2 unnamed_9 = (float2x2)0;
+    int unnamed_10[4] = {(int)0,(int)0,(int)0,(int)0};
 
     foo = ConstructFoo(float4(1.0.xxxx), 1);
     float2x2 mat2comp = float2x2(float2(1.0, 0.0), float2(0.0, 1.0));
     float4x4 mat4comp = float4x4(float4(1.0, 0.0, 0.0, 0.0), float4(0.0, 1.0, 0.0, 0.0), float4(0.0, 0.0, 1.0, 0.0), float4(0.0, 0.0, 0.0, 1.0));
-    float _expr39 = foo.a.x;
-    return _expr39;
+    unnamed_8 = uint2(0u.xx);
+    unnamed_9 = float2x2(float2(0.0.xx), float2(0.0.xx));
+    {
+        int _result[4]={ 0, 1, 2, 3 };
+        for(int _i=0; _i<4; ++_i) unnamed_10[_i] = _result[_i];
+    }
+    float _expr70 = foo.a.x;
+    return _expr70;
 }
 
 void modulo()

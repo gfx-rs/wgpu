@@ -40,12 +40,26 @@ fn bool_cast(x: vec3<f32>) -> vec3<f32> {
 
 fn constructors() -> f32 {
     var foo: Foo;
+    var unnamed: bool = false;
+    var unnamed_1: i32 = 0;
+    var unnamed_2: u32 = 0u;
+    var unnamed_3: f32 = 0.0;
+    var unnamed_4: vec2<u32> = vec2<u32>(0u, 0u);
+    var unnamed_5: mat2x2<f32> = mat2x2<f32>(vec2<f32>(0.0, 0.0), vec2<f32>(0.0, 0.0));
+    var unnamed_6: array<Foo,3> = array<Foo,3>(Foo(vec4<f32>(0.0, 0.0, 0.0, 0.0), 0), Foo(vec4<f32>(0.0, 0.0, 0.0, 0.0), 0), Foo(vec4<f32>(0.0, 0.0, 0.0, 0.0), 0));
+    var unnamed_7: Foo = Foo(vec4<f32>(0.0, 0.0, 0.0, 0.0), 0);
+    var unnamed_8: vec2<u32>;
+    var unnamed_9: mat2x2<f32>;
+    var unnamed_10: array<i32,4u>;
 
     foo = Foo(vec4<f32>(1.0), 1);
     let mat2comp = mat2x2<f32>(vec2<f32>(1.0, 0.0), vec2<f32>(0.0, 1.0));
     let mat4comp = mat4x4<f32>(vec4<f32>(1.0, 0.0, 0.0, 0.0), vec4<f32>(0.0, 1.0, 0.0, 0.0), vec4<f32>(0.0, 0.0, 1.0, 0.0), vec4<f32>(0.0, 0.0, 0.0, 1.0));
-    let _e39 = foo.a.x;
-    return _e39;
+    unnamed_8 = vec2<u32>(0u);
+    unnamed_9 = mat2x2<f32>(vec2<f32>(0.0), vec2<f32>(0.0));
+    unnamed_10 = array<i32,4u>(0, 1, 2, 3);
+    let _e70 = foo.a.x;
+    return _e70;
 }
 
 fn modulo() {

@@ -8,10 +8,22 @@ struct Foo {
     metal::float4 a;
     int b;
 };
+struct type_12 {
+    Foo inner[3];
+};
+struct type_13 {
+    int inner[4u];
+};
 constant metal::float4 v_f32_one = {1.0, 1.0, 1.0, 1.0};
 constant metal::float4 v_f32_zero = {0.0, 0.0, 0.0, 0.0};
 constant metal::float4 v_f32_half = {0.5, 0.5, 0.5, 0.5};
 constant metal::int4 v_i32_one = {1, 1, 1, 1};
+constant metal::uint2 const_type_11_ = {0u, 0u};
+constant metal::float2 const_type_6_ = {0.0, 0.0};
+constant metal::float2x2 const_type_7_ = {const_type_6_, const_type_6_};
+constant metal::float4 const_type = {0.0, 0.0, 0.0, 0.0};
+constant Foo const_Foo = {const_type, 0};
+constant type_12 const_type_12_ = {const_Foo, const_Foo, const_Foo};
 
 metal::float4 builtins(
 ) {
@@ -52,11 +64,25 @@ metal::float3 bool_cast(
 float constructors(
 ) {
     Foo foo;
+    bool unnamed = false;
+    int unnamed_1 = 0;
+    uint unnamed_2 = 0u;
+    float unnamed_3 = 0.0;
+    metal::uint2 unnamed_4 = const_type_11_;
+    metal::float2x2 unnamed_5 = const_type_7_;
+    type_12 unnamed_6 = const_type_12_;
+    Foo unnamed_7 = const_Foo;
+    metal::uint2 unnamed_8;
+    metal::float2x2 unnamed_9;
+    type_13 unnamed_10;
     foo = Foo {metal::float4(1.0), 1};
     metal::float2x2 mat2comp = metal::float2x2(metal::float2(1.0, 0.0), metal::float2(0.0, 1.0));
     metal::float4x4 mat4comp = metal::float4x4(metal::float4(1.0, 0.0, 0.0, 0.0), metal::float4(0.0, 1.0, 0.0, 0.0), metal::float4(0.0, 0.0, 1.0, 0.0), metal::float4(0.0, 0.0, 0.0, 1.0));
-    float _e39 = foo.a.x;
-    return _e39;
+    unnamed_8 = metal::uint2(0u);
+    unnamed_9 = metal::float2x2(metal::float2(0.0), metal::float2(0.0));
+    for(int _i=0; _i<4; ++_i) unnamed_10.inner[_i] = type_13 {0, 1, 2, 3}.inner[_i];
+    float _e70 = foo.a.x;
+    return _e70;
 }
 
 void modulo(

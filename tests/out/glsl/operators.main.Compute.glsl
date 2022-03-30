@@ -43,11 +43,25 @@ vec3 bool_cast(vec3 x) {
 
 float constructors() {
     Foo foo = Foo(vec4(0.0), 0);
+    bool unnamed = false;
+    int unnamed_1 = 0;
+    uint unnamed_2 = 0u;
+    float unnamed_3 = 0.0;
+    uvec2 unnamed_4 = uvec2(0u, 0u);
+    mat2x2 unnamed_5 = mat2x2(vec2(0.0, 0.0), vec2(0.0, 0.0));
+    Foo unnamed_6[3] = Foo[3](Foo(vec4(0.0, 0.0, 0.0, 0.0), 0), Foo(vec4(0.0, 0.0, 0.0, 0.0), 0), Foo(vec4(0.0, 0.0, 0.0, 0.0), 0));
+    Foo unnamed_7 = Foo(vec4(0.0, 0.0, 0.0, 0.0), 0);
+    uvec2 unnamed_8 = uvec2(0u);
+    mat2x2 unnamed_9 = mat2x2(0.0);
+    int unnamed_10[4] = int[4](0, 0, 0, 0);
     foo = Foo(vec4(1.0), 1);
     mat2x2 mat2comp = mat2x2(vec2(1.0, 0.0), vec2(0.0, 1.0));
     mat4x4 mat4comp = mat4x4(vec4(1.0, 0.0, 0.0, 0.0), vec4(0.0, 1.0, 0.0, 0.0), vec4(0.0, 0.0, 1.0, 0.0), vec4(0.0, 0.0, 0.0, 1.0));
-    float _e39 = foo.a.x;
-    return _e39;
+    unnamed_8 = uvec2(0u);
+    unnamed_9 = mat2x2(vec2(0.0), vec2(0.0));
+    unnamed_10 = int[4](0, 1, 2, 3);
+    float _e70 = foo.a.x;
+    return _e70;
 }
 
 void modulo() {
