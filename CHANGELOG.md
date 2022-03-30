@@ -10,6 +10,7 @@
     - renames:
       - `findLsb` -> `firstTrailingBit`
       - `findMsb` -> `firstLeadingBit`
+      - `smoothStep` -> `smoothstep`
 
 ## v0.8 (2021-12-18)
   - development release for wgpu-0.12

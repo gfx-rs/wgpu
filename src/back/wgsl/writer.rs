@@ -1517,7 +1517,7 @@ impl<W: Write> Writer<W> {
                     Mf::Fma => Function::Regular("fma"),
                     Mf::Mix => Function::Regular("mix"),
                     Mf::Step => Function::Regular("step"),
-                    Mf::SmoothStep => Function::Regular("smoothStep"),
+                    Mf::SmoothStep => Function::Regular("smoothstep"),
                     Mf::Sqrt => Function::Regular("sqrt"),
                     Mf::InverseSqrt => Function::Regular("inverseSqrt"),
                     Mf::Transpose => Function::Regular("transpose"),

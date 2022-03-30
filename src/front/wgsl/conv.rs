@@ -191,7 +191,7 @@ pub fn map_standard_fun(word: &str) -> Option<crate::MathFunction> {
         "fma" => Mf::Fma,
         "mix" => Mf::Mix,
         "step" => Mf::Step,
-        "smoothStep" => Mf::SmoothStep,
+        "smoothstep" => Mf::SmoothStep,
         "sqrt" => Mf::Sqrt,
         "inverseSqrt" => Mf::InverseSqrt,
         "transpose" => Mf::Transpose,
