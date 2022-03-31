@@ -233,7 +233,11 @@ platform supports.";
 ///
 /// Uses of this macro have the form:
 ///
+/// ```ignore
+///
 ///     gfx_select!(id => global.method(args...))
+///
+/// ```
 ///
 /// where `id` is some [`id::Id`] resource id, `global` is a [`hub::Global`],
 /// and `method` is any method on [`Global`] that takes a single generic
