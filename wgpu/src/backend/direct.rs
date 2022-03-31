@@ -1545,21 +1545,17 @@ impl crate::Context for Context {
 
     #[cfg_attr(target_arch = "wasm32", allow(unused))]
     fn device_drop(&self, device: &Self::DeviceId) {
+        let global = &self.0;
+
         #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
         {
-            let global = &self.0;
             match wgc::gfx_select!(device.id => global.device_poll(device.id, true)) {
                 Ok(()) => (),
                 Err(err) => self.handle_error_fatal(err, "Device::drop"),
             }
         }
-        //TODO: make this work in general
-        #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
-        #[cfg(feature = "metal-auto-capture")]
-        {
-            let global = &self.0;
-            wgc::gfx_select!(device.id => global.device_drop(device.id));
-        }
+
+        wgc::gfx_select!(device.id => global.device_drop(device.id));
     }
 
     fn device_poll(&self, device: &Self::DeviceId, maintain: crate::Maintain) {
