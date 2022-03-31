@@ -309,6 +309,11 @@ impl<A: hal::Api> LifetimeTracker<A> {
         }
     }
 
+    /// Return true if there are no queue submissions still in flight.
+    pub fn queue_empty(&self) -> bool {
+        self.active.is_empty()
+    }
+
     /// Start tracking resources associated with a new queue submission.
     pub fn track_submission(
         &mut self,

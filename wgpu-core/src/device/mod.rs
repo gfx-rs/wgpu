@@ -10,8 +10,8 @@ use crate::{
     instance, pipeline, present, resource,
     track::{BufferState, TextureSelector, TextureState, TrackerSet, UsageConflict},
     validation::{self, check_buffer_usage, check_texture_usage},
-    FastHashMap, Label, LabelHelpers as _, LifeGuard, MultiRefCount, Stored, SubmissionIndex,
-    DOWNLEVEL_ERROR_MESSAGE,
+    FastHashMap, Label, LabelHelpers as _, LifeGuard, MultiRefCount, RefCount, Stored,
+    SubmissionIndex, DOWNLEVEL_ERROR_MESSAGE,
 };
 
 use arrayvec::ArrayVec;
@@ -266,6 +266,14 @@ pub struct Device<A: hal::Api> {
     //desc_allocator: Mutex<descriptor::DescriptorAllocator<A>>,
     //Note: The submission index here corresponds to the last submission that is done.
     pub(crate) life_guard: LifeGuard,
+
+    /// A clone of `life_guard.ref_count`.
+    ///
+    /// Holding a separate clone of the `RefCount` here lets us tell whether the
+    /// device is referenced by other resources, even if `life_guard.ref_count`
+    /// was set to `None` by a call to `device_drop`.
+    ref_count: RefCount,
+
     command_allocator: Mutex<CommandAllocator<A>>,
     pub(crate) active_submission_index: SubmissionIndex,
     fence: A::Fence,
@@ -371,12 +379,15 @@ impl<A: HalApi> Device<A> {
                 }));
         }
 
+        let life_guard = LifeGuard::new("<device>");
+        let ref_count = life_guard.add_ref();
         Ok(Self {
             raw: open.device,
             adapter_id,
             queue: open.queue,
             zero_buffer,
-            life_guard: LifeGuard::new("<device>"),
+            life_guard,
+            ref_count,
             command_allocator: Mutex::new(com_alloc),
             active_submission_index: 0,
             fence,
@@ -413,12 +424,22 @@ impl<A: HalApi> Device<A> {
         self.life_tracker.lock()
     }
 
+    /// Check this device for completed commands.
+    ///
+    /// Return a pair `(closures, queue_empty)`, where:
+    ///
+    /// - `closures` is a list of actions to take: mapping buffers, notifying the user
+    ///
+    /// - `queue_empty` is a boolean indicating whether there are more queue
+    ///   submissions still in flight. (We have to take the locks needed to
+    ///   produce this information for other reasons, so we might as well just
+    ///   return it to our callers.)
     fn maintain<'this, 'token: 'this, G: GlobalIdentityHandlerFactory>(
         &'this self,
         hub: &Hub<A, G>,
         force_wait: bool,
         token: &mut Token<'token, Self>,
-    ) -> Result<UserClosures, WaitIdleError> {
+    ) -> Result<(UserClosures, bool), WaitIdleError> {
         profiling::scope!("maintain", "Device");
         let mut life_tracker = self.lock_life(token);
 
@@ -461,10 +482,11 @@ impl<A: HalApi> Device<A> {
         let mapping_closures = life_tracker.handle_mapping(hub, &self.raw, &self.trackers, token);
         life_tracker.cleanup(&self.raw);
 
-        Ok(UserClosures {
+        let closures = UserClosures {
             mappings: mapping_closures,
             submissions: submission_closures,
-        })
+        };
+        Ok((closures, life_tracker.queue_empty()))
     }
 
     fn untrack<'this, 'token: 'this, G: GlobalIdentityHandlerFactory>(
@@ -4887,7 +4909,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         device_id: id::DeviceId,
         force_wait: bool,
     ) -> Result<(), WaitIdleError> {
-        let closures = {
+        let (closures, _) = {
             let hub = A::hub(self);
             let mut token = Token::root();
             let (device_guard, mut token) = hub.devices.read(&mut token);
@@ -4913,12 +4935,27 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("poll_devices");
 
         let hub = A::hub(self);
-        let mut token = Token::root();
-        let (device_guard, mut token) = hub.devices.read(&mut token);
-        for (_, device) in device_guard.iter(A::VARIANT) {
-            let cbs = device.maintain(hub, force_wait, &mut token)?;
-            closures.extend(cbs);
+        let mut devices_to_drop = vec![];
+        {
+            let mut token = Token::root();
+            let (device_guard, mut token) = hub.devices.read(&mut token);
+
+            for (id, device) in device_guard.iter(A::VARIANT) {
+                let (cbs, queue_empty) = device.maintain(hub, force_wait, &mut token)?;
+
+                // If the device's own `RefCount` clone is the only one left, and
+                // its submission queue is empty, then it can be freed.
+                if queue_empty && device.ref_count.load() == 1 {
+                    devices_to_drop.push(id);
+                }
+                closures.extend(cbs);
+            }
         }
+
+        for device_id in devices_to_drop {
+            self.exit_device::<A>(device_id);
+        }
+
         Ok(())
     }
 
@@ -4984,19 +5021,45 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let hub = A::hub(self);
         let mut token = Token::root();
-        let (device, _) = hub.devices.unregister(device_id, &mut token);
-        if let Some(mut device) = device {
-            device.prepare_to_die();
 
-            // Adapter is only referenced by the device and itself.
-            // This isn't a robust way to destroy them, we should find a better one.
-            if device.adapter_id.ref_count.load() == 1 {
-                let _ = hub
-                    .adapters
-                    .unregister(device.adapter_id.value.0, &mut token);
+        // For now, just drop the `RefCount` in `device.life_guard`, which
+        // stands for the user's reference to the device. We'll take care of
+        // cleaning up the device when we're polled, once its queue submissions
+        // have completed and it is no longer needed by other resources.
+        let (mut device_guard, _) = hub.devices.write(&mut token);
+        if let Ok(device) = device_guard.get_mut(device_id) {
+            device.life_guard.ref_count.take().unwrap();
+        }
+    }
+
+    /// Exit the unreferenced, inactive device `device_id`.
+    fn exit_device<A: HalApi>(&self, device_id: id::DeviceId) {
+        let hub = A::hub(self);
+        let mut token = Token::root();
+        let mut free_adapter_id = None;
+        {
+            let (device, mut _token) = hub.devices.unregister(device_id, &mut token);
+            if let Some(mut device) = device {
+                // The things `Device::prepare_to_die` takes care are mostly
+                // unnecessary here. We know our queue is empty, so we don't
+                // need to wait for submissions or triage them. We know we were
+                // just polled, so `life_tracker.free_resources` is empty.
+                debug_assert!(device.lock_life(&mut _token).queue_empty());
+                device.pending_writes.deactivate();
+
+                // Adapter is only referenced by the device and itself.
+                // This isn't a robust way to destroy them, we should find a better one.
+                if device.adapter_id.ref_count.load() == 1 {
+                    free_adapter_id = Some(device.adapter_id.value.0);
+                }
+
+                device.dispose();
             }
+        }
 
-            device.dispose();
+        // Free the adapter now that we've dropped the `Device` token.
+        if let Some(free_adapter_id) = free_adapter_id {
+            let _ = hub.adapters.unregister(free_adapter_id, &mut token);
         }
     }
 
