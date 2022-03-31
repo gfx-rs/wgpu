@@ -4520,8 +4520,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(pair) => pair,
                 Err(e) => break e,
             };
+            let ref_count = pipeline.life_guard.add_ref();
 
             let id = fid.assign(pipeline, &mut token);
+            log::info!("Created render pipeline {:?} with {:?}", id, desc);
+
+            device
+                .trackers
+                .lock()
+                .render_pipes
+                .init(id, ref_count, PhantomData)
+                .unwrap();
             return (id.0, None);
         };
 
@@ -4652,8 +4661,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(pair) => pair,
                 Err(e) => break e,
             };
+            let ref_count = pipeline.life_guard.add_ref();
 
             let id = fid.assign(pipeline, &mut token);
+            log::info!("Created compute pipeline {:?} with {:?}", id, desc);
+
+            device
+                .trackers
+                .lock()
+                .compute_pipes
+                .init(id, ref_count, PhantomData)
+                .unwrap();
             return (id.0, None);
         };
 
