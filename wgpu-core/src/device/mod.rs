@@ -269,6 +269,9 @@ pub struct Device<A: hal::Api> {
     command_allocator: Mutex<CommandAllocator<A>>,
     pub(crate) active_submission_index: SubmissionIndex,
     fence: A::Fence,
+
+    /// All live resources allocated with this [`Device`].
+    ///
     /// Has to be locked temporarily only (locked last)
     pub(crate) trackers: Mutex<TrackerSet>,
     // Life tracker should be locked right after the device and before anything else.

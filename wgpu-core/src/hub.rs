@@ -24,8 +24,7 @@ use std::{fmt::Debug, marker::PhantomData, mem, ops};
 /// Use `IdentityManager::default` to construct new instances.
 ///
 /// `IdentityManager` returns `Id`s whose index values are suitable for use as
-/// indices into a vector of information (which you maintain elsewhere) about
-/// those ids' referents:
+/// indices into a `Storage<T>` that holds those ids' referents:
 ///
 /// - Every live id has a distinct index value. Each live id's index selects a
 ///   distinct element in the vector.
@@ -88,10 +87,20 @@ impl IdentityManager {
     }
 }
 
+/// An entry in a `Storage::map` table.
 #[derive(Debug)]
 enum Element<T> {
+    /// There are no live ids with this index.
     Vacant,
+
+    /// There is one live id with this index, allocated at the given
+    /// epoch.
     Occupied(T, Epoch),
+
+    /// Like `Occupied`, but an error occurred when creating the
+    /// resource.
+    ///
+    /// The given `String` is the resource's descriptor label.
     Error(Epoch, String),
 }
 
@@ -112,6 +121,11 @@ impl StorageReport {
 #[derive(Clone, Debug)]
 pub(crate) struct InvalidId;
 
+/// A table of `T` values indexed by the id type `I`.
+///
+/// The table is represented as a vector indexed by the ids' index
+/// values, so you should use an id allocator like `IdentityManager`
+/// that keeps the index values dense and close to zero.
 #[derive(Debug)]
 pub struct Storage<T, I: id::TypedId> {
     map: Vec<Element<T>>,
@@ -269,7 +283,7 @@ impl<T, I: id::TypedId> Storage<T, I> {
 /// If type A implements `Access<B>`, that means we are allowed to proceed
 /// with locking resource `B` after we lock `A`.
 ///
-/// The implenentations basically describe the edges in a directed graph
+/// The implementations basically describe the edges in a directed graph
 /// of lock transitions. As long as it doesn't have loops, we can have
 /// multiple concurrent paths on this graph (from multiple threads) without
 /// deadlocks, i.e. there is always a path whose next resource is not locked
