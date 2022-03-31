@@ -361,10 +361,24 @@ impl<A: hal::Api> LifetimeTracker<A> {
     /// Sort out the consequences of completed submissions.
     ///
     /// Assume that all submissions up through `last_done` have completed.
-    /// Buffers they used are now ready to map. Resources for which they were
-    /// the final use are now ready to free.
     ///
-    /// Return a list of `SubmittedWorkDoneClosure`s to run.
+    /// -   Buffers used by those submissions are now ready to map, if
+    ///     requested. Add any buffers in the submission's [`mapped`] list to
+    ///     [`self.ready_to_map`], where [`LifetimeTracker::handle_mapping`] will find
+    ///     them.
+    ///
+    /// -   Resources whose final use was in those submissions are now ready to
+    ///     free. Add any resources in the submission's [`last_resources`] table
+    ///     to [`self.free_resources`], where [`LifetimeTracker::cleanup`] will find
+    ///     them.
+    ///
+    /// Return a list of [`SubmittedWorkDoneClosure`]s to run.
+    ///
+    /// [`mapped`]: ActiveSubmission::mapped
+    /// [`self.ready_to_map`]: LifetimeTracker::ready_to_map
+    /// [`last_resources`]: ActiveSubmission::last_resources
+    /// [`self.free_resources`]: LifetimeTracker::free_resources
+    /// [`SubmittedWorkDoneClosure`]: crate::device::queue::SubmittedWorkDoneClosure
     #[must_use]
     pub fn triage_submissions(
         &mut self,
@@ -435,6 +449,45 @@ impl<A: hal::Api> LifetimeTracker<A> {
 }
 
 impl<A: HalApi> LifetimeTracker<A> {
+    /// Identify resources to free, according to `trackers` and `self.suspected_resources`.
+    ///
+    /// Given `trackers`, the [`TrackerSet`] belonging to same [`Device`] as
+    /// `self`, and `hub`, the [`Hub`] to which that `Device` belongs:
+    ///
+    /// Remove from `trackers` each resource mentioned in
+    /// [`self.suspected_resources`]. If `trackers` held the final reference to
+    /// that resource, add it to the appropriate free list, to be destroyed by
+    /// the hal:
+    ///
+    /// -   Add resources used by queue submissions still in flight to the
+    ///     [`last_resources`] table of the last such submission's entry in
+    ///     [`self.active`]. When that submission has finished execution. the
+    ///     [`triage_submissions`] method will move them to
+    ///     [`self.free_resources`].
+    ///
+    /// -   Add resources that can be freed right now to [`self.free_resources`]
+    ///     directly. [`LifetimeTracker::cleanup`] will take care of them as
+    ///     part of this poll.
+    ///
+    /// ## Entrained resources
+    ///
+    /// This function finds resources that are used only by other resources
+    /// ready to be freed, and adds those to the free lists as well. For
+    /// example, if there's some texture `T` used only by some texture view
+    /// `TV`, then if `TV` can be freed, `T` gets added to the free lists too.
+    ///
+    /// Since `wgpu-core` resource ownership patterns are acyclic, we can visit
+    /// each type that can be owned after all types that could possibly own
+    /// it. This way, we can detect all free-able objects in a single pass,
+    /// simply by starting with types that are roots of the ownership DAG (like
+    /// render bundles) and working our way towards leaf types (like buffers).
+    ///
+    /// [`Device`]: super::Device
+    /// [`self.suspected_resources`]: LifetimeTracker::suspected_resources
+    /// [`last_resources`]: ActiveSubmission::last_resources
+    /// [`self.active`]: LifetimeTracker::active
+    /// [`triage_submissions`]: LifetimeTracker::triage_submissions
+    /// [`self.free_resources`]: LifetimeTracker::free_resources
     pub(super) fn triage_suspected<G: GlobalIdentityHandlerFactory>(
         &mut self,
         hub: &Hub<A, G>,
