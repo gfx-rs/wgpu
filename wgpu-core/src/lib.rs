@@ -93,6 +93,12 @@ unsafe impl Sync for RefCount {}
 impl RefCount {
     const MAX: usize = 1 << 24;
 
+    /// Construct a new `RefCount`, with an initial count of 1.
+    fn new() -> RefCount {
+        let bx = Box::new(AtomicUsize::new(1));
+        Self(unsafe { ptr::NonNull::new_unchecked(Box::into_raw(bx)) })
+    }
+
     fn load(&self) -> usize {
         unsafe { self.0.as_ref() }.load(Ordering::Acquire)
     }
@@ -184,9 +190,8 @@ pub struct LifeGuard {
 impl LifeGuard {
     #[allow(unused_variables)]
     fn new(label: &str) -> Self {
-        let bx = Box::new(AtomicUsize::new(1));
         Self {
-            ref_count: ptr::NonNull::new(Box::into_raw(bx)).map(RefCount),
+            ref_count: Some(RefCount::new()),
             submission_index: AtomicUsize::new(0),
             #[cfg(debug_assertions)]
             label: label.to_string(),
