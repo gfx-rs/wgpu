@@ -2,6 +2,7 @@ use crate::{
     Buffer, BufferAddress, BufferDescriptor, BufferSize, BufferUsages, BufferViewMut,
     CommandEncoder, Device, MapMode,
 };
+use std::fmt;
 use std::pin::Pin;
 use std::task::{self, Poll};
 use std::{future::Future, sync::mpsc};
@@ -180,5 +181,16 @@ impl StagingBelt {
             .collect::<Vec<_>>();
 
         Join { futures }
+    }
+}
+
+impl fmt::Debug for StagingBelt {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("StagingBelt")
+            .field("chunk_size", &self.chunk_size)
+            .field("active_chunks", &self.active_chunks.len())
+            .field("closed_chunks", &self.closed_chunks.len())
+            .field("free_chunks", &self.free_chunks.len())
+            .finish_non_exhaustive()
     }
 }
