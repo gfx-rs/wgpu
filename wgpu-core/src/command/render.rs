@@ -982,7 +982,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                 )
             };
             let desc = hal::RenderPassDescriptor {
-                label: Some("Zero init discarded depth/stencil aspect"),
+                label: Some("(wgpu internal) Zero init discarded depth/stencil aspect"),
                 extent: view.extent,
                 sample_count: view.samples,
                 color_attachments: &[],

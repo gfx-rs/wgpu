@@ -338,7 +338,7 @@ impl crate::Queue<Api> for Queue {
                                 .to_owned()
                         }
                     };
-                    raw.set_label("_Signal");
+                    raw.set_label("(wgpu internal) Signal");
                     raw.add_completed_handler(&block);
 
                     fence.maintain();
@@ -370,7 +370,7 @@ impl crate::Queue<Api> for Queue {
         let queue = &self.raw.lock();
         objc::rc::autoreleasepool(|| {
             let command_buffer = queue.new_command_buffer();
-            command_buffer.set_label("_Present");
+            command_buffer.set_label("(wgpu internal) Present");
 
             // https://developer.apple.com/documentation/quartzcore/cametallayer/1478157-presentswithtransaction?language=objc
             if !texture.present_with_transaction {
