@@ -126,7 +126,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (texture_id, status) = match unsafe { suf.raw.acquire_texture(FRAME_TIMEOUT_MS) } {
             Ok(Some(ast)) => {
                 let clear_view_desc = hal::TextureViewDescriptor {
-                    label: Some("clear surface texture view"),
+                    label: Some("(wgpu internal) clear surface texture view"),
                     format: config.format,
                     dimension: wgt::TextureViewDimension::D2,
                     usage: hal::TextureUses::COLOR_TARGET,

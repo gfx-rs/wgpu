@@ -356,7 +356,7 @@ impl<A: HalApi> Device<A> {
         let zero_buffer = unsafe {
             open.device
                 .create_buffer(&hal::BufferDescriptor {
-                    label: Some("wgpu zero init buffer"),
+                    label: Some("(wgpu internal) zero init buffer"),
                     size: ZERO_BUFFER_SIZE,
                     usage: hal::BufferUses::COPY_SRC | hal::BufferUses::COPY_DST,
                     memory_flags: hal::MemoryFlags::empty(),
@@ -784,7 +784,7 @@ impl<A: HalApi> Device<A> {
             for mip_level in 0..desc.mip_level_count {
                 for array_layer in 0..desc.size.depth_or_array_layers {
                     let desc = hal::TextureViewDescriptor {
-                        label: Some("clear texture view"),
+                        label: Some("(wgpu internal) clear texture view"),
                         format: desc.format,
                         dimension,
                         usage,
@@ -3107,7 +3107,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             } else {
                 // buffer needs staging area for initialization only
                 let stage_desc = wgt::BufferDescriptor {
-                    label: Some(Cow::Borrowed("<init_buffer>")),
+                    label: Some(Cow::Borrowed(
+                        "(wgpu internal) initializing unmappable buffer",
+                    )),
                     size: desc.size,
                     usage: wgt::BufferUsages::MAP_WRITE | wgt::BufferUsages::COPY_SRC,
                     mapped_at_creation: false,

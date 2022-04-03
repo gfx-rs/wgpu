@@ -174,7 +174,7 @@ impl<A: hal::Api> PendingWrites<A> {
         if !self.is_active {
             unsafe {
                 self.command_encoder
-                    .begin_encoding(Some("_PendingWrites"))
+                    .begin_encoding(Some("(wgpu internal) PendingWrites"))
                     .unwrap();
             }
             self.is_active = true;
@@ -196,7 +196,7 @@ impl<A: hal::Api> super::Device<A> {
     fn prepare_stage(&mut self, size: wgt::BufferAddress) -> Result<StagingData<A>, DeviceError> {
         profiling::scope!("prepare_stage");
         let stage_desc = hal::BufferDescriptor {
-            label: Some("_Staging"),
+            label: Some("(wgpu internal) Staging"),
             size,
             usage: hal::BufferUses::MAP_WRITE | hal::BufferUses::COPY_SRC,
             memory_flags: hal::MemoryFlags::TRANSIENT,
@@ -754,7 +754,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         unsafe {
                             baked
                                 .encoder
-                                .begin_encoding(Some("_Transit"))
+                                .begin_encoding(Some("(wgpu internal) Transit"))
                                 .map_err(DeviceError::from)?
                         };
                         log::trace!("Stitching command buffer {:?} before submission", cmb_id);
@@ -785,7 +785,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             unsafe {
                                 baked
                                     .encoder
-                                    .begin_encoding(Some("_Present"))
+                                    .begin_encoding(Some("(wgpu internal) Present"))
                                     .map_err(DeviceError::from)?
                             };
                             let texture_barriers = trackers

@@ -450,7 +450,7 @@ fn clear_texture_via_render_passes<A: hal::Api>(
             };
             unsafe {
                 encoder.begin_render_pass(&hal::RenderPassDescriptor {
-                    label: Some("clear_texture clear pass"),
+                    label: Some("(wgpu internal) clear_texture clear pass"),
                     extent,
                     sample_count,
                     color_attachments,

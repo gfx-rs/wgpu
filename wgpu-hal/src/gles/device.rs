@@ -213,8 +213,12 @@ impl super::Device {
             };
             let shader_src = format!("#version {} es \n void main(void) {{}}", version,);
             log::info!("Only vertex shader is present. Creating an empty fragment shader",);
-            let shader =
-                Self::compile_shader(gl, &shader_src, naga::ShaderStage::Fragment, Some("_dummy"))?;
+            let shader = Self::compile_shader(
+                gl,
+                &shader_src,
+                naga::ShaderStage::Fragment,
+                Some("(wgpu internal) dummy fragment shader"),
+            )?;
             shaders_to_delete.push(shader);
         }
 

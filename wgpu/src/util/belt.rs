@@ -115,7 +115,7 @@ impl StagingBelt {
             let size = self.chunk_size.max(size.get());
             Chunk {
                 buffer: device.create_buffer(&BufferDescriptor {
-                    label: Some("staging"),
+                    label: Some("(wgpu internal) StagingBelt staging buffer"),
                     size,
                     usage: BufferUsages::MAP_WRITE | BufferUsages::COPY_SRC,
                     mapped_at_creation: true,
