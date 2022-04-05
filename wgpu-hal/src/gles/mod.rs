@@ -202,7 +202,7 @@ pub struct Queue {
     features: wgt::Features,
     draw_fbo: glow::Framebuffer,
     copy_fbo: glow::Framebuffer,
-    /// Shader program used to clear the screen for [`PrivateCapabilities::REQUIRES_SHADER_CLEAR`]
+    /// Shader program used to clear the screen for [`Workarounds::MESA_I915_SRGB_SHADER_CLEAR`]
     /// devices.
     shader_clear_program: glow::Program,
     /// The uniform location of the color uniform in the shader clear program
