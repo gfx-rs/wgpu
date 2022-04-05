@@ -23,9 +23,10 @@ pub type DynamicOffset = u32;
 
 /// Buffer-Texture copies must have [`bytes_per_row`] aligned to this number.
 ///
-/// This doesn't apply to [`Queue::write_texture`].
+/// This doesn't apply to [`Queue::write_texture`][Qwt].
 ///
 /// [`bytes_per_row`]: ImageDataLayout::bytes_per_row
+/// [Qwt]: ../wgpu/struct.Queue.html#method.write_texture
 pub const COPY_BYTES_PER_ROW_ALIGNMENT: u32 = 256;
 /// An offset into the query resolve buffer has to be aligned to this.
 pub const QUERY_RESOLVE_BUFFER_ALIGNMENT: BufferAddress = 256;
@@ -616,6 +617,8 @@ impl Features {
 /// what you need.
 ///
 /// See also: <https://gpuweb.github.io/gpuweb/#dictdef-gpulimits>
+///
+/// [`downlevel_defaults()`]: Limits::downlevel_defaults
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
@@ -1060,7 +1063,7 @@ pub struct AdapterInfo {
     pub backend: Backend,
 }
 
-/// Describes a [`Device`].
+/// Describes a [`Device`](../wgpu/struct.Device.html).
 #[repr(C)]
 #[derive(Clone, Debug, Default)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
@@ -1315,7 +1318,9 @@ impl BlendState {
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct ColorTargetState {
     /// The [`TextureFormat`] of the image that this pipeline will render to. Must match the the format
-    /// of the corresponding color attachment in [`CommandEncoder::begin_render_pass`].
+    /// of the corresponding color attachment in [`CommandEncoder::begin_render_pass`][CEbrp]
+    ///
+    /// [CEbrp]: ../wgpu/struct.CommandEncoder.html#method.begin_render_pass
     pub format: TextureFormat,
     /// The blending that is used for this pipeline.
     #[cfg_attr(feature = "serde", serde(default))]
@@ -1964,7 +1969,11 @@ pub enum TextureFormat {
     EacRg11Snorm,
     /// block compressed texture. 16 bytes per block.
     ///
-    /// Features [`TEXTURE_COMPRESSION_ASTC_LDR`] or [`TEXTURE_COMPRESSION_ASTC_HDR`] must be enabled to use this texture format.
+    /// Features [`TEXTURE_COMPRESSION_ASTC_LDR`] or [`TEXTURE_COMPRESSION_ASTC_HDR`]
+    /// must be enabled to use this texture format.
+    ///
+    /// [`TEXTURE_COMPRESSION_ASTC_LDR`]: Features::TEXTURE_COMPRESSION_ASTC_LDR
+    /// [`TEXTURE_COMPRESSION_ASTC_HDR`]: Features::TEXTURE_COMPRESSION_ASTC_HDR
     Astc {
         /// compressed block dimensions
         block: AstcBlock,
@@ -2253,7 +2262,9 @@ impl DepthBiasState {
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub struct DepthStencilState {
     /// Format of the depth/stencil buffer, must be special depth format. Must match the the format
-    /// of the depth/stencil attachment in [`CommandEncoder::begin_render_pass`].
+    /// of the depth/stencil attachment in [`CommandEncoder::begin_render_pass`][CEbrp].
+    ///
+    /// [CEbrp]: ../wgpu/struct.CommandEncoder.html#method.begin_render_pass
     pub format: TextureFormat,
     /// If disabled, depth will not be written to.
     pub depth_write_enabled: bool,
@@ -2307,7 +2318,10 @@ pub enum StencilOperation {
     Keep = 0,
     /// Set stencil value to zero.
     Zero = 1,
-    /// Replace stencil value with value provided in most recent call to [`RenderPass::set_stencil_reference`].
+    /// Replace stencil value with value provided in most recent call to
+    /// [`RenderPass::set_stencil_reference`][RPssr].
+    ///
+    /// [RPssr]: ../wgpu/struct.RenderPass.html#method.set_stencil_reference
     Replace = 2,
     /// Bitwise inverts stencil value.
     Invert = 3,
@@ -2426,7 +2440,10 @@ impl Default for VertexStepMode {
 
 /// Vertex inputs (attributes) to shaders.
 ///
-/// Arrays of these can be made with the [`vertex_attr_array`] macro. Vertex attributes are assumed to be tightly packed.
+/// Arrays of these can be made with the [`vertex_attr_array`]
+/// macro. Vertex attributes are assumed to be tightly packed.
+///
+/// [`vertex_attr_array`]: ../wgpu/macro.vertex_attr_array.html
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
@@ -2593,7 +2610,7 @@ bitflags::bitflags! {
 #[cfg(feature = "bitflags_serde_shim")]
 bitflags_serde_shim::impl_serde_for_bitflags!(BufferUsages);
 
-/// Describes a [`Buffer`].
+/// Describes a [`Buffer`](../wgpu/struct.Buffer.html).
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
@@ -2623,7 +2640,7 @@ impl<L> BufferDescriptor<L> {
     }
 }
 
-/// Describes a [`CommandEncoder`].
+/// Describes a [`CommandEncoder`](../wgpu/struct.CommandEncoder.html).
 #[repr(C)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
@@ -2696,6 +2713,8 @@ bitflags::bitflags! {
 bitflags_serde_shim::impl_serde_for_bitflags!(TextureUsages);
 
 /// Configures a [`Surface`] for presentation.
+///
+/// [`Surface`]: ../wgpu/struct.Surface.html
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
@@ -3019,7 +3038,7 @@ fn test_max_mips() {
     );
 }
 
-/// Describes a [`Texture`].
+/// Describes a [`Texture`](../wgpu/struct.Texture.html).
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
@@ -3198,7 +3217,7 @@ pub struct PushConstantRange {
     pub range: Range<u32>,
 }
 
-/// Describes a [`CommandBuffer`].
+/// Describes a [`CommandBuffer`](../wgpu/struct.CommandBuffer.html).
 #[repr(C)]
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
@@ -3231,7 +3250,7 @@ pub struct RenderBundleDepthStencil {
     pub stencil_read_only: bool,
 }
 
-/// Describes a [`RenderBundle`].
+/// Describes a [`RenderBundle`](../wgpu/struct.RenderBundle.html).
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
@@ -3280,12 +3299,17 @@ pub struct ImageDataLayout {
     ///
     /// This value is required if there are multiple rows (i.e. height or depth is more than one pixel or pixel block for compressed textures)
     ///
-    /// Must be a multiple of 256 for [`CommandEncoder::copy_buffer_to_texture`] and [`CommandEncoder::copy_texture_to_buffer`]. You must manually pad
-    /// the image such that this is a multiple of 256. It will not affect the image data.
+    /// Must be a multiple of 256 for [`CommandEncoder::copy_buffer_to_texture`][CEcbtt]
+    /// and [`CommandEncoder::copy_texture_to_buffer`][CEcttb]. You must manually pad the
+    /// image such that this is a multiple of 256. It will not affect the image data.
     ///
-    /// [`Queue::write_texture`] does not have this requirement.
+    /// [`Queue::write_texture`][Qwt] does not have this requirement.
     ///
     /// Must be a multiple of the texture block size. For non-compressed textures, this is 1.
+    ///
+    /// [CEcbtt]: ../wgpu/struct.CommandEncoder.html#method.copy_buffer_to_texture
+    /// [CEcttb]: ../wgpu/struct.CommandEncoder.html#method.copy_texture_to_buffer
+    /// [Qwt]: ../wgpu/struct.Queue.html#method.write_texture
     pub bytes_per_row: Option<NonZeroU32>,
     /// "Rows" that make up a single "image".
     ///
@@ -3464,7 +3488,11 @@ pub enum BindingType {
         /// Sub-type of the buffer binding.
         ty: BufferBindingType,
         /// Indicates that the binding has a dynamic offset.
-        /// One offset must be passed to [`RenderPass::set_bind_group`] for each dynamic binding in increasing order of binding number.
+        ///
+        /// One offset must be passed to [`RenderPass::set_bind_group`][RPsbg] for each dynamic
+        /// binding in increasing order of binding number.
+        ///
+        /// [RPsbg]: ../wgpu/struct.RenderPass.html#method.set_bind_group
         #[cfg_attr(any(feature = "trace", feature = "replay"), serde(default))]
         has_dynamic_offset: bool,
         /// Minimum size of the corresponding `BufferBinding` required to match this entry.
@@ -3586,7 +3614,9 @@ pub struct ImageCopyTexture<T> {
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub struct ImageSubresourceRange {
-    /// Aspect of the texture. Color textures must be [`TextureAspect::All`](wgt::TextureAspect::All).
+    /// Aspect of the texture. Color textures must be [`TextureAspect::All`][TAA].
+    ///
+    /// [TAA]: ../wgpu/enum.TextureAspect.html#variant.All
     pub aspect: TextureAspect,
     /// Base mip level.
     pub base_mip_level: u32,
@@ -3689,12 +3719,14 @@ pub enum QueryType {
     /// Query returns a 64-bit number indicating the GPU-timestamp
     /// where all previous commands have finished executing.
     ///
-    /// Must be multiplied by [`Queue::get_timestamp_period`] to get
+    /// Must be multiplied by [`Queue::get_timestamp_period`][Qgtp] to get
     /// the value in nanoseconds. Absolute values have no meaning,
     /// but timestamps can be subtracted to get the time it takes
     /// for a string of operations to complete.
     ///
     /// [`Features::TIMESTAMP_QUERY`] must be enabled to use this query type.
+    ///
+    /// [Qgtp]: ../wgpu/struct.Queue.html#method.get_timestamp_period
     Timestamp,
 }
 

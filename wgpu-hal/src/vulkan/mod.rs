@@ -343,7 +343,7 @@ pub struct Queue {
     /// from submissions to the last present, since it's required by the
     /// specification.
     /// It would be correct to use a single semaphore there, but
-    /// https://gitlab.freedesktop.org/mesa/mesa/-/issues/5508
+    /// [Intel hangs in `anv_queue_finish`](https://gitlab.freedesktop.org/mesa/mesa/-/issues/5508).
     relay_semaphores: [vk::Semaphore; 2],
     relay_index: Option<usize>,
 }
