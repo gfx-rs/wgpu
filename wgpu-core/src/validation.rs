@@ -868,9 +868,6 @@ impl Interface {
                 _ => continue,
             };
             let ty = match module.types[var.ty].inner {
-                naga::TypeInner::Struct { members: _, span } => ResourceType::Buffer {
-                    size: wgt::BufferSize::new(span as u64).unwrap(),
-                },
                 naga::TypeInner::Image {
                     dim,
                     arrayed,
@@ -884,10 +881,9 @@ impl Interface {
                 naga::TypeInner::Array { stride, .. } => ResourceType::Buffer {
                     size: wgt::BufferSize::new(stride as u64).unwrap(),
                 },
-                ref other => {
-                    log::error!("Unexpected resource type: {:?}", other);
-                    continue;
-                }
+                ref other => ResourceType::Buffer {
+                    size: wgt::BufferSize::new(other.size(&module.constants) as u64).unwrap(),
+                },
             };
             let handle = resources.append(
                 Resource {

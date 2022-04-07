@@ -3,12 +3,9 @@ struct VertexOutput {
     @builtin(position) position: vec4<f32>,
 };
 
-struct Locals {
-    transform: mat4x4<f32>
-};
 @group(0)
 @binding(0)
-var<uniform> r_locals: Locals;
+var<uniform> transform: mat4x4<f32>;
 
 @vertex
 fn vs_main(
@@ -17,7 +14,7 @@ fn vs_main(
 ) -> VertexOutput {
     var result: VertexOutput;
     result.tex_coord = tex_coord;
-    result.position = r_locals.transform * position;
+    result.position = transform * position;
     return result;
 }
 
