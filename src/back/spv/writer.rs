@@ -799,8 +799,6 @@ impl Writer {
         handle: Handle<crate::Type>,
     ) -> Result<Word, Error> {
         let ty = &arena[handle];
-        let decorate_layout = true; //TODO?
-
         let id = if let Some(local) = make_local(&ty.inner) {
             // This type can be represented as a `LocalType`, so check if we've
             // already written an instruction for it. If not, do so now, with
@@ -829,9 +827,7 @@ impl Writer {
             let id = self.id_gen.next();
             let instruction = match ty.inner {
                 crate::TypeInner::Array { base, size, stride } => {
-                    if decorate_layout {
-                        self.decorate(id, Decoration::ArrayStride, &[stride]);
-                    }
+                    self.decorate(id, Decoration::ArrayStride, &[stride]);
 
                     let type_id = self.get_type_id(LookupType::Handle(base));
                     match size {
@@ -848,14 +844,12 @@ impl Writer {
                 } => {
                     let mut member_ids = Vec::with_capacity(members.len());
                     for (index, member) in members.iter().enumerate() {
-                        if decorate_layout {
-                            self.annotations.push(Instruction::member_decorate(
-                                id,
-                                index as u32,
-                                Decoration::Offset,
-                                &[member.offset],
-                            ));
-                        }
+                        self.annotations.push(Instruction::member_decorate(
+                            id,
+                            index as u32,
+                            Decoration::Offset,
+                            &[member.offset],
+                        ));
 
                         if self.flags.contains(WriterFlags::DEBUG) {
                             if let Some(ref name) = member.name {
