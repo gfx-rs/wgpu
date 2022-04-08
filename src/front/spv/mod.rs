@@ -4208,19 +4208,15 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             } = *inner
             {
                 if let Some(stride) = decor.matrix_stride {
-                    let rounded_rows = if rows > crate::VectorSize::Bi {
-                        4
-                    } else {
-                        rows as u32
-                    };
-                    if stride.get() != rounded_rows * (width as u32) {
-                        log::warn!(
-                            "Unexpected matrix stride {} for an {}x{} matrix with scalar width={}",
-                            stride.get(),
-                            columns as u8,
-                            rows as u8,
+                    let aligned_rows = if rows > crate::VectorSize::Bi { 4 } else { 2 };
+                    let expected_stride = aligned_rows * width as u32;
+                    if stride.get() != expected_stride {
+                        return Err(Error::UnsupportedMatrixStride {
+                            stride: stride.get(),
+                            columns: columns as u8,
+                            rows: rows as u8,
                             width,
-                        );
+                        });
                     }
                 }
             }
