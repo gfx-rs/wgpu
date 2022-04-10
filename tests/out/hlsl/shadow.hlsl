@@ -13,8 +13,8 @@ struct Entity {
 
 struct VertexOutput {
     float4 proj_position : SV_Position;
-    linear float3 world_normal : LOC0;
-    linear float4 world_position : LOC1;
+    float3 world_normal : LOC0;
+    float4 world_position : LOC1;
 };
 
 struct Light {

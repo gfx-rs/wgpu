@@ -7,7 +7,7 @@ ConstantBuffer<NagaConstants> _NagaConstants: register(b1);
 
 struct VertexOutput {
     float4 position : SV_Position;
-    linear float3 uv : LOC0;
+    float3 uv : LOC0;
 };
 
 struct Data {

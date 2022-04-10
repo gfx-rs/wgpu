@@ -758,7 +758,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     }) = member.binding
                     {
                         if let Some(interpolation) = interpolation {
-                            write!(self.out, "{} ", interpolation.to_hlsl_str())?
+                            if let Some(string) = interpolation.to_hlsl_str() {
+                                write!(self.out, "{} ", string)?
+                            }
                         }
 
                         if let Some(sampling) = sampling {

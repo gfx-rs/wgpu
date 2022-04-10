@@ -7,7 +7,7 @@ struct gl_PerVertex {
 };
 
 struct type_9 {
-    linear float2 member : LOC0;
+    float2 member : LOC0;
     float4 gl_Position : SV_Position;
 };
 

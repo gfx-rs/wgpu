@@ -7,13 +7,13 @@ ConstantBuffer<NagaConstants> _NagaConstants: register(b0, space1);
 
 struct VertexOutput {
     float4 position : SV_Position;
-    linear float varying : LOC1;
+    float varying : LOC1;
 };
 
 struct FragmentOutput {
     float depth : SV_Depth;
     uint sample_mask : SV_Coverage;
-    linear float color : SV_Target0;
+    float color : SV_Target0;
 };
 
 struct Input1_ {

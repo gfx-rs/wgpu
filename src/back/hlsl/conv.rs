@@ -111,12 +111,14 @@ impl crate::BuiltIn {
 }
 
 impl crate::Interpolation {
-    /// Helper function that returns the string corresponding to the HLSL interpolation qualifier
-    pub(super) fn to_hlsl_str(self) -> &'static str {
+    /// Return the string corresponding to the HLSL interpolation qualifier.
+    pub(super) fn to_hlsl_str(self) -> Option<&'static str> {
         match self {
-            Self::Perspective => "linear",
-            Self::Linear => "noperspective",
-            Self::Flat => "nointerpolation",
+            // Would be "linear", but it's the default interpolation in SM4 and up
+            // https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-struct#interpolation-modifiers-introduced-in-shader-model-4
+            Self::Perspective => None,
+            Self::Linear => Some("noperspective"),
+            Self::Flat => Some("nointerpolation"),
         }
     }
 }

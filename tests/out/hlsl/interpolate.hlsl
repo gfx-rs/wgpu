@@ -5,9 +5,9 @@ struct FragmentInput {
     noperspective float linear_ : LOC1;
     noperspective centroid float2 linear_centroid : LOC2;
     noperspective sample float3 linear_sample : LOC3;
-    linear float4 perspective : LOC4;
-    linear centroid float perspective_centroid : LOC5;
-    linear sample float perspective_sample : LOC6;
+    float4 perspective : LOC4;
+    centroid float perspective_centroid : LOC5;
+    sample float perspective_sample : LOC6;
 };
 
 struct VertexOutput_vert_main {
