@@ -21,6 +21,9 @@ uint NagaBufferLength(ByteAddressBuffer buffer)
 [numthreads(1, 1, 1)]
 void main()
 {
+    float3 unnamed = (float3)0;
+    float2 unnamed_1 = (float2)0;
+    int idx = 1;
     float Foo_1 = 1.0;
     bool at = true;
 
@@ -28,8 +31,17 @@ void main()
     wg[3] = _expr9;
     float _expr14 = asfloat(alignment.Load(0+0));
     wg[2] = _expr14;
+    float3 _expr16 = asfloat(alignment.Load3(0));
+    unnamed = _expr16;
+    float3 _expr19 = asfloat(alignment.Load3(0));
+    unnamed_1 = _expr19.zx;
     alignment.Store(12, asuint(4.0));
     wg[1] = float(((NagaBufferLength(dummy) - 0) / 8));
     at_1 = 2u;
+    alignment.Store3(0, asuint(float3(1.0.xxx)));
+    alignment.Store(0+0, asuint(1.0));
+    alignment.Store(0+0, asuint(2.0));
+    int _expr42 = idx;
+    alignment.Store(_expr42*4+0, asuint(3.0));
     return;
 }

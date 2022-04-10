@@ -19,15 +19,27 @@ layout(std430) readonly buffer type_6_block_1Compute { vec2 _group_0_binding_2_c
 
 
 void main() {
+    vec3 unnamed = vec3(0.0);
+    vec2 unnamed_1 = vec2(0.0);
+    int idx = 1;
     float Foo_1 = 1.0;
     bool at = true;
     float _e9 = _group_0_binding_1_cs.v1_;
     wg[3] = _e9;
     float _e14 = _group_0_binding_1_cs.v3_.x;
     wg[2] = _e14;
+    vec3 _e16 = _group_0_binding_1_cs.v3_;
+    unnamed = _e16;
+    vec3 _e19 = _group_0_binding_1_cs.v3_;
+    unnamed_1 = _e19.zx;
     _group_0_binding_1_cs.v1_ = 4.0;
     wg[1] = float(uint(_group_0_binding_2_cs.length()));
     at_1 = 2u;
+    _group_0_binding_1_cs.v3_ = vec3(1.0);
+    _group_0_binding_1_cs.v3_.x = 1.0;
+    _group_0_binding_1_cs.v3_.x = 2.0;
+    int _e42 = idx;
+    _group_0_binding_1_cs.v3_[_e42] = 3.0;
     return;
 }
 
