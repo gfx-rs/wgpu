@@ -43,5 +43,8 @@ void main()
     alignment.Store(0+0, asuint(2.0));
     int _expr42 = idx;
     alignment.Store(_expr42*4+0, asuint(3.0));
-    return;
+    float3 _expr47 = asfloat(alignment.Load3(0));
+    float3 unnamed_2 = mul(float3x3(float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0)), _expr47);
+    float3 _expr50 = asfloat(alignment.Load3(0));
+    float3 unnamed_3 = mul(_expr50, float3x3(float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0)));
 }

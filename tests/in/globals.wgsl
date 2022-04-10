@@ -35,6 +35,10 @@ fn main() {
     alignment.v3[0] = 2.0;
     alignment.v3[idx] = 3.0;
 
+    let m = mat3x3<f32>();
+    let _ = alignment.v3 * m;
+    let _ = m * alignment.v3;
+
     // Valid, Foo and at is in function scope
     var Foo: f32 = 1.0;
     var at: bool = true;

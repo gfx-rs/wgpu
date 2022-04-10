@@ -38,5 +38,8 @@ fn main() {
     alignment.v3_.x = 2.0;
     let _e42 = idx;
     alignment.v3_[_e42] = 3.0;
-    return;
+    let _e47 = alignment.v3_;
+    let unnamed_2 = (_e47 * mat3x3<f32>(vec3<f32>(0.0, 0.0, 0.0), vec3<f32>(0.0, 0.0, 0.0), vec3<f32>(0.0, 0.0, 0.0)));
+    let _e50 = alignment.v3_;
+    let unnamed_3 = (mat3x3<f32>(vec3<f32>(0.0, 0.0, 0.0), vec3<f32>(0.0, 0.0, 0.0), vec3<f32>(0.0, 0.0, 0.0)) * _e50);
 }

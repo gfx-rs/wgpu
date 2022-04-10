@@ -40,6 +40,9 @@ void main() {
     _group_0_binding_1_cs.v3_.x = 2.0;
     int _e42 = idx;
     _group_0_binding_1_cs.v3_[_e42] = 3.0;
-    return;
+    vec3 _e47 = _group_0_binding_1_cs.v3_;
+    vec3 unnamed_2 = (_e47 * mat3x3(vec3(0.0, 0.0, 0.0), vec3(0.0, 0.0, 0.0), vec3(0.0, 0.0, 0.0)));
+    vec3 _e50 = _group_0_binding_1_cs.v3_;
+    vec3 unnamed_3 = (mat3x3(vec3(0.0, 0.0, 0.0), vec3(0.0, 0.0, 0.0), vec3(0.0, 0.0, 0.0)) * _e50);
 }
 

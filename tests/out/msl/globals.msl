@@ -20,6 +20,8 @@ typedef metal::float2 type_6[1];
 struct type_8 {
     metal::float4 inner[20];
 };
+constant metal::float3 const_type_4_ = {0.0, 0.0, 0.0};
+constant metal::float3x3 const_type_10_ = {const_type_4_, const_type_4_, const_type_4_};
 
 kernel void main_(
   threadgroup type_2& wg
@@ -49,5 +51,8 @@ kernel void main_(
     alignment.v3_[0] = 2.0;
     int _e42 = idx;
     alignment.v3_[_e42] = 3.0;
-    return;
+    metal::float3 _e47 = alignment.v3_;
+    metal::float3 unnamed_2 = _e47 * const_type_10_;
+    metal::float3 _e50 = alignment.v3_;
+    metal::float3 unnamed_3 = const_type_10_ * _e50;
 }
