@@ -4,6 +4,8 @@ use crate::{
     proc::Alignment,
 };
 
+const UNIFORM_MIN_ALIGNMENT: Alignment = unsafe { Alignment::new_unchecked(16) };
+
 bitflags::bitflags! {
     /// Flags associated with [`Type`]s by [`Validator`].
     ///
@@ -63,6 +65,12 @@ pub enum Disalignment {
         index: u32,
         offset: u32,
         alignment: u32,
+    },
+    #[error("The struct member[{index}] offset {offset} must be at least {expected}")]
+    MemberOffsetAfterStruct {
+        index: u32,
+        offset: u32,
+        expected: u32,
     },
     #[error("The struct member[{index}] is not statically sized")]
     UnsizedMember { index: u32 },
@@ -341,7 +349,11 @@ impl super::Validator {
                 let uniform_layout = match base_info.uniform_layout {
                     Ok(base_alignment) => {
                         // combine the alignment requirements
-                        let align = base_alignment.unwrap().get().max(general_alignment);
+                        let align = base_alignment
+                            .unwrap()
+                            .get()
+                            .max(general_alignment)
+                            .max(UNIFORM_MIN_ALIGNMENT.get());
                         if stride % align != 0 {
                             Err((
                                 handle,
@@ -448,7 +460,11 @@ impl super::Validator {
                         | TypeFlags::ARGUMENT,
                     1,
                 );
+                ti.uniform_layout = Ok(Some(UNIFORM_MIN_ALIGNMENT));
+
                 let mut min_offset = 0;
+
+                let mut prev_struct_data: Option<(u32, u32)> = None;
 
                 for (i, member) in members.iter().enumerate() {
                     if member.ty >= handle {
@@ -508,6 +524,29 @@ impl super::Validator {
                         base_info.storage_layout,
                         handle,
                     );
+
+                    // Validate rule: If a structure member itself has a structure type S,
+                    // then the number of bytes between the start of that member and
+                    // the start of any following member must be at least roundUp(16, SizeOf(S)).
+                    if let Some((span, offset)) = prev_struct_data {
+                        let diff = member.offset - offset;
+                        let min = crate::valid::Layouter::round_up(UNIFORM_MIN_ALIGNMENT, span);
+                        if diff < min {
+                            ti.uniform_layout = Err((
+                                handle,
+                                Disalignment::MemberOffsetAfterStruct {
+                                    index: i as u32,
+                                    offset: member.offset,
+                                    expected: offset + min,
+                                },
+                            ));
+                        }
+                    };
+
+                    prev_struct_data = match types[member.ty].inner {
+                        crate::TypeInner::Struct { span, .. } => Some((span, member.offset)),
+                        _ => None,
+                    };
 
                     // The last field may be an unsized array.
                     if !base_info.flags.contains(TypeFlags::SIZED) {
