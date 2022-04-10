@@ -554,8 +554,6 @@ impl<'a> ExpressionContext<'a> {
         index::access_needs_check(base, index, self.module, self.function, self.info)
     }
 
-    // Because packed vectors such as `packed_float3` cannot be directly loaded,
-    // we convert them to unpacked vectors like `float3` on load.
     fn get_packed_vec_kind(
         &self,
         expr_handle: Handle<crate::Expression>,
@@ -1917,16 +1915,14 @@ impl<W: Write> Writer<W> {
                         write!(self.out, ".{}", name)?;
                     }
                     crate::TypeInner::ValuePointer { .. } | crate::TypeInner::Vector { .. } => {
-                        let wrap_packed_vec_scalar_kind = context.get_packed_vec_kind(base);
-                        //Note: this doesn't work for left-hand side
-                        if let Some(scalar_kind) = wrap_packed_vec_scalar_kind {
-                            write!(self.out, "{}::{}3(", NAMESPACE, scalar_kind.to_msl_name())?;
-                            self.put_access_chain(base, policy, context)?;
-                            write!(self.out, ")")?;
+                        self.put_access_chain(base, policy, context)?;
+                        // Prior to Metal v2.1 component access for packed vectors wasn't available
+                        // however array indexing is
+                        if context.get_packed_vec_kind(base).is_some() {
+                            write!(self.out, "[{}]", index)?;
                         } else {
-                            self.put_access_chain(base, policy, context)?;
+                            write!(self.out, ".{}", back::COMPONENTS[index as usize])?;
                         }
-                        write!(self.out, ".{}", back::COMPONENTS[index as usize])?;
                     }
                     _ => {
                         self.put_subscripted_access_chain(
@@ -2052,7 +2048,6 @@ impl<W: Write> Writer<W> {
         policy: index::BoundsCheckPolicy,
         context: &ExpressionContext,
     ) -> BackendResult {
-        let wrap_packed_vec_scalar_kind = context.get_packed_vec_kind(pointer);
         let is_atomic = match *context.resolve_type(pointer) {
             crate::TypeInner::Pointer { base, .. } => match context.module.types[base].inner {
                 crate::TypeInner::Atomic { .. } => true,
@@ -2061,11 +2056,7 @@ impl<W: Write> Writer<W> {
             _ => false,
         };
 
-        if let Some(scalar_kind) = wrap_packed_vec_scalar_kind {
-            write!(self.out, "{}::{}3(", NAMESPACE, scalar_kind.to_msl_name())?;
-            self.put_access_chain(pointer, policy, context)?;
-            write!(self.out, ")")?;
-        } else if is_atomic {
+        if is_atomic {
             write!(
                 self.out,
                 "{}::atomic_load_explicit({}",
