@@ -23,6 +23,31 @@ struct type_8 {
 constant metal::float3 const_type_4_ = {0.0, 0.0, 0.0};
 constant metal::float3x3 const_type_10_ = {const_type_4_, const_type_4_, const_type_4_};
 
+void test_msl_packed_vec3_as_arg(
+    metal::float3 arg
+) {
+    return;
+}
+
+void test_msl_packed_vec3_(
+    device Foo& alignment
+) {
+    int idx = 1;
+    alignment.v3_ = metal::float3(1.0);
+    alignment.v3_[0] = 1.0;
+    alignment.v3_[0] = 2.0;
+    int _e19 = idx;
+    alignment.v3_[_e19] = 3.0;
+    Foo data = alignment;
+    metal::float3 unnamed = data.v3_;
+    metal::float2 unnamed_1 = data.v3_.zx;
+    test_msl_packed_vec3_as_arg(data.v3_);
+    metal::float3 unnamed_2 = data.v3_ * const_type_10_;
+    metal::float3 unnamed_3 = const_type_10_ * data.v3_;
+    metal::float3 unnamed_4 = data.v3_ * 2.0;
+    metal::float3 unnamed_5 = 2.0 * data.v3_;
+}
+
 kernel void main_(
   threadgroup type_2& wg
 , threadgroup metal::atomic_uint& at_1
@@ -30,29 +55,15 @@ kernel void main_(
 , device type_6 const& dummy [[user(fake0)]]
 , constant _mslBufferSizes& _buffer_sizes [[user(fake0)]]
 ) {
-    metal::float3 unnamed;
-    metal::float2 unnamed_1;
-    int idx = 1;
     float Foo_1 = 1.0;
     bool at = true;
+    test_msl_packed_vec3_(alignment);
     float _e9 = alignment.v1_;
     wg.inner[3] = _e9;
     float _e14 = alignment.v3_[0];
     wg.inner[2] = _e14;
-    metal::float3 _e16 = alignment.v3_;
-    unnamed = _e16;
-    metal::float3 _e19 = alignment.v3_;
-    unnamed_1 = _e19.zx;
     alignment.v1_ = 4.0;
     wg.inner[1] = static_cast<float>(1 + (_buffer_sizes.size3 - 0 - 8) / 8);
     metal::atomic_store_explicit(&at_1, 2u, metal::memory_order_relaxed);
-    alignment.v3_ = metal::float3(1.0);
-    alignment.v3_[0] = 1.0;
-    alignment.v3_[0] = 2.0;
-    int _e42 = idx;
-    alignment.v3_[_e42] = 3.0;
-    metal::float3 _e47 = alignment.v3_;
-    metal::float3 unnamed_2 = _e47 * const_type_10_;
-    metal::float3 _e50 = alignment.v3_;
-    metal::float3 unnamed_3 = const_type_10_ * _e50;
+    return;
 }
