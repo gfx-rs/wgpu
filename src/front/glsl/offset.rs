@@ -121,6 +121,14 @@ pub fn calculate_offset(
                 align = align_up(align, 16);
             }
 
+            // See comment on the error kind
+            if StructLayout::Std140 == layout && rows == crate::VectorSize::Bi {
+                errors.push(Error {
+                    kind: ErrorKind::UnsupportedMatrixTypeInStd140,
+                    meta,
+                });
+            }
+
             (align, align * columns as u32)
         }
         TypeInner::Struct { ref members, .. } => {
