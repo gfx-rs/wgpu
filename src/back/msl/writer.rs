@@ -1275,7 +1275,7 @@ impl<W: Write> Writer<W> {
                 vector,
                 pattern,
             } => {
-                self.put_expression(vector, context, false)?;
+                self.put_wrapped_expression_for_packed_vec3_access(vector, context, false)?;
                 write!(self.out, ".")?;
                 for &sc in pattern[..size as usize].iter() {
                     write!(self.out, "{}", back::COMPONENTS[sc as usize])?;
@@ -1447,9 +1447,31 @@ impl<W: Write> Writer<W> {
                     if !is_scoped {
                         write!(self.out, "(")?;
                     }
-                    self.put_expression(left, context, false)?;
+
+                    // Cast packed vector if necessary
+                    // Packed vector - matrix multiplications are not supported in MSL
+                    if op == crate::BinaryOperator::Multiply
+                        && matches!(
+                            context.resolve_type(right),
+                            &crate::TypeInner::Matrix { .. }
+                        )
+                    {
+                        self.put_wrapped_expression_for_packed_vec3_access(left, context, false)?;
+                    } else {
+                        self.put_expression(left, context, false)?;
+                    }
+
                     write!(self.out, " {} ", op_str)?;
-                    self.put_expression(right, context, false)?;
+
+                    // See comment above
+                    if op == crate::BinaryOperator::Multiply
+                        && matches!(context.resolve_type(left), &crate::TypeInner::Matrix { .. })
+                    {
+                        self.put_wrapped_expression_for_packed_vec3_access(right, context, false)?;
+                    } else {
+                        self.put_expression(right, context, false)?;
+                    }
+
                     if !is_scoped {
                         write!(self.out, ")")?;
                     }
@@ -1734,6 +1756,23 @@ impl<W: Write> Writer<W> {
                     write!(self.out, ")")?;
                 }
             }
+        }
+        Ok(())
+    }
+
+    /// Used by expressions like Swizzle and Binary since they need packed_vec3's to be casted to a vec3
+    fn put_wrapped_expression_for_packed_vec3_access(
+        &mut self,
+        expr_handle: Handle<crate::Expression>,
+        context: &ExpressionContext,
+        is_scoped: bool,
+    ) -> BackendResult {
+        if let Some(scalar_kind) = context.get_packed_vec_kind(expr_handle) {
+            write!(self.out, "{}::{}3(", NAMESPACE, scalar_kind.to_msl_name())?;
+            self.put_expression(expr_handle, context, is_scoped)?;
+            write!(self.out, ")")?;
+        } else {
+            self.put_expression(expr_handle, context, is_scoped)?;
         }
         Ok(())
     }

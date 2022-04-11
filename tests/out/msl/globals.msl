@@ -40,10 +40,10 @@ void test_msl_packed_vec3_(
     alignment.v3_[_e19] = 3.0;
     Foo data = alignment;
     metal::float3 unnamed = data.v3_;
-    metal::float2 unnamed_1 = data.v3_.zx;
+    metal::float2 unnamed_1 = metal::float3(data.v3_).zx;
     test_msl_packed_vec3_as_arg(data.v3_);
-    metal::float3 unnamed_2 = data.v3_ * const_type_10_;
-    metal::float3 unnamed_3 = const_type_10_ * data.v3_;
+    metal::float3 unnamed_2 = metal::float3(data.v3_) * const_type_10_;
+    metal::float3 unnamed_3 = const_type_10_ * metal::float3(data.v3_);
     metal::float3 unnamed_4 = data.v3_ * 2.0;
     metal::float3 unnamed_5 = 2.0 * data.v3_;
 }
