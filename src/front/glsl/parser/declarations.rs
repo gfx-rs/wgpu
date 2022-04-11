@@ -189,11 +189,23 @@ impl<'source> ParsingContext<'source> {
                 })
                 .transpose()?;
 
-            // TODO: Should we try to make constants here?
-            // This is mostly a hack because we don't yet support adding
-            // bodies to entry points for variable initialization
-            let maybe_constant =
-                init.and_then(|(root, meta)| parser.solve_constant(ctx.ctx, root, meta).ok());
+            // If the declaration has an initializer try to make a constant out of it,
+            // this is only strictly needed for global constant declarations (and if the
+            // initializer can't be made a constant it should throw an error) but we also
+            // try to do it for all other types of declarations.
+            let maybe_constant = if let Some((root, meta)) = init {
+                let is_const = ctx.qualifiers.storage.0 == StorageQualifier::Const;
+
+                match parser.solve_constant(ctx.ctx, root, meta) {
+                    Ok(res) => Some(res),
+                    // If the declaration is external (global scope) and is constant qualified
+                    // then the initializer must be a constant expression
+                    Err(err) if ctx.external && is_const => return Err(err),
+                    _ => None,
+                }
+            } else {
+                None
+            };
 
             let pointer = ctx.add_var(parser, ty, name, maybe_constant, meta)?;
 

@@ -57,7 +57,7 @@ pub enum ConstantSolvingError {
     SplatScalarOnly,
     #[error("Can only swizzle vector constants")]
     SwizzleVectorOnly,
-    #[error("Not implemented: {0}")]
+    #[error("Not implemented as constant expression: {0}")]
     NotImplemented(String),
 }
 
