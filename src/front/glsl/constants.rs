@@ -234,9 +234,7 @@ impl<'a> ConstantSolver<'a> {
                                         ScalarValue::Float(a),
                                         ScalarValue::Float(b),
                                         ScalarValue::Float(c),
-                                    ) => {
-                                        ScalarValue::Float(glsl_float_min(glsl_float_max(a, b), c))
-                                    }
+                                    ) => ScalarValue::Float(glsl_float_clamp(a, b, c)),
                                     _ => return Err(ConstantSolvingError::InvalidMathArg),
                                 },
                                 width,
@@ -599,6 +597,15 @@ fn glsl_float_min(x: f64, y: f64) -> f64 {
     }
 }
 
+/// Helper function to implement the GLSL `clamp` function for floats.
+///
+/// While Rust does provide a `f64::clamp` method, it requires a version of rust
+/// above our MSRV and it also panics if either `min` or `max` are `NaN`s which
+/// is not the behavior specified by the glsl specification.
+fn glsl_float_clamp(value: f64, min: f64, max: f64) -> f64 {
+    glsl_float_min(glsl_float_max(value, min), max)
+}
+
 #[cfg(test)]
 mod tests {
     use std::vec;
@@ -609,6 +616,19 @@ mod tests {
     };
 
     use super::ConstantSolver;
+
+    #[test]
+    fn nan_handling() {
+        assert!(super::glsl_float_max(f64::NAN, 2.0).is_nan());
+        assert!(!super::glsl_float_max(2.0, f64::NAN).is_nan());
+
+        assert!(super::glsl_float_min(f64::NAN, 2.0).is_nan());
+        assert!(!super::glsl_float_min(2.0, f64::NAN).is_nan());
+
+        assert!(super::glsl_float_clamp(f64::NAN, 1.0, 2.0).is_nan());
+        assert!(!super::glsl_float_clamp(1.0, f64::NAN, 2.0).is_nan());
+        assert!(!super::glsl_float_clamp(1.0, 2.0, f64::NAN).is_nan());
+    }
 
     #[test]
     fn unary_op() {
