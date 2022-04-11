@@ -15,6 +15,41 @@ struct Bar {
 @group(0) @binding(0)
 var<storage,read_write> bar: Bar;
 
+struct Baz {
+	m: mat3x2<f32>,
+}
+
+@group(0) @binding(1)
+var<uniform> baz: Baz;
+
+fn test_matrix_within_struct_accesses() {
+	var idx = 9;
+
+    idx--;
+
+	// loads
+    var _ = baz.m;
+    var _ = baz.m[0];
+    var _ = baz.m[idx];
+    var _ = baz.m[0][1];
+    var _ = baz.m[0][idx];
+    var _ = baz.m[idx][1];
+    var _ = baz.m[idx][idx];
+
+    var t = Baz(mat3x2<f32>(vec2<f32>(1.0), vec2<f32>(2.0), vec2<f32>(3.0)));
+
+    idx++;
+
+	// stores
+    t.m = mat3x2<f32>(vec2<f32>(6.0), vec2<f32>(5.0), vec2<f32>(4.0));
+    t.m[0] = vec2<f32>(9.0);
+    t.m[idx] = vec2<f32>(90.0);
+    t.m[0][1] = 10.0;
+    t.m[0][idx] = 20.0;
+    t.m[idx][1] = 30.0;
+    t.m[idx][idx] = 40.0;
+}
+
 fn read_from_private(foo: ptr<function, f32>) -> f32 {
     return *foo;
 }
@@ -25,6 +60,8 @@ fn foo_vert(@builtin(vertex_index) vi: u32) -> @builtin(position) vec4<f32> {
     // We should check that backed doesn't skip this expression
     let baz: f32 = foo;
     foo = 1.0;
+
+	test_matrix_within_struct_accesses();
 
     // test storage loads
 	let matrix = bar.matrix;

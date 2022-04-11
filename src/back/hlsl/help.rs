@@ -48,6 +48,12 @@ pub(super) struct WrappedConstructor {
     pub(super) ty: Handle<crate::Type>,
 }
 
+#[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
+pub(super) struct WrappedStructMatrixAccess {
+    pub(super) ty: Handle<crate::Type>,
+    pub(super) index: u32,
+}
+
 /// HLSL backend requires its own `ImageQuery` enum.
 ///
 /// It is used inside `WrappedImageQuery` and should be unique per ImageQuery function.
@@ -393,17 +399,372 @@ impl<'a, W: Write> super::Writer<'a, W> {
             INDENT, struct_name, RETURN_VARIABLE_NAME
         )?;
         for i in 0..members.len() as u32 {
+            let member = &members[i as usize];
+
             let field_name = &self.names[&NameKey::StructMember(constructor.ty, i)];
-            //TODO: handle arrays?
-            writeln!(
-                self.out,
-                "{}{}.{} = {}{};",
-                INDENT, RETURN_VARIABLE_NAME, field_name, ARGUMENT_VARIABLE_NAME, i,
-            )?;
+
+            match module.types[member.ty].inner {
+                crate::TypeInner::Matrix {
+                    columns,
+                    rows: crate::VectorSize::Bi,
+                    ..
+                } if member.binding.is_none() => {
+                    for j in 0..columns as u8 {
+                        writeln!(
+                            self.out,
+                            "{}{}.{}_{} = {}{}[{}];",
+                            INDENT,
+                            RETURN_VARIABLE_NAME,
+                            field_name,
+                            j,
+                            ARGUMENT_VARIABLE_NAME,
+                            i,
+                            j
+                        )?;
+                    }
+                }
+                _ => {
+                    //TODO: handle arrays?
+                    writeln!(
+                        self.out,
+                        "{}{}.{} = {}{};",
+                        INDENT, RETURN_VARIABLE_NAME, field_name, ARGUMENT_VARIABLE_NAME, i,
+                    )?;
+                }
+            }
         }
 
         // Write return value
         writeln!(self.out, "{}return {};", INDENT, RETURN_VARIABLE_NAME)?;
+
+        // End of function body
+        writeln!(self.out, "}}")?;
+        // Write extra new line
+        writeln!(self.out)?;
+
+        Ok(())
+    }
+
+    pub(super) fn write_wrapped_struct_matrix_get_function_name(
+        &mut self,
+        access: WrappedStructMatrixAccess,
+    ) -> BackendResult {
+        let name = &self.names[&NameKey::Type(access.ty)];
+        let field_name = &self.names[&NameKey::StructMember(access.ty, access.index)];
+        write!(self.out, "GetMat{}On{}", field_name, name)?;
+        Ok(())
+    }
+
+    /// Writes a function used to get a matCx2 from within a structure.
+    pub(super) fn write_wrapped_struct_matrix_get_function(
+        &mut self,
+        module: &crate::Module,
+        access: WrappedStructMatrixAccess,
+    ) -> BackendResult {
+        use crate::back::INDENT;
+
+        const STRUCT_ARGUMENT_VARIABLE_NAME: &str = "obj";
+
+        // Write function return type and name
+        let member = match module.types[access.ty].inner {
+            crate::TypeInner::Struct { ref members, .. } => &members[access.index as usize],
+            _ => unreachable!(),
+        };
+        let ret_ty = &module.types[member.ty].inner;
+        self.write_value_type(module, ret_ty)?;
+        write!(self.out, " ")?;
+        self.write_wrapped_struct_matrix_get_function_name(access)?;
+
+        // Write function parameters
+        write!(self.out, "(")?;
+        let struct_name = &self.names[&NameKey::Type(access.ty)];
+        write!(
+            self.out,
+            "{} {}",
+            struct_name, STRUCT_ARGUMENT_VARIABLE_NAME
+        )?;
+
+        // Write function body
+        writeln!(self.out, ") {{")?;
+
+        // Write return value
+        write!(self.out, "{}return ", INDENT)?;
+        self.write_value_type(module, ret_ty)?;
+        write!(self.out, "(")?;
+        let field_name = &self.names[&NameKey::StructMember(access.ty, access.index)];
+        match module.types[member.ty].inner {
+            crate::TypeInner::Matrix { columns, .. } => {
+                for i in 0..columns as u8 {
+                    if i != 0 {
+                        write!(self.out, ", ")?;
+                    }
+                    write!(
+                        self.out,
+                        "{}.{}_{}",
+                        STRUCT_ARGUMENT_VARIABLE_NAME, field_name, i
+                    )?;
+                }
+            }
+            _ => unreachable!(),
+        }
+        writeln!(self.out, ");")?;
+
+        // End of function body
+        writeln!(self.out, "}}")?;
+        // Write extra new line
+        writeln!(self.out)?;
+
+        Ok(())
+    }
+
+    pub(super) fn write_wrapped_struct_matrix_set_function_name(
+        &mut self,
+        access: WrappedStructMatrixAccess,
+    ) -> BackendResult {
+        let name = &self.names[&NameKey::Type(access.ty)];
+        let field_name = &self.names[&NameKey::StructMember(access.ty, access.index)];
+        write!(self.out, "SetMat{}On{}", field_name, name)?;
+        Ok(())
+    }
+
+    /// Writes a function used to set a matCx2 from within a structure.
+    pub(super) fn write_wrapped_struct_matrix_set_function(
+        &mut self,
+        module: &crate::Module,
+        access: WrappedStructMatrixAccess,
+    ) -> BackendResult {
+        use crate::back::INDENT;
+
+        const STRUCT_ARGUMENT_VARIABLE_NAME: &str = "obj";
+        const MATRIX_ARGUMENT_VARIABLE_NAME: &str = "mat";
+
+        // Write function return type and name
+        write!(self.out, "void ")?;
+        self.write_wrapped_struct_matrix_set_function_name(access)?;
+
+        // Write function parameters
+        write!(self.out, "(")?;
+        let struct_name = &self.names[&NameKey::Type(access.ty)];
+        write!(
+            self.out,
+            "{} {}, ",
+            struct_name, STRUCT_ARGUMENT_VARIABLE_NAME
+        )?;
+        let member = match module.types[access.ty].inner {
+            crate::TypeInner::Struct { ref members, .. } => &members[access.index as usize],
+            _ => unreachable!(),
+        };
+        self.write_type(module, member.ty)?;
+        write!(self.out, " {}", MATRIX_ARGUMENT_VARIABLE_NAME)?;
+        // Write function body
+        writeln!(self.out, ") {{")?;
+
+        let field_name = &self.names[&NameKey::StructMember(access.ty, access.index)];
+
+        match module.types[member.ty].inner {
+            crate::TypeInner::Matrix { columns, .. } => {
+                for i in 0..columns as u8 {
+                    writeln!(
+                        self.out,
+                        "{}{}.{}_{} = {}[{}];",
+                        INDENT,
+                        STRUCT_ARGUMENT_VARIABLE_NAME,
+                        field_name,
+                        i,
+                        MATRIX_ARGUMENT_VARIABLE_NAME,
+                        i
+                    )?;
+                }
+            }
+            _ => unreachable!(),
+        }
+
+        // End of function body
+        writeln!(self.out, "}}")?;
+        // Write extra new line
+        writeln!(self.out)?;
+
+        Ok(())
+    }
+
+    pub(super) fn write_wrapped_struct_matrix_set_vec_function_name(
+        &mut self,
+        access: WrappedStructMatrixAccess,
+    ) -> BackendResult {
+        let name = &self.names[&NameKey::Type(access.ty)];
+        let field_name = &self.names[&NameKey::StructMember(access.ty, access.index)];
+        write!(self.out, "SetMatVec{}On{}", field_name, name)?;
+        Ok(())
+    }
+
+    /// Writes a function used to set a vec2 on a matCx2 from within a structure.
+    pub(super) fn write_wrapped_struct_matrix_set_vec_function(
+        &mut self,
+        module: &crate::Module,
+        access: WrappedStructMatrixAccess,
+    ) -> BackendResult {
+        use crate::back::INDENT;
+
+        const STRUCT_ARGUMENT_VARIABLE_NAME: &str = "obj";
+        const VECTOR_ARGUMENT_VARIABLE_NAME: &str = "vec";
+        const MATRIX_INDEX_ARGUMENT_VARIABLE_NAME: &str = "mat_idx";
+
+        // Write function return type and name
+        write!(self.out, "void ")?;
+        self.write_wrapped_struct_matrix_set_vec_function_name(access)?;
+
+        // Write function parameters
+        write!(self.out, "(")?;
+        let struct_name = &self.names[&NameKey::Type(access.ty)];
+        write!(
+            self.out,
+            "{} {}, ",
+            struct_name, STRUCT_ARGUMENT_VARIABLE_NAME
+        )?;
+        let member = match module.types[access.ty].inner {
+            crate::TypeInner::Struct { ref members, .. } => &members[access.index as usize],
+            _ => unreachable!(),
+        };
+        let vec_ty = match module.types[member.ty].inner {
+            crate::TypeInner::Matrix { rows, width, .. } => crate::TypeInner::Vector {
+                size: rows,
+                kind: crate::ScalarKind::Float,
+                width,
+            },
+            _ => unreachable!(),
+        };
+        self.write_value_type(module, &vec_ty)?;
+        write!(
+            self.out,
+            " {}, uint {}",
+            VECTOR_ARGUMENT_VARIABLE_NAME, MATRIX_INDEX_ARGUMENT_VARIABLE_NAME
+        )?;
+
+        // Write function body
+        writeln!(self.out, ") {{")?;
+
+        writeln!(
+            self.out,
+            "{}switch({}) {{",
+            INDENT, MATRIX_INDEX_ARGUMENT_VARIABLE_NAME
+        )?;
+
+        let field_name = &self.names[&NameKey::StructMember(access.ty, access.index)];
+
+        match module.types[member.ty].inner {
+            crate::TypeInner::Matrix { columns, .. } => {
+                for i in 0..columns as u8 {
+                    writeln!(
+                        self.out,
+                        "{}case {}: {}.{}_{} = {};",
+                        INDENT,
+                        i,
+                        STRUCT_ARGUMENT_VARIABLE_NAME,
+                        field_name,
+                        i,
+                        VECTOR_ARGUMENT_VARIABLE_NAME
+                    )?;
+                }
+            }
+            _ => unreachable!(),
+        }
+
+        writeln!(self.out, "{}}}", INDENT)?;
+
+        // End of function body
+        writeln!(self.out, "}}")?;
+        // Write extra new line
+        writeln!(self.out)?;
+
+        Ok(())
+    }
+
+    pub(super) fn write_wrapped_struct_matrix_set_scalar_function_name(
+        &mut self,
+        access: WrappedStructMatrixAccess,
+    ) -> BackendResult {
+        let name = &self.names[&NameKey::Type(access.ty)];
+        let field_name = &self.names[&NameKey::StructMember(access.ty, access.index)];
+        write!(self.out, "SetMatScalar{}On{}", field_name, name)?;
+        Ok(())
+    }
+
+    /// Writes a function used to set a float on a matCx2 from within a structure.
+    pub(super) fn write_wrapped_struct_matrix_set_scalar_function(
+        &mut self,
+        module: &crate::Module,
+        access: WrappedStructMatrixAccess,
+    ) -> BackendResult {
+        use crate::back::INDENT;
+
+        const STRUCT_ARGUMENT_VARIABLE_NAME: &str = "obj";
+        const SCALAR_ARGUMENT_VARIABLE_NAME: &str = "scalar";
+        const MATRIX_INDEX_ARGUMENT_VARIABLE_NAME: &str = "mat_idx";
+        const VECTOR_INDEX_ARGUMENT_VARIABLE_NAME: &str = "vec_idx";
+
+        // Write function return type and name
+        write!(self.out, "void ")?;
+        self.write_wrapped_struct_matrix_set_scalar_function_name(access)?;
+
+        // Write function parameters
+        write!(self.out, "(")?;
+        let struct_name = &self.names[&NameKey::Type(access.ty)];
+        write!(
+            self.out,
+            "{} {}, ",
+            struct_name, STRUCT_ARGUMENT_VARIABLE_NAME
+        )?;
+        let member = match module.types[access.ty].inner {
+            crate::TypeInner::Struct { ref members, .. } => &members[access.index as usize],
+            _ => unreachable!(),
+        };
+        let scalar_ty = match module.types[member.ty].inner {
+            crate::TypeInner::Matrix { width, .. } => crate::TypeInner::Scalar {
+                kind: crate::ScalarKind::Float,
+                width,
+            },
+            _ => unreachable!(),
+        };
+        self.write_value_type(module, &scalar_ty)?;
+        write!(
+            self.out,
+            " {}, uint {}, uint {}",
+            SCALAR_ARGUMENT_VARIABLE_NAME,
+            MATRIX_INDEX_ARGUMENT_VARIABLE_NAME,
+            VECTOR_INDEX_ARGUMENT_VARIABLE_NAME
+        )?;
+
+        // Write function body
+        writeln!(self.out, ") {{")?;
+
+        writeln!(
+            self.out,
+            "{}switch({}) {{",
+            INDENT, MATRIX_INDEX_ARGUMENT_VARIABLE_NAME
+        )?;
+
+        let field_name = &self.names[&NameKey::StructMember(access.ty, access.index)];
+
+        match module.types[member.ty].inner {
+            crate::TypeInner::Matrix { columns, .. } => {
+                for i in 0..columns as u8 {
+                    writeln!(
+                        self.out,
+                        "{}case {}: {}.{}_{}[{}] = {};",
+                        INDENT,
+                        i,
+                        STRUCT_ARGUMENT_VARIABLE_NAME,
+                        field_name,
+                        i,
+                        VECTOR_INDEX_ARGUMENT_VARIABLE_NAME,
+                        SCALAR_ARGUMENT_VARIABLE_NAME
+                    )?;
+                }
+            }
+            _ => unreachable!(),
+        }
+
+        writeln!(self.out, "{}}}", INDENT)?;
 
         // End of function body
         writeln!(self.out, "}}")?;
@@ -476,6 +837,47 @@ impl<'a, W: Write> super::Writer<'a, W> {
                     if !self.wrapped.constructors.contains(&constructor) {
                         self.write_wrapped_constructor_function(module, constructor)?;
                         self.wrapped.constructors.insert(constructor);
+                    }
+                }
+                // We treat matrices of the form `matCx2` as a sequence of C `vec2`s
+                // (see top level module docs for details).
+                //
+                // The functions injected here are required to get the matrix accesses working.
+                crate::Expression::AccessIndex { base, index } => {
+                    let base_ty_res = &func_ctx.info[base].ty;
+                    let mut resolved = base_ty_res.inner_with(&module.types);
+                    let base_ty_handle = match *resolved {
+                        crate::TypeInner::Pointer { base, .. } => {
+                            resolved = &module.types[base].inner;
+                            Some(base)
+                        }
+                        _ => base_ty_res.handle(),
+                    };
+                    if let crate::TypeInner::Struct { ref members, .. } = *resolved {
+                        let member = &members[index as usize];
+
+                        match module.types[member.ty].inner {
+                            crate::TypeInner::Matrix {
+                                rows: crate::VectorSize::Bi,
+                                ..
+                            } if member.binding.is_none() => {
+                                let ty = base_ty_handle.unwrap();
+                                let access = WrappedStructMatrixAccess { ty, index };
+
+                                if !self.wrapped.struct_matrix_access.contains(&access) {
+                                    self.write_wrapped_struct_matrix_get_function(module, access)?;
+                                    self.write_wrapped_struct_matrix_set_function(module, access)?;
+                                    self.write_wrapped_struct_matrix_set_vec_function(
+                                        module, access,
+                                    )?;
+                                    self.write_wrapped_struct_matrix_set_scalar_function(
+                                        module, access,
+                                    )?;
+                                    self.wrapped.struct_matrix_access.insert(access);
+                                }
+                            }
+                            _ => {}
+                        }
                     }
                 }
                 _ => {}

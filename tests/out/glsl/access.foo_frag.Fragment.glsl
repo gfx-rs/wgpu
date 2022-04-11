@@ -6,6 +6,9 @@ precision highp int;
 struct AlignedWrapper {
     int value;
 };
+struct Baz {
+    mat3x2 m;
+};
 layout(std430) buffer Bar_block_0Fragment {
     mat4x3 matrix;
     mat2x2 matrix_array[2];
@@ -17,8 +20,8 @@ layout(std430) buffer Bar_block_0Fragment {
 layout(location = 0) out vec4 _fs2p_location0;
 
 float read_from_private(inout float foo_1) {
-    float _e2 = foo_1;
-    return _e2;
+    float _e3 = foo_1;
+    return _e3;
 }
 
 void main() {

@@ -1,5 +1,5 @@
 use super::{
-    help::{WrappedArrayLength, WrappedConstructor, WrappedImageQuery},
+    help::{WrappedArrayLength, WrappedConstructor, WrappedImageQuery, WrappedStructMatrixAccess},
     storage::StoreValue,
     BackendResult, Error, Options,
 };
@@ -784,6 +784,28 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     // Write [size]
                     self.write_array_size(module, size)?;
                 }
+                // We treat matrices of the form `matCx2` as a sequence of C `vec2`s
+                // (see top level module docs for details).
+                TypeInner::Matrix {
+                    rows,
+                    columns,
+                    width,
+                } if member.binding.is_none() && rows == crate::VectorSize::Bi => {
+                    let vec_ty = crate::TypeInner::Vector {
+                        size: rows,
+                        kind: crate::ScalarKind::Float,
+                        width,
+                    };
+                    let field_name_key = NameKey::StructMember(handle, index as u32);
+
+                    for i in 0..columns as u8 {
+                        if i != 0 {
+                            write!(self.out, "; ")?;
+                        }
+                        self.write_value_type(module, &vec_ty)?;
+                        write!(self.out, " {}_{}", &self.names[&field_name_key], i)?;
+                    }
+                }
                 _ => {
                     // Write modifier before type
                     if let Some(ref binding) = member.binding {
@@ -1253,11 +1275,175 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     writeln!(self.out, "[_i] = _result[_i];")?;
                     writeln!(self.out, "{}}}", level)?;
                 } else {
+                    // We treat matrices of the form `matCx2` as a sequence of C `vec2`s
+                    // (see top level module docs for details).
+                    //
+                    // We handle matrix Stores here directly (including sub accesses for Vectors and Scalars).
+                    // Loads are handled by `Expression::AccessIndex` (since sub accesses work fine for Loads).
+                    struct MatrixAccess {
+                        base: Handle<crate::Expression>,
+                        index: u32,
+                    }
+                    enum Index {
+                        Expression(Handle<crate::Expression>),
+                        Static(u32),
+                    }
+
+                    let get_members = |expr: Handle<crate::Expression>| {
+                        let base_ty_res = &func_ctx.info[expr].ty;
+                        let resolved = base_ty_res.inner_with(&module.types);
+                        match *resolved {
+                            TypeInner::Pointer { base, .. } => match module.types[base].inner {
+                                TypeInner::Struct { ref members, .. } => Some(members),
+                                _ => None,
+                            },
+                            _ => None,
+                        }
+                    };
+
+                    let mut matrix = None;
+                    let mut vector = None;
+                    let mut scalar = None;
+
+                    let mut current_expr = pointer;
+                    for _ in 0..3 {
+                        let resolved = func_ctx.info[current_expr].ty.inner_with(&module.types);
+
+                        match (resolved, &func_ctx.expressions[current_expr]) {
+                            (
+                                &TypeInner::Pointer { base: ty, .. },
+                                &crate::Expression::AccessIndex { base, index },
+                            ) if matches!(
+                                module.types[ty].inner,
+                                TypeInner::Matrix {
+                                    rows: crate::VectorSize::Bi,
+                                    ..
+                                }
+                            ) && get_members(base)
+                                .map(|members| members[index as usize].binding.is_none())
+                                == Some(true) =>
+                            {
+                                matrix = Some(MatrixAccess { base, index });
+                                break;
+                            }
+                            (
+                                &TypeInner::ValuePointer {
+                                    size: Some(crate::VectorSize::Bi),
+                                    ..
+                                },
+                                &crate::Expression::Access { base, index },
+                            ) => {
+                                vector = Some(Index::Expression(index));
+                                current_expr = base;
+                            }
+                            (
+                                &TypeInner::ValuePointer {
+                                    size: Some(crate::VectorSize::Bi),
+                                    ..
+                                },
+                                &crate::Expression::AccessIndex { base, index },
+                            ) => {
+                                vector = Some(Index::Static(index));
+                                current_expr = base;
+                            }
+                            (
+                                &TypeInner::ValuePointer { size: None, .. },
+                                &crate::Expression::Access { base, index },
+                            ) => {
+                                scalar = Some(Index::Expression(index));
+                                current_expr = base;
+                            }
+                            (
+                                &TypeInner::ValuePointer { size: None, .. },
+                                &crate::Expression::AccessIndex { base, index },
+                            ) => {
+                                scalar = Some(Index::Static(index));
+                                current_expr = base;
+                            }
+                            _ => break,
+                        }
+                    }
+
                     write!(self.out, "{}", level)?;
-                    self.write_expr(module, pointer, func_ctx)?;
-                    write!(self.out, " = ")?;
-                    self.write_expr(module, value, func_ctx)?;
-                    writeln!(self.out, ";")?
+
+                    if let Some(MatrixAccess { index, base }) = matrix {
+                        let base_ty_res = &func_ctx.info[base].ty;
+                        let resolved = base_ty_res.inner_with(&module.types);
+                        let ty = match *resolved {
+                            TypeInner::Pointer { base, .. } => base,
+                            _ => base_ty_res.handle().unwrap(),
+                        };
+
+                        if let Some(Index::Static(vec_index)) = vector {
+                            self.write_expr(module, base, func_ctx)?;
+                            write!(
+                                self.out,
+                                ".{}_{}",
+                                &self.names[&NameKey::StructMember(ty, index)],
+                                vec_index
+                            )?;
+
+                            if let Some(scalar_index) = scalar {
+                                write!(self.out, "[")?;
+                                match scalar_index {
+                                    Index::Static(index) => {
+                                        write!(self.out, "{}", index)?;
+                                    }
+                                    Index::Expression(index) => {
+                                        self.write_expr(module, index, func_ctx)?;
+                                    }
+                                }
+                                write!(self.out, "]")?;
+                            }
+
+                            write!(self.out, " = ")?;
+                            self.write_expr(module, value, func_ctx)?;
+                            writeln!(self.out, ";")?;
+                        } else {
+                            let access = WrappedStructMatrixAccess { ty, index };
+                            match (&vector, &scalar) {
+                                (&Some(_), &Some(_)) => {
+                                    self.write_wrapped_struct_matrix_set_scalar_function_name(
+                                        access,
+                                    )?;
+                                }
+                                (&Some(_), &None) => {
+                                    self.write_wrapped_struct_matrix_set_vec_function_name(access)?;
+                                }
+                                (&None, _) => {
+                                    self.write_wrapped_struct_matrix_set_function_name(access)?;
+                                }
+                            }
+
+                            write!(self.out, "(")?;
+                            self.write_expr(module, base, func_ctx)?;
+                            write!(self.out, ", ")?;
+                            self.write_expr(module, value, func_ctx)?;
+
+                            if let Some(Index::Expression(vec_index)) = vector {
+                                write!(self.out, ", ")?;
+                                self.write_expr(module, vec_index, func_ctx)?;
+
+                                if let Some(scalar_index) = scalar {
+                                    write!(self.out, ", ")?;
+                                    match scalar_index {
+                                        Index::Static(index) => {
+                                            write!(self.out, "{}", index)?;
+                                        }
+                                        Index::Expression(index) => {
+                                            self.write_expr(module, index, func_ctx)?;
+                                        }
+                                    }
+                                }
+                            }
+                            writeln!(self.out, ");")?;
+                        }
+                    } else {
+                        self.write_expr(module, pointer, func_ctx)?;
+                        write!(self.out, " = ")?;
+                        self.write_expr(module, value, func_ctx)?;
+                        writeln!(self.out, ";")?
+                    }
                 }
             }
             Statement::Loop {
@@ -1592,8 +1778,6 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 {
                     // do nothing, the chain is written on `Load`/`Store`
                 } else {
-                    self.write_expr(module, base, func_ctx)?;
-
                     let base_ty_res = &func_ctx.info[base].ty;
                     let mut resolved = base_ty_res.inner_with(&module.types);
                     let base_ty_handle = match *resolved {
@@ -1603,6 +1787,34 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         }
                         _ => base_ty_res.handle(),
                     };
+
+                    // We treat matrices of the form `matCx2` as a sequence of C `vec2`s
+                    // (see top level module docs for details).
+                    //
+                    // We handle matrix reconstruction here for Loads.
+                    // Stores are handled directly by `Statement::Store`.
+                    if let TypeInner::Struct { ref members, .. } = *resolved {
+                        let member = &members[index as usize];
+
+                        match module.types[member.ty].inner {
+                            TypeInner::Matrix {
+                                rows: crate::VectorSize::Bi,
+                                ..
+                            } if member.binding.is_none() => {
+                                let ty = base_ty_handle.unwrap();
+                                self.write_wrapped_struct_matrix_get_function_name(
+                                    WrappedStructMatrixAccess { ty, index },
+                                )?;
+                                write!(self.out, "(")?;
+                                self.write_expr(module, base, func_ctx)?;
+                                write!(self.out, ")")?;
+                                return Ok(());
+                            }
+                            _ => {}
+                        }
+                    };
+
+                    self.write_expr(module, base, func_ctx)?;
 
                     match *resolved {
                         TypeInner::Vector { .. } => {

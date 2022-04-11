@@ -6,6 +6,8 @@ Backend for [HLSL][hlsl] (High-Level Shading Language).
 - 5.1
 - 6.0
 
+# General Matrix Note
+
 All matrix construction/deconstruction is row based in HLSL. This means that when
 we construct a matrix from column vectors, our matrix will be implicitly transposed.
 The inverse transposition happens when we call `[0]` to get the zeroth column vector.
@@ -18,6 +20,13 @@ To deal with this, we add `row_major` to all declarations of matrices in Uniform
 
 Finally because all of our matrices are transposed, if you use `mat3x4`, it'll become `float3x4` in HLSL
 (HLSL has inverted col/row notation).
+
+# Matrix struct member of the form `matCx2` Note
+
+Struct member matrices of the form `matCx2` are translated to a sequence of C `vec2`s due to
+differences in alignment between WGSL and HLSL for uniform buffers.
+
+Accesses to these matrices are handled by injected functions.
 
 [hlsl]: https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl
 */
@@ -169,6 +178,7 @@ struct Wrapped {
     array_lengths: crate::FastHashSet<help::WrappedArrayLength>,
     image_queries: crate::FastHashSet<help::WrappedImageQuery>,
     constructors: crate::FastHashSet<help::WrappedConstructor>,
+    struct_matrix_access: crate::FastHashSet<help::WrappedStructMatrixAccess>,
 }
 
 impl Wrapped {
@@ -176,6 +186,7 @@ impl Wrapped {
         self.array_lengths.clear();
         self.image_queries.clear();
         self.constructors.clear();
+        self.struct_matrix_access.clear();
     }
 }
 
