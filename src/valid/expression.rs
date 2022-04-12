@@ -670,7 +670,6 @@ impl super::Validator {
                             Some(Sk::Uint) | Some(Sk::Sint) | Some(Sk::Float) => true,
                             Some(Sk::Bool) | None => false,
                         };
-                        //TODO: should we be more restrictive here? I.e. expect scalar only to the left.
                         let types_match = match (left_inner, right_inner) {
                             (&Ti::Scalar { kind: kind1, .. }, &Ti::Scalar { kind: kind2, .. })
                             | (&Ti::Vector { kind: kind1, .. }, &Ti::Scalar { kind: kind2, .. })

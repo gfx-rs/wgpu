@@ -24,6 +24,10 @@ constant metal::float2x2 const_type_7_ = {const_type_6_, const_type_6_};
 constant metal::float4 const_type = {0.0, 0.0, 0.0, 0.0};
 constant Foo const_Foo = {const_type, 0};
 constant type_12 const_type_12_ = {const_Foo, const_Foo, const_Foo};
+constant metal::float3 const_type_4_ = {0.0, 0.0, 0.0};
+constant metal::float3x3 const_type_14_ = {const_type_4_, const_type_4_, const_type_4_};
+constant metal::float4x3 const_type_15_ = {const_type_4_, const_type_4_, const_type_4_, const_type_4_};
+constant metal::float3x4 const_type_16_ = {const_type, const_type, const_type};
 
 metal::float4 builtins(
 ) {
@@ -43,15 +47,6 @@ metal::float4 splat(
     metal::float2 a_1 = ((metal::float2(1.0) + metal::float2(2.0)) - metal::float2(3.0)) / metal::float2(4.0);
     metal::int4 b = metal::int4(5) % metal::int4(2);
     return a_1.xyxy + static_cast<metal::float4>(b);
-}
-
-int unary(
-) {
-    if (!true) {
-        return 1;
-    } else {
-        return ~1;
-    }
 }
 
 metal::float3 bool_cast(
@@ -85,27 +80,135 @@ float constructors(
     return _e70;
 }
 
-void modulo(
-) {
-    int a_2 = 1 % 1;
-    float b_1 = metal::fmod(1.0, 1.0);
-    metal::int3 c = metal::int3(1) % metal::int3(1);
-    metal::float3 d = metal::fmod(metal::float3(1.0), metal::float3(1.0));
-}
-
-void scalar_times_matrix(
-) {
-    metal::float4x4 model = metal::float4x4(metal::float4(1.0, 0.0, 0.0, 0.0), metal::float4(0.0, 1.0, 0.0, 0.0), metal::float4(0.0, 0.0, 1.0, 0.0), metal::float4(0.0, 0.0, 0.0, 1.0));
-    metal::float4x4 assertion = 2.0 * model;
-}
-
 void logical(
 ) {
-    bool a_3 = true | false;
-    bool b_2 = true & false;
+    bool unnamed_11 = !true;
+    bool unnamed_12 = true || false;
+    bool unnamed_13 = true && false;
+    bool unnamed_14 = true | false;
+    metal::bool3 unnamed_15 = metal::bool3(true) | metal::bool3(false);
+    bool unnamed_16 = true & false;
+    metal::bool4 unnamed_17 = metal::bool4(true) & metal::bool4(false);
 }
 
-void binary_assignment(
+void arithmetic(
+) {
+    metal::int2 unnamed_18 = -metal::int2(1);
+    metal::float2 unnamed_19 = -metal::float2(1.0);
+    int unnamed_20 = 2 + 1;
+    uint unnamed_21 = 2u + 1u;
+    float unnamed_22 = 2.0 + 1.0;
+    metal::int2 unnamed_23 = metal::int2(2) + metal::int2(1);
+    metal::uint3 unnamed_24 = metal::uint3(2u) + metal::uint3(1u);
+    metal::float4 unnamed_25 = metal::float4(2.0) + metal::float4(1.0);
+    int unnamed_26 = 2 - 1;
+    uint unnamed_27 = 2u - 1u;
+    float unnamed_28 = 2.0 - 1.0;
+    metal::int2 unnamed_29 = metal::int2(2) - metal::int2(1);
+    metal::uint3 unnamed_30 = metal::uint3(2u) - metal::uint3(1u);
+    metal::float4 unnamed_31 = metal::float4(2.0) - metal::float4(1.0);
+    int unnamed_32 = 2 * 1;
+    uint unnamed_33 = 2u * 1u;
+    float unnamed_34 = 2.0 * 1.0;
+    metal::int2 unnamed_35 = metal::int2(2) * metal::int2(1);
+    metal::uint3 unnamed_36 = metal::uint3(2u) * metal::uint3(1u);
+    metal::float4 unnamed_37 = metal::float4(2.0) * metal::float4(1.0);
+    int unnamed_38 = 2 / 1;
+    uint unnamed_39 = 2u / 1u;
+    float unnamed_40 = 2.0 / 1.0;
+    metal::int2 unnamed_41 = metal::int2(2) / metal::int2(1);
+    metal::uint3 unnamed_42 = metal::uint3(2u) / metal::uint3(1u);
+    metal::float4 unnamed_43 = metal::float4(2.0) / metal::float4(1.0);
+    int unnamed_44 = 2 % 1;
+    uint unnamed_45 = 2u % 1u;
+    float unnamed_46 = metal::fmod(2.0, 1.0);
+    metal::int2 unnamed_47 = metal::int2(2) % metal::int2(1);
+    metal::uint3 unnamed_48 = metal::uint3(2u) % metal::uint3(1u);
+    metal::float4 unnamed_49 = metal::fmod(metal::float4(2.0), metal::float4(1.0));
+    metal::int2 unnamed_50 = metal::int2(2) + metal::int2(1);
+    metal::int2 unnamed_51 = metal::int2(2) + metal::int2(1);
+    metal::int2 unnamed_52 = metal::int2(2) - metal::int2(1);
+    metal::int2 unnamed_53 = metal::int2(2) - metal::int2(1);
+    metal::int2 unnamed_54 = metal::int2(2) * 1;
+    metal::int2 unnamed_55 = 2 * metal::int2(1);
+    metal::int2 unnamed_56 = metal::int2(2) / metal::int2(1);
+    metal::int2 unnamed_57 = metal::int2(2) / metal::int2(1);
+    metal::int2 unnamed_58 = metal::int2(2) % metal::int2(1);
+    metal::int2 unnamed_59 = metal::int2(2) % metal::int2(1);
+    metal::float3x3 unnamed_60 = const_type_14_ * 1.0;
+    metal::float3x3 unnamed_61 = 2.0 * const_type_14_;
+    metal::float3 unnamed_62 = const_type_15_ * metal::float4(1.0);
+    metal::float4 unnamed_63 = metal::float3(2.0) * const_type_15_;
+    metal::float3x3 unnamed_64 = const_type_15_ * const_type_16_;
+}
+
+void bit(
+) {
+    int unnamed_65 = ~1;
+    uint unnamed_66 = ~1u;
+    int unnamed_67 = 2 | 1;
+    uint unnamed_68 = 2u | 1u;
+    metal::int2 unnamed_69 = metal::int2(2) | metal::int2(1);
+    metal::uint3 unnamed_70 = metal::uint3(2u) | metal::uint3(1u);
+    int unnamed_71 = 2 & 1;
+    uint unnamed_72 = 2u & 1u;
+    metal::int2 unnamed_73 = metal::int2(2) & metal::int2(1);
+    metal::uint3 unnamed_74 = metal::uint3(2u) & metal::uint3(1u);
+    int unnamed_75 = 2 ^ 1;
+    uint unnamed_76 = 2u ^ 1u;
+    metal::int2 unnamed_77 = metal::int2(2) ^ metal::int2(1);
+    metal::uint3 unnamed_78 = metal::uint3(2u) ^ metal::uint3(1u);
+    int unnamed_79 = 2 << 1u;
+    uint unnamed_80 = 2u << 1u;
+    metal::int2 unnamed_81 = metal::int2(2) << metal::uint2(1u);
+    metal::uint3 unnamed_82 = metal::uint3(2u) << metal::uint3(1u);
+    int unnamed_83 = 2 >> 1u;
+    uint unnamed_84 = 2u >> 1u;
+    metal::int2 unnamed_85 = metal::int2(2) >> metal::uint2(1u);
+    metal::uint3 unnamed_86 = metal::uint3(2u) >> metal::uint3(1u);
+}
+
+void comparison(
+) {
+    bool unnamed_87 = 2 == 1;
+    bool unnamed_88 = 2u == 1u;
+    bool unnamed_89 = 2.0 == 1.0;
+    metal::bool2 unnamed_90 = metal::int2(2) == metal::int2(1);
+    metal::bool3 unnamed_91 = metal::uint3(2u) == metal::uint3(1u);
+    metal::bool4 unnamed_92 = metal::float4(2.0) == metal::float4(1.0);
+    bool unnamed_93 = 2 != 1;
+    bool unnamed_94 = 2u != 1u;
+    bool unnamed_95 = 2.0 != 1.0;
+    metal::bool2 unnamed_96 = metal::int2(2) != metal::int2(1);
+    metal::bool3 unnamed_97 = metal::uint3(2u) != metal::uint3(1u);
+    metal::bool4 unnamed_98 = metal::float4(2.0) != metal::float4(1.0);
+    bool unnamed_99 = 2 < 1;
+    bool unnamed_100 = 2u < 1u;
+    bool unnamed_101 = 2.0 < 1.0;
+    metal::bool2 unnamed_102 = metal::int2(2) < metal::int2(1);
+    metal::bool3 unnamed_103 = metal::uint3(2u) < metal::uint3(1u);
+    metal::bool4 unnamed_104 = metal::float4(2.0) < metal::float4(1.0);
+    bool unnamed_105 = 2 <= 1;
+    bool unnamed_106 = 2u <= 1u;
+    bool unnamed_107 = 2.0 <= 1.0;
+    metal::bool2 unnamed_108 = metal::int2(2) <= metal::int2(1);
+    metal::bool3 unnamed_109 = metal::uint3(2u) <= metal::uint3(1u);
+    metal::bool4 unnamed_110 = metal::float4(2.0) <= metal::float4(1.0);
+    bool unnamed_111 = 2 > 1;
+    bool unnamed_112 = 2u > 1u;
+    bool unnamed_113 = 2.0 > 1.0;
+    metal::bool2 unnamed_114 = metal::int2(2) > metal::int2(1);
+    metal::bool3 unnamed_115 = metal::uint3(2u) > metal::uint3(1u);
+    metal::bool4 unnamed_116 = metal::float4(2.0) > metal::float4(1.0);
+    bool unnamed_117 = 2 >= 1;
+    bool unnamed_118 = 2u >= 1u;
+    bool unnamed_119 = 2.0 >= 1.0;
+    metal::bool2 unnamed_120 = metal::int2(2) >= metal::int2(1);
+    metal::bool3 unnamed_121 = metal::uint3(2u) >= metal::uint3(1u);
+    metal::bool4 unnamed_122 = metal::float4(2.0) >= metal::float4(1.0);
+}
+
+void assignment(
 ) {
     int a = 1;
     int _e6 = a;
@@ -121,13 +224,19 @@ void binary_assignment(
     int _e18 = a;
     a = _e18 % 1;
     int _e21 = a;
-    a = _e21 ^ 0;
+    a = _e21 & 0;
     int _e24 = a;
-    a = _e24 & 0;
+    a = _e24 | 0;
     int _e27 = a;
-    a = _e27 + 1;
+    a = _e27 ^ 0;
     int _e30 = a;
-    a = _e30 - 1;
+    a = _e30 << 2u;
+    int _e33 = a;
+    a = _e33 >> 1u;
+    int _e36 = a;
+    a = _e36 + 1;
+    int _e39 = a;
+    a = _e39 - 1;
     return;
 }
 
@@ -135,12 +244,12 @@ kernel void main_(
 ) {
     metal::float4 _e4 = builtins();
     metal::float4 _e5 = splat();
-    int _e6 = unary();
-    metal::float3 _e8 = bool_cast(v_f32_one.xyz);
-    float _e9 = constructors();
-    modulo();
-    scalar_times_matrix();
+    metal::float3 _e7 = bool_cast(v_f32_one.xyz);
+    float _e8 = constructors();
     logical();
-    binary_assignment();
+    arithmetic();
+    bit();
+    comparison();
+    assignment();
     return;
 }
