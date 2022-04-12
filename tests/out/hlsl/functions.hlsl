@@ -9,13 +9,13 @@ float2 test_fma()
 
 int test_integer_dot_product()
 {
-    int2 a_2_ = int2(1.xx);
-    int2 b_2_ = int2(1.xx);
+    int2 a_2_ = (1).xx;
+    int2 b_2_ = (1).xx;
     int c_2_ = dot(a_2_, b_2_);
-    uint3 a_3_ = uint3(1u.xxx);
-    uint3 b_3_ = uint3(1u.xxx);
+    uint3 a_3_ = (1u).xxx;
+    uint3 b_3_ = (1u).xxx;
     uint c_3_ = dot(a_3_, b_3_);
-    int c_4_ = dot(int4(4.xxxx), int4(2.xxxx));
+    int c_4_ = dot((4).xxxx, (2).xxxx);
     return c_4_;
 }
 

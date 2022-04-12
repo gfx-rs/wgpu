@@ -33,13 +33,13 @@ float4 builtins()
     float b1_ = float(int4(1, 1, 1, 1).x);
     float4 b2_ = float4(int4(1, 1, 1, 1));
     int4 v_i32_zero = int4(float4(0.0, 0.0, 0.0, 0.0));
-    return (((((float4((int4(s1_.xxxx) + v_i32_zero)) + s2_) + m1_) + m2_) + float4(b1_.xxxx)) + b2_);
+    return (((((float4(((s1_).xxxx + v_i32_zero)) + s2_) + m1_) + m2_) + (b1_).xxxx) + b2_);
 }
 
 float4 splat()
 {
-    float2 a_1 = (((float2(1.0.xx) + float2(2.0.xx)) - float2(3.0.xx)) / float2(4.0.xx));
-    int4 b = (int4(5.xxxx) % int4(2.xxxx));
+    float2 a_1 = ((((1.0).xx + (2.0).xx) - (3.0).xx) / (4.0).xx);
+    int4 b = ((5).xxxx % (2).xxxx);
     return (a_1.xyxy + float4(b));
 }
 
@@ -69,11 +69,11 @@ float constructors()
     float2x2 unnamed_9 = (float2x2)0;
     int unnamed_10[4] = {(int)0,(int)0,(int)0,(int)0};
 
-    foo = ConstructFoo(float4(1.0.xxxx), 1);
+    foo = ConstructFoo((1.0).xxxx, 1);
     float2x2 mat2comp = float2x2(float2(1.0, 0.0), float2(0.0, 1.0));
     float4x4 mat4comp = float4x4(float4(1.0, 0.0, 0.0, 0.0), float4(0.0, 1.0, 0.0, 0.0), float4(0.0, 0.0, 1.0, 0.0), float4(0.0, 0.0, 0.0, 1.0));
-    unnamed_8 = uint2(0u.xx);
-    unnamed_9 = float2x2(float2(0.0.xx), float2(0.0.xx));
+    unnamed_8 = (0u).xx;
+    unnamed_9 = float2x2((0.0).xx, (0.0).xx);
     {
         int _result[4]=Constructarray4_int_(0, 1, 2, 3);
         for(int _i=0; _i<4; ++_i) unnamed_10[_i] = _result[_i];
@@ -85,65 +85,65 @@ float constructors()
 void logical()
 {
     bool unnamed_11 = !true;
-    bool2 unnamed_12 = !bool2(true.xx);
+    bool2 unnamed_12 = !(true).xx;
     bool unnamed_13 = (true || false);
     bool unnamed_14 = (true && false);
     bool unnamed_15 = (true | false);
-    bool3 unnamed_16 = (bool3(true.xxx) | bool3(false.xxx));
+    bool3 unnamed_16 = ((true).xxx | (false).xxx);
     bool unnamed_17 = (true & false);
-    bool4 unnamed_18 = (bool4(true.xxxx) & bool4(false.xxxx));
+    bool4 unnamed_18 = ((true).xxxx & (false).xxxx);
 }
 
 void arithmetic()
 {
-    int2 unnamed_19 = -int2(1.xx);
-    float2 unnamed_20 = -float2(1.0.xx);
+    int2 unnamed_19 = -(1).xx;
+    float2 unnamed_20 = -(1.0).xx;
     int unnamed_21 = (2 + 1);
     uint unnamed_22 = (2u + 1u);
     float unnamed_23 = (2.0 + 1.0);
-    int2 unnamed_24 = (int2(2.xx) + int2(1.xx));
-    uint3 unnamed_25 = (uint3(2u.xxx) + uint3(1u.xxx));
-    float4 unnamed_26 = (float4(2.0.xxxx) + float4(1.0.xxxx));
+    int2 unnamed_24 = ((2).xx + (1).xx);
+    uint3 unnamed_25 = ((2u).xxx + (1u).xxx);
+    float4 unnamed_26 = ((2.0).xxxx + (1.0).xxxx);
     int unnamed_27 = (2 - 1);
     uint unnamed_28 = (2u - 1u);
     float unnamed_29 = (2.0 - 1.0);
-    int2 unnamed_30 = (int2(2.xx) - int2(1.xx));
-    uint3 unnamed_31 = (uint3(2u.xxx) - uint3(1u.xxx));
-    float4 unnamed_32 = (float4(2.0.xxxx) - float4(1.0.xxxx));
+    int2 unnamed_30 = ((2).xx - (1).xx);
+    uint3 unnamed_31 = ((2u).xxx - (1u).xxx);
+    float4 unnamed_32 = ((2.0).xxxx - (1.0).xxxx);
     int unnamed_33 = (2 * 1);
     uint unnamed_34 = (2u * 1u);
     float unnamed_35 = (2.0 * 1.0);
-    int2 unnamed_36 = (int2(2.xx) * int2(1.xx));
-    uint3 unnamed_37 = (uint3(2u.xxx) * uint3(1u.xxx));
-    float4 unnamed_38 = (float4(2.0.xxxx) * float4(1.0.xxxx));
+    int2 unnamed_36 = ((2).xx * (1).xx);
+    uint3 unnamed_37 = ((2u).xxx * (1u).xxx);
+    float4 unnamed_38 = ((2.0).xxxx * (1.0).xxxx);
     int unnamed_39 = (2 / 1);
     uint unnamed_40 = (2u / 1u);
     float unnamed_41 = (2.0 / 1.0);
-    int2 unnamed_42 = (int2(2.xx) / int2(1.xx));
-    uint3 unnamed_43 = (uint3(2u.xxx) / uint3(1u.xxx));
-    float4 unnamed_44 = (float4(2.0.xxxx) / float4(1.0.xxxx));
+    int2 unnamed_42 = ((2).xx / (1).xx);
+    uint3 unnamed_43 = ((2u).xxx / (1u).xxx);
+    float4 unnamed_44 = ((2.0).xxxx / (1.0).xxxx);
     int unnamed_45 = (2 % 1);
     uint unnamed_46 = (2u % 1u);
     float unnamed_47 = (2.0 % 1.0);
-    int2 unnamed_48 = (int2(2.xx) % int2(1.xx));
-    uint3 unnamed_49 = (uint3(2u.xxx) % uint3(1u.xxx));
-    float4 unnamed_50 = (float4(2.0.xxxx) % float4(1.0.xxxx));
-    int2 unnamed_51 = (int2(2.xx) + int2(1.xx));
-    int2 unnamed_52 = (int2(2.xx) + int2(1.xx));
-    int2 unnamed_53 = (int2(2.xx) - int2(1.xx));
-    int2 unnamed_54 = (int2(2.xx) - int2(1.xx));
-    int2 unnamed_55 = (int2(2.xx) * 1);
-    int2 unnamed_56 = (2 * int2(1.xx));
-    int2 unnamed_57 = (int2(2.xx) / int2(1.xx));
-    int2 unnamed_58 = (int2(2.xx) / int2(1.xx));
-    int2 unnamed_59 = (int2(2.xx) % int2(1.xx));
-    int2 unnamed_60 = (int2(2.xx) % int2(1.xx));
+    int2 unnamed_48 = ((2).xx % (1).xx);
+    uint3 unnamed_49 = ((2u).xxx % (1u).xxx);
+    float4 unnamed_50 = ((2.0).xxxx % (1.0).xxxx);
+    int2 unnamed_51 = ((2).xx + (1).xx);
+    int2 unnamed_52 = ((2).xx + (1).xx);
+    int2 unnamed_53 = ((2).xx - (1).xx);
+    int2 unnamed_54 = ((2).xx - (1).xx);
+    int2 unnamed_55 = ((2).xx * 1);
+    int2 unnamed_56 = (2 * (1).xx);
+    int2 unnamed_57 = ((2).xx / (1).xx);
+    int2 unnamed_58 = ((2).xx / (1).xx);
+    int2 unnamed_59 = ((2).xx % (1).xx);
+    int2 unnamed_60 = ((2).xx % (1).xx);
     float3x3 unnamed_61 = (float3x3(float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0)) + float3x3(float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0)));
     float3x3 unnamed_62 = (float3x3(float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0)) - float3x3(float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0)));
     float3x3 unnamed_63 = mul(1.0, float3x3(float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0)));
     float3x3 unnamed_64 = mul(float3x3(float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0)), 2.0);
-    float3 unnamed_65 = mul(float4(1.0.xxxx), float4x3(float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0)));
-    float4 unnamed_66 = mul(float4x3(float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0)), float3(2.0.xxx));
+    float3 unnamed_65 = mul((1.0).xxxx, float4x3(float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0)));
+    float4 unnamed_66 = mul(float4x3(float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0)), (2.0).xxx);
     float3x3 unnamed_67 = mul(float3x4(float4(0.0, 0.0, 0.0, 0.0), float4(0.0, 0.0, 0.0, 0.0), float4(0.0, 0.0, 0.0, 0.0)), float4x3(float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0)));
 }
 
@@ -151,28 +151,28 @@ void bit()
 {
     int unnamed_68 = ~1;
     uint unnamed_69 = ~1u;
-    int2 unnamed_70 = ~int2(1.xx);
-    uint3 unnamed_71 = ~uint3(1u.xxx);
+    int2 unnamed_70 = ~(1).xx;
+    uint3 unnamed_71 = ~(1u).xxx;
     int unnamed_72 = (2 | 1);
     uint unnamed_73 = (2u | 1u);
-    int2 unnamed_74 = (int2(2.xx) | int2(1.xx));
-    uint3 unnamed_75 = (uint3(2u.xxx) | uint3(1u.xxx));
+    int2 unnamed_74 = ((2).xx | (1).xx);
+    uint3 unnamed_75 = ((2u).xxx | (1u).xxx);
     int unnamed_76 = (2 & 1);
     uint unnamed_77 = (2u & 1u);
-    int2 unnamed_78 = (int2(2.xx) & int2(1.xx));
-    uint3 unnamed_79 = (uint3(2u.xxx) & uint3(1u.xxx));
+    int2 unnamed_78 = ((2).xx & (1).xx);
+    uint3 unnamed_79 = ((2u).xxx & (1u).xxx);
     int unnamed_80 = (2 ^ 1);
     uint unnamed_81 = (2u ^ 1u);
-    int2 unnamed_82 = (int2(2.xx) ^ int2(1.xx));
-    uint3 unnamed_83 = (uint3(2u.xxx) ^ uint3(1u.xxx));
+    int2 unnamed_82 = ((2).xx ^ (1).xx);
+    uint3 unnamed_83 = ((2u).xxx ^ (1u).xxx);
     int unnamed_84 = (2 << 1u);
     uint unnamed_85 = (2u << 1u);
-    int2 unnamed_86 = (int2(2.xx) << uint2(1u.xx));
-    uint3 unnamed_87 = (uint3(2u.xxx) << uint3(1u.xxx));
+    int2 unnamed_86 = ((2).xx << (1u).xx);
+    uint3 unnamed_87 = ((2u).xxx << (1u).xxx);
     int unnamed_88 = (2 >> 1u);
     uint unnamed_89 = (2u >> 1u);
-    int2 unnamed_90 = (int2(2.xx) >> uint2(1u.xx));
-    uint3 unnamed_91 = (uint3(2u.xxx) >> uint3(1u.xxx));
+    int2 unnamed_90 = ((2).xx >> (1u).xx);
+    uint3 unnamed_91 = ((2u).xxx >> (1u).xxx);
 }
 
 void comparison()
@@ -180,39 +180,39 @@ void comparison()
     bool unnamed_92 = (2 == 1);
     bool unnamed_93 = (2u == 1u);
     bool unnamed_94 = (2.0 == 1.0);
-    bool2 unnamed_95 = (int2(2.xx) == int2(1.xx));
-    bool3 unnamed_96 = (uint3(2u.xxx) == uint3(1u.xxx));
-    bool4 unnamed_97 = (float4(2.0.xxxx) == float4(1.0.xxxx));
+    bool2 unnamed_95 = ((2).xx == (1).xx);
+    bool3 unnamed_96 = ((2u).xxx == (1u).xxx);
+    bool4 unnamed_97 = ((2.0).xxxx == (1.0).xxxx);
     bool unnamed_98 = (2 != 1);
     bool unnamed_99 = (2u != 1u);
     bool unnamed_100 = (2.0 != 1.0);
-    bool2 unnamed_101 = (int2(2.xx) != int2(1.xx));
-    bool3 unnamed_102 = (uint3(2u.xxx) != uint3(1u.xxx));
-    bool4 unnamed_103 = (float4(2.0.xxxx) != float4(1.0.xxxx));
+    bool2 unnamed_101 = ((2).xx != (1).xx);
+    bool3 unnamed_102 = ((2u).xxx != (1u).xxx);
+    bool4 unnamed_103 = ((2.0).xxxx != (1.0).xxxx);
     bool unnamed_104 = (2 < 1);
     bool unnamed_105 = (2u < 1u);
     bool unnamed_106 = (2.0 < 1.0);
-    bool2 unnamed_107 = (int2(2.xx) < int2(1.xx));
-    bool3 unnamed_108 = (uint3(2u.xxx) < uint3(1u.xxx));
-    bool4 unnamed_109 = (float4(2.0.xxxx) < float4(1.0.xxxx));
+    bool2 unnamed_107 = ((2).xx < (1).xx);
+    bool3 unnamed_108 = ((2u).xxx < (1u).xxx);
+    bool4 unnamed_109 = ((2.0).xxxx < (1.0).xxxx);
     bool unnamed_110 = (2 <= 1);
     bool unnamed_111 = (2u <= 1u);
     bool unnamed_112 = (2.0 <= 1.0);
-    bool2 unnamed_113 = (int2(2.xx) <= int2(1.xx));
-    bool3 unnamed_114 = (uint3(2u.xxx) <= uint3(1u.xxx));
-    bool4 unnamed_115 = (float4(2.0.xxxx) <= float4(1.0.xxxx));
+    bool2 unnamed_113 = ((2).xx <= (1).xx);
+    bool3 unnamed_114 = ((2u).xxx <= (1u).xxx);
+    bool4 unnamed_115 = ((2.0).xxxx <= (1.0).xxxx);
     bool unnamed_116 = (2 > 1);
     bool unnamed_117 = (2u > 1u);
     bool unnamed_118 = (2.0 > 1.0);
-    bool2 unnamed_119 = (int2(2.xx) > int2(1.xx));
-    bool3 unnamed_120 = (uint3(2u.xxx) > uint3(1u.xxx));
-    bool4 unnamed_121 = (float4(2.0.xxxx) > float4(1.0.xxxx));
+    bool2 unnamed_119 = ((2).xx > (1).xx);
+    bool3 unnamed_120 = ((2u).xxx > (1u).xxx);
+    bool4 unnamed_121 = ((2.0).xxxx > (1.0).xxxx);
     bool unnamed_122 = (2 >= 1);
     bool unnamed_123 = (2u >= 1u);
     bool unnamed_124 = (2.0 >= 1.0);
-    bool2 unnamed_125 = (int2(2.xx) >= int2(1.xx));
-    bool3 unnamed_126 = (uint3(2u.xxx) >= uint3(1u.xxx));
-    bool4 unnamed_127 = (float4(2.0.xxxx) >= float4(1.0.xxxx));
+    bool2 unnamed_125 = ((2).xx >= (1).xx);
+    bool3 unnamed_126 = ((2u).xxx >= (1u).xxx);
+    bool4 unnamed_127 = ((2.0).xxxx >= (1.0).xxxx);
 }
 
 void assignment()

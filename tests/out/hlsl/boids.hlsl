@@ -100,13 +100,13 @@ void main(uint3 global_invocation_id : SV_DispatchThreadID)
         float2 _expr92 = cMass;
         int _expr93 = cMassCount;
         float2 _expr97 = vPos;
-        cMass = ((_expr92 / float2(float(_expr93).xx)) - _expr97);
+        cMass = ((_expr92 / (float(_expr93)).xx) - _expr97);
     }
     int _expr99 = cVelCount;
     if ((_expr99 > 0)) {
         float2 _expr102 = cVel;
         int _expr103 = cVelCount;
-        cVel = (_expr102 / float2(float(_expr103).xx));
+        cVel = (_expr102 / (float(_expr103)).xx);
     }
     float2 _expr107 = vVel;
     float2 _expr108 = cMass;

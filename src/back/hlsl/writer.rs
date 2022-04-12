@@ -2286,11 +2286,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     crate::VectorSize::Tri => "xxx",
                     crate::VectorSize::Quad => "xxxx",
                 };
-                let resolved = func_ctx.info[expr].ty.inner_with(&module.types);
-                self.write_value_type(module, resolved)?;
                 write!(self.out, "(")?;
                 self.write_expr(module, value, func_ctx)?;
-                write!(self.out, ".{})", number_of_components)?
+                write!(self.out, ").{}", number_of_components)?
             }
             Expression::Select {
                 condition,

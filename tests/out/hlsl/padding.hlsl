@@ -39,5 +39,5 @@ float4 vertex() : SV_Position
     float _expr6 = input.b;
     float _expr9 = input2_.b;
     float _expr12 = input3_.b;
-    return (((float4(1.0.xxxx) * _expr6) * _expr9) * _expr12);
+    return ((((1.0).xxxx * _expr6) * _expr9) * _expr12);
 }

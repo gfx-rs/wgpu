@@ -88,13 +88,13 @@ void test_matrix_within_struct_accesses()
     int _expr44 = idx;
     float _expr46 = GetMatmOnBaz(baz)[_expr42][_expr44];
     unnamed_7 = _expr46;
-    t = ConstructBaz(float3x2(float2(1.0.xx), float2(2.0.xx), float2(3.0.xx)));
+    t = ConstructBaz(float3x2((1.0).xx, (2.0).xx, (3.0).xx));
     int _expr57 = idx;
     idx = (_expr57 + 1);
-    SetMatmOnBaz(t, float3x2(float2(6.0.xx), float2(5.0.xx), float2(4.0.xx)));
-    t.m_0 = float2(9.0.xx);
+    SetMatmOnBaz(t, float3x2((6.0).xx, (5.0).xx, (4.0).xx));
+    t.m_0 = (9.0).xx;
     int _expr74 = idx;
-    SetMatVecmOnBaz(t, float2(90.0.xx), _expr74);
+    SetMatVecmOnBaz(t, (90.0).xx, _expr74);
     t.m_0[1] = 10.0;
     int _expr87 = idx;
     t.m_0[_expr87] = 20.0;
@@ -151,7 +151,7 @@ float4 foo_vert(uint vi : SV_VertexID) : SV_Position
     int value = c[vi];
     const float _e42 = test_arr_as_arg(Constructarray5_array10_float__(Constructarray10_float_(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), Constructarray10_float_(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), Constructarray10_float_(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), Constructarray10_float_(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), Constructarray10_float_(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)));
     unnamed = _e42;
-    return float4(mul(float4(int4(value.xxxx)), matrix_), 2.0);
+    return float4(mul(float4((value).xxxx), matrix_), 2.0);
 }
 
 uint2 Constructarray2_uint2_(uint2 arg0, uint2 arg1)[2] {
@@ -163,19 +163,19 @@ float4 foo_frag() : SV_Target0
 {
     bar.Store(8+16+0, asuint(1.0));
     {
-        float4x3 _value2 = float4x3(float3(0.0.xxx), float3(1.0.xxx), float3(2.0.xxx), float3(3.0.xxx));
+        float4x3 _value2 = float4x3((0.0).xxx, (1.0).xxx, (2.0).xxx, (3.0).xxx);
         bar.Store3(0+0, asuint(_value2[0]));
         bar.Store3(0+16, asuint(_value2[1]));
         bar.Store3(0+32, asuint(_value2[2]));
         bar.Store3(0+48, asuint(_value2[3]));
     }
     {
-        uint2 _value2[2] = Constructarray2_uint2_(uint2(0u.xx), uint2(1u.xx));
+        uint2 _value2[2] = Constructarray2_uint2_((0u).xx, (1u).xx);
         bar.Store2(104+0, asuint(_value2[0]));
         bar.Store2(104+8, asuint(_value2[1]));
     }
     bar.Store(0+8+120, asuint(1));
-    return float4(0.0.xxxx);
+    return (0.0).xxxx;
 }
 
 [numthreads(1, 1, 1)]

@@ -49,7 +49,7 @@ VertexOutput ConstructVertexOutput(float4 arg0, float arg1) {
 VertexOutput_vertex vertex(uint vertex_index : SV_VertexID, uint instance_index : SV_InstanceID, uint color : LOC10)
 {
     uint tmp = (((_NagaConstants.base_vertex + vertex_index) + (_NagaConstants.base_instance + instance_index)) + color);
-    const VertexOutput vertexoutput = ConstructVertexOutput(float4(1.0.xxxx), float(tmp));
+    const VertexOutput vertexoutput = ConstructVertexOutput((1.0).xxxx, float(tmp));
     const VertexOutput_vertex vertexoutput_1 = { vertexoutput.varying, vertexoutput.position };
     return vertexoutput_1;
 }

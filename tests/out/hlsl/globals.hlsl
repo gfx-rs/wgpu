@@ -22,7 +22,7 @@ void test_msl_packed_vec3_()
 {
     int idx = 1;
 
-    alignment.Store3(0, asuint(float3(1.0.xxx)));
+    alignment.Store3(0, asuint((1.0).xxx));
     alignment.Store(0+0, asuint(1.0));
     alignment.Store(0+0, asuint(2.0));
     int _expr21 = idx;

@@ -46,7 +46,7 @@ void depth_load(uint3 local_id_1 : SV_GroupThreadID)
     int2 dim_1 = NagaRWDimensions2D(image_storage_src);
     int2 itc_1 = ((dim_1 * int2(local_id_1.xy)) % int2(10, 20));
     float val = image_depth_multisampled_src.Load(itc_1, int(local_id_1.z)).x;
-    image_dst[itc_1.x] = uint4(uint(val).xxxx);
+    image_dst[itc_1.x] = (uint(val)).xxxx;
     return;
 }
 
@@ -157,7 +157,7 @@ float4 queries() : SV_Position
     int3 dim_3d_lod = NagaMipDimensions3D(image_3d, 1);
     int2 dim_2s_ms = NagaMSDimensions2D(image_aa);
     int sum = ((((((((((dim_1d + dim_2d.y) + dim_2d_lod.y) + dim_2d_array.y) + dim_2d_array_lod.y) + dim_cube.y) + dim_cube_lod.y) + dim_cube_array.y) + dim_cube_array_lod.y) + dim_3d.z) + dim_3d_lod.z);
-    return float4(float(sum).xxxx);
+    return (float(sum)).xxxx;
 }
 
 int NagaNumLevels2D(Texture2D<float4> tex)
@@ -227,12 +227,12 @@ float4 levels_queries() : SV_Position
     int num_levels_3d = NagaNumLevels3D(image_3d);
     int num_samples_aa = NagaMSNumSamples2D(image_aa);
     int sum_1 = (((((((num_layers_2d + num_layers_cube) + num_samples_aa) + num_levels_2d) + num_levels_2d_array) + num_levels_3d) + num_levels_cube) + num_levels_cube_array);
-    return float4(float(sum_1).xxxx);
+    return (float(sum_1)).xxxx;
 }
 
 float4 sample_() : SV_Target0
 {
-    float2 tc = float2(0.5.xx);
+    float2 tc = (0.5).xx;
     float4 s1d = image_1d.Sample(sampler_reg, tc.x);
     float4 s2d = image_2d.Sample(sampler_reg, tc);
     float4 s2d_offset = image_2d.Sample(sampler_reg, tc, int2(3, 1));
@@ -244,16 +244,16 @@ float4 sample_() : SV_Target0
 
 float sample_comparison() : SV_Target0
 {
-    float2 tc_1 = float2(0.5.xx);
+    float2 tc_1 = (0.5).xx;
     float s2d_depth = image_2d_depth.SampleCmp(sampler_cmp, tc_1, 0.5);
     float s2d_depth_level = image_2d_depth.SampleCmpLevelZero(sampler_cmp, tc_1, 0.5);
-    float scube_depth_level = image_cube_depth.SampleCmpLevelZero(sampler_cmp, float3(0.5.xxx), 0.5);
+    float scube_depth_level = image_cube_depth.SampleCmpLevelZero(sampler_cmp, (0.5).xxx, 0.5);
     return (s2d_depth + s2d_depth_level);
 }
 
 float4 gather() : SV_Target0
 {
-    float2 tc_2 = float2(0.5.xx);
+    float2 tc_2 = (0.5).xx;
     float4 s2d_1 = image_2d.GatherGreen(sampler_reg, tc_2);
     float4 s2d_offset_1 = image_2d.GatherAlpha(sampler_reg, tc_2, int2(3, 1));
     float4 s2d_depth_1 = image_2d_depth.GatherCmp(sampler_cmp, tc_2, 0.5);
@@ -263,8 +263,8 @@ float4 gather() : SV_Target0
 
 float4 depth_no_comparison() : SV_Target0
 {
-    float2 tc_3 = float2(0.5.xx);
+    float2 tc_3 = (0.5).xx;
     float s2d_2 = image_2d_depth.Sample(sampler_reg, tc_3);
     float4 s2d_gather = image_2d_depth.Gather(sampler_reg, tc_3);
-    return (float4(s2d_2.xxxx) + s2d_gather);
+    return ((s2d_2).xxxx + s2d_gather);
 }
