@@ -87,7 +87,8 @@ fn logical() {
 
 fn arithmetic() {
     // unary
-    let _ = -1;
+    // TODO: uncomment when we get the changes from https://github.com/gfx-rs/rspirv/pull/231
+    // let _ = -1;
     let _ = -1.0;
     let _ = -vec2(1);
     let _ = -vec2(1.0);
