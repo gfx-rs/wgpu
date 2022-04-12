@@ -346,6 +346,26 @@ impl<'w> BlockContext<'w> {
                             crate::ScalarKind::Float => spirv::Op::FAdd,
                             _ => spirv::Op::IAdd,
                         },
+                        crate::TypeInner::Matrix {
+                            columns,
+                            rows,
+                            width,
+                        } => {
+                            self.write_matrix_matrix_column_op(
+                                block,
+                                id,
+                                result_type_id,
+                                left_id,
+                                right_id,
+                                columns,
+                                rows,
+                                width,
+                                spirv::Op::FAdd,
+                            );
+
+                            self.cached[expr_handle] = id;
+                            return Ok(());
+                        }
                         _ => unimplemented!(),
                     },
                     crate::BinaryOperator::Subtract => match *left_ty_inner {
@@ -354,6 +374,26 @@ impl<'w> BlockContext<'w> {
                             crate::ScalarKind::Float => spirv::Op::FSub,
                             _ => spirv::Op::ISub,
                         },
+                        crate::TypeInner::Matrix {
+                            columns,
+                            rows,
+                            width,
+                        } => {
+                            self.write_matrix_matrix_column_op(
+                                block,
+                                id,
+                                result_type_id,
+                                left_id,
+                                right_id,
+                                columns,
+                                rows,
+                                width,
+                                spirv::Op::FSub,
+                            );
+
+                            self.cached[expr_handle] = id;
+                            return Ok(());
+                        }
                         _ => unimplemented!(),
                     },
                     crate::BinaryOperator::Multiply => match (left_dimension, right_dimension) {
@@ -1148,6 +1188,64 @@ impl<'w> BlockContext<'w> {
         };
 
         Ok(pointer)
+    }
+
+    /// Build the instructions for matrix - matrix column operations
+    #[allow(clippy::too_many_arguments)]
+    fn write_matrix_matrix_column_op(
+        &mut self,
+        block: &mut Block,
+        result_id: Word,
+        result_type_id: Word,
+        left_id: Word,
+        right_id: Word,
+        columns: crate::VectorSize,
+        rows: crate::VectorSize,
+        width: u8,
+        op: spirv::Op,
+    ) {
+        self.temp_list.clear();
+
+        let vector_type_id = self.get_type_id(LookupType::Local(LocalType::Value {
+            vector_size: Some(rows),
+            kind: crate::ScalarKind::Float,
+            width,
+            pointer_space: None,
+        }));
+
+        for index in 0..columns as u32 {
+            let column_id_left = self.gen_id();
+            let column_id_right = self.gen_id();
+            let column_id_res = self.gen_id();
+
+            block.body.push(Instruction::composite_extract(
+                vector_type_id,
+                column_id_left,
+                left_id,
+                &[index],
+            ));
+            block.body.push(Instruction::composite_extract(
+                vector_type_id,
+                column_id_right,
+                right_id,
+                &[index],
+            ));
+            block.body.push(Instruction::binary(
+                op,
+                vector_type_id,
+                column_id_res,
+                column_id_left,
+                column_id_right,
+            ));
+
+            self.temp_list.push(column_id_res);
+        }
+
+        block.body.push(Instruction::composite_construct(
+            result_type_id,
+            result_id,
+            &self.temp_list,
+        ));
     }
 
     /// Build the instructions for the arithmetic expression of a dot product

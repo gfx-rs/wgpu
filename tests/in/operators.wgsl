@@ -150,8 +150,8 @@ fn arithmetic() {
     let _ = 2 % vec2(1);
 
     // Matrix arithmetic
-    // let _ = mat3x3<f32>() + mat3x3<f32>();
-    // let _ = mat3x3<f32>() - mat3x3<f32>();
+    let _ = mat3x3<f32>() + mat3x3<f32>();
+    let _ = mat3x3<f32>() - mat3x3<f32>();
 
     let _ = mat3x3<f32>() * 1.0;
     let _ = 2.0 * mat3x3<f32>();
