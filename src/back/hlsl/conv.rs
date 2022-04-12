@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use super::Error;
 
 impl crate::ScalarKind {
@@ -34,6 +36,79 @@ impl crate::TypeInner {
             Self::Matrix { .. } => true,
             _ => false,
         }
+    }
+
+    pub(super) fn try_size_hlsl(
+        &self,
+        types: &crate::UniqueArena<crate::Type>,
+        constants: &crate::Arena<crate::Constant>,
+    ) -> Result<u32, crate::arena::BadHandle> {
+        Ok(match *self {
+            Self::Matrix {
+                columns,
+                rows,
+                width,
+            } => {
+                let aligned_rows = if rows > crate::VectorSize::Bi { 4 } else { 2 };
+                let stride = aligned_rows * width as u32;
+                let last_row_size = rows as u32 * width as u32;
+                ((columns as u32 - 1) * stride) + last_row_size
+            }
+            Self::Array { base, size, stride } => {
+                let count = match size {
+                    crate::ArraySize::Constant(handle) => {
+                        let constant = constants.try_get(handle)?;
+                        constant.to_array_length().unwrap_or(1)
+                    }
+                    // A dynamically-sized array has to have at least one element
+                    crate::ArraySize::Dynamic => 1,
+                };
+                let last_el_size = types[base].inner.try_size_hlsl(types, constants)?;
+                ((count - 1) * stride) + last_el_size
+            }
+            _ => self.try_size(constants)?,
+        })
+    }
+
+    /// Used to generate the name of the wrapped type constructor
+    pub(super) fn hlsl_type_id<'a>(
+        &self,
+        base: crate::Handle<crate::Type>,
+        types: &crate::UniqueArena<crate::Type>,
+        constants: &crate::Arena<crate::Constant>,
+        names: &'a crate::FastHashMap<crate::proc::NameKey, String>,
+    ) -> Result<Cow<'a, str>, Error> {
+        Ok(match types[base].inner {
+            crate::TypeInner::Scalar { kind, width } => Cow::Borrowed(kind.to_hlsl_str(width)?),
+            crate::TypeInner::Vector { size, kind, width } => Cow::Owned(format!(
+                "{}{}",
+                kind.to_hlsl_str(width)?,
+                crate::back::vector_size_str(size)
+            )),
+            crate::TypeInner::Matrix {
+                columns,
+                rows,
+                width,
+            } => Cow::Owned(format!(
+                "{}{}x{}",
+                crate::ScalarKind::Float.to_hlsl_str(width)?,
+                crate::back::vector_size_str(columns),
+                crate::back::vector_size_str(rows),
+            )),
+            crate::TypeInner::Array {
+                base,
+                size: crate::ArraySize::Constant(size),
+                ..
+            } => Cow::Owned(format!(
+                "array{}_{}_",
+                constants[size].to_array_length().unwrap(),
+                self.hlsl_type_id(base, types, constants, names)?
+            )),
+            crate::TypeInner::Struct { .. } => {
+                Cow::Borrowed(&names[&crate::proc::NameKey::Type(base)])
+            }
+            _ => unreachable!(),
+        })
     }
 }
 

@@ -1,0 +1,43 @@
+
+struct S {
+    float3 a;
+    int _end_pad_0;
+};
+
+struct Test {
+    S a;
+    float b;
+    int _end_pad_0;
+    int _end_pad_1;
+    int _end_pad_2;
+};
+
+struct Test2_ {
+    float3 a[2];
+    int _pad1_0;
+    float b;
+    int _end_pad_0;
+    int _end_pad_1;
+    int _end_pad_2;
+};
+
+struct Test3_ {
+    row_major float4x3 a;
+    int _pad1_0;
+    float b;
+    int _end_pad_0;
+    int _end_pad_1;
+    int _end_pad_2;
+};
+
+cbuffer input : register(b0) { Test input; }
+cbuffer input2_ : register(b1) { Test2_ input2_; }
+cbuffer input3_ : register(b2) { Test3_ input3_; }
+
+float4 vertex() : SV_Position
+{
+    float _expr6 = input.b;
+    float _expr9 = input2_.b;
+    float _expr12 = input3_.b;
+    return (((float4(1.0.xxxx) * _expr6) * _expr9) * _expr12);
+}

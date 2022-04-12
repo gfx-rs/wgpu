@@ -54,6 +54,10 @@ fn read_from_private(foo: ptr<function, f32>) -> f32 {
     return *foo;
 }
 
+fn test_arr_as_arg(a: array<array<f32, 10>, 5>) -> f32 {
+    return a[4][9];
+}
+
 @stage(vertex)
 fn foo_vert(@builtin(vertex_index) vi: u32) -> @builtin(position) vec4<f32> {
     var foo: f32 = 0.0;
@@ -78,6 +82,8 @@ fn foo_vert(@builtin(vertex_index) vi: u32) -> @builtin(position) vec4<f32> {
 	var c = array<i32, 5>(a, i32(b), 3, 4, 5);
 	c[vi + 1u] = 42;
 	let value = c[vi];
+
+	var _ = test_arr_as_arg(array<array<f32, 10>, 5>());
 
 	return vec4<f32>(matrix * vec4<f32>(vec4<i32>(value)), 2.0);
 }

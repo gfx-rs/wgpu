@@ -26,7 +26,7 @@ int dim_1d = NagaDimensions1D(image_1d);
 ```
 */
 
-use super::{super::FunctionCtx, BackendResult, Error};
+use super::{super::FunctionCtx, BackendResult};
 use crate::{arena::Handle, proc::NameKey};
 use std::fmt::Write;
 
@@ -350,9 +350,15 @@ impl<'a, W: Write> super::Writer<'a, W> {
 
     pub(super) fn write_wrapped_constructor_function_name(
         &mut self,
+        module: &crate::Module,
         constructor: WrappedConstructor,
     ) -> BackendResult {
-        let name = &self.names[&NameKey::Type(constructor.ty)];
+        let name = module.types[constructor.ty].inner.hlsl_type_id(
+            constructor.ty,
+            &module.types,
+            &module.constants,
+            &self.names,
+        )?;
         write!(self.out, "Construct{}", name)?;
         Ok(())
     }
@@ -369,69 +375,114 @@ impl<'a, W: Write> super::Writer<'a, W> {
         const RETURN_VARIABLE_NAME: &str = "ret";
 
         // Write function return type and name
-        let struct_name = &self.names[&NameKey::Type(constructor.ty)];
-        write!(self.out, "{} ", struct_name)?;
-        self.write_wrapped_constructor_function_name(constructor)?;
+        self.write_type(module, constructor.ty)?;
+        write!(self.out, " ")?;
+        self.write_wrapped_constructor_function_name(module, constructor)?;
 
         // Write function parameters
         write!(self.out, "(")?;
-        let members = match module.types[constructor.ty].inner {
-            crate::TypeInner::Struct { ref members, .. } => members,
-            _ => return Err(Error::Unimplemented("non-struct constructor".to_string())),
-        };
-        for (i, member) in members.iter().enumerate() {
+
+        let mut write_arg = |i, ty| -> BackendResult {
             if i != 0 {
                 write!(self.out, ", ")?;
             }
-            self.write_type(module, member.ty)?;
+            self.write_type(module, ty)?;
             write!(self.out, " {}{}", ARGUMENT_VARIABLE_NAME, i)?;
-            if let crate::TypeInner::Array { size, .. } = module.types[member.ty].inner {
-                self.write_array_size(module, size)?;
+            if let crate::TypeInner::Array { base, size, .. } = module.types[ty].inner {
+                self.write_array_size(module, base, size)?;
             }
+            Ok(())
+        };
+
+        match module.types[constructor.ty].inner {
+            crate::TypeInner::Struct { ref members, .. } => {
+                for (i, member) in members.iter().enumerate() {
+                    write_arg(i, member.ty)?;
+                }
+            }
+            crate::TypeInner::Array {
+                base,
+                size: crate::ArraySize::Constant(size),
+                ..
+            } => {
+                let count = module.constants[size].to_array_length().unwrap();
+                for i in 0..count as usize {
+                    write_arg(i, base)?;
+                }
+            }
+            _ => unreachable!(),
+        };
+
+        write!(self.out, ")")?;
+
+        if let crate::TypeInner::Array { base, size, .. } = module.types[constructor.ty].inner {
+            self.write_array_size(module, base, size)?;
         }
+
         // Write function body
-        writeln!(self.out, ") {{")?;
+        writeln!(self.out, " {{")?;
 
-        let struct_name = &self.names[&NameKey::Type(constructor.ty)];
-        writeln!(
-            self.out,
-            "{}{} {};",
-            INDENT, struct_name, RETURN_VARIABLE_NAME
-        )?;
-        for i in 0..members.len() as u32 {
-            let member = &members[i as usize];
+        match module.types[constructor.ty].inner {
+            crate::TypeInner::Struct { ref members, .. } => {
+                let struct_name = &self.names[&NameKey::Type(constructor.ty)];
+                writeln!(
+                    self.out,
+                    "{}{} {};",
+                    INDENT, struct_name, RETURN_VARIABLE_NAME
+                )?;
+                for (i, member) in members.iter().enumerate() {
+                    let field_name = &self.names[&NameKey::StructMember(constructor.ty, i as u32)];
 
-            let field_name = &self.names[&NameKey::StructMember(constructor.ty, i)];
-
-            match module.types[member.ty].inner {
-                crate::TypeInner::Matrix {
-                    columns,
-                    rows: crate::VectorSize::Bi,
-                    ..
-                } if member.binding.is_none() => {
-                    for j in 0..columns as u8 {
-                        writeln!(
-                            self.out,
-                            "{}{}.{}_{} = {}{}[{}];",
-                            INDENT,
-                            RETURN_VARIABLE_NAME,
-                            field_name,
-                            j,
-                            ARGUMENT_VARIABLE_NAME,
-                            i,
-                            j
-                        )?;
+                    match module.types[member.ty].inner {
+                        crate::TypeInner::Matrix {
+                            columns,
+                            rows: crate::VectorSize::Bi,
+                            ..
+                        } if member.binding.is_none() => {
+                            for j in 0..columns as u8 {
+                                writeln!(
+                                    self.out,
+                                    "{}{}.{}_{} = {}{}[{}];",
+                                    INDENT,
+                                    RETURN_VARIABLE_NAME,
+                                    field_name,
+                                    j,
+                                    ARGUMENT_VARIABLE_NAME,
+                                    i,
+                                    j
+                                )?;
+                            }
+                        }
+                        _ => {
+                            writeln!(
+                                self.out,
+                                "{}{}.{} = {}{};",
+                                INDENT, RETURN_VARIABLE_NAME, field_name, ARGUMENT_VARIABLE_NAME, i,
+                            )?;
+                        }
                     }
                 }
-                _ => {
-                    //TODO: handle arrays?
-                    writeln!(
-                        self.out,
-                        "{}{}.{} = {}{};",
-                        INDENT, RETURN_VARIABLE_NAME, field_name, ARGUMENT_VARIABLE_NAME, i,
-                    )?;
-                }
             }
+            crate::TypeInner::Array {
+                base,
+                size: crate::ArraySize::Constant(size),
+                ..
+            } => {
+                write!(self.out, "{}", INDENT)?;
+                self.write_type(module, base)?;
+                write!(self.out, " {}", RETURN_VARIABLE_NAME)?;
+                self.write_array_size(module, base, crate::ArraySize::Constant(size))?;
+                write!(self.out, " = {{ ")?;
+                let count = module.constants[size].to_array_length().unwrap();
+                for i in 0..count {
+                    if i != 0 {
+                        write!(self.out, ", ")?;
+                    }
+                    write!(self.out, "{}{}", ARGUMENT_VARIABLE_NAME, i)?;
+                }
+                writeln!(self.out, " }};",)?;
+            }
+            _ => unreachable!(),
         }
 
         // Write return value
@@ -831,7 +882,9 @@ impl<'a, W: Write> super::Writer<'a, W> {
                 }
                 crate::Expression::Compose { ty, components: _ } => {
                     let constructor = match module.types[ty].inner {
-                        crate::TypeInner::Struct { .. } => WrappedConstructor { ty },
+                        crate::TypeInner::Struct { .. } | crate::TypeInner::Array { .. } => {
+                            WrappedConstructor { ty }
+                        }
                         _ => continue,
                     };
                     if !self.wrapped.constructors.contains(&constructor) {
@@ -882,6 +935,33 @@ impl<'a, W: Write> super::Writer<'a, W> {
                 }
                 _ => {}
             };
+        }
+
+        Ok(())
+    }
+
+    pub(super) fn write_wrapped_constructor_function_for_constant(
+        &mut self,
+        module: &crate::Module,
+        constant: &crate::Constant,
+    ) -> BackendResult {
+        if let crate::ConstantInner::Composite { ty, ref components } = constant.inner {
+            match module.types[ty].inner {
+                crate::TypeInner::Struct { .. } | crate::TypeInner::Array { .. } => {
+                    let constructor = WrappedConstructor { ty };
+                    if !self.wrapped.constructors.contains(&constructor) {
+                        self.write_wrapped_constructor_function(module, constructor)?;
+                        self.wrapped.constructors.insert(constructor);
+                    }
+                }
+                _ => {}
+            }
+            for constant in components {
+                self.write_wrapped_constructor_function_for_constant(
+                    module,
+                    &module.constants[*constant],
+                )?;
+            }
         }
 
         Ok(())

@@ -24,6 +24,10 @@ float read_from_private(inout float foo_1) {
     return _e3;
 }
 
+float test_arr_as_arg(float a[5][10]) {
+    return a[4][9];
+}
+
 void main() {
     _group_0_binding_0_fs.matrix[1][2] = 1.0;
     _group_0_binding_0_fs.matrix = mat4x3(vec3(0.0), vec3(1.0), vec3(2.0), vec3(3.0));

@@ -727,7 +727,11 @@ impl<'a, W: Write> Writer<'a, W> {
         self.collect_reflection_info()
     }
 
-    fn write_array_size(&mut self, size: crate::ArraySize) -> BackendResult {
+    fn write_array_size(
+        &mut self,
+        base: Handle<crate::Type>,
+        size: crate::ArraySize,
+    ) -> BackendResult {
         write!(self.out, "[")?;
 
         // Write the array size
@@ -751,6 +755,16 @@ impl<'a, W: Write> Writer<'a, W> {
         }
 
         write!(self.out, "]")?;
+
+        if let TypeInner::Array {
+            base: next_base,
+            size: next_size,
+            ..
+        } = self.module.types[base].inner
+        {
+            self.write_array_size(next_base, next_size)?;
+        }
+
         Ok(())
     }
 
@@ -807,7 +821,7 @@ impl<'a, W: Write> Writer<'a, W> {
             // GLSL arrays are written as `type name[size]`
             // Current code is written arrays only as `[size]`
             // Base `type` and `name` should be written outside
-            TypeInner::Array { size, .. } => self.write_array_size(size)?,
+            TypeInner::Array { base, size, .. } => self.write_array_size(base, size)?,
             // Panic if either Image, Sampler, Pointer, or a Struct is being written
             //
             // Write all variants instead of `_` so that if new variants are added a
@@ -994,8 +1008,8 @@ impl<'a, W: Write> Writer<'a, W> {
         write!(self.out, " ")?;
         self.write_global_name(handle, global)?;
 
-        if let TypeInner::Array { size, .. } = self.module.types[global.ty].inner {
-            self.write_array_size(size)?;
+        if let TypeInner::Array { base, size, .. } = self.module.types[global.ty].inner {
+            self.write_array_size(base, size)?;
         }
 
         if global.space.initializable() && is_value_init_supported(self.module, global.ty) {
@@ -1298,6 +1312,11 @@ impl<'a, W: Write> Writer<'a, W> {
             // The leading space is important
             write!(this.out, " {}", &this.names[&ctx.argument_key(i as u32)])?;
 
+            // Write array size
+            if let TypeInner::Array { base, size, .. } = this.module.types[arg.ty].inner {
+                this.write_array_size(base, size)?;
+            }
+
             Ok(())
         })?;
 
@@ -1356,8 +1375,8 @@ impl<'a, W: Write> Writer<'a, W> {
             // The leading space is important
             write!(self.out, " {}", self.names[&ctx.name_key(handle)])?;
             // Write size for array type
-            if let TypeInner::Array { size, .. } = self.module.types[local.ty].inner {
-                self.write_array_size(size)?;
+            if let TypeInner::Array { base, size, .. } = self.module.types[local.ty].inner {
+                self.write_array_size(base, size)?;
             }
             // Write the local initializer if needed
             if let Some(init) = local.init {
@@ -1448,8 +1467,8 @@ impl<'a, W: Write> Writer<'a, W> {
             // `type(components)` where `components` is a comma separated list of constants
             crate::ConstantInner::Composite { ty, ref components } => {
                 self.write_type(ty)?;
-                if let TypeInner::Array { size, .. } = self.module.types[ty].inner {
-                    self.write_array_size(size)?;
+                if let TypeInner::Array { base, size, .. } = self.module.types[ty].inner {
+                    self.write_array_size(base, size)?;
                 }
                 write!(self.out, "(")?;
 
@@ -1525,7 +1544,7 @@ impl<'a, W: Write> Writer<'a, W> {
                         &self.names[&NameKey::StructMember(handle, idx as u32)]
                     )?;
                     // Write [size]
-                    self.write_array_size(size)?;
+                    self.write_array_size(base, size)?;
                     // Newline is important
                     writeln!(self.out, ";")?;
                 }
@@ -2056,8 +2075,8 @@ impl<'a, W: Write> Writer<'a, W> {
                 self.write_type(ty)?;
 
                 let resolved = ctx.info[expr].ty.inner_with(&self.module.types);
-                if let TypeInner::Array { size, .. } = *resolved {
-                    self.write_array_size(size)?;
+                if let TypeInner::Array { base, size, .. } = *resolved {
+                    self.write_array_size(base, size)?;
                 }
 
                 write!(self.out, "(")?;
@@ -2909,8 +2928,8 @@ impl<'a, W: Write> Writer<'a, W> {
         let resolved = base_ty_res.inner_with(&self.module.types);
 
         write!(self.out, " {}", name)?;
-        if let TypeInner::Array { size, .. } = *resolved {
-            self.write_array_size(size)?;
+        if let TypeInner::Array { base, size, .. } = *resolved {
+            self.write_array_size(base, size)?;
         }
         write!(self.out, " = ")?;
         self.write_expr(handle, ctx)?;
@@ -2948,7 +2967,7 @@ impl<'a, W: Write> Writer<'a, W> {
                     proc::IndexableLength::Dynamic => return Ok(()),
                 };
                 self.write_type(base)?;
-                self.write_array_size(size)?;
+                self.write_array_size(base, size)?;
                 write!(self.out, "(")?;
                 for _ in 1..count {
                     self.write_zero_init_value(base)?;

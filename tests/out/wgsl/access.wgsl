@@ -21,36 +21,36 @@ var<uniform> baz: Baz;
 
 fn test_matrix_within_struct_accesses() {
     var idx: i32 = 9;
-    var unnamed: mat3x2<f32>;
-    var unnamed_1: vec2<f32>;
+    var unnamed_1: mat3x2<f32>;
     var unnamed_2: vec2<f32>;
-    var unnamed_3: f32;
+    var unnamed_3: vec2<f32>;
     var unnamed_4: f32;
     var unnamed_5: f32;
     var unnamed_6: f32;
+    var unnamed_7: f32;
     var t: Baz;
 
     let _e4 = idx;
     idx = (_e4 - 1);
     let _e8 = baz.m;
-    unnamed = _e8;
+    unnamed_1 = _e8;
     let _e13 = baz.m[0];
-    unnamed_1 = _e13;
+    unnamed_2 = _e13;
     let _e16 = idx;
     let _e18 = baz.m[_e16];
-    unnamed_2 = _e18;
+    unnamed_3 = _e18;
     let _e25 = baz.m[0][1];
-    unnamed_3 = _e25;
+    unnamed_4 = _e25;
     let _e30 = idx;
     let _e32 = baz.m[0][_e30];
-    unnamed_4 = _e32;
+    unnamed_5 = _e32;
     let _e35 = idx;
     let _e39 = baz.m[_e35][1];
-    unnamed_5 = _e39;
+    unnamed_6 = _e39;
     let _e42 = idx;
     let _e44 = idx;
     let _e46 = baz.m[_e42][_e44];
-    unnamed_6 = _e46;
+    unnamed_7 = _e46;
     t = Baz(mat3x2<f32>(vec2<f32>(1.0), vec2<f32>(2.0), vec2<f32>(3.0)));
     let _e57 = idx;
     idx = (_e57 + 1);
@@ -74,10 +74,15 @@ fn read_from_private(foo_1: ptr<function, f32>) -> f32 {
     return _e3;
 }
 
+fn test_arr_as_arg(a: array<array<f32,10>,5>) -> f32 {
+    return a[4][9];
+}
+
 @stage(vertex) 
 fn foo_vert(@builtin(vertex_index) vi: u32) -> @builtin(position) vec4<f32> {
     var foo: f32 = 0.0;
     var c: array<i32,5>;
+    var unnamed: f32;
 
     let baz_1 = foo;
     foo = 1.0;
@@ -85,12 +90,14 @@ fn foo_vert(@builtin(vertex_index) vi: u32) -> @builtin(position) vec4<f32> {
     let matrix = bar.matrix;
     let arr = bar.arr;
     let b = bar.matrix[3][0];
-    let a = bar.data[(arrayLength((&bar.data)) - 2u)].value;
+    let a_1 = bar.data[(arrayLength((&bar.data)) - 2u)].value;
     let data_pointer = (&bar.data[0].value);
     let _e28 = read_from_private((&foo));
-    c = array<i32,5>(a, i32(b), 3, 4, 5);
+    c = array<i32,5>(a_1, i32(b), 3, 4, 5);
     c[(vi + 1u)] = 42;
     let value = c[vi];
+    let _e42 = test_arr_as_arg(array<array<f32,10>,5>(array<f32,10>(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), array<f32,10>(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), array<f32,10>(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), array<f32,10>(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), array<f32,10>(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)));
+    unnamed = _e42;
     return vec4<f32>((matrix * vec4<f32>(vec4<i32>(value))), 2.0);
 }
 

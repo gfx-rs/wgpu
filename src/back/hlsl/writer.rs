@@ -152,7 +152,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
 
         // Write all structs
         for (handle, ty) in module.types.iter() {
-            if let TypeInner::Struct { ref members, .. } = ty.inner {
+            if let TypeInner::Struct { ref members, span } = ty.inner {
                 if let Some(member) = members.last() {
                     if let TypeInner::Array {
                         size: crate::ArraySize::Dynamic,
@@ -176,10 +176,16 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     module,
                     handle,
                     members,
+                    span,
                     ep_result.map(|r| (r.0, Io::Output)),
                 )?;
                 writeln!(self.out)?;
             }
+        }
+
+        // Write wrapped constructor functions used in constants
+        for (_, constant) in module.constants.iter() {
+            self.write_wrapped_constructor_function_for_constant(module, constant)?;
         }
 
         // Write all globals
@@ -525,8 +531,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             let arg_name = &self.names[&NameKey::EntryPointArgument(ep_index, arg_index as u32)];
             write!(self.out, " {}", arg_name)?;
             match module.types[arg.ty].inner {
-                TypeInner::Array { size, .. } => {
-                    self.write_array_size(module, size)?;
+                TypeInner::Array { base, size, .. } => {
+                    self.write_array_size(module, base, size)?;
                     let fake_member = fake_iter.next().unwrap();
                     writeln!(self.out, " = {}.{};", ep_input.arg_name, fake_member.name)?;
                 }
@@ -631,8 +637,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             write!(self.out, ")")?;
         } else {
             // need to write the array size if the type was emitted with `write_type`
-            if let TypeInner::Array { size, .. } = module.types[global.ty].inner {
-                self.write_array_size(module, size)?;
+            if let TypeInner::Array { base, size, .. } = module.types[global.ty].inner {
+                self.write_array_size(module, base, size)?;
             }
             if global.space == crate::AddressSpace::Private {
                 write!(self.out, " = ")?;
@@ -650,8 +656,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             let sub_name = &self.names[&NameKey::GlobalVariable(handle)];
             write!(self.out, " {}", sub_name)?;
             // need to write the array size if the type was emitted with `write_type`
-            if let TypeInner::Array { size, .. } = module.types[global.ty].inner {
-                self.write_array_size(module, size)?;
+            if let TypeInner::Array { base, size, .. } = module.types[global.ty].inner {
+                self.write_array_size(module, base, size)?;
             }
             writeln!(self.out, "; }}")?;
         } else {
@@ -713,6 +719,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
     pub(super) fn write_array_size(
         &mut self,
         module: &Module,
+        base: Handle<crate::Type>,
         size: crate::ArraySize,
     ) -> BackendResult {
         write!(self.out, "[")?;
@@ -729,6 +736,16 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         }
 
         write!(self.out, "]")?;
+
+        if let TypeInner::Array {
+            base: next_base,
+            size: next_size,
+            ..
+        } = module.types[base].inner
+        {
+            self.write_array_size(module, next_base, next_size)?;
+        }
+
         Ok(())
     }
 
@@ -741,6 +758,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         module: &Module,
         handle: Handle<crate::Type>,
         members: &[crate::StructMember],
+        span: u32,
         shader_stage: Option<(ShaderStage, Io)>,
     ) -> BackendResult {
         // Write struct name
@@ -759,7 +777,10 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 }
             }
             let ty_inner = &module.types[member.ty].inner;
-            last_offset = member.offset + ty_inner.size(&module.constants);
+            last_offset = member.offset
+                + ty_inner
+                    .try_size_hlsl(&module.types, &module.constants)
+                    .unwrap();
 
             // The indentation is only for readability
             write!(self.out, "{}", back::INDENT)?;
@@ -782,7 +803,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         &self.names[&NameKey::StructMember(handle, index as u32)]
                     )?;
                     // Write [size]
-                    self.write_array_size(module, size)?;
+                    self.write_array_size(module, base, size)?;
                 }
                 // We treat matrices of the form `matCx2` as a sequence of C `vec2`s
                 // (see top level module docs for details).
@@ -830,6 +851,14 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 self.write_semantic(binding, shader_stage)?;
             };
             writeln!(self.out, ";")?;
+        }
+
+        // add padding at the end since sizes of types don't get rounded up to their alignment in HLSL
+        if members.last().unwrap().binding.is_none() && span > last_offset {
+            let padding = (span - last_offset) / 4;
+            for i in 0..padding {
+                writeln!(self.out, "{}int _end_pad_{};", back::INDENT, i)?;
+            }
         }
 
         writeln!(self.out, "}};")?;
@@ -904,8 +933,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             // HLSL arrays are written as `type name[size]`
             // Current code is written arrays only as `[size]`
             // Base `type` and `name` should be written outside
-            TypeInner::Array { size, .. } => {
-                self.write_array_size(module, size)?;
+            TypeInner::Array { base, size, .. } => {
+                self.write_array_size(module, base, size)?;
             }
             _ => {
                 return Err(Error::Unimplemented(format!(
@@ -989,8 +1018,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
 
                     // Write argument name. Space is important.
                     write!(self.out, " {}", argument_name)?;
-                    if let TypeInner::Array { size, .. } = module.types[arg.ty].inner {
-                        self.write_array_size(module, size)?;
+                    if let TypeInner::Array { base, size, .. } = module.types[arg.ty].inner {
+                        self.write_array_size(module, base, size)?;
                     }
                 }
             }
@@ -1009,8 +1038,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                             &self.names[&NameKey::EntryPointArgument(ep_index, index as u32)];
 
                         write!(self.out, " {}", argument_name)?;
-                        if let TypeInner::Array { size, .. } = module.types[arg.ty].inner {
-                            self.write_array_size(module, size)?;
+                        if let TypeInner::Array { base, size, .. } = module.types[arg.ty].inner {
+                            self.write_array_size(module, base, size)?;
                         }
 
                         if let Some(ref binding) = arg.binding {
@@ -1053,8 +1082,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             self.write_type(module, local.ty)?;
             write!(self.out, " {}", self.names[&func_ctx.name_key(handle)])?;
             // Write size for array type
-            if let TypeInner::Array { size, .. } = module.types[local.ty].inner {
-                self.write_array_size(module, size)?;
+            if let TypeInner::Array { base, size, .. } = module.types[local.ty].inner {
+                self.write_array_size(module, base, size)?;
             }
 
             write!(self.out, " = ")?;
@@ -1706,19 +1735,19 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         match *expression {
             Expression::Constant(constant) => self.write_constant(module, constant)?,
             Expression::Compose { ty, ref components } => {
-                let (brace_open, brace_close) = match module.types[ty].inner {
-                    TypeInner::Struct { .. } => {
-                        self.write_wrapped_constructor_function_name(WrappedConstructor { ty })?;
-                        ("(", ")")
+                match module.types[ty].inner {
+                    TypeInner::Struct { .. } | TypeInner::Array { .. } => {
+                        self.write_wrapped_constructor_function_name(
+                            module,
+                            WrappedConstructor { ty },
+                        )?;
                     }
-                    TypeInner::Array { .. } => ("{ ", " }"),
                     _ => {
                         self.write_type(module, ty)?;
-                        ("(", ")")
                     }
                 };
 
-                write!(self.out, "{}", brace_open)?;
+                write!(self.out, "(")?;
 
                 for (index, &component) in components.iter().enumerate() {
                     if index != 0 {
@@ -1728,7 +1757,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     self.write_expr(module, component, func_ctx)?;
                 }
 
-                write!(self.out, "{}", brace_close)?;
+                write!(self.out, ")")?;
             }
             // All of the multiplication can be expressed as `mul`,
             // except vector * vector, which needs to use the "*" operator.
@@ -2324,15 +2353,15 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         ty: Handle<crate::Type>,
         components: &[Handle<crate::Constant>],
     ) -> BackendResult {
-        let (open_b, close_b) = match module.types[ty].inner {
-            TypeInner::Array { .. } | TypeInner::Struct { .. } => ("{ ", " }"),
+        match module.types[ty].inner {
+            TypeInner::Struct { .. } | TypeInner::Array { .. } => {
+                self.write_wrapped_constructor_function_name(module, WrappedConstructor { ty })?;
+            }
             _ => {
-                // We should write type only for non struct/array constants
                 self.write_type(module, ty)?;
-                ("(", ")")
             }
         };
-        write!(self.out, "{}", open_b)?;
+        write!(self.out, "(")?;
         for (index, constant) in components.iter().enumerate() {
             self.write_constant(module, *constant)?;
             // Only write a comma if isn't the last element
@@ -2341,7 +2370,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 write!(self.out, ", ")?;
             }
         }
-        write!(self.out, "{}", close_b)?;
+        write!(self.out, ")")?;
 
         Ok(())
     }
@@ -2392,8 +2421,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
 
         write!(self.out, " {}", name)?;
         // If rhs is a array type, we should write array size
-        if let TypeInner::Array { size, .. } = *resolved {
-            self.write_array_size(module, size)?;
+        if let TypeInner::Array { base, size, .. } = *resolved {
+            self.write_array_size(module, base, size)?;
         }
         write!(self.out, " = ")?;
         self.write_expr(module, handle, ctx)?;

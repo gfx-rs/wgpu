@@ -11,9 +11,23 @@ struct type_9 {
     float4 gl_Position : SV_Position;
 };
 
+float Constructarray1_float_(float arg0)[1] {
+    float ret[1] = { arg0 };
+    return ret;
+}
+
+gl_PerVertex Constructgl_PerVertex(float4 arg0, float arg1, float arg2[1], float arg3[1]) {
+    gl_PerVertex ret;
+    ret.gl_Position = arg0;
+    ret.gl_PointSize = arg1;
+    ret.gl_ClipDistance = arg2;
+    ret.gl_CullDistance = arg3;
+    return ret;
+}
+
 static float2 v_uv = (float2)0;
 static float2 a_uv_1 = (float2)0;
-static gl_PerVertex perVertexStruct = { float4(0.0, 0.0, 0.0, 1.0), 1.0, { 0.0 }, { 0.0 } };
+static gl_PerVertex perVertexStruct = Constructgl_PerVertex(float4(0.0, 0.0, 0.0, 1.0), 1.0, Constructarray1_float_(0.0), Constructarray1_float_(0.0));
 static float2 a_pos_1 = (float2)0;
 
 struct VertexOutput_main {
