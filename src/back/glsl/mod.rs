@@ -2457,10 +2457,13 @@ impl<'a, W: Write> Writer<'a, W> {
                     "({} ",
                     match op {
                         Uo::Negate => "-",
-                        Uo::Not => match *ctx.info[expr].ty.inner_with(&self.module.types) {
-                            TypeInner::Scalar { kind: Sk::Sint, .. } => "~",
-                            TypeInner::Scalar { kind: Sk::Uint, .. } => "~",
-                            TypeInner::Scalar { kind: Sk::Bool, .. } => "!",
+                        Uo::Not => match ctx.info[expr]
+                            .ty
+                            .inner_with(&self.module.types)
+                            .scalar_kind()
+                        {
+                            Some(Sk::Sint) | Some(Sk::Uint) => "~",
+                            Some(Sk::Bool) => "!",
                             ref other =>
                                 return Err(Error::Custom(format!(
                                     "Cannot apply not to type {:?}",

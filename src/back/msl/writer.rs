@@ -1421,10 +1421,9 @@ impl<W: Write> Writer<W> {
                 use crate::{ScalarKind as Sk, UnaryOperator as Uo};
                 let op_str = match op {
                     Uo::Negate => "-",
-                    Uo::Not => match *context.resolve_type(expr) {
-                        crate::TypeInner::Scalar { kind: Sk::Sint, .. } => "~",
-                        crate::TypeInner::Scalar { kind: Sk::Uint, .. } => "~",
-                        crate::TypeInner::Scalar { kind: Sk::Bool, .. } => "!",
+                    Uo::Not => match context.resolve_type(expr).scalar_kind() {
+                        Some(Sk::Sint) | Some(Sk::Uint) => "~",
+                        Some(Sk::Bool) => "!",
                         _ => return Err(Error::Validation),
                     },
                 };

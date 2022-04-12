@@ -74,7 +74,7 @@ fn constructors() -> f32 {
 fn logical() {
     // unary
     let _ = !true;
-    // let _ = !vec2(true);
+    let _ = !vec2(true);
 
     // binary
     let _ = true || false;
@@ -166,8 +166,8 @@ fn bit() {
     // unary
     let _ = ~1;
     let _ = ~1u;
-    // let _ = ~vec2(1);
-    // let _ = ~vec3(1u);
+    let _ = ~vec2(1);
+    let _ = ~vec3(1u);
 
     // binary
     let _ = 2 | 1;
