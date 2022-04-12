@@ -1116,94 +1116,126 @@ impl<'a, W: Write> Writer<'a, W> {
         Ok(())
     }
 
-    /// Writes the varying declaration.
+    /// Write a GLSL global that will carry a Naga entry point's argument or return value.
+    ///
+    /// A Naga entry point's arguments and return value are rendered in GLSL as
+    /// variables at global scope with the `in` and `out` storage qualifiers.
+    /// The code we generate for `main` loads from all the `in` globals into
+    /// appropriately named locals. Before it returns, `main` assigns the
+    /// components of its return value into all the `out` globals.
+    ///
+    /// This function writes a declaration for one such GLSL global,
+    /// representing a value passed into or returned from [`self.entry_point`]
+    /// that has a [`Location`] binding. The global's name is generated based on
+    /// the location index and the shader stages being connected; see
+    /// [`VaryingName`]. This means we don't need to know the names of
+    /// arguments, just their types and bindings.
+    ///
+    /// Emit nothing for entry point arguments or return values with [`BuiltIn`]
+    /// bindings; `main` will read from or assign to the appropriate GLSL
+    /// special variable; these are pre-declared. As an exception, we do declare
+    /// `gl_Position` or `gl_FragCoord` with the `invariant` qualifier if
+    /// needed.
+    ///
+    /// Use `output` together with [`self.entry_point.stage`] to determine which
+    /// shader stages are being connected, and choose the `in` or `out` storage
+    /// qualifier.
+    ///
+    /// [`self.entry_point`]: Writer::entry_point
+    /// [`self.entry_point.stage`]: crate::EntryPoint::stage
+    /// [`Location`]: crate::Binding::Location
+    /// [`BuiltIn`]: crate::Binding::BuiltIn
     fn write_varying(
         &mut self,
         binding: Option<&crate::Binding>,
         ty: Handle<crate::Type>,
         output: bool,
     ) -> Result<(), Error> {
-        match self.module.types[ty].inner {
-            crate::TypeInner::Struct { ref members, .. } => {
-                for member in members {
-                    self.write_varying(member.binding.as_ref(), member.ty, output)?;
-                }
+        // For a struct, emit a separate global for each member with a binding.
+        if let crate::TypeInner::Struct { ref members, .. } = self.module.types[ty].inner {
+            for member in members {
+                self.write_varying(member.binding.as_ref(), member.ty, output)?;
             }
-            _ => {
-                let (location, interpolation, sampling) = match binding {
-                    Some(&crate::Binding::Location {
-                        location,
-                        interpolation,
-                        sampling,
-                    }) => (location, interpolation, sampling),
-                    Some(&crate::Binding::BuiltIn {
-                        built_in,
-                        invariant: true,
-                    }) => {
-                        writeln!(self.out, "invariant {};", glsl_built_in(built_in, output))?;
-                        return Ok(());
-                    }
-                    _ => return Ok(()),
-                };
+            return Ok(());
+        }
 
-                // Write the interpolation modifier if needed
-                //
-                // We ignore all interpolation and auxiliary modifiers that aren't used in fragment
-                // shaders' input globals or vertex shaders' output globals.
-                let emit_interpolation_and_auxiliary = match self.entry_point.stage {
-                    ShaderStage::Vertex => output,
-                    ShaderStage::Fragment => !output,
-                    _ => false,
-                };
+        let binding = match binding {
+            None => return Ok(()),
+            Some(binding) => binding,
+        };
 
-                // Write the I/O locations, if allowed
-                if self.options.version.supports_explicit_locations()
-                    || !emit_interpolation_and_auxiliary
-                {
-                    write!(self.out, "layout(location = {}) ", location)?;
+        let (location, interpolation, sampling) = match *binding {
+            crate::Binding::Location {
+                location,
+                interpolation,
+                sampling,
+            } => (location, interpolation, sampling),
+            crate::Binding::BuiltIn {
+                built_in,
+                invariant,
+            } => {
+                if invariant {
+                    writeln!(self.out, "invariant {};", glsl_built_in(built_in, output))?;
                 }
+                return Ok(());
+            }
+        };
 
-                // Write the interpolation qualifier.
-                if let Some(interp) = interpolation {
-                    if emit_interpolation_and_auxiliary {
-                        write!(self.out, "{} ", glsl_interpolation(interp))?;
-                    }
-                }
+        // Write the interpolation modifier if needed
+        //
+        // We ignore all interpolation and auxiliary modifiers that aren't used in fragment
+        // shaders' input globals or vertex shaders' output globals.
+        let emit_interpolation_and_auxiliary = match self.entry_point.stage {
+            ShaderStage::Vertex => output,
+            ShaderStage::Fragment => !output,
+            _ => false,
+        };
 
-                // Write the sampling auxiliary qualifier.
-                //
-                // Before GLSL 4.2, the `centroid` and `sample` qualifiers were required to appear
-                // immediately before the `in` / `out` qualifier, so we'll just follow that rule
-                // here, regardless of the version.
-                if let Some(sampling) = sampling {
-                    if emit_interpolation_and_auxiliary {
-                        if let Some(qualifier) = glsl_sampling(sampling) {
-                            write!(self.out, "{} ", qualifier)?;
-                        }
-                    }
-                }
+        // Write the I/O locations, if allowed
+        if self.options.version.supports_explicit_locations() || !emit_interpolation_and_auxiliary {
+            write!(self.out, "layout(location = {}) ", location)?;
+        }
 
-                // Write the input/output qualifier.
-                write!(self.out, "{} ", if output { "out" } else { "in" })?;
-
-                // Write the type
-                // `write_type` adds no leading or trailing spaces
-                self.write_type(ty)?;
-
-                // Finally write the global name and end the global with a `;` and a newline
-                // Leading space is important
-                let vname = VaryingName {
-                    binding: &crate::Binding::Location {
-                        location,
-                        interpolation: None,
-                        sampling: None,
-                    },
-                    stage: self.entry_point.stage,
-                    output,
-                };
-                writeln!(self.out, " {};", vname)?;
+        // Write the interpolation qualifier.
+        if let Some(interp) = interpolation {
+            if emit_interpolation_and_auxiliary {
+                write!(self.out, "{} ", glsl_interpolation(interp))?;
             }
         }
+
+        // Write the sampling auxiliary qualifier.
+        //
+        // Before GLSL 4.2, the `centroid` and `sample` qualifiers were required to appear
+        // immediately before the `in` / `out` qualifier, so we'll just follow that rule
+        // here, regardless of the version.
+        if let Some(sampling) = sampling {
+            if emit_interpolation_and_auxiliary {
+                if let Some(qualifier) = glsl_sampling(sampling) {
+                    write!(self.out, "{} ", qualifier)?;
+                }
+            }
+        }
+
+        // Write the input/output qualifier.
+        write!(self.out, "{} ", if output { "out" } else { "in" })?;
+
+        // Write the type
+        // `write_type` adds no leading or trailing spaces
+        self.write_type(ty)?;
+
+        // Finally write the global name and end the global with a `;` and a newline
+        // Leading space is important
+        let vname = VaryingName {
+            binding: &crate::Binding::Location {
+                location,
+                interpolation: None,
+                sampling: None,
+            },
+            stage: self.entry_point.stage,
+            output,
+        };
+        writeln!(self.out, " {};", vname)?;
+
         Ok(())
     }
 
