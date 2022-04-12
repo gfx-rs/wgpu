@@ -249,9 +249,11 @@ impl Options {
                     return Err(Error::UnsupportedAttribute("invariant".to_string()));
                 }
 
+                // The 'invariant' attribute can only appear on vertex
+                // shader outputs, but not fragment shader inputs.
                 Ok(ResolvedBinding::BuiltIn {
                     built_in,
-                    invariant: invariant && matches!(mode, LocationMode::FragmentOutput),
+                    invariant: invariant && matches!(mode, LocationMode::VertexOutput),
                 })
             }
             crate::Binding::Location {

@@ -27,7 +27,7 @@ struct vertex_Input {
     uint color [[attribute(10)]];
 };
 struct vertex_Output {
-    metal::float4 position [[position]];
+    metal::float4 position [[position, invariant]];
     float varying [[user(loc1), center_perspective]];
     float _point_size [[point_size]];
 };
@@ -84,7 +84,7 @@ kernel void compute_(
 struct vertex_two_structsInput {
 };
 struct vertex_two_structsOutput {
-    metal::float4 member_3 [[position]];
+    metal::float4 member_3 [[position, invariant]];
     float _point_size [[point_size]];
 };
 vertex vertex_two_structsOutput vertex_two_structs(
