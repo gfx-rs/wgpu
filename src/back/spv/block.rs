@@ -337,7 +337,7 @@ impl<'w> BlockContext<'w> {
                 let left_dimension = get_dimension(left_ty_inner);
                 let right_dimension = get_dimension(right_ty_inner);
 
-                let mut preserve_order = true;
+                let mut reverse_operands = false;
 
                 let spirv_op = match op {
                     crate::BinaryOperator::Add => match *left_ty_inner {
@@ -397,19 +397,36 @@ impl<'w> BlockContext<'w> {
                         _ => unimplemented!(),
                     },
                     crate::BinaryOperator::Multiply => match (left_dimension, right_dimension) {
-                        (Dimension::Scalar, Dimension::Vector { .. }) => {
-                            preserve_order = false;
-                            spirv::Op::VectorTimesScalar
+                        (Dimension::Scalar, Dimension::Vector) => {
+                            self.write_vector_scalar_mult(
+                                block,
+                                id,
+                                result_type_id,
+                                right_id,
+                                left_id,
+                                right_ty_inner,
+                            );
+
+                            self.cached[expr_handle] = id;
+                            return Ok(());
                         }
-                        (Dimension::Vector, Dimension::Scalar { .. }) => {
-                            spirv::Op::VectorTimesScalar
+                        (Dimension::Vector, Dimension::Scalar) => {
+                            self.write_vector_scalar_mult(
+                                block,
+                                id,
+                                result_type_id,
+                                left_id,
+                                right_id,
+                                left_ty_inner,
+                            );
+
+                            self.cached[expr_handle] = id;
+                            return Ok(());
                         }
                         (Dimension::Vector, Dimension::Matrix) => spirv::Op::VectorTimesMatrix,
-                        (Dimension::Matrix, Dimension::Scalar { .. }) => {
-                            spirv::Op::MatrixTimesScalar
-                        }
-                        (Dimension::Scalar, Dimension::Matrix { .. }) => {
-                            preserve_order = false;
+                        (Dimension::Matrix, Dimension::Scalar) => spirv::Op::MatrixTimesScalar,
+                        (Dimension::Scalar, Dimension::Matrix) => {
+                            reverse_operands = true;
                             spirv::Op::MatrixTimesScalar
                         }
                         (Dimension::Matrix, Dimension::Vector) => spirv::Op::MatrixTimesVector,
@@ -498,8 +515,8 @@ impl<'w> BlockContext<'w> {
                     spirv_op,
                     result_type_id,
                     id,
-                    if preserve_order { left_id } else { right_id },
-                    if preserve_order { right_id } else { left_id },
+                    if reverse_operands { right_id } else { left_id },
+                    if reverse_operands { left_id } else { right_id },
                 ));
                 id
             }
@@ -1245,6 +1262,45 @@ impl<'w> BlockContext<'w> {
             result_type_id,
             result_id,
             &self.temp_list,
+        ));
+    }
+
+    /// Build the instructions for vector - scalar multiplication
+    fn write_vector_scalar_mult(
+        &mut self,
+        block: &mut Block,
+        result_id: Word,
+        result_type_id: Word,
+        vector_id: Word,
+        scalar_id: Word,
+        vector: &crate::TypeInner,
+    ) {
+        let (size, kind) = match *vector {
+            crate::TypeInner::Vector { size, kind, .. } => (size, kind),
+            _ => unreachable!(),
+        };
+
+        let (op, operand_id) = match kind {
+            crate::ScalarKind::Float => (spirv::Op::VectorTimesScalar, scalar_id),
+            _ => {
+                let operand_id = self.gen_id();
+                self.temp_list.clear();
+                self.temp_list.resize(size as usize, scalar_id);
+                block.body.push(Instruction::composite_construct(
+                    result_type_id,
+                    operand_id,
+                    &self.temp_list,
+                ));
+                (spirv::Op::IMul, operand_id)
+            }
+        };
+
+        block.body.push(Instruction::binary(
+            op,
+            result_type_id,
+            result_id,
+            vector_id,
+            operand_id,
         ));
     }
 
