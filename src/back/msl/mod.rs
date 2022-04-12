@@ -165,11 +165,29 @@ pub enum EntryPointError {
     MissingSizesBuffer,
 }
 
+/// Points in the MSL code where we might emit a pipeline input or output.
+///
+/// Note that, even though vertex shaders' outputs are always fragment
+/// shaders' inputs, we still need to distinguish `VertexOutput` and
+/// `FragmentInput`, since there are certain differences in the way
+/// [`ResolvedBinding`s] are represented on either side.
+///
+/// [`ResolvedBinding`s]: ResolvedBinding
 #[derive(Clone, Copy, Debug)]
 enum LocationMode {
+    /// Input to the vertex shader.
     VertexInput,
+
+    /// Output from the vertex shader.
+    VertexOutput,
+
+    /// Input to the fragment shader.
+    FragmentInput,
+
+    /// Output from the fragment shader.
     FragmentOutput,
-    Intermediate,
+
+    /// Compute shader input or output.
     Uniform,
 }
 
@@ -243,22 +261,24 @@ impl Options {
             } => match mode {
                 LocationMode::VertexInput => Ok(ResolvedBinding::Attribute(location)),
                 LocationMode::FragmentOutput => Ok(ResolvedBinding::Color(location)),
-                LocationMode::Intermediate => Ok(ResolvedBinding::User {
-                    prefix: if self.spirv_cross_compatibility {
-                        "locn"
-                    } else {
-                        "loc"
-                    },
-                    index: location,
-                    interpolation: {
-                        // unwrap: The verifier ensures that vertex shader outputs and fragment
-                        // shader inputs always have fully specified interpolation, and that
-                        // sampling is `None` only for Flat interpolation.
-                        let interpolation = interpolation.unwrap();
-                        let sampling = sampling.unwrap_or(crate::Sampling::Center);
-                        Some(ResolvedInterpolation::from_binding(interpolation, sampling))
-                    },
-                }),
+                LocationMode::VertexOutput | LocationMode::FragmentInput => {
+                    Ok(ResolvedBinding::User {
+                        prefix: if self.spirv_cross_compatibility {
+                            "locn"
+                        } else {
+                            "loc"
+                        },
+                        index: location,
+                        interpolation: {
+                            // unwrap: The verifier ensures that vertex shader outputs and fragment
+                            // shader inputs always have fully specified interpolation, and that
+                            // sampling is `None` only for Flat interpolation.
+                            let interpolation = interpolation.unwrap();
+                            let sampling = sampling.unwrap_or(crate::Sampling::Center);
+                            Some(ResolvedInterpolation::from_binding(interpolation, sampling))
+                        },
+                    })
+                }
                 LocationMode::Uniform => {
                     log::error!(
                         "Unexpected Binding::Location({}) for the Uniform mode",

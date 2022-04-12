@@ -3331,11 +3331,11 @@ impl<W: Write> Writer<W> {
                 crate::ShaderStage::Vertex => (
                     "vertex",
                     LocationMode::VertexInput,
-                    LocationMode::Intermediate,
+                    LocationMode::VertexOutput,
                 ),
                 crate::ShaderStage::Fragment { .. } => (
                     "fragment",
-                    LocationMode::Intermediate,
+                    LocationMode::FragmentInput,
                     LocationMode::FragmentOutput,
                 ),
                 crate::ShaderStage::Compute { .. } => {
