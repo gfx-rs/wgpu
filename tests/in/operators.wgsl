@@ -137,18 +137,38 @@ fn arithmetic() {
     // Binary arithmetic expressions with mixed scalar and vector operands
     let _ = vec2(2) + 1;
     let _ = 2 + vec2(1);
+    let _ = vec2(2u) + 1u;
+    let _ = 2u + vec2(1u);
+    let _ = vec2(2.0) + 1.0;
+    let _ = 2.0 + vec2(1.0);
 
     let _ = vec2(2) - 1;
     let _ = 2 - vec2(1);
+    let _ = vec2(2u) - 1u;
+    let _ = 2u - vec2(1u);
+    let _ = vec2(2.0) - 1.0;
+    let _ = 2.0 - vec2(1.0);
 
     let _ = vec2(2) * 1;
     let _ = 2 * vec2(1);
+    let _ = vec2(2u) * 1u;
+    let _ = 2u * vec2(1u);
+    let _ = vec2(2.0) * 1.0;
+    let _ = 2.0 * vec2(1.0);
 
     let _ = vec2(2) / 1;
     let _ = 2 / vec2(1);
+    let _ = vec2(2u) / 1u;
+    let _ = 2u / vec2(1u);
+    let _ = vec2(2.0) / 1.0;
+    let _ = 2.0 / vec2(1.0);
 
     let _ = vec2(2) % 1;
     let _ = 2 % vec2(1);
+    let _ = vec2(2u) % 1u;
+    let _ = 2u % vec2(1u);
+    let _ = vec2(2.0) % 1.0;
+    let _ = 2.0 % vec2(1.0);
 
     // Matrix arithmetic
     let _ = mat3x3<f32>() + mat3x3<f32>();
