@@ -108,45 +108,6 @@ impl crate::AddressSpace {
     }
 }
 
-#[derive(PartialEq)]
-enum GlobalTypeKind<'a> {
-    WrappedStruct,
-    Unsized(&'a [crate::StructMember]),
-    Other,
-}
-
-impl<'a> GlobalTypeKind<'a> {
-    //Note: similar to `back/spv/helpers.rs`
-    fn new(ir_module: &'a crate::Module, global_ty: Handle<crate::Type>) -> Self {
-        match ir_module.types[global_ty].inner {
-            crate::TypeInner::Struct {
-                ref members,
-                span: _,
-            } => match ir_module.types[members.last().unwrap().ty].inner {
-                // Structs with dynamically sized arrays can't be copied and can't be wrapped.
-                crate::TypeInner::Array {
-                    size: crate::ArraySize::Dynamic,
-                    ..
-                } => Self::Unsized(members),
-                _ => Self::WrappedStruct,
-            },
-            // Naga IR permits globals to be dynamically sized arrays. Render
-            // these in GLSL as buffers.
-            crate::TypeInner::Array {
-                size: crate::ArraySize::Dynamic,
-                ..
-            } => Self::WrappedStruct,
-            // Naga IR permits globals to be constant sized arrays. Render
-            // these in GLSL as uniforms.
-            crate::TypeInner::Array {
-                size: crate::ArraySize::Constant(..),
-                ..
-            } => Self::WrappedStruct,
-            _ => Self::Other,
-        }
-    }
-}
-
 /// A GLSL version.
 #[derive(Debug, Copy, Clone, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
@@ -952,50 +913,34 @@ impl<'a, W: Write> Writer<'a, W> {
             write!(self.out, "{} ", storage_qualifier)?;
         }
 
-        // If struct is a block we need to write `block_name { members }` where `block_name` must be
-        // unique between blocks and structs so we add `_block_ID` where `ID` is a `IdGenerator`
-        // generated number so it's unique and `members` are the same as in a struct
-
-        // Write the block name, it's just the struct name appended with `_block_ID`
-        let needs_wrapper = if global.space.is_buffer() {
-            let ty_name = &self.names[&NameKey::Type(global.ty)];
-            let block_name = format!(
-                "{}_block_{}{:?}",
-                ty_name,
-                self.block_id.generate(),
-                self.entry_point.stage,
-            );
-            write!(self.out, "{} ", block_name)?;
-            self.reflection_names_globals.insert(handle, block_name);
-
-            match GlobalTypeKind::new(self.module, global.ty) {
-                GlobalTypeKind::WrappedStruct => {
-                    write!(self.out, "{{ ")?;
-                    // Write the type
-                    // `write_type` adds no leading or trailing spaces
-                    self.write_type(global.ty)?;
-                    true
-                }
-                GlobalTypeKind::Unsized(members) => {
-                    self.write_struct_body(global.ty, members)?;
-                    false
-                }
-                GlobalTypeKind::Other => {
-                    return Err(Error::Custom("Non-struct type of a buffer".to_string()));
-                }
+        match global.space {
+            crate::AddressSpace::Private => {
+                self.write_simple_global(handle, global)?;
             }
-        } else {
-            self.write_type(global.ty)?;
-            false
-        };
-
-        if let crate::AddressSpace::PushConstant = global.space {
-            let global_name = self.get_global_name(handle, global);
-            self.reflection_names_globals.insert(handle, global_name);
+            crate::AddressSpace::WorkGroup => {
+                self.write_simple_global(handle, global)?;
+            }
+            crate::AddressSpace::PushConstant => {
+                self.write_simple_global(handle, global)?;
+            }
+            crate::AddressSpace::Uniform | crate::AddressSpace::Handle => {
+                self.write_interface_block(handle, global)?;
+            }
+            crate::AddressSpace::Storage { .. } => {
+                self.write_interface_block(handle, global)?;
+            }
+            crate::AddressSpace::Function => unreachable!(),
         }
 
-        // Finally write the global name and end the global with a `;` and a newline
-        // Leading space is important
+        Ok(())
+    }
+
+    fn write_simple_global(
+        &mut self,
+        handle: Handle<crate::GlobalVariable>,
+        global: &crate::GlobalVariable,
+    ) -> BackendResult {
+        self.write_type(global.ty)?;
         write!(self.out, " ")?;
         self.write_global_name(handle, global)?;
 
@@ -1012,11 +957,68 @@ impl<'a, W: Write> Writer<'a, W> {
             }
         }
 
-        if needs_wrapper {
-            write!(self.out, "; }}")?;
+        writeln!(self.out, ";")?;
+
+        if let crate::AddressSpace::PushConstant = global.space {
+            let global_name = self.get_global_name(handle, global);
+            self.reflection_names_globals.insert(handle, global_name);
+        }
+
+        Ok(())
+    }
+
+    /// Write an interface block for a single Naga global.
+    ///
+    /// Write `block_name { members }`. Since `block_name` must be unique
+    /// between blocks and structs, we add `_block_ID` where `ID` is a
+    /// `IdGenerator` generated number. Write `members` in the same way we write
+    /// a struct's members.
+    fn write_interface_block(
+        &mut self,
+        handle: Handle<crate::GlobalVariable>,
+        global: &crate::GlobalVariable,
+    ) -> BackendResult {
+        // Write the block name, it's just the struct name appended with `_block_ID`
+        let ty_name = &self.names[&NameKey::Type(global.ty)];
+        let block_name = format!(
+            "{}_block_{}{:?}",
+            ty_name,
+            self.block_id.generate(),
+            self.entry_point.stage,
+        );
+        write!(self.out, "{} ", block_name)?;
+        self.reflection_names_globals.insert(handle, block_name);
+
+        match self.module.types[global.ty].inner {
+            crate::TypeInner::Struct { ref members, .. }
+                if self.module.types[members.last().unwrap().ty]
+                    .inner
+                    .is_dynamically_sized(&self.module.types) =>
+            {
+                // Structs with dynamically sized arrays must have their
+                // members lifted up as members of the interface block. GLSL
+                // can't write such struct types anyway.
+                self.write_struct_body(global.ty, members)?;
+                write!(self.out, " ")?;
+                self.write_global_name(handle, global)?;
+            }
+            _ => {
+                // A global of any other type is written as the sole member
+                // of the interface block. Since the interface block is
+                // anonymous, this becomes visible in the global scope.
+                write!(self.out, "{{ ")?;
+                self.write_type(global.ty)?;
+                write!(self.out, " ")?;
+                self.write_global_name(handle, global)?;
+                if let TypeInner::Array { base, size, .. } = self.module.types[global.ty].inner {
+                    self.write_array_size(base, size)?;
+                }
+                write!(self.out, "; }}")?;
+            }
         }
 
         writeln!(self.out, ";")?;
+
         Ok(())
     }
 
