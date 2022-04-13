@@ -356,6 +356,8 @@ pub enum Error {
 enum BinaryOperation {
     /// Vector comparison should use the function like `greaterThan()`, etc.
     VectorCompare,
+    /// Vector component wise operation; used to polyfill unsupported ops like `|` and `&` for `bvecN`'s
+    VectorComponentWise,
     /// GLSL `%` is SPIR-V `OpUMod/OpSMod` and `mod()` is `OpFMod`, but [`BinaryOperator::Modulo`](crate::BinaryOperator::Modulo) is `OpFRem`.
     Modulo,
     /// Any plain operation. No additional logic required.
@@ -2452,26 +2454,30 @@ impl<'a, W: Write> Writer<'a, W> {
             Expression::Unary { op, expr } => {
                 use crate::{ScalarKind as Sk, UnaryOperator as Uo};
 
-                write!(
-                    self.out,
-                    "({} ",
-                    match op {
-                        Uo::Negate => "-",
-                        Uo::Not => match ctx.info[expr]
-                            .ty
-                            .inner_with(&self.module.types)
-                            .scalar_kind()
-                        {
-                            Some(Sk::Sint) | Some(Sk::Uint) => "~",
-                            Some(Sk::Bool) => "!",
-                            ref other =>
-                                return Err(Error::Custom(format!(
-                                    "Cannot apply not to type {:?}",
-                                    other
-                                ))),
-                        },
+                let ty = ctx.info[expr].ty.inner_with(&self.module.types);
+
+                match *ty {
+                    TypeInner::Vector { kind: Sk::Bool, .. } => {
+                        write!(self.out, "not(")?;
                     }
-                )?;
+                    _ => {
+                        let operator = match op {
+                            Uo::Negate => "-",
+                            Uo::Not => match ty.scalar_kind() {
+                                Some(Sk::Sint) | Some(Sk::Uint) => "~",
+                                Some(Sk::Bool) => "!",
+                                ref other => {
+                                    return Err(Error::Custom(format!(
+                                        "Cannot apply not to type {:?}",
+                                        other
+                                    )))
+                                }
+                            },
+                        };
+
+                        write!(self.out, "({} ", operator)?;
+                    }
+                }
 
                 self.write_expr(expr, ctx)?;
 
@@ -2494,27 +2500,22 @@ impl<'a, W: Write> Writer<'a, W> {
                 let right_inner = ctx.info[right].ty.inner_with(&self.module.types);
 
                 let function = match (left_inner, right_inner) {
-                    (
-                        &Ti::Vector {
-                            kind: left_kind, ..
-                        },
-                        &Ti::Vector {
-                            kind: right_kind, ..
-                        },
-                    ) => match op {
+                    (&Ti::Vector { kind, .. }, &Ti::Vector { .. }) => match op {
                         Bo::Less
                         | Bo::LessEqual
                         | Bo::Greater
                         | Bo::GreaterEqual
                         | Bo::Equal
                         | Bo::NotEqual => BinaryOperation::VectorCompare,
-                        Bo::Modulo => match (left_kind, right_kind) {
-                            (Sk::Float, _) | (_, Sk::Float) => match op {
-                                Bo::Modulo => BinaryOperation::Modulo,
-                                _ => BinaryOperation::Other,
-                            },
-                            _ => BinaryOperation::Other,
-                        },
+                        Bo::Modulo if kind == Sk::Float => BinaryOperation::Modulo,
+                        Bo::And if kind == Sk::Bool => {
+                            op = crate::BinaryOperator::LogicalAnd;
+                            BinaryOperation::VectorComponentWise
+                        }
+                        Bo::InclusiveOr if kind == Sk::Bool => {
+                            op = crate::BinaryOperator::LogicalOr;
+                            BinaryOperation::VectorComponentWise
+                        }
                         _ => BinaryOperation::Other,
                     },
                     _ => match (left_inner.scalar_kind(), right_inner.scalar_kind()) {
@@ -2552,6 +2553,31 @@ impl<'a, W: Write> Writer<'a, W> {
                         self.write_expr(left, ctx)?;
                         write!(self.out, ", ")?;
                         self.write_expr(right, ctx)?;
+                        write!(self.out, ")")?;
+                    }
+                    BinaryOperation::VectorComponentWise => {
+                        self.write_value_type(left_inner)?;
+                        write!(self.out, "(")?;
+
+                        let size = match *left_inner {
+                            Ti::Vector { size, .. } => size,
+                            _ => unreachable!(),
+                        };
+
+                        for i in 0..size as usize {
+                            if i != 0 {
+                                write!(self.out, ", ")?;
+                            }
+
+                            self.write_expr(left, ctx)?;
+                            write!(self.out, ".{}", back::COMPONENTS[i])?;
+
+                            write!(self.out, " {} ", back::binary_operation_str(op))?;
+
+                            self.write_expr(right, ctx)?;
+                            write!(self.out, ".{}", back::COMPONENTS[i])?;
+                        }
+
                         write!(self.out, ")")?;
                     }
                     BinaryOperation::Modulo => {
