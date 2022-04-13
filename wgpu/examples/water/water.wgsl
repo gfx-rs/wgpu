@@ -242,10 +242,10 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let terrain_depth = to_linear_depth(textureSample(terrain_depth_tex, depth_sampler, normalized_coords).r);
 
     let dist = terrain_depth - pixel_depth;
-    let clamped = pow(smoothStep(0.0, 1.5, dist), 4.8);
+    let clamped = pow(smoothstep(0.0, 1.5, dist), 4.8);
 
     let final_colour = in.f_Light + reflection_colour;
-    let t = smoothStep(1.0, 5.0, dist) * 0.2; //TODO: splat for mix()?
+    let t = smoothstep(1.0, 5.0, dist) * 0.2; //TODO: splat for mix()?
     let depth_colour = mix(final_colour, water_colour, vec3<f32>(t, t, t));
 
     return vec4<f32>(depth_colour, clamped * (1.0 - in.f_Fresnel));
