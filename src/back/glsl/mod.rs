@@ -948,10 +948,8 @@ impl<'a, W: Write> Writer<'a, W> {
             self.write_storage_access(access)?;
         }
 
-        // Write the storage class
-        // Trailing space is important
-        if let Some(storage_class) = glsl_storage_class(global.space) {
-            write!(self.out, "{} ", storage_class)?;
+        if let Some(storage_qualifier) = glsl_storage_qualifier(global.space) {
+            write!(self.out, "{} ", storage_qualifier)?;
         }
 
         // If struct is a block we need to write `block_name { members }` where `block_name` must be
@@ -3197,7 +3195,7 @@ fn glsl_built_in(built_in: crate::BuiltIn, output: bool) -> &'static str {
 }
 
 /// Helper function that returns the string corresponding to the address space
-fn glsl_storage_class(space: crate::AddressSpace) -> Option<&'static str> {
+fn glsl_storage_qualifier(space: crate::AddressSpace) -> Option<&'static str> {
     use crate::AddressSpace as As;
 
     match space {
