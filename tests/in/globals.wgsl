@@ -19,6 +19,9 @@ var<storage> dummy: array<vec2<f32>>;
 @group(0) @binding(3)
 var<uniform> float_vecs: array<vec4<f32>, 20>;
 
+@group(0) @binding(4)
+var<uniform> global_vec: vec4<f32>;
+
 fn test_msl_packed_vec3_as_arg(arg: vec3<f32>) {}
 
 fn test_msl_packed_vec3() {
@@ -50,6 +53,9 @@ fn test_msl_packed_vec3() {
 fn main() {
     test_msl_packed_vec3();
 
+    wg[6] = global_vec.x;
+    wg[5] = dummy[1].y;
+    wg[4] = float_vecs[0].w;
     wg[3] = alignment.v1;
     wg[2] = alignment.v3.x;
     alignment.v1 = 4.0;

@@ -923,13 +923,17 @@ impl<'a, W: Write> Writer<'a, W> {
             crate::AddressSpace::PushConstant => {
                 self.write_simple_global(handle, global)?;
             }
-            crate::AddressSpace::Uniform | crate::AddressSpace::Handle => {
+            crate::AddressSpace::Uniform => {
                 self.write_interface_block(handle, global)?;
             }
             crate::AddressSpace::Storage { .. } => {
                 self.write_interface_block(handle, global)?;
             }
+            // A global variable in the `Function` address space is a
+            // contradiction in terms.
             crate::AddressSpace::Function => unreachable!(),
+            // Textures and samplers are handled directly in `Writer::write`.
+            crate::AddressSpace::Handle => unreachable!(),
         }
 
         Ok(())
