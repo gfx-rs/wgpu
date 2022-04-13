@@ -153,15 +153,13 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         // Write all structs
         for (handle, ty) in module.types.iter() {
             if let TypeInner::Struct { ref members, span } = ty.inner {
-                if let Some(member) = members.last() {
-                    if let TypeInner::Array {
-                        size: crate::ArraySize::Dynamic,
-                        ..
-                    } = module.types[member.ty].inner
-                    {
-                        // unsized arrays can only be in storage buffers, for which we use `ByteAddressBuffer` anyway.
-                        continue;
-                    }
+                if module.types[members.last().unwrap().ty]
+                    .inner
+                    .is_dynamically_sized(&module.types)
+                {
+                    // unsized arrays can only be in storage buffers,
+                    // for which we use `ByteAddressBuffer` anyway.
+                    continue;
                 }
 
                 let ep_result = ep_results.iter().find(|e| {

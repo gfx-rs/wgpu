@@ -185,6 +185,18 @@ impl super::TypeInner {
         let right = rhs.canonical_form(types);
         left.as_ref().unwrap_or(self) == right.as_ref().unwrap_or(rhs)
     }
+
+    pub fn is_dynamically_sized(&self, types: &crate::UniqueArena<crate::Type>) -> bool {
+        use crate::TypeInner as Ti;
+        match *self {
+            Ti::Array { size, .. } => size == crate::ArraySize::Dynamic,
+            Ti::Struct { ref members, .. } => members
+                .last()
+                .map(|last| types[last.ty].inner.is_dynamically_sized(types))
+                .unwrap_or(false),
+            _ => false,
+        }
+    }
 }
 
 impl super::AddressSpace {

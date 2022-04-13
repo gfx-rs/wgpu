@@ -570,27 +570,19 @@ impl<'a, W: Write> Writer<'a, W> {
 
         let ep_info = self.info.get_entry_point(self.entry_point_idx as usize);
 
-        // Write all structs
+        // Write struct types.
         //
-        // This are always ordered because of the IR is structured in a way that you can't make a
-        // struct without adding all of it's members first
+        // This are always ordered because the IR is structured in a way that
+        // you can't make a struct without adding all of its members first.
         for (handle, ty) in self.module.types.iter() {
             if let TypeInner::Struct { ref members, .. } = ty.inner {
-                let generate_struct = match GlobalTypeKind::new(self.module, handle) {
-                    GlobalTypeKind::WrappedStruct => true,
-                    // If it's a global non-wrapped struct, it will be printed
-                    // with the corresponding global variable.
-                    GlobalTypeKind::Unsized(_) => false,
-                    GlobalTypeKind::Other => {
-                        let used_by_global =
-                            self.module.global_variables.iter().any(|(vh, var)| {
-                                !ep_info[vh].is_empty() && var.space.is_buffer() && var.ty == handle
-                            });
-                        // If not used by a global, it's safe to just spew it here
-                        !used_by_global
-                    }
-                };
-                if generate_struct {
+                // Structures ending with runtime-sized arrays can only be
+                // rendered as shader storage blocks in GLSL, not stand-alone
+                // struct types.
+                if !self.module.types[members.last().unwrap().ty]
+                    .inner
+                    .is_dynamically_sized(&self.module.types)
+                {
                     let name = &self.names[&NameKey::Type(handle)];
                     write!(self.out, "struct {} ", name)?;
                     self.write_struct_body(handle, members)?;
