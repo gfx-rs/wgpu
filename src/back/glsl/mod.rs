@@ -98,11 +98,12 @@ impl crate::AddressSpace {
     /// Whether a variable with this address space can be initialized
     fn initializable(&self) -> bool {
         match *self {
+            crate::AddressSpace::Function | crate::AddressSpace::Private => true,
             crate::AddressSpace::WorkGroup
             | crate::AddressSpace::Uniform
-            | crate::AddressSpace::PushConstant
-            | crate::AddressSpace::Storage { .. } => false,
-            _ => true,
+            | crate::AddressSpace::Storage { .. }
+            | crate::AddressSpace::Handle
+            | crate::AddressSpace::PushConstant => false,
         }
     }
 }
