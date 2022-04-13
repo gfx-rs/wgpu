@@ -325,7 +325,7 @@ pub enum AddressSpace {
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 pub enum BuiltIn {
-    Position,
+    Position { invariant: bool },
     ViewIndex,
     // vertex
     BaseInstance,
@@ -748,11 +748,7 @@ pub enum ConstantInner {
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 pub enum Binding {
     /// Built-in shader variable.
-    BuiltIn {
-        built_in: BuiltIn,
-        /// can only be `true` for [`BuiltIn::Position`]
-        invariant: bool,
-    },
+    BuiltIn(BuiltIn),
 
     /// Indexed location.
     ///

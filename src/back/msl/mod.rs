@@ -100,10 +100,7 @@ impl ops::Index<crate::ShaderStage> for PerStageMap {
 }
 
 enum ResolvedBinding {
-    BuiltIn {
-        built_in: crate::BuiltIn,
-        invariant: bool,
-    },
+    BuiltIn(crate::BuiltIn),
     Attribute(u32),
     Color(u32),
     User {
@@ -241,20 +238,20 @@ impl Options {
         mode: LocationMode,
     ) -> Result<ResolvedBinding, Error> {
         match *binding {
-            crate::Binding::BuiltIn {
-                built_in,
-                invariant,
-            } => {
-                if invariant && self.lang_version < (2, 1) {
-                    return Err(Error::UnsupportedAttribute("invariant".to_string()));
+            crate::Binding::BuiltIn(mut built_in) => {
+                if let crate::BuiltIn::Position { ref mut invariant } = built_in {
+                    if *invariant && self.lang_version < (2, 1) {
+                        return Err(Error::UnsupportedAttribute("invariant".to_string()));
+                    }
+
+                    // The 'invariant' attribute may only appear on vertex
+                    // shader outputs, not fragment shader inputs.
+                    if !matches!(mode, LocationMode::VertexOutput) {
+                        *invariant = false;
+                    }
                 }
 
-                // The 'invariant' attribute can only appear on vertex
-                // shader outputs, but not fragment shader inputs.
-                Ok(ResolvedBinding::BuiltIn {
-                    built_in,
-                    invariant: invariant && matches!(mode, LocationMode::VertexOutput),
-                })
+                Ok(ResolvedBinding::BuiltIn(built_in))
             }
             crate::Binding::Location {
                 location,
@@ -369,13 +366,11 @@ impl ResolvedBinding {
     fn try_fmt<W: Write>(&self, out: &mut W) -> Result<(), Error> {
         write!(out, " [[")?;
         match *self {
-            Self::BuiltIn {
-                built_in,
-                invariant,
-            } => {
+            Self::BuiltIn(built_in) => {
                 use crate::BuiltIn as Bi;
                 let name = match built_in {
-                    Bi::Position => "position",
+                    Bi::Position { invariant: false } => "position",
+                    Bi::Position { invariant: true } => "position, invariant",
                     // vertex
                     Bi::BaseInstance => "base_instance",
                     Bi::BaseVertex => "base_vertex",
@@ -401,10 +396,6 @@ impl ResolvedBinding {
                     }
                 };
                 write!(out, "{}", name)?;
-
-                if invariant {
-                    write!(out, ", invariant")?;
-                }
             }
             Self::Attribute(index) => write!(out, "attribute({})", index)?,
             Self::Color(index) => write!(out, "color({})", index)?,

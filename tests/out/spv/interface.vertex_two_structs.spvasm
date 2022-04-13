@@ -16,8 +16,8 @@ OpMemberDecorate %18 0 Offset 0
 OpMemberDecorate %19 0 Offset 0
 OpDecorate %24 BuiltIn VertexIndex
 OpDecorate %28 BuiltIn InstanceIndex
-OpDecorate %30 BuiltIn Position
 OpDecorate %30 Invariant
+OpDecorate %30 BuiltIn Position
 OpDecorate %32 BuiltIn PointSize
 %2 = OpTypeVoid
 %4 = OpTypeFloat 32

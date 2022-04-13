@@ -1254,16 +1254,14 @@ impl BindingParser {
                     sampling,
                 }))
             }
-            (None, Some(crate::BuiltIn::Position), None, None, true) => {
-                Ok(Some(crate::Binding::BuiltIn {
-                    built_in: crate::BuiltIn::Position,
-                    invariant: true,
-                }))
+            (None, Some(crate::BuiltIn::Position { .. }), None, None, invariant) => {
+                Ok(Some(crate::Binding::BuiltIn(crate::BuiltIn::Position {
+                    invariant,
+                })))
             }
-            (None, Some(built_in), None, None, false) => Ok(Some(crate::Binding::BuiltIn {
-                built_in,
-                invariant: false,
-            })),
+            (None, Some(built_in), None, None, false) => {
+                Ok(Some(crate::Binding::BuiltIn(built_in)))
+            }
             (_, _, _, _, _) => Err(Error::InconsistentBinding(span)),
         }
     }

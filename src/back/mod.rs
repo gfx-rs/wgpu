@@ -96,14 +96,14 @@ impl<'a> FunctionCtx<'_> {
             match self.expressions[expression] {
                 crate::Expression::FunctionArgument(arg_index) => {
                     return match ep_function.arguments[arg_index as usize].binding {
-                        Some(crate::Binding::BuiltIn { built_in: bi, .. }) => Some(bi),
+                        Some(crate::Binding::BuiltIn(bi)) => Some(bi),
                         _ => built_in,
                     };
                 }
                 crate::Expression::AccessIndex { base, index } => {
                     match *self.info[base].ty.inner_with(&module.types) {
                         crate::TypeInner::Struct { ref members, .. } => {
-                            if let Some(crate::Binding::BuiltIn { built_in: bi, .. }) =
+                            if let Some(crate::Binding::BuiltIn(bi)) =
                                 members[index as usize].binding
                             {
                                 built_in = Some(bi);

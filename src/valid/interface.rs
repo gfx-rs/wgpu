@@ -103,7 +103,7 @@ struct VaryingContext<'a> {
     output: bool,
     types: &'a UniqueArena<crate::Type>,
     location_mask: &'a mut BitSet,
-    built_in_mask: u32,
+    built_ins: &'a mut crate::FastHashSet<crate::BuiltIn>,
     capabilities: Capabilities,
 }
 
@@ -115,12 +115,19 @@ impl VaryingContext<'_> {
 
         let ty_inner = &self.types[self.ty].inner;
         match *binding {
-            crate::Binding::BuiltIn { built_in, .. } => {
-                let bit = 1 << built_in as u32;
-                if self.built_in_mask & bit != 0 {
+            crate::Binding::BuiltIn(built_in) => {
+                // Ignore the `invariant` field for the sake of duplicate checks,
+                // but use the original in error messages.
+                let canonical = if let crate::BuiltIn::Position { .. } = built_in {
+                    crate::BuiltIn::Position { invariant: false }
+                } else {
+                    built_in
+                };
+
+                if self.built_ins.contains(&canonical) {
                     return Err(VaryingError::DuplicateBuiltIn(built_in));
                 }
-                self.built_in_mask |= bit;
+                self.built_ins.insert(canonical);
 
                 let width = 4;
                 let (visible, type_good) = match built_in {
@@ -153,7 +160,7 @@ impl VaryingContext<'_> {
                                 width,
                             },
                     ),
-                    Bi::Position => (
+                    Bi::Position { .. } => (
                         match self.stage {
                             St::Vertex => self.output,
                             St::Fragment => !self.output,
@@ -457,7 +464,7 @@ impl super::Validator {
         }
 
         self.location_mask.clear();
-        let mut argument_built_ins = 0;
+        let mut argument_built_ins = crate::FastHashSet::default();
         // TODO: add span info to function arguments
         for (index, fa) in ep.function.arguments.iter().enumerate() {
             let mut ctx = VaryingContext {
@@ -466,23 +473,23 @@ impl super::Validator {
                 output: false,
                 types: &module.types,
                 location_mask: &mut self.location_mask,
-                built_in_mask: argument_built_ins,
+                built_ins: &mut argument_built_ins,
                 capabilities: self.capabilities,
             };
             ctx.validate(fa.binding.as_ref())
                 .map_err_inner(|e| EntryPointError::Argument(index as u32, e).with_span())?;
-            argument_built_ins = ctx.built_in_mask;
         }
 
         self.location_mask.clear();
         if let Some(ref fr) = ep.function.result {
+            let mut result_built_ins = crate::FastHashSet::default();
             let mut ctx = VaryingContext {
                 ty: fr.ty,
                 stage: ep.stage,
                 output: true,
                 types: &module.types,
                 location_mask: &mut self.location_mask,
-                built_in_mask: 0,
+                built_ins: &mut result_built_ins,
                 capabilities: self.capabilities,
             };
             ctx.validate(fr.binding.as_ref())

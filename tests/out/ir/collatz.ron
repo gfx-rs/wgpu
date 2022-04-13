@@ -284,10 +284,7 @@
                     (
                         name: Some("global_id"),
                         ty: 4,
-                        binding: Some(BuiltIn(
-                            built_in: GlobalInvocationId,
-                            invariant: false,
-                        )),
+                        binding: Some(BuiltIn(GlobalInvocationId)),
                     ),
                 ],
                 result: None,

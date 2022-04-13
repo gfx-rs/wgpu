@@ -67,10 +67,7 @@ impl Parser {
         let idx = self.entry_args.len();
         self.entry_args.push(EntryArg {
             name: None,
-            binding: Binding::BuiltIn {
-                built_in: data.builtin,
-                invariant: false,
-            },
+            binding: Binding::BuiltIn(data.builtin),
             handle,
             storage: data.storage,
         });
@@ -120,7 +117,7 @@ impl Parser {
                     kind: ScalarKind::Float,
                     width: 4,
                 },
-                builtin: BuiltIn::Position,
+                builtin: BuiltIn::Position { invariant: false },
                 mutable: true,
                 storage: StorageQualifier::Output,
             },
@@ -130,7 +127,7 @@ impl Parser {
                     kind: ScalarKind::Float,
                     width: 4,
                 },
-                builtin: BuiltIn::Position,
+                builtin: BuiltIn::Position { invariant: false },
                 mutable: false,
                 storage: StorageQualifier::Input,
             },
@@ -240,11 +237,10 @@ impl Parser {
     ) {
         if let Some(var) = self.lookup_variable(ctx, body, name, meta) {
             if let Some(index) = var.entry_arg {
-                if let Binding::BuiltIn { built_in, .. } = self.entry_args[index].binding {
-                    self.entry_args[index].binding = Binding::BuiltIn {
-                        built_in,
-                        invariant: built_in == BuiltIn::Position,
-                    };
+                if let Binding::BuiltIn(BuiltIn::Position { ref mut invariant }) =
+                    self.entry_args[index].binding
+                {
+                    *invariant = true;
                 }
             }
         }

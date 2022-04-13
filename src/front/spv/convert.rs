@@ -121,10 +121,10 @@ pub(super) fn map_width(word: spirv::Word) -> Result<crate::Bytes, Error> {
         .map_err(|_| Error::InvalidTypeWidth(word))
 }
 
-pub(super) fn map_builtin(word: spirv::Word) -> Result<crate::BuiltIn, Error> {
+pub(super) fn map_builtin(word: spirv::Word, invariant: bool) -> Result<crate::BuiltIn, Error> {
     use spirv::BuiltIn as Bi;
     Ok(match spirv::BuiltIn::from_u32(word) {
-        Some(Bi::Position) | Some(Bi::FragCoord) => crate::BuiltIn::Position,
+        Some(Bi::Position) | Some(Bi::FragCoord) => crate::BuiltIn::Position { invariant },
         Some(Bi::ViewIndex) => crate::BuiltIn::ViewIndex,
         // vertex
         Some(Bi::BaseInstance) => crate::BuiltIn::BaseInstance,

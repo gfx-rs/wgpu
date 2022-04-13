@@ -455,7 +455,7 @@ impl FunctionInfo {
             E::FunctionArgument(index) => {
                 let arg = &resolve_context.arguments[index as usize];
                 let uniform = match arg.binding {
-                    Some(crate::Binding::BuiltIn { built_in, .. }) => match built_in {
+                    Some(crate::Binding::BuiltIn(built_in)) => match built_in {
                         // per-polygon built-ins are uniform
                         crate::BuiltIn::FrontFacing
                         // per-work-group built-ins are uniform

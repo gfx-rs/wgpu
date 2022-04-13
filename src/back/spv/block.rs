@@ -144,7 +144,7 @@ impl Writer {
             body.push(Instruction::store(res_member.id, member_value_id, None));
 
             match res_member.built_in {
-                Some(crate::BuiltIn::Position)
+                Some(crate::BuiltIn::Position { .. })
                     if self.flags.contains(WriterFlags::ADJUST_COORDINATE_SPACE) =>
                 {
                     self.write_epilogue_position_y_flip(res_member.id, body)?;

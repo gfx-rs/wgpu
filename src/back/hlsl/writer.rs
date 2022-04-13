@@ -60,7 +60,7 @@ impl InterfaceKey {
     fn new(binding: Option<&crate::Binding>) -> Self {
         match binding {
             Some(&crate::Binding::Location { location, .. }) => Self::Location(location),
-            Some(&crate::Binding::BuiltIn { built_in, .. }) => Self::BuiltIn(built_in),
+            Some(&crate::Binding::BuiltIn(built_in)) => Self::BuiltIn(built_in),
             None => Self::Other,
         }
     }
@@ -309,9 +309,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
 
     fn write_modifier(&mut self, binding: &crate::Binding) -> BackendResult {
         match *binding {
-            crate::Binding::BuiltIn {
-                invariant: true, ..
-            } => {
+            crate::Binding::BuiltIn(crate::BuiltIn::Position { invariant: true }) => {
                 write!(self.out, "precise ")?;
             }
             crate::Binding::Location {
@@ -345,9 +343,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         stage: Option<(ShaderStage, Io)>,
     ) -> BackendResult {
         match *binding {
-            crate::Binding::BuiltIn {
-                built_in: builtin, ..
-            } => {
+            crate::Binding::BuiltIn(builtin) => {
                 let builtin_str = builtin.to_hlsl_str()?;
                 write!(self.out, " : {}", builtin_str)?;
             }
@@ -963,9 +959,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         if let Some(crate::FunctionResult {
             binding:
                 Some(
-                    ref binding @ crate::Binding::BuiltIn {
-                        invariant: true, ..
-                    },
+                    ref binding @ crate::Binding::BuiltIn(crate::BuiltIn::Position {
+                        invariant: true,
+                    }),
                 ),
             ..
         }) = func.result

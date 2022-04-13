@@ -336,7 +336,7 @@ impl fmt::Display for VaryingName<'_> {
                 };
                 write!(f, "_{}_location{}", prefix, location,)
             }
-            crate::Binding::BuiltIn { built_in, .. } => {
+            crate::Binding::BuiltIn(built_in) => {
                 write!(f, "{}", glsl_built_in(built_in, self.output))
             }
         }
@@ -1170,11 +1170,8 @@ impl<'a, W: Write> Writer<'a, W> {
                 interpolation,
                 sampling,
             } => (location, interpolation, sampling),
-            crate::Binding::BuiltIn {
-                built_in,
-                invariant,
-            } => {
-                if invariant {
+            crate::Binding::BuiltIn(built_in) => {
+                if let crate::BuiltIn::Position { invariant: true } = built_in {
                     writeln!(self.out, "invariant {};", glsl_built_in(built_in, output))?;
                 }
                 return Ok(());
@@ -1830,10 +1827,8 @@ impl<'a, W: Write> Writer<'a, W> {
 
                                     for (index, member) in members.iter().enumerate() {
                                         // TODO: handle builtin in better way
-                                        if let Some(crate::Binding::BuiltIn {
-                                            built_in: builtin,
-                                            ..
-                                        }) = member.binding
+                                        if let Some(crate::Binding::BuiltIn(builtin)) =
+                                            member.binding
                                         {
                                             match builtin {
                                                 crate::BuiltIn::ClipDistance
@@ -3170,7 +3165,7 @@ fn glsl_built_in(built_in: crate::BuiltIn, output: bool) -> &'static str {
     use crate::BuiltIn as Bi;
 
     match built_in {
-        Bi::Position => {
+        Bi::Position { .. } => {
             if output {
                 "gl_Position"
             } else {

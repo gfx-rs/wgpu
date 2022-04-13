@@ -398,11 +398,8 @@ impl Writer {
                     let mut has_point_size = false;
                     let class = spirv::StorageClass::Output;
                     if let Some(ref binding) = result.binding {
-                        has_point_size |= *binding
-                            == crate::Binding::BuiltIn {
-                                built_in: crate::BuiltIn::PointSize,
-                                invariant: false,
-                            };
+                        has_point_size |=
+                            *binding == crate::Binding::BuiltIn(crate::BuiltIn::PointSize);
                         let type_id = self.get_type_id(LookupType::Handle(result.ty));
                         let varying_id =
                             self.write_varying(ir_module, class, None, result.ty, binding)?;
@@ -419,11 +416,8 @@ impl Writer {
                             let type_id = self.get_type_id(LookupType::Handle(member.ty));
                             let name = member.name.as_ref().map(AsRef::as_ref);
                             let binding = member.binding.as_ref().unwrap();
-                            has_point_size |= *binding
-                                == crate::Binding::BuiltIn {
-                                    built_in: crate::BuiltIn::PointSize,
-                                    invariant: false,
-                                };
+                            has_point_size |=
+                                *binding == crate::Binding::BuiltIn(crate::BuiltIn::PointSize);
                             let varying_id =
                                 self.write_varying(ir_module, class, name, member.ty, binding)?;
                             iface.varying_ids.push(varying_id);
@@ -1180,13 +1174,14 @@ impl Writer {
                     }
                 }
             }
-            crate::Binding::BuiltIn {
-                built_in,
-                invariant,
-            } => {
+            crate::Binding::BuiltIn(built_in) => {
                 use crate::BuiltIn as Bi;
                 let built_in = match built_in {
-                    Bi::Position => {
+                    Bi::Position { invariant } => {
+                        if invariant {
+                            self.decorate(id, Decoration::Invariant, &[]);
+                        }
+
                         if class == spirv::StorageClass::Output {
                             BuiltIn::Position
                         } else {
@@ -1234,10 +1229,6 @@ impl Writer {
                 };
 
                 self.decorate(id, Decoration::BuiltIn, &[built_in as u32]);
-
-                if invariant {
-                    self.decorate(id, Decoration::Invariant, &[]);
-                }
             }
         }
 
@@ -1365,13 +1356,7 @@ impl Writer {
                 crate::TypeInner::Struct { ref members, .. } => members.iter().any(|member| {
                     has_view_index_check(ir_module, member.binding.as_ref(), member.ty)
                 }),
-                _ => {
-                    binding
-                        == Some(&crate::Binding::BuiltIn {
-                            built_in: crate::BuiltIn::ViewIndex,
-                            invariant: false,
-                        })
-                }
+                _ => binding == Some(&crate::Binding::BuiltIn(crate::BuiltIn::ViewIndex)),
             }
         }
 

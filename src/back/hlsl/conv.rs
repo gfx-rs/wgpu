@@ -151,7 +151,7 @@ impl crate::StorageFormat {
 impl crate::BuiltIn {
     pub(super) fn to_hlsl_str(self) -> Result<&'static str, Error> {
         Ok(match self {
-            Self::Position => "SV_Position",
+            Self::Position { .. } => "SV_Position",
             // vertex
             Self::ClipDistance => "SV_ClipDistance",
             Self::CullDistance => "SV_CullDistance",

@@ -377,7 +377,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                         } => {
                             for (index, sm) in sub_members.iter().enumerate() {
                                 match sm.binding {
-                                    Some(crate::Binding::BuiltIn { built_in, .. }) => {
+                                    Some(crate::Binding::BuiltIn(built_in)) => {
                                         // Cull unused builtins to preserve performances
                                         if !self.builtin_usage.contains(&built_in) {
                                             continue;
@@ -414,10 +414,9 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
 
             for (member_index, member) in members.iter().enumerate() {
                 match member.binding {
-                    Some(crate::Binding::BuiltIn {
-                        built_in: crate::BuiltIn::Position,
-                        ..
-                    }) if self.options.adjust_coordinate_space => {
+                    Some(crate::Binding::BuiltIn(crate::BuiltIn::Position { .. }))
+                        if self.options.adjust_coordinate_space =>
+                    {
                         let mut emitter = Emitter::default();
                         emitter.start(&function.expressions);
                         let global_expr = components[member_index];

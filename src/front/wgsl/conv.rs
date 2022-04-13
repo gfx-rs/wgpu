@@ -16,7 +16,7 @@ pub fn map_address_space(word: &str, span: Span) -> Result<crate::AddressSpace, 
 
 pub fn map_built_in(word: &str, span: Span) -> Result<crate::BuiltIn, Error<'_>> {
     Ok(match word {
-        "position" => crate::BuiltIn::Position,
+        "position" => crate::BuiltIn::Position { invariant: false },
         // vertex
         "vertex_index" => crate::BuiltIn::VertexIndex,
         "instance_index" => crate::BuiltIn::InstanceIndex,

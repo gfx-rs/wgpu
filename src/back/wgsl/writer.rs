@@ -402,7 +402,7 @@ impl<W: Write> Writer<W> {
         writeln!(self.out)?;
         for (index, member) in members.iter().enumerate() {
             // Skip struct member with unsupported built in
-            if let Some(crate::Binding::BuiltIn { built_in, .. }) = member.binding {
+            if let Some(crate::Binding::BuiltIn(built_in)) = member.binding {
                 if builtin_str(built_in).is_none() {
                     log::warn!("Skip member with unsupported builtin {:?}", built_in);
                     continue;
@@ -1747,7 +1747,7 @@ impl<W: Write> Writer<W> {
 
                 // Write the comma separated constants
                 for (index, constant) in components.iter().enumerate() {
-                    if let Some(&crate::Binding::BuiltIn { built_in, .. }) =
+                    if let Some(&crate::Binding::BuiltIn(built_in)) =
                         members.and_then(|members| members.get(index)?.binding.as_ref())
                     {
                         if builtin_str(built_in).is_none() {
@@ -1849,7 +1849,7 @@ fn builtin_str(built_in: crate::BuiltIn) -> Option<&'static str> {
     match built_in {
         Bi::VertexIndex => Some("vertex_index"),
         Bi::InstanceIndex => Some("instance_index"),
-        Bi::Position => Some("position"),
+        Bi::Position { .. } => Some("position"),
         Bi::FrontFacing => Some("front_facing"),
         Bi::FragDepth => Some("frag_depth"),
         Bi::LocalInvocationId => Some("local_invocation_id"),
@@ -1977,11 +1977,8 @@ fn map_binding_to_attribute(
     scalar_kind: Option<crate::ScalarKind>,
 ) -> Vec<Attribute> {
     match *binding {
-        crate::Binding::BuiltIn {
-            built_in,
-            invariant,
-        } => {
-            if invariant {
+        crate::Binding::BuiltIn(built_in) => {
+            if let crate::BuiltIn::Position { invariant: true } = built_in {
                 vec![Attribute::BuiltIn(built_in), Attribute::Invariant]
             } else {
                 vec![Attribute::BuiltIn(built_in)]
@@ -2017,8 +2014,7 @@ fn access_to_unsupported_builtin(
     {
         // Let's check that we try to access a struct member with unsupported built-in and skip it.
         if let TypeInner::Struct { ref members, .. } = module.types[pointer_base_handle].inner {
-            if let Some(crate::Binding::BuiltIn { built_in, .. }) = members[index as usize].binding
-            {
+            if let Some(crate::Binding::BuiltIn(built_in)) = members[index as usize].binding {
                 if builtin_str(built_in).is_none() {
                     log::warn!("Skip component with unsupported builtin {:?}", built_in);
                     return true;
