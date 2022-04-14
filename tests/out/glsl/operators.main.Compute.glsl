@@ -57,7 +57,7 @@ float constructors() {
 }
 
 void logical() {
-    bool unnamed_11 = (! true);
+    bool unnamed_11 = (!true);
     bvec2 unnamed_12 = not(bvec2(true));
     bool unnamed_13 = (true || false);
     bool unnamed_14 = (true && false);
@@ -68,8 +68,8 @@ void logical() {
 }
 
 void arithmetic() {
-    ivec2 unnamed_19 = (- ivec2(1));
-    vec2 unnamed_20 = (- vec2(1.0));
+    ivec2 unnamed_19 = (-ivec2(1));
+    vec2 unnamed_20 = (-vec2(1.0));
     int unnamed_21 = (2 + 1);
     uint unnamed_22 = (2u + 1u);
     float unnamed_23 = (2.0 + 1.0);
@@ -140,10 +140,10 @@ void arithmetic() {
 }
 
 void bit() {
-    int unnamed_88 = (~ 1);
-    uint unnamed_89 = (~ 1u);
-    ivec2 unnamed_90 = (~ ivec2(1));
-    uvec3 unnamed_91 = (~ uvec3(1u));
+    int unnamed_88 = (~1);
+    uint unnamed_89 = (~1u);
+    ivec2 unnamed_90 = (~ivec2(1));
+    uvec3 unnamed_91 = (~uvec3(1u));
     int unnamed_92 = (2 | 1);
     uint unnamed_93 = (2u | 1u);
     ivec2 unnamed_94 = (ivec2(2) | ivec2(1));

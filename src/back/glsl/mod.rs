@@ -2475,7 +2475,7 @@ impl<'a, W: Write> Writer<'a, W> {
                             },
                         };
 
-                        write!(self.out, "({} ", operator)?;
+                        write!(self.out, "({}", operator)?;
                     }
                 }
 
