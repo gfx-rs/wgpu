@@ -676,6 +676,8 @@ pub enum TypeInner {
 
     /// User-defined structure.
     ///
+    /// There must always be at least one member.
+    ///
     /// A `Struct` type is [`DATA`], and the types of its members must be
     /// `DATA` as well.
     ///

@@ -120,6 +120,8 @@ pub enum TypeError {
         size: u32,
         span: u32,
     },
+    #[error("Structure types must have at least one member")]
+    EmptyStruct,
 }
 
 // Only makes sense if `flags.contains(HOST_SHARED)`
@@ -451,6 +453,10 @@ impl super::Validator {
                 }
             }
             Ti::Struct { ref members, span } => {
+                if members.is_empty() {
+                    return Err(TypeError::EmptyStruct);
+                }
+
                 let mut ti = TypeInfo::new(
                     TypeFlags::DATA
                         | TypeFlags::SIZED

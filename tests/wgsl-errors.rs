@@ -930,6 +930,14 @@ fn invalid_structs() {
             ..
         })
     }
+
+    check_validation_error! {
+        "struct Empty {}":
+        Err(naga::valid::ValidationError::Type {
+            error: naga::valid::TypeError::EmptyStruct,
+            ..
+        })
+    }
 }
 
 #[test]
