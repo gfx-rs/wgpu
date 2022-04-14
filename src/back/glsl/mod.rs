@@ -677,7 +677,7 @@ impl<'a, W: Write> Writer<'a, W> {
         // Add newline at the end of file
         writeln!(self.out)?;
 
-        // Collect all relection info and return it to the user
+        // Collect all reflection info and return it to the user
         self.collect_reflection_info()
     }
 

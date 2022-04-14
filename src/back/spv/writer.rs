@@ -132,7 +132,7 @@ impl Writer {
     /// If nothing in `capabilities` appears in the available capabilities
     /// specified in the [`Options`] from which this `Writer` was created,
     /// return an error. The `what` string is used in the error message to
-    /// explain what provoked the requirement. (If no available capabilites were
+    /// explain what provoked the requirement. (If no available capabilities were
     /// given, assume everything is available.)
     ///
     /// The first acceptable capability will be added to this `Writer`'s
@@ -523,7 +523,7 @@ impl Writer {
                 gv.access_id = gv.var_id;
             };
 
-            // work around borrow checking in the presense of `self.xxx()` calls
+            // work around borrow checking in the presence of `self.xxx()` calls
             self.global_variables[handle.index()] = gv;
         }
 

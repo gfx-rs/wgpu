@@ -49,7 +49,7 @@ struct Args {
     #[argh(option)]
     profile: Option<GlslProfileArg>,
 
-    /// the shader model to use if targeting HSLS
+    /// the shader model to use if targeting HLSL
     ///
     /// May be `50`, 51`, or `60`
     #[argh(option)]
@@ -474,7 +474,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                     .write(
                         &module,
                         info.as_ref().ok_or(CliError(
-                            "Generating hsls output requires validation to \
+                            "Generating hlsl output requires validation to \
                             succeed, and it failed in a previous step",
                         ))?,
                     )

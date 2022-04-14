@@ -5,7 +5,7 @@ Important note about `Expression::ImageQuery`/`Expression::ArrayLength` and hlsl
 
 Due to implementation of `GetDimensions` function in hlsl (<https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-to-getdimensions>)
 backend can't work with it as an expression.
-Instead, it generates a unique wrapped function per `Expression::ImageQuery`, based on texure info and query function.
+Instead, it generates a unique wrapped function per `Expression::ImageQuery`, based on texture info and query function.
 See `WrappedImageQuery` struct that represents a unique function and will be generated before writing all statements and expressions.
 This allowed to works with `Expression::ImageQuery` as expression and write wrapped function.
 

@@ -198,7 +198,7 @@ impl<W: Write> Writer<W> {
         Ok(())
     }
 
-    /// Helper method used to write stuct name
+    /// Helper method used to write struct name
     ///
     /// # Notes
     /// Adds no trailing or leading whitespace
@@ -1675,7 +1675,7 @@ impl<W: Write> Writer<W> {
         global: &crate::GlobalVariable,
         handle: Handle<crate::GlobalVariable>,
     ) -> BackendResult {
-        // Write group and dinding attributes if present
+        // Write group and binding attributes if present
         if let Some(ref binding) = global.binding {
             self.write_attributes(&[
                 Attribute::Group(binding.group),

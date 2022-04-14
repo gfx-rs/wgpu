@@ -263,7 +263,7 @@ impl<'source> ParsingContext<'source> {
                 }
                 TokenValue::MemoryQualifier(access) => {
                     let storage_access = qualifiers
-                        .storage_acess
+                        .storage_access
                         .get_or_insert((crate::StorageAccess::all(), Span::default()));
                     if !storage_access.0.contains(!access) {
                         parser.errors.push(Error {

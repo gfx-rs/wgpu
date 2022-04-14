@@ -772,7 +772,7 @@ impl Parser {
                 };
 
                 // Check if the best parameter corresponds to the current selected overload
-                // to pass to the next comparation, if this isn't true mark it as ambiguous
+                // to pass to the next comparison, if this isn't true mark it as ambiguous
                 match best_arg {
                     true => match superior {
                         Some(false) => ambiguous = true,
@@ -812,7 +812,7 @@ impl Parser {
                 None => {
                     ambiguous = true;
                     // Assign the new overload, this helps ensures that in this case of
-                    // amiguity the parsing won't end immediately and allow for further
+                    // ambiguity the parsing won't end immediately and allow for further
                     // collection of errors.
                     maybe_overload = Some(overload);
                 }

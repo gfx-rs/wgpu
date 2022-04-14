@@ -135,7 +135,7 @@ impl super::TypeInner {
         self.try_size(constants).unwrap()
     }
 
-    /// Return the canoncal form of `self`, or `None` if it's already in
+    /// Return the canonical form of `self`, or `None` if it's already in
     /// canonical form.
     ///
     /// Certain types have multiple representations in `TypeInner`. This

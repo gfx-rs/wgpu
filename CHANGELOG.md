@@ -3,7 +3,7 @@
 ## v0.9 (TBD)
   - WGSL:
     - semicolon after struct declaration are now optional
-    - commas are used to separate struct members intead of semicolons
+    - commas are used to separate struct members instead of semicolons
     - attributes are declared with `@attrib` instead of `[[attrib]]`
     - `stride` attribute is removed
     - block comments are supported
@@ -57,7 +57,7 @@
   - development release for wgpu-0.11
   - API:
     - bit extraction and packing functions
-    - hyperbolic trigonometry functionss
+    - hyperbolic trigonometry functions
     - validation is gated by a cargo feature
     - `view_index` builtin
     - separate bounds checking policies for locals/buffers/textures

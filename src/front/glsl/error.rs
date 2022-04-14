@@ -84,7 +84,7 @@ pub enum ErrorKind {
     /// A reference to a type that wasn't declared was used.
     #[error("Unknown type: {0}")]
     UnknownType(String),
-    /// A reference to a non existant member of a type was made.
+    /// A reference to a non existent member of a type was made.
     #[error("Unknown field: {0}")]
     UnknownField(String),
     /// An unknown layout qualifier was used.

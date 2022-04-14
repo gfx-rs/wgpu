@@ -4337,7 +4337,7 @@ impl Parser {
                         crate::ConstantInner::Composite { ty, components: _ } => ty == explicit_ty,
                     };
                     if !type_match {
-                        let exptected_inner_str = match con.inner {
+                        let expected_inner_str = match con.inner {
                             crate::ConstantInner::Scalar { width, value } => {
                                 crate::TypeInner::Scalar {
                                     kind: value.scalar_kind(),
@@ -4351,7 +4351,7 @@ impl Parser {
                         };
                         return Err(Error::InitializationTypeMismatch(
                             name_span,
-                            exptected_inner_str,
+                            expected_inner_str,
                         ));
                     }
                 }

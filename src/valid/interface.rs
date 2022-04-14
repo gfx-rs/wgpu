@@ -79,7 +79,7 @@ pub enum EntryPointError {
     Argument(u32, #[source] VaryingError),
     #[error(transparent)]
     Result(#[from] VaryingError),
-    #[error("Location {location} onterpolation of an integer has to be flat")]
+    #[error("Location {location} interpolation of an integer has to be flat")]
     InvalidIntegerInterpolation { location: u32 },
     #[error(transparent)]
     Function(#[from] FunctionError),

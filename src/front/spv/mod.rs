@@ -2849,7 +2849,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     // we can treat it as an extension of the current `Body`.
                     //
                     // NOTE: it's possible that another branch was already made to this block
-                    // setting the body index in which case it SHOULD NOT be overriden.
+                    // setting the body index in which case it SHOULD NOT be overridden.
                     // For example a switch with falltrough, the OpSwitch will set the body to
                     // the respective case and the case may branch to another case in which case
                     // the body index shouldn't be changed
@@ -3015,7 +3015,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     // others will be empty falltrough so that they all execute the same body
                     // without duplicating code.
                     //
-                    // Since `switch_cases` is an indexmap the order of insertation is preserved
+                    // Since `switch_cases` is an indexmap the order of insertion is preserved
                     // this is needed because spir-v defines falltrough order in the switch
                     // instruction.
                     let mut cases = Vec::with_capacity((inst.wc as usize - 3) / 2);

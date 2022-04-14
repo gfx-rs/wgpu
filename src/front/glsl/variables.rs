@@ -499,7 +499,7 @@ impl Parser {
             StorageQualifier::AddressSpace(mut space) => {
                 match space {
                     AddressSpace::Storage { ref mut access } => {
-                        if let Some((allowed_access, _)) = qualifiers.storage_acess.take() {
+                        if let Some((allowed_access, _)) = qualifiers.storage_access.take() {
                             *access = allowed_access;
                         }
                     }
@@ -514,7 +514,8 @@ impl Parser {
                                 mut format,
                             } = class
                             {
-                                if let Some((allowed_access, _)) = qualifiers.storage_acess.take() {
+                                if let Some((allowed_access, _)) = qualifiers.storage_access.take()
+                                {
                                     access = allowed_access;
                                 }
 

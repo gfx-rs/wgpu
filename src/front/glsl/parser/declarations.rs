@@ -323,13 +323,13 @@ impl<'source> ParsingContext<'source> {
                                 }),
                             };
                         }
-                        // Pass the token to the init_declator_list parser
+                        // Pass the token to the init_declarator_list parser
                         _ => Token {
                             value: TokenValue::Identifier(name),
                             meta: token.meta,
                         },
                     },
-                    // Pass the token to the init_declator_list parser
+                    // Pass the token to the init_declarator_list parser
                     _ => token,
                 };
 

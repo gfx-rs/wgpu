@@ -23,7 +23,7 @@ pub enum ExprPos {
     /// The expression is in the right hand side of an assignment
     Rhs,
     /// The expression is an array being indexed, needed to allow constant
-    /// arrays to be dinamically indexed
+    /// arrays to be dynamically indexed
     AccessBase {
         /// The index is a constant
         constant_index: bool,

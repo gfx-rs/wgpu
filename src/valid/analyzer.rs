@@ -219,7 +219,7 @@ pub struct FunctionInfo {
     /// How this function and its callees use this module's globals.
     ///
     /// This is indexed by `Handle<GlobalVariable>` indices. However,
-    /// `FunctionInfo` implements `std::ops::Index<Handle<Globalvariable>>`,
+    /// `FunctionInfo` implements `std::ops::Index<Handle<GlobalVariable>>`,
     /// so you can simply index this struct with a global handle to retrieve
     /// its usage information.
     global_uses: Box<[GlobalUse]>,

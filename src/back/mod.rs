@@ -124,7 +124,7 @@ impl crate::Expression {
     /// should be considered for baking.
     ///
     /// Note: we have to cache any expressions that depend on the control flow,
-    /// or otherwise they may be moved into a non-uniform contol flow, accidentally.
+    /// or otherwise they may be moved into a non-uniform control flow, accidentally.
     /// See the [module-level documentation][emit] for details.
     ///
     /// [emit]: index.html#expression-evaluation-time

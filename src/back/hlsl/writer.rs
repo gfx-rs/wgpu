@@ -900,7 +900,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 // The IR supports only float matrix
                 // https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-matrix
 
-                // Because of the implicit transpose all matrices have in HLSL, we need to tranpose the size as well.
+                // Because of the implicit transpose all matrices have in HLSL, we need to transpose the size as well.
                 write!(
                     self.out,
                     "{}{}x{}",
@@ -1212,7 +1212,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 }
 
                 if let TypeInner::Struct { .. } = *resolved {
-                    // We can safery unwrap here, since we now we working with struct
+                    // We can safely unwrap here, since we now we working with struct
                     let ty = base_ty_res.handle().unwrap();
                     let struct_name = &self.names[&NameKey::Type(ty)];
                     let variable_name = self.namer.call(&struct_name.to_lowercase());

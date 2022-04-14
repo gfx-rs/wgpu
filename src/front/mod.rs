@@ -105,7 +105,7 @@ impl Typifier {
         Ok(())
     }
 
-    /// Invalidates the cached type resolution for `epxr_handle` forcing a recomputation
+    /// Invalidates the cached type resolution for `expr_handle` forcing a recomputation
     ///
     /// If the type of the expression hasn't yet been calculated a
     /// [`grow`](Self::grow) is performed instead
