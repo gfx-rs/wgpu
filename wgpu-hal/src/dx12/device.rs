@@ -290,6 +290,10 @@ impl super::Device {
         &self.raw
     }
 
+    pub fn raw_queue(&self) -> &native::CommandQueue {
+        &self.present_queue
+    }
+
     pub unsafe fn texture_from_raw(
         resource: native::Resource,
         format: wgt::TextureFormat,
