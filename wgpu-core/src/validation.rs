@@ -845,10 +845,7 @@ impl Interface {
                     sampling,
                 },
             },
-            Some(&naga::Binding::BuiltIn {
-                built_in,
-                invariant: _,
-            }) => Varying::BuiltIn(built_in),
+            Some(&naga::Binding::BuiltIn(built_in)) => Varying::BuiltIn(built_in),
             None => {
                 log::error!("Missing binding for a varying");
                 return;

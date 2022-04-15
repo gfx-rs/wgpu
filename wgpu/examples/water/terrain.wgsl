@@ -18,7 +18,7 @@ struct VertexOutput {
     @location(1) clip_dist: f32,
 };
 
-@stage(vertex)
+@vertex
 fn vs_main(
     @location(0) position: vec3<f32>,
     @location(1) normal: vec3<f32>,
@@ -36,7 +36,7 @@ fn vs_main(
     return out;
 }
 
-@stage(fragment)
+@fragment
 @early_depth_test
 fn fs_main(
     in: VertexOutput,

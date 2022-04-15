@@ -10,7 +10,7 @@ struct Locals {
 @binding(0)
 var<uniform> r_data: Locals;
 
-@stage(vertex)
+@vertex
 fn vs_main(@builtin(vertex_index) vertex_index: u32) -> VertexOutput {
     let pos = vec2<f32>(
         100.0 * (1.0 - f32(vertex_index & 2u)),
@@ -29,7 +29,7 @@ var r_color: texture_2d<f32>;
 @binding(2)
 var r_sampler: sampler;
 
-@stage(fragment)
+@fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     return textureSample(r_color, r_sampler, in.tex_coords);
 }
