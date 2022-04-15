@@ -163,6 +163,21 @@ impl Context {
         }
     }
 
+    #[cfg(all(target_arch = "wasm32", feature = "webgl"))]
+    pub unsafe fn create_surface_from_canvas(
+        self: &Arc<Self>,
+        canvas: &web_sys::HtmlCanvasElement,
+    ) -> crate::Surface {
+        let id = self.0.create_surface_webgl_canvas(canvas, PhantomData);
+        crate::Surface {
+            context: Arc::clone(self),
+            id: Surface {
+                id,
+                configured_device: Mutex::default(),
+            },
+        }
+    }
+
     #[cfg(target_os = "windows")]
     pub unsafe fn create_surface_from_visual(
         self: &Arc<Self>,

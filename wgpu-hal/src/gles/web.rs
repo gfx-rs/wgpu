@@ -28,6 +28,23 @@ pub struct Instance {
     canvas: Mutex<Option<web_sys::HtmlCanvasElement>>,
 }
 
+impl Instance {
+    pub fn create_surface_from_canvas(
+        &self,
+        canvas: &web_sys::HtmlCanvasElement,
+    ) -> Result<Surface, crate::InstanceError> {
+        *self.canvas.lock() = Some(canvas.clone());
+
+        Ok(Surface {
+            canvas: canvas.clone(),
+            present_program: None,
+            swapchain: None,
+            texture: None,
+            presentable: true,
+        })
+    }
+}
+
 // SAFE: WASM doesn't have threads
 unsafe impl Sync for Instance {}
 unsafe impl Send for Instance {}
@@ -79,15 +96,7 @@ impl crate::Instance<super::Api> for Instance {
                 .dyn_into()
                 .expect("Failed to downcast to canvas type");
 
-            *self.canvas.lock() = Some(canvas.clone());
-
-            Ok(Surface {
-                canvas,
-                present_program: None,
-                swapchain: None,
-                texture: None,
-                presentable: true,
-            })
+            self.create_surface_from_canvas(&canvas)
         } else {
             unreachable!()
         }

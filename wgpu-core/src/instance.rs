@@ -493,6 +493,33 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         id.0
     }
 
+    #[cfg(all(target_arch = "wasm32", feature = "webgl"))]
+    pub fn create_surface_webgl_canvas(
+        &self,
+        canvas: &web_sys::HtmlCanvasElement,
+        id_in: Input<G, SurfaceId>,
+    ) -> SurfaceId {
+        profiling::scope!("create_surface_webgl", "Instance");
+
+        let surface = Surface {
+            presentation: None,
+            metal: None,
+            #[cfg(vulkan)]
+            vulkan: None,
+            gl:  self.instance.gl.as_ref().map(|inst| HalSurface {
+                raw: {
+                    inst.create_surface_from_canvas(canvas)
+                },
+                //acquired_texture: None,
+            }),
+            dx11: None
+        };
+
+        let mut token = Token::root();
+        let id = self.surfaces.prepare(id_in).assign(surface, &mut token);
+        id.0
+    }
+
     #[cfg(dx12)]
     pub unsafe fn instance_create_surface_from_visual(
         &self,
