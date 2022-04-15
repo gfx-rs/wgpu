@@ -1287,6 +1287,16 @@ pub struct ParseError {
 }
 
 impl ParseError {
+    pub fn labels(&self) -> impl Iterator<Item = (Span, &str)> + ExactSizeIterator + '_ {
+        self.labels
+            .iter()
+            .map(|&(ref span, ref msg)| (span.clone(), msg.as_ref()))
+    }
+
+    pub fn message(&self) -> &str {
+        &self.message
+    }
+
     fn diagnostic(&self) -> Diagnostic<()> {
         let diagnostic = Diagnostic::error()
             .with_message(self.message.to_string())
