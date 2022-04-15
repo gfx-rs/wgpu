@@ -40,7 +40,7 @@ fn test_msl_packed_vec3_() {
     let unnamed_5 = (2.0 * data.v3_);
 }
 
-@stage(compute) @workgroup_size(1, 1, 1) 
+@compute @workgroup_size(1, 1, 1) 
 fn main() {
     var Foo_1: f32 = 1.0;
     var at: bool = true;

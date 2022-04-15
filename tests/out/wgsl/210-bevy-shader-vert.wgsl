@@ -43,7 +43,7 @@ fn main_1() {
     return;
 }
 
-@stage(vertex) 
+@vertex 
 fn main(@location(0) Vertex_Position: vec3<f32>, @location(1) Vertex_Normal: vec3<f32>, @location(2) Vertex_Uv: vec2<f32>) -> VertexOutput {
     Vertex_Position_1 = Vertex_Position;
     Vertex_Normal_1 = Vertex_Normal;

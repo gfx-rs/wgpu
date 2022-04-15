@@ -33,7 +33,7 @@ fn main_1() {
     return;
 }
 
-@stage(fragment) 
+@fragment 
 fn main() {
     main_1();
     return;

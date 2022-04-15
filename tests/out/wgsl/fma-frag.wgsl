@@ -41,7 +41,7 @@ fn main_1() {
     return;
 }
 
-@stage(fragment) 
+@fragment 
 fn main() -> FragmentOutput {
     main_1();
     let _e3 = o_color;

@@ -235,7 +235,7 @@ fn assignment() {
     return;
 }
 
-@stage(compute) @workgroup_size(1, 1, 1) 
+@compute @workgroup_size(1, 1, 1) 
 fn main() {
     let _e4 = builtins();
     let _e5 = splat();

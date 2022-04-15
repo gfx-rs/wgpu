@@ -6,7 +6,7 @@ fn main_1() {
     let _e2 = i;
 }
 
-@stage(vertex) 
+@vertex 
 fn main() {
     main_1();
     return;

@@ -10,7 +10,7 @@ struct FragmentIn {
 
 var<push_constant> pc: PushConstants;
 
-@stage(fragment) 
+@fragment 
 fn main(in: FragmentIn) -> @location(0) vec4<f32> {
     let _e4 = pc.index;
     if (in.primitive_index == _e4) {

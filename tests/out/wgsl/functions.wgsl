@@ -16,7 +16,7 @@ fn test_integer_dot_product() -> i32 {
     return c_4_;
 }
 
-@stage(compute) @workgroup_size(1, 1, 1) 
+@compute @workgroup_size(1, 1, 1) 
 fn main() {
     let _e0 = test_fma();
     let _e1 = test_integer_dot_product();

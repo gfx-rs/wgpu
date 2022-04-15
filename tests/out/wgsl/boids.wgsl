@@ -26,7 +26,7 @@ var<storage> particlesSrc: Particles;
 @group(0) @binding(2) 
 var<storage, read_write> particlesDst: Particles;
 
-@stage(compute) @workgroup_size(64, 1, 1) 
+@compute @workgroup_size(64, 1, 1) 
 fn main(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
     var vPos: vec2<f32>;
     var vVel: vec2<f32>;

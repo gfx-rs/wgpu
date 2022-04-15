@@ -32,7 +32,7 @@ fn main_1() {
     return;
 }
 
-@stage(vertex) 
+@vertex 
 fn main(@location(0) position: vec2<f32>, @location(1) color: vec4<f32>) -> VertexOutput {
     position_1 = position;
     color_1 = color;

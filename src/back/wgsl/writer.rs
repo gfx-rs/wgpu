@@ -347,7 +347,7 @@ impl<W: Write> Writer<W> {
                         ShaderStage::Fragment => "fragment",
                         ShaderStage::Compute => "compute",
                     };
-                    write!(self.out, "@stage({}) ", stage_str)?;
+                    write!(self.out, "@{} ", stage_str)?;
                 }
                 Attribute::WorkGroupSize(size) => {
                     write!(

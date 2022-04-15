@@ -37,7 +37,7 @@ var image_2d_depth: texture_depth_2d;
 @group(1) @binding(3) 
 var image_cube_depth: texture_depth_cube;
 
-@stage(compute) @workgroup_size(16, 1, 1) 
+@compute @workgroup_size(16, 1, 1) 
 fn main(@builtin(local_invocation_id) local_id: vec3<u32>) {
     let dim = textureDimensions(image_storage_src);
     let itc = ((dim * vec2<i32>(local_id.xy)) % vec2<i32>(10, 20));
@@ -50,7 +50,7 @@ fn main(@builtin(local_invocation_id) local_id: vec3<u32>) {
     return;
 }
 
-@stage(compute) @workgroup_size(16, 1, 1) 
+@compute @workgroup_size(16, 1, 1) 
 fn depth_load(@builtin(local_invocation_id) local_id_1: vec3<u32>) {
     let dim_1 = textureDimensions(image_storage_src);
     let itc_1 = ((dim_1 * vec2<i32>(local_id_1.xy)) % vec2<i32>(10, 20));
@@ -59,7 +59,7 @@ fn depth_load(@builtin(local_invocation_id) local_id_1: vec3<u32>) {
     return;
 }
 
-@stage(vertex) 
+@vertex 
 fn queries() -> @builtin(position) vec4<f32> {
     let dim_1d = textureDimensions(image_1d);
     let dim_1d_lod = textureDimensions(image_1d, i32(dim_1d));
@@ -78,7 +78,7 @@ fn queries() -> @builtin(position) vec4<f32> {
     return vec4<f32>(f32(sum));
 }
 
-@stage(vertex) 
+@vertex 
 fn levels_queries() -> @builtin(position) vec4<f32> {
     let num_levels_2d = textureNumLevels(image_2d);
     let num_levels_2d_array = textureNumLevels(image_2d_array);
@@ -92,7 +92,7 @@ fn levels_queries() -> @builtin(position) vec4<f32> {
     return vec4<f32>(f32(sum_1));
 }
 
-@stage(fragment) 
+@fragment 
 fn sample() -> @location(0) vec4<f32> {
     let tc = vec2<f32>(0.5);
     let s1d = textureSample(image_1d, sampler_reg, tc.x);
@@ -104,7 +104,7 @@ fn sample() -> @location(0) vec4<f32> {
     return ((((s1d + s2d) + s2d_offset) + s2d_level) + s2d_level_offset);
 }
 
-@stage(fragment) 
+@fragment 
 fn sample_comparison() -> @location(0) f32 {
     let tc_1 = vec2<f32>(0.5);
     let s2d_depth = textureSampleCompare(image_2d_depth, sampler_cmp, tc_1, 0.5);
@@ -113,7 +113,7 @@ fn sample_comparison() -> @location(0) f32 {
     return (s2d_depth + s2d_depth_level);
 }
 
-@stage(fragment) 
+@fragment 
 fn gather() -> @location(0) vec4<f32> {
     let tc_2 = vec2<f32>(0.5);
     let s2d_1 = textureGather(1, image_2d, sampler_reg, tc_2);
@@ -123,7 +123,7 @@ fn gather() -> @location(0) vec4<f32> {
     return (((s2d_1 + s2d_offset_1) + s2d_depth_1) + s2d_depth_offset);
 }
 
-@stage(fragment) 
+@fragment 
 fn depth_no_comparison() -> @location(0) vec4<f32> {
     let tc_3 = vec2<f32>(0.5);
     let s2d_2 = textureSample(image_2d_depth, sampler_reg, tc_3);

@@ -14,7 +14,7 @@ fn main_1() {
     return;
 }
 
-@stage(vertex) 
+@vertex 
 fn main() {
     main_1();
 }

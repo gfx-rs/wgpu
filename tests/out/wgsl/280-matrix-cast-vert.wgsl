@@ -4,7 +4,7 @@ fn main_1() {
     let _e1 = f32(1);
 }
 
-@stage(vertex) 
+@vertex 
 fn main() {
     main_1();
     return;

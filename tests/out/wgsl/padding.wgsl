@@ -24,7 +24,7 @@ var<uniform> input2_: Test2_;
 @group(0) @binding(2) 
 var<uniform> input3_: Test3_;
 
-@stage(vertex) 
+@vertex 
 fn vertex() -> @builtin(position) vec4<f32> {
     let _e6 = input.b;
     let _e9 = input2_.b;

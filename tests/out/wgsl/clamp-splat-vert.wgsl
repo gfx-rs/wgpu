@@ -12,7 +12,7 @@ fn main_1() {
     return;
 }
 
-@stage(vertex) 
+@vertex 
 fn main(@location(0) a_pos: vec2<f32>) -> VertexOutput {
     a_pos_1 = a_pos;
     main_1();

@@ -21,7 +21,7 @@ fn main_1() {
     return;
 }
 
-@stage(fragment) 
+@fragment 
 fn main(@location(0) v_Uv: vec2<f32>) -> FragmentOutput {
     v_Uv_1 = v_Uv;
     main_1();
