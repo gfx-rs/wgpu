@@ -1,4 +1,4 @@
-@stage(compute) @workgroup_size(1)
+@compute @workgroup_size(1)
 fn main() {
     var i = 0;
     var i2 = vec2<i32>(0);

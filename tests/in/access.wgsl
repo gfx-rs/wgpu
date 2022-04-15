@@ -58,7 +58,7 @@ fn test_arr_as_arg(a: array<array<f32, 10>, 5>) -> f32 {
     return a[4][9];
 }
 
-@stage(vertex)
+@vertex
 fn foo_vert(@builtin(vertex_index) vi: u32) -> @builtin(position) vec4<f32> {
     var foo: f32 = 0.0;
     // We should check that backed doesn't skip this expression
@@ -88,7 +88,7 @@ fn foo_vert(@builtin(vertex_index) vi: u32) -> @builtin(position) vec4<f32> {
 	return vec4<f32>(matrix * vec4<f32>(vec4<i32>(value)), 2.0);
 }
 
-@stage(fragment)
+@fragment
 fn foo_frag() -> @location(0) vec4<f32> {
 	// test storage stores
 	bar.matrix[1].z = 1.0;
@@ -99,7 +99,7 @@ fn foo_frag() -> @location(0) vec4<f32> {
 	return vec4<f32>(0.0);
 }
 
-@stage(compute) @workgroup_size(1)
+@compute @workgroup_size(1)
 fn atomics() {
 	var tmp: i32;
 	let value = atomicLoad(&bar.atom);

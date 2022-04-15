@@ -27,7 +27,7 @@ var<uniform> input2: Test2;
 var<uniform> input3: Test3;
 
 
-@stage(vertex)
+@vertex
 fn vertex() -> @builtin(position) vec4<f32> {
     return vec4<f32>(1.0) * input.b * input2.b * input3.b;
 }

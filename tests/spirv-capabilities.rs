@@ -136,7 +136,7 @@ fn sample_rate_shading() {
     require(
         &[Ca::SampleRateShading],
         r#"
-        @stage(fragment)
+        @fragment
         fn f(@location(0) @interpolate(perspective, sample) x: f32) { }
     "#,
     );
@@ -144,7 +144,7 @@ fn sample_rate_shading() {
     require(
         &[Ca::SampleRateShading],
         r#"
-        @stage(fragment)
+        @fragment
         fn f(@builtin(sample_index) x: u32) { }
     "#,
     );
@@ -155,7 +155,7 @@ fn geometry() {
     require(
         &[Ca::Geometry],
         r#"
-        @stage(fragment)
+        @fragment
         fn f(@builtin(primitive_index) x: u32) { }
     "#,
     );

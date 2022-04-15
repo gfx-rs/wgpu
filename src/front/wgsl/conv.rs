@@ -38,15 +38,6 @@ pub fn map_built_in(word: &str, span: Span) -> Result<crate::BuiltIn, Error<'_>>
     })
 }
 
-pub fn map_shader_stage(word: &str, span: Span) -> Result<crate::ShaderStage, Error<'_>> {
-    match word {
-        "vertex" => Ok(crate::ShaderStage::Vertex),
-        "fragment" => Ok(crate::ShaderStage::Fragment),
-        "compute" => Ok(crate::ShaderStage::Compute),
-        _ => Err(Error::UnknownShaderStage(span)),
-    }
-}
-
 pub fn map_interpolation(word: &str, span: Span) -> Result<crate::Interpolation, Error<'_>> {
     match word {
         "linear" => Ok(crate::Interpolation::Linear),

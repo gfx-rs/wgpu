@@ -4210,11 +4210,14 @@ impl Parser {
                     bind_group = Some(parse_non_negative_sint_literal(lexer, 4)?);
                     lexer.expect(Token::Paren(')'))?;
                 }
-                ("stage", _) => {
-                    lexer.expect(Token::Paren('('))?;
-                    let (ident, ident_span) = lexer.next_ident_with_span()?;
-                    stage = Some(conv::map_shader_stage(ident, ident_span)?);
-                    lexer.expect(Token::Paren(')'))?;
+                ("vertex", _) => {
+                    stage = Some(crate::ShaderStage::Vertex);
+                }
+                ("fragment", _) => {
+                    stage = Some(crate::ShaderStage::Fragment);
+                }
+                ("compute", _) => {
+                    stage = Some(crate::ShaderStage::Compute);
                 }
                 ("workgroup_size", _) => {
                     lexer.expect(Token::Paren('('))?;

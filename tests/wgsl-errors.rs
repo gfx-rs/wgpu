@@ -132,7 +132,7 @@ fn bad_texture() {
         r#"
             @group(0) @binding(0) var sampler1 : sampler;
 
-            @stage(fragment)
+            @fragment
             fn main() -> @location(0) vec4<f32> {
                 let a = 3;
                 return textureSample(a, sampler1, vec2<f32>(0.0));
@@ -245,7 +245,7 @@ fn bad_texture_sample_type() {
             @group(0) @binding(0) var sampler1 : sampler;
             @group(0) @binding(1) var texture : texture_2d<bool>;
 
-            @stage(fragment)
+            @fragment
             fn main() -> @location(0) vec4<f32> {
                 return textureSample(texture, sampler1, vec2<f32>(0.0));
             }
@@ -338,22 +338,6 @@ fn unknown_access() {
   │
 2 │             var<storage,unknown_access> x: array<u32>;
   │                         ^^^^^^^^^^^^^^ unknown access
-
-"#,
-    );
-}
-
-#[test]
-fn unknown_shader_stage() {
-    check(
-        r#"
-            @stage(geometry) fn main() {}
-        "#,
-        r#"error: unknown shader stage: 'geometry'
-  ┌─ wgsl:2:20
-  │
-2 │             @stage(geometry) fn main() {}
-  │                    ^^^^^^^^ unknown shader stage
 
 "#,
     );
@@ -1027,7 +1011,7 @@ fn pointer_type_equivalence() {
 fn missing_bindings() {
     check_validation_error! {
         "
-        @stage(vertex)
+        @vertex
         fn vertex(input: vec4<f32>) -> @location(0) vec4<f32> {
            return input;
         }
@@ -1044,7 +1028,7 @@ fn missing_bindings() {
 
     check_validation_error! {
         "
-        @stage(vertex)
+        @vertex
         fn vertex(@location(0) input: vec4<f32>, more_input: f32) -> @location(0) vec4<f32> {
            return input + more_input;
         }
@@ -1061,7 +1045,7 @@ fn missing_bindings() {
 
     check_validation_error! {
         "
-        @stage(vertex)
+        @vertex
         fn vertex(@location(0) input: vec4<f32>) -> vec4<f32> {
            return input;
         }
@@ -1082,7 +1066,7 @@ fn missing_bindings() {
           uv: vec2<f32>
         }
 
-        @stage(vertex)
+        @vertex
         fn vertex(input: VertexIn) -> @location(0) vec4<f32> {
            return input.pos;
         }

@@ -7,7 +7,7 @@ fn test(Passed_Texture: texture_2d<f32>, Passed_Sampler: sampler) -> vec4<f32> {
     return textureSample(Passed_Texture, Passed_Sampler, vec2<f32>(0.0, 0.0));
 }
 
-@stage(fragment)
+@fragment
 fn main() -> @location(0) vec4<f32> {
     return test(Texture, Sampler);
 }

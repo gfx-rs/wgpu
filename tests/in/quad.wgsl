@@ -6,7 +6,7 @@ struct VertexOutput {
   @builtin(position) position : vec4<f32>,
 }
 
-@stage(vertex)
+@vertex
 fn vert_main(
   @location(0) pos : vec2<f32>,
   @location(1) uv : vec2<f32>,
@@ -18,7 +18,7 @@ fn vert_main(
 @group(0) @binding(0) var u_texture : texture_2d<f32>;
 @group(0) @binding(1) var u_sampler : sampler;
 
-@stage(fragment)
+@fragment
 fn frag_main(@location(0) uv : vec2<f32>) -> @location(0) vec4<f32> {
   let color = textureSample(u_texture, u_sampler, uv);
   if color.a == 0.0 {
@@ -32,7 +32,7 @@ fn frag_main(@location(0) uv : vec2<f32>) -> @location(0) vec4<f32> {
 
 
 // We need to make sure that backends are successfully handling multiple entry points for the same shader stage. 
-@stage(fragment)
+@fragment
 fn fs_extra() -> @location(0) vec4<f32> {
     return vec4<f32>(0.0, 0.5, 0.0, 0.5);
 }

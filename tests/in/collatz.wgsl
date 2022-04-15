@@ -26,7 +26,7 @@ fn collatz_iterations(n_base: u32) -> u32 {
     return i;
 }
 
-@stage(compute) @workgroup_size(1)
+@compute @workgroup_size(1)
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     v_indices.data[global_id.x] = collatz_iterations(v_indices.data[global_id.x]);
 }

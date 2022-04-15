@@ -11,7 +11,7 @@ struct FragmentInput {
   @location(6) @interpolate(perspective, sample) perspective_sample : f32,
 }
 
-@stage(vertex)
+@vertex
 fn vert_main() -> FragmentInput {
    var out: FragmentInput;
 
@@ -27,5 +27,5 @@ fn vert_main() -> FragmentInput {
    return out;
 }
 
-@stage(fragment)
+@fragment
 fn frag_main(val : FragmentInput) { }

@@ -52,7 +52,7 @@ fn test_msl_packed_vec3() {
     let _ = 2.0 * data.v3;
 }
 
-@stage(compute) @workgroup_size(1)
+@compute @workgroup_size(1)
 fn main() {
     test_msl_packed_vec3();
 

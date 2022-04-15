@@ -9,7 +9,7 @@ struct FragmentIn {
     @builtin(primitive_index) primitive_index: u32,
 }
 
-@stage(fragment)
+@fragment
 fn main(in: FragmentIn) -> @location(0) vec4<f32> {
     if in.primitive_index == pc.index {
         return in.color;
