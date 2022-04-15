@@ -3,7 +3,7 @@ struct VertexOutput {
     @location(0) tex_coords: vec2<f32>,
 };
 
-@stage(vertex)
+@vertex
 fn vs_main(@builtin(vertex_index) vertex_index: u32) -> VertexOutput {
     var out: VertexOutput;
     let x = i32(vertex_index) / 2;
@@ -28,7 +28,7 @@ var r_color: texture_2d<f32>;
 @binding(1)
 var r_sampler: sampler;
 
-@stage(fragment)
+@fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     return textureSample(r_color, r_sampler, in.tex_coords);
 }

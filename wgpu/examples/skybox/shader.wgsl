@@ -17,7 +17,7 @@ struct Data {
 @binding(0)
 var<uniform> r_data: Data;
 
-@stage(vertex)
+@vertex
 fn vs_sky(@builtin(vertex_index) vertex_index: u32) -> SkyOutput {
     // hacky way to draw a large triangle
     let tmp1 = i32(vertex_index) / 2;
@@ -45,7 +45,7 @@ struct EntityOutput {
     @location(3) view: vec3<f32>,
 };
 
-@stage(vertex)
+@vertex
 fn vs_entity(
     @location(0) pos: vec3<f32>,
     @location(1) normal: vec3<f32>,
@@ -64,12 +64,12 @@ var r_texture: texture_cube<f32>;
 @binding(2)
 var r_sampler: sampler;
 
-@stage(fragment)
+@fragment
 fn fs_sky(in: SkyOutput) -> @location(0) vec4<f32> {
     return textureSample(r_texture, r_sampler, in.uv);
 }
 
-@stage(fragment)
+@fragment
 fn fs_entity(in: EntityOutput) -> @location(0) vec4<f32> {
     let incident = normalize(in.view);
     let normal = normalize(in.normal);

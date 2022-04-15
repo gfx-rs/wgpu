@@ -18,7 +18,7 @@ struct SimParams {
 @group(0) @binding(2) var<storage, read_write> particlesDst : array<Particle>;
 
 // https://github.com/austinEng/Project6-Vulkan-Flocking/blob/master/data/shaders/computeparticles/particle.comp
-@stage(compute)
+@compute
 @workgroup_size(64)
 fn main(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
   let total = arrayLength(&particlesSrc);

@@ -187,7 +187,7 @@ struct VertexOutput {
     @location(2) f_Light: vec3<f32>,
 };
 
-@stage(vertex)
+@vertex
 fn vs_main(
     @location(0) position: vec2<i32>,
     @location(1) offsets: vec4<i32>,
@@ -233,7 +233,7 @@ fn to_linear_depth(depth: f32) -> f32 {
     return z_e;
 }
 
-@stage(fragment)
+@fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let reflection_colour = textureSample(reflection, colour_sampler, in.f_WaterScreenPos.xy).xyz;
 

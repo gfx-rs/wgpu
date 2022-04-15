@@ -16,7 +16,7 @@ struct Entity {
 @binding(0)
 var<uniform> u_entity: Entity;
 
-@stage(vertex)
+@vertex
 fn vs_bake(@location(0) position: vec4<i32>) -> @builtin(position) vec4<f32> {
     return u_globals.view_proj * u_entity.world * vec4<f32>(position);
 }
@@ -27,7 +27,7 @@ struct VertexOutput {
     @location(1) world_position: vec4<f32>
 };
 
-@stage(vertex)
+@vertex
 fn vs_main(
     @location(0) position: vec4<i32>,
     @location(1) normal: vec4<i32>,
@@ -78,7 +78,7 @@ fn fetch_shadow(light_id: u32, homogeneous_coords: vec4<f32>) -> f32 {
 let c_ambient: vec3<f32> = vec3<f32>(0.05, 0.05, 0.05);
 let c_max_lights: u32 = 10u;
 
-@stage(fragment)
+@fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let normal = normalize(in.world_normal);
     // accumulate color
@@ -98,7 +98,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 }
 
 // The fragment entrypoint used when storage buffers are not available for the lights
-@stage(fragment)
+@fragment
 fn fs_main_without_storage(in: VertexOutput) -> @location(0) vec4<f32> {
     let normal = normalize(in.world_normal);
     var color: vec3<f32> = c_ambient;
