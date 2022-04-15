@@ -24,7 +24,7 @@ Back-end        |       Status       | Feature  | Notes |
 SPIR-V          | :white_check_mark: | spv-out  |       |
 WGSL            | :ok:               | wgsl-out |       |
 Metal           | :white_check_mark: | msl-out  |       |
-HLSL            | :ok:               | hlsl-out | Shader Model 5.0+ (DirectX 11+) |
+HLSL            | :white_check_mark: | hlsl-out | Shader Model 5.0+ (DirectX 11+) |
 GLSL            | :ok:               | glsl-out | GLSL 330+ and GLSL ES 300+ |
 AIR             |                    |          |       |
 DXIL/DXIR       |                    |          |       |
