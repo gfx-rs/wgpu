@@ -599,9 +599,9 @@ fn glsl_float_min(x: f64, y: f64) -> f64 {
 
 /// Helper function to implement the GLSL `clamp` function for floats.
 ///
-/// While Rust does provide a `f64::clamp` method, it requires a version of rust
-/// above our MSRV and it also panics if either `min` or `max` are `NaN`s which
-/// is not the behavior specified by the glsl specification.
+/// While Rust does provide a `f64::clamp` method, it panics if either
+/// `min` or `max` are `NaN`s which is not the behavior specified by
+/// the glsl specification.
 fn glsl_float_clamp(value: f64, min: f64, max: f64) -> f64 {
     glsl_float_min(glsl_float_max(value, min), max)
 }
