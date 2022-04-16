@@ -503,16 +503,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let surface = Surface {
             presentation: None,
-            metal: None,
-            #[cfg(vulkan)]
-            vulkan: None,
-            gl:  self.instance.gl.as_ref().map(|inst| HalSurface {
+            gl: self.instance.gl.as_ref().map(|inst| HalSurface {
                 raw: {
                     inst.create_surface_from_canvas(canvas)
+                        .expect("Create surface from canvas")
                 },
                 //acquired_texture: None,
             }),
-            dx11: None
         };
 
         let mut token = Token::root();

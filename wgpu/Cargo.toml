@@ -83,7 +83,7 @@ glsl = ["naga/glsl-in"]
 trace = ["serde", "wgc/trace"]
 replay = ["serde", "wgc/replay"]
 angle = ["wgc/angle"]
-webgl = ["wgc"]
+webgl = ["wgc", "wgc/webgl"]
 emscripten = ["webgl"]
 vulkan-portability = ["wgc/vulkan-portability"]
 
