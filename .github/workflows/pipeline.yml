@@ -4,7 +4,7 @@ on: [push, pull_request]
 
 jobs:
   test-msrv:
-    name: Test MSRV
+    name: Test MSRV and dependencies minimal-versions
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -13,11 +13,12 @@ jobs:
           profile: minimal
           toolchain: "1.56.0"
           override: true
-      - uses: actions-rs/cargo@v1
-        name: Test all features
-        with:
-          command: test
-          args: --all-features --workspace
+      - uses: taiki-e/install-action@cargo-hack
+      - uses: taiki-e/install-action@cargo-minimal-versions
+      # nightly is only used by cargo-minimal-versions to regenerate the lock file
+      - run: rustup toolchain add nightly --no-self-update
+      - name: Test all features
+        run: cargo minimal-versions test --all-features --workspace
       - name: Check snapshots
         run: git diff --exit-code -- tests/out
   test:
