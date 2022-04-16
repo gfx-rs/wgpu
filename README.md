@@ -4,7 +4,7 @@
 [![Crates.io](https://img.shields.io/crates/v/naga.svg?label=naga)](https://crates.io/crates/naga)
 [![Docs.rs](https://docs.rs/naga/badge.svg)](https://docs.rs/naga)
 [![Build Status](https://github.com/gfx-rs/naga/workflows/pipeline/badge.svg)](https://github.com/gfx-rs/naga/actions)
-![MSRV](https://img.shields.io/badge/rustc-1.43+-blue.svg)
+![MSRV](https://img.shields.io/badge/rustc-1.56+-blue.svg)
 [![codecov.io](https://codecov.io/gh/gfx-rs/naga/branch/master/graph/badge.svg?token=9VOKYO8BM2)](https://codecov.io/gh/gfx-rs/naga)
 
 The shader translation library for the needs of [wgpu](https://github.com/gfx-rs/wgpu) and [gfx-rs](https://github.com/gfx-rs/gfx) projects.
@@ -65,16 +65,4 @@ make validate-glsl # for OpenGL shaders, requires GLSLang installed
 make validate-dot # for dot files, requires GraphViz installed
 make validate-wgsl # for WGSL shaders
 make validate-hlsl # for HLSL shaders. Note: this Make target makes use of the "sh" shell. This is not the default shell in Windows.
-```
-
-## MSRV
-
-The `naga` codebase's MSRV is 1.43. However some newer versions of our dependencies have newer MSRVs than that. Here are a list of all known MSRV breaking dependencies and the versions that hold to MSRV.
-
-- `bitflags`: `>1.3` have an MSRV of 1.46. `<=1.2` has an MSRV of 1.43 or earlier.
-
-If you want to use `naga` with `1.43` add the following to your Cargo.toml dependency list even if you don't use bitflags yourself:
-
-```toml
-bitflags = "<1.3"
 ```

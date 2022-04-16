@@ -11,27 +11,13 @@ jobs:
       - uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: "1.43.0"
+          toolchain: "1.56.0"
           override: true
-      - uses: actions-rs/cargo@v1
-        name: Downgrade bitflags to MSRV
-        with:
-          command: update
-          args: -p bitflags --precise 1.2.1
-      - uses: actions-rs/cargo@v1
-        name: Downgrade indexmap to MSRV
-        with:
-          command: update
-          args: -p indexmap --precise 1.6.2
       - uses: actions-rs/cargo@v1
         name: Test all features
         with:
-          # we could use `test` but `criterion` is a dev dependency,
-          # and it doesn't build with our MSRV
-          command: check
-          # `cli` already enables most features,
-          # except for `arbitrary`, which requires Rust-1.51
-          args: --workspace
+          command: test
+          args: --all-features --workspace
       - name: Check snapshots
         run: git diff --exit-code -- tests/out
   test:
