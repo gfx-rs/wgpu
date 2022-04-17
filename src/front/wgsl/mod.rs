@@ -58,11 +58,9 @@ pub enum NumberType {
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Token<'a> {
     Separator(char),
-    DoubleColon,
     Paren(char),
     Attribute,
     Number { value: &'a str, ty: NumberType },
-    String(&'a str),
     Word(&'a str),
     Operation(char),
     LogicalOperation(char),
@@ -72,7 +70,6 @@ pub enum Token<'a> {
     DecrementOperation,
     Arrow,
     Unknown(char),
-    UnterminatedString,
     UnterminatedBlockComment,
     Trivia,
     End,
@@ -191,13 +188,11 @@ impl<'a> Error<'a> {
                         ExpectedToken::Token(token) => {
                             match token {
                                 Token::Separator(c) => format!("'{}'", c),
-                                Token::DoubleColon => "'::'".to_string(),
                                 Token::Paren(c) => format!("'{}'", c),
                                 Token::Attribute => "@".to_string(),
                                 Token::Number { value, .. } => {
                                     format!("number ({})", value)
                                 }
-                                Token::String(s) => format!("string literal ('{}')", s),
                                 Token::Word(s) => s.to_string(),
                                 Token::Operation(c) => format!("operation ('{}')", c),
                                 Token::LogicalOperation(c) => format!("logical operation ('{}')", c),
@@ -208,7 +203,6 @@ impl<'a> Error<'a> {
                                 Token::DecrementOperation => "decrement operation".to_string(),
                                 Token::Arrow => "->".to_string(),
                                 Token::Unknown(c) => format!("unknown ('{}')", c),
-                                Token::UnterminatedString => "unterminated string".to_string(),
                                 Token::UnterminatedBlockComment => "unterminated block comment".to_string(),
                                 Token::Trivia => "trivia".to_string(),
                                 Token::End => "end".to_string(),

@@ -271,15 +271,7 @@ fn consume_token(mut input: &str, generic: bool) -> (Token<'_>, &str) {
         None => return (Token::End, input),
     };
     match cur {
-        ':' => {
-            input = chars.as_str();
-            if chars.next() == Some(':') {
-                (Token::DoubleColon, chars.as_str())
-            } else {
-                (Token::Separator(cur), input)
-            }
-        }
-        ';' | ',' => (Token::Separator(cur), chars.as_str()),
+        ':' | ';' | ',' => (Token::Separator(cur), chars.as_str()),
         '.' => {
             let og_chars = chars.as_str();
             match chars.next() {
@@ -306,17 +298,6 @@ fn consume_token(mut input: &str, generic: bool) -> (Token<'_>, &str) {
             }
         }
         '0'..='9' => consume_number(input),
-        '"' => {
-            let mut iter = chars.as_str().splitn(2, '"');
-
-            // splitn returns an iterator with at least one element, so unwrapping is fine
-            let quote_content = iter.next().unwrap();
-            if let Some(rest) = iter.next() {
-                (Token::String(quote_content), rest)
-            } else {
-                (Token::UnterminatedString, quote_content)
-            }
-        }
         '/' => {
             input = chars.as_str();
             match chars.next() {
@@ -725,7 +706,6 @@ fn test_tokens() {
     sub_test("No¾", &[Token::Word("No"), Token::Unknown('¾')]);
     sub_test("No好", &[Token::Word("No好")]);
     sub_test("_No", &[Token::Word("_No")]);
-    sub_test("\"\u{2}ПЀ\u{0}\"", &[Token::String("\u{2}ПЀ\u{0}")]); // https://github.com/gfx-rs/naga/issues/90
     sub_test(
         "*/*/***/*//=/*****//",
         &[
