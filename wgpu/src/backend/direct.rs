@@ -164,7 +164,7 @@ impl Context {
     }
 
     #[cfg(all(target_arch = "wasm32", feature = "webgl"))]
-    pub unsafe fn instance_create_surface_from_canvas(
+    pub fn instance_create_surface_from_canvas(
         self: &Arc<Self>,
         canvas: &web_sys::HtmlCanvasElement,
     ) -> Surface {
