@@ -81,7 +81,7 @@ impl<T> Handle<T> {
         marker: PhantomData,
     };
 
-    pub(crate) fn new(index: Index) -> Self {
+    pub(crate) const fn new(index: Index) -> Self {
         Handle {
             index,
             marker: PhantomData,
@@ -89,7 +89,7 @@ impl<T> Handle<T> {
     }
 
     /// Returns the zero-based index of this handle.
-    pub fn index(self) -> usize {
+    pub const fn index(self) -> usize {
         let index = self.index.get() - 1;
         index as usize
     }
@@ -106,7 +106,7 @@ impl<T> Handle<T> {
     }
 
     /// Convert a `usize` index into a `Handle<T>`, without range checks.
-    unsafe fn from_usize_unchecked(index: usize) -> Self {
+    const unsafe fn from_usize_unchecked(index: usize) -> Self {
         Handle::new(Index::new_unchecked((index + 1) as u32))
     }
 }
@@ -187,7 +187,7 @@ impl<T: fmt::Debug> fmt::Debug for Arena<T> {
 
 impl<T> Arena<T> {
     /// Create a new arena with no initial capacity allocated.
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Arena {
             data: Vec::new(),
             #[cfg(feature = "span")]
@@ -196,6 +196,7 @@ impl<T> Arena<T> {
     }
 
     /// Extracts the inner vector.
+    #[allow(clippy::missing_const_for_fn)] // ignore due to requirement of #![feature(const_precise_live_drops)]
     pub fn into_inner(self) -> Vec<T> {
         self.data
     }

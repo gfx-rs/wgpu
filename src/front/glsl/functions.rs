@@ -1521,9 +1521,9 @@ fn conversion(target: &TypeInner, source: &TypeInner) -> Option<Conversion> {
             // A conversion from a float to a double is special
             ((Float, 8), (Float, 4)) => Conversion::FloatToDouble,
             // A conversion from an integer to a float is special
-            ((Float, 4), (Sint, _)) | ((Float, 4), (Uint, _)) => Conversion::IntToFloat,
+            ((Float, 4), (Sint | Uint, _)) => Conversion::IntToFloat,
             // A conversion from an integer to a double is special
-            ((Float, 8), (Sint, _)) | ((Float, 8), (Uint, _)) => Conversion::IntToDouble,
+            ((Float, 8), (Sint | Uint, _)) => Conversion::IntToDouble,
             _ => Conversion::Other,
         },
     )

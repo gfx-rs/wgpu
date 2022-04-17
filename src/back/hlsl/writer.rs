@@ -57,7 +57,7 @@ enum InterfaceKey {
 }
 
 impl InterfaceKey {
-    fn new(binding: Option<&crate::Binding>) -> Self {
+    const fn new(binding: Option<&crate::Binding>) -> Self {
         match binding {
             Some(&crate::Binding::Location { location, .. }) => Self::Location(location),
             Some(&crate::Binding::BuiltIn(built_in)) => Self::BuiltIn(built_in),

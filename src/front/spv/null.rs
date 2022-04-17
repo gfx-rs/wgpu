@@ -1,7 +1,7 @@
 use super::Error;
 use crate::arena::{Arena, Handle, UniqueArena};
 
-fn make_scalar_inner(kind: crate::ScalarKind, width: crate::Bytes) -> crate::ConstantInner {
+const fn make_scalar_inner(kind: crate::ScalarKind, width: crate::Bytes) -> crate::ConstantInner {
     crate::ConstantInner::Scalar {
         width,
         value: match kind {

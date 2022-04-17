@@ -1,13 +1,5 @@
 use super::{conv, Error, ExpectedToken, NumberType, Span, Token, TokenSpan};
 
-fn _consume_str<'a>(input: &'a str, what: &str) -> Option<&'a str> {
-    if input.starts_with(what) {
-        Some(&input[what.len()..])
-    } else {
-        None
-    }
-}
-
 fn consume_any(input: &str, what: impl Fn(char) -> bool) -> (&str, &str) {
     let pos = input.find(|c| !what(c)).unwrap_or(input.len());
     input.split_at(pos)
@@ -17,8 +9,8 @@ fn consume_any(input: &str, what: impl Fn(char) -> bool) -> (&str, &str) {
 /// Returns whether the prefix was present and could therefore be skipped,
 /// the remaining str and the number of *bytes* skipped.
 pub fn try_skip_prefix<'a, 'b>(input: &'a str, prefix: &'b str) -> (bool, &'a str, usize) {
-    if input.starts_with(prefix) {
-        (true, &input[prefix.len()..], prefix.len())
+    if let Some(rem) = input.strip_prefix(prefix) {
+        (true, rem, prefix.len())
     } else {
         (false, input, 0)
     }
@@ -194,12 +186,7 @@ fn consume_number(input: &str) -> (Token, &str) {
 
             NumberLexerState {
                 hex,
-                digit_state: NLDigitState::DigitsThenDot,
-                ..
-            }
-            | NumberLexerState {
-                hex,
-                digit_state: NLDigitState::DigitAfterDot,
+                digit_state: NLDigitState::DigitsThenDot | NLDigitState::DigitAfterDot,
                 ..
             } => match c {
                 '0'..='9' => {
@@ -231,11 +218,7 @@ fn consume_number(input: &str) -> (Token, &str) {
             },
 
             NumberLexerState {
-                digit_state: NLDigitState::SignAfterExponent,
-                ..
-            }
-            | NumberLexerState {
-                digit_state: NLDigitState::DigitAfterExponent,
+                digit_state: NLDigitState::SignAfterExponent | NLDigitState::DigitAfterExponent,
                 ..
             } => match c {
                 '0'..='9' => {
@@ -384,7 +367,7 @@ fn consume_token(mut input: &str, generic: bool) -> (Token<'_>, &str) {
             let sub_input = chars.as_str();
             match chars.next() {
                 Some('>') => (Token::Arrow, chars.as_str()),
-                Some('0'..='9') | Some('.') => consume_number(input),
+                Some('0'..='9' | '.') => consume_number(input),
                 Some('-') => (Token::DecrementOperation, chars.as_str()),
                 Some('=') => (Token::AssignmentOperation(cur), chars.as_str()),
                 _ => (Token::Operation(cur), sub_input),
@@ -440,14 +423,14 @@ pub(super) struct Lexer<'a> {
 }
 
 impl<'a> Lexer<'a> {
-    pub(super) fn new(input: &'a str) -> Self {
+    pub(super) const fn new(input: &'a str) -> Self {
         Lexer {
             input,
             source: input,
         }
     }
 
-    pub(super) fn _leftover_span(&self) -> Span {
+    pub(super) const fn _leftover_span(&self) -> Span {
         self.source.len() - self.input.len()..self.source.len()
     }
 
@@ -477,11 +460,11 @@ impl<'a> Lexer<'a> {
         (token, rest)
     }
 
-    pub(super) fn current_byte_offset(&self) -> usize {
+    pub(super) const fn current_byte_offset(&self) -> usize {
         self.source.len() - self.input.len()
     }
 
-    pub(super) fn span_from(&self, offset: usize) -> Span {
+    pub(super) const fn span_from(&self, offset: usize) -> Span {
         offset..self.current_byte_offset()
     }
 

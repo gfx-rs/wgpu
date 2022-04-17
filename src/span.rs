@@ -14,7 +14,7 @@ impl Span {
     /// Creates a new `Span` from a range of byte indices
     ///
     /// Note: end is exclusive, it doesn't belong to the `Span`
-    pub fn new(start: u32, end: u32) -> Self {
+    pub const fn new(start: u32, end: u32) -> Self {
         Span { start, end }
     }
 
@@ -111,7 +111,7 @@ where
 
 impl<E> WithSpan<E> {
     /// Create a new [`WithSpan`] from an [`Error`], containing no spans.
-    pub fn new(inner: E) -> Self {
+    pub const fn new(inner: E) -> Self {
         Self {
             inner,
             #[cfg(feature = "span")]
@@ -120,11 +120,12 @@ impl<E> WithSpan<E> {
     }
 
     /// Reverse of [`Self::new`], discards span information and returns an inner error.
+    #[allow(clippy::missing_const_for_fn)] // ignore due to requirement of #![feature(const_precise_live_drops)]
     pub fn into_inner(self) -> E {
         self.inner
     }
 
-    pub fn as_inner(&self) -> &E {
+    pub const fn as_inner(&self) -> &E {
         &self.inner
     }
 

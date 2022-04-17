@@ -14,7 +14,7 @@ pub struct Block {
 }
 
 impl Block {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             body: Vec::new(),
             #[cfg(feature = "span")]

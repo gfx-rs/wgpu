@@ -1843,7 +1843,7 @@ impl<W: Write> Writer<W> {
     }
 }
 
-fn builtin_str(built_in: crate::BuiltIn) -> Option<&'static str> {
+const fn builtin_str(built_in: crate::BuiltIn) -> Option<&'static str> {
     use crate::BuiltIn as Bi;
 
     match built_in {
@@ -1866,7 +1866,7 @@ fn builtin_str(built_in: crate::BuiltIn) -> Option<&'static str> {
     }
 }
 
-fn image_dimension_str(dim: crate::ImageDimension) -> &'static str {
+const fn image_dimension_str(dim: crate::ImageDimension) -> &'static str {
     use crate::ImageDimension as IDim;
 
     match dim {
@@ -1877,7 +1877,7 @@ fn image_dimension_str(dim: crate::ImageDimension) -> &'static str {
     }
 }
 
-fn scalar_kind_str(kind: crate::ScalarKind) -> &'static str {
+const fn scalar_kind_str(kind: crate::ScalarKind) -> &'static str {
     use crate::ScalarKind as Sk;
 
     match kind {
@@ -1888,7 +1888,7 @@ fn scalar_kind_str(kind: crate::ScalarKind) -> &'static str {
     }
 }
 
-fn storage_format_str(format: crate::StorageFormat) -> &'static str {
+const fn storage_format_str(format: crate::StorageFormat) -> &'static str {
     use crate::StorageFormat as Sf;
 
     match format {
@@ -1928,7 +1928,7 @@ fn storage_format_str(format: crate::StorageFormat) -> &'static str {
 }
 
 /// Helper function that returns the string corresponding to the WGSL interpolation qualifier
-fn interpolation_str(interpolation: crate::Interpolation) -> &'static str {
+const fn interpolation_str(interpolation: crate::Interpolation) -> &'static str {
     use crate::Interpolation as I;
 
     match interpolation {
@@ -1939,7 +1939,7 @@ fn interpolation_str(interpolation: crate::Interpolation) -> &'static str {
 }
 
 /// Return the WGSL auxiliary qualifier for the given sampling value.
-fn sampling_str(sampling: crate::Sampling) -> &'static str {
+const fn sampling_str(sampling: crate::Sampling) -> &'static str {
     use crate::Sampling as S;
 
     match sampling {
@@ -1949,7 +1949,9 @@ fn sampling_str(sampling: crate::Sampling) -> &'static str {
     }
 }
 
-fn address_space_str(space: crate::AddressSpace) -> (Option<&'static str>, Option<&'static str>) {
+const fn address_space_str(
+    space: crate::AddressSpace,
+) -> (Option<&'static str>, Option<&'static str>) {
     use crate::AddressSpace as As;
 
     (

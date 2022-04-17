@@ -305,7 +305,7 @@ impl Options {
         }
     }
 
-    fn resolve_push_constants(
+    const fn resolve_push_constants(
         &self,
         stage: crate::ShaderStage,
     ) -> Result<ResolvedBinding, EntryPointError> {
@@ -428,7 +428,7 @@ impl ResolvedBinding {
 }
 
 impl ResolvedInterpolation {
-    fn from_binding(interpolation: crate::Interpolation, sampling: crate::Sampling) -> Self {
+    const fn from_binding(interpolation: crate::Interpolation, sampling: crate::Sampling) -> Self {
         use crate::Interpolation as I;
         use crate::Sampling as S;
 

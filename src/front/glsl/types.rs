@@ -204,7 +204,7 @@ pub fn parse_type(type_name: &str) -> Option<Type> {
     }
 }
 
-pub fn scalar_components(ty: &TypeInner) -> Option<(ScalarKind, Bytes)> {
+pub const fn scalar_components(ty: &TypeInner) -> Option<(ScalarKind, Bytes)> {
     match *ty {
         TypeInner::Scalar { kind, width } => Some((kind, width)),
         TypeInner::Vector { kind, width, .. } => Some((kind, width)),
@@ -214,7 +214,7 @@ pub fn scalar_components(ty: &TypeInner) -> Option<(ScalarKind, Bytes)> {
     }
 }
 
-pub fn type_power(kind: ScalarKind, width: Bytes) -> Option<u32> {
+pub const fn type_power(kind: ScalarKind, width: Bytes) -> Option<u32> {
     Some(match kind {
         ScalarKind::Sint => 0,
         ScalarKind::Uint => 1,

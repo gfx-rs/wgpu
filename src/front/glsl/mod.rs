@@ -233,7 +233,7 @@ impl Parser {
     /// Following an unsuccessful parsing the state of the returned information
     /// is undefined, it might contain only partial information about the
     /// current shader, the previous shader or both.
-    pub fn metadata(&self) -> &ShaderMetadata {
+    pub const fn metadata(&self) -> &ShaderMetadata {
         &self.meta
     }
 }

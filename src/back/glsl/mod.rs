@@ -73,7 +73,7 @@ pub const SUPPORTED_ES_VERSIONS: &[u16] = &[300, 310, 320];
 pub type BindingMap = std::collections::BTreeMap<crate::ResourceBinding, u8>;
 
 impl crate::AtomicFunction {
-    fn to_glsl(self) -> &'static str {
+    const fn to_glsl(self) -> &'static str {
         match self {
             Self::Add | Self::Subtract => "Add",
             Self::And => "And",
@@ -88,7 +88,7 @@ impl crate::AtomicFunction {
 }
 
 impl crate::AddressSpace {
-    fn is_buffer(&self) -> bool {
+    const fn is_buffer(&self) -> bool {
         match *self {
             crate::AddressSpace::Uniform | crate::AddressSpace::Storage { .. } => true,
             _ => false,
@@ -96,7 +96,7 @@ impl crate::AddressSpace {
     }
 
     /// Whether a variable with this address space can be initialized
-    fn initializable(&self) -> bool {
+    const fn initializable(&self) -> bool {
         match *self {
             crate::AddressSpace::Function | crate::AddressSpace::Private => true,
             crate::AddressSpace::WorkGroup
@@ -121,7 +121,7 @@ pub enum Version {
 
 impl Version {
     /// Returns true if self is `Version::Embedded` (i.e. is a es version)
-    fn is_es(&self) -> bool {
+    const fn is_es(&self) -> bool {
         match *self {
             Version::Desktop(_) => false,
             Version::Embedded(_) => true,
@@ -306,7 +306,7 @@ impl fmt::Display for VaryingName<'_> {
 }
 
 impl ShaderStage {
-    fn to_str(self) -> &'static str {
+    const fn to_str(self) -> &'static str {
         match self {
             ShaderStage::Compute => "cs",
             ShaderStage::Fragment => "fs",
@@ -3153,7 +3153,7 @@ struct ScalarString<'a> {
 ///
 /// # Errors
 /// If a [`Float`](crate::ScalarKind::Float) with an width that isn't 4 or 8
-fn glsl_scalar(
+const fn glsl_scalar(
     kind: crate::ScalarKind,
     width: crate::Bytes,
 ) -> Result<ScalarString<'static>, Error> {
@@ -3187,7 +3187,7 @@ fn glsl_scalar(
 }
 
 /// Helper function that returns the glsl variable name for a builtin
-fn glsl_built_in(built_in: crate::BuiltIn, output: bool) -> &'static str {
+const fn glsl_built_in(built_in: crate::BuiltIn, output: bool) -> &'static str {
     use crate::BuiltIn as Bi;
 
     match built_in {
@@ -3230,7 +3230,7 @@ fn glsl_built_in(built_in: crate::BuiltIn, output: bool) -> &'static str {
 }
 
 /// Helper function that returns the string corresponding to the address space
-fn glsl_storage_qualifier(space: crate::AddressSpace) -> Option<&'static str> {
+const fn glsl_storage_qualifier(space: crate::AddressSpace) -> Option<&'static str> {
     use crate::AddressSpace as As;
 
     match space {
@@ -3245,7 +3245,7 @@ fn glsl_storage_qualifier(space: crate::AddressSpace) -> Option<&'static str> {
 }
 
 /// Helper function that returns the string corresponding to the glsl interpolation qualifier
-fn glsl_interpolation(interpolation: crate::Interpolation) -> &'static str {
+const fn glsl_interpolation(interpolation: crate::Interpolation) -> &'static str {
     use crate::Interpolation as I;
 
     match interpolation {
@@ -3256,7 +3256,7 @@ fn glsl_interpolation(interpolation: crate::Interpolation) -> &'static str {
 }
 
 /// Return the GLSL auxiliary qualifier for the given sampling value.
-fn glsl_sampling(sampling: crate::Sampling) -> Option<&'static str> {
+const fn glsl_sampling(sampling: crate::Sampling) -> Option<&'static str> {
     use crate::Sampling as S;
 
     match sampling {
@@ -3267,7 +3267,7 @@ fn glsl_sampling(sampling: crate::Sampling) -> Option<&'static str> {
 }
 
 /// Helper function that returns the glsl dimension string of [`ImageDimension`](crate::ImageDimension)
-fn glsl_dimension(dim: crate::ImageDimension) -> &'static str {
+const fn glsl_dimension(dim: crate::ImageDimension) -> &'static str {
     use crate::ImageDimension as IDim;
 
     match dim {
@@ -3279,7 +3279,7 @@ fn glsl_dimension(dim: crate::ImageDimension) -> &'static str {
 }
 
 /// Helper function that returns the glsl storage format string of [`StorageFormat`](crate::StorageFormat)
-fn glsl_storage_format(format: crate::StorageFormat) -> &'static str {
+const fn glsl_storage_format(format: crate::StorageFormat) -> &'static str {
     use crate::StorageFormat as Sf;
 
     match format {

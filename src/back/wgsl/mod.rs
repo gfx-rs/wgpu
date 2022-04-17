@@ -36,7 +36,7 @@ pub fn write_string(
 }
 
 impl crate::AtomicFunction {
-    fn to_wgsl(self) -> &'static str {
+    const fn to_wgsl(self) -> &'static str {
         match self {
             Self::Add => "Add",
             Self::Subtract => "Sub",

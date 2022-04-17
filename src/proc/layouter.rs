@@ -14,7 +14,7 @@ pub struct TypeLayout {
 
 impl TypeLayout {
     /// Produce the stride as if this type is a base of an array.
-    pub fn to_stride(&self) -> u32 {
+    pub const fn to_stride(&self) -> u32 {
         Layouter::round_up(self.alignment, self.size)
     }
 }
@@ -63,7 +63,7 @@ pub struct LayoutError {
 }
 
 impl LayoutErrorInner {
-    fn with(self, ty: Handle<crate::Type>) -> LayoutError {
+    const fn with(self, ty: Handle<crate::Type>) -> LayoutError {
         LayoutError { ty, inner: self }
     }
 }
@@ -75,7 +75,7 @@ impl Layouter {
     }
 
     /// Round `offset` up to the nearest `alignment` boundary.
-    pub fn round_up(alignment: Alignment, offset: u32) -> u32 {
+    pub const fn round_up(alignment: Alignment, offset: u32) -> u32 {
         match offset & (alignment.get() - 1) {
             0 => offset,
             other => offset + alignment.get() - other,

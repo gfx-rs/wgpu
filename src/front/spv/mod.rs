@@ -89,7 +89,7 @@ pub struct Instruction {
 }
 
 impl Instruction {
-    fn expect(self, count: u16) -> Result<(), Error> {
+    const fn expect(self, count: u16) -> Result<(), Error> {
         if self.wc == count {
             Ok(())
         } else {
@@ -105,7 +105,7 @@ impl Instruction {
 }
 
 impl crate::TypeInner {
-    fn can_comparison_sample(&self) -> bool {
+    const fn can_comparison_sample(&self) -> bool {
         match *self {
             crate::TypeInner::Image {
                 class:
@@ -151,7 +151,7 @@ impl<T> LookupHelper for FastHashMap<spirv::Word, T> {
 }
 
 impl crate::ImageDimension {
-    fn required_coordinate_size(&self) -> Option<crate::VectorSize> {
+    const fn required_coordinate_size(&self) -> Option<crate::VectorSize> {
         match *self {
             crate::ImageDimension::D1 => None,
             crate::ImageDimension::D2 => Some(crate::VectorSize::Bi),
@@ -217,7 +217,7 @@ impl Decoration {
         }
     }
 
-    fn resource_binding(&self) -> Option<crate::ResourceBinding> {
+    const fn resource_binding(&self) -> Option<crate::ResourceBinding> {
         match *self {
             Decoration {
                 desc_set: Some(group),
@@ -408,7 +408,7 @@ struct Body {
 
 impl Body {
     /// Creates a new empty `Body` with the specified `parent`
-    pub fn with_parent(parent: usize) -> Self {
+    pub const fn with_parent(parent: usize) -> Self {
         Body {
             parent,
             data: Vec::new(),

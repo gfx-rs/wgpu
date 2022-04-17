@@ -502,7 +502,7 @@ impl super::Instruction {
         instruction
     }
 
-    pub(super) fn function_end() -> Self {
+    pub(super) const fn function_end() -> Self {
         Self::new(Op::FunctionEnd)
     }
 
@@ -906,11 +906,11 @@ impl super::Instruction {
         instruction
     }
 
-    pub(super) fn kill() -> Self {
+    pub(super) const fn kill() -> Self {
         Self::new(Op::Kill)
     }
 
-    pub(super) fn return_void() -> Self {
+    pub(super) const fn return_void() -> Self {
         Self::new(Op::Return)
     }
 

@@ -20,7 +20,7 @@ pub(super) fn string_to_words(input: &str) -> Vec<Word> {
     words
 }
 
-pub(super) fn map_storage_class(space: crate::AddressSpace) -> spirv::StorageClass {
+pub(super) const fn map_storage_class(space: crate::AddressSpace) -> spirv::StorageClass {
     match space {
         crate::AddressSpace::Handle => spirv::StorageClass::UniformConstant,
         crate::AddressSpace::Function => spirv::StorageClass::Function,
@@ -50,7 +50,9 @@ pub(super) fn contains_builtin(
 }
 
 impl crate::AddressSpace {
-    pub(super) fn to_spirv_semantics_and_scope(self) -> (spirv::MemorySemantics, spirv::Scope) {
+    pub(super) const fn to_spirv_semantics_and_scope(
+        self,
+    ) -> (spirv::MemorySemantics, spirv::Scope) {
         match self {
             Self::Storage { .. } => (spirv::MemorySemantics::UNIFORM_MEMORY, spirv::Scope::Device),
             Self::WorkGroup => (

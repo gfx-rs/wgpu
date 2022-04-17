@@ -50,7 +50,7 @@ pub struct Uniformity {
 }
 
 impl Uniformity {
-    fn new() -> Self {
+    const fn new() -> Self {
         Uniformity {
             non_uniform_result: None,
             requirements: UniformityRequirements::empty(),
@@ -94,7 +94,7 @@ impl ops::BitOr for FunctionUniformity {
 }
 
 impl FunctionUniformity {
-    fn new() -> Self {
+    const fn new() -> Self {
         FunctionUniformity {
             result: Uniformity::new(),
             exit: ExitFlags::empty(),
@@ -102,7 +102,7 @@ impl FunctionUniformity {
     }
 
     /// Returns a disruptor based on the stored exit flags, if any.
-    fn exit_disruptor(&self) -> Option<UniformityDisruptor> {
+    const fn exit_disruptor(&self) -> Option<UniformityDisruptor> {
         if self.exit.contains(ExitFlags::MAY_RETURN) {
             Some(UniformityDisruptor::Return)
         } else if self.exit.contains(ExitFlags::MAY_KILL) {
@@ -146,7 +146,7 @@ pub struct ExpressionInfo {
 }
 
 impl ExpressionInfo {
-    fn new() -> Self {
+    const fn new() -> Self {
         ExpressionInfo {
             uniformity: Uniformity::new(),
             ref_count: 0,
@@ -169,7 +169,7 @@ enum GlobalOrArgument {
 }
 
 impl crate::Expression {
-    fn to_global_or_argument(&self) -> Result<GlobalOrArgument, ExpressionError> {
+    const fn to_global_or_argument(&self) -> Result<GlobalOrArgument, ExpressionError> {
         Ok(match *self {
             crate::Expression::GlobalVariable(var) => GlobalOrArgument::Global(var),
             crate::Expression::FunctionArgument(i) => GlobalOrArgument::Argument(i),
@@ -248,10 +248,10 @@ pub struct FunctionInfo {
 }
 
 impl FunctionInfo {
-    pub fn global_variable_count(&self) -> usize {
+    pub const fn global_variable_count(&self) -> usize {
         self.global_uses.len()
     }
-    pub fn expression_count(&self) -> usize {
+    pub const fn expression_count(&self) -> usize {
         self.expressions.len()
     }
     pub fn dominates_global_use(&self, other: &Self) -> bool {

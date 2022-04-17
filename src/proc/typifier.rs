@@ -97,7 +97,7 @@ pub enum TypeResolution {
 }
 
 impl TypeResolution {
-    pub fn handle(&self) -> Option<Handle<crate::Type>> {
+    pub const fn handle(&self) -> Option<Handle<crate::Type>> {
         match *self {
             Self::Handle(handle) => Some(handle),
             Self::Value(_) => None,
@@ -149,7 +149,7 @@ impl Clone for TypeResolution {
 }
 
 impl crate::ConstantInner {
-    pub fn resolve_type(&self) -> TypeResolution {
+    pub const fn resolve_type(&self) -> TypeResolution {
         match *self {
             Self::Scalar { width, ref value } => TypeResolution::Value(crate::TypeInner::Scalar {
                 kind: value.scalar_kind(),

@@ -323,7 +323,7 @@ pub struct Writer<W> {
 }
 
 impl crate::ScalarKind {
-    fn to_msl_name(self) -> &'static str {
+    const fn to_msl_name(self) -> &'static str {
         match self {
             Self::Float => "float",
             Self::Sint => "int",
@@ -333,7 +333,7 @@ impl crate::ScalarKind {
     }
 }
 
-fn separate(need_separator: bool) -> &'static str {
+const fn separate(need_separator: bool) -> &'static str {
     if need_separator {
         ","
     } else {
@@ -398,7 +398,7 @@ impl crate::AddressSpace {
     /// Returns true if global variables in this address space are
     /// passed in function arguments. These arguments need to be
     /// passed through any functions called from the entry point.
-    fn needs_pass_through(&self) -> bool {
+    const fn needs_pass_through(&self) -> bool {
         match *self {
             Self::Uniform
             | Self::Storage { .. }
@@ -411,7 +411,7 @@ impl crate::AddressSpace {
     }
 
     /// Returns true if the address space may need a "const" qualifier.
-    fn needs_access_qualifier(&self) -> bool {
+    const fn needs_access_qualifier(&self) -> bool {
         match *self {
             //Note: we are ignoring the storage access here, and instead
             // rely on the actual use of a global by functions. This means we
@@ -425,7 +425,7 @@ impl crate::AddressSpace {
         }
     }
 
-    fn to_msl_name(self) -> Option<&'static str> {
+    const fn to_msl_name(self) -> Option<&'static str> {
         match self {
             Self::Handle => None,
             Self::Uniform | Self::PushConstant => Some("constant"),
@@ -438,7 +438,7 @@ impl crate::AddressSpace {
 
 impl crate::Type {
     // Returns `true` if we need to emit an alias for this type.
-    fn needs_alias(&self) -> bool {
+    const fn needs_alias(&self) -> bool {
         use crate::TypeInner as Ti;
 
         match self.inner {
@@ -459,7 +459,7 @@ impl crate::Type {
 
 impl crate::Constant {
     // Returns `true` if we need to emit an alias for this constant.
-    fn needs_alias(&self) -> bool {
+    const fn needs_alias(&self) -> bool {
         match self.inner {
             crate::ConstantInner::Scalar { .. } => self.name.is_some(),
             crate::ConstantInner::Composite { .. } => true,

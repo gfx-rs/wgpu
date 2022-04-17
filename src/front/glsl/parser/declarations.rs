@@ -451,11 +451,7 @@ impl<'source> ParsingContext<'source> {
 
                     match parser.module.types[ty].inner {
                         TypeInner::Scalar {
-                            kind: ScalarKind::Float,
-                            ..
-                        }
-                        | TypeInner::Scalar {
-                            kind: ScalarKind::Sint,
+                            kind: ScalarKind::Float | ScalarKind::Sint,
                             ..
                         } => {}
                         _ => parser.errors.push(Error {

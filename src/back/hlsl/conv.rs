@@ -15,7 +15,7 @@ impl crate::ScalarKind {
     /// Helper function that returns scalar related strings
     ///
     /// <https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-scalar>
-    pub(super) fn to_hlsl_str(self, width: crate::Bytes) -> Result<&'static str, Error> {
+    pub(super) const fn to_hlsl_str(self, width: crate::Bytes) -> Result<&'static str, Error> {
         match self {
             Self::Sint => Ok("int"),
             Self::Uint => Ok("uint"),
@@ -31,7 +31,7 @@ impl crate::ScalarKind {
 }
 
 impl crate::TypeInner {
-    pub(super) fn is_matrix(&self) -> bool {
+    pub(super) const fn is_matrix(&self) -> bool {
         match *self {
             Self::Matrix { .. } => true,
             _ => false,
@@ -113,7 +113,7 @@ impl crate::TypeInner {
 }
 
 impl crate::StorageFormat {
-    pub(super) fn to_hlsl_str(self) -> &'static str {
+    pub(super) const fn to_hlsl_str(self) -> &'static str {
         match self {
             Self::R16Float => "float",
             Self::R8Unorm => "unorm float",
@@ -187,7 +187,7 @@ impl crate::BuiltIn {
 
 impl crate::Interpolation {
     /// Return the string corresponding to the HLSL interpolation qualifier.
-    pub(super) fn to_hlsl_str(self) -> Option<&'static str> {
+    pub(super) const fn to_hlsl_str(self) -> Option<&'static str> {
         match self {
             // Would be "linear", but it's the default interpolation in SM4 and up
             // https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-struct#interpolation-modifiers-introduced-in-shader-model-4
@@ -200,7 +200,7 @@ impl crate::Interpolation {
 
 impl crate::Sampling {
     /// Return the HLSL auxiliary qualifier for the given sampling value.
-    pub(super) fn to_hlsl_str(self) -> Option<&'static str> {
+    pub(super) const fn to_hlsl_str(self) -> Option<&'static str> {
         match self {
             Self::Center => None,
             Self::Centroid => Some("centroid"),
@@ -211,7 +211,7 @@ impl crate::Sampling {
 
 impl crate::AtomicFunction {
     /// Return the HLSL suffix for the `InterlockedXxx` method.
-    pub(super) fn to_hlsl_suffix(self) -> &'static str {
+    pub(super) const fn to_hlsl_suffix(self) -> &'static str {
         match self {
             Self::Add | Self::Subtract => "Add",
             Self::And => "And",

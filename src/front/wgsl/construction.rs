@@ -41,7 +41,7 @@ enum ConstructorType {
 }
 
 impl ConstructorType {
-    fn to_type_resolution(&self) -> Option<TypeResolution> {
+    const fn to_type_resolution(&self) -> Option<TypeResolution> {
         Some(match *self {
             ConstructorType::Scalar { kind, width } => {
                 TypeResolution::Value(TypeInner::Scalar { kind, width })
@@ -425,7 +425,8 @@ pub(super) fn parse_construction<'a>(
         (
             Components::Many {
                 components,
-                first_component_ty: &TypeInner::Scalar { kind, width },
+                first_component_ty:
+                    &TypeInner::Scalar { kind, width } | &TypeInner::Vector { kind, width, .. },
                 ..
             },
             ConstructorType::PartialVector { size },
@@ -433,23 +434,7 @@ pub(super) fn parse_construction<'a>(
         | (
             Components::Many {
                 components,
-                first_component_ty: &TypeInner::Vector { kind, width, .. },
-                ..
-            },
-            ConstructorType::PartialVector { size },
-        )
-        | (
-            Components::Many {
-                components,
-                first_component_ty: &TypeInner::Scalar { .. },
-                ..
-            },
-            ConstructorType::Vector { size, width, kind },
-        )
-        | (
-            Components::Many {
-                components,
-                first_component_ty: &TypeInner::Vector { .. },
+                first_component_ty: &TypeInner::Scalar { .. } | &TypeInner::Vector { .. },
                 ..
             },
             ConstructorType::Vector { size, width, kind },
@@ -636,10 +621,13 @@ pub(super) fn parse_construction<'a>(
         }
 
         // Parameters are of the wrong type for vector or matrix constructor
-        (Components::Many { spans, .. }, ConstructorType::Vector { .. })
-        | (Components::Many { spans, .. }, ConstructorType::Matrix { .. })
-        | (Components::Many { spans, .. }, ConstructorType::PartialVector { .. })
-        | (Components::Many { spans, .. }, ConstructorType::PartialMatrix { .. }) => {
+        (
+            Components::Many { spans, .. },
+            ConstructorType::Vector { .. }
+            | ConstructorType::Matrix { .. }
+            | ConstructorType::PartialVector { .. }
+            | ConstructorType::PartialMatrix { .. },
+        ) => {
             return Err(Error::InvalidConstructorComponentType(spans[0].clone(), 0));
         }
     };

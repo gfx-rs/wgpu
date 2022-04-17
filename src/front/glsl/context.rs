@@ -32,7 +32,7 @@ pub enum ExprPos {
 
 impl ExprPos {
     /// Returns an lhs position if the current position is lhs otherwise AccessBase
-    fn maybe_access_base(&self, constant_index: bool) -> Self {
+    const fn maybe_access_base(&self, constant_index: bool) -> Self {
         match *self {
             ExprPos::Lhs => *self,
             _ => ExprPos::AccessBase { constant_index },
@@ -1414,7 +1414,7 @@ pub struct StmtContext {
 }
 
 impl StmtContext {
-    fn new() -> Self {
+    const fn new() -> Self {
         StmtContext {
             hir_exprs: Arena::new(),
         }

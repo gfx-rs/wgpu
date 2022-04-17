@@ -163,7 +163,7 @@ pub(super) struct TypeInfo {
 }
 
 impl TypeInfo {
-    fn dummy() -> Self {
+    const fn dummy() -> Self {
         TypeInfo {
             flags: TypeFlags::empty(),
             uniform_layout: Ok(None),
@@ -171,7 +171,7 @@ impl TypeInfo {
         }
     }
 
-    fn new(flags: TypeFlags, align: u32) -> Self {
+    const fn new(flags: TypeFlags, align: u32) -> Self {
         let alignment = Alignment::new(align);
         TypeInfo {
             flags,
@@ -182,7 +182,7 @@ impl TypeInfo {
 }
 
 impl super::Validator {
-    pub(super) fn check_width(&self, kind: crate::ScalarKind, width: crate::Bytes) -> bool {
+    pub(super) const fn check_width(&self, kind: crate::ScalarKind, width: crate::Bytes) -> bool {
         match kind {
             crate::ScalarKind::Bool => width == crate::BOOL_WIDTH,
             crate::ScalarKind::Float => {

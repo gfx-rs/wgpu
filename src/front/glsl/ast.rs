@@ -352,7 +352,7 @@ pub enum ParameterQualifier {
 
 impl ParameterQualifier {
     /// Returns true if the argument should be passed as a lhs expression
-    pub fn is_lhs(&self) -> bool {
+    pub const fn is_lhs(&self) -> bool {
         match *self {
             ParameterQualifier::Out | ParameterQualifier::InOut => true,
             _ => false,
@@ -360,7 +360,7 @@ impl ParameterQualifier {
     }
 
     /// Converts from a parameter qualifier into a [`ExprPos`](ExprPos)
-    pub fn as_pos(&self) -> ExprPos {
+    pub const fn as_pos(&self) -> ExprPos {
         match *self {
             ParameterQualifier::Out | ParameterQualifier::InOut => ExprPos::Lhs,
             _ => ExprPos::Rhs,

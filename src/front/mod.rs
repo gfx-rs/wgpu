@@ -55,7 +55,7 @@ impl Emitter {
 
 #[allow(dead_code)]
 impl super::ConstantInner {
-    fn boolean(value: bool) -> Self {
+    const fn boolean(value: bool) -> Self {
         Self::Scalar {
             width: super::BOOL_WIDTH,
             value: super::ScalarValue::Bool(value),
@@ -70,7 +70,7 @@ pub struct Typifier {
 }
 
 impl Typifier {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Typifier {
             resolutions: Vec::new(),
         }
@@ -147,6 +147,6 @@ impl ops::Index<Handle<crate::Expression>> for Typifier {
 /// assert_eq!(334, align_up(333, 2));
 /// assert_eq!(384, align_up(257, 128));
 /// ```
-pub fn align_up(value: u32, align: u32) -> u32 {
+pub const fn align_up(value: u32, align: u32) -> u32 {
     ((value.wrapping_sub(1)) & !(align - 1)).wrapping_add(align)
 }

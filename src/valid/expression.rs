@@ -173,11 +173,7 @@ impl super::Validator {
                 match *resolver.resolve(index)? {
                     //TODO: only allow one of these
                     Ti::Scalar {
-                        kind: Sk::Sint,
-                        width: _,
-                    }
-                    | Ti::Scalar {
-                        kind: Sk::Uint,
+                        kind: Sk::Sint | Sk::Uint,
                         width: _,
                     } => {}
                     ref other => {
@@ -633,8 +629,7 @@ impl super::Validator {
                 use crate::UnaryOperator as Uo;
                 let inner = resolver.resolve(expr)?;
                 match (op, inner.scalar_kind()) {
-                    (_, Some(Sk::Sint))
-                    | (_, Some(Sk::Bool))
+                    (_, Some(Sk::Sint | Sk::Bool))
                     //TODO: restrict Negate for bools?
                     | (Uo::Negate, Some(Sk::Float))
                     | (Uo::Not, Some(Sk::Uint)) => {}
@@ -667,7 +662,7 @@ impl super::Validator {
                     },
                     Bo::Multiply => {
                         let kind_match = match left_inner.scalar_kind() {
-                            Some(Sk::Uint) | Some(Sk::Sint) | Some(Sk::Float) => true,
+                            Some(Sk::Uint | Sk::Sint | Sk::Float) => true,
                             Some(Sk::Bool) | None => false,
                         };
                         let types_match = match (left_inner, right_inner) {
@@ -1070,10 +1065,9 @@ impl super::Validator {
                         };
                         match *arg_ty {
                             Ti::Vector {
-                                kind: Sk::Float, ..
-                            }
-                            | Ti::Vector { kind: Sk::Sint, .. }
-                            | Ti::Vector { kind: Sk::Uint, .. } => {}
+                                kind: Sk::Float | Sk::Sint | Sk::Uint,
+                                ..
+                            } => {}
                             _ => return Err(ExpressionError::InvalidArgumentType(fun, 0, arg)),
                         }
                         if arg1_ty != arg_ty {
@@ -1250,10 +1244,14 @@ impl super::Validator {
                             return Err(ExpressionError::WrongArgumentCount(fun));
                         }
                         match *arg_ty {
-                            Ti::Scalar { kind: Sk::Sint, .. }
-                            | Ti::Scalar { kind: Sk::Uint, .. }
-                            | Ti::Vector { kind: Sk::Sint, .. }
-                            | Ti::Vector { kind: Sk::Uint, .. } => {}
+                            Ti::Scalar {
+                                kind: Sk::Sint | Sk::Uint,
+                                ..
+                            }
+                            | Ti::Vector {
+                                kind: Sk::Sint | Sk::Uint,
+                                ..
+                            } => {}
                             _ => return Err(ExpressionError::InvalidArgumentType(fun, 0, arg)),
                         }
                     }
@@ -1263,10 +1261,14 @@ impl super::Validator {
                             _ => return Err(ExpressionError::WrongArgumentCount(fun)),
                         };
                         match *arg_ty {
-                            Ti::Scalar { kind: Sk::Sint, .. }
-                            | Ti::Scalar { kind: Sk::Uint, .. }
-                            | Ti::Vector { kind: Sk::Sint, .. }
-                            | Ti::Vector { kind: Sk::Uint, .. } => {}
+                            Ti::Scalar {
+                                kind: Sk::Sint | Sk::Uint,
+                                ..
+                            }
+                            | Ti::Vector {
+                                kind: Sk::Sint | Sk::Uint,
+                                ..
+                            } => {}
                             _ => return Err(ExpressionError::InvalidArgumentType(fun, 0, arg)),
                         }
                         if arg1_ty != arg_ty {
@@ -1303,10 +1305,14 @@ impl super::Validator {
                             _ => return Err(ExpressionError::WrongArgumentCount(fun)),
                         };
                         match *arg_ty {
-                            Ti::Scalar { kind: Sk::Sint, .. }
-                            | Ti::Scalar { kind: Sk::Uint, .. }
-                            | Ti::Vector { kind: Sk::Sint, .. }
-                            | Ti::Vector { kind: Sk::Uint, .. } => {}
+                            Ti::Scalar {
+                                kind: Sk::Sint | Sk::Uint,
+                                ..
+                            }
+                            | Ti::Vector {
+                                kind: Sk::Sint | Sk::Uint,
+                                ..
+                            } => {}
                             _ => return Err(ExpressionError::InvalidArgumentType(fun, 0, arg)),
                         }
                         match *arg1_ty {

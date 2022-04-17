@@ -288,7 +288,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
         }
-        ext @ "vert" | ext @ "frag" | ext @ "comp" => {
+        ext @ ("vert" | "frag" | "comp") => {
             let input = String::from_utf8(input)?;
             let mut parser = naga::front::glsl::Parser::default();
 
@@ -429,7 +429,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
 
                 fs::write(output_path, bytes.as_slice())?;
             }
-            stage @ "vert" | stage @ "frag" | stage @ "comp" => {
+            stage @ ("vert" | "frag" | "comp") => {
                 use naga::back::glsl;
 
                 let pipeline_options = glsl::PipelineOptions {

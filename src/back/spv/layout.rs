@@ -6,7 +6,7 @@ use std::iter;
 const GENERATOR: Word = 28;
 
 impl PhysicalLayout {
-    pub(super) fn new(version: Word) -> Self {
+    pub(super) const fn new(version: Word) -> Self {
         PhysicalLayout {
             magic_number: MAGIC_NUMBER,
             version,
@@ -72,7 +72,7 @@ impl super::recyclable::Recyclable for LogicalLayout {
 }
 
 impl Instruction {
-    pub(super) fn new(op: Op) -> Self {
+    pub(super) const fn new(op: Op) -> Self {
         Instruction {
             op,
             wc: 1, // Always start at 1 for the first word (OP + WC),
