@@ -366,7 +366,8 @@ fn consume_token(mut input: &str, generic: bool) -> (Token<'_>, &str) {
                 (Token::Operation(cur), input)
             }
         }
-        '!' | '~' => {
+        '~' => (Token::Operation(cur), chars.as_str()),
+        '!' => {
             input = chars.as_str();
             if chars.next() == Some('=') {
                 (Token::LogicalOperation(cur), chars.as_str())
