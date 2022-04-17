@@ -306,10 +306,6 @@ fn consume_token(mut input: &str, generic: bool) -> (Token<'_>, &str) {
             }
         }
         '0'..='9' => consume_number(input),
-        '_' | 'a'..='z' | 'A'..='Z' => {
-            let (word, rest) = consume_any(input, |c| c.is_ascii_alphanumeric() || c == '_');
-            (Token::Word(word), rest)
-        }
         '"' => {
             let mut iter = chars.as_str().splitn(2, '"');
 
@@ -325,7 +321,7 @@ fn consume_token(mut input: &str, generic: bool) -> (Token<'_>, &str) {
             input = chars.as_str();
             match chars.next() {
                 Some('/') => {
-                    let _ = chars.position(|c| c == '\n' || c == '\r');
+                    let _ = chars.position(is_comment_end);
                     (Token::Trivia, chars.as_str())
                 }
                 Some('*') => {
@@ -408,12 +404,49 @@ fn consume_token(mut input: &str, generic: bool) -> (Token<'_>, &str) {
                 (Token::Operation(cur), input)
             }
         }
-        ' ' | '\n' | '\r' | '\t' => {
-            let (_, rest) = consume_any(input, |c| c == ' ' || c == '\n' || c == '\r' || c == '\t');
+        _ if is_blankspace(cur) => {
+            let (_, rest) = consume_any(input, is_blankspace);
             (Token::Trivia, rest)
+        }
+        _ if is_word_start(cur) => {
+            let (word, rest) = consume_any(input, is_word_part);
+            (Token::Word(word), rest)
         }
         _ => (Token::Unknown(cur), chars.as_str()),
     }
+}
+
+/// Returns whether or not a char is a comment end
+/// (Unicode Pattern_White_Space excluding U+0020, U+0009, U+200E and U+200F)
+const fn is_comment_end(c: char) -> bool {
+    match c {
+        '\u{000a}'..='\u{000d}' | '\u{0085}' | '\u{2028}' | '\u{2029}' => true,
+        _ => false,
+    }
+}
+
+/// Returns whether or not a char is a blankspace (Unicode Pattern_White_Space)
+const fn is_blankspace(c: char) -> bool {
+    match c {
+        '\u{0020}'
+        | '\u{0009}'..='\u{000d}'
+        | '\u{0085}'
+        | '\u{200e}'
+        | '\u{200f}'
+        | '\u{2028}'
+        | '\u{2029}' => true,
+        _ => false,
+    }
+}
+
+/// Returns whether or not a char is a word start (Unicode XID_Start + '_')
+fn is_word_start(c: char) -> bool {
+    c == '_' || unicode_id::UnicodeID::is_id_start(c)
+}
+
+/// Returns whether or not a char is a word part (Unicode XID_Continue)
+fn is_word_part(c: char) -> bool {
+    unicode_id::UnicodeID::is_id_continue(c)
 }
 
 #[derive(Clone)]
@@ -674,11 +707,23 @@ fn test_tokens() {
         ],
     );
     sub_test(
-        "æNoø",
-        &[Token::Unknown('æ'), Token::Word("No"), Token::Unknown('ø')],
+        "Δέλτα réflexion Кызыл 𐰓𐰏𐰇 朝焼け سلام 검정 שָׁלוֹם गुलाबी փիրուզ",
+        &[
+            Token::Word("Δέλτα"),
+            Token::Word("réflexion"),
+            Token::Word("Кызыл"),
+            Token::Word("𐰓𐰏𐰇"),
+            Token::Word("朝焼け"),
+            Token::Word("سلام"),
+            Token::Word("검정"),
+            Token::Word("שָׁלוֹם"),
+            Token::Word("गुलाबी"),
+            Token::Word("փիրուզ"),
+        ],
     );
+    sub_test("æNoø", &[Token::Word("æNoø")]);
     sub_test("No¾", &[Token::Word("No"), Token::Unknown('¾')]);
-    sub_test("No好", &[Token::Word("No"), Token::Unknown('好')]);
+    sub_test("No好", &[Token::Word("No好")]);
     sub_test("_No", &[Token::Word("_No")]);
     sub_test("\"\u{2}ПЀ\u{0}\"", &[Token::String("\u{2}ПЀ\u{0}")]); // https://github.com/gfx-rs/naga/issues/90
     sub_test(
