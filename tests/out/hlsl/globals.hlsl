@@ -11,7 +11,7 @@ RWByteAddressBuffer alignment : register(u1);
 ByteAddressBuffer dummy : register(t2);
 cbuffer float_vecs : register(b3) { float4 float_vecs[20]; }
 cbuffer global_vec : register(b4) { float4 global_vec; }
-cbuffer global_mat : register(b5) { float4x4 global_mat; }
+cbuffer global_mat : register(b5) { row_major float4x4 global_mat; }
 
 void test_msl_packed_vec3_as_arg(float3 arg)
 {
