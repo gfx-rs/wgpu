@@ -175,6 +175,18 @@ impl Context {
         }
     }
 
+    #[cfg(all(target_arch = "wasm32", feature = "webgl"))]
+    pub fn instance_create_surface_from_offscreen_canvas(
+        self: &Arc<Self>,
+        canvas: &web_sys::OffscreenCanvas,
+    ) -> Surface {
+        let id = self.0.create_surface_webgl_offscreen_canvas(canvas, PhantomData);
+        Surface {
+            id,
+            configured_device: Mutex::default(),
+        }
+    }
+
     #[cfg(target_os = "windows")]
     pub unsafe fn create_surface_from_visual(
         self: &Arc<Self>,

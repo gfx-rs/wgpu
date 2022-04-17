@@ -1531,7 +1531,7 @@ impl Instance {
     /// # Safety
     ///
     /// - canvas must be a valid <canvas> element to create a surface upon.
-    #[cfg(all(target_arch = "wasm32"))]
+    #[cfg(target_arch = "wasm32")]
     pub fn create_surface_from_canvas(
         &self,
         canvas: &web_sys::HtmlCanvasElement,
@@ -1547,7 +1547,7 @@ impl Instance {
     /// # Safety
     ///
     /// - canvas must be a valid OffscreenCanvas to create a surface upon.
-    #[cfg(all(target_arch = "wasm32", not(feature = "webgl")))]
+    #[cfg(target_arch = "wasm32")]
     pub fn create_surface_from_offscreen_canvas(
         &self,
         canvas: &web_sys::OffscreenCanvas,

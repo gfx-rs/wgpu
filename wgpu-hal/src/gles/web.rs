@@ -43,6 +43,21 @@ impl Instance {
             presentable: true,
         })
     }
+
+    pub fn create_surface_from_offscreen_canvas(
+        &self,
+        canvas: &web_sys::OffscreenCanvas,
+    ) -> Result<Surface, crate::InstanceError> {
+        *self.canvas.lock() = Some(canvas.clone());
+
+        Ok(Surface {
+            canvas: canvas.clone(),
+            present_program: None,
+            swapchain: None,
+            texture: None,
+            presentable: true,
+        })
+    }
 }
 
 // SAFE: WASM doesn't have threads
