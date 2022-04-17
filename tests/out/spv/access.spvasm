@@ -14,7 +14,7 @@ OpExecutionMode %204 LocalSize 1 1 1
 OpSource GLSL 450
 OpMemberName %32 0 "value"
 OpName %32 "AlignedWrapper"
-OpMemberName %41 0 "matrix"
+OpMemberName %41 0 "_matrix"
 OpMemberName %41 1 "matrix_array"
 OpMemberName %41 2 "atom"
 OpMemberName %41 3 "arr"

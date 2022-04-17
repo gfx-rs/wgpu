@@ -230,7 +230,7 @@ float4 levels_queries() : SV_Position
     return (float(sum_1)).xxxx;
 }
 
-float4 sample_() : SV_Target0
+float4 texture_sample() : SV_Target0
 {
     float2 tc = (0.5).xx;
     float4 s1d = image_1d.Sample(sampler_reg, tc.x);
@@ -242,7 +242,7 @@ float4 sample_() : SV_Target0
     return ((((s1d + s2d) + s2d_offset) + s2d_level) + s2d_level_offset);
 }
 
-float sample_comparison() : SV_Target0
+float texture_sample_comparison() : SV_Target0
 {
     float2 tc_1 = (0.5).xx;
     float s2d_depth = image_2d_depth.SampleCmp(sampler_cmp, tc_1, 0.5);

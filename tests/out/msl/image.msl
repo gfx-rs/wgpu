@@ -99,10 +99,10 @@ vertex levels_queriesOutput levels_queries(
 }
 
 
-struct sampleOutput {
+struct texture_sampleOutput {
     metal::float4 member_4 [[color(0)]];
 };
-fragment sampleOutput sample(
+fragment texture_sampleOutput texture_sample(
   metal::texture1d<float, metal::access::sample> image_1d [[user(fake0)]]
 , metal::texture2d<float, metal::access::sample> image_2d [[user(fake0)]]
 , metal::sampler sampler_reg [[user(fake0)]]
@@ -114,14 +114,14 @@ fragment sampleOutput sample(
     metal::float4 s2d_level = image_2d.sample(sampler_reg, tc, metal::level(2.299999952316284));
     metal::float4 s2d_level_offset = image_2d.sample(sampler_reg, tc, metal::level(2.299999952316284), const_type_9_);
     metal::float4 s2d_bias_offset = image_2d.sample(sampler_reg, tc, metal::bias(2.0), const_type_9_);
-    return sampleOutput { (((s1d + s2d) + s2d_offset) + s2d_level) + s2d_level_offset };
+    return texture_sampleOutput { (((s1d + s2d) + s2d_offset) + s2d_level) + s2d_level_offset };
 }
 
 
-struct sample_comparisonOutput {
+struct texture_sample_comparisonOutput {
     float member_5 [[color(0)]];
 };
-fragment sample_comparisonOutput sample_comparison(
+fragment texture_sample_comparisonOutput texture_sample_comparison(
   metal::sampler sampler_cmp [[user(fake0)]]
 , metal::depth2d<float, metal::access::sample> image_2d_depth [[user(fake0)]]
 , metal::depthcube<float, metal::access::sample> image_cube_depth [[user(fake0)]]
@@ -130,7 +130,7 @@ fragment sample_comparisonOutput sample_comparison(
     float s2d_depth = image_2d_depth.sample_compare(sampler_cmp, tc_1, 0.5);
     float s2d_depth_level = image_2d_depth.sample_compare(sampler_cmp, tc_1, 0.5);
     float scube_depth_level = image_cube_depth.sample_compare(sampler_cmp, metal::float3(0.5), 0.5);
-    return sample_comparisonOutput { s2d_depth + s2d_depth_level };
+    return texture_sample_comparisonOutput { s2d_depth + s2d_depth_level };
 }
 
 

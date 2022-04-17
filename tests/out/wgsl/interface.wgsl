@@ -1,6 +1,6 @@
 struct VertexOutput {
     @builtin(position) @invariant position: vec4<f32>,
-    @location(1) varying: f32,
+    @location(1) _varying: f32,
 }
 
 struct FragmentOutput {
@@ -17,7 +17,7 @@ struct Input2_ {
     @builtin(instance_index) index: u32,
 }
 
-var<workgroup> output: array<u32,1>;
+var<workgroup> _output: array<u32,1>;
 
 @vertex 
 fn vertex(@builtin(vertex_index) vertex_index: u32, @builtin(instance_index) instance_index: u32, @location(10) color: u32) -> VertexOutput {
@@ -26,15 +26,15 @@ fn vertex(@builtin(vertex_index) vertex_index: u32, @builtin(instance_index) ins
 }
 
 @fragment 
-fn fragment(in: VertexOutput, @builtin(front_facing) front_facing: bool, @builtin(sample_index) sample_index: u32, @builtin(sample_mask) sample_mask: u32) -> FragmentOutput {
+fn fragment(_in: VertexOutput, @builtin(front_facing) front_facing: bool, @builtin(sample_index) sample_index: u32, @builtin(sample_mask) sample_mask: u32) -> FragmentOutput {
     let mask: u32 = (sample_mask & (1u << sample_index));
     let color_1: f32 = select(0.0, 1.0, front_facing);
-    return FragmentOutput(in.varying, mask, color_1);
+    return FragmentOutput(_in._varying, mask, color_1);
 }
 
 @compute @workgroup_size(1, 1, 1) 
 fn compute(@builtin(global_invocation_id) global_id: vec3<u32>, @builtin(local_invocation_id) local_id: vec3<u32>, @builtin(local_invocation_index) local_index: u32, @builtin(workgroup_id) wg_id: vec3<u32>, @builtin(num_workgroups) num_wgs: vec3<u32>) {
-    output[0] = ((((global_id.x + local_id.x) + local_index) + wg_id.x) + num_wgs.x);
+    _output[0] = ((((global_id.x + local_id.x) + local_index) + wg_id.x) + num_wgs.x);
     return;
 }
 

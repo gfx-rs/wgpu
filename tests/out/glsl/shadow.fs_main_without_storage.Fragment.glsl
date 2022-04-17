@@ -45,10 +45,10 @@ float fetch_shadow(uint light_id, vec4 homogeneous_coords) {
 }
 
 void main() {
-    VertexOutput in_1 = VertexOutput(gl_FragCoord, _vs2fs_location0, _vs2fs_location1);
+    VertexOutput _in_1 = VertexOutput(gl_FragCoord, _vs2fs_location0, _vs2fs_location1);
     vec3 color_1 = vec3(0.05000000074505806, 0.05000000074505806, 0.05000000074505806);
     uint i_1 = 0u;
-    vec3 normal_1 = normalize(in_1.world_normal);
+    vec3 normal_1 = normalize(_in_1.world_normal);
     bool loop_init = true;
     while(true) {
         if (!loop_init) {
@@ -65,8 +65,8 @@ void main() {
         uint _e23 = i_1;
         Light light = _group_0_binding_1_fs[_e23];
         uint _e26 = i_1;
-        float _e30 = fetch_shadow(_e26, (light.proj * in_1.world_position));
-        vec3 light_dir = normalize((light.pos.xyz - in_1.world_position.xyz));
+        float _e30 = fetch_shadow(_e26, (light.proj * _in_1.world_position));
+        vec3 light_dir = normalize((light.pos.xyz - _in_1.world_position.xyz));
         float diffuse = max(0.0, dot(normal_1, light_dir));
         vec3 _e40 = color_1;
         color_1 = (_e40 + ((_e30 * diffuse) * light.color.xyz));

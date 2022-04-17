@@ -47,10 +47,10 @@ metal::float4 test_textureLoad_3d(
 
 metal::float4 test_textureLoad_multisampled_2d(
     metal::int2 coords_4,
-    int sample,
+    int _sample,
     metal::texture2d_ms<float, metal::access::read> image_multisampled_2d
 ) {
-    metal::float4 _e7 = image_multisampled_2d.read(metal::min(metal::uint2(coords_4), metal::uint2(image_multisampled_2d.get_width(), image_multisampled_2d.get_height()) - 1), metal::min(uint(sample), image_multisampled_2d.get_num_samples() - 1));
+    metal::float4 _e7 = image_multisampled_2d.read(metal::min(metal::uint2(coords_4), metal::uint2(image_multisampled_2d.get_width(), image_multisampled_2d.get_height()) - 1), metal::min(uint(_sample), image_multisampled_2d.get_num_samples() - 1));
     return _e7;
 }
 
@@ -77,10 +77,10 @@ float test_textureLoad_depth_2d_array(
 
 float test_textureLoad_depth_multisampled_2d(
     metal::int2 coords_7,
-    int sample_1,
+    int _sample_1,
     metal::depth2d_ms<float, metal::access::read> image_depth_multisampled_2d
 ) {
-    float _e10 = image_depth_multisampled_2d.read(metal::min(metal::uint2(coords_7), metal::uint2(image_depth_multisampled_2d.get_width(), image_depth_multisampled_2d.get_height()) - 1), metal::min(uint(sample_1), image_depth_multisampled_2d.get_num_samples() - 1));
+    float _e10 = image_depth_multisampled_2d.read(metal::min(metal::uint2(coords_7), metal::uint2(image_depth_multisampled_2d.get_width(), image_depth_multisampled_2d.get_height()) - 1), metal::min(uint(_sample_1), image_depth_multisampled_2d.get_num_samples() - 1));
     return _e10;
 }
 

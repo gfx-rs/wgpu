@@ -13,8 +13,8 @@ OpEntryPoint GLCompute %76 "main" %73
 OpEntryPoint GLCompute %121 "depth_load" %119
 OpEntryPoint Vertex %142 "queries" %140
 OpEntryPoint Vertex %194 "levels_queries" %193
-OpEntryPoint Fragment %223 "sample" %222
-OpEntryPoint Fragment %252 "sample_comparison" %250
+OpEntryPoint Fragment %223 "texture_sample" %222
+OpEntryPoint Fragment %252 "texture_sample_comparison" %250
 OpEntryPoint Fragment %272 "gather" %271
 OpEntryPoint Fragment %294 "depth_no_comparison" %293
 OpExecutionMode %76 LocalSize 16 1 1
@@ -49,8 +49,8 @@ OpName %119 "local_id"
 OpName %121 "depth_load"
 OpName %142 "queries"
 OpName %194 "levels_queries"
-OpName %223 "sample"
-OpName %252 "sample_comparison"
+OpName %223 "texture_sample"
+OpName %252 "texture_sample_comparison"
 OpName %272 "gather"
 OpName %294 "depth_no_comparison"
 OpDecorate %34 DescriptorSet 0

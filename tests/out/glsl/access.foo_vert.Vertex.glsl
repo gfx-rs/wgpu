@@ -10,7 +10,7 @@ struct Baz {
     mat3x2 m;
 };
 layout(std430) buffer Bar_block_0Vertex {
-    mat4x3 matrix;
+    mat4x3 _matrix;
     mat2x2 matrix_array[2];
     int atom;
     uvec2 arr[2];
@@ -86,9 +86,9 @@ void main() {
     float baz_1 = foo;
     foo = 1.0;
     test_matrix_within_struct_accesses();
-    mat4x3 matrix = _group_0_binding_0_vs.matrix;
+    mat4x3 _matrix = _group_0_binding_0_vs._matrix;
     uvec2 arr[2] = _group_0_binding_0_vs.arr;
-    float b = _group_0_binding_0_vs.matrix[3][0];
+    float b = _group_0_binding_0_vs._matrix[3][0];
     int a_1 = _group_0_binding_0_vs.data[(uint(_group_0_binding_0_vs.data.length()) - 2u)].value;
     float _e28 = read_from_private(foo);
     c = int[5](a_1, int(b), 3, 4, 5);
@@ -96,7 +96,7 @@ void main() {
     int value = c[vi];
     float _e42 = test_arr_as_arg(float[5][10](float[10](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), float[10](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), float[10](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), float[10](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), float[10](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)));
     unnamed = _e42;
-    gl_Position = vec4((matrix * vec4(ivec4(value))), 2.0);
+    gl_Position = vec4((_matrix * vec4(ivec4(value))), 2.0);
     gl_Position.yz = vec2(-gl_Position.y, gl_Position.z * 2.0 - gl_Position.w);
     return;
 }

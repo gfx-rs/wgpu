@@ -3,7 +3,7 @@ struct AlignedWrapper {
 }
 
 struct Bar {
-    matrix: mat4x3<f32>,
+    _matrix: mat4x3<f32>,
     matrix_array: array<mat2x2<f32>,2>,
     atom: atomic<i32>,
     arr: array<vec2<u32>,2>,
@@ -87,9 +87,9 @@ fn foo_vert(@builtin(vertex_index) vi: u32) -> @builtin(position) vec4<f32> {
     let baz_1 = foo;
     foo = 1.0;
     test_matrix_within_struct_accesses();
-    let matrix = bar.matrix;
+    let _matrix = bar._matrix;
     let arr = bar.arr;
-    let b = bar.matrix[3][0];
+    let b = bar._matrix[3][0];
     let a_1 = bar.data[(arrayLength((&bar.data)) - 2u)].value;
     let data_pointer = (&bar.data[0].value);
     let _e28 = read_from_private((&foo));
@@ -98,13 +98,13 @@ fn foo_vert(@builtin(vertex_index) vi: u32) -> @builtin(position) vec4<f32> {
     let value = c[vi];
     let _e42 = test_arr_as_arg(array<array<f32,10>,5>(array<f32,10>(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), array<f32,10>(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), array<f32,10>(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), array<f32,10>(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), array<f32,10>(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)));
     unnamed = _e42;
-    return vec4<f32>((matrix * vec4<f32>(vec4<i32>(value))), 2.0);
+    return vec4<f32>((_matrix * vec4<f32>(vec4<i32>(value))), 2.0);
 }
 
 @fragment 
 fn foo_frag() -> @location(0) vec4<f32> {
-    bar.matrix[1][2] = 1.0;
-    bar.matrix = mat4x3<f32>(vec3<f32>(0.0), vec3<f32>(1.0), vec3<f32>(2.0), vec3<f32>(3.0));
+    bar._matrix[1][2] = 1.0;
+    bar._matrix = mat4x3<f32>(vec3<f32>(0.0), vec3<f32>(1.0), vec3<f32>(2.0), vec3<f32>(3.0));
     bar.arr = array<vec2<u32>,2>(vec2<u32>(0u), vec2<u32>(1u));
     bar.data[1].value = 1;
     return vec4<f32>(0.0);

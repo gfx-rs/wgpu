@@ -65,15 +65,15 @@ vertex vs_mainOutput vs_main(
 ) {
     const auto position = varyings.position;
     const auto normal = varyings.normal;
-    VertexOutput out;
+    VertexOutput _out;
     metal::float4x4 w = u_entity.world;
     metal::float4x4 _e7 = u_entity.world;
     metal::float4 world_pos = _e7 * static_cast<metal::float4>(position);
-    out.world_normal = metal::float3x3(w[0].xyz, w[1].xyz, w[2].xyz) * static_cast<metal::float3>(normal.xyz);
-    out.world_position = world_pos;
+    _out.world_normal = metal::float3x3(w[0].xyz, w[1].xyz, w[2].xyz) * static_cast<metal::float3>(normal.xyz);
+    _out.world_position = world_pos;
     metal::float4x4 _e25 = u_globals.view_proj;
-    out.proj_position = _e25 * world_pos;
-    VertexOutput _e27 = out;
+    _out.proj_position = _e25 * world_pos;
+    VertexOutput _e27 = _out;
     const auto _tmp = _e27;
     return vs_mainOutput { _tmp.proj_position, _tmp.world_normal, _tmp.world_position };
 }
@@ -96,10 +96,10 @@ fragment fs_mainOutput fs_main(
 , metal::sampler sampler_shadow [[user(fake0)]]
 , constant _mslBufferSizes& _buffer_sizes [[user(fake0)]]
 ) {
-    const VertexOutput in = { proj_position, varyings_1.world_normal, varyings_1.world_position };
+    const VertexOutput _in = { proj_position, varyings_1.world_normal, varyings_1.world_position };
     metal::float3 color = c_ambient;
     uint i = 0u;
-    metal::float3 normal_1 = metal::normalize(in.world_normal);
+    metal::float3 normal_1 = metal::normalize(_in.world_normal);
     bool loop_init = true;
     while(true) {
         if (!loop_init) {
@@ -116,8 +116,8 @@ fragment fs_mainOutput fs_main(
         uint _e23 = i;
         Light light = s_lights[_e23];
         uint _e26 = i;
-        float _e30 = fetch_shadow(_e26, light.proj * in.world_position, t_shadow, sampler_shadow);
-        metal::float3 light_dir = metal::normalize(light.pos.xyz - in.world_position.xyz);
+        float _e30 = fetch_shadow(_e26, light.proj * _in.world_position, t_shadow, sampler_shadow);
+        metal::float3 light_dir = metal::normalize(light.pos.xyz - _in.world_position.xyz);
         float diffuse = metal::max(0.0, metal::dot(normal_1, light_dir));
         metal::float3 _e40 = color;
         color = _e40 + ((_e30 * diffuse) * light.color.xyz);
@@ -144,10 +144,10 @@ fragment fs_main_without_storageOutput fs_main_without_storage(
 , metal::depth2d_array<float, metal::access::sample> t_shadow [[user(fake0)]]
 , metal::sampler sampler_shadow [[user(fake0)]]
 ) {
-    const VertexOutput in_1 = { proj_position_1, varyings_2.world_normal, varyings_2.world_position };
+    const VertexOutput _in_1 = { proj_position_1, varyings_2.world_normal, varyings_2.world_position };
     metal::float3 color_1 = c_ambient;
     uint i_1 = 0u;
-    metal::float3 normal_2 = metal::normalize(in_1.world_normal);
+    metal::float3 normal_2 = metal::normalize(_in_1.world_normal);
     bool loop_init_1 = true;
     while(true) {
         if (!loop_init_1) {
@@ -164,8 +164,8 @@ fragment fs_main_without_storageOutput fs_main_without_storage(
         uint _e23 = i_1;
         Light light_1 = u_lights.inner[_e23];
         uint _e26 = i_1;
-        float _e30 = fetch_shadow(_e26, light_1.proj * in_1.world_position, t_shadow, sampler_shadow);
-        metal::float3 light_dir_1 = metal::normalize(light_1.pos.xyz - in_1.world_position.xyz);
+        float _e30 = fetch_shadow(_e26, light_1.proj * _in_1.world_position, t_shadow, sampler_shadow);
+        metal::float3 light_dir_1 = metal::normalize(light_1.pos.xyz - _in_1.world_position.xyz);
         float diffuse_1 = metal::max(0.0, metal::dot(normal_2, light_dir_1));
         metal::float3 _e40 = color_1;
         color_1 = _e40 + ((_e30 * diffuse_1) * light_1.color.xyz);

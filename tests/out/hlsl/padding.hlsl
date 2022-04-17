@@ -30,13 +30,13 @@ struct Test3_ {
     int _end_pad_2;
 };
 
-cbuffer input : register(b0) { Test input; }
+cbuffer input1_ : register(b0) { Test input1_; }
 cbuffer input2_ : register(b1) { Test2_ input2_; }
 cbuffer input3_ : register(b2) { Test3_ input3_; }
 
 float4 vertex() : SV_Position
 {
-    float _expr6 = input.b;
+    float _expr6 = input1_.b;
     float _expr9 = input2_.b;
     float _expr12 = input3_.b;
     return ((((1.0).xxxx * _expr6) * _expr9) * _expr12);

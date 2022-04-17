@@ -1012,8 +1012,8 @@ fn missing_bindings() {
     check_validation_error! {
         "
         @vertex
-        fn vertex(input: vec4<f32>) -> @location(0) vec4<f32> {
-           return input;
+        fn vertex(_input: vec4<f32>) -> @location(0) vec4<f32> {
+           return _input;
         }
         ":
         Err(naga::valid::ValidationError::EntryPoint {
@@ -1029,8 +1029,8 @@ fn missing_bindings() {
     check_validation_error! {
         "
         @vertex
-        fn vertex(@location(0) input: vec4<f32>, more_input: f32) -> @location(0) vec4<f32> {
-           return input + more_input;
+        fn vertex(@location(0) _input: vec4<f32>, more_input: f32) -> @location(0) vec4<f32> {
+           return _input + more_input;
         }
         ":
         Err(naga::valid::ValidationError::EntryPoint {
@@ -1046,8 +1046,8 @@ fn missing_bindings() {
     check_validation_error! {
         "
         @vertex
-        fn vertex(@location(0) input: vec4<f32>) -> vec4<f32> {
-           return input;
+        fn vertex(@location(0) _input: vec4<f32>) -> vec4<f32> {
+           return _input;
         }
         ":
         Err(naga::valid::ValidationError::EntryPoint {
@@ -1067,8 +1067,8 @@ fn missing_bindings() {
         }
 
         @vertex
-        fn vertex(input: VertexIn) -> @location(0) vec4<f32> {
-           return input.pos;
+        fn vertex(_input: VertexIn) -> @location(0) vec4<f32> {
+           return _input.pos;
         }
         ":
         Err(naga::valid::ValidationError::EntryPoint {
@@ -1213,13 +1213,13 @@ fn invalid_runtime_sized_arrays() {
 
         struct Outer {
             legit: i32,
-            unsized: Unsized
+            _unsized: Unsized
         }
 
         @group(0) @binding(0) var<storage> outer: Outer;
 
         fn fetch(i: i32) -> f32 {
-           return outer.unsized.arr[i];
+           return outer._unsized.arr[i];
         }
         ":
         Err(naga::valid::ValidationError::Type {
@@ -1227,7 +1227,7 @@ fn invalid_runtime_sized_arrays() {
             error: naga::valid::TypeError::InvalidDynamicArray(member_name, _),
             ..
         })
-        if struct_name == "Outer" && member_name == "unsized"
+        if struct_name == "Outer" && member_name == "_unsized"
     }
 }
 
@@ -1238,8 +1238,8 @@ fn select() {
         fn select_pointers(which: bool) -> i32 {
             var x: i32 = 1;
             var y: i32 = 2;
-            let ptr = select(&x, &y, which);
-            return *ptr;
+            let p = select(&x, &y, which);
+            return *p;
         }
         ",
         "

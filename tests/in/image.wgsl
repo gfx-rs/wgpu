@@ -97,7 +97,7 @@ fn levels_queries() -> @builtin(position) vec4<f32> {
 var sampler_reg: sampler;
 
 @fragment
-fn sample() -> @location(0) vec4<f32> {
+fn texture_sample() -> @location(0) vec4<f32> {
     let tc = vec2<f32>(0.5);
     let level = 2.3;
     let s1d = textureSample(image_1d, sampler_reg, tc.x);
@@ -117,7 +117,7 @@ var image_2d_depth: texture_depth_2d;
 var image_cube_depth: texture_depth_cube;
 
 @fragment
-fn sample_comparison() -> @location(0) f32 {
+fn texture_sample_comparison() -> @location(0) f32 {
     let tc = vec2<f32>(0.5);
     let dref = 0.5;
     let s2d_depth = textureSampleCompare(image_2d_depth, sampler_cmp, tc, dref);

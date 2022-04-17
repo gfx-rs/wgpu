@@ -7,7 +7,7 @@ ConstantBuffer<NagaConstants> _NagaConstants: register(b0, space1);
 
 struct VertexOutput {
     precise float4 position : SV_Position;
-    float varying : LOC1;
+    float _varying : LOC1;
 };
 
 struct FragmentOutput {
@@ -24,15 +24,15 @@ struct Input2_ {
     uint index : SV_InstanceID;
 };
 
-groupshared uint output[1];
+groupshared uint _output[1];
 
 struct VertexOutput_vertex {
-    float varying : LOC1;
+    float _varying : LOC1;
     precise float4 position : SV_Position;
 };
 
 struct FragmentInput_fragment {
-    float varying_1 : LOC1;
+    float _varying_1 : LOC1;
     precise float4 position_1 : SV_Position;
     bool front_facing_1 : SV_IsFrontFace;
     uint sample_index_1 : SV_SampleIndex;
@@ -42,7 +42,7 @@ struct FragmentInput_fragment {
 VertexOutput ConstructVertexOutput(float4 arg0, float arg1) {
     VertexOutput ret;
     ret.position = arg0;
-    ret.varying = arg1;
+    ret._varying = arg1;
     return ret;
 }
 
@@ -50,7 +50,7 @@ VertexOutput_vertex vertex(uint vertex_index : SV_VertexID, uint instance_index 
 {
     uint tmp = (((_NagaConstants.base_vertex + vertex_index) + (_NagaConstants.base_instance + instance_index)) + color);
     const VertexOutput vertexoutput = ConstructVertexOutput((1.0).xxxx, float(tmp));
-    const VertexOutput_vertex vertexoutput_1 = { vertexoutput.varying, vertexoutput.position };
+    const VertexOutput_vertex vertexoutput_1 = { vertexoutput._varying, vertexoutput.position };
     return vertexoutput_1;
 }
 
@@ -64,20 +64,20 @@ FragmentOutput ConstructFragmentOutput(float arg0, uint arg1, float arg2) {
 
 FragmentOutput fragment(FragmentInput_fragment fragmentinput_fragment)
 {
-    VertexOutput in_ = { fragmentinput_fragment.position_1, fragmentinput_fragment.varying_1 };
+    VertexOutput _in = { fragmentinput_fragment.position_1, fragmentinput_fragment._varying_1 };
     bool front_facing = fragmentinput_fragment.front_facing_1;
     uint sample_index = fragmentinput_fragment.sample_index_1;
     uint sample_mask = fragmentinput_fragment.sample_mask_1;
     uint mask = (sample_mask & (1u << sample_index));
     float color_1 = (front_facing ? 1.0 : 0.0);
-    const FragmentOutput fragmentoutput = ConstructFragmentOutput(in_.varying, mask, color_1);
+    const FragmentOutput fragmentoutput = ConstructFragmentOutput(_in._varying, mask, color_1);
     return fragmentoutput;
 }
 
 [numthreads(1, 1, 1)]
 void compute(uint3 global_id : SV_DispatchThreadID, uint3 local_id : SV_GroupThreadID, uint local_index : SV_GroupIndex, uint3 wg_id : SV_GroupID, uint3 num_wgs : SV_GroupID)
 {
-    output[0] = ((((global_id.x + local_id.x) + local_index) + wg_id.x) + uint3(_NagaConstants.base_vertex, _NagaConstants.base_instance, _NagaConstants.other).x);
+    _output[0] = ((((global_id.x + local_id.x) + local_index) + wg_id.x) + uint3(_NagaConstants.base_vertex, _NagaConstants.base_instance, _NagaConstants.other).x);
     return;
 }
 

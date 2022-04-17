@@ -138,7 +138,7 @@ float4 foo_vert(uint vi : SV_VertexID) : SV_Position
     float baz_1 = foo;
     foo = 1.0;
     test_matrix_within_struct_accesses();
-    float4x3 matrix_ = float4x3(asfloat(bar.Load3(0+0)), asfloat(bar.Load3(0+16)), asfloat(bar.Load3(0+32)), asfloat(bar.Load3(0+48)));
+    float4x3 _matrix = float4x3(asfloat(bar.Load3(0+0)), asfloat(bar.Load3(0+16)), asfloat(bar.Load3(0+32)), asfloat(bar.Load3(0+48)));
     uint2 arr[2] = {asuint(bar.Load2(104+0)), asuint(bar.Load2(104+8))};
     float b = asfloat(bar.Load(0+48+0));
     int a_1 = asint(bar.Load(0+(((NagaBufferLengthRW(bar) - 120) / 8) - 2u)*8+120));
@@ -151,7 +151,7 @@ float4 foo_vert(uint vi : SV_VertexID) : SV_Position
     int value = c[vi];
     const float _e42 = test_arr_as_arg(Constructarray5_array10_float__(Constructarray10_float_(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), Constructarray10_float_(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), Constructarray10_float_(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), Constructarray10_float_(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), Constructarray10_float_(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)));
     unnamed = _e42;
-    return float4(mul(float4((value).xxxx), matrix_), 2.0);
+    return float4(mul(float4((value).xxxx), _matrix), 2.0);
 }
 
 uint2 Constructarray2_uint2_(uint2 arg0, uint2 arg1)[2] {

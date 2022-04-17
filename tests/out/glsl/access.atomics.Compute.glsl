@@ -12,7 +12,7 @@ struct Baz {
     mat3x2 m;
 };
 layout(std430) buffer Bar_block_0Compute {
-    mat4x3 matrix;
+    mat4x3 _matrix;
     mat2x2 matrix_array[2];
     int atom;
     uvec2 arr[2];

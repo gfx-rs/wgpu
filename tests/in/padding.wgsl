@@ -18,7 +18,7 @@ struct Test3 {
 }
 
 @group(0) @binding(0)
-var<uniform> input: Test;
+var<uniform> input1: Test;
 
 @group(0) @binding(1)
 var<uniform> input2: Test2;
@@ -29,5 +29,5 @@ var<uniform> input3: Test3;
 
 @vertex
 fn vertex() -> @builtin(position) vec4<f32> {
-    return vec4<f32>(1.0) * input.b * input2.b * input3.b;
+    return vec4<f32>(1.0) * input1.b * input2.b * input3.b;
 }

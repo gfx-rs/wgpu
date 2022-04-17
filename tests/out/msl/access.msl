@@ -19,7 +19,7 @@ struct type_6 {
 };
 typedef AlignedWrapper type_7[1];
 struct Bar {
-    metal::float4x3 matrix;
+    metal::float4x3 _matrix;
     type_3 matrix_array;
     metal::atomic_int atom;
     char _pad3[4];
@@ -122,9 +122,9 @@ vertex foo_vertOutput foo_vert(
     float baz_1 = foo;
     foo = 1.0;
     test_matrix_within_struct_accesses(baz);
-    metal::float4x3 matrix = bar.matrix;
+    metal::float4x3 _matrix = bar._matrix;
     type_6 arr = bar.arr;
-    float b = bar.matrix[3].x;
+    float b = bar._matrix[3].x;
     int a_1 = bar.data[(1 + (_buffer_sizes.size0 - 120 - 8) / 8) - 2u].value;
     float _e28 = read_from_private(foo);
     for(int _i=0; _i<5; ++_i) c.inner[_i] = type_17 {a_1, static_cast<int>(b), 3, 4, 5}.inner[_i];
@@ -132,7 +132,7 @@ vertex foo_vertOutput foo_vert(
     int value = c.inner[vi];
     float _e42 = test_arr_as_arg(const_type_13_);
     unnamed = _e42;
-    return foo_vertOutput { metal::float4(matrix * static_cast<metal::float4>(metal::int4(value)), 2.0) };
+    return foo_vertOutput { metal::float4(_matrix * static_cast<metal::float4>(metal::int4(value)), 2.0) };
 }
 
 
@@ -143,8 +143,8 @@ fragment foo_fragOutput foo_frag(
   device Bar& bar [[buffer(0)]]
 , constant _mslBufferSizes& _buffer_sizes [[buffer(24)]]
 ) {
-    bar.matrix[1].z = 1.0;
-    bar.matrix = metal::float4x3(metal::float3(0.0), metal::float3(1.0), metal::float3(2.0), metal::float3(3.0));
+    bar._matrix[1].z = 1.0;
+    bar._matrix = metal::float4x3(metal::float3(0.0), metal::float3(1.0), metal::float3(2.0), metal::float3(3.0));
     for(int _i=0; _i<2; ++_i) bar.arr.inner[_i] = type_6 {metal::uint2(0u), metal::uint2(1u)}.inner[_i];
     bar.data[1].value = 1;
     return foo_fragOutput { metal::float4(0.0) };

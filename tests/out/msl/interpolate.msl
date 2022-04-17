@@ -6,8 +6,8 @@ using metal::uint;
 
 struct FragmentInput {
     metal::float4 position;
-    uint flat;
-    float linear;
+    uint _flat;
+    float _linear;
     metal::float2 linear_centroid;
     metal::float3 linear_sample;
     metal::float4 perspective;
@@ -17,8 +17,8 @@ struct FragmentInput {
 
 struct vert_mainOutput {
     metal::float4 position [[position]];
-    uint flat [[user(loc0), flat]];
-    float linear [[user(loc1), center_no_perspective]];
+    uint _flat [[user(loc0), flat]];
+    float _linear [[user(loc1), center_no_perspective]];
     metal::float2 linear_centroid [[user(loc2), centroid_no_perspective]];
     metal::float3 linear_sample [[user(loc3), sample_no_perspective]];
     metal::float4 perspective [[user(loc4), center_perspective]];
@@ -27,24 +27,24 @@ struct vert_mainOutput {
 };
 vertex vert_mainOutput vert_main(
 ) {
-    FragmentInput out;
-    out.position = metal::float4(2.0, 4.0, 5.0, 6.0);
-    out.flat = 8u;
-    out.linear = 27.0;
-    out.linear_centroid = metal::float2(64.0, 125.0);
-    out.linear_sample = metal::float3(216.0, 343.0, 512.0);
-    out.perspective = metal::float4(729.0, 1000.0, 1331.0, 1728.0);
-    out.perspective_centroid = 2197.0;
-    out.perspective_sample = 2744.0;
-    FragmentInput _e30 = out;
+    FragmentInput _out;
+    _out.position = metal::float4(2.0, 4.0, 5.0, 6.0);
+    _out._flat = 8u;
+    _out._linear = 27.0;
+    _out.linear_centroid = metal::float2(64.0, 125.0);
+    _out.linear_sample = metal::float3(216.0, 343.0, 512.0);
+    _out.perspective = metal::float4(729.0, 1000.0, 1331.0, 1728.0);
+    _out.perspective_centroid = 2197.0;
+    _out.perspective_sample = 2744.0;
+    FragmentInput _e30 = _out;
     const auto _tmp = _e30;
-    return vert_mainOutput { _tmp.position, _tmp.flat, _tmp.linear, _tmp.linear_centroid, _tmp.linear_sample, _tmp.perspective, _tmp.perspective_centroid, _tmp.perspective_sample };
+    return vert_mainOutput { _tmp.position, _tmp._flat, _tmp._linear, _tmp.linear_centroid, _tmp.linear_sample, _tmp.perspective, _tmp.perspective_centroid, _tmp.perspective_sample };
 }
 
 
 struct frag_mainInput {
-    uint flat [[user(loc0), flat]];
-    float linear [[user(loc1), center_no_perspective]];
+    uint _flat [[user(loc0), flat]];
+    float _linear [[user(loc1), center_no_perspective]];
     metal::float2 linear_centroid [[user(loc2), centroid_no_perspective]];
     metal::float3 linear_sample [[user(loc3), sample_no_perspective]];
     metal::float4 perspective [[user(loc4), center_perspective]];
@@ -55,6 +55,6 @@ fragment void frag_main(
   frag_mainInput varyings_1 [[stage_in]]
 , metal::float4 position [[position]]
 ) {
-    const FragmentInput val = { position, varyings_1.flat, varyings_1.linear, varyings_1.linear_centroid, varyings_1.linear_sample, varyings_1.perspective, varyings_1.perspective_centroid, varyings_1.perspective_sample };
+    const FragmentInput val = { position, varyings_1._flat, varyings_1._linear, varyings_1.linear_centroid, varyings_1.linear_sample, varyings_1.perspective, varyings_1.perspective_centroid, varyings_1.perspective_sample };
     return;
 }
