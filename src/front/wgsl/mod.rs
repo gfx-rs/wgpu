@@ -70,7 +70,6 @@ pub enum Token<'a> {
     DecrementOperation,
     Arrow,
     Unknown(char),
-    UnterminatedBlockComment,
     Trivia,
     End,
 }
@@ -203,7 +202,6 @@ impl<'a> Error<'a> {
                                 Token::DecrementOperation => "decrement operation".to_string(),
                                 Token::Arrow => "->".to_string(),
                                 Token::Unknown(c) => format!("unknown ('{}')", c),
-                                Token::UnterminatedBlockComment => "unterminated block comment".to_string(),
                                 Token::Trivia => "trivia".to_string(),
                                 Token::End => "end".to_string(),
                             }

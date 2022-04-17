@@ -264,11 +264,11 @@ fn consume_number(input: &str) -> (Token, &str) {
     )
 }
 
-fn consume_token(mut input: &str, generic: bool) -> (Token<'_>, &str) {
+fn consume_token(input: &str, generic: bool) -> (Token<'_>, &str) {
     let mut chars = input.chars();
     let cur = match chars.next() {
         Some(c) => c,
-        None => return (Token::End, input),
+        None => return (Token::End, ""),
     };
     match cur {
         ':' | ';' | ',' => (Token::Separator(cur), chars.as_str()),
@@ -282,108 +282,95 @@ fn consume_token(mut input: &str, generic: bool) -> (Token<'_>, &str) {
         '@' => (Token::Attribute, chars.as_str()),
         '(' | ')' | '{' | '}' | '[' | ']' => (Token::Paren(cur), chars.as_str()),
         '<' | '>' => {
-            input = chars.as_str();
-            let next = chars.next();
-            if next == Some('=') && !generic {
-                (Token::LogicalOperation(cur), chars.as_str())
-            } else if next == Some(cur) && !generic {
-                input = chars.as_str();
-                if chars.next() == Some('=') {
-                    (Token::AssignmentOperation(cur), chars.as_str())
-                } else {
-                    (Token::ShiftOperation(cur), input)
+            let og_chars = chars.as_str();
+            match chars.next() {
+                Some('=') if !generic => (Token::LogicalOperation(cur), chars.as_str()),
+                Some(c) if c == cur && !generic => {
+                    let og_chars = chars.as_str();
+                    match chars.next() {
+                        Some('=') => (Token::AssignmentOperation(cur), chars.as_str()),
+                        _ => (Token::ShiftOperation(cur), og_chars),
+                    }
                 }
-            } else {
-                (Token::Paren(cur), input)
+                _ => (Token::Paren(cur), og_chars),
             }
         }
         '0'..='9' => consume_number(input),
         '/' => {
-            input = chars.as_str();
+            let og_chars = chars.as_str();
             match chars.next() {
                 Some('/') => {
                     let _ = chars.position(is_comment_end);
                     (Token::Trivia, chars.as_str())
                 }
                 Some('*') => {
-                    input = chars.as_str();
-
                     let mut depth = 1;
-                    let mut prev = '\0';
+                    let mut prev = None;
 
                     for c in &mut chars {
                         match (prev, c) {
-                            ('*', '/') => {
-                                prev = '\0';
+                            (Some('*'), '/') => {
+                                prev = None;
                                 depth -= 1;
                                 if depth == 0 {
-                                    break;
+                                    return (Token::Trivia, chars.as_str());
                                 }
                             }
-                            ('/', '*') => {
-                                prev = '\0';
+                            (Some('/'), '*') => {
+                                prev = None;
                                 depth += 1;
                             }
                             _ => {
-                                prev = c;
+                                prev = Some(c);
                             }
                         }
                     }
 
-                    if depth > 0 {
-                        (Token::UnterminatedBlockComment, input)
-                    } else {
-                        (Token::Trivia, chars.as_str())
-                    }
+                    (Token::End, "")
                 }
                 Some('=') => (Token::AssignmentOperation(cur), chars.as_str()),
-                _ => (Token::Operation(cur), input),
+                _ => (Token::Operation(cur), og_chars),
             }
         }
         '-' => {
-            let sub_input = chars.as_str();
+            let og_chars = chars.as_str();
             match chars.next() {
                 Some('>') => (Token::Arrow, chars.as_str()),
                 Some('0'..='9' | '.') => consume_number(input),
                 Some('-') => (Token::DecrementOperation, chars.as_str()),
                 Some('=') => (Token::AssignmentOperation(cur), chars.as_str()),
-                _ => (Token::Operation(cur), sub_input),
+                _ => (Token::Operation(cur), og_chars),
             }
         }
         '+' => {
-            input = chars.as_str();
+            let og_chars = chars.as_str();
             match chars.next() {
                 Some('+') => (Token::IncrementOperation, chars.as_str()),
                 Some('=') => (Token::AssignmentOperation(cur), chars.as_str()),
-                _ => (Token::Operation(cur), input),
+                _ => (Token::Operation(cur), og_chars),
             }
         }
         '*' | '%' | '^' => {
-            input = chars.as_str();
-            if chars.next() == Some('=') {
-                (Token::AssignmentOperation(cur), chars.as_str())
-            } else {
-                (Token::Operation(cur), input)
+            let og_chars = chars.as_str();
+            match chars.next() {
+                Some('=') => (Token::AssignmentOperation(cur), chars.as_str()),
+                _ => (Token::Operation(cur), og_chars),
             }
         }
         '~' => (Token::Operation(cur), chars.as_str()),
-        '!' => {
-            input = chars.as_str();
-            if chars.next() == Some('=') {
-                (Token::LogicalOperation(cur), chars.as_str())
-            } else {
-                (Token::Operation(cur), input)
+        '=' | '!' => {
+            let og_chars = chars.as_str();
+            match chars.next() {
+                Some('=') => (Token::LogicalOperation(cur), chars.as_str()),
+                _ => (Token::Operation(cur), og_chars),
             }
         }
-        '=' | '&' | '|' => {
-            input = chars.as_str();
-            let next = chars.next();
-            if next == Some(cur) {
-                (Token::LogicalOperation(cur), chars.as_str())
-            } else if next == Some('=') {
-                (Token::AssignmentOperation(cur), chars.as_str())
-            } else {
-                (Token::Operation(cur), input)
+        '&' | '|' => {
+            let og_chars = chars.as_str();
+            match chars.next() {
+                Some(c) if c == cur => (Token::LogicalOperation(cur), chars.as_str()),
+                Some('=') => (Token::AssignmentOperation(cur), chars.as_str()),
+                _ => (Token::Operation(cur), og_chars),
             }
         }
         _ if is_blankspace(cur) => {
