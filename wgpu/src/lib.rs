@@ -1532,10 +1532,7 @@ impl Instance {
     ///
     /// - canvas must be a valid <canvas> element to create a surface upon.
     #[cfg(target_arch = "wasm32")]
-    pub fn create_surface_from_canvas(
-        &self,
-        canvas: &web_sys::HtmlCanvasElement,
-    ) -> Surface {
+    pub fn create_surface_from_canvas(&self, canvas: &web_sys::HtmlCanvasElement) -> Surface {
         Surface {
             context: Arc::clone(&self.context),
             id: self.context.instance_create_surface_from_canvas(canvas),

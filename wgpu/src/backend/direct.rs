@@ -170,8 +170,8 @@ impl Context {
     ) -> Surface {
         let id = self.0.create_surface_webgl_canvas(canvas, PhantomData);
         Surface {
-                id,
-                configured_device: Mutex::default(),
+            id,
+            configured_device: Mutex::default(),
         }
     }
 
@@ -180,7 +180,9 @@ impl Context {
         self: &Arc<Self>,
         canvas: &web_sys::OffscreenCanvas,
     ) -> Surface {
-        let id = self.0.create_surface_webgl_offscreen_canvas(canvas, PhantomData);
+        let id = self
+            .0
+            .create_surface_webgl_offscreen_canvas(canvas, PhantomData);
         Surface {
             id,
             configured_device: Mutex::default(),
