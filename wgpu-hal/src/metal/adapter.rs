@@ -665,7 +665,7 @@ impl super::PrivateCapabilities {
             max_varying_components: if device
                 .supports_feature_set(MTLFeatureSet::macOS_GPUFamily1_v1)
             {
-                128
+                124
             } else {
                 60
             },
@@ -680,11 +680,7 @@ impl super::PrivateCapabilities {
             } else {
                 512
             },
-            max_total_threadgroup_memory: if device
-                .supports_feature_set(MTLFeatureSet::iOS_GPUFamily4_v2)
-            {
-                64 << 10
-            } else if Self::supports_any(
+            max_total_threadgroup_memory: if Self::supports_any(
                 device,
                 &[
                     MTLFeatureSet::iOS_GPUFamily4_v1,
@@ -833,13 +829,12 @@ impl super::PrivateCapabilities {
                 max_push_constant_size: 0x1000,
                 min_uniform_buffer_offset_alignment: self.buffer_alignment as u32,
                 min_storage_buffer_offset_alignment: self.buffer_alignment as u32,
-                //TODO: double-check how these match Metal feature set tables
                 max_inter_stage_shader_components: self.max_varying_components,
                 max_compute_workgroup_storage_size: self.max_total_threadgroup_memory,
                 max_compute_invocations_per_workgroup: self.max_threads_per_group,
-                max_compute_workgroup_size_x: 256,
-                max_compute_workgroup_size_y: 256,
-                max_compute_workgroup_size_z: 64,
+                max_compute_workgroup_size_x: self.max_threads_per_group,
+                max_compute_workgroup_size_y: self.max_threads_per_group,
+                max_compute_workgroup_size_z: self.max_threads_per_group,
                 max_compute_workgroups_per_dimension: 0xFFFF,
             },
             alignments: crate::Alignments {
