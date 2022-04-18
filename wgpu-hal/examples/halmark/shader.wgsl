@@ -34,12 +34,12 @@ fn vs_main(@builtin(vertex_index) vi: u32) -> VertexOutput {
 
 @group(0)
 @binding(1)
-var texture: texture_2d<f32>;
+var tex: texture_2d<f32>;
 @group(0)
 @binding(2)
 var sam: sampler;
 
 @fragment
-fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-    return in.color * textureSampleLevel(texture, sam, in.tex_coords, 0.0);
+fn fs_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
+    return vertex.color * textureSampleLevel(tex, sam, vertex.tex_coords, 0.0);
 }
