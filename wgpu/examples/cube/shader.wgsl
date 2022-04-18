@@ -15,10 +15,10 @@ fn vs_main(
     @location(0) position: vec4<f32>,
     @location(1) tex_coord: vec2<f32>,
 ) -> VertexOutput {
-    var out: VertexOutput;
-    out.tex_coord = tex_coord;
-    out.position = r_locals.transform * position;
-    return out;
+    var result: VertexOutput;
+    result.tex_coord = tex_coord;
+    result.position = r_locals.transform * position;
+    return result;
 }
 
 @group(0)
@@ -26,8 +26,8 @@ fn vs_main(
 var r_color: texture_2d<u32>;
 
 @fragment
-fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-    let tex = textureLoad(r_color, vec2<i32>(in.tex_coord * 256.0), 0);
+fn fs_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
+    let tex = textureLoad(r_color, vec2<i32>(vertex.tex_coord * 256.0), 0);
     let v = f32(tex.x) / 255.0;
     return vec4<f32>(1.0 - (v * 5.0), 1.0 - (v * 15.0), 1.0 - (v * 50.0), 1.0);
 }

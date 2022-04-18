@@ -206,15 +206,15 @@ fn vs_main(
     let eye = normalize(-water_pos);
     let transformed_light = vm * vec4<f32>(light_point, 1.0);
 
-    var out: VertexOutput;
-    out.f_Light = light_colour * calc_specular(eye, normal, normalize(water_pos.xyz - (transformed_light.xyz * (1.0 / transformed_light.w))));
-    out.f_Fresnel = calc_fresnel(eye, normal);
+    var result: VertexOutput;
+    result.f_Light = light_colour * calc_specular(eye, normal, normalize(water_pos.xyz - (transformed_light.xyz * (1.0 / transformed_light.w))));
+    result.f_Fresnel = calc_fresnel(eye, normal);
 
     let gridpos = uniforms.projection * vm * original_pos;
-    out.f_WaterScreenPos = (0.5 * gridpos.xy * (1.0 / gridpos.w)) + vec2<f32>(0.5, 0.5);
+    result.f_WaterScreenPos = (0.5 * gridpos.xy * (1.0 / gridpos.w)) + vec2<f32>(0.5, 0.5);
 
-    out.position = uniforms.projection * transformed_pos;
-    return out;
+    result.position = uniforms.projection * transformed_pos;
+    return result;
 }
 
 
@@ -234,19 +234,19 @@ fn to_linear_depth(depth: f32) -> f32 {
 }
 
 @fragment
-fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-    let reflection_colour = textureSample(reflection, colour_sampler, in.f_WaterScreenPos.xy).xyz;
+fn fs_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
+    let reflection_colour = textureSample(reflection, colour_sampler, vertex.f_WaterScreenPos.xy).xyz;
 
-    let pixel_depth = to_linear_depth(in.position.z);
-    let normalized_coords = in.position.xy / vec2<f32>(uniforms.time_size_width.w, uniforms.viewport_height);
+    let pixel_depth = to_linear_depth(vertex.position.z);
+    let normalized_coords = vertex.position.xy / vec2<f32>(uniforms.time_size_width.w, uniforms.viewport_height);
     let terrain_depth = to_linear_depth(textureSample(terrain_depth_tex, depth_sampler, normalized_coords).r);
 
     let dist = terrain_depth - pixel_depth;
     let clamped = pow(smoothstep(0.0, 1.5, dist), 4.8);
 
-    let final_colour = in.f_Light + reflection_colour;
+    let final_colour = vertex.f_Light + reflection_colour;
     let t = smoothstep(1.0, 5.0, dist) * 0.2; //TODO: splat for mix()?
     let depth_colour = mix(final_colour, water_colour, vec3<f32>(t, t, t));
 
-    return vec4<f32>(depth_colour, clamped * (1.0 - in.f_Fresnel));
+    return vec4<f32>(depth_colour, clamped * (1.0 - vertex.f_Fresnel));
 }

@@ -33,10 +33,10 @@ fn vs_sky(@builtin(vertex_index) vertex_index: u32) -> SkyOutput {
     let inv_model_view = transpose(mat3x3<f32>(r_data.view.x.xyz, r_data.view.y.xyz, r_data.view.z.xyz));
     let unprojected = r_data.proj_inv * pos;
 
-    var out: SkyOutput;
-    out.uv = inv_model_view * unprojected.xyz;
-    out.position = pos;
-    return out;
+    var result: SkyOutput;
+    result.uv = inv_model_view * unprojected.xyz;
+    result.position = pos;
+    return result;
 }
 
 struct EntityOutput {
@@ -50,11 +50,11 @@ fn vs_entity(
     @location(0) pos: vec3<f32>,
     @location(1) normal: vec3<f32>,
 ) -> EntityOutput {
-    var out: EntityOutput;
-    out.normal = normal;
-    out.view = pos - r_data.cam_pos.xyz;
-    out.position = r_data.proj * r_data.view * vec4<f32>(pos, 1.0);
-    return out;
+    var result: EntityOutput;
+    result.normal = normal;
+    result.view = pos - r_data.cam_pos.xyz;
+    result.position = r_data.proj * r_data.view * vec4<f32>(pos, 1.0);
+    return result;
 }
 
 @group(0)
@@ -65,14 +65,14 @@ var r_texture: texture_cube<f32>;
 var r_sampler: sampler;
 
 @fragment
-fn fs_sky(in: SkyOutput) -> @location(0) vec4<f32> {
-    return textureSample(r_texture, r_sampler, in.uv);
+fn fs_sky(vertex: SkyOutput) -> @location(0) vec4<f32> {
+    return textureSample(r_texture, r_sampler, vertex.uv);
 }
 
 @fragment
-fn fs_entity(in: EntityOutput) -> @location(0) vec4<f32> {
-    let incident = normalize(in.view);
-    let normal = normalize(in.normal);
+fn fs_entity(vertex: EntityOutput) -> @location(0) vec4<f32> {
+    let incident = normalize(vertex.view);
+    let normal = normalize(vertex.normal);
     let reflected = incident - 2.0 * dot(normal, incident) * normal;
 
     let reflected_color = textureSample(r_texture, r_sampler, reflected).rgb;
