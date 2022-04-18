@@ -1032,7 +1032,7 @@ dependencies = [
 [[package]]
 name = "naga"
 version = "0.8.0"
-source = "git+https://github.com/gfx-rs/naga?rev=0e2bb019#0e2bb0194b029c388a70403d36a82d5fc774d307"
+source = "git+https://github.com/gfx-rs/naga?rev=85056524#850565243d1d0d03215f13246c94d63e1d4c51cd"
 dependencies = [
  "bit-set",
  "bitflags",
@@ -1048,7 +1048,7 @@ dependencies = [
  "spirv",
  "termcolor",
  "thiserror",
- "unicode-id",
+ "unicode-xid",
 ]
 
 [[package]]
@@ -1725,12 +1725,6 @@ checksum = "a31142970826733df8241ef35dc040ef98c679ab14d7c3e54d827099b3acecaa"
 dependencies = [
  "serde",
 ]
-
-[[package]]
-name = "unicode-id"
-version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "69fe8d9274f490a36442acb4edfd0c4e473fdfc6a8b5cd32f28a0235761aedbe"
 
 [[package]]
 name = "unicode-segmentation"
