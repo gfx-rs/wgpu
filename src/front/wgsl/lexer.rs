@@ -410,12 +410,12 @@ const fn is_blankspace(c: char) -> bool {
 
 /// Returns whether or not a char is a word start (Unicode XID_Start + '_')
 fn is_word_start(c: char) -> bool {
-    c == '_' || unicode_id::UnicodeID::is_id_start(c)
+    c == '_' || unicode_xid::UnicodeXID::is_xid_start(c)
 }
 
 /// Returns whether or not a char is a word part (Unicode XID_Continue)
 fn is_word_part(c: char) -> bool {
-    unicode_id::UnicodeID::is_id_continue(c)
+    unicode_xid::UnicodeXID::is_xid_continue(c)
 }
 
 #[derive(Clone)]
