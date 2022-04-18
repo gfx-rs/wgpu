@@ -44,7 +44,7 @@ harness = false
 
 [dependencies]
 arbitrary = { version = "1.0.2", features = ["derive"], optional = true }
-bitflags = "1.0.4"
+bitflags = "1.0.5"
 bit-set = "0.5"
 termcolor = "1.0.4"
 # remove termcolor dep when updating to the next version of codespan-reporting
