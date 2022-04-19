@@ -286,7 +286,7 @@ impl super::Adapter {
         downlevel_flags.set(wgt::DownlevelFlags::FRAGMENT_STORAGE, supports_storage);
         downlevel_flags.set(
             wgt::DownlevelFlags::ANISOTROPIC_FILTERING,
-            extensions.contains("EXT_texture_filter_anisotropic")
+            extensions.contains("EXT_texture_filter_anisotropic"),
         );
 
         let mut features = wgt::Features::empty()
