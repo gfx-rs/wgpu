@@ -58,6 +58,19 @@ unsafe extern "system" fn output_debug_string_handler(
         return excpt::EXCEPTION_CONTINUE_SEARCH;
     }
 
+    let dxgi_debug_layer_bug_text1 = "ID3D12CommandQueue::Present";
+    // We currently dont cross command list types, so this text has the
+    // highest chance of being a true positive for this issue.
+    let dxgi_debug_layer_bug_text2 = "resource state on previous Command List type";
+    if level == log::Level::Error
+        && message.contains(dxgi_debug_layer_bug_text1)
+        && message.contains(dxgi_debug_layer_bug_text2)
+    {
+        // This is a bug in the DXGI and D3D12 validation layer when on windows 11.
+        // See https://stackoverflow.com/q/69805245 for more.
+        return excpt::EXCEPTION_CONTINUE_SEARCH;
+    }
+
     let _ = std::panic::catch_unwind(|| {
         log::log!(level, "{}", message);
     });
