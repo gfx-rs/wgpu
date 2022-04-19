@@ -57,6 +57,8 @@ pub struct BindTarget {
     pub buffer: Option<Slot>,
     pub texture: Option<Slot>,
     pub sampler: Option<BindSamplerTarget>,
+    /// If the binding is an unsized binding array, this overrides the size.
+    pub binding_array_size: Option<u32>,
     pub mutable: bool,
 }
 
@@ -319,6 +321,7 @@ impl Options {
                 buffer: Some(slot),
                 texture: None,
                 sampler: None,
+                binding_array_size: None,
                 mutable: false,
             })),
             None if self.fake_missing_bindings => Ok(ResolvedBinding::User {
@@ -340,6 +343,7 @@ impl Options {
                 buffer: Some(slot),
                 texture: None,
                 sampler: None,
+                binding_array_size: None,
                 mutable: false,
             })),
             None if self.fake_missing_bindings => Ok(ResolvedBinding::User {
@@ -359,6 +363,13 @@ impl ResolvedBinding {
                 sampler: Some(BindSamplerTarget::Inline(index)),
                 ..
             }) => Some(&options.inline_samplers[index as usize]),
+            _ => None,
+        }
+    }
+
+    const fn as_bind_target(&self) -> Option<&BindTarget> {
+        match *self {
+            Self::Resource(ref target) => Some(target),
             _ => None,
         }
     }

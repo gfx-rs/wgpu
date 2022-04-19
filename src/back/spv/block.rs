@@ -173,7 +173,14 @@ impl<'w> BlockContext<'w> {
     /// thing in one fell swoop.
     fn is_intermediate(&self, expr_handle: Handle<crate::Expression>) -> bool {
         match self.ir_function.expressions[expr_handle] {
-            crate::Expression::GlobalVariable(_) | crate::Expression::LocalVariable(_) => true,
+            crate::Expression::GlobalVariable(handle) => {
+                let ty = self.ir_module.global_variables[handle].ty;
+                match self.ir_module.types[ty].inner {
+                    crate::TypeInner::BindingArray { .. } => false,
+                    _ => true,
+                }
+            }
+            crate::Expression::LocalVariable(_) => true,
             crate::Expression::FunctionArgument(index) => {
                 let arg = &self.ir_function.arguments[index as usize];
                 self.ir_module.types[arg.ty].inner.pointer_space().is_some()
@@ -200,9 +207,53 @@ impl<'w> BlockContext<'w> {
                 0
             }
             crate::Expression::Access { base, index } => {
-                let base_ty = self.fun_info[base].ty.inner_with(&self.ir_module.types);
-                match *base_ty {
-                    crate::TypeInner::Vector { .. } => (),
+                let base_ty_inner = self.fun_info[base].ty.inner_with(&self.ir_module.types);
+                match *base_ty_inner {
+                    crate::TypeInner::Vector { .. } => {
+                        self.write_vector_access(expr_handle, base, index, block)?
+                    }
+                    crate::TypeInner::BindingArray {
+                        base: binding_type, ..
+                    } => {
+                        let binding_array_false_pointer = LookupType::Local(LocalType::Pointer {
+                            base: binding_type,
+                            class: spirv::StorageClass::UniformConstant,
+                        });
+
+                        let result_id = match self.write_expression_pointer(
+                            expr_handle,
+                            block,
+                            Some(binding_array_false_pointer),
+                        )? {
+                            ExpressionPointer::Ready { pointer_id } => pointer_id,
+                            ExpressionPointer::Conditional { .. } => {
+                                return Err(Error::FeatureNotImplemented(
+                                    "Texture array out-of-bounds handling",
+                                ));
+                            }
+                        };
+
+                        let binding_type_id = self.get_type_id(LookupType::Handle(binding_type));
+
+                        let load_id = self.gen_id();
+                        block.body.push(Instruction::load(
+                            binding_type_id,
+                            load_id,
+                            result_id,
+                            None,
+                        ));
+
+                        if self.fun_info[index].uniformity.non_uniform_result.is_some() {
+                            self.writer.require_any(
+                                "NonUniformEXT",
+                                &[spirv::Capability::ShaderNonUniform],
+                            )?;
+                            self.writer.use_extension("SPV_EXT_descriptor_indexing");
+                            self.writer
+                                .decorate(load_id, spirv::Decoration::NonUniform, &[]);
+                        }
+                        load_id
+                    }
                     ref other => {
                         log::error!(
                             "Unable to access base {:?} of type {:?}",
@@ -213,9 +264,7 @@ impl<'w> BlockContext<'w> {
                             "only vectors may be dynamically indexed by value",
                         ));
                     }
-                };
-
-                self.write_vector_access(expr_handle, base, index, block)?
+                }
             }
             crate::Expression::AccessIndex { base, index: _ } if self.is_intermediate(base) => {
                 // See `is_intermediate`; we'll handle this later in
@@ -241,6 +290,39 @@ impl<'w> BlockContext<'w> {
                             &[index],
                         ));
                         id
+                    }
+                    crate::TypeInner::BindingArray {
+                        base: binding_type, ..
+                    } => {
+                        let binding_array_false_pointer = LookupType::Local(LocalType::Pointer {
+                            base: binding_type,
+                            class: spirv::StorageClass::UniformConstant,
+                        });
+
+                        let result_id = match self.write_expression_pointer(
+                            expr_handle,
+                            block,
+                            Some(binding_array_false_pointer),
+                        )? {
+                            ExpressionPointer::Ready { pointer_id } => pointer_id,
+                            ExpressionPointer::Conditional { .. } => {
+                                return Err(Error::FeatureNotImplemented(
+                                    "Texture array out-of-bounds handling",
+                                ));
+                            }
+                        };
+
+                        let binding_type_id = self.get_type_id(LookupType::Handle(binding_type));
+
+                        let load_id = self.gen_id();
+                        block.body.push(Instruction::load(
+                            binding_type_id,
+                            load_id,
+                            result_id,
+                            None,
+                        ));
+
+                        load_id
                     }
                     ref other => {
                         log::error!("Unable to access index of {:?}", other);
@@ -776,7 +858,7 @@ impl<'w> BlockContext<'w> {
             }
             crate::Expression::LocalVariable(variable) => self.function.variables[&variable].id,
             crate::Expression::Load { pointer } => {
-                match self.write_expression_pointer(pointer, block)? {
+                match self.write_expression_pointer(pointer, block, None)? {
                     ExpressionPointer::Ready { pointer_id } => {
                         let id = self.gen_id();
                         let atomic_space =
@@ -1100,15 +1182,26 @@ impl<'w> BlockContext<'w> {
     ///
     /// Emit any needed bounds-checking expressions to `block`.
     ///
+    /// Some cases we need to generate a different return type than what the IR gives us.
+    /// This is because pointers to binding arrays don't exist in the IR, but we need to
+    /// create them to create an access chain in SPIRV.
+    ///
     /// On success, the return value is an [`ExpressionPointer`] value; see the
     /// documentation for that type.
     fn write_expression_pointer(
         &mut self,
         mut expr_handle: Handle<crate::Expression>,
         block: &mut Block,
+        return_type_override: Option<LookupType>,
     ) -> Result<ExpressionPointer, Error> {
         let result_lookup_ty = match self.fun_info[expr_handle].ty {
-            TypeResolution::Handle(ty_handle) => LookupType::Handle(ty_handle),
+            TypeResolution::Handle(ty_handle) => match return_type_override {
+                // We use the return type override as a special case for binding arrays as the OpAccessChain
+                // needs to return a pointer, but indexing into a binding array just gives you the type of
+                // the binding in the IR.
+                Some(ty) => ty,
+                None => LookupType::Handle(ty_handle),
+            },
             TypeResolution::Value(ref inner) => LookupType::Local(make_local(inner).unwrap()),
         };
         let result_type_id = self.get_type_id(result_lookup_ty);
@@ -1612,7 +1705,7 @@ impl<'w> BlockContext<'w> {
                 }
                 crate::Statement::Store { pointer, value } => {
                     let value_id = self.cached[value];
-                    match self.write_expression_pointer(pointer, &mut block)? {
+                    match self.write_expression_pointer(pointer, &mut block, None)? {
                         ExpressionPointer::Ready { pointer_id } => {
                             let atomic_space = match *self.fun_info[pointer]
                                 .ty
@@ -1702,14 +1795,15 @@ impl<'w> BlockContext<'w> {
 
                     self.cached[result] = id;
 
-                    let pointer_id = match self.write_expression_pointer(pointer, &mut block)? {
-                        ExpressionPointer::Ready { pointer_id } => pointer_id,
-                        ExpressionPointer::Conditional { .. } => {
-                            return Err(Error::FeatureNotImplemented(
-                                "Atomics out-of-bounds handling",
-                            ));
-                        }
-                    };
+                    let pointer_id =
+                        match self.write_expression_pointer(pointer, &mut block, None)? {
+                            ExpressionPointer::Ready { pointer_id } => pointer_id,
+                            ExpressionPointer::Conditional { .. } => {
+                                return Err(Error::FeatureNotImplemented(
+                                    "Atomics out-of-bounds handling",
+                                ));
+                            }
+                        };
 
                     let space = self.fun_info[pointer]
                         .ty

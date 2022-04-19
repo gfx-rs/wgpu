@@ -202,7 +202,7 @@ impl Layouter {
                         alignment,
                     }
                 }
-                Ti::Image { .. } | Ti::Sampler { .. } => TypeLayout {
+                Ti::Image { .. } | Ti::Sampler { .. } | Ti::BindingArray { .. } => TypeLayout {
                     size,
                     alignment: Alignment::new(1).unwrap(),
                 },

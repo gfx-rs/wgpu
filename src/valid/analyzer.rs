@@ -168,11 +168,19 @@ enum GlobalOrArgument {
     Argument(u32),
 }
 
-impl crate::Expression {
-    const fn to_global_or_argument(&self) -> Result<GlobalOrArgument, ExpressionError> {
-        Ok(match *self {
+impl GlobalOrArgument {
+    fn from_expression(
+        expression_arena: &Arena<crate::Expression>,
+        expression: Handle<crate::Expression>,
+    ) -> Result<GlobalOrArgument, ExpressionError> {
+        Ok(match expression_arena[expression] {
             crate::Expression::GlobalVariable(var) => GlobalOrArgument::Global(var),
             crate::Expression::FunctionArgument(i) => GlobalOrArgument::Argument(i),
+            crate::Expression::Access { base, .. }
+            | crate::Expression::AccessIndex { base, .. } => match expression_arena[base] {
+                crate::Expression::GlobalVariable(var) => GlobalOrArgument::Global(var),
+                _ => return Err(ExpressionError::ExpectedGlobalOrArgument),
+            },
             _ => return Err(ExpressionError::ExpectedGlobalOrArgument),
         })
     }
@@ -356,12 +364,12 @@ impl FunctionInfo {
                 GlobalOrArgument::Global(var) => GlobalOrArgument::Global(var),
                 GlobalOrArgument::Argument(i) => {
                     let handle = arguments[i as usize];
-                    expression_arena[handle]
-                        .to_global_or_argument()
-                        .map_err(|error| {
+                    GlobalOrArgument::from_expression(expression_arena, handle).map_err(
+                        |error| {
                             FunctionError::Expression { handle, error }
                                 .with_span_handle(handle, expression_arena)
-                        })?
+                        },
+                    )?
                 }
             };
 
@@ -369,12 +377,12 @@ impl FunctionInfo {
                 GlobalOrArgument::Global(var) => GlobalOrArgument::Global(var),
                 GlobalOrArgument::Argument(i) => {
                     let handle = arguments[i as usize];
-                    expression_arena[handle]
-                        .to_global_or_argument()
-                        .map_err(|error| {
+                    GlobalOrArgument::from_expression(expression_arena, handle).map_err(
+                        |error| {
                             FunctionError::Expression { handle, error }
                                 .with_span_handle(handle, expression_arena)
-                        })?
+                        },
+                    )?
                 }
             };
 
@@ -417,17 +425,73 @@ impl FunctionInfo {
         expression_arena: &Arena<crate::Expression>,
         other_functions: &[FunctionInfo],
         resolve_context: &ResolveContext,
+        capabilities: super::Capabilities,
     ) -> Result<(), ExpressionError> {
         use crate::{Expression as E, SampleLevel as Sl};
 
         let mut assignable_global = None;
         let uniformity = match *expression {
-            E::Access { base, index } => Uniformity {
-                non_uniform_result: self
-                    .add_assignable_ref(base, &mut assignable_global)
-                    .or(self.add_ref(index)),
-                requirements: UniformityRequirements::empty(),
-            },
+            E::Access { base, index } => {
+                let base_ty = self[base].ty.inner_with(resolve_context.types);
+
+                // build up the caps needed if this is indexed non-uniformly
+                let mut needed_caps = super::Capabilities::empty();
+                let is_binding_array = match *base_ty {
+                    crate::TypeInner::BindingArray {
+                        base: array_element_ty_handle,
+                        ..
+                    } => {
+                        // these are nasty aliases, but these idents are too long and break rustfmt
+                        let ub_st = super::Capabilities::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING;
+                        let st_sb = super::Capabilities::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING;
+                        let sampler = super::Capabilities::SAMPLER_NON_UNIFORM_INDEXING;
+
+                        // We're a binding array, so lets use the type of _what_ we are array of to determine if we can non-uniformly index it.
+                        let array_element_ty =
+                            &resolve_context.types[array_element_ty_handle].inner;
+
+                        needed_caps |= match *array_element_ty {
+                            // If we're an image, use the appropriate limit.
+                            crate::TypeInner::Image { class, .. } => match class {
+                                crate::ImageClass::Storage { .. } => ub_st,
+                                _ => st_sb,
+                            },
+                            crate::TypeInner::Sampler { .. } => sampler,
+                            // If we're anything but an image, assume we're a buffer and use the address space.
+                            _ => {
+                                if let E::GlobalVariable(global_handle) = expression_arena[base] {
+                                    let global = &resolve_context.global_vars[global_handle];
+                                    match global.space {
+                                        crate::AddressSpace::Uniform => ub_st,
+                                        crate::AddressSpace::Storage { .. } => st_sb,
+                                        _ => unreachable!(),
+                                    }
+                                } else {
+                                    unreachable!()
+                                }
+                            }
+                        };
+
+                        true
+                    }
+                    _ => false,
+                };
+
+                if self[index].uniformity.non_uniform_result.is_some()
+                    && !capabilities.contains(needed_caps)
+                    && is_binding_array
+                {
+                    return Err(ExpressionError::MissingCapabilities(needed_caps));
+                }
+
+                let _ = ();
+                Uniformity {
+                    non_uniform_result: self
+                        .add_assignable_ref(base, &mut assignable_global)
+                        .or(self.add_ref(index)),
+                    requirements: UniformityRequirements::empty(),
+                }
+            }
             E::AccessIndex { base, .. } => Uniformity {
                 non_uniform_result: self.add_assignable_ref(base, &mut assignable_global),
                 requirements: UniformityRequirements::empty(),
@@ -515,8 +579,8 @@ impl FunctionInfo {
                 level,
                 depth_ref,
             } => {
-                let image_storage = expression_arena[image].to_global_or_argument()?;
-                let sampler_storage = expression_arena[sampler].to_global_or_argument()?;
+                let image_storage = GlobalOrArgument::from_expression(expression_arena, image)?;
+                let sampler_storage = GlobalOrArgument::from_expression(expression_arena, sampler)?;
 
                 match (image_storage, sampler_storage) {
                     (GlobalOrArgument::Global(image), GlobalOrArgument::Global(sampler)) => {
@@ -870,6 +934,7 @@ impl ModuleInfo {
         fun: &crate::Function,
         module: &crate::Module,
         flags: ValidationFlags,
+        capabilities: super::Capabilities,
     ) -> Result<FunctionInfo, WithSpan<FunctionError>> {
         let mut info = FunctionInfo {
             flags,
@@ -897,6 +962,7 @@ impl ModuleInfo {
                 &fun.expressions,
                 &self.functions,
                 &resolve_context,
+                capabilities,
             ) {
                 return Err(FunctionError::Expression { handle, error }
                     .with_span_handle(handle, &fun.expressions));
@@ -1015,8 +1081,15 @@ fn uniform_control_flow() {
         arguments: &[],
     };
     for (handle, expression) in expressions.iter() {
-        info.process_expression(handle, expression, &expressions, &[], &resolve_context)
-            .unwrap();
+        info.process_expression(
+            handle,
+            expression,
+            &expressions,
+            &[],
+            &resolve_context,
+            super::Capabilities::empty(),
+        )
+        .unwrap();
     }
     assert_eq!(info[non_uniform_global_expr].ref_count, 1);
     assert_eq!(info[uniform_global_expr].ref_count, 1);

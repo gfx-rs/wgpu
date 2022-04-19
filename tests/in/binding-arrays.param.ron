@@ -1,0 +1,39 @@
+(
+	god_mode: true,
+	hlsl: (
+		shader_model: V5_1,
+		binding_map: {
+			(group: 0, binding: 0): (space: 0, register: 0, binding_array_size: Some(10)),
+			(group: 0, binding: 1): (space: 1, register: 0),
+			(group: 0, binding: 2): (space: 2, register: 0),
+			(group: 0, binding: 3): (space: 3, register: 0),
+			(group: 0, binding: 4): (space: 4, register: 0),
+			(group: 0, binding: 5): (space: 5, register: 0),
+			(group: 0, binding: 6): (space: 6, register: 0),
+			(group: 0, binding: 7): (space: 7, register: 0),
+			(group: 0, binding: 8): (space: 8, register: 0),
+		},
+		fake_missing_bindings: true,
+		special_constants_binding: None,
+	),
+	msl: (
+		lang_version: (2, 0),
+		per_stage_map: (
+			fs: (
+				resources: {
+					(group: 0, binding: 0): (texture: Some(0), binding_array_size: Some(10), mutable: false),
+				},
+				sizes_buffer: None,
+			)
+		),
+		inline_samplers: [],
+		spirv_cross_compatibility: false,
+		fake_missing_bindings: true,
+	),
+	spv: (
+		version: (1, 1),
+		binding_map: {
+			(group: 0, binding: 0): (binding_array_size: Some(10)),
+		},
+	)
+)

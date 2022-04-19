@@ -580,6 +580,7 @@ impl super::Validator {
                 ti
             }
             Ti::Image { .. } | Ti::Sampler { .. } => TypeInfo::new(TypeFlags::ARGUMENT, 0),
+            Ti::BindingArray { .. } => TypeInfo::new(TypeFlags::empty(), 0),
         })
     }
 }

@@ -657,6 +657,21 @@ impl super::Validator {
                         crate::Expression::GlobalVariable(var_handle) => {
                             &context.global_vars[var_handle]
                         }
+                        // We're looking at a binding index situation, so punch through the index and look at the global behind it.
+                        crate::Expression::Access { base, .. }
+                        | crate::Expression::AccessIndex { base, .. } => {
+                            match *context.get_expression(base).map_err(|e| e.with_span())? {
+                                crate::Expression::GlobalVariable(var_handle) => {
+                                    &context.global_vars[var_handle]
+                                }
+                                _ => {
+                                    return Err(FunctionError::InvalidImageStore(
+                                        ExpressionError::ExpectedGlobalVariable,
+                                    )
+                                    .with_span_handle(image, context.expressions))
+                                }
+                            }
+                        }
                         _ => {
                             return Err(FunctionError::InvalidImageStore(
                                 ExpressionError::ExpectedGlobalVariable,
@@ -665,7 +680,13 @@ impl super::Validator {
                         }
                     };
 
-                    let value_ty = match context.types[var.ty].inner {
+                    // Punch through a binding array to get the underlying type
+                    let global_ty = match context.types[var.ty].inner {
+                        Ti::BindingArray { base, .. } => &context.types[base].inner,
+                        ref inner => inner,
+                    };
+
+                    let value_ty = match *global_ty {
                         Ti::Image {
                             class,
                             arrayed,
@@ -823,7 +844,7 @@ impl super::Validator {
         mod_info: &ModuleInfo,
     ) -> Result<FunctionInfo, WithSpan<FunctionError>> {
         #[cfg_attr(not(feature = "validate"), allow(unused_mut))]
-        let mut info = mod_info.process_function(fun, module, self.flags)?;
+        let mut info = mod_info.process_function(fun, module, self.flags, self.capabilities)?;
 
         #[cfg(feature = "validate")]
         for (var_handle, var) in fun.local_variables.iter() {

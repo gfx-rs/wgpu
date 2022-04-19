@@ -291,6 +291,7 @@ impl<'a> ResolveContext<'a> {
                         }
                     })
                 }
+                Ti::BindingArray { base, .. } => TypeResolution::Handle(base),
                 ref other => {
                     log::error!("Access type {:?}", other);
                     return Err(ResolveError::InvalidAccess {
@@ -392,6 +393,7 @@ impl<'a> ResolveContext<'a> {
                             });
                         }
                     }),
+                    Ti::BindingArray { base, .. } => TypeResolution::Handle(base),
                     ref other => {
                         log::error!("Access index type {:?}", other);
                         return Err(ResolveError::InvalidAccess {

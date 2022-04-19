@@ -125,7 +125,7 @@ impl super::TypeInner {
                 count * stride
             }
             Self::Struct { span, .. } => span,
-            Self::Image { .. } | Self::Sampler { .. } => 0,
+            Self::Image { .. } | Self::Sampler { .. } | Self::BindingArray { .. } => 0,
         })
     }
 

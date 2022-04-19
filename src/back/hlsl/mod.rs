@@ -119,6 +119,8 @@ use crate::proc;
 pub struct BindTarget {
     pub space: u8,
     pub register: u32,
+    /// If the binding is an unsized binding array, this overrides the size.
+    pub binding_array_size: Option<u32>,
 }
 
 // Using `BTreeMap` instead of `HashMap` so that we can hash itself.
@@ -214,6 +216,7 @@ impl Options {
             None if self.fake_missing_bindings => Ok(BindTarget {
                 space: res_binding.group as u8,
                 register: res_binding.binding,
+                binding_array_size: None,
             }),
             None => Err(EntryPointError::MissingBinding(res_binding.clone())),
         }

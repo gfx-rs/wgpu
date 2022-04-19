@@ -785,7 +785,8 @@ impl<'a, W: Write> Writer<'a, W> {
             TypeInner::Pointer { .. }
             | TypeInner::Struct { .. }
             | TypeInner::Image { .. }
-            | TypeInner::Sampler { .. } => {
+            | TypeInner::Sampler { .. }
+            | TypeInner::BindingArray { .. } => {
                 return Err(Error::Custom(format!("Unable to write type {:?}", inner)))
             }
         }

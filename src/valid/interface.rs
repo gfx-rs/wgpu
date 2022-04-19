@@ -383,7 +383,9 @@ impl super::Validator {
             }
             crate::AddressSpace::Handle => {
                 match types[var.ty].inner {
-                    crate::TypeInner::Image { .. } | crate::TypeInner::Sampler { .. } => {}
+                    crate::TypeInner::Image { .. }
+                    | crate::TypeInner::Sampler { .. }
+                    | crate::TypeInner::BindingArray { .. } => {}
                     _ => {
                         return Err(GlobalVariableError::InvalidType(var.space));
                     }
@@ -512,6 +514,13 @@ impl super::Validator {
                 crate::AddressSpace::Uniform => GlobalUse::READ | GlobalUse::QUERY,
                 crate::AddressSpace::Storage { access } => storage_usage(access),
                 crate::AddressSpace::Handle => match module.types[var.ty].inner {
+                    crate::TypeInner::BindingArray { base, .. } => match module.types[base].inner {
+                        crate::TypeInner::Image {
+                            class: crate::ImageClass::Storage { access, .. },
+                            ..
+                        } => storage_usage(access),
+                        _ => GlobalUse::READ | GlobalUse::QUERY,
+                    },
                     crate::TypeInner::Image {
                         class: crate::ImageClass::Storage { access, .. },
                         ..

@@ -97,7 +97,7 @@ impl Namer {
                 *count += 1;
                 // Add the suffix. This may fit in base's existing allocation.
                 let mut suffixed = base.into_owned();
-                write!(&mut suffixed, "{}{}", SEPARATOR, *count).unwrap();
+                write!(suffixed, "{}{}", SEPARATOR, *count).unwrap();
                 suffixed
             }
             None => {

@@ -43,6 +43,9 @@ struct SpirvOutParameters {
     clamp_frag_depth: bool,
     #[serde(default)]
     separate_entry_points: bool,
+    #[serde(default)]
+    #[cfg(all(feature = "deserialize", feature = "spv-out"))]
+    binding_map: naga::back::spv::BindingMap,
 }
 
 #[derive(Default, serde::Deserialize)]
@@ -207,6 +210,7 @@ fn write_output_spv(
             Some(params.capabilities.clone())
         },
         bounds_check_policies,
+        binding_map: params.binding_map.clone(),
         ..spv::Options::default()
     };
 
@@ -497,6 +501,11 @@ fn convert_wgsl() {
         (
             "math-functions",
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
+        ),
+        ("cubeArrayShadow", Targets::GLSL),
+        (
+            "binding-arrays",
+            Targets::WGSL | Targets::HLSL | Targets::METAL | Targets::SPIRV,
         ),
     ];
 
