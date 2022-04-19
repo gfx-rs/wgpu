@@ -1,5 +1,12 @@
 # Change Log
 
+## wgpu-hal 0.12.5 (2022-04-19)
+  - fix crashes when logging in debug message callbacks
+  - fix program termination when dx12 or gles error messages happen.
+  - implement validation canary
+  - DX12:
+    - Ignore erroneous validation error from DXGI debug layer. 
+
 ## wgpu-hal-0.12.4 (2022-01-24)
   - Metal:
     - check for MSL-2.3
