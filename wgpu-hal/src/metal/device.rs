@@ -667,6 +667,8 @@ impl crate::Device<super::Api> for super::Device {
                     index: naga::proc::BoundsCheckPolicy::ReadZeroSkipWrite,
                     buffer: naga::proc::BoundsCheckPolicy::ReadZeroSkipWrite,
                     image: naga::proc::BoundsCheckPolicy::ReadZeroSkipWrite,
+                    // TODO: support bounds checks on binding arrays
+                    binding_array: naga::proc::BoundsCheckPolicy::Unchecked,
                 },
             },
             total_push_constants,

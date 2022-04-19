@@ -17,7 +17,7 @@ exclude = [
 default-members = ["wgpu", "wgpu-hal", "wgpu-info"]
 
 [patch."https://github.com/gfx-rs/naga"]
-#naga = { path = "../naga" }
+naga = { path = "../naga" }
 
 [patch."https://github.com/zakarumych/gpu-descriptor"]
 #gpu-descriptor = { path = "../gpu-descriptor/gpu-descriptor" }

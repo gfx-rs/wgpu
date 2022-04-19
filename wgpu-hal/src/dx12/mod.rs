@@ -199,7 +199,6 @@ impl CommandSignatures {
 }
 
 struct DeviceShared {
-    features: wgt::Features,
     zero_buffer: native::Resource,
     cmd_signatures: CommandSignatures,
     heap_views: descriptor::GeneralHeap,

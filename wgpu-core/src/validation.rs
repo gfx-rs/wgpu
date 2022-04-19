@@ -867,7 +867,14 @@ impl Interface {
                 Some(ref br) => br.clone(),
                 _ => continue,
             };
-            let ty = match module.types[var.ty].inner {
+            let naga_ty = &module.types[var.ty].inner;
+
+            let inner_ty = match *naga_ty {
+                naga::TypeInner::BindingArray { base, .. } => &module.types[base].inner,
+                ref ty => ty,
+            };
+
+            let ty = match *inner_ty {
                 naga::TypeInner::Image {
                     dim,
                     arrayed,

@@ -21,7 +21,6 @@ impl super::Device {
     pub(super) fn new(
         raw: native::Device,
         present_queue: native::CommandQueue,
-        features: wgt::Features,
         private_caps: super::PrivateCapabilities,
         library: &Arc<native::D3D12Lib>,
     ) -> Result<Self, crate::DeviceError> {
@@ -87,7 +86,6 @@ impl super::Device {
         let capacity_samplers = 2_048;
 
         let shared = super::DeviceShared {
-            features,
             zero_buffer,
             cmd_signatures: super::CommandSignatures {
                 draw: raw
@@ -221,13 +219,6 @@ impl super::Device {
         {
             compile_flags |=
                 d3dcompiler::D3DCOMPILE_DEBUG | d3dcompiler::D3DCOMPILE_SKIP_OPTIMIZATION;
-        }
-        if self
-            .shared
-            .features
-            .contains(wgt::Features::UNSIZED_BINDING_ARRAY)
-        {
-            compile_flags |= d3dcompiler::D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES;
         }
 
         let source_name = match stage.module.raw_name {

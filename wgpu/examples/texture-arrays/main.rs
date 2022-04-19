@@ -71,12 +71,11 @@ struct Example {
 
 impl framework::Example for Example {
     fn optional_features() -> wgpu::Features {
-        wgpu::Features::UNSIZED_BINDING_ARRAY
-            | wgpu::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING
+        wgpu::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING
             | wgpu::Features::PUSH_CONSTANTS
     }
     fn required_features() -> wgpu::Features {
-        wgpu::Features::TEXTURE_BINDING_ARRAY | wgpu::Features::SPIRV_SHADER_PASSTHROUGH
+        wgpu::Features::TEXTURE_BINDING_ARRAY
     }
     fn required_limits() -> wgpu::Limits {
         wgpu::Limits {
@@ -91,24 +90,33 @@ impl framework::Example for Example {
         queue: &wgpu::Queue,
     ) -> Self {
         let mut uniform_workaround = false;
-        let vs_module = device.create_shader_module(&wgpu::include_spirv!("shader.vert.spv"));
-        let fs_source = match device.features() {
-            f if f.contains(wgpu::Features::UNSIZED_BINDING_ARRAY) => {
-                wgpu::include_spirv_raw!("unsized-non-uniform.frag.spv")
-            }
-            f if f.contains(
-                wgpu::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
-            ) =>
-            {
-                wgpu::include_spirv_raw!("non-uniform.frag.spv")
-            }
-            f if f.contains(wgpu::Features::TEXTURE_BINDING_ARRAY) => {
-                uniform_workaround = true;
-                wgpu::include_spirv_raw!("uniform.frag.spv")
-            }
-            _ => unreachable!(),
+        let shader_module = device.create_shader_module(&wgpu::include_wgsl!("indexing.wgsl"));
+        let env_override = match std::env::var("WGPU_TEXTURE_ARRAY_STYLE") {
+            Ok(value) => match &*value.to_lowercase() {
+                "nonuniform" | "non_uniform" => Some(true),
+                "uniform" => Some(false),
+                _ => None,
+            },
+            Err(_) => None,
         };
-        let fs_module = unsafe { device.create_shader_module_spirv(&fs_source) };
+        let fragment_entry_point = match (device.features(), env_override) {
+            (_, Some(false)) => {
+                uniform_workaround = true;
+                "uniform_main"
+            }
+            (_, Some(true)) => "non_uniform_main",
+            (f, _)
+                if f.contains(
+                    wgpu::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
+                ) =>
+            {
+                "non_uniform_main"
+            }
+            _ => {
+                uniform_workaround = true;
+                "uniform_main"
+            }
+        };
 
         let vertex_size = std::mem::size_of::<Vertex>();
         let vertex_data = create_vertices();
@@ -231,8 +239,8 @@ impl framework::Example for Example {
             label: None,
             layout: Some(&pipeline_layout),
             vertex: wgpu::VertexState {
-                module: &vs_module,
-                entry_point: "main",
+                module: &shader_module,
+                entry_point: "vert_main",
                 buffers: &[wgpu::VertexBufferLayout {
                     array_stride: vertex_size as wgpu::BufferAddress,
                     step_mode: wgpu::VertexStepMode::Vertex,
@@ -240,8 +248,8 @@ impl framework::Example for Example {
                 }],
             },
             fragment: Some(wgpu::FragmentState {
-                module: &fs_module,
-                entry_point: "main",
+                module: &shader_module,
+                entry_point: fragment_entry_point,
                 targets: &[config.format.into()],
             }),
             primitive: wgpu::PrimitiveState {
