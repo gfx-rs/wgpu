@@ -1309,11 +1309,15 @@ impl crate::Device<super::Api> for super::Device {
             write = match ty {
                 vk::DescriptorType::SAMPLER => {
                     let index = sampler_infos.len();
-                    let binding = desc.samplers[entry.resource_index as usize];
-                    let vk_info = vk::DescriptorImageInfo::builder()
-                        .sampler(binding.raw)
-                        .build();
-                    sampler_infos.push(vk_info);
+                    let start = entry.resource_index;
+                    let end = start + entry.count;
+                    sampler_infos.extend(desc.samplers[start as usize..end as usize].iter().map(
+                        |binding| {
+                            vk::DescriptorImageInfo::builder()
+                                .sampler(binding.raw)
+                                .build()
+                        },
+                    ));
                     write.image_info(&sampler_infos[index..])
                 }
                 vk::DescriptorType::SAMPLED_IMAGE | vk::DescriptorType::STORAGE_IMAGE => {
