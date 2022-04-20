@@ -87,7 +87,7 @@ impl framework::Example for Example {
         queue: &wgpu::Queue,
     ) -> Self {
         let mut uniform_workaround = false;
-        let shader_module = device.create_shader_module(&wgpu::include_wgsl!("indexing.wgsl"));
+        let base_shader_module = device.create_shader_module(&wgpu::include_wgsl!("indexing.wgsl"));
         let env_override = match std::env::var("WGPU_TEXTURE_ARRAY_STYLE") {
             Ok(value) => match &*value.to_lowercase() {
                 "nonuniform" | "non_uniform" => Some(true),
@@ -113,6 +113,15 @@ impl framework::Example for Example {
                 uniform_workaround = true;
                 "uniform_main"
             }
+        };
+        let non_uniform_shader_module;
+        // TODO: Because naga's capibilities are evaluated on validate, not on write, we cannot make a shader module with unsupported
+        // capabilities even if we don't use it. So for now put it in a separate module.
+        let fragment_shader_module = if !uniform_workaround {
+            non_uniform_shader_module = device.create_shader_module(&wgpu::include_wgsl!("non_uniform_indexing.wgsl"));
+            &non_uniform_shader_module
+        } else {
+            &base_shader_module
         };
 
         println!("Using fragment entry point '{}'", fragment_entry_point);
@@ -307,7 +316,7 @@ impl framework::Example for Example {
             label: None,
             layout: Some(&pipeline_layout),
             vertex: wgpu::VertexState {
-                module: &shader_module,
+                module: &base_shader_module,
                 entry_point: "vert_main",
                 buffers: &[wgpu::VertexBufferLayout {
                     array_stride: vertex_size as wgpu::BufferAddress,
@@ -316,7 +325,7 @@ impl framework::Example for Example {
                 }],
             },
             fragment: Some(wgpu::FragmentState {
-                module: &shader_module,
+                module: &fragment_shader_module,
                 entry_point: fragment_entry_point,
                 targets: &[config.format.into()],
             }),
@@ -396,60 +405,29 @@ fn main() {
     framework::run::<Example>("texture-arrays");
 }
 
-// This fails due to an issue with naga https://github.com/gfx-rs/wgpu/issues/1532
-#[test]
-fn texture_arrays_constant() {
-    framework::test::<Example>(framework::FrameworkRefTest {
-        image_path: "/examples/texture-arrays/screenshot.png",
-        width: 1024,
-        height: 768,
-        optional_features: wgpu::Features::default(),
-        base_test_parameters: framework::test_common::TestParameters::default().failure(),
-        tolerance: 0,
-        max_outliers: 0,
-    });
-}
-
-// This fails due to an issue with naga https://github.com/gfx-rs/wgpu/issues/1532
 #[test]
 fn texture_arrays_uniform() {
     framework::test::<Example>(framework::FrameworkRefTest {
         image_path: "/examples/texture-arrays/screenshot.png",
         width: 1024,
         height: 768,
-        optional_features: wgpu::Features::TEXTURE_BINDING_ARRAY | wgpu::Features::PUSH_CONSTANTS,
-        base_test_parameters: framework::test_common::TestParameters::default().failure(),
+        optional_features: wgpu::Features::empty(),
+        base_test_parameters: framework::test_common::TestParameters::default(),
         tolerance: 0,
         max_outliers: 0,
     });
 }
 
-// This fails due to an issue with naga https://github.com/gfx-rs/wgpu/issues/1532
 #[test]
 fn texture_arrays_non_uniform() {
     framework::test::<Example>(framework::FrameworkRefTest {
         image_path: "/examples/texture-arrays/screenshot.png",
         width: 1024,
         height: 768,
-        optional_features: wgpu::Features::TEXTURE_BINDING_ARRAY
-            | wgpu::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
-        base_test_parameters: framework::test_common::TestParameters::default().failure(),
+        optional_features: wgpu::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
+        base_test_parameters: framework::test_common::TestParameters::default(),
         tolerance: 0,
         max_outliers: 0,
     });
 }
 
-// This fails due to an issue with naga https://github.com/gfx-rs/wgpu/issues/1532
-#[test]
-fn texture_arrays_unsized_non_uniform() {
-    framework::test::<Example>(framework::FrameworkRefTest {
-        image_path: "/examples/texture-arrays/screenshot.png",
-        width: 1024,
-        height: 768,
-        optional_features: wgpu::Features::TEXTURE_BINDING_ARRAY
-            | wgpu::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
-        base_test_parameters: framework::test_common::TestParameters::default().failure(),
-        tolerance: 0,
-        max_outliers: 0,
-    });
-}

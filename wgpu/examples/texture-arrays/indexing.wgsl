@@ -59,25 +59,3 @@ fn uniform_main(fragment: FragmentInput) -> @location(0) vec4<f32> {
 
     return vec4<f32>(outval.x, outval.y, outval.z, 1.0);
 }
-
-@fragment
-fn non_uniform_main(fragment: FragmentInput) -> @location(0) vec4<f32> {
-    var outval: vec3<f32>;
-    if fragment.tex_coord.y <= 0.5 {
-        outval = textureSampleLevel(
-            texture_array_top[fragment.index],
-            sampler_array[fragment.index],
-            fragment.tex_coord,
-            0.0
-        ).rgb;
-    } else {
-        outval = textureSampleLevel(
-            texture_array_bottom[fragment.index],
-            sampler_array[fragment.index],
-            fragment.tex_coord,
-            0.0
-        ).rgb;
-    }
-
-    return vec4<f32>(outval.x, outval.y, outval.z, 1.0);
-}
