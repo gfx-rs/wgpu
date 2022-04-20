@@ -2,7 +2,7 @@
 mod framework;
 
 use bytemuck::{Pod, Zeroable};
-use std::num::NonZeroU32;
+use std::num::{NonZeroU32, NonZeroU64};
 use wgpu::util::DeviceExt;
 
 #[repr(C)]
@@ -51,12 +51,16 @@ fn create_indices() -> Vec<u16> {
 enum Color {
     Red,
     Green,
+    Blue,
+    White,
 }
 
 fn create_texture_data(color: Color) -> [u8; 4] {
     match color {
         Color::Red => [255, 0, 0, 255],
         Color::Green => [0, 255, 0, 255],
+        Color::Blue => [0, 0, 255, 255],
+        Color::White => [255, 255, 255, 255],
     }
 }
 
@@ -72,16 +76,9 @@ struct Example {
 impl framework::Example for Example {
     fn optional_features() -> wgpu::Features {
         wgpu::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING
-            | wgpu::Features::PUSH_CONSTANTS
     }
     fn required_features() -> wgpu::Features {
         wgpu::Features::TEXTURE_BINDING_ARRAY
-    }
-    fn required_limits() -> wgpu::Limits {
-        wgpu::Limits {
-            max_push_constant_size: 4,
-            ..wgpu::Limits::default()
-        }
     }
     fn init(
         config: &wgpu::SurfaceConfiguration,
@@ -118,6 +115,8 @@ impl framework::Example for Example {
             }
         };
 
+        println!("Using fragment entry point '{}'", fragment_entry_point);
+
         let vertex_size = std::mem::size_of::<Vertex>();
         let vertex_data = create_vertices();
         let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -133,8 +132,19 @@ impl framework::Example for Example {
             usage: wgpu::BufferUsages::INDEX,
         });
 
+        let mut texture_index_buffer_contents = vec![0u32; 128];
+        texture_index_buffer_contents[0] = 0;
+        texture_index_buffer_contents[64] = 1;
+        let texture_index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Index Buffer"),
+            contents: bytemuck::cast_slice(&texture_index_buffer_contents),
+            usage: wgpu::BufferUsages::UNIFORM,
+        });
+
         let red_texture_data = create_texture_data(Color::Red);
         let green_texture_data = create_texture_data(Color::Green);
+        let blue_texture_data = create_texture_data(Color::Blue);
+        let white_texture_data = create_texture_data(Color::White);
 
         let texture_descriptor = wgpu::TextureDescriptor {
             size: wgpu::Extent3d::default(),
@@ -153,9 +163,19 @@ impl framework::Example for Example {
             label: Some("green"),
             ..texture_descriptor
         });
+        let blue_texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("blue"),
+            ..texture_descriptor
+        });
+        let white_texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("white"),
+            ..texture_descriptor
+        });
 
         let red_texture_view = red_texture.create_view(&wgpu::TextureViewDescriptor::default());
         let green_texture_view = green_texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let blue_texture_view = blue_texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let white_texture_view = white_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
         queue.write_texture(
             red_texture.as_image_copy(),
@@ -170,6 +190,26 @@ impl framework::Example for Example {
         queue.write_texture(
             green_texture.as_image_copy(),
             &green_texture_data,
+            wgpu::ImageDataLayout {
+                offset: 0,
+                bytes_per_row: Some(NonZeroU32::new(4).unwrap()),
+                rows_per_image: None,
+            },
+            wgpu::Extent3d::default(),
+        );
+        queue.write_texture(
+            blue_texture.as_image_copy(),
+            &blue_texture_data,
+            wgpu::ImageDataLayout {
+                offset: 0,
+                bytes_per_row: Some(NonZeroU32::new(4).unwrap()),
+                rows_per_image: None,
+            },
+            wgpu::Extent3d::default(),
+        );
+        queue.write_texture(
+            white_texture.as_image_copy(),
+            &white_texture_data,
             wgpu::ImageDataLayout {
                 offset: 0,
                 bytes_per_row: Some(NonZeroU32::new(4).unwrap()),
@@ -196,8 +236,28 @@ impl framework::Example for Example {
                 wgpu::BindGroupLayoutEntry {
                     binding: 1,
                     visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: NonZeroU32::new(2),
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
                     ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                     count: NonZeroU32::new(2),
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 3,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: true,
+                        min_binding_size: Some(NonZeroU64::new(4).unwrap()),
+                    },
+                    count: None,
                 },
             ],
         });
@@ -213,7 +273,22 @@ impl framework::Example for Example {
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
+                    resource: wgpu::BindingResource::TextureViewArray(&[
+                        &blue_texture_view,
+                        &white_texture_view,
+                    ]),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
                     resource: wgpu::BindingResource::SamplerArray(&[&sampler, &sampler]),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                        buffer: &texture_index_buffer,
+                        offset: 0,
+                        size: Some(NonZeroU64::new(4).unwrap()),
+                    }),
                 },
             ],
             layout: &bind_group_layout,
@@ -223,14 +298,7 @@ impl framework::Example for Example {
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("main"),
             bind_group_layouts: &[&bind_group_layout],
-            push_constant_ranges: if uniform_workaround {
-                &[wgpu::PushConstantRange {
-                    stages: wgpu::ShaderStages::FRAGMENT,
-                    range: 0..4,
-                }]
-            } else {
-                &[]
-            },
+            push_constant_ranges: &[],
         });
 
         let index_format = wgpu::IndexFormat::Uint16;
@@ -306,15 +374,15 @@ impl framework::Example for Example {
         });
 
         rpass.set_pipeline(&self.pipeline);
-        rpass.set_bind_group(0, &self.bind_group, &[]);
         rpass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
         rpass.set_index_buffer(self.index_buffer.slice(..), self.index_format);
         if self.uniform_workaround {
-            rpass.set_push_constants(wgpu::ShaderStages::FRAGMENT, 0, bytemuck::cast_slice(&[0]));
+            rpass.set_bind_group(0, &self.bind_group, &[0]);
             rpass.draw_indexed(0..6, 0, 0..1);
-            rpass.set_push_constants(wgpu::ShaderStages::FRAGMENT, 0, bytemuck::cast_slice(&[1]));
+            rpass.set_bind_group(0, &self.bind_group, &[256]);
             rpass.draw_indexed(6..12, 0, 0..1);
         } else {
+            rpass.set_bind_group(0, &self.bind_group, &[0]);
             rpass.draw_indexed(0..12, 0, 0..1);
         }
 
@@ -379,8 +447,7 @@ fn texture_arrays_unsized_non_uniform() {
         width: 1024,
         height: 768,
         optional_features: wgpu::Features::TEXTURE_BINDING_ARRAY
-            | wgpu::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING
-            | wgpu::Features::UNSIZED_BINDING_ARRAY,
+            | wgpu::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
         base_test_parameters: framework::test_common::TestParameters::default().failure(),
         tolerance: 0,
         max_outliers: 0,
