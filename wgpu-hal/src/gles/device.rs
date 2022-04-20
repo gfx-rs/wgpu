@@ -741,7 +741,7 @@ impl crate::Device<super::Api> for super::Device {
         }
 
         if let Some(anisotropy) = desc.anisotropy_clamp {
-            gl.sampler_parameter_f32(raw, glow::TEXTURE_MAX_ANISOTROPY, anisotropy.get() as f32);
+            gl.sampler_parameter_i32(raw, glow::TEXTURE_MAX_ANISOTROPY, anisotropy.get() as i32);
         }
 
         //set_param_float(glow::TEXTURE_LOD_BIAS, info.lod_bias.0);
