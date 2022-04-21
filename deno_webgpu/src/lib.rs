@@ -575,8 +575,8 @@ fn declare_webgpu_ops() -> Vec<deno_core::OpDecl> {
         render_pass::op_webgpu_render_pass_draw_indexed_indirect::decl(),
         // compute_pass
         compute_pass::op_webgpu_compute_pass_set_pipeline::decl(),
-        compute_pass::op_webgpu_compute_pass_dispatch::decl(),
-        compute_pass::op_webgpu_compute_pass_dispatch_indirect::decl(),
+        compute_pass::op_webgpu_compute_pass_dispatch_workgroups::decl(),
+        compute_pass::op_webgpu_compute_pass_dispatch_workgroups_indirect::decl(),
         compute_pass::op_webgpu_compute_pass_begin_pipeline_statistics_query::decl(),
         compute_pass::op_webgpu_compute_pass_end_pipeline_statistics_query::decl(),
         compute_pass::op_webgpu_compute_pass_write_timestamp::decl(),

@@ -128,10 +128,10 @@ impl crate::ComputePassInner<Context> for ComputePass {
         // self.0.pop_debug_group();
     }
 
-    fn dispatch(&mut self, x: u32, y: u32, z: u32) {
+    fn dispatch_workgroups(&mut self, x: u32, y: u32, z: u32) {
         self.0.dispatch_with_y_and_z(x, y, z);
     }
-    fn dispatch_indirect(
+    fn dispatch_workgroups_indirect(
         &mut self,
         indirect_buffer: &Sendable<web_sys::GpuBuffer>,
         indirect_offset: wgt::BufferAddress,

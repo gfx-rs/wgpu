@@ -812,7 +812,7 @@ pub mod compute_ffi {
     }
 
     #[no_mangle]
-    pub extern "C" fn wgpu_compute_pass_dispatch(
+    pub extern "C" fn wgpu_compute_pass_dispatch_workgroups(
         pass: &mut ComputePass,
         groups_x: u32,
         groups_y: u32,
@@ -824,7 +824,7 @@ pub mod compute_ffi {
     }
 
     #[no_mangle]
-    pub extern "C" fn wgpu_compute_pass_dispatch_indirect(
+    pub extern "C" fn wgpu_compute_pass_dispatch_workgroups_indirect(
         pass: &mut ComputePass,
         buffer_id: id::BufferId,
         offset: BufferAddress,

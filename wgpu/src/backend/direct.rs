@@ -321,15 +321,19 @@ mod pass_impl {
             wgpu_compute_pass_end_pipeline_statistics_query(self)
         }
 
-        fn dispatch(&mut self, x: u32, y: u32, z: u32) {
-            wgpu_compute_pass_dispatch(self, x, y, z)
+        fn dispatch_workgroups(&mut self, x: u32, y: u32, z: u32) {
+            wgpu_compute_pass_dispatch_workgroups(self, x, y, z)
         }
-        fn dispatch_indirect(
+        fn dispatch_workgroups_indirect(
             &mut self,
             indirect_buffer: &super::Buffer,
             indirect_offset: wgt::BufferAddress,
         ) {
-            wgpu_compute_pass_dispatch_indirect(self, indirect_buffer.id, indirect_offset)
+            wgpu_compute_pass_dispatch_workgroups_indirect(
+                self,
+                indirect_buffer.id,
+                indirect_offset,
+            )
         }
     }
 
