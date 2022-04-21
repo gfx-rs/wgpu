@@ -74,13 +74,21 @@ impl super::CommandState {
     ) -> Option<(u32, &'a [u32])> {
         let stage_info = &self.stage_infos[stage];
         let slot = stage_info.sizes_slot?;
+
         result_sizes.clear();
-        for br in stage_info.sized_bindings.iter() {
-            // If it's None, this isn't the right time to update the sizes
-            let size = self.storage_buffer_length_map.get(br)?;
-            result_sizes.push(size.get().min(!0u32 as u64) as u32);
+        result_sizes.extend(
+            stage_info
+                .sized_bindings
+                .iter()
+                .filter_map(|br| self.storage_buffer_length_map.get(br))
+                .map(|size| size.get().min(!0u32 as u64) as u32),
+        );
+
+        if !result_sizes.is_empty() {
+            Some((slot as _, result_sizes))
+        } else {
+            None
         }
-        Some((slot as _, result_sizes))
     }
 }
 
