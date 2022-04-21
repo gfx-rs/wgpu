@@ -3118,8 +3118,8 @@ impl<L> TextureDescriptor<L> {
     /// Returns the number of array layers.
     pub fn array_layer_count(&self) -> u32 {
         match self.dimension {
-            TextureDimension::D1 | TextureDimension::D2 => self.size.depth_or_array_layers,
-            TextureDimension::D3 => 1,
+            TextureDimension::D1 | TextureDimension::D3 => 1,
+            TextureDimension::D2 => self.size.depth_or_array_layers,
         }
     }
 }
