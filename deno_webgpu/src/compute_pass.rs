@@ -40,7 +40,7 @@ pub fn op_webgpu_compute_pass_set_pipeline(
 }
 
 #[op]
-pub fn op_webgpu_compute_pass_dispatch(
+pub fn op_webgpu_compute_pass_dispatch_workgroups(
     state: &mut OpState,
     compute_pass_rid: ResourceId,
     x: u32,
@@ -51,7 +51,7 @@ pub fn op_webgpu_compute_pass_dispatch(
         .resource_table
         .get::<WebGpuComputePass>(compute_pass_rid)?;
 
-    wgpu_core::command::compute_ffi::wgpu_compute_pass_dispatch(
+    wgpu_core::command::compute_ffi::wgpu_compute_pass_dispatch_workgroups(
         &mut compute_pass_resource.0.borrow_mut(),
         x,
         y,
@@ -62,7 +62,7 @@ pub fn op_webgpu_compute_pass_dispatch(
 }
 
 #[op]
-pub fn op_webgpu_compute_pass_dispatch_indirect(
+pub fn op_webgpu_compute_pass_dispatch_workgroups_indirect(
     state: &mut OpState,
     compute_pass_rid: ResourceId,
     indirect_buffer: ResourceId,
@@ -75,7 +75,7 @@ pub fn op_webgpu_compute_pass_dispatch_indirect(
         .resource_table
         .get::<WebGpuComputePass>(compute_pass_rid)?;
 
-    wgpu_core::command::compute_ffi::wgpu_compute_pass_dispatch_indirect(
+    wgpu_core::command::compute_ffi::wgpu_compute_pass_dispatch_workgroups_indirect(
         &mut compute_pass_resource.0.borrow_mut(),
         buffer_resource.0,
         indirect_offset,

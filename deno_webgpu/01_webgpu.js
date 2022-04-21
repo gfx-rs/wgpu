@@ -4213,9 +4213,9 @@
      * @param {number} workgroupCountY
      * @param {number} workgroupCountZ
      */
-    dispatch(workgroupCountX, workgroupCountY = 1, workgroupCountZ = 1) {
+    dispatchWorkgroups(workgroupCountX, workgroupCountY = 1, workgroupCountZ = 1) {
       webidl.assertBranded(this, GPUComputePassEncoderPrototype);
-      const prefix = "Failed to execute 'dispatch' on 'GPUComputePassEncoder'";
+      const prefix = "Failed to execute 'dispatchWorkgroups' on 'GPUComputePassEncoder'";
       webidl.requiredArguments(arguments.length, 1, { prefix });
       workgroupCountX = webidl.converters.GPUSize32(workgroupCountX, {
         prefix,
@@ -4239,7 +4239,7 @@
       });
       const computePassRid = assertResource(this, { prefix, context: "this" });
       core.opSync(
-        "op_webgpu_compute_pass_dispatch",
+        "op_webgpu_compute_pass_dispatch_workgroups",
         computePassRid,
         workgroupCountX,
         workgroupCountY,
@@ -4251,10 +4251,10 @@
      * @param {GPUBuffer} indirectBuffer
      * @param {number} indirectOffset
      */
-    dispatchIndirect(indirectBuffer, indirectOffset) {
+    dispatchWorkgroupsIndirect(indirectBuffer, indirectOffset) {
       webidl.assertBranded(this, GPUComputePassEncoderPrototype);
       const prefix =
-        "Failed to execute 'dispatchIndirect' on 'GPUComputePassEncoder'";
+        "Failed to execute 'dispatchWorkgroupsIndirect' on 'GPUComputePassEncoder'";
       webidl.requiredArguments(arguments.length, 2, { prefix });
       indirectBuffer = webidl.converters.GPUBuffer(indirectBuffer, {
         prefix,
@@ -4283,7 +4283,7 @@
         selfContext: "this",
       });
       core.opSync(
-        "op_webgpu_compute_pass_dispatch_indirect",
+        "op_webgpu_compute_pass_dispatch_workgroups_indirect",
         computePassRid,
         indirectBufferRid,
         indirectOffset,

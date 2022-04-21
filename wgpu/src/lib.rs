@@ -69,8 +69,8 @@ trait ComputePassInner<Ctx: Context> {
     fn write_timestamp(&mut self, query_set: &Ctx::QuerySetId, query_index: u32);
     fn begin_pipeline_statistics_query(&mut self, query_set: &Ctx::QuerySetId, query_index: u32);
     fn end_pipeline_statistics_query(&mut self);
-    fn dispatch(&mut self, x: u32, y: u32, z: u32);
-    fn dispatch_indirect(
+    fn dispatch_workgroups(&mut self, x: u32, y: u32, z: u32);
+    fn dispatch_workgroups_indirect(
         &mut self,
         indirect_buffer: &Ctx::BufferId,
         indirect_offset: BufferAddress,
@@ -2881,19 +2881,23 @@ impl<'a> ComputePass<'a> {
     /// Dispatches compute work operations.
     ///
     /// `x`, `y` and `z` denote the number of work groups to dispatch in each dimension.
-    pub fn dispatch(&mut self, x: u32, y: u32, z: u32) {
-        ComputePassInner::dispatch(&mut self.id, x, y, z);
+    pub fn dispatch_workgroups(&mut self, x: u32, y: u32, z: u32) {
+        ComputePassInner::dispatch_workgroups(&mut self.id, x, y, z);
     }
 
     /// Dispatches compute work operations, based on the contents of the `indirect_buffer`.
     ///
     /// The structure expected in `indirect_buffer` must conform to [`DispatchIndirect`](crate::util::DispatchIndirect).
-    pub fn dispatch_indirect(
+    pub fn dispatch_workgroups_indirect(
         &mut self,
         indirect_buffer: &'a Buffer,
         indirect_offset: BufferAddress,
     ) {
-        ComputePassInner::dispatch_indirect(&mut self.id, &indirect_buffer.id, indirect_offset);
+        ComputePassInner::dispatch_workgroups_indirect(
+            &mut self.id,
+            &indirect_buffer.id,
+            indirect_offset,
+        );
     }
 }
 
