@@ -84,7 +84,11 @@ impl super::CommandState {
                 .map(|size| size.get().min(!0u32 as u64) as u32),
         );
 
-        (!result_sizes.is_empty()).then(move || (slot as _, result_sizes.as_slice()))
+        if !result_sizes.is_empty() {
+            Some((slot as _, result_sizes))
+        } else {
+            None
+        }
     }
 }
 
