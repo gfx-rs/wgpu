@@ -280,6 +280,7 @@ web-sys = { version = "0.3.53", features = [
     "GpuVertexStepMode",
     "HtmlCanvasElement",
     "OffscreenCanvas",
+    "ImageBitmapRenderingContext",
     "Window",
 ]}
 js-sys = "0.3.50"

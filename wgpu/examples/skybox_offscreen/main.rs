@@ -2,6 +2,8 @@
 
 mod framework {
     use std::future::Future;
+    use wasm_bindgen::JsCast;
+    use web_sys::{ImageBitmapRenderingContext, OffscreenCanvas};
     use winit::{
         event::{self, WindowEvent},
         event_loop::{ControlFlow, EventLoop},
@@ -62,6 +64,8 @@ mod framework {
         adapter: wgpu::Adapter,
         device: wgpu::Device,
         queue: wgpu::Queue,
+        bitmap_renderer: ImageBitmapRenderingContext,
+        offscreen_canvas: OffscreenCanvas,
     }
 
     async fn setup<E: Example>(title: &str) -> Setup {
@@ -78,15 +82,28 @@ mod framework {
             .unwrap_or(log::Level::Error);
         console_log::init_with_level(level).expect("could not initialize logger");
         std::panic::set_hook(Box::new(console_error_panic_hook::hook));
+
         // On wasm, append the canvas to the document body
+        let canvas = window.canvas();
+        let canvas_clone = canvas.clone();
         web_sys::window()
             .and_then(|win| win.document())
             .and_then(|doc| doc.body())
             .and_then(|body| {
-                body.append_child(&web_sys::Element::from(window.canvas()))
+                body.append_child(&web_sys::Element::from(canvas_clone))
                     .ok()
             })
             .expect("couldn't append canvas to document body");
+
+        let bitmap_renderer = canvas
+            .get_context("bitmaprenderer")
+            .expect("couldn't create ImageBitmapRenderingContext (Result)")
+            .expect("couldn't create ImageBitmapRenderingContext (Option)")
+            .dyn_into::<ImageBitmapRenderingContext>()
+            .expect("couldn't convert into ImageBitmapRenderingContext");
+
+        let offscreen_canvas =
+            OffscreenCanvas::new(1024, 768).expect("couldn't create OffscreenCanvas");
 
         log::info!("Initializing the surface...");
 
@@ -95,7 +112,7 @@ mod framework {
         let instance = wgpu::Instance::new(backend);
         let (size, surface) = unsafe {
             let size = window.inner_size();
-            let surface = instance.create_surface(&window);
+            let surface = instance.create_surface_from_offscreen_canvas(&offscreen_canvas);
             (size, surface)
         };
         let adapter =
@@ -152,6 +169,8 @@ mod framework {
             adapter,
             device,
             queue,
+            bitmap_renderer,
+            offscreen_canvas,
         }
     }
 
@@ -165,6 +184,8 @@ mod framework {
             adapter,
             device,
             queue,
+            bitmap_renderer,
+            offscreen_canvas,
         }: Setup,
     ) {
         let spawner = Spawner::new();
@@ -194,11 +215,11 @@ mod framework {
                 }
                 event::Event::WindowEvent {
                     event:
-                    WindowEvent::Resized(size)
-                    | WindowEvent::ScaleFactorChanged {
-                        new_inner_size: &mut size,
-                        ..
-                    },
+                        WindowEvent::Resized(size)
+                        | WindowEvent::ScaleFactorChanged {
+                            new_inner_size: &mut size,
+                            ..
+                        },
                     ..
                 } => {
                     log::info!("Resizing to {:?}", size);
@@ -210,11 +231,11 @@ mod framework {
                 event::Event::WindowEvent { event, .. } => match event {
                     WindowEvent::KeyboardInput {
                         input:
-                        event::KeyboardInput {
-                            virtual_keycode: Some(event::VirtualKeyCode::Escape),
-                            state: event::ElementState::Pressed,
-                            ..
-                        },
+                            event::KeyboardInput {
+                                virtual_keycode: Some(event::VirtualKeyCode::Escape),
+                                state: event::ElementState::Pressed,
+                                ..
+                            },
                         ..
                     }
                     | WindowEvent::CloseRequested => {
@@ -241,6 +262,10 @@ mod framework {
                     example.render(&view, &device, &queue, &spawner);
 
                     frame.present();
+                    let image_bitmap = offscreen_canvas
+                        .transfer_to_image_bitmap()
+                        .expect("couldn't transfer offscreen canvas to image bitmap.");
+                    bitmap_renderer.transfer_from_image_bitmap(&image_bitmap);
                 }
                 _ => {}
             }
@@ -261,7 +286,7 @@ mod framework {
     }
 
     pub fn run<E: Example>(title: &str) {
-        use wasm_bindgen::{prelude::*, JsCast};
+        use wasm_bindgen::prelude::*;
 
         let title = title.to_owned();
         wasm_bindgen_futures::spawn_local(async move {
@@ -272,9 +297,10 @@ mod framework {
             // Otherwise wasm_bindgen_futures Queue would break and never handle any tasks again.
             // This is required, because winit uses JS exception for control flow to escape from `run`.
             if let Err(error) = call_catch(&start_closure) {
-                let is_control_flow_exception = error.dyn_ref::<js_sys::Error>().map_or(false, |e| {
-                    e.message().includes("Using exceptions for control flow", 0)
-                });
+                let is_control_flow_exception =
+                    error.dyn_ref::<js_sys::Error>().map_or(false, |e| {
+                        e.message().includes("Using exceptions for control flow", 0)
+                    });
 
                 if !is_control_flow_exception {
                     web_sys::console::error_1(&error);
@@ -308,7 +334,7 @@ mod framework {
     }
 
     // This allows treating the framework as a standalone example,
-// thus avoiding listing the example names in `Cargo.toml`.
+    // thus avoiding listing the example names in `Cargo.toml`.
     #[allow(dead_code)]
     fn main() {}
 }
