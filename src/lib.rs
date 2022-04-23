@@ -698,7 +698,48 @@ pub enum TypeInner {
     },
     /// Can be used to sample values from images.
     Sampler { comparison: bool },
-    /// Array of bindings
+
+    /// Array of bindings.
+    ///
+    /// A `BindingArray` represents an array where each element draws its value
+    /// from a separate bound resource. The array's element type `base` may be
+    /// [`Image`], [`Sampler`], or any type that would be permitted for a global
+    /// in the [`Uniform`] or [`Storage`] address spaces. Only global variables
+    /// may be binding arrays; on the host side, their values are provided by
+    /// [`TextureViewArray`], [`SamplerArray`], or [`BufferArray`]
+    /// bindings.
+    ///
+    /// Since each element comes from a distinct resource, a binding array of
+    /// images could have images of varying sizes (but not varying dimensions;
+    /// they must all have the same `Image` type). Or, a binding array of
+    /// buffers could have elements that are dynamically sized arrays, each with
+    /// a different length.
+    ///
+    /// Binding arrays are not [`DATA`]. This means that all binding array
+    /// globals must be placed in the [`Handle`] address space. Referring to
+    /// such a global produces a `BindingArray` value directly; there are never
+    /// pointers to binding arrays. The only operation permitted on
+    /// `BindingArray` values is indexing, which yields the element by value,
+    /// not a pointer to the element. (This means that buffer array contents
+    /// cannot be stored to; [naga#1864] covers lifting this restriction.)
+    ///
+    /// Unlike textures and samplers, binding arrays are not [`ARGUMENT`], so
+    /// they cannot be passed as arguments to functions.
+    ///
+    /// Naga's WGSL front end supports binding arrays with the type syntax
+    /// `binding_array<T, N>`.
+    ///
+    /// [`Image`]: TypeInner::Image
+    /// [`Sampler`]: TypeInner::Sampler
+    /// [`Uniform`]: AddressSpace::Uniform
+    /// [`Storage`]: AddressSpace::Storage
+    /// [`TextureViewArray`]: https://docs.rs/wgpu/latest/wgpu/enum.BindingResource.html#variant.TextureViewArray
+    /// [`SamplerArray`]: https://docs.rs/wgpu/latest/wgpu/enum.BindingResource.html#variant.SamplerArray
+    /// [`BufferArray`]: https://docs.rs/wgpu/latest/wgpu/enum.BindingResource.html#variant.BufferArray
+    /// [`DATA`]: crate::valid::TypeFlags::DATA
+    /// [`Handle`]: AddressSpace::Handle
+    /// [`ARGUMENT`]: crate::valid::TypeFlags::ARGUMENT
+    /// [naga#1864]: https://github.com/gfx-rs/naga/issues/1864
     BindingArray { base: Handle<Type>, size: ArraySize },
 }
 
