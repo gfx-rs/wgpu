@@ -1,14 +1,13 @@
-# skybox
+# skybox offscreen
 
-This animated example demonstrates loading a Wavefront OBJ model, and rendering it with skybox and simple reflections.
-It hooks up `winit` mouse controls for camera rotation around the model at the center.
+This is the [skybox example](../skybox/README.md) version demonstrating an offscreen canvas rendering approach.
 
 ## To Run
-
+WebGPU backend:
 ```
-cargo run --example skybox
+cargo run-wasm --example skybox_offscreen
 ```
-
-## Screenshots
-
-![Skybox](./screenshot.png)
+WebGL2 backend:
+```
+cargo run-wasm --example skybox_offscreen --features webgl
+```
