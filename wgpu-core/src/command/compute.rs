@@ -78,7 +78,9 @@ pub struct ComputePass {
     parent_id: id::CommandEncoderId,
 
     // Resource binding dedupe state.
+    #[cfg_attr(feature = "serial-pass", serde(skip))]
     current_bind_groups: BindGroupStateChange,
+    #[cfg_attr(feature = "serial-pass", serde(skip))]
     current_pipeline: StateChange<id::ComputePipelineId>,
 }
 

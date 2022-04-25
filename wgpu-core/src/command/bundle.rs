@@ -88,7 +88,9 @@ pub struct RenderBundleEncoder {
     pub(crate) is_ds_read_only: bool,
 
     // Resource binding dedupe state.
+    #[cfg_attr(feature = "serial-pass", serde(skip))]
     current_bind_groups: BindGroupStateChange,
+    #[cfg_attr(feature = "serial-pass", serde(skip))]
     current_pipeline: StateChange<id::RenderPipelineId>,
 }
 
@@ -1231,15 +1233,13 @@ pub mod bundle_ffi {
         offsets: *const DynamicOffset,
         offset_length: usize,
     ) {
-        let redundant = bundle
-            .current_bind_groups
-            .set_and_check_redundant(
-                bind_group_id,
-                index,
-                &mut bundle.base.dynamic_offsets,
-                offsets,
-                offset_length,
-            );
+        let redundant = bundle.current_bind_groups.set_and_check_redundant(
+            bind_group_id,
+            index,
+            &mut bundle.base.dynamic_offsets,
+            offsets,
+            offset_length,
+        );
 
         if redundant {
             return;

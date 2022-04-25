@@ -166,7 +166,9 @@ pub struct RenderPass {
     depth_stencil_target: Option<RenderPassDepthStencilAttachment>,
 
     // Resource binding dedupe state.
+    #[cfg_attr(feature = "serial-pass", serde(skip))]
     current_bind_groups: BindGroupStateChange,
+    #[cfg_attr(feature = "serial-pass", serde(skip))]
     current_pipeline: StateChange<id::RenderPipelineId>,
 }
 

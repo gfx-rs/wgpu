@@ -426,6 +426,12 @@ impl<T: Copy + PartialEq> StateChange<T> {
     }
 }
 
+impl<T: Copy + PartialEq> Default for StateChange<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[derive(Debug)]
 struct BindGroupStateChange {
     last_states: [StateChange<id::BindGroupId>; hal::MAX_BIND_GROUPS],
@@ -433,7 +439,9 @@ struct BindGroupStateChange {
 
 impl BindGroupStateChange {
     fn new() -> Self {
-        Self { last_states: [StateChange::new(); hal::MAX_BIND_GROUPS] }
+        Self {
+            last_states: [StateChange::new(); hal::MAX_BIND_GROUPS],
+        }
     }
 
     unsafe fn set_and_check_redundant(
@@ -463,6 +471,12 @@ impl BindGroupStateChange {
             dynamic_offsets.extend_from_slice(slice::from_raw_parts(offsets, offset_length));
         }
         false
+    }
+}
+
+impl Default for BindGroupStateChange {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
