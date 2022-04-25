@@ -4,9 +4,9 @@ use crate::{
         bind::Binder,
         end_pipeline_statistics_query,
         memory_init::{fixup_discarded_surfaces, SurfacesInDiscardState},
-        BasePass, BasePassRef, CommandBuffer, CommandEncoderError, CommandEncoderStatus, DrawError,
-        ExecutionError, MapPassErr, PassErrorScope, QueryResetMap, QueryUseError, RenderCommand,
-        RenderCommandError, StateChange,
+        BasePass, BasePassRef, BindGroupStateChange, CommandBuffer, CommandEncoderError,
+        CommandEncoderStatus, DrawError, ExecutionError, MapPassErr, PassErrorScope, QueryResetMap,
+        QueryUseError, RenderCommand, RenderCommandError, StateChange,
     },
     device::{
         AttachmentData, Device, MissingDownlevelFlags, MissingFeatures,
@@ -164,6 +164,12 @@ pub struct RenderPass {
     parent_id: id::CommandEncoderId,
     color_targets: ArrayVec<RenderPassColorAttachment, { hal::MAX_COLOR_TARGETS }>,
     depth_stencil_target: Option<RenderPassDepthStencilAttachment>,
+
+    // Resource binding dedupe state.
+    #[cfg_attr(feature = "serial-pass", serde(skip))]
+    current_bind_groups: BindGroupStateChange,
+    #[cfg_attr(feature = "serial-pass", serde(skip))]
+    current_pipeline: StateChange<id::RenderPipelineId>,
 }
 
 impl RenderPass {
@@ -173,6 +179,9 @@ impl RenderPass {
             parent_id,
             color_targets: desc.color_attachments.iter().cloned().collect(),
             depth_stencil_target: desc.depth_stencil_attachment.cloned(),
+
+            current_bind_groups: BindGroupStateChange::new(),
+            current_pipeline: StateChange::new(),
         }
     }
 
@@ -337,7 +346,7 @@ struct State {
     binder: Binder,
     blend_constant: OptionalState,
     stencil_reference: u32,
-    pipeline: StateChange<id::RenderPipelineId>,
+    pipeline: Option<id::RenderPipelineId>,
     index: IndexState,
     vertex: VertexState,
     debug_scope_depth: u32,
@@ -361,7 +370,7 @@ impl State {
                 index: bind_mask.trailing_zeros(),
             });
         }
-        if self.pipeline.is_unset() {
+        if self.pipeline.is_none() {
             return Err(DrawError::MissingPipeline);
         }
         if self.blend_constant == OptionalState::Required {
@@ -392,7 +401,7 @@ impl State {
     /// Reset the `RenderBundle`-related states.
     fn reset_bundle(&mut self) {
         self.binder.reset();
-        self.pipeline.reset();
+        self.pipeline = None;
         self.index.reset();
         self.vertex.reset();
     }
@@ -1092,7 +1101,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 binder: Binder::new(),
                 blend_constant: OptionalState::Unused,
                 stencil_reference: 0,
-                pipeline: StateChange::new(),
+                pipeline: None,
                 index: IndexState::default(),
                 vertex: VertexState::default(),
                 debug_scope_depth: 0,
@@ -1187,9 +1196,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     }
                     RenderCommand::SetPipeline(pipeline_id) => {
                         let scope = PassErrorScope::SetPipelineRender(pipeline_id);
-                        if state.pipeline.set_and_check_redundant(pipeline_id) {
-                            continue;
-                        }
+                        state.pipeline = Some(pipeline_id);
 
                         let pipeline = cmd_buf
                             .trackers
@@ -1505,7 +1512,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         let scope = PassErrorScope::Draw {
                             indexed,
                             indirect: false,
-                            pipeline: state.pipeline.last_state,
+                            pipeline: state.pipeline,
                         };
                         state.is_ready(indexed).map_pass_err(scope)?;
 
@@ -1545,7 +1552,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         let scope = PassErrorScope::Draw {
                             indexed,
                             indirect: false,
-                            pipeline: state.pipeline.last_state,
+                            pipeline: state.pipeline,
                         };
                         state.is_ready(indexed).map_pass_err(scope)?;
 
@@ -1589,7 +1596,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         let scope = PassErrorScope::Draw {
                             indexed,
                             indirect: true,
-                            pipeline: state.pipeline.last_state,
+                            pipeline: state.pipeline,
                         };
                         state.is_ready(indexed).map_pass_err(scope)?;
 
@@ -1662,7 +1669,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         let scope = PassErrorScope::Draw {
                             indexed,
                             indirect: true,
-                            pipeline: state.pipeline.last_state,
+                            pipeline: state.pipeline,
                         };
                         state.is_ready(indexed).map_pass_err(scope)?;
 
@@ -2012,16 +2019,23 @@ pub mod render_ffi {
         offsets: *const DynamicOffset,
         offset_length: usize,
     ) {
+        let redundant = pass.current_bind_groups.set_and_check_redundant(
+            bind_group_id,
+            index,
+            &mut pass.base.dynamic_offsets,
+            offsets,
+            offset_length,
+        );
+
+        if redundant {
+            return;
+        }
+
         pass.base.commands.push(RenderCommand::SetBindGroup {
             index: index.try_into().unwrap(),
             num_dynamic_offsets: offset_length.try_into().unwrap(),
             bind_group_id,
         });
-        if offset_length != 0 {
-            pass.base
-                .dynamic_offsets
-                .extend_from_slice(slice::from_raw_parts(offsets, offset_length));
-        }
     }
 
     #[no_mangle]
@@ -2029,6 +2043,10 @@ pub mod render_ffi {
         pass: &mut RenderPass,
         pipeline_id: id::RenderPipelineId,
     ) {
+        if pass.current_pipeline.set_and_check_redundant(pipeline_id) {
+            return;
+        }
+
         pass.base
             .commands
             .push(RenderCommand::SetPipeline(pipeline_id));

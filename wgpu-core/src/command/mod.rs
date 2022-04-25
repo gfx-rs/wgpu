@@ -8,6 +8,8 @@ mod query;
 mod render;
 mod transfer;
 
+use std::slice;
+
 pub(crate) use self::clear::clear_texture_no_device;
 pub use self::{
     bundle::*, clear::ClearError, compute::*, draw::*, query::*, render::*, transfer::*,
@@ -405,7 +407,7 @@ where
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 struct StateChange<T> {
     last_state: Option<T>,
 }
@@ -419,11 +421,62 @@ impl<T: Copy + PartialEq> StateChange<T> {
         self.last_state = Some(new_state);
         already_set
     }
-    fn is_unset(&self) -> bool {
-        self.last_state.is_none()
-    }
     fn reset(&mut self) {
         self.last_state = None;
+    }
+}
+
+impl<T: Copy + PartialEq> Default for StateChange<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[derive(Debug)]
+struct BindGroupStateChange {
+    last_states: [StateChange<id::BindGroupId>; hal::MAX_BIND_GROUPS],
+}
+
+impl BindGroupStateChange {
+    fn new() -> Self {
+        Self {
+            last_states: [StateChange::new(); hal::MAX_BIND_GROUPS],
+        }
+    }
+
+    unsafe fn set_and_check_redundant(
+        &mut self,
+        bind_group_id: id::BindGroupId,
+        index: u32,
+        dynamic_offsets: &mut Vec<u32>,
+        offsets: *const wgt::DynamicOffset,
+        offset_length: usize,
+    ) -> bool {
+        // For now never deduplicate bind groups with dynamic offsets.
+        if offset_length == 0 {
+            // If this get returns None, that means we're well over the limit, so let the call through to get a proper error
+            if let Some(current_bind_group) = self.last_states.get_mut(index as usize) {
+                // Bail out if we're binding the same bind group.
+                if current_bind_group.set_and_check_redundant(bind_group_id) {
+                    return true;
+                }
+            }
+        } else {
+            // We intentionally remove the memory of this bind group if we have dynamic offsets,
+            // such that if you try to bind this bind group later with _no_ dynamic offsets it
+            // tries to bind it again and gives a proper validation error.
+            if let Some(current_bind_group) = self.last_states.get_mut(index as usize) {
+                current_bind_group.reset();
+            }
+            dynamic_offsets.extend_from_slice(slice::from_raw_parts(offsets, offset_length));
+        }
+        false
+    }
+}
+
+impl Default for BindGroupStateChange {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

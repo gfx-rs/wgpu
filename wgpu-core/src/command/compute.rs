@@ -6,8 +6,8 @@ use crate::{
         bind::Binder,
         end_pipeline_statistics_query,
         memory_init::{fixup_discarded_surfaces, SurfacesInDiscardState},
-        BasePass, BasePassRef, CommandBuffer, CommandEncoderError, CommandEncoderStatus,
-        MapPassErr, PassErrorScope, QueryUseError, StateChange,
+        BasePass, BasePassRef, BindGroupStateChange, CommandBuffer, CommandEncoderError,
+        CommandEncoderStatus, MapPassErr, PassErrorScope, QueryUseError, StateChange,
     },
     device::MissingDownlevelFlags,
     error::{ErrorFormatter, PrettyError},
@@ -76,6 +76,12 @@ pub enum ComputeCommand {
 pub struct ComputePass {
     base: BasePass<ComputeCommand>,
     parent_id: id::CommandEncoderId,
+
+    // Resource binding dedupe state.
+    #[cfg_attr(feature = "serial-pass", serde(skip))]
+    current_bind_groups: BindGroupStateChange,
+    #[cfg_attr(feature = "serial-pass", serde(skip))]
+    current_pipeline: StateChange<id::ComputePipelineId>,
 }
 
 impl ComputePass {
@@ -83,6 +89,9 @@ impl ComputePass {
         Self {
             base: BasePass::new(&desc.label),
             parent_id,
+
+            current_bind_groups: BindGroupStateChange::new(),
+            current_pipeline: StateChange::new(),
         }
     }
 
@@ -222,7 +231,7 @@ where
 #[derive(Debug)]
 struct State {
     binder: Binder,
-    pipeline: StateChange<id::ComputePipelineId>,
+    pipeline: Option<id::ComputePipelineId>,
     trackers: StatefulTrackerSubset,
     debug_scope_depth: u32,
 }
@@ -236,7 +245,7 @@ impl State {
                 index: bind_mask.trailing_zeros(),
             });
         }
-        if self.pipeline.is_unset() {
+        if self.pipeline.is_none() {
             return Err(DispatchError::MissingPipeline);
         }
         self.binder.check_late_buffer_bindings()?;
@@ -325,7 +334,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let mut state = State {
             binder: Binder::new(),
-            pipeline: StateChange::new(),
+            pipeline: None,
             trackers: StatefulTrackerSubset::new(A::VARIANT),
             debug_scope_depth: 0,
         };
@@ -420,9 +429,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 ComputeCommand::SetPipeline(pipeline_id) => {
                     let scope = PassErrorScope::SetPipelineCompute(pipeline_id);
 
-                    if state.pipeline.set_and_check_redundant(pipeline_id) {
-                        continue;
-                    }
+                    state.pipeline = Some(pipeline_id);
 
                     let pipeline = cmd_buf
                         .trackers
@@ -524,7 +531,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 ComputeCommand::Dispatch(groups) => {
                     let scope = PassErrorScope::Dispatch {
                         indirect: false,
-                        pipeline: state.pipeline.last_state,
+                        pipeline: state.pipeline,
                     };
 
                     fixup_discarded_surfaces(
@@ -568,7 +575,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 ComputeCommand::DispatchIndirect { buffer_id, offset } => {
                     let scope = PassErrorScope::Dispatch {
                         indirect: true,
-                        pipeline: state.pipeline.last_state,
+                        pipeline: state.pipeline,
                     };
 
                     state.is_ready().map_pass_err(scope)?;
@@ -750,16 +757,23 @@ pub mod compute_ffi {
         offsets: *const DynamicOffset,
         offset_length: usize,
     ) {
+        let redundant = pass.current_bind_groups.set_and_check_redundant(
+            bind_group_id,
+            index,
+            &mut pass.base.dynamic_offsets,
+            offsets,
+            offset_length,
+        );
+
+        if redundant {
+            return;
+        }
+
         pass.base.commands.push(ComputeCommand::SetBindGroup {
             index: index.try_into().unwrap(),
             num_dynamic_offsets: offset_length.try_into().unwrap(),
             bind_group_id,
         });
-        if offset_length != 0 {
-            pass.base
-                .dynamic_offsets
-                .extend_from_slice(slice::from_raw_parts(offsets, offset_length));
-        }
     }
 
     #[no_mangle]
@@ -767,6 +781,10 @@ pub mod compute_ffi {
         pass: &mut ComputePass,
         pipeline_id: id::ComputePipelineId,
     ) {
+        if pass.current_pipeline.set_and_check_redundant(pipeline_id) {
+            return;
+        }
+
         pass.base
             .commands
             .push(ComputeCommand::SetPipeline(pipeline_id));
