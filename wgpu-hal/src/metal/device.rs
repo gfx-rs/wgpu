@@ -74,7 +74,12 @@ impl super::Device {
         )
         .map_err(|e| crate::PipelineError::Linkage(stage_bit, format!("MSL: {:?}", e)))?;
 
-        log::debug!("Naga generated shader for entry point '{}' and stage {:?}\n{}", stage.entry_point, naga_stage, &source);
+        log::debug!(
+            "Naga generated shader for entry point '{}' and stage {:?}\n{}",
+            stage.entry_point,
+            naga_stage,
+            &source
+        );
 
         let options = mtl::CompileOptions::new();
         options.set_language_version(self.shared.private_caps.msl_version);

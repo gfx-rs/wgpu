@@ -31,12 +31,7 @@ mod conv;
 mod device;
 mod instance;
 
-use std::{
-    borrow::Borrow,
-    ffi::CStr,
-    num::{NonZeroU32},
-    sync::Arc,
-};
+use std::{borrow::Borrow, ffi::CStr, num::NonZeroU32, sync::Arc};
 
 use arrayvec::ArrayVec;
 use ash::{

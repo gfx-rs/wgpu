@@ -170,9 +170,6 @@ fn deserialize_features(features: &wgpu_types::Features) -> Vec<&'static str> {
     ) {
         return_features.push("uniform-buffer-and-storage-buffer-texture-non-uniform-indexing");
     }
-    if features.contains(wgpu_types::Features::UNSIZED_BINDING_ARRAY) {
-        return_features.push("unsized-binding-array");
-    }
     if features.contains(wgpu_types::Features::ADDRESS_MODE_CLAMP_TO_BORDER) {
         return_features.push("address-mode-clamp-to-border");
     }
@@ -340,10 +337,6 @@ impl From<GpuRequiredFeatures> for wgpu_types::Features {
             required_features
                 .0
                 .contains("uniform-buffer-and-storage-buffer-texture-non-uniform-indexing"),
-        );
-        features.set(
-            wgpu_types::Features::UNSIZED_BINDING_ARRAY,
-            required_features.0.contains("unsized-binding-array"),
         );
         features.set(
             wgpu_types::Features::ADDRESS_MODE_CLAMP_TO_BORDER,
