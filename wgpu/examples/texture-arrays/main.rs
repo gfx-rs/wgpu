@@ -325,7 +325,7 @@ impl framework::Example for Example {
                 }],
             },
             fragment: Some(wgpu::FragmentState {
-                module: &fragment_shader_module,
+                module: fragment_shader_module,
                 entry_point: fragment_entry_point,
                 targets: &[config.format.into()],
             }),
