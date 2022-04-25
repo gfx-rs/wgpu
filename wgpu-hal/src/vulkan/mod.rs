@@ -398,12 +398,15 @@ pub struct BindGroupLayout {
     raw: vk::DescriptorSetLayout,
     desc_count: gpu_descriptor::DescriptorTotalCount,
     types: Box<[(vk::DescriptorType, u32)]>,
+    /// Map of binding index to size,
+    binding_arrays: Vec<(u32, NonZeroU32)>,
     requires_update_after_bind: bool,
 }
 
 #[derive(Debug)]
 pub struct PipelineLayout {
     raw: vk::PipelineLayout,
+    binding_arrays: naga::back::spv::BindingMap,
 }
 
 #[derive(Debug)]

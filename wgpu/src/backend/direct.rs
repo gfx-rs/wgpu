@@ -1329,8 +1329,8 @@ impl crate::Context for Context {
         ));
         if let Some(cause) = error {
             if let wgc::pipeline::CreateRenderPipelineError::Internal { stage, ref error } = cause {
-                log::warn!("Shader translation error for stage {:?}: {}", stage, error);
-                log::warn!("Please report it to https://github.com/gfx-rs/naga");
+                log::error!("Shader translation error for stage {:?}: {}", stage, error);
+                log::error!("Please report it to https://github.com/gfx-rs/naga");
             }
             self.handle_error(
                 &device.error_sink,

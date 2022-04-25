@@ -1145,6 +1145,25 @@ impl<A: HalApi> Device<A> {
             self.features
                 .contains(wgt::Features::SHADER_PRIMITIVE_INDEX),
         );
+        caps.set(
+            Caps::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
+            self.features.contains(
+                wgt::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
+            ),
+        );
+        caps.set(
+            Caps::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
+            self.features.contains(
+                wgt::Features::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
+            ),
+        );
+        // TODO: This needs a proper wgpu feature
+        caps.set(
+            Caps::SAMPLER_NON_UNIFORM_INDEXING,
+            self.features.contains(
+                wgt::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
+            ),
+        );
         let info = naga::valid::Validator::new(naga::valid::ValidationFlags::all(), caps)
             .validate(&module)
             .map_err(|inner| {

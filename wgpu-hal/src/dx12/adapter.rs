@@ -91,6 +91,18 @@ impl super::Adapter {
             )
         });
 
+        let mut shader_model_support: d3d12::D3D12_FEATURE_DATA_SHADER_MODEL =
+            d3d12::D3D12_FEATURE_DATA_SHADER_MODEL {
+                HighestShaderModel: d3d12::D3D_SHADER_MODEL_6_0,
+            };
+        assert_eq!(0, unsafe {
+            device.CheckFeatureSupport(
+                d3d12::D3D12_FEATURE_SHADER_MODEL,
+                &mut shader_model_support as *mut _ as *mut _,
+                mem::size_of::<d3d12::D3D12_FEATURE_DATA_SHADER_MODEL>() as _,
+            )
+        });
+
         let mut workarounds = super::Workarounds::default();
 
         let info = wgt::AdapterInfo {
@@ -175,11 +187,6 @@ impl super::Adapter {
             | wgt::Features::DEPTH_CLIP_CONTROL
             | wgt::Features::INDIRECT_FIRST_INSTANCE
             | wgt::Features::MAPPABLE_PRIMARY_BUFFERS
-            //TODO: Naga part
-            //| wgt::Features::TEXTURE_BINDING_ARRAY
-            //| wgt::Features::BUFFER_BINDING_ARRAY
-            //| wgt::Features::STORAGE_RESOURCE_BINDING_ARRAY
-            //| wgt::Features::UNSIZED_BINDING_ARRAY
             | wgt::Features::MULTI_DRAW_INDIRECT
             | wgt::Features::MULTI_DRAW_INDIRECT_COUNT
             | wgt::Features::ADDRESS_MODE_CLAMP_TO_BORDER
@@ -202,6 +209,13 @@ impl super::Adapter {
             wgt::Features::CONSERVATIVE_RASTERIZATION,
             options.ConservativeRasterizationTier
                 != d3d12::D3D12_CONSERVATIVE_RASTERIZATION_TIER_NOT_SUPPORTED,
+        );
+
+        features.set(
+            wgt::Features::TEXTURE_BINDING_ARRAY
+                | wgt::Features::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING
+                | wgt::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
+            shader_model_support.HighestShaderModel >= d3d12::D3D_SHADER_MODEL_5_1,
         );
 
         let base = wgt::Limits::default();
@@ -282,7 +296,7 @@ impl super::Adapter {
 impl crate::Adapter<super::Api> for super::Adapter {
     unsafe fn open(
         &self,
-        features: wgt::Features,
+        _features: wgt::Features,
         _limits: &wgt::Limits,
     ) -> Result<crate::OpenDevice<super::Api>, crate::DeviceError> {
         let queue = {
@@ -297,13 +311,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
                 .into_device_result("Queue creation")?
         };
 
-        let device = super::Device::new(
-            self.device,
-            queue,
-            features,
-            self.private_caps,
-            &self.library,
-        )?;
+        let device = super::Device::new(self.device, queue, self.private_caps, &self.library)?;
         Ok(crate::OpenDevice {
             device,
             queue: super::Queue {

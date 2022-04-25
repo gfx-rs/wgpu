@@ -3,13 +3,12 @@ use super::conv;
 use ash::{extensions::khr, vk};
 use parking_lot::Mutex;
 
-use std::{ffi::CStr, sync::Arc};
+use std::{collections::BTreeMap, ffi::CStr, sync::Arc};
 
 //TODO: const fn?
 fn indexing_features() -> wgt::Features {
     wgt::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING
         | wgt::Features::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING
-        | wgt::Features::UNSIZED_BINDING_ARRAY
 }
 
 /// Aggregate of the `vk::PhysicalDevice*Features` structs used by `gfx`.
@@ -212,9 +211,6 @@ impl PhysicalDeviceFeatures {
                             uab_types.contains(super::UpdateAfterBindTypes::STORAGE_BUFFER),
                         )
                         .descriptor_binding_partially_bound(needs_partially_bound)
-                        .runtime_descriptor_array(
-                            requested_features.contains(wgt::Features::UNSIZED_BINDING_ARRAY),
-                        )
                         //.sampler_filter_minmax(requested_features.contains(wgt::Features::SAMPLER_REDUCTION))
                         .imageless_framebuffer(private_caps.imageless_framebuffers)
                         .timeline_semaphore(private_caps.timeline_semaphores)
@@ -253,9 +249,6 @@ impl PhysicalDeviceFeatures {
                             uab_types.contains(super::UpdateAfterBindTypes::STORAGE_BUFFER),
                         )
                         .descriptor_binding_partially_bound(needs_partially_bound)
-                        .runtime_descriptor_array(
-                            requested_features.contains(wgt::Features::UNSIZED_BINDING_ARRAY),
-                        )
                         .build(),
                 )
             } else {
@@ -471,9 +464,6 @@ impl PhysicalDeviceFeatures {
             ) {
                 features.insert(F::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING);
             }
-            if vulkan_1_2.runtime_descriptor_array != 0 {
-                features |= F::UNSIZED_BINDING_ARRAY;
-            }
             if vulkan_1_2.descriptor_binding_partially_bound != 0 && !intel_windows {
                 features |= F::PARTIALLY_BOUND_BINDING_ARRAY;
             }
@@ -518,9 +508,6 @@ impl PhysicalDeviceFeatures {
             }
             if descriptor_indexing.descriptor_binding_partially_bound != 0 && !intel_windows {
                 features |= F::PARTIALLY_BOUND_BINDING_ARRAY;
-            }
-            if descriptor_indexing.runtime_descriptor_array != 0 {
-                features |= F::UNSIZED_BINDING_ARRAY;
             }
         }
 
@@ -1183,6 +1170,13 @@ impl super::Adapter {
                 capabilities.push(spv::Capability::MultiView);
             }
 
+            if features.intersects(
+                wgt::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING
+                    | wgt::Features::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
+            ) {
+                capabilities.push(spv::Capability::ShaderNonUniform);
+            }
+
             let mut flags = spv::WriterFlags::empty();
             flags.set(
                 spv::WriterFlags::DEBUG,
@@ -1215,7 +1209,11 @@ impl super::Adapter {
                     } else {
                         naga::proc::BoundsCheckPolicy::Restrict
                     },
+                    // TODO: support bounds checks on binding arrays
+                    binding_array: naga::proc::BoundsCheckPolicy::Unchecked,
                 },
+                // We need to build this separately for each invocation, so just default it out here
+                binding_map: BTreeMap::default(),
             }
         };
 

@@ -348,16 +348,6 @@ bitflags::bitflags! {
         ///
         /// This is a native only feature.
         const PARTIALLY_BOUND_BINDING_ARRAY = 1 << 22;
-        /// Allows the user to create unsized uniform arrays of bindings:
-        ///
-        /// eg. `uniform texture2D textures[]`.
-        ///
-        /// Supported platforms:
-        /// - DX12
-        /// - Vulkan 1.2+ (or VK_EXT_descriptor_indexing)'s runtimeDescriptorArray feature
-        ///
-        /// This is a native only feature.
-        const UNSIZED_BINDING_ARRAY = 1 << 23;
         /// Allows the user to call [`RenderPass::multi_draw_indirect`] and [`RenderPass::multi_draw_indexed_indirect`].
         ///
         /// Allows multiple indirect calls to be dispatched from a single buffer.
@@ -367,7 +357,7 @@ bitflags::bitflags! {
         /// - Vulkan
         ///
         /// This is a native only feature.
-        const MULTI_DRAW_INDIRECT = 1 << 24;
+        const MULTI_DRAW_INDIRECT = 1 << 23;
         /// Allows the user to call [`RenderPass::multi_draw_indirect_count`] and [`RenderPass::multi_draw_indexed_indirect_count`].
         ///
         /// This allows the use of a buffer containing the actual number of draw calls.
@@ -377,7 +367,7 @@ bitflags::bitflags! {
         /// - Vulkan 1.2+ (or VK_KHR_draw_indirect_count)
         ///
         /// This is a native only feature.
-        const MULTI_DRAW_INDIRECT_COUNT = 1 << 25;
+        const MULTI_DRAW_INDIRECT_COUNT = 1 << 24;
         /// Allows the use of push constants: small, fast bits of memory that can be updated
         /// inside a [`RenderPass`].
         ///
@@ -394,7 +384,7 @@ bitflags::bitflags! {
         /// - OpenGL (emulated with uniforms)
         ///
         /// This is a native only feature.
-        const PUSH_CONSTANTS = 1 << 26;
+        const PUSH_CONSTANTS = 1 << 25;
         /// Allows the use of [`AddressMode::ClampToBorder`] with a border color
         /// other than [`SamplerBorderColor::Zero`].
         ///
@@ -406,7 +396,7 @@ bitflags::bitflags! {
         /// - OpenGL
         ///
         /// This is a web and native feature.
-        const ADDRESS_MODE_CLAMP_TO_BORDER = 1 << 27;
+        const ADDRESS_MODE_CLAMP_TO_BORDER = 1 << 26;
         /// Allows the user to set [`PolygonMode::Line`] in [`PrimitiveState::polygon_mode`]
         ///
         /// This allows drawing polygons/triangles as lines (wireframe) instead of filled
@@ -417,7 +407,7 @@ bitflags::bitflags! {
         /// - Metal
         ///
         /// This is a native only feature.
-        const POLYGON_MODE_LINE = 1 << 28;
+        const POLYGON_MODE_LINE = 1 << 27;
         /// Allows the user to set [`PolygonMode::Point`] in [`PrimitiveState::polygon_mode`]
         ///
         /// This allows only drawing the vertices of polygons/triangles instead of filled
@@ -427,7 +417,7 @@ bitflags::bitflags! {
         /// - Vulkan
         ///
         /// This is a native only feature.
-        const POLYGON_MODE_POINT = 1 << 29;
+        const POLYGON_MODE_POINT = 1 << 28;
         /// Enables ETC family of compressed textures. All ETC textures use 4x4 pixel blocks.
         /// ETC2 RGB and RGBA1 are 8 bytes per block. RTC2 RGBA8 and EAC are 16 bytes per block.
         ///
@@ -442,7 +432,7 @@ bitflags::bitflags! {
         /// - Mobile (some)
         ///
         /// This is a native-only feature.
-        const TEXTURE_COMPRESSION_ETC2 = 1 << 30;
+        const TEXTURE_COMPRESSION_ETC2 = 1 << 29;
         /// Enables ASTC family of compressed textures. ASTC textures use pixel blocks varying from 4x4 to 12x12.
         /// Blocks are always 16 bytes.
         ///
@@ -457,7 +447,7 @@ bitflags::bitflags! {
         /// - Mobile (some)
         ///
         /// This is a native-only feature.
-        const TEXTURE_COMPRESSION_ASTC_LDR = 1 << 31;
+        const TEXTURE_COMPRESSION_ASTC_LDR = 1 << 30;
         /// Enables device specific texture format features.
         ///
         /// See `TextureFormatFeatures` for a listing of the features in question.
@@ -469,7 +459,7 @@ bitflags::bitflags! {
         /// This extension does not enable additional formats.
         ///
         /// This is a native-only feature.
-        const TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES = 1 << 32;
+        const TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES = 1 << 31;
         /// Enables 64-bit floating point types in SPIR-V shaders.
         ///
         /// Note: even when supported by GPU hardware, 64-bit floating point operations are
@@ -479,7 +469,7 @@ bitflags::bitflags! {
         /// - Vulkan
         ///
         /// This is a native-only feature.
-        const SHADER_FLOAT64 = 1 << 33;
+        const SHADER_FLOAT64 = 1 << 32;
         /// Enables using 64-bit types for vertex attributes.
         ///
         /// Requires SHADER_FLOAT64.
@@ -487,7 +477,7 @@ bitflags::bitflags! {
         /// Supported Platforms: N/A
         ///
         /// This is a native-only feature.
-        const VERTEX_ATTRIBUTE_64BIT = 1 << 34;
+        const VERTEX_ATTRIBUTE_64BIT = 1 << 33;
         /// Allows the user to set a overestimation-conservative-rasterization in [`PrimitiveState::conservative`]
         ///
         /// Processing of degenerate triangles/lines is hardware specific.
@@ -497,7 +487,7 @@ bitflags::bitflags! {
         /// - Vulkan
         ///
         /// This is a native only feature.
-        const CONSERVATIVE_RASTERIZATION = 1 << 35;
+        const CONSERVATIVE_RASTERIZATION = 1 << 34;
         /// Enables bindings of writable storage buffers and textures visible to vertex shaders.
         ///
         /// Note: some (tiled-based) platforms do not support vertex shaders with any side-effects.
@@ -506,14 +496,14 @@ bitflags::bitflags! {
         /// - All
         ///
         /// This is a native-only feature.
-        const VERTEX_WRITABLE_STORAGE = 1 << 36;
+        const VERTEX_WRITABLE_STORAGE = 1 << 35;
         /// Enables clear to zero for textures.
         ///
         /// Supported platforms:
         /// - All
         ///
         /// This is a native only feature.
-        const CLEAR_TEXTURE = 1 << 37;
+        const CLEAR_TEXTURE = 1 << 36;
         /// Enables creating shader modules from SPIR-V binary data (unsafe).
         ///
         /// SPIR-V data is not parsed or interpreted in any way; you can use
@@ -525,7 +515,7 @@ bitflags::bitflags! {
         /// Vulkan implementation.
         ///
         /// This is a native only feature.
-        const SPIRV_SHADER_PASSTHROUGH = 1 << 38;
+        const SPIRV_SHADER_PASSTHROUGH = 1 << 37;
         /// Enables `builtin(primitive_index)` in fragment shaders.
         ///
         /// Note: enables geometry processing for pipelines using the builtin.
@@ -536,14 +526,14 @@ bitflags::bitflags! {
         /// - Vulkan
         ///
         /// This is a native only feature.
-        const SHADER_PRIMITIVE_INDEX = 1 << 39;
+        const SHADER_PRIMITIVE_INDEX = 1 << 38;
         /// Enables multiview render passes and `builtin(view_index)` in vertex shaders.
         ///
         /// Supported platforms:
         /// - Vulkan
         ///
         /// This is a native only feature.
-        const MULTIVIEW = 1 << 40;
+        const MULTIVIEW = 1 << 39;
         /// Enables normalized `16-bit` texture formats.
         ///
         /// Supported platforms:
@@ -552,7 +542,7 @@ bitflags::bitflags! {
         /// - Metal
         ///
         /// This is a native only feature.
-        const TEXTURE_FORMAT_16BIT_NORM = 1 << 41;
+        const TEXTURE_FORMAT_16BIT_NORM = 1 << 40;
         /// Allows the use of [`AddressMode::ClampToBorder`] with a border color
         /// of [`SamplerBorderColor::Zero`].
         ///
@@ -564,12 +554,12 @@ bitflags::bitflags! {
         /// - OpenGL
         ///
         /// This is a native only feature.
-        const ADDRESS_MODE_CLAMP_TO_ZERO = 1 << 42;
+        const ADDRESS_MODE_CLAMP_TO_ZERO = 1 << 41;
         /// Supported Platforms:
         /// - Metal
         ///
         /// This is a native-only feature.
-        const TEXTURE_COMPRESSION_ASTC_HDR = 1 << 43;
+        const TEXTURE_COMPRESSION_ASTC_HDR = 1 << 42;
     }
 }
 
