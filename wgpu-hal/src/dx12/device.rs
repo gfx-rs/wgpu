@@ -970,7 +970,7 @@ impl crate::Device<super::Api> for super::Device {
                     native_binding(bt),
                 ));
 
-                bt.register += entry.count.map(NonZeroU32::get).unwrap_or(1);
+                bt.register += entry.count.map_or(1, NonZeroU32::get);
             }
 
             bind_group_infos.push(info);

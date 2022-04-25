@@ -1115,13 +1115,7 @@ impl crate::Device<super::Api> for super::Device {
             .entries
             .iter()
             .enumerate()
-            .filter_map(|(idx, entry)| {
-                if let Some(count) = entry.count {
-                    Some((idx as u32, count))
-                } else {
-                    None
-                }
-            })
+            .filter_map(|(idx, entry)| entry.count.map(|count| (idx as u32, count)))
             .collect();
 
         let mut binding_flag_info;
