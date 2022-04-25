@@ -1270,13 +1270,14 @@ impl<W: Write> Writer<W> {
         let expression = &context.function.expressions[expr_handle];
         log::trace!("expression {:?} = {:?}", expr_handle, expression);
         match *expression {
-            crate::Expression::Access { .. } | crate::Expression::AccessIndex { .. } => {
+            crate::Expression::Access { base, .. }
+            | crate::Expression::AccessIndex { base, .. } => {
                 // This is an acceptable place to generate a `ReadZeroSkipWrite` check.
                 // Since `put_bounds_checks` and `put_access_chain` handle an entire
                 // access chain at a time, recursing back through `put_expression` only
                 // for index expressions and the base object, we will never see intermediate
                 // `Access` or `AccessIndex` expressions here.
-                let policy = context.choose_bounds_check_policy(expr_handle);
+                let policy = context.choose_bounds_check_policy(base);
                 if policy == index::BoundsCheckPolicy::ReadZeroSkipWrite
                     && self.put_bounds_checks(
                         expr_handle,
@@ -3339,11 +3340,19 @@ impl<W: Write> Writer<W> {
                     }
                     if let Some(ref br) = var.binding {
                         let good = match options.per_stage_map[ep.stage].resources.get(br) {
-                            Some(target) => match module.types[var.ty].inner {
-                                crate::TypeInner::Image { .. } => target.texture.is_some(),
-                                crate::TypeInner::Sampler { .. } => target.sampler.is_some(),
-                                _ => target.buffer.is_some(),
-                            },
+                            Some(target) => {
+                                let binding_ty = match module.types[var.ty].inner {
+                                    crate::TypeInner::BindingArray { base, .. } => {
+                                        &module.types[base].inner
+                                    }
+                                    ref ty => ty,
+                                };
+                                match *binding_ty {
+                                    crate::TypeInner::Image { .. } => target.texture.is_some(),
+                                    crate::TypeInner::Sampler { .. } => target.sampler.is_some(),
+                                    _ => target.buffer.is_some(),
+                                }
+                            }
                             None => false,
                         };
                         if !good {

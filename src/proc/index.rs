@@ -117,6 +117,10 @@ pub struct BoundsCheckPolicies {
     /// [`ImageStore`]: crate::Statement::ImageStore
     #[cfg_attr(feature = "deserialize", serde(default))]
     pub image: BoundsCheckPolicy,
+
+    /// How should the generated code handle binding array indexes that are out of bounds.
+    #[cfg_attr(feature = "deserialize", serde(default))]
+    pub binding_array: BoundsCheckPolicy,
 }
 
 /// The default `BoundsCheckPolicy` is `Unchecked`.
@@ -127,20 +131,27 @@ impl Default for BoundsCheckPolicy {
 }
 
 impl BoundsCheckPolicies {
-    /// Determine which policy applies to `access`.
+    /// Determine which policy applies to `base`.
     ///
-    /// `access` is a subtree of `Access` and `AccessIndex` expressions,
-    /// operating either on a pointer to a value, or on a value directly.
+    /// `base` is the "base" expression (the expression being indexed) of a `Access`
+    /// and `AccessIndex` expression. This is either a pointer, a value, being directly
+    /// indexed, or a binding array.
     ///
     /// See the documentation for [`BoundsCheckPolicy`] for details about
     /// when each policy applies.
     pub fn choose_policy(
         &self,
-        access: Handle<crate::Expression>,
+        base: Handle<crate::Expression>,
         types: &UniqueArena<crate::Type>,
         info: &valid::FunctionInfo,
     ) -> BoundsCheckPolicy {
-        match info[access].ty.inner_with(types).pointer_space() {
+        let ty = info[base].ty.inner_with(types);
+
+        if let crate::TypeInner::BindingArray { .. } = *ty {
+            return self.binding_array;
+        }
+
+        match ty.pointer_space() {
             Some(crate::AddressSpace::Storage { access: _ } | crate::AddressSpace::Uniform) => {
                 self.buffer
             }

@@ -4,6 +4,12 @@
 
 using metal::uint;
 
+struct DefaultConstructible {
+    template<typename T>
+    operator T() && {
+        return T {};
+    }
+};
 struct UniformIndex {
     uint index;
 };
@@ -65,13 +71,13 @@ fragment main_Output main_(
     metal::float4 _e75 = texture_array_depth[non_uniform_index].gather_compare(samp_comp[non_uniform_index], uv, 0.0);
     v4_ = _e71 + _e75;
     metal::float4 _e77 = v4_;
-    metal::float4 _e81 = texture_array_unbounded[0].read(metal::uint2(pix), 0);
+    metal::float4 _e81 = (uint(0) < texture_array_unbounded[0].get_num_mip_levels() && metal::all(metal::uint2(pix) < metal::uint2(texture_array_unbounded[0].get_width(0), texture_array_unbounded[0].get_height(0))) ? texture_array_unbounded[0].read(metal::uint2(pix), 0): DefaultConstructible());
     v4_ = _e77 + _e81;
     metal::float4 _e83 = v4_;
-    metal::float4 _e86 = texture_array_unbounded[uniform_index].read(metal::uint2(pix), 0);
+    metal::float4 _e86 = (uint(0) < texture_array_unbounded[uniform_index].get_num_mip_levels() && metal::all(metal::uint2(pix) < metal::uint2(texture_array_unbounded[uniform_index].get_width(0), texture_array_unbounded[uniform_index].get_height(0))) ? texture_array_unbounded[uniform_index].read(metal::uint2(pix), 0): DefaultConstructible());
     v4_ = _e83 + _e86;
     metal::float4 _e88 = v4_;
-    metal::float4 _e91 = texture_array_unbounded[non_uniform_index].read(metal::uint2(pix), 0);
+    metal::float4 _e91 = (uint(0) < texture_array_unbounded[non_uniform_index].get_num_mip_levels() && metal::all(metal::uint2(pix) < metal::uint2(texture_array_unbounded[non_uniform_index].get_width(0), texture_array_unbounded[non_uniform_index].get_height(0))) ? texture_array_unbounded[non_uniform_index].read(metal::uint2(pix), 0): DefaultConstructible());
     v4_ = _e88 + _e91;
     int _e93 = i1_;
     i1_ = _e93 + int(texture_array_2darray[0].get_array_size());
@@ -146,11 +152,17 @@ fragment main_Output main_(
     metal::float4 _e244 = texture_array_bounded[non_uniform_index].sample(samp[non_uniform_index], uv, metal::level(0.0));
     v4_ = _e240 + _e244;
     metal::float4 _e248 = v4_;
-    texture_array_storage[0].write(_e248, metal::uint2(pix));
+    if (metal::all(metal::uint2(pix) < metal::uint2(texture_array_storage[0].get_width(), texture_array_storage[0].get_height()))) {
+        texture_array_storage[0].write(_e248, metal::uint2(pix));
+    }
     metal::float4 _e250 = v4_;
-    texture_array_storage[uniform_index].write(_e250, metal::uint2(pix));
+    if (metal::all(metal::uint2(pix) < metal::uint2(texture_array_storage[uniform_index].get_width(), texture_array_storage[uniform_index].get_height()))) {
+        texture_array_storage[uniform_index].write(_e250, metal::uint2(pix));
+    }
     metal::float4 _e252 = v4_;
-    texture_array_storage[non_uniform_index].write(_e252, metal::uint2(pix));
+    if (metal::all(metal::uint2(pix) < metal::uint2(texture_array_storage[non_uniform_index].get_width(), texture_array_storage[non_uniform_index].get_height()))) {
+        texture_array_storage[non_uniform_index].write(_e252, metal::uint2(pix));
+    }
     metal::int2 _e253 = i2_;
     int _e254 = i1_;
     metal::float2 v2_ = static_cast<metal::float2>(_e253 + metal::int2(_e254));

@@ -252,8 +252,8 @@ fn write_output_msl(
 
     let mut options = options.clone();
     options.bounds_check_policies = bounds_check_policies;
-    let (string, tr_info) =
-        msl::write_string(module, info, &options, pipeline_options).expect("Metal write failed");
+    let (string, tr_info) = msl::write_string(module, info, &options, pipeline_options)
+        .unwrap_or_else(|err| panic!("Metal write failed: {}", err));
 
     for (ep, result) in module.entry_points.iter().zip(tr_info.entry_point_names) {
         if let Err(error) = result {
