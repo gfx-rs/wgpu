@@ -493,21 +493,7 @@ impl super::Queue {
                             glow::CompressedPixelUnpackData::Slice(src_data)
                         }
                     };
-                    log::error!(
-                        "bytes_per_row: {}, \
-                         minimum_rows_per_image: {}, \
-                         rows_per_image: {}, \
-                         bytes_per_image: {}, \
-                         minimum_bytes_per_image: {}, \
-                         bytes_in_upload: {}\
-                        ",
-                        bytes_per_row,
-                        minimum_rows_per_image,
-                        rows_per_image,
-                        bytes_per_image,
-                        minimum_bytes_per_image,
-                        bytes_in_upload
-                    );
+
                     match dst_target {
                         glow::TEXTURE_3D
                         | glow::TEXTURE_CUBE_MAP_ARRAY
