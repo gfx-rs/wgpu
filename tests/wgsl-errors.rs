@@ -171,14 +171,14 @@ fn type_not_constructible() {
     check(
         r#"
             fn x() {
-                var _ = atomic<i32>(0);
+                _ = atomic<i32>(0);
             }
         "#,
         r#"error: type `atomic` is not constructible
-  ┌─ wgsl:3:25
+  ┌─ wgsl:3:21
   │
-3 │                 var _ = atomic<i32>(0);
-  │                         ^^^^^^ type is not constructible
+3 │                 _ = atomic<i32>(0);
+  │                     ^^^^^^ type is not constructible
 
 "#,
     );
@@ -189,14 +189,14 @@ fn type_not_inferrable() {
     check(
         r#"
             fn x() {
-                var _ = vec2();
+                _ = vec2();
             }
         "#,
         r#"error: type can't be inferred
-  ┌─ wgsl:3:25
+  ┌─ wgsl:3:21
   │
-3 │                 var _ = vec2();
-  │                         ^^^^ type can't be inferred
+3 │                 _ = vec2();
+  │                     ^^^^ type can't be inferred
 
 "#,
     );
@@ -207,14 +207,14 @@ fn unexpected_constructor_parameters() {
     check(
         r#"
             fn x() {
-                var _ = i32(0, 1);
+                _ = i32(0, 1);
             }
         "#,
         r#"error: unexpected components
-  ┌─ wgsl:3:31
+  ┌─ wgsl:3:27
   │
-3 │                 var _ = i32(0, 1);
-  │                               ^^ unexpected components
+3 │                 _ = i32(0, 1);
+  │                           ^^ unexpected components
 
 "#,
     );
@@ -225,14 +225,14 @@ fn constructor_parameter_type_mismatch() {
     check(
         r#"
             fn x() {
-                var _ = mat2x2<f32>(array(0, 1), vec2(2, 3));
+                _ = mat2x2<f32>(array(0, 1), vec2(2, 3));
             }
         "#,
         r#"error: invalid type for constructor component at index [0]
-  ┌─ wgsl:3:37
+  ┌─ wgsl:3:33
   │
-3 │                 var _ = mat2x2<f32>(array(0, 1), vec2(2, 3));
-  │                                     ^^^^^^^^^^^ invalid component type
+3 │                 _ = mat2x2<f32>(array(0, 1), vec2(2, 3));
+  │                                 ^^^^^^^^^^^ invalid component type
 
 "#,
     );

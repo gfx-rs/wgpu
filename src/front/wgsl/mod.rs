@@ -147,6 +147,7 @@ pub enum Error<'a> {
     InvalidForInitializer(Span),
     InvalidGatherComponent(Span, i32),
     InvalidConstructorComponentType(Span, i32),
+    InvalidIdentifierUnderscore(Span),
     ReservedIdentifierPrefix(Span),
     UnknownAddressSpace(Span),
     UnknownAttribute(Span),
@@ -361,6 +362,11 @@ impl<'a> Error<'a> {
                 message: format!("invalid type for constructor component at index [{}]", component),
                 labels: vec![(bad_span.clone(), "invalid component type".into())],
                 notes: vec![],
+            },
+            Error::InvalidIdentifierUnderscore(ref bad_span) => ParseError {
+                message: "Identifier can't be '_'".to_string(),
+                labels: vec![(bad_span.clone(), "invalid identifier".into())],
+                notes: vec!["Use phony assignment instead ('_ =' notice the absence of 'let' or 'var')".to_string()],
             },
             Error::ReservedIdentifierPrefix(ref bad_span) => ParseError {
                 message: format!("Identifier starts with a reserved prefix: '{}'", &source[bad_span.clone()]),
@@ -3489,6 +3495,21 @@ impl Parser {
             (Token::Word(word), _) => {
                 let mut emitter = super::Emitter::default();
                 let statement = match word {
+                    "_" => {
+                        let _ = lexer.next();
+                        emitter.start(context.expressions);
+                        lexer.expect(Token::Operation('='))?;
+                        let expr_id = self.parse_general_expression(
+                            lexer,
+                            context.as_expression(block, &mut emitter),
+                        )?;
+                        lexer.expect(Token::Separator(';'))?;
+                        block.extend(emitter.finish(context.expressions));
+                        // TODO: the situation here could be improved but
+                        // for now this is necessary to get the expressions emitted
+                        context.named_expressions.insert(expr_id, "_".to_string());
+                        None
+                    }
                     "let" => {
                         let _ = lexer.next();
                         emitter.start(context.expressions);

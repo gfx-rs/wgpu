@@ -58,51 +58,37 @@ Baz ConstructBaz(float3x2 arg0) {
 void test_matrix_within_struct_accesses()
 {
     int idx = 9;
-    float3x2 unnamed_1 = (float3x2)0;
-    float2 unnamed_2 = (float2)0;
-    float2 unnamed_3 = (float2)0;
-    float unnamed_4 = (float)0;
-    float unnamed_5 = (float)0;
-    float unnamed_6 = (float)0;
-    float unnamed_7 = (float)0;
     Baz t = (Baz)0;
 
     int _expr4 = idx;
     idx = (_expr4 - 1);
-    float3x2 _expr8 = GetMatmOnBaz(baz);
-    unnamed_1 = _expr8;
-    float2 _expr13 = GetMatmOnBaz(baz)[0];
-    unnamed_2 = _expr13;
-    int _expr16 = idx;
-    float2 _expr18 = GetMatmOnBaz(baz)[_expr16];
-    unnamed_3 = _expr18;
-    float _expr25 = GetMatmOnBaz(baz)[0][1];
-    unnamed_4 = _expr25;
+    float3x2 unnamed = GetMatmOnBaz(baz);
+    float2 unnamed_1 = GetMatmOnBaz(baz)[0];
+    int _expr14 = idx;
+    float2 unnamed_2 = GetMatmOnBaz(baz)[_expr14];
+    float unnamed_3 = GetMatmOnBaz(baz)[0][1];
+    int _expr26 = idx;
+    float unnamed_4 = GetMatmOnBaz(baz)[0][_expr26];
     int _expr30 = idx;
-    float _expr32 = GetMatmOnBaz(baz)[0][_expr30];
-    unnamed_5 = _expr32;
-    int _expr35 = idx;
-    float _expr39 = GetMatmOnBaz(baz)[_expr35][1];
-    unnamed_6 = _expr39;
-    int _expr42 = idx;
-    int _expr44 = idx;
-    float _expr46 = GetMatmOnBaz(baz)[_expr42][_expr44];
-    unnamed_7 = _expr46;
+    float unnamed_5 = GetMatmOnBaz(baz)[_expr30][1];
+    int _expr36 = idx;
+    int _expr38 = idx;
+    float unnamed_6 = GetMatmOnBaz(baz)[_expr36][_expr38];
     t = ConstructBaz(float3x2((1.0).xx, (2.0).xx, (3.0).xx));
-    int _expr57 = idx;
-    idx = (_expr57 + 1);
+    int _expr50 = idx;
+    idx = (_expr50 + 1);
     SetMatmOnBaz(t, float3x2((6.0).xx, (5.0).xx, (4.0).xx));
     t.m_0 = (9.0).xx;
-    int _expr74 = idx;
-    SetMatVecmOnBaz(t, (90.0).xx, _expr74);
+    int _expr67 = idx;
+    SetMatVecmOnBaz(t, (90.0).xx, _expr67);
     t.m_0[1] = 10.0;
-    int _expr87 = idx;
-    t.m_0[_expr87] = 20.0;
-    int _expr91 = idx;
-    SetMatScalarmOnBaz(t, 30.0, _expr91, 1);
-    int _expr97 = idx;
-    int _expr99 = idx;
-    SetMatScalarmOnBaz(t, 40.0, _expr97, _expr99);
+    int _expr80 = idx;
+    t.m_0[_expr80] = 20.0;
+    int _expr84 = idx;
+    SetMatScalarmOnBaz(t, 30.0, _expr84, 1);
+    int _expr90 = idx;
+    int _expr92 = idx;
+    SetMatScalarmOnBaz(t, 40.0, _expr90, _expr92);
     return;
 }
 
@@ -133,7 +119,6 @@ float4 foo_vert(uint vi : SV_VertexID) : SV_Position
 {
     float foo = 0.0;
     int c[5] = {(int)0,(int)0,(int)0,(int)0,(int)0};
-    float unnamed = (float)0;
 
     float baz_1 = foo;
     foo = 1.0;
@@ -150,7 +135,6 @@ float4 foo_vert(uint vi : SV_VertexID) : SV_Position
     c[(vi + 1u)] = 42;
     int value = c[vi];
     const float _e42 = test_arr_as_arg(Constructarray5_array10_float__(Constructarray10_float_(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), Constructarray10_float_(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), Constructarray10_float_(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), Constructarray10_float_(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), Constructarray10_float_(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)));
-    unnamed = _e42;
     return float4(mul(float4((value).xxxx), _matrix), 2.0);
 }
 

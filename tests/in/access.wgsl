@@ -28,13 +28,13 @@ fn test_matrix_within_struct_accesses() {
     idx--;
 
 	// loads
-    var _ = baz.m;
-    var _ = baz.m[0];
-    var _ = baz.m[idx];
-    var _ = baz.m[0][1];
-    var _ = baz.m[0][idx];
-    var _ = baz.m[idx][1];
-    var _ = baz.m[idx][idx];
+    _ = baz.m;
+    _ = baz.m[0];
+    _ = baz.m[idx];
+    _ = baz.m[0][1];
+    _ = baz.m[0][idx];
+    _ = baz.m[idx][1];
+    _ = baz.m[idx][idx];
 
     var t = Baz(mat3x2<f32>(vec2<f32>(1.0), vec2<f32>(2.0), vec2<f32>(3.0)));
 
@@ -83,7 +83,7 @@ fn foo_vert(@builtin(vertex_index) vi: u32) -> @builtin(position) vec4<f32> {
 	c[vi + 1u] = 42;
 	let value = c[vi];
 
-	var _ = test_arr_as_arg(array<array<f32, 10>, 5>());
+	_ = test_arr_as_arg(array<array<f32, 10>, 5>());
 
 	return vec4<f32>(_matrix * vec4<f32>(vec4<i32>(value)), 2.0);
 }

@@ -39,17 +39,17 @@ fn test_msl_packed_vec3() {
     let data = alignment;
 
     // loads
-    let _ = data.v3;
-    let _ = data.v3.zx;
+    _ = data.v3;
+    _ = data.v3.zx;
     test_msl_packed_vec3_as_arg(data.v3);
 
     // matrix vector multiplication
-    let _ = data.v3 * mat3x3<f32>();
-    let _ = mat3x3<f32>() * data.v3;
+    _ = data.v3 * mat3x3<f32>();
+    _ = mat3x3<f32>() * data.v3;
 
     // scalar vector multiplication
-    let _ = data.v3 * 2.0;
-    let _ = 2.0 * data.v3;
+    _ = data.v3 * 2.0;
+    _ = 2.0 * data.v3;
 }
 
 @compute @workgroup_size(1)
