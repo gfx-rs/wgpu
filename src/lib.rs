@@ -1108,14 +1108,15 @@ pub enum Expression {
         base: Handle<Expression>,
         index: Handle<Expression>,
     },
-    /// Array access with a known index.
+    /// Access the same types as [`Access`], plus [`Struct`] with a known index.
+    ///
+    /// [`Access`]: Expression::Access
+    /// [`Struct`]: TypeInner::Struct
     AccessIndex {
         base: Handle<Expression>,
         index: u32,
     },
     /// Constant value.
-    ///
-    /// Every `Constant` expression
     Constant(Handle<Constant>),
     /// Splat scalar into a vector.
     Splat {
