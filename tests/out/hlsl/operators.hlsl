@@ -110,10 +110,10 @@ void arithmetic()
     float4 unnamed_36 = ((2.0).xxxx / (1.0).xxxx);
     int unnamed_37 = (2 % 1);
     uint unnamed_38 = (2u % 1u);
-    float unnamed_39 = (2.0 % 1.0);
+    float unnamed_39 = fmod(2.0, 1.0);
     int2 unnamed_40 = ((2).xx % (1).xx);
     uint3 unnamed_41 = ((2u).xxx % (1u).xxx);
-    float4 unnamed_42 = ((2.0).xxxx % (1.0).xxxx);
+    float4 unnamed_42 = fmod((2.0).xxxx, (1.0).xxxx);
     int2 unnamed_43 = ((2).xx + (1).xx);
     int2 unnamed_44 = ((2).xx + (1).xx);
     uint2 unnamed_45 = ((2u).xx + (1u).xx);
@@ -142,8 +142,8 @@ void arithmetic()
     int2 unnamed_68 = ((2).xx % (1).xx);
     uint2 unnamed_69 = ((2u).xx % (1u).xx);
     uint2 unnamed_70 = ((2u).xx % (1u).xx);
-    float2 unnamed_71 = ((2.0).xx % (1.0).xx);
-    float2 unnamed_72 = ((2.0).xx % (1.0).xx);
+    float2 unnamed_71 = fmod((2.0).xx, (1.0).xx);
+    float2 unnamed_72 = fmod((2.0).xx, (1.0).xx);
     float3x3 unnamed_73 = (float3x3(float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0)) + float3x3(float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0)));
     float3x3 unnamed_74 = (float3x3(float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0)) - float3x3(float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0)));
     float3x3 unnamed_75 = mul(1.0, float3x3(float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0)));
