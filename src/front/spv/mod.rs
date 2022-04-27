@@ -2009,9 +2009,82 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     inst.expect(5)?;
                     parse_expr_op!(crate::BinaryOperator::Divide, BINARY)?;
                 }
-                Op::UMod | Op::FMod | Op::FRem => {
+                Op::UMod | Op::FRem => {
                     inst.expect(5)?;
                     parse_expr_op!(crate::BinaryOperator::Modulo, BINARY)?;
+                }
+                Op::FMod => {
+                    inst.expect(5)?;
+
+                    let start = self.data_offset;
+                    let span = self.span_from_with_op(start);
+
+                    let result_type_id = self.next()?;
+                    let result_id = self.next()?;
+                    let p1_id = self.next()?;
+                    let p2_id = self.next()?;
+
+                    let p1_lexp = self.lookup_expression.lookup(p1_id)?;
+                    let left = self.get_expr_handle(
+                        p1_id,
+                        p1_lexp,
+                        ctx,
+                        &mut emitter,
+                        &mut block,
+                        body_idx,
+                    );
+                    let p2_lexp = self.lookup_expression.lookup(p2_id)?;
+                    let right = self.get_expr_handle(
+                        p2_id,
+                        p2_lexp,
+                        ctx,
+                        &mut emitter,
+                        &mut block,
+                        body_idx,
+                    );
+
+                    let div = ctx.expressions.append(
+                        crate::Expression::Binary {
+                            op: crate::BinaryOperator::Divide,
+                            left,
+                            right,
+                        },
+                        span,
+                    );
+                    let floor = ctx.expressions.append(
+                        crate::Expression::Math {
+                            fun: crate::MathFunction::Floor,
+                            arg: div,
+                            arg1: None,
+                            arg2: None,
+                            arg3: None,
+                        },
+                        span,
+                    );
+                    let mult = ctx.expressions.append(
+                        crate::Expression::Binary {
+                            op: crate::BinaryOperator::Multiply,
+                            left: floor,
+                            right,
+                        },
+                        span,
+                    );
+                    let sub = ctx.expressions.append(
+                        crate::Expression::Binary {
+                            op: crate::BinaryOperator::Subtract,
+                            left,
+                            right: mult,
+                        },
+                        span,
+                    );
+                    self.lookup_expression.insert(
+                        result_id,
+                        LookupExpression {
+                            handle: sub,
+                            type_id: result_type_id,
+                            block_id,
+                        },
+                    );
                 }
                 Op::VectorTimesScalar
                 | Op::VectorTimesMatrix
