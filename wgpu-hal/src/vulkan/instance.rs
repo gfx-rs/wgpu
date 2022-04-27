@@ -7,10 +7,10 @@ use std::{
 
 use ash::{
     extensions::{ext, khr},
-    vk,
+    vk::{self, Handle},
 };
 
-use super::conv;
+use super::{conv, VkGetInstanceProcAddr};
 
 unsafe extern "system" fn debug_utils_messenger_callback(
     message_severity: vk::DebugUtilsMessageSeverityFlagsEXT,
@@ -133,7 +133,20 @@ impl super::Swapchain {
 }
 
 impl super::Instance {
-    pub fn required_extensions(
+    /// # Safety
+    /// `get_instance_proc_addr` must be a valid pointer obtained from a Vulkan loader.
+    pub unsafe fn required_extensions(
+        get_instance_proc_addr: VkGetInstanceProcAddr,
+        flags: crate::InstanceFlags,
+    ) -> Result<Vec<&'static CStr>, crate::InstanceError> {
+        let entry = ash::Entry::from_static_fn(vk::StaticFn {
+            get_instance_proc_addr: std::mem::transmute(get_instance_proc_addr),
+        });
+
+        Self::required_extensions_inner(&entry, flags)
+    }
+
+    fn required_extensions_inner(
         entry: &ash::Entry,
         flags: crate::InstanceFlags,
     ) -> Result<Vec<&'static CStr>, crate::InstanceError> {
@@ -189,29 +202,98 @@ impl super::Instance {
                 false
             }
         });
+
         Ok(extensions)
     }
 
     /// # Safety
-    ///
-    /// - `raw_instance` must be created from `entry`
-    /// - `raw_instance` must be created respecting `driver_api_version`, `extensions` and `flags`
-    /// - `extensions` must be a superset of `required_extensions()` and must be created from the
-    ///   same entry, driver_api_version and flags.
-    pub unsafe fn from_raw(
-        entry: ash::Entry,
-        raw_instance: ash::Instance,
-        driver_api_version: u32,
-        extensions: Vec<&'static CStr>,
+    /// `get_instance_proc_addr` must be a valid pointer obtained from a Vulkan loader.
+    pub unsafe fn required_layers(
+        get_instance_proc_addr: VkGetInstanceProcAddr,
         flags: crate::InstanceFlags,
-        has_nv_optimus: bool,
+    ) -> Result<Vec<&'static CStr>, crate::InstanceError> {
+        let entry = ash::Entry::from_static_fn(vk::StaticFn {
+            get_instance_proc_addr: std::mem::transmute(get_instance_proc_addr),
+        });
+
+        Self::required_layers_inner(&entry, flags)
+    }
+
+    fn required_layers_inner(
+        entry: &ash::Entry,
+        flags: crate::InstanceFlags,
+    ) -> Result<Vec<&'static CStr>, crate::InstanceError> {
+        let instance_layers = entry.enumerate_instance_layer_properties().map_err(|e| {
+            log::info!("enumerate_instance_layer_properties: {:?}", e);
+            crate::InstanceError
+        })?;
+
+        // Check requested layers against the available layers
+
+        let mut layers: Vec<&'static CStr> = Vec::new();
+        if flags.contains(crate::InstanceFlags::VALIDATION) {
+            layers.push(CStr::from_bytes_with_nul(b"VK_LAYER_KHRONOS_validation\0").unwrap());
+        }
+
+        // Only keep available layers.
+        layers.retain(|&layer| {
+            if instance_layers.iter().any(
+                |inst_layer| unsafe { CStr::from_ptr(inst_layer.layer_name.as_ptr()) } == layer,
+            ) {
+                true
+            } else {
+                log::warn!("Unable to find layer: {}", layer.to_string_lossy());
+                false
+            }
+        });
+
+        Ok(layers)
+    }
+
+    /// # Safety
+    ///
+    /// - `get_instance_proc_addr` must be a valid pointer obtained from a Vulkan loader.
+    /// - `vk_instance` must be created from `get_instance_proc_addr`, using `api_version` and at
+    ///   least `required_extensions()` and `required_layers()` using the same `flags`
+    pub unsafe fn from_raw(
+        get_instance_proc_addr: VkGetInstanceProcAddr,
+        vk_instance: u64,
+        api_version: u32,
+        flags: crate::InstanceFlags,
         drop_guard: Option<super::DropGuard>,
     ) -> Result<Self, crate::InstanceError> {
-        log::info!("Instance version: 0x{:x}", driver_api_version);
+        let entry = ash::Entry::from_static_fn(vk::StaticFn {
+            get_instance_proc_addr: std::mem::transmute(get_instance_proc_addr),
+        });
+
+        let extensions = Self::required_extensions_inner(&entry, flags)?;
+
+        let vk_instance =
+            ash::Instance::load(entry.static_fn(), vk::Instance::from_raw(vk_instance));
+
+        Self::from_raw_inner(
+            entry,
+            vk_instance,
+            api_version,
+            extensions,
+            flags,
+            drop_guard,
+        )
+    }
+
+    unsafe fn from_raw_inner(
+        entry: ash::Entry,
+        vk_instance: ash::Instance,
+        api_version: u32,
+        extensions: Vec<&'static CStr>,
+        flags: crate::InstanceFlags,
+        drop_guard: Option<super::DropGuard>,
+    ) -> Result<Self, crate::InstanceError> {
+        log::info!("Instance version: 0x{:x}", api_version);
 
         let debug_utils = if extensions.contains(&ext::DebugUtils::name()) {
             log::info!("Enabling debug utils");
-            let extension = ext::DebugUtils::new(&entry, &raw_instance);
+            let extension = ext::DebugUtils::new(&entry, &vk_instance);
             // having ERROR unconditionally because Vk doesn't like empty flags
             let mut severity = vk::DebugUtilsMessageSeverityFlagsEXT::ERROR;
             if log::max_level() >= log::LevelFilter::Debug {
@@ -245,21 +327,28 @@ impl super::Instance {
 
         // We can't use any of Vulkan-1.1+ abilities on Vk 1.0 instance,
         // so disabling this query helps.
-        let get_physical_device_properties = if driver_api_version >= vk::API_VERSION_1_1
+        let get_physical_device_properties = if api_version >= vk::API_VERSION_1_1
             && extensions.contains(&khr::GetPhysicalDeviceProperties2::name())
         {
             log::info!("Enabling device properties2");
-            Some(khr::GetPhysicalDeviceProperties2::new(
-                &entry,
-                &raw_instance,
-            ))
+            Some(khr::GetPhysicalDeviceProperties2::new(&entry, &vk_instance))
         } else {
             None
         };
 
+        let instance_layers = entry.enumerate_instance_layer_properties().map_err(|e| {
+            log::info!("enumerate_instance_layer_properties: {:?}", e);
+            crate::InstanceError
+        })?;
+
+        let nv_optimus_layer = CStr::from_bytes_with_nul(b"VK_LAYER_NV_optimus\0").unwrap();
+        let has_nv_optimus = instance_layers
+            .iter()
+            .any(|inst_layer| CStr::from_ptr(inst_layer.layer_name.as_ptr()) == nv_optimus_layer);
+
         Ok(Self {
             shared: Arc::new(super::InstanceShared {
-                raw: raw_instance,
+                raw: vk_instance,
                 drop_guard,
                 flags,
                 debug_utils,
@@ -506,39 +595,9 @@ impl crate::Instance<super::Api> for super::Instance {
                 },
             );
 
-        let extensions = Self::required_extensions(&entry, desc.flags)?;
+        let extensions = Self::required_extensions_inner(&entry, desc.flags)?;
 
-        let instance_layers = entry.enumerate_instance_layer_properties().map_err(|e| {
-            log::info!("enumerate_instance_layer_properties: {:?}", e);
-            crate::InstanceError
-        })?;
-
-        let nv_optimus_layer = CStr::from_bytes_with_nul(b"VK_LAYER_NV_optimus\0").unwrap();
-        let has_nv_optimus = instance_layers
-            .iter()
-            .any(|inst_layer| CStr::from_ptr(inst_layer.layer_name.as_ptr()) == nv_optimus_layer);
-
-        // Check requested layers against the available layers
-        let layers = {
-            let mut layers: Vec<&'static CStr> = Vec::new();
-            if desc.flags.contains(crate::InstanceFlags::VALIDATION) {
-                layers.push(CStr::from_bytes_with_nul(b"VK_LAYER_KHRONOS_validation\0").unwrap());
-            }
-
-            // Only keep available layers.
-            layers.retain(|&layer| {
-                if instance_layers
-                    .iter()
-                    .any(|inst_layer| CStr::from_ptr(inst_layer.layer_name.as_ptr()) == layer)
-                {
-                    true
-                } else {
-                    log::warn!("Unable to find layer: {}", layer.to_string_lossy());
-                    false
-                }
-            });
-            layers
-        };
+        let layers = Self::required_layers_inner(&entry, desc.flags)?;
 
         let vk_instance = {
             let str_pointers = layers
@@ -562,13 +621,12 @@ impl crate::Instance<super::Api> for super::Instance {
             })?
         };
 
-        Self::from_raw(
+        Self::from_raw_inner(
             entry,
             vk_instance,
             driver_api_version,
             extensions,
             desc.flags,
-            has_nv_optimus,
             Some(Box::new(())), // `Some` signals that wgpu-hal is in charge of destroying vk_instance
         )
     }
@@ -636,7 +694,7 @@ impl crate::Instance<super::Api> for super::Instance {
 
         let mut exposed_adapters = raw_devices
             .into_iter()
-            .flat_map(|device| self.expose_adapter(device))
+            .flat_map(|device| self.expose_adapter(device.as_raw()))
             .collect::<Vec<_>>();
 
         // Detect if it's an Intel + NVidia configuration with Optimus

@@ -31,12 +31,18 @@ mod conv;
 mod device;
 mod instance;
 
-use std::{borrow::Borrow, ffi::CStr, num::NonZeroU32, sync::Arc};
+use std::{
+    borrow::Borrow,
+    ffi::{c_void, CStr},
+    num::NonZeroU32,
+    os::raw::c_char,
+    sync::Arc,
+};
 
 use arrayvec::ArrayVec;
 use ash::{
     extensions::{ext, khr},
-    vk,
+    vk::{self, Handle},
 };
 use parking_lot::Mutex;
 
@@ -44,6 +50,10 @@ const MILLIS_TO_NANOS: u64 = 1_000_000;
 const MAX_TOTAL_ATTACHMENTS: usize = crate::MAX_COLOR_TARGETS * 2 + 1;
 
 pub type DropGuard = Box<dyn std::any::Any + Send + Sync>;
+pub type VkGetInstanceProcAddr = unsafe extern "system" fn(
+    instance: *const c_void,
+    p_name: *const c_char,
+) -> Option<unsafe extern "system" fn()>;
 
 #[derive(Clone)]
 pub struct Api;
@@ -242,7 +252,7 @@ bitflags::bitflags! {
 }
 
 impl UpdateAfterBindTypes {
-    pub fn from_limits(limits: &wgt::Limits, phd_limits: &vk::PhysicalDeviceLimits) -> Self {
+    fn from_limits(limits: &wgt::Limits, phd_limits: &vk::PhysicalDeviceLimits) -> Self {
         let mut uab_types = UpdateAfterBindTypes::empty();
         uab_types.set(
             UpdateAfterBindTypes::UNIFORM_BUFFER,
@@ -370,8 +380,8 @@ impl Texture {
     /// # Safety
     ///
     /// - The image handle must not be manually destroyed
-    pub unsafe fn raw_handle(&self) -> vk::Image {
-        self.raw
+    pub unsafe fn raw_handle(&self) -> u64 {
+        self.raw.as_raw()
     }
 }
 

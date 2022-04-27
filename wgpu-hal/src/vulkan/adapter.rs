@@ -1,9 +1,16 @@
 use super::conv;
 
-use ash::{extensions::khr, vk};
+use ash::{
+    extensions::khr,
+    vk::{self, Handle},
+};
 use parking_lot::Mutex;
 
-use std::{collections::BTreeMap, ffi::CStr, sync::Arc};
+use std::{
+    collections::BTreeMap,
+    ffi::{c_void, CStr},
+    sync::Arc,
+};
 
 //TODO: const fn?
 fn indexing_features() -> wgt::Features {
@@ -32,8 +39,21 @@ unsafe impl Send for PhysicalDeviceFeatures {}
 unsafe impl Sync for PhysicalDeviceFeatures {}
 
 impl PhysicalDeviceFeatures {
+    /// # Safety
+    /// `info` must be a valid pointer to an instance of VkDeviceCreateInfo.
+    pub unsafe fn add_to_device_create_info(&mut self, info: *mut c_void) {
+        let device_create_info_ptr = info.cast::<vk::DeviceCreateInfo>();
+
+        let device_create_info_copy = *device_create_info_ptr;
+
+        // Safety: DeviceCreateInfoBuilder is repr(transparent)
+        *device_create_info_ptr = self
+            .add_to_device_create_builder(std::mem::transmute(device_create_info_copy))
+            .build();
+    }
+
     /// Add the members of `self` into `info.enabled_features` and its `p_next` chain.
-    pub fn add_to_device_create_builder<'a>(
+    fn add_to_device_create_builder<'a>(
         &'a mut self,
         mut info: vk::DeviceCreateInfoBuilder<'a>,
     ) -> vk::DeviceCreateInfoBuilder<'a> {
@@ -898,11 +918,10 @@ impl super::InstanceShared {
 }
 
 impl super::Instance {
-    pub fn expose_adapter(
-        &self,
-        phd: vk::PhysicalDevice,
-    ) -> Option<crate::ExposedAdapter<super::Api>> {
+    pub fn expose_adapter(&self, phd: u64) -> Option<crate::ExposedAdapter<super::Api>> {
         use crate::auxil::db;
+
+        let phd = vk::PhysicalDevice::from_raw(phd);
 
         let (phd_capabilities, phd_features) = self.shared.inspect(phd);
 
@@ -1057,7 +1076,18 @@ impl super::Instance {
 }
 
 impl super::Adapter {
-    pub fn required_device_extensions(&self, features: wgt::Features) -> Vec<&'static CStr> {
+    pub fn required_device_capabilities(
+        &self,
+        features: wgt::Features,
+        limits: &wgt::Limits,
+    ) -> (
+        Vec<&'static CStr>,
+        PhysicalDeviceFeatures,
+        super::UpdateAfterBindTypes,
+    ) {
+        let phd_limits = &self.phd_capabilities.properties.limits;
+        let uab_types = super::UpdateAfterBindTypes::from_limits(limits, phd_limits);
+
         let (supported_extensions, unsupported_extensions) = self
             .phd_capabilities
             .get_required_extensions(features)
@@ -1071,33 +1101,51 @@ impl super::Adapter {
         }
 
         log::debug!("Supported extensions: {:?}", supported_extensions);
-        supported_extensions
-    }
 
-    /// `features` must be the same features used to create `enabled_extensions`.
-    pub fn physical_device_features(
-        &self,
-        enabled_extensions: &[&'static CStr],
-        features: wgt::Features,
-        uab_types: super::UpdateAfterBindTypes,
-    ) -> PhysicalDeviceFeatures {
-        PhysicalDeviceFeatures::from_extensions_and_requested_features(
-            self.phd_capabilities.properties.api_version,
-            enabled_extensions,
-            features,
-            self.downlevel_flags,
-            &self.private_caps,
-            uab_types,
-        )
+        let physical_device_features =
+            PhysicalDeviceFeatures::from_extensions_and_requested_features(
+                self.phd_capabilities.properties.api_version,
+                &supported_extensions,
+                features,
+                self.downlevel_flags,
+                &self.private_caps,
+                uab_types,
+            );
+
+        (supported_extensions, physical_device_features, uab_types)
     }
 
     /// # Safety
-    ///
-    /// - `raw_device` must be created from this adapter.
-    /// - `raw_device` must be created using `family_index`, `enabled_extensions` and `physical_device_features()`
-    /// - `enabled_extensions` must be a superset of `required_device_extensions()`.
-    #[allow(clippy::too_many_arguments)]
+    /// `vk_device` must be created from this adapter, using `features`, `limits`, `family_index`
+    /// and at least `required_device_extensions()`, `physical_device_features()` using the same
+    /// features and limits.
     pub unsafe fn device_from_raw(
+        &self,
+        vk_device: u64,
+        handle_is_owned: bool,
+        features: wgt::Features,
+        limits: &wgt::Limits,
+        family_index: u32,
+        queue_index: u32,
+    ) -> Result<crate::OpenDevice<super::Api>, crate::DeviceError> {
+        let device =
+            ash::Device::load(self.instance.raw.fp_v1_0(), vk::Device::from_raw(vk_device));
+
+        let (extensions, _, uab_types) = self.required_device_capabilities(features, limits);
+
+        self.device_from_raw_inner(
+            device,
+            handle_is_owned,
+            &extensions,
+            features,
+            uab_types,
+            family_index,
+            queue_index,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    unsafe fn device_from_raw_inner(
         &self,
         raw_device: ash::Device,
         handle_is_owned: bool,
@@ -1312,12 +1360,8 @@ impl crate::Adapter<super::Api> for super::Adapter {
         features: wgt::Features,
         limits: &wgt::Limits,
     ) -> Result<crate::OpenDevice<super::Api>, crate::DeviceError> {
-        let phd_limits = &self.phd_capabilities.properties.limits;
-        let uab_types = super::UpdateAfterBindTypes::from_limits(limits, phd_limits);
-
-        let enabled_extensions = self.required_device_extensions(features);
-        let mut enabled_phd_features =
-            self.physical_device_features(&enabled_extensions, features, uab_types);
+        let (enabled_extensions, mut enabled_phd_features, uab_types) =
+            self.required_device_capabilities(features, limits);
 
         let family_index = 0; //TODO
         let family_info = vk::DeviceQueueCreateInfo::builder()
@@ -1345,7 +1389,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
             self.instance.raw.create_device(self.raw, &info, None)?
         };
 
-        self.device_from_raw(
+        self.device_from_raw_inner(
             raw_device,
             true,
             &enabled_extensions,

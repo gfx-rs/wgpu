@@ -1,7 +1,10 @@
 use super::conv;
 
 use arrayvec::ArrayVec;
-use ash::{extensions::khr, vk};
+use ash::{
+    extensions::khr,
+    vk::{self, Handle},
+};
 use inplace_it::inplace_or_alloc_from_iter;
 use parking_lot::Mutex;
 
@@ -18,7 +21,7 @@ impl super::DeviceShared {
     pub(super) unsafe fn set_object_name(
         &self,
         object_type: vk::ObjectType,
-        object: impl vk::Handle,
+        object: impl Handle,
         name: &str,
     ) {
         use std::ffi::CStr;
@@ -598,12 +601,12 @@ impl super::Device {
     /// - If `drop_guard` is `Some`, the application must manually destroy the image handle. This
     ///   can be done inside the `Drop` impl of `drop_guard`.
     pub unsafe fn texture_from_raw(
-        vk_image: vk::Image,
+        vk_image: u64,
         desc: &crate::TextureDescriptor,
         drop_guard: Option<super::DropGuard>,
     ) -> super::Texture {
         super::Texture {
-            raw: vk_image,
+            raw: vk::Image::from_raw(vk_image),
             drop_guard,
             block: None,
             usage: desc.usage,
