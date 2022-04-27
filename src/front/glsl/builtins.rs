@@ -727,6 +727,17 @@ fn inject_standard_builtins(
                     _ => {}
                 }
 
+                // we need to cast the return type of findLsb / findMsb
+                let mc = if kind == Sk::Uint {
+                    match mc {
+                        MacroCall::MathFunction(MathFunction::FindLsb) => MacroCall::FindLsbUint,
+                        MacroCall::MathFunction(MathFunction::FindMsb) => MacroCall::FindMsbUint,
+                        mc => mc,
+                    }
+                } else {
+                    mc
+                };
+
                 declaration.overloads.push(module.add_builtin(args, mc))
             }
         }
@@ -1580,6 +1591,8 @@ pub enum MacroCall {
     },
     ImageStore,
     MathFunction(MathFunction),
+    FindLsbUint,
+    FindMsbUint,
     BitfieldExtract,
     BitfieldInsert,
     Relational(RelationalFunction),
@@ -1848,6 +1861,33 @@ impl MacroCall {
                 Span::default(),
                 body,
             ),
+            mc @ (MacroCall::FindLsbUint | MacroCall::FindMsbUint) => {
+                let fun = match mc {
+                    MacroCall::FindLsbUint => MathFunction::FindLsb,
+                    MacroCall::FindMsbUint => MathFunction::FindMsb,
+                    _ => unreachable!(),
+                };
+                let res = ctx.add_expression(
+                    Expression::Math {
+                        fun,
+                        arg: args[0],
+                        arg1: None,
+                        arg2: None,
+                        arg3: None,
+                    },
+                    Span::default(),
+                    body,
+                );
+                ctx.add_expression(
+                    Expression::As {
+                        expr: res,
+                        kind: Sk::Sint,
+                        convert: Some(4),
+                    },
+                    Span::default(),
+                    body,
+                )
+            }
             MacroCall::BitfieldInsert => {
                 let conv_arg_2 = ctx.add_expression(
                     Expression::As {

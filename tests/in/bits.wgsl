@@ -37,7 +37,7 @@ fn main() {
     u3 = extractBits(u3, 5u, 10u);
     u4 = extractBits(u4, 5u, 10u);
     i = firstTrailingBit(i);
-    i2 = firstTrailingBit(u2);
+    u2 = firstTrailingBit(u2);
     i3 = firstLeadingBit(i3);
-    i = firstLeadingBit(u);
+    u = firstLeadingBit(u);
 }

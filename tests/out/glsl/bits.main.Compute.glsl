@@ -88,11 +88,11 @@ void main() {
     int _e120 = i;
     i = findLSB(_e120);
     uvec2 _e122 = u2_;
-    i2_ = findLSB(_e122);
+    u2_ = uvec2(findLSB(_e122));
     ivec3 _e124 = i3_;
     i3_ = findMSB(_e124);
     uint _e126 = u;
-    i = findMSB(_e126);
+    u = uint(findMSB(_e126));
     return;
 }
 

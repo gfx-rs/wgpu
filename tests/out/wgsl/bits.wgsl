@@ -82,10 +82,10 @@ fn main() {
     let _e120 = i;
     i = firstTrailingBit(_e120);
     let _e122 = u2_;
-    i2_ = firstTrailingBit(_e122);
+    u2_ = firstTrailingBit(_e122);
     let _e124 = i3_;
     i3_ = firstLeadingBit(_e124);
     let _e126 = u;
-    i = firstLeadingBit(_e126);
+    u = firstLeadingBit(_e126);
     return;
 }

@@ -821,13 +821,13 @@ impl<'a> ResolveContext<'a> {
                     Mf::CountOneBits |
                     Mf::ReverseBits |
                     Mf::ExtractBits |
-                    Mf::InsertBits => res_arg.clone(),
+                    Mf::InsertBits |
                     Mf::FindLsb |
                     Mf::FindMsb => match *res_arg.inner_with(types)  {
-                        Ti::Scalar { kind: _, width } =>
-                            TypeResolution::Value(Ti::Scalar { kind: crate::ScalarKind::Sint, width }),
-                        Ti::Vector { size, kind: _, width } =>
-                            TypeResolution::Value(Ti::Vector { size, kind: crate::ScalarKind::Sint, width }),
+                        Ti::Scalar { kind: kind @ (crate::ScalarKind::Sint | crate::ScalarKind::Uint), width } =>
+                            TypeResolution::Value(Ti::Scalar { kind, width }),
+                        Ti::Vector { size, kind: kind @ (crate::ScalarKind::Sint | crate::ScalarKind::Uint), width } =>
+                            TypeResolution::Value(Ti::Vector { size, kind, width }),
                         ref other => return Err(ResolveError::IncompatibleOperands(
                                 format!("{:?}({:?})", fun, other)
                             )),

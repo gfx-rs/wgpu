@@ -155,13 +155,13 @@ OpStore %33 %110
 %112 = OpExtInst  %4  %1 FindILsb %111
 OpStore %19 %112
 %113 = OpLoad  %14  %29
-%114 = OpExtInst  %11  %1 FindILsb %113
-OpStore %21 %114
+%114 = OpExtInst  %14  %1 FindILsb %113
+OpStore %29 %114
 %115 = OpLoad  %12  %23
 %116 = OpExtInst  %12  %1 FindSMsb %115
 OpStore %23 %116
 %117 = OpLoad  %6  %27
-%118 = OpExtInst  %4  %1 FindUMsb %117
-OpStore %19 %118
+%118 = OpExtInst  %6  %1 FindUMsb %117
+OpStore %27 %118
 OpReturn
 OpFunctionEnd

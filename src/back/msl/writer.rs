@@ -1591,21 +1591,6 @@ impl<W: Write> Writer<W> {
                     crate::TypeInner::Scalar { .. } => true,
                     _ => false,
                 };
-                let argument_size_suffix = match *context.resolve_type(arg) {
-                    crate::TypeInner::Vector {
-                        size: crate::VectorSize::Bi,
-                        ..
-                    } => "2",
-                    crate::TypeInner::Vector {
-                        size: crate::VectorSize::Tri,
-                        ..
-                    } => "3",
-                    crate::TypeInner::Vector {
-                        size: crate::VectorSize::Quad,
-                        ..
-                    } => "4",
-                    _ => "",
-                };
 
                 let fun_name = match fun {
                     // comparison
@@ -1705,21 +1690,13 @@ impl<W: Write> Writer<W> {
                     self.put_expression(arg1.unwrap(), context, false)?;
                     write!(self.out, ")")?;
                 } else if fun == Mf::FindLsb {
-                    write!(
-                        self.out,
-                        "(((1 + int{}({}::ctz(",
-                        argument_size_suffix, NAMESPACE
-                    )?;
+                    write!(self.out, "((({}::ctz(", NAMESPACE)?;
                     self.put_expression(arg, context, true)?;
-                    write!(self.out, "))) % 33) - 1)")?;
+                    write!(self.out, ") + 1) % 33) - 1)")?;
                 } else if fun == Mf::FindMsb {
-                    write!(
-                        self.out,
-                        "(((1 + int{}({}::clz(",
-                        argument_size_suffix, NAMESPACE
-                    )?;
+                    write!(self.out, "((({}::clz(", NAMESPACE)?;
                     self.put_expression(arg, context, true)?;
-                    write!(self.out, "))) % 33) - 1)")?;
+                    write!(self.out, ") + 1) % 33) - 1)")?
                 } else if fun == Mf::Unpack2x16float {
                     write!(self.out, "float2(as_type<half2>(")?;
                     self.put_expression(arg, context, false)?;

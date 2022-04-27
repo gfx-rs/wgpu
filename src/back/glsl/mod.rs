@@ -2806,6 +2806,30 @@ impl<'a, W: Write> Writer<'a, W> {
                 let extract_bits = fun == Mf::ExtractBits;
                 let insert_bits = fun == Mf::InsertBits;
 
+                // we might need to cast to unsigned integers since
+                // GLSL's findLSB / findMSB always return signed integers
+                let need_extra_paren = {
+                    (fun == Mf::FindLsb || fun == Mf::FindMsb)
+                        && match *ctx.info[arg].ty.inner_with(&self.module.types) {
+                            crate::TypeInner::Scalar {
+                                kind: crate::ScalarKind::Uint,
+                                ..
+                            } => {
+                                write!(self.out, "uint(")?;
+                                true
+                            }
+                            crate::TypeInner::Vector {
+                                kind: crate::ScalarKind::Uint,
+                                size,
+                                ..
+                            } => {
+                                write!(self.out, "uvec{}(", size as u8)?;
+                                true
+                            }
+                            _ => false,
+                        }
+                };
+
                 write!(self.out, "{}(", fun_name)?;
                 self.write_expr(arg, ctx)?;
                 if let Some(arg) = arg1 {
@@ -2838,7 +2862,11 @@ impl<'a, W: Write> Writer<'a, W> {
                         self.write_expr(arg, ctx)?;
                     }
                 }
-                write!(self.out, ")")?
+                write!(self.out, ")")?;
+
+                if need_extra_paren {
+                    write!(self.out, ")")?
+                }
             }
             // `As` is always a call.
             // If `convert` is true the function name is the type
