@@ -506,7 +506,7 @@ impl<'a> ConstantSolver<'a> {
                                 BinaryOperator::Subtract => a - b,
                                 BinaryOperator::Multiply => a * b,
                                 BinaryOperator::Divide => a / b,
-                                BinaryOperator::Modulo => a % b,
+                                BinaryOperator::Modulo => a - b * (a / b).floor(),
                                 _ => return Err(ConstantSolvingError::InvalidBinaryOpArgs),
                             })
                         }

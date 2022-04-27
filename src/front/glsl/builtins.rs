@@ -1969,11 +1969,42 @@ impl MacroCall {
             MacroCall::Mod(size) => {
                 ctx.implicit_splat(parser, &mut args[1], meta, size)?;
 
-                ctx.add_expression(
+                // x - y * floor(x / y)
+
+                let div = ctx.add_expression(
                     Expression::Binary {
-                        op: BinaryOperator::Modulo,
+                        op: BinaryOperator::Divide,
                         left: args[0],
                         right: args[1],
+                    },
+                    Span::default(),
+                    body,
+                );
+                let floor = ctx.add_expression(
+                    Expression::Math {
+                        fun: MathFunction::Floor,
+                        arg: div,
+                        arg1: None,
+                        arg2: None,
+                        arg3: None,
+                    },
+                    Span::default(),
+                    body,
+                );
+                let mult = ctx.add_expression(
+                    Expression::Binary {
+                        op: BinaryOperator::Multiply,
+                        left: floor,
+                        right: args[1],
+                    },
+                    Span::default(),
+                    body,
+                );
+                ctx.add_expression(
+                    Expression::Binary {
+                        op: BinaryOperator::Subtract,
+                        left: args[0],
+                        right: mult,
                     },
                     Span::default(),
                     body,
