@@ -529,7 +529,7 @@ impl<'w> BlockContext<'w> {
                         _ => unimplemented!(),
                     },
                     crate::BinaryOperator::Modulo => match left_ty_inner.scalar_kind() {
-                        Some(crate::ScalarKind::Sint) => spirv::Op::SMod,
+                        Some(crate::ScalarKind::Sint) => spirv::Op::SRem,
                         Some(crate::ScalarKind::Uint) => spirv::Op::UMod,
                         Some(crate::ScalarKind::Float) => spirv::Op::FRem,
                         _ => unimplemented!(),

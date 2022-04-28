@@ -213,7 +213,7 @@ OpBranch %84
 %88 = OpBitcast  %21  %87
 %89 = OpIMul  %21  %85 %88
 %90 = OpCompositeConstruct  %21  %3 %5
-%91 = OpSMod  %21  %89 %90
+%91 = OpSRem  %21  %89 %90
 %92 = OpCompositeExtract  %13  %75 2
 %93 = OpBitcast  %4  %92
 %95 = OpImageFetch  %94  %78 %91 Lod %93
@@ -254,7 +254,7 @@ OpBranch %125
 %128 = OpBitcast  %21  %127
 %129 = OpIMul  %21  %126 %128
 %130 = OpCompositeConstruct  %21  %3 %5
-%131 = OpSMod  %21  %129 %130
+%131 = OpSRem  %21  %129 %130
 %132 = OpCompositeExtract  %13  %120 2
 %133 = OpBitcast  %4  %132
 %134 = OpImageFetch  %29  %122 %131 Sample %133

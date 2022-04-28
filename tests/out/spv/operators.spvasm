@@ -115,7 +115,7 @@ OpBranch %81
 %88 = OpFDiv  %31  %86 %87
 %89 = OpCompositeConstruct  %27  %17 %17 %17 %17
 %90 = OpCompositeConstruct  %27  %18 %18 %18 %18
-%91 = OpSMod  %27  %89 %90
+%91 = OpSRem  %27  %89 %90
 %92 = OpVectorShuffle  %26  %88 %88 0 1 0 1
 %93 = OpConvertSToF  %26  %91
 %94 = OpFAdd  %26  %92 %93
@@ -233,12 +233,12 @@ OpBranch %151
 %203 = OpCompositeConstruct  %26  %14 %14 %14 %14
 %204 = OpCompositeConstruct  %26  %3 %3 %3 %3
 %205 = OpFDiv  %26  %203 %204
-%206 = OpSMod  %8  %18 %7
+%206 = OpSRem  %8  %18 %7
 %207 = OpUMod  %20  %24 %25
 %208 = OpFRem  %4  %14 %3
 %209 = OpCompositeConstruct  %152  %18 %18
 %210 = OpCompositeConstruct  %152  %7 %7
-%211 = OpSMod  %152  %209 %210
+%211 = OpSRem  %152  %209 %210
 %212 = OpCompositeConstruct  %163  %24 %24 %24
 %213 = OpCompositeConstruct  %163  %25 %25 %25
 %214 = OpUMod  %163  %212 %213
@@ -317,10 +317,10 @@ OpBranch %151
 %287 = OpFDiv  %31  %286 %285
 %288 = OpCompositeConstruct  %152  %18 %18
 %289 = OpCompositeConstruct  %152  %7 %7
-%290 = OpSMod  %152  %288 %289
+%290 = OpSRem  %152  %288 %289
 %291 = OpCompositeConstruct  %152  %7 %7
 %292 = OpCompositeConstruct  %152  %18 %18
-%293 = OpSMod  %152  %292 %291
+%293 = OpSRem  %152  %292 %291
 %294 = OpCompositeConstruct  %34  %24 %24
 %295 = OpCompositeConstruct  %34  %25 %25
 %296 = OpUMod  %34  %294 %295
@@ -512,7 +512,7 @@ OpStore %457 %468
 %471 = OpSDiv  %8  %469 %470
 OpStore %457 %471
 %472 = OpLoad  %8  %457
-%473 = OpSMod  %8  %472 %7
+%473 = OpSRem  %8  %472 %7
 OpStore %457 %473
 %474 = OpLoad  %8  %457
 %475 = OpBitwiseAnd  %8  %474 %11
