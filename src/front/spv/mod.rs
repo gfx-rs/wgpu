@@ -1966,7 +1966,6 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 | Op::BitwiseXor
                 | Op::BitwiseAnd
                 | Op::SDiv
-                | Op::SMod
                 | Op::SRem => {
                     inst.expect(5)?;
                     let operator = map_binary_operator(inst.op)?;
@@ -2013,8 +2012,113 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     inst.expect(5)?;
                     parse_expr_op!(crate::BinaryOperator::Modulo, BINARY)?;
                 }
+                Op::SMod => {
+                    inst.expect(5)?;
+
+                    // x - y * int(floor(float(x) / float(y)))
+
+                    let start = self.data_offset;
+                    let result_type_id = self.next()?;
+                    let result_id = self.next()?;
+                    let p1_id = self.next()?;
+                    let p2_id = self.next()?;
+                    let span = self.span_from_with_op(start);
+
+                    let p1_lexp = self.lookup_expression.lookup(p1_id)?;
+                    let left = self.get_expr_handle(
+                        p1_id,
+                        p1_lexp,
+                        ctx,
+                        &mut emitter,
+                        &mut block,
+                        body_idx,
+                    );
+                    let p2_lexp = self.lookup_expression.lookup(p2_id)?;
+                    let right = self.get_expr_handle(
+                        p2_id,
+                        p2_lexp,
+                        ctx,
+                        &mut emitter,
+                        &mut block,
+                        body_idx,
+                    );
+
+                    let left_cast = ctx.expressions.append(
+                        crate::Expression::As {
+                            expr: left,
+                            kind: crate::ScalarKind::Float,
+                            convert: None,
+                        },
+                        span,
+                    );
+                    let right_cast = ctx.expressions.append(
+                        crate::Expression::As {
+                            expr: right,
+                            kind: crate::ScalarKind::Float,
+                            convert: None,
+                        },
+                        span,
+                    );
+                    let div = ctx.expressions.append(
+                        crate::Expression::Binary {
+                            op: crate::BinaryOperator::Divide,
+                            left: left_cast,
+                            right: right_cast,
+                        },
+                        span,
+                    );
+                    let floor = ctx.expressions.append(
+                        crate::Expression::Math {
+                            fun: crate::MathFunction::Floor,
+                            arg: div,
+                            arg1: None,
+                            arg2: None,
+                            arg3: None,
+                        },
+                        span,
+                    );
+                    let result_ty = self.lookup_type.lookup(result_type_id)?;
+                    let kind = ctx.type_arena[result_ty.handle]
+                        .inner
+                        .scalar_kind()
+                        .unwrap();
+                    let cast = ctx.expressions.append(
+                        crate::Expression::As {
+                            expr: floor,
+                            kind,
+                            convert: None,
+                        },
+                        span,
+                    );
+                    let mult = ctx.expressions.append(
+                        crate::Expression::Binary {
+                            op: crate::BinaryOperator::Multiply,
+                            left: cast,
+                            right,
+                        },
+                        span,
+                    );
+                    let sub = ctx.expressions.append(
+                        crate::Expression::Binary {
+                            op: crate::BinaryOperator::Subtract,
+                            left,
+                            right: mult,
+                        },
+                        span,
+                    );
+                    self.lookup_expression.insert(
+                        result_id,
+                        LookupExpression {
+                            handle: sub,
+                            type_id: result_type_id,
+                            block_id,
+                        },
+                    );
+                }
                 Op::FMod => {
                     inst.expect(5)?;
+
+                    // x - y * floor(x / y)
 
                     let start = self.data_offset;
                     let span = self.span_from_with_op(start);

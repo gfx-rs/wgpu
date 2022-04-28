@@ -12,7 +12,7 @@ pub(super) const fn map_binary_operator(word: spirv::Op) -> Result<crate::Binary
         Op::ISub | Op::FSub => Ok(BinaryOperator::Subtract),
         Op::IMul | Op::FMul => Ok(BinaryOperator::Multiply),
         Op::UDiv | Op::SDiv | Op::FDiv => Ok(BinaryOperator::Divide),
-        Op::UMod | Op::SMod | Op::SRem => Ok(BinaryOperator::Modulo),
+        Op::SRem => Ok(BinaryOperator::Modulo),
         // Relational and Logical Instructions
         Op::IEqual | Op::FOrdEqual | Op::FUnordEqual | Op::LogicalEqual => {
             Ok(BinaryOperator::Equal)
