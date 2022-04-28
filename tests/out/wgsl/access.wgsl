@@ -25,18 +25,18 @@ fn test_matrix_within_struct_accesses() {
 
     let _e4 = idx;
     idx = (_e4 - 1);
-    let unnamed = baz.m;
-    let unnamed_1 = baz.m[0];
+    _ = baz.m;
+    _ = baz.m[0];
     let _e14 = idx;
-    let unnamed_2 = baz.m[_e14];
-    let unnamed_3 = baz.m[0][1];
+    _ = baz.m[_e14];
+    _ = baz.m[0][1];
     let _e26 = idx;
-    let unnamed_4 = baz.m[0][_e26];
+    _ = baz.m[0][_e26];
     let _e30 = idx;
-    let unnamed_5 = baz.m[_e30][1];
+    _ = baz.m[_e30][1];
     let _e36 = idx;
     let _e38 = idx;
-    let unnamed_6 = baz.m[_e36][_e38];
+    _ = baz.m[_e36][_e38];
     t = Baz(mat3x2<f32>(vec2<f32>(1.0), vec2<f32>(2.0), vec2<f32>(3.0)));
     let _e50 = idx;
     idx = (_e50 + 1);

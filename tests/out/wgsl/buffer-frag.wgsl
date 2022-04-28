@@ -21,6 +21,9 @@ fn main_1() {
     var a: u32;
     var b: u32;
 
+    _ = (&testBuffer.data);
+    _ = (&testBufferWriteOnly.data);
+    _ = (&testBufferReadOnly.data);
     let _e12 = testBuffer.data[0];
     a = _e12;
     testBuffer.data[1] = u32(2);
@@ -32,6 +35,8 @@ fn main_1() {
 
 @fragment 
 fn main() {
+    _ = (&testBuffer.data);
+    _ = (&testBufferWriteOnly.data);
     main_1();
     return;
 }

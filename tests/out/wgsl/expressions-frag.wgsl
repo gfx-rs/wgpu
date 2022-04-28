@@ -270,16 +270,19 @@ fn testUnaryOpMat(a_16: mat3x3<f32>) {
 fn testStructConstructor() {
     var tree: BST = BST(1);
 
+    _ = BST(1);
 }
 
 fn testNonScalarToScalarConstructor() {
     var f: f32 = 1.0;
 
+    _ = f32(mat2x2<f32>(vec2<f32>(1.0, 0.0), vec2<f32>(0.0, 1.0))[0].x);
 }
 
 fn testArrayConstructor() {
     var tree_1: array<f32,1u> = array<f32,1u>(0.0);
 
+    _ = array<f32,1u>(0.0);
 }
 
 fn testFreestandingConstructor() {
@@ -290,6 +293,7 @@ fn testNonImplicitCastVectorCast() {
     var a_18: u32 = 1u;
     var b_16: vec4<i32>;
 
+    _ = u32(1);
     let _e3 = a_18;
     b_16 = vec4<i32>(i32(_e3));
     return;
@@ -355,12 +359,14 @@ fn ternary(a_20: bool) {
 fn main_1() {
     var local_5: f32;
 
+    _ = global;
     let _e3 = global;
     local_5 = _e3;
     privatePointer((&local_5));
     let _e5 = local_5;
     global = _e5;
     let _e6 = o_color;
+    _ = _e6.xyzw;
     let _e9 = vec4<f32>(1.0);
     o_color.x = _e9.x;
     o_color.y = _e9.y;

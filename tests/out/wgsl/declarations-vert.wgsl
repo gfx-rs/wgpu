@@ -34,6 +34,12 @@ fn main_1() {
     var a_1: f32;
     var b: f32;
 
+    _ = (&vert.position);
+    _ = (&vert.a);
+    _ = (&frag.position);
+    _ = (&frag.a);
+    _ = array<vec3<f32>,2u>(vec3<f32>(-(1.0), 1.0, 0.0), vec3<f32>(-(1.0), -(1.0), 0.0));
+    _ = TestStruct(f32(1), f32(2));
     let _e35 = in_array_2[1];
     from_input_array = _e35;
     let _e41 = array_2d[0][0];
@@ -50,6 +56,10 @@ fn main(@location(0) position: vec2<f32>, @location(1) a: vec2<f32>, @location(2
     vert.a = a;
     in_array_2[0] = in_array;
     in_array_2[1] = in_array_1;
+    _ = (&vert.position);
+    _ = (&vert.a);
+    _ = (&frag.position);
+    _ = (&frag.a);
     main_1();
     let _e30 = frag.position;
     let _e32 = frag.a;

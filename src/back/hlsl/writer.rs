@@ -1167,6 +1167,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         // Otherwise, we could accidentally write variable name instead of full expression.
                         // Also, we use sanitized names! It defense backend from generating variable with name from reserved keywords.
                         Some(self.namer.call(name))
+                    } else if info.ref_count == 0 {
+                        Some(self.namer.call(""))
                     } else {
                         let min_ref_count = func_ctx.expressions[handle].bake_ref_count();
                         if min_ref_count <= info.ref_count {

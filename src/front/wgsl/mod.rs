@@ -3499,15 +3499,12 @@ impl Parser {
                         let _ = lexer.next();
                         emitter.start(context.expressions);
                         lexer.expect(Token::Operation('='))?;
-                        let expr_id = self.parse_general_expression(
+                        self.parse_general_expression(
                             lexer,
                             context.as_expression(block, &mut emitter),
                         )?;
                         lexer.expect(Token::Separator(';'))?;
                         block.extend(emitter.finish(context.expressions));
-                        // TODO: the situation here could be improved but
-                        // for now this is necessary to get the expressions emitted
-                        context.named_expressions.insert(expr_id, "_".to_string());
                         None
                     }
                     "let" => {

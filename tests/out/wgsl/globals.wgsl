@@ -31,13 +31,13 @@ fn test_msl_packed_vec3_() {
     let _e21 = idx;
     alignment.v3_[_e21] = 3.0;
     let data = alignment;
-    let unnamed = data.v3_;
-    let unnamed_1 = data.v3_.zx;
+    _ = data.v3_;
+    _ = data.v3_.zx;
     test_msl_packed_vec3_as_arg(data.v3_);
-    let unnamed_2 = (data.v3_ * mat3x3<f32>(vec3<f32>(0.0, 0.0, 0.0), vec3<f32>(0.0, 0.0, 0.0), vec3<f32>(0.0, 0.0, 0.0)));
-    let unnamed_3 = (mat3x3<f32>(vec3<f32>(0.0, 0.0, 0.0), vec3<f32>(0.0, 0.0, 0.0), vec3<f32>(0.0, 0.0, 0.0)) * data.v3_);
-    let unnamed_4 = (data.v3_ * 2.0);
-    let unnamed_5 = (2.0 * data.v3_);
+    _ = (data.v3_ * mat3x3<f32>(vec3<f32>(0.0, 0.0, 0.0), vec3<f32>(0.0, 0.0, 0.0), vec3<f32>(0.0, 0.0, 0.0)));
+    _ = (mat3x3<f32>(vec3<f32>(0.0, 0.0, 0.0), vec3<f32>(0.0, 0.0, 0.0), vec3<f32>(0.0, 0.0, 0.0)) * data.v3_);
+    _ = (data.v3_ * 2.0);
+    _ = (2.0 * data.v3_);
 }
 
 @compute @workgroup_size(1, 1, 1) 
