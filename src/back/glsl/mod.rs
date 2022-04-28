@@ -2580,6 +2580,18 @@ impl<'a, W: Write> Writer<'a, W> {
 
                         write!(self.out, ")")?;
                     }
+                    // TODO: handle undefined behavior of BinaryOperator::Modulo
+                    //
+                    // sint:
+                    // if right == 0 return 0
+                    // if left == min(type_of(left)) && right == -1 return 0
+                    // if sign(left) == -1 || sign(right) == -1 return result as defined by WGSL
+                    //
+                    // uint:
+                    // if right == 0 return 0
+                    //
+                    // float:
+                    // if right == 0 return ? see https://github.com/gpuweb/gpuweb/issues/2798
                     BinaryOperation::Modulo => {
                         write!(self.out, "(")?;
 

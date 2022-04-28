@@ -1795,6 +1795,20 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 self.write_expr(module, left, func_ctx)?;
                 write!(self.out, ")")?;
             }
+
+            // TODO: handle undefined behavior of BinaryOperator::Modulo
+            //
+            // sint:
+            // if right == 0 return 0
+            // if left == min(type_of(left)) && right == -1 return 0
+            // if sign(left) != sign(right) return result as defined by WGSL
+            //
+            // uint:
+            // if right == 0 return 0
+            //
+            // float:
+            // if right == 0 return ? see https://github.com/gpuweb/gpuweb/issues/2798
+
             // While HLSL supports float operands with the % operator it is only
             // defined in cases where both sides are either positive or negative.
             Expression::Binary {

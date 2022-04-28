@@ -1482,6 +1482,20 @@ impl<W: Write> Writer<W> {
                     .resolve_type(left)
                     .scalar_kind()
                     .ok_or(Error::UnsupportedBinaryOp(op))?;
+
+                // TODO: handle undefined behavior of BinaryOperator::Modulo
+                //
+                // sint:
+                // if right == 0 return 0
+                // if left == min(type_of(left)) && right == -1 return 0
+                // if sign(left) == -1 || sign(right) == -1 return result as defined by WGSL
+                //
+                // uint:
+                // if right == 0 return 0
+                //
+                // float:
+                // if right == 0 return ? see https://github.com/gpuweb/gpuweb/issues/2798
+
                 if op == crate::BinaryOperator::Modulo && kind == crate::ScalarKind::Float {
                     write!(self.out, "{}::fmod(", NAMESPACE)?;
                     self.put_expression(left, context, true)?;

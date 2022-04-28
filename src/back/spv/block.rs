@@ -529,8 +529,15 @@ impl<'w> BlockContext<'w> {
                         _ => unimplemented!(),
                     },
                     crate::BinaryOperator::Modulo => match left_ty_inner.scalar_kind() {
+                        // TODO: handle undefined behavior
+                        // if right == 0 return 0
+                        // if left == min(type_of(left)) && right == -1 return 0
                         Some(crate::ScalarKind::Sint) => spirv::Op::SRem,
+                        // TODO: handle undefined behavior
+                        // if right == 0 return 0
                         Some(crate::ScalarKind::Uint) => spirv::Op::UMod,
+                        // TODO: handle undefined behavior
+                        // if right == 0 return ? see https://github.com/gpuweb/gpuweb/issues/2798
                         Some(crate::ScalarKind::Float) => spirv::Op::FRem,
                         _ => unimplemented!(),
                     },
