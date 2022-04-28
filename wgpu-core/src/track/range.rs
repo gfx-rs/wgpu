@@ -15,6 +15,7 @@ pub struct RangedStates<I, T> {
 }
 
 impl<I: Copy + PartialOrd, T: Copy + PartialEq> RangedStates<I, T> {
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn empty() -> Self {
         Self {
             ranges: SmallVec::new(),

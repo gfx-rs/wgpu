@@ -626,7 +626,7 @@ bitflags!(
 
 bitflags::bitflags! {
     /// Similar to `wgt::BufferUsages` but for internal use.
-    pub struct BufferUses: u32 {
+    pub struct BufferUses: u16 {
         const MAP_READ = 1 << 0;
         const MAP_WRITE = 1 << 1;
         const COPY_SRC = 1 << 2;
@@ -653,7 +653,7 @@ bitflags::bitflags! {
 
 bitflags::bitflags! {
     /// Similar to `wgt::TextureUsages` but for internal use.
-    pub struct TextureUses: u32 {
+    pub struct TextureUses: u16 {
         const COPY_SRC = 1 << 0;
         const COPY_DST = 1 << 1;
         const RESOURCE = 1 << 2;
@@ -662,6 +662,7 @@ bitflags::bitflags! {
         const DEPTH_STENCIL_WRITE = 1 << 5;
         const STORAGE_READ = 1 << 6;
         const STORAGE_WRITE = 1 << 7;
+        const COMPLEX = 1 << 8;
         /// The combination of usages that can be used together (read-only).
         const INCLUSIVE = Self::COPY_SRC.bits | Self::RESOURCE.bits | Self::DEPTH_STENCIL_READ.bits;
         /// The combination of exclusive usages (write-only and read-write).

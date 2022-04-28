@@ -19,8 +19,6 @@ pub struct TextureSelector {
 #[derive(Clone, Debug, Default, PartialEq)]
 pub(crate) struct TextureState {
     mips: ArrayVec<PlaneStates, { hal::MAX_MIP_LEVELS as usize }>,
-    /// True if we have the information about all the subresources here
-    full: bool,
 }
 
 impl PendingTransition<TextureState> {
@@ -44,7 +42,6 @@ impl TextureState {
             })
             .take(mip_level_count as usize)
             .collect(),
-            full: true,
         }
     }
 }
@@ -61,9 +58,7 @@ impl ResourceState for TextureState {
         // initial state to whatever we need, which we can always make
         // to be the same as the query result for the known subresources.
         let num_levels = self.mips.len();
-        if self.full {
-            assert!(num_levels >= selector.levels.end as usize);
-        }
+        assert!(num_levels >= selector.levels.end as usize);
         let mip_start = num_levels.min(selector.levels.start as usize);
         let mip_end = num_levels.min(selector.levels.end as usize);
         for mip in self.mips[mip_start..mip_end].iter() {
@@ -86,13 +81,7 @@ impl ResourceState for TextureState {
         usage: Self::Usage,
         mut output: Option<&mut Vec<PendingTransition<Self>>>,
     ) -> Result<(), PendingTransition<Self>> {
-        if self.full {
-            assert!(self.mips.len() >= selector.levels.end as usize);
-        } else {
-            while self.mips.len() < selector.levels.end as usize {
-                self.mips.push(PlaneStates::empty());
-            }
-        }
+        assert!(self.mips.len() >= selector.levels.end as usize);
         for (mip_id, mip) in self.mips[selector.levels.start as usize..selector.levels.end as usize]
             .iter_mut()
             .enumerate()
@@ -143,13 +132,7 @@ impl ResourceState for TextureState {
         mut output: Option<&mut Vec<PendingTransition<Self>>>,
     ) -> Result<(), PendingTransition<Self>> {
         let mut temp = Vec::new();
-        if self.full {
-            assert!(self.mips.len() >= other.mips.len());
-        } else {
-            while self.mips.len() < other.mips.len() {
-                self.mips.push(PlaneStates::empty());
-            }
-        }
+        assert!(self.mips.len() >= other.mips.len());
 
         for (mip_id, (mip_self, mip_other)) in self.mips.iter_mut().zip(&other.mips).enumerate() {
             let level = mip_id as u32;
