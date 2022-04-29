@@ -810,6 +810,33 @@ fn module_scope_identifier_redefinition() {
     );
 }
 
+/// Check the result of validating a WGSL program against a pattern.
+///
+/// Unless you are generating code programmatically, the
+/// `check_validation_error` macro will probably be more convenient to
+/// use.
+macro_rules! check_one_validation {
+    ( $source:expr, $pattern:pat $( if $guard:expr )? ) => {
+        let source = $source;
+        let error = validation_error($source);
+        if ! matches!(&error, $pattern $( if $guard )? ) {
+            eprintln!("validation error does not match pattern:\n\
+                       source code: {}\n\
+                       \n\
+                       actual result:\n\
+                       {:#?}\n\
+                       \n\
+                       expected match for pattern:\n\
+                       {}",
+                      &source,
+                      error,
+                      stringify!($pattern));
+            $( eprintln!("if {}", stringify!($guard)); )?
+            panic!("validation error does not match pattern");
+        }
+    }
+}
+
 macro_rules! check_validation {
     // We want to support an optional guard expression after the pattern, so
     // that we can check values we can't match against, like strings.
@@ -817,33 +844,15 @@ macro_rules! check_validation {
     // pattern, because Rust treats `?` as a repetition operator, and its count
     // (0 or 1) will not necessarily match `$source`.
     ( $( $source:literal ),* : $pattern:pat ) => {
-        check_validation!( @full $( $source ),* : $pattern if true ; "");
-    };
-
-    ( $( $source:literal ),* : $pattern:pat if $guard:expr ) => {
-        check_validation!( @full $( $source ),* : $pattern if $guard ; stringify!( $guard ) );
-    };
-
-    ( @full $( $source:literal ),* : $pattern:pat if $guard:expr ; $guard_string:expr ) => {
         $(
-            let error = validation_error($source);
-            if ! matches!(&error, $pattern if $guard) {
-                eprintln!("validation error does not match pattern:\n\
-                           source code: {}\n\
-                           \n\
-                           actual result:\n\
-                           {:#?}\n\
-                           \n\
-                           expected match for pattern:\n\
-                           {}{}",
-                          stringify!($source),
-                          error,
-                          stringify!($pattern),
-                          $guard_string);
-                panic!("validation error does not match pattern");
-            }
+            check_one_validation!($source, $pattern);
         )*
     };
+    ( $( $source:literal ),* : $pattern:pat if $guard:expr ) => {
+        $(
+            check_one_validation!($source, $pattern if $guard);
+        )*
+    }
 }
 
 fn validation_error(source: &str) -> Result<naga::valid::ModuleInfo, naga::valid::ValidationError> {
