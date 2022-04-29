@@ -810,18 +810,18 @@ fn module_scope_identifier_redefinition() {
     );
 }
 
-macro_rules! check_validation_error {
+macro_rules! check_validation {
     // We want to support an optional guard expression after the pattern, so
     // that we can check values we can't match against, like strings.
     // Unfortunately, we can't simply include `$( if $guard:expr )?` in the
     // pattern, because Rust treats `?` as a repetition operator, and its count
     // (0 or 1) will not necessarily match `$source`.
     ( $( $source:literal ),* : $pattern:pat ) => {
-        check_validation_error!( @full $( $source ),* : $pattern if true ; "");
+        check_validation!( @full $( $source ),* : $pattern if true ; "");
     };
 
     ( $( $source:literal ),* : $pattern:pat if $guard:expr ) => {
-        check_validation_error!( @full $( $source ),* : $pattern if $guard ; stringify!( $guard ) );
+        check_validation!( @full $( $source ),* : $pattern if $guard ; stringify!( $guard ) );
     };
 
     ( @full $( $source:literal ),* : $pattern:pat if $guard:expr ; $guard_string:expr ) => {
@@ -864,7 +864,7 @@ fn validation_error(source: &str) -> Result<naga::valid::ModuleInfo, naga::valid
 
 #[test]
 fn invalid_arrays() {
-    check_validation_error! {
+    check_validation! {
         "type Bad = array<array<f32>, 4>;",
         "type Bad = array<sampler, 4>;",
         "type Bad = array<texture_2d<f32>, 4>;":
@@ -874,7 +874,7 @@ fn invalid_arrays() {
         })
     }
 
-    check_validation_error! {
+    check_validation! {
         "type Bad = array<f32, true>;",
         r#"
             let length: f32 = 2.718;
@@ -886,7 +886,7 @@ fn invalid_arrays() {
         })
     }
 
-    check_validation_error! {
+    check_validation! {
         "type Bad = array<f32, 0>;",
         "type Bad = array<f32, -1>;":
         Err(naga::valid::ValidationError::Type {
@@ -898,7 +898,7 @@ fn invalid_arrays() {
 
 #[test]
 fn invalid_structs() {
-    check_validation_error! {
+    check_validation! {
         "struct Bad { data: sampler }",
         "struct Bad { data: texture_2d<f32> }":
         Err(naga::valid::ValidationError::Type {
@@ -907,7 +907,7 @@ fn invalid_structs() {
         })
     }
 
-    check_validation_error! {
+    check_validation! {
         "struct Bad { data: array<f32>, other: f32, }":
         Err(naga::valid::ValidationError::Type {
             error: naga::valid::TypeError::InvalidDynamicArray(_, _),
@@ -915,7 +915,7 @@ fn invalid_structs() {
         })
     }
 
-    check_validation_error! {
+    check_validation! {
         "struct Empty {}":
         Err(naga::valid::ValidationError::Type {
             error: naga::valid::TypeError::EmptyStruct,
@@ -926,7 +926,7 @@ fn invalid_structs() {
 
 #[test]
 fn invalid_functions() {
-    check_validation_error! {
+    check_validation! {
         "fn unacceptable_unsized(arg: array<f32>) { }",
         "
         struct Unsized { data: array<f32> }
@@ -944,7 +944,7 @@ fn invalid_functions() {
     }
 
     // Pointer's address space cannot hold unsized data.
-    check_validation_error! {
+    check_validation! {
         "fn unacceptable_unsized(arg: ptr<workgroup, array<f32>>) { }",
         "
         struct Unsized { data: array<f32> }
@@ -960,7 +960,7 @@ fn invalid_functions() {
     }
 
     // Pointers of these storage classes cannot be passed as arguments.
-    check_validation_error! {
+    check_validation! {
         "fn unacceptable_ptr_space(arg: ptr<storage, array<f32>>) { }":
         Err(naga::valid::ValidationError::Function {
             name: function_name,
@@ -974,7 +974,7 @@ fn invalid_functions() {
         if function_name == "unacceptable_ptr_space" && argument_name == "arg"
     }
 
-    check_validation_error! {
+    check_validation! {
         "fn unacceptable_ptr_space(arg: ptr<uniform, f32>) { }":
         Err(naga::valid::ValidationError::Function {
             name: function_name,
@@ -991,7 +991,7 @@ fn invalid_functions() {
 
 #[test]
 fn pointer_type_equivalence() {
-    check_validation_error! {
+    check_validation! {
         r#"
             fn f(pv: ptr<function, vec2<f32>>, pf: ptr<function, f32>) { }
 
@@ -1009,7 +1009,7 @@ fn pointer_type_equivalence() {
 
 #[test]
 fn missing_bindings() {
-    check_validation_error! {
+    check_validation! {
         "
         @vertex
         fn vertex(_input: vec4<f32>) -> @location(0) vec4<f32> {
@@ -1026,7 +1026,7 @@ fn missing_bindings() {
         })
     }
 
-    check_validation_error! {
+    check_validation! {
         "
         @vertex
         fn vertex(@location(0) _input: vec4<f32>, more_input: f32) -> @location(0) vec4<f32> {
@@ -1043,7 +1043,7 @@ fn missing_bindings() {
         })
     }
 
-    check_validation_error! {
+    check_validation! {
         "
         @vertex
         fn vertex(@location(0) _input: vec4<f32>) -> vec4<f32> {
@@ -1059,7 +1059,7 @@ fn missing_bindings() {
         })
     }
 
-    check_validation_error! {
+    check_validation! {
         "
         struct VertexIn {
           @location(0) pos: vec4<f32>,
@@ -1084,7 +1084,7 @@ fn missing_bindings() {
 
 #[test]
 fn invalid_access() {
-    check_validation_error! {
+    check_validation! {
         "
         fn array_by_value(a: array<i32, 5>, i: i32) -> i32 {
             return a[i];
@@ -1104,7 +1104,7 @@ fn invalid_access() {
         })
     }
 
-    check_validation_error! {
+    check_validation! {
         r#"
             fn main() -> f32 {
                 let a = array<f32, 3>(0., 1., 2.);
@@ -1123,7 +1123,7 @@ fn invalid_access() {
 
 #[test]
 fn valid_access() {
-    check_validation_error! {
+    check_validation! {
         "
         fn vector_by_value(v: vec4<i32>, i: i32) -> i32 {
             return v[i];
@@ -1150,7 +1150,7 @@ fn valid_access() {
 
 #[test]
 fn invalid_local_vars() {
-    check_validation_error! {
+    check_validation! {
         "
         struct Unsized { data: array<f32> }
         fn local_ptr_dynamic_array(okay: ptr<storage, Unsized>) {
@@ -1171,7 +1171,7 @@ fn invalid_local_vars() {
 
 #[test]
 fn dead_code() {
-    check_validation_error! {
+    check_validation! {
         "
         fn dead_code_after_if(condition: bool) -> i32 {
             if (condition) {
@@ -1184,7 +1184,7 @@ fn dead_code() {
         ":
         Ok(_)
     }
-    check_validation_error! {
+    check_validation! {
         "
         fn dead_code_after_block() -> i32 {
             {
@@ -1205,7 +1205,7 @@ fn invalid_runtime_sized_arrays() {
     // You can't have structs whose last member is an unsized struct. An unsized
     // array may only appear as the last member of a struct used directly as a
     // variable's store type.
-    check_validation_error! {
+    check_validation! {
         "
         struct Unsized {
             arr: array<f32>
@@ -1233,7 +1233,7 @@ fn invalid_runtime_sized_arrays() {
 
 #[test]
 fn select() {
-    check_validation_error! {
+    check_validation! {
         "
         fn select_pointers(which: bool) -> i32 {
             var x: i32 = 1;
@@ -1275,7 +1275,7 @@ fn select() {
 
 #[test]
 fn last_case_falltrough() {
-    check_validation_error! {
+    check_validation! {
         "
         fn test_falltrough() {
           switch(0) {
@@ -1297,7 +1297,7 @@ fn last_case_falltrough() {
 
 #[test]
 fn missing_default_case() {
-    check_validation_error! {
+    check_validation! {
         "
         fn test_missing_default_case() {
           switch(0) {
@@ -1318,7 +1318,7 @@ fn missing_default_case() {
 fn wrong_access_mode() {
     // The assignments to `global.i` should be forbidden, because they are in
     // variables whose access mode is `read`, not `read_write`.
-    check_validation_error! {
+    check_validation! {
         "
             struct Globals {
                 i: i32
