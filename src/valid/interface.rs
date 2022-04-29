@@ -364,7 +364,7 @@ impl super::Validator {
                         ));
                     }
                 }
-                (TypeFlags::DATA | TypeFlags::HOST_SHARED, true)
+                (TypeFlags::DATA | TypeFlags::HOST_SHAREABLE, true)
             }
             crate::AddressSpace::Uniform => {
                 if let Err((ty_handle, disalignment)) = type_info.uniform_layout {
@@ -377,7 +377,10 @@ impl super::Validator {
                     }
                 }
                 (
-                    TypeFlags::DATA | TypeFlags::COPY | TypeFlags::SIZED | TypeFlags::HOST_SHARED,
+                    TypeFlags::DATA
+                        | TypeFlags::COPY
+                        | TypeFlags::SIZED
+                        | TypeFlags::HOST_SHAREABLE,
                     true,
                 )
             }
@@ -402,7 +405,10 @@ impl super::Validator {
                     ));
                 }
                 (
-                    TypeFlags::DATA | TypeFlags::COPY | TypeFlags::HOST_SHARED | TypeFlags::SIZED,
+                    TypeFlags::DATA
+                        | TypeFlags::COPY
+                        | TypeFlags::HOST_SHAREABLE
+                        | TypeFlags::SIZED,
                     false,
                 )
             }

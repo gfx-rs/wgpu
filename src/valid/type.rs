@@ -40,14 +40,15 @@ bitflags::bitflags! {
         /// The data can be copied around.
         const COPY = 0x4;
 
-        /// Can be be used for interfacing between pipeline stages.
+        /// Can be be used for user-defined IO between pipeline stages.
         ///
-        /// This includes non-bool scalars and vectors, matrices, and structs
-        /// and arrays containing only interface types.
-        const INTERFACE = 0x8;
+        /// This covers anything that can be in [`Location`] binding:
+        /// non-bool scalars and vectors, matrices, and structs and
+        /// arrays containing only interface types.
+        const IO_SHAREABLE = 0x8;
 
         /// Can be used for host-shareable structures.
-        const HOST_SHARED = 0x10;
+        const HOST_SHAREABLE = 0x10;
 
         /// This type can be passed as a function argument.
         const ARGUMENT = 0x40;
@@ -214,8 +215,8 @@ impl super::Validator {
                     TypeFlags::DATA
                         | TypeFlags::SIZED
                         | TypeFlags::COPY
-                        | TypeFlags::INTERFACE
-                        | TypeFlags::HOST_SHARED
+                        | TypeFlags::IO_SHAREABLE
+                        | TypeFlags::HOST_SHAREABLE
                         | TypeFlags::ARGUMENT,
                     width as u32,
                 )
@@ -229,8 +230,8 @@ impl super::Validator {
                     TypeFlags::DATA
                         | TypeFlags::SIZED
                         | TypeFlags::COPY
-                        | TypeFlags::INTERFACE
-                        | TypeFlags::HOST_SHARED
+                        | TypeFlags::IO_SHAREABLE
+                        | TypeFlags::HOST_SHAREABLE
                         | TypeFlags::ARGUMENT,
                     count * (width as u32),
                 )
@@ -248,8 +249,8 @@ impl super::Validator {
                     TypeFlags::DATA
                         | TypeFlags::SIZED
                         | TypeFlags::COPY
-                        | TypeFlags::INTERFACE
-                        | TypeFlags::HOST_SHARED
+                        | TypeFlags::IO_SHAREABLE
+                        | TypeFlags::HOST_SHAREABLE
                         | TypeFlags::ARGUMENT,
                     count * (width as u32),
                 )
@@ -263,7 +264,7 @@ impl super::Validator {
                     return Err(TypeError::InvalidAtomicWidth(kind, width));
                 }
                 TypeInfo::new(
-                    TypeFlags::DATA | TypeFlags::SIZED | TypeFlags::HOST_SHARED,
+                    TypeFlags::DATA | TypeFlags::SIZED | TypeFlags::HOST_SHAREABLE,
                     width as u32,
                 )
             }
@@ -445,7 +446,8 @@ impl super::Validator {
                     }
                 };
 
-                let base_mask = TypeFlags::COPY | TypeFlags::HOST_SHARED | TypeFlags::INTERFACE;
+                let base_mask =
+                    TypeFlags::COPY | TypeFlags::HOST_SHAREABLE | TypeFlags::IO_SHAREABLE;
                 TypeInfo {
                     flags: TypeFlags::DATA | (base_info.flags & base_mask) | sized_flag,
                     uniform_layout,
@@ -461,8 +463,8 @@ impl super::Validator {
                     TypeFlags::DATA
                         | TypeFlags::SIZED
                         | TypeFlags::COPY
-                        | TypeFlags::HOST_SHARED
-                        | TypeFlags::INTERFACE
+                        | TypeFlags::HOST_SHAREABLE
+                        | TypeFlags::IO_SHAREABLE
                         | TypeFlags::ARGUMENT,
                     1,
                 );
@@ -480,7 +482,7 @@ impl super::Validator {
                     if !base_info.flags.contains(TypeFlags::DATA) {
                         return Err(TypeError::InvalidData(member.ty));
                     }
-                    if !base_info.flags.contains(TypeFlags::HOST_SHARED) {
+                    if !base_info.flags.contains(TypeFlags::HOST_SHAREABLE) {
                         if ti.uniform_layout.is_ok() {
                             ti.uniform_layout = Err((member.ty, Disalignment::NonHostShareable));
                         }
@@ -495,7 +497,7 @@ impl super::Validator {
                         // to not bother with offsets/alignments if they are never
                         // used for host sharing.
                         if member.offset == 0 {
-                            ti.flags.set(TypeFlags::HOST_SHARED, false);
+                            ti.flags.set(TypeFlags::HOST_SHAREABLE, false);
                         } else {
                             return Err(TypeError::MemberOverlap {
                                 index: i as u32,
