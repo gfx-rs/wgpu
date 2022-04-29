@@ -309,7 +309,10 @@ impl Writer {
                 pointer_type_id,
                 id,
                 spirv::StorageClass::Function,
-                init_word,
+                init_word.or_else(|| {
+                    let type_id = self.get_type_id(LookupType::Handle(variable.ty));
+                    Some(self.write_constant_null(type_id))
+                }),
             );
             function
                 .variables
@@ -1323,6 +1326,13 @@ impl Writer {
             } else {
                 self.get_pointer_id(&ir_module.types, global_variable.ty, class)?
             }
+        };
+
+        let init_word = match global_variable.space {
+            crate::AddressSpace::Private => {
+                init_word.or_else(|| Some(self.write_constant_null(inner_type_id)))
+            }
+            _ => init_word,
         };
 
         Instruction::variable(pointer_type_id, id, class, init_word)

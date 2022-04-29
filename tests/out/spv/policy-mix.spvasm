@@ -1,7 +1,7 @@
 ; SPIR-V
 ; Version: 1.1
 ; Generator: rspirv
-; Bound: 99
+; Bound: 101
 OpCapability Shader
 OpCapability ImageQuery
 OpCapability Linkage
@@ -18,11 +18,11 @@ OpName %26 "in_uniform"
 OpName %29 "image_2d_array"
 OpName %31 "in_workgroup"
 OpName %33 "in_private"
-OpName %35 "in_function"
-OpName %38 "c"
-OpName %39 "i"
-OpName %40 "l"
-OpName %41 "mock_function"
+OpName %36 "in_function"
+OpName %40 "c"
+OpName %41 "i"
+OpName %42 "l"
+OpName %43 "mock_function"
 OpDecorate %14 ArrayStride 16
 OpMemberDecorate %15 0 Offset 0
 OpDecorate %16 ArrayStride 16
@@ -73,76 +73,78 @@ OpDecorate %29 Binding 2
 %32 = OpTypePointer Workgroup %19
 %31 = OpVariable  %32  Workgroup
 %34 = OpTypePointer Private %20
-%33 = OpVariable  %34  Private
-%36 = OpTypePointer Function %22
-%42 = OpTypeFunction %13 %21 %4 %4
-%43 = OpTypePointer StorageBuffer %15
-%45 = OpTypeInt 32 0
-%44 = OpConstant  %45  0
-%47 = OpTypePointer Uniform %17
-%54 = OpTypePointer StorageBuffer %14
-%55 = OpTypePointer StorageBuffer %13
-%58 = OpTypePointer Uniform %16
-%59 = OpTypePointer Uniform %13
-%63 = OpTypeVector %4 3
-%65 = OpTypeBool
-%66 = OpConstantNull  %13
-%72 = OpTypeVector %65 3
-%79 = OpTypePointer Workgroup %10
-%80 = OpConstant  %45  29
-%86 = OpTypePointer Private %10
-%87 = OpConstant  %45  39
-%93 = OpTypePointer Function %13
-%94 = OpConstant  %45  1
-%41 = OpFunction  %13  None %42
-%38 = OpFunctionParameter  %21
-%39 = OpFunctionParameter  %4
-%40 = OpFunctionParameter  %4
-%37 = OpLabel
-%35 = OpVariable  %36  Function
-%46 = OpAccessChain  %43  %23 %44
-%48 = OpAccessChain  %47  %26 %44
-%49 = OpLoad  %18  %29
-OpBranch %50
-%50 = OpLabel
-%51 = OpCompositeConstruct  %13  %9 %11 %11 %12
-%52 = OpCompositeConstruct  %13  %11 %9 %11 %12
-%53 = OpCompositeConstruct  %22  %51 %52
-OpStore %35 %53
-%56 = OpAccessChain  %55  %46 %44 %39
-%57 = OpLoad  %13  %56
-%60 = OpAccessChain  %59  %48 %44 %39
-%61 = OpLoad  %13  %60
-%62 = OpFAdd  %13  %57 %61
-%64 = OpCompositeConstruct  %63  %38 %39
-%67 = OpImageQueryLevels  %4  %49
-%68 = OpULessThan  %65  %40 %67
-OpSelectionMerge %69 None
-OpBranchConditional %68 %70 %69
-%70 = OpLabel
-%71 = OpImageQuerySizeLod  %63  %49 %40
-%73 = OpULessThan  %72  %64 %71
-%74 = OpAll  %65  %73
-OpBranchConditional %74 %75 %69
-%75 = OpLabel
-%76 = OpImageFetch  %13  %49 %64 Lod %40
-OpBranch %69
-%69 = OpLabel
-%77 = OpPhi  %13  %66 %50 %66 %70 %76 %75
-%78 = OpFAdd  %13  %62 %77
-%81 = OpExtInst  %45  %1 UMin %39 %80
-%82 = OpAccessChain  %79  %31 %81
-%83 = OpLoad  %10  %82
-%84 = OpCompositeConstruct  %13  %83 %83 %83 %83
-%85 = OpFAdd  %13  %78 %84
-%88 = OpExtInst  %45  %1 UMin %39 %87
-%89 = OpAccessChain  %86  %33 %88
-%90 = OpLoad  %10  %89
-%91 = OpCompositeConstruct  %13  %90 %90 %90 %90
-%92 = OpFAdd  %13  %85 %91
-%95 = OpExtInst  %45  %1 UMin %39 %94
-%96 = OpAccessChain  %93  %35 %95
-%97 = OpLoad  %13  %96
-%98 = OpFAdd  %13  %92 %97
-OpReturnValue %98
+%35 = OpConstantNull  %20
+%33 = OpVariable  %34  Private %35
+%37 = OpTypePointer Function %22
+%38 = OpConstantNull  %22
+%44 = OpTypeFunction %13 %21 %4 %4
+%45 = OpTypePointer StorageBuffer %15
+%47 = OpTypeInt 32 0
+%46 = OpConstant  %47  0
+%49 = OpTypePointer Uniform %17
+%56 = OpTypePointer StorageBuffer %14
+%57 = OpTypePointer StorageBuffer %13
+%60 = OpTypePointer Uniform %16
+%61 = OpTypePointer Uniform %13
+%65 = OpTypeVector %4 3
+%67 = OpTypeBool
+%68 = OpConstantNull  %13
+%74 = OpTypeVector %67 3
+%81 = OpTypePointer Workgroup %10
+%82 = OpConstant  %47  29
+%88 = OpTypePointer Private %10
+%89 = OpConstant  %47  39
+%95 = OpTypePointer Function %13
+%96 = OpConstant  %47  1
+%43 = OpFunction  %13  None %44
+%40 = OpFunctionParameter  %21
+%41 = OpFunctionParameter  %4
+%42 = OpFunctionParameter  %4
+%39 = OpLabel
+%36 = OpVariable  %37  Function %38
+%48 = OpAccessChain  %45  %23 %46
+%50 = OpAccessChain  %49  %26 %46
+%51 = OpLoad  %18  %29
+OpBranch %52
+%52 = OpLabel
+%53 = OpCompositeConstruct  %13  %9 %11 %11 %12
+%54 = OpCompositeConstruct  %13  %11 %9 %11 %12
+%55 = OpCompositeConstruct  %22  %53 %54
+OpStore %36 %55
+%58 = OpAccessChain  %57  %48 %46 %41
+%59 = OpLoad  %13  %58
+%62 = OpAccessChain  %61  %50 %46 %41
+%63 = OpLoad  %13  %62
+%64 = OpFAdd  %13  %59 %63
+%66 = OpCompositeConstruct  %65  %40 %41
+%69 = OpImageQueryLevels  %4  %51
+%70 = OpULessThan  %67  %42 %69
+OpSelectionMerge %71 None
+OpBranchConditional %70 %72 %71
+%72 = OpLabel
+%73 = OpImageQuerySizeLod  %65  %51 %42
+%75 = OpULessThan  %74  %66 %73
+%76 = OpAll  %67  %75
+OpBranchConditional %76 %77 %71
+%77 = OpLabel
+%78 = OpImageFetch  %13  %51 %66 Lod %42
+OpBranch %71
+%71 = OpLabel
+%79 = OpPhi  %13  %68 %52 %68 %72 %78 %77
+%80 = OpFAdd  %13  %64 %79
+%83 = OpExtInst  %47  %1 UMin %41 %82
+%84 = OpAccessChain  %81  %31 %83
+%85 = OpLoad  %10  %84
+%86 = OpCompositeConstruct  %13  %85 %85 %85 %85
+%87 = OpFAdd  %13  %80 %86
+%90 = OpExtInst  %47  %1 UMin %41 %89
+%91 = OpAccessChain  %88  %33 %90
+%92 = OpLoad  %10  %91
+%93 = OpCompositeConstruct  %13  %92 %92 %92 %92
+%94 = OpFAdd  %13  %87 %93
+%97 = OpExtInst  %47  %1 UMin %41 %96
+%98 = OpAccessChain  %95  %36 %97
+%99 = OpLoad  %13  %98
+%100 = OpFAdd  %13  %94 %99
+OpReturnValue %100
 OpFunctionEnd
