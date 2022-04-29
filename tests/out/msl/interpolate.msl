@@ -27,16 +27,16 @@ struct vert_mainOutput {
 };
 vertex vert_mainOutput vert_main(
 ) {
-    FragmentInput _out;
-    _out.position = metal::float4(2.0, 4.0, 5.0, 6.0);
-    _out._flat = 8u;
-    _out._linear = 27.0;
-    _out.linear_centroid = metal::float2(64.0, 125.0);
-    _out.linear_sample = metal::float3(216.0, 343.0, 512.0);
-    _out.perspective = metal::float4(729.0, 1000.0, 1331.0, 1728.0);
-    _out.perspective_centroid = 2197.0;
-    _out.perspective_sample = 2744.0;
-    FragmentInput _e30 = _out;
+    FragmentInput out;
+    out.position = metal::float4(2.0, 4.0, 5.0, 6.0);
+    out._flat = 8u;
+    out._linear = 27.0;
+    out.linear_centroid = metal::float2(64.0, 125.0);
+    out.linear_sample = metal::float3(216.0, 343.0, 512.0);
+    out.perspective = metal::float4(729.0, 1000.0, 1331.0, 1728.0);
+    out.perspective_centroid = 2197.0;
+    out.perspective_sample = 2744.0;
+    FragmentInput _e30 = out;
     const auto _tmp = _e30;
     return vert_mainOutput { _tmp.position, _tmp._flat, _tmp._linear, _tmp.linear_centroid, _tmp.linear_sample, _tmp.perspective, _tmp.perspective_centroid, _tmp.perspective_sample };
 }

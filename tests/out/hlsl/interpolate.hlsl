@@ -34,17 +34,17 @@ struct FragmentInput_frag_main {
 
 VertexOutput_vert_main vert_main()
 {
-    FragmentInput _out = (FragmentInput)0;
+    FragmentInput out_ = (FragmentInput)0;
 
-    _out.position = float4(2.0, 4.0, 5.0, 6.0);
-    _out._flat = 8u;
-    _out._linear = 27.0;
-    _out.linear_centroid = float2(64.0, 125.0);
-    _out.linear_sample = float3(216.0, 343.0, 512.0);
-    _out.perspective = float4(729.0, 1000.0, 1331.0, 1728.0);
-    _out.perspective_centroid = 2197.0;
-    _out.perspective_sample = 2744.0;
-    FragmentInput _expr30 = _out;
+    out_.position = float4(2.0, 4.0, 5.0, 6.0);
+    out_._flat = 8u;
+    out_._linear = 27.0;
+    out_.linear_centroid = float2(64.0, 125.0);
+    out_.linear_sample = float3(216.0, 343.0, 512.0);
+    out_.perspective = float4(729.0, 1000.0, 1331.0, 1728.0);
+    out_.perspective_centroid = 2197.0;
+    out_.perspective_sample = 2744.0;
+    FragmentInput _expr30 = out_;
     const FragmentInput fragmentinput = _expr30;
     const VertexOutput_vert_main fragmentinput_1 = { fragmentinput._flat, fragmentinput._linear, fragmentinput.linear_centroid, fragmentinput.linear_sample, fragmentinput.perspective, fragmentinput.perspective_centroid, fragmentinput.perspective_sample, fragmentinput.position };
     return fragmentinput_1;

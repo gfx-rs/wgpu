@@ -8,6 +8,6 @@ struct FragmentIn {
 }
 
 @fragment
-fn main(_in: FragmentIn) -> @location(0) vec4<f32> {
-    return _in.color * pc.multiplier;
+fn main(in: FragmentIn) -> @location(0) vec4<f32> {
+    return in.color * pc.multiplier;
 }

@@ -33,6 +33,6 @@ var r_texture: texture_cube<f32>;
 var r_sampler: sampler;
 
 @fragment
-fn fs_main(_in: VertexOutput) -> @location(0) vec4<f32> {
-    return textureSample(r_texture, r_sampler, _in.uv);
+fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
+    return textureSample(r_texture, r_sampler, in.uv);
 }

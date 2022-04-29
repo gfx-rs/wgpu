@@ -23,17 +23,17 @@ struct FragmentOutput {
 
 @fragment
 fn fragment(
-    _in: VertexOutput,
+    in: VertexOutput,
     @builtin(front_facing) front_facing: bool,
     @builtin(sample_index) sample_index: u32,
     @builtin(sample_mask) sample_mask: u32,
 ) -> FragmentOutput {
     let mask = sample_mask & (1u << sample_index);
     let color = select(0.0, 1.0, front_facing);
-    return FragmentOutput(_in._varying, mask, color);
+    return FragmentOutput(in._varying, mask, color);
 }
 
-var<workgroup> _output: array<u32, 1>;
+var<workgroup> output: array<u32, 1>;
 
 @compute @workgroup_size(1)
 fn compute(
@@ -43,7 +43,7 @@ fn compute(
     @builtin(workgroup_id) wg_id: vec3<u32>,
     @builtin(num_workgroups) num_wgs: vec3<u32>,
 ) {
-    _output[0] = global_id.x + local_id.x + local_index + wg_id.x + num_wgs.x;
+    output[0] = global_id.x + local_id.x + local_index + wg_id.x + num_wgs.x;
 }
 
 struct Input1 {

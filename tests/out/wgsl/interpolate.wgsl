@@ -11,17 +11,17 @@ struct FragmentInput {
 
 @vertex 
 fn vert_main() -> FragmentInput {
-    var _out: FragmentInput;
+    var out: FragmentInput;
 
-    _out.position = vec4<f32>(2.0, 4.0, 5.0, 6.0);
-    _out._flat = 8u;
-    _out._linear = 27.0;
-    _out.linear_centroid = vec2<f32>(64.0, 125.0);
-    _out.linear_sample = vec3<f32>(216.0, 343.0, 512.0);
-    _out.perspective = vec4<f32>(729.0, 1000.0, 1331.0, 1728.0);
-    _out.perspective_centroid = 2197.0;
-    _out.perspective_sample = 2744.0;
-    let _e30 = _out;
+    out.position = vec4<f32>(2.0, 4.0, 5.0, 6.0);
+    out._flat = 8u;
+    out._linear = 27.0;
+    out.linear_centroid = vec2<f32>(64.0, 125.0);
+    out.linear_sample = vec3<f32>(216.0, 343.0, 512.0);
+    out.perspective = vec4<f32>(729.0, 1000.0, 1331.0, 1728.0);
+    out.perspective_centroid = 2197.0;
+    out.perspective_sample = 2744.0;
+    let _e30 = out;
     return _e30;
 }
 

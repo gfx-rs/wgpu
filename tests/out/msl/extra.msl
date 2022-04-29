@@ -25,11 +25,11 @@ fragment main_Output main_(
 , uint primitive_index [[primitive_id]]
 , constant PushConstants& pc [[buffer(1)]]
 ) {
-    const FragmentIn _in = { varyings.color, primitive_index };
+    const FragmentIn in = { varyings.color, primitive_index };
     uint _e4 = pc.index;
-    if (_in.primitive_index == _e4) {
-        return main_Output { _in.color };
+    if (in.primitive_index == _e4) {
+        return main_Output { in.color };
     } else {
-        return main_Output { metal::float4(metal::float3(1.0) - _in.color.xyz, _in.color.w) };
+        return main_Output { metal::float4(metal::float3(1.0) - in.color.xyz, in.color.w) };
     }
 }
