@@ -45,7 +45,7 @@ void test_matrix_within_struct_accesses(
     constant Baz& baz
 ) {
     int idx = 9;
-    Baz t;
+    Baz t = {};
     int _e4 = idx;
     idx = _e4 - 1;
     metal::float3x2 unnamed = baz.m;
@@ -103,7 +103,7 @@ vertex foo_vertOutput foo_vert(
 , constant _mslBufferSizes& _buffer_sizes [[buffer(24)]]
 ) {
     float foo = 0.0;
-    type_16 c;
+    type_16 c = {};
     float baz_1 = foo;
     foo = 1.0;
     test_matrix_within_struct_accesses(baz);
@@ -139,7 +139,7 @@ kernel void atomics(
   device Bar& bar [[buffer(0)]]
 , constant _mslBufferSizes& _buffer_sizes [[buffer(24)]]
 ) {
-    int tmp;
+    int tmp = {};
     int value_1 = metal::atomic_load_explicit(&bar.atom, metal::memory_order_relaxed);
     int _e7 = metal::atomic_fetch_add_explicit(&bar.atom, 5, metal::memory_order_relaxed);
     tmp = _e7;

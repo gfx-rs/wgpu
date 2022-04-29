@@ -37,15 +37,15 @@ kernel void main_(
 , device Particles& particlesDst [[buffer(2)]]
 , constant _mslBufferSizes& _buffer_sizes [[buffer(3)]]
 ) {
-    metal::float2 vPos;
-    metal::float2 vVel;
-    metal::float2 cMass;
-    metal::float2 cVel;
-    metal::float2 colVel;
+    metal::float2 vPos = {};
+    metal::float2 vVel = {};
+    metal::float2 cMass = {};
+    metal::float2 cVel = {};
+    metal::float2 colVel = {};
     int cMassCount = 0;
     int cVelCount = 0;
-    metal::float2 pos;
-    metal::float2 vel;
+    metal::float2 pos = {};
+    metal::float2 vel = {};
     uint i = 0u;
     uint index = global_invocation_id.x;
     if (index >= NUM_PARTICLES) {

@@ -58,7 +58,7 @@ metal::float3 bool_cast(
 
 float constructors(
 ) {
-    Foo foo;
+    Foo foo = {};
     foo = Foo {metal::float4(1.0), 1};
     metal::float2x2 mat2comp = metal::float2x2(metal::float2(1.0, 0.0), metal::float2(0.0, 1.0));
     metal::float4x4 mat4comp = metal::float4x4(metal::float4(1.0, 0.0, 0.0, 0.0), metal::float4(0.0, 1.0, 0.0, 0.0), metal::float4(0.0, 0.0, 1.0, 0.0), metal::float4(0.0, 0.0, 0.0, 1.0));

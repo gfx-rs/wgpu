@@ -3269,15 +3269,20 @@ impl<W: Write> Writer<W> {
                 };
                 let local_name = &self.names[&NameKey::FunctionLocal(fun_handle, local_handle)];
                 write!(self.out, "{}{} {}", back::INDENT, ty_name, local_name)?;
-                if let Some(value) = local.init {
-                    let coco = ConstantContext {
-                        handle: value,
-                        arena: &module.constants,
-                        names: &self.names,
-                        first_time: false,
-                    };
-                    write!(self.out, " = {}", coco)?;
-                }
+                match local.init {
+                    Some(value) => {
+                        let coco = ConstantContext {
+                            handle: value,
+                            arena: &module.constants,
+                            names: &self.names,
+                            first_time: false,
+                        };
+                        write!(self.out, " = {}", coco)?;
+                    }
+                    None => {
+                        write!(self.out, " = {{}}")?;
+                    }
+                };
                 writeln!(self.out, ";")?;
             }
 
@@ -3801,15 +3806,20 @@ impl<W: Write> Writer<W> {
                     first_time: false,
                 };
                 write!(self.out, "{}{} {}", back::INDENT, ty_name, name)?;
-                if let Some(value) = local.init {
-                    let coco = ConstantContext {
-                        handle: value,
-                        arena: &module.constants,
-                        names: &self.names,
-                        first_time: false,
-                    };
-                    write!(self.out, " = {}", coco)?;
-                }
+                match local.init {
+                    Some(value) => {
+                        let coco = ConstantContext {
+                            handle: value,
+                            arena: &module.constants,
+                            names: &self.names,
+                            first_time: false,
+                        };
+                        write!(self.out, " = {}", coco)?;
+                    }
+                    None => {
+                        write!(self.out, " = {{}}")?;
+                    }
+                };
                 writeln!(self.out, ";")?;
             }
 

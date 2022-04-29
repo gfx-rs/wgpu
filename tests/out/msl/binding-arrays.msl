@@ -37,9 +37,9 @@ fragment main_Output main_(
 ) {
     const FragmentIn fragment_in = { varyings.index };
     int i1_ = 0;
-    metal::int2 i2_;
+    metal::int2 i2_ = {};
     float v1_ = 0.0;
-    metal::float4 v4_;
+    metal::float4 v4_ = {};
     uint uniform_index = uni.index;
     uint non_uniform_index = fragment_in.index;
     i2_ = metal::int2(0);

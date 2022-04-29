@@ -49,7 +49,7 @@ struct main_Input {
 kernel void main_(
   metal::uint3 global_id [[thread_position_in_grid]]
 ) {
-    int pos;
+    int pos = {};
     metal::threadgroup_barrier(metal::mem_flags::mem_device);
     metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);
     switch(1) {

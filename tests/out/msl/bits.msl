@@ -8,15 +8,15 @@ using metal::uint;
 kernel void main_(
 ) {
     int i = 0;
-    metal::int2 i2_;
-    metal::int3 i3_;
-    metal::int4 i4_;
+    metal::int2 i2_ = {};
+    metal::int3 i3_ = {};
+    metal::int4 i4_ = {};
     uint u = 0u;
-    metal::uint2 u2_;
-    metal::uint3 u3_;
-    metal::uint4 u4_;
-    metal::float2 f2_;
-    metal::float4 f4_;
+    metal::uint2 u2_ = {};
+    metal::uint3 u3_ = {};
+    metal::uint4 u4_ = {};
+    metal::float2 f2_ = {};
+    metal::float4 f4_ = {};
     i2_ = metal::int2(0);
     i3_ = metal::int3(0);
     i4_ = metal::int4(0);

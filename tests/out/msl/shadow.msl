@@ -65,7 +65,7 @@ vertex vs_mainOutput vs_main(
 ) {
     const auto position = varyings.position;
     const auto normal = varyings.normal;
-    VertexOutput out;
+    VertexOutput out = {};
     metal::float4x4 w = u_entity.world;
     metal::float4x4 _e7 = u_entity.world;
     metal::float4 world_pos = _e7 * static_cast<metal::float4>(position);

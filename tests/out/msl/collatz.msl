@@ -16,7 +16,7 @@ struct PrimeIndices {
 uint collatz_iterations(
     uint n_base
 ) {
-    uint n;
+    uint n = {};
     uint i = 0u;
     n = n_base;
     while(true) {

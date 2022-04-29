@@ -42,7 +42,7 @@ metal::float4 mock_function(
     threadgroup type_5 const& in_workgroup,
     thread type_6 const& in_private
 ) {
-    type_9 in_function;
+    type_9 in_function = {};
     for(int _i=0; _i<2; ++_i) in_function.inner[_i] = type_9 {metal::float4(0.7070000171661377, 0.0, 0.0, 1.0), metal::float4(0.0, 0.7070000171661377, 0.0, 1.0)}.inner[_i];
     metal::float4 _e22 = in_storage.a.inner[i];
     metal::float4 _e25 = in_uniform.a.inner[i];
