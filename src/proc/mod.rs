@@ -67,6 +67,15 @@ impl super::ScalarValue {
     }
 }
 
+impl super::ScalarKind {
+    pub const fn is_numeric(self) -> bool {
+        match self {
+            crate::ScalarKind::Sint | crate::ScalarKind::Uint | crate::ScalarKind::Float => true,
+            crate::ScalarKind::Bool => false,
+        }
+    }
+}
+
 pub const POINTER_SPAN: u32 = 4;
 
 impl super::TypeInner {

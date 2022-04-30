@@ -227,13 +227,17 @@ impl super::Validator {
                 if !self.check_width(kind, width) {
                     return Err(TypeError::InvalidWidth(kind, width));
                 }
+                let shareable = if kind.is_numeric() {
+                    TypeFlags::IO_SHAREABLE | TypeFlags::HOST_SHAREABLE
+                } else {
+                    TypeFlags::empty()
+                };
                 TypeInfo::new(
                     TypeFlags::DATA
                         | TypeFlags::SIZED
                         | TypeFlags::COPY
-                        | TypeFlags::IO_SHAREABLE
-                        | TypeFlags::HOST_SHAREABLE
-                        | TypeFlags::ARGUMENT,
+                        | TypeFlags::ARGUMENT
+                        | shareable,
                     width as u32,
                 )
             }
@@ -241,14 +245,19 @@ impl super::Validator {
                 if !self.check_width(kind, width) {
                     return Err(TypeError::InvalidWidth(kind, width));
                 }
+                let shareable = if kind.is_numeric() {
+                    TypeFlags::IO_SHAREABLE | TypeFlags::HOST_SHAREABLE
+                } else {
+                    TypeFlags::empty()
+                };
                 let count = if size >= crate::VectorSize::Tri { 4 } else { 2 };
                 TypeInfo::new(
                     TypeFlags::DATA
                         | TypeFlags::SIZED
                         | TypeFlags::COPY
-                        | TypeFlags::IO_SHAREABLE
                         | TypeFlags::HOST_SHAREABLE
-                        | TypeFlags::ARGUMENT,
+                        | TypeFlags::ARGUMENT
+                        | shareable,
                     count * (width as u32),
                 )
             }
@@ -265,7 +274,6 @@ impl super::Validator {
                     TypeFlags::DATA
                         | TypeFlags::SIZED
                         | TypeFlags::COPY
-                        | TypeFlags::IO_SHAREABLE
                         | TypeFlags::HOST_SHAREABLE
                         | TypeFlags::ARGUMENT,
                     count * (width as u32),
@@ -469,8 +477,7 @@ impl super::Validator {
                     }
                 };
 
-                let base_mask =
-                    TypeFlags::COPY | TypeFlags::HOST_SHAREABLE | TypeFlags::IO_SHAREABLE;
+                let base_mask = TypeFlags::COPY | TypeFlags::HOST_SHAREABLE;
                 TypeInfo {
                     flags: TypeFlags::DATA | (base_info.flags & base_mask) | sized_flag,
                     uniform_layout,

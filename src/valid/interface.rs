@@ -39,6 +39,8 @@ pub enum GlobalVariableError {
 pub enum VaryingError {
     #[error("The type {0:?} does not match the varying")]
     InvalidType(Handle<crate::Type>),
+    #[error("The type {0:?} cannot be used for user-defined entry point inputs or outputs")]
+    NotIOShareableType(Handle<crate::Type>),
     #[error("Interpolation is not valid")]
     InvalidInterpolation,
     #[error("Interpolation must be specified on vertex shader outputs and fragment shader inputs")]
@@ -101,6 +103,7 @@ struct VaryingContext<'a> {
     stage: crate::ShaderStage,
     output: bool,
     types: &'a UniqueArena<crate::Type>,
+    type_info: &'a Vec<super::r#type::TypeInfo>,
     location_mask: &'a mut BitSet,
     built_ins: &'a mut crate::FastHashSet<crate::BuiltIn>,
     capabilities: Capabilities,
@@ -270,6 +273,13 @@ impl VaryingContext<'_> {
                 interpolation,
                 sampling,
             } => {
+                // Only IO-shareable types may be stored in locations.
+                if !self.type_info[ty.index()]
+                    .flags
+                    .contains(super::TypeFlags::IO_SHAREABLE)
+                {
+                    return Err(VaryingError::NotIOShareableType(ty));
+                }
                 if !self.location_mask.insert(location as usize) {
                     return Err(VaryingError::BindingCollision { location });
                 }
@@ -485,6 +495,7 @@ impl super::Validator {
                 stage: ep.stage,
                 output: false,
                 types: &module.types,
+                type_info: &self.types,
                 location_mask: &mut self.location_mask,
                 built_ins: &mut argument_built_ins,
                 capabilities: self.capabilities,
@@ -500,6 +511,7 @@ impl super::Validator {
                 stage: ep.stage,
                 output: true,
                 types: &module.types,
+                type_info: &self.types,
                 location_mask: &mut self.location_mask,
                 built_ins: &mut result_built_ins,
                 capabilities: self.capabilities,

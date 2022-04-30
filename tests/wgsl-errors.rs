@@ -1362,3 +1362,109 @@ fn wrong_access_mode() {
             if name == "store"
     }
 }
+
+#[test]
+fn io_shareable_types() {
+    for numeric in "i32 u32 f32".split_whitespace() {
+        let types = format!(
+            "{} vec2<{}> vec3<{}> vec4<{}>",
+            numeric, numeric, numeric, numeric
+        );
+        for ty in types.split_whitespace() {
+            check_one_validation! {
+                &format!("@vertex
+                          fn f(@location(0) arg: {}) -> @builtin(position) vec4<f32>
+                          {{ return vec4<f32>(0.0); }}",
+                         ty),
+                Ok(_module)
+            }
+        }
+    }
+
+    for ty in "bool
+               vec2<bool> vec3<bool> vec4<bool>
+               array<f32,4>
+               mat2x2<f32>
+               ptr<function,f32>"
+        .split_whitespace()
+    {
+        check_one_validation! {
+            &format!("@vertex
+                          fn f(@location(0) arg: {}) -> @builtin(position) vec4<f32>
+                          {{ return vec4<f32>(0.0); }}",
+                     ty),
+            Err(
+                naga::valid::ValidationError::EntryPoint {
+                    stage: naga::ShaderStage::Vertex,
+                    name,
+                    error: naga::valid::EntryPointError::Argument(
+                        0,
+                        naga::valid::VaryingError::NotIOShareableType(
+                            _,
+                        ),
+                    ),
+                },
+            )
+            if name == "f"
+        }
+    }
+}
+
+#[test]
+fn host_shareable_types() {
+    // Host-shareable, constructible types.
+    let types = "i32 u32 f32
+                 vec2<i32> vec3<u32> vec4<f32>
+                 mat4x4<f32>
+                 array<mat4x4<f32>,4>
+                 AStruct";
+    for ty in types.split_whitespace() {
+        check_one_validation! {
+            &format!("struct AStruct {{ member: array<mat4x4<f32>, 8> }};
+                      @group(0) @binding(0) var<uniform> ubuf: {};
+                      @group(0) @binding(1) var<storage> sbuf: {};",
+                     ty, ty),
+            Ok(_module)
+        }
+    }
+
+    // Host-shareable but not constructible types.
+    let types = "atomic<i32> atomic<u32>
+                 array<atomic<u32>,4>
+                 array<u32>
+                 AStruct";
+    for ty in types.split_whitespace() {
+        check_one_validation! {
+            &format!("struct AStruct {{ member: array<atomic<u32>, 8> }};
+                      @group(0) @binding(1) var<storage> sbuf: {};",
+                     ty),
+            Ok(_module)
+        }
+    }
+
+    // Types that are neither host-shareable nor constructible.
+    for ty in "bool ptr<storage,i32>".split_whitespace() {
+        check_one_validation! {
+            &format!("@group(0) @binding(0) var<storage> sbuf: {};", ty),
+            Err(
+                naga::valid::ValidationError::GlobalVariable {
+                    name,
+                    handle: _,
+                    error: naga::valid::GlobalVariableError::MissingTypeFlags { .. },
+                },
+            )
+            if name == "sbuf"
+        }
+
+        check_one_validation! {
+            &format!("@group(0) @binding(0) var<uniform> ubuf: {};", ty),
+            Err(naga::valid::ValidationError::GlobalVariable {
+                    name,
+                    handle: _,
+                    error: naga::valid::GlobalVariableError::MissingTypeFlags { .. },
+                },
+            )
+            if name == "ubuf"
+        }
+    }
+}
