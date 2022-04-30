@@ -133,9 +133,17 @@ pub enum HirExprKind {
     },
     Variable(VariableReference),
     Call(FunctionCall),
+    /// Represents the ternary operator in glsl (`:?`)
     Conditional {
+        /// The expression that will decide which branch to take, must evaluate to a boolean
         condition: Handle<HirExpr>,
+        /// The expression that will be evaluated if [`condition`][condition] returns `true`
+        ///
+        /// [condition]: Self::Conditional::condition
         accept: Handle<HirExpr>,
+        /// The expression that will be evaluated if [`condition`][condition] returns `false`
+        ///
+        /// [condition]: Self::Conditional::condition
         reject: Handle<HirExpr>,
     },
     Assign {

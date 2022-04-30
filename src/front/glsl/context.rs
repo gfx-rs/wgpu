@@ -1069,35 +1069,138 @@ impl Context {
                 )?;
                 return Ok((maybe_expr, meta));
             }
+            // `HirExprKind::Conditional` represents the ternary operator in glsl (`:?`)
+            //
+            // The ternary operator is defined to only evaluate one of the two possible
+            // expressions which means that it's behavior is that of an `if` statement,
+            // and it's merely syntatic sugar for it.
             HirExprKind::Conditional {
                 condition,
                 accept,
                 reject,
             } if ExprPos::Lhs != pos => {
+                // Lower the condition first to the current bodyy
                 let condition = self
                     .lower_expect_inner(stmt, parser, condition, ExprPos::Rhs, body)?
                     .0;
+
+                // Emit all expressions since we will be adding statements to
+                // other bodies next
+                self.emit_flush(body);
+                self.emit_start();
+
+                // Create the bodies for the two cases
+                let mut accept_body = Block::new();
+                let mut reject_body = Block::new();
+
+                // Lower the `true` branch
                 let (mut accept, accept_meta) =
-                    self.lower_expect_inner(stmt, parser, accept, pos, body)?;
+                    self.lower_expect_inner(stmt, parser, accept, pos, &mut accept_body)?;
+
+                // Flush the body of the `true` branch, to start emitting on the
+                // `false` branch
+                self.emit_flush(&mut accept_body);
+                self.emit_start();
+
+                // Lower the `false` branch
                 let (mut reject, reject_meta) =
-                    self.lower_expect_inner(stmt, parser, reject, pos, body)?;
+                    self.lower_expect_inner(stmt, parser, reject, pos, &mut reject_body)?;
 
-                self.binary_implicit_conversion(
-                    parser,
-                    &mut accept,
+                // Flush the body of the `false` branch
+                self.emit_flush(&mut reject_body);
+                self.emit_start();
+
+                // We need to do some custom implicit conversions since the two target expressions
+                // are in different bodies
+                if let (
+                    Some((accept_power, accept_width, accept_kind)),
+                    Some((reject_power, reject_width, reject_kind)),
+                ) = (
+                    // Get the components of both branches and calculate the type power
+                    self.expr_scalar_components(parser, accept, accept_meta)?
+                        .and_then(|(kind, width)| Some((type_power(kind, width)?, width, kind))),
+                    self.expr_scalar_components(parser, reject, reject_meta)?
+                        .and_then(|(kind, width)| Some((type_power(kind, width)?, width, kind))),
+                ) {
+                    match accept_power.cmp(&reject_power) {
+                        std::cmp::Ordering::Less => {
+                            self.conversion(&mut accept, accept_meta, reject_kind, reject_width)?;
+                            // The expression belongs to the `true` branch so we need to flush to
+                            // the respective body
+                            self.emit_flush(&mut accept_body);
+                        }
+                        // Technically there's nothing to flush but we need to add some
+                        // expressions that must not be emitted so instead of flushing,
+                        // starting and flushing again, just make sure everything is
+                        // flushed.
+                        std::cmp::Ordering::Equal => self.emit_flush(body),
+                        std::cmp::Ordering::Greater => {
+                            self.conversion(&mut reject, reject_meta, accept_kind, accept_width)?;
+                            // The expression belongs to the `false` branch so we need to flush to
+                            // the respective body
+                            self.emit_flush(&mut reject_body);
+                        }
+                    }
+                }
+
+                // We need to get the type of the resulting expression to create the local,
+                // this must be done after implicit conversions to ensure both branches have
+                // the same type.
+                let ty = parser.resolve_type_handle(self, accept, accept_meta)?;
+
+                // Add the local that will hold the result of our conditional
+                let local = self.locals.append(
+                    LocalVariable {
+                        name: None,
+                        ty,
+                        init: None,
+                    },
+                    Span::default(),
+                );
+
+                // Note: `Expression::LocalVariable` must not be emited so it's important
+                // that at this point the emitter is flushed but not started.
+                let local_expr = self
+                    .expressions
+                    .append(Expression::LocalVariable(local), meta);
+
+                // Add to each body the store to the result variable
+                accept_body.push(
+                    Statement::Store {
+                        pointer: local_expr,
+                        value: accept,
+                    },
                     accept_meta,
-                    &mut reject,
+                );
+                reject_body.push(
+                    Statement::Store {
+                        pointer: local_expr,
+                        value: reject,
+                    },
                     reject_meta,
-                )?;
+                );
 
-                self.add_expression(
-                    Expression::Select {
+                // Finally add the `If` to the main body with the `condition` we lowered
+                // earlier and the branches we prepared.
+                body.push(
+                    Statement::If {
                         condition,
-                        accept,
-                        reject,
+                        accept: accept_body,
+                        reject: reject_body,
                     },
                     meta,
-                    body,
+                );
+
+                // Restart the emitter
+                self.emit_start();
+
+                // Note: `Expression::Load` must be emited before it's used so make
+                // sure the emitter is active here.
+                self.expressions.append(
+                    Expression::Load {
+                        pointer: local_expr,
+                    },
+                    meta,
                 )
             }
             HirExprKind::Assign { tgt, value } if ExprPos::Lhs != pos => {

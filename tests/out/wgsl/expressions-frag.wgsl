@@ -299,13 +299,66 @@ fn privatePointer(a_19: ptr<function, f32>) {
     return;
 }
 
+fn ternary(a_20: bool) {
+    var a_21: bool;
+    var local: u32;
+    var b_17: u32;
+    var local_1: u32;
+    var c_1: u32;
+    var local_2: u32;
+    var local_3: u32;
+    var local_4: u32;
+    var nested: u32;
+
+    a_21 = a_20;
+    let _e3 = a_21;
+    if _e3 {
+        local = u32(0);
+    } else {
+        local = 1u;
+    }
+    let _e8 = local;
+    b_17 = _e8;
+    let _e10 = a_21;
+    if _e10 {
+        local_1 = 0u;
+    } else {
+        local_1 = u32(1);
+    }
+    let _e15 = local_1;
+    c_1 = _e15;
+    let _e17 = a_21;
+    if _e17 {
+        let _e18 = a_21;
+        if _e18 {
+            let _e19 = a_21;
+            if _e19 {
+                local_2 = 0u;
+            } else {
+                local_2 = u32(1);
+            }
+            let _e24 = local_2;
+            local_3 = _e24;
+        } else {
+            local_3 = 1u;
+        }
+        let _e27 = local_3;
+        local_4 = _e27;
+    } else {
+        local_4 = u32(1);
+    }
+    let _e31 = local_4;
+    nested = _e31;
+    return;
+}
+
 fn main_1() {
-    var local: f32;
+    var local_5: f32;
 
     let _e3 = global;
-    local = _e3;
-    privatePointer((&local));
-    let _e5 = local;
+    local_5 = _e3;
+    privatePointer((&local_5));
+    let _e5 = local_5;
     global = _e5;
     let _e6 = o_color;
     let _e9 = vec4<f32>(1.0);

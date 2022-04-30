@@ -121,6 +121,13 @@ void testNonImplicitCastVectorCast() {
 float global;
 void privatePointer(inout float a) {}
 
+void ternary(bool a) {
+    uint b = a ? 0 : 1u;
+    uint c = a ? 0u : 1;
+
+    uint nested = a ? (a ? (a ? 0u : 1) : 1u) : 1;
+}
+
 out vec4 o_color;
 void main() {
     privatePointer(global);

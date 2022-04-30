@@ -225,6 +225,18 @@ pub const fn type_power(kind: ScalarKind, width: Bytes) -> Option<u32> {
 }
 
 impl Parser {
+    /// Resolves the types of the expressions until `handle` (inclusive)
+    ///
+    /// This needs to be done before the [`typifier`][typifier] can be queried for
+    /// the types of the expressions in the range between the last grow and `handle`.
+    ///
+    /// # Note
+    ///
+    /// The `resolve_type*` methods (like [`resolve_type`][Self::resolve_type]) automatically
+    /// grow the [`typifier`][typifier] so calling this method is not necessary when using
+    /// them.
+    ///
+    /// [typifier]: Context::typifier
     pub(crate) fn typifier_grow(
         &self,
         ctx: &mut Context,
@@ -248,6 +260,12 @@ impl Parser {
             })
     }
 
+    /// Gets the type for the result of the `handle` expression
+    ///
+    /// Automatically grows the [`typifier`][typifier] to `handle` so calling
+    /// [`typifier_grow`][Self::typifier_grow] is not necessary
+    ///
+    /// [typifier]: Context::typifier
     pub(crate) fn resolve_type<'b>(
         &'b self,
         ctx: &'b mut Context,
@@ -256,6 +274,42 @@ impl Parser {
     ) -> Result<&'b TypeInner> {
         self.typifier_grow(ctx, handle, meta)?;
         Ok(ctx.typifier.get(handle, &self.module.types))
+    }
+
+    /// Gets the type handle for the result of the `handle` expression
+    ///
+    /// Automatically grows the [`typifier`][typifier] to `handle` so calling
+    /// [`typifier_grow`][Self::typifier_grow] is not necessary
+    ///
+    /// # Note
+    ///
+    /// Consider using [`resolve_type`][Self::resolve_type] whenever possible
+    /// since it doesn't require adding each type to the [`types`][types] arena
+    /// and it doesn't need to mutably borrow the [`Parser`][Self]
+    ///
+    /// [typifier]: Context::typifier
+    /// [types]: crate::Module::types
+    pub(crate) fn resolve_type_handle(
+        &mut self,
+        ctx: &mut Context,
+        handle: Handle<Expression>,
+        meta: Span,
+    ) -> Result<Handle<Type>> {
+        self.typifier_grow(ctx, handle, meta)?;
+        let resolution = &ctx.typifier[handle];
+        Ok(match *resolution {
+            // If the resolution is already a handle return early
+            crate::proc::TypeResolution::Handle(handle) => handle,
+            // If it's a value we need to clone it
+            crate::proc::TypeResolution::Value(_) => match resolution.clone() {
+                // This is unreachable
+                crate::proc::TypeResolution::Handle(handle) => handle,
+                // Add the value to the type arena and return the handle
+                crate::proc::TypeResolution::Value(inner) => {
+                    self.module.types.insert(Type { name: None, inner }, meta)
+                }
+            },
+        })
     }
 
     /// Invalidates the cached type resolution for `handle` forcing a recomputation
