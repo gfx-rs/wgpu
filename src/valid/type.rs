@@ -323,12 +323,28 @@ impl super::Validator {
                 size: _,
                 kind,
                 width,
-                space: _,
+                space,
             } => {
+                // ValuePointer should be treated the same way as the equivalent
+                // Pointer / Scalar / Vector combination, so each step in those
+                // variants' match arms should have a counterpart here.
+                //
+                // However, some cases are trivial: All our implicit base types
+                // are DATA and SIZED, so we can never return
+                // `InvalidPointerBase` or `InvalidPointerToUnsized`.
                 if !self.check_width(kind, width) {
                     return Err(TypeError::InvalidWidth(kind, width));
                 }
-                TypeInfo::new(TypeFlags::DATA | TypeFlags::SIZED | TypeFlags::COPY, 0)
+
+                use crate::AddressSpace as As;
+                let argument_flag = match space {
+                    As::Function | As::Private | As::WorkGroup => TypeFlags::ARGUMENT,
+                    As::Uniform | As::Storage { .. } | As::Handle | As::PushConstant => {
+                        TypeFlags::empty()
+                    }
+                };
+
+                TypeInfo::new(argument_flag | TypeFlags::SIZED | TypeFlags::COPY, 0)
             }
             Ti::Array { base, size, stride } => {
                 if base >= handle {
