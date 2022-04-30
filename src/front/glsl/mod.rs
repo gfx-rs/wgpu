@@ -190,7 +190,7 @@ impl Parser {
         self.layouter.clear();
 
         // This is necessary because if the last parsing errored out, the module
-        // wouldn't have been swapped
+        // wouldn't have been taken
         self.module = Module::default();
     }
 
@@ -213,13 +213,9 @@ impl Parser {
         }
 
         if self.errors.is_empty() {
-            let mut module = Module::default();
-            std::mem::swap(&mut self.module, &mut module);
-            Ok(module)
+            Ok(std::mem::take(&mut self.module))
         } else {
-            let mut errors = Vec::new();
-            std::mem::swap(&mut self.errors, &mut errors);
-            Err(errors)
+            Err(std::mem::take(&mut self.errors))
         }
     }
 
