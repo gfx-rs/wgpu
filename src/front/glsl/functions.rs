@@ -972,7 +972,7 @@ impl Parser {
 
         match kind {
             FunctionKind::Call(function) => {
-                ctx.emit_flush(body);
+                ctx.emit_end(body);
 
                 let result = if !is_void {
                     Some(ctx.add_expression(Expression::CallResult(function), meta, body))
@@ -995,8 +995,7 @@ impl Parser {
                 for (original, pointer) in proxy_writes {
                     let value = ctx.add_expression(Expression::Load { pointer }, meta, body);
 
-                    ctx.emit_flush(body);
-                    ctx.emit_start();
+                    ctx.emit_restart(body);
 
                     body.push(
                         Statement::Store {

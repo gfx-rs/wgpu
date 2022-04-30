@@ -103,8 +103,7 @@ impl<'source> ParsingContext<'source> {
                     }
                 };
 
-                ctx.emit_flush(body);
-                ctx.emit_start();
+                ctx.emit_restart(body);
 
                 body.push(Statement::Return { value }, meta);
                 terminator.get_or_insert(body.len());
@@ -132,8 +131,7 @@ impl<'source> ParsingContext<'source> {
                 };
                 self.expect(parser, TokenValue::RightParen)?;
 
-                ctx.emit_flush(body);
-                ctx.emit_start();
+                ctx.emit_restart(body);
 
                 let mut accept = Block::new();
                 if let Some(more_meta) =
@@ -176,8 +174,7 @@ impl<'source> ParsingContext<'source> {
 
                 self.expect(parser, TokenValue::RightParen)?;
 
-                ctx.emit_flush(body);
-                ctx.emit_start();
+                ctx.emit_restart(body);
 
                 let mut cases = Vec::new();
 
@@ -301,8 +298,7 @@ impl<'source> ParsingContext<'source> {
                     &mut loop_body,
                 );
 
-                ctx.emit_flush(&mut loop_body);
-                ctx.emit_start();
+                ctx.emit_restart(&mut loop_body);
 
                 loop_body.push(
                     Statement::If {
@@ -359,8 +355,7 @@ impl<'source> ParsingContext<'source> {
                     &mut loop_body,
                 );
 
-                ctx.emit_flush(&mut loop_body);
-                ctx.emit_start();
+                ctx.emit_restart(&mut loop_body);
 
                 loop_body.push(
                     Statement::If {
@@ -427,8 +422,7 @@ impl<'source> ParsingContext<'source> {
 
                             let pointer = parser.add_local_var(ctx, &mut block, decl)?;
 
-                            ctx.emit_flush(&mut block);
-                            ctx.emit_start();
+                            ctx.emit_restart(&mut block);
 
                             block.push(Statement::Store { pointer, value }, meta);
 
@@ -448,8 +442,7 @@ impl<'source> ParsingContext<'source> {
                         &mut block,
                     );
 
-                    ctx.emit_flush(&mut block);
-                    ctx.emit_start();
+                    ctx.emit_restart(&mut block);
 
                     block.push(
                         Statement::If {

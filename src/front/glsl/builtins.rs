@@ -1837,7 +1837,7 @@ impl MacroCall {
             MacroCall::ImageStore => {
                 let comps =
                     parser.coordinate_components(ctx, args[0], args[1], None, meta, body)?;
-                ctx.emit_flush(body);
+                ctx.emit_restart(body);
                 body.push(
                     crate::Statement::ImageStore {
                         image: args[0],
@@ -1847,7 +1847,6 @@ impl MacroCall {
                     },
                     meta,
                 );
-                ctx.emit_start();
                 return Ok(None);
             }
             MacroCall::MathFunction(fun) => ctx.add_expression(
@@ -2038,8 +2037,7 @@ impl MacroCall {
                 body,
             ),
             MacroCall::Barrier => {
-                ctx.emit_flush(body);
-                ctx.emit_start();
+                ctx.emit_restart(body);
                 body.push(crate::Statement::Barrier(crate::Barrier::all()), meta);
                 return Ok(None);
             }

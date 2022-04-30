@@ -101,7 +101,7 @@ impl Context {
         }: GlobalLookup,
         body: &mut Block,
     ) {
-        self.emit_flush(body);
+        self.emit_end(body);
         let (expr, load, constant) = match kind {
             GlobalLookupKind::Variable(v) => {
                 let span = parser.module.global_variables.get_span(v);
@@ -170,12 +170,35 @@ impl Context {
         self.lookup_global_var_exps.insert(name.into(), var);
     }
 
+    /// Starts the expression emitter
+    ///
+    /// # Panics
+    ///
+    /// - If called twice in a row without calling [`emit_end`][Self::emit_end].
+    #[inline]
     pub fn emit_start(&mut self) {
         self.emitter.start(&self.expressions)
     }
 
-    pub fn emit_flush(&mut self, body: &mut Block) {
+    /// Emits all the expressions captured by the emitter to the passed `body`
+    ///
+    /// # Panics
+    ///
+    /// - If called before calling [`emit_start`][Self::emit_start].
+    /// - If called twice in a row without calling [`emit_start`][Self::emit_start].
+    pub fn emit_end(&mut self, body: &mut Block) {
         body.extend(self.emitter.finish(&self.expressions))
+    }
+
+    /// Emits all the expressions captured by the emitter to the passed `body`
+    /// and starts the emitter again
+    ///
+    /// # Panics
+    ///
+    /// - If called before calling [`emit_start`][Self::emit_start].
+    pub fn emit_restart(&mut self, body: &mut Block) {
+        self.emit_end(body);
+        self.emit_start()
     }
 
     pub fn add_expression(
@@ -186,7 +209,7 @@ impl Context {
     ) -> Handle<Expression> {
         let needs_pre_emit = expr.needs_pre_emit();
         if needs_pre_emit {
-            self.emit_flush(body);
+            self.emit_end(body);
         }
         let handle = self.expressions.append(expr, meta);
         if needs_pre_emit {
@@ -292,8 +315,7 @@ impl Context {
                 );
                 let local_expr = self.add_expression(Expression::LocalVariable(handle), meta, body);
 
-                self.emit_flush(body);
-                self.emit_start();
+                self.emit_restart(body);
 
                 body.push(
                     Statement::Store {
@@ -462,8 +484,7 @@ impl Context {
                     body,
                 );
 
-                self.emit_flush(body);
-                self.emit_start();
+                self.emit_restart(body);
 
                 body.push(
                     Statement::Store {
@@ -474,8 +495,7 @@ impl Context {
                 );
             }
         } else {
-            self.emit_flush(body);
-            self.emit_start();
+            self.emit_restart(body);
 
             body.push(Statement::Store { pointer, value }, meta);
         }
@@ -1086,8 +1106,7 @@ impl Context {
 
                 // Emit all expressions since we will be adding statements to
                 // other bodies next
-                self.emit_flush(body);
-                self.emit_start();
+                self.emit_restart(body);
 
                 // Create the bodies for the two cases
                 let mut accept_body = Block::new();
@@ -1099,16 +1118,14 @@ impl Context {
 
                 // Flush the body of the `true` branch, to start emitting on the
                 // `false` branch
-                self.emit_flush(&mut accept_body);
-                self.emit_start();
+                self.emit_restart(&mut accept_body);
 
                 // Lower the `false` branch
                 let (mut reject, reject_meta) =
                     self.lower_expect_inner(stmt, parser, reject, pos, &mut reject_body)?;
 
                 // Flush the body of the `false` branch
-                self.emit_flush(&mut reject_body);
-                self.emit_start();
+                self.emit_restart(&mut reject_body);
 
                 // We need to do some custom implicit conversions since the two target expressions
                 // are in different bodies
@@ -1127,18 +1144,18 @@ impl Context {
                             self.conversion(&mut accept, accept_meta, reject_kind, reject_width)?;
                             // The expression belongs to the `true` branch so we need to flush to
                             // the respective body
-                            self.emit_flush(&mut accept_body);
+                            self.emit_end(&mut accept_body);
                         }
                         // Technically there's nothing to flush but we need to add some
                         // expressions that must not be emitted so instead of flushing,
                         // starting and flushing again, just make sure everything is
                         // flushed.
-                        std::cmp::Ordering::Equal => self.emit_flush(body),
+                        std::cmp::Ordering::Equal => self.emit_end(body),
                         std::cmp::Ordering::Greater => {
                             self.conversion(&mut reject, reject_meta, accept_kind, accept_width)?;
                             // The expression belongs to the `false` branch so we need to flush to
                             // the respective body
-                            self.emit_flush(&mut reject_body);
+                            self.emit_end(&mut reject_body);
                         }
                     }
                 }
