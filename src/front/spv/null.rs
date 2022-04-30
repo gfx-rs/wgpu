@@ -158,7 +158,7 @@ pub fn generate_default_built_in(
             width: 4,
         },
         Some(crate::BuiltIn::SampleMask) => crate::ConstantInner::Scalar {
-            value: crate::ScalarValue::Uint(!0),
+            value: crate::ScalarValue::Uint(u64::MAX),
             width: 4,
         },
         //Note: `crate::BuiltIn::ClipDistance` is intentionally left for the default path

@@ -77,7 +77,7 @@ impl<T> hash::Hash for Handle<T> {
 impl<T> Handle<T> {
     #[cfg(test)]
     pub const DUMMY: Self = Handle {
-        index: unsafe { NonZeroU32::new_unchecked(!0) },
+        index: unsafe { NonZeroU32::new_unchecked(u32::MAX) },
         marker: PhantomData,
     };
 

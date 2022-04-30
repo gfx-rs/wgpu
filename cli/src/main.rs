@@ -340,7 +340,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             println!("Validation successful");
             return Ok(());
         } else {
-            std::process::exit(!0);
+            std::process::exit(-1);
         }
     }
 

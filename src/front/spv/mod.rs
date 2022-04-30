@@ -2453,7 +2453,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     let mut max_component = 0;
                     for _ in 5..inst.wc as usize {
                         let mut index = self.next()?;
-                        if index == !0 {
+                        if index == u32::MAX {
                             // treat Undefined as X
                             index = 0;
                         }

@@ -131,7 +131,7 @@ impl crate::Expression {
     const fn bake_ref_count(&self) -> usize {
         match *self {
             // accesses are never cached, only loads are
-            crate::Expression::Access { .. } | crate::Expression::AccessIndex { .. } => !0,
+            crate::Expression::Access { .. } | crate::Expression::AccessIndex { .. } => usize::MAX,
             // sampling may use the control flow, and image ops look better by themselves
             crate::Expression::ImageSample { .. } | crate::Expression::ImageLoad { .. } => 1,
             // derivatives use the control flow

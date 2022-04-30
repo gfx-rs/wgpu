@@ -3878,7 +3878,7 @@ fn test_stack_size() {
 
     {
         // check expression stack
-        let mut addresses = !0usize..0usize;
+        let mut addresses = usize::MAX..0usize;
         for pointer in writer.put_expression_stack_pointers {
             addresses.start = addresses.start.min(pointer as usize);
             addresses.end = addresses.end.max(pointer as usize);
@@ -3893,7 +3893,7 @@ fn test_stack_size() {
 
     {
         // check block stack
-        let mut addresses = !0usize..0usize;
+        let mut addresses = usize::MAX..0usize;
         for pointer in writer.put_block_stack_pointers {
             addresses.start = addresses.start.min(pointer as usize);
             addresses.end = addresses.end.max(pointer as usize);
