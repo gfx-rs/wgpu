@@ -7,11 +7,9 @@
 ![MSRV](https://img.shields.io/badge/rustc-1.56+-blue.svg)
 [![codecov.io](https://codecov.io/gh/gfx-rs/naga/branch/master/graph/badge.svg?token=9VOKYO8BM2)](https://codecov.io/gh/gfx-rs/naga)
 
-The shader translation library for the needs of [wgpu](https://github.com/gfx-rs/wgpu) and [gfx-rs](https://github.com/gfx-rs/gfx) projects.
+The shader translation library for the needs of [wgpu](https://github.com/gfx-rs/wgpu).
 
 ## Supported end-points
-
-Everything is still work-in-progress, but some end-points are usable:
 
 Front-end       |       Status       | Feature | Notes |
 --------------- | ------------------ | ------- | ----- |
