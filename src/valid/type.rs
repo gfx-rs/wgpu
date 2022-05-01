@@ -52,6 +52,15 @@ bitflags::bitflags! {
 
         /// This type can be passed as a function argument.
         const ARGUMENT = 0x40;
+
+        /// A WGSL [constructible] type.
+        ///
+        /// The constructible types are scalars, vectors, matrices, fixed-size
+        /// arrays of constructible types, and structs whose members are all
+        /// constructible.
+        ///
+        /// [constructible]: https://gpuweb.github.io/gpuweb/wgsl/#constructible
+        const CONSTRUCTIBLE = 0x80;
     }
 }
 
@@ -237,6 +246,7 @@ impl super::Validator {
                         | TypeFlags::SIZED
                         | TypeFlags::COPY
                         | TypeFlags::ARGUMENT
+                        | TypeFlags::CONSTRUCTIBLE
                         | shareable,
                     width as u32,
                 )
@@ -257,6 +267,7 @@ impl super::Validator {
                         | TypeFlags::COPY
                         | TypeFlags::HOST_SHAREABLE
                         | TypeFlags::ARGUMENT
+                        | TypeFlags::CONSTRUCTIBLE
                         | shareable,
                     count * (width as u32),
                 )
@@ -275,7 +286,8 @@ impl super::Validator {
                         | TypeFlags::SIZED
                         | TypeFlags::COPY
                         | TypeFlags::HOST_SHAREABLE
-                        | TypeFlags::ARGUMENT,
+                        | TypeFlags::ARGUMENT
+                        | TypeFlags::CONSTRUCTIBLE,
                     count * (width as u32),
                 )
             }
@@ -467,7 +479,7 @@ impl super::Validator {
                             return Err(TypeError::NonPositiveArrayLength(const_handle));
                         }
 
-                        TypeFlags::SIZED | TypeFlags::ARGUMENT
+                        TypeFlags::SIZED | TypeFlags::ARGUMENT | TypeFlags::CONSTRUCTIBLE
                     }
                     crate::ArraySize::Dynamic => {
                         // Non-SIZED types may only appear as the last element of a structure.
@@ -495,7 +507,8 @@ impl super::Validator {
                         | TypeFlags::COPY
                         | TypeFlags::HOST_SHAREABLE
                         | TypeFlags::IO_SHAREABLE
-                        | TypeFlags::ARGUMENT,
+                        | TypeFlags::ARGUMENT
+                        | TypeFlags::CONSTRUCTIBLE,
                     1,
                 );
                 ti.uniform_layout = Ok(Some(UNIFORM_MIN_ALIGNMENT));

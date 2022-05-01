@@ -1029,6 +1029,43 @@ fn invalid_functions() {
         })
         if function_name == "unacceptable_ptr_space" && argument_name == "arg"
     }
+
+    check_validation! {
+        "
+        struct AFloat {
+          said_float: f32
+        };
+        @group(0) @binding(0)
+        var<storage> float: AFloat;
+
+        fn return_pointer() -> ptr<storage, f32> {
+           return &float.said_float;
+        }
+        ":
+        Err(naga::valid::ValidationError::Function {
+            name: function_name,
+            error: naga::valid::FunctionError::NonConstructibleReturnType,
+            ..
+        })
+        if function_name == "return_pointer"
+    }
+
+    check_validation! {
+        "
+        @group(0) @binding(0)
+        var<storage> atom: atomic<u32>;
+
+        fn return_atomic() -> atomic<u32> {
+           return atom;
+        }
+        ":
+        Err(naga::valid::ValidationError::Function {
+            name: function_name,
+            error: naga::valid::FunctionError::NonConstructibleReturnType,
+            ..
+        })
+        if function_name == "return_atomic"
+    }
 }
 
 #[test]

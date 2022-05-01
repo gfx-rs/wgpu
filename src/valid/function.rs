@@ -86,6 +86,8 @@ pub enum FunctionError {
     },
     #[error("Argument '{name}' at index {index} has a type that can't be passed into functions.")]
     InvalidArgumentType { index: usize, name: String },
+    #[error("The function's given return type cannot be returned from functions")]
+    NonConstructibleReturnType,
     #[error("Argument '{name}' at index {index} is a pointer of space {space:?}, which can't be passed into functions.")]
     InvalidArgumentPointerSpace {
         index: usize,
@@ -891,6 +893,17 @@ impl super::Validator {
                     name: argument.name.clone().unwrap_or_default(),
                 }
                 .with_span_handle(argument.ty, &module.types));
+            }
+        }
+
+        #[cfg(feature = "validate")]
+        if let Some(ref result) = fun.result {
+            if !self.types[result.ty.index()]
+                .flags
+                .contains(super::TypeFlags::CONSTRUCTIBLE)
+            {
+                return Err(FunctionError::NonConstructibleReturnType
+                    .with_span_handle(result.ty, &module.types));
             }
         }
 
