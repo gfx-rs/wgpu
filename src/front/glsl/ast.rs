@@ -137,13 +137,13 @@ pub enum HirExprKind {
     Conditional {
         /// The expression that will decide which branch to take, must evaluate to a boolean
         condition: Handle<HirExpr>,
-        /// The expression that will be evaluated if [`condition`][condition] returns `true`
+        /// The expression that will be evaluated if [`condition`] returns `true`
         ///
-        /// [condition]: Self::Conditional::condition
+        /// [`condition`]: Self::Conditional::condition
         accept: Handle<HirExpr>,
-        /// The expression that will be evaluated if [`condition`][condition] returns `false`
+        /// The expression that will be evaluated if [`condition`] returns `false`
         ///
-        /// [condition]: Self::Conditional::condition
+        /// [`condition`]: Self::Conditional::condition
         reject: Handle<HirExpr>,
     },
     Assign {

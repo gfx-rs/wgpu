@@ -438,9 +438,9 @@ impl<'ctx, 'qualifiers> DeclarationContext<'ctx, 'qualifiers> {
 
     /// Emits all the expressions captured by the emitter and starts the emitter again
     ///
-    /// Alias to [`emit_restart`][emit_restart] with the declaration body
+    /// Alias to [`emit_restart`] with the declaration body
     ///
-    /// [emit_restart]: Context::emit_restart
+    /// [`emit_restart`]: Context::emit_restart
     #[inline]
     fn flush_expressions(&mut self) {
         self.ctx.emit_restart(self.body);

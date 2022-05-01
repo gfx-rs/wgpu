@@ -184,8 +184,10 @@ impl Context {
     ///
     /// # Panics
     ///
-    /// - If called before calling [`emit_start`][Self::emit_start].
-    /// - If called twice in a row without calling [`emit_start`][Self::emit_start].
+    /// - If called before calling [`emit_start`].
+    /// - If called twice in a row without calling [`emit_start`].
+    ///
+    /// [`emit_start`]: Self::emit_start
     pub fn emit_end(&mut self, body: &mut Block) {
         body.extend(self.emitter.finish(&self.expressions))
     }
@@ -1099,6 +1101,20 @@ impl Context {
                 accept,
                 reject,
             } if ExprPos::Lhs != pos => {
+                // Given an expression `a ? b : c`, we need to produce a Naga
+                // statement roughly like:
+                //
+                //     var temp;
+                //     if a {
+                //         temp = convert(b);
+                //     } else  {
+                //         temp = convert(c);
+                //     }
+                //
+                // where `convert` stands for type conversions to bring `b` and `c` to
+                // the same type, and then use `temp` to represent the value of the whole
+                // conditional expression in subsequent code.
+
                 // Lower the condition first to the current bodyy
                 let condition = self
                     .lower_expect_inner(stmt, parser, condition, ExprPos::Rhs, body)?
@@ -1146,10 +1162,10 @@ impl Context {
                             // the respective body
                             self.emit_end(&mut accept_body);
                         }
-                        // Technically there's nothing to flush but we need to add some
-                        // expressions that must not be emitted so instead of flushing,
-                        // starting and flushing again, just make sure everything is
-                        // flushed.
+                        // Technically there's nothing to flush but later we will need to
+                        // add some expressions that must not be emitted so instead
+                        // of flushing, starting and flushing again, just make sure
+                        // everything is flushed.
                         std::cmp::Ordering::Equal => self.emit_end(body),
                         std::cmp::Ordering::Greater => {
                             self.conversion(&mut reject, reject_meta, accept_kind, accept_width)?;
@@ -1172,7 +1188,7 @@ impl Context {
                         ty,
                         init: None,
                     },
-                    Span::default(),
+                    meta,
                 );
 
                 // Note: `Expression::LocalVariable` must not be emited so it's important

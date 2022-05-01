@@ -333,19 +333,19 @@ fn ternary(a_20: bool) {
         if _e18 {
             let _e19 = a_21;
             if _e19 {
-                local_2 = 0u;
+                local_2 = 2u;
             } else {
-                local_2 = u32(1);
+                local_2 = u32(3);
             }
             let _e24 = local_2;
             local_3 = _e24;
         } else {
-            local_3 = 1u;
+            local_3 = 4u;
         }
         let _e27 = local_3;
         local_4 = _e27;
     } else {
-        local_4 = u32(1);
+        local_4 = u32(5);
     }
     let _e31 = local_4;
     nested = _e31;
