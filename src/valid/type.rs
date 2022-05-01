@@ -156,6 +156,22 @@ fn check_member_layout(
     };
 }
 
+/// Determine whether a pointer in `space` can be passed as an argument.
+///
+/// If a pointer in `space` is permitted to be passed as an argument to a
+/// user-defined function, return `TypeFlags::ARGUMENT`. Otherwise, return
+/// `TypeFlags::empty()`.
+///
+/// Pointers passed as arguments to user-defined functions must be in the
+/// `Function`, `Private`, or `Workgroup` storage space.
+const fn ptr_space_argument_flag(space: crate::AddressSpace) -> TypeFlags {
+    use crate::AddressSpace as As;
+    match space {
+        As::Function | As::Private | As::WorkGroup => TypeFlags::ARGUMENT,
+        As::Uniform | As::Storage { .. } | As::Handle | As::PushConstant => TypeFlags::empty(),
+    }
+}
+
 #[derive(Clone, Debug)]
 pub(super) struct TypeInfo {
     pub flags: TypeFlags,
@@ -300,20 +316,11 @@ impl super::Validator {
                     }
                 }
 
-                // Pointers passed as arguments to user-defined functions must
-                // be in the `Function`, `Private`, or `Workgroup` storage
-                // space. We only mark pointers in those spaces as `ARGUMENT`.
-                //
                 // `Validator::validate_function` actually checks the storage
                 // space of pointer arguments explicitly before checking the
                 // `ARGUMENT` flag, to give better error messages. But it seems
                 // best to set `ARGUMENT` accurately anyway.
-                let argument_flag = match space {
-                    As::Function | As::Private | As::WorkGroup => TypeFlags::ARGUMENT,
-                    As::Uniform | As::Storage { .. } | As::Handle | As::PushConstant => {
-                        TypeFlags::empty()
-                    }
-                };
+                let argument_flag = ptr_space_argument_flag(space);
 
                 // Pointers cannot be stored in variables, structure members, or
                 // array elements, so we do not mark them as `DATA`.
@@ -336,14 +343,14 @@ impl super::Validator {
                     return Err(TypeError::InvalidWidth(kind, width));
                 }
 
-                use crate::AddressSpace as As;
-                let argument_flag = match space {
-                    As::Function | As::Private | As::WorkGroup => TypeFlags::ARGUMENT,
-                    As::Uniform | As::Storage { .. } | As::Handle | As::PushConstant => {
-                        TypeFlags::empty()
-                    }
-                };
+                // `Validator::validate_function` actually checks the storage
+                // space of pointer arguments explicitly before checking the
+                // `ARGUMENT` flag, to give better error messages. But it seems
+                // best to set `ARGUMENT` accurately anyway.
+                let argument_flag = ptr_space_argument_flag(space);
 
+                // Pointers cannot be stored in variables, structure members, or
+                // array elements, so we do not mark them as `DATA`.
                 TypeInfo::new(argument_flag | TypeFlags::SIZED | TypeFlags::COPY, 0)
             }
             Ti::Array { base, size, stride } => {
