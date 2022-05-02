@@ -1,267 +1,8 @@
-use super::{conv, Error, ExpectedToken, NumberType, Span, Token, TokenSpan};
+use super::{conv, number::consume_number, Error, ExpectedToken, Span, Token, TokenSpan};
 
 fn consume_any(input: &str, what: impl Fn(char) -> bool) -> (&str, &str) {
     let pos = input.find(|c| !what(c)).unwrap_or(input.len());
     input.split_at(pos)
-}
-
-/// Tries to skip a given prefix in the input string.
-/// Returns whether the prefix was present and could therefore be skipped,
-/// the remaining str and the number of *bytes* skipped.
-pub fn try_skip_prefix<'a, 'b>(input: &'a str, prefix: &'b str) -> (bool, &'a str, usize) {
-    if let Some(rem) = input.strip_prefix(prefix) {
-        (true, rem, prefix.len())
-    } else {
-        (false, input, 0)
-    }
-}
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum NLDigitState {
-    Nothing,
-    LeadingZero,
-    DigitBeforeDot,
-    OnlyDot,
-    DigitsThenDot,
-    DigitAfterDot,
-    Exponent,
-    SignAfterExponent,
-    DigitAfterExponent,
-}
-
-struct NumberLexerState {
-    _minus: bool,
-    hex: bool,
-    leading_zeros: usize,
-    digit_state: NLDigitState,
-    uint_suffix: bool,
-}
-
-impl NumberLexerState {
-    // TODO: add proper error reporting, possibly through try_into_token function returning Result
-
-    pub fn _is_valid_number(&self) -> bool {
-        match *self {
-            Self {
-                _minus: false, // No negative zero for integers.
-                hex,
-                leading_zeros,
-                digit_state: NLDigitState::LeadingZero,
-                ..
-            } => hex || leading_zeros == 1, // No leading zeros allowed in non-hex integers, "0" is always allowed.
-            Self {
-                _minus: minus,
-                hex,
-                leading_zeros,
-                digit_state: NLDigitState::DigitBeforeDot,
-                uint_suffix,
-            } => {
-                (hex || leading_zeros == 0) // No leading zeros allowed in non-hex integers.
-                                              // In this state the number has non-zero digits,
-                                              // i.e. it is not just "0".
-                    && (minus ^ uint_suffix) // Either a negative number, or and unsigned integer, not both.
-            }
-            _ => self.is_float(),
-        }
-    }
-
-    pub fn is_float(&self) -> bool {
-        !self.uint_suffix
-            && (self.digit_state == NLDigitState::DigitsThenDot
-                || self.digit_state == NLDigitState::DigitAfterDot
-                || self.digit_state == NLDigitState::DigitAfterExponent)
-    }
-}
-
-fn consume_number(input: &str) -> (Token, &str) {
-    let (minus, working_substr, minus_offset) = try_skip_prefix(input, "-");
-
-    let (hex, working_substr, hex_offset) = try_skip_prefix(working_substr, "0x");
-
-    let mut state = NumberLexerState {
-        _minus: minus,
-        hex,
-        leading_zeros: 0,
-        digit_state: NLDigitState::Nothing,
-        uint_suffix: false,
-    };
-
-    let mut what = |c| {
-        match state {
-            NumberLexerState {
-                uint_suffix: true, ..
-            } => return false, // Scanning is done once we've reached a type suffix.
-            NumberLexerState {
-                hex,
-                digit_state: NLDigitState::Nothing,
-                ..
-            } => match c {
-                '0' => {
-                    state.digit_state = NLDigitState::LeadingZero;
-                    state.leading_zeros += 1;
-                }
-                '1'..='9' => {
-                    state.digit_state = NLDigitState::DigitBeforeDot;
-                }
-                'a'..='f' | 'A'..='F' if hex => {
-                    state.digit_state = NLDigitState::DigitBeforeDot;
-                }
-                '.' => {
-                    state.digit_state = NLDigitState::OnlyDot;
-                }
-                _ => return false,
-            },
-
-            NumberLexerState {
-                hex,
-                digit_state: NLDigitState::LeadingZero,
-                ..
-            } => match c {
-                '0' => {
-                    // We stay in NLDigitState::LeadingZero.
-                    state.leading_zeros += 1;
-                }
-                '1'..='9' => {
-                    state.digit_state = NLDigitState::DigitBeforeDot;
-                }
-                'a'..='f' | 'A'..='F' if hex => {
-                    state.digit_state = NLDigitState::DigitBeforeDot;
-                }
-                '.' => {
-                    state.digit_state = NLDigitState::DigitsThenDot;
-                }
-                'e' | 'E' if !hex => {
-                    state.digit_state = NLDigitState::Exponent;
-                }
-                'p' | 'P' if hex => {
-                    state.digit_state = NLDigitState::Exponent;
-                }
-                'u' => {
-                    // We stay in NLDigitState::LeadingZero.
-                    state.uint_suffix = true;
-                }
-                _ => return false,
-            },
-
-            NumberLexerState {
-                hex,
-                digit_state: NLDigitState::DigitBeforeDot,
-                ..
-            } => match c {
-                '0'..='9' => {
-                    // We stay in NLDigitState::DigitBeforeDot.
-                }
-                'a'..='f' | 'A'..='F' if hex => {
-                    // We stay in NLDigitState::DigitBeforeDot.
-                }
-                '.' => {
-                    state.digit_state = NLDigitState::DigitsThenDot;
-                }
-                'e' | 'E' if !hex => {
-                    state.digit_state = NLDigitState::Exponent;
-                }
-                'p' | 'P' if hex => {
-                    state.digit_state = NLDigitState::Exponent;
-                }
-                'u' => {
-                    // We stay in NLDigitState::DigitBeforeDot.
-                    state.uint_suffix = true;
-                }
-                _ => return false,
-            },
-
-            NumberLexerState {
-                hex,
-                digit_state: NLDigitState::OnlyDot,
-                ..
-            } => match c {
-                '0'..='9' => {
-                    state.digit_state = NLDigitState::DigitAfterDot;
-                }
-                'a'..='f' | 'A'..='F' if hex => {
-                    state.digit_state = NLDigitState::DigitAfterDot;
-                }
-                _ => return false,
-            },
-
-            NumberLexerState {
-                hex,
-                digit_state: NLDigitState::DigitsThenDot | NLDigitState::DigitAfterDot,
-                ..
-            } => match c {
-                '0'..='9' => {
-                    state.digit_state = NLDigitState::DigitAfterDot;
-                }
-                'a'..='f' | 'A'..='F' if hex => {
-                    state.digit_state = NLDigitState::DigitAfterDot;
-                }
-                'e' | 'E' if !hex => {
-                    state.digit_state = NLDigitState::Exponent;
-                }
-                'p' | 'P' if hex => {
-                    state.digit_state = NLDigitState::Exponent;
-                }
-                _ => return false,
-            },
-
-            NumberLexerState {
-                digit_state: NLDigitState::Exponent,
-                ..
-            } => match c {
-                '0'..='9' => {
-                    state.digit_state = NLDigitState::DigitAfterExponent;
-                }
-                '-' | '+' => {
-                    state.digit_state = NLDigitState::SignAfterExponent;
-                }
-                _ => return false,
-            },
-
-            NumberLexerState {
-                digit_state: NLDigitState::SignAfterExponent | NLDigitState::DigitAfterExponent,
-                ..
-            } => match c {
-                '0'..='9' => {
-                    state.digit_state = NLDigitState::DigitAfterExponent;
-                }
-                _ => return false,
-            },
-        }
-
-        // No match branch has rejected this yet, so we are still in a number literal
-        true
-    };
-
-    let pos = working_substr
-        .find(|c| !what(c))
-        .unwrap_or(working_substr.len());
-    let (value, rest) = input.split_at(pos + minus_offset + hex_offset);
-
-    // NOTE: This code can use string slicing,
-    //       because number literals are exclusively ASCII.
-    //       This means all relevant characters fit into one byte
-    //       and using string slicing (which slices UTF-8 bytes) works for us.
-
-    // TODO: A syntax error can already be recognized here, possibly report it at this stage.
-
-    // Return possibly knowably incorrect (given !state.is_valid_number()) token for now.
-    (
-        Token::Number {
-            value: if state.uint_suffix {
-                &value[..value.len() - 1]
-            } else {
-                value
-            },
-            ty: if state.uint_suffix {
-                NumberType::Uint
-            } else if state.is_float() {
-                NumberType::Float
-            } else {
-                NumberType::Sint
-            },
-        },
-        rest,
-    )
 }
 
 fn consume_token(input: &str, generic: bool) -> (Token<'_>, &str) {
@@ -633,6 +374,9 @@ impl<'a> Lexer<'a> {
 }
 
 #[cfg(test)]
+use super::{number::Number, NumberError};
+
+#[cfg(test)]
 fn sub_test(source: &str, expected_tokens: &[Token]) {
     let mut lex = Lexer::new(source);
     for &token in expected_tokens {
@@ -642,40 +386,194 @@ fn sub_test(source: &str, expected_tokens: &[Token]) {
 }
 
 #[test]
+fn test_numbers() {
+    // WGSL spec examples //
+
+    // decimal integer
+    sub_test(
+        "0x123 0X123u 1u 123 0 0i 0x3f",
+        &[
+            Token::Number(Ok(Number::I32(291))),
+            Token::Number(Ok(Number::U32(291))),
+            Token::Number(Ok(Number::U32(1))),
+            Token::Number(Ok(Number::I32(123))),
+            Token::Number(Ok(Number::I32(0))),
+            Token::Number(Ok(Number::I32(0))),
+            Token::Number(Ok(Number::I32(63))),
+        ],
+    );
+    // decimal floating point
+    sub_test(
+        "0.e+4f 01. .01 12.34 .0f 0h 1e-3 0xa.fp+2 0x1P+4f 0X.3 0x3p+2h 0X1.fp-4 0x3.2p+2h",
+        &[
+            Token::Number(Ok(Number::F32(0.))),
+            Token::Number(Ok(Number::F32(1.))),
+            Token::Number(Ok(Number::F32(0.01))),
+            Token::Number(Ok(Number::F32(12.34))),
+            Token::Number(Ok(Number::F32(0.))),
+            Token::Number(Err(NumberError::UnimplementedF16)),
+            Token::Number(Ok(Number::F32(0.001))),
+            Token::Number(Ok(Number::F32(43.75))),
+            Token::Number(Ok(Number::F32(16.))),
+            Token::Number(Ok(Number::F32(0.1875))),
+            Token::Number(Err(NumberError::UnimplementedF16)),
+            Token::Number(Ok(Number::F32(0.12109375))),
+            Token::Number(Err(NumberError::UnimplementedF16)),
+        ],
+    );
+
+    // MIN / MAX //
+
+    // min / max decimal signed integer
+    sub_test(
+        "-2147483648i 2147483647i -2147483649i 2147483648i",
+        &[
+            Token::Number(Ok(Number::I32(i32::MIN))),
+            Token::Number(Ok(Number::I32(i32::MAX))),
+            Token::Number(Err(NumberError::NotRepresentable)),
+            Token::Number(Err(NumberError::NotRepresentable)),
+        ],
+    );
+    // min / max decimal unsigned integer
+    sub_test(
+        "0u 4294967295u -1u 4294967296u",
+        &[
+            Token::Number(Ok(Number::U32(u32::MIN))),
+            Token::Number(Ok(Number::U32(u32::MAX))),
+            Token::Number(Err(NumberError::NotRepresentable)),
+            Token::Number(Err(NumberError::NotRepresentable)),
+        ],
+    );
+
+    // min / max hexadecimal signed integer
+    sub_test(
+        "-0x80000000i 0x7FFFFFFFi -0x80000001i 0x80000000i",
+        &[
+            Token::Number(Ok(Number::I32(i32::MIN))),
+            Token::Number(Ok(Number::I32(i32::MAX))),
+            Token::Number(Err(NumberError::NotRepresentable)),
+            Token::Number(Err(NumberError::NotRepresentable)),
+        ],
+    );
+    // min / max hexadecimal unsigned integer
+    sub_test(
+        "0x0u 0xFFFFFFFFu -0x1u 0x100000000u",
+        &[
+            Token::Number(Ok(Number::U32(u32::MIN))),
+            Token::Number(Ok(Number::U32(u32::MAX))),
+            Token::Number(Err(NumberError::NotRepresentable)),
+            Token::Number(Err(NumberError::NotRepresentable)),
+        ],
+    );
+
+    /// ≈ 2^-126 * 2^−23 (= 2^−149)
+    const SMALLEST_POSITIVE_SUBNORMAL_F32: f32 = 1e-45;
+    /// ≈ 2^-126 * (1 − 2^−23)
+    const LARGEST_SUBNORMAL_F32: f32 = 1.1754942e-38;
+    /// ≈ 2^-126
+    const SMALLEST_POSITIVE_NORMAL_F32: f32 = f32::MIN_POSITIVE;
+    /// ≈ 1 − 2^−24
+    const LARGEST_F32_LESS_THAN_ONE: f32 = 0.99999994;
+    /// ≈ 1 + 2^−23
+    const SMALLEST_F32_LARGER_THAN_ONE: f32 = 1.0000001;
+    /// ≈ -(2^127 * (2 − 2^−23))
+    const SMALLEST_NORMAL_F32: f32 = f32::MIN;
+    /// ≈ 2^127 * (2 − 2^−23)
+    const LARGEST_NORMAL_F32: f32 = f32::MAX;
+
+    // decimal floating point
+    sub_test(
+        "1e-45f 1.1754942e-38f 1.17549435e-38f 0.99999994f 1.0000001f -3.40282347e+38f 3.40282347e+38f",
+        &[
+            Token::Number(Ok(Number::F32(
+                SMALLEST_POSITIVE_SUBNORMAL_F32,
+            ))),
+            Token::Number(Ok(Number::F32(
+                LARGEST_SUBNORMAL_F32,
+            ))),
+            Token::Number(Ok(Number::F32(
+                SMALLEST_POSITIVE_NORMAL_F32,
+            ))),
+            Token::Number(Ok(Number::F32(
+                LARGEST_F32_LESS_THAN_ONE,
+            ))),
+            Token::Number(Ok(Number::F32(
+                SMALLEST_F32_LARGER_THAN_ONE,
+            ))),
+            Token::Number(Ok(Number::F32(
+                SMALLEST_NORMAL_F32,
+            ))),
+            Token::Number(Ok(Number::F32(
+                LARGEST_NORMAL_F32,
+            ))),
+        ],
+    );
+    sub_test(
+        "-3.40282367e+38f 3.40282367e+38f",
+        &[
+            Token::Number(Err(NumberError::NotRepresentable)), // ≈ -2^128
+            Token::Number(Err(NumberError::NotRepresentable)), // ≈ 2^128
+        ],
+    );
+
+    // hexadecimal floating point
+    sub_test(
+        "0x1p-149f 0x7FFFFFp-149f 0x1p-126f 0xFFFFFFp-24f 0x800001p-23f -0xFFFFFFp+104f 0xFFFFFFp+104f",
+        &[
+            Token::Number(Ok(Number::F32(
+                SMALLEST_POSITIVE_SUBNORMAL_F32,
+            ))),
+            Token::Number(Ok(Number::F32(
+                LARGEST_SUBNORMAL_F32,
+            ))),
+            Token::Number(Ok(Number::F32(
+                SMALLEST_POSITIVE_NORMAL_F32,
+            ))),
+            Token::Number(Ok(Number::F32(
+                LARGEST_F32_LESS_THAN_ONE,
+            ))),
+            Token::Number(Ok(Number::F32(
+                SMALLEST_F32_LARGER_THAN_ONE,
+            ))),
+            Token::Number(Ok(Number::F32(
+                SMALLEST_NORMAL_F32,
+            ))),
+            Token::Number(Ok(Number::F32(
+                LARGEST_NORMAL_F32,
+            ))),
+        ],
+    );
+    sub_test(
+        "-0x1p128f 0x1p128f 0x1.000001p0f",
+        &[
+            Token::Number(Err(NumberError::NotRepresentable)), // = -2^128
+            Token::Number(Err(NumberError::NotRepresentable)), // = 2^128
+            Token::Number(Err(NumberError::NotRepresentable)),
+        ],
+    );
+}
+
+#[test]
 fn test_tokens() {
     sub_test("id123_OK", &[Token::Word("id123_OK")]);
     sub_test(
         "92No",
-        &[
-            Token::Number {
-                value: "92",
-                ty: NumberType::Sint,
-            },
-            Token::Word("No"),
-        ],
+        &[Token::Number(Ok(Number::I32(92))), Token::Word("No")],
     );
     sub_test(
         "2u3o",
         &[
-            Token::Number {
-                value: "2",
-                ty: NumberType::Uint,
-            },
-            Token::Number {
-                value: "3",
-                ty: NumberType::Sint,
-            },
+            Token::Number(Ok(Number::U32(2))),
+            Token::Number(Ok(Number::I32(3))),
             Token::Word("o"),
         ],
     );
     sub_test(
         "2.4f44po",
         &[
-            Token::Number {
-                value: "2.4",
-                ty: NumberType::Float,
-            },
-            Token::Word("f44po"),
+            Token::Number(Ok(Number::F32(2.4))),
+            Token::Number(Ok(Number::I32(44))),
+            Token::Word("po"),
         ],
     );
     sub_test(
@@ -715,10 +613,7 @@ fn test_variable_decl() {
             Token::Attribute,
             Token::Word("group"),
             Token::Paren('('),
-            Token::Number {
-                value: "0",
-                ty: NumberType::Sint,
-            },
+            Token::Number(Ok(Number::I32(0))),
             Token::Paren(')'),
             Token::Word("var"),
             Token::Paren('<'),
