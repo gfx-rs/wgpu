@@ -61,10 +61,7 @@ serde = { version = "1.0.103", features = ["derive"], optional = true }
 petgraph = { version ="0.6", optional = true }
 pp-rs = { version = "0.2.1", optional = true }
 hexf-parse = { version = "0.2.1", optional = true }
-# update unicode-xid to the next version since it has been updated to unicode v14
-# (but has no release that includes it yet)
-# https://github.com/unicode-rs/unicode-xid/pull/27
-unicode-xid = { version = "0.2.2", optional = true }
+unicode-xid = { version = "0.2.3", optional = true }
 
 [dev-dependencies]
 bincode = "1"
