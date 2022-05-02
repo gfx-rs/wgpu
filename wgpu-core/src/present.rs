@@ -174,7 +174,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     initialization_status: TextureInitTracker::new(1, 1),
                     full_range: track::TextureSelector {
                         layers: 0..1,
-                        levels: 0..1,
+                        mips: 0..1,
                     },
                     life_guard: LifeGuard::new("<Surface>"),
                     clear_mode: resource::TextureClearMode::RenderPass {
@@ -195,7 +195,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         id,
                         track::TextureSelector {
                             layers: 0..1,
-                            levels: 0..1,
+                            mips: 0..1,
                         },
                         hal::TextureUses::UNINITIALIZED,
                         None,

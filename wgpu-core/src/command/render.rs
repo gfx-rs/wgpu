@@ -605,7 +605,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
             // but recording the discard right away be alright since the texture can't be used during the pass anyways
             texture_memory_actions.discard(TextureSurfaceDiscard {
                 texture: view.parent_id.value.0,
-                mip_level: view.selector.levels.start,
+                mip_level: view.selector.mips.start,
                 layer: view.selector.layers.start,
             });
         }
@@ -779,7 +779,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                     // Both are discarded using the regular path.
                     discarded_surfaces.push(TextureSurfaceDiscard {
                         texture: view.parent_id.value.0,
-                        mip_level: view.selector.levels.start,
+                        mip_level: view.selector.mips.start,
                         layer: view.selector.layers.start,
                     });
                 }

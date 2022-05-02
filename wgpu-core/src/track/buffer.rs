@@ -1,122 +1,208 @@
-use super::{PendingTransition, ResourceState, Unit};
-use crate::id::{BufferId, Valid};
+use std::vec::Drain;
+
+use super::PendingTransition;
+use crate::{
+    hub,
+    id::{BufferId, TypedId, Valid},
+    resource::Buffer,
+    track::{invalid_resource_state, resize_bitvec, skip_barrier, ResourceUses, UsageConflict},
+};
+use bit_vec::BitVec;
 use hal::BufferUses;
 
-pub(crate) type BufferState = Unit<BufferUses>;
+impl ResourceUses for BufferUses {
+    const EXCLUSIVE: Self = Self::EXCLUSIVE;
 
-impl PendingTransition<BufferState> {
-    fn collapse(self) -> Result<BufferUses, Self> {
-        if self.usage.start.is_empty()
-            || self.usage.start == self.usage.end
-            || !BufferUses::EXCLUSIVE.intersects(self.usage.start | self.usage.end)
-        {
-            Ok(self.usage.start | self.usage.end)
-        } else {
-            Err(self)
-        }
-    }
-}
-
-impl Default for BufferState {
-    fn default() -> Self {
-        Self {
-            first: None,
-            last: BufferUses::empty(),
-        }
-    }
-}
-
-impl BufferState {
-    pub fn with_usage(usage: BufferUses) -> Self {
-        Unit::new(usage)
-    }
-}
-
-impl ResourceState for BufferState {
     type Id = BufferId;
     type Selector = ();
-    type Usage = BufferUses;
 
-    fn query(&self, _selector: Self::Selector) -> Option<Self::Usage> {
-        Some(self.last)
+    fn bits(self) -> u16 {
+        self.bits()
     }
 
-    fn change(
-        &mut self,
-        id: Valid<Self::Id>,
-        _selector: Self::Selector,
-        usage: Self::Usage,
-        output: Option<&mut Vec<PendingTransition<Self>>>,
-    ) -> Result<(), PendingTransition<Self>> {
-        let old = self.last;
-        if old != usage || !BufferUses::ORDERED.contains(usage) {
-            let pending = PendingTransition {
-                id,
-                selector: (),
-                usage: old..usage,
-            };
-            *self = match output {
-                None => {
-                    assert_eq!(
-                        self.first, None,
-                        "extending a state that is already a transition"
-                    );
-                    Unit::new(pending.collapse()?)
-                }
-                Some(transitions) => {
-                    transitions.push(pending);
-                    Unit {
-                        first: self.first.or(Some(old)),
-                        last: usage,
-                    }
-                }
-            };
+    fn all_ordered(self) -> bool {
+        self.contains(Self::ORDERED)
+    }
+
+    fn any_exclusive(self) -> bool {
+        self.intersects(Self::EXCLUSIVE)
+    }
+}
+
+pub struct BufferBindGroupState {
+    buffers: Vec<(Valid<BufferId>, BufferUses)>,
+}
+
+pub(crate) struct BufferUsageScope {
+    state: Vec<BufferUses>,
+    owned: BitVec<usize>,
+}
+
+impl BufferUsageScope {
+    pub fn new() -> Self {
+        Self {
+            state: Vec::new(),
+            owned: BitVec::default(),
         }
+    }
+
+    pub fn set_max_index(&mut self, size: usize) {
+        self.state.resize(size, BufferUses::empty());
+
+        resize_bitvec(&mut self.owned, size);
+    }
+
+    pub unsafe fn extend_from_bind_group<A: hal::Api>(
+        &mut self,
+        storage: &hub::Storage<Buffer<A>, BufferId>,
+        bind_group: &BufferBindGroupState,
+    ) -> Result<(), UsageConflict> {
+        for &(id, state) in &bind_group.buffers {
+            self.extend(storage, id, state)?;
+        }
+
         Ok(())
     }
 
-    fn merge(
+    pub unsafe fn extend<A: hal::Api>(
         &mut self,
-        id: Valid<Self::Id>,
-        other: &Self,
-        output: Option<&mut Vec<PendingTransition<Self>>>,
-    ) -> Result<(), PendingTransition<Self>> {
-        let old = self.last;
-        let new = other.port();
-        if old == new && BufferUses::ORDERED.contains(new) {
-            if output.is_some() && self.first.is_none() {
-                *self = Unit {
-                    first: Some(old),
-                    last: other.last,
-                };
+        storage: &hub::Storage<Buffer<A>, BufferId>,
+        id: Valid<BufferId>,
+        new_state: BufferUses,
+    ) -> Result<(), UsageConflict> {
+        let (index, _, _) = id.0.unzip();
+        let index = index as usize;
+
+        let currently_active = self.owned.get(index).unwrap_unchecked();
+        if currently_active {
+            let current_state = *self.state.get_unchecked(index);
+
+            let merged_state = current_state | new_state;
+
+            if invalid_resource_state(merged_state) {
+                return Err(UsageConflict::from_buffer(id, current_state, new_state));
             }
-        } else {
-            let pending = PendingTransition {
-                id,
-                selector: (),
-                usage: old..new,
-            };
-            *self = match output {
-                None => {
-                    assert_eq!(
-                        self.first, None,
-                        "extending a state that is already a transition"
-                    );
-                    Unit::new(pending.collapse()?)
-                }
-                Some(transitions) => {
-                    transitions.push(pending);
-                    Unit {
-                        first: self.first.or(Some(old)),
-                        last: other.last,
-                    }
-                }
-            };
+
+            *self.state.get_unchecked_mut(index) = merged_state;
         }
+
+        // We're the first to use this resource, let's add it.
+        self.owned.set(index, true);
+
+        *self.state.get_unchecked_mut(index) = new_state;
+
         Ok(())
     }
+}
 
-    fn optimize(&mut self) {}
+pub(crate) struct BufferTracker {
+    start: Vec<BufferUses>,
+    end: Vec<BufferUses>,
+    temp: Vec<PendingTransition<BufferUses>>,
+    owned: BitVec<usize>,
+}
+impl BufferTracker {
+    pub fn new() -> Self {
+        Self {
+            start: Vec::new(),
+            end: Vec::new(),
+            temp: Vec::new(),
+            owned: BitVec::default(),
+        }
+    }
+
+    fn set_max_index(&mut self, size: usize) {
+        self.start.resize(size, BufferUses::empty());
+        self.end.resize(size, BufferUses::empty());
+
+        resize_bitvec(&mut self.owned, size);
+    }
+
+    pub fn change_states<A: hal::Api>(
+        &mut self,
+        storage: &hub::Storage<Buffer<A>, BufferId>,
+        incoming_set: &Vec<BufferUses>,
+        incoming_ownership: &BitVec<usize>,
+    ) -> Drain<PendingTransition<BufferUses>> {
+        let incoming_size = incoming_set.len();
+        if incoming_size > self.start.len() {
+            self.set_max_index(incoming_size);
+        }
+
+        for (word_index, mut word) in incoming_ownership.blocks().enumerate() {
+            if word == 0 {
+                continue;
+            }
+
+            let bit_start = word_index * 64;
+            let bit_end = ((word_index + 1) * 64).min(incoming_size);
+
+            for index in bit_start..bit_end {
+                if word & 0b1 == 0 {
+                    continue;
+                }
+                word >>= 1;
+
+                unsafe { self.transition(storage, incoming_set, index) };
+            }
+        }
+
+        self.temp.drain(..)
+    }
+
+    pub unsafe fn change_states_bind_group<A: hal::Api>(
+        &mut self,
+        storage: &hub::Storage<Buffer<A>, BufferId>,
+        incoming_set: &Vec<BufferUses>,
+        incoming_ownership: &mut BitVec<usize>,
+        bind_group_state: &BufferBindGroupState,
+    ) -> Drain<PendingTransition<BufferUses>> {
+        let incoming_size = incoming_set.len();
+        if incoming_size > self.start.len() {
+            self.set_max_index(incoming_size);
+        }
+
+        for &(index, _) in bind_group_state.buffers.iter() {
+            let index = index.0.unzip().0 as usize;
+            if !incoming_ownership.get(index).unwrap_unchecked() {
+                continue;
+            }
+            self.transition(storage, incoming_set, index);
+            incoming_ownership.set(index, false);
+        }
+
+        self.temp.drain(..)
+    }
+
+    unsafe fn transition<A: hal::Api>(
+        &mut self,
+        storage: &hub::Storage<Buffer<A>, BufferId>,
+        incoming_set: &Vec<BufferUses>,
+        index: usize,
+    ) {
+        let old_tracked = self.owned.get(index).unwrap_unchecked();
+        let old_state = *self.end.get_unchecked(index);
+        let new_state = *incoming_set.get_unchecked(index);
+
+        if old_tracked {
+            if skip_barrier(old_state, new_state) {
+                return;
+            }
+
+            self.temp.push(PendingTransition {
+                id: index as u32,
+                selector: (),
+                usage: old_state..new_state,
+            });
+
+            *self.end.get_unchecked_mut(index) = new_state;
+        } else {
+            *self.start.get_unchecked_mut(index) = new_state;
+            *self.end.get_unchecked_mut(index) = new_state;
+
+            self.owned.set(index, true);
+        }
+    }
 }
 
 #[cfg(test)]

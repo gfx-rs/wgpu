@@ -10,7 +10,7 @@ use crate::{
     id::{BufferId, CommandEncoderId, DeviceId, TextureId, Valid},
     init_tracker::{MemoryInitKind, TextureInitRange},
     resource::{Texture, TextureClearMode},
-    track::{ResourceTracker, TextureSelector, OldTextureState},
+    track::{OldTextureState, ResourceTracker, TextureSelector},
 };
 
 use hal::{auxil::align_to, CommandEncoder as _};
@@ -191,13 +191,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         // Check if subresource level range is valid
         let subresource_level_end = match subresource_range.mip_level_count {
             Some(count) => subresource_range.base_mip_level + count.get(),
-            None => dst_texture.full_range.levels.end,
+            None => dst_texture.full_range.mips.end,
         };
-        if dst_texture.full_range.levels.start > subresource_range.base_mip_level
-            || dst_texture.full_range.levels.end < subresource_level_end
+        if dst_texture.full_range.mips.start > subresource_range.base_mip_level
+            || dst_texture.full_range.mips.end < subresource_level_end
         {
             return Err(ClearError::InvalidTextureLevelRange {
-                texture_level_range: dst_texture.full_range.levels.clone(),
+                texture_level_range: dst_texture.full_range.mips.clone(),
                 subresource_base_mip_level: subresource_range.base_mip_level,
                 subresource_mip_level_count: subresource_range.mip_level_count,
             });
@@ -277,7 +277,7 @@ pub(crate) fn clear_texture_no_device<A: hal::Api>(
     };
 
     let selector = TextureSelector {
-        levels: range.mip_range.clone(),
+        mips: range.mip_range.clone(),
         layers: range.layer_range.clone(),
     };
 

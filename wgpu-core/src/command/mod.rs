@@ -23,7 +23,7 @@ use crate::{
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Storage, Token},
     id,
     resource::{Buffer, Texture},
-    track::{BufferState, ResourceTracker, OldTextureState, TrackerSet},
+    track::{BufferState, ResourceTracker, TrackerSet},
     Label, Stored,
 };
 

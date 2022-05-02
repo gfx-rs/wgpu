@@ -36,6 +36,14 @@ impl<I: Copy + PartialOrd, T: Copy + PartialEq> RangedStates<I, T> {
         }
     }
 
+    pub fn iter(&self) -> impl Iterator<Item = &(Range<I>, T)> {
+        self.ranges.iter()
+    }
+
+    pub fn into_iter(self) -> impl Iterator<Item = (Range<I>, T)> {
+        self.ranges.into_iter()
+    }
+
     /// Clear all the ranges.
     pub fn clear(&mut self) {
         self.ranges.clear();

@@ -8,7 +8,7 @@ use crate::{
         TextureInitTracker, TextureInitTrackerAction,
     },
     instance, pipeline, present, resource,
-    track::{BufferState, TextureSelector, OldTextureState, TrackerSet, UsageConflict},
+    track::{BufferState, OldTextureState, TextureSelector, TrackerSet, UsageConflict},
     validation::{self, check_buffer_usage, check_texture_usage},
     FastHashMap, Label, LabelHelpers as _, LifeGuard, MultiRefCount, RefCount, Stored,
     SubmissionIndex, DOWNLEVEL_ERROR_MESSAGE,
@@ -655,7 +655,7 @@ impl<A: HalApi> Device<A> {
                 desc.array_layer_count(),
             ),
             full_range: TextureSelector {
-                levels: 0..desc.mip_level_count,
+                mips: 0..desc.mip_level_count,
                 layers: 0..desc.array_layer_count(),
             },
             life_guard: LifeGuard::new(desc.label.borrow_or_default()),
@@ -876,7 +876,7 @@ impl<A: HalApi> Device<A> {
                 _ => texture.desc.array_layer_count(),
             },
         };
-        let level_end = texture.full_range.levels.end;
+        let level_end = texture.full_range.mips.end;
         let layer_end = texture.full_range.layers.end;
         if required_level_count > level_end {
             return Err(resource::CreateTextureViewError::TooManyMipLevels {
@@ -927,7 +927,7 @@ impl<A: HalApi> Device<A> {
             .array_layer_count
             .map_or(layer_end, |_| required_layer_count);
         let selector = TextureSelector {
-            levels: desc.range.base_mip_level..end_level,
+            mips: desc.range.base_mip_level..end_level,
             layers: desc.range.base_array_layer..end_layer,
         };
 
@@ -976,7 +976,7 @@ impl<A: HalApi> Device<A> {
                 }
                 _ => hal::TextureUses::all(),
             };
-            let mask_mip_level = if selector.levels.end - selector.levels.start != 1 {
+            let mask_mip_level = if selector.mips.end - selector.mips.start != 1 {
                 hal::TextureUses::RESOURCE
             } else {
                 hal::TextureUses::all()
@@ -1058,7 +1058,8 @@ impl<A: HalApi> Device<A> {
 
         let anisotropy_clamp = if let Some(clamp) = desc.anisotropy_clamp {
             let clamp = clamp.get();
-            let valid_clamp = clamp <= hal::MAX_ANISOTROPY && conv::is_power_of_two_u32(clamp as u32);
+            let valid_clamp =
+                clamp <= hal::MAX_ANISOTROPY && conv::is_power_of_two_u32(clamp as u32);
             if !valid_clamp {
                 return Err(resource::CreateSamplerError::InvalidClamp(clamp));
             }
@@ -2018,7 +2019,7 @@ impl<A: HalApi> Device<A> {
                     });
                 }
 
-                let mip_level_count = view.selector.levels.end - view.selector.levels.start;
+                let mip_level_count = view.selector.mips.end - view.selector.mips.start;
                 if mip_level_count != 1 {
                     return Err(Error::InvalidStorageTextureMipLevelCount {
                         binding,
@@ -3446,7 +3447,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(texture) => texture,
                 Err(error) => break error,
             };
-            let num_levels = texture.full_range.levels.end;
+            let num_levels = texture.full_range.mips.end;
             let num_layers = texture.full_range.layers.end;
             let ref_count = texture.life_guard.add_ref();
 
@@ -3524,7 +3525,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             texture.initialization_status = TextureInitTracker::new(desc.mip_level_count, 0);
 
-            let num_levels = texture.full_range.levels.end;
+            let num_levels = texture.full_range.mips.end;
             let num_layers = texture.full_range.layers.end;
             let ref_count = texture.life_guard.add_ref();
 

@@ -191,7 +191,7 @@ pub(crate) fn extract_texture_selector<A: hal::Api>(
         aspect: copy_aspect,
     };
     let selector = TextureSelector {
-        levels: copy_texture.mip_level..copy_texture.mip_level + 1,
+        mips: copy_texture.mip_level..copy_texture.mip_level + 1,
         layers,
     };
 
