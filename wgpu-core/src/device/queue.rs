@@ -683,7 +683,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                     let ref_count = cmdbuf.trackers.textures.get_ref_count(id);
                                     //TODO: better error handling here?
                                     // register it in the temporary tracker.
-                                    let mut ts = track::TextureState::default();
+                                    let mut ts = track::OldTextureState::default();
                                     let _ = ts.change(
                                         id,
                                         texture.full_range.clone(),
@@ -846,7 +846,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 let ref_count = texture.life_guard.add_ref();
                                 //TODO: better error handling here?
                                 // register it in the temporary tracker.
-                                let mut ts = track::TextureState::default();
+                                let mut ts = track::OldTextureState::default();
                                 let _ = ts.change(
                                     id::Valid(id),
                                     texture.full_range.clone(),

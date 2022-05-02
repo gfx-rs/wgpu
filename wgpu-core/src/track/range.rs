@@ -65,7 +65,6 @@ impl<I: Copy + PartialOrd, T: Copy + PartialEq> RangedStates<I, T> {
     }
 
     /// Merge the neighboring ranges together, where possible.
-    #[allow(clippy::suspicious_operation_groupings)]
     pub fn coalesce(&mut self) {
         let mut num_removed = 0;
         let mut iter = self.ranges.iter_mut();

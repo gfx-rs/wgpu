@@ -2090,6 +2090,7 @@ name = "wgpu-core"
 version = "0.12.0"
 dependencies = [
  "arrayvec",
+ "bit-vec",
  "bitflags",
  "cfg_aliases",
  "codespan-reporting",

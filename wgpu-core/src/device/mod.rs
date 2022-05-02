@@ -8,7 +8,7 @@ use crate::{
         TextureInitTracker, TextureInitTrackerAction,
     },
     instance, pipeline, present, resource,
-    track::{BufferState, TextureSelector, TextureState, TrackerSet, UsageConflict},
+    track::{BufferState, TextureSelector, OldTextureState, TrackerSet, UsageConflict},
     validation::{self, check_buffer_usage, check_texture_usage},
     FastHashMap, Label, LabelHelpers as _, LifeGuard, MultiRefCount, RefCount, Stored,
     SubmissionIndex, DOWNLEVEL_ERROR_MESSAGE,
@@ -1058,7 +1058,7 @@ impl<A: HalApi> Device<A> {
 
         let anisotropy_clamp = if let Some(clamp) = desc.anisotropy_clamp {
             let clamp = clamp.get();
-            let valid_clamp = clamp <= hal::MAX_ANISOTROPY && conv::is_power_of_two(clamp as u32);
+            let valid_clamp = clamp <= hal::MAX_ANISOTROPY && conv::is_power_of_two_u32(clamp as u32);
             if !valid_clamp {
                 return Err(resource::CreateSamplerError::InvalidClamp(clamp));
             }
@@ -2551,7 +2551,7 @@ impl<A: HalApi> Device<A> {
 
         let samples = {
             let sc = desc.multisample.count;
-            if sc == 0 || sc > 32 || !conv::is_power_of_two(sc) {
+            if sc == 0 || sc > 32 || !conv::is_power_of_two_u32(sc) {
                 return Err(pipeline::CreateRenderPipelineError::InvalidSampleCount(sc));
             }
             sc
@@ -3457,7 +3457,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .trackers
                 .lock()
                 .textures
-                .init(id, ref_count, TextureState::new(num_levels, num_layers))
+                .init(id, ref_count, OldTextureState::new(num_levels, num_layers))
                 .unwrap();
             return (id.0, None);
         };
@@ -3535,7 +3535,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .trackers
                 .lock()
                 .textures
-                .init(id, ref_count, TextureState::new(num_levels, num_layers))
+                .init(id, ref_count, OldTextureState::new(num_levels, num_layers))
                 .unwrap();
             return (id.0, None);
         };

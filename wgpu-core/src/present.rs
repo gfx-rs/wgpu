@@ -190,7 +190,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     use track::ResourceState as _;
                     // register it in the device tracker as uninitialized
                     let mut trackers = device.trackers.lock();
-                    let mut ts = track::TextureState::default();
+                    let mut ts = track::OldTextureState::default();
                     let _ = ts.change(
                         id,
                         track::TextureSelector {

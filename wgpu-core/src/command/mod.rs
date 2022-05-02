@@ -23,7 +23,7 @@ use crate::{
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Storage, Token},
     id,
     resource::{Buffer, Texture},
-    track::{BufferState, ResourceTracker, TextureState, TrackerSet},
+    track::{BufferState, ResourceTracker, OldTextureState, TrackerSet},
     Label, Stored,
 };
 
@@ -142,7 +142,7 @@ impl<A: HalApi> CommandBuffer<A> {
         raw: &mut A::CommandEncoder,
         base: &mut TrackerSet,
         head_buffers: &ResourceTracker<BufferState>,
-        head_textures: &ResourceTracker<TextureState>,
+        head_textures: &ResourceTracker<OldTextureState>,
         buffer_guard: &Storage<Buffer<A>, id::BufferId>,
         texture_guard: &Storage<Texture<A>, id::TextureId>,
     ) {

@@ -10,7 +10,7 @@ use crate::{
     id::{BufferId, CommandEncoderId, DeviceId, TextureId, Valid},
     init_tracker::{MemoryInitKind, TextureInitRange},
     resource::{Texture, TextureClearMode},
-    track::{ResourceTracker, TextureSelector, TextureState},
+    track::{ResourceTracker, TextureSelector, OldTextureState},
 };
 
 use hal::{auxil::align_to, CommandEncoder as _};
@@ -236,7 +236,7 @@ pub(crate) fn clear_texture<A: hal::Api>(
     dst_texture: &Texture<A>,
     range: TextureInitRange,
     encoder: &mut A::CommandEncoder,
-    texture_tracker: &mut ResourceTracker<TextureState>,
+    texture_tracker: &mut ResourceTracker<OldTextureState>,
     device: &Device<A>,
 ) -> Result<(), ClearError> {
     clear_texture_no_device(
@@ -255,7 +255,7 @@ pub(crate) fn clear_texture_no_device<A: hal::Api>(
     dst_texture: &Texture<A>,
     range: TextureInitRange,
     encoder: &mut A::CommandEncoder,
-    texture_tracker: &mut ResourceTracker<TextureState>,
+    texture_tracker: &mut ResourceTracker<OldTextureState>,
     alignments: &hal::Alignments,
     zero_buffer: &A::Buffer,
 ) -> Result<(), ClearError> {

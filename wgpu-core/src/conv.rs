@@ -1,6 +1,10 @@
 use crate::resource;
 
-pub fn is_power_of_two(val: u32) -> bool {
+pub fn is_power_of_two_u16(val: u16) -> bool {
+    val != 0 && (val & (val - 1)) == 0
+}
+
+pub fn is_power_of_two_u32(val: u32) -> bool {
     val != 0 && (val & (val - 1)) == 0
 }
 
@@ -146,7 +150,7 @@ pub fn check_texture_dimension_size(
             return Err(Tde::LimitExceeded { dim, given, limit });
         }
     }
-    if sample_size == 0 || sample_size > sample_limit || !is_power_of_two(sample_size) {
+    if sample_size == 0 || sample_size > sample_limit || !is_power_of_two_u32(sample_size) {
         return Err(Tde::InvalidSampleCount(sample_size));
     }
 

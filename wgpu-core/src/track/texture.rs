@@ -1,10 +1,16 @@
 use super::{range::RangedStates, PendingTransition, ResourceState, Unit};
-use crate::id::{TextureId, Valid};
+use crate::{
+    conv, hub,
+    id::{TextureId, TypedId, Valid},
+    resource::Texture,
+};
+use bit_vec::BitVec;
 use hal::TextureUses;
 
 use arrayvec::ArrayVec;
+use naga::FastHashMap;
 
-use std::{iter, ops::Range};
+use std::{iter, ops::Range, vec::Drain};
 
 type PlaneStates = RangedStates<u32, Unit<TextureUses>>;
 
@@ -17,11 +23,11 @@ pub struct TextureSelector {
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
-pub(crate) struct TextureState {
+pub(crate) struct OldTextureState {
     mips: ArrayVec<PlaneStates, { hal::MAX_MIP_LEVELS as usize }>,
 }
 
-impl PendingTransition<TextureState> {
+impl PendingTransition<OldTextureState> {
     fn collapse(self) -> Result<TextureUses, Self> {
         if self.usage.start.is_empty()
             || self.usage.start == self.usage.end
@@ -34,7 +40,7 @@ impl PendingTransition<TextureState> {
     }
 }
 
-impl TextureState {
+impl OldTextureState {
     pub fn new(mip_level_count: u32, array_layer_count: u32) -> Self {
         Self {
             mips: iter::repeat_with(|| {
@@ -46,7 +52,7 @@ impl TextureState {
     }
 }
 
-impl ResourceState for TextureState {
+impl ResourceState for OldTextureState {
     type Id = TextureId;
     type Selector = TextureSelector;
     type Usage = TextureUses;
@@ -213,6 +219,354 @@ impl ResourceState for TextureState {
     }
 }
 
+fn invalid_texture_state(state: TextureUses) -> bool {
+    // Is power of two also means "is one bit set". We check for this as if
+    // we're in any exclusive state, we must only be in a single state.
+    state.intersects(hal::TextureUses::EXCLUSIVE) && !conv::is_power_of_two_u16(state.bits())
+}
+
+#[derive(Clone, Debug, Default, PartialEq)]
+pub(crate) struct ComplexTextureState {
+    mips: ArrayVec<RangedStates<u32, TextureUses>, { hal::MAX_MIP_LEVELS as usize }>,
+}
+
+impl ComplexTextureState {
+    pub fn new(mip_level_count: u32, array_layer_count: u32) -> Self {
+        Self {
+            mips: iter::repeat_with(|| {
+                RangedStates::from_range(0..array_layer_count, TextureUses::UNINITIALIZED)
+            })
+            .take(mip_level_count as usize)
+            .collect(),
+        }
+    }
+}
+
+fn resize_bitvec<B: bit_vec::BitBlock>(vec: &mut BitVec<B>, size: usize) {
+    let owned_size_to_grow = size.checked_sub(vec.len());
+    if let Some(delta) = owned_size_to_grow {
+        if delta != 0 {
+            vec.grow(delta, false);
+        }
+    } else {
+        vec.truncate(size);
+    }
+}
+
+pub struct TextureStateSet {
+    simple: Vec<TextureUses>,
+    complex: FastHashMap<u32, ComplexTextureState>,
+}
+impl TextureStateSet {
+    pub fn new() -> Self {
+        Self {
+            simple: Vec::new(),
+            complex: FastHashMap::default(),
+        }
+    }
+}
+
+pub struct TextureUsageScope {
+    set: TextureStateSet,
+    owned: BitVec<usize>,
+}
+
+impl TextureUsageScope {
+    pub fn new() -> Self {
+        Self {
+            set: TextureStateSet::new(),
+            owned: BitVec::default(),
+        }
+    }
+
+    pub fn set_max_index(&mut self, size: usize) {
+        self.set.simple.resize(size, TextureUses::UNINITIALIZED);
+
+        resize_bitvec(&mut self.owned, size);
+    }
+
+    /// # Safety
+    ///
+    /// `id` must be a valid ID and have an ID value less than the last call to set_max_index.
+    unsafe fn extend<A: hal::Api>(
+        &mut self,
+        storage: &hub::Storage<Texture<A>, TextureId>,
+        id: Valid<TextureId>,
+        selector: Option<TextureSelector>,
+        new_state: TextureUses,
+    ) -> Result<(), ()> {
+        let (index, _, _) = id.0.unzip();
+        let index = index as usize;
+
+        let currently_active = self.owned.get(index).unwrap_unchecked();
+        if currently_active {
+            let current_state = *self.set.simple.get_unchecked(index);
+            match (current_state == hal::TextureUses::COMPLEX, selector) {
+                // Both our usages are simple
+                (false, None) => {
+                    let merged_state = current_state | new_state;
+
+                    if invalid_texture_state(merged_state) {
+                        // Conflicting states
+                        return Err(());
+                    }
+
+                    *self.set.simple.get_unchecked_mut(index) = merged_state;
+
+                    return Ok(());
+                }
+                // The old usage is complex.
+                (true, selector) => return self.extend_complex(storage, id, selector, new_state),
+
+                // The old usage is simple, so demote it to a complex one.
+                (false, Some(selector)) => {
+                    *self.set.simple.get_unchecked_mut(index) = hal::TextureUses::COMPLEX;
+
+                    // Demote our simple state to a complex one.
+                    self.extend_complex(storage, id, None, current_state)?;
+
+                    // Extend that complex state with our new complex state.
+                    return self.extend_complex(storage, id, Some(selector), new_state);
+                }
+            }
+        }
+
+        // We're the first to use this resource, let's add it.
+        self.owned.set(index, true);
+
+        if let Some(selector) = selector {
+            *self.set.simple.get_unchecked_mut(index) = hal::TextureUses::COMPLEX;
+            self.extend_complex(storage, id, Some(selector), new_state)?;
+        } else {
+            *self.set.simple.get_unchecked_mut(index) = new_state;
+        }
+
+        Ok(())
+    }
+
+    #[cold]
+    fn extend_complex<A: hal::Api>(
+        &mut self,
+        storage: &hub::Storage<Texture<A>, TextureId>,
+        id: Valid<TextureId>,
+        selector: Option<TextureSelector>,
+        new_state: TextureUses,
+    ) -> Result<(), ()> {
+        let texture = &storage[id];
+
+        let (id, _, _) = id.0.unzip();
+
+        // Create the complex entry for this texture.
+        let complex = self.set.complex.entry(id).or_insert_with(|| {
+            ComplexTextureState::new(
+                texture.desc.mip_level_count,
+                texture.desc.array_layer_count(),
+            )
+        });
+
+        let mips;
+        let layers;
+        match selector {
+            Some(selector) => {
+                mips = selector.levels.clone();
+                layers = selector.layers.clone();
+            }
+            None => {
+                mips = 0..texture.desc.mip_level_count;
+                layers = 0..texture.desc.array_layer_count();
+            }
+        }
+
+        // Go through all relevant mip levels
+        for mip in mips {
+            let mip_state = &mut complex.mips[mip as usize];
+
+            // Set our state.
+            for (_, current_state) in mip_state.isolate(&layers, new_state) {
+                let merged = *current_state | new_state;
+                if invalid_texture_state(merged) {
+                    return Err(());
+                }
+                *current_state = merged;
+            }
+        }
+
+        Ok(())
+    }
+}
+
+pub(crate) struct TextureTracker {
+    start_set: TextureStateSet,
+    end_set: TextureStateSet,
+    /// Temporary storage for collecting transitions.
+    temp: Vec<PendingTransition<OldTextureState>>,
+    owned: BitVec<usize>,
+}
+impl TextureTracker {
+    pub fn new() -> Self {
+        Self {
+            start_set: TextureStateSet::new(),
+            end_set: TextureStateSet::new(),
+            temp: Vec::new(),
+            owned: BitVec::default(),
+        }
+    }
+
+    fn set_max_index(&mut self, size: usize) {
+        self.start_set
+            .simple
+            .resize(size, TextureUses::UNINITIALIZED);
+        self.end_set.simple.resize(size, TextureUses::UNINITIALIZED);
+
+        resize_bitvec(&mut self.owned, size);
+    }
+
+    pub fn transition_to_other<A: hal::Api>(
+        &mut self,
+        storage: &hub::Storage<Texture<A>, TextureId>,
+        incoming_set: &TextureStateSet,
+        incoming_ownership: &BitVec<usize>,
+    ) -> Drain<PendingTransition<OldTextureState>> {
+        let incoming_size = incoming_set.simple.len();
+        if incoming_size > self.start_set.simple.len() {
+            self.set_max_index(incoming_size);
+        }
+
+        for (word_index, mut word) in incoming_ownership.blocks().enumerate() {
+            if word == 0 {
+                continue;
+            }
+
+            let bit_start = word_index * 64;
+            let bit_end = ((word_index + 1) * 64).min(incoming_size);
+
+            for index in bit_start..bit_end {
+                if word & 0b1 == 0 {
+                    continue;
+                }
+                word >>= 1;
+
+                unsafe { self.transition_index_to_other(storage, incoming_set, index) };
+            }
+        }
+
+        self.temp.drain(..)
+    }
+
+    unsafe fn transition_index_to_other<A: hal::Api>(
+        &mut self,
+        storage: &hub::Storage<Texture<A>, TextureId>,
+        incoming_set: &TextureStateSet,
+        index: usize,
+    ) {
+        let old_tracked = self.owned.get(index).unwrap_unchecked();
+        let old_state = *self.end_set.simple.get_unchecked(index);
+        let new_state = *incoming_set.simple.get_unchecked(index);
+
+        match (
+            old_tracked,
+            old_state == TextureUses::COMPLEX,
+            new_state == TextureUses::COMPLEX,
+        ) {
+            (false, _, false) => {
+                *self.start_set.simple.get_unchecked_mut(index) = new_state;
+                *self.end_set.simple.get_unchecked_mut(index) = new_state;
+
+                self.owned.set(index, true);
+            }
+            (false, _, true) => {
+                *self.start_set.simple.get_unchecked_mut(index) = TextureUses::COMPLEX;
+                *self.end_set.simple.get_unchecked_mut(index) = TextureUses::COMPLEX;
+
+                let complex_state = &incoming_set.complex[&(index as u32)];
+                self.start_set
+                    .complex
+                    .insert(index as u32, complex_state.clone());
+                self.end_set
+                    .complex
+                    .insert(index as u32, complex_state.clone());
+
+                self.owned.set(index, true);
+            }
+            (true, false, false) => {
+                // If the state didn't change and all the usages are ordered, the hardware
+                // will guarentee the order of accesses, so we do not need to issue a barrier at all
+                if old_state == new_state && old_state.contains(TextureUses::ORDERED) {
+                    return;
+                }
+
+                self.temp.push(PendingTransition {
+                    id: index as u32,
+                    selector: storage.get_unchecked(index as u32).unwrap().full_range,
+                    usage: old_state..new_state,
+                });
+            }
+            (true, true, true) => {
+                self.transition_index_to_other_complex(storage, incoming_set, index);
+            }
+            (true, true, false) => {}
+            (true, false, true) => {}
+        }
+    }
+
+    #[cold]
+    unsafe fn transition_index_to_other_complex<A: hal::Api>(
+        &mut self,
+        storage: &hub::Storage<Texture<A>, TextureId>,
+        incoming_set: &TextureStateSet,
+        index: usize,
+    ) {
+        let old_complex = self.end_set.complex.get(&(index as u32)).unwrap_unchecked();
+        let new_complex = self.end_set.complex.get(&(index as u32)).unwrap_unchecked();
+
+        let mut temp = Vec::new();
+        debug_assert!(old_complex.mips.len() >= new_complex.mips.len());
+
+        for (mip_id, (mip_self, mip_other)) in old_complex
+            .mips
+            .iter_mut()
+            .zip(&new_complex.mips)
+            .enumerate()
+        {
+            let level = mip_id as u32;
+            temp.extend(mip_self.merge(mip_other, 0));
+
+            for (layers, states) in temp.drain(..) {
+                match states {
+                    Range {
+                        start: Some(start),
+                        end: Some(end),
+                    } => {
+                        // If the state didn't change and all the usages are ordered, the hardware
+                        // will guarentee the order of accesses, so we do not need to issue a barrier at all
+                        if start == end && TextureUses::ORDERED.contains(start) {
+                            return;
+                        }
+                        // TODO: Can't satisfy clippy here unless we modify
+                        // `TextureSelector` to use `std::ops::RangeBounds`.
+                        #[allow(clippy::range_plus_one)]
+                        let pending = PendingTransition {
+                            id: index as u32,
+                            selector: TextureSelector {
+                                levels: level..level + 1,
+                                layers: layers.clone(),
+                            },
+                            usage: start..end,
+                        };
+
+                        self.temp.push(pending);
+
+                        for (_, state) in mip_self.isolate(&layers, end) {
+                            *state = end;
+                        }
+                    }
+                    _ => unreachable!(),
+                };
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
     //TODO: change() tests
@@ -221,7 +575,7 @@ mod test {
 
     #[test]
     fn query() {
-        let mut ts = TextureState::default();
+        let mut ts = OldTextureState::default();
         ts.mips.push(PlaneStates::empty());
         ts.mips.push(PlaneStates::from_slice(&[
             (1..3, Unit::new(TextureUses::RESOURCE)),
@@ -266,12 +620,12 @@ mod test {
     #[test]
     fn merge() {
         let id = Id::dummy();
-        let mut ts1 = TextureState::default();
+        let mut ts1 = OldTextureState::default();
         ts1.mips.push(PlaneStates::from_slice(&[(
             1..3,
             Unit::new(TextureUses::RESOURCE),
         )]));
-        let mut ts2 = TextureState::default();
+        let mut ts2 = OldTextureState::default();
         assert_eq!(
             ts1.merge(id, &ts2, None),
             Ok(()),

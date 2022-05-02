@@ -14,7 +14,7 @@ use std::{
 use thiserror::Error;
 
 pub(crate) use buffer::BufferState;
-pub(crate) use texture::{TextureSelector, TextureState};
+pub(crate) use texture::{OldTextureState, TextureSelector};
 
 /// A single unit of state tracking. It keeps an initial
 /// usage as well as the last/current one, similar to `Range`.
@@ -109,7 +109,7 @@ struct Resource<S> {
 /// based on the contents.
 #[derive(Debug, PartialEq)]
 pub(crate) struct PendingTransition<S: ResourceState> {
-    pub id: Valid<S::Id>,
+    pub id: u32,
     pub selector: S::Selector,
     pub usage: ops::Range<S::Usage>,
 }
@@ -131,14 +131,15 @@ impl PendingTransition<BufferState> {
 
 impl From<PendingTransition<BufferState>> for UsageConflict {
     fn from(e: PendingTransition<BufferState>) -> Self {
-        Self::Buffer {
-            id: e.id.0,
-            combined_use: e.usage.end,
-        }
+        // Self::Buffer {
+        //     id: e.id.0,
+        //     combined_use: e.usage.end,
+        // }
+        todo!()
     }
 }
 
-impl PendingTransition<TextureState> {
+impl PendingTransition<OldTextureState> {
     /// Produce the hal barrier corresponding to the transition.
     pub fn into_hal<'a, A: hal::Api>(
         self,
@@ -164,14 +165,15 @@ impl PendingTransition<TextureState> {
     }
 }
 
-impl From<PendingTransition<TextureState>> for UsageConflict {
-    fn from(e: PendingTransition<TextureState>) -> Self {
-        Self::Texture {
-            id: e.id.0,
-            mip_levels: e.selector.levels.start..e.selector.levels.end,
-            array_layers: e.selector.layers.start..e.selector.layers.end,
-            combined_use: e.usage.end,
-        }
+impl From<PendingTransition<OldTextureState>> for UsageConflict {
+    fn from(e: PendingTransition<OldTextureState>) -> Self {
+        // Self::Texture {
+        //     id: e.id.0,
+        //     mip_levels: e.selector.levels.start..e.selector.levels.end,
+        //     array_layers: e.selector.layers.start..e.selector.layers.end,
+        //     combined_use: e.usage.end,
+        // }
+        todo!()
     }
 }
 
@@ -582,7 +584,7 @@ pub enum UsageConflict {
 #[derive(Debug)]
 pub(crate) struct TrackerSet {
     pub buffers: ResourceTracker<BufferState>,
-    pub textures: ResourceTracker<TextureState>,
+    pub textures: ResourceTracker<OldTextureState>,
     pub views: ResourceTracker<PhantomData<id::TextureViewId>>,
     pub bind_groups: ResourceTracker<PhantomData<id::BindGroupId>>,
     pub samplers: ResourceTracker<PhantomData<id::SamplerId>>,
@@ -650,7 +652,7 @@ impl TrackerSet {
 #[derive(Debug)]
 pub(crate) struct StatefulTrackerSubset {
     pub buffers: ResourceTracker<BufferState>,
-    pub textures: ResourceTracker<TextureState>,
+    pub textures: ResourceTracker<OldTextureState>,
 }
 
 impl StatefulTrackerSubset {

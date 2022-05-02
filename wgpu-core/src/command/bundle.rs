@@ -117,7 +117,7 @@ impl RenderBundleEncoder {
                 },
                 sample_count: {
                     let sc = desc.sample_count;
-                    if sc == 0 || sc > 32 || !conv::is_power_of_two(sc) {
+                    if sc == 0 || sc > 32 || !conv::is_power_of_two_u32(sc) {
                         return Err(CreateRenderBundleError::InvalidSampleCount(sc));
                     }
                     sc

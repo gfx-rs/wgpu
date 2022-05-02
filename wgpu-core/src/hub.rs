@@ -191,6 +191,14 @@ impl<T, I: id::TypedId> Storage<T, I> {
         result
     }
 
+    pub(crate) unsafe fn get_unchecked(&self, id: u32) -> Result<&T, InvalidId> {
+        match self.map[id as usize] {
+            Element::Occupied(ref v, _) => Ok(v),
+            Element::Vacant => panic!("{}[{}] does not exist", self.kind, id),
+            Element::Error(_, _) => Err(InvalidId),
+        }
+    }
+
     pub(crate) fn label_for_invalid_id(&self, id: I) -> &str {
         let (index, _, _) = id.unzip();
         match self.map[index as usize] {
