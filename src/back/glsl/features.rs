@@ -36,6 +36,8 @@ bitflags::bitflags! {
         const MULTI_VIEW = 1 << 17;
         /// Fused multiply-add.
         const FMA = 1 << 18;
+        /// Texture samples query
+        const TEXTURE_SAMPLES = 1 << 19;
     }
 }
 
@@ -101,7 +103,10 @@ impl FeaturesManager {
         check_feature!(SAMPLE_VARIABLES, 400, 300);
         check_feature!(DYNAMIC_ARRAY_SIZE, 430, 310);
         check_feature!(MULTI_VIEW, 140, 310);
-        check_feature!(FMA, 400, 310);
+        // Only available on glsl core, this means that opengl es can't query the number
+        // of samples in a image and neither do bound checks on the sample argument
+        // of texelFecth
+        check_feature!(TEXTURE_SAMPLES, 150);
 
         // Return an error if there are missing features
         if missing.is_empty() {
@@ -205,9 +210,17 @@ impl FeaturesManager {
             writeln!(out, "#extension GL_EXT_multiview : require")?;
         }
 
-        if self.0.contains(Features::FMA) && version.is_es() {
+        if self.0.contains(Features::FMA) && version >= Version::Embedded(310) {
             // https://www.khronos.org/registry/OpenGL/extensions/EXT/EXT_gpu_shader5.txt
             writeln!(out, "#extension GL_EXT_gpu_shader5 : require")?;
+        }
+
+        if self.0.contains(Features::TEXTURE_SAMPLES) {
+            // https://www.khronos.org/registry/OpenGL/extensions/ARB/ARB_shader_texture_image_samples.txt
+            writeln!(
+                out,
+                "#extension GL_ARB_shader_texture_image_samples : require"
+            )?;
         }
 
         Ok(())
@@ -363,24 +376,26 @@ impl<'a, W> Writer<'a, W> {
             }
         }
 
-        if self.options.version.supports_fma_function() {
-            let has_fma = self
-                .module
-                .functions
-                .iter()
-                .flat_map(|(_, f)| f.expressions.iter())
-                .chain(
-                    self.module
-                        .entry_points
-                        .iter()
-                        .flat_map(|e| e.function.expressions.iter()),
-                )
-                .any(|(_, e)| match *e {
-                    Expression::Math { fun, .. } if fun == MathFunction::Fma => true,
-                    _ => false,
-                });
-            if has_fma {
-                self.features.request(Features::FMA);
+        // Loop trough all expressions in both functions and entry points
+        // to check for needed features
+        for (_, expr) in self
+            .module
+            .functions
+            .iter()
+            .flat_map(|(_, f)| f.expressions.iter())
+            .chain(self.entry_point.function.expressions.iter())
+        {
+            match *expr {
+                // Check for fused multiply add use
+                Expression::Math { fun, .. } if fun == MathFunction::Fma => {
+                    self.features.request(Features::FMA)
+                }
+                // Check for samples query
+                Expression::ImageQuery {
+                    query: crate::ImageQuery::NumSamples,
+                    ..
+                } => self.features.request(Features::TEXTURE_SAMPLES),
+                _ => {}
             }
         }
 

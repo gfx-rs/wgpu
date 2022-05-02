@@ -2433,7 +2433,6 @@ impl<'a, W: Write> Writer<'a, W> {
                         }
                     }
                     crate::ImageQuery::NumSamples => {
-                        // assumes ARB_shader_texture_image_samples
                         let fun_name = match class {
                             ImageClass::Sampled { .. } | ImageClass::Depth { .. } => {
                                 "textureSamples"
