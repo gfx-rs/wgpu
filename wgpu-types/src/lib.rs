@@ -581,7 +581,7 @@ impl Features {
 /// Represents the sets of limits an adapter/device supports.
 ///
 /// We provide three different defaults.
-/// - [`Limits::downlevel_defaults()`]. This is a set of limits that is guarenteed to work on almost
+/// - [`Limits::downlevel_defaults()`]. This is a set of limits that is guaranteed to work on almost
 ///   all backends, including "downlevel" backends such as OpenGL and D3D11, other than WebGL. For
 ///   most applications we recommend using these limits, assuming they are high enough for your
 ///   application, and you do not intent to support WebGL.
