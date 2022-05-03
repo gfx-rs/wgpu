@@ -8,7 +8,7 @@ use crate::{
     id::{self, TextureId},
     init_tracker::*,
     resource::{Buffer, Texture},
-    track::{OldTextureState, ResourceTracker, TrackerSet, TextureTracker},
+    track::{TextureTracker},
     FastHashMap,
 };
 

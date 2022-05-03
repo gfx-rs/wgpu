@@ -310,7 +310,7 @@ impl<A: hal::Api> Access<Device<A>> for Surface {}
 impl<A: hal::Api> Access<Device<A>> for Adapter<A> {}
 impl<A: hal::Api> Access<PipelineLayout<A>> for Root {}
 impl<A: hal::Api> Access<PipelineLayout<A>> for Device<A> {}
-impl<A: hal::Api> Access<PipelineLayout<A>> for RenderBundle {}
+impl<A: hal::Api> Access<PipelineLayout<A>> for RenderBundle<A> {}
 impl<A: hal::Api> Access<BindGroupLayout<A>> for Root {}
 impl<A: hal::Api> Access<BindGroupLayout<A>> for Device<A> {}
 impl<A: hal::Api> Access<BindGroupLayout<A>> for PipelineLayout<A> {}
@@ -321,8 +321,8 @@ impl<A: hal::Api> Access<BindGroup<A>> for PipelineLayout<A> {}
 impl<A: hal::Api> Access<BindGroup<A>> for CommandBuffer<A> {}
 impl<A: hal::Api> Access<CommandBuffer<A>> for Root {}
 impl<A: hal::Api> Access<CommandBuffer<A>> for Device<A> {}
-impl<A: hal::Api> Access<RenderBundle> for Device<A> {}
-impl<A: hal::Api> Access<RenderBundle> for CommandBuffer<A> {}
+impl<A: hal::Api> Access<RenderBundle<A>> for Device<A> {}
+impl<A: hal::Api> Access<RenderBundle<A>> for CommandBuffer<A> {}
 impl<A: hal::Api> Access<ComputePipeline<A>> for Device<A> {}
 impl<A: hal::Api> Access<ComputePipeline<A>> for BindGroup<A> {}
 impl<A: hal::Api> Access<RenderPipeline<A>> for Device<A> {}

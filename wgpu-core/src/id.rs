@@ -184,7 +184,7 @@ pub type CommandBufferId = Id<crate::command::CommandBuffer<Dummy>>;
 pub type RenderPassEncoderId = *mut crate::command::RenderPass;
 pub type ComputePassEncoderId = *mut crate::command::ComputePass;
 pub type RenderBundleEncoderId = *mut crate::command::RenderBundleEncoder;
-pub type RenderBundleId = Id<crate::command::RenderBundle>;
+pub type RenderBundleId = Id<crate::command::RenderBundle<Dummy>>;
 pub type QuerySetId = Id<crate::resource::QuerySet<Dummy>>;
 
 #[test]

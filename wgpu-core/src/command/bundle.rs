@@ -45,11 +45,12 @@ use crate::{
         SHADER_STAGE_COUNT,
     },
     error::{ErrorFormatter, PrettyError},
-    hub::{GlobalIdentityHandlerFactory, HalApi, Hub, Resource, Storage, Token},
+    hub::{GlobalIdentityHandlerFactory, Hub, Resource, Storage, Token},
     id,
     init_tracker::{BufferInitTrackerAction, MemoryInitKind, TextureInitTrackerAction},
-    pipeline::PipelineFlags,
-    track::{TrackerSet, UsageConflict, UsageScope, RenderBundleScope},
+    pipeline::{PipelineFlags, self},
+    resource,
+    track::{RenderBundleScope, UsageConflict},
     validation::check_buffer_usage,
     Label, LabelHelpers, LifeGuard, Stored,
 };
@@ -173,14 +174,14 @@ impl RenderBundleEncoder {
         device: &Device<A>,
         hub: &Hub<A, G>,
         token: &mut Token<Device<A>>,
-    ) -> Result<RenderBundle, RenderBundleError> {
+    ) -> Result<RenderBundle<A>, RenderBundleError> {
         let (pipeline_layout_guard, mut token) = hub.pipeline_layouts.read(token);
         let (bind_group_guard, mut token) = hub.bind_groups.read(&mut token);
         let (pipeline_guard, mut token) = hub.render_pipelines.read(&mut token);
         let (buffer_guard, _) = hub.buffers.read(&mut token);
 
         let mut state = State {
-            trackers: TrackerSet::new(self.parent_id.backend()),
+            trackers: RenderBundleScope::new(),
             index: IndexState::new(),
             vertex: (0..hal::MAX_VERTEX_BUFFERS)
                 .map(|_| VertexState::new())
@@ -267,11 +268,13 @@ impl RenderBundleEncoder {
 
                     state.pipeline = Some(pipeline_id);
 
-                    let pipeline = state
-                        .trackers
-                        .render_pipes
-                        .use_extend(&*pipeline_guard, pipeline_id, (), ())
-                        .unwrap();
+                    let pipeline: &pipeline::RenderPipeline<A> = unsafe {
+                        state
+                            .trackers
+                            .render_pipelines
+                            .extend(&*pipeline_guard, pipeline_id)
+                            .unwrap()
+                    };
 
                     self.context
                         .check_compatible(&pipeline.pass_context)
@@ -306,11 +309,13 @@ impl RenderBundleEncoder {
                     size,
                 } => {
                     let scope = PassErrorScope::SetIndexBuffer(buffer_id);
-                    let buffer = state
-                        .trackers
-                        .buffers
-                        .use_extend(&*buffer_guard, buffer_id, (), hal::BufferUses::INDEX)
-                        .unwrap();
+                    let buffer: &resource::Buffer<A> = unsafe {
+                        state
+                            .trackers
+                            .buffers
+                            .extend(&*buffer_guard, buffer_id, hal::BufferUses::INDEX)
+                            .map_pass_err(scope)?
+                    };
                     check_buffer_usage(buffer.usage, wgt::BufferUsages::INDEX)
                         .map_pass_err(scope)?;
 
@@ -333,11 +338,13 @@ impl RenderBundleEncoder {
                     size,
                 } => {
                     let scope = PassErrorScope::SetVertexBuffer(buffer_id);
-                    let buffer = state
-                        .trackers
-                        .buffers
-                        .use_extend(&*buffer_guard, buffer_id, (), hal::BufferUses::VERTEX)
-                        .unwrap();
+                    let buffer: &resource::Buffer<A> = unsafe {
+                        state
+                            .trackers
+                            .buffers
+                            .extend(&*buffer_guard, buffer_id, hal::BufferUses::VERTEX)
+                            .map_pass_err(scope)?
+                    };
                     check_buffer_usage(buffer.usage, wgt::BufferUsages::VERTEX)
                         .map_pass_err(scope)?;
 
@@ -458,11 +465,13 @@ impl RenderBundleEncoder {
                         .require_downlevel_flags(wgt::DownlevelFlags::INDIRECT_EXECUTION)
                         .map_pass_err(scope)?;
 
-                    let buffer = state
-                        .trackers
-                        .buffers
-                        .use_extend(&*buffer_guard, buffer_id, (), hal::BufferUses::INDIRECT)
-                        .unwrap();
+                    let buffer: &resource::Buffer<A> = unsafe {
+                        state
+                            .trackers
+                            .buffers
+                            .extend(&*buffer_guard, buffer_id, hal::BufferUses::INDIRECT)
+                            .map_pass_err(scope)?
+                    };
                     check_buffer_usage(buffer.usage, wgt::BufferUsages::INDIRECT)
                         .map_pass_err(scope)?;
 
@@ -491,12 +500,13 @@ impl RenderBundleEncoder {
                         .require_downlevel_flags(wgt::DownlevelFlags::INDIRECT_EXECUTION)
                         .map_pass_err(scope)?;
 
-                    let buffer = state
-                        .trackers
-                        .buffers
-                        .use_extend(&*buffer_guard, buffer_id, (), hal::BufferUses::INDIRECT)
-                        .map_err(|err| RenderCommandError::Buffer(buffer_id, err))
-                        .map_pass_err(scope)?;
+                    let buffer: &resource::Buffer<A> = unsafe {
+                        state
+                            .trackers
+                            .buffers
+                            .extend(&*buffer_guard, buffer_id, hal::BufferUses::INDIRECT)
+                            .map_pass_err(scope)?
+                    };
                     check_buffer_usage(buffer.usage, wgt::BufferUsages::INDIRECT)
                         .map_pass_err(scope)?;
 
@@ -992,8 +1002,8 @@ struct VertexLimitState {
 }
 
 #[derive(Debug)]
-struct State {
-    trackers: TrackerSet,
+struct State<A: hal::Api> {
+    trackers: RenderBundleScope<A>,
     index: IndexState,
     vertex: ArrayVec<VertexState, { hal::MAX_VERTEX_BUFFERS }>,
     bind: ArrayVec<BindState, { hal::MAX_BIND_GROUPS }>,
@@ -1004,7 +1014,7 @@ struct State {
     pipeline: Option<id::RenderPipelineId>,
 }
 
-impl State {
+impl<A: hal::Api> State<A> {
     fn vertex_limits(&self) -> VertexLimitState {
         let mut vert_state = VertexLimitState {
             vertex_limit: u32::MAX,

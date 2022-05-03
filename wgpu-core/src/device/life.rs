@@ -7,7 +7,6 @@ use crate::{
     },
     hub::{GlobalIdentityHandlerFactory, HalApi, Hub, Token},
     id, resource,
-    track::TrackerSet,
     RefCount, Stored, SubmissionIndex,
 };
 use smallvec::SmallVec;

@@ -232,6 +232,20 @@ pub(crate) struct RenderBundleScope<A: hal::Api> {
     pub query_sets: StatelessTracker<resource::QuerySet<A>, id::QuerySetId>,
 }
 
+impl<A: hal::Api> RenderBundleScope<A> {
+    pub fn new() -> Self {
+        Self {
+            buffers: BufferTracker::new(),
+            textures: TextureTracker::new(),
+            views: StatelessTracker::new(),
+            samplers: StatelessTracker::new(),
+            bind_groups: StatelessTracker::new(),
+            render_pipelines: StatelessTracker::new(),
+            query_sets: StatelessTracker::new(),
+        }
+    }
+}
+
 pub(crate) struct UsageScope {
     pub buffers: BufferUsageScope,
     pub textures: TextureUsageScope,

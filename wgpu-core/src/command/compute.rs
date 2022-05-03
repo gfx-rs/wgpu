@@ -15,7 +15,7 @@ use crate::{
     id,
     init_tracker::MemoryInitKind,
     resource::{Buffer, Texture},
-    track::{StatefulTrackerSubset, TrackerSet, UsageConflict, UseExtendError},
+    track::UsageConflict,
     validation::{check_buffer_usage, MissingBufferUsageError},
     Label,
 };

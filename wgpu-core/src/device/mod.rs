@@ -8,7 +8,7 @@ use crate::{
         TextureInitTracker, TextureInitTrackerAction,
     },
     instance, pipeline, present, resource,
-    track::{BufferState, OldTextureState, TextureSelector, TrackerSet, UsageConflict},
+    track::{TextureSelector, UsageConflict},
     validation::{self, check_buffer_usage, check_texture_usage},
     FastHashMap, Label, LabelHelpers as _, LifeGuard, MultiRefCount, RefCount, Stored,
     SubmissionIndex, DOWNLEVEL_ERROR_MESSAGE,
