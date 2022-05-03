@@ -33,12 +33,25 @@ DOT (GraphViz)  | :ok:               | dot-out  | Not a shading language |
 
 ## Conversion tool
 
-Naga includes a default binary target, which allows to test the conversion of different code paths.
+Naga can be used as a CLI, which allows to test the conversion of different code paths.
+
+First, install `naga-cli` from crates.io or directly from GitHub.
+
 ```bash
-cargo run my_shader.wgsl # validate only
-cargo run my_shader.spv my_shader.txt # dump the IR module into a file
-cargo run my_shader.spv my_shader.metal --flow-dir flow-dir # convert the SPV to Metal, also dump the SPIR-V flow graph to `flow-dir`
-cargo run my_shader.wgsl my_shader.vert --profile es310 # convert the WGSL to GLSL vertex stage under ES 3.20 profile
+# release version
+cargo install naga-cli
+
+# development version
+cargo install naga-cli --git https://github.com/gfx-rs/naga.git
+```
+
+Then, you can run `naga` command.
+
+```bash
+naga my_shader.wgsl # validate only
+naga my_shader.spv my_shader.txt # dump the IR module into a file
+naga my_shader.spv my_shader.metal --flow-dir flow-dir # convert the SPV to Metal, also dump the SPIR-V flow graph to `flow-dir`
+naga my_shader.wgsl my_shader.vert --profile es310 # convert the WGSL to GLSL vertex stage under ES 3.20 profile
 ```
 
 ## Development workflow
