@@ -2772,9 +2772,9 @@ impl<'a> RenderPass<'a> {
     ///
     /// Offset is measured in bytes, but must be a multiple of [`PUSH_CONSTANT_ALIGNMENT`].
     ///
-    /// Data size must be a multiple of 4 and must be aligned to the 4s, so we take an array of u32.
-    /// For example, with an offset of 4 and an array of `[u32; 3]`, that will write to the range
-    /// of 4..16.
+    /// Data size must be a multiple of 4 and must have an alignment of 4.
+    /// For example, with an offset of 4 and an array of `[u8; 8]`, that will write to the range
+    /// of 4..12.
     ///
     /// For each byte in the range of push constant data written, the union of the stages of all push constant
     /// ranges that covers that byte must be exactly `stages`. There's no good way of explaining this simply,
@@ -2907,9 +2907,9 @@ impl<'a> ComputePass<'a> {
     ///
     /// Offset is measured in bytes, but must be a multiple of [`PUSH_CONSTANT_ALIGNMENT`].
     ///
-    /// Data size must be a multiple of 4 and must be aligned to the 4s, so we take an array of u32.
-    /// For example, with an offset of 4 and an array of `[u32; 3]`, that will write to the range
-    /// of 4..16.
+    /// Data size must be a multiple of 4 and must have an alignment of 4.
+    /// For example, with an offset of 4 and an array of `[u8; 8]`, that will write to the range
+    /// of 4..12.
     pub fn set_push_constants(&mut self, offset: u32, data: &[u8]) {
         self.id.set_push_constants(offset, data);
     }
@@ -3065,9 +3065,9 @@ impl<'a> RenderBundleEncoder<'a> {
     ///
     /// Offset is measured in bytes, but must be a multiple of [`PUSH_CONSTANT_ALIGNMENT`].
     ///
-    /// Data size must be a multiple of 4 and must be aligned to the 4s, so we take an array of u32.
-    /// For example, with an offset of 4 and an array of `[u32; 3]`, that will write to the range
-    /// of 4..16.
+    /// Data size must be a multiple of 4 and must have an alignment of 4.
+    /// For example, with an offset of 4 and an array of `[u8; 8]`, that will write to the range
+    /// of 4..12.
     ///
     /// For each byte in the range of push constant data written, the union of the stages of all push constant
     /// ranges that covers that byte must be exactly `stages`. There's no good way of explaining this simply,
