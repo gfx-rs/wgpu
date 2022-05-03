@@ -5,7 +5,10 @@ use crate::{
     hub,
     id::{BufferId, TypedId, Valid},
     resource::Buffer,
-    track::{invalid_resource_state, resize_bitvec, skip_barrier, ResourceUses, UsageConflict},
+    track::{
+        invalid_resource_state, iterate_bitvec, resize_bitvec, skip_barrier, ResourceUses,
+        UsageConflict,
+    },
 };
 use bit_vec::BitVec;
 use hal::BufferUses;
@@ -58,19 +61,48 @@ impl BufferUsageScope {
         bind_group: &BufferBindGroupState,
     ) -> Result<(), UsageConflict> {
         for &(id, state) in &bind_group.buffers {
-            self.extend(storage, id, state)?;
+            self.extend(storage, id.0, state)?;
         }
 
         Ok(())
     }
 
-    pub unsafe fn extend<A: hal::Api>(
+    pub unsafe fn extend_from_scope<A: hal::Api>(
         &mut self,
         storage: &hub::Storage<Buffer<A>, BufferId>,
-        id: Valid<BufferId>,
+        scope: &Self,
+    ) -> Result<(), UsageConflict> {
+        let incoming_size = scope.state.len();
+        if incoming_size > self.state.len() {
+            self.set_max_index(incoming_size);
+        }
+
+        iterate_bitvec(&scope.owned, |index| {
+            unsafe { self.extend_inner(storage, index as u32, *scope.state.get_unchecked(index)) };
+        });
+
+        Ok(())
+    }
+
+    pub unsafe fn extend<'a, A: hal::Api>(
+        &mut self,
+        storage: &'a hub::Storage<Buffer<A>, BufferId>,
+        id: BufferId,
+        new_state: BufferUses,
+    ) -> Result<&'a Buffer<A>, UsageConflict> {
+        self.extend_inner(storage, id.unzip().0, new_state)?;
+
+        Ok(storage
+            .get(id)
+            .map_err(|_| UsageConflict::BufferInvalid { id })?)
+    }
+
+    unsafe fn extend_inner<'a, A: hal::Api>(
+        &mut self,
+        storage: &'a hub::Storage<Buffer<A>, BufferId>,
+        index: u32,
         new_state: BufferUses,
     ) -> Result<(), UsageConflict> {
-        let (index, _, _) = id.0.unzip();
         let index = index as usize;
 
         let currently_active = self.owned.get(index).unwrap_unchecked();
@@ -80,7 +112,7 @@ impl BufferUsageScope {
             let merged_state = current_state | new_state;
 
             if invalid_resource_state(merged_state) {
-                return Err(UsageConflict::from_buffer(id, current_state, new_state));
+                return Err(UsageConflict::from_buffer(index, current_state, new_state));
             }
 
             *self.state.get_unchecked_mut(index) = merged_state;
@@ -118,7 +150,15 @@ impl BufferTracker {
         resize_bitvec(&mut self.owned, size);
     }
 
-    pub fn change_states<A: hal::Api>(
+    pub fn change_states_scope<A: hal::Api>(
+        &mut self,
+        storage: &hub::Storage<Buffer<A>, BufferId>,
+        scope: &BufferUsageScope,
+    ) -> Drain<PendingTransition<BufferUses>> {
+        self.change_states_inner(storage, &scope.state, &scope.owned)
+    }
+
+    fn change_states_inner<A: hal::Api>(
         &mut self,
         storage: &hub::Storage<Buffer<A>, BufferId>,
         incoming_set: &Vec<BufferUses>,
@@ -129,23 +169,9 @@ impl BufferTracker {
             self.set_max_index(incoming_size);
         }
 
-        for (word_index, mut word) in incoming_ownership.blocks().enumerate() {
-            if word == 0 {
-                continue;
-            }
-
-            let bit_start = word_index * 64;
-            let bit_end = ((word_index + 1) * 64).min(incoming_size);
-
-            for index in bit_start..bit_end {
-                if word & 0b1 == 0 {
-                    continue;
-                }
-                word >>= 1;
-
-                unsafe { self.transition(storage, incoming_set, index) };
-            }
-        }
+        iterate_bitvec(incoming_ownership, |index| {
+            unsafe { self.transition(storage, incoming_set, index) };
+        });
 
         self.temp.drain(..)
     }
@@ -202,121 +228,5 @@ impl BufferTracker {
 
             self.owned.set(index, true);
         }
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-    use crate::id::Id;
-
-    #[test]
-    fn change_extend() {
-        let mut bs = Unit {
-            first: None,
-            last: BufferUses::INDEX,
-        };
-        let id = Id::dummy();
-        assert_eq!(
-            bs.change(id, (), BufferUses::STORAGE_WRITE, None),
-            Err(PendingTransition {
-                id,
-                selector: (),
-                usage: BufferUses::INDEX..BufferUses::STORAGE_WRITE,
-            }),
-        );
-        bs.change(id, (), BufferUses::VERTEX, None).unwrap();
-        bs.change(id, (), BufferUses::INDEX, None).unwrap();
-        assert_eq!(bs, Unit::new(BufferUses::VERTEX | BufferUses::INDEX));
-    }
-
-    #[test]
-    fn change_replace() {
-        let mut bs = Unit {
-            first: None,
-            last: BufferUses::STORAGE_WRITE,
-        };
-        let id = Id::dummy();
-        let mut list = Vec::new();
-        bs.change(id, (), BufferUses::VERTEX, Some(&mut list))
-            .unwrap();
-        assert_eq!(
-            &list,
-            &[PendingTransition {
-                id,
-                selector: (),
-                usage: BufferUses::STORAGE_WRITE..BufferUses::VERTEX,
-            }],
-        );
-        assert_eq!(
-            bs,
-            Unit {
-                first: Some(BufferUses::STORAGE_WRITE),
-                last: BufferUses::VERTEX,
-            }
-        );
-
-        list.clear();
-        bs.change(id, (), BufferUses::STORAGE_WRITE, Some(&mut list))
-            .unwrap();
-        assert_eq!(
-            &list,
-            &[PendingTransition {
-                id,
-                selector: (),
-                usage: BufferUses::VERTEX..BufferUses::STORAGE_WRITE,
-            }],
-        );
-        assert_eq!(
-            bs,
-            Unit {
-                first: Some(BufferUses::STORAGE_WRITE),
-                last: BufferUses::STORAGE_WRITE,
-            }
-        );
-    }
-
-    #[test]
-    fn merge_replace() {
-        let mut bs = Unit {
-            first: None,
-            last: BufferUses::empty(),
-        };
-        let other_smooth = Unit {
-            first: Some(BufferUses::empty()),
-            last: BufferUses::COPY_DST,
-        };
-        let id = Id::dummy();
-        let mut list = Vec::new();
-        bs.merge(id, &other_smooth, Some(&mut list)).unwrap();
-        assert!(list.is_empty());
-        assert_eq!(
-            bs,
-            Unit {
-                first: Some(BufferUses::empty()),
-                last: BufferUses::COPY_DST,
-            }
-        );
-
-        let other_rough = Unit {
-            first: Some(BufferUses::empty()),
-            last: BufferUses::UNIFORM,
-        };
-        bs.merge(id, &other_rough, Some(&mut list)).unwrap();
-        assert_eq!(
-            &list,
-            &[PendingTransition {
-                id,
-                selector: (),
-                usage: BufferUses::COPY_DST..BufferUses::empty(),
-            }],
-        );
-        assert_eq!(
-            bs,
-            Unit {
-                first: Some(BufferUses::empty()),
-                last: BufferUses::UNIFORM,
-            }
-        );
     }
 }

@@ -3,7 +3,10 @@ use crate::{
     hub,
     id::{TextureId, TypedId, Valid},
     resource::Texture,
-    track::{invalid_resource_state, resize_bitvec, skip_barrier, ResourceUses, UsageConflict},
+    track::{
+        invalid_resource_state, iterate_bitvec, resize_bitvec, skip_barrier, ResourceUses,
+        UsageConflict,
+    },
 };
 use bit_vec::BitVec;
 use hal::TextureUses;
@@ -92,6 +95,23 @@ impl TextureUsageScope {
         resize_bitvec(&mut self.owned, size);
     }
 
+    pub fn extend_from_scope<A: hal::Api>(
+        &mut self,
+        storage: &hub::Storage<Texture<A>, TextureId>,
+        scope: &Self,
+    ) -> Drain<PendingTransition<TextureUses>> {
+        let incoming_size = scope.set.simple.len();
+        if incoming_size > self.set.simple.len() {
+            self.set_max_index(incoming_size);
+        }
+
+        iterate_bitvec(&scope.set.simple, |index| {
+            todo!()
+        });
+
+        self.temp.drain(..)
+    }
+
     pub unsafe fn extend_from_bind_group<A: hal::Api>(
         &mut self,
         storage: &hub::Storage<Texture<A>, TextureId>,
@@ -107,14 +127,30 @@ impl TextureUsageScope {
     /// # Safety
     ///
     /// `id` must be a valid ID and have an ID value less than the last call to set_max_index.
-    pub unsafe fn extend<A: hal::Api>(
+    pub unsafe fn extend<'a, A: hal::Api>(
+        &mut self,
+        storage: &'a hub::Storage<Texture<A>, TextureId>,
+        id: TextureId,
+        selector: Option<TextureSelector>,
+        new_state: TextureUses,
+    ) -> Result<&'a Texture<A>, UsageConflict> {
+        let (index, _, _) = id.unzip();
+        self.extend_inner(storage, index, selector, new_state)?;
+        Ok(storage
+            .get(id)
+            .map_err(|_| UsageConflict::TextureInvalid { id: index })?)
+    }
+
+    /// # Safety
+    ///
+    /// `id` must be a valid ID and have an ID value less than the last call to set_max_index.
+    unsafe fn extend_inner<A: hal::Api>(
         &mut self,
         storage: &hub::Storage<Texture<A>, TextureId>,
-        id: Valid<TextureId>,
+        index: u32,
         selector: Option<TextureSelector>,
         new_state: TextureUses,
     ) -> Result<(), UsageConflict> {
-        let (index, _, _) = id.0.unzip();
         let index = index as usize;
 
         let currently_active = self.owned.get(index).unwrap_unchecked();
@@ -128,7 +164,7 @@ impl TextureUsageScope {
                     if invalid_resource_state(merged_state) {
                         return Err(UsageConflict::from_texture(
                             storage,
-                            id,
+                            index,
                             selector,
                             current_state,
                             new_state,
@@ -140,17 +176,19 @@ impl TextureUsageScope {
                     return Ok(());
                 }
                 // The old usage is complex.
-                (true, selector) => return self.extend_complex(storage, id, selector, new_state),
+                (true, selector) => {
+                    return self.extend_complex(storage, index, selector, new_state)
+                }
 
                 // The old usage is simple, so demote it to a complex one.
                 (false, Some(selector)) => {
                     *self.set.simple.get_unchecked_mut(index) = hal::TextureUses::COMPLEX;
 
                     // Demote our simple state to a complex one.
-                    self.extend_complex(storage, id, None, current_state)?;
+                    self.extend_complex(storage, index, None, current_state)?;
 
                     // Extend that complex state with our new complex state.
-                    return self.extend_complex(storage, id, Some(selector), new_state);
+                    return self.extend_complex(storage, index, Some(selector), new_state);
                 }
             }
         }
@@ -160,7 +198,7 @@ impl TextureUsageScope {
 
         if let Some(selector) = selector {
             *self.set.simple.get_unchecked_mut(index) = hal::TextureUses::COMPLEX;
-            self.extend_complex(storage, id, Some(selector), new_state)?;
+            self.extend_complex(storage, index, Some(selector), new_state)?;
         } else {
             *self.set.simple.get_unchecked_mut(index) = new_state;
         }
@@ -169,16 +207,14 @@ impl TextureUsageScope {
     }
 
     #[cold]
-    fn extend_complex<A: hal::Api>(
+    unsafe fn extend_complex<A: hal::Api>(
         &mut self,
         storage: &hub::Storage<Texture<A>, TextureId>,
-        id: Valid<TextureId>,
+        index: u32,
         selector: Option<TextureSelector>,
         new_state: TextureUses,
     ) -> Result<(), UsageConflict> {
-        let texture = &storage[id];
-
-        let (index, _, _) = id.0.unzip();
+        let texture = storage.get_unchecked(index);
 
         // Create the complex entry for this texture.
         let complex = self.set.complex.entry(index).or_insert_with(|| {
@@ -211,7 +247,7 @@ impl TextureUsageScope {
                 if invalid_resource_state(merged) {
                     return Err(UsageConflict::from_texture(
                         storage,
-                        id,
+                        index,
                         selector,
                         *current_state,
                         new_state,
@@ -262,23 +298,9 @@ impl TextureTracker {
             self.set_max_index(incoming_size);
         }
 
-        for (word_index, mut word) in incoming_ownership.blocks().enumerate() {
-            if word == 0 {
-                continue;
-            }
-
-            let bit_start = word_index * 64;
-            let bit_end = ((word_index + 1) * 64).min(incoming_size);
-
-            for index in bit_start..bit_end {
-                if word & 0b1 == 0 {
-                    continue;
-                }
-                word >>= 1;
-
-                unsafe { self.transition(storage, incoming_set, index) };
-            }
-        }
+        iterate_bitvec(incoming_ownership, |index| {
+            unsafe { self.transition(storage, incoming_set, index) };
+        });
 
         self.temp.drain(..)
     }
@@ -491,199 +513,5 @@ impl TextureTracker {
             .complex
             .insert(index as u32, new_complex.clone());
         *self.end_set.simple.get_unchecked_mut(index) = TextureUses::COMPLEX;
-    }
-}
-
-#[cfg(test)]
-mod test {
-    //TODO: change() tests
-    use super::*;
-    use crate::id::Id;
-
-    #[test]
-    fn query() {
-        let mut ts = OldTextureState::default();
-        ts.mips.push(PlaneStates::empty());
-        ts.mips.push(PlaneStates::from_slice(&[
-            (1..3, Unit::new(TextureUses::RESOURCE)),
-            (3..5, Unit::new(TextureUses::RESOURCE)),
-            (5..6, Unit::new(TextureUses::STORAGE_READ)),
-        ]));
-
-        assert_eq!(
-            ts.query(TextureSelector {
-                mips: 1..2,
-                layers: 2..5,
-            }),
-            // level 1 matches
-            Some(TextureUses::RESOURCE),
-        );
-        assert_eq!(
-            ts.query(TextureSelector {
-                mips: 0..2,
-                layers: 2..5,
-            }),
-            // level 0 is empty, level 1 matches
-            Some(TextureUses::RESOURCE),
-        );
-        assert_eq!(
-            ts.query(TextureSelector {
-                mips: 1..2,
-                layers: 1..5,
-            }),
-            // level 1 matches with gaps
-            Some(TextureUses::RESOURCE),
-        );
-        assert_eq!(
-            ts.query(TextureSelector {
-                mips: 1..2,
-                layers: 4..6,
-            }),
-            // level 1 doesn't match
-            None,
-        );
-    }
-
-    #[test]
-    fn merge() {
-        let id = Id::dummy();
-        let mut ts1 = OldTextureState::default();
-        ts1.mips.push(PlaneStates::from_slice(&[(
-            1..3,
-            Unit::new(TextureUses::RESOURCE),
-        )]));
-        let mut ts2 = OldTextureState::default();
-        assert_eq!(
-            ts1.merge(id, &ts2, None),
-            Ok(()),
-            "failed to merge with an empty"
-        );
-
-        ts2.mips.push(PlaneStates::from_slice(&[(
-            1..2,
-            Unit::new(TextureUses::COPY_SRC),
-        )]));
-        assert_eq!(
-            ts1.merge(Id::dummy(), &ts2, None),
-            Ok(()),
-            "failed to extend a compatible state"
-        );
-        assert_eq!(
-            ts1.mips[0].query(&(1..2), |&v| v),
-            Some(Ok(Unit {
-                first: None,
-                last: TextureUses::RESOURCE | TextureUses::COPY_SRC,
-            })),
-            "wrong extension result"
-        );
-
-        ts2.mips[0] = PlaneStates::from_slice(&[(1..2, Unit::new(TextureUses::COPY_DST))]);
-        assert_eq!(
-            ts1.clone().merge(Id::dummy(), &ts2, None),
-            Err(PendingTransition {
-                id,
-                selector: TextureSelector {
-                    mips: 0..1,
-                    layers: 1..2,
-                },
-                usage: TextureUses::RESOURCE | TextureUses::COPY_SRC..TextureUses::COPY_DST,
-            }),
-            "wrong error on extending with incompatible state"
-        );
-
-        let mut list = Vec::new();
-        ts2.mips[0] = PlaneStates::from_slice(&[
-            (1..2, Unit::new(TextureUses::COPY_DST)),
-            (
-                2..3,
-                Unit {
-                    first: Some(TextureUses::COPY_SRC),
-                    last: TextureUses::COLOR_TARGET,
-                },
-            ),
-        ]);
-        ts1.merge(Id::dummy(), &ts2, Some(&mut list)).unwrap();
-        assert_eq!(
-            &list,
-            &[
-                PendingTransition {
-                    id,
-                    selector: TextureSelector {
-                        mips: 0..1,
-                        layers: 1..2,
-                    },
-                    usage: TextureUses::RESOURCE | TextureUses::COPY_SRC..TextureUses::COPY_DST,
-                },
-                PendingTransition {
-                    id,
-                    selector: TextureSelector {
-                        mips: 0..1,
-                        layers: 2..3,
-                    },
-                    // the transition links the end of the base rage (..SAMPLED)
-                    // with the start of the next range (COPY_SRC..)
-                    usage: TextureUses::RESOURCE..TextureUses::COPY_SRC,
-                },
-            ],
-            "replacing produced wrong transitions"
-        );
-        assert_eq!(
-            ts1.mips[0].query(&(1..2), |&v| v),
-            Some(Ok(Unit {
-                first: Some(TextureUses::RESOURCE | TextureUses::COPY_SRC),
-                last: TextureUses::COPY_DST,
-            })),
-            "wrong final layer 1 state"
-        );
-        assert_eq!(
-            ts1.mips[0].query(&(2..3), |&v| v),
-            Some(Ok(Unit {
-                first: Some(TextureUses::RESOURCE),
-                last: TextureUses::COLOR_TARGET,
-            })),
-            "wrong final layer 2 state"
-        );
-
-        list.clear();
-        ts2.mips[0] = PlaneStates::from_slice(&[(
-            2..3,
-            Unit {
-                first: Some(TextureUses::COLOR_TARGET),
-                last: TextureUses::COPY_SRC,
-            },
-        )]);
-        ts1.merge(Id::dummy(), &ts2, Some(&mut list)).unwrap();
-        assert_eq!(&list, &[], "unexpected replacing transition");
-
-        list.clear();
-        ts2.mips[0] = PlaneStates::from_slice(&[(
-            2..3,
-            Unit {
-                first: Some(TextureUses::COPY_DST),
-                last: TextureUses::COPY_DST,
-            },
-        )]);
-        ts1.merge(Id::dummy(), &ts2, Some(&mut list)).unwrap();
-        assert_eq!(
-            &list,
-            &[PendingTransition {
-                id,
-                selector: TextureSelector {
-                    mips: 0..1,
-                    layers: 2..3,
-                },
-                usage: TextureUses::COPY_SRC..TextureUses::COPY_DST,
-            },],
-            "invalid replacing transition"
-        );
-        assert_eq!(
-            ts1.mips[0].query(&(2..3), |&v| v),
-            Some(Ok(Unit {
-                // the initial state here is never expected to change
-                first: Some(TextureUses::RESOURCE),
-                last: TextureUses::COPY_DST,
-            })),
-            "wrong final layer 2 state"
-        );
     }
 }

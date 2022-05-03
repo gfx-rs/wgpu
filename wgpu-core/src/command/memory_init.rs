@@ -8,7 +8,7 @@ use crate::{
     id::{self, TextureId},
     init_tracker::*,
     resource::{Buffer, Texture},
-    track::{OldTextureState, ResourceTracker, TrackerSet},
+    track::{OldTextureState, ResourceTracker, TrackerSet, TextureTracker},
     FastHashMap,
 };
 
@@ -127,7 +127,7 @@ pub(crate) fn fixup_discarded_surfaces<
     inits: InitIter,
     encoder: &mut A::CommandEncoder,
     texture_guard: &Storage<Texture<A>, TextureId>,
-    texture_tracker: &mut ResourceTracker<OldTextureState>,
+    texture_tracker: &mut TextureTracker,
     device: &Device<A>,
 ) {
     for init in inits {

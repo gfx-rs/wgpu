@@ -4,7 +4,7 @@ use crate::{
     hub::Resource,
     id::{BindGroupLayoutId, BufferId, DeviceId, SamplerId, TextureViewId, Valid},
     init_tracker::{BufferInitTrackerAction, TextureInitTrackerAction},
-    track::{TrackerSet, UsageConflict, DUMMY_SELECTOR},
+    track::{UsageConflict, BindGroupStates},
     validation::{MissingBufferUsageError, MissingTextureUsageError},
     FastHashMap, Label, LifeGuard, MultiRefCount, Stored,
 };
@@ -17,7 +17,7 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use std::{
-    borrow::{Borrow, Cow},
+    borrow::{Cow},
     ops::Range,
 };
 
@@ -709,13 +709,12 @@ pub(crate) fn buffer_binding_type_alignment(
     }
 }
 
-#[derive(Debug)]
 pub struct BindGroup<A: hal::Api> {
     pub(crate) raw: A::BindGroup,
     pub(crate) device_id: Stored<DeviceId>,
     pub(crate) layout_id: Valid<BindGroupLayoutId>,
     pub(crate) life_guard: LifeGuard,
-    pub(crate) used: TrackerSet,
+    pub(crate) used: BindGroupStates<A>,
     pub(crate) used_buffer_ranges: Vec<BufferInitTrackerAction>,
     pub(crate) used_texture_ranges: Vec<TextureInitTrackerAction>,
     pub(crate) dynamic_binding_info: Vec<BindGroupDynamicBindingData>,
@@ -763,12 +762,6 @@ impl<A: hal::Api> BindGroup<A> {
         }
 
         Ok(())
-    }
-}
-
-impl<A: hal::Api> Borrow<()> for BindGroup<A> {
-    fn borrow(&self) -> &() {
-        &DUMMY_SELECTOR
     }
 }
 

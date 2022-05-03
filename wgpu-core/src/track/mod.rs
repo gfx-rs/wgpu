@@ -1,20 +1,20 @@
 mod buffer;
 mod range;
+mod stateless;
 mod texture;
 
 use crate::{
-    conv, hub,
-    id::{self, TypedId, Valid},
-    resource, Epoch, FastHashMap, Index, RefCount,
+    binding_model, command, conv, hub,
+    id::{self, TypedId},
+    pipeline, resource,
 };
 
 use bit_vec::BitVec;
-use std::{
-    collections::hash_map::Entry, fmt, marker::PhantomData, num::NonZeroU32, ops, vec::Drain,
-};
+use std::{fmt, num::NonZeroU32, ops};
 use thiserror::Error;
 
-pub(crate) use buffer::BufferState;
+pub(crate) use buffer::{BufferBindGroupState, BufferTracker, BufferUsageScope};
+pub(crate) use stateless::{StatelessBindGroupSate, StatelessTracker};
 pub(crate) use texture::{
     TextureBindGroupState, TextureSelector, TextureTracker, TextureUsageScope,
 };
@@ -104,8 +104,33 @@ fn resize_bitvec<B: bit_vec::BitBlock>(vec: &mut BitVec<B>, size: usize) {
     }
 }
 
+fn iterate_bitvec(ownership: &BitVec<usize>, mut func: impl FnMut(usize)) {
+    let size = ownership.len();
+    for (word_index, mut word) in ownership.blocks().enumerate() {
+        if word == 0 {
+            continue;
+        }
+
+        let bit_start = word_index * 64;
+        let bit_end = (bit_start + 64).min(size);
+
+        for index in bit_start..bit_end {
+            if word & 0b1 == 0 {
+                continue;
+            }
+            word >>= 1;
+
+            func(index);
+        }
+    }
+}
+
 #[derive(Clone, Debug, Error)]
 pub enum UsageConflict {
+    #[error("Attempted to use buffer {id} which is invalid.")]
+    BufferInvalid { id: u32 },
+    #[error("Attempted to use texture {id} which is invalid.")]
+    TextureInvalid { id: u32 },
     #[error("Attempted to use buffer {id:?} with {invalid_use}.")]
     Buffer {
         id: id::BufferId,
@@ -120,13 +145,9 @@ pub enum UsageConflict {
     },
 }
 impl UsageConflict {
-    fn from_buffer(
-        id: Valid<id::BufferId>,
-        current_state: hal::BufferUses,
-        new_state: hal::BufferUses,
-    ) -> Self {
+    fn from_buffer(id: u32, current_state: hal::BufferUses, new_state: hal::BufferUses) -> Self {
         Self::Buffer {
-            id: id.0,
+            id,
             invalid_use: InvalidUse {
                 current_state,
                 new_state,
@@ -136,12 +157,12 @@ impl UsageConflict {
 
     fn from_texture<A: hal::Api>(
         storage: &hub::Storage<resource::Texture<A>, id::TextureId>,
-        id: Valid<id::TextureId>,
+        id: u32,
         selector: Option<TextureSelector>,
         current_state: hal::TextureUses,
         new_state: hal::TextureUses,
     ) -> Self {
-        let texture = &storage[id];
+        let texture = unsafe { storage.get_unchecked(id) };
 
         let mips;
         let layers;
@@ -194,109 +215,73 @@ impl<T: ResourceUses> fmt::Display for InvalidUse<T> {
     }
 }
 
-pub(crate) struct BindGroupStates {
+pub(crate) struct BindGroupStates<A: hal::Api> {
+    pub buffers: BufferBindGroupState,
     pub textures: TextureBindGroupState,
+    pub views: StatelessBindGroupSate<resource::TextureView<A>, id::TextureViewId>,
+    pub samplers: StatelessBindGroupSate<resource::Sampler<A>, id::SamplerId>,
 }
 
-/// A set of trackers for all relevant resources.
-///
-/// `Device` uses this to track all resources allocated from that device.
-/// Resources like `BindGroup`, `CommandBuffer`, and so on that may own a
-/// variety of other resources also use a value of this type to keep track of
-/// everything they're depending on.
-#[derive(Debug)]
-pub(crate) struct TrackerSet {
-    pub buffers: ResourceTracker<BufferState>,
-    pub textures: ResourceTracker<OldTextureState>,
-    pub views: ResourceTracker<PhantomData<id::TextureViewId>>,
-    pub bind_groups: ResourceTracker<PhantomData<id::BindGroupId>>,
-    pub samplers: ResourceTracker<PhantomData<id::SamplerId>>,
-    pub compute_pipes: ResourceTracker<PhantomData<id::ComputePipelineId>>,
-    pub render_pipes: ResourceTracker<PhantomData<id::RenderPipelineId>>,
-    pub bundles: ResourceTracker<PhantomData<id::RenderBundleId>>,
-    pub query_sets: ResourceTracker<PhantomData<id::QuerySetId>>,
+pub(crate) struct RenderBundleScope<A: hal::Api> {
+    pub buffers: BufferUsageScope,
+    pub textures: TextureUsageScope,
+    pub views: StatelessTracker<resource::TextureView<A>, id::TextureViewId>,
+    pub samplers: StatelessTracker<resource::Sampler<A>, id::SamplerId>,
+    pub bind_groups: StatelessTracker<binding_model::BindGroup<A>, id::BindGroupId>,
+    pub render_pipelines: StatelessTracker<pipeline::RenderPipeline<A>, id::RenderPipelineId>,
+    pub query_sets: StatelessTracker<resource::QuerySet<A>, id::QuerySetId>,
 }
 
-impl TrackerSet {
-    /// Create an empty set.
-    pub fn new(backend: wgt::Backend) -> Self {
+pub(crate) struct UsageScope {
+    pub buffers: BufferUsageScope,
+    pub textures: TextureUsageScope,
+}
+
+impl UsageScope {
+    pub fn new() -> Self {
         Self {
-            buffers: ResourceTracker::new(backend),
-            textures: ResourceTracker::new(backend),
-            views: ResourceTracker::new(backend),
-            bind_groups: ResourceTracker::new(backend),
-            samplers: ResourceTracker::new(backend),
-            compute_pipes: ResourceTracker::new(backend),
-            render_pipes: ResourceTracker::new(backend),
-            bundles: ResourceTracker::new(backend),
-            query_sets: ResourceTracker::new(backend),
+            buffers: BufferUsageScope::new(),
+            textures: TextureUsageScope::new(),
         }
     }
 
-    /// Clear all the trackers.
-    pub fn _clear(&mut self) {
-        self.buffers.clear();
-        self.textures.clear();
-        self.views.clear();
-        self.bind_groups.clear();
-        self.samplers.clear();
-        self.compute_pipes.clear();
-        self.render_pipes.clear();
-        self.bundles.clear();
-        self.query_sets.clear();
-    }
+    pub unsafe fn extend_from_bind_group<A: hal::Api>(
+        &mut self,
+        buffers: &hub::Storage<resource::Buffer<A>, id::BufferId>,
+        textures: &hub::Storage<resource::Texture<A>, id::TextureId>,
+        bind_group: &BindGroupStates<A>,
+    ) -> Result<(), UsageConflict> {
+        self.buffers
+            .extend_from_bind_group(buffers, &bind_group.buffers)?;
+        self.textures
+            .extend_from_bind_group(textures, &bind_group.textures)?;
 
-    /// Try to optimize the tracking representation.
-    pub fn optimize(&mut self) {
-        self.buffers.optimize();
-        self.textures.optimize();
-        self.views.optimize();
-        self.bind_groups.optimize();
-        self.samplers.optimize();
-        self.compute_pipes.optimize();
-        self.render_pipes.optimize();
-        self.bundles.optimize();
-        self.query_sets.optimize();
-    }
-
-    /// Merge only the stateful trackers of another instance by extending
-    /// the usage. Returns a conflict if any.
-    pub fn merge_extend_stateful(&mut self, other: &Self) -> Result<(), UsageConflict> {
-        self.buffers.merge_extend(&other.buffers)?;
-        self.textures.merge_extend(&other.textures)?;
         Ok(())
     }
 
-    pub fn backend(&self) -> wgt::Backend {
-        self.buffers.backend
-    }
-}
+    pub unsafe fn extend_from_render_bundle<A: hal::Api>(
+        &mut self,
+        buffers: &hub::Storage<resource::Buffer<A>, id::BufferId>,
+        textures: &hub::Storage<resource::Texture<A>, id::TextureId>,
+        render_bundle: &RenderBundleScope<A>,
+    ) -> Result<(), UsageConflict> {
+        self.buffers
+            .extend_from_scope(buffers, &render_bundle.buffers)?;
+        self.textures
+            .extend_from_scope(textures, &render_bundle.textures)?;
 
-#[derive(Debug)]
-pub(crate) struct StatefulTrackerSubset {
-    pub buffers: ResourceTracker<BufferState>,
-    pub textures: ResourceTracker<OldTextureState>,
-}
-
-impl StatefulTrackerSubset {
-    /// Create an empty set.
-    pub fn new(backend: wgt::Backend) -> Self {
-        Self {
-            buffers: ResourceTracker::new(backend),
-            textures: ResourceTracker::new(backend),
-        }
-    }
-
-    /// Clear all the trackers.
-    pub fn clear(&mut self) {
-        self.buffers.clear();
-        self.textures.clear();
-    }
-
-    /// Merge all the trackers of another tracker the usage.
-    pub fn merge_extend(&mut self, other: &TrackerSet) -> Result<(), UsageConflict> {
-        self.buffers.merge_extend(&other.buffers)?;
-        self.textures.merge_extend(&other.textures)?;
         Ok(())
     }
+}
+
+pub(crate) struct Tracker<A: hal::Api> {
+    pub buffers: BufferTracker,
+    pub textures: TextureTracker,
+    pub views: StatelessTracker<resource::TextureView<A>, id::TextureViewId>,
+    pub samplers: StatelessTracker<resource::Sampler<A>, id::SamplerId>,
+    pub bind_groups: StatelessTracker<binding_model::BindGroup<A>, id::BindGroupId>,
+    pub compute_pipelines: StatelessTracker<pipeline::ComputePipeline<A>, id::ComputePipelineId>,
+    pub render_pipelines: StatelessTracker<pipeline::RenderPipeline<A>, id::RenderPipelineId>,
+    pub bundles: StatelessTracker<command::RenderBundle<A>, id::RenderBundleId>,
+    pub query_sets: StatelessTracker<resource::QuerySet<A>, id::QuerySetId>,
 }

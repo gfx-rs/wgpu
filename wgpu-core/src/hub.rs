@@ -191,11 +191,11 @@ impl<T, I: id::TypedId> Storage<T, I> {
         result
     }
 
-    pub(crate) unsafe fn get_unchecked(&self, id: u32) -> Result<&T, InvalidId> {
+    pub(crate) unsafe fn get_unchecked(&self, id: u32) -> &T {
         match self.map[id as usize] {
-            Element::Occupied(ref v, _) => Ok(v),
+            Element::Occupied(ref v, e) => v,
             Element::Vacant => panic!("{}[{}] does not exist", self.kind, id),
-            Element::Error(_, _) => Err(InvalidId),
+            Element::Error(_, _) => panic!(""),
         }
     }
 
@@ -627,7 +627,7 @@ pub struct Hub<A: hal::Api, F: GlobalIdentityHandlerFactory> {
     pub bind_group_layouts: Registry<BindGroupLayout<A>, id::BindGroupLayoutId, F>,
     pub bind_groups: Registry<BindGroup<A>, id::BindGroupId, F>,
     pub command_buffers: Registry<CommandBuffer<A>, id::CommandBufferId, F>,
-    pub render_bundles: Registry<RenderBundle, id::RenderBundleId, F>,
+    pub render_bundles: Registry<RenderBundle<A>, id::RenderBundleId, F>,
     pub render_pipelines: Registry<RenderPipeline<A>, id::RenderPipelineId, F>,
     pub compute_pipelines: Registry<ComputePipeline<A>, id::ComputePipelineId, F>,
     pub query_sets: Registry<QuerySet<A>, id::QuerySetId, F>,

@@ -1,6 +1,7 @@
 use crate::{
     binding_model::BindError,
     command::{
+        self,
         bind::Binder,
         end_pipeline_statistics_query,
         memory_init::{fixup_discarded_surfaces, SurfacesInDiscardState},
@@ -17,8 +18,8 @@ use crate::{
     id,
     init_tracker::{MemoryInitKind, TextureInitRange, TextureInitTrackerAction},
     pipeline::PipelineFlags,
-    resource::{Texture, TextureView},
-    track::{StatefulTrackerSubset, TextureSelector, UsageConflict},
+    resource::{self, Texture, TextureView},
+    track::{TextureSelector, UsageConflict, UsageScope},
     validation::{
         check_buffer_usage, check_texture_usage, MissingBufferUsageError, MissingTextureUsageError,
     },
@@ -38,7 +39,6 @@ use serde::Deserialize;
 #[cfg(any(feature = "serial-pass", feature = "trace"))]
 use serde::Serialize;
 
-use crate::track::UseExtendError;
 use std::{borrow::Cow, fmt, iter, marker::PhantomData, mem, num::NonZeroU32, ops::Range, str};
 
 use super::{memory_init::TextureSurfaceDiscard, CommandBufferTextureMemoryActions};
@@ -563,7 +563,7 @@ type AttachmentDataVec<T> = ArrayVec<T, MAX_TOTAL_ATTACHMENTS>;
 
 struct RenderPassInfo<'a, A: hal::Api> {
     context: RenderPassContext,
-    trackers: StatefulTrackerSubset,
+    usage_scope: UsageScope,
     render_attachments: AttachmentDataVec<RenderAttachment<'a>>, // All render attachments, including depth/stencil
     is_ds_read_only: bool,
     extent: wgt::Extent3d,
@@ -934,7 +934,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
 
         Ok(Self {
             context,
-            trackers: StatefulTrackerSubset::new(A::VARIANT),
+            usage_scope: UsageScope::new(),
             render_attachments,
             is_ds_read_only,
             extent,
@@ -949,7 +949,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
         mut self,
         raw: &mut A::CommandEncoder,
         texture_guard: &Storage<Texture<A>, id::TextureId>,
-    ) -> Result<(StatefulTrackerSubset, SurfacesInDiscardState), RenderPassErrorInner> {
+    ) -> Result<(UsageScope, SurfacesInDiscardState), RenderPassErrorInner> {
         profiling::scope!("finish", "RenderPassInfo");
         unsafe {
             raw.end_render_pass();
@@ -963,7 +963,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
             check_texture_usage(texture.desc.usage, TextureUsages::RENDER_ATTACHMENT)?;
 
             // the tracker set of the pass is always in "extend" mode
-            self.trackers
+            self.usage_scope
                 .textures
                 .change_extend(
                     ra.texture_id.value,
@@ -1012,7 +1012,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
             }
         }
 
-        Ok((self.trackers, self.pending_discard_init_fixups))
+        Ok((self.usage_scope, self.pending_discard_init_fixups))
     }
 }
 
@@ -1047,7 +1047,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut token = Token::root();
         let (device_guard, mut token) = hub.devices.read(&mut token);
 
-        let (trackers, query_reset_state, pending_discard_init_fixups) = {
+        let (scope, query_reset_state, pending_discard_init_fixups) = {
             let (mut cmb_guard, mut token) = hub.command_buffers.write(&mut token);
 
             let cmd_buf = CommandBuffer::get_encoder_mut(&mut *cmb_guard, encoder_id)
@@ -1136,20 +1136,24 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         );
                         dynamic_offset_count += num_dynamic_offsets as usize;
 
-                        let bind_group = cmd_buf
-                            .trackers
-                            .bind_groups
-                            .use_extend(&*bind_group_guard, bind_group_id, (), ())
-                            .map_err(|_| RenderCommandError::InvalidBindGroup(bind_group_id))
-                            .map_pass_err(scope)?;
+                        let bind_group = unsafe {
+                            cmd_buf
+                                .trackers
+                                .bind_groups
+                                .extend(&*bind_group_guard, bind_group_id)
+                        };
                         bind_group
                             .validate_dynamic_bindings(&temp_offsets, &cmd_buf.limits)
                             .map_pass_err(scope)?;
 
                         // merge the resource tracker in
-                        info.trackers
-                            .merge_extend(&bind_group.used)
-                            .map_pass_err(scope)?;
+                        unsafe {
+                            info.usage_scope.extend_from_bind_group(
+                                &*buffer_guard,
+                                &*texture_guard,
+                                &bind_group.used,
+                            )
+                        }
                         //Note: stateless trackers are not merged: the lifetime reference
                         // is held to the bind group itself.
 
@@ -1198,12 +1202,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         let scope = PassErrorScope::SetPipelineRender(pipeline_id);
                         state.pipeline = Some(pipeline_id);
 
-                        let pipeline = cmd_buf
-                            .trackers
-                            .render_pipes
-                            .use_extend(&*pipeline_guard, pipeline_id, (), ())
-                            .map_err(|_| RenderCommandError::InvalidPipeline(pipeline_id))
-                            .map_pass_err(scope)?;
+                        let pipeline = unsafe {
+                            cmd_buf
+                                .trackers
+                                .render_pipelines
+                                .extend(&*pipeline_guard, pipeline_id)
+                        };
 
                         info.context
                             .check_compatible(&pipeline.pass_context)
@@ -1309,12 +1313,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         size,
                     } => {
                         let scope = PassErrorScope::SetIndexBuffer(buffer_id);
-                        let buffer = info
-                            .trackers
-                            .buffers
-                            .use_extend(&*buffer_guard, buffer_id, (), hal::BufferUses::INDEX)
-                            .map_err(|e| RenderCommandError::Buffer(buffer_id, e))
-                            .map_pass_err(scope)?;
+                        let buffer: &resource::Buffer<A> = unsafe {
+                            info.usage_scope
+                                .buffers
+                                .extend(&*buffer_guard, buffer_id, hal::BufferUses::INDEX)
+                                .map_pass_err(scope)?
+                        };
                         check_buffer_usage(buffer.usage, BufferUsages::INDEX)
                             .map_pass_err(scope)?;
                         let buf_raw = buffer
@@ -1356,12 +1360,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         size,
                     } => {
                         let scope = PassErrorScope::SetVertexBuffer(buffer_id);
-                        let buffer = info
-                            .trackers
-                            .buffers
-                            .use_extend(&*buffer_guard, buffer_id, (), hal::BufferUses::VERTEX)
-                            .map_err(|e| RenderCommandError::Buffer(buffer_id, e))
-                            .map_pass_err(scope)?;
+                        let buffer: &resource::Buffer<A> = unsafe {
+                            info.usage_scope
+                                .buffers
+                                .extend(&*buffer_guard, buffer_id, hal::BufferUses::VERTEX)
+                                .map_pass_err(scope)?
+                        };
                         check_buffer_usage(buffer.usage, BufferUsages::VERTEX)
                             .map_pass_err(scope)?;
                         let buf_raw = buffer
@@ -1614,12 +1618,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .require_downlevel_flags(wgt::DownlevelFlags::INDIRECT_EXECUTION)
                             .map_pass_err(scope)?;
 
-                        let indirect_buffer = info
-                            .trackers
-                            .buffers
-                            .use_extend(&*buffer_guard, buffer_id, (), hal::BufferUses::INDIRECT)
-                            .map_err(|e| RenderCommandError::Buffer(buffer_id, e))
-                            .map_pass_err(scope)?;
+                        let indirect_buffer: &resource::Buffer<A> = unsafe {
+                            info.usage_scope
+                                .buffers
+                                .extend(&*buffer_guard, buffer_id, hal::BufferUses::INDIRECT)
+                                .map_pass_err(scope)?
+                        };
                         check_buffer_usage(indirect_buffer.usage, BufferUsages::INDIRECT)
                             .map_pass_err(scope)?;
                         let indirect_raw = indirect_buffer
@@ -1685,12 +1689,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .require_downlevel_flags(wgt::DownlevelFlags::INDIRECT_EXECUTION)
                             .map_pass_err(scope)?;
 
-                        let indirect_buffer = info
-                            .trackers
-                            .buffers
-                            .use_extend(&*buffer_guard, buffer_id, (), hal::BufferUses::INDIRECT)
-                            .map_err(|e| RenderCommandError::Buffer(buffer_id, e))
-                            .map_pass_err(scope)?;
+                        let indirect_buffer: &resource::Buffer<A> = unsafe {
+                            info.usage_scope
+                                .buffers
+                                .extend(&*buffer_guard, buffer_id, hal::BufferUses::INDIRECT)
+                                .map_pass_err(scope)?
+                        };
                         check_buffer_usage(indirect_buffer.usage, BufferUsages::INDIRECT)
                             .map_pass_err(scope)?;
                         let indirect_raw = indirect_buffer
@@ -1699,17 +1703,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .ok_or(RenderCommandError::DestroyedBuffer(buffer_id))
                             .map_pass_err(scope)?;
 
-                        let count_buffer = info
-                            .trackers
-                            .buffers
-                            .use_extend(
-                                &*buffer_guard,
-                                count_buffer_id,
-                                (),
-                                hal::BufferUses::INDIRECT,
-                            )
-                            .map_err(|e| RenderCommandError::Buffer(count_buffer_id, e))
-                            .map_pass_err(scope)?;
+                        let count_buffer: &resource::Buffer<A> = unsafe {
+                            info.usage_scope
+                                .buffers
+                                .extend(&*buffer_guard, count_buffer_id, hal::BufferUses::INDIRECT)
+                                .map_pass_err(scope)?
+                        };
                         check_buffer_usage(count_buffer.usage, BufferUsages::INDIRECT)
                             .map_pass_err(scope)?;
                         let count_raw = count_buffer
@@ -1811,17 +1810,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     } => {
                         let scope = PassErrorScope::WriteTimestamp;
 
-                        let query_set = cmd_buf
-                            .trackers
-                            .query_sets
-                            .use_extend(&*query_set_guard, query_set_id, (), ())
-                            .map_err(|e| match e {
-                                UseExtendError::InvalidResource => {
-                                    RenderCommandError::InvalidQuerySet(query_set_id)
-                                }
-                                _ => unreachable!(),
-                            })
-                            .map_pass_err(scope)?;
+                        let query_set: &resource::QuerySet<A> = unsafe {
+                            cmd_buf
+                                .trackers
+                                .query_sets
+                                .extend(&*query_set_guard, query_set_id)
+                                .map_err(|_| RenderCommandError::InvalidQuerySet(query_set_id))
+                                .map_pass_err(scope)?
+                        };
 
                         query_set
                             .validate_and_write_timestamp(
@@ -1838,17 +1834,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     } => {
                         let scope = PassErrorScope::BeginPipelineStatisticsQuery;
 
-                        let query_set = cmd_buf
-                            .trackers
-                            .query_sets
-                            .use_extend(&*query_set_guard, query_set_id, (), ())
-                            .map_err(|e| match e {
-                                UseExtendError::InvalidResource => {
-                                    RenderCommandError::InvalidQuerySet(query_set_id)
-                                }
-                                _ => unreachable!(),
-                            })
-                            .map_pass_err(scope)?;
+                        let query_set: &resource::QuerySet<A> = unsafe {
+                            cmd_buf
+                                .trackers
+                                .query_sets
+                                .extend(&*query_set_guard, query_set_id)
+                                .map_err(|_| RenderCommandError::InvalidQuerySet(query_set_id))
+                                .map_pass_err(scope)?
+                        };
 
                         query_set
                             .validate_and_begin_pipeline_statistics_query(
@@ -1868,12 +1861,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     }
                     RenderCommand::ExecuteBundle(bundle_id) => {
                         let scope = PassErrorScope::ExecuteBundle;
-                        let bundle = cmd_buf
-                            .trackers
-                            .bundles
-                            .use_extend(&*bundle_guard, bundle_id, (), ())
-                            .map_err(|_| RenderCommandError::InvalidRenderBundle(bundle_id))
-                            .map_pass_err(scope)?;
+                        let bundle: &command::RenderBundle<A> = unsafe {
+                            cmd_buf
+                                .trackers
+                                .bundles
+                                .extend(&*bundle_guard, bundle_id)
+                                .map_err(|_| RenderCommandError::InvalidRenderBundle(bundle_id))
+                                .map_pass_err(scope)?
+                        };
 
                         info.context
                             .check_compatible(&bundle.context)
@@ -1924,9 +1919,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         })
                         .map_pass_err(scope)?;
 
-                        info.trackers
-                            .merge_extend(&bundle.used)
-                            .map_pass_err(scope)?;
+                        unsafe {
+                            info.usage_scope
+                                .extend_from_render_bundle(
+                                    &*buffer_guard,
+                                    &*texture_guard,
+                                    &bundle.used,
+                                )
+                                .map_pass_err(scope)?
+                        };
                         // Start tracking the bind groups specifically, as they are the only
                         // compound resources, to make it easier to update submission indices
                         // later at submission time.
@@ -1977,8 +1978,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             super::CommandBuffer::insert_barriers(
                 transit,
                 &mut cmd_buf.trackers,
-                &trackers.buffers,
-                &trackers.textures,
+                &scope,
                 &*buffer_guard,
                 &*texture_guard,
             );

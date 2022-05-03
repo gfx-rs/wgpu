@@ -49,7 +49,7 @@ use crate::{
     id,
     init_tracker::{BufferInitTrackerAction, MemoryInitKind, TextureInitTrackerAction},
     pipeline::PipelineFlags,
-    track::{TrackerSet, UsageConflict},
+    track::{TrackerSet, UsageConflict, UsageScope, RenderBundleScope},
     validation::check_buffer_usage,
     Label, LabelHelpers, LifeGuard, Stored,
 };
@@ -599,23 +599,23 @@ pub type RenderBundleDescriptor<'a> = wgt::RenderBundleDescriptor<Label<'a>>;
 // The plan is to back it by an actual Vulkan secondary buffer, D3D12 Bundle,
 // or Metal indirect command buffer.
 #[derive(Debug)]
-pub struct RenderBundle {
+pub struct RenderBundle<A: hal::Api> {
     // Normalized command stream. It can be executed verbatim,
     // without re-binding anything on the pipeline change.
     base: BasePass<RenderCommand>,
     pub(super) is_ds_read_only: bool,
     pub(crate) device_id: Stored<id::DeviceId>,
-    pub(crate) used: TrackerSet,
+    pub(crate) used: RenderBundleScope<A>,
     pub(super) buffer_memory_init_actions: Vec<BufferInitTrackerAction>,
     pub(super) texture_memory_init_actions: Vec<TextureInitTrackerAction>,
     pub(super) context: RenderPassContext,
     pub(crate) life_guard: LifeGuard,
 }
 
-unsafe impl Send for RenderBundle {}
-unsafe impl Sync for RenderBundle {}
+unsafe impl<A: hal::Api> Send for RenderBundle<A> {}
+unsafe impl<A: hal::Api> Sync for RenderBundle<A> {}
 
-impl RenderBundle {
+impl<A: hal::Api> RenderBundle<A> {
     /// Actually encode the contents into a native command buffer.
     ///
     /// This is partially duplicating the logic of `command_encoder_run_render_pass`.
@@ -625,7 +625,7 @@ impl RenderBundle {
     /// Note that the function isn't expected to fail, generally.
     /// All the validation has already been done by this point.
     /// The only failure condition is if some of the used buffers are destroyed.
-    pub(super) unsafe fn execute<A: HalApi>(
+    pub(super) unsafe fn execute(
         &self,
         raw: &mut A::CommandEncoder,
         pipeline_layout_guard: &Storage<
@@ -814,7 +814,7 @@ impl RenderBundle {
     }
 }
 
-impl Resource for RenderBundle {
+impl<A: hal::Api> Resource for RenderBundle<A> {
     const TYPE: &'static str = "RenderBundle";
 
     fn life_guard(&self) -> &LifeGuard {

@@ -19,6 +19,7 @@ use self::memory_init::CommandBufferTextureMemoryActions;
 
 use crate::error::{ErrorFormatter, PrettyError};
 use crate::init_tracker::BufferInitTrackerAction;
+use crate::track::{Tracker, UsageScope};
 use crate::{
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Storage, Token},
     id,
@@ -96,7 +97,7 @@ pub struct CommandBuffer<A: hal::Api> {
     encoder: CommandEncoder<A>,
     status: CommandEncoderStatus,
     pub(crate) device_id: Stored<id::DeviceId>,
-    pub(crate) trackers: TrackerSet,
+    pub(crate) trackers: Tracker<A>,
     buffer_memory_init_actions: Vec<BufferInitTrackerAction>,
     texture_memory_actions: CommandBufferTextureMemoryActions,
     limits: wgt::Limits,
@@ -140,19 +141,21 @@ impl<A: HalApi> CommandBuffer<A> {
 
     pub(crate) fn insert_barriers(
         raw: &mut A::CommandEncoder,
-        base: &mut TrackerSet,
-        head_buffers: &ResourceTracker<BufferState>,
-        head_textures: &ResourceTracker<OldTextureState>,
+        base: &mut Tracker<A>,
+        head: &UsageScope,
         buffer_guard: &Storage<Buffer<A>, id::BufferId>,
         texture_guard: &Storage<Texture<A>, id::TextureId>,
     ) {
         profiling::scope!("insert_barriers");
         debug_assert_eq!(A::VARIANT, base.backend());
 
-        let buffer_barriers = base.buffers.merge_replace(head_buffers).map(|pending| {
-            let buf = &buffer_guard[pending.id];
-            pending.into_hal(buf)
-        });
+        let buffer_barriers = base
+            .buffers
+            .change_states_scope(&*buffer_guard, &head.buffers)
+            .map(|pending| {
+                let buf = unsafe { &buffer_guard.get_unchecked(pending.id) };
+                pending.into_hal(buf)
+            });
         let texture_barriers = base.textures.merge_replace(head_textures).map(|pending| {
             let tex = &texture_guard[pending.id];
             pending.into_hal(tex)
