@@ -12,7 +12,7 @@ struct Foo {
 };
 
 Foo ConstructFoo(float4 arg0, int arg1) {
-    Foo ret;
+    Foo ret = (Foo)0;
     ret.a = arg0;
     ret.b = arg1;
     return ret;

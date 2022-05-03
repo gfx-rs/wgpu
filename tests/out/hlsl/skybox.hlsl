@@ -30,7 +30,7 @@ struct FragmentInput_fs_main {
 };
 
 VertexOutput ConstructVertexOutput(float4 arg0, float3 arg1) {
-    VertexOutput ret;
+    VertexOutput ret = (VertexOutput)0;
     ret.position = arg0;
     ret.uv = arg1;
     return ret;

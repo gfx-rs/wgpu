@@ -427,8 +427,8 @@ impl<'a, W: Write> super::Writer<'a, W> {
                 let struct_name = &self.names[&NameKey::Type(constructor.ty)];
                 writeln!(
                     self.out,
-                    "{}{} {};",
-                    INDENT, struct_name, RETURN_VARIABLE_NAME
+                    "{}{} {} = ({})0;",
+                    INDENT, struct_name, RETURN_VARIABLE_NAME, struct_name
                 )?;
                 for (i, member) in members.iter().enumerate() {
                     let field_name = &self.names[&NameKey::StructMember(constructor.ty, i as u32)];

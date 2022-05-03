@@ -18,7 +18,7 @@ struct FragmentInput_frag_main {
 };
 
 VertexOutput ConstructVertexOutput(float2 arg0, float4 arg1) {
-    VertexOutput ret;
+    VertexOutput ret = (VertexOutput)0;
     ret.uv = arg0;
     ret.position = arg1;
     return ret;

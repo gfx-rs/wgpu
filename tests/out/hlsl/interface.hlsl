@@ -40,7 +40,7 @@ struct FragmentInput_fragment {
 };
 
 VertexOutput ConstructVertexOutput(float4 arg0, float arg1) {
-    VertexOutput ret;
+    VertexOutput ret = (VertexOutput)0;
     ret.position = arg0;
     ret._varying = arg1;
     return ret;
@@ -55,7 +55,7 @@ VertexOutput_vertex vertex(uint vertex_index : SV_VertexID, uint instance_index 
 }
 
 FragmentOutput ConstructFragmentOutput(float arg0, uint arg1, float arg2) {
-    FragmentOutput ret;
+    FragmentOutput ret = (FragmentOutput)0;
     ret.depth = arg0;
     ret.sample_mask = arg1;
     ret.color = arg2;

@@ -48,7 +48,7 @@ void SetMatScalarmOnBaz(Baz obj, float scalar, uint mat_idx, uint vec_idx) {
 }
 
 Baz ConstructBaz(float3x2 arg0) {
-    Baz ret;
+    Baz ret = (Baz)0;
     ret.m_0 = arg0[0];
     ret.m_1 = arg0[1];
     ret.m_2 = arg0[2];
