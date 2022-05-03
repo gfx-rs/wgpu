@@ -112,7 +112,7 @@ version = "0.12"
 [dependencies]
 arrayvec = "0.7"
 log = "0.4"
-parking_lot = "0.11"
+parking_lot = "0.12"
 raw-window-handle = "0.4"
 serde = { version = "1", features = ["derive"], optional = true }
 smallvec = "1"
@@ -283,8 +283,7 @@ web-sys = { version = "0.3.53", features = [
 ]}
 js-sys = "0.3.50"
 wasm-bindgen-futures = "0.4.23"
-# enable parking_lot's wasm-bindgen feature so that it, in turn, enables that of crate `instant`
-parking_lot = { version = "0.11", features = ["wasm-bindgen"] }
+parking_lot = "0.12"
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 console_error_panic_hook = "0.1.6"
