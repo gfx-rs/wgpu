@@ -24,7 +24,6 @@ use crate::{
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Storage, Token},
     id,
     resource::{Buffer, Texture},
-    track::{BufferState, ResourceTracker, TrackerSet},
     Label, Stored,
 };
 
@@ -85,7 +84,7 @@ impl<A: hal::Api> CommandEncoder<A> {
 pub struct BakedCommands<A: hal::Api> {
     pub(crate) encoder: A::CommandEncoder,
     pub(crate) list: Vec<A::CommandBuffer>,
-    pub(crate) trackers: TrackerSet,
+    pub(crate) trackers: Tracker<A>,
     buffer_memory_init_actions: Vec<BufferInitTrackerAction>,
     texture_memory_actions: CommandBufferTextureMemoryActions,
 }
@@ -125,7 +124,7 @@ impl<A: HalApi> CommandBuffer<A> {
             },
             status: CommandEncoderStatus::Recording,
             device_id,
-            trackers: TrackerSet::new(A::VARIANT),
+            trackers: Tracker::new(),
             buffer_memory_init_actions: Default::default(),
             texture_memory_actions: Default::default(),
             limits,
@@ -156,10 +155,13 @@ impl<A: HalApi> CommandBuffer<A> {
                 let buf = unsafe { &buffer_guard.get_unchecked(pending.id) };
                 pending.into_hal(buf)
             });
-        let texture_barriers = base.textures.merge_replace(head_textures).map(|pending| {
-            let tex = &texture_guard[pending.id];
-            pending.into_hal(tex)
-        });
+        let texture_barriers = base
+            .textures
+            .change_states_scope(&*texture_guard, &head.textures)
+            .map(|pending| {
+                let tex = unsafe { texture_guard.get_unchecked(pending.id) };
+                pending.into_hal(tex)
+            });
 
         unsafe {
             raw.transition_buffers(buffer_barriers);

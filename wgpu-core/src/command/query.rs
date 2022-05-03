@@ -8,7 +8,6 @@ use crate::{
     id::{self, Id, TypedId},
     init_tracker::MemoryInitKind,
     resource::QuerySet,
-    track::UseExtendError,
     Epoch, FastHashMap, Index,
 };
 use std::{iter, marker::PhantomData};
@@ -297,14 +296,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             });
         }
 
-        let query_set = cmd_buf
-            .trackers
-            .query_sets
-            .use_extend(&*query_set_guard, query_set_id, (), ())
-            .map_err(|e| match e {
-                UseExtendError::InvalidResource => QueryError::InvalidQuerySet(query_set_id),
-                _ => unreachable!(),
-            })?;
+        let query_set = unsafe {
+            cmd_buf
+                .trackers
+                .query_sets
+                .extend(&*query_set_guard, query_set_id)
+                .map_err(|_| QueryError::InvalidQuerySet(query_set_id))?
+        };
 
         query_set.validate_and_write_timestamp(raw_encoder, query_set_id, query_index, None)?;
 
@@ -345,14 +343,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             return Err(QueryError::Resolve(ResolveError::BufferOffsetAlignment));
         }
 
-        let query_set = cmd_buf
-            .trackers
-            .query_sets
-            .use_extend(&*query_set_guard, query_set_id, (), ())
-            .map_err(|e| match e {
-                UseExtendError::InvalidResource => QueryError::InvalidQuerySet(query_set_id),
-                _ => unreachable!(),
-            })?;
+        let query_set = unsafe {
+            cmd_buf
+                .trackers
+                .query_sets
+                .extend(&*query_set_guard, query_set_id)
+                .map_err(|_| QueryError::InvalidQuerySet(query_set_id))?
+        };
 
         let (dst_buffer, dst_pending) = cmd_buf
             .trackers

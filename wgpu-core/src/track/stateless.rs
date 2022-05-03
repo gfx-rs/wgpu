@@ -47,4 +47,15 @@ impl<T, Id: TypedId> StatelessTracker<T, Id> {
             self.owned.set(id.0.unzip().0 as usize, true);
         }
     }
+
+    pub fn extend_from_tracker(&mut self, storage: &hub::Storage<T, Id>, other: &Self) {
+        let incoming_size = other.owned.len();
+        if incoming_size > self.owned.len() {
+            self.set_max_index(incoming_size);
+        }
+
+        for (left, &right) in unsafe { self.owned.storage_mut().iter_mut() }.zip(other.owned.storage()) {
+            *left |= right;
+        }
+    }
 }

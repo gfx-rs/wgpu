@@ -1072,10 +1072,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let (bundle_guard, mut token) = hub.render_bundles.read(&mut token);
             let (pipeline_layout_guard, mut token) = hub.pipeline_layouts.read(&mut token);
             let (bind_group_guard, mut token) = hub.bind_groups.read(&mut token);
+            let (render_pipe_guard, mut token) = hub.render_pipelines.read(&mut token);
             let (pipeline_guard, mut token) = hub.render_pipelines.read(&mut token);
             let (query_set_guard, mut token) = hub.query_sets.read(&mut token);
             let (buffer_guard, mut token) = hub.buffers.read(&mut token);
             let (texture_guard, mut token) = hub.textures.read(&mut token);
+            let (sampler_guard, mut token) = hub.samplers.read(&mut token);
             let (view_guard, _) = hub.texture_views.read(&mut token);
 
             log::trace!(
@@ -1926,16 +1928,19 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                     &*texture_guard,
                                     &bundle.used,
                                 )
-                                .map_pass_err(scope)?
+                                .map_pass_err(scope)?;
+                            cmd_buf
+                                .trackers
+                                .extend_from_render_bundle(
+                                    &*view_guard,
+                                    &*sampler_guard,
+                                    &*bind_group_guard,
+                                    &*render_pipe_guard,
+                                    &*query_set_guard,
+                                    &bundle.used,
+                                )
+                                .map_pass_err(scope)?;
                         };
-                        // Start tracking the bind groups specifically, as they are the only
-                        // compound resources, to make it easier to update submission indices
-                        // later at submission time.
-                        cmd_buf
-                            .trackers
-                            .bind_groups
-                            .merge_extend(&bundle.used.bind_groups)
-                            .unwrap();
                         state.reset_bundle();
                     }
                 }

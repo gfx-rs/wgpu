@@ -287,7 +287,15 @@ impl TextureTracker {
         resize_bitvec(&mut self.owned, size);
     }
 
-    pub fn change_states<A: hal::Api>(
+    pub fn change_states_scope<A: hal::Api>(
+        &mut self,
+        storage: &hub::Storage<Texture<A>, TextureId>,
+        scope: &TextureUsageScope,
+    ) -> Drain<PendingTransition<TextureUses>> {
+        self.change_states_inner(storage, &scope.set, &scope.owned)
+    }
+
+    fn change_states_inner<A: hal::Api>(
         &mut self,
         storage: &hub::Storage<Texture<A>, TextureId>,
         incoming_set: &TextureStateSet,

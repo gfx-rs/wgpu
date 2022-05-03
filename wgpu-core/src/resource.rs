@@ -3,7 +3,7 @@ use crate::{
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Resource, Token},
     id::{DeviceId, SurfaceId, TextureId, Valid},
     init_tracker::{BufferInitTracker, TextureInitTracker},
-    track::{TextureSelector, DUMMY_SELECTOR},
+    track::{TextureSelector},
     validation::MissingBufferUsageError,
     Label, LifeGuard, RefCount, Stored,
 };
@@ -146,12 +146,6 @@ impl<A: hal::Api> Resource for Buffer<A> {
 
     fn life_guard(&self) -> &LifeGuard {
         &self.life_guard
-    }
-}
-
-impl<A: hal::Api> Borrow<()> for Buffer<A> {
-    fn borrow(&self) -> &() {
-        &DUMMY_SELECTOR
     }
 }
 
@@ -428,12 +422,6 @@ impl<A: hal::Api> Resource for TextureView<A> {
     }
 }
 
-impl<A: hal::Api> Borrow<()> for TextureView<A> {
-    fn borrow(&self) -> &() {
-        &DUMMY_SELECTOR
-    }
-}
-
 /// Describes a [`Sampler`]
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
@@ -510,11 +498,6 @@ impl<A: hal::Api> Resource for Sampler<A> {
     }
 }
 
-impl<A: hal::Api> Borrow<()> for Sampler<A> {
-    fn borrow(&self) -> &() {
-        &DUMMY_SELECTOR
-    }
-}
 #[derive(Clone, Debug, Error)]
 pub enum CreateQuerySetError {
     #[error(transparent)]
@@ -542,12 +525,6 @@ impl<A: hal::Api> Resource for QuerySet<A> {
 
     fn life_guard(&self) -> &LifeGuard {
         &self.life_guard
-    }
-}
-
-impl<A: hal::Api> Borrow<()> for QuerySet<A> {
-    fn borrow(&self) -> &() {
-        &DUMMY_SELECTOR
     }
 }
 

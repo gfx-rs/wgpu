@@ -285,3 +285,41 @@ pub(crate) struct Tracker<A: hal::Api> {
     pub bundles: StatelessTracker<command::RenderBundle<A>, id::RenderBundleId>,
     pub query_sets: StatelessTracker<resource::QuerySet<A>, id::QuerySetId>,
 }
+
+impl<A: hal::Api> Tracker<A> {
+    pub fn new() -> Self {
+        Self {
+            buffers: BufferTracker::new(),
+            textures: TextureTracker::new(),
+            views: StatelessTracker::new(),
+            samplers: StatelessTracker::new(),
+            bind_groups: StatelessTracker::new(),
+            compute_pipelines: StatelessTracker::new(),
+            render_pipelines: StatelessTracker::new(),
+            bundles: StatelessTracker::new(),
+            query_sets: StatelessTracker::new(),
+        }
+    }
+
+    pub unsafe fn extend_from_render_bundle(
+        &mut self,
+        views: hub::Storage<resource::TextureView<A>, id::TextureViewId>,
+        samplers: hub::Storage<resource::Sampler<A>, id::SamplerId>,
+        bind_groups: hub::Storage<binding_model::BindGroup<A>, id::BindGroupId>,
+        render_pipelines: hub::Storage<pipeline::RenderPipeline<A>, id::RenderPipelineId>,
+        query_sets: hub::Storage<resource::QuerySet<A>, id::QuerySetId>,
+        render_bundle: &RenderBundleScope<A>,
+    ) -> Result<(), UsageConflict> {
+        self.views.extend_from_tracker(&views, &render_bundle.views);
+        self.samplers
+            .extend_from_tracker(&samplers, &render_bundle.samplers);
+        self.bind_groups
+            .extend_from_tracker(&bind_groups, &render_bundle.bind_groups);
+        self.render_pipelines
+            .extend_from_tracker(&render_pipelines, &render_bundle.render_pipelines);
+        self.query_sets
+            .extend_from_tracker(&query_sets, &render_bundle.query_sets);
+
+        Ok(())
+    }
+}

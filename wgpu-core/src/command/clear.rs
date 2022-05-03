@@ -10,7 +10,7 @@ use crate::{
     id::{BufferId, CommandEncoderId, DeviceId, TextureId, Valid},
     init_tracker::{MemoryInitKind, TextureInitRange},
     resource::{Texture, TextureClearMode},
-    track::{OldTextureState, ResourceTracker, TextureSelector, TextureTracker},
+    track::{TextureSelector, TextureTracker},
 };
 
 use hal::{auxil::align_to, CommandEncoder as _};

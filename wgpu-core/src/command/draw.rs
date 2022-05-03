@@ -5,7 +5,7 @@ use crate::{
     binding_model::{LateMinBufferBindingSizeMismatch, PushConstantUploadError},
     error::ErrorFormatter,
     id,
-    track::{UseExtendError, UsageConflict},
+    track::{UsageConflict},
     validation::{MissingBufferUsageError, MissingTextureUsageError},
 };
 use wgt::{BufferAddress, BufferSize, Color};
