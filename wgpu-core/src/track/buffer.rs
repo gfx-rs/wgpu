@@ -177,6 +177,14 @@ impl BufferTracker {
         self.temp.drain(..)
     }
 
+    pub unsafe fn init(&mut self, id: BufferId, state: BufferUses) {
+        let index = id.unzip().0 as usize;
+        *self.start.get_unchecked_mut(index) = state;
+        *self.end.get_unchecked_mut(index) = state;
+
+        self.owned.set(index, true);
+    }
+
     pub unsafe fn change_state<'a, A: hal::Api>(
         &mut self,
         storage: &'a hub::Storage<Buffer<A>, BufferId>,

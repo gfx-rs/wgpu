@@ -1633,7 +1633,7 @@ impl<A: HalApi> Device<A> {
                 internal_use,
             )
             .ok_or_else(|| {
-                binding_model::CreateBindGroupError::InvalidTexture(view.parent_id.value)
+                binding_model::CreateBindGroupError::InvalidTexture(view.parent_id.value.0)
             })?;
         check_texture_usage(texture.desc.usage, pub_usage)?;
 
@@ -3182,12 +3182,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let id = fid.assign(buffer, &mut token);
             log::info!("Created buffer {:?} with {:?}", id, desc);
 
-            device
-                .trackers
-                .lock()
-                .buffers
-                .init(id, ref_count, BufferState::with_usage(buffer_use))
-                .unwrap();
+            unsafe { device.trackers.lock().buffers.init(id.0, buffer_use) };
             return (id.0, None);
         };
 
@@ -3455,12 +3450,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let id = fid.assign(texture, &mut token);
             log::info!("Created texture {:?} with {:?}", id, desc);
 
-            device
-                .trackers
-                .lock()
-                .textures
-                .init(id, ref_count, OldTextureState::new(num_levels, num_layers))
-                .unwrap();
+            unsafe {
+                device
+                    .trackers
+                    .lock()
+                    .textures
+                    .init(id.0, hal::TextureUses::UNINITIALIZED)
+            };
             return (id.0, None);
         };
 
@@ -3533,12 +3529,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let id = fid.assign(texture, &mut token);
             log::info!("Created texture {:?} with {:?}", id, desc);
 
-            device
-                .trackers
-                .lock()
-                .textures
-                .init(id, ref_count, OldTextureState::new(num_levels, num_layers))
-                .unwrap();
+            unsafe {
+                device
+                    .trackers
+                    .lock()
+                    .textures
+                    .init(id.0, hal::TextureUses::UNINITIALIZED)
+            };
             return (id.0, None);
         };
 
@@ -3696,12 +3693,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let ref_count = view.life_guard.add_ref();
             let id = fid.assign(view, &mut token);
 
-            device
-                .trackers
-                .lock()
-                .views
-                .init(id, ref_count, PhantomData)
-                .unwrap();
+            unsafe { device.trackers.lock().views.init(id.0) };
             return (id.0, None);
         };
 
@@ -3794,12 +3786,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let ref_count = sampler.life_guard.add_ref();
             let id = fid.assign(sampler, &mut token);
 
-            device
-                .trackers
-                .lock()
-                .samplers
-                .init(id, ref_count, PhantomData)
-                .unwrap();
+            unsafe {
+                device.trackers.lock().samplers.init(id.0);
+            }
             return (id.0, None);
         };
 
@@ -4057,18 +4046,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let ref_count = bind_group.life_guard.add_ref();
 
             let id = fid.assign(bind_group, &mut token);
-            log::debug!(
-                "Bind group {:?} {:#?}",
-                id,
-                hub.bind_groups.read(&mut token).0[id].used
-            );
+            log::debug!("Bind group {:?}", id,);
 
-            device
-                .trackers
-                .lock()
-                .bind_groups
-                .init(id, ref_count, PhantomData)
-                .unwrap();
+            unsafe { device.trackers.lock().bind_groups.init(id.0) };
             return (id.0, None);
         };
 
@@ -4371,16 +4351,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Err(e) => break e,
             };
 
-            log::debug!("Render bundle {:#?}", render_bundle.used);
+            log::debug!("Render bundle");
             let ref_count = render_bundle.life_guard.add_ref();
             let id = fid.assign(render_bundle, &mut token);
 
-            device
-                .trackers
-                .lock()
-                .bundles
-                .init(id, ref_count, PhantomData)
-                .unwrap();
+            unsafe { device.trackers.lock().bundles.init(id.0) };
             return (id.0, None);
         };
 
@@ -4455,12 +4430,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let ref_count = query_set.life_guard.add_ref();
             let id = fid.assign(query_set, &mut token);
 
-            device
-                .trackers
-                .lock()
-                .query_sets
-                .init(id, ref_count, PhantomData)
-                .unwrap();
+            unsafe {
+                device.trackers.lock().query_sets.init(id.0);
+            }
 
             return (id.0, None);
         };
@@ -4551,12 +4523,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let id = fid.assign(pipeline, &mut token);
             log::info!("Created render pipeline {:?} with {:?}", id, desc);
 
-            device
-                .trackers
-                .lock()
-                .render_pipes
-                .init(id, ref_count, PhantomData)
-                .unwrap();
+            unsafe {
+                device.trackers.lock().render_pipelines.init(id.0);
+            }
             return (id.0, None);
         };
 
@@ -4692,12 +4661,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let id = fid.assign(pipeline, &mut token);
             log::info!("Created compute pipeline {:?} with {:?}", id, desc);
 
-            device
-                .trackers
-                .lock()
-                .compute_pipes
-                .init(id, ref_count, PhantomData)
-                .unwrap();
+            unsafe { device.trackers.lock().compute_pipelines.init(id.0) };
             return (id.0, None);
         };
 
@@ -5155,16 +5119,20 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             };
             log::debug!("Buffer {:?} map state -> Waiting", buffer_id);
 
+            let device = &device_guard[buffer.device_id.value];
+
+            unsafe {
+                let trackers = device.trackers.lock();
+                trackers
+                    .buffers
+                    .change_state(&*buffer_guard, buffer_id, internal_use);
+                trackers.buffers.drain();
+            };
+
             (buffer.device_id.value, buffer.life_guard.add_ref())
         };
 
         let device = &device_guard[device_id];
-        device.trackers.lock().buffers.change_replace(
-            id::Valid(buffer_id),
-            &ref_count,
-            (),
-            internal_use,
-        );
 
         device
             .lock_life(&mut token)

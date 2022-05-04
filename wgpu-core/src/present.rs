@@ -187,20 +187,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 let id = fid.assign(texture, &mut token);
 
                 {
-                    use track::ResourceState as _;
                     // register it in the device tracker as uninitialized
                     let mut trackers = device.trackers.lock();
-                    let mut ts = track::OldTextureState::default();
-                    let _ = ts.change(
-                        id,
-                        track::TextureSelector {
-                            layers: 0..1,
-                            mips: 0..1,
-                        },
-                        hal::TextureUses::UNINITIALIZED,
-                        None,
-                    );
-                    let _ = trackers.textures.init(id, ref_count.clone(), ts);
+                    let _ = unsafe { trackers.textures.init(id.0, hal::TextureUses::UNINITIALIZED) };
                 }
 
                 if present.acquired_texture.is_some() {

@@ -308,6 +308,15 @@ impl TextureTracker {
         self.temp.drain(..)
     }
 
+    pub unsafe fn init(&mut self, id: TextureId, usage: TextureUses) {
+        let index = id.unzip().0 as usize;
+
+        *self.start_set.simple.get_unchecked_mut(index) = usage;
+        *self.end_set.simple.get_unchecked_mut(index) = usage;
+
+        self.owned.set(index, true);
+    }
+
     pub fn change_state<'a, A: hal::Api>(
         &mut self,
         storage: &'a hub::Storage<Texture<A>, TextureId>,

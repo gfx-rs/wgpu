@@ -43,6 +43,12 @@ impl<T, Id: TypedId> StatelessTracker<T, Id> {
         resize_bitvec(&mut self.owned, size);
     }
 
+    pub unsafe fn init(&mut self, id: Id) {
+        let index = id.unzip().0 as usize;
+
+        self.owned.set(index, true);
+    }
+
     pub unsafe fn extend<'a>(&mut self, storage: &'a hub::Storage<T, Id>, id: Id) -> Option<&'a T> {
         self.owned.set(id.unzip().0 as usize, true);
 
