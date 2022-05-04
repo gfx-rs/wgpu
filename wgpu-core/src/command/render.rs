@@ -696,11 +696,13 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
         let mut depth_stencil = None;
 
         if let Some(at) = depth_stencil_attachment {
-            let view = cmd_buf
-                .trackers
-                .views
-                .use_extend(&*view_guard, at.view, (), ())
-                .map_err(|_| RenderPassErrorInner::InvalidAttachment(at.view))?;
+            let view = unsafe {
+                cmd_buf
+                    .trackers
+                    .views
+                    .extend(&*view_guard, at.view)
+                    .ok_or_else(|| RenderPassErrorInner::InvalidAttachment(at.view))?
+            };
             check_multiview(view)?;
             add_view(view, "depth")?;
 
@@ -805,11 +807,13 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
         }
 
         for at in color_attachments {
-            let color_view = cmd_buf
-                .trackers
-                .views
-                .use_extend(&*view_guard, at.view, (), ())
-                .map_err(|_| RenderPassErrorInner::InvalidAttachment(at.view))?;
+            let color_view = unsafe {
+                cmd_buf
+                    .trackers
+                    .views
+                    .extend(&*view_guard, at.view)
+                    .ok_or_else(|| RenderPassErrorInner::InvalidAttachment(at.view))?
+            };
             check_multiview(color_view)?;
             add_view(color_view, "color")?;
 
@@ -835,11 +839,13 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
 
             let mut hal_resolve_target = None;
             if let Some(resolve_target) = at.resolve_target {
-                let resolve_view = cmd_buf
-                    .trackers
-                    .views
-                    .use_extend(&*view_guard, resolve_target, (), ())
-                    .map_err(|_| RenderPassErrorInner::InvalidAttachment(resolve_target))?;
+                let resolve_view = unsafe {
+                    cmd_buf
+                        .trackers
+                        .views
+                        .extend(&*view_guard, resolve_target)
+                        .ok_or_else(|| RenderPassErrorInner::InvalidAttachment(resolve_target))?
+                };
 
                 check_multiview(resolve_view)?;
                 if color_view.extent != resolve_view.extent {
@@ -963,15 +969,17 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
             check_texture_usage(texture.desc.usage, TextureUsages::RENDER_ATTACHMENT)?;
 
             // the tracker set of the pass is always in "extend" mode
-            self.usage_scope
-                .textures
-                .change_extend(
-                    ra.texture_id.value,
-                    &ra.texture_id.ref_count,
-                    ra.selector.clone(),
-                    ra.usage,
-                )
-                .map_err(UsageConflict::from)?;
+            unsafe {
+                self.usage_scope
+                    .textures
+                    .extend(
+                        &*texture_guard,
+                        ra.texture_id.value.0,
+                        Some(ra.selector.clone()),
+                        ra.usage,
+                    )
+                    .map_err(UsageConflict::from)?
+            };
         }
 
         // If either only stencil or depth was discarded, we put in a special clear pass to keep the init status of the aspects in sync.
@@ -1073,12 +1081,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let (pipeline_layout_guard, mut token) = hub.pipeline_layouts.read(&mut token);
             let (bind_group_guard, mut token) = hub.bind_groups.read(&mut token);
             let (render_pipe_guard, mut token) = hub.render_pipelines.read(&mut token);
-            let (pipeline_guard, mut token) = hub.render_pipelines.read(&mut token);
             let (query_set_guard, mut token) = hub.query_sets.read(&mut token);
             let (buffer_guard, mut token) = hub.buffers.read(&mut token);
             let (texture_guard, mut token) = hub.textures.read(&mut token);
-            let (sampler_guard, mut token) = hub.samplers.read(&mut token);
-            let (view_guard, _) = hub.texture_views.read(&mut token);
+            let (view_guard, mut token) = hub.texture_views.read(&mut token);
+            let (sampler_guard, _) = hub.samplers.read(&mut token);
 
             log::trace!(
                 "Encoding render pass begin in command buffer {:?}",
@@ -1143,6 +1150,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 .trackers
                                 .bind_groups
                                 .extend(&*bind_group_guard, bind_group_id)
+                                .ok_or_else(|| RenderCommandError::InvalidBindGroup(bind_group_id))
+                                .map_pass_err(scope)?
                         };
                         bind_group
                             .validate_dynamic_bindings(&temp_offsets, &cmd_buf.limits)
@@ -1150,11 +1159,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                         // merge the resource tracker in
                         unsafe {
-                            info.usage_scope.extend_from_bind_group(
-                                &*buffer_guard,
-                                &*texture_guard,
-                                &bind_group.used,
-                            )
+                            info.usage_scope
+                                .extend_from_bind_group(
+                                    &*buffer_guard,
+                                    &*texture_guard,
+                                    &bind_group.used,
+                                )
+                                .map_pass_err(scope)?;
                         }
                         //Note: stateless trackers are not merged: the lifetime reference
                         // is held to the bind group itself.
@@ -1208,7 +1219,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             cmd_buf
                                 .trackers
                                 .render_pipelines
-                                .extend(&*pipeline_guard, pipeline_id)
+                                .extend(&*render_pipe_guard, pipeline_id)
+                                .ok_or_else(|| RenderCommandError::InvalidPipeline(pipeline_id))
+                                .map_pass_err(scope)?
                         };
 
                         info.context
@@ -1817,7 +1830,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 .trackers
                                 .query_sets
                                 .extend(&*query_set_guard, query_set_id)
-                                .map_err(|_| RenderCommandError::InvalidQuerySet(query_set_id))
+                                .ok_or_else(|| RenderCommandError::InvalidQuerySet(query_set_id))
                                 .map_pass_err(scope)?
                         };
 
@@ -1841,7 +1854,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 .trackers
                                 .query_sets
                                 .extend(&*query_set_guard, query_set_id)
-                                .map_err(|_| RenderCommandError::InvalidQuerySet(query_set_id))
+                                .ok_or_else(|| RenderCommandError::InvalidQuerySet(query_set_id))
                                 .map_pass_err(scope)?
                         };
 
@@ -1868,7 +1881,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 .trackers
                                 .bundles
                                 .extend(&*bundle_guard, bundle_id)
-                                .map_err(|_| RenderCommandError::InvalidRenderBundle(bundle_id))
+                                .ok_or_else(|| RenderCommandError::InvalidRenderBundle(bundle_id))
                                 .map_pass_err(scope)?
                         };
 
@@ -1907,7 +1920,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 raw,
                                 &*pipeline_layout_guard,
                                 &*bind_group_guard,
-                                &*pipeline_guard,
+                                &*render_pipe_guard,
                                 &*buffer_guard,
                             )
                         }

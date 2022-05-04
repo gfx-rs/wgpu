@@ -3,7 +3,7 @@ use crate::{
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Resource, Token},
     id::{DeviceId, SurfaceId, TextureId, Valid},
     init_tracker::{BufferInitTracker, TextureInitTracker},
-    track::{TextureSelector},
+    track::TextureSelector,
     validation::MissingBufferUsageError,
     Label, LifeGuard, RefCount, Stored,
 };

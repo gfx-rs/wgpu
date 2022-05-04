@@ -284,10 +284,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         .map_err(DeviceError::from)?;
 
         let mut trackers = device.trackers.lock();
-        let (dst, transition) = trackers
-            .buffers
-            .use_replace(&*buffer_guard, buffer_id, (), hal::BufferUses::COPY_DST)
-            .map_err(TransferError::InvalidBuffer)?;
+        let (dst, transition) = unsafe {
+            trackers
+                .buffers
+                .change_state(&*buffer_guard, buffer_id, hal::BufferUses::COPY_DST)
+                .ok_or_else(|| TransferError::InvalidBuffer(buffer_id))?
+        };
         let dst_raw = dst
             .raw
             .as_ref()
@@ -452,6 +454,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     .collect::<Vec<std::ops::Range<u32>>>()
                 {
                     crate::command::clear_texture_no_device(
+                        &*texture_guard,
                         id::Valid(destination.texture),
                         &*dst,
                         TextureInitRange {
@@ -471,15 +474,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
         }
 
-        let (dst, transition) = trackers
-            .textures
-            .use_replace(
-                &*texture_guard,
-                destination.texture,
-                selector,
-                hal::TextureUses::COPY_DST,
-            )
-            .unwrap();
+        let (dst, transition) = unsafe {
+            trackers
+                .textures
+                .change_state(
+                    &*texture_guard,
+                    destination.texture,
+                    selector,
+                    hal::TextureUses::COPY_DST,
+                )
+                .ok_or_else(|| TransferError::InvalidTexture(destination.texture))?
+        };
 
         let (hal_copy_size, array_layer_count) =
             validate_texture_copy_range(destination, &dst.desc, CopySide::Destination, size)?;
@@ -561,7 +566,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .ok_or(TransferError::InvalidTexture(destination.texture))?;
 
         unsafe {
-            encoder.transition_textures(transition.map(|pending| pending.into_hal(dst)));
+            encoder
+                .transition_textures(transition.map(|pending| pending.into_hal(dst)).into_iter());
             encoder.transition_buffers(iter::once(barrier));
             encoder.copy_buffer_to_texture(&stage.buffer, dst_raw, regions);
         }

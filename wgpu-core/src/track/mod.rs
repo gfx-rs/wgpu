@@ -133,12 +133,12 @@ pub enum UsageConflict {
     TextureInvalid { id: u32 },
     #[error("Attempted to use buffer {id:?} with {invalid_use}.")]
     Buffer {
-        id: id::BufferId,
+        id: u32,
         invalid_use: InvalidUse<hal::BufferUses>,
     },
     #[error("Attempted to use a texture {id:?} mips {mip_levels:?} layers {array_layers:?} with {invalid_use}.")]
     Texture {
-        id: id::TextureId,
+        id: u32,
         mip_levels: ops::Range<u32>,
         array_layers: ops::Range<u32>,
         invalid_use: InvalidUse<hal::TextureUses>,
@@ -179,7 +179,7 @@ impl UsageConflict {
         }
 
         Self::Texture {
-            id: id.0,
+            id,
             mip_levels: mips,
             array_layers: layers,
             invalid_use: InvalidUse {
@@ -222,6 +222,17 @@ pub(crate) struct BindGroupStates<A: hal::Api> {
     pub samplers: StatelessBindGroupSate<resource::Sampler<A>, id::SamplerId>,
 }
 
+impl<A: hal::Api> BindGroupStates<A> {
+    pub fn new() -> Self {
+        Self {
+            buffers: BufferBindGroupState::new(),
+            textures: TextureBindGroupState::new(),
+            views: StatelessBindGroupSate::new(),
+            samplers: StatelessBindGroupSate::new(),
+        }
+    }
+}
+
 pub(crate) struct RenderBundleScope<A: hal::Api> {
     pub buffers: BufferUsageScope,
     pub textures: TextureUsageScope,
@@ -235,8 +246,8 @@ pub(crate) struct RenderBundleScope<A: hal::Api> {
 impl<A: hal::Api> RenderBundleScope<A> {
     pub fn new() -> Self {
         Self {
-            buffers: BufferTracker::new(),
-            textures: TextureTracker::new(),
+            buffers: BufferUsageScope::new(),
+            textures: TextureUsageScope::new(),
             views: StatelessTracker::new(),
             samplers: StatelessTracker::new(),
             bind_groups: StatelessTracker::new(),
@@ -244,8 +255,23 @@ impl<A: hal::Api> RenderBundleScope<A> {
             query_sets: StatelessTracker::new(),
         }
     }
+
+    pub unsafe fn extend_from_bind_group(
+        &mut self,
+        buffers: &hub::Storage<resource::Buffer<A>, id::BufferId>,
+        textures: &hub::Storage<resource::Texture<A>, id::TextureId>,
+        bind_group: &BindGroupStates<A>,
+    ) -> Result<(), UsageConflict> {
+        self.buffers
+            .extend_from_bind_group(buffers, &bind_group.buffers)?;
+        self.textures
+            .extend_from_bind_group(textures, &bind_group.textures)?;
+
+        Ok(())
+    }
 }
 
+#[derive(Debug)]
 pub(crate) struct UsageScope {
     pub buffers: BufferUsageScope,
     pub textures: TextureUsageScope,
@@ -315,24 +341,37 @@ impl<A: hal::Api> Tracker<A> {
         }
     }
 
+    pub unsafe fn extend_from_bind_group(
+        &mut self,
+        buffers: &hub::Storage<resource::Buffer<A>, id::BufferId>,
+        textures: &hub::Storage<resource::Texture<A>, id::TextureId>,
+        scope: &mut UsageScope,
+        bind_group: &BindGroupStates<A>,
+    ) {
+        self.buffers
+            .change_states_bind_group(buffers, &mut scope.buffers, &bind_group.buffers);
+        self.textures
+            .change_states_bind_group(textures, &mut scope.textures, &bind_group.textures);
+    }
+
     pub unsafe fn extend_from_render_bundle(
         &mut self,
-        views: hub::Storage<resource::TextureView<A>, id::TextureViewId>,
-        samplers: hub::Storage<resource::Sampler<A>, id::SamplerId>,
-        bind_groups: hub::Storage<binding_model::BindGroup<A>, id::BindGroupId>,
-        render_pipelines: hub::Storage<pipeline::RenderPipeline<A>, id::RenderPipelineId>,
-        query_sets: hub::Storage<resource::QuerySet<A>, id::QuerySetId>,
+        views: &hub::Storage<resource::TextureView<A>, id::TextureViewId>,
+        samplers: &hub::Storage<resource::Sampler<A>, id::SamplerId>,
+        bind_groups: &hub::Storage<binding_model::BindGroup<A>, id::BindGroupId>,
+        render_pipelines: &hub::Storage<pipeline::RenderPipeline<A>, id::RenderPipelineId>,
+        query_sets: &hub::Storage<resource::QuerySet<A>, id::QuerySetId>,
         render_bundle: &RenderBundleScope<A>,
     ) -> Result<(), UsageConflict> {
-        self.views.extend_from_tracker(&views, &render_bundle.views);
+        self.views.extend_from_tracker(views, &render_bundle.views);
         self.samplers
-            .extend_from_tracker(&samplers, &render_bundle.samplers);
+            .extend_from_tracker(samplers, &render_bundle.samplers);
         self.bind_groups
-            .extend_from_tracker(&bind_groups, &render_bundle.bind_groups);
+            .extend_from_tracker(bind_groups, &render_bundle.bind_groups);
         self.render_pipelines
-            .extend_from_tracker(&render_pipelines, &render_bundle.render_pipelines);
+            .extend_from_tracker(render_pipelines, &render_bundle.render_pipelines);
         self.query_sets
-            .extend_from_tracker(&query_sets, &render_bundle.query_sets);
+            .extend_from_tracker(query_sets, &render_bundle.query_sets);
 
         Ok(())
     }

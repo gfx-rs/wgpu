@@ -7,6 +7,7 @@ use crate::{
     },
     hub::{GlobalIdentityHandlerFactory, HalApi, Hub, Token},
     id, resource,
+    track::Tracker,
     RefCount, Stored, SubmissionIndex,
 };
 use smallvec::SmallVec;
@@ -490,7 +491,7 @@ impl<A: HalApi> LifetimeTracker<A> {
     pub(super) fn triage_suspected<G: GlobalIdentityHandlerFactory>(
         &mut self,
         hub: &Hub<A, G>,
-        trackers: &Mutex<TrackerSet>,
+        trackers: &Mutex<Tracker<A>>,
         #[cfg(feature = "trace")] trace: Option<&Mutex<trace::Trace>>,
         token: &mut Token<super::Device<A>>,
     ) {

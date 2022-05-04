@@ -1,14 +1,16 @@
 use crate::{
     binding_model, command, conv,
     device::life::WaitIdleError,
-    hub::{Global, GlobalIdentityHandlerFactory, HalApi, Hub, Input, InvalidId, Storage, Token},
+    hub::{
+        self, Global, GlobalIdentityHandlerFactory, HalApi, Hub, Input, InvalidId, Storage, Token,
+    },
     id,
     init_tracker::{
         BufferInitTracker, BufferInitTrackerAction, MemoryInitKind, TextureInitRange,
         TextureInitTracker, TextureInitTrackerAction,
     },
     instance, pipeline, present, resource,
-    track::{TextureSelector, UsageConflict},
+    track::{BindGroupStates, TextureSelector, Tracker, UsageConflict},
     validation::{self, check_buffer_usage, check_texture_usage},
     FastHashMap, Label, LabelHelpers as _, LifeGuard, MultiRefCount, RefCount, Stored,
     SubmissionIndex, DOWNLEVEL_ERROR_MESSAGE,
@@ -281,7 +283,7 @@ pub struct Device<A: hal::Api> {
     /// All live resources allocated with this [`Device`].
     ///
     /// Has to be locked temporarily only (locked last)
-    pub(crate) trackers: Mutex<TrackerSet>,
+    pub(crate) trackers: Mutex<Tracker<A>>,
     // Life tracker should be locked right after the device and before anything else.
     life_tracker: Mutex<life::LifetimeTracker<A>>,
     /// Temporary storage for resource management functions. Cleared at the end
@@ -394,7 +396,7 @@ impl<A: HalApi> Device<A> {
             command_allocator: Mutex::new(com_alloc),
             active_submission_index: 0,
             fence,
-            trackers: Mutex::new(TrackerSet::new(A::VARIANT)),
+            trackers: Mutex::new(Tracker::new()),
             life_tracker: Mutex::new(life::LifetimeTracker::new()),
             temp_suspected: life::SuspectedResources::default(),
             #[cfg(feature = "trace")]
@@ -495,7 +497,7 @@ impl<A: HalApi> Device<A> {
     fn untrack<'this, 'token: 'this, G: GlobalIdentityHandlerFactory>(
         &'this mut self,
         hub: &Hub<A, G>,
-        trackers: &TrackerSet,
+        trackers: &Tracker<A>,
         token: &mut Token<'token, Self>,
     ) {
         self.temp_suspected.clear();
@@ -1495,7 +1497,7 @@ impl<A: HalApi> Device<A> {
         used_buffer_ranges: &mut Vec<BufferInitTrackerAction>,
         dynamic_binding_info: &mut Vec<binding_model::BindGroupDynamicBindingData>,
         late_buffer_binding_sizes: &mut FastHashMap<u32, wgt::BufferSize>,
-        used: &mut TrackerSet,
+        used: &mut BindGroupStates<A>,
         storage: &'a Storage<resource::Buffer<A>, id::BufferId>,
         limits: &wgt::Limits,
     ) -> Result<hal::BufferBinding<'a, A>, binding_model::CreateBindGroupError> {
@@ -1544,8 +1546,8 @@ impl<A: HalApi> Device<A> {
 
         let buffer = used
             .buffers
-            .use_extend(storage, bb.buffer_id, (), internal_use)
-            .map_err(|_| Error::InvalidBuffer(bb.buffer_id))?;
+            .extend(storage, bb.buffer_id, internal_use)
+            .ok_or_else(|| Error::InvalidBuffer(bb.buffer_id))?;
         check_buffer_usage(buffer.usage, pub_usage)?;
         let raw_buffer = buffer
             .raw
@@ -1614,26 +1616,25 @@ impl<A: HalApi> Device<A> {
 
     fn create_texture_binding(
         view: &resource::TextureView<A>,
-        texture_guard: &parking_lot::lock_api::RwLockReadGuard<
-            parking_lot::RawRwLock,
-            Storage<resource::Texture<A>, id::Id<resource::Texture<hal::api::Empty>>>,
-        >,
+        texture_guard: &hub::Storage<resource::Texture<A>, id::TextureId>,
         internal_use: hal::TextureUses,
         pub_usage: wgt::TextureUsages,
-        used: &mut TrackerSet,
+        used: &mut BindGroupStates<A>,
         used_texture_ranges: &mut Vec<TextureInitTrackerAction>,
     ) -> Result<(), binding_model::CreateBindGroupError> {
         // Careful here: the texture may no longer have its own ref count,
         // if it was deleted by the user.
         let texture = &texture_guard[view.parent_id.value];
         used.textures
-            .change_extend(
-                view.parent_id.value,
-                &view.parent_id.ref_count,
-                view.selector.clone(),
+            .extend(
+                texture_guard,
+                view.parent_id.value.0,
+                Some(view.selector.clone()),
                 internal_use,
             )
-            .map_err(UsageConflict::from)?;
+            .ok_or_else(|| {
+                binding_model::CreateBindGroupError::InvalidTexture(view.parent_id.value)
+            })?;
         check_texture_usage(texture.desc.usage, pub_usage)?;
 
         used_texture_ranges.push(TextureInitTrackerAction {
@@ -1675,7 +1676,7 @@ impl<A: HalApi> Device<A> {
         // it needs to be in BGL iteration order, not BG entry order.
         let mut late_buffer_binding_sizes = FastHashMap::default();
         // fill out the descriptors
-        let mut used = TrackerSet::new(A::VARIANT);
+        let mut used = BindGroupStates::new();
 
         let (buffer_guard, mut token) = hub.buffers.read(token);
         let (texture_guard, mut token) = hub.textures.read(&mut token); //skip token
@@ -1739,8 +1740,8 @@ impl<A: HalApi> Device<A> {
                         wgt::BindingType::Sampler(ty) => {
                             let sampler = used
                                 .samplers
-                                .use_extend(&*sampler_guard, id, (), ())
-                                .map_err(|_| Error::InvalidSampler(id))?;
+                                .extend(&*sampler_guard, id)
+                                .ok_or_else(|| Error::InvalidSampler(id))?;
 
                             // Allowed sampler values for filtering and comparison
                             let (allowed_filtering, allowed_comparison) = match ty {
@@ -1788,8 +1789,8 @@ impl<A: HalApi> Device<A> {
                     for &id in bindings_array.iter() {
                         let sampler = used
                             .samplers
-                            .use_extend(&*sampler_guard, id, (), ())
-                            .map_err(|_| Error::InvalidSampler(id))?;
+                            .extend(&*sampler_guard, id)
+                            .ok_or_else(|| Error::InvalidSampler(id))?;
                         hal_samplers.push(&sampler.raw);
                     }
 
@@ -1798,8 +1799,8 @@ impl<A: HalApi> Device<A> {
                 Br::TextureView(id) => {
                     let view = used
                         .views
-                        .use_extend(&*texture_view_guard, id, (), ())
-                        .map_err(|_| Error::InvalidTextureView(id))?;
+                        .extend(&*texture_view_guard, id)
+                        .ok_or_else(|| Error::InvalidTextureView(id))?;
                     let (pub_usage, internal_use) = Self::texture_use_parameters(
                         binding,
                         decl,
@@ -1829,8 +1830,8 @@ impl<A: HalApi> Device<A> {
                     for &id in bindings_array.iter() {
                         let view = used
                             .views
-                            .use_extend(&*texture_view_guard, id, (), ())
-                            .map_err(|_| Error::InvalidTextureView(id))?;
+                            .extend(&*texture_view_guard, id)
+                            .ok_or_else(|| Error::InvalidTextureView(id))?;
                         let (pub_usage, internal_use) =
                             Self::texture_use_parameters(binding, decl, view,
                                                          "SampledTextureArray, ReadonlyStorageTextureArray or WriteonlyStorageTextureArray")?;

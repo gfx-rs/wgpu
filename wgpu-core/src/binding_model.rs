@@ -2,9 +2,9 @@ use crate::{
     device::{DeviceError, MissingDownlevelFlags, MissingFeatures, SHADER_STAGE_COUNT},
     error::{ErrorFormatter, PrettyError},
     hub::Resource,
-    id::{BindGroupLayoutId, BufferId, DeviceId, SamplerId, TextureViewId, Valid},
+    id::{BindGroupLayoutId, BufferId, DeviceId, SamplerId, TextureId, TextureViewId, Valid},
     init_tracker::{BufferInitTrackerAction, TextureInitTrackerAction},
-    track::{UsageConflict, BindGroupStates},
+    track::{BindGroupStates, UsageConflict},
     validation::{MissingBufferUsageError, MissingTextureUsageError},
     FastHashMap, Label, LifeGuard, MultiRefCount, Stored,
 };
@@ -16,10 +16,7 @@ use serde::Deserialize;
 #[cfg(feature = "trace")]
 use serde::Serialize;
 
-use std::{
-    borrow::{Cow},
-    ops::Range,
-};
+use std::{borrow::Cow, ops::Range};
 
 use thiserror::Error;
 
@@ -63,6 +60,8 @@ pub enum CreateBindGroupError {
     InvalidBuffer(BufferId),
     #[error("texture view {0:?} is invalid")]
     InvalidTextureView(TextureViewId),
+    #[error("texture {0:?} is invalid")]
+    InvalidTexture(TextureId),
     #[error("sampler {0:?} is invalid")]
     InvalidSampler(SamplerId),
     #[error(

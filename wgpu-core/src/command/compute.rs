@@ -14,8 +14,9 @@ use crate::{
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Storage, Token},
     id,
     init_tracker::MemoryInitKind,
-    resource::{Buffer, Texture},
-    track::UsageConflict,
+    pipeline,
+    resource::{self, Buffer, Texture},
+    track::{Tracker, UsageConflict, UsageScope},
     validation::{check_buffer_usage, MissingBufferUsageError},
     Label,
 };
@@ -228,11 +229,10 @@ where
     }
 }
 
-#[derive(Debug)]
 struct State {
     binder: Binder,
     pipeline: Option<id::ComputePipelineId>,
-    trackers: StatefulTrackerSubset,
+    scope: UsageScope,
     debug_scope_depth: u32,
 }
 
@@ -256,29 +256,37 @@ impl State {
     fn flush_states<A: HalApi>(
         &mut self,
         raw_encoder: &mut A::CommandEncoder,
-        base_trackers: &mut TrackerSet,
+        base_trackers: &mut Tracker<A>,
         bind_group_guard: &Storage<BindGroup<A>, id::BindGroupId>,
         buffer_guard: &Storage<Buffer<A>, id::BufferId>,
         texture_guard: &Storage<Texture<A>, id::TextureId>,
     ) -> Result<(), UsageConflict> {
         for id in self.binder.list_active() {
-            self.trackers.merge_extend(&bind_group_guard[id].used)?;
-            //Note: stateless trackers are not merged: the lifetime reference
+            unsafe {
+                self.scope.extend_from_bind_group(
+                    buffer_guard,
+                    texture_guard,
+                    &bind_group_guard[id].used,
+                )?
+            };
+            // Note: stateless trackers are not merged: the lifetime reference
             // is held to the bind group itself.
+        }
+
+        for id in self.binder.list_active() {
+            unsafe {
+                base_trackers.extend_from_bind_group(
+                    buffer_guard,
+                    texture_guard,
+                    &mut self.scope,
+                    &bind_group_guard[id].used,
+                )
+            }
         }
 
         log::trace!("Encoding dispatch barriers");
 
-        CommandBuffer::insert_barriers(
-            raw_encoder,
-            base_trackers,
-            &self.trackers.buffers,
-            &self.trackers.textures,
-            buffer_guard,
-            texture_guard,
-        );
-
-        self.trackers.clear();
+        CommandBuffer::drain_barriers(raw_encoder, base_trackers, buffer_guard, texture_guard);
         Ok(())
     }
 }
@@ -309,8 +317,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (device_guard, mut token) = hub.devices.read(&mut token);
 
         let (mut cmd_buf_guard, mut token) = hub.command_buffers.write(&mut token);
-        let cmd_buf = CommandBuffer::get_encoder_mut(&mut *cmd_buf_guard, encoder_id)
-            .map_pass_err(init_scope)?;
+        let cmd_buf: &mut CommandBuffer<A> =
+            CommandBuffer::get_encoder_mut(&mut *cmd_buf_guard, encoder_id)
+                .map_pass_err(init_scope)?;
         // will be reset to true if recording is done without errors
         cmd_buf.status = CommandEncoderStatus::Error;
         let raw = cmd_buf.encoder.open();
@@ -335,7 +344,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut state = State {
             binder: Binder::new(),
             pipeline: None,
-            trackers: StatefulTrackerSubset::new(A::VARIANT),
+            scope: UsageScope::new(),
             debug_scope_depth: 0,
         };
         let mut temp_offsets = Vec::new();
@@ -376,12 +385,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     );
                     dynamic_offset_count += num_dynamic_offsets as usize;
 
-                    let bind_group = cmd_buf
-                        .trackers
-                        .bind_groups
-                        .use_extend(&*bind_group_guard, bind_group_id, (), ())
-                        .map_err(|_| ComputePassErrorInner::InvalidBindGroup(bind_group_id))
-                        .map_pass_err(scope)?;
+                    let bind_group: &BindGroup<A> = unsafe {
+                        cmd_buf
+                            .trackers
+                            .bind_groups
+                            .extend(&*bind_group_guard, bind_group_id)
+                            .ok_or_else(|| ComputePassErrorInner::InvalidBindGroup(bind_group_id))
+                            .map_pass_err(scope)?
+                    };
                     bind_group
                         .validate_dynamic_bindings(&temp_offsets, &cmd_buf.limits)
                         .map_pass_err(scope)?;
@@ -431,12 +442,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                     state.pipeline = Some(pipeline_id);
 
-                    let pipeline = cmd_buf
-                        .trackers
-                        .compute_pipes
-                        .use_extend(&*pipeline_guard, pipeline_id, (), ())
-                        .map_err(|_| ComputePassErrorInner::InvalidPipeline(pipeline_id))
-                        .map_pass_err(scope)?;
+                    let pipeline: &pipeline::ComputePipeline<A> = unsafe {
+                        cmd_buf
+                            .trackers
+                            .compute_pipelines
+                            .extend(&*pipeline_guard, pipeline_id)
+                            .ok_or_else(|| ComputePassErrorInner::InvalidPipeline(pipeline_id))
+                            .map_pass_err(scope)?
+                    };
 
                     unsafe {
                         raw.set_compute_pipeline(&pipeline.raw);
@@ -584,12 +597,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .require_downlevel_flags(wgt::DownlevelFlags::INDIRECT_EXECUTION)
                         .map_pass_err(scope)?;
 
-                    let indirect_buffer = state
-                        .trackers
-                        .buffers
-                        .use_extend(&*buffer_guard, buffer_id, (), hal::BufferUses::INDIRECT)
-                        .map_err(|_| ComputePassErrorInner::InvalidIndirectBuffer(buffer_id))
-                        .map_pass_err(scope)?;
+                    let indirect_buffer: &Buffer<A> = unsafe {
+                        state
+                            .scope
+                            .buffers
+                            .extend(&*buffer_guard, buffer_id, hal::BufferUses::INDIRECT)
+                            .map_pass_err(scope)?
+                    };
                     check_buffer_usage(indirect_buffer.usage, wgt::BufferUsages::INDIRECT)
                         .map_pass_err(scope)?;
 
@@ -667,17 +681,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 } => {
                     let scope = PassErrorScope::WriteTimestamp;
 
-                    let query_set = cmd_buf
-                        .trackers
-                        .query_sets
-                        .use_extend(&*query_set_guard, query_set_id, (), ())
-                        .map_err(|e| match e {
-                            UseExtendError::InvalidResource => {
-                                ComputePassErrorInner::InvalidQuerySet(query_set_id)
-                            }
-                            _ => unreachable!(),
-                        })
-                        .map_pass_err(scope)?;
+                    let query_set: &resource::QuerySet<A> = unsafe {
+                        cmd_buf
+                            .trackers
+                            .query_sets
+                            .extend(&*query_set_guard, query_set_id)
+                            .ok_or_else(|| ComputePassErrorInner::InvalidQuerySet(query_set_id))
+                            .map_pass_err(scope)?
+                    };
 
                     query_set
                         .validate_and_write_timestamp(raw, query_set_id, query_index, None)
@@ -689,17 +700,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 } => {
                     let scope = PassErrorScope::BeginPipelineStatisticsQuery;
 
-                    let query_set = cmd_buf
-                        .trackers
-                        .query_sets
-                        .use_extend(&*query_set_guard, query_set_id, (), ())
-                        .map_err(|e| match e {
-                            UseExtendError::InvalidResource => {
-                                ComputePassErrorInner::InvalidQuerySet(query_set_id)
-                            }
-                            _ => unreachable!(),
-                        })
-                        .map_pass_err(scope)?;
+                    let query_set: &resource::QuerySet<A> = unsafe {
+                        cmd_buf
+                            .trackers
+                            .query_sets
+                            .extend(&*query_set_guard, query_set_id)
+                            .ok_or_else(|| ComputePassErrorInner::InvalidQuerySet(query_set_id))
+                            .map_pass_err(scope)?
+                    };
 
                     query_set
                         .validate_and_begin_pipeline_statistics_query(

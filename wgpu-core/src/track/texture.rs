@@ -1,7 +1,7 @@
 use super::{range::RangedStates, PendingTransition};
 use crate::{
     hub,
-    id::{TextureId, TypedId, Valid},
+    id::{TextureId, TypedId},
     resource::Texture,
     track::{
         invalid_resource_state, iterate_bitvec, resize_bitvec, skip_barrier, ResourceUses,
@@ -60,9 +60,29 @@ impl ComplexTextureState {
 
 // TODO: This representation could be optimized in a couple ways, but keep it simple for now.
 pub struct TextureBindGroupState {
-    textures: Vec<(Valid<TextureId>, Option<TextureSelector>, TextureUses)>,
+    textures: Vec<(TextureId, Option<TextureSelector>, TextureUses)>,
+}
+impl TextureBindGroupState {
+    pub fn new() -> Self {
+        Self {
+            textures: Vec::new(),
+        }
+    }
+
+    pub fn extend<'a, A: hal::Api>(
+        &mut self,
+        storage: &'a hub::Storage<Texture<A>, TextureId>,
+        id: TextureId,
+        selector: Option<TextureSelector>,
+        state: TextureUses,
+    ) -> Option<&'a Texture<A>> {
+        self.textures.push((id, selector, state));
+
+        storage.get(id).ok()
+    }
 }
 
+#[derive(Debug)]
 pub struct TextureStateSet {
     simple: Vec<TextureUses>,
     complex: FastHashMap<u32, ComplexTextureState>,
@@ -76,6 +96,7 @@ impl TextureStateSet {
     }
 }
 
+#[derive(Debug)]
 pub struct TextureUsageScope {
     set: TextureStateSet,
     owned: BitVec<usize>,
@@ -99,17 +120,15 @@ impl TextureUsageScope {
         &mut self,
         storage: &hub::Storage<Texture<A>, TextureId>,
         scope: &Self,
-    ) -> Drain<PendingTransition<TextureUses>> {
+    ) -> Result<(), UsageConflict> {
         let incoming_size = scope.set.simple.len();
         if incoming_size > self.set.simple.len() {
             self.set_max_index(incoming_size);
         }
 
-        iterate_bitvec(&scope.set.simple, |index| {
-            todo!()
-        });
+        iterate_bitvec(&scope.owned, |index| todo!());
 
-        self.temp.drain(..)
+        Ok(())
     }
 
     pub unsafe fn extend_from_bind_group<A: hal::Api>(
@@ -147,11 +166,11 @@ impl TextureUsageScope {
     unsafe fn extend_inner<A: hal::Api>(
         &mut self,
         storage: &hub::Storage<Texture<A>, TextureId>,
-        index: u32,
+        id: u32,
         selector: Option<TextureSelector>,
         new_state: TextureUses,
     ) -> Result<(), UsageConflict> {
-        let index = index as usize;
+        let index = id as usize;
 
         let currently_active = self.owned.get(index).unwrap_unchecked();
         if currently_active {
@@ -164,7 +183,7 @@ impl TextureUsageScope {
                     if invalid_resource_state(merged_state) {
                         return Err(UsageConflict::from_texture(
                             storage,
-                            index,
+                            id,
                             selector,
                             current_state,
                             new_state,
@@ -176,19 +195,17 @@ impl TextureUsageScope {
                     return Ok(());
                 }
                 // The old usage is complex.
-                (true, selector) => {
-                    return self.extend_complex(storage, index, selector, new_state)
-                }
+                (true, selector) => return self.extend_complex(storage, id, selector, new_state),
 
                 // The old usage is simple, so demote it to a complex one.
                 (false, Some(selector)) => {
                     *self.set.simple.get_unchecked_mut(index) = hal::TextureUses::COMPLEX;
 
                     // Demote our simple state to a complex one.
-                    self.extend_complex(storage, index, None, current_state)?;
+                    self.extend_complex(storage, id, None, current_state)?;
 
                     // Extend that complex state with our new complex state.
-                    return self.extend_complex(storage, index, Some(selector), new_state);
+                    return self.extend_complex(storage, id, Some(selector), new_state);
                 }
             }
         }
@@ -198,7 +215,7 @@ impl TextureUsageScope {
 
         if let Some(selector) = selector {
             *self.set.simple.get_unchecked_mut(index) = hal::TextureUses::COMPLEX;
-            self.extend_complex(storage, index, Some(selector), new_state)?;
+            self.extend_complex(storage, id, Some(selector), new_state)?;
         } else {
             *self.set.simple.get_unchecked_mut(index) = new_state;
         }
@@ -210,14 +227,14 @@ impl TextureUsageScope {
     unsafe fn extend_complex<A: hal::Api>(
         &mut self,
         storage: &hub::Storage<Texture<A>, TextureId>,
-        index: u32,
+        id: u32,
         selector: Option<TextureSelector>,
         new_state: TextureUses,
     ) -> Result<(), UsageConflict> {
-        let texture = storage.get_unchecked(index);
+        let texture = storage.get_unchecked(id);
 
         // Create the complex entry for this texture.
-        let complex = self.set.complex.entry(index).or_insert_with(|| {
+        let complex = self.set.complex.entry(id).or_insert_with(|| {
             ComplexTextureState::new(
                 texture.desc.mip_level_count,
                 texture.desc.array_layer_count(),
@@ -247,7 +264,7 @@ impl TextureUsageScope {
                 if invalid_resource_state(merged) {
                     return Err(UsageConflict::from_texture(
                         storage,
-                        index,
+                        id,
                         selector,
                         *current_state,
                         new_state,
@@ -287,11 +304,25 @@ impl TextureTracker {
         resize_bitvec(&mut self.owned, size);
     }
 
+    pub fn drain(&mut self) -> Drain<PendingTransition<TextureUses>> {
+        self.temp.drain(..)
+    }
+
+    pub fn change_state<'a, A: hal::Api>(
+        &mut self,
+        storage: &'a hub::Storage<Texture<A>, TextureId>,
+        id: TextureId,
+        selector: TextureSelector,
+        new_usage: TextureUses,
+    ) -> Option<(&'a Texture<A>, Option<PendingTransition<TextureUses>>)> {
+        todo!()
+    }
+
     pub fn change_states_scope<A: hal::Api>(
         &mut self,
         storage: &hub::Storage<Texture<A>, TextureId>,
         scope: &TextureUsageScope,
-    ) -> Drain<PendingTransition<TextureUses>> {
+    ) {
         self.change_states_inner(storage, &scope.set, &scope.owned)
     }
 
@@ -300,7 +331,7 @@ impl TextureTracker {
         storage: &hub::Storage<Texture<A>, TextureId>,
         incoming_set: &TextureStateSet,
         incoming_ownership: &BitVec<usize>,
-    ) -> Drain<PendingTransition<TextureUses>> {
+    ) {
         let incoming_size = incoming_set.simple.len();
         if incoming_size > self.start_set.simple.len() {
             self.set_max_index(incoming_size);
@@ -309,32 +340,27 @@ impl TextureTracker {
         iterate_bitvec(incoming_ownership, |index| {
             unsafe { self.transition(storage, incoming_set, index) };
         });
-
-        self.temp.drain(..)
     }
 
     pub unsafe fn change_states_bind_group<A: hal::Api>(
         &mut self,
         storage: &hub::Storage<Texture<A>, TextureId>,
-        incoming_set: &TextureStateSet,
-        incoming_ownership: &mut BitVec<usize>,
+        scope: &mut TextureUsageScope,
         bind_group_state: &TextureBindGroupState,
-    ) -> Drain<PendingTransition<TextureUses>> {
-        let incoming_size = incoming_set.simple.len();
+    ) {
+        let incoming_size = scope.set.simple.len();
         if incoming_size > self.start_set.simple.len() {
             self.set_max_index(incoming_size);
         }
 
         for &(index, _, _) in bind_group_state.textures.iter() {
-            let index = index.0.unzip().0 as usize;
-            if !incoming_ownership.get(index).unwrap_unchecked() {
+            let index = index.unzip().0 as usize;
+            if !scope.owned.get(index).unwrap_unchecked() {
                 continue;
             }
-            self.transition(storage, incoming_set, index);
-            incoming_ownership.set(index, false);
+            self.transition(storage, &scope.set, index);
+            scope.owned.set(index, false);
         }
-
-        self.temp.drain(..)
     }
 
     unsafe fn transition<A: hal::Api>(
@@ -379,7 +405,7 @@ impl TextureTracker {
 
                 self.temp.push(PendingTransition {
                     id: index as u32,
-                    selector: storage.get_unchecked(index as u32).unwrap().full_range,
+                    selector: storage.get_unchecked(index as u32).full_range,
                     usage: old_state..new_state,
                 });
 

@@ -301,7 +301,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .trackers
                 .query_sets
                 .extend(&*query_set_guard, query_set_id)
-                .map_err(|_| QueryError::InvalidQuerySet(query_set_id))?
+                .ok_or_else(|| QueryError::InvalidQuerySet(query_set_id))?
         };
 
         query_set.validate_and_write_timestamp(raw_encoder, query_set_id, query_index, None)?;
@@ -348,14 +348,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .trackers
                 .query_sets
                 .extend(&*query_set_guard, query_set_id)
-                .map_err(|_| QueryError::InvalidQuerySet(query_set_id))?
+                .ok_or_else(|| QueryError::InvalidQuerySet(query_set_id))?
         };
 
-        let (dst_buffer, dst_pending) = cmd_buf
-            .trackers
-            .buffers
-            .use_replace(&*buffer_guard, destination, (), hal::BufferUses::COPY_DST)
-            .map_err(QueryError::InvalidBuffer)?;
+        let (dst_buffer, dst_pending) = unsafe {
+            cmd_buf
+                .trackers
+                .buffers
+                .change_state(&*buffer_guard, destination, hal::BufferUses::COPY_DST)
+                .ok_or_else(|| QueryError::InvalidBuffer(destination))?
+        };
         let dst_barrier = dst_pending.map(|pending| pending.into_hal(dst_buffer));
 
         if !dst_buffer.usage.contains(wgt::BufferUsages::COPY_DST) {
@@ -404,7 +406,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             ));
 
         unsafe {
-            raw_encoder.transition_buffers(dst_barrier);
+            raw_encoder.transition_buffers(dst_barrier.into_iter());
             raw_encoder.copy_query_results(
                 &query_set.raw,
                 start_query..end_query,

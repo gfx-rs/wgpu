@@ -146,22 +146,31 @@ impl<A: HalApi> CommandBuffer<A> {
         texture_guard: &Storage<Texture<A>, id::TextureId>,
     ) {
         profiling::scope!("insert_barriers");
-        debug_assert_eq!(A::VARIANT, base.backend());
 
-        let buffer_barriers = base
-            .buffers
-            .change_states_scope(&*buffer_guard, &head.buffers)
-            .map(|pending| {
-                let buf = unsafe { &buffer_guard.get_unchecked(pending.id) };
-                pending.into_hal(buf)
-            });
-        let texture_barriers = base
-            .textures
-            .change_states_scope(&*texture_guard, &head.textures)
-            .map(|pending| {
-                let tex = unsafe { texture_guard.get_unchecked(pending.id) };
-                pending.into_hal(tex)
-            });
+        base.buffers
+            .change_states_scope(&*buffer_guard, &head.buffers);
+        base.textures
+            .change_states_scope(&*texture_guard, &head.textures);
+
+        Self::drain_barriers(raw, base, buffer_guard, texture_guard);
+    }
+
+    pub(crate) fn drain_barriers(
+        raw: &mut A::CommandEncoder,
+        base: &mut Tracker<A>,
+        buffer_guard: &Storage<Buffer<A>, id::BufferId>,
+        texture_guard: &Storage<Texture<A>, id::TextureId>,
+    ) {
+        profiling::scope!("drain_barriers");
+
+        let buffer_barriers = base.buffers.drain().map(|pending| {
+            let buf = unsafe { &buffer_guard.get_unchecked(pending.id) };
+            pending.into_hal(buf)
+        });
+        let texture_barriers = base.textures.drain().map(|pending| {
+            let tex = unsafe { texture_guard.get_unchecked(pending.id) };
+            pending.into_hal(tex)
+        });
 
         unsafe {
             raw.transition_buffers(buffer_barriers);
@@ -302,7 +311,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     cmd_buf.status = CommandEncoderStatus::Finished;
                     //Note: if we want to stop tracking the swapchain texture view,
                     // this is the place to do it.
-                    log::trace!("Command buffer {:?} {:#?}", encoder_id, cmd_buf.trackers);
+                    log::trace!("Command buffer {:?}", encoder_id);
                     None
                 }
                 CommandEncoderStatus::Finished => Some(CommandEncoderError::NotRecording),

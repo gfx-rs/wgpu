@@ -48,9 +48,9 @@ use crate::{
     hub::{GlobalIdentityHandlerFactory, Hub, Resource, Storage, Token},
     id,
     init_tracker::{BufferInitTrackerAction, MemoryInitKind, TextureInitTrackerAction},
-    pipeline::{PipelineFlags, self},
+    pipeline::{self, PipelineFlags},
     resource,
-    track::{RenderBundleScope, UsageConflict},
+    track::RenderBundleScope,
     validation::check_buffer_usage,
     Label, LabelHelpers, LifeGuard, Stored,
 };
@@ -178,7 +178,8 @@ impl RenderBundleEncoder {
         let (pipeline_layout_guard, mut token) = hub.pipeline_layouts.read(token);
         let (bind_group_guard, mut token) = hub.bind_groups.read(&mut token);
         let (pipeline_guard, mut token) = hub.render_pipelines.read(&mut token);
-        let (buffer_guard, _) = hub.buffers.read(&mut token);
+        let (buffer_guard, mut token) = hub.buffers.read(&mut token);
+        let (texture_guard, mut token) = hub.textures.read(&mut token);
 
         let mut state = State {
             trackers: RenderBundleScope::new(),
@@ -222,12 +223,14 @@ impl RenderBundleEncoder {
                     let offsets = &base.dynamic_offsets[..num_dynamic_offsets as usize];
                     base.dynamic_offsets = &base.dynamic_offsets[num_dynamic_offsets as usize..];
 
-                    let bind_group = state
-                        .trackers
-                        .bind_groups
-                        .use_extend(&*bind_group_guard, bind_group_id, (), ())
-                        .map_err(|_| RenderCommandError::InvalidBindGroup(bind_group_id))
-                        .map_pass_err(scope)?;
+                    let bind_group = unsafe {
+                        state
+                            .trackers
+                            .bind_groups
+                            .extend(&*bind_group_guard, bind_group_id)
+                            .ok_or_else(|| RenderCommandError::InvalidBindGroup(bind_group_id))
+                            .map_pass_err(scope)?
+                    };
                     if bind_group.dynamic_binding_info.len() != offsets.len() {
                         return Err(RenderCommandError::InvalidDynamicOffsetCount {
                             actual: offsets.len(),
@@ -256,10 +259,16 @@ impl RenderBundleEncoder {
                     texture_memory_init_actions.extend_from_slice(&bind_group.used_texture_ranges);
 
                     state.set_bind_group(index, bind_group_id, bind_group.layout_id, offsets);
-                    state
-                        .trackers
-                        .merge_extend_stateful(&bind_group.used)
-                        .map_pass_err(scope)?;
+                    unsafe {
+                        state
+                            .trackers
+                            .extend_from_bind_group(
+                                &*buffer_guard,
+                                &*texture_guard,
+                                &bind_group.used,
+                            )
+                            .map_pass_err(scope)?
+                    };
                     //Note: stateless trackers are not merged: the lifetime reference
                     // is held to the bind group itself.
                 }
@@ -608,7 +617,6 @@ pub type RenderBundleDescriptor<'a> = wgt::RenderBundleDescriptor<Label<'a>>;
 //Note: here, `RenderBundle` is just wrapping a raw stream of render commands.
 // The plan is to back it by an actual Vulkan secondary buffer, D3D12 Bundle,
 // or Metal indirect command buffer.
-#[derive(Debug)]
 pub struct RenderBundle<A: hal::Api> {
     // Normalized command stream. It can be executed verbatim,
     // without re-binding anything on the pipeline change.
@@ -1001,7 +1009,6 @@ struct VertexLimitState {
     instance_limit_slot: u32,
 }
 
-#[derive(Debug)]
 struct State<A: hal::Api> {
     trackers: RenderBundleScope<A>,
     index: IndexState,
@@ -1172,8 +1179,6 @@ pub(super) enum RenderBundleErrorInner {
     Device(#[from] DeviceError),
     #[error(transparent)]
     RenderCommand(RenderCommandError),
-    #[error(transparent)]
-    ResourceUsageConflict(#[from] UsageConflict),
     #[error(transparent)]
     Draw(#[from] DrawError),
     #[error(transparent)]

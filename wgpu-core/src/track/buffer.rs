@@ -3,7 +3,7 @@ use std::vec::Drain;
 use super::PendingTransition;
 use crate::{
     hub,
-    id::{BufferId, TypedId, Valid},
+    id::{BufferId, TypedId},
     resource::Buffer,
     track::{
         invalid_resource_state, iterate_bitvec, resize_bitvec, skip_barrier, ResourceUses,
@@ -33,9 +33,28 @@ impl ResourceUses for BufferUses {
 }
 
 pub struct BufferBindGroupState {
-    buffers: Vec<(Valid<BufferId>, BufferUses)>,
+    buffers: Vec<(BufferId, BufferUses)>,
+}
+impl BufferBindGroupState {
+    pub fn new() -> Self {
+        Self {
+            buffers: Vec::new(),
+        }
+    }
+
+    pub fn extend<'a, A: hal::Api>(
+        &mut self,
+        storage: &'a hub::Storage<Buffer<A>, BufferId>,
+        id: BufferId,
+        state: BufferUses,
+    ) -> Option<&'a Buffer<A>> {
+        self.buffers.push((id, state));
+
+        storage.get(id).ok()
+    }
 }
 
+#[derive(Debug)]
 pub(crate) struct BufferUsageScope {
     state: Vec<BufferUses>,
     owned: BitVec<usize>,
@@ -61,7 +80,7 @@ impl BufferUsageScope {
         bind_group: &BufferBindGroupState,
     ) -> Result<(), UsageConflict> {
         for &(id, state) in &bind_group.buffers {
-            self.extend(storage, id.0, state)?;
+            self.extend(storage, id, state)?;
         }
 
         Ok(())
@@ -94,7 +113,7 @@ impl BufferUsageScope {
 
         Ok(storage
             .get(id)
-            .map_err(|_| UsageConflict::BufferInvalid { id })?)
+            .map_err(|_| UsageConflict::BufferInvalid { id: id.unzip().0 })?)
     }
 
     unsafe fn extend_inner<'a, A: hal::Api>(
@@ -112,7 +131,11 @@ impl BufferUsageScope {
             let merged_state = current_state | new_state;
 
             if invalid_resource_state(merged_state) {
-                return Err(UsageConflict::from_buffer(index, current_state, new_state));
+                return Err(UsageConflict::from_buffer(
+                    index as u32,
+                    current_state,
+                    new_state,
+                ));
             }
 
             *self.state.get_unchecked_mut(index) = merged_state;
@@ -150,11 +173,27 @@ impl BufferTracker {
         resize_bitvec(&mut self.owned, size);
     }
 
+    pub fn drain(&mut self) -> Drain<PendingTransition<BufferUses>> {
+        self.temp.drain(..)
+    }
+
+    pub unsafe fn change_state<'a, A: hal::Api>(
+        &mut self,
+        storage: &'a hub::Storage<Buffer<A>, BufferId>,
+        id: BufferId,
+        state: BufferUses,
+    ) -> Option<(&'a Buffer<A>, Option<PendingTransition<BufferUses>>)> {
+        self.transition_inner(storage, id.unzip().0 as usize, state);
+
+        let value = storage.get(id).ok()?;
+        Some((value, self.temp.pop()))
+    }
+
     pub fn change_states_scope<A: hal::Api>(
         &mut self,
         storage: &hub::Storage<Buffer<A>, BufferId>,
         scope: &BufferUsageScope,
-    ) -> Drain<PendingTransition<BufferUses>> {
+    ) {
         self.change_states_inner(storage, &scope.state, &scope.owned)
     }
 
@@ -163,7 +202,7 @@ impl BufferTracker {
         storage: &hub::Storage<Buffer<A>, BufferId>,
         incoming_set: &Vec<BufferUses>,
         incoming_ownership: &BitVec<usize>,
-    ) -> Drain<PendingTransition<BufferUses>> {
+    ) {
         let incoming_size = incoming_set.len();
         if incoming_size > self.start.len() {
             self.set_max_index(incoming_size);
@@ -172,32 +211,27 @@ impl BufferTracker {
         iterate_bitvec(incoming_ownership, |index| {
             unsafe { self.transition(storage, incoming_set, index) };
         });
-
-        self.temp.drain(..)
     }
 
     pub unsafe fn change_states_bind_group<A: hal::Api>(
         &mut self,
         storage: &hub::Storage<Buffer<A>, BufferId>,
-        incoming_set: &Vec<BufferUses>,
-        incoming_ownership: &mut BitVec<usize>,
+        scope: &mut BufferUsageScope,
         bind_group_state: &BufferBindGroupState,
-    ) -> Drain<PendingTransition<BufferUses>> {
-        let incoming_size = incoming_set.len();
+    ) {
+        let incoming_size = scope.state.len();
         if incoming_size > self.start.len() {
             self.set_max_index(incoming_size);
         }
 
         for &(index, _) in bind_group_state.buffers.iter() {
-            let index = index.0.unzip().0 as usize;
-            if !incoming_ownership.get(index).unwrap_unchecked() {
+            let index = index.unzip().0 as usize;
+            if !scope.owned.get(index).unwrap_unchecked() {
                 continue;
             }
-            self.transition(storage, incoming_set, index);
-            incoming_ownership.set(index, false);
+            self.transition(storage, &scope.state, index);
+            scope.owned.set(index, false);
         }
-
-        self.temp.drain(..)
     }
 
     unsafe fn transition<A: hal::Api>(
@@ -206,9 +240,19 @@ impl BufferTracker {
         incoming_set: &Vec<BufferUses>,
         index: usize,
     ) {
+        let new_state = *incoming_set.get_unchecked(index);
+
+        self.transition_inner(storage, index, new_state);
+    }
+
+    unsafe fn transition_inner<A: hal::Api>(
+        &mut self,
+        storage: &hub::Storage<Buffer<A>, BufferId>,
+        index: usize,
+        new_state: BufferUses,
+    ) {
         let old_tracked = self.owned.get(index).unwrap_unchecked();
         let old_state = *self.end.get_unchecked(index);
-        let new_state = *incoming_set.get_unchecked(index);
 
         if old_tracked {
             if skip_barrier(old_state, new_state) {

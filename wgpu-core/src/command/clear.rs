@@ -6,7 +6,7 @@ use crate::{
     command::CommandBuffer,
     device::Device,
     get_lowest_common_denom,
-    hub::{Global, GlobalIdentityHandlerFactory, HalApi, Resource, Token},
+    hub::{self, Global, GlobalIdentityHandlerFactory, HalApi, Token},
     id::{BufferId, CommandEncoderId, DeviceId, TextureId, Valid},
     init_tracker::{MemoryInitKind, TextureInitRange},
     resource::{Texture, TextureClearMode},
@@ -87,11 +87,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             list.push(TraceCommand::ClearBuffer { dst, offset, size });
         }
 
-        let (dst_buffer, dst_pending) = cmd_buf
-            .trackers
-            .buffers
-            .use_replace(&*buffer_guard, dst, (), hal::BufferUses::COPY_DST)
-            .map_err(ClearError::InvalidBuffer)?;
+        let (dst_buffer, dst_pending) = unsafe {
+            cmd_buf
+                .trackers
+                .buffers
+                .change_state(&*buffer_guard, dst, hal::BufferUses::COPY_DST)
+                .ok_or_else(|| ClearError::InvalidBuffer(dst))?
+        };
         let dst_raw = dst_buffer
             .raw
             .as_ref()
@@ -139,7 +141,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let dst_barrier = dst_pending.map(|pending| pending.into_hal(dst_buffer));
         let cmd_buf_raw = cmd_buf.encoder.open();
         unsafe {
-            cmd_buf_raw.transition_buffers(dst_barrier);
+            cmd_buf_raw.transition_buffers(dst_barrier.into_iter());
             cmd_buf_raw.clear_buffer(dst_raw, offset..end);
         }
         Ok(())
@@ -218,6 +220,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         clear_texture(
+            &*texture_guard,
             Valid(dst),
             dst_texture,
             TextureInitRange {
@@ -232,6 +235,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 }
 
 pub(crate) fn clear_texture<A: hal::Api>(
+    storage: &hub::Storage<Texture<A>, TextureId>,
     dst_texture_id: Valid<TextureId>,
     dst_texture: &Texture<A>,
     range: TextureInitRange,
@@ -240,6 +244,7 @@ pub(crate) fn clear_texture<A: hal::Api>(
     device: &Device<A>,
 ) -> Result<(), ClearError> {
     clear_texture_no_device(
+        storage,
         dst_texture_id,
         dst_texture,
         range,
@@ -251,6 +256,7 @@ pub(crate) fn clear_texture<A: hal::Api>(
 }
 
 pub(crate) fn clear_texture_no_device<A: hal::Api>(
+    storage: &hub::Storage<Texture<A>, TextureId>,
     dst_texture_id: Valid<TextureId>,
     dst_texture: &Texture<A>,
     range: TextureInitRange,
@@ -287,14 +293,13 @@ pub(crate) fn clear_texture_no_device<A: hal::Api>(
     // On the other hand, when coming via command_encoder_clear_texture, the life_guard is still there since in order to call it a texture object is needed.
     //
     // We could in theory distinguish these two scenarios in the internal clear_texture api in order to remove this check and call the cheaper change_replace_tracked whenever possible.
-    let dst_barrier = if let Some(ref_count) = dst_texture.life_guard().ref_count.as_ref() {
-        texture_tracker.change_replace(dst_texture_id, ref_count, selector, clear_usage)
-    } else {
-        texture_tracker.change_replace_tracked(dst_texture_id, selector, clear_usage)
-    }
-    .map(|pending| pending.into_hal(dst_texture));
+    let dst_barrier = texture_tracker
+        .change_state(storage, dst_texture_id.0, selector, clear_usage)
+        .unwrap()
+        .1
+        .map(|pending| pending.into_hal(dst_texture));
     unsafe {
-        encoder.transition_textures(dst_barrier);
+        encoder.transition_textures(dst_barrier.into_iter());
     }
 
     // Record actual clearing
