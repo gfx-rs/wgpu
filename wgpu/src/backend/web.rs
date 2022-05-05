@@ -1691,8 +1691,9 @@ impl crate::Context for Context {
         // Device is dropped automatically
     }
 
-    fn device_poll(&self, _device: &Self::DeviceId, _maintain: crate::Maintain) {
+    fn device_poll(&self, _device: &Self::DeviceId, _maintain: crate::Maintain) -> bool {
         // Device is polled automatically
+        true
     }
 
     fn device_on_uncaptured_error(
