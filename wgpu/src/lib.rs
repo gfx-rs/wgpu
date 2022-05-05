@@ -322,7 +322,7 @@ trait Context: Debug + Send + Sized + Sync {
         desc: &RenderBundleEncoderDescriptor,
     ) -> Self::RenderBundleEncoderId;
     fn device_drop(&self, device: &Self::DeviceId);
-    fn device_poll(&self, device: &Self::DeviceId, maintain: Maintain);
+    fn device_poll(&self, device: &Self::DeviceId, maintain: Maintain) -> bool;
     fn device_on_uncaptured_error(
         &self,
         device: &Self::DeviceId,
@@ -1687,9 +1687,11 @@ impl Adapter {
 impl Device {
     /// Check for resource cleanups and mapping callbacks.
     ///
+    /// Return `queue_empty` indicating whether there are more queue submissions still in flight.
+    ///
     /// no-op on the web, device is automatically polled.
-    pub fn poll(&self, maintain: Maintain) {
-        Context::device_poll(&*self.context, &self.id, maintain);
+    pub fn poll(&self, maintain: Maintain) -> bool {
+        Context::device_poll(&*self.context, &self.id, maintain)
     }
 
     /// List all features that may be used with this device.

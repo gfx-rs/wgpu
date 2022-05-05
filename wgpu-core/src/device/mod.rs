@@ -4949,12 +4949,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     /// Check `device_id` for freeable resources and completed buffer mappings.
+    ///
+    /// Return `queue_empty` indicating whether there are more queue submissions still in flight.
     pub fn device_poll<A: HalApi>(
         &self,
         device_id: id::DeviceId,
         force_wait: bool,
-    ) -> Result<(), WaitIdleError> {
-        let (closures, _) = {
+    ) -> Result<bool, WaitIdleError> {
+        let (closures, queue_empty) = {
             let hub = A::hub(self);
             let mut token = Token::root();
             let (device_guard, mut token) = hub.devices.read(&mut token);
@@ -4966,7 +4968,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         unsafe {
             closures.fire();
         }
-        Ok(())
+        Ok(queue_empty)
     }
 
     /// Poll all devices belonging to the backend `A`.

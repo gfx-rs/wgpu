@@ -1554,7 +1554,7 @@ impl crate::Context for Context {
         #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
         {
             match wgc::gfx_select!(device.id => global.device_poll(device.id, true)) {
-                Ok(()) => (),
+                Ok(_) => (),
                 Err(err) => self.handle_error_fatal(err, "Device::drop"),
             }
         }
@@ -1562,7 +1562,7 @@ impl crate::Context for Context {
         wgc::gfx_select!(device.id => global.device_drop(device.id));
     }
 
-    fn device_poll(&self, device: &Self::DeviceId, maintain: crate::Maintain) {
+    fn device_poll(&self, device: &Self::DeviceId, maintain: crate::Maintain) -> bool {
         let global = &self.0;
         match wgc::gfx_select!(device.id => global.device_poll(
             device.id,
@@ -1571,7 +1571,7 @@ impl crate::Context for Context {
                 crate::Maintain::Wait => true,
             }
         )) {
-            Ok(()) => (),
+            Ok(queue_empty) => queue_empty,
             Err(err) => self.handle_error_fatal(err, "Device::poll"),
         }
     }
