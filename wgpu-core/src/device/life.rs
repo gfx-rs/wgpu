@@ -829,7 +829,7 @@ impl<A: HalApi> LifetimeTracker<A> {
         &mut self,
         hub: &Hub<A, G>,
         raw: &A::Device,
-        trackers: &Mutex<TrackerSet>,
+        trackers: &Mutex<Tracker<A>>,
         token: &mut Token<super::Device<A>>,
     ) -> Vec<super::BufferMapPendingClosure> {
         if self.ready_to_map.is_empty() {

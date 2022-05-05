@@ -7,6 +7,7 @@ use crate::{
         invalid_resource_state, iterate_bitvec, resize_bitvec, skip_barrier, ResourceUses,
         UsageConflict,
     },
+    RefCount,
 };
 use bit_vec::BitVec;
 use hal::TextureUses;
@@ -60,7 +61,7 @@ impl ComplexTextureState {
 
 // TODO: This representation could be optimized in a couple ways, but keep it simple for now.
 pub struct TextureBindGroupState {
-    textures: Vec<(TextureId, Option<TextureSelector>, TextureUses)>,
+    textures: Vec<(TextureId, Option<TextureSelector>, RefCount, TextureUses)>,
 }
 impl TextureBindGroupState {
     pub fn new() -> Self {
@@ -69,14 +70,15 @@ impl TextureBindGroupState {
         }
     }
 
-    pub fn extend<'a, A: hal::Api>(
+    pub fn extend_with_refcount<'a, A: hal::Api>(
         &mut self,
         storage: &'a hub::Storage<Texture<A>, TextureId>,
         id: TextureId,
+        ref_count: RefCount,
         selector: Option<TextureSelector>,
         state: TextureUses,
     ) -> Option<&'a Texture<A>> {
-        self.textures.push((id, selector, state));
+        self.textures.push((id, selector, ref_count, state));
 
         storage.get(id).ok()
     }
@@ -100,6 +102,7 @@ impl TextureStateSet {
 pub struct TextureUsageScope {
     set: TextureStateSet,
     owned: BitVec<usize>,
+    ref_counts: Vec<Option<RefCount>>,
 }
 
 impl TextureUsageScope {
@@ -107,11 +110,13 @@ impl TextureUsageScope {
         Self {
             set: TextureStateSet::new(),
             owned: BitVec::default(),
+            ref_counts: Vec::new(),
         }
     }
 
     pub fn set_max_index(&mut self, size: usize) {
         self.set.simple.resize(size, TextureUses::UNINITIALIZED);
+        self.ref_counts.resize(size, None);
 
         resize_bitvec(&mut self.owned, size);
     }
@@ -136,8 +141,8 @@ impl TextureUsageScope {
         storage: &hub::Storage<Texture<A>, TextureId>,
         bind_group: &TextureBindGroupState,
     ) -> Result<(), UsageConflict> {
-        for (id, selector, state) in &bind_group.textures {
-            self.extend(storage, *id, selector.clone(), *state)?;
+        for (id, selector, ref_count, state) in &bind_group.textures {
+            self.extend_inner(storage, id.unzip().0, selector.clone(), ref_count, *state)?;
         }
 
         Ok(())
@@ -154,10 +159,19 @@ impl TextureUsageScope {
         new_state: TextureUses,
     ) -> Result<&'a Texture<A>, UsageConflict> {
         let (index, _, _) = id.unzip();
-        self.extend_inner(storage, index, selector, new_state)?;
-        Ok(storage
+        let tex = storage
             .get(id)
-            .map_err(|_| UsageConflict::TextureInvalid { id: index })?)
+            .map_err(|_| UsageConflict::TextureInvalid { id: index })?;
+
+        self.extend_inner(
+            storage,
+            index,
+            selector,
+            tex.life_guard.ref_count.as_ref().unwrap(),
+            new_state,
+        )?;
+
+        Ok(tex)
     }
 
     /// # Safety
@@ -168,6 +182,7 @@ impl TextureUsageScope {
         storage: &hub::Storage<Texture<A>, TextureId>,
         id: u32,
         selector: Option<TextureSelector>,
+        ref_count: &RefCount,
         new_state: TextureUses,
     ) -> Result<(), UsageConflict> {
         let index = id as usize;
@@ -211,6 +226,7 @@ impl TextureUsageScope {
         }
 
         // We're the first to use this resource, let's add it.
+        *self.ref_counts.get_unchecked_mut(index) = Some(ref_count.clone());
         self.owned.set(index, true);
 
         if let Some(selector) = selector {
@@ -284,6 +300,7 @@ pub(crate) struct TextureTracker {
     /// Temporary storage for collecting transitions.
     temp: Vec<PendingTransition<TextureUses>>,
     owned: BitVec<usize>,
+    ref_counts: Vec<Option<RefCount>>,
 }
 impl TextureTracker {
     pub fn new() -> Self {
@@ -292,6 +309,7 @@ impl TextureTracker {
             end_set: TextureStateSet::new(),
             temp: Vec::new(),
             owned: BitVec::default(),
+            ref_counts: Vec::new(),
         }
     }
 
@@ -300,6 +318,7 @@ impl TextureTracker {
             .simple
             .resize(size, TextureUses::UNINITIALIZED);
         self.end_set.simple.resize(size, TextureUses::UNINITIALIZED);
+        self.ref_counts.resize(size, None);
 
         resize_bitvec(&mut self.owned, size);
     }
@@ -308,13 +327,14 @@ impl TextureTracker {
         self.temp.drain(..)
     }
 
-    pub unsafe fn init(&mut self, id: TextureId, usage: TextureUses) {
+    pub unsafe fn init(&mut self, id: TextureId, ref_count: RefCount, usage: TextureUses) {
         let index = id.unzip().0 as usize;
 
         *self.start_set.simple.get_unchecked_mut(index) = usage;
         *self.end_set.simple.get_unchecked_mut(index) = usage;
 
         self.owned.set(index, true);
+        *self.ref_counts.get_unchecked_mut(index) = Some(ref_count);
     }
 
     pub fn change_state<'a, A: hal::Api>(
@@ -332,7 +352,7 @@ impl TextureTracker {
         storage: &hub::Storage<Texture<A>, TextureId>,
         scope: &TextureUsageScope,
     ) {
-        self.change_states_inner(storage, &scope.set, &scope.owned)
+        self.change_states_inner(storage, &scope.set, &scope.owned, &scope.ref_counts)
     }
 
     fn change_states_inner<A: hal::Api>(
@@ -340,6 +360,7 @@ impl TextureTracker {
         storage: &hub::Storage<Texture<A>, TextureId>,
         incoming_set: &TextureStateSet,
         incoming_ownership: &BitVec<usize>,
+        incoming_ref_counts: &Vec<Option<RefCount>>,
     ) {
         let incoming_size = incoming_set.simple.len();
         if incoming_size > self.start_set.simple.len() {
@@ -347,7 +368,7 @@ impl TextureTracker {
         }
 
         iterate_bitvec(incoming_ownership, |index| {
-            unsafe { self.transition(storage, incoming_set, index) };
+            unsafe { self.transition(storage, incoming_set, incoming_ref_counts, index) };
         });
     }
 
@@ -362,12 +383,12 @@ impl TextureTracker {
             self.set_max_index(incoming_size);
         }
 
-        for &(index, _, _) in bind_group_state.textures.iter() {
+        for &(index, _, _, _) in bind_group_state.textures.iter() {
             let index = index.unzip().0 as usize;
             if !scope.owned.get(index).unwrap_unchecked() {
                 continue;
             }
-            self.transition(storage, &scope.set, index);
+            self.transition(storage, &scope.set, &scope.ref_counts, index);
             scope.owned.set(index, false);
         }
     }
@@ -376,6 +397,7 @@ impl TextureTracker {
         &mut self,
         storage: &hub::Storage<Texture<A>, TextureId>,
         incoming_set: &TextureStateSet,
+        incoming_ref_counts: &Vec<Option<RefCount>>,
         index: usize,
     ) {
         let old_tracked = self.owned.get(index).unwrap_unchecked();
@@ -392,6 +414,12 @@ impl TextureTracker {
                 *self.end_set.simple.get_unchecked_mut(index) = new_state;
 
                 self.owned.set(index, true);
+
+                let ref_count = incoming_ref_counts
+                    .get_unchecked(index)
+                    .unwrap_unchecked()
+                    .clone();
+                *self.ref_counts.get_unchecked_mut(index) = Some(ref_count);
             }
             (false, _, true) => {
                 *self.start_set.simple.get_unchecked_mut(index) = TextureUses::COMPLEX;
@@ -406,6 +434,12 @@ impl TextureTracker {
                     .insert(index as u32, complex_state.clone());
 
                 self.owned.set(index, true);
+
+                let ref_count = incoming_ref_counts
+                    .get_unchecked(index)
+                    .unwrap_unchecked()
+                    .clone();
+                *self.ref_counts.get_unchecked_mut(index) = Some(ref_count);
             }
             (true, false, false) => {
                 if skip_barrier(old_state, new_state) {

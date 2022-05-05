@@ -1624,11 +1624,12 @@ impl<A: HalApi> Device<A> {
     ) -> Result<(), binding_model::CreateBindGroupError> {
         // Careful here: the texture may no longer have its own ref count,
         // if it was deleted by the user.
-        let texture = &texture_guard[view.parent_id.value];
-        used.textures
-            .extend(
+        let texture = used
+            .textures
+            .extend_with_refcount(
                 texture_guard,
                 view.parent_id.value.0,
+                view.parent_id.ref_count.clone(),
                 Some(view.selector.clone()),
                 internal_use,
             )
@@ -3451,11 +3452,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             log::info!("Created texture {:?} with {:?}", id, desc);
 
             unsafe {
-                device
-                    .trackers
-                    .lock()
-                    .textures
-                    .init(id.0, hal::TextureUses::UNINITIALIZED)
+                device.trackers.lock().textures.init(
+                    id.0,
+                    ref_count,
+                    hal::TextureUses::UNINITIALIZED,
+                )
             };
             return (id.0, None);
         };
@@ -3534,7 +3535,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     .trackers
                     .lock()
                     .textures
-                    .init(id.0, hal::TextureUses::UNINITIALIZED)
+                    .init(id.0, ref_count, hal::TextureUses::UNINITIALIZED)
             };
             return (id.0, None);
         };
@@ -3693,7 +3694,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let ref_count = view.life_guard.add_ref();
             let id = fid.assign(view, &mut token);
 
-            unsafe { device.trackers.lock().views.init(id.0) };
+            unsafe { device.trackers.lock().views.init(id.0, ref_count) };
             return (id.0, None);
         };
 
@@ -3787,7 +3788,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let id = fid.assign(sampler, &mut token);
 
             unsafe {
-                device.trackers.lock().samplers.init(id.0);
+                device.trackers.lock().samplers.init(id.0, ref_count);
             }
             return (id.0, None);
         };
@@ -4048,7 +4049,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let id = fid.assign(bind_group, &mut token);
             log::debug!("Bind group {:?}", id,);
 
-            unsafe { device.trackers.lock().bind_groups.init(id.0) };
+            unsafe { device.trackers.lock().bind_groups.init(id.0, ref_count) };
             return (id.0, None);
         };
 
@@ -4355,7 +4356,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let ref_count = render_bundle.life_guard.add_ref();
             let id = fid.assign(render_bundle, &mut token);
 
-            unsafe { device.trackers.lock().bundles.init(id.0) };
+            unsafe { device.trackers.lock().bundles.init(id.0, ref_count) };
             return (id.0, None);
         };
 
@@ -4431,7 +4432,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let id = fid.assign(query_set, &mut token);
 
             unsafe {
-                device.trackers.lock().query_sets.init(id.0);
+                device.trackers.lock().query_sets.init(id.0, ref_count);
             }
 
             return (id.0, None);
@@ -4524,7 +4525,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             log::info!("Created render pipeline {:?} with {:?}", id, desc);
 
             unsafe {
-                device.trackers.lock().render_pipelines.init(id.0);
+                device.trackers.lock().render_pipelines.init(id.0, ref_count);
             }
             return (id.0, None);
         };
@@ -4661,7 +4662,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let id = fid.assign(pipeline, &mut token);
             log::info!("Created compute pipeline {:?} with {:?}", id, desc);
 
-            unsafe { device.trackers.lock().compute_pipelines.init(id.0) };
+            unsafe { device.trackers.lock().compute_pipelines.init(id.0, ref_count) };
             return (id.0, None);
         };
 
