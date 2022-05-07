@@ -1,4 +1,4 @@
-use std::{vec::Drain, marker::PhantomData};
+use std::{marker::PhantomData, vec::Drain};
 
 use super::PendingTransition;
 use crate::{
@@ -21,7 +21,7 @@ impl ResourceUses for BufferUses {
     type Selector = ();
 
     fn bits(self) -> u16 {
-        self.bits()
+        Self::bits(&self)
     }
 
     fn all_ordered(self) -> bool {
@@ -33,10 +33,10 @@ impl ResourceUses for BufferUses {
     }
 }
 
-pub struct BufferBindGroupState<A: hub::HalApi> {
+pub(crate) struct BufferBindGroupState<A: hub::HalApi> {
     buffers: Vec<(Valid<BufferId>, RefCount, BufferUses)>,
 
-    _phantom: PhantomData<A>
+    _phantom: PhantomData<A>,
 }
 impl<A: hub::HalApi> BufferBindGroupState<A> {
     pub fn new() -> Self {
@@ -45,6 +45,10 @@ impl<A: hub::HalApi> BufferBindGroupState<A> {
 
             _phantom: PhantomData,
         }
+    }
+
+    pub fn used(&self) -> impl Iterator<Item = Valid<BufferId>> + '_ {
+        self.buffers.iter().map(|&(id, _, _)| id)
     }
 
     pub fn extend<'a>(
@@ -109,26 +113,29 @@ impl<A: hub::HalApi> BufferUsageScope<A> {
         resize_bitvec(&mut self.owned, size);
     }
 
+    pub fn used(&self) -> impl Iterator<Item = Valid<BufferId>> + '_ {
+        self.debug_assert_in_bounds(self.owned.len() - 1);
+        iterate_bitvec_indices(&self.owned).map(move |index| {
+            let epoch = unsafe { *self.epochs.get_unchecked(index) };
+            Valid(BufferId::zip(index as u32, epoch, A::VARIANT))
+        })
+    }
+
     pub unsafe fn extend_from_bind_group(
         &mut self,
-        storage: &hub::Storage<Buffer<A>, BufferId>,
         bind_group: &BufferBindGroupState<A>,
     ) -> Result<(), UsageConflict> {
         for (id, ref_count, state) in &bind_group.buffers {
             let (index32, epoch, _) = id.0.unzip();
             let index = index32 as usize;
 
-            self.extend_inner(storage, *id, index, epoch, ref_count, *state)?;
+            self.extend_inner(*id, index, epoch, ref_count, *state)?;
         }
 
         Ok(())
     }
 
-    pub fn extend_from_scope(
-        &mut self,
-        storage: &hub::Storage<Buffer<A>, BufferId>,
-        scope: &Self,
-    ) -> Result<(), UsageConflict> {
+    pub fn extend_from_scope(&mut self, scope: &Self) -> Result<(), UsageConflict> {
         let incoming_size = scope.state.len();
         if incoming_size > self.state.len() {
             self.set_max_index(incoming_size);
@@ -148,13 +155,12 @@ impl<A: hub::HalApi> BufferUsageScope<A> {
                 let new_state = *scope.state.get_unchecked(index);
 
                 self.extend_inner(
-                    storage,
                     Valid(BufferId::zip(index as u32, epoch, A::VARIANT)),
                     index,
                     epoch,
                     ref_count,
                     new_state,
-                )
+                )?;
             };
         }
 
@@ -175,7 +181,6 @@ impl<A: hub::HalApi> BufferUsageScope<A> {
         let index = index32 as usize;
 
         self.extend_inner(
-            storage,
             Valid(id),
             index,
             epoch,
@@ -188,7 +193,6 @@ impl<A: hub::HalApi> BufferUsageScope<A> {
 
     unsafe fn extend_inner<'a>(
         &mut self,
-        storage: &'a hub::Storage<Buffer<A>, BufferId>,
         id: Valid<BufferId>,
         index: usize,
         epoch: u32,
@@ -312,7 +316,6 @@ impl<A: hub::HalApi> BufferTracker<A> {
         let index = index32 as usize;
 
         self.transition_inner(
-            storage,
             index,
             epoch,
             value.life_guard.ref_count.as_ref().unwrap(),
@@ -322,11 +325,29 @@ impl<A: hub::HalApi> BufferTracker<A> {
         Some((value, self.temp.pop()))
     }
 
-    pub fn change_states_scope(
-        &mut self,
-        storage: &hub::Storage<Buffer<A>, BufferId>,
-        scope: &BufferUsageScope<A>,
-    ) {
+    pub fn change_states_tracker(&mut self, tracker: &Self) {
+        let incoming_size = tracker.start.len();
+        if incoming_size > self.start.len() {
+            self.set_max_index(incoming_size);
+        }
+
+        for index in iterate_bitvec_indices(&tracker.owned) {
+            tracker.debug_assert_in_bounds(index);
+            unsafe {
+                let ref_count = tracker
+                    .ref_counts
+                    .get_unchecked(index)
+                    .as_ref()
+                    .unwrap_unchecked();
+
+                let epoch = *tracker.epochs.get_unchecked(index);
+
+                self.transition(&tracker.start, ref_count, index, epoch);
+            }
+        }
+    }
+
+    pub fn change_states_scope(&mut self, scope: &BufferUsageScope<A>) {
         let incoming_size = scope.state.len();
         if incoming_size > self.start.len() {
             self.set_max_index(incoming_size);
@@ -343,14 +364,13 @@ impl<A: hub::HalApi> BufferTracker<A> {
 
                 let epoch = *scope.epochs.get_unchecked(index);
 
-                self.transition(storage, &scope.state, ref_count, index, epoch);
+                self.transition(&scope.state, ref_count, index, epoch);
             }
         }
     }
 
     pub unsafe fn change_states_bind_group(
         &mut self,
-        storage: &hub::Storage<Buffer<A>, BufferId>,
         scope: &mut BufferUsageScope<A>,
         bind_group_state: &BufferBindGroupState<A>,
     ) {
@@ -368,7 +388,7 @@ impl<A: hub::HalApi> BufferTracker<A> {
             if !scope.owned.get(index).unwrap_unchecked() {
                 continue;
             }
-            self.transition(storage, &scope.state, ref_count, index, epoch);
+            self.transition(&scope.state, ref_count, index, epoch);
 
             scope.owned.set(index, false);
         }
@@ -376,7 +396,6 @@ impl<A: hub::HalApi> BufferTracker<A> {
 
     unsafe fn transition(
         &mut self,
-        storage: &hub::Storage<Buffer<A>, BufferId>,
         incoming_set: &Vec<BufferUses>,
         ref_count: &RefCount,
         index: usize,
@@ -384,12 +403,11 @@ impl<A: hub::HalApi> BufferTracker<A> {
     ) {
         let new_state = *incoming_set.get_unchecked(index);
 
-        self.transition_inner(storage, index, epoch, ref_count, new_state);
+        self.transition_inner(index, epoch, ref_count, new_state);
     }
 
     unsafe fn transition_inner(
         &mut self,
-        storage: &hub::Storage<Buffer<A>, BufferId>,
         index: usize,
         epoch: u32,
         ref_count: &RefCount,
@@ -417,9 +435,39 @@ impl<A: hub::HalApi> BufferTracker<A> {
             *self.end.get_unchecked_mut(index) = new_state;
 
             *self.ref_counts.get_unchecked_mut(index) = Some(ref_count.clone());
-            *self.epochs.get_unchecked(index) = epoch;
+            *self.epochs.get_unchecked_mut(index) = epoch;
 
             self.owned.set(index, true);
         }
+    }
+
+    pub fn remove_abandoned(&mut self, id: Valid<BufferId>) -> bool {
+        let (index32, epoch, _) = id.0.unzip();
+        let index = index32 as usize;
+
+        if index > self.owned.len() {
+            return false;
+        }
+
+        self.debug_assert_in_bounds(index);
+
+        unsafe {
+            if self.owned.get(index).unwrap_unchecked() {
+                let existing_epoch = self.epochs.get_unchecked_mut(index);
+                let existing_ref_count = self.ref_counts.get_unchecked_mut(index);
+
+                if *existing_epoch == epoch
+                    && existing_ref_count.as_mut().unwrap_unchecked().load() == 1
+                {
+                    self.owned.set(index, false);
+                    *existing_epoch = u32::MAX;
+                    *existing_ref_count = None;
+
+                    return true;
+                }
+            }
+        }
+
+        false
     }
 }

@@ -1084,8 +1084,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let (query_set_guard, mut token) = hub.query_sets.read(&mut token);
             let (buffer_guard, mut token) = hub.buffers.read(&mut token);
             let (texture_guard, mut token) = hub.textures.read(&mut token);
-            let (view_guard, mut token) = hub.texture_views.read(&mut token);
-            let (sampler_guard, _) = hub.samplers.read(&mut token);
+            let (view_guard, _) = hub.texture_views.read(&mut token);
 
             log::trace!(
                 "Encoding render pass begin in command buffer {:?}",
@@ -1160,11 +1159,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         // merge the resource tracker in
                         unsafe {
                             info.usage_scope
-                                .extend_from_bind_group(
-                                    &*buffer_guard,
-                                    &*texture_guard,
-                                    &bind_group.used,
-                                )
+                                .extend_from_bind_group(&*texture_guard, &bind_group.used)
                                 .map_pass_err(scope)?;
                         }
                         //Note: stateless trackers are not merged: the lifetime reference
@@ -1936,22 +1931,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                         unsafe {
                             info.usage_scope
-                                .extend_from_render_bundle(
-                                    &*buffer_guard,
-                                    &*texture_guard,
-                                    &bundle.used,
-                                )
+                                .extend_from_render_bundle(&*texture_guard, &bundle.used)
                                 .map_pass_err(scope)?;
                             cmd_buf
                                 .trackers
-                                .extend_from_render_bundle(
-                                    &*view_guard,
-                                    &*sampler_guard,
-                                    &*bind_group_guard,
-                                    &*render_pipe_guard,
-                                    &*query_set_guard,
-                                    &bundle.used,
-                                )
+                                .extend_from_render_bundle(&bundle.used)
                                 .map_pass_err(scope)?;
                         };
                         state.reset_bundle();
@@ -1993,7 +1977,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .map_err(RenderCommandError::InvalidQuerySet)
                 .map_pass_err(PassErrorScope::QueryReset)?;
 
-            super::CommandBuffer::insert_barriers(
+            super::CommandBuffer::insert_barriers_from_scope(
                 transit,
                 &mut cmd_buf.trackers,
                 &scope,

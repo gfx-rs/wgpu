@@ -263,11 +263,8 @@ impl<A: HalApi> State<A> {
     ) -> Result<(), UsageConflict> {
         for id in self.binder.list_active() {
             unsafe {
-                self.scope.extend_from_bind_group(
-                    buffer_guard,
-                    texture_guard,
-                    &bind_group_guard[id].used,
-                )?
+                self.scope
+                    .extend_from_bind_group(texture_guard, &bind_group_guard[id].used)?
             };
             // Note: stateless trackers are not merged: the lifetime reference
             // is held to the bind group itself.
@@ -276,7 +273,6 @@ impl<A: HalApi> State<A> {
         for id in self.binder.list_active() {
             unsafe {
                 base_trackers.extend_from_bind_group(
-                    buffer_guard,
                     texture_guard,
                     &mut self.scope,
                     &bind_group_guard[id].used,

@@ -4,7 +4,7 @@ use hal::CommandEncoder;
 
 use crate::{
     device::Device,
-    hub::{Storage, HalApi},
+    hub::{HalApi, Storage},
     id::{self, TextureId},
     init_tracker::*,
     resource::{Buffer, Texture},
@@ -134,14 +134,14 @@ pub(crate) fn fixup_discarded_surfaces<
         clear_texture(
             texture_guard,
             id::Valid(init.texture),
-            texture_guard.get(init.texture).unwrap(),
             TextureInitRange {
                 mip_range: init.mip_level..(init.mip_level + 1),
                 layer_range: init.layer..(init.layer + 1),
             },
             encoder,
             texture_tracker,
-            device,
+            &device.alignments,
+            &device.zero_buffer,
         )
         .unwrap();
     }
@@ -282,11 +282,11 @@ impl<A: HalApi> BakedCommands<A> {
                 clear_texture(
                     texture_guard,
                     id::Valid(texture_use.id),
-                    &*texture,
                     range,
                     &mut self.encoder,
                     &mut device_tracker.textures,
-                    device,
+                    &device.alignments,
+                    &device.zero_buffer,
                 )
                 .unwrap();
             }

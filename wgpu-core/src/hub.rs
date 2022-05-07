@@ -193,7 +193,7 @@ impl<T, I: id::TypedId> Storage<T, I> {
 
     pub(crate) unsafe fn get_unchecked(&self, id: u32) -> &T {
         match self.map[id as usize] {
-            Element::Occupied(ref v, e) => v,
+            Element::Occupied(ref v, _) => v,
             Element::Vacant => panic!("{}[{}] does not exist", self.kind, id),
             Element::Error(_, _) => panic!(""),
         }
@@ -1003,16 +1003,16 @@ pub trait HalApi: hal::Api {
 
 impl HalApi for hal::api::Empty {
     const VARIANT: Backend = Backend::Empty;
-    fn create_instance_from_hal(name: &str, hal_instance: Self::Instance) -> Instance {
+    fn create_instance_from_hal(_: &str, _: Self::Instance) -> Instance {
         unimplemented!("called empty api")
     }
-    fn hub<G: GlobalIdentityHandlerFactory>(global: &Global<G>) -> &Hub<Self, G> {
+    fn hub<G: GlobalIdentityHandlerFactory>(_: &Global<G>) -> &Hub<Self, G> {
         unimplemented!("called empty api")
     }
-    fn get_surface(surface: &Surface) -> &HalSurface<Self> {
+    fn get_surface(_: &Surface) -> &HalSurface<Self> {
         unimplemented!("called empty api")
     }
-    fn get_surface_mut(surface: &mut Surface) -> &mut HalSurface<Self> {
+    fn get_surface_mut(_: &mut Surface) -> &mut HalSurface<Self> {
         unimplemented!("called empty api")
     }
 }

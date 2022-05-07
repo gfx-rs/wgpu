@@ -1,7 +1,7 @@
 #[cfg(feature = "trace")]
 use crate::device::trace::Command as TraceCommand;
 use crate::{
-    command::{CommandBuffer, CommandEncoderError},
+    command::{clear_texture, CommandBuffer, CommandEncoderError},
     conv,
     device::{Device, MissingDownlevelFlags},
     error::{ErrorFormatter, PrettyError},
@@ -21,8 +21,6 @@ use thiserror::Error;
 use wgt::{BufferAddress, BufferUsages, Extent3d, TextureUsages};
 
 use std::iter;
-
-use super::clear::clear_texture;
 
 pub type ImageCopyBuffer = wgt::ImageCopyBuffer<BufferId>;
 pub type ImageCopyTexture = wgt::ImageCopyTexture<TextureId>;
@@ -388,7 +386,6 @@ fn handle_texture_init<A: HalApi>(
     copy_texture: &ImageCopyTexture,
     copy_size: &Extent3d,
     texture_guard: &Storage<Texture<A>, TextureId>,
-    texture: &Texture<A>,
 ) {
     let init_action = TextureInitTrackerAction {
         id: copy_texture.texture,
@@ -412,14 +409,14 @@ fn handle_texture_init<A: HalApi>(
             clear_texture(
                 texture_guard,
                 Valid(init.texture),
-                texture,
                 TextureInitRange {
                     mip_range: init.mip_level..(init.mip_level + 1),
                     layer_range: init.layer..(init.layer + 1),
                 },
                 cmd_buf_raw,
                 &mut cmd_buf.trackers.textures,
-                device,
+                &device.alignments,
+                &device.zero_buffer,
             )
             .unwrap();
         }
@@ -434,7 +431,7 @@ fn handle_src_texture_init<A: HalApi>(
     copy_size: &Extent3d,
     texture_guard: &Storage<Texture<A>, TextureId>,
 ) -> Result<(), TransferError> {
-    let texture = texture_guard
+    let _ = texture_guard
         .get(source.texture)
         .map_err(|_| TransferError::InvalidTexture(source.texture))?;
 
@@ -445,7 +442,6 @@ fn handle_src_texture_init<A: HalApi>(
         source,
         copy_size,
         texture_guard,
-        texture,
     );
     Ok(())
 }
@@ -481,7 +477,6 @@ fn handle_dst_texture_init<A: HalApi>(
         destination,
         copy_size,
         texture_guard,
-        texture,
     );
     Ok(())
 }

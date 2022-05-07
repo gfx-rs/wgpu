@@ -45,7 +45,7 @@ use crate::{
         SHADER_STAGE_COUNT,
     },
     error::{ErrorFormatter, PrettyError},
-    hub::{GlobalIdentityHandlerFactory, Hub, Resource, Storage, Token, HalApi},
+    hub::{GlobalIdentityHandlerFactory, HalApi, Hub, Resource, Storage, Token},
     id,
     init_tracker::{BufferInitTrackerAction, MemoryInitKind, TextureInitTrackerAction},
     pipeline::{self, PipelineFlags},
@@ -179,7 +179,7 @@ impl RenderBundleEncoder {
         let (bind_group_guard, mut token) = hub.bind_groups.read(&mut token);
         let (pipeline_guard, mut token) = hub.render_pipelines.read(&mut token);
         let (buffer_guard, mut token) = hub.buffers.read(&mut token);
-        let (texture_guard, mut token) = hub.textures.read(&mut token);
+        let (texture_guard, _) = hub.textures.read(&mut token);
 
         let mut state = State {
             trackers: RenderBundleScope::new(),
@@ -262,11 +262,7 @@ impl RenderBundleEncoder {
                     unsafe {
                         state
                             .trackers
-                            .extend_from_bind_group(
-                                &*buffer_guard,
-                                &*texture_guard,
-                                &bind_group.used,
-                            )
+                            .extend_from_bind_group(&*texture_guard, &bind_group.used)
                             .map_pass_err(scope)?
                     };
                     //Note: stateless trackers are not merged: the lifetime reference

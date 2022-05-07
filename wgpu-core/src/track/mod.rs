@@ -68,8 +68,8 @@ impl PendingTransition<hal::TextureUses> {
     }
 }
 
-trait ResourceUses:
-    fmt::Debug + ops::BitAnd<Output = Self> + ops::BitOr<Output = Self> + PartialEq + Sized
+pub trait ResourceUses:
+    fmt::Debug + ops::BitAnd<Output = Self> + ops::BitOr<Output = Self> + PartialEq + Sized + Copy
 {
     const EXCLUSIVE: Self;
 
@@ -117,7 +117,7 @@ fn iterate_bitvec_indices(ownership: &BitVec<usize>) -> impl Iterator<Item = usi
             let bit_start = word_index * BITS_PER_BLOCK;
             let bit_end = (bit_start + BITS_PER_BLOCK).min(size);
 
-            (bit_start..bit_end).filter(move |index| {
+            (bit_start..bit_end).filter(move |_| {
                 let active = word & 0b1 != 0;
                 word >>= 1;
 
@@ -178,8 +178,8 @@ impl UsageConflict {
                 layers = selector.layers;
             }
             None => {
-                mips = texture.full_range.mips;
-                layers = texture.full_range.layers;
+                mips = texture.full_range.mips.clone();
+                layers = texture.full_range.layers.clone();
             }
         }
 
@@ -196,7 +196,7 @@ impl UsageConflict {
 }
 
 #[derive(Clone, Debug)]
-struct InvalidUse<T> {
+pub struct InvalidUse<T> {
     current_state: T,
     new_state: T,
 }
@@ -263,12 +263,10 @@ impl<A: hub::HalApi> RenderBundleScope<A> {
 
     pub unsafe fn extend_from_bind_group(
         &mut self,
-        buffers: &hub::Storage<resource::Buffer<A>, id::BufferId>,
         textures: &hub::Storage<resource::Texture<A>, id::TextureId>,
         bind_group: &BindGroupStates<A>,
     ) -> Result<(), UsageConflict> {
-        self.buffers
-            .extend_from_bind_group(buffers, &bind_group.buffers)?;
+        self.buffers.extend_from_bind_group(&bind_group.buffers)?;
         self.textures
             .extend_from_bind_group(textures, &bind_group.textures)?;
 
@@ -292,12 +290,10 @@ impl<A: hub::HalApi> UsageScope<A> {
 
     pub unsafe fn extend_from_bind_group(
         &mut self,
-        buffers: &hub::Storage<resource::Buffer<A>, id::BufferId>,
         textures: &hub::Storage<resource::Texture<A>, id::TextureId>,
         bind_group: &BindGroupStates<A>,
     ) -> Result<(), UsageConflict> {
-        self.buffers
-            .extend_from_bind_group(buffers, &bind_group.buffers)?;
+        self.buffers.extend_from_bind_group(&bind_group.buffers)?;
         self.textures
             .extend_from_bind_group(textures, &bind_group.textures)?;
 
@@ -306,12 +302,10 @@ impl<A: hub::HalApi> UsageScope<A> {
 
     pub unsafe fn extend_from_render_bundle(
         &mut self,
-        buffers: &hub::Storage<resource::Buffer<A>, id::BufferId>,
         textures: &hub::Storage<resource::Texture<A>, id::TextureId>,
         render_bundle: &RenderBundleScope<A>,
     ) -> Result<(), UsageConflict> {
-        self.buffers
-            .extend_from_scope(buffers, &render_bundle.buffers)?;
+        self.buffers.extend_from_scope(&render_bundle.buffers)?;
         self.textures
             .extend_from_scope(textures, &render_bundle.textures)?;
 
@@ -348,35 +342,28 @@ impl<A: hub::HalApi> Tracker<A> {
 
     pub unsafe fn extend_from_bind_group(
         &mut self,
-        buffers: &hub::Storage<resource::Buffer<A>, id::BufferId>,
         textures: &hub::Storage<resource::Texture<A>, id::TextureId>,
         scope: &mut UsageScope<A>,
         bind_group: &BindGroupStates<A>,
     ) {
         self.buffers
-            .change_states_bind_group(buffers, &mut scope.buffers, &bind_group.buffers);
+            .change_states_bind_group(&mut scope.buffers, &bind_group.buffers);
         self.textures
             .change_states_bind_group(textures, &mut scope.textures, &bind_group.textures);
     }
 
     pub unsafe fn extend_from_render_bundle(
         &mut self,
-        views: &hub::Storage<resource::TextureView<A>, id::TextureViewId>,
-        samplers: &hub::Storage<resource::Sampler<A>, id::SamplerId>,
-        bind_groups: &hub::Storage<binding_model::BindGroup<A>, id::BindGroupId>,
-        render_pipelines: &hub::Storage<pipeline::RenderPipeline<A>, id::RenderPipelineId>,
-        query_sets: &hub::Storage<resource::QuerySet<A>, id::QuerySetId>,
         render_bundle: &RenderBundleScope<A>,
     ) -> Result<(), UsageConflict> {
-        self.views.extend_from_tracker(views, &render_bundle.views);
-        self.samplers
-            .extend_from_tracker(samplers, &render_bundle.samplers);
+        self.views.extend_from_tracker(&render_bundle.views);
+        self.samplers.extend_from_tracker(&render_bundle.samplers);
         self.bind_groups
-            .extend_from_tracker(bind_groups, &render_bundle.bind_groups);
+            .extend_from_tracker(&render_bundle.bind_groups);
         self.render_pipelines
-            .extend_from_tracker(render_pipelines, &render_bundle.render_pipelines);
+            .extend_from_tracker(&render_bundle.render_pipelines);
         self.query_sets
-            .extend_from_tracker(query_sets, &render_bundle.query_sets);
+            .extend_from_tracker(&render_bundle.query_sets);
 
         Ok(())
     }

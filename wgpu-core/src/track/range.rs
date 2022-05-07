@@ -8,7 +8,7 @@ use std::{cmp::Ordering, fmt::Debug, iter, ops::Range, slice::Iter};
 /// optimized for a case where keys of the same values
 /// are often grouped together linearly.
 #[derive(Clone, Debug, PartialEq)]
-pub struct RangedStates<I, T> {
+pub(crate) struct RangedStates<I, T> {
     /// List of ranges, each associated with a singe value.
     /// Ranges of keys have to be non-intersecting and ordered.
     ranges: SmallVec<[(Range<I>, T); 1]>,
@@ -200,7 +200,7 @@ impl<I: Copy + PartialOrd, T: Copy + PartialEq> RangedStates<I, T> {
 
 /// A custom iterator that goes through two `RangedStates` and process a merge.
 #[derive(Debug)]
-pub struct Merge<'a, I, T> {
+pub(crate) struct Merge<'a, I, T> {
     base: I,
     sa: iter::Peekable<Iter<'a, (Range<I>, T)>>,
     sb: iter::Peekable<Iter<'a, (Range<I>, T)>>,

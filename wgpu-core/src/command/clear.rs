@@ -4,7 +4,6 @@ use std::{num::NonZeroU32, ops::Range};
 use crate::device::trace::Command as TraceCommand;
 use crate::{
     command::CommandBuffer,
-    device::Device,
     get_lowest_common_denom,
     hub::{self, Global, GlobalIdentityHandlerFactory, HalApi, Token},
     id::{BufferId, CommandEncoderId, DeviceId, TextureId, Valid},
@@ -219,17 +218,19 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             });
         }
 
+        let device = &device_guard[cmd_buf.device_id.value];
+
         clear_texture(
             &*texture_guard,
             Valid(dst),
-            dst_texture,
             TextureInitRange {
                 mip_range: subresource_range.base_mip_level..subresource_level_end,
                 layer_range: subresource_range.base_array_layer..subresource_layer_end,
             },
             cmd_buf.encoder.open(),
             &mut cmd_buf.trackers.textures,
-            &device_guard[cmd_buf.device_id.value],
+            &device.alignments,
+            &device.zero_buffer,
         )
     }
 }
@@ -237,34 +238,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 pub(crate) fn clear_texture<A: HalApi>(
     storage: &hub::Storage<Texture<A>, TextureId>,
     dst_texture_id: Valid<TextureId>,
-    dst_texture: &Texture<A>,
-    range: TextureInitRange,
-    encoder: &mut A::CommandEncoder,
-    texture_tracker: &mut TextureTracker<A>,
-    device: &Device<A>,
-) -> Result<(), ClearError> {
-    clear_texture_no_device(
-        storage,
-        dst_texture_id,
-        dst_texture,
-        range,
-        encoder,
-        texture_tracker,
-        &device.alignments,
-        &device.zero_buffer,
-    )
-}
-
-pub(crate) fn clear_texture_no_device<A: HalApi>(
-    storage: &hub::Storage<Texture<A>, TextureId>,
-    dst_texture_id: Valid<TextureId>,
-    dst_texture: &Texture<A>,
     range: TextureInitRange,
     encoder: &mut A::CommandEncoder,
     texture_tracker: &mut TextureTracker<A>,
     alignments: &hal::Alignments,
     zero_buffer: &A::Buffer,
 ) -> Result<(), ClearError> {
+    let dst_texture = &storage[dst_texture_id];
+
     let dst_raw = dst_texture
         .inner
         .as_raw()
@@ -293,11 +274,13 @@ pub(crate) fn clear_texture_no_device<A: HalApi>(
     // On the other hand, when coming via command_encoder_clear_texture, the life_guard is still there since in order to call it a texture object is needed.
     //
     // We could in theory distinguish these two scenarios in the internal clear_texture api in order to remove this check and call the cheaper change_replace_tracked whenever possible.
-    let dst_barrier = texture_tracker
-        .change_state(storage, dst_texture_id.0, selector, clear_usage)
-        .unwrap()
-        .1
-        .map(|pending| pending.into_hal(dst_texture));
+    let dst_barrier = unsafe {
+        texture_tracker
+            .change_state(storage, dst_texture_id.0, selector, clear_usage)
+            .unwrap()
+            .1
+            .map(|pending| pending.into_hal(dst_texture))
+    };
     unsafe {
         encoder.transition_textures(dst_barrier.into_iter());
     }

@@ -1,9 +1,7 @@
 use crate::{
     binding_model, command, conv,
     device::life::WaitIdleError,
-    hub::{
-        Global, GlobalIdentityHandlerFactory, HalApi, Hub, Input, InvalidId, Storage, Token,
-    },
+    hub::{Global, GlobalIdentityHandlerFactory, HalApi, Hub, Input, InvalidId, Storage, Token},
     id,
     init_tracker::{
         BufferInitTracker, BufferInitTrackerAction, MemoryInitKind, TextureInitRange,
@@ -3183,7 +3181,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let id = fid.assign(buffer, &mut token);
             log::info!("Created buffer {:?} with {:?}", id, desc);
 
-            unsafe { device.trackers.lock().buffers.init(id, ref_count, buffer_use) };
+            unsafe {
+                device
+                    .trackers
+                    .lock()
+                    .buffers
+                    .init(id, ref_count, buffer_use)
+            };
             return (id.0, None);
         };
 
@@ -3444,8 +3448,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(texture) => texture,
                 Err(error) => break error,
             };
-            let num_levels = texture.full_range.mips.end;
-            let num_layers = texture.full_range.layers.end;
             let ref_count = texture.life_guard.add_ref();
 
             let id = fid.assign(texture, &mut token);
@@ -3523,20 +3525,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             texture.initialization_status = TextureInitTracker::new(desc.mip_level_count, 0);
 
-            let num_levels = texture.full_range.mips.end;
-            let num_layers = texture.full_range.layers.end;
             let ref_count = texture.life_guard.add_ref();
 
             let id = fid.assign(texture, &mut token);
             log::info!("Created texture {:?} with {:?}", id, desc);
 
-            unsafe {
-                device.trackers.lock().textures.init(
-                    id.0,
-                    ref_count,
-                    hal::TextureUses::UNINITIALIZED,
-                )
-            };
+            device
+                .trackers
+                .lock()
+                .textures
+                .init(id.0, ref_count, hal::TextureUses::UNINITIALIZED);
+
             return (id.0, None);
         };
 
@@ -4525,11 +4524,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             log::info!("Created render pipeline {:?} with {:?}", id, desc);
 
             unsafe {
-                device
-                    .trackers
-                    .lock()
-                    .render_pipelines
-                    .init(id, ref_count);
+                device.trackers.lock().render_pipelines.init(id, ref_count);
             }
             return (id.0, None);
         };
@@ -4666,13 +4661,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let id = fid.assign(pipeline, &mut token);
             log::info!("Created compute pipeline {:?} with {:?}", id, desc);
 
-            unsafe {
-                device
-                    .trackers
-                    .lock()
-                    .compute_pipelines
-                    .init(id, ref_count)
-            };
+            unsafe { device.trackers.lock().compute_pipelines.init(id, ref_count) };
             return (id.0, None);
         };
 
@@ -5132,15 +5121,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             let device = &device_guard[buffer.device_id.value];
 
+            let ret = (buffer.device_id.value, buffer.life_guard.add_ref());
+
             unsafe {
-                let trackers = device.trackers.lock();
+                let mut trackers = device.trackers.lock();
                 trackers
                     .buffers
                     .change_state(&*buffer_guard, buffer_id, internal_use);
                 trackers.buffers.drain();
             };
 
-            (buffer.device_id.value, buffer.life_guard.add_ref())
+            ret
         };
 
         let device = &device_guard[device_id];

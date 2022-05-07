@@ -135,7 +135,7 @@ pub(crate) struct Valid<I>(pub I);
 /// Most `wgpu-core` clients should not use this trait. Unusual clients that
 /// need to construct `Id` values directly, or access their components, like the
 /// WGPU recording player, may use this trait to do so.
-pub trait TypedId {
+pub trait TypedId: Copy {
     fn zip(index: Index, epoch: Epoch, backend: Backend) -> Self;
     fn unzip(self) -> (Index, Epoch, Backend);
 }

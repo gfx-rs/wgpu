@@ -9,7 +9,7 @@ use crate::{
     Epoch, RefCount,
 };
 
-pub struct StatelessBindGroupSate<T, Id: TypedId> {
+pub(crate) struct StatelessBindGroupSate<T, Id: TypedId> {
     resources: Vec<(Valid<Id>, RefCount)>,
 
     _phantom: PhantomData<T>,
@@ -24,6 +24,10 @@ impl<T: hub::Resource, Id: TypedId> StatelessBindGroupSate<T, Id> {
         }
     }
 
+    pub fn used(&self) -> impl Iterator<Item = Valid<Id>> + '_ {
+        self.resources.iter().map(|&(id, _)| id)
+    }
+
     pub fn extend<'a>(&mut self, storage: &'a hub::Storage<T, Id>, id: Id) -> Option<&'a T> {
         let resource = storage.get(id).ok()?;
 
@@ -34,7 +38,7 @@ impl<T: hub::Resource, Id: TypedId> StatelessBindGroupSate<T, Id> {
     }
 }
 
-pub struct StatelessTracker<A: hub::HalApi, T, Id: TypedId> {
+pub(crate) struct StatelessTracker<A: hub::HalApi, T, Id: TypedId> {
     ref_counts: Vec<Option<RefCount>>,
     epochs: Vec<Epoch>,
 
@@ -108,11 +112,7 @@ impl<A: hub::HalApi, T: hub::Resource, Id: TypedId> StatelessTracker<A, T, Id> {
         Some(item)
     }
 
-    pub unsafe fn extend_from_bind_group(
-        &mut self,
-        storage: &hub::Storage<T, Id>,
-        bind_group: &StatelessBindGroupSate<T, Id>,
-    ) {
+    pub unsafe fn extend_from_bind_group(&mut self, bind_group: &StatelessBindGroupSate<T, Id>) {
         for (id, ref_count) in &bind_group.resources {
             let (index32, epoch, _) = id.0.unzip();
             let index = index32 as usize;
@@ -127,7 +127,7 @@ impl<A: hub::HalApi, T: hub::Resource, Id: TypedId> StatelessTracker<A, T, Id> {
         }
     }
 
-    pub fn extend_from_tracker(&mut self, storage: &hub::Storage<T, Id>, other: &Self) {
+    pub fn extend_from_tracker(&mut self, other: &Self) {
         let incoming_size = other.owned.len();
         if incoming_size > self.owned.len() {
             self.set_max_index(incoming_size);
@@ -144,8 +144,8 @@ impl<A: hub::HalApi, T: hub::Resource, Id: TypedId> StatelessTracker<A, T, Id> {
                     let other_ref_count = other
                         .ref_counts
                         .get_unchecked(index)
-                        .unwrap_unchecked()
-                        .clone();
+                        .clone()
+                        .unwrap_unchecked();
                     *self.ref_counts.get_unchecked_mut(index) = Some(other_ref_count);
 
                     let epoch = *other.epochs.get_unchecked(index);
@@ -153,5 +153,35 @@ impl<A: hub::HalApi, T: hub::Resource, Id: TypedId> StatelessTracker<A, T, Id> {
                 }
             }
         }
+    }
+
+    pub fn remove_abandoned(&mut self, id: Valid<Id>) -> bool {
+        let (index32, epoch, _) = id.0.unzip();
+        let index = index32 as usize;
+
+        if index > self.owned.len() {
+            return false;
+        }
+
+        self.debug_assert_in_bounds(index);
+
+        unsafe {
+            if self.owned.get(index).unwrap_unchecked() {
+                let existing_epoch = self.epochs.get_unchecked_mut(index);
+                let existing_ref_count = self.ref_counts.get_unchecked_mut(index);
+
+                if *existing_epoch == epoch
+                    && existing_ref_count.as_mut().unwrap_unchecked().load() == 1
+                {
+                    self.owned.set(index, false);
+                    *existing_epoch = u32::MAX;
+                    *existing_ref_count = None;
+
+                    return true;
+                }
+            }
+        }
+
+        false
     }
 }

@@ -10,7 +10,7 @@ mod transfer;
 
 use std::slice;
 
-pub(crate) use self::clear::clear_texture_no_device;
+pub(crate) use self::clear::clear_texture;
 pub use self::{
     bundle::*, clear::ClearError, compute::*, draw::*, query::*, render::*, transfer::*,
 };
@@ -138,7 +138,23 @@ impl<A: HalApi> CommandBuffer<A> {
         }
     }
 
-    pub(crate) fn insert_barriers(
+    pub(crate) fn insert_barriers_from_tracker(
+        raw: &mut A::CommandEncoder,
+        base: &mut Tracker<A>,
+        head: &Tracker<A>,
+        buffer_guard: &Storage<Buffer<A>, id::BufferId>,
+        texture_guard: &Storage<Texture<A>, id::TextureId>,
+    ) {
+        profiling::scope!("insert_barriers");
+
+        base.buffers.change_states_tracker(&head.buffers);
+        base.textures
+            .change_states_tracker(&*texture_guard, &head.textures);
+
+        Self::drain_barriers(raw, base, buffer_guard, texture_guard);
+    }
+
+    pub(crate) fn insert_barriers_from_scope(
         raw: &mut A::CommandEncoder,
         base: &mut Tracker<A>,
         head: &UsageScope<A>,
@@ -147,8 +163,7 @@ impl<A: HalApi> CommandBuffer<A> {
     ) {
         profiling::scope!("insert_barriers");
 
-        base.buffers
-            .change_states_scope(&*buffer_guard, &head.buffers);
+        base.buffers.change_states_scope(&head.buffers);
         base.textures
             .change_states_scope(&*texture_guard, &head.textures);
 
