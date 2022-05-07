@@ -1777,7 +1777,7 @@ impl crate::Device<super::Api> for super::Device {
         wait_value: crate::FenceValue,
         timeout_ms: u32,
     ) -> Result<bool, crate::DeviceError> {
-        let timeout_us = timeout_ms as u64 * super::MILLIS_TO_NANOS;
+        let timeout_ns = timeout_ms as u64 * super::MILLIS_TO_NANOS;
         match *fence {
             super::Fence::TimelineSemaphore(raw) => {
                 let semaphores = [raw];
@@ -1787,10 +1787,10 @@ impl crate::Device<super::Api> for super::Device {
                     .values(&values);
                 let result = match self.shared.extension_fns.timeline_semaphore {
                     Some(super::ExtensionFn::Extension(ref ext)) => {
-                        ext.wait_semaphores(&vk_info, timeout_us)
+                        ext.wait_semaphores(&vk_info, timeout_ns)
                     }
                     Some(super::ExtensionFn::Promoted) => {
-                        self.shared.raw.wait_semaphores(&vk_info, timeout_us)
+                        self.shared.raw.wait_semaphores(&vk_info, timeout_ns)
                     }
                     None => unreachable!(),
                 };
@@ -1810,7 +1810,7 @@ impl crate::Device<super::Api> for super::Device {
                 } else {
                     match active.iter().find(|&&(value, _)| value >= wait_value) {
                         Some(&(_, raw)) => {
-                            match self.shared.raw.wait_for_fences(&[raw], true, timeout_us) {
+                            match self.shared.raw.wait_for_fences(&[raw], true, timeout_ns) {
                                 Ok(()) => Ok(true),
                                 Err(vk::Result::TIMEOUT) => Ok(false),
                                 Err(other) => Err(other.into()),
