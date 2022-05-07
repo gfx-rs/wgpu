@@ -4,7 +4,7 @@ use hal::CommandEncoder;
 
 use crate::{
     device::Device,
-    hub::Storage,
+    hub::{Storage, HalApi},
     id::{self, TextureId},
     init_tracker::*,
     resource::{Buffer, Texture},
@@ -121,13 +121,13 @@ impl CommandBufferTextureMemoryActions {
 // Utility function that takes discarded surfaces from (several calls to) register_init_action and initializes them on the spot.
 // Takes care of barriers as well!
 pub(crate) fn fixup_discarded_surfaces<
-    A: hal::Api,
+    A: HalApi,
     InitIter: Iterator<Item = TextureSurfaceDiscard>,
 >(
     inits: InitIter,
     encoder: &mut A::CommandEncoder,
     texture_guard: &Storage<Texture<A>, TextureId>,
-    texture_tracker: &mut TextureTracker,
+    texture_tracker: &mut TextureTracker<A>,
     device: &Device<A>,
 ) {
     for init in inits {
@@ -147,7 +147,7 @@ pub(crate) fn fixup_discarded_surfaces<
     }
 }
 
-impl<A: hal::Api> BakedCommands<A> {
+impl<A: HalApi> BakedCommands<A> {
     // inserts all buffer initializations that are going to be needed for executing the commands and updates resource init states accordingly
     pub(crate) fn initialize_buffer_memory(
         &mut self,

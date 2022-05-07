@@ -273,7 +273,8 @@ pub(super) struct LifetimeTracker<A: hal::Api> {
     /// Textures can be used in the upcoming submission by `write_texture`.
     pub future_suspected_textures: Vec<Stored<id::TextureId>>,
 
-    /// Resources that are suspected for destruction.
+    /// Resources whose user handle has died (i.e. drop/destroy has been called)
+    /// and will likely be ready for destruction soon.
     pub suspected_resources: SuspectedResources,
 
     /// Resources used by queue submissions still in flight. One entry per

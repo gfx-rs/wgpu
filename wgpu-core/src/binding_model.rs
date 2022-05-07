@@ -1,7 +1,7 @@
 use crate::{
     device::{DeviceError, MissingDownlevelFlags, MissingFeatures, SHADER_STAGE_COUNT},
     error::{ErrorFormatter, PrettyError},
-    hub::Resource,
+    hub::{Resource, HalApi},
     id::{BindGroupLayoutId, BufferId, DeviceId, SamplerId, TextureId, TextureViewId, Valid},
     init_tracker::{BufferInitTrackerAction, TextureInitTrackerAction},
     track::{BindGroupStates, UsageConflict},
@@ -708,7 +708,7 @@ pub(crate) fn buffer_binding_type_alignment(
     }
 }
 
-pub struct BindGroup<A: hal::Api> {
+pub struct BindGroup<A: HalApi> {
     pub(crate) raw: A::BindGroup,
     pub(crate) device_id: Stored<DeviceId>,
     pub(crate) layout_id: Valid<BindGroupLayoutId>,
@@ -722,7 +722,7 @@ pub struct BindGroup<A: hal::Api> {
     pub(crate) late_buffer_binding_sizes: Vec<wgt::BufferSize>,
 }
 
-impl<A: hal::Api> BindGroup<A> {
+impl<A: HalApi> BindGroup<A> {
     pub(crate) fn validate_dynamic_bindings(
         &self,
         offsets: &[wgt::DynamicOffset],
@@ -764,7 +764,7 @@ impl<A: hal::Api> BindGroup<A> {
     }
 }
 
-impl<A: hal::Api> Resource for BindGroup<A> {
+impl<A: HalApi> Resource for BindGroup<A> {
     const TYPE: &'static str = "BindGroup";
 
     fn life_guard(&self) -> &LifeGuard {

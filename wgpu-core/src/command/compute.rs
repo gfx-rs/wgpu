@@ -229,14 +229,14 @@ where
     }
 }
 
-struct State {
+struct State<A: HalApi> {
     binder: Binder,
     pipeline: Option<id::ComputePipelineId>,
-    scope: UsageScope,
+    scope: UsageScope<A>,
     debug_scope_depth: u32,
 }
 
-impl State {
+impl<A: HalApi> State<A> {
     fn is_ready(&self) -> Result<(), DispatchError> {
         let bind_mask = self.binder.invalid_mask();
         if bind_mask != 0 {
@@ -253,7 +253,7 @@ impl State {
         Ok(())
     }
 
-    fn flush_states<A: HalApi>(
+    fn flush_states(
         &mut self,
         raw_encoder: &mut A::CommandEncoder,
         base_trackers: &mut Tracker<A>,

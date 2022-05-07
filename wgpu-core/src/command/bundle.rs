@@ -45,7 +45,7 @@ use crate::{
         SHADER_STAGE_COUNT,
     },
     error::{ErrorFormatter, PrettyError},
-    hub::{GlobalIdentityHandlerFactory, Hub, Resource, Storage, Token},
+    hub::{GlobalIdentityHandlerFactory, Hub, Resource, Storage, Token, HalApi},
     id,
     init_tracker::{BufferInitTrackerAction, MemoryInitKind, TextureInitTrackerAction},
     pipeline::{self, PipelineFlags},
@@ -168,7 +168,7 @@ impl RenderBundleEncoder {
         self.parent_id
     }
 
-    pub(crate) fn finish<A: hal::Api, G: GlobalIdentityHandlerFactory>(
+    pub(crate) fn finish<A: HalApi, G: GlobalIdentityHandlerFactory>(
         self,
         desc: &RenderBundleDescriptor,
         device: &Device<A>,
@@ -617,7 +617,7 @@ pub type RenderBundleDescriptor<'a> = wgt::RenderBundleDescriptor<Label<'a>>;
 //Note: here, `RenderBundle` is just wrapping a raw stream of render commands.
 // The plan is to back it by an actual Vulkan secondary buffer, D3D12 Bundle,
 // or Metal indirect command buffer.
-pub struct RenderBundle<A: hal::Api> {
+pub struct RenderBundle<A: HalApi> {
     // Normalized command stream. It can be executed verbatim,
     // without re-binding anything on the pipeline change.
     base: BasePass<RenderCommand>,
@@ -630,10 +630,10 @@ pub struct RenderBundle<A: hal::Api> {
     pub(crate) life_guard: LifeGuard,
 }
 
-unsafe impl<A: hal::Api> Send for RenderBundle<A> {}
-unsafe impl<A: hal::Api> Sync for RenderBundle<A> {}
+unsafe impl<A: HalApi> Send for RenderBundle<A> {}
+unsafe impl<A: HalApi> Sync for RenderBundle<A> {}
 
-impl<A: hal::Api> RenderBundle<A> {
+impl<A: HalApi> RenderBundle<A> {
     /// Actually encode the contents into a native command buffer.
     ///
     /// This is partially duplicating the logic of `command_encoder_run_render_pass`.
@@ -832,7 +832,7 @@ impl<A: hal::Api> RenderBundle<A> {
     }
 }
 
-impl<A: hal::Api> Resource for RenderBundle<A> {
+impl<A: HalApi> Resource for RenderBundle<A> {
     const TYPE: &'static str = "RenderBundle";
 
     fn life_guard(&self) -> &LifeGuard {
@@ -1009,7 +1009,7 @@ struct VertexLimitState {
     instance_limit_slot: u32,
 }
 
-struct State<A: hal::Api> {
+struct State<A: HalApi> {
     trackers: RenderBundleScope<A>,
     index: IndexState,
     vertex: ArrayVec<VertexState, { hal::MAX_VERTEX_BUFFERS }>,
@@ -1021,7 +1021,7 @@ struct State<A: hal::Api> {
     pipeline: Option<id::RenderPipelineId>,
 }
 
-impl<A: hal::Api> State<A> {
+impl<A: HalApi> State<A> {
     fn vertex_limits(&self) -> VertexLimitState {
         let mut vert_state = VertexLimitState {
             vertex_limit: u32::MAX,

@@ -81,7 +81,7 @@ impl<A: hal::Api> CommandEncoder<A> {
     }
 }
 
-pub struct BakedCommands<A: hal::Api> {
+pub struct BakedCommands<A: HalApi> {
     pub(crate) encoder: A::CommandEncoder,
     pub(crate) list: Vec<A::CommandBuffer>,
     pub(crate) trackers: Tracker<A>,
@@ -92,7 +92,7 @@ pub struct BakedCommands<A: hal::Api> {
 pub(crate) struct DestroyedBufferError(pub id::BufferId);
 pub(crate) struct DestroyedTextureError(pub id::TextureId);
 
-pub struct CommandBuffer<A: hal::Api> {
+pub struct CommandBuffer<A: HalApi> {
     encoder: CommandEncoder<A>,
     status: CommandEncoderStatus,
     pub(crate) device_id: Stored<id::DeviceId>,
@@ -141,7 +141,7 @@ impl<A: HalApi> CommandBuffer<A> {
     pub(crate) fn insert_barriers(
         raw: &mut A::CommandEncoder,
         base: &mut Tracker<A>,
-        head: &UsageScope,
+        head: &UsageScope<A>,
         buffer_guard: &Storage<Buffer<A>, id::BufferId>,
         texture_guard: &Storage<Texture<A>, id::TextureId>,
     ) {
@@ -179,7 +179,7 @@ impl<A: HalApi> CommandBuffer<A> {
     }
 }
 
-impl<A: hal::Api> CommandBuffer<A> {
+impl<A: HalApi> CommandBuffer<A> {
     fn get_encoder_mut(
         storage: &mut Storage<Self, id::CommandEncoderId>,
         id: id::CommandEncoderId,
@@ -212,7 +212,7 @@ impl<A: hal::Api> CommandBuffer<A> {
     }
 }
 
-impl<A: hal::Api> crate::hub::Resource for CommandBuffer<A> {
+impl<A: HalApi> crate::hub::Resource for CommandBuffer<A> {
     const TYPE: &'static str = "CommandBuffer";
 
     fn life_guard(&self) -> &crate::LifeGuard {

@@ -6,7 +6,7 @@ use crate::{
     device::{Device, MissingDownlevelFlags},
     error::{ErrorFormatter, PrettyError},
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Storage, Token},
-    id::{BufferId, CommandEncoderId, Id, TextureId, Valid},
+    id::{BufferId, CommandEncoderId, TextureId, Valid},
     init_tracker::{
         has_copy_partial_init_tracker_coverage, MemoryInitKind, TextureInitRange,
         TextureInitTrackerAction,
@@ -381,13 +381,13 @@ pub(crate) fn validate_texture_copy_range(
     Ok((copy_extent, array_layer_count))
 }
 
-fn handle_texture_init<A: hal::Api>(
+fn handle_texture_init<A: HalApi>(
     init_kind: MemoryInitKind,
     cmd_buf: &mut CommandBuffer<A>,
     device: &Device<A>,
     copy_texture: &ImageCopyTexture,
     copy_size: &Extent3d,
-    texture_guard: &Storage<Texture<A>, Id<Texture<hal::api::Empty>>>,
+    texture_guard: &Storage<Texture<A>, TextureId>,
     texture: &Texture<A>,
 ) {
     let init_action = TextureInitTrackerAction {
@@ -427,7 +427,7 @@ fn handle_texture_init<A: hal::Api>(
 }
 
 // Ensures the source texture of a transfer is in the right initialization state and records the state for after the transfer operation.
-fn handle_src_texture_init<A: hal::Api>(
+fn handle_src_texture_init<A: HalApi>(
     cmd_buf: &mut CommandBuffer<A>,
     device: &Device<A>,
     source: &ImageCopyTexture,
@@ -451,7 +451,7 @@ fn handle_src_texture_init<A: hal::Api>(
 }
 
 // Ensures the destination texture of a transfer is in the right initialization state and records the state for after the transfer operation.
-fn handle_dst_texture_init<A: hal::Api>(
+fn handle_dst_texture_init<A: HalApi>(
     cmd_buf: &mut CommandBuffer<A>,
     device: &Device<A>,
     destination: &ImageCopyTexture,

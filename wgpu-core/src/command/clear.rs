@@ -234,13 +234,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 }
 
-pub(crate) fn clear_texture<A: hal::Api>(
+pub(crate) fn clear_texture<A: HalApi>(
     storage: &hub::Storage<Texture<A>, TextureId>,
     dst_texture_id: Valid<TextureId>,
     dst_texture: &Texture<A>,
     range: TextureInitRange,
     encoder: &mut A::CommandEncoder,
-    texture_tracker: &mut TextureTracker,
+    texture_tracker: &mut TextureTracker<A>,
     device: &Device<A>,
 ) -> Result<(), ClearError> {
     clear_texture_no_device(
@@ -255,13 +255,13 @@ pub(crate) fn clear_texture<A: hal::Api>(
     )
 }
 
-pub(crate) fn clear_texture_no_device<A: hal::Api>(
+pub(crate) fn clear_texture_no_device<A: HalApi>(
     storage: &hub::Storage<Texture<A>, TextureId>,
     dst_texture_id: Valid<TextureId>,
     dst_texture: &Texture<A>,
     range: TextureInitRange,
     encoder: &mut A::CommandEncoder,
-    texture_tracker: &mut TextureTracker,
+    texture_tracker: &mut TextureTracker<A>,
     alignments: &hal::Alignments,
     zero_buffer: &A::Buffer,
 ) -> Result<(), ClearError> {

@@ -561,9 +561,9 @@ impl<A: hal::Api> TextureView<A> {
 const MAX_TOTAL_ATTACHMENTS: usize = hal::MAX_COLOR_TARGETS + hal::MAX_COLOR_TARGETS + 1;
 type AttachmentDataVec<T> = ArrayVec<T, MAX_TOTAL_ATTACHMENTS>;
 
-struct RenderPassInfo<'a, A: hal::Api> {
+struct RenderPassInfo<'a, A: HalApi> {
     context: RenderPassContext,
-    usage_scope: UsageScope,
+    usage_scope: UsageScope<A>,
     render_attachments: AttachmentDataVec<RenderAttachment<'a>>, // All render attachments, including depth/stencil
     is_ds_read_only: bool,
     extent: wgt::Extent3d,
@@ -955,7 +955,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
         mut self,
         raw: &mut A::CommandEncoder,
         texture_guard: &Storage<Texture<A>, id::TextureId>,
-    ) -> Result<(UsageScope, SurfacesInDiscardState), RenderPassErrorInner> {
+    ) -> Result<(UsageScope<A>, SurfacesInDiscardState), RenderPassErrorInner> {
         profiling::scope!("finish", "RenderPassInfo");
         unsafe {
             raw.end_render_pass();

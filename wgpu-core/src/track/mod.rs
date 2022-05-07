@@ -10,7 +10,7 @@ use crate::{
 };
 
 use bit_vec::BitVec;
-use std::{fmt, num::NonZeroU32, ops};
+use std::{fmt, mem, num::NonZeroU32, ops};
 use thiserror::Error;
 
 pub(crate) use buffer::{BufferBindGroupState, BufferTracker, BufferUsageScope};
@@ -104,48 +104,53 @@ fn resize_bitvec<B: bit_vec::BitBlock>(vec: &mut BitVec<B>, size: usize) {
     }
 }
 
-fn iterate_bitvec(ownership: &BitVec<usize>, mut func: impl FnMut(usize)) {
+fn iterate_bitvec_indices(ownership: &BitVec<usize>) -> impl Iterator<Item = usize> + '_ {
+    const BITS_PER_BLOCK: usize = mem::size_of::<usize>() * 8;
+
     let size = ownership.len();
-    for (word_index, mut word) in ownership.blocks().enumerate() {
-        if word == 0 {
-            continue;
-        }
 
-        let bit_start = word_index * 64;
-        let bit_end = (bit_start + 64).min(size);
+    ownership
+        .blocks()
+        .enumerate()
+        .filter(|(_, word)| *word != 0)
+        .flat_map(move |(word_index, mut word)| {
+            let bit_start = word_index * BITS_PER_BLOCK;
+            let bit_end = (bit_start + BITS_PER_BLOCK).min(size);
 
-        for index in bit_start..bit_end {
-            if word & 0b1 == 0 {
-                continue;
-            }
-            word >>= 1;
+            (bit_start..bit_end).filter(move |index| {
+                let active = word & 0b1 != 0;
+                word >>= 1;
 
-            func(index);
-        }
-    }
+                active
+            })
+        })
 }
 
 #[derive(Clone, Debug, Error)]
 pub enum UsageConflict {
-    #[error("Attempted to use buffer {id} which is invalid.")]
-    BufferInvalid { id: u32 },
-    #[error("Attempted to use texture {id} which is invalid.")]
-    TextureInvalid { id: u32 },
+    #[error("Attempted to use buffer {id:?} which is invalid.")]
+    BufferInvalid { id: id::BufferId },
+    #[error("Attempted to use texture {id:?} which is invalid.")]
+    TextureInvalid { id: id::TextureId },
     #[error("Attempted to use buffer {id:?} with {invalid_use}.")]
     Buffer {
-        id: u32,
+        id: id::BufferId,
         invalid_use: InvalidUse<hal::BufferUses>,
     },
     #[error("Attempted to use a texture {id:?} mips {mip_levels:?} layers {array_layers:?} with {invalid_use}.")]
     Texture {
-        id: u32,
+        id: id::TextureId,
         mip_levels: ops::Range<u32>,
         array_layers: ops::Range<u32>,
         invalid_use: InvalidUse<hal::TextureUses>,
     },
 }
 impl UsageConflict {
-    fn from_buffer(id: u32, current_state: hal::BufferUses, new_state: hal::BufferUses) -> Self {
+    fn from_buffer(
+        id: id::BufferId,
+        current_state: hal::BufferUses,
+        new_state: hal::BufferUses,
+    ) -> Self {
         Self::Buffer {
             id,
             invalid_use: InvalidUse {
@@ -157,12 +162,12 @@ impl UsageConflict {
 
     fn from_texture<A: hal::Api>(
         storage: &hub::Storage<resource::Texture<A>, id::TextureId>,
-        id: u32,
+        id: id::Valid<id::TextureId>,
         selector: Option<TextureSelector>,
         current_state: hal::TextureUses,
         new_state: hal::TextureUses,
     ) -> Self {
-        let texture = unsafe { storage.get_unchecked(id) };
+        let texture = &storage[id];
 
         let mips;
         let layers;
@@ -179,7 +184,7 @@ impl UsageConflict {
         }
 
         Self::Texture {
-            id,
+            id: id.0,
             mip_levels: mips,
             array_layers: layers,
             invalid_use: InvalidUse {
@@ -215,14 +220,14 @@ impl<T: ResourceUses> fmt::Display for InvalidUse<T> {
     }
 }
 
-pub(crate) struct BindGroupStates<A: hal::Api> {
-    pub buffers: BufferBindGroupState,
-    pub textures: TextureBindGroupState,
+pub(crate) struct BindGroupStates<A: hub::HalApi> {
+    pub buffers: BufferBindGroupState<A>,
+    pub textures: TextureBindGroupState<A>,
     pub views: StatelessBindGroupSate<resource::TextureView<A>, id::TextureViewId>,
     pub samplers: StatelessBindGroupSate<resource::Sampler<A>, id::SamplerId>,
 }
 
-impl<A: hal::Api> BindGroupStates<A> {
+impl<A: hub::HalApi> BindGroupStates<A> {
     pub fn new() -> Self {
         Self {
             buffers: BufferBindGroupState::new(),
@@ -233,17 +238,17 @@ impl<A: hal::Api> BindGroupStates<A> {
     }
 }
 
-pub(crate) struct RenderBundleScope<A: hal::Api> {
-    pub buffers: BufferUsageScope,
-    pub textures: TextureUsageScope,
-    pub views: StatelessTracker<resource::TextureView<A>, id::TextureViewId>,
-    pub samplers: StatelessTracker<resource::Sampler<A>, id::SamplerId>,
-    pub bind_groups: StatelessTracker<binding_model::BindGroup<A>, id::BindGroupId>,
-    pub render_pipelines: StatelessTracker<pipeline::RenderPipeline<A>, id::RenderPipelineId>,
-    pub query_sets: StatelessTracker<resource::QuerySet<A>, id::QuerySetId>,
+pub(crate) struct RenderBundleScope<A: hub::HalApi> {
+    pub buffers: BufferUsageScope<A>,
+    pub textures: TextureUsageScope<A>,
+    pub views: StatelessTracker<A, resource::TextureView<A>, id::TextureViewId>,
+    pub samplers: StatelessTracker<A, resource::Sampler<A>, id::SamplerId>,
+    pub bind_groups: StatelessTracker<A, binding_model::BindGroup<A>, id::BindGroupId>,
+    pub render_pipelines: StatelessTracker<A, pipeline::RenderPipeline<A>, id::RenderPipelineId>,
+    pub query_sets: StatelessTracker<A, resource::QuerySet<A>, id::QuerySetId>,
 }
 
-impl<A: hal::Api> RenderBundleScope<A> {
+impl<A: hub::HalApi> RenderBundleScope<A> {
     pub fn new() -> Self {
         Self {
             buffers: BufferUsageScope::new(),
@@ -272,12 +277,12 @@ impl<A: hal::Api> RenderBundleScope<A> {
 }
 
 #[derive(Debug)]
-pub(crate) struct UsageScope {
-    pub buffers: BufferUsageScope,
-    pub textures: TextureUsageScope,
+pub(crate) struct UsageScope<A: hub::HalApi> {
+    pub buffers: BufferUsageScope<A>,
+    pub textures: TextureUsageScope<A>,
 }
 
-impl UsageScope {
+impl<A: hub::HalApi> UsageScope<A> {
     pub fn new() -> Self {
         Self {
             buffers: BufferUsageScope::new(),
@@ -285,7 +290,7 @@ impl UsageScope {
         }
     }
 
-    pub unsafe fn extend_from_bind_group<A: hal::Api>(
+    pub unsafe fn extend_from_bind_group(
         &mut self,
         buffers: &hub::Storage<resource::Buffer<A>, id::BufferId>,
         textures: &hub::Storage<resource::Texture<A>, id::TextureId>,
@@ -299,7 +304,7 @@ impl UsageScope {
         Ok(())
     }
 
-    pub unsafe fn extend_from_render_bundle<A: hal::Api>(
+    pub unsafe fn extend_from_render_bundle(
         &mut self,
         buffers: &hub::Storage<resource::Buffer<A>, id::BufferId>,
         textures: &hub::Storage<resource::Texture<A>, id::TextureId>,
@@ -314,19 +319,19 @@ impl UsageScope {
     }
 }
 
-pub(crate) struct Tracker<A: hal::Api> {
-    pub buffers: BufferTracker,
-    pub textures: TextureTracker,
-    pub views: StatelessTracker<resource::TextureView<A>, id::TextureViewId>,
-    pub samplers: StatelessTracker<resource::Sampler<A>, id::SamplerId>,
-    pub bind_groups: StatelessTracker<binding_model::BindGroup<A>, id::BindGroupId>,
-    pub compute_pipelines: StatelessTracker<pipeline::ComputePipeline<A>, id::ComputePipelineId>,
-    pub render_pipelines: StatelessTracker<pipeline::RenderPipeline<A>, id::RenderPipelineId>,
-    pub bundles: StatelessTracker<command::RenderBundle<A>, id::RenderBundleId>,
-    pub query_sets: StatelessTracker<resource::QuerySet<A>, id::QuerySetId>,
+pub(crate) struct Tracker<A: hub::HalApi> {
+    pub buffers: BufferTracker<A>,
+    pub textures: TextureTracker<A>,
+    pub views: StatelessTracker<A, resource::TextureView<A>, id::TextureViewId>,
+    pub samplers: StatelessTracker<A, resource::Sampler<A>, id::SamplerId>,
+    pub bind_groups: StatelessTracker<A, binding_model::BindGroup<A>, id::BindGroupId>,
+    pub compute_pipelines: StatelessTracker<A, pipeline::ComputePipeline<A>, id::ComputePipelineId>,
+    pub render_pipelines: StatelessTracker<A, pipeline::RenderPipeline<A>, id::RenderPipelineId>,
+    pub bundles: StatelessTracker<A, command::RenderBundle<A>, id::RenderBundleId>,
+    pub query_sets: StatelessTracker<A, resource::QuerySet<A>, id::QuerySetId>,
 }
 
-impl<A: hal::Api> Tracker<A> {
+impl<A: hub::HalApi> Tracker<A> {
     pub fn new() -> Self {
         Self {
             buffers: BufferTracker::new(),
@@ -345,7 +350,7 @@ impl<A: hal::Api> Tracker<A> {
         &mut self,
         buffers: &hub::Storage<resource::Buffer<A>, id::BufferId>,
         textures: &hub::Storage<resource::Texture<A>, id::TextureId>,
-        scope: &mut UsageScope,
+        scope: &mut UsageScope<A>,
         bind_group: &BindGroupStates<A>,
     ) {
         self.buffers

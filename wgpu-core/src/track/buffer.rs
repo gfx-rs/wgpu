@@ -1,15 +1,15 @@
-use std::vec::Drain;
+use std::{vec::Drain, marker::PhantomData};
 
 use super::PendingTransition;
 use crate::{
     hub,
-    id::{BufferId, TypedId},
+    id::{BufferId, TypedId, Valid},
     resource::Buffer,
     track::{
-        invalid_resource_state, iterate_bitvec, resize_bitvec, skip_barrier, ResourceUses,
+        invalid_resource_state, iterate_bitvec_indices, resize_bitvec, skip_barrier, ResourceUses,
         UsageConflict,
     },
-    RefCount,
+    Epoch, RefCount,
 };
 use bit_vec::BitVec;
 use hal::BufferUses;
@@ -33,17 +33,21 @@ impl ResourceUses for BufferUses {
     }
 }
 
-pub struct BufferBindGroupState {
-    buffers: Vec<(BufferId, RefCount, BufferUses)>,
+pub struct BufferBindGroupState<A: hub::HalApi> {
+    buffers: Vec<(Valid<BufferId>, RefCount, BufferUses)>,
+
+    _phantom: PhantomData<A>
 }
-impl BufferBindGroupState {
+impl<A: hub::HalApi> BufferBindGroupState<A> {
     pub fn new() -> Self {
         Self {
             buffers: Vec::new(),
+
+            _phantom: PhantomData,
         }
     }
 
-    pub fn extend<'a, A: hal::Api>(
+    pub fn extend<'a>(
         &mut self,
         storage: &'a hub::Storage<Buffer<A>, BufferId>,
         id: BufferId,
@@ -51,48 +55,76 @@ impl BufferBindGroupState {
     ) -> Option<&'a Buffer<A>> {
         let buffer = storage.get(id).ok()?;
 
-        self.buffers.push((id, buffer.life_guard.add_ref(), state));
+        self.buffers
+            .push((Valid(id), buffer.life_guard.add_ref(), state));
 
         Some(buffer)
     }
 }
 
 #[derive(Debug)]
-pub(crate) struct BufferUsageScope {
+pub(crate) struct BufferUsageScope<A: hub::HalApi> {
     state: Vec<BufferUses>,
+
+    ref_counts: Vec<Option<RefCount>>,
+    epochs: Vec<Epoch>,
+
     owned: BitVec<usize>,
-    ref_count: Vec<Option<RefCount>>,
+
+    _phantom: PhantomData<A>,
 }
 
-impl BufferUsageScope {
+impl<A: hub::HalApi> BufferUsageScope<A> {
     pub fn new() -> Self {
         Self {
             state: Vec::new(),
+
+            ref_counts: Vec::new(),
+            epochs: Vec::new(),
+
             owned: BitVec::default(),
-            ref_count: Vec::new(),
+
+            _phantom: PhantomData,
         }
+    }
+
+    fn debug_assert_in_bounds(&self, index: usize) {
+        debug_assert!(index < self.state.len());
+        debug_assert!(index < self.ref_counts.len());
+        debug_assert!(index < self.epochs.len());
+        debug_assert!(index < self.owned.len());
+
+        debug_assert!(if self.owned.get(index).unwrap() {
+            self.ref_counts[index].is_some()
+        } else {
+            true
+        });
     }
 
     pub fn set_max_index(&mut self, size: usize) {
         self.state.resize(size, BufferUses::empty());
-        self.ref_count.resize(size, None);
+        self.ref_counts.resize(size, None);
+        self.epochs.resize(size, u32::MAX);
 
         resize_bitvec(&mut self.owned, size);
     }
 
-    pub unsafe fn extend_from_bind_group<A: hal::Api>(
+    pub unsafe fn extend_from_bind_group(
         &mut self,
         storage: &hub::Storage<Buffer<A>, BufferId>,
-        bind_group: &BufferBindGroupState,
+        bind_group: &BufferBindGroupState<A>,
     ) -> Result<(), UsageConflict> {
         for (id, ref_count, state) in &bind_group.buffers {
-            self.extend_inner(storage, id.unzip().0, ref_count, *state)?;
+            let (index32, epoch, _) = id.0.unzip();
+            let index = index32 as usize;
+
+            self.extend_inner(storage, *id, index, epoch, ref_count, *state)?;
         }
 
         Ok(())
     }
 
-    pub unsafe fn extend_from_scope<A: hal::Api>(
+    pub fn extend_from_scope(
         &mut self,
         storage: &hub::Storage<Buffer<A>, BufferId>,
         scope: &Self,
@@ -102,25 +134,34 @@ impl BufferUsageScope {
             self.set_max_index(incoming_size);
         }
 
-        iterate_bitvec(&scope.owned, |index| {
+        for index in iterate_bitvec_indices(&scope.owned) {
+            self.debug_assert_in_bounds(index);
+            scope.debug_assert_in_bounds(index);
+
             unsafe {
+                let ref_count = scope
+                    .ref_counts
+                    .get_unchecked(index)
+                    .as_ref()
+                    .unwrap_unchecked();
+                let epoch = *scope.epochs.get_unchecked(index);
+                let new_state = *scope.state.get_unchecked(index);
+
                 self.extend_inner(
                     storage,
-                    index as u32,
-                    scope
-                        .ref_count
-                        .get_unchecked(index)
-                        .as_ref()
-                        .unwrap_unchecked(),
-                    *scope.state.get_unchecked(index),
+                    Valid(BufferId::zip(index as u32, epoch, A::VARIANT)),
+                    index,
+                    epoch,
+                    ref_count,
+                    new_state,
                 )
             };
-        });
+        }
 
         Ok(())
     }
 
-    pub unsafe fn extend<'a, A: hal::Api>(
+    pub unsafe fn extend<'a>(
         &mut self,
         storage: &'a hub::Storage<Buffer<A>, BufferId>,
         id: BufferId,
@@ -128,11 +169,16 @@ impl BufferUsageScope {
     ) -> Result<&'a Buffer<A>, UsageConflict> {
         let buffer = storage
             .get(id)
-            .map_err(|_| UsageConflict::BufferInvalid { id: id.unzip().0 })?;
+            .map_err(|_| UsageConflict::BufferInvalid { id })?;
+
+        let (index32, epoch, _) = id.unzip();
+        let index = index32 as usize;
 
         self.extend_inner(
             storage,
-            id.unzip().0,
+            Valid(id),
+            index,
+            epoch,
             buffer.life_guard.ref_count.as_ref().unwrap(),
             new_state,
         )?;
@@ -140,14 +186,16 @@ impl BufferUsageScope {
         Ok(buffer)
     }
 
-    unsafe fn extend_inner<'a, A: hal::Api>(
+    unsafe fn extend_inner<'a>(
         &mut self,
         storage: &'a hub::Storage<Buffer<A>, BufferId>,
-        index: u32,
+        id: Valid<BufferId>,
+        index: usize,
+        epoch: u32,
         ref_count: &RefCount,
         new_state: BufferUses,
     ) -> Result<(), UsageConflict> {
-        let index = index as usize;
+        self.debug_assert_in_bounds(index);
 
         let currently_active = self.owned.get(index).unwrap_unchecked();
         if currently_active {
@@ -156,19 +204,16 @@ impl BufferUsageScope {
             let merged_state = current_state | new_state;
 
             if invalid_resource_state(merged_state) {
-                return Err(UsageConflict::from_buffer(
-                    index as u32,
-                    current_state,
-                    new_state,
-                ));
+                return Err(UsageConflict::from_buffer(id.0, current_state, new_state));
             }
 
             *self.state.get_unchecked_mut(index) = merged_state;
         }
 
         // We're the first to use this resource, let's add it.
+        *self.epochs.get_unchecked_mut(index) = epoch;
+        *self.ref_counts.get_unchecked_mut(index) = Some(ref_count.clone());
         self.owned.set(index, true);
-        *self.ref_count.get_unchecked_mut(index) = Some(ref_count.clone());
 
         *self.state.get_unchecked_mut(index) = new_state;
 
@@ -176,45 +221,86 @@ impl BufferUsageScope {
     }
 }
 
-pub(crate) struct BufferTracker {
+pub(crate) struct BufferTracker<A: hub::HalApi> {
     start: Vec<BufferUses>,
     end: Vec<BufferUses>,
-    temp: Vec<PendingTransition<BufferUses>>,
+
+    epochs: Vec<Epoch>,
+    ref_counts: Vec<Option<RefCount>>,
     owned: BitVec<usize>,
-    ref_count: Vec<Option<RefCount>>,
+
+    temp: Vec<PendingTransition<BufferUses>>,
+
+    _phantom: PhantomData<A>,
 }
-impl BufferTracker {
+impl<A: hub::HalApi> BufferTracker<A> {
     pub fn new() -> Self {
         Self {
             start: Vec::new(),
             end: Vec::new(),
-            temp: Vec::new(),
+
+            epochs: Vec::new(),
+            ref_counts: Vec::new(),
             owned: BitVec::default(),
-            ref_count: Vec::new(),
+
+            temp: Vec::new(),
+
+            _phantom: PhantomData,
         }
+    }
+
+    fn debug_assert_in_bounds(&self, index: usize) {
+        debug_assert!(index < self.start.len());
+        debug_assert!(index < self.end.len());
+        debug_assert!(index < self.ref_counts.len());
+        debug_assert!(index < self.epochs.len());
+        debug_assert!(index < self.owned.len());
+
+        debug_assert!(if self.owned.get(index).unwrap() {
+            self.ref_counts[index].is_some()
+        } else {
+            true
+        });
     }
 
     fn set_max_index(&mut self, size: usize) {
         self.start.resize(size, BufferUses::empty());
         self.end.resize(size, BufferUses::empty());
-        self.ref_count.resize(size, None);
+
+        self.epochs.resize(size, u32::MAX);
+        self.ref_counts.resize(size, None);
 
         resize_bitvec(&mut self.owned, size);
+    }
+
+    pub fn used(&self) -> impl Iterator<Item = Valid<BufferId>> + '_ {
+        self.debug_assert_in_bounds(self.owned.len() - 1);
+        iterate_bitvec_indices(&self.owned).map(move |index| {
+            let epoch = unsafe { *self.epochs.get_unchecked(index) };
+            Valid(BufferId::zip(index as u32, epoch, A::VARIANT))
+        })
     }
 
     pub fn drain(&mut self) -> Drain<PendingTransition<BufferUses>> {
         self.temp.drain(..)
     }
 
-    pub unsafe fn init(&mut self, id: BufferId, state: BufferUses) {
-        let index = id.unzip().0 as usize;
+    pub unsafe fn init(&mut self, id: Valid<BufferId>, ref_count: RefCount, state: BufferUses) {
+        let (index32, epoch, _) = id.0.unzip();
+        let index = index32 as usize;
+
+        self.debug_assert_in_bounds(index);
+
         *self.start.get_unchecked_mut(index) = state;
         *self.end.get_unchecked_mut(index) = state;
+
+        *self.ref_counts.get_unchecked_mut(index) = Some(ref_count);
+        *self.epochs.get_unchecked_mut(index) = epoch;
 
         self.owned.set(index, true);
     }
 
-    pub unsafe fn change_state<'a, A: hal::Api>(
+    pub unsafe fn change_state<'a>(
         &mut self,
         storage: &'a hub::Storage<Buffer<A>, BufferId>,
         id: BufferId,
@@ -222,9 +308,13 @@ impl BufferTracker {
     ) -> Option<(&'a Buffer<A>, Option<PendingTransition<BufferUses>>)> {
         let value = storage.get(id).ok()?;
 
+        let (index32, epoch, _) = id.unzip();
+        let index = index32 as usize;
+
         self.transition_inner(
             storage,
-            id.unzip().0 as usize,
+            index,
+            epoch,
             value.life_guard.ref_count.as_ref().unwrap(),
             state,
         );
@@ -232,67 +322,81 @@ impl BufferTracker {
         Some((value, self.temp.pop()))
     }
 
-    pub fn change_states_scope<A: hal::Api>(
+    pub fn change_states_scope(
         &mut self,
         storage: &hub::Storage<Buffer<A>, BufferId>,
-        scope: &BufferUsageScope,
+        scope: &BufferUsageScope<A>,
     ) {
         let incoming_size = scope.state.len();
         if incoming_size > self.start.len() {
             self.set_max_index(incoming_size);
         }
 
-        iterate_bitvec(&scope.owned, |index| unsafe {
-            let ref_count = scope
-                .ref_count
-                .get_unchecked(index)
-                .as_ref()
-                .unwrap_unchecked();
+        for index in iterate_bitvec_indices(&scope.owned) {
+            scope.debug_assert_in_bounds(index);
+            unsafe {
+                let ref_count = scope
+                    .ref_counts
+                    .get_unchecked(index)
+                    .as_ref()
+                    .unwrap_unchecked();
 
-            self.transition(storage, &scope.state, ref_count, index);
-        });
+                let epoch = *scope.epochs.get_unchecked(index);
+
+                self.transition(storage, &scope.state, ref_count, index, epoch);
+            }
+        }
     }
 
-    pub unsafe fn change_states_bind_group<A: hal::Api>(
+    pub unsafe fn change_states_bind_group(
         &mut self,
         storage: &hub::Storage<Buffer<A>, BufferId>,
-        scope: &mut BufferUsageScope,
-        bind_group_state: &BufferBindGroupState,
+        scope: &mut BufferUsageScope<A>,
+        bind_group_state: &BufferBindGroupState<A>,
     ) {
         let incoming_size = scope.state.len();
         if incoming_size > self.start.len() {
             self.set_max_index(incoming_size);
         }
 
-        for (index, ref_count, _) in bind_group_state.buffers.iter() {
-            let index = index.unzip().0 as usize;
+        for (id, ref_count, _) in bind_group_state.buffers.iter() {
+            let (index32, epoch, _) = id.0.unzip();
+            let index = index32 as usize;
+
+            scope.debug_assert_in_bounds(index);
+
             if !scope.owned.get(index).unwrap_unchecked() {
                 continue;
             }
-            self.transition(storage, &scope.state, ref_count, index);
+            self.transition(storage, &scope.state, ref_count, index, epoch);
+
             scope.owned.set(index, false);
         }
     }
 
-    unsafe fn transition<A: hal::Api>(
+    unsafe fn transition(
         &mut self,
         storage: &hub::Storage<Buffer<A>, BufferId>,
         incoming_set: &Vec<BufferUses>,
         ref_count: &RefCount,
         index: usize,
+        epoch: u32,
     ) {
         let new_state = *incoming_set.get_unchecked(index);
 
-        self.transition_inner(storage, index, ref_count, new_state);
+        self.transition_inner(storage, index, epoch, ref_count, new_state);
     }
 
-    unsafe fn transition_inner<A: hal::Api>(
+    unsafe fn transition_inner(
         &mut self,
         storage: &hub::Storage<Buffer<A>, BufferId>,
         index: usize,
+        epoch: u32,
         ref_count: &RefCount,
         new_state: BufferUses,
     ) {
+        self.debug_assert_in_bounds(index);
+
         let old_tracked = self.owned.get(index).unwrap_unchecked();
         let old_state = *self.end.get_unchecked(index);
 
@@ -311,6 +415,9 @@ impl BufferTracker {
         } else {
             *self.start.get_unchecked_mut(index) = new_state;
             *self.end.get_unchecked_mut(index) = new_state;
+
+            *self.ref_counts.get_unchecked_mut(index) = Some(ref_count.clone());
+            *self.epochs.get_unchecked(index) = epoch;
 
             self.owned.set(index, true);
         }

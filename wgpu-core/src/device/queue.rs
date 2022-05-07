@@ -192,7 +192,7 @@ impl<A: hal::Api> PendingWrites<A> {
     }
 }
 
-impl<A: hal::Api> super::Device<A> {
+impl<A: HalApi> super::Device<A> {
     fn prepare_stage(&mut self, size: wgt::BufferAddress) -> Result<StagingData<A>, DeviceError> {
         profiling::scope!("prepare_stage");
         let stage_desc = hal::BufferDescriptor {
