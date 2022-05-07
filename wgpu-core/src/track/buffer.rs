@@ -47,6 +47,11 @@ impl<A: hub::HalApi> BufferBindGroupState<A> {
         }
     }
 
+    pub(crate) fn optimize(&mut self) {
+        self.buffers
+            .sort_unstable_by_key(|&(id, _, _)| id.0.unzip().0);
+    }
+
     pub fn used(&self) -> impl Iterator<Item = Valid<BufferId>> + '_ {
         self.buffers.iter().map(|&(id, _, _)| id)
     }

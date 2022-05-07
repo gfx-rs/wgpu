@@ -79,6 +79,11 @@ impl<A: hub::HalApi> TextureBindGroupState<A> {
         }
     }
 
+    pub(crate) fn optimize(&mut self) {
+        self.textures
+            .sort_unstable_by_key(|&(id, _, _, _)| id.0.unzip().0);
+    }
+
     pub fn used(&self) -> impl Iterator<Item = Valid<TextureId>> + '_ {
         self.textures.iter().map(|&(id, _, _, _)| id)
     }

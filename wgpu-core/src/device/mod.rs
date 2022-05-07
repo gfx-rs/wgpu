@@ -1859,6 +1859,8 @@ impl<A: HalApi> Device<A> {
             });
         }
 
+        used.optimize();
+
         hal_entries.sort_by_key(|entry| entry.binding);
         for (a, b) in hal_entries.iter().zip(hal_entries.iter().skip(1)) {
             if a.binding == b.binding {

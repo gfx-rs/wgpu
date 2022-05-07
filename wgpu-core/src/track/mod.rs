@@ -236,6 +236,13 @@ impl<A: hub::HalApi> BindGroupStates<A> {
             samplers: StatelessBindGroupSate::new(),
         }
     }
+
+    pub fn optimize(&mut self) {
+        self.buffers.optimize();
+        self.textures.optimize();
+        self.views.optimize();
+        self.samplers.optimize();
+    }
 }
 
 pub(crate) struct RenderBundleScope<A: hub::HalApi> {

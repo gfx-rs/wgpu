@@ -24,6 +24,11 @@ impl<T: hub::Resource, Id: TypedId> StatelessBindGroupSate<T, Id> {
         }
     }
 
+    pub(crate) fn optimize(&mut self) {
+        self.resources
+            .sort_unstable_by_key(|&(id, _)| id.0.unzip().0);
+    }
+
     pub fn used(&self) -> impl Iterator<Item = Valid<Id>> + '_ {
         self.resources.iter().map(|&(id, _)| id)
     }
