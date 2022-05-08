@@ -514,13 +514,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             });
         }
 
-        let (src_buffer, src_pending) = unsafe {
-            cmd_buf
-                .trackers
-                .buffers
-                .change_state(&*buffer_guard, source, hal::BufferUses::COPY_SRC)
-                .ok_or_else(|| TransferError::InvalidBuffer(source))?
-        };
+        let (src_buffer, src_pending) = cmd_buf
+            .trackers
+            .buffers
+            .change_state(&*buffer_guard, source, hal::BufferUses::COPY_SRC)
+            .ok_or_else(|| TransferError::InvalidBuffer(source))?;
         let src_raw = src_buffer
             .raw
             .as_ref()
@@ -531,13 +529,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         // expecting only a single barrier
         let src_barrier = src_pending.map(|pending| pending.into_hal(src_buffer));
 
-        let (dst_buffer, dst_pending) = unsafe {
-            cmd_buf
-                .trackers
-                .buffers
-                .change_state(&*buffer_guard, destination, hal::BufferUses::COPY_DST)
-                .ok_or_else(|| TransferError::InvalidBuffer(destination))?
-        };
+        let (dst_buffer, dst_pending) = cmd_buf
+            .trackers
+            .buffers
+            .change_state(&*buffer_guard, destination, hal::BufferUses::COPY_DST)
+            .ok_or_else(|| TransferError::InvalidBuffer(destination))?;
         let dst_raw = dst_buffer
             .raw
             .as_ref()
@@ -652,13 +648,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         // Handle texture init *before* dealing with barrier transitions so we have an easier time inserting "immediate-inits" that may be required by prior discards in rare cases.
         handle_dst_texture_init(cmd_buf, device, destination, copy_size, &texture_guard)?;
 
-        let (src_buffer, src_pending) = unsafe {
-            cmd_buf
-                .trackers
-                .buffers
-                .change_state(&*buffer_guard, source.buffer, hal::BufferUses::COPY_SRC)
-                .ok_or_else(|| TransferError::InvalidBuffer(source.buffer))?
-        };
+        let (src_buffer, src_pending) = cmd_buf
+            .trackers
+            .buffers
+            .change_state(&*buffer_guard, source.buffer, hal::BufferUses::COPY_SRC)
+            .ok_or_else(|| TransferError::InvalidBuffer(source.buffer))?;
         let src_raw = src_buffer
             .raw
             .as_ref()
@@ -668,18 +662,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
         let src_barrier = src_pending.map(|pending| pending.into_hal(src_buffer));
 
-        let (dst_texture, dst_pending) = unsafe {
-            cmd_buf
-                .trackers
-                .textures
-                .change_state(
-                    &*texture_guard,
-                    destination.texture,
-                    dst_range,
-                    hal::TextureUses::COPY_DST,
-                )
-                .ok_or_else(|| TransferError::InvalidTexture(destination.texture))?
-        };
+        let (dst_texture, dst_pending) = cmd_buf
+            .trackers
+            .textures
+            .change_state(
+                &*texture_guard,
+                destination.texture,
+                dst_range,
+                hal::TextureUses::COPY_DST,
+            )
+            .ok_or_else(|| TransferError::InvalidTexture(destination.texture))?;
         let dst_raw = dst_texture
             .inner
             .as_raw()
@@ -783,18 +775,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         // Handle texture init *before* dealing with barrier transitions so we have an easier time inserting "immediate-inits" that may be required by prior discards in rare cases.
         handle_src_texture_init(cmd_buf, device, source, copy_size, &texture_guard)?;
 
-        let (src_texture, src_pending) = unsafe {
-            cmd_buf
-                .trackers
-                .textures
-                .change_state(
-                    &*texture_guard,
-                    source.texture,
-                    src_range,
-                    hal::TextureUses::COPY_SRC,
-                )
-                .ok_or_else(|| TransferError::InvalidTexture(source.texture))?
-        };
+        let (src_texture, src_pending) = cmd_buf
+            .trackers
+            .textures
+            .change_state(
+                &*texture_guard,
+                source.texture,
+                src_range,
+                hal::TextureUses::COPY_SRC,
+            )
+            .ok_or_else(|| TransferError::InvalidTexture(source.texture))?;
         let src_raw = src_texture
             .inner
             .as_raw()
@@ -804,17 +794,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
         let src_barrier = src_pending.map(|pending| pending.into_hal(src_texture));
 
-        let (dst_buffer, dst_pending) = unsafe {
-            cmd_buf
-                .trackers
-                .buffers
-                .change_state(
-                    &*buffer_guard,
-                    destination.buffer,
-                    hal::BufferUses::COPY_DST,
-                )
-                .ok_or_else(|| TransferError::InvalidBuffer(destination.buffer))?
-        };
+        let (dst_buffer, dst_pending) = cmd_buf
+            .trackers
+            .buffers
+            .change_state(
+                &*buffer_guard,
+                destination.buffer,
+                hal::BufferUses::COPY_DST,
+            )
+            .ok_or_else(|| TransferError::InvalidBuffer(destination.buffer))?;
         let dst_raw = dst_buffer
             .raw
             .as_ref()
@@ -937,18 +925,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         handle_src_texture_init(cmd_buf, device, source, copy_size, &texture_guard)?;
         handle_dst_texture_init(cmd_buf, device, destination, copy_size, &texture_guard)?;
 
-        let (src_texture, src_pending) = unsafe {
-            cmd_buf
-                .trackers
-                .textures
-                .change_state(
-                    &*texture_guard,
-                    source.texture,
-                    src_range,
-                    hal::TextureUses::COPY_SRC,
-                )
-                .ok_or_else(|| TransferError::InvalidTexture(source.texture))?
-        };
+        let (src_texture, src_pending) = cmd_buf
+            .trackers
+            .textures
+            .change_state(
+                &*texture_guard,
+                source.texture,
+                src_range,
+                hal::TextureUses::COPY_SRC,
+            )
+            .ok_or_else(|| TransferError::InvalidTexture(source.texture))?;
         let src_raw = src_texture
             .inner
             .as_raw()
@@ -964,18 +950,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .into_iter()
             .collect();
 
-        let (dst_texture, dst_pending) = unsafe {
-            cmd_buf
-                .trackers
-                .textures
-                .change_state(
-                    &*texture_guard,
-                    destination.texture,
-                    dst_range,
-                    hal::TextureUses::COPY_DST,
-                )
-                .ok_or(TransferError::InvalidTexture(destination.texture))?
-        };
+        let (dst_texture, dst_pending) = cmd_buf
+            .trackers
+            .textures
+            .change_state(
+                &*texture_guard,
+                destination.texture,
+                dst_range,
+                hal::TextureUses::COPY_DST,
+            )
+            .ok_or(TransferError::InvalidTexture(destination.texture))?;
         let dst_raw = dst_texture
             .inner
             .as_raw()

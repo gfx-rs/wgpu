@@ -332,6 +332,8 @@ impl<A: hub::HalApi> BufferTracker<A> {
 
         self.allow_index(index);
 
+        self.debug_assert_in_bounds(index);
+
         unsafe {
             self.transition_inner(
                 index,

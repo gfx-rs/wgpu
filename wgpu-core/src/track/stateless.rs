@@ -118,21 +118,6 @@ impl<A: hub::HalApi, T: hub::Resource, Id: TypedId> StatelessTracker<A, T, Id> {
         Some(item)
     }
 
-    pub unsafe fn extend_from_bind_group(&mut self, bind_group: &StatelessBindGroupSate<T, Id>) {
-        for (id, ref_count) in &bind_group.resources {
-            let (index32, epoch, _) = id.0.unzip();
-            let index = index32 as usize;
-            self.debug_assert_in_bounds(index);
-
-            let previously_owned = self.owned.get(index).unwrap_unchecked();
-            if !previously_owned {
-                *self.epochs.get_unchecked_mut(index) = epoch;
-                *self.ref_counts.get_unchecked_mut(index) = Some(ref_count.clone());
-                self.owned.set(index, true);
-            }
-        }
-    }
-
     pub fn extend_from_tracker(&mut self, other: &Self) {
         let incoming_size = other.owned.len();
         if incoming_size > self.owned.len() {

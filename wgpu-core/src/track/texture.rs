@@ -486,15 +486,18 @@ impl<A: hub::HalApi> TextureTracker<A> {
         selector: TextureSelector,
         new_usage: TextureUses,
     ) -> Option<(&'a Texture<A>, Option<PendingTransition<TextureUses>>)> {
-        let (index32, epoch, _) = id.unzip();
+        let item = storage.get(id).ok()?;
+
+        let (index32, _epoch, _) = id.unzip();
         let index = index32 as usize;
 
         self.allow_index(index);
 
         self.debug_assert_in_bounds(index);
-        
+
         let _ = (storage, id, selector, new_usage);
-        todo!()
+
+        Some((item, self.temp.pop()))
     }
 
     pub fn change_states_tracker(

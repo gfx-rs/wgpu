@@ -3183,13 +3183,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let id = fid.assign(buffer, &mut token);
             log::info!("Created buffer {:?} with {:?}", id, desc);
 
-            unsafe {
-                device
-                    .trackers
-                    .lock()
-                    .buffers
-                    .init(id, ref_count, buffer_use)
-            };
+            device
+                .trackers
+                .lock()
+                .buffers
+                .init(id, ref_count, buffer_use);
+
             return (id.0, None);
         };
 
@@ -3455,13 +3454,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let id = fid.assign(texture, &mut token);
             log::info!("Created texture {:?} with {:?}", id, desc);
 
-            unsafe {
-                device.trackers.lock().textures.init(
-                    id.0,
-                    ref_count,
-                    hal::TextureUses::UNINITIALIZED,
-                )
-            };
+            device
+                .trackers
+                .lock()
+                .textures
+                .init(id.0, ref_count, hal::TextureUses::UNINITIALIZED);
+
             return (id.0, None);
         };
 
@@ -5125,13 +5123,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             let ret = (buffer.device_id.value, buffer.life_guard.add_ref());
 
-            unsafe {
-                let mut trackers = device.trackers.lock();
-                trackers
-                    .buffers
-                    .change_state(&*buffer_guard, buffer_id, internal_use);
-                trackers.buffers.drain();
-            };
+            let mut trackers = device.trackers.lock();
+            trackers
+                .buffers
+                .change_state(&*buffer_guard, buffer_id, internal_use);
+            trackers.buffers.drain();
 
             ret
         };

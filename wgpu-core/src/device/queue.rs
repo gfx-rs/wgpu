@@ -284,12 +284,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         .map_err(DeviceError::from)?;
 
         let mut trackers = device.trackers.lock();
-        let (dst, transition) = unsafe {
-            trackers
-                .buffers
-                .change_state(&*buffer_guard, buffer_id, hal::BufferUses::COPY_DST)
-                .ok_or_else(|| TransferError::InvalidBuffer(buffer_id))?
-        };
+        let (dst, transition) = trackers
+            .buffers
+            .change_state(&*buffer_guard, buffer_id, hal::BufferUses::COPY_DST)
+            .ok_or_else(|| TransferError::InvalidBuffer(buffer_id))?;
         let dst_raw = dst
             .raw
             .as_ref()
@@ -473,17 +471,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
         }
 
-        let (dst, transition) = unsafe {
-            trackers
-                .textures
-                .change_state(
-                    &*texture_guard,
-                    destination.texture,
-                    selector,
-                    hal::TextureUses::COPY_DST,
-                )
-                .ok_or_else(|| TransferError::InvalidTexture(destination.texture))?
-        };
+        let (dst, transition) = trackers
+            .textures
+            .change_state(
+                &*texture_guard,
+                destination.texture,
+                selector,
+                hal::TextureUses::COPY_DST,
+            )
+            .ok_or_else(|| TransferError::InvalidTexture(destination.texture))?;
 
         let (hal_copy_size, array_layer_count) =
             validate_texture_copy_range(destination, &dst.desc, CopySide::Destination, size)?;

@@ -189,13 +189,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 {
                     // register it in the device tracker as uninitialized
                     let mut trackers = device.trackers.lock();
-                    let _ = unsafe {
-                        trackers.textures.init(
-                            id.0,
-                            ref_count.clone(),
-                            hal::TextureUses::UNINITIALIZED,
-                        )
-                    };
+                    let _ = trackers.textures.init(
+                        id.0,
+                        ref_count.clone(),
+                        hal::TextureUses::UNINITIALIZED,
+                    );
                 }
 
                 if present.acquired_texture.is_some() {

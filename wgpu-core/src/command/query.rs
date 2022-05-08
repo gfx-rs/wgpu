@@ -351,13 +351,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .ok_or_else(|| QueryError::InvalidQuerySet(query_set_id))?
         };
 
-        let (dst_buffer, dst_pending) = unsafe {
-            cmd_buf
-                .trackers
-                .buffers
-                .change_state(&*buffer_guard, destination, hal::BufferUses::COPY_DST)
-                .ok_or_else(|| QueryError::InvalidBuffer(destination))?
-        };
+        let (dst_buffer, dst_pending) = cmd_buf
+            .trackers
+            .buffers
+            .change_state(&*buffer_guard, destination, hal::BufferUses::COPY_DST)
+            .ok_or_else(|| QueryError::InvalidBuffer(destination))?;
         let dst_barrier = dst_pending.map(|pending| pending.into_hal(dst_buffer));
 
         if !dst_buffer.usage.contains(wgt::BufferUsages::COPY_DST) {

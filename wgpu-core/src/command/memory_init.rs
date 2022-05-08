@@ -203,13 +203,11 @@ impl<A: HalApi> BakedCommands<A> {
 
             // Don't do use_replace since the buffer may already no longer have a ref_count.
             // However, we *know* that it is currently in use, so the tracker must already know about it.
-            let transition = unsafe {
-                device_tracker
-                    .buffers
-                    .change_state(buffer_guard, buffer_id, hal::BufferUses::COPY_DST)
-                    .unwrap()
-                    .1
-            };
+            let transition = device_tracker
+                .buffers
+                .change_state(buffer_guard, buffer_id, hal::BufferUses::COPY_DST)
+                .unwrap()
+                .1;
 
             let buffer = buffer_guard
                 .get_mut(buffer_id)

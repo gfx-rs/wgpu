@@ -86,13 +86,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             list.push(TraceCommand::ClearBuffer { dst, offset, size });
         }
 
-        let (dst_buffer, dst_pending) = unsafe {
-            cmd_buf
-                .trackers
-                .buffers
-                .change_state(&*buffer_guard, dst, hal::BufferUses::COPY_DST)
-                .ok_or_else(|| ClearError::InvalidBuffer(dst))?
-        };
+        let (dst_buffer, dst_pending) = cmd_buf
+            .trackers
+            .buffers
+            .change_state(&*buffer_guard, dst, hal::BufferUses::COPY_DST)
+            .ok_or_else(|| ClearError::InvalidBuffer(dst))?;
         let dst_raw = dst_buffer
             .raw
             .as_ref()
@@ -274,13 +272,11 @@ pub(crate) fn clear_texture<A: HalApi>(
     // On the other hand, when coming via command_encoder_clear_texture, the life_guard is still there since in order to call it a texture object is needed.
     //
     // We could in theory distinguish these two scenarios in the internal clear_texture api in order to remove this check and call the cheaper change_replace_tracked whenever possible.
-    let dst_barrier = unsafe {
-        texture_tracker
-            .change_state(storage, dst_texture_id.0, selector, clear_usage)
-            .unwrap()
-            .1
-            .map(|pending| pending.into_hal(dst_texture))
-    };
+    let dst_barrier = texture_tracker
+        .change_state(storage, dst_texture_id.0, selector, clear_usage)
+        .unwrap()
+        .1
+        .map(|pending| pending.into_hal(dst_texture));
     unsafe {
         encoder.transition_textures(dst_barrier.into_iter());
     }
