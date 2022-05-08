@@ -134,7 +134,7 @@ impl super::Adapter {
         } else if strings_that_imply_cpu.iter().any(|&s| renderer.contains(s)) {
             wgt::DeviceType::Cpu
         } else {
-            wgt::DeviceType::DiscreteGpu
+            wgt::DeviceType::Other
         };
 
         // source: Sascha Willems at Vulkan

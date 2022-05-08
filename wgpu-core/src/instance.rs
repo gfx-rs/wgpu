@@ -735,7 +735,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let preferred_gpu = match desc.power_preference {
             PowerPreference::LowPower => integrated.or(other).or(discrete).or(virt).or(cpu),
-            PowerPreference::HighPerformance => discrete.or(other).or(integrated).or(virt).or(cpu),
+            PowerPreference::HighPerformance => discrete.or(integrated).or(other).or(virt).or(cpu),
         };
 
         let mut selected = preferred_gpu.unwrap_or(0);
