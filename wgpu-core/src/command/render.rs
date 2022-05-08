@@ -18,7 +18,7 @@ use crate::{
     id,
     init_tracker::{MemoryInitKind, TextureInitRange, TextureInitTrackerAction},
     pipeline::PipelineFlags,
-    resource::{self, Texture, TextureView},
+    resource::{self, Buffer, Texture, TextureView},
     track::{TextureSelector, UsageConflict, UsageScope},
     validation::{
         check_buffer_usage, check_texture_usage, MissingBufferUsageError, MissingTextureUsageError,
@@ -618,6 +618,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
         depth_stencil_attachment: Option<&RenderPassDepthStencilAttachment>,
         cmd_buf: &mut CommandBuffer<A>,
         view_guard: &'a Storage<TextureView<A>, id::TextureViewId>,
+        buffer_guard: &'a Storage<Buffer<A>, id::BufferId>,
         texture_guard: &'a Storage<Texture<A>, id::TextureId>,
     ) -> Result<Self, RenderPassErrorInner> {
         profiling::scope!("start", "RenderPassInfo");
@@ -940,7 +941,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
 
         Ok(Self {
             context,
-            usage_scope: UsageScope::new(),
+            usage_scope: UsageScope::new(buffer_guard, texture_guard),
             render_attachments,
             is_ds_read_only,
             extent,
@@ -1080,7 +1081,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let (bundle_guard, mut token) = hub.render_bundles.read(&mut token);
             let (pipeline_layout_guard, mut token) = hub.pipeline_layouts.read(&mut token);
             let (bind_group_guard, mut token) = hub.bind_groups.read(&mut token);
-            let (render_pipe_guard, mut token) = hub.render_pipelines.read(&mut token);
+            let (render_pipeline_guard, mut token) = hub.render_pipelines.read(&mut token);
             let (query_set_guard, mut token) = hub.query_sets.read(&mut token);
             let (buffer_guard, mut token) = hub.buffers.read(&mut token);
             let (texture_guard, mut token) = hub.textures.read(&mut token);
@@ -1098,9 +1099,22 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 depth_stencil_attachment,
                 cmd_buf,
                 &*view_guard,
+                &*buffer_guard,
                 &*texture_guard,
             )
             .map_pass_err(init_scope)?;
+
+            cmd_buf.trackers.set_size(
+                Some(&*buffer_guard),
+                Some(&*texture_guard),
+                Some(&*view_guard),
+                None,
+                Some(&*bind_group_guard),
+                None,
+                Some(&*render_pipeline_guard),
+                Some(&*bundle_guard),
+                Some(&*query_set_guard),
+            );
 
             let raw = &mut cmd_buf.encoder.raw;
 
@@ -1214,7 +1228,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             cmd_buf
                                 .trackers
                                 .render_pipelines
-                                .extend(&*render_pipe_guard, pipeline_id)
+                                .extend(&*render_pipeline_guard, pipeline_id)
                                 .ok_or_else(|| RenderCommandError::InvalidPipeline(pipeline_id))
                                 .map_pass_err(scope)?
                         };
@@ -1323,7 +1337,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         size,
                     } => {
                         let scope = PassErrorScope::SetIndexBuffer(buffer_id);
-                        let buffer: &resource::Buffer<A> = unsafe {
+                        let buffer: &Buffer<A> = unsafe {
                             info.usage_scope
                                 .buffers
                                 .extend(&*buffer_guard, buffer_id, hal::BufferUses::INDEX)
@@ -1370,7 +1384,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         size,
                     } => {
                         let scope = PassErrorScope::SetVertexBuffer(buffer_id);
-                        let buffer: &resource::Buffer<A> = unsafe {
+                        let buffer: &Buffer<A> = unsafe {
                             info.usage_scope
                                 .buffers
                                 .extend(&*buffer_guard, buffer_id, hal::BufferUses::VERTEX)
@@ -1628,7 +1642,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .require_downlevel_flags(wgt::DownlevelFlags::INDIRECT_EXECUTION)
                             .map_pass_err(scope)?;
 
-                        let indirect_buffer: &resource::Buffer<A> = unsafe {
+                        let indirect_buffer: &Buffer<A> = unsafe {
                             info.usage_scope
                                 .buffers
                                 .extend(&*buffer_guard, buffer_id, hal::BufferUses::INDIRECT)
@@ -1699,7 +1713,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .require_downlevel_flags(wgt::DownlevelFlags::INDIRECT_EXECUTION)
                             .map_pass_err(scope)?;
 
-                        let indirect_buffer: &resource::Buffer<A> = unsafe {
+                        let indirect_buffer: &Buffer<A> = unsafe {
                             info.usage_scope
                                 .buffers
                                 .extend(&*buffer_guard, buffer_id, hal::BufferUses::INDIRECT)
@@ -1713,7 +1727,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .ok_or(RenderCommandError::DestroyedBuffer(buffer_id))
                             .map_pass_err(scope)?;
 
-                        let count_buffer: &resource::Buffer<A> = unsafe {
+                        let count_buffer: &Buffer<A> = unsafe {
                             info.usage_scope
                                 .buffers
                                 .extend(&*buffer_guard, count_buffer_id, hal::BufferUses::INDIRECT)
@@ -1915,7 +1929,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 raw,
                                 &*pipeline_layout_guard,
                                 &*bind_group_guard,
-                                &*render_pipe_guard,
+                                &*render_pipeline_guard,
                                 &*buffer_guard,
                             )
                         }

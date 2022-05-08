@@ -76,7 +76,7 @@ impl<A: hub::HalApi, T: hub::Resource, Id: TypedId> StatelessTracker<A, T, Id> {
         });
     }
 
-    pub fn set_max_index(&mut self, size: usize) {
+    pub fn set_size(&mut self, size: usize) {
         self.epochs.resize(size, u32::MAX);
         self.ref_counts.resize(size, None);
 
@@ -102,6 +102,7 @@ impl<A: hub::HalApi, T: hub::Resource, Id: TypedId> StatelessTracker<A, T, Id> {
         self.owned.set(index, true);
     }
 
+    /// Requires set_size to be called
     pub unsafe fn extend<'a>(&mut self, storage: &'a hub::Storage<T, Id>, id: Id) -> Option<&'a T> {
         let item = storage.get(id).ok()?;
 
@@ -135,7 +136,7 @@ impl<A: hub::HalApi, T: hub::Resource, Id: TypedId> StatelessTracker<A, T, Id> {
     pub fn extend_from_tracker(&mut self, other: &Self) {
         let incoming_size = other.owned.len();
         if incoming_size > self.owned.len() {
-            self.set_max_index(incoming_size);
+            self.set_size(incoming_size);
         }
 
         for index in iterate_bitvec_indices(&other.owned) {

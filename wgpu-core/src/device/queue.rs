@@ -627,6 +627,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                     // finish all the command buffers first
                     for &cmb_id in command_buffer_ids {
+                        #[allow(unused_mut)]
                         let mut cmdbuf = match hub
                             .command_buffers
                             .unregister_locked(cmb_id, &mut *command_buffer_guard)

@@ -165,7 +165,7 @@ impl<A: hub::HalApi> TextureUsageScope<A> {
         });
     }
 
-    pub fn set_max_index(&mut self, size: usize) {
+    pub fn set_size(&mut self, size: usize) {
         self.set.simple.resize(size, TextureUses::UNINITIALIZED);
         self.ref_counts.resize(size, None);
         self.epochs.resize(size, u32::MAX);
@@ -192,7 +192,7 @@ impl<A: hub::HalApi> TextureUsageScope<A> {
     ) -> Result<(), UsageConflict> {
         let incoming_size = scope.set.simple.len();
         if incoming_size > self.set.simple.len() {
-            self.set_max_index(incoming_size);
+            self.set_size(incoming_size);
         }
 
         for index in iterate_bitvec_indices(&scope.owned) {
@@ -217,7 +217,7 @@ impl<A: hub::HalApi> TextureUsageScope<A> {
 
     /// # Safety
     ///
-    /// `id` must be a valid ID and have an ID value less than the last call to set_max_index.
+    /// `id` must be a valid ID and have an ID value less than the last call to set_size.
     pub unsafe fn extend<'a>(
         &mut self,
         storage: &'a hub::Storage<Texture<A>, TextureId>,
@@ -242,7 +242,7 @@ impl<A: hub::HalApi> TextureUsageScope<A> {
 
     /// # Safety
     ///
-    /// `id` must be a valid ID and have an ID value less than the last call to set_max_index.
+    /// `id` must be a valid ID and have an ID value less than the last call to set_size.
     pub unsafe fn extend_refcount(
         &mut self,
         storage: &hub::Storage<Texture<A>, TextureId>,
@@ -425,7 +425,7 @@ impl<A: hub::HalApi> TextureTracker<A> {
         });
     }
 
-    fn set_max_index(&mut self, size: usize) {
+    pub fn set_size(&mut self, size: usize) {
         self.start_set
             .simple
             .resize(size, TextureUses::UNINITIALIZED);
@@ -434,6 +434,12 @@ impl<A: hub::HalApi> TextureTracker<A> {
         self.epochs.resize(size, u32::MAX);
 
         resize_bitvec(&mut self.owned, size);
+    }
+
+    fn allow_index(&mut self, index: usize) {
+        if index >= self.start_set.simple.len() {
+            self.set_size(index + 1);
+        }
     }
 
     pub fn used(&self) -> impl Iterator<Item = Valid<TextureId>> + '_ {
@@ -455,27 +461,38 @@ impl<A: hub::HalApi> TextureTracker<A> {
         self.ref_counts[index].as_ref().unwrap()
     }
 
-    pub unsafe fn init(&mut self, id: TextureId, ref_count: RefCount, usage: TextureUses) {
+    pub fn init(&mut self, id: TextureId, ref_count: RefCount, usage: TextureUses) {
         let (index32, epoch, _) = id.unzip();
         let index = index32 as usize;
 
+        self.allow_index(index);
+
         self.debug_assert_in_bounds(index);
 
-        *self.start_set.simple.get_unchecked_mut(index) = usage;
-        *self.end_set.simple.get_unchecked_mut(index) = usage;
+        unsafe {
+            *self.start_set.simple.get_unchecked_mut(index) = usage;
+            *self.end_set.simple.get_unchecked_mut(index) = usage;
 
-        *self.epochs.get_unchecked_mut(index) = epoch;
-        *self.ref_counts.get_unchecked_mut(index) = Some(ref_count);
-        self.owned.set(index, true);
+            *self.epochs.get_unchecked_mut(index) = epoch;
+            *self.ref_counts.get_unchecked_mut(index) = Some(ref_count);
+            self.owned.set(index, true);
+        }
     }
 
-    pub unsafe fn change_state<'a>(
+    pub fn change_state<'a>(
         &mut self,
         storage: &'a hub::Storage<Texture<A>, TextureId>,
         id: TextureId,
         selector: TextureSelector,
         new_usage: TextureUses,
     ) -> Option<(&'a Texture<A>, Option<PendingTransition<TextureUses>>)> {
+        let (index32, epoch, _) = id.unzip();
+        let index = index32 as usize;
+
+        self.allow_index(index);
+
+        self.debug_assert_in_bounds(index);
+        
         let _ = (storage, id, selector, new_usage);
         todo!()
     }
@@ -487,7 +504,7 @@ impl<A: hub::HalApi> TextureTracker<A> {
     ) {
         let incoming_size = tracker.start_set.simple.len();
         if incoming_size > self.start_set.simple.len() {
-            self.set_max_index(incoming_size);
+            self.set_size(incoming_size);
         }
 
         for index in iterate_bitvec_indices(&tracker.owned) {
@@ -511,7 +528,7 @@ impl<A: hub::HalApi> TextureTracker<A> {
     ) {
         let incoming_size = scope.set.simple.len();
         if incoming_size > self.start_set.simple.len() {
-            self.set_max_index(incoming_size);
+            self.set_size(incoming_size);
         }
 
         for index in iterate_bitvec_indices(&scope.owned) {
@@ -530,7 +547,7 @@ impl<A: hub::HalApi> TextureTracker<A> {
     ) {
         let incoming_size = scope.set.simple.len();
         if incoming_size > self.start_set.simple.len() {
-            self.set_max_index(incoming_size);
+            self.set_size(incoming_size);
         }
 
         for &(id, _, _, _) in bind_group_state.textures.iter() {

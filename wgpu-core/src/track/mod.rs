@@ -248,24 +248,35 @@ impl<A: hub::HalApi> BindGroupStates<A> {
 pub(crate) struct RenderBundleScope<A: hub::HalApi> {
     pub buffers: BufferUsageScope<A>,
     pub textures: TextureUsageScope<A>,
-    pub views: StatelessTracker<A, resource::TextureView<A>, id::TextureViewId>,
-    pub samplers: StatelessTracker<A, resource::Sampler<A>, id::SamplerId>,
+    // Don't need to track views and samplers, they are never used directly, only by bind groups.
     pub bind_groups: StatelessTracker<A, binding_model::BindGroup<A>, id::BindGroupId>,
     pub render_pipelines: StatelessTracker<A, pipeline::RenderPipeline<A>, id::RenderPipelineId>,
     pub query_sets: StatelessTracker<A, resource::QuerySet<A>, id::QuerySetId>,
 }
 
 impl<A: hub::HalApi> RenderBundleScope<A> {
-    pub fn new() -> Self {
-        Self {
+    pub fn new(
+        buffers: &hub::Storage<resource::Buffer<A>, id::BufferId>,
+        textures: &hub::Storage<resource::Texture<A>, id::TextureId>,
+        bind_groups: &hub::Storage<binding_model::BindGroup<A>, id::BindGroupId>,
+        render_pipelines: &hub::Storage<pipeline::RenderPipeline<A>, id::RenderPipelineId>,
+        query_sets: &hub::Storage<resource::QuerySet<A>, id::QuerySetId>,
+    ) -> Self {
+        let mut value = Self {
             buffers: BufferUsageScope::new(),
             textures: TextureUsageScope::new(),
-            views: StatelessTracker::new(),
-            samplers: StatelessTracker::new(),
             bind_groups: StatelessTracker::new(),
             render_pipelines: StatelessTracker::new(),
             query_sets: StatelessTracker::new(),
-        }
+        };
+
+        value.buffers.set_size(buffers.len());
+        value.textures.set_size(textures.len());
+        value.bind_groups.set_size(bind_groups.len());
+        value.render_pipelines.set_size(render_pipelines.len());
+        value.query_sets.set_size(query_sets.len());
+
+        value
     }
 
     pub unsafe fn extend_from_bind_group(
@@ -288,11 +299,19 @@ pub(crate) struct UsageScope<A: hub::HalApi> {
 }
 
 impl<A: hub::HalApi> UsageScope<A> {
-    pub fn new() -> Self {
-        Self {
+    pub fn new(
+        buffers: &hub::Storage<resource::Buffer<A>, id::BufferId>,
+        textures: &hub::Storage<resource::Texture<A>, id::TextureId>,
+    ) -> Self {
+        let mut value = Self {
             buffers: BufferUsageScope::new(),
             textures: TextureUsageScope::new(),
-        }
+        };
+
+        value.buffers.set_size(buffers.len());
+        value.textures.set_size(textures.len());
+
+        value
     }
 
     pub unsafe fn extend_from_bind_group(
@@ -347,6 +366,49 @@ impl<A: hub::HalApi> Tracker<A> {
         }
     }
 
+    pub fn set_size(
+        &mut self,
+        buffers: Option<&hub::Storage<resource::Buffer<A>, id::BufferId>>,
+        textures: Option<&hub::Storage<resource::Texture<A>, id::TextureId>>,
+        views: Option<&hub::Storage<resource::TextureView<A>, id::TextureViewId>>,
+        samplers: Option<&hub::Storage<resource::Sampler<A>, id::SamplerId>>,
+        bind_groups: Option<&hub::Storage<binding_model::BindGroup<A>, id::BindGroupId>>,
+        compute_pipelines: Option<
+            &hub::Storage<pipeline::ComputePipeline<A>, id::ComputePipelineId>,
+        >,
+        render_pipelines: Option<&hub::Storage<pipeline::RenderPipeline<A>, id::RenderPipelineId>>,
+        bundles: Option<&hub::Storage<command::RenderBundle<A>, id::RenderBundleId>>,
+        query_sets: Option<&hub::Storage<resource::QuerySet<A>, id::QuerySetId>>,
+    ) {
+        if let Some(buffers) = buffers {
+            self.buffers.set_size(buffers.len());
+        };
+        if let Some(textures) = textures {
+            self.textures.set_size(textures.len());
+        };
+        if let Some(views) = views {
+            self.views.set_size(views.len());
+        };
+        if let Some(samplers) = samplers {
+            self.samplers.set_size(samplers.len());
+        };
+        if let Some(bind_groups) = bind_groups {
+            self.bind_groups.set_size(bind_groups.len());
+        };
+        if let Some(compute_pipelines) = compute_pipelines {
+            self.compute_pipelines.set_size(compute_pipelines.len());
+        }
+        if let Some(render_pipelines) = render_pipelines {
+            self.render_pipelines.set_size(render_pipelines.len());
+        };
+        if let Some(bundles) = bundles {
+            self.bundles.set_size(bundles.len());
+        };
+        if let Some(query_sets) = query_sets {
+            self.query_sets.set_size(query_sets.len());
+        };
+    }
+
     pub unsafe fn extend_from_bind_group(
         &mut self,
         textures: &hub::Storage<resource::Texture<A>, id::TextureId>,
@@ -363,8 +425,6 @@ impl<A: hub::HalApi> Tracker<A> {
         &mut self,
         render_bundle: &RenderBundleScope<A>,
     ) -> Result<(), UsageConflict> {
-        self.views.extend_from_tracker(&render_bundle.views);
-        self.samplers.extend_from_tracker(&render_bundle.samplers);
         self.bind_groups
             .extend_from_tracker(&render_bundle.bind_groups);
         self.render_pipelines

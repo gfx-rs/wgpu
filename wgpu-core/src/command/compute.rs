@@ -340,13 +340,25 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut state = State {
             binder: Binder::new(),
             pipeline: None,
-            scope: UsageScope::new(),
+            scope: UsageScope::new(&*buffer_guard, &*texture_guard),
             debug_scope_depth: 0,
         };
         let mut temp_offsets = Vec::new();
         let mut dynamic_offset_count = 0;
         let mut string_offset = 0;
         let mut active_query = None;
+
+        cmd_buf.trackers.set_size(
+            Some(&*buffer_guard),
+            Some(&*texture_guard),
+            None,
+            None,
+            Some(&*bind_group_guard),
+            Some(&*pipeline_guard),
+            None,
+            None,
+            Some(&*query_set_guard),
+        );
 
         let hal_desc = hal::ComputePassDescriptor { label: base.label };
         unsafe {

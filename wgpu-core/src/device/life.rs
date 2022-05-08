@@ -71,8 +71,6 @@ impl SuspectedResources {
     pub(super) fn add_render_bundle_scope<A: HalApi>(&mut self, trackers: &RenderBundleScope<A>) {
         self.buffers.extend(trackers.buffers.used());
         self.textures.extend(trackers.textures.used());
-        self.texture_views.extend(trackers.views.used());
-        self.samplers.extend(trackers.samplers.used());
         self.bind_groups.extend(trackers.bind_groups.used());
         self.render_pipelines
             .extend(trackers.render_pipelines.used());

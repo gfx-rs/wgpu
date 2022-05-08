@@ -110,7 +110,7 @@ impl<A: hub::HalApi> BufferUsageScope<A> {
         });
     }
 
-    pub fn set_max_index(&mut self, size: usize) {
+    pub fn set_size(&mut self, size: usize) {
         self.state.resize(size, BufferUses::empty());
         self.ref_counts.resize(size, None);
         self.epochs.resize(size, u32::MAX);
@@ -143,7 +143,7 @@ impl<A: hub::HalApi> BufferUsageScope<A> {
     pub fn extend_from_scope(&mut self, scope: &Self) -> Result<(), UsageConflict> {
         let incoming_size = scope.state.len();
         if incoming_size > self.state.len() {
-            self.set_max_index(incoming_size);
+            self.set_size(incoming_size);
         }
 
         for index in iterate_bitvec_indices(&scope.owned) {
@@ -272,7 +272,7 @@ impl<A: hub::HalApi> BufferTracker<A> {
         });
     }
 
-    fn set_max_index(&mut self, size: usize) {
+    pub fn set_size(&mut self, size: usize) {
         self.start.resize(size, BufferUses::empty());
         self.end.resize(size, BufferUses::empty());
 
@@ -280,6 +280,12 @@ impl<A: hub::HalApi> BufferTracker<A> {
         self.ref_counts.resize(size, None);
 
         resize_bitvec(&mut self.owned, size);
+    }
+
+    fn allow_index(&mut self, index: usize) {
+        if index >= self.start.len() {
+            self.set_size(index + 1);
+        }
     }
 
     pub fn used(&self) -> impl Iterator<Item = Valid<BufferId>> + '_ {
@@ -294,22 +300,26 @@ impl<A: hub::HalApi> BufferTracker<A> {
         self.temp.drain(..)
     }
 
-    pub unsafe fn init(&mut self, id: Valid<BufferId>, ref_count: RefCount, state: BufferUses) {
+    pub fn init(&mut self, id: Valid<BufferId>, ref_count: RefCount, state: BufferUses) {
         let (index32, epoch, _) = id.0.unzip();
         let index = index32 as usize;
 
+        self.allow_index(index);
+
         self.debug_assert_in_bounds(index);
 
-        *self.start.get_unchecked_mut(index) = state;
-        *self.end.get_unchecked_mut(index) = state;
+        unsafe {
+            *self.start.get_unchecked_mut(index) = state;
+            *self.end.get_unchecked_mut(index) = state;
 
-        *self.ref_counts.get_unchecked_mut(index) = Some(ref_count);
-        *self.epochs.get_unchecked_mut(index) = epoch;
+            *self.ref_counts.get_unchecked_mut(index) = Some(ref_count);
+            *self.epochs.get_unchecked_mut(index) = epoch;
 
-        self.owned.set(index, true);
+            self.owned.set(index, true);
+        }
     }
 
-    pub unsafe fn change_state<'a>(
+    pub fn change_state<'a>(
         &mut self,
         storage: &'a hub::Storage<Buffer<A>, BufferId>,
         id: BufferId,
@@ -320,12 +330,16 @@ impl<A: hub::HalApi> BufferTracker<A> {
         let (index32, epoch, _) = id.unzip();
         let index = index32 as usize;
 
-        self.transition_inner(
-            index,
-            epoch,
-            value.life_guard.ref_count.as_ref().unwrap(),
-            state,
-        );
+        self.allow_index(index);
+
+        unsafe {
+            self.transition_inner(
+                index,
+                epoch,
+                value.life_guard.ref_count.as_ref().unwrap(),
+                state,
+            )
+        };
 
         Some((value, self.temp.pop()))
     }
@@ -333,7 +347,7 @@ impl<A: hub::HalApi> BufferTracker<A> {
     pub fn change_states_tracker(&mut self, tracker: &Self) {
         let incoming_size = tracker.start.len();
         if incoming_size > self.start.len() {
-            self.set_max_index(incoming_size);
+            self.set_size(incoming_size);
         }
 
         for index in iterate_bitvec_indices(&tracker.owned) {
@@ -355,7 +369,7 @@ impl<A: hub::HalApi> BufferTracker<A> {
     pub fn change_states_scope(&mut self, scope: &BufferUsageScope<A>) {
         let incoming_size = scope.state.len();
         if incoming_size > self.start.len() {
-            self.set_max_index(incoming_size);
+            self.set_size(incoming_size);
         }
 
         for index in iterate_bitvec_indices(&scope.owned) {
@@ -381,7 +395,7 @@ impl<A: hub::HalApi> BufferTracker<A> {
     ) {
         let incoming_size = scope.state.len();
         if incoming_size > self.start.len() {
-            self.set_max_index(incoming_size);
+            self.set_size(incoming_size);
         }
 
         for (id, ref_count, _) in bind_group_state.buffers.iter() {
@@ -395,6 +409,8 @@ impl<A: hub::HalApi> BufferTracker<A> {
             }
             self.transition(&scope.state, ref_count, index, epoch);
 
+            *scope.ref_counts.get_unchecked_mut(index) = None;
+            *scope.epochs.get_unchecked_mut(index) = u32::MAX;
             scope.owned.set(index, false);
         }
     }

@@ -271,6 +271,10 @@ impl<T, I: id::TypedId> Storage<T, I> {
             })
     }
 
+    pub(crate) fn len(&self) -> usize {
+        self.map.len()
+    }
+
     fn generate_report(&self) -> StorageReport {
         let mut report = StorageReport {
             element_size: mem::size_of::<T>(),

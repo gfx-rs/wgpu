@@ -34,7 +34,7 @@ invalidations or index format changes.
 #![allow(clippy::reversed_empty_ranges)]
 
 use crate::{
-    binding_model::buffer_binding_type_alignment,
+    binding_model::{buffer_binding_type_alignment, self},
     command::{
         BasePass, BindGroupStateChange, DrawError, MapPassErr, PassErrorScope, RenderCommand,
         RenderCommandError, StateChange,
@@ -178,11 +178,18 @@ impl RenderBundleEncoder {
         let (pipeline_layout_guard, mut token) = hub.pipeline_layouts.read(token);
         let (bind_group_guard, mut token) = hub.bind_groups.read(&mut token);
         let (pipeline_guard, mut token) = hub.render_pipelines.read(&mut token);
+        let (query_set_guard, mut token) = hub.query_sets.read(&mut token);
         let (buffer_guard, mut token) = hub.buffers.read(&mut token);
         let (texture_guard, _) = hub.textures.read(&mut token);
 
         let mut state = State {
-            trackers: RenderBundleScope::new(),
+            trackers: RenderBundleScope::new(
+                &*buffer_guard,
+                &*texture_guard,
+                &*bind_group_guard,
+                &*pipeline_guard,
+                &*query_set_guard,
+            ),
             index: IndexState::new(),
             vertex: (0..hal::MAX_VERTEX_BUFFERS)
                 .map(|_| VertexState::new())
@@ -223,7 +230,7 @@ impl RenderBundleEncoder {
                     let offsets = &base.dynamic_offsets[..num_dynamic_offsets as usize];
                     base.dynamic_offsets = &base.dynamic_offsets[num_dynamic_offsets as usize..];
 
-                    let bind_group = unsafe {
+                    let bind_group: &binding_model::BindGroup<A> = unsafe {
                         state
                             .trackers
                             .bind_groups
