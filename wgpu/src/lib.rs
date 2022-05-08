@@ -210,7 +210,7 @@ trait Context: Debug + Send + Sized + Sync {
         desc: &DeviceDescriptor,
         trace_dir: Option<&std::path::Path>,
     ) -> Self::RequestDeviceFuture;
-    fn instance_poll_all_devices(&self, force_wait: bool);
+    fn instance_poll_all_devices(&self, force_wait: bool) -> bool;
     fn adapter_is_surface_supported(
         &self,
         adapter: &Self::AdapterId,
@@ -1563,8 +1563,10 @@ impl Instance {
     /// Polls all devices.
     /// If `force_wait` is true and this is not running on the web,
     /// then this function will block until all in-flight buffers have been mapped.
-    pub fn poll_all(&self, force_wait: bool) {
-        self.context.instance_poll_all_devices(force_wait);
+    ///
+    /// Return `all_queue_empty` indicating whether there are more queue submissions still in flight.
+    pub fn poll_all(&self, force_wait: bool) -> bool {
+        self.context.instance_poll_all_devices(force_wait)
     }
 
     /// Generates memory report.

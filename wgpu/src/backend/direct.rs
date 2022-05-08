@@ -824,10 +824,10 @@ impl crate::Context for Context {
         ready(id.ok())
     }
 
-    fn instance_poll_all_devices(&self, force_wait: bool) {
+    fn instance_poll_all_devices(&self, force_wait: bool) -> bool {
         let global = &self.0;
         match global.poll_all_devices(force_wait) {
-            Ok(()) => (),
+            Ok(all_queue_empty) => all_queue_empty,
             Err(err) => self.handle_error_fatal(err, "Device::poll"),
         }
     }
