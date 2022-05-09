@@ -34,7 +34,7 @@ invalidations or index format changes.
 #![allow(clippy::reversed_empty_ranges)]
 
 use crate::{
-    binding_model::{buffer_binding_type_alignment, self},
+    binding_model::{self, buffer_binding_type_alignment},
     command::{
         BasePass, BindGroupStateChange, DrawError, MapPassErr, PassErrorScope, RenderCommand,
         RenderCommandError, StateChange,

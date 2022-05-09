@@ -6,11 +6,11 @@ mod texture;
 use crate::{
     binding_model, command, conv, hub,
     id::{self, TypedId},
-    pipeline, resource,
+    pipeline, resource, Epoch, RefCount,
 };
 
 use bit_vec::BitVec;
-use std::{fmt, mem, num::NonZeroU32, ops};
+use std::{fmt, marker::PhantomData, mem, num::NonZeroU32, ops};
 use thiserror::Error;
 
 pub(crate) use buffer::{BufferBindGroupState, BufferTracker, BufferUsageScope};
@@ -160,33 +160,16 @@ impl UsageConflict {
         }
     }
 
-    fn from_texture<A: hal::Api>(
-        storage: &hub::Storage<resource::Texture<A>, id::TextureId>,
-        id: id::Valid<id::TextureId>,
-        selector: Option<TextureSelector>,
+    fn from_texture(
+        id: id::TextureId,
+        selector: TextureSelector,
         current_state: hal::TextureUses,
         new_state: hal::TextureUses,
     ) -> Self {
-        let texture = &storage[id];
-
-        let mips;
-        let layers;
-
-        match selector {
-            Some(selector) => {
-                mips = selector.mips;
-                layers = selector.layers;
-            }
-            None => {
-                mips = texture.full_range.mips.clone();
-                layers = texture.full_range.layers.clone();
-            }
-        }
-
         Self::Texture {
-            id: id.0,
-            mip_levels: mips,
-            array_layers: layers,
+            id: id,
+            mip_levels: selector.mips,
+            array_layers: selector.layers,
             invalid_use: InvalidUse {
                 current_state,
                 new_state,
@@ -217,6 +200,63 @@ impl<T: ResourceUses> fmt::Display for InvalidUse<T> {
             {exclusive:?} is an exclusive usage and cannot be used with any other\
             usages within the usage scope (renderpass or compute dispatch)"
         )
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct ResourceMetadata<A: hub::HalApi> {
+    owned: BitVec<usize>,
+    ref_counts: Vec<Option<RefCount>>,
+    epochs: Vec<Epoch>,
+
+    _phantom: PhantomData<A>,
+}
+impl<A: hub::HalApi> ResourceMetadata<A> {
+    pub fn new() -> Self {
+        Self {
+            owned: BitVec::default(),
+            ref_counts: Vec::new(),
+            epochs: Vec::new(),
+
+            _phantom: PhantomData,
+        }
+    }
+
+    pub fn set_size(&mut self, size: usize) {
+        self.ref_counts.resize(size, None);
+        self.epochs.resize(size, u32::MAX);
+
+        resize_bitvec(&mut self.owned, size);
+    }
+
+    fn debug_assert_in_bounds(&self, index: usize) {
+        debug_assert!(index < self.owned.len());
+        debug_assert!(index < self.ref_counts.len());
+        debug_assert!(index < self.epochs.len());
+
+        debug_assert!(if self.owned.get(index).unwrap() {
+            self.ref_counts[index].is_some()
+        } else {
+            true
+        });
+    }
+
+    fn is_empty(&self) -> bool {
+        !self.owned.any()
+    }
+
+    fn used<Id: TypedId>(&self) -> impl Iterator<Item = id::Valid<Id>> + '_ {
+        self.debug_assert_in_bounds(self.owned.len() - 1);
+        iterate_bitvec_indices(&self.owned).map(move |index| {
+            let epoch = unsafe { *self.epochs.get_unchecked(index) };
+            id::Valid(Id::zip(index as u32, epoch, A::VARIANT))
+        })
+    }
+
+    unsafe fn reset(&mut self, index: usize) {
+        *self.ref_counts.get_unchecked_mut(index) = None;
+        *self.epochs.get_unchecked_mut(index) = u32::MAX;
+        self.owned.set(index, false);
     }
 }
 

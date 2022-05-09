@@ -40,6 +40,10 @@ impl<I: Copy + PartialOrd, T: Copy + PartialEq> RangedStates<I, T> {
         self.ranges.iter()
     }
 
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut (Range<I>, T)> {
+        self.ranges.iter_mut()
+    }
+
     pub fn into_iter(self) -> impl Iterator<Item = (Range<I>, T)> {
         self.ranges.into_iter()
     }
