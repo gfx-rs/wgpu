@@ -2808,7 +2808,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 // we might need to cast to unsigned integers since
                 // GLSL's findLSB / findMSB always return signed integers
                 let need_extra_paren = {
-                    (fun == Mf::FindLsb || fun == Mf::FindMsb)
+                    (fun == Mf::FindLsb || fun == Mf::FindMsb || fun == Mf::CountOneBits)
                         && match *ctx.info[arg].ty.inner_with(&self.module.types) {
                             crate::TypeInner::Scalar {
                                 kind: crate::ScalarKind::Uint,

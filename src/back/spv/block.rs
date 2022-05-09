@@ -798,10 +798,18 @@ impl<'w> BlockContext<'w> {
                         arg0_id,
                     )),
                     Mf::Determinant => MathOp::Ext(spirv::GLOp::Determinant),
-                    Mf::ReverseBits | Mf::CountOneBits => {
-                        log::error!("unimplemented math function {:?}", fun);
-                        return Err(Error::FeatureNotImplemented("math function"));
-                    }
+                    Mf::ReverseBits => MathOp::Custom(Instruction::unary(
+                        spirv::Op::BitReverse,
+                        result_type_id,
+                        id,
+                        arg0_id,
+                    )),
+                    Mf::CountOneBits => MathOp::Custom(Instruction::unary(
+                        spirv::Op::BitCount,
+                        result_type_id,
+                        id,
+                        arg0_id,
+                    )),
                     Mf::ExtractBits => {
                         let op = match arg_scalar_kind {
                             Some(crate::ScalarKind::Uint) => spirv::Op::BitFieldUExtract,

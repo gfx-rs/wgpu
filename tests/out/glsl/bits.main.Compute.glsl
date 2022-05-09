@@ -93,6 +93,38 @@ void main() {
     i3_ = findMSB(_e124);
     uint _e126 = u;
     u = uint(findMSB(_e126));
+    int _e128 = i;
+    i = bitCount(_e128);
+    ivec2 _e130 = i2_;
+    i2_ = bitCount(_e130);
+    ivec3 _e132 = i3_;
+    i3_ = bitCount(_e132);
+    ivec4 _e134 = i4_;
+    i4_ = bitCount(_e134);
+    uint _e136 = u;
+    u = uint(bitCount(_e136));
+    uvec2 _e138 = u2_;
+    u2_ = uvec2(bitCount(_e138));
+    uvec3 _e140 = u3_;
+    u3_ = uvec3(bitCount(_e140));
+    uvec4 _e142 = u4_;
+    u4_ = uvec4(bitCount(_e142));
+    int _e144 = i;
+    i = bitfieldReverse(_e144);
+    ivec2 _e146 = i2_;
+    i2_ = bitfieldReverse(_e146);
+    ivec3 _e148 = i3_;
+    i3_ = bitfieldReverse(_e148);
+    ivec4 _e150 = i4_;
+    i4_ = bitfieldReverse(_e150);
+    uint _e152 = u;
+    u = bitfieldReverse(_e152);
+    uvec2 _e154 = u2_;
+    u2_ = bitfieldReverse(_e154);
+    uvec3 _e156 = u3_;
+    u3_ = bitfieldReverse(_e156);
+    uvec4 _e158 = u4_;
+    u4_ = bitfieldReverse(_e158);
     return;
 }
 

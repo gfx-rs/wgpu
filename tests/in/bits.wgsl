@@ -40,4 +40,20 @@ fn main() {
     u2 = firstTrailingBit(u2);
     i3 = firstLeadingBit(i3);
     u = firstLeadingBit(u);
+    i = countOneBits(i);
+    i2 = countOneBits(i2);
+    i3 = countOneBits(i3);
+    i4 = countOneBits(i4);
+    u = countOneBits(u);
+    u2 = countOneBits(u2);
+    u3 = countOneBits(u3);
+    u4 = countOneBits(u4);
+    i = reverseBits(i);
+    i2 = reverseBits(i2);
+    i3 = reverseBits(i3);
+    i4 = reverseBits(i4);
+    u = reverseBits(u);
+    u2 = reverseBits(u2);
+    u3 = reverseBits(u3);
+    u4 = reverseBits(u4);
 }

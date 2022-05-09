@@ -1,7 +1,7 @@
 ; SPIR-V
 ; Version: 1.1
 ; Generator: rspirv
-; Bound: 119
+; Bound: 151
 OpCapability Shader
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
@@ -163,5 +163,53 @@ OpStore %23 %116
 %117 = OpLoad  %6  %27
 %118 = OpExtInst  %6  %1 FindUMsb %117
 OpStore %27 %118
+%119 = OpLoad  %4  %19
+%120 = OpBitCount  %4  %119
+OpStore %19 %120
+%121 = OpLoad  %11  %21
+%122 = OpBitCount  %11  %121
+OpStore %21 %122
+%123 = OpLoad  %12  %23
+%124 = OpBitCount  %12  %123
+OpStore %23 %124
+%125 = OpLoad  %13  %25
+%126 = OpBitCount  %13  %125
+OpStore %25 %126
+%127 = OpLoad  %6  %27
+%128 = OpBitCount  %6  %127
+OpStore %27 %128
+%129 = OpLoad  %14  %29
+%130 = OpBitCount  %14  %129
+OpStore %29 %130
+%131 = OpLoad  %15  %31
+%132 = OpBitCount  %15  %131
+OpStore %31 %132
+%133 = OpLoad  %16  %33
+%134 = OpBitCount  %16  %133
+OpStore %33 %134
+%135 = OpLoad  %4  %19
+%136 = OpBitReverse  %4  %135
+OpStore %19 %136
+%137 = OpLoad  %11  %21
+%138 = OpBitReverse  %11  %137
+OpStore %21 %138
+%139 = OpLoad  %12  %23
+%140 = OpBitReverse  %12  %139
+OpStore %23 %140
+%141 = OpLoad  %13  %25
+%142 = OpBitReverse  %13  %141
+OpStore %25 %142
+%143 = OpLoad  %6  %27
+%144 = OpBitReverse  %6  %143
+OpStore %27 %144
+%145 = OpLoad  %14  %29
+%146 = OpBitReverse  %14  %145
+OpStore %29 %146
+%147 = OpLoad  %15  %31
+%148 = OpBitReverse  %15  %147
+OpStore %31 %148
+%149 = OpLoad  %16  %33
+%150 = OpBitReverse  %16  %149
+OpStore %33 %150
 OpReturn
 OpFunctionEnd
