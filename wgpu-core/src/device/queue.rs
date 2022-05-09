@@ -617,6 +617,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     //Note: locking the trackers has to be done after the storages
                     let mut trackers = device.trackers.lock();
 
+                    used_surface_textures.set_size(texture_guard.len());
+
                     //TODO: if multiple command buffers are submitted, we can re-use the last
                     // native command buffer of the previous chain instead of always creating
                     // a temporary one, since the chains are not finished.
@@ -832,6 +834,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                     let (_, mut token) = hub.buffers.read(&mut token); // skip token
                     let (mut texture_guard, _) = hub.textures.write(&mut token);
+
+                    used_surface_textures.set_size(texture_guard.len());
 
                     for &id in pending_writes.dst_textures.iter() {
                         let texture = texture_guard.get_mut(id).unwrap();

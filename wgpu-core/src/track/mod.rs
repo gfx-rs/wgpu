@@ -246,7 +246,9 @@ impl<A: hub::HalApi> ResourceMetadata<A> {
     }
 
     fn used<Id: TypedId>(&self) -> impl Iterator<Item = id::Valid<Id>> + '_ {
-        self.debug_assert_in_bounds(self.owned.len() - 1);
+        if !self.owned.is_empty() {
+            self.debug_assert_in_bounds(self.owned.len() - 1)
+        };
         iterate_bitvec_indices(&self.owned).map(move |index| {
             let epoch = unsafe { *self.epochs.get_unchecked(index) };
             id::Valid(Id::zip(index as u32, epoch, A::VARIANT))

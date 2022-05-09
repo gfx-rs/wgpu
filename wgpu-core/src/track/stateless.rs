@@ -84,36 +84,52 @@ impl<A: hub::HalApi, T: hub::Resource, Id: TypedId> StatelessTracker<A, T, Id> {
     }
 
     pub fn used(&self) -> impl Iterator<Item = Valid<Id>> + '_ {
-        self.debug_assert_in_bounds(self.owned.len() - 1);
+        if !self.owned.is_empty() {
+            self.debug_assert_in_bounds(self.owned.len() - 1)
+        };
         iterate_bitvec_indices(&self.owned).map(move |index| {
             let epoch = unsafe { *self.epochs.get_unchecked(index) };
             Valid(Id::zip(index as u32, epoch, A::VARIANT))
         })
     }
 
-    pub unsafe fn init(&mut self, id: Valid<Id>, ref_count: RefCount) {
+    fn allow_index(&mut self, index: usize) {
+        if index >= self.owned.len() {
+            self.set_size(index + 1);
+        }
+    }
+
+    pub fn init(&mut self, id: Valid<Id>, ref_count: RefCount) {
         let (index32, epoch, _) = id.0.unzip();
         let index = index32 as usize;
 
+        self.allow_index(index);
+
         self.debug_assert_in_bounds(index);
 
-        *self.epochs.get_unchecked_mut(index) = epoch;
-        *self.ref_counts.get_unchecked_mut(index) = Some(ref_count);
-        self.owned.set(index, true);
+        unsafe {
+            *self.epochs.get_unchecked_mut(index) = epoch;
+            *self.ref_counts.get_unchecked_mut(index) = Some(ref_count);
+            self.owned.set(index, true);
+        }
     }
 
     /// Requires set_size to be called
-    pub unsafe fn extend<'a>(&mut self, storage: &'a hub::Storage<T, Id>, id: Id) -> Option<&'a T> {
+    pub fn extend<'a>(&mut self, storage: &'a hub::Storage<T, Id>, id: Id) -> Option<&'a T> {
         let item = storage.get(id).ok()?;
 
         let (index32, epoch, _) = id.unzip();
         let index = index32 as usize;
 
+        self.allow_index(index);
+
         self.debug_assert_in_bounds(index);
 
-        *self.epochs.get_unchecked_mut(index) = epoch;
-        *self.ref_counts.get_unchecked_mut(index) = Some(item.life_guard().add_ref());
-        self.owned.set(index, true);
+        unsafe {
+            *self.epochs.get_unchecked_mut(index) = epoch;
+            *self.ref_counts.get_unchecked_mut(index) = Some(item.life_guard().add_ref());
+            self.owned.set(index, true);
+        }
 
         Some(item)
     }
@@ -126,6 +142,7 @@ impl<A: hub::HalApi, T: hub::Resource, Id: TypedId> StatelessTracker<A, T, Id> {
 
         for index in iterate_bitvec_indices(&other.owned) {
             self.debug_assert_in_bounds(index);
+            other.debug_assert_in_bounds(index);
             unsafe {
                 let previously_owned = self.owned.get(index).unwrap_unchecked();
 

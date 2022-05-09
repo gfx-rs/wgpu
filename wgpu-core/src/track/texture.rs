@@ -4,8 +4,8 @@ use crate::{
     id::{TextureId, TypedId, Valid},
     resource::Texture,
     track::{
-        invalid_resource_state, iterate_bitvec_indices, skip_barrier,
-        ResourceMetadata, ResourceUses, UsageConflict,
+        invalid_resource_state, iterate_bitvec_indices, skip_barrier, ResourceMetadata,
+        ResourceUses, UsageConflict,
     },
     Epoch, RefCount,
 };
@@ -280,6 +280,8 @@ impl<A: hub::HalApi> TextureUsageScope<A> {
         let (index32, epoch, _) = id.0.unzip();
         let index = index32 as usize;
 
+        self.debug_assert_in_bounds(index);
+
         state_combine(
             Some(storage),
             None,
@@ -529,22 +531,20 @@ impl<A: hub::HalApi> TextureTracker<A> {
             if !scope.metadata.owned.get(index).unwrap_unchecked() {
                 continue;
             }
-            unsafe {
-                state_combine(
-                    Some(storage),
-                    Some(&mut self.start_set),
-                    &mut self.end_set,
-                    &mut self.metadata,
-                    index32,
-                    index,
-                    LayeredStateProvider::TextureSet { set: &scope.set },
-                    ResourceMetadataProvider::Indirect {
-                        metadata: &scope.metadata,
-                    },
-                    Some(&mut self.temp),
-                )
-                .unwrap();
-            }
+            state_combine(
+                Some(storage),
+                Some(&mut self.start_set),
+                &mut self.end_set,
+                &mut self.metadata,
+                index32,
+                index,
+                LayeredStateProvider::TextureSet { set: &scope.set },
+                ResourceMetadataProvider::Indirect {
+                    metadata: &scope.metadata,
+                },
+                Some(&mut self.temp),
+            )
+            .unwrap();
 
             scope.metadata.reset(index);
         }
