@@ -44,6 +44,9 @@ impl<W: fmt::Write> super::Writer<'_, W> {
         chain: &[SubAccess],
         func_ctx: &FunctionCtx,
     ) -> BackendResult {
+        if chain.is_empty() {
+            write!(self.out, "0")?;
+        }
         for (i, access) in chain.iter().enumerate() {
             if i != 0 {
                 write!(self.out, "+")?;

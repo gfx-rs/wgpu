@@ -22,6 +22,9 @@ struct Baz {
 @group(0) @binding(1)
 var<uniform> baz: Baz;
 
+@group(0) @binding(2)
+var<storage,read_write> qux: vec2<i32>;
+
 fn test_matrix_within_struct_accesses() {
 	var idx = 9;
 
@@ -73,6 +76,7 @@ fn foo_vert(@builtin(vertex_index) vi: u32) -> @builtin(position) vec4<f32> {
 	let index = 3u;
 	let b = bar._matrix[index].x;
 	let a = bar.data[arrayLength(&bar.data) - 2u].value;
+	let c = qux;
 
 	// test pointer types
 	let data_pointer: ptr<storage, i32, read_write> = &bar.data[0].value;
@@ -95,6 +99,7 @@ fn foo_frag() -> @location(0) vec4<f32> {
 	bar._matrix = mat4x3<f32>(vec3<f32>(0.0), vec3<f32>(1.0), vec3<f32>(2.0), vec3<f32>(3.0));
 	bar.arr = array<vec2<u32>, 2>(vec2<u32>(0u), vec2<u32>(1u));
 	bar.data[1].value = 1;
+	qux = vec2<i32>();
 
 	return vec4<f32>(0.0);
 }

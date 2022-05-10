@@ -29,64 +29,65 @@ struct Bar {
 struct Baz {
     metal::float3x2 m;
 };
-struct type_11 {
+struct type_12 {
     float inner[10];
 };
-struct type_12 {
-    type_11 inner[5];
+struct type_13 {
+    type_12 inner[5];
 };
-struct type_16 {
+struct type_17 {
     int inner[5];
 };
-constant type_11 const_type_11_ = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
-constant type_12 const_type_12_ = {const_type_11_, const_type_11_, const_type_11_, const_type_11_, const_type_11_};
+constant type_12 const_type_12_ = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+constant type_13 const_type_13_ = {const_type_12_, const_type_12_, const_type_12_, const_type_12_, const_type_12_};
+constant metal::int2 const_type_9_ = {0, 0};
 
 void test_matrix_within_struct_accesses(
     constant Baz& baz
 ) {
     int idx = 9;
     Baz t = {};
-    int _e4 = idx;
-    idx = _e4 - 1;
+    int _e5 = idx;
+    idx = _e5 - 1;
     metal::float3x2 unnamed = baz.m;
     metal::float2 unnamed_1 = baz.m[0];
-    int _e14 = idx;
-    metal::float2 unnamed_2 = baz.m[_e14];
+    int _e15 = idx;
+    metal::float2 unnamed_2 = baz.m[_e15];
     float unnamed_3 = baz.m[0].y;
-    int _e26 = idx;
-    float unnamed_4 = baz.m[0][_e26];
-    int _e30 = idx;
-    float unnamed_5 = baz.m[_e30].y;
-    int _e36 = idx;
-    int _e38 = idx;
-    float unnamed_6 = baz.m[_e36][_e38];
+    int _e27 = idx;
+    float unnamed_4 = baz.m[0][_e27];
+    int _e31 = idx;
+    float unnamed_5 = baz.m[_e31].y;
+    int _e37 = idx;
+    int _e39 = idx;
+    float unnamed_6 = baz.m[_e37][_e39];
     t = Baz {metal::float3x2(metal::float2(1.0), metal::float2(2.0), metal::float2(3.0))};
-    int _e50 = idx;
-    idx = _e50 + 1;
+    int _e51 = idx;
+    idx = _e51 + 1;
     t.m = metal::float3x2(metal::float2(6.0), metal::float2(5.0), metal::float2(4.0));
     t.m[0] = metal::float2(9.0);
-    int _e67 = idx;
-    t.m[_e67] = metal::float2(90.0);
+    int _e68 = idx;
+    t.m[_e68] = metal::float2(90.0);
     t.m[0].y = 10.0;
-    int _e80 = idx;
-    t.m[0][_e80] = 20.0;
-    int _e84 = idx;
-    t.m[_e84].y = 30.0;
-    int _e90 = idx;
-    int _e92 = idx;
-    t.m[_e90][_e92] = 40.0;
+    int _e81 = idx;
+    t.m[0][_e81] = 20.0;
+    int _e85 = idx;
+    t.m[_e85].y = 30.0;
+    int _e91 = idx;
+    int _e93 = idx;
+    t.m[_e91][_e93] = 40.0;
     return;
 }
 
 float read_from_private(
     thread float& foo_1
 ) {
-    float _e3 = foo_1;
-    return _e3;
+    float _e4 = foo_1;
+    return _e4;
 }
 
 float test_arr_as_arg(
-    type_12 a
+    type_13 a
 ) {
     return a.inner[4].inner[9];
 }
@@ -100,10 +101,11 @@ vertex foo_vertOutput foo_vert(
   uint vi [[vertex_id]]
 , device Bar const& bar [[buffer(0)]]
 , constant Baz& baz [[buffer(1)]]
+, device metal::int2 const& qux [[buffer(2)]]
 , constant _mslBufferSizes& _buffer_sizes [[buffer(24)]]
 ) {
     float foo = 0.0;
-    type_16 c = {};
+    type_17 c = {};
     float baz_1 = foo;
     foo = 1.0;
     test_matrix_within_struct_accesses(baz);
@@ -111,11 +113,12 @@ vertex foo_vertOutput foo_vert(
     type_6 arr = bar.arr;
     float b = bar._matrix[3].x;
     int a_1 = bar.data[(1 + (_buffer_sizes.size0 - 120 - 8) / 8) - 2u].value;
-    float _e28 = read_from_private(foo);
-    for(int _i=0; _i<5; ++_i) c.inner[_i] = type_16 {a_1, static_cast<int>(b), 3, 4, 5}.inner[_i];
+    metal::int2 c_1 = qux;
+    float _e30 = read_from_private(foo);
+    for(int _i=0; _i<5; ++_i) c.inner[_i] = type_17 {a_1, static_cast<int>(b), 3, 4, 5}.inner[_i];
     c.inner[vi + 1u] = 42;
     int value = c.inner[vi];
-    float _e42 = test_arr_as_arg(const_type_12_);
+    float _e44 = test_arr_as_arg(const_type_13_);
     return foo_vertOutput { metal::float4(_matrix * static_cast<metal::float4>(metal::int4(value)), 2.0) };
 }
 
@@ -125,12 +128,14 @@ struct foo_fragOutput {
 };
 fragment foo_fragOutput foo_frag(
   device Bar& bar [[buffer(0)]]
+, device metal::int2& qux [[buffer(2)]]
 , constant _mslBufferSizes& _buffer_sizes [[buffer(24)]]
 ) {
     bar._matrix[1].z = 1.0;
     bar._matrix = metal::float4x3(metal::float3(0.0), metal::float3(1.0), metal::float3(2.0), metal::float3(3.0));
     for(int _i=0; _i<2; ++_i) bar.arr.inner[_i] = type_6 {metal::uint2(0u), metal::uint2(1u)}.inner[_i];
     bar.data[1].value = 1;
+    qux = const_type_9_;
     return foo_fragOutput { metal::float4(0.0) };
 }
 
@@ -141,22 +146,22 @@ kernel void atomics(
 ) {
     int tmp = {};
     int value_1 = metal::atomic_load_explicit(&bar.atom, metal::memory_order_relaxed);
-    int _e7 = metal::atomic_fetch_add_explicit(&bar.atom, 5, metal::memory_order_relaxed);
-    tmp = _e7;
-    int _e10 = metal::atomic_fetch_sub_explicit(&bar.atom, 5, metal::memory_order_relaxed);
-    tmp = _e10;
-    int _e13 = metal::atomic_fetch_and_explicit(&bar.atom, 5, metal::memory_order_relaxed);
-    tmp = _e13;
-    int _e16 = metal::atomic_fetch_or_explicit(&bar.atom, 5, metal::memory_order_relaxed);
-    tmp = _e16;
-    int _e19 = metal::atomic_fetch_xor_explicit(&bar.atom, 5, metal::memory_order_relaxed);
-    tmp = _e19;
-    int _e22 = metal::atomic_fetch_min_explicit(&bar.atom, 5, metal::memory_order_relaxed);
-    tmp = _e22;
-    int _e25 = metal::atomic_fetch_max_explicit(&bar.atom, 5, metal::memory_order_relaxed);
-    tmp = _e25;
-    int _e28 = metal::atomic_exchange_explicit(&bar.atom, 5, metal::memory_order_relaxed);
-    tmp = _e28;
+    int _e8 = metal::atomic_fetch_add_explicit(&bar.atom, 5, metal::memory_order_relaxed);
+    tmp = _e8;
+    int _e11 = metal::atomic_fetch_sub_explicit(&bar.atom, 5, metal::memory_order_relaxed);
+    tmp = _e11;
+    int _e14 = metal::atomic_fetch_and_explicit(&bar.atom, 5, metal::memory_order_relaxed);
+    tmp = _e14;
+    int _e17 = metal::atomic_fetch_or_explicit(&bar.atom, 5, metal::memory_order_relaxed);
+    tmp = _e17;
+    int _e20 = metal::atomic_fetch_xor_explicit(&bar.atom, 5, metal::memory_order_relaxed);
+    tmp = _e20;
+    int _e23 = metal::atomic_fetch_min_explicit(&bar.atom, 5, metal::memory_order_relaxed);
+    tmp = _e23;
+    int _e26 = metal::atomic_fetch_max_explicit(&bar.atom, 5, metal::memory_order_relaxed);
+    tmp = _e26;
+    int _e29 = metal::atomic_exchange_explicit(&bar.atom, 5, metal::memory_order_relaxed);
+    tmp = _e29;
     metal::atomic_store_explicit(&bar.atom, value_1, metal::memory_order_relaxed);
     return;
 }

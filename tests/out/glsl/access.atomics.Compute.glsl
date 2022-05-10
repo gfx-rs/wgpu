@@ -21,8 +21,8 @@ layout(std430) buffer Bar_block_0Compute {
 
 
 float read_from_private(inout float foo_1) {
-    float _e3 = foo_1;
-    return _e3;
+    float _e4 = foo_1;
+    return _e4;
 }
 
 float test_arr_as_arg(float a[5][10]) {
@@ -32,22 +32,22 @@ float test_arr_as_arg(float a[5][10]) {
 void main() {
     int tmp = 0;
     int value = _group_0_binding_0_cs.atom;
-    int _e7 = atomicAdd(_group_0_binding_0_cs.atom, 5);
-    tmp = _e7;
-    int _e10 = atomicAdd(_group_0_binding_0_cs.atom, -5);
-    tmp = _e10;
-    int _e13 = atomicAnd(_group_0_binding_0_cs.atom, 5);
-    tmp = _e13;
-    int _e16 = atomicOr(_group_0_binding_0_cs.atom, 5);
-    tmp = _e16;
-    int _e19 = atomicXor(_group_0_binding_0_cs.atom, 5);
-    tmp = _e19;
-    int _e22 = atomicMin(_group_0_binding_0_cs.atom, 5);
-    tmp = _e22;
-    int _e25 = atomicMax(_group_0_binding_0_cs.atom, 5);
-    tmp = _e25;
-    int _e28 = atomicExchange(_group_0_binding_0_cs.atom, 5);
-    tmp = _e28;
+    int _e8 = atomicAdd(_group_0_binding_0_cs.atom, 5);
+    tmp = _e8;
+    int _e11 = atomicAdd(_group_0_binding_0_cs.atom, -5);
+    tmp = _e11;
+    int _e14 = atomicAnd(_group_0_binding_0_cs.atom, 5);
+    tmp = _e14;
+    int _e17 = atomicOr(_group_0_binding_0_cs.atom, 5);
+    tmp = _e17;
+    int _e20 = atomicXor(_group_0_binding_0_cs.atom, 5);
+    tmp = _e20;
+    int _e23 = atomicMin(_group_0_binding_0_cs.atom, 5);
+    tmp = _e23;
+    int _e26 = atomicMax(_group_0_binding_0_cs.atom, 5);
+    tmp = _e26;
+    int _e29 = atomicExchange(_group_0_binding_0_cs.atom, 5);
+    tmp = _e29;
     _group_0_binding_0_cs.atom = value;
     return;
 }
