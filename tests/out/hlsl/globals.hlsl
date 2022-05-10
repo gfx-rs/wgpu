@@ -18,6 +18,13 @@ void test_msl_packed_vec3_as_arg(float3 arg)
     return;
 }
 
+Foo ConstructFoo(float3 arg0, float arg1) {
+    Foo ret = (Foo)0;
+    ret.v3_ = arg0;
+    ret.v1_ = arg1;
+    return ret;
+}
+
 void test_msl_packed_vec3_()
 {
     int idx = 1;
@@ -27,7 +34,7 @@ void test_msl_packed_vec3_()
     alignment.Store(0+0, asuint(2.0));
     int _expr21 = idx;
     alignment.Store(_expr21*4+0, asuint(3.0));
-    Foo data = {asfloat(alignment.Load3(0)), asfloat(alignment.Load(12))};
+    Foo data = ConstructFoo(asfloat(alignment.Load3(0)), asfloat(alignment.Load(12)));
     float3 unnamed = data.v3_;
     float2 unnamed_1 = data.v3_.zx;
     test_msl_packed_vec3_as_arg(data.v3_);

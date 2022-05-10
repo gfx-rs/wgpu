@@ -77,6 +77,14 @@ VertexOutput_vs_main vs_main(int4 position : LOC0, int4 normal : LOC1)
     return vertexoutput_1;
 }
 
+Light ConstructLight(float4x4 arg0, float4 arg1, float4 arg2) {
+    Light ret = (Light)0;
+    ret.proj = arg0;
+    ret.pos = arg1;
+    ret.color = arg2;
+    return ret;
+}
+
 float4 fs_main(FragmentInput_fs_main fragmentinput_fs_main) : SV_Target0
 {
     VertexOutput in_ = { fragmentinput_fs_main.proj_position_1, fragmentinput_fs_main.world_normal_1, fragmentinput_fs_main.world_position_1 };
@@ -98,7 +106,7 @@ float4 fs_main(FragmentInput_fs_main fragmentinput_fs_main) : SV_Target0
             break;
         }
         uint _expr23 = i;
-        Light light = {float4x4(asfloat(s_lights.Load4(_expr23*96+0+0)), asfloat(s_lights.Load4(_expr23*96+0+16)), asfloat(s_lights.Load4(_expr23*96+0+32)), asfloat(s_lights.Load4(_expr23*96+0+48))), asfloat(s_lights.Load4(_expr23*96+64)), asfloat(s_lights.Load4(_expr23*96+80))};
+        Light light = ConstructLight(float4x4(asfloat(s_lights.Load4(_expr23*96+0+0)), asfloat(s_lights.Load4(_expr23*96+0+16)), asfloat(s_lights.Load4(_expr23*96+0+32)), asfloat(s_lights.Load4(_expr23*96+0+48))), asfloat(s_lights.Load4(_expr23*96+64)), asfloat(s_lights.Load4(_expr23*96+80)));
         uint _expr26 = i;
         const float _e30 = fetch_shadow(_expr26, mul(in_.world_position, light.proj));
         float3 light_dir = normalize((light.pos.xyz - in_.world_position.xyz));

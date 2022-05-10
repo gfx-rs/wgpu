@@ -880,6 +880,48 @@ impl<'a, W: Write> super::Writer<'a, W> {
                         self.wrapped.image_queries.insert(wiq);
                     }
                 }
+                // Write `WrappedConstructor` for structs that are loaded from `AddressSpace::Storage`
+                // since they will later be used by the fn `write_storage_load`
+                crate::Expression::Load { pointer } => {
+                    let pointer_space = func_ctx.info[pointer]
+                        .ty
+                        .inner_with(&module.types)
+                        .pointer_space();
+
+                    if let Some(crate::AddressSpace::Storage { .. }) = pointer_space {
+                        if let Some(ty) = func_ctx.info[handle].ty.handle() {
+                            write_wrapped_constructor(self, ty, module, func_ctx)?;
+                        }
+                    }
+
+                    fn write_wrapped_constructor<W: Write>(
+                        writer: &mut super::Writer<'_, W>,
+                        ty: Handle<crate::Type>,
+                        module: &crate::Module,
+                        func_ctx: &FunctionCtx,
+                    ) -> BackendResult {
+                        match module.types[ty].inner {
+                            crate::TypeInner::Struct { ref members, .. } => {
+                                for member in members {
+                                    write_wrapped_constructor(writer, member.ty, module, func_ctx)?;
+                                }
+
+                                let constructor = WrappedConstructor { ty };
+                                if !writer.wrapped.constructors.contains(&constructor) {
+                                    writer
+                                        .write_wrapped_constructor_function(module, constructor)?;
+                                    writer.wrapped.constructors.insert(constructor);
+                                }
+                            }
+                            crate::TypeInner::Array { base, .. } => {
+                                write_wrapped_constructor(writer, base, module, func_ctx)?;
+                            }
+                            _ => {}
+                        };
+
+                        Ok(())
+                    }
+                }
                 crate::Expression::Compose { ty, components: _ } => {
                     let constructor = match module.types[ty].inner {
                         crate::TypeInner::Struct { .. } | crate::TypeInner::Array { .. } => {
