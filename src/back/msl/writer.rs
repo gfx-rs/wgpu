@@ -462,7 +462,9 @@ impl crate::AddressSpace {
             // rely on the actual use of a global by functions. This means we
             // may end up with "const" even if the binding is read-write,
             // and that should be OK.
-            Self::Storage { .. } | Self::Private | Self::WorkGroup => true,
+            Self::Storage { .. } => true,
+            // These should always be read-write.
+            Self::Private | Self::WorkGroup => false,
             // These translate to `constant` address space, no need for qualifiers.
             Self::Uniform | Self::PushConstant => false,
             // Not applicable.

@@ -29,6 +29,11 @@ float test_arr_as_arg(float a[5][10]) {
     return a[4][9];
 }
 
+void assign_through_ptr_fn(inout uint p) {
+    p = 42u;
+    return;
+}
+
 void main() {
     int tmp = 0;
     int value = _group_0_binding_0_cs.atom;

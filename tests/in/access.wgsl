@@ -120,3 +120,14 @@ fn atomics() {
 	// tmp = atomicCompareExchangeWeak(&bar.atom, 5, 5);
 	atomicStore(&bar.atom, value);
 }
+
+var<workgroup> val: u32;
+
+fn assign_through_ptr_fn(p: ptr<workgroup, u32>) {
+    *p = 42u;
+}
+
+@compute @workgroup_size(1)
+fn assign_through_ptr() {
+    assign_through_ptr_fn(&val);
+}

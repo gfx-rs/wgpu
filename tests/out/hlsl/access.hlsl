@@ -21,6 +21,7 @@ float Constructarray5_array10_float__(float arg0[10], float arg1[10], float arg2
 RWByteAddressBuffer bar : register(u0);
 cbuffer baz : register(b1) { Baz baz; }
 RWByteAddressBuffer qux : register(u2);
+groupshared uint val;
 
 float3x2 GetMatmOnBaz(Baz obj) {
     return float3x2(obj.m_0, obj.m_1, obj.m_2);
@@ -102,6 +103,12 @@ float read_from_private(inout float foo_1)
 float test_arr_as_arg(float a[5][10])
 {
     return a[4][9];
+}
+
+void assign_through_ptr_fn(inout uint p)
+{
+    p = 42u;
+    return;
 }
 
 uint NagaBufferLengthRW(RWByteAddressBuffer buffer)
@@ -188,5 +195,12 @@ void atomics()
     int _e29; bar.InterlockedExchange(96, 5, _e29);
     tmp = _e29;
     bar.Store(96, asuint(value_1));
+    return;
+}
+
+[numthreads(1, 1, 1)]
+void assign_through_ptr()
+{
+    assign_through_ptr_fn(val);
     return;
 }

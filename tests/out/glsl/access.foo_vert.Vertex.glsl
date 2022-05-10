@@ -66,6 +66,11 @@ float test_arr_as_arg(float a[5][10]) {
     return a[4][9];
 }
 
+void assign_through_ptr_fn(inout uint p) {
+    p = 42u;
+    return;
+}
+
 void main() {
     uint vi = uint(gl_VertexID);
     float foo = 0.0;

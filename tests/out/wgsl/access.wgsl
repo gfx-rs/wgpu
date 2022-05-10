@@ -20,6 +20,7 @@ var<storage, read_write> bar: Bar;
 var<uniform> baz: Baz;
 @group(0) @binding(2) 
 var<storage, read_write> qux: vec2<i32>;
+var<workgroup> val: u32;
 
 fn test_matrix_within_struct_accesses() {
     var idx: i32 = 9;
@@ -64,6 +65,11 @@ fn read_from_private(foo_1: ptr<function, f32>) -> f32 {
 
 fn test_arr_as_arg(a: array<array<f32,10>,5>) -> f32 {
     return a[4][9];
+}
+
+fn assign_through_ptr_fn(p: ptr<workgroup, u32>) {
+    (*p) = 42u;
+    return;
 }
 
 @vertex 
@@ -120,5 +126,11 @@ fn atomics() {
     let _e29 = atomicExchange((&bar.atom), 5);
     tmp = _e29;
     atomicStore((&bar.atom), value_1);
+    return;
+}
+
+@compute @workgroup_size(1, 1, 1) 
+fn assign_through_ptr() {
+    assign_through_ptr_fn((&val));
     return;
 }

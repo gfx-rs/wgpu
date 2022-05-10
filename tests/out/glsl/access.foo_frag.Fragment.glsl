@@ -30,6 +30,11 @@ float test_arr_as_arg(float a[5][10]) {
     return a[4][9];
 }
 
+void assign_through_ptr_fn(inout uint p) {
+    p = 42u;
+    return;
+}
+
 void main() {
     _group_0_binding_0_fs._matrix[1][2] = 1.0;
     _group_0_binding_0_fs._matrix = mat4x3(vec3(0.0), vec3(1.0), vec3(2.0), vec3(3.0));

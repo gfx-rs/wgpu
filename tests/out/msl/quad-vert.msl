@@ -23,9 +23,9 @@ constant gl_PerVertex const_gl_PerVertex = {const_type_3_, 1.0, const_type_5_, c
 
 void main_1(
     thread metal::float2& v_uv,
-    thread metal::float2 const& a_uv_1,
+    thread metal::float2& a_uv_1,
     thread gl_PerVertex& perVertexStruct,
-    thread metal::float2 const& a_pos_1
+    thread metal::float2& a_pos_1
 ) {
     metal::float2 _e12 = a_uv_1;
     v_uv = _e12;

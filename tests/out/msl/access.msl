@@ -92,6 +92,13 @@ float test_arr_as_arg(
     return a.inner[4].inner[9];
 }
 
+void assign_through_ptr_fn(
+    threadgroup uint& p
+) {
+    p = 42u;
+    return;
+}
+
 struct foo_vertInput {
 };
 struct foo_vertOutput {
@@ -163,5 +170,13 @@ kernel void atomics(
     int _e29 = metal::atomic_exchange_explicit(&bar.atom, 5, metal::memory_order_relaxed);
     tmp = _e29;
     metal::atomic_store_explicit(&bar.atom, value_1, metal::memory_order_relaxed);
+    return;
+}
+
+
+kernel void assign_through_ptr(
+  threadgroup uint& val
+) {
+    assign_through_ptr_fn(val);
     return;
 }

@@ -39,8 +39,8 @@ metal::float4 mock_function(
     device InStorage const& in_storage,
     constant InUniform& in_uniform,
     metal::texture2d_array<float, metal::access::sample> image_2d_array,
-    threadgroup type_5 const& in_workgroup,
-    thread type_6 const& in_private
+    threadgroup type_5& in_workgroup,
+    thread type_6& in_private
 ) {
     type_9 in_function = {};
     for(int _i=0; _i<2; ++_i) in_function.inner[_i] = type_9 {metal::float4(0.7070000171661377, 0.0, 0.0, 1.0), metal::float4(0.0, 0.7070000171661377, 0.0, 1.0)}.inner[_i];
