@@ -83,8 +83,13 @@ fn create_texels(size: usize) -> Vec<u8> {
         .collect()
 }
 
-// This can be done simpler with `FutureExt`, but we don't want to add
-// a dependency just for this small case.
+/// A wrapper for `pop_error_scope` futures that panics if an error occurs.
+///
+/// Given a future `inner` of an `Option<E>` for some error type `E`,
+/// wait for the future to be ready, and panic if its value is `Some`.
+///
+/// This can be done simpler with `FutureExt`, but we don't want to add
+/// a dependency just for this small case.
 struct ErrorFuture<F> {
     inner: F,
 }
@@ -389,6 +394,8 @@ impl framework::Example for Example {
         }
 
         queue.submit(Some(encoder.finish()));
+
+        // If an error occurs, report it and panic.
         spawner.spawn_local(ErrorFuture {
             inner: device.pop_error_scope(),
         });
