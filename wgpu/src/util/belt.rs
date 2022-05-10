@@ -48,14 +48,16 @@ struct Chunk {
 /// Staging belt is a machine that uploads data.
 ///
 /// Internally it uses a ring-buffer of staging buffers that are sub-allocated.
-/// It has an advantage over `Queue.write_buffer` in a way that it returns a mutable slice,
+/// It has an advantage over [`Queue::write_buffer`] in a way that it returns a mutable slice,
 /// which you can fill to avoid an extra data copy.
 ///
 /// Using a staging belt is slightly complicated, and generally goes as follows:
-/// - Write to buffers that need writing to using `write_buffer`.
+/// - Write to buffers that need writing to using [`StagingBelt::write_buffer`].
 /// - Call `finish`.
-/// - Submit all command encoders used with `write_buffer`.
+/// - Submit all command encoders used with `StagingBelt::write_buffer`.
 /// - Call `recall`
+///
+/// [`Queue::write_buffer`]: crate::Queue::write_buffer
 pub struct StagingBelt {
     chunk_size: BufferAddress,
     /// Chunks that we are actively using for pending transfers at this moment.
