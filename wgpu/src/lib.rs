@@ -1561,10 +1561,21 @@ impl Instance {
     }
 
     /// Polls all devices.
-    /// If `force_wait` is true and this is not running on the web,
-    /// then this function will block until all in-flight buffers have been mapped.
     ///
-    /// Return `all_queue_empty` indicating whether there are more queue submissions still in flight.
+    /// If `force_wait` is true and this is not running on the web, then this
+    /// function will block until all in-flight buffers have been mapped and
+    /// all submitted commands have finished execution.
+    ///
+    /// Return `true` if all devices' queues are empty, or `false` if there are
+    /// queue submissions still in flight. (Note that, unless access to all
+    /// [`Queue`s] associated with this [`Instance`] is coordinated somehow,
+    /// this information could be out of date by the time the caller receives
+    /// it. `Queue`s can be shared between threads, and other threads could
+    /// submit new work at any time.)
+    ///
+    /// On the web, this is a no-op. `Device`s are automatically polled.
+    ///
+    /// [`Queue`s]: Queue
     pub fn poll_all(&self, force_wait: bool) -> bool {
         self.context.instance_poll_all_devices(force_wait)
     }
@@ -1689,9 +1700,13 @@ impl Adapter {
 impl Device {
     /// Check for resource cleanups and mapping callbacks.
     ///
-    /// Return `queue_empty` indicating whether there are more queue submissions still in flight.
+    /// Return `true` if the queue is empty, or `false` if there are more queue
+    /// submissions still in flight. (Note that, unless access to the [`Queue`] is
+    /// coordinated somehow, this information could be out of date by the time
+    /// the caller receives it. `Queue`s can be shared between threads, so
+    /// other threads could submit new work at any time.)
     ///
-    /// no-op on the web, device is automatically polled.
+    /// On the web, this is a no-op. `Device`s are automatically polled.
     pub fn poll(&self, maintain: Maintain) -> bool {
         Context::device_poll(&*self.context, &self.id, maintain)
     }
