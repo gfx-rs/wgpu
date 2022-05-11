@@ -3353,25 +3353,26 @@ impl Parser {
                 let _ = context.resolve_type(reference.handle)?;
 
                 let ty = context.typifier.get(reference.handle, context.types);
-                let constant_inner = match ty.canonical_form(context.types) {
-                    Some(crate::TypeInner::ValuePointer {
+                let (kind, width) = match *ty {
+                    crate::TypeInner::ValuePointer {
                         size: None,
                         kind,
                         width,
-                        space: _,
-                    }) => crate::ConstantInner::Scalar {
-                        width,
-                        value: match kind {
-                            crate::ScalarKind::Sint => crate::ScalarValue::Sint(1),
-                            crate::ScalarKind::Uint => crate::ScalarValue::Uint(1),
-                            _ => {
-                                return Err(Error::BadIncrDecrReferenceType(lhs_span));
-                            }
-                        },
+                        ..
+                    } => (kind, width),
+                    crate::TypeInner::Pointer { base, .. } => match context.types[base].inner {
+                        crate::TypeInner::Scalar { kind, width } => (kind, width),
+                        _ => return Err(Error::BadIncrDecrReferenceType(lhs_span)),
                     },
-                    _ => {
-                        return Err(Error::BadIncrDecrReferenceType(lhs_span));
-                    }
+                    _ => return Err(Error::BadIncrDecrReferenceType(lhs_span)),
+                };
+                let constant_inner = crate::ConstantInner::Scalar {
+                    width,
+                    value: match kind {
+                        crate::ScalarKind::Sint => crate::ScalarValue::Sint(1),
+                        crate::ScalarKind::Uint => crate::ScalarValue::Uint(1),
+                        _ => return Err(Error::BadIncrDecrReferenceType(lhs_span)),
+                    },
                 };
                 let constant = context.constants.append(
                     crate::Constant {

@@ -196,6 +196,7 @@ void comparison() {
 
 void assignment() {
     int a = 1;
+    ivec3 vec0_ = ivec3(0, 0, 0);
     int _e6 = a;
     a = (_e6 + 1);
     int _e9 = a;
@@ -222,6 +223,10 @@ void assignment() {
     a = (_e36 + 1);
     int _e39 = a;
     a = (_e39 - 1);
+    int _e46 = vec0_.y;
+    vec0_.y = (_e46 + 1);
+    int _e51 = vec0_.y;
+    vec0_.y = (_e51 - 1);
     return;
 }
 

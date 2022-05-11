@@ -28,6 +28,7 @@ constant metal::float3 const_type_4_ = {0.0, 0.0, 0.0};
 constant metal::float3x3 const_type_14_ = {const_type_4_, const_type_4_, const_type_4_};
 constant metal::float4x3 const_type_15_ = {const_type_4_, const_type_4_, const_type_4_, const_type_4_};
 constant metal::float3x4 const_type_16_ = {const_type, const_type, const_type};
+constant metal::int3 const_type_17_ = {0, 0, 0};
 
 metal::float4 builtins(
 ) {
@@ -225,6 +226,7 @@ void comparison(
 void assignment(
 ) {
     int a = 1;
+    metal::int3 vec0_ = const_type_17_;
     int _e6 = a;
     a = _e6 + 1;
     int _e9 = a;
@@ -251,6 +253,10 @@ void assignment(
     a = _e36 + 1;
     int _e39 = a;
     a = _e39 - 1;
+    int _e46 = vec0_.y;
+    vec0_.y = _e46 + 1;
+    int _e51 = vec0_.y;
+    vec0_.y = _e51 - 1;
     return;
 }
 

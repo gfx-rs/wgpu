@@ -194,6 +194,7 @@ fn comparison() {
 
 fn assignment() {
     var a: i32 = 1;
+    var vec0_: vec3<i32> = vec3<i32>(0, 0, 0);
 
     let _e6 = a;
     a = (_e6 + 1);
@@ -221,6 +222,10 @@ fn assignment() {
     a = (_e36 + 1);
     let _e39 = a;
     a = (_e39 - 1);
+    let _e46 = vec0_.y;
+    vec0_.y = (_e46 + 1);
+    let _e51 = vec0_.y;
+    vec0_.y = (_e51 - 1);
     return;
 }
 

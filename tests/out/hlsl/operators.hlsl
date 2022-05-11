@@ -224,6 +224,7 @@ void comparison()
 void assignment()
 {
     int a = 1;
+    int3 vec0_ = int3(0, 0, 0);
 
     int _expr6 = a;
     a = (_expr6 + 1);
@@ -251,6 +252,10 @@ void assignment()
     a = (_expr36 + 1);
     int _expr39 = a;
     a = (_expr39 - 1);
+    int _expr46 = vec0_.y;
+    vec0_.y = (_expr46 + 1);
+    int _expr51 = vec0_.y;
+    vec0_.y = (_expr51 - 1);
     return;
 }
 

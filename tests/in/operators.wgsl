@@ -277,6 +277,10 @@ fn assignment() {
 
     a++;
     a--;
+
+    var vec0: vec3<i32> = vec3<i32>();
+    vec0[1]++;
+    vec0[1]--;
 }
 
 @compute @workgroup_size(1)
