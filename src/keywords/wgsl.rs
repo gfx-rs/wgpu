@@ -134,6 +134,7 @@ pub const RESERVED: &[&str] = &[
     "await",
     "become",
     "bf16",
+    "binding_array",
     "cast",
     "catch",
     "cbuffer",
