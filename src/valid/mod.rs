@@ -93,7 +93,7 @@ bitflags::bitflags! {
         /// Support for non-uniform indexing of uniform buffers and storage texture arrays.
         const UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING = 0x10;
         /// Support for non-uniform indexing of samplers.
-        const SAMPLER_NON_UNIFORM_INDEXING = 0x11;
+        const SAMPLER_NON_UNIFORM_INDEXING = 0x20;
     }
 }
 
