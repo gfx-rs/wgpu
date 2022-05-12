@@ -590,6 +590,9 @@ static_assertions::assert_impl_all!(Device: Send, Sync);
 /// Identifier for a particular call to [`Queue::submit`]. Can be used
 /// as part of an argument to [`Device::poll`] to block for a particular
 /// submission to finish.
+///
+/// This type is unique to the Rust API of `wgpu`.
+/// There is no analogue in the WebGPU specification.
 #[derive(Debug, Copy, Clone)]
 pub struct SubmissionIndex(<C as Context>::SubmissionIndex);
 static_assertions::assert_impl_all!(SubmissionIndex: Send, Sync);
@@ -671,9 +674,12 @@ static_assertions::assert_impl_all!(Buffer: Send, Sync);
 
 /// Slice into a [`Buffer`].
 ///
-/// Created by calling [`Buffer::slice`]. To use the whole buffer, call with unbounded slice:
+/// It can be created with [`Buffer::slice`]. To use the whole buffer, call with unbounded slice:
 ///
 /// `buffer.slice(..)`
+///
+/// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
+/// an offset and size are specified as arguments to each call working with the [`Buffer`], instead.
 #[derive(Copy, Clone, Debug)]
 pub struct BufferSlice<'a> {
     buffer: &'a Buffer,
@@ -736,6 +742,10 @@ impl Drop for Sampler {
 ///
 /// A `Surface` represents a platform-specific surface (e.g. a window) onto which rendered images may
 /// be presented. A `Surface` may be created with the unsafe function [`Instance::create_surface`].
+///
+/// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
+/// [`GPUCanvasContext`](https://gpuweb.github.io/gpuweb/#canvas-context)
+/// serves a similar role.
 #[derive(Debug)]
 pub struct Surface {
     context: Arc<C>,
@@ -829,6 +839,9 @@ impl Drop for ShaderModule {
 ///
 /// Any necessary shader translation (e.g. from WGSL to SPIR-V or vice versa)
 /// will be done internally by wgpu.
+///
+/// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
+/// only WGSL source code strings are accepted.
 #[cfg_attr(feature = "naga", allow(clippy::large_enum_variant))]
 #[derive(Clone)]
 #[non_exhaustive]
@@ -876,7 +889,11 @@ pub struct ShaderModuleDescriptor<'a> {
 }
 static_assertions::assert_impl_all!(ShaderModuleDescriptor: Send, Sync);
 
-/// Descriptor for a shader module given by SPIR-V binary.
+/// Descriptor for a shader module given by SPIR-V binary, for use with
+/// [`Device::create_shader_module_spirv`].
+///
+/// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
+/// only WGSL source code strings are accepted.
 pub struct ShaderModuleDescriptorSpirV<'a> {
     /// Debug label of the shader module. This will show up in graphics debuggers for easy identification.
     pub label: Label<'a>,
@@ -1213,6 +1230,9 @@ impl<V: Default> Default for LoadOp<V> {
 }
 
 /// Pair of load and store operations for an attachment aspect.
+///
+/// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
+/// separate `loadOp` and `storeOp` fields are used instead.
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
@@ -1664,6 +1684,10 @@ static_assertions::assert_impl_all!(RenderBundleEncoderDescriptor: Send, Sync);
 
 /// Surface texture that can be rendered to.
 /// Result of a successful call to [`Surface::get_current_texture`].
+///
+/// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
+/// the [`GPUCanvasContext`](https://gpuweb.github.io/gpuweb/#canvas-context) provides
+/// a texture without any additional information.
 #[derive(Debug)]
 pub struct SurfaceTexture {
     /// Accessible view of the frame.
