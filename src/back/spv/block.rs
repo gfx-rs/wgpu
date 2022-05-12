@@ -956,7 +956,8 @@ impl<'w> BlockContext<'w> {
                 }
 
                 let cast = match (src_kind, kind, convert) {
-                    (_, _, None) | (Sk::Bool, Sk::Bool, Some(_)) => Cast::Unary(spirv::Op::Bitcast),
+                    (Sk::Bool, Sk::Bool, _) => Cast::Unary(spirv::Op::CopyObject),
+                    (_, _, None) => Cast::Unary(spirv::Op::Bitcast),
                     // casting to a bool - generate `OpXxxNotEqual`
                     (_, Sk::Bool, Some(_)) => {
                         let (op, value) = match src_kind {
