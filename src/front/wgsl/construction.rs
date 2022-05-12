@@ -363,6 +363,25 @@ pub(super) fn parse_construction<'a>(
             convert: Some(dst_width),
         },
 
+        // Vector conversion (vector -> vector) - partial
+        (
+            Components::One {
+                component,
+                ty:
+                    &TypeInner::Vector {
+                        size: src_size,
+                        kind: src_kind,
+                        ..
+                    },
+                ..
+            },
+            ConstructorType::PartialVector { size: dst_size },
+        ) if dst_size == src_size => Expression::As {
+            expr: component,
+            kind: src_kind,
+            convert: None,
+        },
+
         // Matrix conversion (matrix -> matrix)
         (
             Components::One {
@@ -384,6 +403,28 @@ pub(super) fn parse_construction<'a>(
             expr: component,
             kind: ScalarKind::Float,
             convert: Some(dst_width),
+        },
+
+        // Matrix conversion (matrix -> matrix) - partial
+        (
+            Components::One {
+                component,
+                ty:
+                    &TypeInner::Matrix {
+                        columns: src_columns,
+                        rows: src_rows,
+                        ..
+                    },
+                ..
+            },
+            ConstructorType::PartialMatrix {
+                columns: dst_columns,
+                rows: dst_rows,
+            },
+        ) if dst_columns == src_columns && dst_rows == src_rows => Expression::As {
+            expr: component,
+            kind: ScalarKind::Float,
+            convert: None,
         },
 
         // Vector constructor (splat) - infer type

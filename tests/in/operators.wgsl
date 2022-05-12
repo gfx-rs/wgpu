@@ -75,6 +75,8 @@ fn constructors() -> f32 {
     _ = f32(f32());
     _ = vec2<u32>(vec2<u32>());
     _ = mat2x3<f32>(mat2x3<f32>());
+    _ = vec2(vec2<u32>());
+    _ = mat2x3(mat2x3<f32>());
 
     return foo.a.x;
 }

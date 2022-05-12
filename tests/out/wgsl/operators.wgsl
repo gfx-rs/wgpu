@@ -45,8 +45,10 @@ fn constructors() -> f32 {
     _ = f32(0.0);
     _ = vec2<u32>(vec2<u32>(0u, 0u));
     _ = mat2x3<f32>(mat2x3<f32>(vec3<f32>(0.0, 0.0, 0.0), vec3<f32>(0.0, 0.0, 0.0)));
-    let _e71 = foo.a.x;
-    return _e71;
+    _ = bitcast<vec2<u32>>(vec2<u32>(0u, 0u));
+    _ = mat2x3<f32>(mat2x3<f32>(vec3<f32>(0.0, 0.0, 0.0), vec3<f32>(0.0, 0.0, 0.0)));
+    let _e75 = foo.a.x;
+    return _e75;
 }
 
 fn logical() {
