@@ -1741,37 +1741,45 @@ impl<W: Write> Writer<W> {
                 expr,
                 kind,
                 convert,
-            } => {
-                let (src_kind, src_width) = match *context.resolve_type(expr) {
-                    crate::TypeInner::Scalar { kind, width }
-                    | crate::TypeInner::Vector { kind, width, .. } => (kind, width),
-                    crate::TypeInner::Matrix { width, .. } => (crate::ScalarKind::Float, width),
-                    _ => return Err(Error::Validation),
-                };
-                let is_bool_cast =
-                    kind == crate::ScalarKind::Bool || src_kind == crate::ScalarKind::Bool;
-                let op = match convert {
-                    Some(w) if w == src_width || is_bool_cast => "static_cast",
-                    Some(8) if kind == crate::ScalarKind::Float => {
-                        return Err(Error::CapabilityNotSupported(valid::Capabilities::FLOAT64))
-                    }
-                    Some(_) => return Err(Error::Validation),
-                    None => "as_type",
-                };
-                write!(self.out, "{}<", op)?;
-                match *context.resolve_type(expr) {
-                    crate::TypeInner::Matrix { columns, rows, .. } => {
-                        put_numeric_type(&mut self.out, kind, &[rows, columns])?
-                    }
-                    crate::TypeInner::Vector { size, .. } => {
-                        put_numeric_type(&mut self.out, kind, &[size])?
-                    }
-                    _ => put_numeric_type(&mut self.out, kind, &[])?,
-                };
-                write!(self.out, ">(")?;
-                self.put_expression(expr, context, true)?;
-                write!(self.out, ")")?;
-            }
+            } => match *context.resolve_type(expr) {
+                crate::TypeInner::Scalar {
+                    kind: src_kind,
+                    width: src_width,
+                }
+                | crate::TypeInner::Vector {
+                    kind: src_kind,
+                    width: src_width,
+                    ..
+                } => {
+                    let is_bool_cast =
+                        kind == crate::ScalarKind::Bool || src_kind == crate::ScalarKind::Bool;
+                    let op = match convert {
+                        Some(w) if w == src_width || is_bool_cast => "static_cast",
+                        Some(8) if kind == crate::ScalarKind::Float => {
+                            return Err(Error::CapabilityNotSupported(valid::Capabilities::FLOAT64))
+                        }
+                        Some(_) => return Err(Error::Validation),
+                        None => "as_type",
+                    };
+                    write!(self.out, "{}<", op)?;
+                    match *context.resolve_type(expr) {
+                        crate::TypeInner::Vector { size, .. } => {
+                            put_numeric_type(&mut self.out, kind, &[size])?
+                        }
+                        _ => put_numeric_type(&mut self.out, kind, &[])?,
+                    };
+                    write!(self.out, ">(")?;
+                    self.put_expression(expr, context, true)?;
+                    write!(self.out, ")")?;
+                }
+                crate::TypeInner::Matrix { columns, rows, .. } => {
+                    put_numeric_type(&mut self.out, kind, &[rows, columns])?;
+                    write!(self.out, "(")?;
+                    self.put_expression(expr, context, true)?;
+                    write!(self.out, ")")?;
+                }
+                _ => return Err(Error::Validation),
+            },
             // has to be a named expression
             crate::Expression::CallResult(_) | crate::Expression::AtomicResult { .. } => {
                 unreachable!()

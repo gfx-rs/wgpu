@@ -72,9 +72,9 @@ float constructors(
     uint unnamed_5 = static_cast<uint>(0u);
     float unnamed_6 = static_cast<float>(0.0);
     metal::uint2 unnamed_7 = static_cast<metal::uint2>(const_type_11_);
-    metal::float2x3 unnamed_8 = static_cast<metal::float2x3>(const_type_14_);
+    metal::float2x3 unnamed_8 = metal::float2x3(const_type_14_);
     metal::uint2 unnamed_9 = as_type<metal::uint2>(const_type_11_);
-    metal::float2x3 unnamed_10 = as_type<metal::float2x3>(const_type_14_);
+    metal::float2x3 unnamed_10 = metal::float2x3(const_type_14_);
     float _e75 = foo.a.x;
     return _e75;
 }
