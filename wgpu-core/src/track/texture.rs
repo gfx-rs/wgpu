@@ -392,7 +392,7 @@ impl<A: hub::HalApi> TextureTracker<A> {
         id: TextureId,
         selector: TextureSelector,
         new_state: TextureUses,
-    ) -> Option<(&'a Texture<A>, Option<PendingTransition<TextureUses>>)> {
+    ) -> Option<(&'a Texture<A>, Drain<PendingTransition<TextureUses>>)> {
         let texture = storage.get(id).ok()?;
 
         let (index32, epoch, _) = id.unzip();
@@ -420,7 +420,7 @@ impl<A: hub::HalApi> TextureTracker<A> {
             .unwrap();
         }
 
-        Some((texture, self.temp.pop()))
+        Some((texture, self.temp.drain(..)))
     }
 
     pub fn change_states_tracker(
