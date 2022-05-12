@@ -33,7 +33,7 @@ impl ResourceUses for TextureUses {
     }
 
     fn all_ordered(self) -> bool {
-        self.contains(Self::ORDERED)
+        Self::ORDERED.contains(self)
     }
 
     fn any_exclusive(self) -> bool {
@@ -551,14 +551,33 @@ impl<A: hub::HalApi> TextureTracker<A> {
     }
 
     pub fn remove(&mut self, id: Valid<TextureId>) -> bool {
-        self.remove_inner(id, true)
+        let (index32, epoch, _) = id.0.unzip();
+        let index = index32 as usize;
+
+        if index > self.metadata.owned.len() {
+            return false;
+        }
+
+        self.debug_assert_in_bounds(index);
+
+        unsafe {
+            if self.metadata.owned.get(index).unwrap_unchecked() {
+                let existing_epoch = *self.metadata.epochs.get_unchecked_mut(index);
+                assert_eq!(existing_epoch, epoch);
+
+                self.start_set.complex.remove(&index32);
+                self.end_set.complex.remove(&index32);
+
+                self.metadata.reset(index);
+
+                return true;
+            }
+        }
+
+        false
     }
 
     pub fn remove_abandoned(&mut self, id: Valid<TextureId>) -> bool {
-        self.remove_inner(id, false)
-    }
-
-    fn remove_inner(&mut self, id: Valid<TextureId>, force: bool) -> bool {
         let (index32, epoch, _) = id.0.unzip();
         let index = index32 as usize;
 
@@ -582,8 +601,6 @@ impl<A: hub::HalApi> TextureTracker<A> {
                     self.metadata.reset(index);
 
                     return true;
-                } else if force {
-                    assert_eq!(*existing_epoch, epoch);
                 }
             }
         }
@@ -640,6 +657,7 @@ impl<'a> LayeredStateProvider<'a> {
         }
     }
 
+    #[inline(always)]
     unsafe fn get_layers<A: hub::HalApi>(
         self,
         texture: Option<&Texture<A>>,
@@ -713,6 +731,7 @@ impl<A: hub::HalApi> ResourceMetadataProvider<'_, A> {
     }
 }
 
+#[inline(always)]
 unsafe fn state_combine<A: hub::HalApi>(
     storage: Option<&hub::Storage<Texture<A>, TextureId>>,
     start_state: Option<&mut TextureStateSet>,
@@ -778,6 +797,7 @@ unsafe fn state_combine<A: hub::HalApi>(
     Ok(())
 }
 
+#[inline(always)]
 unsafe fn set_state<'a, A: hub::HalApi>(
     texture: Option<&Texture<A>>,
     start_state: Option<&mut TextureStateSet>,
@@ -842,6 +862,7 @@ struct PartialUsageConflict {
     new_state: TextureUses,
 }
 
+#[inline(always)]
 fn merge_or_transition_state<A: hub::HalApi>(
     texture: &Texture<A>,
     old_state: SingleOrManyStates<TextureUses, ComplexTextureState>,

@@ -973,10 +973,11 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
             unsafe {
                 self.usage_scope
                     .textures
-                    .extend(
+                    .extend_refcount(
                         &*texture_guard,
-                        ra.texture_id.value.0,
+                        ra.texture_id.value,
                         Some(ra.selector.clone()),
+                        &ra.texture_id.ref_count,
                         ra.usage,
                     )
                     .map_err(UsageConflict::from)?

@@ -25,7 +25,7 @@ impl ResourceUses for BufferUses {
     }
 
     fn all_ordered(self) -> bool {
-        self.contains(Self::ORDERED)
+        Self::ORDERED.contains(self)
     }
 
     fn any_exclusive(self) -> bool {
