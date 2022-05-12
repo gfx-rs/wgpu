@@ -66,6 +66,9 @@ pub enum Backend {
 }
 
 /// Power Preference when choosing a physical adapter.
+///
+/// Corresponds to [WebGPU `GPUPowerPreference`](
+/// https://gpuweb.github.io/gpuweb/#enumdef-gpupowerpreference).
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
@@ -125,6 +128,9 @@ impl From<Backend> for Backends {
 }
 
 /// Options for requesting adapter.
+///
+/// Corresponds to [WebGPU `GPURequestAdapterOptions`](
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpurequestadapteroptions).
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
@@ -161,6 +167,9 @@ bitflags::bitflags! {
     /// If you want to use a feature, you need to first verify that the adapter supports
     /// the feature. If the adapter does not support the feature, requesting a device with it enabled
     /// will panic.
+    ///
+    /// Corresponds to [WebGPU `GPUFeatureName`](
+    /// https://gpuweb.github.io/gpuweb/#enumdef-gpufeaturename).
     #[repr(transparent)]
     #[derive(Default)]
     pub struct Features: u64 {
@@ -616,7 +625,8 @@ impl Features {
 /// implementation needs to support more than is needed. You should ideally only request exactly
 /// what you need.
 ///
-/// See also: <https://gpuweb.github.io/gpuweb/#dictdef-gpulimits>
+/// Corresponds to [WebGPU `GPUSupportedLimits`](
+/// https://gpuweb.github.io/gpuweb/#gpusupportedlimits).
 ///
 /// [`downlevel_defaults()`]: Limits::downlevel_defaults
 #[repr(C)]
@@ -1064,6 +1074,9 @@ pub struct AdapterInfo {
 }
 
 /// Describes a [`Device`](../wgpu/struct.Device.html).
+///
+/// Corresponds to [WebGPU `GPUDeviceDescriptor`](
+/// https://gpuweb.github.io/gpuweb/#gpudevicedescriptor).
 #[repr(C)]
 #[derive(Clone, Debug, Default)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
@@ -1096,6 +1109,9 @@ bitflags::bitflags! {
     /// These can be combined so something that is visible from both vertex and fragment shaders can be defined as:
     ///
     /// `ShaderStages::VERTEX | ShaderStages::FRAGMENT`
+    ///
+    /// Corresponds to [WebGPU `GPUShaderStageFlags`](
+    /// https://gpuweb.github.io/gpuweb/#typedefdef-gpushaderstageflags).
     #[repr(transparent)]
     pub struct ShaderStages: u32 {
         /// Binding is not visible from any shader stage.
@@ -1115,6 +1131,9 @@ bitflags::bitflags! {
 bitflags_serde_shim::impl_serde_for_bitflags!(ShaderStages);
 
 /// Dimensions of a particular texture view.
+///
+/// Corresponds to [WebGPU `GPUTextureViewDimension`](
+/// https://gpuweb.github.io/gpuweb/#enumdef-gputextureviewdimension).
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
@@ -1160,6 +1179,9 @@ impl TextureViewDimension {
 /// Alpha blend factor.
 ///
 /// Alpha blending is very complicated: see the OpenGL or Vulkan spec for more information.
+///
+/// Corresponds to [WebGPU `GPUBlendFactor`](
+/// https://gpuweb.github.io/gpuweb/#enumdef-gpublendfactor).
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
@@ -1197,6 +1219,9 @@ pub enum BlendFactor {
 /// Alpha blend operation.
 ///
 /// Alpha blending is very complicated: see the OpenGL or Vulkan spec for more information.
+///
+/// Corresponds to [WebGPU `GPUBlendOperation`](
+/// https://gpuweb.github.io/gpuweb/#enumdef-gpublendoperation).
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
@@ -1221,7 +1246,10 @@ impl Default for BlendOperation {
     }
 }
 
-/// Describes the blend component of a pipeline.
+/// Describes a blend component of a [`BlendState`].
+///
+/// Corresponds to [WebGPU `GPUBlendComponent`](
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpublendcomponent).
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
@@ -1271,9 +1299,13 @@ impl Default for BlendComponent {
     }
 }
 
-/// Describe the blend state of a render pipeline.
+/// Describe the blend state of a render pipeline,
+/// within [`ColorTargetState`].
 ///
 /// See the OpenGL or Vulkan spec for more information.
+///
+/// Corresponds to [WebGPU `GPUBlendState`](
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpublendstate).
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
@@ -1311,6 +1343,9 @@ impl BlendState {
 }
 
 /// Describes the color state of a render pipeline.
+///
+/// Corresponds to [WebGPU `GPUColorTargetState`](
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpucolortargetstate).
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
@@ -1341,6 +1376,9 @@ impl From<TextureFormat> for ColorTargetState {
 }
 
 /// Primitive type the input mesh is composed of.
+///
+/// Corresponds to [WebGPU `GPUPrimitiveTopology`](
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpuprimitivetopology).
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
@@ -1383,7 +1421,10 @@ impl PrimitiveTopology {
     }
 }
 
-/// Winding order which classifies the "front" face.
+/// Vertex winding order which classifies the "front" face of a triangle.
+///
+/// Corresponds to [WebGPU `GPUFrontFace`](
+/// https://gpuweb.github.io/gpuweb/#enumdef-gpufrontface).
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
@@ -1407,6 +1448,10 @@ impl Default for FrontFace {
 }
 
 /// Face of a vertex.
+///
+/// Corresponds to [WebGPU `GPUCullMode`](
+/// https://gpuweb.github.io/gpuweb/#enumdef-gpucullmode),
+/// except that the `"none"` value is represented using `Option<Face>` instead.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
@@ -1441,6 +1486,9 @@ impl Default for PolygonMode {
 }
 
 /// Describes the state of primitive assembly and rasterization in a render pipeline.
+///
+/// Corresponds to [WebGPU `GPUPrimitiveState`](
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpuprimitivestate).
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
@@ -1479,6 +1527,9 @@ pub struct PrimitiveState {
 }
 
 /// Describes the multi-sampling state of a render pipeline.
+///
+/// Corresponds to [WebGPU `GPUMultisampleState`](
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpumultisamplestate).
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
@@ -1627,8 +1678,11 @@ pub enum AstcChannel {
 
 /// Underlying texture data format.
 ///
-/// If there is a conversion in the format (such as srgb -> linear), The conversion listed is for
+/// If there is a conversion in the format (such as srgb -> linear), the conversion listed here is for
 /// loading from texture in a shader. When writing to the texture, the opposite conversion takes place.
+///
+/// Corresponds to [WebGPU `GPUTextureFormat`](
+/// https://gpuweb.github.io/gpuweb/#enumdef-gputextureformat).
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
@@ -2176,6 +2230,9 @@ impl TextureFormat {
 
 bitflags::bitflags! {
     /// Color write mask. Disabled color channels will not be written to.
+    ///
+    /// Corresponds to [WebGPU `GPUColorWriteFlags`](
+    /// https://gpuweb.github.io/gpuweb/#typedefdef-gpucolorwriteflags).
     #[repr(transparent)]
     pub struct ColorWrites: u32 {
         /// Enable red channel writes
@@ -2203,6 +2260,11 @@ impl Default for ColorWrites {
 }
 
 /// State of the stencil operation (fixed-pipeline stage).
+///
+/// For use in [`DepthStencilState`].
+///
+/// Corresponds to a portion of [WebGPU `GPUDepthStencilState`](
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpudepthstencilstate).
 #[repr(C)]
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
@@ -2235,6 +2297,11 @@ impl StencilState {
 }
 
 /// Describes the biasing setting for the depth target.
+///
+/// For use in [`DepthStencilState`].
+///
+/// Corresponds to a portion of [WebGPU `GPUDepthStencilState`](
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpudepthstencilstate).
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
@@ -2256,6 +2323,9 @@ impl DepthBiasState {
 }
 
 /// Describes the depth/stencil state in a render pipeline.
+///
+/// Corresponds to [WebGPU `GPUDepthStencilState`](
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpudepthstencilstate).
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
@@ -2290,6 +2360,9 @@ impl DepthStencilState {
 }
 
 /// Format of indices used with pipeline.
+///
+/// Corresponds to [WebGPU `GPUIndexFormat`](
+/// https://gpuweb.github.io/gpuweb/#enumdef-gpuindexformat).
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
@@ -2308,6 +2381,9 @@ impl Default for IndexFormat {
 }
 
 /// Operation to perform on the stencil value.
+///
+/// Corresponds to [WebGPU `GPUStencilOperation`](
+/// https://gpuweb.github.io/gpuweb/#enumdef-gpustenciloperation).
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
@@ -2344,6 +2420,9 @@ impl Default for StencilOperation {
 /// Describes stencil state in a render pipeline.
 ///
 /// If you are not using stencil state, set this to [`StencilFaceState::IGNORE`].
+///
+/// Corresponds to [WebGPU `GPUStencilFaceState`](
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpustencilfacestate).
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
@@ -2385,6 +2464,9 @@ impl Default for StencilFaceState {
 }
 
 /// Comparison function used for depth and stencil operations.
+///
+/// Corresponds to [WebGPU `GPUCompareFunction`](
+/// https://gpuweb.github.io/gpuweb/#enumdef-gpucomparefunction).
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
@@ -2420,6 +2502,9 @@ impl CompareFunction {
 }
 
 /// Rate that determines when vertex data is advanced.
+///
+/// Corresponds to [WebGPU `GPUVertexStepMode`](
+/// https://gpuweb.github.io/gpuweb/#enumdef-gpuvertexstepmode).
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
@@ -2443,6 +2528,9 @@ impl Default for VertexStepMode {
 /// Arrays of these can be made with the [`vertex_attr_array`]
 /// macro. Vertex attributes are assumed to be tightly packed.
 ///
+/// Corresponds to [WebGPU `GPUVertexAttribute`](
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpuvertexattribute).
+///
 /// [`vertex_attr_array`]: ../wgpu/macro.vertex_attr_array.html
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -2458,7 +2546,10 @@ pub struct VertexAttribute {
     pub shader_location: ShaderLocation,
 }
 
-/// Vertex Format for a Vertex Attribute (input).
+/// Vertex Format for a [`VertexAttribute`] (input).
+///
+/// Corresponds to [WebGPU `GPUVertexFormat`](
+/// https://gpuweb.github.io/gpuweb/#enumdef-gpuvertexformat).
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
@@ -2574,6 +2665,9 @@ bitflags::bitflags! {
     ///
     /// The usages determine what kind of memory the buffer is allocated from and what
     /// actions the buffer can partake in.
+    ///
+    /// Corresponds to [WebGPU `GPUBufferUsageFlags`](
+    /// https://gpuweb.github.io/gpuweb/#typedefdef-gpubufferusageflags).
     #[repr(transparent)]
     pub struct BufferUsages: u32 {
         /// Allow a buffer to be mapped for reading using [`Buffer::map_async`] + [`Buffer::get_mapped_range`].
@@ -2611,6 +2705,9 @@ bitflags::bitflags! {
 bitflags_serde_shim::impl_serde_for_bitflags!(BufferUsages);
 
 /// Describes a [`Buffer`](../wgpu/struct.Buffer.html).
+///
+/// Corresponds to [WebGPU `GPUBufferDescriptor`](
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpubufferdescriptor).
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
@@ -2641,6 +2738,9 @@ impl<L> BufferDescriptor<L> {
 }
 
 /// Describes a [`CommandEncoder`](../wgpu/struct.CommandEncoder.html).
+///
+/// Corresponds to [WebGPU `GPUCommandEncoderDescriptor`](
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpucommandencoderdescriptor).
 #[repr(C)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
@@ -2692,6 +2792,9 @@ bitflags::bitflags! {
     ///
     /// The usages determine what kind of memory the texture is allocated from and what
     /// actions the texture can partake in.
+    ///
+    /// Corresponds to [WebGPU `GPUTextureUsageFlags`](
+    /// https://gpuweb.github.io/gpuweb/#typedefdef-gputextureusageflags).
     #[repr(transparent)]
     pub struct TextureUsages: u32 {
         /// Allows a texture to be the source in a [`CommandEncoder::copy_texture_to_buffer`] or
@@ -2810,6 +2913,9 @@ impl Color {
 }
 
 /// Dimensionality of a texture.
+///
+/// Corresponds to [WebGPU `GPUTextureDimension`](
+/// https://gpuweb.github.io/gpuweb/#enumdef-gputexturedimension).
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
@@ -2827,6 +2933,9 @@ pub enum TextureDimension {
 }
 
 /// Origin of a copy to/from a texture.
+///
+/// Corresponds to [WebGPU `GPUOrigin3D`](
+/// https://gpuweb.github.io/gpuweb/#typedefdef-gpuorigin3d).
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
@@ -2853,6 +2962,9 @@ impl Default for Origin3d {
 }
 
 /// Extent of a texture related operation.
+///
+/// Corresponds to [WebGPU `GPUExtent3D`](
+/// https://gpuweb.github.io/gpuweb/#typedefdef-gpuextent3d).
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
@@ -3039,6 +3151,9 @@ fn test_max_mips() {
 }
 
 /// Describes a [`Texture`](../wgpu/struct.Texture.html).
+///
+/// Corresponds to [WebGPU `GPUTextureDescriptor`](
+/// https://gpuweb.github.io/gpuweb/#dictdef-gputexturedescriptor).
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
@@ -3125,6 +3240,9 @@ impl<L> TextureDescriptor<L> {
 }
 
 /// Kind of data the texture holds.
+///
+/// Corresponds to [WebGPU `GPUTextureAspect`](
+/// https://gpuweb.github.io/gpuweb/#enumdef-gputextureaspect).
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
@@ -3146,6 +3264,9 @@ impl Default for TextureAspect {
 }
 
 /// How edges should be handled in texture addressing.
+///
+/// Corresponds to [WebGPU `GPUAddressMode`](
+/// https://gpuweb.github.io/gpuweb/#enumdef-gpuaddressmode).
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
@@ -3182,6 +3303,9 @@ impl Default for AddressMode {
 }
 
 /// Texel mixing mode when sampling between texels.
+///
+/// Corresponds to [WebGPU `GPUFilterMode`](
+/// https://gpuweb.github.io/gpuweb/#enumdef-gpufiltermode).
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
@@ -3218,6 +3342,9 @@ pub struct PushConstantRange {
 }
 
 /// Describes a [`CommandBuffer`](../wgpu/struct.CommandBuffer.html).
+///
+/// Corresponds to [WebGPU `GPUCommandBufferDescriptor`](
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpucommandbufferdescriptor).
 #[repr(C)]
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
@@ -3237,6 +3364,9 @@ impl<L> CommandBufferDescriptor<L> {
 }
 
 /// Describes the depth/stencil attachment for render bundles.
+///
+/// Corresponds to a portion of [WebGPU `GPURenderBundleEncoderDescriptor`](
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpurenderbundleencoderdescriptor).
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
@@ -3251,6 +3381,9 @@ pub struct RenderBundleDepthStencil {
 }
 
 /// Describes a [`RenderBundle`](../wgpu/struct.RenderBundle.html).
+///
+/// Corresponds to [WebGPU `GPURenderBundleDescriptor`](
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpurenderbundledescriptor).
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
@@ -3285,6 +3418,9 @@ impl<T> Default for RenderBundleDescriptor<Option<T>> {
 /// | 32x16x8    | RGBA8  | 4               | 1 * 1 * 1        | 32 * 4 = 128 padded to 256 = Some(256) | None                         |
 /// | 256x256    | BC3    | 16              | 4 * 4 * 1        | 16 * (256 / 4) = 1024 = Some(1024)     | None                         |
 /// | 64x64x8    | BC3    | 16              | 4 * 4 * 1        | 16 * (64 / 4) = 256 = Some(256)        | 64 / 4 = 16 = Some(16)       |
+///
+/// Corresponds to [WebGPU `GPUImageDataLayout`](
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpuimagedatalayout).
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
@@ -3325,7 +3461,8 @@ pub struct ImageDataLayout {
 
 /// Specific type of a buffer binding.
 ///
-/// WebGPU spec: <https://gpuweb.github.io/gpuweb/#enumdef-gpubufferbindingtype>
+/// Corresponds to [WebGPU `GPUBufferBindingType`](
+/// https://gpuweb.github.io/gpuweb/#enumdef-gpubufferbindingtype).
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
@@ -3371,7 +3508,8 @@ impl Default for BufferBindingType {
 
 /// Specific type of a sample in a texture binding.
 ///
-/// WebGPU spec: <https://gpuweb.github.io/gpuweb/#enumdef-gputexturesampletype>
+/// Corresponds to [WebGPU `GPUTextureSampleType`](
+/// https://gpuweb.github.io/gpuweb/#enumdef-gputexturesampletype).
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
@@ -3422,7 +3560,10 @@ impl Default for TextureSampleType {
 
 /// Specific type of a sample in a texture binding.
 ///
-/// WebGPU spec: <https://gpuweb.github.io/gpuweb/#enumdef-gpustoragetextureaccess>
+/// For use in [`BindingType::StorageTexture`].
+///
+/// Corresponds to [WebGPU `GPUStorageTextureAccess`](
+/// https://gpuweb.github.io/gpuweb/#enumdef-gpustoragetextureaccess).
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
@@ -3455,7 +3596,10 @@ pub enum StorageTextureAccess {
 
 /// Specific type of a sampler binding.
 ///
-/// WebGPU spec: <https://gpuweb.github.io/gpuweb/#enumdef-gpusamplerbindingtype>
+/// For use in [`BindingType::Sampler`].
+///
+/// Corresponds to [WebGPU `GPUSamplerBindingType`](
+/// https://gpuweb.github.io/gpuweb/#enumdef-gpusamplerbindingtype).
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
@@ -3474,16 +3618,18 @@ pub enum SamplerBindingType {
 
 /// Specific type of a binding.
 ///
-/// WebGPU spec: the enum of
-/// - <https://gpuweb.github.io/gpuweb/#dictdef-gpubufferbindinglayout>
-/// - <https://gpuweb.github.io/gpuweb/#dictdef-gpusamplerbindinglayout>
-/// - <https://gpuweb.github.io/gpuweb/#dictdef-gputexturebindinglayout>
-/// - <https://gpuweb.github.io/gpuweb/#dictdef-gpustoragetexturebindinglayout>
+/// For use in [`BindGroupLayoutEntry`].
+///
+/// Corresponds to WebGPU's mutually exclusive fields within [`GPUBindGroupLayoutEntry`](
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpubindgrouplayoutentry).
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub enum BindingType {
     /// A buffer binding.
+    ///
+    /// Corresponds to [WebGPU `GPUBufferBindingLayout`](
+    /// https://gpuweb.github.io/gpuweb/#dictdef-gpubufferbindinglayout).
     Buffer {
         /// Sub-type of the buffer binding.
         ty: BufferBindingType,
@@ -3509,6 +3655,9 @@ pub enum BindingType {
     /// layout(binding = 0)
     /// uniform sampler s;
     /// ```
+    ///
+    /// Corresponds to [WebGPU `GPUSamplerBindingLayout`](
+    /// https://gpuweb.github.io/gpuweb/#dictdef-gpusamplerbindinglayout).
     Sampler(SamplerBindingType),
     /// A texture binding.
     ///
@@ -3517,6 +3666,9 @@ pub enum BindingType {
     /// layout(binding = 0)
     /// uniform texture2D t;
     /// ```
+    ///
+    /// Corresponds to [WebGPU `GPUTextureBindingLayout`](
+    /// https://gpuweb.github.io/gpuweb/#dictdef-gputexturebindinglayout).
     Texture {
         /// Sample type of the texture binding.
         sample_type: TextureSampleType,
@@ -3535,6 +3687,9 @@ pub enum BindingType {
     /// ```
     /// Note that the texture format must be specified in the shader as well.
     /// A list of valid formats can be found in the specification here: <https://www.khronos.org/registry/OpenGL/specs/gl/GLSLangSpec.4.60.html#layout-qualifiers>
+    ///
+    /// Corresponds to [WebGPU `GPUStorageTextureBindingLayout`](
+    /// https://gpuweb.github.io/gpuweb/#dictdef-gpustoragetexturebindinglayout).
     StorageTexture {
         /// Allowed access to this texture.
         access: StorageTextureAccess,
@@ -3558,6 +3713,9 @@ impl BindingType {
 }
 
 /// Describes a single binding inside a bind group.
+///
+/// Corresponds to [WebGPU `GPUBindGroupLayoutEntry`](
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpubindgrouplayoutentry).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
@@ -3579,6 +3737,9 @@ pub struct BindGroupLayoutEntry {
 }
 
 /// View of a buffer which can be used to copy to/from a texture.
+///
+/// Corresponds to [WebGPU `GPUImageCopyBuffer`](
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpuimagecopybuffer).
 #[repr(C)]
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
@@ -3591,6 +3752,9 @@ pub struct ImageCopyBuffer<B> {
 }
 
 /// View of a texture which can be used to copy to/from a buffer/texture.
+///
+/// Corresponds to [WebGPU `GPUImageCopyTexture`](
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpuimagecopytexture).
 #[repr(C)]
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
@@ -3678,6 +3842,9 @@ pub enum SamplerBorderColor {
 }
 
 /// Describes how to create a QuerySet.
+///
+/// Corresponds to [WebGPU `GPUQuerySetDescriptor`](
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpuquerysetdescriptor).
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
@@ -3703,6 +3870,9 @@ impl<L> QuerySetDescriptor<L> {
 }
 
 /// Type of query contained in a QuerySet.
+///
+/// Corresponds to [WebGPU `GPUQueryType`](
+/// https://gpuweb.github.io/gpuweb/#enumdef-gpuquerytype).
 #[derive(Copy, Clone, Debug)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
