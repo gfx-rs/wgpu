@@ -11,7 +11,8 @@ struct type_9 {
     float4 gl_Position : SV_Position;
 };
 
-float Constructarray1_float_(float arg0)[1] {
+typedef float ret_Constructarray1_float_[1];
+ret_Constructarray1_float_ Constructarray1_float_(float arg0) {
     float ret[1] = { arg0 };
     return ret;
 }

@@ -18,7 +18,8 @@ Foo ConstructFoo(float4 arg0, int arg1) {
     return ret;
 }
 
-Foo Constructarray3_Foo_(Foo arg0, Foo arg1, Foo arg2)[3] {
+typedef Foo ret_Constructarray3_Foo_[3];
+ret_Constructarray3_Foo_ Constructarray3_Foo_(Foo arg0, Foo arg1, Foo arg2) {
     Foo ret[3] = { arg0, arg1, arg2 };
     return ret;
 }
@@ -49,7 +50,8 @@ float3 bool_cast(float3 x)
     return float3(y);
 }
 
-int Constructarray4_int_(int arg0, int arg1, int arg2, int arg3)[4] {
+typedef int ret_Constructarray4_int_[4];
+ret_Constructarray4_int_ Constructarray4_int_(int arg0, int arg1, int arg2, int arg3) {
     int ret[4] = { arg0, arg1, arg2, arg3 };
     return ret;
 }

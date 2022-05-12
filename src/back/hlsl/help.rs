@@ -375,7 +375,19 @@ impl<'a, W: Write> super::Writer<'a, W> {
         const RETURN_VARIABLE_NAME: &str = "ret";
 
         // Write function return type and name
-        self.write_type(module, constructor.ty)?;
+        if let crate::TypeInner::Array { base, size, .. } = module.types[constructor.ty].inner {
+            write!(self.out, "typedef ")?;
+            self.write_type(module, constructor.ty)?;
+            write!(self.out, " ret_")?;
+            self.write_wrapped_constructor_function_name(module, constructor)?;
+            self.write_array_size(module, base, size)?;
+            writeln!(self.out, ";")?;
+
+            write!(self.out, "ret_")?;
+            self.write_wrapped_constructor_function_name(module, constructor)?;
+        } else {
+            self.write_type(module, constructor.ty)?;
+        }
         write!(self.out, " ")?;
         self.write_wrapped_constructor_function_name(module, constructor)?;
 
@@ -414,10 +426,6 @@ impl<'a, W: Write> super::Writer<'a, W> {
         };
 
         write!(self.out, ")")?;
-
-        if let crate::TypeInner::Array { base, size, .. } = module.types[constructor.ty].inner {
-            self.write_array_size(module, base, size)?;
-        }
 
         // Write function body
         writeln!(self.out, " {{")?;
