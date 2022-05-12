@@ -2141,9 +2141,32 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 convert,
             } => {
                 let inner = func_ctx.info[expr].ty.inner_with(&module.types);
-                let (size_str, src_width) = match *inner {
-                    TypeInner::Vector { size, width, .. } => (back::vector_size_str(size), width),
-                    TypeInner::Scalar { width, .. } => ("", width),
+                let get_width = |src_width| kind.to_hlsl_str(convert.unwrap_or(src_width));
+                match *inner {
+                    TypeInner::Vector { size, width, .. } => {
+                        write!(
+                            self.out,
+                            "{}{}(",
+                            get_width(width)?,
+                            back::vector_size_str(size)
+                        )?;
+                    }
+                    TypeInner::Scalar { width, .. } => {
+                        write!(self.out, "{}(", get_width(width)?,)?;
+                    }
+                    TypeInner::Matrix {
+                        columns,
+                        rows,
+                        width,
+                    } => {
+                        write!(
+                            self.out,
+                            "{}{}x{}(",
+                            get_width(width)?,
+                            back::vector_size_str(columns),
+                            back::vector_size_str(rows)
+                        )?;
+                    }
                     _ => {
                         return Err(Error::Unimplemented(format!(
                             "write_expr expression::as {:?}",
@@ -2151,8 +2174,6 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         )));
                     }
                 };
-                let kind_str = kind.to_hlsl_str(convert.unwrap_or(src_width))?;
-                write!(self.out, "{}{}(", kind_str, size_str,)?;
                 self.write_expr(module, expr, func_ctx)?;
                 write!(self.out, ")")?;
             }

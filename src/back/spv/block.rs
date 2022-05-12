@@ -942,6 +942,7 @@ impl<'w> BlockContext<'w> {
                     match *self.fun_info[expr].ty.inner_with(&self.ir_module.types) {
                         crate::TypeInner::Scalar { kind, width } => (kind, None, width),
                         crate::TypeInner::Vector { kind, width, size } => (kind, Some(size), width),
+                        crate::TypeInner::Matrix { width, .. } => (kind, None, width),
                         ref other => {
                             log::error!("As source {:?}", other);
                             return Err(Error::Validation("Unexpected Expression::As source"));

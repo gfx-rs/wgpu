@@ -39,8 +39,14 @@ fn constructors() -> f32 {
     _ = vec2<u32>(0u);
     _ = mat2x2<f32>(vec2<f32>(0.0), vec2<f32>(0.0));
     _ = array<i32,4u>(0, 1, 2, 3);
-    let _e59 = foo.a.x;
-    return _e59;
+    _ = bool(false);
+    _ = i32(0);
+    _ = u32(0u);
+    _ = f32(0.0);
+    _ = vec2<u32>(vec2<u32>(0u, 0u));
+    _ = mat2x3<f32>(mat2x3<f32>(vec3<f32>(0.0, 0.0, 0.0), vec3<f32>(0.0, 0.0, 0.0)));
+    let _e71 = foo.a.x;
+    return _e71;
 }
 
 fn logical() {

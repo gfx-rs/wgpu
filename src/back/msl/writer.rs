@@ -1745,6 +1745,7 @@ impl<W: Write> Writer<W> {
                 let (src_kind, src_width) = match *context.resolve_type(expr) {
                     crate::TypeInner::Scalar { kind, width }
                     | crate::TypeInner::Vector { kind, width, .. } => (kind, width),
+                    crate::TypeInner::Matrix { width, .. } => (crate::ScalarKind::Float, width),
                     _ => return Err(Error::Validation),
                 };
                 let is_bool_cast =
@@ -1759,6 +1760,9 @@ impl<W: Write> Writer<W> {
                 };
                 write!(self.out, "{}<", op)?;
                 match *context.resolve_type(expr) {
+                    crate::TypeInner::Matrix { columns, rows, .. } => {
+                        put_numeric_type(&mut self.out, kind, &[rows, columns])?
+                    }
                     crate::TypeInner::Vector { size, .. } => {
                         put_numeric_type(&mut self.out, kind, &[size])?
                     }

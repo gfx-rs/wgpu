@@ -864,6 +864,15 @@ impl<'a> ResolveContext<'a> {
                     size,
                     width: convert.unwrap_or(width),
                 }),
+                Ti::Matrix {
+                    columns,
+                    rows,
+                    width,
+                } => TypeResolution::Value(Ti::Matrix {
+                    columns,
+                    rows,
+                    width: convert.unwrap_or(width),
+                }),
                 ref other => {
                     return Err(ResolveError::IncompatibleOperands(format!(
                         "{:?} as {:?}",

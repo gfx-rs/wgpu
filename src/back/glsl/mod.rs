@@ -2895,6 +2895,11 @@ impl<'a, W: Write> Writer<'a, W> {
                         // this is similar to `write_type`, but with the target kind
                         let scalar = glsl_scalar(target_kind, width)?;
                         match *inner {
+                            TypeInner::Matrix { columns, rows, .. } => write!(
+                                self.out,
+                                "{}mat{}x{}",
+                                scalar.prefix, columns as u8, rows as u8
+                            )?,
                             TypeInner::Vector { size, .. } => {
                                 write!(self.out, "{}vec{}", scalar.prefix, size as u8)?
                             }
