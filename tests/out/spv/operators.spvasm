@@ -166,7 +166,7 @@ OpStore %110 %118
 %134 = OpBitcast  %20  %19
 %135 = OpBitcast  %4  %5
 %136 = OpBitcast  %34  %46
-%137 = OpBitcast  %37  %53
+%137 = OpCopyObject  %37  %53
 %140 = OpAccessChain  %139  %110 %19 %19
 %141 = OpLoad  %4  %140
 OpReturnValue %141

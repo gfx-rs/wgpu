@@ -938,11 +938,13 @@ impl<'w> BlockContext<'w> {
                 use crate::ScalarKind as Sk;
 
                 let expr_id = self.cached[expr];
-                let (src_kind, src_size, src_width) =
+                let (src_kind, src_size, src_width, is_matrix) =
                     match *self.fun_info[expr].ty.inner_with(&self.ir_module.types) {
-                        crate::TypeInner::Scalar { kind, width } => (kind, None, width),
-                        crate::TypeInner::Vector { kind, width, size } => (kind, Some(size), width),
-                        crate::TypeInner::Matrix { width, .. } => (kind, None, width),
+                        crate::TypeInner::Scalar { kind, width } => (kind, None, width, false),
+                        crate::TypeInner::Vector { kind, width, size } => {
+                            (kind, Some(size), width, false)
+                        }
+                        crate::TypeInner::Matrix { width, .. } => (kind, None, width, true),
                         ref other => {
                             log::error!("As source {:?}", other);
                             return Err(Error::Validation("Unexpected Expression::As source"));
@@ -955,103 +957,112 @@ impl<'w> BlockContext<'w> {
                     Ternary(spirv::Op, Word, Word),
                 }
 
-                let cast = match (src_kind, kind, convert) {
-                    (Sk::Bool, Sk::Bool, _) => Cast::Unary(spirv::Op::CopyObject),
-                    (_, _, None) => Cast::Unary(spirv::Op::Bitcast),
-                    // casting to a bool - generate `OpXxxNotEqual`
-                    (_, Sk::Bool, Some(_)) => {
-                        let (op, value) = match src_kind {
-                            Sk::Sint => (spirv::Op::INotEqual, crate::ScalarValue::Sint(0)),
-                            Sk::Uint => (spirv::Op::INotEqual, crate::ScalarValue::Uint(0)),
-                            Sk::Float => {
-                                (spirv::Op::FUnordNotEqual, crate::ScalarValue::Float(0.0))
-                            }
-                            Sk::Bool => unreachable!(),
-                        };
-                        let zero_scalar_id = self.writer.get_constant_scalar(value, src_width);
-                        let zero_id = match src_size {
-                            Some(size) => {
-                                let vector_type_id =
-                                    self.get_type_id(LookupType::Local(LocalType::Value {
-                                        vector_size: Some(size),
-                                        kind: src_kind,
-                                        width: src_width,
-                                        pointer_space: None,
-                                    }));
-                                let components = [zero_scalar_id; 4];
+                let cast = if is_matrix {
+                    // we only support identity casts for matrices
+                    Cast::Unary(spirv::Op::CopyObject)
+                } else {
+                    match (src_kind, kind, convert) {
+                        (Sk::Bool, Sk::Bool, _) => Cast::Unary(spirv::Op::CopyObject),
+                        (_, _, None) => Cast::Unary(spirv::Op::Bitcast),
+                        // casting to a bool - generate `OpXxxNotEqual`
+                        (_, Sk::Bool, Some(_)) => {
+                            let (op, value) = match src_kind {
+                                Sk::Sint => (spirv::Op::INotEqual, crate::ScalarValue::Sint(0)),
+                                Sk::Uint => (spirv::Op::INotEqual, crate::ScalarValue::Uint(0)),
+                                Sk::Float => {
+                                    (spirv::Op::FUnordNotEqual, crate::ScalarValue::Float(0.0))
+                                }
+                                Sk::Bool => unreachable!(),
+                            };
+                            let zero_scalar_id = self.writer.get_constant_scalar(value, src_width);
+                            let zero_id = match src_size {
+                                Some(size) => {
+                                    let vector_type_id =
+                                        self.get_type_id(LookupType::Local(LocalType::Value {
+                                            vector_size: Some(size),
+                                            kind: src_kind,
+                                            width: src_width,
+                                            pointer_space: None,
+                                        }));
+                                    let components = [zero_scalar_id; 4];
 
-                                let zero_id = self.gen_id();
-                                block.body.push(Instruction::composite_construct(
-                                    vector_type_id,
-                                    zero_id,
-                                    &components[..size as usize],
-                                ));
-                                zero_id
-                            }
-                            None => zero_scalar_id,
-                        };
+                                    let zero_id = self.gen_id();
+                                    block.body.push(Instruction::composite_construct(
+                                        vector_type_id,
+                                        zero_id,
+                                        &components[..size as usize],
+                                    ));
+                                    zero_id
+                                }
+                                None => zero_scalar_id,
+                            };
 
-                        Cast::Binary(op, zero_id)
-                    }
-                    // casting from a bool - generate `OpSelect`
-                    (Sk::Bool, _, Some(dst_width)) => {
-                        let (val0, val1) = match kind {
-                            Sk::Sint => (crate::ScalarValue::Sint(0), crate::ScalarValue::Sint(1)),
-                            Sk::Uint => (crate::ScalarValue::Uint(0), crate::ScalarValue::Uint(1)),
-                            Sk::Float => (
-                                crate::ScalarValue::Float(0.0),
-                                crate::ScalarValue::Float(1.0),
-                            ),
-                            Sk::Bool => unreachable!(),
-                        };
-                        let scalar0_id = self.writer.get_constant_scalar(val0, dst_width);
-                        let scalar1_id = self.writer.get_constant_scalar(val1, dst_width);
-                        let (accept_id, reject_id) = match src_size {
-                            Some(size) => {
-                                let vector_type_id =
-                                    self.get_type_id(LookupType::Local(LocalType::Value {
-                                        vector_size: Some(size),
-                                        kind,
-                                        width: dst_width,
-                                        pointer_space: None,
-                                    }));
-                                let components0 = [scalar0_id; 4];
-                                let components1 = [scalar1_id; 4];
+                            Cast::Binary(op, zero_id)
+                        }
+                        // casting from a bool - generate `OpSelect`
+                        (Sk::Bool, _, Some(dst_width)) => {
+                            let (val0, val1) = match kind {
+                                Sk::Sint => {
+                                    (crate::ScalarValue::Sint(0), crate::ScalarValue::Sint(1))
+                                }
+                                Sk::Uint => {
+                                    (crate::ScalarValue::Uint(0), crate::ScalarValue::Uint(1))
+                                }
+                                Sk::Float => (
+                                    crate::ScalarValue::Float(0.0),
+                                    crate::ScalarValue::Float(1.0),
+                                ),
+                                Sk::Bool => unreachable!(),
+                            };
+                            let scalar0_id = self.writer.get_constant_scalar(val0, dst_width);
+                            let scalar1_id = self.writer.get_constant_scalar(val1, dst_width);
+                            let (accept_id, reject_id) = match src_size {
+                                Some(size) => {
+                                    let vector_type_id =
+                                        self.get_type_id(LookupType::Local(LocalType::Value {
+                                            vector_size: Some(size),
+                                            kind,
+                                            width: dst_width,
+                                            pointer_space: None,
+                                        }));
+                                    let components0 = [scalar0_id; 4];
+                                    let components1 = [scalar1_id; 4];
 
-                                let vec0_id = self.gen_id();
-                                block.body.push(Instruction::composite_construct(
-                                    vector_type_id,
-                                    vec0_id,
-                                    &components0[..size as usize],
-                                ));
-                                let vec1_id = self.gen_id();
-                                block.body.push(Instruction::composite_construct(
-                                    vector_type_id,
-                                    vec1_id,
-                                    &components1[..size as usize],
-                                ));
-                                (vec1_id, vec0_id)
-                            }
-                            None => (scalar1_id, scalar0_id),
-                        };
+                                    let vec0_id = self.gen_id();
+                                    block.body.push(Instruction::composite_construct(
+                                        vector_type_id,
+                                        vec0_id,
+                                        &components0[..size as usize],
+                                    ));
+                                    let vec1_id = self.gen_id();
+                                    block.body.push(Instruction::composite_construct(
+                                        vector_type_id,
+                                        vec1_id,
+                                        &components1[..size as usize],
+                                    ));
+                                    (vec1_id, vec0_id)
+                                }
+                                None => (scalar1_id, scalar0_id),
+                            };
 
-                        Cast::Ternary(spirv::Op::Select, accept_id, reject_id)
+                            Cast::Ternary(spirv::Op::Select, accept_id, reject_id)
+                        }
+                        (Sk::Float, Sk::Uint, Some(_)) => Cast::Unary(spirv::Op::ConvertFToU),
+                        (Sk::Float, Sk::Sint, Some(_)) => Cast::Unary(spirv::Op::ConvertFToS),
+                        (Sk::Float, Sk::Float, Some(dst_width)) if src_width != dst_width => {
+                            Cast::Unary(spirv::Op::FConvert)
+                        }
+                        (Sk::Sint, Sk::Float, Some(_)) => Cast::Unary(spirv::Op::ConvertSToF),
+                        (Sk::Sint, Sk::Sint, Some(dst_width)) if src_width != dst_width => {
+                            Cast::Unary(spirv::Op::SConvert)
+                        }
+                        (Sk::Uint, Sk::Float, Some(_)) => Cast::Unary(spirv::Op::ConvertUToF),
+                        (Sk::Uint, Sk::Uint, Some(dst_width)) if src_width != dst_width => {
+                            Cast::Unary(spirv::Op::UConvert)
+                        }
+                        // We assume it's either an identity cast, or int-uint.
+                        _ => Cast::Unary(spirv::Op::Bitcast),
                     }
-                    (Sk::Float, Sk::Uint, Some(_)) => Cast::Unary(spirv::Op::ConvertFToU),
-                    (Sk::Float, Sk::Sint, Some(_)) => Cast::Unary(spirv::Op::ConvertFToS),
-                    (Sk::Float, Sk::Float, Some(dst_width)) if src_width != dst_width => {
-                        Cast::Unary(spirv::Op::FConvert)
-                    }
-                    (Sk::Sint, Sk::Float, Some(_)) => Cast::Unary(spirv::Op::ConvertSToF),
-                    (Sk::Sint, Sk::Sint, Some(dst_width)) if src_width != dst_width => {
-                        Cast::Unary(spirv::Op::SConvert)
-                    }
-                    (Sk::Uint, Sk::Float, Some(_)) => Cast::Unary(spirv::Op::ConvertUToF),
-                    (Sk::Uint, Sk::Uint, Some(dst_width)) if src_width != dst_width => {
-                        Cast::Unary(spirv::Op::UConvert)
-                    }
-                    // We assume it's either an identity cast, or int-uint.
-                    _ => Cast::Unary(spirv::Op::Bitcast),
                 };
 
                 let id = self.gen_id();
