@@ -31,6 +31,10 @@ impl ResourceUses for BufferUses {
     fn any_exclusive(self) -> bool {
         self.intersects(Self::EXCLUSIVE)
     }
+
+    fn uninit(self) -> bool {
+        false
+    }
 }
 
 pub(crate) struct BufferBindGroupState<A: hub::HalApi> {

@@ -79,6 +79,7 @@ pub trait ResourceUses:
     fn bits(self) -> u16;
     fn all_ordered(self) -> bool;
     fn any_exclusive(self) -> bool;
+    fn uninit(self) -> bool;
 }
 
 fn invalid_resource_state<T: ResourceUses>(state: T) -> bool {
@@ -90,7 +91,7 @@ fn invalid_resource_state<T: ResourceUses>(state: T) -> bool {
 fn skip_barrier<T: ResourceUses>(old_state: T, new_state: T) -> bool {
     // If the state didn't change and all the usages are ordered, the hardware
     // will guarentee the order of accesses, so we do not need to issue a barrier at all
-    old_state == new_state && old_state.all_ordered()
+    old_state == new_state && (old_state.all_ordered() || old_state.uninit())
 }
 
 fn resize_bitvec<B: bit_vec::BitBlock>(vec: &mut BitVec<B>, size: usize) {
@@ -126,7 +127,7 @@ fn iterate_bitvec_indices(ownership: &BitVec<usize>) -> impl Iterator<Item = usi
         })
 }
 
-#[derive(Clone, Debug, Error)]
+#[derive(Clone, Debug, Error, PartialEq)]
 pub enum UsageConflict {
     #[error("Attempted to use buffer {id:?} which is invalid.")]
     BufferInvalid { id: id::BufferId },
@@ -178,7 +179,7 @@ impl UsageConflict {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct InvalidUse<T> {
     current_state: T,
     new_state: T,

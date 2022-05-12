@@ -4,10 +4,10 @@ use crate::{
     id::{TextureId, TypedId, Valid},
     resource::Texture,
     track::{
-        invalid_resource_state, iterate_bitvec_indices, skip_barrier, ResourceMetadata,
-        ResourceUses, UsageConflict,
+        invalid_resource_state, iterate_bitvec_indices, range::MergeItem, skip_barrier,
+        ResourceMetadata, ResourceUses, UsageConflict,
     },
-    Epoch, RefCount,
+    Epoch, LifeGuard, RefCount,
 };
 use hal::TextureUses;
 
@@ -38,6 +38,10 @@ impl ResourceUses for TextureUses {
 
     fn any_exclusive(self) -> bool {
         self.intersects(Self::EXCLUSIVE)
+    }
+
+    fn uninit(self) -> bool {
+        self == Self::UNINITIALIZED
     }
 }
 
@@ -145,11 +149,15 @@ pub(crate) struct TextureStateSet {
     complex: FastHashMap<u32, ComplexTextureState>,
 }
 impl TextureStateSet {
-    pub fn new() -> Self {
+    fn new() -> Self {
         Self {
             simple: Vec::new(),
             complex: FastHashMap::default(),
         }
+    }
+
+    fn set_size(&mut self, size: usize) {
+        self.simple.resize(size, TextureUses::UNINITIALIZED);
     }
 }
 
@@ -184,7 +192,7 @@ impl<A: hub::HalApi> TextureUsageScope<A> {
     }
 
     pub fn set_size(&mut self, size: usize) {
-        self.set.simple.resize(size, TextureUses::UNINITIALIZED);
+        self.set.set_size(size);
         self.metadata.set_size(size);
     }
 
@@ -211,7 +219,7 @@ impl<A: hub::HalApi> TextureUsageScope<A> {
 
             unsafe {
                 state_combine(
-                    Some(storage),
+                    Some(texture_data_from_texture(storage, index32)),
                     None,
                     &mut self.set,
                     &mut self.metadata,
@@ -244,31 +252,6 @@ impl<A: hub::HalApi> TextureUsageScope<A> {
     /// # Safety
     ///
     /// `id` must be a valid ID and have an ID value less than the last call to set_size.
-    pub unsafe fn extend<'a>(
-        &mut self,
-        storage: &'a hub::Storage<Texture<A>, TextureId>,
-        id: TextureId,
-        selector: Option<TextureSelector>,
-        new_state: TextureUses,
-    ) -> Result<&'a Texture<A>, UsageConflict> {
-        let tex = storage
-            .get(id)
-            .map_err(|_| UsageConflict::TextureInvalid { id })?;
-
-        self.extend_refcount(
-            storage,
-            Valid(id),
-            selector,
-            tex.life_guard.ref_count.as_ref().unwrap(),
-            new_state,
-        )?;
-
-        Ok(tex)
-    }
-
-    /// # Safety
-    ///
-    /// `id` must be a valid ID and have an ID value less than the last call to set_size.
     pub unsafe fn extend_refcount(
         &mut self,
         storage: &hub::Storage<Texture<A>, TextureId>,
@@ -283,7 +266,7 @@ impl<A: hub::HalApi> TextureUsageScope<A> {
         self.debug_assert_in_bounds(index);
 
         state_combine(
-            Some(storage),
+            Some(texture_data_from_texture(storage, index32)),
             None,
             &mut self.set,
             &mut self.metadata,
@@ -349,10 +332,8 @@ impl<A: hub::HalApi> TextureTracker<A> {
     }
 
     pub fn set_size(&mut self, size: usize) {
-        self.start_set
-            .simple
-            .resize(size, TextureUses::UNINITIALIZED);
-        self.end_set.simple.resize(size, TextureUses::UNINITIALIZED);
+        self.start_set.set_size(size);
+        self.end_set.set_size(size);
 
         self.metadata.set_size(size);
     }
@@ -423,7 +404,7 @@ impl<A: hub::HalApi> TextureTracker<A> {
 
         unsafe {
             state_combine(
-                Some(storage),
+                Some(texture_data_from_texture(storage, index32)),
                 Some(&mut self.start_set),
                 &mut self.end_set,
                 &mut self.metadata,
@@ -459,7 +440,7 @@ impl<A: hub::HalApi> TextureTracker<A> {
             tracker.debug_assert_in_bounds(index);
             unsafe {
                 state_combine(
-                    Some(storage),
+                    Some(texture_data_from_texture(storage, index32)),
                     Some(&mut self.start_set),
                     &mut self.end_set,
                     &mut self.metadata,
@@ -495,7 +476,7 @@ impl<A: hub::HalApi> TextureTracker<A> {
             scope.debug_assert_in_bounds(index);
             unsafe {
                 state_combine(
-                    Some(storage),
+                    Some(texture_data_from_texture(storage, index32)),
                     Some(&mut self.start_set),
                     &mut self.end_set,
                     &mut self.metadata,
@@ -532,7 +513,7 @@ impl<A: hub::HalApi> TextureTracker<A> {
                 continue;
             }
             state_combine(
-                Some(storage),
+                Some(texture_data_from_texture(storage, index32)),
                 Some(&mut self.start_set),
                 &mut self.end_set,
                 &mut self.metadata,
@@ -658,9 +639,9 @@ impl<'a> LayeredStateProvider<'a> {
     }
 
     #[inline(always)]
-    unsafe fn get_layers<A: hub::HalApi>(
+    unsafe fn get_layers(
         self,
-        texture: Option<&Texture<A>>,
+        texture_data: Option<(&LifeGuard, &TextureSelector)>,
         index32: u32,
         index: usize,
     ) -> SingleOrManyStates<TextureUses, impl Iterator<Item = (TextureSelector, TextureUses)> + 'a>
@@ -668,7 +649,7 @@ impl<'a> LayeredStateProvider<'a> {
         match self {
             LayeredStateProvider::KnownSingle { state } => SingleOrManyStates::Single(state),
             LayeredStateProvider::Selector { selector, state } => {
-                if texture.unwrap().full_range == selector {
+                if *texture_data.unwrap().1 == selector {
                     SingleOrManyStates::Single(state)
                 } else {
                     SingleOrManyStates::Many(Either::Left(iter::once((selector, state))))
@@ -702,7 +683,11 @@ enum ResourceMetadataProvider<'a, A: hub::HalApi> {
     },
 }
 impl<A: hub::HalApi> ResourceMetadataProvider<'_, A> {
-    unsafe fn get_own(self, texture: Option<&Texture<A>>, index: usize) -> (Epoch, RefCount) {
+    unsafe fn get_own(
+        self,
+        texture_data: Option<(&LifeGuard, &TextureSelector)>,
+        index: usize,
+    ) -> (Epoch, RefCount) {
         match self {
             ResourceMetadataProvider::Direct { epoch, ref_count } => {
                 (epoch, ref_count.into_owned())
@@ -716,7 +701,7 @@ impl<A: hub::HalApi> ResourceMetadataProvider<'_, A> {
                     .unwrap_unchecked(),
             ),
             ResourceMetadataProvider::Resource { epoch } => {
-                (epoch, texture.unwrap().life_guard.add_ref())
+                (epoch, texture_data.unwrap().0.add_ref())
             }
         }
     }
@@ -732,8 +717,17 @@ impl<A: hub::HalApi> ResourceMetadataProvider<'_, A> {
 }
 
 #[inline(always)]
+unsafe fn texture_data_from_texture<A: hub::HalApi>(
+    storage: &hub::Storage<Texture<A>, TextureId>,
+    index32: u32,
+) -> (&LifeGuard, &TextureSelector) {
+    let texture = storage.get_unchecked(index32);
+    (&texture.life_guard, &texture.full_range)
+}
+
+#[inline(always)]
 unsafe fn state_combine<A: hub::HalApi>(
-    storage: Option<&hub::Storage<Texture<A>, TextureId>>,
+    texture_data: Option<(&LifeGuard, &TextureSelector)>,
     start_state: Option<&mut TextureStateSet>,
     end_state: &mut TextureStateSet,
     resource_metadata: &mut ResourceMetadata<A>,
@@ -743,8 +737,6 @@ unsafe fn state_combine<A: hub::HalApi>(
     metadata_provider: ResourceMetadataProvider<'_, A>,
     barriers: Option<&mut Vec<PendingTransition<TextureUses>>>,
 ) -> Result<(), UsageConflict> {
-    let texture = storage.map(|s| s.get_unchecked(index32));
-
     let currently_owned = resource_metadata.owned.get(index).unwrap_unchecked();
 
     if currently_owned {
@@ -757,7 +749,7 @@ unsafe fn state_combine<A: hub::HalApi>(
         };
 
         let new_state = set_state(
-            texture,
+            texture_data,
             start_state,
             end_state,
             index32,
@@ -766,19 +758,25 @@ unsafe fn state_combine<A: hub::HalApi>(
             barriers.is_none(),
         );
 
-        merge_or_transition_state(texture.unwrap(), old_state, new_state, index32, barriers)
-            .map_err(|partial| {
-                let epoch = metadata_provider.get_epoch(index);
-                UsageConflict::from_texture(
-                    TextureId::zip(index32, epoch, A::VARIANT),
-                    partial.selector,
-                    partial.current_state,
-                    partial.new_state,
-                )
-            })?;
+        merge_or_transition_state(
+            texture_data.unwrap(),
+            old_state,
+            new_state,
+            index32,
+            barriers,
+        )
+        .map_err(|partial| {
+            let epoch = metadata_provider.get_epoch(index);
+            UsageConflict::from_texture(
+                TextureId::zip(index32, epoch, A::VARIANT),
+                partial.selector,
+                partial.current_state,
+                partial.new_state,
+            )
+        })?;
     } else {
         set_state(
-            texture,
+            texture_data,
             start_state,
             end_state,
             index32,
@@ -787,7 +785,7 @@ unsafe fn state_combine<A: hub::HalApi>(
             false,
         );
 
-        let (epoch, ref_count) = metadata_provider.get_own(texture, index);
+        let (epoch, ref_count) = metadata_provider.get_own(texture_data, index);
 
         resource_metadata.owned.set(index, true);
         *resource_metadata.epochs.get_unchecked_mut(index) = epoch;
@@ -798,8 +796,8 @@ unsafe fn state_combine<A: hub::HalApi>(
 }
 
 #[inline(always)]
-unsafe fn set_state<'a, A: hub::HalApi>(
-    texture: Option<&Texture<A>>,
+unsafe fn set_state<'a>(
+    texture_data: Option<(&LifeGuard, &TextureSelector)>,
     start_state: Option<&mut TextureStateSet>,
     end_state: &'a mut TextureStateSet,
     index32: u32,
@@ -807,12 +805,12 @@ unsafe fn set_state<'a, A: hub::HalApi>(
     state_provider: LayeredStateProvider,
     merging_and_existing: bool,
 ) -> SingleOrManyStates<&'a mut TextureUses, &'a mut ComplexTextureState> {
-    match state_provider.get_layers(texture, index32, index) {
+    match state_provider.get_layers(texture_data, index32, index) {
         SingleOrManyStates::Single(state) => {
             let reference = end_state.simple.get_unchecked_mut(index);
 
             if merging_and_existing && *reference == TextureUses::COMPLEX {
-                let full_range = texture.unwrap().full_range.clone();
+                let full_range = texture_data.unwrap().1.clone();
 
                 let complex = ComplexTextureState::from_selector_state_iter(
                     full_range.clone(),
@@ -836,7 +834,7 @@ unsafe fn set_state<'a, A: hub::HalApi>(
             SingleOrManyStates::Single(reference)
         }
         SingleOrManyStates::Many(state_iter) => {
-            let full_range = texture.unwrap().full_range.clone();
+            let full_range = texture_data.unwrap().1.clone();
 
             let complex = ComplexTextureState::from_selector_state_iter(full_range, state_iter);
 
@@ -863,8 +861,8 @@ struct PartialUsageConflict {
 }
 
 #[inline(always)]
-fn merge_or_transition_state<A: hub::HalApi>(
-    texture: &Texture<A>,
+fn merge_or_transition_state(
+    texture_data: (&LifeGuard, &TextureSelector),
     old_state: SingleOrManyStates<TextureUses, ComplexTextureState>,
     new_state: SingleOrManyStates<&mut TextureUses, &mut ComplexTextureState>,
     index32: u32,
@@ -881,7 +879,7 @@ fn merge_or_transition_state<A: hub::HalApi>(
                     #[allow(clippy::range_plus_one)]
                     barriers.push(PendingTransition {
                         id: index32,
-                        selector: texture.full_range.clone(),
+                        selector: texture_data.1.clone(),
                         usage: old_simple..*new_simple,
                     })
                 }
@@ -890,7 +888,7 @@ fn merge_or_transition_state<A: hub::HalApi>(
 
                     if invalid_resource_state(merged_state) {
                         return Err(PartialUsageConflict {
-                            selector: texture.full_range.clone(),
+                            selector: texture_data.1.clone(),
                             current_state: old_simple,
                             new_state: *new_simple,
                         });
@@ -906,10 +904,13 @@ fn merge_or_transition_state<A: hub::HalApi>(
             for (mip_index, mips) in new_many.mips.iter_mut().enumerate() {
                 let mip_index = mip_index as u32;
                 for (layer, new_state) in mips.iter_mut() {
+                    if *new_state == TextureUses::UNINITIALIZED {
+                        *new_state = old_simple;
+                    }
                     match barriers {
                         Some(&mut ref mut barriers) => {
                             if skip_barrier(old_simple, *new_state) {
-                                return Ok(());
+                                continue;
                             }
 
                             #[allow(clippy::range_plus_one)]
@@ -953,7 +954,7 @@ fn merge_or_transition_state<A: hub::HalApi>(
                     match barriers {
                         Some(&mut ref mut barriers) => {
                             if skip_barrier(old_state, *new_single) {
-                                return Ok(());
+                                continue;
                             }
 
                             #[allow(clippy::range_plus_one)]
@@ -976,7 +977,6 @@ fn merge_or_transition_state<A: hub::HalApi>(
             Ok(())
         }
         (SingleOrManyStates::Many(mut old_complex), SingleOrManyStates::Many(new_complex)) => {
-            let mut temp = Vec::new();
             debug_assert!(old_complex.mips.len() >= new_complex.mips.len());
 
             for (mip_id, (mip_old, mip_new)) in old_complex
@@ -986,18 +986,17 @@ fn merge_or_transition_state<A: hub::HalApi>(
                 .enumerate()
             {
                 let level = mip_id as u32;
-                temp.extend(mip_old.merge(mip_new, 0));
 
-                for (layers, states) in temp.drain(..) {
+                for (layers, states) in mip_old.merge(mip_new, 0) {
                     match states {
-                        Range {
-                            start: Some(start),
-                            end: Some(end),
-                        } => {
+                        MergeItem(start, end) => {
+                            if *end == TextureUses::UNINITIALIZED {
+                                *end = start;
+                            }
                             match barriers {
                                 Some(&mut ref mut barriers) => {
-                                    if skip_barrier(start, end) {
-                                        return Ok(());
+                                    if skip_barrier(start, *end) {
+                                        continue;
                                     }
                                     // TODO: Can't satisfy clippy here unless we modify
                                     // `TextureSelector` to use `std::ops::RangeBounds`.
@@ -1008,13 +1007,13 @@ fn merge_or_transition_state<A: hub::HalApi>(
                                             mips: level..level + 1,
                                             layers: layers.clone(),
                                         },
-                                        usage: start..end,
+                                        usage: start..*end,
                                     };
 
                                     barriers.push(pending);
                                 }
                                 None => {
-                                    let merged_state = start | end;
+                                    let merged_state = start | *end;
 
                                     if invalid_resource_state(merged_state) {
                                         return Err(PartialUsageConflict {
@@ -1023,17 +1022,14 @@ fn merge_or_transition_state<A: hub::HalApi>(
                                                 layers: layers.clone(),
                                             },
                                             current_state: start,
-                                            new_state: end,
+                                            new_state: *end,
                                         });
                                     }
 
-                                    for (_, state) in mip_new.isolate(&layers, end) {
-                                        *state = merged_state;
-                                    }
+                                    *end = merged_state;
                                 }
                             }
                         }
-                        _ => unreachable!(),
                     };
                 }
 
@@ -1042,5 +1038,190 @@ fn merge_or_transition_state<A: hub::HalApi>(
 
             Ok(())
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    struct TrackingTest {
+        life_guard: LifeGuard,
+        selector: TextureSelector,
+        set: TextureStateSet,
+        metadata: ResourceMetadata<hal::api::Empty>,
+    }
+
+    fn setup(mips: Range<u32>, layers: Range<u32>, states: &[TextureUses]) -> TrackingTest {
+        let life_guard = LifeGuard::new("test");
+        let selector = TextureSelector { mips, layers };
+
+        let mut set = TextureStateSet::new();
+        let mut metadata = ResourceMetadata::<hal::api::Empty>::new();
+
+        set.set_size(states.len());
+        metadata.set_size(states.len());
+
+        for &state in states {
+            set.simple[0] = state;
+
+            metadata.owned.set(0, true);
+            metadata.ref_counts[0] = None; // Okay because we only read this through metadata provider
+            metadata.epochs[0] = 1;
+        }
+
+        TrackingTest {
+            life_guard,
+            selector,
+            set,
+            metadata,
+        }
+    }
+
+    #[test]
+    fn simple_transition() {
+        let mut test = setup(0..1, 0..1, &[TextureUses::UNINITIALIZED]);
+
+        let mut barriers = Vec::new();
+        unsafe {
+            let _ = state_combine(
+                Some((&test.life_guard, &test.selector)),
+                None,
+                &mut test.set,
+                &mut test.metadata,
+                0,
+                0,
+                LayeredStateProvider::KnownSingle {
+                    state: TextureUses::RESOURCE,
+                },
+                ResourceMetadataProvider::Direct {
+                    epoch: 1,
+                    ref_count: Cow::Borrowed(test.life_guard.ref_count.as_ref().unwrap()),
+                },
+                Some(&mut barriers),
+            );
+        };
+        assert_eq!(test.set.simple, &[TextureUses::RESOURCE]);
+        assert_eq!(
+            barriers,
+            &[PendingTransition {
+                id: 0,
+                selector: test.selector,
+                usage: TextureUses::UNINITIALIZED..TextureUses::RESOURCE
+            }]
+        );
+    }
+
+    #[test]
+    fn simple_merger() {
+        let mut test = setup(0..1, 0..1, &[TextureUses::COPY_SRC]);
+
+        unsafe {
+            let res = state_combine(
+                Some((&test.life_guard, &test.selector)),
+                None,
+                &mut test.set,
+                &mut test.metadata,
+                0,
+                0,
+                LayeredStateProvider::KnownSingle {
+                    state: TextureUses::RESOURCE,
+                },
+                ResourceMetadataProvider::Direct {
+                    epoch: 1,
+                    ref_count: Cow::Borrowed(test.life_guard.ref_count.as_ref().unwrap()),
+                },
+                None,
+            );
+            assert_eq!(res, Ok(()));
+        };
+        assert_eq!(
+            test.set.simple,
+            &[TextureUses::COPY_SRC | TextureUses::RESOURCE]
+        );
+    }
+
+    #[test]
+    fn simple_to_complex_transition() {
+        let mut test = setup(0..1, 0..2, &[TextureUses::RESOURCE]);
+
+        let transition_selector = TextureSelector {
+            mips: 0..1,
+            layers: 1..2,
+        };
+
+        let mut barriers = Vec::new();
+        unsafe {
+            let _ = state_combine(
+                Some((&test.life_guard, &test.selector)),
+                None,
+                &mut test.set,
+                &mut test.metadata,
+                0,
+                0,
+                LayeredStateProvider::Selector {
+                    selector: transition_selector.clone(),
+                    state: TextureUses::STORAGE_WRITE,
+                },
+                ResourceMetadataProvider::Direct {
+                    epoch: 1,
+                    ref_count: Cow::Borrowed(test.life_guard.ref_count.as_ref().unwrap()),
+                },
+                Some(&mut barriers),
+            );
+        };
+        assert_eq!(test.set.simple, &[TextureUses::COMPLEX]);
+        assert_eq!(
+            barriers,
+            &[PendingTransition {
+                id: 0,
+                selector: transition_selector,
+                usage: TextureUses::RESOURCE..TextureUses::STORAGE_WRITE
+            }]
+        );
+    }
+
+    #[test]
+    fn simple_to_complex_merger() {
+        let mut test = setup(0..1, 0..2, &[TextureUses::RESOURCE]);
+
+        let transition_selector = TextureSelector {
+            mips: 0..1,
+            layers: 1..2,
+        };
+
+        unsafe {
+            let res = state_combine(
+                Some((&test.life_guard, &test.selector)),
+                None,
+                &mut test.set,
+                &mut test.metadata,
+                0,
+                0,
+                LayeredStateProvider::Selector {
+                    selector: transition_selector.clone(),
+                    state: TextureUses::DEPTH_STENCIL_READ,
+                },
+                ResourceMetadataProvider::Direct {
+                    epoch: 1,
+                    ref_count: Cow::Borrowed(test.life_guard.ref_count.as_ref().unwrap()),
+                },
+                None,
+            );
+            assert_eq!(res, Ok(()));
+        };
+        assert_eq!(test.set.simple, &[TextureUses::COMPLEX]);
+        let complex = test.set.complex.get(&0).unwrap();
+        let mip0: Vec<_> = complex.mips[0].iter().cloned().collect();
+        assert_eq!(
+            mip0,
+            &[
+                (0..1, TextureUses::RESOURCE),
+                (
+                    1..2,
+                    TextureUses::RESOURCE | TextureUses::DEPTH_STENCIL_READ
+                )
+            ]
+        );
     }
 }

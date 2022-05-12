@@ -673,7 +673,7 @@ bitflags::bitflags! {
         /// still need to be pipeline barriers inserted for synchronization.
         const ORDERED = Self::INCLUSIVE.bits | Self::COLOR_TARGET.bits | Self::DEPTH_STENCIL_WRITE.bits | Self::STORAGE_READ.bits;
         //TODO: remove this
-        const UNINITIALIZED = 0xFFFF;
+        const UNINITIALIZED = 1 << 9;
     }
 }
 
