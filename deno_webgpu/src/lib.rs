@@ -146,6 +146,9 @@ fn deserialize_features(features: &wgpu_types::Features) -> Vec<&'static str> {
     if features.contains(wgpu_types::Features::INDIRECT_FIRST_INSTANCE) {
         return_features.push("indirect-first-instance");
     }
+    if features.contains(wgpu_types::Features::SHADER_FLOAT16) {
+        return_features.push("shader-f16")
+    }
 
     // extended from spec
     if features.contains(wgpu_types::Features::MAPPABLE_PRIMARY_BUFFERS) {
@@ -305,6 +308,10 @@ impl From<GpuRequiredFeatures> for wgpu_types::Features {
         features.set(
             wgpu_types::Features::INDIRECT_FIRST_INSTANCE,
             required_features.0.contains("indirect-first-instance"),
+        );
+        features.set(
+            wgpu_types::Features::SHADER_FLOAT16,
+            required_features.0.contains("shader-f16"),
         );
 
         // extended from spec
