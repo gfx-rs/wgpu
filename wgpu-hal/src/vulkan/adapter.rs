@@ -25,6 +25,10 @@ pub struct PhysicalDeviceFeatures {
     depth_clip_enable: Option<vk::PhysicalDeviceDepthClipEnableFeaturesEXT>,
     multiview: Option<vk::PhysicalDeviceMultiviewFeaturesKHR>,
     astc_hdr: Option<vk::PhysicalDeviceTextureCompressionASTCHDRFeaturesEXT>,
+    shader_float16: Option<(
+        vk::PhysicalDeviceShaderFloat16Int8Features,
+        vk::PhysicalDevice16BitStorageFeatures,
+    )>,
 }
 
 // This is safe because the structs have `p_next: *mut c_void`, which we null out/never read.
@@ -61,6 +65,10 @@ impl PhysicalDeviceFeatures {
         }
         if let Some(ref mut feature) = self.astc_hdr {
             info = info.push_next(feature);
+        }
+        if let Some((ref mut f16_i8_feature, ref mut _16bit_feature)) = self.shader_float16 {
+            info = info.push_next(f16_i8_feature);
+            info = info.push_next(_16bit_feature);
         }
         info
     }
@@ -326,6 +334,19 @@ impl PhysicalDeviceFeatures {
             } else {
                 None
             },
+            shader_float16: if requested_features.contains(wgt::Features::SHADER_FLOAT16) {
+                Some((
+                    vk::PhysicalDeviceShaderFloat16Int8Features::builder()
+                        .shader_float16(true)
+                        .build(),
+                    vk::PhysicalDevice16BitStorageFeatures::builder()
+                        .storage_buffer16_bit_access(true)
+                        .uniform_and_storage_buffer16_bit_access(true)
+                        .build(),
+                ))
+            } else {
+                None
+            },
         }
     }
 
@@ -531,6 +552,15 @@ impl PhysicalDeviceFeatures {
             );
         }
 
+        if let Some((ref f16_i8, ref bit16)) = self.shader_float16 {
+            features.set(
+                F::SHADER_FLOAT16,
+                f16_i8.shader_float16 != 0
+                    && bit16.storage_buffer16_bit_access != 0
+                    && bit16.uniform_and_storage_buffer16_bit_access != 0,
+            );
+        }
+
         (features, dl_flags)
     }
 
@@ -642,7 +672,12 @@ impl PhysicalDeviceCapabilities {
         extensions.push(vk::KhrPortabilitySubsetFn::name());
 
         if requested_features.contains(wgt::Features::TEXTURE_COMPRESSION_ASTC_HDR) {
-            extensions.push(vk::ExtTextureCompressionAstcHdrFn::name())
+            extensions.push(vk::ExtTextureCompressionAstcHdrFn::name());
+        }
+
+        if requested_features.contains(wgt::Features::SHADER_FLOAT16) {
+            extensions.push(vk::KhrShaderFloat16Int8Fn::name());
+            extensions.push(vk::Khr16bitStorageFn::name());
         }
 
         extensions
@@ -882,6 +917,16 @@ impl super::InstanceShared {
                     .astc_hdr
                     .insert(vk::PhysicalDeviceTextureCompressionASTCHDRFeaturesEXT::default());
                 builder = builder.push_next(next);
+            }
+            if capabilities.supports_extension(vk::KhrShaderFloat16Int8Fn::name())
+                && capabilities.supports_extension(vk::Khr16bitStorageFn::name())
+            {
+                let next = features.shader_float16.insert((
+                    vk::PhysicalDeviceShaderFloat16Int8FeaturesKHR::default(),
+                    vk::PhysicalDevice16BitStorageFeaturesKHR::default(),
+                ));
+                builder = builder.push_next(&mut next.0);
+                builder = builder.push_next(&mut next.1);
             }
 
             let mut features2 = builder.build();
