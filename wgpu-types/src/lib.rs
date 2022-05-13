@@ -1368,7 +1368,7 @@ impl From<TextureFormat> for ColorTargetState {
 /// Primitive type the input mesh is composed of.
 ///
 /// Corresponds to [WebGPU `GPUPrimitiveTopology`](
-/// https://gpuweb.github.io/gpuweb/#dictdef-gpuprimitivetopology).
+/// https://gpuweb.github.io/gpuweb/#enumdef-gpuprimitivetopology).
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
@@ -2986,12 +2986,13 @@ impl Default for Extent3d {
 }
 
 impl Extent3d {
-    /// Calculates the [physical size] is backing an texture of the given format and extent.
-    /// This includes padding to the block width and height of the format.
+    /// Calculates the [physical size] backing a texture of the given
+    /// format and extent.  This includes padding to the block width
+    /// and height of the format.
     ///
     /// This is the texture extent that you must upload at when uploading to _mipmaps_ of compressed textures.
     ///
-    /// [physical size]: https://gpuweb.github.io/gpuweb/#physical-size
+    /// [physical size]: https://gpuweb.github.io/gpuweb/#physical-miplevel-specific-texture-extent
     pub fn physical_size(&self, format: TextureFormat) -> Self {
         let (block_width, block_height) = format.describe().block_dimensions;
         let block_width = block_width as u32;
