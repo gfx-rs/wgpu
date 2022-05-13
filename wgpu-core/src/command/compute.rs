@@ -309,8 +309,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (device_guard, mut token) = hub.devices.read(&mut token);
 
         let (mut cmd_buf_guard, mut token) = hub.command_buffers.write(&mut token);
-        let cmd_buf = CommandBuffer::get_encoder_mut(&mut *cmd_buf_guard, encoder_id)
-            .map_pass_err(init_scope)?;
+        // Spell out the type, to placate rust-analyzer.
+        // https://github.com/rust-lang/rust-analyzer/issues/12247
+        let cmd_buf: &mut CommandBuffer<A> =
+            CommandBuffer::get_encoder_mut(&mut *cmd_buf_guard, encoder_id)
+                .map_pass_err(init_scope)?;
         // will be reset to true if recording is done without errors
         cmd_buf.status = CommandEncoderStatus::Error;
         let raw = cmd_buf.encoder.open();
