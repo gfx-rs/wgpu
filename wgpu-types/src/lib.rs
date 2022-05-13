@@ -232,6 +232,16 @@ bitflags::bitflags! {
         ///
         /// This is a web and native feature.
         const PIPELINE_STATISTICS_QUERY = 1 << 4;
+        /// Allows shaders to acquire the FP16 ability
+        ///
+        /// Note: this is not supported in naga yet，only through spir-v passthrough right now.
+        ///
+        /// Supported Platforms:
+        /// - Vulkan
+        /// - Metal
+        ///
+        /// This is a web and native feature.
+        const SHADER_FLOAT16 = 1 << 5;
         /// Webgpu only allows the MAP_READ and MAP_WRITE buffer usage to be matched with
         /// COPY_DST and COPY_SRC respectively. This removes this requirement.
         ///
