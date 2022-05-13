@@ -1170,11 +1170,11 @@ impl<V: Default> Default for Operations<V> {
 /// Corresponds to [WebGPU `GPURenderPassColorAttachment`](
 /// https://gpuweb.github.io/gpuweb/#color-attachments).
 #[derive(Clone, Debug)]
-pub struct RenderPassColorAttachment<'a> {
+pub struct RenderPassColorAttachment<'tex> {
     /// The view to use as an attachment.
-    pub view: &'a TextureView,
+    pub view: &'tex TextureView,
     /// The view that will receive the resolved output if multisampling is used.
-    pub resolve_target: Option<&'a TextureView>,
+    pub resolve_target: Option<&'tex TextureView>,
     /// What operations will be performed on this color attachment.
     pub ops: Operations<Color>,
 }
@@ -1186,9 +1186,9 @@ pub struct RenderPassColorAttachment<'a> {
 /// Corresponds to [WebGPU `GPURenderPassDepthStencilAttachment`](
 /// https://gpuweb.github.io/gpuweb/#depth-stencil-attachments).
 #[derive(Clone, Debug)]
-pub struct RenderPassDepthStencilAttachment<'a> {
+pub struct RenderPassDepthStencilAttachment<'tex> {
     /// The view to use as an attachment.
-    pub view: &'a TextureView,
+    pub view: &'tex TextureView,
     /// What operations will be performed on the depth part of the attachment.
     pub depth_ops: Option<Operations<f32>>,
     /// What operations will be performed on the stencil part of the attachment.
@@ -1389,19 +1389,19 @@ pub struct BindGroupDescriptor<'a> {
 ///
 /// For use with [`CommandEncoder::begin_render_pass`].
 ///
-/// Note: separate lifetimes are needed because the texture views
-/// have to live as long as the pass is recorded, while everything else doesn't.
+/// Note: separate lifetimes are needed because the texture views (`'tex`)
+/// have to live as long as the pass is recorded, while everything else (`'desc`) doesn't.
 ///
 /// Corresponds to [WebGPU `GPURenderPassDescriptor`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpurenderpassdescriptor).
 #[derive(Clone, Debug, Default)]
-pub struct RenderPassDescriptor<'a, 'b> {
+pub struct RenderPassDescriptor<'tex, 'desc> {
     /// Debug label of the render pass. This will show up in graphics debuggers for easy identification.
-    pub label: Label<'a>,
+    pub label: Label<'desc>,
     /// The color attachments of the render pass.
-    pub color_attachments: &'b [RenderPassColorAttachment<'a>],
+    pub color_attachments: &'desc [RenderPassColorAttachment<'tex>],
     /// The depth and stencil attachment of the render pass, if any.
-    pub depth_stencil_attachment: Option<RenderPassDepthStencilAttachment<'a>>,
+    pub depth_stencil_attachment: Option<RenderPassDepthStencilAttachment<'tex>>,
 }
 
 /// Describes how the vertex buffer is interpreted.
@@ -2490,10 +2490,10 @@ impl CommandEncoder {
     /// Begins recording of a render pass.
     ///
     /// This function returns a [`RenderPass`] object which records a single render pass.
-    pub fn begin_render_pass<'a>(
-        &'a mut self,
-        desc: &RenderPassDescriptor<'a, '_>,
-    ) -> RenderPass<'a> {
+    pub fn begin_render_pass<'pass>(
+        &'pass mut self,
+        desc: &RenderPassDescriptor<'pass, '_>,
+    ) -> RenderPass<'pass> {
         let id = self.id.as_ref().unwrap();
         RenderPass {
             id: Context::command_encoder_begin_render_pass(&*self.context, id, desc),
