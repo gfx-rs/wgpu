@@ -4,8 +4,8 @@ use crate::{
     id::{TextureId, TypedId, Valid},
     resource::Texture,
     track::{
-        invalid_resource_state, iterate_bitvec_indices, range::MergeItem, skip_barrier,
-        ResourceMetadata, ResourceUses, UsageConflict,
+        invalid_resource_state, iterate_bitvec_indices, skip_barrier, ResourceMetadata,
+        ResourceUses, UsageConflict,
     },
     Epoch, LifeGuard, RefCount,
 };
@@ -54,7 +54,7 @@ impl ComplexTextureState {
     fn new(mip_level_count: u32, array_layer_count: u32) -> Self {
         Self {
             mips: iter::repeat_with(|| {
-                RangedStates::from_range(0..array_layer_count, TextureUses::UNINITIALIZED)
+                RangedStates::from_range(0..array_layer_count, TextureUses::UNKNOWN)
             })
             .take(mip_level_count as usize)
             .collect(),
@@ -70,7 +70,7 @@ impl ComplexTextureState {
         for (selector, desired_state) in state_iter {
             let mips = selector.mips.start as usize..selector.mips.end as usize;
             for mip in &mut complex.mips[mips] {
-                for (_, state) in mip.isolate(&selector.layers, TextureUses::UNINITIALIZED) {
+                for (_, state) in mip.isolate(&selector.layers, TextureUses::UNKNOWN) {
                     *state = desired_state;
                 }
             }
@@ -447,7 +447,7 @@ impl<A: hub::HalApi> TextureTracker<A> {
                     index32,
                     index,
                     LayeredStateProvider::TextureSet {
-                        set: &tracker.end_set,
+                        set: &tracker.start_set,
                     },
                     ResourceMetadataProvider::Indirect {
                         metadata: &tracker.metadata,
@@ -610,6 +610,7 @@ where
     }
 }
 
+#[derive(Debug)]
 enum SingleOrManyStates<S, M> {
     Single(S),
     Many(M),
@@ -725,6 +726,16 @@ unsafe fn texture_data_from_texture<A: hub::HalApi>(
     (&texture.life_guard, &texture.full_range)
 }
 
+// I think the trick to the barriers is that there are three different possible operations:
+
+// merge from a single state
+// barrier from a single state into a double sided tracker
+// update from a single state into a double sided tracker
+
+// recording rpasses is a merge(rpass, resource)
+// cmd_buf <- rpass is a barrier(cmd_buf, rpass) + update(cmd_buf, rpass)
+// device <- cmd_buf is a barrier(device, cmd_buff.start) + update(cmd_buf, cmd_buf.end)
+
 #[inline(always)]
 unsafe fn state_combine<A: hub::HalApi>(
     texture_data: Option<(&LifeGuard, &TextureSelector)>,
@@ -750,7 +761,7 @@ unsafe fn state_combine<A: hub::HalApi>(
 
         let new_state = set_state(
             texture_data,
-            start_state,
+            None, // We never need to set the start state here.
             end_state,
             index32,
             index,
@@ -758,8 +769,22 @@ unsafe fn state_combine<A: hub::HalApi>(
             barriers.is_none(),
         );
 
+        let mut start_complex = None;
+        if let Some(start_state) = start_state {
+            let start_simple = *start_state.simple.get_unchecked(index);
+
+            if start_simple == TextureUses::COMPLEX {
+                start_complex = Some(start_state.complex.get_mut(&index32).unwrap_unchecked());
+            } else {
+                dbg!(&start_simple);
+            }
+        } else {
+            dbg!("no start state");
+        }
+
         merge_or_transition_state(
             texture_data.unwrap(),
+            start_complex,
             old_state,
             new_state,
             index32,
@@ -860,14 +885,17 @@ struct PartialUsageConflict {
     new_state: TextureUses,
 }
 
+// in single -> double or
 #[inline(always)]
 fn merge_or_transition_state(
     texture_data: (&LifeGuard, &TextureSelector),
+    start_complex: Option<&mut ComplexTextureState>,
     old_state: SingleOrManyStates<TextureUses, ComplexTextureState>,
     new_state: SingleOrManyStates<&mut TextureUses, &mut ComplexTextureState>,
     index32: u32,
     barriers: Option<&mut Vec<PendingTransition<TextureUses>>>,
 ) -> Result<(), PartialUsageConflict> {
+    dbg!(&start_complex, &old_state, &new_state);
     match (old_state, new_state) {
         (SingleOrManyStates::Single(old_simple), SingleOrManyStates::Single(new_simple)) => {
             match barriers {
@@ -903,9 +931,10 @@ fn merge_or_transition_state(
         (SingleOrManyStates::Single(old_simple), SingleOrManyStates::Many(new_many)) => {
             for (mip_index, mips) in new_many.mips.iter_mut().enumerate() {
                 let mip_index = mip_index as u32;
-                for (layer, new_state) in mips.iter_mut() {
-                    if *new_state == TextureUses::UNINITIALIZED {
+                for (layers, new_state) in mips.iter_mut() {
+                    if *new_state == TextureUses::UNKNOWN {
                         *new_state = old_simple;
+                        continue;
                     }
                     match barriers {
                         Some(&mut ref mut barriers) => {
@@ -918,7 +947,7 @@ fn merge_or_transition_state(
                                 id: index32,
                                 selector: TextureSelector {
                                     mips: mip_index..mip_index + 1,
-                                    layers: layer.clone(),
+                                    layers: layers.clone(),
                                 },
                                 usage: old_simple..*new_state,
                             })
@@ -930,7 +959,7 @@ fn merge_or_transition_state(
                                 return Err(PartialUsageConflict {
                                     selector: TextureSelector {
                                         mips: mip_index..mip_index + 1,
-                                        layers: layer.clone(),
+                                        layers: layers.clone(),
                                     },
                                     current_state: old_simple,
                                     new_state: *new_state,
@@ -948,9 +977,28 @@ fn merge_or_transition_state(
             Ok(())
         }
         (SingleOrManyStates::Many(old_many), SingleOrManyStates::Single(new_single)) => {
-            for (mip_index, mips) in old_many.mips.iter().enumerate() {
-                let mip_index = mip_index as u32;
-                for &(ref layer, old_state) in mips.iter() {
+            for (mip_index_usize, mips) in old_many.mips.iter().enumerate() {
+                let mip_index = mip_index_usize as u32;
+                for &(ref layers, old_state) in mips.iter() {
+                    // If this state is still unknown, at no point during this tracker have we had information about
+                    // these states. This means that the starting side also has no idea what the state is. We need to
+                    // go tell it about this new state.
+                    if old_state == TextureUses::UNKNOWN {
+                        // We only care if this is a two sided tracker, if this is a one sided tracker this block is unreachable.
+
+                        // We only care if the starting side of the two sided tracker is complex. If it is simple, there was
+                        // no way for us to get an unknown in the old_state anyway as the simple usage would have carried over.
+                        if let Some(&mut ref mut start_complex) = start_complex {
+                            for (_, state) in
+                                start_complex.mips[mip_index_usize].isolate(layers, *new_single)
+                            {
+                                *state = *new_single;
+                            }
+                        }
+                        // We're the first usage, so no barrier to generate.
+                        continue;
+                    }
+
                     match barriers {
                         Some(&mut ref mut barriers) => {
                             if skip_barrier(old_state, *new_single) {
@@ -962,7 +1010,7 @@ fn merge_or_transition_state(
                                 id: index32,
                                 selector: TextureSelector {
                                     mips: mip_index..mip_index + 1,
-                                    layers: layer.clone(),
+                                    layers: layers.clone(),
                                 },
                                 usage: old_state..*new_single,
                             })
@@ -970,6 +1018,11 @@ fn merge_or_transition_state(
                         None => {
                             unreachable!();
                         }
+                    }
+
+                    // If this exists, we almost certainly caused chaos to it, let's clean up.
+                    if let Some(&mut ref mut start_complex) = start_complex {
+                        start_complex.mips[mip_index_usize].coalesce();
                     }
                 }
             }
@@ -979,61 +1032,113 @@ fn merge_or_transition_state(
         (SingleOrManyStates::Many(mut old_complex), SingleOrManyStates::Many(new_complex)) => {
             debug_assert!(old_complex.mips.len() >= new_complex.mips.len());
 
-            for (mip_id, (mip_old, mip_new)) in old_complex
+            let mut temp = Vec::new();
+
+            for (mip_index_usize, (mip_old, mip_new)) in old_complex
                 .mips
                 .iter_mut()
                 .zip(&mut new_complex.mips)
                 .enumerate()
             {
-                let level = mip_id as u32;
+                let mip_index = mip_index_usize as u32;
+                temp.extend(mip_old.merge(mip_new, 0));
 
-                for (layers, states) in mip_old.merge(mip_new, 0) {
+                for (layers, states) in temp.drain(..) {
                     match states {
-                        MergeItem(start, end) => {
-                            if *end == TextureUses::UNINITIALIZED {
-                                *end = start;
-                            }
+                        Range {
+                            start: Some(old_state),
+                            end: Some(new_state),
+                        } => {
                             match barriers {
                                 Some(&mut ref mut barriers) => {
-                                    if skip_barrier(start, *end) {
+                                    // We only care if the starting side of the two sided tracker is complex. If it is simple, there was
+                                    // no way for us to get an unknown in the old_state anyway as the simple usage would have carried over.
+                                    if let Some(&mut ref mut start_complex) = start_complex {
+                                        // If we know about the state now, but the previous complex tracker doesn't know then
+                                        // at no point during this tracker have we had information about these states. This means
+                                        // that the starting side also has no idea what the state is. We need to go tell it about this new state.
+                                        if old_state == TextureUses::UNKNOWN
+                                            && new_state != TextureUses::UNKNOWN
+                                        {
+                                            for (_, state) in start_complex.mips[mip_index_usize]
+                                                .isolate(&layers, new_state)
+                                            {
+                                                *state = new_state;
+                                            }
+                                            // It's not our job to issue a barrier, this is the first state in the command buffer.
+                                            continue;
+                                        }
+                                    }
+
+                                    // The tracker knows the state of this, but the new state has no idea. Let's tell the new state about it.
+                                    if old_state != TextureUses::UNKNOWN
+                                        && new_state == TextureUses::UNKNOWN
+                                    {
+                                        for (_, state) in mip_new.isolate(&layers, new_state) {
+                                            *state = old_state;
+                                        }
+                                        // There's no new state, so no barrier to generate.
                                         continue;
                                     }
-                                    // TODO: Can't satisfy clippy here unless we modify
-                                    // `TextureSelector` to use `std::ops::RangeBounds`.
+
+                                    if old_state == TextureUses::UNKNOWN
+                                        && new_state == TextureUses::UNKNOWN
+                                    {
+                                        // We know nothing about what is going on here.
+                                        continue;
+                                    }
+
+                                    if skip_barrier(old_state, new_state) {
+                                        continue;
+                                    }
+
                                     #[allow(clippy::range_plus_one)]
                                     let pending = PendingTransition {
                                         id: index32,
                                         selector: TextureSelector {
-                                            mips: level..level + 1,
+                                            mips: mip_index..mip_index + 1,
                                             layers: layers.clone(),
                                         },
-                                        usage: start..*end,
+                                        usage: old_state..new_state,
                                     };
 
                                     barriers.push(pending);
                                 }
                                 None => {
-                                    let merged_state = start | *end;
+                                    let mut merged_state = old_state | new_state;
+                                    // If we have any state other than unknown, strip the unknown
+                                    let unknownless = merged_state - TextureUses::UNKNOWN;
+                                    if !unknownless.is_empty() {
+                                        merged_state = unknownless;
+                                    }
 
                                     if invalid_resource_state(merged_state) {
                                         return Err(PartialUsageConflict {
                                             selector: TextureSelector {
-                                                mips: level..level + 1,
+                                                mips: mip_index..mip_index + 1,
                                                 layers: layers.clone(),
                                             },
-                                            current_state: start,
-                                            new_state: *end,
+                                            current_state: old_state,
+                                            new_state,
                                         });
                                     }
 
-                                    *end = merged_state;
+                                    for (_, state) in mip_new.isolate(&layers, new_state) {
+                                        *state = merged_state;
+                                    }
                                 }
                             }
                         }
+                        _ => unreachable!(),
                     };
                 }
 
                 mip_new.coalesce();
+
+                // If this exists, we almost certainly caused chaos to it, let's clean up.
+                if let Some(&mut ref mut start_complex) = start_complex {
+                    start_complex.mips[mip_index_usize].coalesce();
+                }
             }
 
             Ok(())

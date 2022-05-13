@@ -654,26 +654,27 @@ bitflags::bitflags! {
 bitflags::bitflags! {
     /// Similar to `wgt::TextureUsages` but for internal use.
     pub struct TextureUses: u16 {
-        const COPY_SRC = 1 << 0;
-        const COPY_DST = 1 << 1;
-        const RESOURCE = 1 << 2;
-        const COLOR_TARGET = 1 << 3;
-        const DEPTH_STENCIL_READ = 1 << 4;
-        const DEPTH_STENCIL_WRITE = 1 << 5;
-        const STORAGE_READ = 1 << 6;
-        const STORAGE_WRITE = 1 << 7;
-        const COMPLEX = 1 << 8;
+        const PRESENT = 1 << 0;
+        const COPY_SRC = 1 << 1;
+        const COPY_DST = 1 << 2;
+        const RESOURCE = 1 << 3;
+        const COLOR_TARGET = 1 << 4;
+        const DEPTH_STENCIL_READ = 1 << 5;
+        const DEPTH_STENCIL_WRITE = 1 << 6;
+        const STORAGE_READ = 1 << 7;
+        const STORAGE_WRITE = 1 << 8;
         /// The combination of usages that can be used together (read-only).
         const INCLUSIVE = Self::COPY_SRC.bits | Self::RESOURCE.bits | Self::DEPTH_STENCIL_READ.bits;
         /// The combination of exclusive usages (write-only and read-write).
         /// These usages may still show up with others, but can't automatically be combined.
-        const EXCLUSIVE = Self::COPY_DST.bits | Self::COLOR_TARGET.bits | Self::DEPTH_STENCIL_WRITE.bits | Self::STORAGE_READ.bits | Self::STORAGE_WRITE.bits;
+        const EXCLUSIVE = Self::COPY_DST.bits | Self::COLOR_TARGET.bits | Self::DEPTH_STENCIL_WRITE.bits | Self::STORAGE_READ.bits | Self::STORAGE_WRITE.bits | Self::PRESENT.bits;
         /// The combination of all usages that the are guaranteed to be be ordered by the hardware.
         /// If a usage is not ordered, then even if it doesn't change between draw calls, there
         /// still need to be pipeline barriers inserted for synchronization.
         const ORDERED = Self::INCLUSIVE.bits | Self::COLOR_TARGET.bits | Self::DEPTH_STENCIL_WRITE.bits | Self::STORAGE_READ.bits;
-        //TODO: remove this
-        const UNINITIALIZED = 1 << 9;
+        const COMPLEX = 1 << 9;
+        const UNINITIALIZED = 1 << 10;
+        const UNKNOWN = 1 << 11;
     }
 }
 

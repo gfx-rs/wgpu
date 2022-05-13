@@ -697,7 +697,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                             id,
                                             None,
                                             ref_count,
-                                            hal::TextureUses::empty(),
+                                            hal::TextureUses::PRESENT,
                                         )
                                         .unwrap();
                                 };
@@ -856,7 +856,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                             id::Valid(id),
                                             None,
                                             &ref_count,
-                                            hal::TextureUses::empty(),
+                                            hal::TextureUses::PRESENT,
                                         )
                                         .unwrap()
                                 };

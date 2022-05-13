@@ -52,6 +52,11 @@ impl PendingTransition<hal::TextureUses> {
     ) -> hal::TextureBarrier<'a, A> {
         log::trace!("\ttexture -> {:?}", self);
         let texture = tex.inner.as_raw().expect("Texture is destroyed");
+        
+        // These showing up in a barrier is always a bug
+        debug_assert_ne!(self.usage.start, hal::TextureUses::UNKNOWN);
+        debug_assert_ne!(self.usage.end, hal::TextureUses::UNKNOWN);
+        
         hal::TextureBarrier {
             texture,
             range: wgt::ImageSubresourceRange {

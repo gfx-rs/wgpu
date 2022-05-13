@@ -199,7 +199,7 @@ pub fn derive_image_layout(
             vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL
         }
         _ => {
-            if usage.is_empty() {
+            if usage == crate::TextureUses::PRESENT {
                 vk::ImageLayout::PRESENT_SRC_KHR
             } else if is_color {
                 vk::ImageLayout::GENERAL
@@ -280,7 +280,7 @@ pub fn map_texture_usage_to_barrier(
         access |= vk::AccessFlags::SHADER_WRITE;
     }
 
-    if usage == crate::TextureUses::UNINITIALIZED || usage.is_empty() {
+    if usage == crate::TextureUses::UNINITIALIZED || usage == crate::TextureUses::PRESENT {
         (
             vk::PipelineStageFlags::TOP_OF_PIPE,
             vk::AccessFlags::empty(),
