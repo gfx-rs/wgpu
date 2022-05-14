@@ -11,7 +11,7 @@ fn function_() {
     return;
 }
 
-@compute @workgroup_size(64, 1, 1) 
+@compute @workgroup_size(1, 1, 1) 
 fn main() {
     function_();
 }

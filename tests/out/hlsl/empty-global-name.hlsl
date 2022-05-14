@@ -12,7 +12,7 @@ void function()
     return;
 }
 
-[numthreads(64, 1, 1)]
+[numthreads(1, 1, 1)]
 void main()
 {
     function();

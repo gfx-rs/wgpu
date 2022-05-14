@@ -13,7 +13,7 @@
                         OpCapability Shader
                         OpMemoryModel Logical GLSL450
                         OpEntryPoint GLCompute %main "main" %global
-                        OpExecutionMode %main LocalSize 64 1 1
+                        OpExecutionMode %main LocalSize 1 1 1
 
                         OpName %global ""
                         OpDecorate %block Block
