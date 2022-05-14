@@ -160,14 +160,11 @@ impl<T, I: id::TypedId> Storage<T, I> {
     /// Panics if there is an epoch mismatch, or the entry is empty.
     pub(crate) fn get(&self, id: I) -> Result<&T, InvalidId> {
         let (index, epoch, _) = id.unzip();
-        let element = match self.map.get(index as usize) {
-            Some(element) => element,
+        let (result, storage_epoch) = match self.map.get(index as usize) {
+            Some(&Element::Occupied(ref v, epoch)) => (Ok(v), epoch),
+            Some(&Element::Vacant) => panic!("{}[{}] does not exist", self.kind, index),
+            Some(&Element::Error(epoch, ..)) => (Err(InvalidId), epoch),
             None => return Err(InvalidId),
-        };
-        let (result, storage_epoch) = match *element {
-            Element::Occupied(ref v, epoch) => (Ok(v), epoch),
-            Element::Vacant => panic!("{}[{}] does not exist", self.kind, index),
-            Element::Error(epoch, ..) => (Err(InvalidId), epoch),
         };
         assert_eq!(
             epoch, storage_epoch,
@@ -181,14 +178,11 @@ impl<T, I: id::TypedId> Storage<T, I> {
     /// Panics if there is an epoch mismatch, or the entry is empty.
     pub(crate) fn get_mut(&mut self, id: I) -> Result<&mut T, InvalidId> {
         let (index, epoch, _) = id.unzip();
-        let element = match self.map.get_mut(index as usize) {
-            Some(element) => element,
+        let (result, storage_epoch) = match self.map.get_mut(index as usize) {
+            Some(&mut Element::Occupied(ref mut v, epoch)) => (Ok(v), epoch),
+            Some(&mut Element::Vacant) => panic!("{}[{}] does not exist", self.kind, index),
+            Some(&mut Element::Error(epoch, ..)) => (Err(InvalidId), epoch),
             None => return Err(InvalidId),
-        };
-        let (result, storage_epoch) = match *element {
-            Element::Occupied(ref mut v, epoch) => (Ok(v), epoch),
-            Element::Vacant => panic!("{}[{}] does not exist", self.kind, index),
-            Element::Error(epoch, ..) => (Err(InvalidId), epoch),
         };
         assert_eq!(
             epoch, storage_epoch,
