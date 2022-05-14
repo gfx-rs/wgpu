@@ -14,7 +14,7 @@ pub(crate) struct RangedStates<I, T> {
     ranges: SmallVec<[(Range<I>, T); 1]>,
 }
 
-impl<I: Copy + PartialOrd, T: Copy + PartialEq> RangedStates<I, T> {
+impl<I: Copy + Ord, T: Copy + PartialEq> RangedStates<I, T> {
     #[cfg_attr(not(test), allow(dead_code))]
     pub fn empty() -> Self {
         Self {
@@ -36,7 +36,7 @@ impl<I: Copy + PartialOrd, T: Copy + PartialEq> RangedStates<I, T> {
         }
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = &(Range<I>, T)> {
+    pub fn iter(&self) -> impl Iterator<Item = &(Range<I>, T)> + Clone {
         self.ranges.iter()
     }
 
@@ -117,6 +117,17 @@ impl<I: Copy + PartialOrd, T: Copy + PartialEq> RangedStates<I, T> {
             }
         }
         result.map(Ok)
+    }
+
+    pub fn iter_filter<'a>(&'a self, range: &'a Range<I>) -> impl Iterator<Item = (Range<I>, &T)> + 'a {
+        self.ranges
+            .iter()
+            .filter(move |(inner, ..)| inner.end > range.start && inner.start < range.end)
+            .map(move |(inner, v)| {
+                let new_range = inner.start.max(range.start)..inner.end.min(range.end);
+
+                (new_range, v)
+            })
     }
 
     /// Split the storage ranges in such a way that there is a linear subset of

@@ -52,11 +52,11 @@ impl PendingTransition<hal::TextureUses> {
     ) -> hal::TextureBarrier<'a, A> {
         log::trace!("\ttexture -> {:?}", self);
         let texture = tex.inner.as_raw().expect("Texture is destroyed");
-        
+
         // These showing up in a barrier is always a bug
         debug_assert_ne!(self.usage.start, hal::TextureUses::UNKNOWN);
         debug_assert_ne!(self.usage.end, hal::TextureUses::UNKNOWN);
-        
+
         hal::TextureBarrier {
             texture,
             range: wgt::ImageSubresourceRange {
@@ -96,7 +96,7 @@ fn invalid_resource_state<T: ResourceUses>(state: T) -> bool {
 fn skip_barrier<T: ResourceUses>(old_state: T, new_state: T) -> bool {
     // If the state didn't change and all the usages are ordered, the hardware
     // will guarentee the order of accesses, so we do not need to issue a barrier at all
-    old_state == new_state && (old_state.all_ordered() || old_state.uninit())
+    old_state == new_state && old_state.all_ordered()
 }
 
 fn resize_bitvec<B: bit_vec::BitBlock>(vec: &mut BitVec<B>, size: usize) {

@@ -266,7 +266,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             // The texture ID got added to the device tracker by `submit()`,
             // and now we are moving it away.
-            log::debug!("Removing swapchain texture {:?} from the device tracker", texture_id.value);
+            log::debug!(
+                "Removing swapchain texture {:?} from the device tracker",
+                texture_id.value
+            );
             device.trackers.lock().textures.remove(texture_id.value);
 
             let (texture, _) = hub.textures.unregister(texture_id.value.0, &mut token);
