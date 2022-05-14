@@ -1,4 +1,4 @@
-.PHONY: all clean validate-spv validate-msl validate-glsl validate-dot validate-wgsl validate-hlsl
+.PHONY: all clean validate-spv validate-msl validate-glsl validate-dot validate-wgsl validate-hlsl-dxc validate-hlsl-fxc
 .SECONDARY: boids.metal quad.metal
 SNAPSHOTS_BASE_IN=tests/in
 SNAPSHOTS_BASE_OUT=tests/out
@@ -69,10 +69,10 @@ validate-wgsl: $(SNAPSHOTS_BASE_OUT)/wgsl/*.wgsl
 		cargo run $${file}; \
 	done
 
-validate-hlsl: SHELL:=/bin/bash # required because config files uses arrays
-validate-hlsl: $(SNAPSHOTS_BASE_OUT)/hlsl/*.hlsl
+validate-hlsl-dxc: SHELL:=/bin/bash # required because config files uses arrays
+validate-hlsl-dxc: $(SNAPSHOTS_BASE_OUT)/hlsl/*.hlsl
 	@set -e && for file in $^ ; do \
-		DXC_PARAMS="-Wno-parentheses-equality -Zi -Qembed_debug"; \
+		DXC_PARAMS="-Wno-parentheses-equality -Zi -Qembed_debug -Od"; \
 		echo "Validating" $${file#"$(SNAPSHOTS_BASE_OUT)/"}; \
 		config="$$(dirname $${file})/$$(basename $${file}).config"; \
 		. $${config}; \
@@ -90,6 +90,40 @@ validate-hlsl: $(SNAPSHOTS_BASE_OUT)/hlsl/*.hlsl
 			name=`echo $${compute[i]} | cut -d \: -f 1`; \
 			profile=`echo $${compute[i]} | cut -d \: -f 2`; \
 			(set -x; dxc $${file} -T $${profile} -E $${name} $${DXC_PARAMS} > /dev/null); \
+		done; \
+		echo "======================"; \
+	done
+
+validate-hlsl-fxc: SHELL:=/bin/bash # required because config files uses arrays
+validate-hlsl-fxc: $(SNAPSHOTS_BASE_OUT)/hlsl/*.hlsl
+	@set -e && for file in $^ ; do \
+		FXC_PARAMS="-Zi -Od"; \
+		echo "Validating" $${file#"$(SNAPSHOTS_BASE_OUT)/"}; \
+		config="$$(dirname $${file})/$$(basename $${file}).config"; \
+		. $${config}; \
+		for (( i=0; i<$${#vertex[@]}; i++ )); do \
+			name=`echo $${vertex[i]} | cut -d \: -f 1`; \
+			profile=`echo $${vertex[i]} | cut -d \: -f 2`; \
+			sm=`echo $${profile} | cut -d \_ -f 2`; \
+			if (( sm < 6 )); then \
+				(set -x; fxc $${file} -T $${profile} -E $${name} $${FXC_PARAMS} > /dev/null); \
+			fi \
+		done; \
+		for (( i=0; i<$${#fragment[@]}; i++ )); do \
+			name=`echo $${fragment[i]} | cut -d \: -f 1`; \
+			profile=`echo $${fragment[i]} | cut -d \: -f 2`; \
+			sm=`echo $${profile} | cut -d \_ -f 2`; \
+			if (( sm < 6 )); then \
+				(set -x; fxc $${file} -T $${profile} -E $${name} $${FXC_PARAMS} > /dev/null); \
+			fi \
+		done; \
+		for (( i=0; i<$${#compute[@]}; i++ )); do \
+			name=`echo $${compute[i]} | cut -d \: -f 1`; \
+			profile=`echo $${compute[i]} | cut -d \: -f 2`; \
+			sm=`echo $${profile} | cut -d \_ -f 2`; \
+			if (( sm < 6 )); then \
+				(set -x; fxc $${file} -T $${profile} -E $${name} $${FXC_PARAMS} > /dev/null); \
+			fi \
 		done; \
 		echo "======================"; \
 	done

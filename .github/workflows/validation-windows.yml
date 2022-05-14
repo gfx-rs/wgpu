@@ -5,12 +5,28 @@ on:
       - 'tests/out/hlsl/*.hlsl'
 
 jobs:
-  validate-windows:
-    name: HLSL
+  validate-windows-dxc:
+    name: HLSL via DXC
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v2
       - name: Add DirectXShaderCompiler
         uses: napokue/setup-dxc@v1.0.0
-      - run: make validate-hlsl
+      - run: make validate-hlsl-dxc
+        shell: sh
+
+  validate-windows-fxc:
+    name: HLSL via FXC
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Add fxc bin to PATH
+        run: |
+          Get-Childitem -Path "C:\Program Files (x86)\Windows Kits\10\bin\**\x64\fxc.exe" `
+          | Sort-Object -Property LastWriteTime -Descending `
+          | Select-Object -First 1 `
+          | Split-Path -Parent `
+          | Out-File -FilePath $Env:GITHUB_PATH -Encoding utf8 -Append
+        shell: powershell
+      - run: make validate-hlsl-fxc
         shell: sh
