@@ -810,6 +810,39 @@ fn module_scope_identifier_redefinition() {
     );
 }
 
+#[test]
+fn matrix_with_bad_type() {
+    check(
+        r#"
+            fn main() {
+                let m = mat2x2<i32>();
+            }
+        "#,
+        r#"error: matrix scalar type must be floating-point, but found `i32`
+  ┌─ wgsl:3:32
+  │
+3 │                 let m = mat2x2<i32>();
+  │                                ^^^ must be floating-point (e.g. `f32`)
+
+"#,
+    );
+
+    check(
+        r#"
+            fn main() {
+                let m: mat3x3<i32>;
+            }
+        "#,
+        r#"error: matrix scalar type must be floating-point, but found `i32`
+  ┌─ wgsl:3:31
+  │
+3 │                 let m: mat3x3<i32>;
+  │                               ^^^ must be floating-point (e.g. `f32`)
+
+"#,
+    );
+}
+
 /// Check the result of validating a WGSL program against a pattern.
 ///
 /// Unless you are generating code programmatically, the

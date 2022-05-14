@@ -184,12 +184,15 @@ fn parse_constructor_type<'a>(
             Ok(Some(ConstructorType::Vector { size, kind, width }))
         }
         (Token::Paren('<'), ConstructorType::PartialMatrix { columns, rows }) => {
-            let (_, width) = lexer.next_scalar_generic()?;
-            Ok(Some(ConstructorType::Matrix {
-                columns,
-                rows,
-                width,
-            }))
+            let (kind, width, span) = lexer.next_scalar_generic_with_span()?;
+            match kind {
+                ScalarKind::Float => Ok(Some(ConstructorType::Matrix {
+                    columns,
+                    rows,
+                    width,
+                })),
+                _ => Err(Error::BadMatrixScalarKind(span, kind, width)),
+            }
         }
         (Token::Paren('<'), ConstructorType::PartialArray) => {
             lexer.expect_generic_paren('<')?;
