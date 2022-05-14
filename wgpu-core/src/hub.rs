@@ -150,12 +150,8 @@ impl<T, I: id::TypedId> Storage<T, I> {
     pub(crate) fn contains(&self, id: I) -> bool {
         let (index, epoch, _) = id.unzip();
         match self.map.get(index as usize) {
-            Some(element) => match *element {
-                Element::Vacant => false,
-                Element::Occupied(_, storage_epoch) | Element::Error(storage_epoch, ..) => {
-                    epoch == storage_epoch
-                }
-            },
+            Some(&Element::Vacant) => false,
+            Some(&Element::Occupied(_, storage_epoch) | &Element::Error(storage_epoch, _)) => storage_epoch == epoch,
             None => false,
         }
     }
@@ -164,44 +160,42 @@ impl<T, I: id::TypedId> Storage<T, I> {
     /// Panics if there is an epoch mismatch, or the entry is empty.
     pub(crate) fn get(&self, id: I) -> Result<&T, InvalidId> {
         let (index, epoch, _) = id.unzip();
-        match self.map.get(index as usize) {
-            Some(element) => {
-                let (result, storage_epoch) = match *element {
-                    Element::Occupied(ref v, epoch) => (Ok(v), epoch),
-                    Element::Vacant => panic!("{}[{}] does not exist", self.kind, index),
-                    Element::Error(epoch, ..) => (Err(InvalidId), epoch),
-                };
-                assert_eq!(
-                    epoch, storage_epoch,
-                    "{}[{}] is no longer alive",
-                    self.kind, index
-                );
-                result
-            }
-            None => Err(InvalidId),
-        }
+        let element = match self.map.get(index as usize) {
+            Some(element) => element,
+            None => return Err(InvalidId),
+        };
+        let (result, storage_epoch) = match *element {
+            Element::Occupied(ref v, epoch) => (Ok(v), epoch),
+            Element::Vacant => panic!("{}[{}] does not exist", self.kind, index),
+            Element::Error(epoch, ..) => (Err(InvalidId), epoch),
+        };
+        assert_eq!(
+            epoch, storage_epoch,
+            "{}[{}] is no longer alive",
+            self.kind, index
+        );
+        result
     }
 
     /// Get a mutable reference to an item behind a potentially invalid ID.
     /// Panics if there is an epoch mismatch, or the entry is empty.
     pub(crate) fn get_mut(&mut self, id: I) -> Result<&mut T, InvalidId> {
         let (index, epoch, _) = id.unzip();
-        match self.map.get_mut(index as usize) {
-            Some(element) => {
-                let (result, storage_epoch) = match *element {
-                    Element::Occupied(ref mut v, epoch) => (Ok(v), epoch),
-                    Element::Vacant => panic!("{}[{}] does not exist", self.kind, index),
-                    Element::Error(epoch, ..) => (Err(InvalidId), epoch),
-                };
-                assert_eq!(
-                    epoch, storage_epoch,
-                    "{}[{}] is no longer alive",
-                    self.kind, index
-                );
-                result
-            }
-            None => Err(InvalidId),
-        }
+        let element = match self.map.get_mut(index as usize) {
+            Some(element) => element,
+            None => return Err(InvalidId),
+        };
+        let (result, storage_epoch) = match *element {
+            Element::Occupied(ref mut v, epoch) => (Ok(v), epoch),
+            Element::Vacant => panic!("{}[{}] does not exist", self.kind, index),
+            Element::Error(epoch, ..) => (Err(InvalidId), epoch),
+        };
+        assert_eq!(
+            epoch, storage_epoch,
+            "{}[{}] is no longer alive",
+            self.kind, index
+        );
+        result
     }
 
     pub(crate) fn label_for_invalid_id(&self, id: I) -> &str {
