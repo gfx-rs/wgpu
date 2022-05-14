@@ -196,8 +196,8 @@ impl<T, I: id::TypedId> Storage<T, I> {
 
     pub(crate) fn label_for_invalid_id(&self, id: I) -> &str {
         let (index, _, _) = id.unzip();
-        match self.map[index as usize] {
-            Element::Error(_, ref label) => label,
+        match self.map.get(index as usize) {
+            Some(&Element::Error(_, ref label)) => label,
             _ => "",
         }
     }
