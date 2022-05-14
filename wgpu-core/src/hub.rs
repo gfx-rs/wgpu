@@ -155,8 +155,8 @@ impl<T, I: id::TypedId> Storage<T, I> {
                 Element::Occupied(_, storage_epoch) | Element::Error(storage_epoch, ..) => {
                     epoch == storage_epoch
                 }
-            }
-            None => false
+            },
+            None => false,
         }
     }
 
