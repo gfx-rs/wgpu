@@ -37,17 +37,17 @@ void SetMatmOnBaz(Baz obj, float3x2 mat) {
 
 void SetMatVecmOnBaz(Baz obj, float2 vec, uint mat_idx) {
     switch(mat_idx) {
-    case 0: obj.m_0 = vec;
-    case 1: obj.m_1 = vec;
-    case 2: obj.m_2 = vec;
+    case 0: { obj.m_0 = vec; break; }
+    case 1: { obj.m_1 = vec; break; }
+    case 2: { obj.m_2 = vec; break; }
     }
 }
 
 void SetMatScalarmOnBaz(Baz obj, float scalar, uint mat_idx, uint vec_idx) {
     switch(mat_idx) {
-    case 0: obj.m_0[vec_idx] = scalar;
-    case 1: obj.m_1[vec_idx] = scalar;
-    case 2: obj.m_2[vec_idx] = scalar;
+    case 0: { obj.m_0[vec_idx] = scalar; break; }
+    case 1: { obj.m_1[vec_idx] = scalar; break; }
+    case 2: { obj.m_2[vec_idx] = scalar; break; }
     }
 }
 

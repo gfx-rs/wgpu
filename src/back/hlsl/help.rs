@@ -715,7 +715,7 @@ impl<'a, W: Write> super::Writer<'a, W> {
                 for i in 0..columns as u8 {
                     writeln!(
                         self.out,
-                        "{}case {}: {}.{}_{} = {};",
+                        "{}case {}: {{ {}.{}_{} = {}; break; }}",
                         INDENT,
                         i,
                         STRUCT_ARGUMENT_VARIABLE_NAME,
@@ -809,7 +809,7 @@ impl<'a, W: Write> super::Writer<'a, W> {
                 for i in 0..columns as u8 {
                     writeln!(
                         self.out,
-                        "{}case {}: {}.{}_{}[{}] = {};",
+                        "{}case {}: {{ {}.{}_{}[{}] = {}; break; }}",
                         INDENT,
                         i,
                         STRUCT_ARGUMENT_VARIABLE_NAME,
