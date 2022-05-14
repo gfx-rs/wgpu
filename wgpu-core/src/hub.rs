@@ -149,11 +149,12 @@ impl<T, I: id::TypedId> ops::IndexMut<id::Valid<I>> for Storage<T, I> {
 impl<T, I: id::TypedId> Storage<T, I> {
     pub(crate) fn contains(&self, id: I) -> bool {
         let (index, epoch, _) = id.unzip();
-        match self.map[index as usize] {
-            Element::Vacant => false,
-            Element::Occupied(_, storage_epoch) | Element::Error(storage_epoch, ..) => {
-                epoch == storage_epoch
+        match self.map.get(index as usize) {
+            Some(&Element::Vacant) => false,
+            Some(&Element::Occupied(_, storage_epoch) | &Element::Error(storage_epoch, _)) => {
+                storage_epoch == epoch
             }
+            None => false,
         }
     }
 
@@ -161,10 +162,11 @@ impl<T, I: id::TypedId> Storage<T, I> {
     /// Panics if there is an epoch mismatch, or the entry is empty.
     pub(crate) fn get(&self, id: I) -> Result<&T, InvalidId> {
         let (index, epoch, _) = id.unzip();
-        let (result, storage_epoch) = match self.map[index as usize] {
-            Element::Occupied(ref v, epoch) => (Ok(v), epoch),
-            Element::Vacant => panic!("{}[{}] does not exist", self.kind, index),
-            Element::Error(epoch, ..) => (Err(InvalidId), epoch),
+        let (result, storage_epoch) = match self.map.get(index as usize) {
+            Some(&Element::Occupied(ref v, epoch)) => (Ok(v), epoch),
+            Some(&Element::Vacant) => panic!("{}[{}] does not exist", self.kind, index),
+            Some(&Element::Error(epoch, ..)) => (Err(InvalidId), epoch),
+            None => return Err(InvalidId),
         };
         assert_eq!(
             epoch, storage_epoch,
@@ -178,10 +180,11 @@ impl<T, I: id::TypedId> Storage<T, I> {
     /// Panics if there is an epoch mismatch, or the entry is empty.
     pub(crate) fn get_mut(&mut self, id: I) -> Result<&mut T, InvalidId> {
         let (index, epoch, _) = id.unzip();
-        let (result, storage_epoch) = match self.map[index as usize] {
-            Element::Occupied(ref mut v, epoch) => (Ok(v), epoch),
-            Element::Vacant => panic!("{}[{}] does not exist", self.kind, index),
-            Element::Error(epoch, ..) => (Err(InvalidId), epoch),
+        let (result, storage_epoch) = match self.map.get_mut(index as usize) {
+            Some(&mut Element::Occupied(ref mut v, epoch)) => (Ok(v), epoch),
+            Some(&mut Element::Vacant) => panic!("{}[{}] does not exist", self.kind, index),
+            Some(&mut Element::Error(epoch, ..)) => (Err(InvalidId), epoch),
+            None => return Err(InvalidId),
         };
         assert_eq!(
             epoch, storage_epoch,
@@ -193,8 +196,8 @@ impl<T, I: id::TypedId> Storage<T, I> {
 
     pub(crate) fn label_for_invalid_id(&self, id: I) -> &str {
         let (index, _, _) = id.unzip();
-        match self.map[index as usize] {
-            Element::Error(_, ref label) => label,
+        match self.map.get(index as usize) {
+            Some(&Element::Error(_, ref label)) => label,
             _ => "",
         }
     }
