@@ -45,7 +45,7 @@ constant metal::int2 const_type_9_ = {0, 0};
 void test_matrix_within_struct_accesses(
     constant Baz& baz
 ) {
-    int idx = 9;
+    int idx = 1;
     Baz t = {};
     int _e5 = idx;
     idx = _e5 - 1;

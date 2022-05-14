@@ -23,7 +23,7 @@ layout(std430) buffer type_9_block_2Vertex { ivec2 _group_0_binding_2_vs; };
 
 
 void test_matrix_within_struct_accesses() {
-    int idx = 9;
+    int idx = 1;
     Baz t = Baz(mat3x2(0.0));
     int _e5 = idx;
     idx = (_e5 - 1);

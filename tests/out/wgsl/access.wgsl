@@ -23,7 +23,7 @@ var<storage, read_write> qux: vec2<i32>;
 var<workgroup> val: u32;
 
 fn test_matrix_within_struct_accesses() {
-    var idx: i32 = 9;
+    var idx: i32 = 1;
     var t: Baz;
 
     let _e5 = idx;

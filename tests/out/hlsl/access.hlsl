@@ -61,7 +61,7 @@ Baz ConstructBaz(float3x2 arg0) {
 
 void test_matrix_within_struct_accesses()
 {
-    int idx = 9;
+    int idx = 1;
     Baz t = (Baz)0;
 
     int _expr5 = idx;

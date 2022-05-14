@@ -26,7 +26,7 @@ var<uniform> baz: Baz;
 var<storage,read_write> qux: vec2<i32>;
 
 fn test_matrix_within_struct_accesses() {
-	var idx = 9;
+	var idx = 1;
 
     idx--;
 
