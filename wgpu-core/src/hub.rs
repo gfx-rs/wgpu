@@ -151,7 +151,9 @@ impl<T, I: id::TypedId> Storage<T, I> {
         let (index, epoch, _) = id.unzip();
         match self.map.get(index as usize) {
             Some(&Element::Vacant) => false,
-            Some(&Element::Occupied(_, storage_epoch) | &Element::Error(storage_epoch, _)) => storage_epoch == epoch,
+            Some(&Element::Occupied(_, storage_epoch) | &Element::Error(storage_epoch, _)) => {
+                storage_epoch == epoch
+            }
             None => false,
         }
     }
