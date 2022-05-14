@@ -1651,7 +1651,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 let indent_level_1 = level.next();
                 let indent_level_2 = indent_level_1.next();
 
-                for case in cases {
+                for (i, case) in cases.iter().enumerate() {
                     match case.value {
                         crate::SwitchValue::Integer(value) => writeln!(
                             self.out,
@@ -1663,25 +1663,35 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         }
                     }
 
+                    // FXC doesn't support fallthrough so we duplicate the body of the following case blocks
                     if case.fall_through {
-                        // Generate each fallthrough case statement in a new block. This is done to
-                        // prevent symbol collision of variables declared in these cases statements.
-                        writeln!(self.out, "{}/* fallthrough */", indent_level_2)?;
-                        writeln!(self.out, "{}{{", indent_level_2)?;
-                    }
-                    for sta in case.body.iter() {
-                        self.write_stmt(
-                            module,
-                            sta,
-                            func_ctx,
-                            back::Level(indent_level_2.0 + usize::from(case.fall_through)),
-                        )?;
-                    }
+                        let curr_len = i + 1;
+                        let end_case_idx = curr_len
+                            + cases
+                                .iter()
+                                .skip(curr_len)
+                                .position(|case| !case.fall_through)
+                                .unwrap();
+                        let indent_level_3 = indent_level_2.next();
+                        for case in &cases[i..=end_case_idx] {
+                            writeln!(self.out, "{}{{", indent_level_2)?;
+                            for sta in case.body.iter() {
+                                self.write_stmt(module, sta, func_ctx, indent_level_3)?;
+                            }
+                            writeln!(self.out, "{}}}", indent_level_2)?;
+                        }
 
-                    if case.fall_through {
-                        writeln!(self.out, "{}}}", indent_level_2)?;
-                    } else if case.body.last().map_or(true, |s| !s.is_terminator()) {
-                        writeln!(self.out, "{}break;", indent_level_2)?;
+                        let last_case = &cases[end_case_idx];
+                        if last_case.body.last().map_or(true, |s| !s.is_terminator()) {
+                            writeln!(self.out, "{}break;", indent_level_2)?;
+                        }
+                    } else {
+                        for sta in case.body.iter() {
+                            self.write_stmt(module, sta, func_ctx, indent_level_2)?;
+                        }
+                        if case.body.last().map_or(true, |s| !s.is_terminator()) {
+                            writeln!(self.out, "{}break;", indent_level_2)?;
+                        }
                     }
 
                     writeln!(self.out, "{}}}", indent_level_1)?;

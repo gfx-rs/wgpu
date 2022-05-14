@@ -60,16 +60,28 @@ void main(uint3 global_id : SV_DispatchThreadID)
             break;
         }
         case 3: {
-            /* fallthrough */
             {
                 pos = 2;
             }
+            {
+                pos = 3;
+            }
+            {
+                pos = 4;
+            }
+            break;
         }
         case 4: {
+            {
+                pos = 3;
+            }
+            {
+                pos = 4;
+            }
             break;
         }
         default: {
-            pos = 3;
+            pos = 4;
             break;
         }
     }
@@ -81,8 +93,8 @@ void main(uint3 global_id : SV_DispatchThreadID)
             break;
         }
     }
-    int _expr10 = pos;
-    switch(_expr10) {
+    int _expr11 = pos;
+    switch(_expr11) {
         case 1: {
             pos = 0;
             break;
@@ -92,9 +104,11 @@ void main(uint3 global_id : SV_DispatchThreadID)
             return;
         }
         case 3: {
-            /* fallthrough */
             {
                 pos = 2;
+            }
+            {
+                return;
             }
         }
         case 4: {

@@ -72,10 +72,10 @@ kernel void main_(
             pos = 2;
         }
         case 4: {
-            break;
+            pos = 3;
         }
         default: {
-            pos = 3;
+            pos = 4;
             break;
         }
     }
@@ -87,8 +87,8 @@ kernel void main_(
             break;
         }
     }
-    int _e10 = pos;
-    switch(_e10) {
+    int _e11 = pos;
+    switch(_e11) {
         case 1: {
             pos = 0;
             break;

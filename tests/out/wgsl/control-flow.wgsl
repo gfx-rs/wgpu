@@ -55,9 +55,11 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
             fallthrough;
         }
         case 4: {
+            pos = 3;
+            fallthrough;
         }
         default: {
-            pos = 3;
+            pos = 4;
         }
     }
     switch 0u {
@@ -66,8 +68,8 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
         default: {
         }
     }
-    let _e10 = pos;
-    switch _e10 {
+    let _e11 = pos;
+    switch _e11 {
         case 1: {
             pos = 0;
             break;
