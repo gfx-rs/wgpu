@@ -6,10 +6,10 @@ use crate::{
     id::{BufferId, TypedId, Valid},
     resource::Buffer,
     track::{
-        invalid_resource_state, iterate_bitvec_indices, resize_bitvec, skip_barrier, ResourceUses,
-        UsageConflict,
+        invalid_resource_state, iterate_bitvec_indices, resize_bitvec, skip_barrier,
+        ResourceMetadata, ResourceMetadataProvider, ResourceUses, UsageConflict,
     },
-    Epoch, RefCount,
+    Epoch, RefCount, LifeGuard,
 };
 use bit_vec::BitVec;
 use hal::BufferUses;
@@ -501,4 +501,91 @@ impl<A: hub::HalApi> BufferTracker<A> {
 
         false
     }
+}
+
+enum StateProvider<'a> {
+    Direct { state: BufferUses },
+    Indirect { other: &'a [BufferUses] },
+}
+impl StateProvider<'_> {
+    unsafe fn get_state(&self, index: usize) -> BufferUses {
+        match *self {
+            StateProvider::Direct { state } => state,
+            StateProvider::Indirect { other } => other[index],
+        }
+    }
+}
+
+unsafe fn insert<A: hub::HalApi>(
+    life_guard: Option<&LifeGuard>,
+    start_state: Option<&mut Vec<BufferUses>>,
+    current_state: &mut Vec<BufferUses>,
+    resource_metadata: &mut ResourceMetadata<A>,
+    index: usize,
+    state_provider: StateProvider<'_>,
+    metadata_provider: ResourceMetadataProvider<'_, A>,
+) {
+    let new_state = state_provider.get_state(index);
+    if let Some(&mut ref mut start_state) = start_state {
+        *start_state.get_unchecked_mut(index) = new_state;
+    }
+    *current_state.get_unchecked_mut(index) = new_state;
+
+    let (epoch, ref_count) = metadata_provider.get_own(life_guard, index);
+
+    resource_metadata.owned.set(index, true);
+    *resource_metadata.epochs.get_unchecked_mut(index) = epoch;
+    *resource_metadata.ref_counts.get_unchecked_mut(index) = Some(ref_count);
+}
+
+unsafe fn merge(
+    current_states: &mut Vec<BufferUses>,
+    id: BufferId,
+    index: usize,
+    state_provider: StateProvider<'_>,
+) -> Result<(), UsageConflict> {
+    let current_state = current_states.get_unchecked_mut(index);
+    let new_state = state_provider.get_state(index);
+
+    let merged_state = *current_state | new_state;
+
+    if invalid_resource_state(merged_state) {
+        return Err(UsageConflict::from_buffer(id, *current_state, new_state));
+    }
+
+    *current_state = merged_state;
+
+    Ok(())
+}
+
+unsafe fn barrier(
+    current_states: &mut Vec<BufferUses>,
+    index32: u32,
+    index: usize,
+    state_provider: StateProvider<'_>,
+    barriers: &mut Vec<PendingTransition<BufferUses>>,
+) {
+    let current_state = *current_states.get_unchecked(index);
+    let new_state = state_provider.get_state(index);
+
+    if skip_barrier(current_state, new_state) {
+        return;
+    }
+
+    barriers.push(PendingTransition {
+        id: index32,
+        selector: (),
+        usage: current_state..new_state,
+    })
+}
+
+unsafe fn update(
+    current_states: &mut Vec<BufferUses>,
+    index: usize,
+    state_provider: StateProvider<'_>,
+) {
+    let current_state = current_states.get_unchecked_mut(index);
+    let new_state = state_provider.get_state(index);
+
+    *current_state = new_state;
 }

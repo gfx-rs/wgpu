@@ -6,11 +6,11 @@ mod texture;
 use crate::{
     binding_model, command, conv, hub,
     id::{self, TypedId},
-    pipeline, resource, Epoch, RefCount,
+    pipeline, resource, Epoch, RefCount, LifeGuard,
 };
 
 use bit_vec::BitVec;
-use std::{fmt, marker::PhantomData, mem, num::NonZeroU32, ops};
+use std::{fmt, marker::PhantomData, mem, num::NonZeroU32, ops, borrow::Cow};
 use thiserror::Error;
 
 pub(crate) use buffer::{BufferBindGroupState, BufferTracker, BufferUsageScope};
@@ -265,6 +265,52 @@ impl<A: hub::HalApi> ResourceMetadata<A> {
         *self.ref_counts.get_unchecked_mut(index) = None;
         *self.epochs.get_unchecked_mut(index) = u32::MAX;
         self.owned.set(index, false);
+    }
+}
+
+enum ResourceMetadataProvider<'a, A: hub::HalApi> {
+    Direct {
+        epoch: Epoch,
+        ref_count: Cow<'a, RefCount>,
+    },
+    Indirect {
+        metadata: &'a ResourceMetadata<A>,
+    },
+    Resource {
+        epoch: Epoch,
+    },
+}
+impl<A: hub::HalApi> ResourceMetadataProvider<'_, A> {
+    unsafe fn get_own(
+        self,
+        life_guard: Option<&LifeGuard>,
+        index: usize,
+    ) -> (Epoch, RefCount) {
+        match self {
+            ResourceMetadataProvider::Direct { epoch, ref_count } => {
+                (epoch, ref_count.into_owned())
+            }
+            ResourceMetadataProvider::Indirect { metadata } => (
+                *metadata.epochs.get_unchecked(index),
+                metadata
+                    .ref_counts
+                    .get_unchecked(index)
+                    .clone()
+                    .unwrap_unchecked(),
+            ),
+            ResourceMetadataProvider::Resource { epoch } => {
+                (epoch, life_guard.unwrap().add_ref())
+            }
+        }
+    }
+    unsafe fn get_epoch(self, index: usize) -> Epoch {
+        match self {
+            ResourceMetadataProvider::Direct { epoch, .. }
+            | ResourceMetadataProvider::Resource { epoch, .. } => epoch,
+            ResourceMetadataProvider::Indirect { metadata } => {
+                *metadata.epochs.get_unchecked(index)
+            }
+        }
     }
 }
 

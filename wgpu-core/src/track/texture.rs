@@ -5,7 +5,7 @@ use crate::{
     resource::Texture,
     track::{
         invalid_resource_state, iterate_bitvec_indices, skip_barrier, ResourceMetadata,
-        ResourceUses, UsageConflict,
+        ResourceMetadataProvider, ResourceUses, UsageConflict,
     },
     Epoch, LifeGuard, RefCount,
 };
@@ -677,52 +677,6 @@ impl<'a> LayeredStateProvider<'a> {
     }
 }
 
-enum ResourceMetadataProvider<'a, A: hub::HalApi> {
-    Direct {
-        epoch: Epoch,
-        ref_count: Cow<'a, RefCount>,
-    },
-    Indirect {
-        metadata: &'a ResourceMetadata<A>,
-    },
-    Resource {
-        epoch: Epoch,
-    },
-}
-impl<A: hub::HalApi> ResourceMetadataProvider<'_, A> {
-    unsafe fn get_own(
-        self,
-        texture_data: Option<(&LifeGuard, &TextureSelector)>,
-        index: usize,
-    ) -> (Epoch, RefCount) {
-        match self {
-            ResourceMetadataProvider::Direct { epoch, ref_count } => {
-                (epoch, ref_count.into_owned())
-            }
-            ResourceMetadataProvider::Indirect { metadata } => (
-                *metadata.epochs.get_unchecked(index),
-                metadata
-                    .ref_counts
-                    .get_unchecked(index)
-                    .clone()
-                    .unwrap_unchecked(),
-            ),
-            ResourceMetadataProvider::Resource { epoch } => {
-                (epoch, texture_data.unwrap().0.add_ref())
-            }
-        }
-    }
-    unsafe fn get_epoch(self, index: usize) -> Epoch {
-        match self {
-            ResourceMetadataProvider::Direct { epoch, .. }
-            | ResourceMetadataProvider::Resource { epoch, .. } => epoch,
-            ResourceMetadataProvider::Indirect { metadata } => {
-                *metadata.epochs.get_unchecked(index)
-            }
-        }
-    }
-}
-
 #[inline(always)]
 unsafe fn texture_data_from_texture<A: hub::HalApi>(
     storage: &hub::Storage<Texture<A>, TextureId>,
@@ -794,6 +748,7 @@ unsafe fn insert_or_barrier_update<A: hub::HalApi>(
     let currently_owned = resource_metadata.owned.get(index).unwrap_unchecked();
 
     if !currently_owned {
+        let update_state_provider = end_state_provider.unwrap_or_else(|| start_state_provider);
         insert(
             Some(texture_data),
             start_state,
@@ -862,7 +817,8 @@ unsafe fn insert<A: hub::HalApi>(
         }
     }
 
-    let (epoch, ref_count) = metadata_provider.get_own(texture_data, index);
+    let (epoch, ref_count) =
+        metadata_provider.get_own(texture_data.map(|(life_guard, _)| life_guard), index);
 
     resource_metadata.owned.set(index, true);
     *resource_metadata.epochs.get_unchecked_mut(index) = epoch;
