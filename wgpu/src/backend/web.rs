@@ -1066,8 +1066,9 @@ impl crate::Context for Context {
         )
     }
 
-    fn instance_poll_all_devices(&self, _force_wait: bool) {
+    fn instance_poll_all_devices(&self, _force_wait: bool) -> bool {
         // Devices are automatically polled.
+        true
     }
 
     fn adapter_request_device(
@@ -1691,8 +1692,9 @@ impl crate::Context for Context {
         // Device is dropped automatically
     }
 
-    fn device_poll(&self, _device: &Self::DeviceId, _maintain: crate::Maintain) {
+    fn device_poll(&self, _device: &Self::DeviceId, _maintain: crate::Maintain) -> bool {
         // Device is polled automatically
+        true
     }
 
     fn device_on_uncaptured_error(

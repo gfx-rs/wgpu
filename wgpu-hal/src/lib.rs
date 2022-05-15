@@ -97,7 +97,7 @@ use thiserror::Error;
 pub const MAX_ANISOTROPY: u8 = 16;
 pub const MAX_BIND_GROUPS: usize = 8;
 pub const MAX_VERTEX_BUFFERS: usize = 16;
-pub const MAX_COLOR_TARGETS: usize = 4;
+pub const MAX_COLOR_TARGETS: usize = 8;
 pub const MAX_MIP_LEVELS: u32 = 16;
 /// Size of a single occlusion/timestamp query, when copied into a buffer, in bytes.
 pub const QUERY_SIZE: wgt::BufferAddress = 8;

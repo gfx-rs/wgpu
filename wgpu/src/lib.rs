@@ -210,7 +210,7 @@ trait Context: Debug + Send + Sized + Sync {
         desc: &DeviceDescriptor,
         trace_dir: Option<&std::path::Path>,
     ) -> Self::RequestDeviceFuture;
-    fn instance_poll_all_devices(&self, force_wait: bool);
+    fn instance_poll_all_devices(&self, force_wait: bool) -> bool;
     fn adapter_is_surface_supported(
         &self,
         adapter: &Self::AdapterId,
@@ -322,7 +322,7 @@ trait Context: Debug + Send + Sized + Sync {
         desc: &RenderBundleEncoderDescriptor,
     ) -> Self::RenderBundleEncoderId;
     fn device_drop(&self, device: &Self::DeviceId);
-    fn device_poll(&self, device: &Self::DeviceId, maintain: Maintain);
+    fn device_poll(&self, device: &Self::DeviceId, maintain: Maintain) -> bool;
     fn device_on_uncaptured_error(
         &self,
         device: &Self::DeviceId,
@@ -507,6 +507,8 @@ trait Context: Debug + Send + Sized + Sync {
 /// Its primary use is to create [`Adapter`]s and [`Surface`]s.
 ///
 /// Does not have to be kept alive.
+///
+/// Corresponds to [WebGPU `GPU`](https://gpuweb.github.io/gpuweb/#gpu-interface).
 #[derive(Debug)]
 pub struct Instance {
     context: Arc<C>,
@@ -518,6 +520,8 @@ pub struct Instance {
 /// on the host system by using [`Adapter::request_device`].
 ///
 /// Does not have to be kept alive.
+///
+/// Corresponds to [WebGPU `GPUAdapter`](https://gpuweb.github.io/gpuweb/#gpu-adapter).
 #[derive(Debug)]
 pub struct Adapter {
     context: Arc<C>,
@@ -538,6 +542,8 @@ impl Drop for Adapter {
 /// These are then used in commands, which are submitted to a [`Queue`].
 ///
 /// A device may be requested from an adapter with [`Adapter::request_device`].
+///
+/// Corresponds to [WebGPU `GPUDevice`](https://gpuweb.github.io/gpuweb/#gpu-device).
 #[derive(Debug)]
 pub struct Device {
     context: Arc<C>,
@@ -617,6 +623,8 @@ impl MapContext {
 ///
 /// Created with [`Device::create_buffer`] or
 /// [`DeviceExt::create_buffer_init`](util::DeviceExt::create_buffer_init).
+///
+/// Corresponds to [WebGPU `GPUBuffer`](https://gpuweb.github.io/gpuweb/#buffer-interface).
 #[derive(Debug)]
 pub struct Buffer {
     context: Arc<C>,
@@ -639,7 +647,9 @@ pub struct BufferSlice<'a> {
 
 /// Handle to a texture on the GPU.
 ///
-/// Created by calling [`Device::create_texture`]
+/// It can be created with [`Device::create_texture`].
+///
+/// Corresponds to [WebGPU `GPUTexture`](https://gpuweb.github.io/gpuweb/#texture-interface).
 #[derive(Debug)]
 pub struct Texture {
     context: Arc<C>,
@@ -651,6 +661,8 @@ pub struct Texture {
 ///
 /// A `TextureView` object describes a texture and associated metadata needed by a
 /// [`RenderPipeline`] or [`BindGroup`].
+///
+/// Corresponds to [WebGPU `GPUTextureView`](https://gpuweb.github.io/gpuweb/#gputextureview).
 #[derive(Debug)]
 pub struct TextureView {
     context: Arc<C>,
@@ -662,6 +674,10 @@ pub struct TextureView {
 /// A `Sampler` object defines how a pipeline will sample from a [`TextureView`]. Samplers define
 /// image filters (including anisotropy) and address (wrapping) modes, among other things. See
 /// the documentation for [`SamplerDescriptor`] for more information.
+///
+/// It can be created with [`Device::create_sampler`].
+///
+/// Corresponds to [WebGPU `GPUSampler`](https://gpuweb.github.io/gpuweb/#sampler-interface).
 #[derive(Debug)]
 pub struct Sampler {
     context: Arc<C>,
@@ -700,6 +716,11 @@ impl Drop for Surface {
 /// create a [`BindGroupDescriptor`] object, which in turn can be used to create a [`BindGroup`]
 /// object with [`Device::create_bind_group`]. A series of `BindGroupLayout`s can also be used to
 /// create a [`PipelineLayoutDescriptor`], which can be used to create a [`PipelineLayout`].
+///
+/// It can be created with [`Device::create_bind_group_layout`].
+///
+/// Corresponds to [WebGPU `GPUBindGroupLayout`](
+/// https://gpuweb.github.io/gpuweb/#gpubindgrouplayout).
 #[derive(Debug)]
 pub struct BindGroupLayout {
     context: Arc<C>,
@@ -720,6 +741,8 @@ impl Drop for BindGroupLayout {
 /// [`BindGroupLayout`]. It can be created with [`Device::create_bind_group`]. A `BindGroup` can
 /// be bound to a particular [`RenderPass`] with [`RenderPass::set_bind_group`], or to a
 /// [`ComputePass`] with [`ComputePass::set_bind_group`].
+///
+/// Corresponds to [WebGPU `GPUBindGroup`](https://gpuweb.github.io/gpuweb/#gpubindgroup).
 #[derive(Debug)]
 pub struct BindGroup {
     context: Arc<C>,
@@ -737,8 +760,11 @@ impl Drop for BindGroup {
 /// Handle to a compiled shader module.
 ///
 /// A `ShaderModule` represents a compiled shader module on the GPU. It can be created by passing
-/// valid SPIR-V source code to [`Device::create_shader_module`]. Shader modules are used to define
-/// programmable stages of a pipeline.
+/// source code to [`Device::create_shader_module`] or valid SPIR-V binary to
+/// [`Device::create_shader_module_spirv`]. Shader modules are used to define programmable stages
+/// of a pipeline.
+///
+/// Corresponds to [WebGPU `GPUShaderModule`](https://gpuweb.github.io/gpuweb/#shader-module).
 #[derive(Debug)]
 pub struct ShaderModule {
     context: Arc<C>,
@@ -782,7 +808,10 @@ pub enum ShaderSource<'a> {
     Wgsl(Cow<'a, str>),
 }
 
-/// Descriptor for a shader module.
+/// Descriptor for use with [`Device::create_shader_module`].
+///
+/// Corresponds to [WebGPU `GPUShaderModuleDescriptor`](
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpushadermoduledescriptor).
 pub struct ShaderModuleDescriptor<'a> {
     /// Debug label of the shader module. This will show up in graphics debuggers for easy identification.
     pub label: Label<'a>,
@@ -801,6 +830,9 @@ pub struct ShaderModuleDescriptorSpirV<'a> {
 /// Handle to a pipeline layout.
 ///
 /// A `PipelineLayout` object describes the available binding groups of a pipeline.
+/// It can be created with [`Device::create_pipeline_layout`].
+///
+/// Corresponds to [WebGPU `GPUPipelineLayout`](https://gpuweb.github.io/gpuweb/#gpupipelinelayout).
 #[derive(Debug)]
 pub struct PipelineLayout {
     context: Arc<C>,
@@ -818,7 +850,9 @@ impl Drop for PipelineLayout {
 /// Handle to a rendering (graphics) pipeline.
 ///
 /// A `RenderPipeline` object represents a graphics pipeline and its stages, bindings, vertex
-/// buffers and targets. A `RenderPipeline` may be created with [`Device::create_render_pipeline`].
+/// buffers and targets. It can be created with [`Device::create_render_pipeline`].
+///
+/// Corresponds to [WebGPU `GPURenderPipeline`](https://gpuweb.github.io/gpuweb/#render-pipeline).
 #[derive(Debug)]
 pub struct RenderPipeline {
     context: Arc<C>,
@@ -849,7 +883,9 @@ impl RenderPipeline {
 /// Handle to a compute pipeline.
 ///
 /// A `ComputePipeline` object represents a compute pipeline and its single shader stage.
-/// A `ComputePipeline` may be created with [`Device::create_compute_pipeline`].
+/// It can be created with [`Device::create_compute_pipeline`].
+///
+/// Corresponds to [WebGPU `GPUComputePipeline`](https://gpuweb.github.io/gpuweb/#compute-pipeline).
 #[derive(Debug)]
 pub struct ComputePipeline {
     context: Arc<C>,
@@ -882,6 +918,8 @@ impl ComputePipeline {
 /// A `CommandBuffer` represents a complete sequence of commands that may be submitted to a command
 /// queue with [`Queue::submit`]. A `CommandBuffer` is obtained by recording a series of commands to
 /// a [`CommandEncoder`] and then calling [`CommandEncoder::finish`].
+///
+/// Corresponds to [WebGPU `GPUCommandBuffer`](https://gpuweb.github.io/gpuweb/#command-buffer).
 #[derive(Debug)]
 pub struct CommandBuffer {
     context: Arc<C>,
@@ -905,6 +943,8 @@ impl Drop for CommandBuffer {
 ///
 /// When finished recording, call [`CommandEncoder::finish`] to obtain a [`CommandBuffer`] which may
 /// be submitted for execution.
+///
+/// Corresponds to [WebGPU `GPUCommandEncoder`](https://gpuweb.github.io/gpuweb/#command-encoder).
 #[derive(Debug)]
 pub struct CommandEncoder {
     context: Arc<C>,
@@ -922,6 +962,11 @@ impl Drop for CommandEncoder {
 }
 
 /// In-progress recording of a render pass.
+///
+/// It can be created with [`CommandEncoder::begin_render_pass`].
+///
+/// Corresponds to [WebGPU `GPURenderPassEncoder`](
+/// https://gpuweb.github.io/gpuweb/#render-pass-encoder).
 #[derive(Debug)]
 pub struct RenderPass<'a> {
     id: <C as Context>::RenderPassId,
@@ -929,6 +974,11 @@ pub struct RenderPass<'a> {
 }
 
 /// In-progress recording of a compute pass.
+///
+/// It can be created with [`CommandEncoder::begin_compute_pass`].
+///
+/// Corresponds to [WebGPU `GPUComputePassEncoder`](
+/// https://gpuweb.github.io/gpuweb/#compute-pass-encoder).
 #[derive(Debug)]
 pub struct ComputePass<'a> {
     id: <C as Context>::ComputePassId,
@@ -937,10 +987,15 @@ pub struct ComputePass<'a> {
 
 /// Encodes a series of GPU operations into a reusable "render bundle".
 ///
-/// It only supports a handful of render commands, but it makes them reusable. [`RenderBundle`]s
-/// can be executed onto a [`CommandEncoder`] using [`RenderPass::execute_bundles`].
+/// It only supports a handful of render commands, but it makes them reusable.
+/// It can be created with [`Device::create_render_bundle_encoder`].
+/// It can be executed onto a [`CommandEncoder`] using [`RenderPass::execute_bundles`].
 ///
-/// Executing a [`RenderBundle`] is often more efficient than issuing the underlying commands manually.
+/// Executing a [`RenderBundle`] is often more efficient than issuing the underlying commands
+/// manually.
+///
+/// Corresponds to [WebGPU `GPURenderBundleEncoder`](
+/// https://gpuweb.github.io/gpuweb/#gpurenderbundleencoder).
 #[derive(Debug)]
 pub struct RenderBundleEncoder<'a> {
     context: Arc<C>,
@@ -953,10 +1008,13 @@ pub struct RenderBundleEncoder<'a> {
 
 /// Pre-prepared reusable bundle of GPU operations.
 ///
-/// It only supports a handful of render commands, but it makes them reusable. [`RenderBundle`]s
-/// can be executed onto a [`CommandEncoder`] using [`RenderPass::execute_bundles`].
+/// It only supports a handful of render commands, but it makes them reusable. Executing a
+/// [`RenderBundle`] is often more efficient than issuing the underlying commands manually.
 ///
-/// Executing a [`RenderBundle`] is often more efficient than issuing the underlying commands manually.
+/// It can be created by use of a [`RenderBundleEncoder`], and executed onto a [`CommandEncoder`]
+/// using [`RenderPass::execute_bundles`].
+///
+/// Corresponds to [WebGPU `GPURenderBundle`](https://gpuweb.github.io/gpuweb/#render-bundle).
 #[derive(Debug)]
 pub struct RenderBundle {
     context: Arc<C>,
@@ -972,6 +1030,10 @@ impl Drop for RenderBundle {
 }
 
 /// Handle to a query set.
+///
+/// It can be created with [`Device::create_query_set`].
+///
+/// Corresponds to [WebGPU `GPUQuerySet`](https://gpuweb.github.io/gpuweb/#queryset).
 pub struct QuerySet {
     context: Arc<C>,
     id: <C as Context>::QuerySetId,
@@ -989,6 +1051,9 @@ impl Drop for QuerySet {
 ///
 /// A `Queue` executes recorded [`CommandBuffer`] objects and provides convenience methods
 /// for writing to [buffers](Queue::write_buffer) and [textures](Queue::write_texture).
+/// It can be created along with a [`Device`] by calling [`Adapter::request_device`].
+///
+/// Corresponds to [WebGPU `GPUQueue`](https://gpuweb.github.io/gpuweb/#gpu-queue).
 #[derive(Debug)]
 pub struct Queue {
     context: Arc<C>,
@@ -996,6 +1061,9 @@ pub struct Queue {
 }
 
 /// Resource that can be bound to a pipeline.
+///
+/// Corresponds to [WebGPU `GPUBindingResource`](
+/// https://gpuweb.github.io/gpuweb/#typedefdef-gpubindingresource).
 #[non_exhaustive]
 #[derive(Clone, Debug)]
 pub enum BindingResource<'a> {
@@ -1037,6 +1105,9 @@ pub enum BindingResource<'a> {
 }
 
 /// Describes the segment of a buffer to bind.
+///
+/// Corresponds to [WebGPU `GPUBufferBinding`](
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpubufferbinding).
 #[derive(Clone, Debug)]
 pub struct BufferBinding<'a> {
     /// The buffer to bind.
@@ -1054,6 +1125,8 @@ pub struct BufferBinding<'a> {
 /// Operation to perform to the output attachment at the start of a renderpass.
 ///
 /// The render target must be cleared at least once before its content is loaded.
+///
+/// Corresponds to [WebGPU `GPULoadOp`](https://gpuweb.github.io/gpuweb/#enumdef-gpuloadop).
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
@@ -1091,21 +1164,31 @@ impl<V: Default> Default for Operations<V> {
 }
 
 /// Describes a color attachment to a [`RenderPass`].
+///
+/// For use with [`RenderPassDescriptor`].
+///
+/// Corresponds to [WebGPU `GPURenderPassColorAttachment`](
+/// https://gpuweb.github.io/gpuweb/#color-attachments).
 #[derive(Clone, Debug)]
-pub struct RenderPassColorAttachment<'a> {
+pub struct RenderPassColorAttachment<'tex> {
     /// The view to use as an attachment.
-    pub view: &'a TextureView,
+    pub view: &'tex TextureView,
     /// The view that will receive the resolved output if multisampling is used.
-    pub resolve_target: Option<&'a TextureView>,
+    pub resolve_target: Option<&'tex TextureView>,
     /// What operations will be performed on this color attachment.
     pub ops: Operations<Color>,
 }
 
 /// Describes a depth/stencil attachment to a [`RenderPass`].
+///
+/// For use with [`RenderPassDescriptor`].
+///
+/// Corresponds to [WebGPU `GPURenderPassDepthStencilAttachment`](
+/// https://gpuweb.github.io/gpuweb/#depth-stencil-attachments).
 #[derive(Clone, Debug)]
-pub struct RenderPassDepthStencilAttachment<'a> {
+pub struct RenderPassDepthStencilAttachment<'tex> {
     /// The view to use as an attachment.
-    pub view: &'a TextureView,
+    pub view: &'tex TextureView,
     /// What operations will be performed on the depth part of the attachment.
     pub depth_ops: Option<Operations<f32>>,
     /// What operations will be performed on the stencil part of the attachment.
@@ -1114,25 +1197,65 @@ pub struct RenderPassDepthStencilAttachment<'a> {
 
 // The underlying types are also exported so that documentation shows up for them
 
-/// Object label.
+/// Object debugging label.
 pub type Label<'a> = Option<&'a str>;
 pub use wgt::RequestAdapterOptions as RequestAdapterOptionsBase;
 /// Additional information required when requesting an adapter.
+///
+/// For use with [`Instance::request_adapter`].
+///
+/// Corresponds to [WebGPU `GPURequestAdapterOptions`](
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpurequestadapteroptions).
 pub type RequestAdapterOptions<'a> = RequestAdapterOptionsBase<&'a Surface>;
 /// Describes a [`Device`].
+///
+/// For use with [`Adapter::request_device`].
+///
+/// Corresponds to [WebGPU `GPUDeviceDescriptor`](
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpudevicedescriptor).
 pub type DeviceDescriptor<'a> = wgt::DeviceDescriptor<Label<'a>>;
 /// Describes a [`Buffer`].
+///
+/// For use with [`Device::create_buffer`].
+///
+/// Corresponds to [WebGPU `GPUBufferDescriptor`](
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpubufferdescriptor).
 pub type BufferDescriptor<'a> = wgt::BufferDescriptor<Label<'a>>;
 /// Describes a [`CommandEncoder`].
+///
+/// For use with [`Device::create_command_encoder`].
+///
+/// Corresponds to [WebGPU `GPUCommandEncoderDescriptor`](
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpucommandencoderdescriptor).
 pub type CommandEncoderDescriptor<'a> = wgt::CommandEncoderDescriptor<Label<'a>>;
 /// Describes a [`RenderBundle`].
+///
+/// For use with [`RenderBundleEncoder::finish`].
+///
+/// Corresponds to [WebGPU `GPURenderBundleDescriptor`](
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpurenderbundledescriptor).
 pub type RenderBundleDescriptor<'a> = wgt::RenderBundleDescriptor<Label<'a>>;
 /// Describes a [`Texture`].
+///
+/// For use with [`Device::create_texture`].
+///
+/// Corresponds to [WebGPU `GPUTextureDescriptor`](
+/// https://gpuweb.github.io/gpuweb/#dictdef-gputexturedescriptor).
 pub type TextureDescriptor<'a> = wgt::TextureDescriptor<Label<'a>>;
 /// Describes a [`QuerySet`].
+///
+/// For use with [`Device::create_query_set`].
+///
+/// Corresponds to [WebGPU `GPUQuerySetDescriptor`](
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpuquerysetdescriptor).
 pub type QuerySetDescriptor<'a> = wgt::QuerySetDescriptor<Label<'a>>;
 
 /// Describes a [`TextureView`].
+///
+/// For use with [`Texture::create_view`].
+///
+/// Corresponds to [WebGPU `GPUTextureViewDescriptor`](
+/// https://gpuweb.github.io/gpuweb/#dictdef-gputextureviewdescriptor).
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct TextureViewDescriptor<'a> {
     /// Debug label of the texture view. This will show up in graphics debuggers for easy identification.
@@ -1158,9 +1281,12 @@ pub struct TextureViewDescriptor<'a> {
     pub array_layer_count: Option<NonZeroU32>,
 }
 
-/// Describes a pipeline layout.
+/// Describes a [`PipelineLayout`].
 ///
-/// A `PipelineLayoutDescriptor` can be used to create a pipeline layout.
+/// For use with [`Device::create_pipeline_layout`].
+///
+/// Corresponds to [WebGPU `GPUPipelineLayoutDescriptor`](
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpupipelinelayoutdescriptor).
 #[derive(Clone, Debug, Default)]
 pub struct PipelineLayoutDescriptor<'a> {
     /// Debug label of the pipeline layout. This will show up in graphics debuggers for easy identification.
@@ -1176,7 +1302,12 @@ pub struct PipelineLayoutDescriptor<'a> {
     pub push_constant_ranges: &'a [PushConstantRange],
 }
 
-/// Describes a [`Sampler`]
+/// Describes a [`Sampler`].
+///
+/// For use with [`Device::create_sampler`].
+///
+/// Corresponds to [WebGPU `GPUSamplerDescriptor`](
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpusamplerdescriptor).
 #[derive(Clone, Debug, PartialEq)]
 pub struct SamplerDescriptor<'a> {
     /// Debug label of the sampler. This will show up in graphics debuggers for easy identification.
@@ -1224,7 +1355,11 @@ impl Default for SamplerDescriptor<'_> {
     }
 }
 
-/// Bindable resource and the slot to bind it to.
+/// An element of a [`BindGroupDescriptor`], consisting of a bindable resource
+/// and the slot to bind it to.
+///
+/// Corresponds to [WebGPU `GPUBindGroupEntry`](
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpubindgroupentry).
 #[derive(Clone, Debug)]
 pub struct BindGroupEntry<'a> {
     /// Slot for which binding provides resource. Corresponds to an entry of the same
@@ -1235,6 +1370,11 @@ pub struct BindGroupEntry<'a> {
 }
 
 /// Describes a group of bindings and the resources to be bound.
+///
+/// For use with [`Device::create_bind_group`].
+///
+/// Corresponds to [WebGPU `GPUBindGroupDescriptor`](
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpubindgroupdescriptor).
 #[derive(Clone, Debug)]
 pub struct BindGroupDescriptor<'a> {
     /// Debug label of the bind group. This will show up in graphics debuggers for easy identification.
@@ -1247,19 +1387,29 @@ pub struct BindGroupDescriptor<'a> {
 
 /// Describes the attachments of a render pass.
 ///
-/// Note: separate lifetimes are needed because the texture views
-/// have to live as long as the pass is recorded, while everything else doesn't.
+/// For use with [`CommandEncoder::begin_render_pass`].
+///
+/// Note: separate lifetimes are needed because the texture views (`'tex`)
+/// have to live as long as the pass is recorded, while everything else (`'desc`) doesn't.
+///
+/// Corresponds to [WebGPU `GPURenderPassDescriptor`](
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpurenderpassdescriptor).
 #[derive(Clone, Debug, Default)]
-pub struct RenderPassDescriptor<'a, 'b> {
+pub struct RenderPassDescriptor<'tex, 'desc> {
     /// Debug label of the render pass. This will show up in graphics debuggers for easy identification.
-    pub label: Label<'a>,
+    pub label: Label<'desc>,
     /// The color attachments of the render pass.
-    pub color_attachments: &'b [RenderPassColorAttachment<'a>],
+    pub color_attachments: &'desc [RenderPassColorAttachment<'tex>],
     /// The depth and stencil attachment of the render pass, if any.
-    pub depth_stencil_attachment: Option<RenderPassDepthStencilAttachment<'a>>,
+    pub depth_stencil_attachment: Option<RenderPassDepthStencilAttachment<'tex>>,
 }
 
 /// Describes how the vertex buffer is interpreted.
+///
+/// For use in [`VertexState`].
+///
+/// Corresponds to [WebGPU `GPUVertexBufferLayout`](
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpurenderpassdescriptor).
 #[derive(Clone, Debug, Hash, Eq, PartialEq)]
 pub struct VertexBufferLayout<'a> {
     /// The stride, in bytes, between elements of this buffer.
@@ -1270,7 +1420,12 @@ pub struct VertexBufferLayout<'a> {
     pub attributes: &'a [VertexAttribute],
 }
 
-/// Describes the vertex process in a render pipeline.
+/// Describes the vertex processing in a render pipeline.
+///
+/// For use in [`RenderPipelineDescriptor`].
+///
+/// Corresponds to [WebGPU `GPUVertexState`](
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpuvertexstate).
 #[derive(Clone, Debug)]
 pub struct VertexState<'a> {
     /// The compiled shader module for this stage.
@@ -1282,7 +1437,12 @@ pub struct VertexState<'a> {
     pub buffers: &'a [VertexBufferLayout<'a>],
 }
 
-/// Describes the fragment process in a render pipeline.
+/// Describes the fragment processing in a render pipeline.
+///
+/// For use in [`RenderPipelineDescriptor`].
+///
+/// Corresponds to [WebGPU `GPUFragmentState`](
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpufragmentstate).
 #[derive(Clone, Debug)]
 pub struct FragmentState<'a> {
     /// The compiled shader module for this stage.
@@ -1295,6 +1455,11 @@ pub struct FragmentState<'a> {
 }
 
 /// Describes a render (graphics) pipeline.
+///
+/// For use with [`Device::create_render_pipeline`].
+///
+/// Corresponds to [WebGPU `GPURenderPipelineDescriptor`](
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpurenderpipelinedescriptor).
 #[derive(Clone, Debug)]
 pub struct RenderPipelineDescriptor<'a> {
     /// Debug label of the pipeline. This will show up in graphics debuggers for easy identification.
@@ -1317,6 +1482,11 @@ pub struct RenderPipelineDescriptor<'a> {
 }
 
 /// Describes the attachments of a compute pass.
+///
+/// For use with [`CommandEncoder::begin_compute_pass`].
+///
+/// Corresponds to [WebGPU `GPUComputePassDescriptor`](
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpucomputepassdescriptor).
 #[derive(Clone, Debug, Default)]
 pub struct ComputePassDescriptor<'a> {
     /// Debug label of the compute pass. This will show up in graphics debuggers for easy identification.
@@ -1324,6 +1494,11 @@ pub struct ComputePassDescriptor<'a> {
 }
 
 /// Describes a compute pipeline.
+///
+/// For use with [`Device::create_compute_pipeline`].
+///
+/// Corresponds to [WebGPU `GPUComputePipelineDescriptor`](
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpucomputepipelinedescriptor).
 #[derive(Clone, Debug)]
 pub struct ComputePipelineDescriptor<'a> {
     /// Debug label of the pipeline. This will show up in graphics debuggers for easy identification.
@@ -1339,13 +1514,24 @@ pub struct ComputePipelineDescriptor<'a> {
 
 pub use wgt::ImageCopyBuffer as ImageCopyBufferBase;
 /// View of a buffer which can be used to copy to/from a texture.
+///
+/// Corresponds to [WebGPU `GPUImageCopyBuffer`](
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpuimagecopybuffer).
 pub type ImageCopyBuffer<'a> = ImageCopyBufferBase<&'a Buffer>;
 
 pub use wgt::ImageCopyTexture as ImageCopyTextureBase;
 /// View of a texture which can be used to copy to/from a buffer/texture.
+///
+/// Corresponds to [WebGPU `GPUImageCopyTexture`](
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpuimagecopytexture).
 pub type ImageCopyTexture<'a> = ImageCopyTextureBase<&'a Texture>;
 
 /// Describes a [`BindGroupLayout`].
+///
+/// For use with [`Device::create_bind_group_layout`].
+///
+/// Corresponds to [WebGPU `GPUBindGroupLayoutDescriptor`](
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpubindgrouplayoutdescriptor).
 #[derive(Clone, Debug)]
 pub struct BindGroupLayoutDescriptor<'a> {
     /// Debug label of the bind group layout. This will show up in graphics debuggers for easy identification.
@@ -1356,6 +1542,11 @@ pub struct BindGroupLayoutDescriptor<'a> {
 }
 
 /// Describes a [`RenderBundleEncoder`].
+///
+/// For use with [`Device::create_render_bundle_encoder`].
+///
+/// Corresponds to [WebGPU `GPURenderBundleEncoderDescriptor`](
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpurenderbundleencoderdescriptor).
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 pub struct RenderBundleEncoderDescriptor<'a> {
     /// Debug label of the render bundle encoder. This will show up in graphics debuggers for easy identification.
@@ -1561,10 +1752,23 @@ impl Instance {
     }
 
     /// Polls all devices.
-    /// If `force_wait` is true and this is not running on the web,
-    /// then this function will block until all in-flight buffers have been mapped.
-    pub fn poll_all(&self, force_wait: bool) {
-        self.context.instance_poll_all_devices(force_wait);
+    ///
+    /// If `force_wait` is true and this is not running on the web, then this
+    /// function will block until all in-flight buffers have been mapped and
+    /// all submitted commands have finished execution.
+    ///
+    /// Return `true` if all devices' queues are empty, or `false` if there are
+    /// queue submissions still in flight. (Note that, unless access to all
+    /// [`Queue`s] associated with this [`Instance`] is coordinated somehow,
+    /// this information could be out of date by the time the caller receives
+    /// it. `Queue`s can be shared between threads, and other threads could
+    /// submit new work at any time.)
+    ///
+    /// On the web, this is a no-op. `Device`s are automatically polled.
+    ///
+    /// [`Queue`s]: Queue
+    pub fn poll_all(&self, force_wait: bool) -> bool {
+        self.context.instance_poll_all_devices(force_wait)
     }
 
     /// Generates memory report.
@@ -1687,9 +1891,15 @@ impl Adapter {
 impl Device {
     /// Check for resource cleanups and mapping callbacks.
     ///
-    /// no-op on the web, device is automatically polled.
-    pub fn poll(&self, maintain: Maintain) {
-        Context::device_poll(&*self.context, &self.id, maintain);
+    /// Return `true` if the queue is empty, or `false` if there are more queue
+    /// submissions still in flight. (Note that, unless access to the [`Queue`] is
+    /// coordinated somehow, this information could be out of date by the time
+    /// the caller receives it. `Queue`s can be shared between threads, so
+    /// other threads could submit new work at any time.)
+    ///
+    /// On the web, this is a no-op. `Device`s are automatically polled.
+    pub fn poll(&self, maintain: Maintain) -> bool {
+        Context::device_poll(&*self.context, &self.id, maintain)
     }
 
     /// List all features that may be used with this device.
@@ -2280,10 +2490,10 @@ impl CommandEncoder {
     /// Begins recording of a render pass.
     ///
     /// This function returns a [`RenderPass`] object which records a single render pass.
-    pub fn begin_render_pass<'a>(
-        &'a mut self,
-        desc: &RenderPassDescriptor<'a, '_>,
-    ) -> RenderPass<'a> {
+    pub fn begin_render_pass<'pass>(
+        &'pass mut self,
+        desc: &RenderPassDescriptor<'pass, '_>,
+    ) -> RenderPass<'pass> {
         let id = self.id.as_ref().unwrap();
         RenderPass {
             id: Context::command_encoder_begin_render_pass(&*self.context, id, desc),
@@ -2772,9 +2982,9 @@ impl<'a> RenderPass<'a> {
     ///
     /// Offset is measured in bytes, but must be a multiple of [`PUSH_CONSTANT_ALIGNMENT`].
     ///
-    /// Data size must be a multiple of 4 and must be aligned to the 4s, so we take an array of u32.
-    /// For example, with an offset of 4 and an array of `[u32; 3]`, that will write to the range
-    /// of 4..16.
+    /// Data size must be a multiple of 4 and must have an alignment of 4.
+    /// For example, with an offset of 4 and an array of `[u8; 8]`, that will write to the range
+    /// of 4..12.
     ///
     /// For each byte in the range of push constant data written, the union of the stages of all push constant
     /// ranges that covers that byte must be exactly `stages`. There's no good way of explaining this simply,
@@ -2907,9 +3117,9 @@ impl<'a> ComputePass<'a> {
     ///
     /// Offset is measured in bytes, but must be a multiple of [`PUSH_CONSTANT_ALIGNMENT`].
     ///
-    /// Data size must be a multiple of 4 and must be aligned to the 4s, so we take an array of u32.
-    /// For example, with an offset of 4 and an array of `[u32; 3]`, that will write to the range
-    /// of 4..16.
+    /// Data size must be a multiple of 4 and must have an alignment of 4.
+    /// For example, with an offset of 4 and an array of `[u8; 8]`, that will write to the range
+    /// of 4..12.
     pub fn set_push_constants(&mut self, offset: u32, data: &[u8]) {
         self.id.set_push_constants(offset, data);
     }
@@ -3065,9 +3275,9 @@ impl<'a> RenderBundleEncoder<'a> {
     ///
     /// Offset is measured in bytes, but must be a multiple of [`PUSH_CONSTANT_ALIGNMENT`].
     ///
-    /// Data size must be a multiple of 4 and must be aligned to the 4s, so we take an array of u32.
-    /// For example, with an offset of 4 and an array of `[u32; 3]`, that will write to the range
-    /// of 4..16.
+    /// Data size must be a multiple of 4 and must have an alignment of 4.
+    /// For example, with an offset of 4 and an array of `[u8; 8]`, that will write to the range
+    /// of 4..12.
     ///
     /// For each byte in the range of push constant data written, the union of the stages of all push constant
     /// ranges that covers that byte must be exactly `stages`. There's no good way of explaining this simply,

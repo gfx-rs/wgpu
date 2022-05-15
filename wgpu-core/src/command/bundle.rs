@@ -1225,7 +1225,7 @@ pub mod bundle_ffi {
     use super::{RenderBundleEncoder, RenderCommand};
     use crate::{id, RawString};
     use std::{convert::TryInto, slice};
-    use wgt::{BufferAddress, BufferSize, DynamicOffset};
+    use wgt::{BufferAddress, BufferSize, DynamicOffset, IndexFormat};
 
     /// # Safety
     ///
@@ -1287,6 +1287,17 @@ pub mod bundle_ffi {
             offset,
             size,
         });
+    }
+
+    #[no_mangle]
+    pub extern "C" fn wgpu_render_bundle_set_index_buffer(
+        encoder: &mut RenderBundleEncoder,
+        buffer: id::BufferId,
+        index_format: IndexFormat,
+        offset: BufferAddress,
+        size: Option<BufferSize>,
+    ) {
+        encoder.set_index_buffer(buffer, index_format, offset, size);
     }
 
     /// # Safety

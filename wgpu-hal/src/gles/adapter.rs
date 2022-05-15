@@ -98,6 +98,7 @@ impl super::Adapter {
         // opengl has no way to discern device_type, so we can try to infer it from the renderer string
         let strings_that_imply_integrated = [
             " xpress", // space here is on purpose so we don't match express
+            "amd renoir",
             "radeon hd 4200",
             "radeon hd 4250",
             "radeon hd 4290",
@@ -134,7 +135,7 @@ impl super::Adapter {
         } else if strings_that_imply_cpu.iter().any(|&s| renderer.contains(s)) {
             wgt::DeviceType::Cpu
         } else {
-            wgt::DeviceType::DiscreteGpu
+            wgt::DeviceType::Other
         };
 
         // source: Sascha Willems at Vulkan

@@ -128,7 +128,7 @@ pub async fn op_webgpu_buffer_get_map_async(
             {
                 let state = state.borrow();
                 let instance = state.borrow::<super::Instance>();
-                gfx_select!(device => instance.device_poll(device, false)).unwrap()
+                gfx_select!(device => instance.device_poll(device, false)).unwrap();
             }
             tokio::time::sleep(Duration::from_millis(10)).await;
         }

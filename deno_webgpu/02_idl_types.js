@@ -120,6 +120,7 @@
       "texture-compression-astc",
       "timestamp-query",
       "indirect-first-instance",
+      "shader-f16",
       // extended from spec
       "mappable-primary-buffers",
       "texture-binding-array",
