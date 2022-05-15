@@ -6,11 +6,11 @@ mod texture;
 use crate::{
     binding_model, command, conv, hub,
     id::{self, TypedId},
-    pipeline, resource, Epoch, RefCount, LifeGuard,
+    pipeline, resource, Epoch, LifeGuard, RefCount,
 };
 
 use bit_vec::BitVec;
-use std::{fmt, marker::PhantomData, mem, num::NonZeroU32, ops, borrow::Cow};
+use std::{borrow::Cow, fmt, marker::PhantomData, mem, num::NonZeroU32, ops};
 use thiserror::Error;
 
 pub(crate) use buffer::{BufferBindGroupState, BufferTracker, BufferUsageScope};
@@ -281,11 +281,7 @@ enum ResourceMetadataProvider<'a, A: hub::HalApi> {
     },
 }
 impl<A: hub::HalApi> ResourceMetadataProvider<'_, A> {
-    unsafe fn get_own(
-        self,
-        life_guard: Option<&LifeGuard>,
-        index: usize,
-    ) -> (Epoch, RefCount) {
+    unsafe fn get_own(self, life_guard: Option<&LifeGuard>, index: usize) -> (Epoch, RefCount) {
         match self {
             ResourceMetadataProvider::Direct { epoch, ref_count } => {
                 (epoch, ref_count.into_owned())
@@ -298,9 +294,7 @@ impl<A: hub::HalApi> ResourceMetadataProvider<'_, A> {
                     .clone()
                     .unwrap_unchecked(),
             ),
-            ResourceMetadataProvider::Resource { epoch } => {
-                (epoch, life_guard.unwrap().add_ref())
-            }
+            ResourceMetadataProvider::Resource { epoch } => (epoch, life_guard.unwrap().add_ref()),
         }
     }
     unsafe fn get_epoch(self, index: usize) -> Epoch {

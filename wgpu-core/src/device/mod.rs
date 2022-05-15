@@ -3693,7 +3693,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let ref_count = view.life_guard.add_ref();
             let id = fid.assign(view, &mut token);
 
-            unsafe { device.trackers.lock().views.init(id, ref_count) };
+            device.trackers.lock().views.init(id, ref_count);
             return (id.0, None);
         };
 
@@ -3786,9 +3786,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let ref_count = sampler.life_guard.add_ref();
             let id = fid.assign(sampler, &mut token);
 
-            unsafe {
-                device.trackers.lock().samplers.init(id, ref_count);
-            }
+            device.trackers.lock().samplers.init(id, ref_count);
+
             return (id.0, None);
         };
 
@@ -4048,7 +4047,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let id = fid.assign(bind_group, &mut token);
             log::debug!("Bind group {:?}", id,);
 
-            unsafe { device.trackers.lock().bind_groups.init(id, ref_count) };
+            device.trackers.lock().bind_groups.init(id, ref_count);
             return (id.0, None);
         };
 
@@ -4355,7 +4354,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let ref_count = render_bundle.life_guard.add_ref();
             let id = fid.assign(render_bundle, &mut token);
 
-            unsafe { device.trackers.lock().bundles.init(id, ref_count) };
+            device.trackers.lock().bundles.init(id, ref_count);
             return (id.0, None);
         };
 
@@ -4430,9 +4429,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let ref_count = query_set.life_guard.add_ref();
             let id = fid.assign(query_set, &mut token);
 
-            unsafe {
-                device.trackers.lock().query_sets.init(id, ref_count);
-            }
+            device.trackers.lock().query_sets.init(id, ref_count);
 
             return (id.0, None);
         };
@@ -4523,9 +4520,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let id = fid.assign(pipeline, &mut token);
             log::info!("Created render pipeline {:?} with {:?}", id, desc);
 
-            unsafe {
-                device.trackers.lock().render_pipelines.init(id, ref_count);
-            }
+            device.trackers.lock().render_pipelines.init(id, ref_count);
+
             return (id.0, None);
         };
 
@@ -4661,7 +4657,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let id = fid.assign(pipeline, &mut token);
             log::info!("Created compute pipeline {:?} with {:?}", id, desc);
 
-            unsafe { device.trackers.lock().compute_pipelines.init(id, ref_count) };
+            device.trackers.lock().compute_pipelines.init(id, ref_count);
             return (id.0, None);
         };
 

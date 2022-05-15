@@ -230,14 +230,12 @@ impl RenderBundleEncoder {
                     let offsets = &base.dynamic_offsets[..num_dynamic_offsets as usize];
                     base.dynamic_offsets = &base.dynamic_offsets[num_dynamic_offsets as usize..];
 
-                    let bind_group: &binding_model::BindGroup<A> = unsafe {
-                        state
-                            .trackers
-                            .bind_groups
-                            .extend(&*bind_group_guard, bind_group_id)
-                            .ok_or_else(|| RenderCommandError::InvalidBindGroup(bind_group_id))
-                            .map_pass_err(scope)?
-                    };
+                    let bind_group: &binding_model::BindGroup<A> = state
+                        .trackers
+                        .bind_groups
+                        .extend(&*bind_group_guard, bind_group_id)
+                        .ok_or_else(|| RenderCommandError::InvalidBindGroup(bind_group_id))
+                        .map_pass_err(scope)?;
                     if bind_group.dynamic_binding_info.len() != offsets.len() {
                         return Err(RenderCommandError::InvalidDynamicOffsetCount {
                             actual: offsets.len(),
@@ -280,13 +278,11 @@ impl RenderBundleEncoder {
 
                     state.pipeline = Some(pipeline_id);
 
-                    let pipeline: &pipeline::RenderPipeline<A> = unsafe {
-                        state
-                            .trackers
-                            .render_pipelines
-                            .extend(&*pipeline_guard, pipeline_id)
-                            .unwrap()
-                    };
+                    let pipeline: &pipeline::RenderPipeline<A> = state
+                        .trackers
+                        .render_pipelines
+                        .extend(&*pipeline_guard, pipeline_id)
+                        .unwrap();
 
                     self.context
                         .check_compatible(&pipeline.pass_context)
@@ -321,13 +317,11 @@ impl RenderBundleEncoder {
                     size,
                 } => {
                     let scope = PassErrorScope::SetIndexBuffer(buffer_id);
-                    let buffer: &resource::Buffer<A> = unsafe {
-                        state
-                            .trackers
-                            .buffers
-                            .extend(&*buffer_guard, buffer_id, hal::BufferUses::INDEX)
-                            .map_pass_err(scope)?
-                    };
+                    let buffer: &resource::Buffer<A> = state
+                        .trackers
+                        .buffers
+                        .extend(&*buffer_guard, buffer_id, hal::BufferUses::INDEX)
+                        .map_pass_err(scope)?;
                     check_buffer_usage(buffer.usage, wgt::BufferUsages::INDEX)
                         .map_pass_err(scope)?;
 
@@ -350,13 +344,11 @@ impl RenderBundleEncoder {
                     size,
                 } => {
                     let scope = PassErrorScope::SetVertexBuffer(buffer_id);
-                    let buffer: &resource::Buffer<A> = unsafe {
-                        state
-                            .trackers
-                            .buffers
-                            .extend(&*buffer_guard, buffer_id, hal::BufferUses::VERTEX)
-                            .map_pass_err(scope)?
-                    };
+                    let buffer: &resource::Buffer<A> = state
+                        .trackers
+                        .buffers
+                        .extend(&*buffer_guard, buffer_id, hal::BufferUses::VERTEX)
+                        .map_pass_err(scope)?;
                     check_buffer_usage(buffer.usage, wgt::BufferUsages::VERTEX)
                         .map_pass_err(scope)?;
 
@@ -477,13 +469,11 @@ impl RenderBundleEncoder {
                         .require_downlevel_flags(wgt::DownlevelFlags::INDIRECT_EXECUTION)
                         .map_pass_err(scope)?;
 
-                    let buffer: &resource::Buffer<A> = unsafe {
-                        state
-                            .trackers
-                            .buffers
-                            .extend(&*buffer_guard, buffer_id, hal::BufferUses::INDIRECT)
-                            .map_pass_err(scope)?
-                    };
+                    let buffer: &resource::Buffer<A> = state
+                        .trackers
+                        .buffers
+                        .extend(&*buffer_guard, buffer_id, hal::BufferUses::INDIRECT)
+                        .map_pass_err(scope)?;
                     check_buffer_usage(buffer.usage, wgt::BufferUsages::INDIRECT)
                         .map_pass_err(scope)?;
 
@@ -512,13 +502,11 @@ impl RenderBundleEncoder {
                         .require_downlevel_flags(wgt::DownlevelFlags::INDIRECT_EXECUTION)
                         .map_pass_err(scope)?;
 
-                    let buffer: &resource::Buffer<A> = unsafe {
-                        state
-                            .trackers
-                            .buffers
-                            .extend(&*buffer_guard, buffer_id, hal::BufferUses::INDIRECT)
-                            .map_pass_err(scope)?
-                    };
+                    let buffer: &resource::Buffer<A> = state
+                        .trackers
+                        .buffers
+                        .extend(&*buffer_guard, buffer_id, hal::BufferUses::INDIRECT)
+                        .map_pass_err(scope)?;
                     check_buffer_usage(buffer.usage, wgt::BufferUsages::INDIRECT)
                         .map_pass_err(scope)?;
 

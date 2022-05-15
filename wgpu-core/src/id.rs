@@ -64,7 +64,7 @@ impl<T> From<SerialId> for Id<T> {
 }
 
 impl<T> Id<T> {
-    #[cfg(test)]
+    #[allow(dead_code)]
     pub(crate) fn dummy(index: u32) -> Valid<Self> {
         Valid(Id::zip(index, 1, Backend::Empty))
     }

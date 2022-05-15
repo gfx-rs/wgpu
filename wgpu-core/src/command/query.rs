@@ -296,13 +296,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             });
         }
 
-        let query_set = unsafe {
-            cmd_buf
-                .trackers
-                .query_sets
-                .extend(&*query_set_guard, query_set_id)
-                .ok_or_else(|| QueryError::InvalidQuerySet(query_set_id))?
-        };
+        let query_set = cmd_buf
+            .trackers
+            .query_sets
+            .extend(&*query_set_guard, query_set_id)
+            .ok_or_else(|| QueryError::InvalidQuerySet(query_set_id))?;
 
         query_set.validate_and_write_timestamp(raw_encoder, query_set_id, query_index, None)?;
 
@@ -343,13 +341,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             return Err(QueryError::Resolve(ResolveError::BufferOffsetAlignment));
         }
 
-        let query_set = unsafe {
-            cmd_buf
-                .trackers
-                .query_sets
-                .extend(&*query_set_guard, query_set_id)
-                .ok_or_else(|| QueryError::InvalidQuerySet(query_set_id))?
-        };
+        let query_set = cmd_buf
+            .trackers
+            .query_sets
+            .extend(&*query_set_guard, query_set_id)
+            .ok_or_else(|| QueryError::InvalidQuerySet(query_set_id))?;
 
         let (dst_buffer, dst_pending) = cmd_buf
             .trackers

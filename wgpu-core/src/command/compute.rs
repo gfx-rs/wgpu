@@ -393,14 +393,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     );
                     dynamic_offset_count += num_dynamic_offsets as usize;
 
-                    let bind_group: &BindGroup<A> = unsafe {
-                        cmd_buf
-                            .trackers
-                            .bind_groups
-                            .extend(&*bind_group_guard, bind_group_id)
-                            .ok_or_else(|| ComputePassErrorInner::InvalidBindGroup(bind_group_id))
-                            .map_pass_err(scope)?
-                    };
+                    let bind_group: &BindGroup<A> = cmd_buf
+                        .trackers
+                        .bind_groups
+                        .extend(&*bind_group_guard, bind_group_id)
+                        .ok_or_else(|| ComputePassErrorInner::InvalidBindGroup(bind_group_id))
+                        .map_pass_err(scope)?;
                     bind_group
                         .validate_dynamic_bindings(&temp_offsets, &cmd_buf.limits)
                         .map_pass_err(scope)?;
@@ -450,14 +448,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                     state.pipeline = Some(pipeline_id);
 
-                    let pipeline: &pipeline::ComputePipeline<A> = unsafe {
-                        cmd_buf
-                            .trackers
-                            .compute_pipelines
-                            .extend(&*pipeline_guard, pipeline_id)
-                            .ok_or_else(|| ComputePassErrorInner::InvalidPipeline(pipeline_id))
-                            .map_pass_err(scope)?
-                    };
+                    let pipeline: &pipeline::ComputePipeline<A> = cmd_buf
+                        .trackers
+                        .compute_pipelines
+                        .extend(&*pipeline_guard, pipeline_id)
+                        .ok_or_else(|| ComputePassErrorInner::InvalidPipeline(pipeline_id))
+                        .map_pass_err(scope)?;
 
                     unsafe {
                         raw.set_compute_pipeline(&pipeline.raw);
@@ -605,13 +601,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .require_downlevel_flags(wgt::DownlevelFlags::INDIRECT_EXECUTION)
                         .map_pass_err(scope)?;
 
-                    let indirect_buffer: &Buffer<A> = unsafe {
-                        state
-                            .scope
-                            .buffers
-                            .extend(&*buffer_guard, buffer_id, hal::BufferUses::INDIRECT)
-                            .map_pass_err(scope)?
-                    };
+                    let indirect_buffer: &Buffer<A> = state
+                        .scope
+                        .buffers
+                        .extend(&*buffer_guard, buffer_id, hal::BufferUses::INDIRECT)
+                        .map_pass_err(scope)?;
                     check_buffer_usage(indirect_buffer.usage, wgt::BufferUsages::INDIRECT)
                         .map_pass_err(scope)?;
 
@@ -689,14 +683,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 } => {
                     let scope = PassErrorScope::WriteTimestamp;
 
-                    let query_set: &resource::QuerySet<A> = unsafe {
-                        cmd_buf
-                            .trackers
-                            .query_sets
-                            .extend(&*query_set_guard, query_set_id)
-                            .ok_or_else(|| ComputePassErrorInner::InvalidQuerySet(query_set_id))
-                            .map_pass_err(scope)?
-                    };
+                    let query_set: &resource::QuerySet<A> = cmd_buf
+                        .trackers
+                        .query_sets
+                        .extend(&*query_set_guard, query_set_id)
+                        .ok_or_else(|| ComputePassErrorInner::InvalidQuerySet(query_set_id))
+                        .map_pass_err(scope)?;
 
                     query_set
                         .validate_and_write_timestamp(raw, query_set_id, query_index, None)
@@ -708,14 +700,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 } => {
                     let scope = PassErrorScope::BeginPipelineStatisticsQuery;
 
-                    let query_set: &resource::QuerySet<A> = unsafe {
-                        cmd_buf
-                            .trackers
-                            .query_sets
-                            .extend(&*query_set_guard, query_set_id)
-                            .ok_or_else(|| ComputePassErrorInner::InvalidQuerySet(query_set_id))
-                            .map_pass_err(scope)?
-                    };
+                    let query_set: &resource::QuerySet<A> = cmd_buf
+                        .trackers
+                        .query_sets
+                        .extend(&*query_set_guard, query_set_id)
+                        .ok_or_else(|| ComputePassErrorInner::InvalidQuerySet(query_set_id))
+                        .map_pass_err(scope)?;
 
                     query_set
                         .validate_and_begin_pipeline_statistics_query(

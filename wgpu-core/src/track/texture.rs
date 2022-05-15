@@ -7,7 +7,7 @@ use crate::{
         invalid_resource_state, iterate_bitvec_indices, skip_barrier, ResourceMetadata,
         ResourceMetadataProvider, ResourceUses, UsageConflict,
     },
-    Epoch, LifeGuard, RefCount,
+    LifeGuard, RefCount,
 };
 use hal::TextureUses;
 
@@ -748,7 +748,7 @@ unsafe fn insert_or_barrier_update<A: hub::HalApi>(
     let currently_owned = resource_metadata.owned.get(index).unwrap_unchecked();
 
     if !currently_owned {
-        let update_state_provider = end_state_provider.unwrap_or_else(|| start_state_provider);
+        let insert_state_provider = end_state_provider.unwrap_or_else(|| start_state_provider);
         insert(
             Some(texture_data),
             start_state,
@@ -756,7 +756,7 @@ unsafe fn insert_or_barrier_update<A: hub::HalApi>(
             resource_metadata,
             index32,
             index,
-            start_state_provider,
+            insert_state_provider,
             metadata_provider,
         );
         return;
@@ -780,7 +780,7 @@ unsafe fn insert_or_barrier_update<A: hub::HalApi>(
         index32,
         index,
         update_state_provider,
-    )
+    );
 }
 
 #[inline(always)]
