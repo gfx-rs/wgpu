@@ -2005,7 +2005,7 @@ pub mod render_ffi {
     };
     use crate::{id, RawString};
     use std::{convert::TryInto, ffi, num::NonZeroU32, slice};
-    use wgt::{BufferAddress, BufferSize, Color, DynamicOffset};
+    use wgt::{BufferAddress, BufferSize, Color, DynamicOffset, IndexFormat};
 
     /// # Safety
     ///
@@ -2066,6 +2066,17 @@ pub mod render_ffi {
             offset,
             size,
         });
+    }
+
+    #[no_mangle]
+    pub extern "C" fn wgpu_render_pass_set_index_buffer(
+        pass: &mut RenderPass,
+        buffer: id::BufferId,
+        index_format: IndexFormat,
+        offset: BufferAddress,
+        size: Option<BufferSize>,
+    ) {
+        pass.set_index_buffer(buffer, index_format, offset, size);
     }
 
     #[no_mangle]
