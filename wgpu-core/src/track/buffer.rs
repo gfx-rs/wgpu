@@ -444,6 +444,7 @@ enum StateProvider<'a> {
     Indirect { state: &'a [BufferUses] },
 }
 impl StateProvider<'_> {
+    #[inline(always)]
     unsafe fn get_state(&self, index: usize) -> BufferUses {
         match *self {
             StateProvider::Direct { state } => state,
@@ -452,6 +453,7 @@ impl StateProvider<'_> {
     }
 }
 
+#[inline(always)]
 unsafe fn insert_or_merge<A: hub::HalApi>(
     life_guard: Option<&LifeGuard>,
     start_states: Option<&mut [BufferUses]>,
@@ -487,6 +489,7 @@ unsafe fn insert_or_merge<A: hub::HalApi>(
     )
 }
 
+#[inline(always)]
 unsafe fn insert_or_barrier_update<A: hub::HalApi>(
     life_guard: Option<&LifeGuard>,
     start_states: Option<&mut [BufferUses]>,
@@ -528,6 +531,7 @@ unsafe fn insert_or_barrier_update<A: hub::HalApi>(
     update(start_state_set, index, update_state_provider);
 }
 
+#[inline(always)]
 unsafe fn insert<A: hub::HalApi>(
     life_guard: Option<&LifeGuard>,
     start_states: Option<&mut [BufferUses]>,
@@ -552,6 +556,7 @@ unsafe fn insert<A: hub::HalApi>(
     *resource_metadata.ref_counts.get_unchecked_mut(index) = Some(ref_count);
 }
 
+#[inline(always)]
 unsafe fn merge<A: hub::HalApi>(
     current_states: &mut [BufferUses],
     index32: u32,
@@ -577,6 +582,7 @@ unsafe fn merge<A: hub::HalApi>(
     Ok(())
 }
 
+#[inline(always)]
 unsafe fn barrier(
     current_states: &mut [BufferUses],
     index32: u32,
@@ -598,6 +604,7 @@ unsafe fn barrier(
     })
 }
 
+#[inline(always)]
 unsafe fn update(
     current_states: &mut [BufferUses],
     index: usize,
