@@ -30,7 +30,8 @@ codespan-reporting = "0.11"
 copyless = "0.1"
 fxhash = "0.2"
 log = "0.4"
-parking_lot = "0.12"
+# parking_lot 0.12 switches from `winapi` to `windows`; permit either
+parking_lot = ">=0.11,<0.13"
 profiling = { version = "1", default-features = false }
 raw-window-handle = { version = "0.4", optional = true }
 ron = { version = "0.7", optional = true }
