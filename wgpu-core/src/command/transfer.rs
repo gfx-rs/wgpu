@@ -518,7 +518,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .trackers
             .buffers
             .change_state(&*buffer_guard, source, hal::BufferUses::COPY_SRC)
-            .ok_or_else(|| TransferError::InvalidBuffer(source))?;
+            .ok_or(TransferError::InvalidBuffer(source))?;
         let src_raw = src_buffer
             .raw
             .as_ref()
@@ -533,7 +533,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .trackers
             .buffers
             .change_state(&*buffer_guard, destination, hal::BufferUses::COPY_DST)
-            .ok_or_else(|| TransferError::InvalidBuffer(destination))?;
+            .ok_or(TransferError::InvalidBuffer(destination))?;
         let dst_raw = dst_buffer
             .raw
             .as_ref()
@@ -652,7 +652,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .trackers
             .buffers
             .change_state(&*buffer_guard, source.buffer, hal::BufferUses::COPY_SRC)
-            .ok_or_else(|| TransferError::InvalidBuffer(source.buffer))?;
+            .ok_or(TransferError::InvalidBuffer(source.buffer))?;
         let src_raw = src_buffer
             .raw
             .as_ref()
@@ -671,7 +671,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 dst_range,
                 hal::TextureUses::COPY_DST,
             )
-            .ok_or_else(|| TransferError::InvalidTexture(destination.texture))?;
+            .ok_or(TransferError::InvalidTexture(destination.texture))?;
         let dst_raw = dst_texture
             .inner
             .as_raw()
@@ -784,7 +784,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 src_range,
                 hal::TextureUses::COPY_SRC,
             )
-            .ok_or_else(|| TransferError::InvalidTexture(source.texture))?;
+            .ok_or(TransferError::InvalidTexture(source.texture))?;
         let src_raw = src_texture
             .inner
             .as_raw()
@@ -802,7 +802,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 destination.buffer,
                 hal::BufferUses::COPY_DST,
             )
-            .ok_or_else(|| TransferError::InvalidBuffer(destination.buffer))?;
+            .ok_or(TransferError::InvalidBuffer(destination.buffer))?;
         let dst_raw = dst_buffer
             .raw
             .as_ref()
@@ -934,7 +934,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 src_range,
                 hal::TextureUses::COPY_SRC,
             )
-            .ok_or_else(|| TransferError::InvalidTexture(source.texture))?;
+            .ok_or(TransferError::InvalidTexture(source.texture))?;
         let src_raw = src_texture
             .inner
             .as_raw()

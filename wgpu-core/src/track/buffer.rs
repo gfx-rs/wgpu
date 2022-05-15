@@ -114,7 +114,7 @@ impl<A: hub::HalApi> BufferUsageScope<A> {
         &mut self,
         bind_group: &BufferBindGroupState<A>,
     ) -> Result<(), UsageConflict> {
-        for (id, ref_count, state) in &bind_group.buffers {
+        for &(id, ref ref_count, state) in &bind_group.buffers {
             let (index32, epoch, _) = id.0.unzip();
             let index = index32 as usize;
 
@@ -125,7 +125,7 @@ impl<A: hub::HalApi> BufferUsageScope<A> {
                 &mut self.metadata,
                 index32,
                 index,
-                StateProvider::Direct { state: *state },
+                StateProvider::Direct { state },
                 ResourceMetadataProvider::Direct {
                     epoch,
                     ref_count: Cow::Borrowed(ref_count),
@@ -378,7 +378,7 @@ impl<A: hub::HalApi> BufferTracker<A> {
             self.set_size(incoming_size);
         }
 
-        for (id, ref_count, _) in bind_group_state.buffers.iter() {
+        for &(id, ref ref_count, _) in bind_group_state.buffers.iter() {
             let (index32, epoch, _) = id.0.unzip();
             let index = index32 as usize;
 
@@ -454,8 +454,8 @@ impl StateProvider<'_> {
 
 unsafe fn insert_or_merge<A: hub::HalApi>(
     life_guard: Option<&LifeGuard>,
-    start_states: Option<&mut Vec<BufferUses>>,
-    current_states: &mut Vec<BufferUses>,
+    start_states: Option<&mut [BufferUses]>,
+    current_states: &mut [BufferUses],
     resource_metadata: &mut ResourceMetadata<A>,
     index32: u32,
     index: usize,
@@ -489,8 +489,8 @@ unsafe fn insert_or_merge<A: hub::HalApi>(
 
 unsafe fn insert_or_barrier_update<A: hub::HalApi>(
     life_guard: Option<&LifeGuard>,
-    start_states: Option<&mut Vec<BufferUses>>,
-    current_states: &mut Vec<BufferUses>,
+    start_states: Option<&mut [BufferUses]>,
+    current_states: &mut [BufferUses],
     resource_metadata: &mut ResourceMetadata<A>,
     index32: u32,
     index: usize,
@@ -530,8 +530,8 @@ unsafe fn insert_or_barrier_update<A: hub::HalApi>(
 
 unsafe fn insert<A: hub::HalApi>(
     life_guard: Option<&LifeGuard>,
-    start_states: Option<&mut Vec<BufferUses>>,
-    current_states: &mut Vec<BufferUses>,
+    start_states: Option<&mut [BufferUses]>,
+    current_states: &mut [BufferUses],
     resource_metadata: &mut ResourceMetadata<A>,
     index: usize,
     start_state_provider: StateProvider<'_>,
@@ -553,7 +553,7 @@ unsafe fn insert<A: hub::HalApi>(
 }
 
 unsafe fn merge<A: hub::HalApi>(
-    current_states: &mut Vec<BufferUses>,
+    current_states: &mut [BufferUses],
     index32: u32,
     index: usize,
     state_provider: StateProvider<'_>,
@@ -578,7 +578,7 @@ unsafe fn merge<A: hub::HalApi>(
 }
 
 unsafe fn barrier(
-    current_states: &mut Vec<BufferUses>,
+    current_states: &mut [BufferUses],
     index32: u32,
     index: usize,
     state_provider: StateProvider<'_>,
@@ -599,7 +599,7 @@ unsafe fn barrier(
 }
 
 unsafe fn update(
-    current_states: &mut Vec<BufferUses>,
+    current_states: &mut [BufferUses],
     index: usize,
     state_provider: StateProvider<'_>,
 ) {

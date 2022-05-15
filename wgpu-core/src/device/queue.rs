@@ -287,7 +287,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (dst, transition) = trackers
             .buffers
             .change_state(&*buffer_guard, buffer_id, hal::BufferUses::COPY_DST)
-            .ok_or_else(|| TransferError::InvalidBuffer(buffer_id))?;
+            .ok_or(TransferError::InvalidBuffer(buffer_id))?;
         let dst_raw = dst
             .raw
             .as_ref()
@@ -479,7 +479,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 selector,
                 hal::TextureUses::COPY_DST,
             )
-            .ok_or_else(|| TransferError::InvalidTexture(destination.texture))?;
+            .ok_or(TransferError::InvalidTexture(destination.texture))?;
 
         let (hal_copy_size, array_layer_count) =
             validate_texture_copy_range(destination, &dst.desc, CopySide::Destination, size)?;

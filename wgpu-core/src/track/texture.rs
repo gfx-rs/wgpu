@@ -70,7 +70,7 @@ impl ComplexTextureState {
         for (selector, desired_state) in state_iter {
             let mips = selector.mips.start as usize..selector.mips.end as usize;
             for mip in &mut complex.mips[mips] {
-                for (_, state) in mip.isolate(&selector.layers, TextureUses::UNKNOWN) {
+                for &mut (_, ref mut state) in mip.isolate(&selector.layers, TextureUses::UNKNOWN) {
                     *state = desired_state;
                 }
             }
@@ -78,19 +78,19 @@ impl ComplexTextureState {
         complex
     }
 
-    fn into_selector_state_iter(
+    fn to_selector_state_iter(
         &self,
     ) -> impl Iterator<Item = (TextureSelector, TextureUses)> + Clone + '_ {
         self.mips.iter().enumerate().flat_map(|(mip, inner)| {
             let mip = mip as u32;
             {
-                inner.iter().map(move |(layers, inner)| {
+                inner.iter().map(move |&(ref layers, inner)| {
                     (
                         TextureSelector {
                             mips: mip..mip + 1,
                             layers: layers.clone(),
                         },
-                        *inner,
+                        inner,
                     )
                 })
             }
@@ -240,8 +240,8 @@ impl<A: hub::HalApi> TextureUsageScope<A> {
         storage: &hub::Storage<Texture<A>, TextureId>,
         bind_group: &TextureBindGroupState<A>,
     ) -> Result<(), UsageConflict> {
-        for (id, selector, ref_count, state) in &bind_group.textures {
-            self.extend_refcount(storage, *id, selector.clone(), ref_count, *state)?;
+        for &(id, ref selector, ref ref_count, state) in &bind_group.textures {
+            self.extend_refcount(storage, id, selector.clone(), ref_count, state)?;
         }
 
         Ok(())
@@ -271,7 +271,7 @@ impl<A: hub::HalApi> TextureUsageScope<A> {
             index,
             LayeredStateProvider::from_option(selector, new_state),
             ResourceMetadataProvider::Direct {
-                epoch: epoch,
+                epoch,
                 ref_count: Cow::Borrowed(ref_count),
             },
         )?;
@@ -379,7 +379,7 @@ impl<A: hub::HalApi> TextureTracker<A> {
                 index,
                 LayeredStateProvider::KnownSingle { state: usage },
                 ResourceMetadataProvider::Direct {
-                    epoch: epoch,
+                    epoch,
                     ref_count: Cow::Owned(ref_count),
                 },
             )
@@ -606,9 +606,9 @@ where
     type Item = D;
 
     fn next(&mut self) -> Option<Self::Item> {
-        match self {
-            Either::Left(inner) => inner.next(),
-            Either::Right(inner) => inner.next(),
+        match *self {
+            Either::Left(ref mut inner) => inner.next(),
+            Either::Right(ref mut inner) => inner.next(),
         }
     }
 }
@@ -635,10 +635,7 @@ enum LayeredStateProvider<'a> {
 impl<'a> LayeredStateProvider<'a> {
     fn from_option(selector: Option<TextureSelector>, state: TextureUses) -> Self {
         match selector {
-            Some(selector) => Self::Selector {
-                selector: selector,
-                state,
-            },
+            Some(selector) => Self::Selector { selector, state },
             None => Self::KnownSingle { state },
         }
     }
@@ -668,7 +665,7 @@ impl<'a> LayeredStateProvider<'a> {
                 if new_state == TextureUses::COMPLEX {
                     let new_complex = set.complex.get(&index32).unwrap_unchecked();
 
-                    SingleOrManyStates::Many(Either::Right(new_complex.into_selector_state_iter()))
+                    SingleOrManyStates::Many(Either::Right(new_complex.to_selector_state_iter()))
                 } else {
                     SingleOrManyStates::Single(new_state)
                 }
@@ -748,7 +745,7 @@ unsafe fn insert_or_barrier_update<A: hub::HalApi>(
     let currently_owned = resource_metadata.owned.get(index).unwrap_unchecked();
 
     if !currently_owned {
-        let insert_state_provider = end_state_provider.unwrap_or_else(|| start_state_provider);
+        let insert_state_provider = end_state_provider.unwrap_or(start_state_provider);
         insert(
             Some(texture_data),
             start_state,
@@ -875,7 +872,7 @@ unsafe fn merge<A: hub::HalApi>(
                 if invalid_resource_state(merged_state) {
                     return Err(UsageConflict::from_texture(
                         TextureId::zip(index32, metadata_provider.get_epoch(index), A::VARIANT),
-                        selector.clone(),
+                        selector,
                         *current_simple,
                         new_state,
                     ));
@@ -884,7 +881,7 @@ unsafe fn merge<A: hub::HalApi>(
                 for mip in
                     &mut new_complex.mips[selector.mips.start as usize..selector.mips.end as usize]
                 {
-                    for (_, current_layer_state) in
+                    for &mut (_, ref mut current_layer_state) in
                         mip.isolate(&selector.layers, TextureUses::UNKNOWN)
                     {
                         *current_layer_state = merged_state;
@@ -901,7 +898,7 @@ unsafe fn merge<A: hub::HalApi>(
             for (mip_id, mip) in current_complex.mips.iter_mut().enumerate() {
                 let mip_id = mip_id as u32;
 
-                for (layers, current_layer_state) in mip.iter_mut() {
+                for &mut (ref layers, ref mut current_layer_state) in mip.iter_mut() {
                     let merged_state = *current_layer_state | new_simple;
 
                     // Once we remove unknown, this will never be empty, as simple states are never unknown.
@@ -932,7 +929,7 @@ unsafe fn merge<A: hub::HalApi>(
 
                     let mip = current_complex.mips.get_unchecked_mut(mip_id as usize);
 
-                    for (layers, current_layer_state) in
+                    for &mut (ref layers, ref mut current_layer_state) in
                         mip.isolate(&selector.layers, TextureUses::UNKNOWN)
                     {
                         let merged_state = *current_layer_state | new_state;
@@ -1020,12 +1017,12 @@ unsafe fn barrier(
             for (mip_id, mip) in current_complex.mips.iter().enumerate() {
                 let mip_id = mip_id as u32;
 
-                for (layers, current_layer_state) in mip.iter() {
-                    if *current_layer_state == TextureUses::UNKNOWN {
+                for &(ref layers, current_layer_state) in mip.iter() {
+                    if current_layer_state == TextureUses::UNKNOWN {
                         continue;
                     }
 
-                    if skip_barrier(*current_layer_state, new_simple) {
+                    if skip_barrier(current_layer_state, new_simple) {
                         continue;
                     }
 
@@ -1035,7 +1032,7 @@ unsafe fn barrier(
                             mips: mip_id..mip_id + 1,
                             layers: layers.clone(),
                         },
-                        usage: *current_layer_state..new_simple,
+                        usage: current_layer_state..new_simple,
                     });
                 }
             }
@@ -1119,7 +1116,7 @@ unsafe fn update(
                 for mip in
                     &mut new_complex.mips[selector.mips.start as usize..selector.mips.end as usize]
                 {
-                    for (_, current_layer_state) in
+                    for &mut (_, ref mut current_layer_state) in
                         mip.isolate(&selector.layers, TextureUses::UNKNOWN)
                     {
                         *current_layer_state = new_state;
@@ -1134,15 +1131,15 @@ unsafe fn update(
         }
         (SingleOrManyStates::Many(current_complex), SingleOrManyStates::Single(new_single)) => {
             for (mip_id, mip) in current_complex.mips.iter().enumerate() {
-                for (layers, current_layer_state) in mip.iter() {
+                for &(ref layers, current_layer_state) in mip.iter() {
                     // If this state is unknown, that means that the start is _also_ unknown.
-                    if *current_layer_state == TextureUses::UNKNOWN {
+                    if current_layer_state == TextureUses::UNKNOWN {
                         if let Some(&mut ref mut start_complex) = start_complex {
                             debug_assert!(mip_id < start_complex.mips.len());
 
                             let start_mip = start_complex.mips.get_unchecked_mut(mip_id);
 
-                            for (_, current_start_state) in
+                            for &mut (_, ref mut current_start_state) in
                                 start_mip.isolate(layers, TextureUses::UNKNOWN)
                             {
                                 debug_assert_eq!(*current_start_state, TextureUses::UNKNOWN);
@@ -1174,7 +1171,7 @@ unsafe fn update(
 
                     let mip = current_complex.mips.get_unchecked_mut(mip_id);
 
-                    for (layers, current_layer_state) in
+                    for &mut (ref layers, ref mut current_layer_state) in
                         mip.isolate(&selector.layers, TextureUses::UNKNOWN)
                     {
                         if *current_layer_state == TextureUses::UNKNOWN
@@ -1185,7 +1182,7 @@ unsafe fn update(
 
                                 let start_mip = start_complex.mips.get_unchecked_mut(mip_id);
 
-                                for (_, current_start_state) in
+                                for &mut (_, ref mut current_start_state) in
                                     start_mip.isolate(layers, TextureUses::UNKNOWN)
                                 {
                                     debug_assert_eq!(*current_start_state, TextureUses::UNKNOWN);

@@ -90,7 +90,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .trackers
             .buffers
             .change_state(&*buffer_guard, dst, hal::BufferUses::COPY_DST)
-            .ok_or_else(|| ClearError::InvalidBuffer(dst))?;
+            .ok_or(ClearError::InvalidBuffer(dst))?;
         let dst_raw = dst_buffer
             .raw
             .as_ref()

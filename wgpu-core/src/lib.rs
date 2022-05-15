@@ -16,6 +16,8 @@
     clippy::new_without_default,
     // Needless updates are more scaleable, easier to play with features.
     clippy::needless_update,
+    // Need many arguments for some core functions to be able to re-use code in many situations.
+    clippy::too_many_arguments,
     // For some reason `rustc` can warn about these in const generics even
     // though they are required.
     unused_braces,

@@ -1,12 +1,10 @@
 use std::marker::PhantomData;
 
-use bit_vec::BitVec;
-
 use crate::{
     hub,
     id::{TypedId, Valid},
-    track::{iterate_bitvec_indices, resize_bitvec},
-    Epoch, RefCount,
+    track::{iterate_bitvec_indices, ResourceMetadata},
+    RefCount,
 };
 
 pub(crate) struct StatelessBindGroupSate<T, Id: TypedId> {
@@ -44,57 +42,34 @@ impl<T: hub::Resource, Id: TypedId> StatelessBindGroupSate<T, Id> {
 }
 
 pub(crate) struct StatelessTracker<A: hub::HalApi, T, Id: TypedId> {
-    ref_counts: Vec<Option<RefCount>>,
-    epochs: Vec<Epoch>,
+    metadata: ResourceMetadata<A>,
 
-    owned: BitVec<usize>,
-
-    _phantom: PhantomData<(A, T, Id)>,
+    _phantom: PhantomData<(T, Id)>,
 }
 
 impl<A: hub::HalApi, T: hub::Resource, Id: TypedId> StatelessTracker<A, T, Id> {
     pub fn new() -> Self {
         Self {
-            ref_counts: Vec::new(),
-            epochs: Vec::new(),
-
-            owned: BitVec::default(),
+            metadata: ResourceMetadata::new(),
 
             _phantom: PhantomData,
         }
     }
 
     fn debug_assert_in_bounds(&self, index: usize) {
-        debug_assert!(index < self.ref_counts.len());
-        debug_assert!(index < self.epochs.len());
-        debug_assert!(index < self.owned.len());
-
-        debug_assert!(if self.owned.get(index).unwrap() {
-            self.ref_counts[index].is_some()
-        } else {
-            true
-        });
+        self.metadata.debug_assert_in_bounds(index);
     }
 
     pub fn set_size(&mut self, size: usize) {
-        self.epochs.resize(size, u32::MAX);
-        self.ref_counts.resize(size, None);
-
-        resize_bitvec(&mut self.owned, size);
+        self.metadata.set_size(size);
     }
 
     pub fn used(&self) -> impl Iterator<Item = Valid<Id>> + '_ {
-        if !self.owned.is_empty() {
-            self.debug_assert_in_bounds(self.owned.len() - 1)
-        };
-        iterate_bitvec_indices(&self.owned).map(move |index| {
-            let epoch = unsafe { *self.epochs.get_unchecked(index) };
-            Valid(Id::zip(index as u32, epoch, A::VARIANT))
-        })
+        self.metadata.used()
     }
 
     fn allow_index(&mut self, index: usize) {
-        if index >= self.owned.len() {
+        if index >= self.metadata.owned.len() {
             self.set_size(index + 1);
         }
     }
@@ -108,9 +83,9 @@ impl<A: hub::HalApi, T: hub::Resource, Id: TypedId> StatelessTracker<A, T, Id> {
         self.debug_assert_in_bounds(index);
 
         unsafe {
-            *self.epochs.get_unchecked_mut(index) = epoch;
-            *self.ref_counts.get_unchecked_mut(index) = Some(ref_count);
-            self.owned.set(index, true);
+            *self.metadata.epochs.get_unchecked_mut(index) = epoch;
+            *self.metadata.ref_counts.get_unchecked_mut(index) = Some(ref_count);
+            self.metadata.owned.set(index, true);
         }
     }
 
@@ -126,38 +101,39 @@ impl<A: hub::HalApi, T: hub::Resource, Id: TypedId> StatelessTracker<A, T, Id> {
         self.debug_assert_in_bounds(index);
 
         unsafe {
-            *self.epochs.get_unchecked_mut(index) = epoch;
-            *self.ref_counts.get_unchecked_mut(index) = Some(item.life_guard().add_ref());
-            self.owned.set(index, true);
+            *self.metadata.epochs.get_unchecked_mut(index) = epoch;
+            *self.metadata.ref_counts.get_unchecked_mut(index) = Some(item.life_guard().add_ref());
+            self.metadata.owned.set(index, true);
         }
 
         Some(item)
     }
 
     pub fn extend_from_tracker(&mut self, other: &Self) {
-        let incoming_size = other.owned.len();
-        if incoming_size > self.owned.len() {
+        let incoming_size = other.metadata.owned.len();
+        if incoming_size > self.metadata.owned.len() {
             self.set_size(incoming_size);
         }
 
-        for index in iterate_bitvec_indices(&other.owned) {
+        for index in iterate_bitvec_indices(&other.metadata.owned) {
             self.debug_assert_in_bounds(index);
             other.debug_assert_in_bounds(index);
             unsafe {
-                let previously_owned = self.owned.get(index).unwrap_unchecked();
+                let previously_owned = self.metadata.owned.get(index).unwrap_unchecked();
 
                 if !previously_owned {
-                    self.owned.set(index, true);
+                    self.metadata.owned.set(index, true);
 
                     let other_ref_count = other
+                        .metadata
                         .ref_counts
                         .get_unchecked(index)
                         .clone()
                         .unwrap_unchecked();
-                    *self.ref_counts.get_unchecked_mut(index) = Some(other_ref_count);
+                    *self.metadata.ref_counts.get_unchecked_mut(index) = Some(other_ref_count);
 
-                    let epoch = *other.epochs.get_unchecked(index);
-                    *self.epochs.get_unchecked_mut(index) = epoch;
+                    let epoch = *other.metadata.epochs.get_unchecked(index);
+                    *self.metadata.epochs.get_unchecked_mut(index) = epoch;
                 }
             }
         }
@@ -167,23 +143,21 @@ impl<A: hub::HalApi, T: hub::Resource, Id: TypedId> StatelessTracker<A, T, Id> {
         let (index32, epoch, _) = id.0.unzip();
         let index = index32 as usize;
 
-        if index > self.owned.len() {
+        if index > self.metadata.owned.len() {
             return false;
         }
 
         self.debug_assert_in_bounds(index);
 
         unsafe {
-            if self.owned.get(index).unwrap_unchecked() {
-                let existing_epoch = self.epochs.get_unchecked_mut(index);
-                let existing_ref_count = self.ref_counts.get_unchecked_mut(index);
+            if self.metadata.owned.get(index).unwrap_unchecked() {
+                let existing_epoch = self.metadata.epochs.get_unchecked_mut(index);
+                let existing_ref_count = self.metadata.ref_counts.get_unchecked_mut(index);
 
                 if *existing_epoch == epoch
                     && existing_ref_count.as_mut().unwrap_unchecked().load() == 1
                 {
-                    self.owned.set(index, false);
-                    *existing_epoch = u32::MAX;
-                    *existing_ref_count = None;
+                    self.metadata.reset(index);
 
                     return true;
                 }

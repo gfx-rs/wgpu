@@ -701,7 +701,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                 .trackers
                 .views
                 .extend(&*view_guard, at.view)
-                .ok_or_else(|| RenderPassErrorInner::InvalidAttachment(at.view))?;
+                .ok_or(RenderPassErrorInner::InvalidAttachment(at.view))?;
             check_multiview(view)?;
             add_view(view, "depth")?;
 
@@ -810,7 +810,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                 .trackers
                 .views
                 .extend(&*view_guard, at.view)
-                .ok_or_else(|| RenderPassErrorInner::InvalidAttachment(at.view))?;
+                .ok_or(RenderPassErrorInner::InvalidAttachment(at.view))?;
             check_multiview(color_view)?;
             add_view(color_view, "color")?;
 
@@ -840,7 +840,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                     .trackers
                     .views
                     .extend(&*view_guard, resolve_target)
-                    .ok_or_else(|| RenderPassErrorInner::InvalidAttachment(resolve_target))?;
+                    .ok_or(RenderPassErrorInner::InvalidAttachment(resolve_target))?;
 
                 check_multiview(resolve_view)?;
                 if color_view.extent != resolve_view.extent {
@@ -1157,7 +1157,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .trackers
                             .bind_groups
                             .extend(&*bind_group_guard, bind_group_id)
-                            .ok_or_else(|| RenderCommandError::InvalidBindGroup(bind_group_id))
+                            .ok_or(RenderCommandError::InvalidBindGroup(bind_group_id))
                             .map_pass_err(scope)?;
                         bind_group
                             .validate_dynamic_bindings(&temp_offsets, &cmd_buf.limits)
@@ -1221,7 +1221,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .trackers
                             .render_pipelines
                             .extend(&*render_pipeline_guard, pipeline_id)
-                            .ok_or_else(|| RenderCommandError::InvalidPipeline(pipeline_id))
+                            .ok_or(RenderCommandError::InvalidPipeline(pipeline_id))
                             .map_pass_err(scope)?;
 
                         info.context
@@ -1824,7 +1824,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .trackers
                             .query_sets
                             .extend(&*query_set_guard, query_set_id)
-                            .ok_or_else(|| RenderCommandError::InvalidQuerySet(query_set_id))
+                            .ok_or(RenderCommandError::InvalidQuerySet(query_set_id))
                             .map_pass_err(scope)?;
 
                         query_set
@@ -1846,7 +1846,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .trackers
                             .query_sets
                             .extend(&*query_set_guard, query_set_id)
-                            .ok_or_else(|| RenderCommandError::InvalidQuerySet(query_set_id))
+                            .ok_or(RenderCommandError::InvalidQuerySet(query_set_id))
                             .map_pass_err(scope)?;
 
                         query_set
@@ -1871,7 +1871,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .trackers
                             .bundles
                             .extend(&*bundle_guard, bundle_id)
-                            .ok_or_else(|| RenderCommandError::InvalidRenderBundle(bundle_id))
+                            .ok_or(RenderCommandError::InvalidRenderBundle(bundle_id))
                             .map_pass_err(scope)?;
 
                         info.context

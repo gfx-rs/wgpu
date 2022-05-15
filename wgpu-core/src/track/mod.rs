@@ -118,7 +118,7 @@ fn iterate_bitvec_indices(ownership: &BitVec<usize>) -> impl Iterator<Item = usi
     ownership
         .blocks()
         .enumerate()
-        .filter(|(_, word)| *word != 0)
+        .filter(|&(_, word)| word != 0)
         .flat_map(move |(word_index, mut word)| {
             let bit_start = word_index * BITS_PER_BLOCK;
             let bit_end = (bit_start + BITS_PER_BLOCK).min(size);
@@ -173,7 +173,7 @@ impl UsageConflict {
         new_state: hal::TextureUses,
     ) -> Self {
         Self::Texture {
-            id: id,
+            id,
             mip_levels: selector.mips,
             array_layers: selector.layers,
             invalid_use: InvalidUse {

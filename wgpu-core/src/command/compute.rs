@@ -397,7 +397,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .trackers
                         .bind_groups
                         .extend(&*bind_group_guard, bind_group_id)
-                        .ok_or_else(|| ComputePassErrorInner::InvalidBindGroup(bind_group_id))
+                        .ok_or(ComputePassErrorInner::InvalidBindGroup(bind_group_id))
                         .map_pass_err(scope)?;
                     bind_group
                         .validate_dynamic_bindings(&temp_offsets, &cmd_buf.limits)
@@ -452,7 +452,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .trackers
                         .compute_pipelines
                         .extend(&*pipeline_guard, pipeline_id)
-                        .ok_or_else(|| ComputePassErrorInner::InvalidPipeline(pipeline_id))
+                        .ok_or(ComputePassErrorInner::InvalidPipeline(pipeline_id))
                         .map_pass_err(scope)?;
 
                     unsafe {
@@ -687,7 +687,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .trackers
                         .query_sets
                         .extend(&*query_set_guard, query_set_id)
-                        .ok_or_else(|| ComputePassErrorInner::InvalidQuerySet(query_set_id))
+                        .ok_or(ComputePassErrorInner::InvalidQuerySet(query_set_id))
                         .map_pass_err(scope)?;
 
                     query_set
@@ -704,7 +704,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .trackers
                         .query_sets
                         .extend(&*query_set_guard, query_set_id)
-                        .ok_or_else(|| ComputePassErrorInner::InvalidQuerySet(query_set_id))
+                        .ok_or(ComputePassErrorInner::InvalidQuerySet(query_set_id))
                         .map_pass_err(scope)?;
 
                     query_set

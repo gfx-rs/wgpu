@@ -234,7 +234,7 @@ impl RenderBundleEncoder {
                         .trackers
                         .bind_groups
                         .extend(&*bind_group_guard, bind_group_id)
-                        .ok_or_else(|| RenderCommandError::InvalidBindGroup(bind_group_id))
+                        .ok_or(RenderCommandError::InvalidBindGroup(bind_group_id))
                         .map_pass_err(scope)?;
                     if bind_group.dynamic_binding_info.len() != offsets.len() {
                         return Err(RenderCommandError::InvalidDynamicOffsetCount {

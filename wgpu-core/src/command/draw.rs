@@ -104,9 +104,12 @@ impl crate::error::PrettyError for RenderCommandError {
             Self::InvalidPipeline(id) => {
                 fmt.render_pipeline_label(&id);
             }
-            Self::UsageConflict(_, ..) | Self::DestroyedBuffer(_) => {
-                // fmt.buffer_label(&id);
-                todo!()
+            Self::UsageConflict(UsageConflict::TextureInvalid { id }) => {
+                fmt.texture_label(&id);
+            }
+            Self::UsageConflict(UsageConflict::BufferInvalid { id })
+            | Self::DestroyedBuffer(id) => {
+                fmt.buffer_label(&id);
             }
             _ => {}
         };

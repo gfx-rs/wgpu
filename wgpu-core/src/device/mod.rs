@@ -328,7 +328,6 @@ impl<A: HalApi> Device<A> {
 }
 
 impl<A: HalApi> Device<A> {
-    #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
         open: hal::OpenDevice<A>,
         adapter_id: Stored<id::AdapterId>,
@@ -1487,7 +1486,6 @@ impl<A: HalApi> Device<A> {
         })
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn create_buffer_binding<'a>(
         bb: &binding_model::BufferBinding,
         binding: u32,
@@ -1545,7 +1543,7 @@ impl<A: HalApi> Device<A> {
         let buffer = used
             .buffers
             .extend(storage, bb.buffer_id, internal_use)
-            .ok_or_else(|| Error::InvalidBuffer(bb.buffer_id))?;
+            .ok_or(Error::InvalidBuffer(bb.buffer_id))?;
         check_buffer_usage(buffer.usage, pub_usage)?;
         let raw_buffer = buffer
             .raw
@@ -1631,9 +1629,9 @@ impl<A: HalApi> Device<A> {
                 Some(view.selector.clone()),
                 internal_use,
             )
-            .ok_or_else(|| {
-                binding_model::CreateBindGroupError::InvalidTexture(view.parent_id.value.0)
-            })?;
+            .ok_or(binding_model::CreateBindGroupError::InvalidTexture(
+                view.parent_id.value.0,
+            ))?;
         check_texture_usage(texture.desc.usage, pub_usage)?;
 
         used_texture_ranges.push(TextureInitTrackerAction {
@@ -1740,7 +1738,7 @@ impl<A: HalApi> Device<A> {
                             let sampler = used
                                 .samplers
                                 .extend(&*sampler_guard, id)
-                                .ok_or_else(|| Error::InvalidSampler(id))?;
+                                .ok_or(Error::InvalidSampler(id))?;
 
                             // Allowed sampler values for filtering and comparison
                             let (allowed_filtering, allowed_comparison) = match ty {
@@ -1789,7 +1787,7 @@ impl<A: HalApi> Device<A> {
                         let sampler = used
                             .samplers
                             .extend(&*sampler_guard, id)
-                            .ok_or_else(|| Error::InvalidSampler(id))?;
+                            .ok_or(Error::InvalidSampler(id))?;
                         hal_samplers.push(&sampler.raw);
                     }
 
@@ -1799,7 +1797,7 @@ impl<A: HalApi> Device<A> {
                     let view = used
                         .views
                         .extend(&*texture_view_guard, id)
-                        .ok_or_else(|| Error::InvalidTextureView(id))?;
+                        .ok_or(Error::InvalidTextureView(id))?;
                     let (pub_usage, internal_use) = Self::texture_use_parameters(
                         binding,
                         decl,
@@ -1830,7 +1828,7 @@ impl<A: HalApi> Device<A> {
                         let view = used
                             .views
                             .extend(&*texture_view_guard, id)
-                            .ok_or_else(|| Error::InvalidTextureView(id))?;
+                            .ok_or(Error::InvalidTextureView(id))?;
                         let (pub_usage, internal_use) =
                             Self::texture_use_parameters(binding, decl, view,
                                                          "SampledTextureArray, ReadonlyStorageTextureArray or WriteonlyStorageTextureArray")?;
