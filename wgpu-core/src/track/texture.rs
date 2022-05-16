@@ -378,6 +378,7 @@ impl<A: hub::HalApi> TextureTracker<A> {
                 index32,
                 index,
                 LayeredStateProvider::KnownSingle { state: usage },
+                None,
                 ResourceMetadataProvider::Direct {
                     epoch,
                     ref_count: Cow::Owned(ref_count),
@@ -714,6 +715,7 @@ unsafe fn insert_or_merge<A: hub::HalApi>(
             index32,
             index,
             state_provider,
+            None,
             metadata_provider,
         );
         return Ok(());
@@ -745,7 +747,6 @@ unsafe fn insert_or_barrier_update<A: hub::HalApi>(
     let currently_owned = resource_metadata.owned.get(index).unwrap_unchecked();
 
     if !currently_owned {
-        let insert_state_provider = end_state_provider.unwrap_or(start_state_provider);
         insert(
             Some(texture_data),
             start_state,
@@ -753,7 +754,8 @@ unsafe fn insert_or_barrier_update<A: hub::HalApi>(
             resource_metadata,
             index32,
             index,
-            insert_state_provider,
+            start_state_provider,
+            end_state_provider,
             metadata_provider,
         );
         return;
@@ -788,17 +790,19 @@ unsafe fn insert<A: hub::HalApi>(
     resource_metadata: &mut ResourceMetadata<A>,
     index32: u32,
     index: usize,
-    state_provider: LayeredStateProvider<'_>,
+    start_state_provider: LayeredStateProvider<'_>,
+    end_state_provider: Option<LayeredStateProvider<'_>>,
     metadata_provider: ResourceMetadataProvider<'_, A>,
 ) {
-    match state_provider.get_layers(texture_data, index32, index) {
+    let start_layers = start_state_provider.get_layers(texture_data, index32, index);
+    match start_layers {
         SingleOrManyStates::Single(state) => {
-            let reference = end_state.simple.get_unchecked_mut(index);
-
             if let Some(start_state) = start_state {
                 *start_state.simple.get_unchecked_mut(index) = state;
             }
-            *reference = state;
+            if end_state_provider.is_none() {
+                *end_state.simple.get_unchecked_mut(index) = state;
+            }
         }
         SingleOrManyStates::Many(state_iter) => {
             let full_range = texture_data.unwrap().1.clone();
@@ -809,8 +813,27 @@ unsafe fn insert<A: hub::HalApi>(
                 *start_state.simple.get_unchecked_mut(index) = TextureUses::COMPLEX;
                 start_state.complex.insert(index32, complex.clone());
             }
-            *end_state.simple.get_unchecked_mut(index) = TextureUses::COMPLEX;
-            end_state.complex.insert(index32, complex);
+
+            if end_state_provider.is_none() {
+                *end_state.simple.get_unchecked_mut(index) = TextureUses::COMPLEX;
+                end_state.complex.insert(index32, complex);
+            }
+        }
+    }
+
+    if let Some(end_state_provider) = end_state_provider {
+        match end_state_provider.get_layers(texture_data, index32, index) {
+            SingleOrManyStates::Single(state) => {
+                *end_state.simple.get_unchecked_mut(index) = state;
+            }
+            SingleOrManyStates::Many(state_iter) => {
+                let full_range = texture_data.unwrap().1.clone();
+
+                let complex = ComplexTextureState::from_selector_state_iter(full_range, state_iter);
+
+                *end_state.simple.get_unchecked_mut(index) = TextureUses::COMPLEX;
+                end_state.complex.insert(index32, complex);
+            }
         }
     }
 
