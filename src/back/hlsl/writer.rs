@@ -6,7 +6,7 @@ use super::{
 use crate::{
     back,
     proc::{self, NameKey},
-    valid, Handle, Module, ShaderStage, TypeInner,
+    valid, Handle, Module, ScalarKind, ShaderStage, TypeInner,
 };
 use std::{fmt, mem};
 
@@ -2190,6 +2190,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     Asincosh { is_sin: bool },
                     Atanh,
                     Regular(&'static str),
+                    MissingIntOverload(&'static str),
                 }
 
                 let fun = match fun {
@@ -2251,8 +2252,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     Mf::Transpose => Function::Regular("transpose"),
                     Mf::Determinant => Function::Regular("determinant"),
                     // bits
-                    Mf::CountOneBits => Function::Regular("countbits"),
-                    Mf::ReverseBits => Function::Regular("reversebits"),
+                    Mf::CountOneBits => Function::MissingIntOverload("countbits"),
+                    Mf::ReverseBits => Function::MissingIntOverload("reversebits"),
                     Mf::FindLsb => Function::Regular("firstbitlow"),
                     Mf::FindMsb => Function::Regular("firstbithigh"),
                     _ => return Err(Error::Unimplemented(format!("write_expr_math {:?}", fun))),
@@ -2294,6 +2295,21 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                             self.write_expr(module, arg, func_ctx)?;
                         }
                         write!(self.out, ")")?
+                    }
+                    Function::MissingIntOverload(fun_name) => {
+                        let scalar_kind = &func_ctx.info[arg]
+                            .ty
+                            .inner_with(&module.types)
+                            .scalar_kind();
+                        if let Some(ScalarKind::Sint) = *scalar_kind {
+                            write!(self.out, "asint({}(asuint(", fun_name)?;
+                            self.write_expr(module, arg, func_ctx)?;
+                            write!(self.out, ")))")?;
+                        } else {
+                            write!(self.out, "{}(", fun_name)?;
+                            self.write_expr(module, arg, func_ctx)?;
+                            write!(self.out, ")")?;
+                        }
                     }
                 }
             }
