@@ -31,7 +31,8 @@ required-features = ["gles"]
 
 [dependencies]
 bitflags = "1.0"
-parking_lot = "0.12"
+# parking_lot 0.12 switches from `winapi` to `windows`; permit either
+parking_lot = ">=0.11,<0.13"
 profiling = { version = "1", default-features = false }
 raw-window-handle = "0.4"
 thiserror = "1"
