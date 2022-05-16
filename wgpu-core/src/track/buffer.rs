@@ -527,8 +527,7 @@ unsafe fn insert_or_barrier_update<A: hub::HalApi>(
         barriers,
     );
 
-    let start_state_set = start_states.unwrap();
-    update(start_state_set, index, update_state_provider);
+    update(current_states, index, update_state_provider);
 }
 
 #[inline(always)]
