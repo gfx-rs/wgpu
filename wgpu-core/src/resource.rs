@@ -1,7 +1,7 @@
 use crate::{
     device::{DeviceError, HostMap, MissingFeatures},
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Resource, Token},
-    id::{DeviceId, SurfaceId, TextureId, Valid},
+    id::{AdapterId, DeviceId, SurfaceId, TextureId, Valid},
     init_tracker::{BufferInitTracker, TextureInitTracker},
     track::{TextureSelector, DUMMY_SELECTOR},
     validation::MissingBufferUsageError,
@@ -248,6 +248,26 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let hal_texture = texture.map(|tex| tex.inner.as_raw().unwrap());
 
         hal_texture_callback(hal_texture);
+    }
+
+    /// # Safety
+    ///
+    /// - The raw adapter handle must not be manually destroyed
+    pub unsafe fn adapter_as_hal<A: HalApi, F: FnOnce(Option<&A::Adapter>) -> R, R>(
+        &self,
+        id: AdapterId,
+        hal_adapter_callback: F,
+    ) -> R {
+        profiling::scope!("as_hal", "Adapter");
+
+        let hub = A::hub(self);
+        let mut token = Token::root();
+
+        let (guard, _) = hub.adapters.read(&mut token);
+        let adapter = guard.get(id).ok();
+        let hal_adapter = adapter.map(|adapter| &adapter.raw.adapter);
+
+        hal_adapter_callback(hal_adapter)
     }
 
     /// # Safety
