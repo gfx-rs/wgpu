@@ -271,7 +271,8 @@ impl RenderBundleEncoder {
                         .trackers
                         .render_pipes
                         .use_extend(&*pipeline_guard, pipeline_id, (), ())
-                        .unwrap();
+                        .map_err(|_| RenderCommandError::InvalidPipeline(pipeline_id))
+                        .map_pass_err(scope)?;
 
                     self.context
                         .check_compatible(&pipeline.pass_context)
