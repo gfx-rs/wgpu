@@ -10,6 +10,12 @@
  * are designed to be as cache efficient as possible. They store resource state
  * in flat vectors, storing metadata SOA style, one vector per type of metadata.
  *
+ * A lot of the tracker code is deeply unsafe, using unchecked accesses all over
+ * to make performance as good as possible. However, for all unsafe accesses, there
+ * is a corresponding debug assert the checks if that access is valid. This helps
+ * get bugs caught fast, while still letting users not need to pay for the bounds
+ * checks.
+ *
  * In wgpu, resource IDs are allocated and re-used, so will always be as low
  * as reasonably possible. This allows us to use the ID as an index into an array.
  *
@@ -142,48 +148,62 @@ impl PendingTransition<hal::TextureUses> {
         debug_assert_ne!(self.usage.start, hal::TextureUses::UNKNOWN);
         debug_assert_ne!(self.usage.end, hal::TextureUses::UNKNOWN);
 
+        let mip_count = self.selector.mips.end - self.selector.mips.start;
+        debug_assert_ne!(mip_count, 0);
+        let layer_count = self.selector.layers.end - self.selector.layers.start;
+        debug_assert_ne!(layer_count, 0);
+
         hal::TextureBarrier {
             texture,
             range: wgt::ImageSubresourceRange {
                 aspect: wgt::TextureAspect::All,
                 base_mip_level: self.selector.mips.start,
-                mip_level_count: NonZeroU32::new(self.selector.mips.end - self.selector.mips.start),
+                mip_level_count: unsafe { Some(NonZeroU32::new_unchecked(mip_count)) },
                 base_array_layer: self.selector.layers.start,
-                array_layer_count: NonZeroU32::new(
-                    self.selector.layers.end - self.selector.layers.start,
-                ),
+                array_layer_count: unsafe { Some(NonZeroU32::new_unchecked(layer_count)) },
             },
             usage: self.usage,
         }
     }
 }
 
-pub trait ResourceUses:
+/// The uses that a resource or subresource can be in.
+pub(crate) trait ResourceUses:
     fmt::Debug + ops::BitAnd<Output = Self> + ops::BitOr<Output = Self> + PartialEq + Sized + Copy
 {
+    /// All flags that are exclusive.
     const EXCLUSIVE: Self;
 
+    /// The relevant resource ID type.
     type Id: Copy + fmt::Debug + TypedId;
+    /// The selector used by this resource.
     type Selector: fmt::Debug;
 
+    /// Turn the resource into a pile of bits.
     fn bits(self) -> u16;
+    /// Returns true if the all the uses are ordered.
     fn all_ordered(self) -> bool;
+    /// Returns true if any of the uses are exclusive.
     fn any_exclusive(self) -> bool;
-    fn uninit(self) -> bool;
 }
 
+/// Returns true if the given states violates the usage scope rule
+/// of any(inclusive) XOR one(exclusive)
 fn invalid_resource_state<T: ResourceUses>(state: T) -> bool {
     // Is power of two also means "is one bit set". We check for this as if
     // we're in any exclusive state, we must only be in a single state.
     state.any_exclusive() && !conv::is_power_of_two_u16(state.bits())
 }
 
+/// Returns true if the transition from one state to another does not require
+/// a barrier.
 fn skip_barrier<T: ResourceUses>(old_state: T, new_state: T) -> bool {
     // If the state didn't change and all the usages are ordered, the hardware
     // will guarentee the order of accesses, so we do not need to issue a barrier at all
     old_state == new_state && old_state.all_ordered()
 }
 
+/// Resizes the given bitvec to the given size. I'm not sure why this is hard to do but it is.
 fn resize_bitvec<B: bit_vec::BitBlock>(vec: &mut BitVec<B>, size: usize) {
     let owned_size_to_grow = size.checked_sub(vec.len());
     if let Some(delta) = owned_size_to_grow {
@@ -195,6 +215,9 @@ fn resize_bitvec<B: bit_vec::BitBlock>(vec: &mut BitVec<B>, size: usize) {
     }
 }
 
+/// Produces an iterator that yields the indexes of all bits that are set in the bitvec.
+///
+/// Will skip entire usize's worth of bits if they are all false.
 fn iterate_bitvec_indices(ownership: &BitVec<usize>) -> impl Iterator<Item = usize> + '_ {
     const BITS_PER_BLOCK: usize = mem::size_of::<usize>() * 8;
 
@@ -269,6 +292,7 @@ impl UsageConflict {
     }
 }
 
+/// Pretty print helper that shows helpful descriptions of a conflicting usage.
 #[derive(Clone, Debug, PartialEq)]
 pub struct InvalidUse<T> {
     current_state: T,
@@ -285,6 +309,7 @@ impl<T: ResourceUses> fmt::Display for InvalidUse<T> {
 
         let exclusive = current_exclusive | new_exclusive;
 
+        // The text starts with "tried to use X resource with {self}"
         write!(
             f,
             "conflicting usages. Current usage {current:?} and new usage {new:?}. \
@@ -294,6 +319,10 @@ impl<T: ResourceUses> fmt::Display for InvalidUse<T> {
     }
 }
 
+/// SOA container for storing metadata of a resource.
+///
+/// This contins the ownership bitvec, the refcount of
+/// the resource, and the epoch of the object's full ID.
 #[derive(Debug)]
 pub(crate) struct ResourceMetadata<A: hub::HalApi> {
     owned: BitVec<usize>,
@@ -320,6 +349,10 @@ impl<A: hub::HalApi> ResourceMetadata<A> {
         resize_bitvec(&mut self.owned, size);
     }
 
+    /// Ensures a given index is in bounds for all arrays and does
+    /// sanity checks of the presence of a refcount.
+    ///
+    /// In release mode this function is completely empty and is removed.
     fn debug_assert_in_bounds(&self, index: usize) {
         debug_assert!(index < self.owned.len());
         debug_assert!(index < self.ref_counts.len());
@@ -332,10 +365,14 @@ impl<A: hub::HalApi> ResourceMetadata<A> {
         });
     }
 
+    /// Returns true if the tracker owns no resources.
+    ///
+    /// This is a O(n) operation.
     fn is_empty(&self) -> bool {
         !self.owned.any()
     }
 
+    /// Returns ids for all resources we own.
     fn used<Id: TypedId>(&self) -> impl Iterator<Item = id::Valid<Id>> + '_ {
         if !self.owned.is_empty() {
             self.debug_assert_in_bounds(self.owned.len() - 1)
@@ -346,6 +383,7 @@ impl<A: hub::HalApi> ResourceMetadata<A> {
         })
     }
 
+    /// Resets the metadata for a given index to sane "invalid" values.
     unsafe fn reset(&mut self, index: usize) {
         *self.ref_counts.get_unchecked_mut(index) = None;
         *self.epochs.get_unchecked_mut(index) = u32::MAX;
@@ -353,46 +391,72 @@ impl<A: hub::HalApi> ResourceMetadata<A> {
     }
 }
 
+/// A source of resource metadata.
+///
+/// This is used to abstract over the various places
+/// trackers can get new resource metadata from.
 enum ResourceMetadataProvider<'a, A: hub::HalApi> {
+    /// Comes directly from explicit values.
     Direct {
         epoch: Epoch,
         ref_count: Cow<'a, RefCount>,
     },
-    Indirect {
-        metadata: &'a ResourceMetadata<A>,
-    },
-    Resource {
-        epoch: Epoch,
-    },
+    /// Comes from another metadata tracker.
+    Indirect { metadata: &'a ResourceMetadata<A> },
+    /// The epoch is given directly, but the life count comes from the resource itself.
+    Resource { epoch: Epoch },
 }
 impl<A: hub::HalApi> ResourceMetadataProvider<'_, A> {
+    /// Get the epoch and an owned refcount from this.
+    ///
+    /// # Safety
+    ///
+    /// - The index must be in bounds of the metadata tracker if this uses an indirect source.
+    /// - life_guard must be Some if this uses a Resource source.
     unsafe fn get_own(self, life_guard: Option<&LifeGuard>, index: usize) -> (Epoch, RefCount) {
         match self {
             ResourceMetadataProvider::Direct { epoch, ref_count } => {
                 (epoch, ref_count.into_owned())
             }
-            ResourceMetadataProvider::Indirect { metadata } => (
-                *metadata.epochs.get_unchecked(index),
-                metadata
-                    .ref_counts
-                    .get_unchecked(index)
-                    .clone()
-                    .unwrap_unchecked(),
-            ),
-            ResourceMetadataProvider::Resource { epoch } => (epoch, life_guard.unwrap().add_ref()),
+            ResourceMetadataProvider::Indirect { metadata } => {
+                metadata.debug_assert_in_bounds(index);
+                (
+                    *metadata.epochs.get_unchecked(index),
+                    metadata
+                        .ref_counts
+                        .get_unchecked(index)
+                        .clone()
+                        .unwrap_unchecked(),
+                )
+            }
+            ResourceMetadataProvider::Resource { epoch } => {
+                debug_assert!(life_guard.is_some());
+                (epoch, life_guard.unwrap_unchecked().add_ref())
+            }
         }
     }
+    /// Get the epoch from this.
+    ///
+    /// # Safety
+    ///
+    /// - The index must be in bounds of the metadata tracker if this uses an indirect source.
     unsafe fn get_epoch(self, index: usize) -> Epoch {
         match self {
             ResourceMetadataProvider::Direct { epoch, .. }
             | ResourceMetadataProvider::Resource { epoch, .. } => epoch,
             ResourceMetadataProvider::Indirect { metadata } => {
+                metadata.debug_assert_in_bounds(index);
                 *metadata.epochs.get_unchecked(index)
             }
         }
     }
 }
 
+/// All the usages that a bind group contains. The uses are not deduplicated in any way
+/// and may include conflicting uses. This is fully compliant by the WebGPU spec.
+///
+/// All bind group states are sorted by their ID so that when adding to a tracker,
+/// they are added in the most efficient order possible (assending order).
 pub(crate) struct BindGroupStates<A: hub::HalApi> {
     pub buffers: BufferBindGroupState<A>,
     pub textures: TextureBindGroupState<A>,
@@ -410,6 +474,7 @@ impl<A: hub::HalApi> BindGroupStates<A> {
         }
     }
 
+    /// Sort all uses.
     pub fn optimize(&mut self) {
         self.buffers.optimize();
         self.textures.optimize();
@@ -418,6 +483,9 @@ impl<A: hub::HalApi> BindGroupStates<A> {
     }
 }
 
+/// This is a render bundle specific usage scope. It includes stateless resources
+/// that are not normally included in a usage scope, but are used by render bundles
+/// and need to be owned by the render bundles.
 pub(crate) struct RenderBundleScope<A: hub::HalApi> {
     pub buffers: BufferUsageScope<A>,
     pub textures: TextureUsageScope<A>,
@@ -428,6 +496,7 @@ pub(crate) struct RenderBundleScope<A: hub::HalApi> {
 }
 
 impl<A: hub::HalApi> RenderBundleScope<A> {
+    /// Create the render bundle scope and pull the maximum IDs from the hubs.
     pub fn new(
         buffers: &hub::Storage<resource::Buffer<A>, id::BufferId>,
         textures: &hub::Storage<resource::Texture<A>, id::TextureId>,
@@ -452,6 +521,15 @@ impl<A: hub::HalApi> RenderBundleScope<A> {
         value
     }
 
+    /// Merge the inner contents of a bind group into the render bundle tracker.
+    ///
+    /// Only stateful things are merged in here, all other resources are owned
+    /// indirectly by the bind group.
+    ///
+    /// # Safety
+    ///
+    /// The maximum ID given by each bind group resource must be less than the
+    /// length of the storage given at the call to `new`.
     pub unsafe fn extend_from_bind_group(
         &mut self,
         textures: &hub::Storage<resource::Texture<A>, id::TextureId>,
@@ -465,6 +543,8 @@ impl<A: hub::HalApi> RenderBundleScope<A> {
     }
 }
 
+/// A usage scope tracker. Only needs to store stateful resources as stateless
+/// resources cannot possibly have a usage conflict.
 #[derive(Debug)]
 pub(crate) struct UsageScope<A: hub::HalApi> {
     pub buffers: BufferUsageScope<A>,
@@ -472,6 +552,7 @@ pub(crate) struct UsageScope<A: hub::HalApi> {
 }
 
 impl<A: hub::HalApi> UsageScope<A> {
+    /// Create the render bundle scope and pull the maximum IDs from the hubs.
     pub fn new(
         buffers: &hub::Storage<resource::Buffer<A>, id::BufferId>,
         textures: &hub::Storage<resource::Texture<A>, id::TextureId>,
@@ -487,6 +568,15 @@ impl<A: hub::HalApi> UsageScope<A> {
         value
     }
 
+    /// Merge the inner contents of a bind group into the usage scope.
+    ///
+    /// Only stateful things are merged in here, all other resources are owned
+    /// indirectly by the bind group.
+    ///
+    /// # Safety
+    ///
+    /// The maximum ID given by each bind group resource must be less than the
+    /// length of the storage given at the call to `new`.
     pub unsafe fn extend_from_bind_group(
         &mut self,
         textures: &hub::Storage<resource::Texture<A>, id::TextureId>,
@@ -499,6 +589,15 @@ impl<A: hub::HalApi> UsageScope<A> {
         Ok(())
     }
 
+    /// Merge the inner contents of a bind group into the usage scope.
+    ///
+    /// Only stateful things are merged in here, all other resources are owned
+    /// indirectly by a bind group or are merged directly into the command buffer tracker.
+    ///
+    /// # Safety
+    ///
+    /// The maximum ID given by each bind group resource must be less than the
+    /// length of the storage given at the call to `new`.
     pub unsafe fn extend_from_render_bundle(
         &mut self,
         textures: &hub::Storage<resource::Texture<A>, id::TextureId>,
@@ -512,6 +611,7 @@ impl<A: hub::HalApi> UsageScope<A> {
     }
 }
 
+/// A full double sided tracker used by CommandBuffers and the Device.
 pub(crate) struct Tracker<A: hub::HalApi> {
     pub buffers: BufferTracker<A>,
     pub textures: TextureTracker<A>,
@@ -539,6 +639,7 @@ impl<A: hub::HalApi> Tracker<A> {
         }
     }
 
+    /// Pull the maximum IDs from the hubs.
     pub fn set_size(
         &mut self,
         buffers: Option<&hub::Storage<resource::Buffer<A>, id::BufferId>>,
@@ -582,7 +683,23 @@ impl<A: hub::HalApi> Tracker<A> {
         };
     }
 
-    pub unsafe fn extend_from_bind_group(
+    /// Uses the the indices of the resources used in a bind group to
+    /// remove them from the usage scope, and transition to the state
+    /// given by the usage scope.
+    ///
+    /// This is weird method used for compute dispatches. Bind groups are added
+    /// to the usage scope in order to combine the uses, then this method acts
+    /// as a sparse way of only changing the needed resoures based on which resources
+    /// the bind groups touched.
+    ///
+    /// Only stateful things are merged in here, all other resources are owned
+    /// indirectly by the bind group.
+    ///
+    /// # Safety
+    ///
+    /// The maximum ID given by each bind group resource must be less than the
+    /// value given to `set_size`
+    pub unsafe fn change_states_from_bind_group(
         &mut self,
         textures: &hub::Storage<resource::Texture<A>, id::TextureId>,
         scope: &mut UsageScope<A>,
@@ -594,7 +711,14 @@ impl<A: hub::HalApi> Tracker<A> {
             .change_states_bind_group(textures, &mut scope.textures, &bind_group.textures);
     }
 
-    pub unsafe fn extend_from_render_bundle(
+    /// Tracks the stateless resources from the given renderbundle. It is expected
+    /// that the stateful resources will get merged into a usage scope first.
+    ///
+    /// # Safety
+    ///
+    /// The maximum ID given by each bind group resource must be less than the
+    /// value given to `set_size`
+    pub unsafe fn change_state_from_render_bundle(
         &mut self,
         render_bundle: &RenderBundleScope<A>,
     ) -> Result<(), UsageConflict> {

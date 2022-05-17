@@ -39,10 +39,6 @@ impl ResourceUses for TextureUses {
     fn any_exclusive(self) -> bool {
         self.intersects(Self::EXCLUSIVE)
     }
-
-    fn uninit(self) -> bool {
-        self == Self::UNINITIALIZED
-    }
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]

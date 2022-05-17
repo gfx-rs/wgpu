@@ -272,7 +272,7 @@ impl<A: HalApi> State<A> {
 
         for id in self.binder.list_active() {
             unsafe {
-                base_trackers.extend_from_bind_group(
+                base_trackers.change_states_from_bind_group(
                     texture_guard,
                     &mut self.scope,
                     &bind_group_guard[id].used,

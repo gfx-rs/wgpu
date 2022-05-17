@@ -1932,7 +1932,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 .map_pass_err(scope)?;
                             cmd_buf
                                 .trackers
-                                .extend_from_render_bundle(&bundle.used)
+                                .change_state_from_render_bundle(&bundle.used)
                                 .map_pass_err(scope)?;
                         };
                         state.reset_bundle();
