@@ -312,6 +312,7 @@ pub(crate) fn validate_texture_copy_range(
 
     match desc.format {
         wgt::TextureFormat::Depth32Float
+        | wgt::TextureFormat::Depth32FloatStencil8
         | wgt::TextureFormat::Depth24Plus
         | wgt::TextureFormat::Depth24PlusStencil8 => {
             if *copy_size != extent {
