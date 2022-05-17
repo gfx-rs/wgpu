@@ -602,7 +602,9 @@ impl From<wgt::TextureFormat> for FormatAspects {
     fn from(format: wgt::TextureFormat) -> Self {
         match format {
             wgt::TextureFormat::Depth32Float | wgt::TextureFormat::Depth24Plus => Self::DEPTH,
-            wgt::TextureFormat::Depth24PlusStencil8 => Self::DEPTH | Self::STENCIL,
+            wgt::TextureFormat::Depth32FloatStencil8 | wgt::TextureFormat::Depth24PlusStencil8 => {
+                Self::DEPTH | Self::STENCIL
+            }
             _ => Self::COLOR,
         }
     }

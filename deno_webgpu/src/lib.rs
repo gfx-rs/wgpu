@@ -128,6 +128,9 @@ fn deserialize_features(features: &wgpu_types::Features) -> Vec<&'static str> {
     if features.contains(wgpu_types::Features::DEPTH_CLIP_CONTROL) {
         return_features.push("depth-clip-control");
     }
+    if features.contains(wgpu_types::Features::DEPTH32FLOAT_STENCIL8) {
+        return_features.push("depth32float-stencil8");
+    }
     if features.contains(wgpu_types::Features::PIPELINE_STATISTICS_QUERY) {
         return_features.push("pipeline-statistics-query");
     }
@@ -284,6 +287,10 @@ impl From<GpuRequiredFeatures> for wgpu_types::Features {
         features.set(
             wgpu_types::Features::DEPTH_CLIP_CONTROL,
             required_features.0.contains("depth-clip-control"),
+        );
+        features.set(
+            wgpu_types::Features::DEPTH32FLOAT_STENCIL8,
+            required_features.0.contains("depth32float-stencil8"),
         );
         features.set(
             wgpu_types::Features::PIPELINE_STATISTICS_QUERY,

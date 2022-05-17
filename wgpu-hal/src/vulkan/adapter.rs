@@ -561,6 +561,17 @@ impl PhysicalDeviceFeatures {
             );
         }
 
+        features.set(
+            F::DEPTH32FLOAT_STENCIL8,
+            caps.supports_format(
+                vk::Format::D32_SFLOAT_S8_UINT,
+                vk::ImageTiling::OPTIMAL,
+                vk::FormatFeatureFlags::DEPTH_STENCIL_ATTACHMENT
+                    | vk::FormatFeatureFlags::SAMPLED_IMAGE
+                    | vk::FormatFeatureFlags::TRANSFER_SRC,
+            ),
+        );
+
         (features, dl_flags)
     }
 

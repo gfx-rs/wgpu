@@ -185,6 +185,15 @@ bitflags::bitflags! {
         ///
         /// This is a web and native feature.
         const DEPTH_CLIP_CONTROL = 1 << 0;
+        /// Allows for explicit creation of textures of format [`TextureFormat::Depth32FloatStencil8`]
+        ///
+        /// Supported platforms:
+        /// - Vulkan (mostly)
+        /// - DX12
+        /// - Metal
+        ///
+        /// This is a web and native feature.
+        const DEPTH32FLOAT_STENCIL8 = 1 << 1;
         /// Enables BCn family of compressed textures. All BCn textures use 4x4 pixel blocks
         /// with 8 or 16 bytes per block.
         ///
@@ -198,7 +207,7 @@ bitflags::bitflags! {
         /// - desktops
         ///
         /// This is a web and native feature.
-        const TEXTURE_COMPRESSION_BC = 1 << 1;
+        const TEXTURE_COMPRESSION_BC = 1 << 2;
         /// Allows non-zero value for the "first instance" in indirect draw calls.
         ///
         /// Supported Platforms:
@@ -207,7 +216,7 @@ bitflags::bitflags! {
         /// - Metal
         ///
         /// This is a web and native feature.
-        const INDIRECT_FIRST_INSTANCE = 1 << 2;
+        const INDIRECT_FIRST_INSTANCE = 1 << 3;
         /// Enables use of Timestamp Queries. These queries tell the current gpu timestamp when
         /// all work before the query is finished. Call [`CommandEncoder::write_timestamp`],
         /// [`RenderPassEncoder::write_timestamp`], or [`ComputePassEncoder::write_timestamp`] to
@@ -225,7 +234,7 @@ bitflags::bitflags! {
         /// - DX12 (works)
         ///
         /// This is a web and native feature.
-        const TIMESTAMP_QUERY = 1 << 3;
+        const TIMESTAMP_QUERY = 1 << 4;
         /// Enables use of Pipeline Statistics Queries. These queries tell the count of various operations
         /// performed between the start and stop call. Call [`RenderPassEncoder::begin_pipeline_statistics_query`] to start
         /// a query, then call [`RenderPassEncoder::end_pipeline_statistics_query`] to stop one.
@@ -240,7 +249,7 @@ bitflags::bitflags! {
         /// - DX12 (works)
         ///
         /// This is a web and native feature.
-        const PIPELINE_STATISTICS_QUERY = 1 << 4;
+        const PIPELINE_STATISTICS_QUERY = 1 << 5;
         /// Allows shaders to acquire the FP16 ability
         ///
         /// Note: this is not supported in naga yet，only through spir-v passthrough right now.
@@ -250,7 +259,7 @@ bitflags::bitflags! {
         /// - Metal
         ///
         /// This is a web and native feature.
-        const SHADER_FLOAT16 = 1 << 5;
+        const SHADER_FLOAT16 = 1 << 6;
         /// Webgpu only allows the MAP_READ and MAP_WRITE buffer usage to be matched with
         /// COPY_DST and COPY_SRC respectively. This removes this requirement.
         ///
@@ -1838,6 +1847,9 @@ pub enum TextureFormat {
     /// Special depth format with 32 bit floating point depth.
     #[cfg_attr(feature = "serde", serde(rename = "depth32float"))]
     Depth32Float,
+    /// Special depth/stencil format with 32 bit floating point depth and 8 bits integer stencil.
+    #[cfg_attr(feature = "serde", serde(rename = "depth32float-stencil8"))]
+    Depth32FloatStencil8,
     /// Special depth format with at least 24 bit integer depth.
     #[cfg_attr(feature = "serde", serde(rename = "depth24plus"))]
     Depth24Plus,
@@ -2046,6 +2058,7 @@ impl TextureFormat {
         let astc_ldr = Features::TEXTURE_COMPRESSION_ASTC_LDR;
         let astc_hdr = Features::TEXTURE_COMPRESSION_ASTC_HDR;
         let norm16bit = Features::TEXTURE_FORMAT_16BIT_NORM;
+        let d32_s8 = Features::DEPTH32FLOAT_STENCIL8;
 
         // Sample Types
         let uint = TextureSampleType::Uint;
@@ -2135,6 +2148,7 @@ impl TextureFormat {
 
             // Depth-stencil textures
             Self::Depth32Float =>        (   native,   depth,    linear,         msaa, (1, 1),  4, attachment, 1),
+            Self::Depth32FloatStencil8 =>(   d32_s8,   depth,    linear,         msaa, (1, 1),  4, attachment, 2),
             Self::Depth24Plus =>         (   native,   depth,    linear,         msaa, (1, 1),  4, attachment, 1),
             Self::Depth24PlusStencil8 => (   native,   depth,    linear,         msaa, (1, 1),  4, attachment, 2),
 

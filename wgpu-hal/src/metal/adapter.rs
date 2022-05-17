@@ -180,7 +180,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
                 };
                 flags
             }
-            Tf::Depth32Float => {
+            Tf::Depth32Float | Tf::Depth32FloatStencil8 => {
                 let mut flats =
                     Tfc::DEPTH_STENCIL_ATTACHMENT | Tfc::MULTISAMPLE | msaa_resolve_apple3x_if;
                 if pc.format_depth32float_filter {
@@ -749,7 +749,8 @@ impl super::PrivateCapabilities {
             | F::POLYGON_MODE_LINE
             | F::CLEAR_TEXTURE
             | F::TEXTURE_FORMAT_16BIT_NORM
-            | F::SHADER_FLOAT16;
+            | F::SHADER_FLOAT16
+            | F::DEPTH32FLOAT_STENCIL8;
 
         features.set(F::TEXTURE_COMPRESSION_ASTC_LDR, self.format_astc);
         features.set(F::TEXTURE_COMPRESSION_ASTC_HDR, self.format_astc_hdr);
@@ -889,6 +890,7 @@ impl super::PrivateCapabilities {
             Tf::Rgba32Sint => RGBA32Sint,
             Tf::Rgba32Float => RGBA32Float,
             Tf::Depth32Float => Depth32Float,
+            Tf::Depth32FloatStencil8 => Depth32Float_Stencil8,
             Tf::Depth24Plus => {
                 if self.format_depth24_stencil8 {
                     Depth24Unorm_Stencil8
