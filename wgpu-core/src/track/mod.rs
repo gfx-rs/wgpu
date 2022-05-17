@@ -1,3 +1,88 @@
+/*! Resource State and Lifetime Trackers
+ *
+ * These structures are responsible for keeping track of resource state,
+ * generating barriers where needed, and making sure resources are kept
+ * alive until the trackers die.
+ *
+ * ## General Architecture
+ *
+ * Tracking is some of the hottest code in the entire codebase, so the trackers
+ * are designed to be as cache efficient as possible. They store resource state
+ * in flat vectors, storing metadata SOA style, one vector per type of metadata.
+ *
+ * In wgpu, resource IDs are allocated and re-used, so will always be as low
+ * as reasonably possible. This allows us to use the ID as an index into an array.
+ *
+ * ## Statefulness
+ *
+ * There are two main types of trackers, stateful and stateless.
+ *
+ * Stateful trackers are for buffers and textures. They both have
+ * resource state attached to them which needs to be used to generate
+ * automatic synchronization. Because of the different requirements of
+ * buffers and textures, they have two separate tracking structures.
+ *
+ * Stateless trackers only store metadata and own the given resource.
+ *
+ * ## Use Case
+ *
+ * Within each type of tracker, the trackers are further split into 3 different
+ * use cases, Bind Group, Usage Scope, and a full Tracker.
+ *
+ * Bind Group trackers are just a list of different resources, their refcount,
+ * and how they are used. Textures are used via a selector and a usage type.
+ * Buffers by just a usage type. Stateless resources don't have a usage type.
+ *
+ * Usage Scope trackers are only for stateful resources. These trackers represent
+ * a single [`UsageScope`] in the spec. When a use is added to a usage scope,
+ * it is merged with all other uses of that resource in that scope. If there
+ * is a usage conflict, merging will fail and an error will be reported.
+ *
+ * Full trackers represent a before and after state of a resource. These
+ * are used for tracking on the device and on command buffers. The before
+ * state represents the state the resource is first used as in the command buffer,
+ * the after state is the state the command buffer leaves the resource in.
+ * These double ended buffers can then be used to generate the needed transitions
+ * between command buffers.
+ *
+ * ## Dense Datastructure with Sparse Data
+ *
+ * This tracking system is based on having completely dense data, but trackers do
+ * not always contain every resource. Some resources (or even most resources) go
+ * unused in any given command buffer. So to help speed up the process of iterating
+ * through possibly thousands of resources, we use a bit vector to represent if
+ * a resource is in the buffer or not. This allows us extremely efficient memory
+ * utilization, as well as being able to bail out of whole blocks of 32-64 resources
+ * with a single usize comparison with zero. In practice this means that merging
+ * partially resident buffers is extremely quick.
+ *
+ * The main advantage of this dense datastructure is that we can do merging
+ * of trackers in an extremely efficient fashion that results in us doing linear
+ * scans down a couple of buffers. CPUs and their caches absolutely eat this up.
+ *
+ * ## Stateful Resource Operations
+ *
+ * All operations on stateful trackers boil down to one of four operations:
+ * - `insert(tracker, new_state)` adds a resource with a given state to the tracker
+ *   for the first time.
+ * - `merge(tracker, new_state)` merges this new state with the previous state, checking
+ *   for usage conflicts.
+ * - `barrier(tracker, new_state)` compares the given state to the existing state and
+ *   generates the needed barriers.
+ * - `update(tracker, new_state)` takes the given new state and overrides the old state.
+ *
+ * This allows us to compose the operations to form the various kinds of tracker merges
+ * that need to happen in the codebase. For each resource in the given merger, the following
+ * operation applies:
+ *
+ * UsageScope <- Resource = insert(scope, usage) OR merge(scope, usage)
+ * UsageScope <- UsageScope = insert(scope, scope) OR merge(scope, scope)
+ * CommandBuffer <- UsageScope = insert(buffer.start, buffer.end, scope) OR barrier(buffer.end, scope) + update(buffer.end, scope)
+ * Deivce <- CommandBuffer = insert(device.start, device.end, buffer.start, buffer.end) OR barrier(device.end, buffer.start) + update(device.end, buffer.end)
+ *
+ * [`UsageScope`]: https://gpuweb.github.io/gpuweb/#programming-model-synchronization
+!*/
+
 mod buffer;
 mod range;
 mod stateless;
