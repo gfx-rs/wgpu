@@ -32,47 +32,47 @@ name = "wgpu-tests"
 path = "tests/root.rs"
 
 [[example]]
-name="boids"
+name = "boids"
 test = true
 
 [[example]]
-name="bunnymark"
+name = "bunnymark"
 test = true
 
 [[example]]
-name="conservative-raster"
+name = "conservative-raster"
 test = true
 
 [[example]]
-name="cube"
+name = "cube"
 test = true
 
 [[example]]
-name="hello-compute"
+name = "hello-compute"
 test = true
 
 [[example]]
-name="mipmap"
+name = "mipmap"
 test = true
 
 [[example]]
-name="msaa-line"
+name = "msaa-line"
 test = true
 
 [[example]]
-name="shadow"
+name = "shadow"
 test = true
 
 [[example]]
-name="skybox"
+name = "skybox"
 test = true
 
 [[example]]
-name="texture-arrays"
+name = "texture-arrays"
 test = true
 
 [[example]]
-name="water"
+name = "water"
 test = true
 
 [features]
@@ -157,8 +157,8 @@ rev = "1aa91549"
 features = ["wgsl-out"]
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-wasm-bindgen = "0.2.76"
-web-sys = { version = "0.3.53", features = [
+wasm-bindgen = "0.2.80"
+web-sys = { version = "0.3.57", features = [
     "Document",
     "Navigator",
     "Node",
@@ -280,10 +280,10 @@ web-sys = { version = "0.3.53", features = [
     "GpuVertexStepMode",
     "HtmlCanvasElement",
     "OffscreenCanvas",
-    "Window",
-]}
-js-sys = "0.3.50"
-wasm-bindgen-futures = "0.4.23"
+    "Window"
+] }
+js-sys = "0.3.57"
+wasm-bindgen-futures = "0.4.30"
 # parking_lot 0.12 switches from `winapi` to `windows`; permit either
 parking_lot = ">=0.11,<0.13"
 
