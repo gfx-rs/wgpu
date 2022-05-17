@@ -907,6 +907,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
     }
 
+    /// # Safety
+    ///
+    /// - The raw handle obtained from the hal Instance must not be manually destroyed
+    pub unsafe fn instance_as_hal<A: HalApi, F: FnOnce(Option<&A::Instance>) -> R, R>(
+        &self,
+        hal_instance_callback: F,
+    ) -> R {
+        let hal_instance = A::instance_as_hal(&self.instance);
+        hal_instance_callback(hal_instance)
+    }
+
     pub fn clear_backend<A: HalApi>(&self, _dummy: ()) {
         let mut surface_guard = self.surfaces.data.write();
         let hub = A::hub(self);
@@ -991,6 +1002,7 @@ impl<G: GlobalIdentityHandlerFactory> Drop for Global<G> {
 pub trait HalApi: hal::Api {
     const VARIANT: Backend;
     fn create_instance_from_hal(name: &str, hal_instance: Self::Instance) -> Instance;
+    fn instance_as_hal(instance: &Instance) -> Option<&Self::Instance>;
     fn hub<G: GlobalIdentityHandlerFactory>(global: &Global<G>) -> &Hub<Self, G>;
     fn get_surface(surface: &Surface) -> &HalSurface<Self>;
     fn get_surface_mut(surface: &mut Surface) -> &mut HalSurface<Self>;
@@ -1005,6 +1017,9 @@ impl HalApi for hal::api::Vulkan {
             vulkan: Some(hal_instance),
             ..Default::default()
         }
+    }
+    fn instance_as_hal(instance: &Instance) -> Option<&Self::Instance> {
+        instance.vulkan.as_ref()
     }
     fn hub<G: GlobalIdentityHandlerFactory>(global: &Global<G>) -> &Hub<Self, G> {
         &global.hubs.vulkan
@@ -1027,6 +1042,9 @@ impl HalApi for hal::api::Metal {
             ..Default::default()
         }
     }
+    fn instance_as_hal(instance: &Instance) -> Option<&Self::Instance> {
+        instance.metal.as_ref()
+    }
     fn hub<G: GlobalIdentityHandlerFactory>(global: &Global<G>) -> &Hub<Self, G> {
         &global.hubs.metal
     }
@@ -1047,6 +1065,9 @@ impl HalApi for hal::api::Dx12 {
             dx12: Some(hal_instance),
             ..Default::default()
         }
+    }
+    fn instance_as_hal(instance: &Instance) -> Option<&Self::Instance> {
+        instance.dx12.as_ref()
     }
     fn hub<G: GlobalIdentityHandlerFactory>(global: &Global<G>) -> &Hub<Self, G> {
         &global.hubs.dx12
@@ -1069,6 +1090,9 @@ impl HalApi for hal::api::Dx11 {
             ..Default::default()
         }
     }
+    fn instance_as_hal(instance: &Instance) -> Option<&Self::Instance> {
+        instance.dx11.as_ref()
+    }
     fn hub<G: GlobalIdentityHandlerFactory>(global: &Global<G>) -> &Hub<Self, G> {
         &global.hubs.dx11
     }
@@ -1090,6 +1114,9 @@ impl HalApi for hal::api::Gles {
             gl: Some(hal_instance),
             ..Default::default()
         }
+    }
+    fn instance_as_hal(instance: &Instance) -> Option<&Self::Instance> {
+        instance.gl.as_ref()
     }
     fn hub<G: GlobalIdentityHandlerFactory>(global: &Global<G>) -> &Hub<Self, G> {
         &global.hubs.gl

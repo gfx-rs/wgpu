@@ -47,6 +47,14 @@ impl Context {
         ))
     }
 
+    #[cfg(any(not(target_arch = "wasm32"), feature = "webgl2"))]
+    pub unsafe fn instance_as_hal<A: wgc::hub::HalApi, F: FnOnce(Option<&A::Instance>) -> R, R>(
+        &self,
+        hal_instance_callback: F,
+    ) -> R {
+        self.0.instance_as_hal::<A, F, R>(hal_instance_callback)
+    }
+
     pub(crate) fn global(&self) -> &wgc::hub::Global<wgc::hub::IdentityManagerFactory> {
         &self.0
     }
@@ -65,6 +73,16 @@ impl Context {
         hal_adapter: hal::ExposedAdapter<A>,
     ) -> wgc::id::AdapterId {
         self.0.create_adapter_from_hal(hal_adapter, PhantomData)
+    }
+
+    #[cfg(any(not(target_arch = "wasm32"), feature = "webgl2"))]
+    pub unsafe fn adapter_as_hal<A: wgc::hub::HalApi, F: FnOnce(Option<&A::Adapter>) -> R, R>(
+        &self,
+        adapter: wgc::id::AdapterId,
+        hal_adapter_callback: F,
+    ) -> R {
+        self.0
+            .adapter_as_hal::<A, F, R>(adapter, hal_adapter_callback)
     }
 
     #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
