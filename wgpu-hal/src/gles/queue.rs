@@ -787,9 +787,9 @@ impl super::Queue {
                 if usage.intersects(crate::BufferUses::MAP_READ | crate::BufferUses::MAP_WRITE) {
                     flags |= glow::BUFFER_UPDATE_BARRIER_BIT;
                 }
-                if usage
-                    .intersects(crate::BufferUses::STORAGE_READ | crate::BufferUses::STORAGE_WRITE)
-                {
+                if usage.intersects(
+                    crate::BufferUses::STORAGE_READ | crate::BufferUses::STORAGE_READ_WRITE,
+                ) {
                     flags |= glow::SHADER_STORAGE_BARRIER_BIT;
                 }
                 gl.memory_barrier(flags);
@@ -800,7 +800,7 @@ impl super::Queue {
                     flags |= glow::TEXTURE_FETCH_BARRIER_BIT;
                 }
                 if usage.intersects(
-                    crate::TextureUses::STORAGE_READ | crate::TextureUses::STORAGE_WRITE,
+                    crate::TextureUses::STORAGE_READ | crate::TextureUses::STORAGE_READ_WRITE,
                 ) {
                     flags |= glow::SHADER_IMAGE_ACCESS_BARRIER_BIT;
                 }

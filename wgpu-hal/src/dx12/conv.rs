@@ -3,7 +3,7 @@ use winapi::um::{d3d12, d3dcommon};
 
 pub fn map_buffer_usage_to_resource_flags(usage: crate::BufferUses) -> d3d12::D3D12_RESOURCE_FLAGS {
     let mut flags = 0;
-    if usage.contains(crate::BufferUses::STORAGE_WRITE) {
+    if usage.contains(crate::BufferUses::STORAGE_READ_WRITE) {
         flags |= d3d12::D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
     }
     flags
@@ -33,7 +33,7 @@ pub fn map_texture_usage_to_resource_flags(
             flags |= d3d12::D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
         }
     }
-    if usage.contains(crate::TextureUses::STORAGE_WRITE) {
+    if usage.contains(crate::TextureUses::STORAGE_READ_WRITE) {
         flags |= d3d12::D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
     }
 
@@ -130,7 +130,7 @@ pub fn map_buffer_usage_to_state(usage: crate::BufferUses) -> d3d12::D3D12_RESOU
     if usage.intersects(Bu::VERTEX | Bu::UNIFORM) {
         state |= d3d12::D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
     }
-    if usage.intersects(Bu::STORAGE_WRITE) {
+    if usage.intersects(Bu::STORAGE_READ_WRITE) {
         state |= d3d12::D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
     } else if usage.intersects(Bu::STORAGE_READ) {
         state |= d3d12::D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE
@@ -170,7 +170,7 @@ pub fn map_texture_usage_to_state(usage: crate::TextureUses) -> d3d12::D3D12_RES
     if usage.intersects(Tu::DEPTH_STENCIL_WRITE) {
         state |= d3d12::D3D12_RESOURCE_STATE_DEPTH_WRITE;
     }
-    if usage.intersects(Tu::STORAGE_READ | Tu::STORAGE_WRITE) {
+    if usage.intersects(Tu::STORAGE_READ | Tu::STORAGE_READ_WRITE) {
         state |= d3d12::D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
     }
     state

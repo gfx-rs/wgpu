@@ -413,6 +413,7 @@ impl<A: hub::HalApi> ResourceMetadataProvider<'_, A> {
     ///
     /// - The index must be in bounds of the metadata tracker if this uses an indirect source.
     /// - life_guard must be Some if this uses a Resource source.
+    #[inline(always)]
     unsafe fn get_own(self, life_guard: Option<&LifeGuard>, index: usize) -> (Epoch, RefCount) {
         match self {
             ResourceMetadataProvider::Direct { epoch, ref_count } => {
@@ -440,6 +441,7 @@ impl<A: hub::HalApi> ResourceMetadataProvider<'_, A> {
     /// # Safety
     ///
     /// - The index must be in bounds of the metadata tracker if this uses an indirect source.
+    #[inline(always)]
     unsafe fn get_epoch(self, index: usize) -> Epoch {
         match self {
             ResourceMetadataProvider::Direct { epoch, .. }

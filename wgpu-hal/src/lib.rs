@@ -642,13 +642,9 @@ bitflags::bitflags! {
         /// A uniform buffer bound in a bind group.
         const UNIFORM = 1 << 6;
         /// A read-only storage buffer used in a bind group.
-        ///
-        /// Can be combined with STORAGE_WRITE to create a read-write usage.
         const STORAGE_READ = 1 << 7;
-        /// A read-write or write only buffer used for binding
-        ///
-        /// Can be combined with STORAGE_READ to create a read-write usage.
-        const STORAGE_WRITE = 1 << 8;
+        /// A read-write or write-only buffer used in a bind group.
+        const STORAGE_READ_WRITE = 1 << 8;
         /// The indirect or count buffer in a indirect draw or dispatch.
         const INDIRECT = 1 << 9;
         /// The combination of states that a buffer may be in _at the same time_.
@@ -656,7 +652,7 @@ bitflags::bitflags! {
             Self::INDEX.bits | Self::VERTEX.bits | Self::UNIFORM.bits |
             Self::STORAGE_READ.bits | Self::INDIRECT.bits;
         /// The combination of states that a buffer must exclusively be in.
-        const EXCLUSIVE = Self::MAP_WRITE.bits | Self::COPY_DST.bits | Self::STORAGE_WRITE.bits;
+        const EXCLUSIVE = Self::MAP_WRITE.bits | Self::COPY_DST.bits | Self::STORAGE_READ_WRITE.bits;
         /// The combination of all usages that the are guaranteed to be be ordered by the hardware.
         /// If a usage is ordered, then if the buffer state doesn't change between draw calls, there
         /// are no barriers needed for synchronization.
@@ -685,12 +681,12 @@ bitflags::bitflags! {
         const DEPTH_STENCIL_WRITE = 1 << 7;
         /// Read-only storage buffer usage. Corresponds to a UAV in d3d, so is exclusive, despite being read only.
         const STORAGE_READ = 1 << 8;
-        /// Read-write storage buffer usage.
-        const STORAGE_WRITE = 1 << 9;
+        /// Read-write or write-only storage buffer usage.
+        const STORAGE_READ_WRITE = 1 << 9;
         /// The combination of states that a texture may be in _at the same time_.
         const INCLUSIVE = Self::COPY_SRC.bits | Self::RESOURCE.bits | Self::DEPTH_STENCIL_READ.bits;
         /// The combination of states that a texture must exclusively be in.
-        const EXCLUSIVE = Self::COPY_DST.bits | Self::COLOR_TARGET.bits | Self::DEPTH_STENCIL_WRITE.bits | Self::STORAGE_READ.bits | Self::STORAGE_WRITE.bits | Self::PRESENT.bits;
+        const EXCLUSIVE = Self::COPY_DST.bits | Self::COLOR_TARGET.bits | Self::DEPTH_STENCIL_WRITE.bits | Self::STORAGE_READ.bits | Self::STORAGE_READ_WRITE.bits | Self::PRESENT.bits;
         /// The combination of all usages that the are guaranteed to be be ordered by the hardware.
         /// If a usage is ordered, then if the texture state doesn't change between draw calls, there
         /// are no barriers needed for synchronization.

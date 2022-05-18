@@ -971,7 +971,7 @@ impl<A: HalApi> Device<A> {
                 wgt::TextureViewDimension::D3 => {
                     hal::TextureUses::RESOURCE
                         | hal::TextureUses::STORAGE_READ
-                        | hal::TextureUses::STORAGE_WRITE
+                        | hal::TextureUses::STORAGE_READ_WRITE
                 }
                 _ => hal::TextureUses::all(),
             };
@@ -1524,7 +1524,7 @@ impl<A: HalApi> Device<A> {
                 if read_only {
                     hal::BufferUses::STORAGE_READ
                 } else {
-                    hal::BufferUses::STORAGE_READ | hal::BufferUses::STORAGE_WRITE
+                    hal::BufferUses::STORAGE_READ_WRITE
                 },
                 limits.max_storage_buffer_binding_size,
             ),
@@ -2028,7 +2028,7 @@ impl<A: HalApi> Device<A> {
                 }
 
                 let internal_use = match access {
-                    wgt::StorageTextureAccess::WriteOnly => hal::TextureUses::STORAGE_WRITE,
+                    wgt::StorageTextureAccess::WriteOnly => hal::TextureUses::STORAGE_READ_WRITE,
                     wgt::StorageTextureAccess::ReadOnly => {
                         if !view
                             .format_features
@@ -2048,7 +2048,7 @@ impl<A: HalApi> Device<A> {
                             return Err(Error::StorageReadNotSupported(view.desc.format));
                         }
 
-                        hal::TextureUses::STORAGE_WRITE | hal::TextureUses::STORAGE_READ
+                        hal::TextureUses::STORAGE_READ_WRITE
                     }
                 };
                 Ok((wgt::TextureUsages::STORAGE_BINDING, internal_use))
