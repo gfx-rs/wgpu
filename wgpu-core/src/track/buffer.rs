@@ -539,6 +539,12 @@ unsafe fn insert<A: hub::HalApi>(
 ) {
     let new_start_state = start_state_provider.get_state(index);
     let new_end_state = end_state_provider.map_or(new_start_state, |p| p.get_state(index));
+
+    // This should only ever happen with a wgpu bug, but let's just double
+    // check that resource states don't have any conflicts.
+    debug_assert_eq!(invalid_resource_state(new_start_state), false);
+    debug_assert_eq!(invalid_resource_state(new_end_state), false);
+
     if let Some(&mut ref mut start_state) = start_states {
         *start_state.get_unchecked_mut(index) = new_start_state;
     }

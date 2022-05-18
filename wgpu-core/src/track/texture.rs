@@ -64,6 +64,10 @@ impl ComplexTextureState {
         let mut complex =
             ComplexTextureState::new(full_range.mips.len() as u32, full_range.layers.len() as u32);
         for (selector, desired_state) in state_iter {
+            // This should only ever happen with a wgpu bug, but let's just double
+            // check that resource states don't have any conflicts.
+            debug_assert_eq!(invalid_resource_state(desired_state), false);
+
             let mips = selector.mips.start as usize..selector.mips.end as usize;
             for mip in &mut complex.mips[mips] {
                 for &mut (_, ref mut state) in mip.isolate(&selector.layers, TextureUses::UNKNOWN) {
@@ -793,6 +797,10 @@ unsafe fn insert<A: hub::HalApi>(
     let start_layers = start_state_provider.get_layers(texture_data, index32, index);
     match start_layers {
         SingleOrManyStates::Single(state) => {
+            // This should only ever happen with a wgpu bug, but let's just double
+            // check that resource states don't have any conflicts.
+            debug_assert_eq!(invalid_resource_state(state), false);
+
             if let Some(start_state) = start_state {
                 *start_state.simple.get_unchecked_mut(index) = state;
             }
@@ -820,6 +828,10 @@ unsafe fn insert<A: hub::HalApi>(
     if let Some(end_state_provider) = end_state_provider {
         match end_state_provider.get_layers(texture_data, index32, index) {
             SingleOrManyStates::Single(state) => {
+                // This should only ever happen with a wgpu bug, but let's just double
+                // check that resource states don't have any conflicts.
+                debug_assert_eq!(invalid_resource_state(state), false);
+
                 *end_state.simple.get_unchecked_mut(index) = state;
             }
             SingleOrManyStates::Many(state_iter) => {
