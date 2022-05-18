@@ -317,6 +317,22 @@ fn clear_texture_2d_uncompressed() {
 }
 
 #[test]
+fn clear_texture_d32_s8() {
+    initialize_test(
+        TestParameters::default()
+            .features(wgpu::Features::CLEAR_TEXTURE | wgpu::Features::DEPTH32FLOAT_STENCIL8),
+        |ctx| {
+            clear_texture_tests(
+                &ctx,
+                &[wgpu::TextureFormat::Depth32FloatStencil8],
+                false,
+                false,
+            );
+        },
+    )
+}
+
+#[test]
 fn clear_texture_2d_bc() {
     initialize_test(
         TestParameters::default()

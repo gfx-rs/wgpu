@@ -49,6 +49,7 @@ impl super::PrivateCapabilities {
             Tf::Rgba32Sint => F::R32G32B32A32_SINT,
             Tf::Rgba32Float => F::R32G32B32A32_SFLOAT,
             Tf::Depth32Float => F::D32_SFLOAT,
+            Tf::Depth32FloatStencil8 => F::D32_SFLOAT_S8_UINT,
             Tf::Depth24Plus => {
                 if self.texture_d24 {
                     F::X8_D24_UNORM_PACK32

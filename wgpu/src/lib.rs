@@ -1632,6 +1632,21 @@ impl Instance {
         }
     }
 
+    /// Returns the inner hal Instance using a callback. The hal instance will be `None` if the
+    /// backend type argument does not match with this wgpu Instance
+    ///
+    /// # Safety
+    ///
+    /// - The raw handle obtained from the hal Instance must not be manually destroyed
+    #[cfg(any(not(target_arch = "wasm32"), feature = "webgl2"))]
+    pub unsafe fn as_hal<A: wgc::hub::HalApi, F: FnOnce(Option<&A::Instance>) -> R, R>(
+        &self,
+        hal_instance_callback: F,
+    ) -> R {
+        self.context
+            .instance_as_hal::<A, F, R>(hal_instance_callback)
+    }
+
     /// Retrieves all available [`Adapter`]s that match the given [`Backends`].
     ///
     /// # Arguments
@@ -1846,6 +1861,21 @@ impl Adapter {
                     },
                 )
             })
+    }
+
+    /// Returns the inner hal Adapter using a callback. The hal adapter will be `None` if the
+    /// backend type argument does not match with this wgpu Adapter
+    ///
+    /// # Safety
+    ///
+    /// - The raw handle obtained from the hal Adapter must not be manually destroyed
+    #[cfg(any(not(target_arch = "wasm32"), feature = "webgl2"))]
+    pub unsafe fn as_hal<A: wgc::hub::HalApi, F: FnOnce(Option<&A::Adapter>) -> R, R>(
+        &self,
+        hal_adapter_callback: F,
+    ) -> R {
+        self.context
+            .adapter_as_hal::<A, F, R>(self.id, hal_adapter_callback)
     }
 
     /// Returns whether this adapter may present to the passed surface.
