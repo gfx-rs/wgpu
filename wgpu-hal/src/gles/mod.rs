@@ -667,6 +667,7 @@ enum Command {
     ClearColorI(u32, [i32; 4]),
     ClearDepth(f32),
     ClearStencil(u32),
+    ClearDepthAndStencil(f32, u32),
     BufferBarrier(glow::Buffer, crate::BufferUses),
     TextureBarrier(crate::TextureUses),
     SetViewport {
