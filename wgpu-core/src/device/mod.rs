@@ -3193,6 +3193,43 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         (id, Some(error))
     }
 
+    /// Assign `id_in` an error with the given `label`.
+    ///
+    /// Ensure that future attempts to use `id_in` as a buffer ID will propagate
+    /// the error, following the WebGPU ["contagious invalidity"] style.
+    ///
+    /// Firefox uses this function to comply strictly with the WebGPU spec,
+    /// which requires [`GPUBufferDescriptor`] validation to be generated on the
+    /// Device timeline and leave the newly created [`GPUBuffer`] invalid.
+    ///
+    /// Ideally, we would simply let [`device_create_buffer`] take care of all
+    /// of this, but some errors must be detected before we can even construct a
+    /// [`wgpu_types::BufferDescriptor`] to give it. For example, the WebGPU API
+    /// allows a `GPUBufferDescriptor`'s [`usage`] property to be any WebIDL
+    /// `unsigned long` value, but we can't construct a
+    /// [`wgpu_types::BufferUsages`] value from values with unassigned bits
+    /// set. This means we must validate `usage` before we can call
+    /// `device_create_buffer`.
+    ///
+    /// When that validation fails, we must arrange for the buffer id to be
+    /// considered invalid. This method provides the means to do so.
+    ///
+    /// ["contagious invalidity"]: https://www.w3.org/TR/webgpu/#invalidity
+    /// [`GPUBufferDescriptor`]: https://www.w3.org/TR/webgpu/#dictdef-gpubufferdescriptor
+    /// [`GPUBuffer`]: https://www.w3.org/TR/webgpu/#gpubuffer
+    /// [`wgpu_types::BufferDescriptor`]: wgt::BufferDescriptor
+    /// [`device_create_buffer`]: Global::device_create_buffer
+    /// [`usage`]: https://www.w3.org/TR/webgpu/#dom-gputexturedescriptor-usage
+    /// [`wgpu_types::BufferUsages`]: wgt::BufferUsages
+    pub fn create_buffer_error<A: HalApi>(&self, id_in: Input<G, id::BufferId>, label: Label) {
+        let hub = A::hub(self);
+        let mut token = Token::root();
+        let fid = hub.buffers.prepare(id_in);
+
+        let (_, mut token) = hub.devices.read(&mut token);
+        fid.assign_error(label.borrow_or_default(), &mut token);
+    }
+
     #[cfg(feature = "replay")]
     pub fn device_wait_for_buffer<A: HalApi>(
         &self,
