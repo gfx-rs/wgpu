@@ -139,20 +139,20 @@ env_logger = "0.9"
 
 [dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-rev = "1aa91549"
+rev = "571302e"
 #version = "0.8"
 optional = true
 
 # used to test all the example shaders
 [dev-dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-rev = "1aa91549"
+rev = "571302e"
 #version = "0.8"
 features = ["wgsl-in"]
 
 [target.'cfg(target_arch = "wasm32")'.dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-rev = "1aa91549"
+rev = "571302e"
 #version = "0.8"
 features = ["wgsl-out"]
 

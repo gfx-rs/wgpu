@@ -51,7 +51,7 @@ foreign-types = { version = "0.3", optional = true }
 ash = { version = "0.37", optional = true }
 gpu-alloc = { version = "0.5", optional = true }
 gpu-descriptor = { version = "0.2", optional = true }
-inplace_it = { version ="0.3.3", optional = true }
+inplace_it = { version = "0.3.3", optional = true }
 
 # backend: Gles
 glow = { version = "0.11.1", optional = true }
@@ -92,20 +92,20 @@ js-sys = { version = "0.3" }
 
 [dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-rev = "1aa91549"
+rev = "571302e"
 #version = "0.8"
 
 # DEV dependencies
 
 [dev-dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-rev = "1aa91549"
+rev = "571302e"
 #version = "0.8"
 features = ["wgsl-in"]
 
 [dev-dependencies]
 env_logger = "0.9"
-winit = "0.26" # for "halmark" example
+winit = "0.26"     # for "halmark" example
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 glutin = "0.28" # for "gles" example
