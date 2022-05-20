@@ -1193,8 +1193,8 @@ impl Composition {
 #[derive(Default)]
 struct TypeAttributes {
     // Although WGSL nas no type attributes at the moment, it had them in the past
-// (`[[stride]]`) and may as well acquire some again in the future.
-// Therefore, we are leaving the plumbing in for now.
+    // (`[[stride]]`) and may as well acquire some again in the future.
+    // Therefore, we are leaving the plumbing in for now.
 }
 
 #[derive(Clone, Debug, PartialEq)]
