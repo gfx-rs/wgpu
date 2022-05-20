@@ -71,6 +71,7 @@ pub const SUPPORTED_CAPABILITIES: &[spirv::Capability] = &[
     spirv::Capability::Float16,
     spirv::Capability::Float64,
     spirv::Capability::Geometry,
+    spirv::Capability::MultiView,
     // tricky ones
     spirv::Capability::UniformBufferArrayDynamicIndexing,
     spirv::Capability::StorageBufferArrayDynamicIndexing,
