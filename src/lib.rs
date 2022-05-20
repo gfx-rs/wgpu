@@ -211,7 +211,7 @@ pub mod valid;
 
 pub use crate::arena::{Arena, Handle, Range, UniqueArena};
 
-pub use crate::span::{Span, SpanContext, WithSpan};
+pub use crate::span::{SourceLocation, Span, SpanContext, WithSpan};
 #[cfg(feature = "arbitrary")]
 use arbitrary::Arbitrary;
 #[cfg(feature = "deserialize")]

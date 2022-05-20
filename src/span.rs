@@ -59,6 +59,22 @@ impl Span {
     pub fn is_defined(&self) -> bool {
         *self != Self::default()
     }
+
+    /// Returns the 1-based line number and column of the this span in
+    /// the provided source.
+    pub fn location(&self, source: &str) -> SourceLocation {
+        let prefix = &source[..self.start as usize];
+        let line_number = prefix.matches('\n').count() as u32 + 1;
+        let line_start = prefix.rfind('\n').map(|pos| pos + 1).unwrap_or(0);
+        let line_position = source[line_start..self.start as usize].chars().count() as u32 + 1;
+
+        SourceLocation {
+            line_number,
+            line_position,
+            offset: self.start,
+            length: self.end - self.start,
+        }
+    }
 }
 
 impl From<Range<usize>> for Span {
@@ -68,6 +84,22 @@ impl From<Range<usize>> for Span {
             end: range.end as u32,
         }
     }
+}
+
+/// A human-readable representation for span, tailored for text source.
+///
+/// Corresponds to the positional members of `GPUCompilationMessage` from the WebGPU specification,
+/// using utf8 instead of utf16 as reference encoding.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct SourceLocation {
+    /// 1-based line number.
+    pub line_number: u32,
+    /// 1-based column of the start of this span
+    pub line_position: u32,
+    /// 0-based Offset in code units (in bytes) of the start of the span.
+    pub offset: u32,
+    /// Length in code units (in bytes) of the span.
+    pub length: u32,
 }
 
 /// A source code span together with "context", a user-readable description of what part of the error it refers to.
@@ -186,6 +218,20 @@ impl<E> WithSpan<E> {
         res.spans.extend(self.spans);
         res
     }
+
+    #[cfg(feature = "span")]
+    pub fn location(&self, source: &str) -> Option<SourceLocation> {
+        if self.spans.is_empty() {
+            return None;
+        }
+
+        Some(self.spans[0].0.location(source))
+    }
+
+    #[cfg(not(feature = "span"))]
+    pub fn location(&self, _source: &str) -> Option<SourceLocation> {
+        None
+    }
 }
 
 /// Convenience trait for [`Error`] to be able to apply spans to anything.
@@ -272,4 +318,108 @@ impl<T, E, E2> MapErrWithSpan<E, E2> for Result<T, WithSpan<E>> {
     {
         self.map_err(|e| e.and_then(func).into_other::<E2>())
     }
+}
+
+#[test]
+fn span_location() {
+    let source = "12\n45\n\n89\n";
+    assert_eq!(
+        Span { start: 0, end: 1 }.location(source),
+        SourceLocation {
+            line_number: 1,
+            line_position: 1,
+            offset: 0,
+            length: 1
+        }
+    );
+    assert_eq!(
+        Span { start: 1, end: 2 }.location(source),
+        SourceLocation {
+            line_number: 1,
+            line_position: 2,
+            offset: 1,
+            length: 1
+        }
+    );
+    assert_eq!(
+        Span { start: 2, end: 3 }.location(source),
+        SourceLocation {
+            line_number: 1,
+            line_position: 3,
+            offset: 2,
+            length: 1
+        }
+    );
+    assert_eq!(
+        Span { start: 3, end: 5 }.location(source),
+        SourceLocation {
+            line_number: 2,
+            line_position: 1,
+            offset: 3,
+            length: 2
+        }
+    );
+    assert_eq!(
+        Span { start: 4, end: 6 }.location(source),
+        SourceLocation {
+            line_number: 2,
+            line_position: 2,
+            offset: 4,
+            length: 2
+        }
+    );
+    assert_eq!(
+        Span { start: 5, end: 6 }.location(source),
+        SourceLocation {
+            line_number: 2,
+            line_position: 3,
+            offset: 5,
+            length: 1
+        }
+    );
+    assert_eq!(
+        Span { start: 6, end: 7 }.location(source),
+        SourceLocation {
+            line_number: 3,
+            line_position: 1,
+            offset: 6,
+            length: 1
+        }
+    );
+    assert_eq!(
+        Span { start: 7, end: 8 }.location(source),
+        SourceLocation {
+            line_number: 4,
+            line_position: 1,
+            offset: 7,
+            length: 1
+        }
+    );
+    assert_eq!(
+        Span { start: 8, end: 9 }.location(source),
+        SourceLocation {
+            line_number: 4,
+            line_position: 2,
+            offset: 8,
+            length: 1
+        }
+    );
+    assert_eq!(
+        Span { start: 9, end: 10 }.location(source),
+        SourceLocation {
+            line_number: 4,
+            line_position: 3,
+            offset: 9,
+            length: 1
+        }
+    );
+    assert_eq!(
+        Span { start: 10, end: 11 }.location(source),
+        SourceLocation {
+            line_number: 5,
+            line_position: 1,
+            offset: 10,
+            length: 1
+        }
+    );
 }

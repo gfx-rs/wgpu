@@ -16,6 +16,7 @@ use crate::{
     proc::{
         ensure_block_returns, Alignment, Layouter, ResolveContext, ResolveError, TypeResolution,
     },
+    span::SourceLocation,
     span::Span as NagaSpan,
     Bytes, ConstantInner, FastHashMap, ScalarValue,
 };
@@ -29,7 +30,7 @@ use self::{
 };
 use codespan_reporting::{
     diagnostic::{Diagnostic, Label},
-    files::{Files, SimpleFile},
+    files::SimpleFile,
     term::{
         self,
         termcolor::{ColorChoice, ColorSpec, StandardStream, WriteColor},
@@ -1367,17 +1368,10 @@ impl ParseError {
 
     /// Returns the 1-based line number and column of the first label in the
     /// error message.
-    pub fn location(&self, source: &str) -> (usize, usize) {
-        let files = SimpleFile::new("wgsl", source);
-        match self.labels.get(0) {
-            Some(label) => {
-                let location = files
-                    .location((), label.0.start)
-                    .expect("invalid span location");
-                (location.line_number, location.column_number)
-            }
-            None => (1, 1),
-        }
+    pub fn location(&self, source: &str) -> Option<SourceLocation> {
+        self.labels
+            .get(0)
+            .map(|label| NagaSpan::new(label.0.start as u32, label.0.end as u32).location(source))
     }
 }
 
