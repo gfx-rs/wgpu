@@ -1360,18 +1360,18 @@ impl super::Adapter {
 
         Ok(crate::OpenDevice { device, queue })
     }
-}
 
-impl crate::Adapter<super::Api> for super::Adapter {
-    unsafe fn open(
+    unsafe fn open_with_extensions(
         &self,
         features: wgt::Features,
         limits: &wgt::Limits,
+        additional_extensions: &[&'static CStr],
     ) -> Result<crate::OpenDevice<super::Api>, crate::DeviceError> {
         let phd_limits = &self.phd_capabilities.properties.limits;
         let uab_types = super::UpdateAfterBindTypes::from_limits(limits, phd_limits);
 
-        let enabled_extensions = self.required_device_extensions(features);
+        let mut enabled_extensions = self.required_device_extensions(features);
+        enabled_extensions.extend(additional_extensions);
         let mut enabled_phd_features =
             self.physical_device_features(&enabled_extensions, features, uab_types);
 
@@ -1410,6 +1410,16 @@ impl crate::Adapter<super::Api> for super::Adapter {
             family_info.queue_family_index,
             0,
         )
+    }
+}
+
+impl crate::Adapter<super::Api> for super::Adapter {
+    unsafe fn open(
+        &self,
+        features: wgt::Features,
+        limits: &wgt::Limits,
+    ) -> Result<crate::OpenDevice<super::Api>, crate::DeviceError> {
+        self.open_with_extensions(features, limits, &[])
     }
 
     unsafe fn texture_format_capabilities(

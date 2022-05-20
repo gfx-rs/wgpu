@@ -192,6 +192,118 @@ impl super::Instance {
         Ok(extensions)
     }
 
+    pub unsafe fn init_with_extensions(
+        desc: &crate::InstanceDescriptor,
+        additional_extensions: &[&'static CStr],
+    ) -> Result<Self, crate::InstanceError> {
+        let entry = match ash::Entry::load() {
+            Ok(entry) => entry,
+            Err(err) => {
+                log::info!("Missing Vulkan entry points: {:?}", err);
+                return Err(crate::InstanceError);
+            }
+        };
+        let driver_api_version = match entry.try_enumerate_instance_version() {
+            // Vulkan 1.1+
+            Ok(Some(version)) => version,
+            Ok(None) => vk::API_VERSION_1_0,
+            Err(err) => {
+                log::warn!("try_enumerate_instance_version: {:?}", err);
+                return Err(crate::InstanceError);
+            }
+        };
+
+        let app_name = CString::new(desc.name).unwrap();
+        let app_info = vk::ApplicationInfo::builder()
+            .application_name(app_name.as_c_str())
+            .application_version(1)
+            .engine_name(CStr::from_bytes_with_nul(b"wgpu-hal\0").unwrap())
+            .engine_version(2)
+            .api_version(
+                // Vulkan 1.0 doesn't like anything but 1.0 passed in here...
+                if driver_api_version < vk::API_VERSION_1_1 {
+                    vk::API_VERSION_1_0
+                } else {
+                    // This is the max Vulkan API version supported by `wgpu-hal`.
+                    //
+                    // If we want to increment this, there are some things that must be done first:
+                    //  - Audit the behavioral differences between the previous and new API versions.
+                    //  - Audit all extensions used by this backend:
+                    //    - If any were promoted in the new API version and the behavior has changed, we must handle the new behavior in addition to the old behavior.
+                    //    - If any were obsoleted in the new API version, we must implement a fallback for the new API version
+                    //    - If any are non-KHR-vendored, we must ensure the new behavior is still correct (since backwards-compatibility is not guaranteed).
+                    vk::HEADER_VERSION_COMPLETE
+                },
+            );
+
+        let mut extensions = Self::required_extensions(&entry, desc.flags)?;
+        extensions.extend(additional_extensions);
+
+        let instance_layers = entry.enumerate_instance_layer_properties().map_err(|e| {
+            log::info!("enumerate_instance_layer_properties: {:?}", e);
+            crate::InstanceError
+        })?;
+
+        let nv_optimus_layer = CStr::from_bytes_with_nul(b"VK_LAYER_NV_optimus\0").unwrap();
+        let has_nv_optimus = instance_layers
+            .iter()
+            .any(|inst_layer| CStr::from_ptr(inst_layer.layer_name.as_ptr()) == nv_optimus_layer);
+
+        // Check requested layers against the available layers
+        let layers = {
+            let mut layers: Vec<&'static CStr> = Vec::new();
+            if desc.flags.contains(crate::InstanceFlags::VALIDATION) {
+                layers.push(CStr::from_bytes_with_nul(b"VK_LAYER_KHRONOS_validation\0").unwrap());
+            }
+
+            // Only keep available layers.
+            layers.retain(|&layer| {
+                if instance_layers
+                    .iter()
+                    .any(|inst_layer| CStr::from_ptr(inst_layer.layer_name.as_ptr()) == layer)
+                {
+                    true
+                } else {
+                    log::warn!("Unable to find layer: {}", layer.to_string_lossy());
+                    false
+                }
+            });
+            layers
+        };
+
+        let vk_instance = {
+            let str_pointers = layers
+                .iter()
+                .chain(extensions.iter())
+                .map(|&s| {
+                    // Safe because `layers` and `extensions` entries have static lifetime.
+                    s.as_ptr()
+                })
+                .collect::<Vec<_>>();
+
+            let create_info = vk::InstanceCreateInfo::builder()
+                .flags(vk::InstanceCreateFlags::empty())
+                .application_info(&app_info)
+                .enabled_layer_names(&str_pointers[..layers.len()])
+                .enabled_extension_names(&str_pointers[layers.len()..]);
+
+            entry.create_instance(&create_info, None).map_err(|e| {
+                log::warn!("create_instance: {:?}", e);
+                crate::InstanceError
+            })?
+        };
+
+        Self::from_raw(
+            entry,
+            vk_instance,
+            driver_api_version,
+            extensions,
+            desc.flags,
+            has_nv_optimus,
+            Some(Box::new(())), // `Some` signals that wgpu-hal is in charge of destroying vk_instance
+        )
+    }
+
     /// # Safety
     ///
     /// - `raw_instance` must be created from `entry`
@@ -466,111 +578,7 @@ impl Drop for super::InstanceShared {
 
 impl crate::Instance<super::Api> for super::Instance {
     unsafe fn init(desc: &crate::InstanceDescriptor) -> Result<Self, crate::InstanceError> {
-        let entry = match ash::Entry::load() {
-            Ok(entry) => entry,
-            Err(err) => {
-                log::info!("Missing Vulkan entry points: {:?}", err);
-                return Err(crate::InstanceError);
-            }
-        };
-        let driver_api_version = match entry.try_enumerate_instance_version() {
-            // Vulkan 1.1+
-            Ok(Some(version)) => version,
-            Ok(None) => vk::API_VERSION_1_0,
-            Err(err) => {
-                log::warn!("try_enumerate_instance_version: {:?}", err);
-                return Err(crate::InstanceError);
-            }
-        };
-
-        let app_name = CString::new(desc.name).unwrap();
-        let app_info = vk::ApplicationInfo::builder()
-            .application_name(app_name.as_c_str())
-            .application_version(1)
-            .engine_name(CStr::from_bytes_with_nul(b"wgpu-hal\0").unwrap())
-            .engine_version(2)
-            .api_version(
-                // Vulkan 1.0 doesn't like anything but 1.0 passed in here...
-                if driver_api_version < vk::API_VERSION_1_1 {
-                    vk::API_VERSION_1_0
-                } else {
-                    // This is the max Vulkan API version supported by `wgpu-hal`.
-                    //
-                    // If we want to increment this, there are some things that must be done first:
-                    //  - Audit the behavioral differences between the previous and new API versions.
-                    //  - Audit all extensions used by this backend:
-                    //    - If any were promoted in the new API version and the behavior has changed, we must handle the new behavior in addition to the old behavior.
-                    //    - If any were obsoleted in the new API version, we must implement a fallback for the new API version
-                    //    - If any are non-KHR-vendored, we must ensure the new behavior is still correct (since backwards-compatibility is not guaranteed).
-                    vk::HEADER_VERSION_COMPLETE
-                },
-            );
-
-        let extensions = Self::required_extensions(&entry, desc.flags)?;
-
-        let instance_layers = entry.enumerate_instance_layer_properties().map_err(|e| {
-            log::info!("enumerate_instance_layer_properties: {:?}", e);
-            crate::InstanceError
-        })?;
-
-        let nv_optimus_layer = CStr::from_bytes_with_nul(b"VK_LAYER_NV_optimus\0").unwrap();
-        let has_nv_optimus = instance_layers
-            .iter()
-            .any(|inst_layer| CStr::from_ptr(inst_layer.layer_name.as_ptr()) == nv_optimus_layer);
-
-        // Check requested layers against the available layers
-        let layers = {
-            let mut layers: Vec<&'static CStr> = Vec::new();
-            if desc.flags.contains(crate::InstanceFlags::VALIDATION) {
-                layers.push(CStr::from_bytes_with_nul(b"VK_LAYER_KHRONOS_validation\0").unwrap());
-            }
-
-            // Only keep available layers.
-            layers.retain(|&layer| {
-                if instance_layers
-                    .iter()
-                    .any(|inst_layer| CStr::from_ptr(inst_layer.layer_name.as_ptr()) == layer)
-                {
-                    true
-                } else {
-                    log::warn!("Unable to find layer: {}", layer.to_string_lossy());
-                    false
-                }
-            });
-            layers
-        };
-
-        let vk_instance = {
-            let str_pointers = layers
-                .iter()
-                .chain(extensions.iter())
-                .map(|&s| {
-                    // Safe because `layers` and `extensions` entries have static lifetime.
-                    s.as_ptr()
-                })
-                .collect::<Vec<_>>();
-
-            let create_info = vk::InstanceCreateInfo::builder()
-                .flags(vk::InstanceCreateFlags::empty())
-                .application_info(&app_info)
-                .enabled_layer_names(&str_pointers[..layers.len()])
-                .enabled_extension_names(&str_pointers[layers.len()..]);
-
-            entry.create_instance(&create_info, None).map_err(|e| {
-                log::warn!("create_instance: {:?}", e);
-                crate::InstanceError
-            })?
-        };
-
-        Self::from_raw(
-            entry,
-            vk_instance,
-            driver_api_version,
-            extensions,
-            desc.flags,
-            has_nv_optimus,
-            Some(Box::new(())), // `Some` signals that wgpu-hal is in charge of destroying vk_instance
-        )
+        Self::init_with_extensions(desc, &[])
     }
 
     unsafe fn create_surface(
