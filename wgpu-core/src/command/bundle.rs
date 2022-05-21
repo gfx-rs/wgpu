@@ -195,9 +195,7 @@ impl RenderBundleEncoder {
             vertex: (0..hal::MAX_VERTEX_BUFFERS)
                 .map(|_| VertexState::new())
                 .collect(),
-            bind: (0..hal::MAX_BIND_GROUPS)
-                .map(|_| BindState::new())
-                .collect(),
+            bind: (0..hal::MAX_BIND_GROUPS).map(|_| None).collect(),
             push_constant_ranges: PushConstantState::new(),
             raw_dynamic_offsets: Vec::new(),
             flat_dynamic_offsets: Vec::new(),
@@ -228,6 +226,8 @@ impl RenderBundleEncoder {
                         .map_pass_err(scope);
                     }
 
+                    // Peel off the front `num_dynamic_offsets` entries from
+                    // `base.dynamic_offsets`.
                     let offsets = &base.dynamic_offsets[..num_dynamic_offsets as usize];
                     base.dynamic_offsets = &base.dynamic_offsets[num_dynamic_offsets as usize..];
 
@@ -963,39 +963,22 @@ impl VertexState {
     }
 }
 
+/// A bind group that has been set at a particular index during render bundle encoding.
 #[derive(Debug)]
 struct BindState {
-    bind_group: Option<(id::BindGroupId, id::BindGroupLayoutId)>,
+    /// The id of the bind group set at this index.
+    bind_group_id: id::BindGroupId,
+
+    /// The layout of `group`.
+    layout_id: id::Valid<id::BindGroupLayoutId>,
+
+    /// The range of dynamic offsets in `State::raw_dynamic_offsets`
+    /// for this bind group.
     dynamic_offsets: Range<usize>,
+
+    /// True if this index's contents have been changed since the last time we
+    /// generated a `SetBindGroup` command.
     is_dirty: bool,
-}
-
-impl BindState {
-    fn new() -> Self {
-        Self {
-            bind_group: None,
-            dynamic_offsets: 0..0,
-            is_dirty: false,
-        }
-    }
-
-    fn set_group(
-        &mut self,
-        bind_group_id: id::BindGroupId,
-        layout_id: id::BindGroupLayoutId,
-        dyn_offset: usize,
-        dyn_count: usize,
-    ) -> bool {
-        match self.bind_group {
-            Some((bg_id, _)) if bg_id == bind_group_id && dyn_count == 0 => false,
-            _ => {
-                self.bind_group = Some((bind_group_id, layout_id));
-                self.dynamic_offsets = dyn_offset..dyn_offset + dyn_count;
-                self.is_dirty = true;
-                true
-            }
-        }
-    }
 }
 
 #[derive(Debug)]
@@ -1052,16 +1035,24 @@ struct State {
 
     /// The state of each vertex buffer slot.
     vertex: ArrayVec<VertexState, { hal::MAX_VERTEX_BUFFERS }>,
-    bind: ArrayVec<BindState, { hal::MAX_BIND_GROUPS }>,
+
+    /// The bind group set at each index, if any.
+    bind: ArrayVec<Option<BindState>, { hal::MAX_BIND_GROUPS }>,
+
     push_constant_ranges: PushConstantState,
 
-    /// The accumulated dynamic offsets for all `SetBindGroup` commands seen.
+    /// The dynamic offsets for all `SetBindGroup` commands we've seen so far.
     ///
     /// Each occupied entry of `bind` has a `dynamic_offsets` range that says
     /// which elements of this vector it owns.
     raw_dynamic_offsets: Vec<wgt::DynamicOffset>,
 
+    /// Dynamic offset values used by the cleaned-up command sequence.
+    ///
+    /// These end up in the final `RenderBundle`. Each `SetBindGroup` command
+    /// consumes the next `num_dynamic_offsets` entries off the front.
     flat_dynamic_offsets: Vec<wgt::DynamicOffset>,
+
     used_bind_groups: usize,
     pipeline: Option<id::RenderPipelineId>,
 }
@@ -1097,11 +1088,10 @@ impl State {
         vert_state
     }
 
-    fn invalidate_group_from(&mut self, slot: usize) {
-        for bind in self.bind[slot..].iter_mut() {
-            if bind.bind_group.is_some() {
-                bind.is_dirty = true;
-            }
+    /// Mark all non-empty bind group table entries from `index` onwards as dirty.
+    fn invalidate_group_from(&mut self, index: usize) {
+        for contents in self.bind[index..].iter_mut().flatten() {
+            contents.is_dirty = true;
         }
     }
 
@@ -1112,15 +1102,33 @@ impl State {
         layout_id: id::Valid<id::BindGroupLayoutId>,
         offsets: &[wgt::DynamicOffset],
     ) {
-        if self.bind[slot as usize].set_group(
-            bind_group_id,
-            layout_id.0,
-            self.raw_dynamic_offsets.len(),
-            offsets.len(),
-        ) {
-            self.invalidate_group_from(slot as usize + 1);
+        // If this call wouldn't actually change this index's state, we can
+        // return early.  (If there are dynamic offsets, the range will always
+        // be different.)
+        if offsets.is_empty() {
+            if let Some(ref contents) = self.bind[slot as usize] {
+                if contents.bind_group_id == bind_group_id {
+                    return;
+                }
+            }
         }
+
+        // Save `offsets` in the side array, and note where they landed.
+        let raw_start = self.raw_dynamic_offsets.len();
         self.raw_dynamic_offsets.extend(offsets);
+        let raw_end = self.raw_dynamic_offsets.len();
+
+        // Record the index's new state.
+        self.bind[slot as usize] = Some(BindState {
+            bind_group_id,
+            layout_id,
+            dynamic_offsets: raw_start..raw_end,
+            is_dirty: true,
+        });
+
+        // Once we've changed the bind group at a particular index, all
+        // subsequent indices need to be rewritten.
+        self.invalidate_group_from(slot as usize + 1);
     }
 
     fn set_pipeline(
@@ -1151,8 +1159,8 @@ impl State {
             self.bind
                 .iter()
                 .zip(layout_ids)
-                .position(|(bs, layout_id)| match bs.bind_group {
-                    Some((_, bgl_id)) => bgl_id != layout_id.0,
+                .position(|(entry, &layout_id)| match *entry {
+                    Some(ref contents) => contents.layout_id != layout_id,
                     None => false,
                 })
         };
@@ -1190,29 +1198,34 @@ impl State {
             .flat_map(|(i, vs)| vs.flush(i as u32))
     }
 
+    /// Generate `SetBindGroup` commands for any bind groups that need to be updated.
     fn flush_binds(&mut self) -> impl Iterator<Item = RenderCommand> + '_ {
-        for bs in self.bind[..self.used_bind_groups].iter() {
-            if bs.is_dirty {
+        // Append each dirty bind group's dynamic offsets to `flat_dynamic_offsets`.
+        for contents in self.bind[..self.used_bind_groups].iter().flatten() {
+            if contents.is_dirty {
                 self.flat_dynamic_offsets
-                    .extend_from_slice(&self.raw_dynamic_offsets[bs.dynamic_offsets.clone()]);
+                    .extend_from_slice(&self.raw_dynamic_offsets[contents.dynamic_offsets.clone()]);
             }
         }
-        self.bind
+
+        // Then, generate `SetBindGroup` commands to update the dirty bind
+        // groups. After this, all entries are clean.
+        self.bind[..self.used_bind_groups]
             .iter_mut()
-            .take(self.used_bind_groups)
             .enumerate()
-            .flat_map(|(i, bs)| {
-                if bs.is_dirty {
-                    bs.is_dirty = false;
-                    Some(RenderCommand::SetBindGroup {
-                        index: i as u8,
-                        bind_group_id: bs.bind_group.unwrap().0,
-                        num_dynamic_offsets: (bs.dynamic_offsets.end - bs.dynamic_offsets.start)
-                            as u8,
-                    })
-                } else {
-                    None
+            .flat_map(|(i, entry)| {
+                if let Some(ref mut contents) = *entry {
+                    if contents.is_dirty {
+                        contents.is_dirty = false;
+                        let offsets = &contents.dynamic_offsets;
+                        return Some(RenderCommand::SetBindGroup {
+                            index: i as u8,
+                            bind_group_id: contents.bind_group_id,
+                            num_dynamic_offsets: (offsets.end - offsets.start) as u8,
+                        });
+                    }
                 }
+                None
             })
     }
 }
