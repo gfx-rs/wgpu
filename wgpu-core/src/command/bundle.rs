@@ -167,6 +167,16 @@ impl RenderBundleEncoder {
         self.parent_id
     }
 
+    /// Convert this encoder's commands into a [`RenderBundle`].
+    ///
+    /// We want executing a [`RenderBundle`] to be quick, so we take
+    /// this opportunity to clean up the [`RenderBundleEncoder`]'s
+    /// command stream and gather metadata about it that will help
+    /// keep [`ExecuteBundle`] simple and fast. We remove redundant
+    /// commands (along with their side data), note resource usage,
+    /// and accumulate buffer and texture initialization actions.
+    ///
+    /// [`ExecuteBundle`]: RenderCommand::ExecuteBundle
     pub(crate) fn finish<A: hal::Api, G: GlobalIdentityHandlerFactory>(
         self,
         desc: &RenderBundleDescriptor,
@@ -823,6 +833,15 @@ impl Resource for RenderBundle {
     }
 }
 
+/// A render bundle's current index buffer state.
+///
+/// [`RenderBundleEncoder::finish`] uses this to drop redundant
+/// `SetIndexBuffer` commands from the final [`RenderBundle`]. It
+/// records index buffer state changes here, and then calls this
+/// type's [`flush`] method before any indexed draw command to produce
+/// a `SetIndexBuffer` command if one is necessary.
+///
+/// [`flush`]: IndexState::flush
 #[derive(Debug)]
 struct IndexState {
     buffer: Option<id::BufferId>,
@@ -833,6 +852,7 @@ struct IndexState {
 }
 
 impl IndexState {
+    /// Return a fresh state: no index buffer has been set yet.
     fn new() -> Self {
         Self {
             buffer: None,
@@ -843,6 +863,9 @@ impl IndexState {
         }
     }
 
+    /// Return the number of entries in the current index buffer.
+    ///
+    /// Panic if no index buffer has been set.
     fn limit(&self) -> u32 {
         assert!(self.buffer.is_some());
         let bytes_per_index = match self.format {
@@ -852,6 +875,8 @@ impl IndexState {
         ((self.range.end - self.range.start) / bytes_per_index) as u32
     }
 
+    /// Prepare for an indexed draw, producing a `SetIndexBuffer`
+    /// command if necessary.
     fn flush(&mut self) -> Option<RenderCommand> {
         if self.is_dirty {
             self.is_dirty = false;
@@ -866,6 +891,7 @@ impl IndexState {
         }
     }
 
+    /// Set the current index buffer's format.
     fn set_format(&mut self, format: wgt::IndexFormat) {
         if self.format != format {
             self.format = format;
@@ -873,6 +899,7 @@ impl IndexState {
         }
     }
 
+    /// Set the current index buffer.
     fn set_buffer(&mut self, id: id::BufferId, range: Range<wgt::BufferAddress>) {
         self.buffer = Some(id);
         self.range = range;
@@ -880,6 +907,15 @@ impl IndexState {
     }
 }
 
+/// The state of a single vertex buffer slot during render bundle encoding.
+///
+/// [`RenderBundleEncoder::finish`] uses this to drop redundant
+/// `SetVertexBuffer` commands from the final [`RenderBundle`]. It
+/// records one vertex buffer slot's state changes here, and then
+/// calls this type's [`flush`] method just before any draw command to
+/// produce a `SetVertexBuffer` commands if one is necessary.
+///
+/// [`flush`]: IndexState::flush
 #[derive(Debug)]
 struct VertexState {
     buffer: Option<id::BufferId>,
@@ -890,6 +926,8 @@ struct VertexState {
 }
 
 impl VertexState {
+    /// Construct a fresh `VertexState`: no buffer has been set for
+    /// this slot.
     fn new() -> Self {
         Self {
             buffer: None,
@@ -900,12 +938,16 @@ impl VertexState {
         }
     }
 
+    /// Set this slot's vertex buffer.
     fn set_buffer(&mut self, buffer_id: id::BufferId, range: Range<wgt::BufferAddress>) {
         self.buffer = Some(buffer_id);
         self.range = range;
         self.is_dirty = true;
     }
 
+    /// Generate a `SetVertexBuffer` command for this slot, if necessary.
+    ///
+    /// `slot` is the index of the vertex buffer slot that `self` tracks.
     fn flush(&mut self, slot: u32) -> Option<RenderCommand> {
         if self.is_dirty {
             self.is_dirty = false;
@@ -992,14 +1034,33 @@ struct VertexLimitState {
     instance_limit_slot: u32,
 }
 
+/// State for analyzing and cleaning up bundle command streams.
+///
+/// To minimize state updates, [`RenderBundleEncoder::finish`]
+/// actually just applies commands like [`SetBindGroup`] and
+/// [`SetIndexBuffer`] to the simulated state stored here, and then
+/// calls the `flush_foo` methods before draw calls to produce the
+/// update commands we actually need.
 #[derive(Debug)]
 struct State {
+    /// Resources used by this bundle. This will become `RenderBundle::used`.
     trackers: TrackerSet,
+
+    /// The current index buffer. We flush this state before indexed
+    /// draw commands.
     index: IndexState,
+
+    /// The state of each vertex buffer slot.
     vertex: ArrayVec<VertexState, { hal::MAX_VERTEX_BUFFERS }>,
     bind: ArrayVec<BindState, { hal::MAX_BIND_GROUPS }>,
     push_constant_ranges: PushConstantState,
+
+    /// The accumulated dynamic offsets for all `SetBindGroup` commands seen.
+    ///
+    /// Each occupied entry of `bind` has a `dynamic_offsets` range that says
+    /// which elements of this vector it owns.
     raw_dynamic_offsets: Vec<wgt::DynamicOffset>,
+
     flat_dynamic_offsets: Vec<wgt::DynamicOffset>,
     used_bind_groups: usize,
     pipeline: Option<id::RenderPipelineId>,
