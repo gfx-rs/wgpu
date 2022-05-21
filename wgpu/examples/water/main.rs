@@ -64,11 +64,6 @@ struct Example {
     terrain_vertex_buf: wgpu::Buffer,
     terrain_vertex_count: usize,
     terrain_normal_bind_group: wgpu::BindGroup,
-    ///
-    /// Binds to the uniform buffer where the
-    /// camera has been placed underwater.
-    ///
-    terrain_flipped_bind_group: wgpu::BindGroup,
     terrain_normal_uniform_buf: wgpu::Buffer,
     ///
     /// Contains uniform variables where the camera
@@ -76,6 +71,13 @@ struct Example {
     ///
     terrain_flipped_uniform_buf: wgpu::Buffer,
     terrain_pipeline: wgpu::RenderPipeline,
+
+    /// A render bundle for drawing the terrain.
+    ///
+    /// This isn't really necessary, but it does make sure we have at
+    /// least one use of `RenderBundleEncoder::set_bind_group` among
+    /// the examples.
+    terrain_bundle: wgpu::RenderBundle,
 
     reflect_view: wgpu::TextureView,
 
@@ -480,6 +482,9 @@ impl framework::Example for Example {
             }],
             label: Some("Terrain Normal Bind Group"),
         });
+
+        // Binds to the uniform buffer where the
+        // camera has been placed underwater.
         let terrain_flipped_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &terrain_bind_group_layout,
             entries: &[wgpu::BindGroupEntry {
@@ -605,6 +610,27 @@ impl framework::Example for Example {
             multiview: None,
         });
 
+        // A render bundle to draw the terrain.
+        let terrain_bundle = {
+            let mut encoder =
+                device.create_render_bundle_encoder(&wgpu::RenderBundleEncoderDescriptor {
+                    label: None,
+                    color_formats: &[config.format],
+                    depth_stencil: Some(wgpu::RenderBundleDepthStencil {
+                        format: wgpu::TextureFormat::Depth32Float,
+                        depth_read_only: false,
+                        stencil_read_only: true,
+                    }),
+                    sample_count: 1,
+                    multiview: None,
+                });
+            encoder.set_pipeline(&terrain_pipeline);
+            encoder.set_bind_group(0, &terrain_flipped_bind_group, &[]);
+            encoder.set_vertex_buffer(0, terrain_vertex_buf.slice(..));
+            encoder.draw(0..terrain_vertices.len() as u32, 0..1);
+            encoder.finish(&wgpu::RenderBundleDescriptor::default())
+        };
+
         // Done
         Example {
             water_vertex_buf,
@@ -617,10 +643,10 @@ impl framework::Example for Example {
             terrain_vertex_buf,
             terrain_vertex_count: terrain_vertices.len(),
             terrain_normal_bind_group,
-            terrain_flipped_bind_group,
             terrain_normal_uniform_buf,
             terrain_flipped_uniform_buf,
             terrain_pipeline,
+            terrain_bundle,
 
             reflect_view,
 
@@ -729,10 +755,8 @@ impl framework::Example for Example {
                     stencil_ops: None,
                 }),
             });
-            rpass.set_pipeline(&self.terrain_pipeline);
-            rpass.set_bind_group(0, &self.terrain_flipped_bind_group, &[]);
-            rpass.set_vertex_buffer(0, self.terrain_vertex_buf.slice(..));
-            rpass.draw(0..self.terrain_vertex_count as u32, 0..1);
+
+            rpass.execute_bundles([&self.terrain_bundle]);
         }
         // Terrain right side up. This time we need to use the
         // depth values, so we must use StoreOp::Store.
