@@ -132,21 +132,27 @@ impl super::Swapchain {
     }
 }
 
-impl super::Instance {
+impl super::InstanceShared {
     pub fn entry(&self) -> &ash::Entry {
-        &self.shared.entry
+        &self.entry
     }
 
     pub fn raw_instance(&self) -> &ash::Instance {
-        &self.shared.raw
+        &self.raw
     }
 
     pub fn driver_api_version(&self) -> u32 {
-        self.shared.driver_api_version
+        self.driver_api_version
     }
 
     pub fn extensions(&self) -> &[&'static CStr] {
         &self.extensions[..]
+    }
+}
+
+impl super::Instance {
+    pub fn shared_instance(&self) -> &super::InstanceShared {
+        &self.shared
     }
 
     pub fn required_extensions(
@@ -276,6 +282,7 @@ impl super::Instance {
         Ok(Self {
             shared: Arc::new(super::InstanceShared {
                 raw: raw_instance,
+                extensions,
                 drop_guard,
                 flags,
                 debug_utils,
@@ -284,7 +291,6 @@ impl super::Instance {
                 has_nv_optimus,
                 driver_api_version,
             }),
-            extensions,
         })
     }
 
@@ -294,7 +300,7 @@ impl super::Instance {
         dpy: *mut vk::Display,
         window: vk::Window,
     ) -> super::Surface {
-        if !self.extensions.contains(&khr::XlibSurface::name()) {
+        if !self.shared.extensions.contains(&khr::XlibSurface::name()) {
             panic!("Vulkan driver does not support VK_KHR_XLIB_SURFACE");
         }
 
@@ -318,7 +324,7 @@ impl super::Instance {
         connection: *mut vk::xcb_connection_t,
         window: vk::xcb_window_t,
     ) -> super::Surface {
-        if !self.extensions.contains(&khr::XcbSurface::name()) {
+        if !self.shared.extensions.contains(&khr::XcbSurface::name()) {
             panic!("Vulkan driver does not support VK_KHR_XCB_SURFACE");
         }
 
@@ -342,7 +348,11 @@ impl super::Instance {
         display: *mut c_void,
         surface: *mut c_void,
     ) -> super::Surface {
-        if !self.extensions.contains(&khr::WaylandSurface::name()) {
+        if !self
+            .shared
+            .extensions
+            .contains(&khr::WaylandSurface::name())
+        {
             panic!("Vulkan driver does not support VK_KHR_WAYLAND_SURFACE");
         }
 
@@ -379,7 +389,7 @@ impl super::Instance {
         hinstance: *mut c_void,
         hwnd: *mut c_void,
     ) -> super::Surface {
-        if !self.extensions.contains(&khr::Win32Surface::name()) {
+        if !self.shared.extensions.contains(&khr::Win32Surface::name()) {
             panic!("Vulkan driver does not support VK_KHR_WIN32_SURFACE");
         }
 
@@ -598,16 +608,21 @@ impl crate::Instance<super::Api> for super::Instance {
 
         match has_handle.raw_window_handle() {
             RawWindowHandle::Wayland(handle)
-                if self.extensions.contains(&khr::WaylandSurface::name()) =>
+                if self
+                    .shared
+                    .extensions
+                    .contains(&khr::WaylandSurface::name()) =>
             {
                 Ok(self.create_surface_from_wayland(handle.display, handle.surface))
             }
             RawWindowHandle::Xlib(handle)
-                if self.extensions.contains(&khr::XlibSurface::name()) =>
+                if self.shared.extensions.contains(&khr::XlibSurface::name()) =>
             {
                 Ok(self.create_surface_from_xlib(handle.display as *mut _, handle.window))
             }
-            RawWindowHandle::Xcb(handle) if self.extensions.contains(&khr::XcbSurface::name()) => {
+            RawWindowHandle::Xcb(handle)
+                if self.shared.extensions.contains(&khr::XcbSurface::name()) =>
+            {
                 Ok(self.create_surface_from_xcb(handle.connection, handle.window))
             }
             RawWindowHandle::AndroidNdk(handle) => {
@@ -622,13 +637,13 @@ impl crate::Instance<super::Api> for super::Instance {
             }
             #[cfg(target_os = "macos")]
             RawWindowHandle::AppKit(handle)
-                if self.extensions.contains(&ext::MetalSurface::name()) =>
+                if self.shared.extensions.contains(&ext::MetalSurface::name()) =>
             {
                 Ok(self.create_surface_from_view(handle.ns_view))
             }
             #[cfg(target_os = "ios")]
             RawWindowHandle::UiKit(handle)
-                if self.extensions.contains(&ext::MetalSurface::name()) =>
+                if self.shared.extensions.contains(&ext::MetalSurface::name()) =>
             {
                 Ok(self.create_surface_from_view(handle.ui_view))
             }
