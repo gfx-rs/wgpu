@@ -1,36 +1,72 @@
 /*! Render Bundles
 
-## Software implementation
+A render bundle is a prerecorded sequence of commands that can be replayed on a
+command encoder with a single call. A single bundle can replayed any number of
+times, on different encoders. Constructing a render bundle lets `wgpu` validate
+and analyze its commands up front, so that replaying a bundle can be more
+efficient than simply re-recording its commands each time.
 
-The path from nothing to using a render bundle consists of 3 phases.
+One important property of render bundles is that the draw calls in a render
+bundle depend solely on the pipeline and state established within the render
+bundle itself. A draw call in a bundle will never use a vertex buffer, say, that
+was set in the `RenderPass` before executing the bundle. We call this property
+'isolation', in that a render bundle is somewhat isolated from the passes that
+use it.
 
-### Initial command encoding
+Render passes are also isolated from the effects of bundles. After executing a
+render bundle, a render pass's pipeline, bind groups, and vertex and index
+buffers are are unset, so the bundle cannot affect later draw calls in the pass.
 
-User creates a `RenderBundleEncoder` and populates it by issuing commands
-from `bundle_ffi` module, just like with `RenderPass`, except that the
-set of available commands is reduced. Everything is written into a `RawPass`.
+Not all commands are available in bundles; for example, a render bundle may not
+contain a [`RenderCommand::SetViewport`] command.
 
-### Bundle baking
+Most of `wgpu`'s backend graphics APIs have something like bundles. For example,
+Vulkan calls them "secondary command buffers", and Metal calls them "indirect
+command buffers". However, `wgpu`'s implementation of render bundles does not
+take advantage of those underlying platform features. At the hal level, `wgpu`
+render bundles just replay the commands.
 
-Once the commands are encoded, user calls `render_bundle_encoder_finish`.
-This is perhaps the most complex part of the logic. It consumes the
-commands stored in `RawPass`, while validating everything, tracking the state,
-and re-recording the commands into a separate `Vec<RenderCommand>`. It
-doesn't actually execute any commands.
+## Render Bundle Lifecycle
 
-What's more important, is that the produced vector of commands is "normalized",
-which means it can be executed verbatim without any state tracking. More
-formally, "normalized" command stream guarantees that any state required by
-a draw call is set explicitly by one of the commands between the draw call
-and the last changing of the pipeline.
+To create a render bundle:
+
+1) Create a [`RenderBundleEncoder`] by calling
+   [`Global::device_create_render_bundle_encoder`][Gdcrbe].
+
+2) Record commands in the `RenderBundleEncoder` using functions from the
+   [`bundle_ffi`] module.
+
+3) Call [`Global::render_bundle_encoder_finish`][Grbef], which analyzes and cleans up
+   the command stream and returns a `RenderBundleId`.
+
+4) Then, any number of times, call [`wgpu_render_pass_execute_bundles`][wrpeb] to
+   execute the bundle as part of some render pass.
+
+## Implementation
+
+The most complex part of render bundles is the "finish" step, mostly implemented
+in [`RenderBundleEncoder::finish`]. This consumes the commands stored in the
+encoder's [`BasePass`], while validating everything, tracking the state,
+dropping redundant or unnecessary commands, and presenting the results as a new
+[`RenderBundle`]. It doesn't actually execute any commands.
+
+This step also enforces the 'isolation' property mentioned above: every draw
+call is checked to ensure that the resources it uses on were established since
+the last time the pipeline was set. This means the bundle can be executed
+verbatim without any state tracking.
 
 ### Execution
 
 When the bundle is used in an actual render pass, `RenderBundle::execute` is
 called. It goes through the commands and issues them into the native command
-buffer. Thanks to the "normalized" property, it doesn't track any bind group
-invalidations or index format changes.
+buffer. Thanks to isolation, it doesn't track any bind group invalidations or
+index format changes.
+
+[Gdcrbe]: crate::hub::Global::device_create_render_bundle_encoder
+[Grbef]: crate::hub::Global::render_bundle_encoder_finish
+[wrpeb]: crate::command::render_ffi::wgpu_render_pass_execute_bundles
 !*/
+
 #![allow(clippy::reversed_empty_ranges)]
 
 use crate::{
