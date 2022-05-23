@@ -540,6 +540,15 @@
     ],
   );
 
+  // ENUM: GPUMipmapFilterMode
+  webidl.converters["GPUMipmapFilterMode"] = webidl.createEnumConverter(
+    "GPUMipmapFilterMode",
+    [
+      "nearest",
+      "linear",
+    ],
+  );
+
   // ENUM: GPUCompareFunction
   webidl.converters["GPUCompareFunction"] = webidl.createEnumConverter(
     "GPUCompareFunction",
@@ -584,7 +593,7 @@
     },
     {
       key: "mipmapFilter",
-      converter: webidl.converters["GPUFilterMode"],
+      converter: webidl.converters["GPUMipmapFilterMode"],
       defaultValue: "nearest",
     },
     {
@@ -936,9 +945,26 @@
   //   GPUCompilationInfo.prototype,
   // );
 
+  // ENUM: GPUAutoLayoutMode
+  webidl.converters["GPUAutoLayoutMode"] = webidl.createEnumConverter(
+    "GPUAutoLayoutMode",
+    [
+      "auto",
+    ],
+  );
+
+  webidl.converters["GPUPipelineLayout or GPUAutoLayoutMode"] = (V, opts) => {
+    // Union for (GPUPipelineLayout or GPUAutoLayoutMode)
+    // TODO
+  };
+
   // DICTIONARY: GPUPipelineDescriptorBase
   const dictMembersGPUPipelineDescriptorBase = [
-    { key: "layout", converter: webidl.converters["GPUPipelineLayout"] },
+    {
+      key: "layout",
+      converter: webidl.converters["GPUPipelineLayout or GPUAutoLayoutMode"],
+      required: true,
+    },
   ];
   webidl.converters["GPUPipelineDescriptorBase"] = webidl
     .createDictionaryConverter(

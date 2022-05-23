@@ -154,15 +154,35 @@
     }
   }
 
-  class GPUOutOfMemoryError extends Error {
-    name = "GPUOutOfMemoryError";
+  class GPUError extends Error {
     constructor() {
-      super("device out of memory");
+      super();
+      webidl.illegalConstructor();
+    }
+
+    [_message];
+    get message() {
+      webidl.assertBranded(this, GPUErrorPrototype);
+      return this[_message];
+    }
+  }
+  const GPUErrorPrototype = GPUError.prototype;
+
+  class GPUOutOfMemoryError extends GPUError {
+    name = "GPUOutOfMemoryError";
+    constructor(message) {
+      const prefix = "Failed to construct 'GPUOutOfMemoryError'";
+      webidl.requiredArguments(arguments.length, 1, { prefix });
+      message = webidl.converters.DOMString(message, {
+        prefix,
+        context: "Argument 1",
+      });
+      super(message);
     }
   }
   const GPUOutOfMemoryErrorPrototype = GPUOutOfMemoryError.prototype;
 
-  class GPUValidationError extends Error {
+  class GPUValidationError extends GPUError {
     name = "GPUValidationError";
     /** @param {string} message */
     constructor(message) {
@@ -203,7 +223,7 @@
       if (err) {
         return null;
       } else {
-        return createGPUAdapter(data.name, data);
+        return createGPUAdapter(data);
       }
     }
 
@@ -213,7 +233,6 @@
   }
   const GPUPrototype = GPU.prototype;
 
-  const _name = Symbol("[[name]]");
   const _adapter = Symbol("[[adapter]]");
   const _cleanup = Symbol("[[cleanup]]");
 
@@ -226,14 +245,12 @@
    */
 
   /**
-   * @param {string} name
    * @param {InnerGPUAdapter} inner
    * @returns {GPUAdapter}
    */
-  function createGPUAdapter(name, inner) {
+  function createGPUAdapter(inner) {
     /** @type {GPUAdapter} */
     const adapter = webidl.createBranded(GPUAdapter);
-    adapter[_name] = name;
     adapter[_adapter] = {
       ...inner,
       features: createGPUSupportedFeatures(inner.features),
@@ -243,16 +260,9 @@
   }
 
   class GPUAdapter {
-    /** @type {string} */
-    [_name];
     /** @type {InnerGPUAdapter} */
     [_adapter];
 
-    /** @returns {string} */
-    get name() {
-      webidl.assertBranded(this, GPUAdapterPrototype);
-      return this[_name];
-    }
     /** @returns {GPUSupportedFeatures} */
     get features() {
       webidl.assertBranded(this, GPUAdapterPrototype);
@@ -315,10 +325,43 @@
       );
     }
 
+    /**
+     * @param {string[]} unmaskHints
+     * @returns {Promise<GPUAdapterInfo>}
+     */
+    async requestAdapterInfo(unmaskHints = []) {
+      webidl.assertBranded(this, GPUAdapterPrototype);
+      const prefix = "Failed to execute 'requestAdapterInfo' on 'GPUAdapter'";
+      unmaskHints = webidl.converters["sequence<DOMString>"](unmaskHints, {
+        prefix,
+        context: "Argument 1",
+      });
+
+      const {
+        vendor,
+        architecture,
+        device,
+        description,
+      } = await core.opAsync(
+        "op_webgpu_request_adapter_info",
+        this[_adapter].rid,
+      );
+
+      const adapterInfo = webidl.createBranded(GPUAdapterInfo);
+      adapterInfo[_vendor] = unmaskHints.includes("vendor") ? vendor : "";
+      adapterInfo[_architecture] = unmaskHints.includes("architecture")
+        ? architecture
+        : "";
+      adapterInfo[_device] = unmaskHints.includes("device") ? device : "";
+      adapterInfo[_description] = unmaskHints.includes("description")
+        ? description
+        : "";
+      return adapterInfo;
+    }
+
     [SymbolFor("Deno.privateCustomInspect")](inspect) {
       return `${this.constructor.name} ${
         inspect({
-          name: this.name,
           features: this.features,
           limits: this.limits,
         })
@@ -326,6 +369,55 @@
     }
   }
   const GPUAdapterPrototype = GPUAdapter.prototype;
+
+  const _vendor = Symbol("[[vendor]]");
+  const _architecture = Symbol("[[architecture]]");
+  const _description = Symbol("[[description]]");
+  class GPUAdapterInfo {
+    /** @type {string} */
+    [_vendor];
+    /** @returns {string} */
+    get vendor() {
+      webidl.assertBranded(this, GPUAdapterInfoPrototype);
+      return this[_vendor];
+    }
+
+    /** @type {string} */
+    [_architecture];
+    /** @returns {string} */
+    get architecture() {
+      webidl.assertBranded(this, GPUAdapterInfoPrototype);
+      return this[_architecture];
+    }
+
+    /** @type {string} */
+    [_device];
+    /** @returns {string} */
+    get device() {
+      webidl.assertBranded(this, GPUAdapterInfoPrototype);
+      return this[_device];
+    }
+
+    /** @type {string} */
+    [_description];
+    /** @returns {string} */
+    get description() {
+      webidl.assertBranded(this, GPUAdapterInfoPrototype);
+      return this[_description];
+    }
+
+    [SymbolFor("Deno.privateCustomInspect")](inspect) {
+      return `${this.constructor.name} ${
+        inspect({
+          vendor: this.vendor,
+          architecture: this.architecture,
+          device: this.device,
+          description: this.description,
+        })
+      }`;
+    }
+  }
+  const GPUAdapterInfoPrototype = GPUAdapterInfo.prototype;
 
   const _limits = Symbol("[[limits]]");
 
@@ -602,26 +694,24 @@
    * @param {any} type
    */
   function GPUObjectBaseMixin(name, type) {
-    type.prototype[_label] = undefined;
+    type.prototype[_label] = null;
     ObjectDefineProperty(type.prototype, "label", {
       /**
-       * @return {string | undefined}
+       * @return {string | null}
        */
       get() {
         webidl.assertBranded(this, type.prototype);
         return this[_label];
       },
       /**
-       * @param {string | undefined} label
+       * @param {string | null} label
        */
       set(label) {
         webidl.assertBranded(this, type.prototype);
-        if (label !== undefined) {
-          label = webidl.converters["UVString"](label, {
-            prefix: `Failed to set 'label' on '${name}'`,
-            context: "Argument 1",
-          });
-        }
+        label = webidl.converters["UVString?"](label, {
+          prefix: `Failed to set 'label' on '${name}'`,
+          context: "Argument 1",
+        });
         this[_label] = label;
       },
     });
@@ -4213,9 +4303,14 @@
      * @param {number} workgroupCountY
      * @param {number} workgroupCountZ
      */
-    dispatchWorkgroups(workgroupCountX, workgroupCountY = 1, workgroupCountZ = 1) {
+    dispatchWorkgroups(
+      workgroupCountX,
+      workgroupCountY = 1,
+      workgroupCountZ = 1,
+    ) {
       webidl.assertBranded(this, GPUComputePassEncoderPrototype);
-      const prefix = "Failed to execute 'dispatchWorkgroups' on 'GPUComputePassEncoder'";
+      const prefix =
+        "Failed to execute 'dispatchWorkgroups' on 'GPUComputePassEncoder'";
       webidl.requiredArguments(arguments.length, 1, { prefix });
       workgroupCountX = webidl.converters.GPUSize32(workgroupCountX, {
         prefix,
@@ -5180,6 +5275,7 @@
     GPURenderBundleEncoder,
     GPURenderBundle,
     GPUQuerySet,
+    GPUError,
     GPUOutOfMemoryError,
     GPUValidationError,
   };

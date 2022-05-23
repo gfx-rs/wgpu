@@ -215,7 +215,6 @@ pub enum GpuAdapterDeviceOrErr {
 #[serde(rename_all = "camelCase")]
 pub struct GpuAdapterDevice {
     rid: ResourceId,
-    name: Option<String>,
     limits: wgpu_types::Limits,
     features: Vec<&'static str>,
     is_software: bool,
@@ -262,7 +261,6 @@ pub async fn op_webgpu_request_adapter(
             })
         }
     };
-    let name = gfx_select!(adapter => instance.adapter_get_info(adapter))?.name;
     let adapter_features = gfx_select!(adapter => instance.adapter_features(adapter))?;
     let features = deserialize_features(&adapter_features);
     let adapter_limits = gfx_select!(adapter => instance.adapter_limits(adapter))?;
@@ -271,7 +269,6 @@ pub async fn op_webgpu_request_adapter(
 
     Ok(GpuAdapterDeviceOrErr::Features(GpuAdapterDevice {
         rid,
-        name: Some(name),
         features,
         limits: adapter_limits,
         is_software: false,
@@ -430,11 +427,39 @@ pub async fn op_webgpu_request_device(
 
     Ok(GpuAdapterDevice {
         rid,
-        name: None,
         features,
         limits,
         // TODO(lucacasonato): report correctly from wgpu
         is_software: false,
+    })
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GPUAdapterInfo {
+    vendor: String,
+    architecture: String,
+    device: String,
+    description: String,
+}
+
+#[op]
+pub async fn op_webgpu_request_adapter_info(
+    state: Rc<RefCell<OpState>>,
+    adapter_rid: ResourceId,
+) -> Result<GPUAdapterInfo, AnyError> {
+    let state = state.borrow_mut();
+    let adapter_resource = state.resource_table.get::<WebGpuAdapter>(adapter_rid)?;
+    let adapter = adapter_resource.0;
+    let instance = state.borrow::<Instance>();
+
+    let info = gfx_select!(adapter => instance.adapter_get_info(adapter))?;
+
+    Ok(GPUAdapterInfo {
+        vendor: info.vendor.to_string(),
+        architecture: String::new(), // TODO(#2170)
+        device: info.device.to_string(),
+        description: info.name,
     })
 }
 
@@ -520,6 +545,7 @@ fn declare_webgpu_ops() -> Vec<deno_core::OpDecl> {
         // Request device/adapter
         op_webgpu_request_adapter::decl(),
         op_webgpu_request_device::decl(),
+        op_webgpu_request_adapter_info::decl(),
         // Query Set
         op_webgpu_create_query_set::decl(),
         // buffer
