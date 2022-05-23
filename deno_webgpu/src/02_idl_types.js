@@ -950,7 +950,6 @@
     {
       key: "layout",
       converter: webidl.converters["GPUPipelineLayout"],
-      required: true,
     },
   ];
   webidl.converters["GPUPipelineDescriptorBase"] = webidl
