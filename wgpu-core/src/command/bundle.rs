@@ -263,6 +263,15 @@ impl RenderBundleEncoder {
                 } => {
                     let scope = PassErrorScope::SetBindGroup(bind_group_id);
 
+                    let bind_group: &binding_model::BindGroup<A> = state
+                        .trackers
+                        .bind_groups
+                        .add_single(&*bind_group_guard, bind_group_id)
+                        .ok_or(RenderCommandError::InvalidBindGroup(bind_group_id))
+                        .map_pass_err(scope)?;
+                    self.check_valid_to_use(bind_group.device_id.value)
+                        .map_pass_err(scope)?;
+
                     let max_bind_groups = device.limits.max_bind_groups;
                     if (index as u32) >= max_bind_groups {
                         return Err(RenderCommandError::BindGroupIndexOutOfRange {
@@ -279,12 +288,6 @@ impl RenderBundleEncoder {
                     next_dynamic_offset = offsets_range.end;
                     let offsets = &base.dynamic_offsets[offsets_range.clone()];
 
-                    let bind_group: &binding_model::BindGroup<A> = state
-                        .trackers
-                        .bind_groups
-                        .add_single(&*bind_group_guard, bind_group_id)
-                        .ok_or(RenderCommandError::InvalidBindGroup(bind_group_id))
-                        .map_pass_err(scope)?;
                     if bind_group.dynamic_binding_info.len() != offsets.len() {
                         return Err(RenderCommandError::InvalidDynamicOffsetCount {
                             actual: offsets.len(),
@@ -333,6 +336,8 @@ impl RenderBundleEncoder {
                         .add_single(&*pipeline_guard, pipeline_id)
                         .ok_or(RenderCommandError::InvalidPipeline(pipeline_id))
                         .map_pass_err(scope)?;
+                    self.check_valid_to_use(pipeline.device_id.value)
+                        .map_pass_err(scope)?;
 
                     self.context
                         .check_compatible(&pipeline.pass_context)
@@ -372,6 +377,8 @@ impl RenderBundleEncoder {
                         .buffers
                         .merge_single(&*buffer_guard, buffer_id, hal::BufferUses::INDEX)
                         .map_pass_err(scope)?;
+                    self.check_valid_to_use(buffer.device_id.value)
+                        .map_pass_err(scope)?;
                     check_buffer_usage(buffer.usage, wgt::BufferUsages::INDEX)
                         .map_pass_err(scope)?;
 
@@ -398,6 +405,8 @@ impl RenderBundleEncoder {
                         .trackers
                         .buffers
                         .merge_single(&*buffer_guard, buffer_id, hal::BufferUses::VERTEX)
+                        .map_pass_err(scope)?;
+                    self.check_valid_to_use(buffer.device_id.value)
                         .map_pass_err(scope)?;
                     check_buffer_usage(buffer.usage, wgt::BufferUsages::VERTEX)
                         .map_pass_err(scope)?;
@@ -524,6 +533,8 @@ impl RenderBundleEncoder {
                         .buffers
                         .merge_single(&*buffer_guard, buffer_id, hal::BufferUses::INDIRECT)
                         .map_pass_err(scope)?;
+                    self.check_valid_to_use(buffer.device_id.value)
+                        .map_pass_err(scope)?;
                     check_buffer_usage(buffer.usage, wgt::BufferUsages::INDIRECT)
                         .map_pass_err(scope)?;
 
@@ -556,6 +567,8 @@ impl RenderBundleEncoder {
                         .trackers
                         .buffers
                         .merge_single(&*buffer_guard, buffer_id, hal::BufferUses::INDIRECT)
+                        .map_pass_err(scope)?;
+                    self.check_valid_to_use(buffer.device_id.value)
                         .map_pass_err(scope)?;
                     check_buffer_usage(buffer.usage, wgt::BufferUsages::INDIRECT)
                         .map_pass_err(scope)?;
@@ -606,6 +619,17 @@ impl RenderBundleEncoder {
             context: self.context,
             life_guard: LifeGuard::new(desc.label.borrow_or_default()),
         })
+    }
+
+    fn check_valid_to_use(
+        &self,
+        device_id: id::Valid<id::DeviceId>,
+    ) -> Result<(), RenderBundleErrorInner> {
+        if device_id.0 != self.parent_id {
+            return Err(RenderBundleErrorInner::NotValidToUse);
+        }
+
+        Ok(())
     }
 
     pub fn set_index_buffer(
@@ -1274,6 +1298,8 @@ impl<A: HalApi> State<A> {
 /// Error encountered when finishing recording a render bundle.
 #[derive(Clone, Debug, Error)]
 pub(super) enum RenderBundleErrorInner {
+    #[error("resource is not valid to use with this render bundle because the resource and the bundle come from different devices")]
+    NotValidToUse,
     #[error(transparent)]
     Device(#[from] DeviceError),
     #[error(transparent)]
