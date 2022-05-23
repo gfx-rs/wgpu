@@ -537,12 +537,8 @@ interface GPUCompilationInfo {
     readonly attribute FrozenArray<GPUCompilationMessage> messages;
 };
 
-enum GPUAutoLayoutMode {
-    "auto",
-};
-
 dictionary GPUPipelineDescriptorBase : GPUObjectDescriptorBase {
-    required (GPUPipelineLayout or GPUAutoLayoutMode) layout;
+    required GPUPipelineLayout layout;
 };
 
 interface mixin GPUPipelineBase {

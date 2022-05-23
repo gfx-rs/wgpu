@@ -945,24 +945,11 @@
   //   GPUCompilationInfo.prototype,
   // );
 
-  // ENUM: GPUAutoLayoutMode
-  webidl.converters["GPUAutoLayoutMode"] = webidl.createEnumConverter(
-    "GPUAutoLayoutMode",
-    [
-      "auto",
-    ],
-  );
-
-  webidl.converters["GPUPipelineLayout or GPUAutoLayoutMode"] = (V, opts) => {
-    // Union for (GPUPipelineLayout or GPUAutoLayoutMode)
-    // TODO
-  };
-
   // DICTIONARY: GPUPipelineDescriptorBase
   const dictMembersGPUPipelineDescriptorBase = [
     {
       key: "layout",
-      converter: webidl.converters["GPUPipelineLayout or GPUAutoLayoutMode"],
+      converter: webidl.converters["GPUPipelineLayout"],
       required: true,
     },
   ];
