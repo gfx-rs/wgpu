@@ -11,11 +11,11 @@ publish = false
 resolver = "2"
 
 [dependencies]
-deno_console = "0.43.0"
-deno_core = "0.125.0"
-deno_url = "0.43.0"
-deno_web = "0.74.0"
-deno_webidl = "0.43.0"
+deno_console = "0.53.0"
+deno_core = "0.135.0"
+deno_url = "0.53.0"
+deno_web = "0.84.0"
+deno_webidl = "0.53.0"
 deno_webgpu = { path = "../deno_webgpu" }
-tokio = { version = "1.15.0", features = ["full"] }
+tokio = { version = "1.17.0", features = ["full"] }
 termcolor = "1.1.2"

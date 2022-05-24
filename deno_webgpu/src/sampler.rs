@@ -27,7 +27,7 @@ pub struct CreateSamplerArgs {
     address_mode_w: wgpu_types::AddressMode,
     mag_filter: wgpu_types::FilterMode,
     min_filter: wgpu_types::FilterMode,
-    mipmap_filter: wgpu_types::FilterMode,
+    mipmap_filter: wgpu_types::FilterMode, // TODO: GPUMipmapFilterMode
     lod_min_clamp: f32,
     lod_max_clamp: f32,
     compare: Option<wgpu_types::CompareFunction>,
