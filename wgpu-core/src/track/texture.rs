@@ -1016,6 +1016,8 @@ unsafe fn insert<A: hub::HalApi>(
             // check that resource states don't have any conflicts.
             debug_assert_eq!(invalid_resource_state(state), false);
 
+            log::trace!("\ttex {index32}: insert start {state:?}");
+
             if let Some(start_state) = start_state {
                 *start_state.simple.get_unchecked_mut(index) = state;
             }
@@ -1029,6 +1031,8 @@ unsafe fn insert<A: hub::HalApi>(
             let full_range = texture_data.unwrap().1.clone();
 
             let complex = ComplexTextureState::from_selector_state_iter(full_range, state_iter);
+
+            log::trace!("\ttex {index32}: insert start {complex:?}");
 
             if let Some(start_state) = start_state {
                 *start_state.simple.get_unchecked_mut(index) = TextureUses::COMPLEX;
@@ -1050,6 +1054,8 @@ unsafe fn insert<A: hub::HalApi>(
                 // check that resource states don't have any conflicts.
                 debug_assert_eq!(invalid_resource_state(state), false);
 
+                log::trace!("\ttex {index32}: insert end {state:?}");
+
                 // We only need to insert into the end, as there is guarenteed to be
                 // a start state provider.
                 *end_state.simple.get_unchecked_mut(index) = state;
@@ -1058,6 +1064,8 @@ unsafe fn insert<A: hub::HalApi>(
                 let full_range = texture_data.unwrap().1.clone();
 
                 let complex = ComplexTextureState::from_selector_state_iter(full_range, state_iter);
+
+                log::trace!("\ttex {index32}: insert end {complex:?}");
 
                 // We only need to insert into the end, as there is guarenteed to be
                 // a start state provider.
@@ -1102,6 +1110,8 @@ unsafe fn merge<A: hub::HalApi>(
         (SingleOrManyStates::Single(current_simple), SingleOrManyStates::Single(new_simple)) => {
             let merged_state = *current_simple | new_simple;
 
+            log::trace!("\ttex {index32}: merge simple {current_simple:?} + {new_simple:?}");
+
             if invalid_resource_state(merged_state) {
                 return Err(UsageConflict::from_texture(
                     TextureId::zip(index32, metadata_provider.get_epoch(index), A::VARIANT),
@@ -1123,6 +1133,10 @@ unsafe fn merge<A: hub::HalApi>(
 
             for (selector, new_state) in new_many {
                 let merged_state = *current_simple | new_state;
+
+                log::trace!(
+                    "\ttex {index32}: merge {selector:?} {current_simple:?} + {new_state:?}"
+                );
 
                 if invalid_resource_state(merged_state) {
                     return Err(UsageConflict::from_texture(
@@ -1159,6 +1173,11 @@ unsafe fn merge<A: hub::HalApi>(
                     // Once we remove unknown, this will never be empty, as simple states are never unknown.
                     let merged_state = merged_state - TextureUses::UNKNOWN;
 
+                    log::trace!(
+                        "\ttex {index32}: merge mip {mip_id} layers {layers:?} \
+                         {current_layer_state:?} + {new_simple:?}"
+                    );
+
                     if invalid_resource_state(merged_state) {
                         return Err(UsageConflict::from_texture(
                             TextureId::zip(index32, metadata_provider.get_epoch(index), A::VARIANT),
@@ -1194,6 +1213,11 @@ unsafe fn merge<A: hub::HalApi>(
                             // We know nothing about this state, lets just move on.
                             continue;
                         }
+
+                        log::trace!(
+                            "\ttex {index32}: merge mip {mip_id} layers {layers:?} \
+                             {current_layer_state:?} + {new_state:?}"
+                        );
 
                         if invalid_resource_state(merged_state) {
                             return Err(UsageConflict::from_texture(
@@ -1245,11 +1269,13 @@ unsafe fn barrier(
                 return;
             }
 
+            log::trace!("\ttex {index32}: transition simple {current_simple:?} -> {new_simple:?}");
+
             barriers.push(PendingTransition {
                 id: index32,
                 selector: texture_data.1.clone(),
                 usage: current_simple..new_simple,
-            })
+            });
         }
         (SingleOrManyStates::Single(current_simple), SingleOrManyStates::Many(new_many)) => {
             for (selector, new_state) in new_many {
@@ -1261,11 +1287,15 @@ unsafe fn barrier(
                     continue;
                 }
 
+                log::trace!(
+                    "\ttex {index32}: transition {selector:?} {current_simple:?} -> {new_state:?}"
+                );
+
                 barriers.push(PendingTransition {
                     id: index32,
                     selector,
                     usage: current_simple..new_state,
-                })
+                });
             }
         }
         (SingleOrManyStates::Many(current_complex), SingleOrManyStates::Single(new_simple)) => {
@@ -1280,6 +1310,11 @@ unsafe fn barrier(
                     if skip_barrier(current_layer_state, new_simple) {
                         continue;
                     }
+
+                    log::trace!(
+                        "\ttex {index32}: transition mip {mip_id} layers {layers:?} \
+                         {current_layer_state:?} -> {new_simple:?}"
+                    );
 
                     barriers.push(PendingTransition {
                         id: index32,
@@ -1309,6 +1344,11 @@ unsafe fn barrier(
                         if skip_barrier(*current_layer_state, new_state) {
                             continue;
                         }
+
+                        log::trace!(
+                            "\ttex {index32}: transition mip {mip_id} layers {layers:?} \
+                            {current_layer_state:?} -> {new_state:?}"
+                        );
 
                         barriers.push(PendingTransition {
                             id: index32,

@@ -1944,7 +1944,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 }
             }
 
-            log::trace!("Merging {:?} with the render pass", encoder_id);
+            log::trace!("Merging renderpass into cmd_buf {:?}", encoder_id);
             let (trackers, pending_discard_init_fixups) =
                 info.finish(raw, &*texture_guard).map_pass_err(init_scope)?;
 

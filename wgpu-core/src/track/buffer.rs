@@ -699,6 +699,8 @@ unsafe fn insert<A: hub::HalApi>(
     debug_assert_eq!(invalid_resource_state(new_start_state), false);
     debug_assert_eq!(invalid_resource_state(new_end_state), false);
 
+    log::trace!("\tbuf {index}: insert {new_start_state:?}..{new_end_state:?}");
+
     if let Some(&mut ref mut start_state) = start_states {
         *start_state.get_unchecked_mut(index) = new_start_state;
     }
@@ -732,6 +734,8 @@ unsafe fn merge<A: hub::HalApi>(
         ));
     }
 
+    log::trace!("\tbuf {index32}: merge {current_state:?} + {new_state:?}");
+
     *current_state = merged_state;
 
     Ok(())
@@ -756,7 +760,9 @@ unsafe fn barrier(
         id: index32,
         selector: (),
         usage: current_state..new_state,
-    })
+    });
+
+    log::trace!("\tbuf {index32}: transition {current_state:?} -> {new_state:?}");
 }
 
 #[inline(always)]

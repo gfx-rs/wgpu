@@ -126,7 +126,6 @@ impl PendingTransition<hal::BufferUses> {
         self,
         buf: &'a resource::Buffer<A>,
     ) -> hal::BufferBarrier<'a, A> {
-        log::trace!("\tbuffer -> {:?}", self);
         let buffer = buf.raw.as_ref().expect("Buffer is destroyed");
         hal::BufferBarrier {
             buffer,
@@ -141,7 +140,6 @@ impl PendingTransition<hal::TextureUses> {
         self,
         tex: &'a resource::Texture<A>,
     ) -> hal::TextureBarrier<'a, A> {
-        log::trace!("\ttexture -> {:?}", self);
         let texture = tex.inner.as_raw().expect("Texture is destroyed");
 
         // These showing up in a barrier is always a bug

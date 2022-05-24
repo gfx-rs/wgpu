@@ -1413,7 +1413,7 @@ impl crate::Device<super::Api> for super::Device {
     unsafe fn destroy_shader_module(&self, module: super::ShaderModule) {
         match module {
             super::ShaderModule::Raw(raw) => {
-                let _ = self.shared.raw.destroy_shader_module(raw, None);
+                self.shared.raw.destroy_shader_module(raw, None);
             }
             super::ShaderModule::Intermediate { .. } => {}
         }
