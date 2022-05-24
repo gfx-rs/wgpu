@@ -1,3 +1,10 @@
+/*! Buffer Trackers
+ *
+ * Buffers are represented by a single state for the whole resource,
+ * a 16 bit bitflag of buffer usages. Because there is only ever
+ * one subresource, they have no selector.
+!*/
+
 use std::{borrow::Cow, marker::PhantomData, vec::Drain};
 
 use super::PendingTransition;
@@ -32,6 +39,7 @@ impl ResourceUses for BufferUses {
     }
 }
 
+/// Stores all the buffers that a bind group stores.
 pub(crate) struct BufferBindGroupState<A: hub::HalApi> {
     buffers: Vec<(Valid<BufferId>, RefCount, BufferUses)>,
 
@@ -46,16 +54,22 @@ impl<A: hub::HalApi> BufferBindGroupState<A> {
         }
     }
 
+    /// Optimize the buffer bind group state by sorting it by ID.
+    ///
+    /// When this list of states is merged into a tracker, the memory
+    /// accesses will be in a constant assending order.
     pub(crate) fn optimize(&mut self) {
         self.buffers
             .sort_unstable_by_key(|&(id, _, _)| id.0.unzip().0);
     }
 
+    /// Returns a list of all buffers tracked. May contain duplicates.
     pub fn used(&self) -> impl Iterator<Item = Valid<BufferId>> + '_ {
         self.buffers.iter().map(|&(id, _, _)| id)
     }
 
-    pub fn extend<'a>(
+    /// Adds the given resource with the given state.
+    pub fn add_single<'a>(
         &mut self,
         storage: &'a hub::Storage<Buffer<A>, BufferId>,
         id: BufferId,
@@ -70,6 +84,7 @@ impl<A: hub::HalApi> BufferBindGroupState<A> {
     }
 }
 
+/// Stores all buffer state within a single usage scope.
 #[derive(Debug)]
 pub(crate) struct BufferUsageScope<A: hub::HalApi> {
     state: Vec<BufferUses>,
@@ -91,22 +106,40 @@ impl<A: hub::HalApi> BufferUsageScope<A> {
         self.metadata.debug_assert_in_bounds(index);
     }
 
+    /// Sets the size of all the vectors inside the tracker.
+    ///
+    /// Must be called with the highest possible Buffer ID before
+    /// all unsafe functions are called.
     pub fn set_size(&mut self, size: usize) {
         self.state.resize(size, BufferUses::empty());
         self.metadata.set_size(size);
     }
 
+    /// Extend the vectors to let the given index be valid.
     fn allow_index(&mut self, index: usize) {
         if index >= self.state.len() {
             self.set_size(index + 1);
         }
     }
 
+    /// Returns a list of all buffers tracked.
     pub fn used(&self) -> impl Iterator<Item = Valid<BufferId>> + '_ {
         self.metadata.used()
     }
 
-    pub unsafe fn extend_from_bind_group(
+    /// Merge the list of buffer states in the given bind group into this usage scope.
+    ///
+    /// If any of the resulting states is invalid, stops the merge and returns a usage
+    /// conflict with the details of the invalid state.
+    ///
+    /// Because bind groups do not check if the union of all their states is valid,
+    /// this method is allowed to return Err on the first bind group bound.
+    ///
+    /// # Safety
+    ///
+    /// [`Self::set_size`] must be called with the maximum possible Buffer ID before this
+    /// method is called.
+    pub unsafe fn merge_bind_group(
         &mut self,
         bind_group: &BufferBindGroupState<A>,
     ) -> Result<(), UsageConflict> {
@@ -121,7 +154,7 @@ impl<A: hub::HalApi> BufferUsageScope<A> {
                 &mut self.metadata,
                 index32,
                 index,
-                StateProvider::Direct { state },
+                BufferStateProvider::Direct { state },
                 ResourceMetadataProvider::Direct {
                     epoch,
                     ref_count: Cow::Borrowed(ref_count),
@@ -132,7 +165,14 @@ impl<A: hub::HalApi> BufferUsageScope<A> {
         Ok(())
     }
 
-    pub fn extend_from_scope(&mut self, scope: &Self) -> Result<(), UsageConflict> {
+    /// Merge the list of buffer states in the given usage scope into this UsageScope.
+    ///
+    /// If any of the resulting states is invalid, stops the merge and returns a usage
+    /// conflict with the details of the invalid state.
+    ///
+    /// If the given tracker uses IDs higher than the length of internal vectors,
+    /// the vectors will be extended. A call to set_size is not needed.
+    pub fn merge_usage_scope(&mut self, scope: &Self) -> Result<(), UsageConflict> {
         let incoming_size = scope.state.len();
         if incoming_size > self.state.len() {
             self.set_size(incoming_size);
@@ -150,7 +190,7 @@ impl<A: hub::HalApi> BufferUsageScope<A> {
                     &mut self.metadata,
                     index as u32,
                     index,
-                    StateProvider::Indirect {
+                    BufferStateProvider::Indirect {
                         state: &scope.state,
                     },
                     ResourceMetadataProvider::Indirect {
@@ -163,7 +203,14 @@ impl<A: hub::HalApi> BufferUsageScope<A> {
         Ok(())
     }
 
-    pub fn extend<'a>(
+    /// Merge a single state into the UsageScope.
+    ///
+    /// If the resulting state is invalid, returns a usage
+    /// conflict with the details of the invalid state.
+    ///
+    /// If the ID is higher than the length of internal vectors,
+    /// the vectors will be extended. A call to set_size is not needed.
+    pub fn merge_single<'a>(
         &mut self,
         storage: &'a hub::Storage<Buffer<A>, BufferId>,
         id: BufferId,
@@ -188,7 +235,7 @@ impl<A: hub::HalApi> BufferUsageScope<A> {
                 &mut self.metadata,
                 index32,
                 index,
-                StateProvider::Direct { state: new_state },
+                BufferStateProvider::Direct { state: new_state },
                 ResourceMetadataProvider::Resource { epoch },
             )?;
         }
@@ -197,6 +244,7 @@ impl<A: hub::HalApi> BufferUsageScope<A> {
     }
 }
 
+/// Stores all buffer state within a command buffer or device.
 pub(crate) struct BufferTracker<A: hub::HalApi> {
     start: Vec<BufferUses>,
     end: Vec<BufferUses>,
@@ -223,6 +271,10 @@ impl<A: hub::HalApi> BufferTracker<A> {
         self.metadata.debug_assert_in_bounds(index);
     }
 
+    /// Sets the size of all the vectors inside the tracker.
+    ///
+    /// Must be called with the highest possible Buffer ID before
+    /// all unsafe functions are called.
     pub fn set_size(&mut self, size: usize) {
         self.start.resize(size, BufferUses::empty());
         self.end.resize(size, BufferUses::empty());
@@ -230,21 +282,30 @@ impl<A: hub::HalApi> BufferTracker<A> {
         self.metadata.set_size(size);
     }
 
+    /// Extend the vectors to let the given index be valid.
     fn allow_index(&mut self, index: usize) {
         if index >= self.start.len() {
             self.set_size(index + 1);
         }
     }
 
+    /// Returns a list of all buffers tracked.
     pub fn used(&self) -> impl Iterator<Item = Valid<BufferId>> + '_ {
         self.metadata.used()
     }
 
-    pub fn drain(&mut self) -> Drain<PendingTransition<BufferUses>> {
+    /// Drains all currently pending transitions.
+    pub fn drain(&mut self) -> Drain<'_, PendingTransition<BufferUses>> {
         self.temp.drain(..)
     }
 
-    pub fn init(&mut self, id: Valid<BufferId>, ref_count: RefCount, state: BufferUses) {
+    /// Inserts a single buffer and its state into the resource tracker.
+    ///
+    /// If the resource already exists in the tracker, this will panic.
+    ///
+    /// If the ID is higher than the length of internal vectors,
+    /// the vectors will be extended. A call to set_size is not needed.
+    pub fn insert_single(&mut self, id: Valid<BufferId>, ref_count: RefCount, state: BufferUses) {
         let (index32, epoch, _) = id.0.unzip();
         let index = index32 as usize;
 
@@ -253,13 +314,19 @@ impl<A: hub::HalApi> BufferTracker<A> {
         self.debug_assert_in_bounds(index);
 
         unsafe {
+            let currently_owned = self.metadata.owned.get(index).unwrap_unchecked();
+
+            if currently_owned {
+                panic!("Tried to insert buffer already tracked");
+            }
+
             insert(
                 None,
                 Some(&mut self.start),
                 &mut self.end,
                 &mut self.metadata,
                 index,
-                StateProvider::Direct { state },
+                BufferStateProvider::Direct { state },
                 None,
                 ResourceMetadataProvider::Direct {
                     epoch,
@@ -269,7 +336,14 @@ impl<A: hub::HalApi> BufferTracker<A> {
         }
     }
 
-    pub fn change_state<'a>(
+    /// Sets the state of a single buffer.
+    ///
+    /// If a transition is needed to get the buffer into the given state, that transition
+    /// is returned. No more than one transition is needed.
+    ///
+    /// If the ID is higher than the length of internal vectors,
+    /// the vectors will be extended. A call to set_size is not needed.
+    pub fn set_single<'a>(
         &mut self,
         storage: &'a hub::Storage<Buffer<A>, BufferId>,
         id: BufferId,
@@ -292,7 +366,7 @@ impl<A: hub::HalApi> BufferTracker<A> {
                 &mut self.metadata,
                 index32,
                 index,
-                StateProvider::Direct { state },
+                BufferStateProvider::Direct { state },
                 None,
                 ResourceMetadataProvider::Resource { epoch },
                 &mut self.temp,
@@ -304,13 +378,22 @@ impl<A: hub::HalApi> BufferTracker<A> {
         Some((value, self.temp.pop()))
     }
 
-    pub fn change_states_tracker(&mut self, tracker: &Self) {
+    /// Sets the given state for all buffers in the given tracker.
+    ///
+    /// If a transition is needed to get the buffers into the needed state,
+    /// those transitions are stored within the tracker. A subsequent
+    /// call to [`Self::drain`] is needed to get those transitions.
+    ///
+    /// If the ID is higher than the length of internal vectors,
+    /// the vectors will be extended. A call to set_size is not needed.
+    pub fn set_from_tracker(&mut self, tracker: &Self) {
         let incoming_size = tracker.start.len();
         if incoming_size > self.start.len() {
             self.set_size(incoming_size);
         }
 
         for index in iterate_bitvec_indices(&tracker.metadata.owned) {
+            self.debug_assert_in_bounds(index);
             tracker.debug_assert_in_bounds(index);
             unsafe {
                 insert_or_barrier_update(
@@ -320,10 +403,10 @@ impl<A: hub::HalApi> BufferTracker<A> {
                     &mut self.metadata,
                     index as u32,
                     index,
-                    StateProvider::Indirect {
+                    BufferStateProvider::Indirect {
                         state: &tracker.start,
                     },
-                    Some(StateProvider::Indirect {
+                    Some(BufferStateProvider::Indirect {
                         state: &tracker.end,
                     }),
                     ResourceMetadataProvider::Indirect {
@@ -335,13 +418,22 @@ impl<A: hub::HalApi> BufferTracker<A> {
         }
     }
 
-    pub fn change_states_scope(&mut self, scope: &BufferUsageScope<A>) {
+    /// Sets the given state for all buffers in the given UsageScope.
+    ///
+    /// If a transition is needed to get the buffers into the needed state,
+    /// those transitions are stored within the tracker. A subsequent
+    /// call to [`Self::drain`] is needed to get those transitions.
+    ///
+    /// If the ID is higher than the length of internal vectors,
+    /// the vectors will be extended. A call to set_size is not needed.
+    pub fn set_from_usage_scope(&mut self, scope: &BufferUsageScope<A>) {
         let incoming_size = scope.state.len();
         if incoming_size > self.start.len() {
             self.set_size(incoming_size);
         }
 
         for index in iterate_bitvec_indices(&scope.metadata.owned) {
+            self.debug_assert_in_bounds(index);
             scope.debug_assert_in_bounds(index);
             unsafe {
                 insert_or_barrier_update(
@@ -351,7 +443,7 @@ impl<A: hub::HalApi> BufferTracker<A> {
                     &mut self.metadata,
                     index as u32,
                     index,
-                    StateProvider::Indirect {
+                    BufferStateProvider::Indirect {
                         state: &scope.state,
                     },
                     None,
@@ -364,7 +456,25 @@ impl<A: hub::HalApi> BufferTracker<A> {
         }
     }
 
-    pub unsafe fn change_states_bind_group(
+    /// Iterates through all buffers in the given bind group and adopts
+    /// the state given for those buffers in the UsageScope. It also
+    /// removes all touched buffers from the usage scope.
+    ///
+    /// If a transition is needed to get the buffers into the needed state,
+    /// those transitions are stored within the tracker. A subsequent
+    /// call to [`Self::drain`] is needed to get those transitions.
+    ///
+    /// This is a really funky method used by Compute Passes to generate
+    /// barriers after a call to dispatch without needing to iterate
+    /// over all elements in the usage scope. We use each the
+    /// bind group as a source of which IDs to look at. The bind groups
+    /// must have first been added to the usage scope.
+    ///
+    /// # Safety
+    ///
+    /// [`Self::set_size`] must be called with the maximum possible Buffer ID before this
+    /// method is called.
+    pub unsafe fn set_and_remove_from_usage_scope_sparse(
         &mut self,
         scope: &mut BufferUsageScope<A>,
         bind_group_state: &BufferBindGroupState<A>,
@@ -390,7 +500,7 @@ impl<A: hub::HalApi> BufferTracker<A> {
                 &mut self.metadata,
                 index as u32,
                 index,
-                StateProvider::Indirect {
+                BufferStateProvider::Indirect {
                     state: &scope.state,
                 },
                 None,
@@ -405,6 +515,13 @@ impl<A: hub::HalApi> BufferTracker<A> {
         }
     }
 
+    /// Removes the given resource from the tracker iff we have the last reference to the
+    /// resource and the epoch matches.
+    ///
+    /// Returns true if the resource was removed.
+    ///
+    /// If the ID is higher than the length of internal vectors,
+    /// false will be returned.
     pub fn remove_abandoned(&mut self, id: Valid<BufferId>) -> bool {
         let (index32, epoch, _) = id.0.unzip();
         let index = index32 as usize;
@@ -434,21 +551,41 @@ impl<A: hub::HalApi> BufferTracker<A> {
     }
 }
 
+/// Source of Buffer State.
 #[derive(Debug, Clone)]
-enum StateProvider<'a> {
+enum BufferStateProvider<'a> {
+    /// Get a state that was provided directly.
     Direct { state: BufferUses },
+    /// Get a state from an an array of states.
     Indirect { state: &'a [BufferUses] },
 }
-impl StateProvider<'_> {
+impl BufferStateProvider<'_> {
+    /// Gets the state from the provider, given a resource ID index.
+    ///
+    /// # Safety
+    ///
+    /// Index must be in bounds for the indirect source iff this is in the indirect state.
     #[inline(always)]
     unsafe fn get_state(&self, index: usize) -> BufferUses {
         match *self {
-            StateProvider::Direct { state } => state,
-            StateProvider::Indirect { state: other } => other[index],
+            BufferStateProvider::Direct { state } => state,
+            BufferStateProvider::Indirect { state } => {
+                debug_assert!(index < state.len());
+                *state.get_unchecked(index)
+            }
         }
     }
 }
 
+/// Does an insertion operation if the index isn't tracked
+/// in the current metadata, otherwise merges the given state
+/// with the current state. If the merging would cause
+/// a conflict, returns that usage conflict.
+///
+/// # Safety
+///
+/// Indexes must be valid indexes into all arrays passed in
+/// to this function, either directly or via metadata or provider structs.
 #[inline(always)]
 unsafe fn insert_or_merge<A: hub::HalApi>(
     life_guard: Option<&LifeGuard>,
@@ -457,7 +594,7 @@ unsafe fn insert_or_merge<A: hub::HalApi>(
     resource_metadata: &mut ResourceMetadata<A>,
     index32: u32,
     index: usize,
-    state_provider: StateProvider<'_>,
+    state_provider: BufferStateProvider<'_>,
     metadata_provider: ResourceMetadataProvider<'_, A>,
 ) -> Result<(), UsageConflict> {
     let currently_owned = resource_metadata.owned.get(index).unwrap_unchecked();
@@ -485,6 +622,23 @@ unsafe fn insert_or_merge<A: hub::HalApi>(
     )
 }
 
+/// If the resource isn't tracked
+/// - Inserts the given resource.
+/// - Uses the `start_state_provider` to populate `start_states`
+/// - Uses either `end_state_provider` or `start_state_provider`
+///   to populate `current_states`.
+/// If the resource is tracked
+/// - Inserts barriers from the state in `current_states`
+///   to the state provided by `start_state_provider`.
+/// - Updates the `current_states` with either the state from
+///   `end_state_provider` or `start_state_provider`.
+///
+/// Any barriers are added to the barrier vector.
+///
+/// # Safety
+///
+/// Indexes must be valid indexes into all arrays passed in
+/// to this function, either directly or via metadata or provider structs.
 #[inline(always)]
 unsafe fn insert_or_barrier_update<A: hub::HalApi>(
     life_guard: Option<&LifeGuard>,
@@ -493,8 +647,8 @@ unsafe fn insert_or_barrier_update<A: hub::HalApi>(
     resource_metadata: &mut ResourceMetadata<A>,
     index32: u32,
     index: usize,
-    start_state_provider: StateProvider<'_>,
-    end_state_provider: Option<StateProvider<'_>>,
+    start_state_provider: BufferStateProvider<'_>,
+    end_state_provider: Option<BufferStateProvider<'_>>,
     metadata_provider: ResourceMetadataProvider<'_, A>,
     barriers: &mut Vec<PendingTransition<BufferUses>>,
 ) {
@@ -533,8 +687,8 @@ unsafe fn insert<A: hub::HalApi>(
     current_states: &mut [BufferUses],
     resource_metadata: &mut ResourceMetadata<A>,
     index: usize,
-    start_state_provider: StateProvider<'_>,
-    end_state_provider: Option<StateProvider<'_>>,
+    start_state_provider: BufferStateProvider<'_>,
+    end_state_provider: Option<BufferStateProvider<'_>>,
     metadata_provider: ResourceMetadataProvider<'_, A>,
 ) {
     let new_start_state = start_state_provider.get_state(index);
@@ -562,7 +716,7 @@ unsafe fn merge<A: hub::HalApi>(
     current_states: &mut [BufferUses],
     index32: u32,
     index: usize,
-    state_provider: StateProvider<'_>,
+    state_provider: BufferStateProvider<'_>,
     metadata_provider: ResourceMetadataProvider<'_, A>,
 ) -> Result<(), UsageConflict> {
     let current_state = current_states.get_unchecked_mut(index);
@@ -588,7 +742,7 @@ unsafe fn barrier(
     current_states: &mut [BufferUses],
     index32: u32,
     index: usize,
-    state_provider: StateProvider<'_>,
+    state_provider: BufferStateProvider<'_>,
     barriers: &mut Vec<PendingTransition<BufferUses>>,
 ) {
     let current_state = *current_states.get_unchecked(index);
@@ -609,7 +763,7 @@ unsafe fn barrier(
 unsafe fn update(
     current_states: &mut [BufferUses],
     index: usize,
-    state_provider: StateProvider<'_>,
+    state_provider: BufferStateProvider<'_>,
 ) {
     let current_state = current_states.get_unchecked_mut(index);
     let new_state = state_provider.get_state(index);

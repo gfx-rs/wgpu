@@ -89,7 +89,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (dst_buffer, dst_pending) = cmd_buf
             .trackers
             .buffers
-            .change_state(&*buffer_guard, dst, hal::BufferUses::COPY_DST)
+            .set_single(&*buffer_guard, dst, hal::BufferUses::COPY_DST)
             .ok_or(ClearError::InvalidBuffer(dst))?;
         let dst_raw = dst_buffer
             .raw
@@ -273,7 +273,7 @@ pub(crate) fn clear_texture<A: HalApi>(
     //
     // We could in theory distinguish these two scenarios in the internal clear_texture api in order to remove this check and call the cheaper change_replace_tracked whenever possible.
     let dst_barrier = texture_tracker
-        .change_state(storage, dst_texture_id.0, selector, clear_usage)
+        .set_single(storage, dst_texture_id.0, selector, clear_usage)
         .unwrap()
         .1
         .map(|pending| pending.into_hal(dst_texture));

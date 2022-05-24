@@ -147,9 +147,9 @@ impl<A: HalApi> CommandBuffer<A> {
     ) {
         profiling::scope!("insert_barriers");
 
-        base.buffers.change_states_tracker(&head.buffers);
+        base.buffers.set_from_tracker(&head.buffers);
         base.textures
-            .change_states_tracker(&*texture_guard, &head.textures);
+            .set_from_tracker(&*texture_guard, &head.textures);
 
         Self::drain_barriers(raw, base, buffer_guard, texture_guard);
     }
@@ -163,9 +163,9 @@ impl<A: HalApi> CommandBuffer<A> {
     ) {
         profiling::scope!("insert_barriers");
 
-        base.buffers.change_states_scope(&head.buffers);
+        base.buffers.set_from_usage_scope(&head.buffers);
         base.textures
-            .change_states_scope(&*texture_guard, &head.textures);
+            .set_from_usage_scope(&*texture_guard, &head.textures);
 
         Self::drain_barriers(raw, base, buffer_guard, texture_guard);
     }

@@ -286,7 +286,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut trackers = device.trackers.lock();
         let (dst, transition) = trackers
             .buffers
-            .change_state(&*buffer_guard, buffer_id, hal::BufferUses::COPY_DST)
+            .set_single(&*buffer_guard, buffer_id, hal::BufferUses::COPY_DST)
             .ok_or(TransferError::InvalidBuffer(buffer_id))?;
         let dst_raw = dst
             .raw
@@ -473,7 +473,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let (dst, transition) = trackers
             .textures
-            .change_state(
+            .set_single(
                 &*texture_guard,
                 destination.texture,
                 selector,
@@ -689,10 +689,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 device.temp_suspected.textures.push(id);
                             }
                             if should_extend {
-                                let ref_count = cmdbuf.trackers.textures.get_ref_count(id);
                                 unsafe {
+                                    let ref_count = cmdbuf.trackers.textures.get_ref_count(id);
                                     used_surface_textures
-                                        .extend_refcount(
+                                        .merge_single(
                                             &*texture_guard,
                                             id,
                                             None,
@@ -795,7 +795,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             };
                             trackers
                                 .textures
-                                .change_states_scope(&*texture_guard, &used_surface_textures);
+                                .set_from_usage_scope(&*texture_guard, &used_surface_textures);
                             let texture_barriers = trackers.textures.drain().map(|pending| {
                                 let tex = unsafe { texture_guard.get_unchecked(pending.id) };
                                 pending.into_hal(tex)
@@ -851,7 +851,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 let ref_count = texture.life_guard.add_ref();
                                 unsafe {
                                     used_surface_textures
-                                        .extend_refcount(
+                                        .merge_single(
                                             &*texture_guard,
                                             id::Valid(id),
                                             None,
@@ -869,7 +869,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                         trackers
                             .textures
-                            .change_states_scope(&*texture_guard, &used_surface_textures);
+                            .set_from_usage_scope(&*texture_guard, &used_surface_textures);
                         let texture_barriers = trackers.textures.drain().map(|pending| {
                             let tex = unsafe { texture_guard.get_unchecked(pending.id) };
                             pending.into_hal(tex)

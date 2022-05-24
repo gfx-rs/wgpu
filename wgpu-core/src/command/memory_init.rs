@@ -205,7 +205,7 @@ impl<A: HalApi> BakedCommands<A> {
             // However, we *know* that it is currently in use, so the tracker must already know about it.
             let transition = device_tracker
                 .buffers
-                .change_state(buffer_guard, buffer_id, hal::BufferUses::COPY_DST)
+                .set_single(buffer_guard, buffer_id, hal::BufferUses::COPY_DST)
                 .unwrap()
                 .1;
 

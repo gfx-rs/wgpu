@@ -476,7 +476,10 @@ impl<A: hub::HalApi> BindGroupStates<A> {
         }
     }
 
-    /// Sort all uses.
+    /// Optimize the bind group states by sorting them by ID.
+    ///
+    /// When this list of states is merged into a tracker, the memory
+    /// accesses will be in a constant assending order.
     pub fn optimize(&mut self) {
         self.buffers.optimize();
         self.textures.optimize();
@@ -532,14 +535,14 @@ impl<A: hub::HalApi> RenderBundleScope<A> {
     ///
     /// The maximum ID given by each bind group resource must be less than the
     /// length of the storage given at the call to `new`.
-    pub unsafe fn extend_from_bind_group(
+    pub unsafe fn merge_bind_group(
         &mut self,
         textures: &hub::Storage<resource::Texture<A>, id::TextureId>,
         bind_group: &BindGroupStates<A>,
     ) -> Result<(), UsageConflict> {
-        self.buffers.extend_from_bind_group(&bind_group.buffers)?;
+        self.buffers.merge_bind_group(&bind_group.buffers)?;
         self.textures
-            .extend_from_bind_group(textures, &bind_group.textures)?;
+            .merge_bind_group(textures, &bind_group.textures)?;
 
         Ok(())
     }
@@ -579,14 +582,14 @@ impl<A: hub::HalApi> UsageScope<A> {
     ///
     /// The maximum ID given by each bind group resource must be less than the
     /// length of the storage given at the call to `new`.
-    pub unsafe fn extend_from_bind_group(
+    pub unsafe fn merge_bind_group(
         &mut self,
         textures: &hub::Storage<resource::Texture<A>, id::TextureId>,
         bind_group: &BindGroupStates<A>,
     ) -> Result<(), UsageConflict> {
-        self.buffers.extend_from_bind_group(&bind_group.buffers)?;
+        self.buffers.merge_bind_group(&bind_group.buffers)?;
         self.textures
-            .extend_from_bind_group(textures, &bind_group.textures)?;
+            .merge_bind_group(textures, &bind_group.textures)?;
 
         Ok(())
     }
@@ -600,14 +603,14 @@ impl<A: hub::HalApi> UsageScope<A> {
     ///
     /// The maximum ID given by each bind group resource must be less than the
     /// length of the storage given at the call to `new`.
-    pub unsafe fn extend_from_render_bundle(
+    pub unsafe fn merge_render_bundle(
         &mut self,
         textures: &hub::Storage<resource::Texture<A>, id::TextureId>,
         render_bundle: &RenderBundleScope<A>,
     ) -> Result<(), UsageConflict> {
-        self.buffers.extend_from_scope(&render_bundle.buffers)?;
+        self.buffers.merge_usage_scope(&render_bundle.buffers)?;
         self.textures
-            .extend_from_scope(textures, &render_bundle.textures)?;
+            .merge_usage_scope(textures, &render_bundle.textures)?;
 
         Ok(())
     }
@@ -685,14 +688,19 @@ impl<A: hub::HalApi> Tracker<A> {
         };
     }
 
-    /// Uses the the indices of the resources used in a bind group to
-    /// remove them from the usage scope, and transition to the state
-    /// given by the usage scope.
+    /// Iterates through all resources in the given bind group and adopts
+    /// the state given for those resources in the UsageScope. It also
+    /// removes all touched resources from the usage scope.
     ///
-    /// This is weird method used for compute dispatches. Bind groups are added
-    /// to the usage scope in order to combine the uses, then this method acts
-    /// as a sparse way of only changing the needed resoures based on which resources
-    /// the bind groups touched.
+    /// If a transition is needed to get the resources into the needed state,
+    /// those transitions are stored within the tracker. A subsequent
+    /// call to [`Self::drain`] is needed to get those transitions.
+    ///
+    /// This is a really funky method used by Compute Passes to generate
+    /// barriers after a call to dispatch without needing to iterate
+    /// over all elements in the usage scope. We use each the
+    /// bind group as a source of which IDs to look at. The bind groups
+    /// must have first been added to the usage scope.
     ///
     /// Only stateful things are merged in here, all other resources are owned
     /// indirectly by the bind group.
@@ -701,16 +709,19 @@ impl<A: hub::HalApi> Tracker<A> {
     ///
     /// The maximum ID given by each bind group resource must be less than the
     /// value given to `set_size`
-    pub unsafe fn change_states_from_bind_group(
+    pub unsafe fn set_and_remove_from_usage_scope_sparse(
         &mut self,
         textures: &hub::Storage<resource::Texture<A>, id::TextureId>,
         scope: &mut UsageScope<A>,
         bind_group: &BindGroupStates<A>,
     ) {
         self.buffers
-            .change_states_bind_group(&mut scope.buffers, &bind_group.buffers);
-        self.textures
-            .change_states_bind_group(textures, &mut scope.textures, &bind_group.textures);
+            .set_and_remove_from_usage_scope_sparse(&mut scope.buffers, &bind_group.buffers);
+        self.textures.set_and_remove_from_usage_scope_sparse(
+            textures,
+            &mut scope.textures,
+            &bind_group.textures,
+        );
     }
 
     /// Tracks the stateless resources from the given renderbundle. It is expected
@@ -720,16 +731,15 @@ impl<A: hub::HalApi> Tracker<A> {
     ///
     /// The maximum ID given by each bind group resource must be less than the
     /// value given to `set_size`
-    pub unsafe fn change_state_from_render_bundle(
+    pub unsafe fn add_from_render_bundle(
         &mut self,
         render_bundle: &RenderBundleScope<A>,
     ) -> Result<(), UsageConflict> {
         self.bind_groups
-            .extend_from_tracker(&render_bundle.bind_groups);
+            .add_from_tracker(&render_bundle.bind_groups);
         self.render_pipelines
-            .extend_from_tracker(&render_bundle.render_pipelines);
-        self.query_sets
-            .extend_from_tracker(&render_bundle.query_sets);
+            .add_from_tracker(&render_bundle.render_pipelines);
+        self.query_sets.add_from_tracker(&render_bundle.query_sets);
 
         Ok(())
     }

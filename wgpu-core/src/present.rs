@@ -189,7 +189,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 {
                     // register it in the device tracker as uninitialized
                     let mut trackers = device.trackers.lock();
-                    let _ = trackers.textures.init(
+                    let _ = trackers.textures.insert_single(
                         id.0,
                         ref_count.clone(),
                         hal::TextureUses::UNINITIALIZED,

@@ -518,7 +518,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (src_buffer, src_pending) = cmd_buf
             .trackers
             .buffers
-            .change_state(&*buffer_guard, source, hal::BufferUses::COPY_SRC)
+            .set_single(&*buffer_guard, source, hal::BufferUses::COPY_SRC)
             .ok_or(TransferError::InvalidBuffer(source))?;
         let src_raw = src_buffer
             .raw
@@ -533,7 +533,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (dst_buffer, dst_pending) = cmd_buf
             .trackers
             .buffers
-            .change_state(&*buffer_guard, destination, hal::BufferUses::COPY_DST)
+            .set_single(&*buffer_guard, destination, hal::BufferUses::COPY_DST)
             .ok_or(TransferError::InvalidBuffer(destination))?;
         let dst_raw = dst_buffer
             .raw
@@ -652,7 +652,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (src_buffer, src_pending) = cmd_buf
             .trackers
             .buffers
-            .change_state(&*buffer_guard, source.buffer, hal::BufferUses::COPY_SRC)
+            .set_single(&*buffer_guard, source.buffer, hal::BufferUses::COPY_SRC)
             .ok_or(TransferError::InvalidBuffer(source.buffer))?;
         let src_raw = src_buffer
             .raw
@@ -666,7 +666,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (dst_texture, dst_pending) = cmd_buf
             .trackers
             .textures
-            .change_state(
+            .set_single(
                 &*texture_guard,
                 destination.texture,
                 dst_range,
@@ -779,7 +779,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (src_texture, src_pending) = cmd_buf
             .trackers
             .textures
-            .change_state(
+            .set_single(
                 &*texture_guard,
                 source.texture,
                 src_range,
@@ -798,7 +798,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (dst_buffer, dst_pending) = cmd_buf
             .trackers
             .buffers
-            .change_state(
+            .set_single(
                 &*buffer_guard,
                 destination.buffer,
                 hal::BufferUses::COPY_DST,
@@ -929,7 +929,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (src_texture, src_pending) = cmd_buf
             .trackers
             .textures
-            .change_state(
+            .set_single(
                 &*texture_guard,
                 source.texture,
                 src_range,
@@ -954,7 +954,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (dst_texture, dst_pending) = cmd_buf
             .trackers
             .textures
-            .change_state(
+            .set_single(
                 &*texture_guard,
                 destination.texture,
                 dst_range,

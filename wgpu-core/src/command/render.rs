@@ -700,7 +700,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
             let view = cmd_buf
                 .trackers
                 .views
-                .extend(&*view_guard, at.view)
+                .add_single(&*view_guard, at.view)
                 .ok_or(RenderPassErrorInner::InvalidAttachment(at.view))?;
             check_multiview(view)?;
             add_view(view, "depth")?;
@@ -809,7 +809,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
             let color_view = cmd_buf
                 .trackers
                 .views
-                .extend(&*view_guard, at.view)
+                .add_single(&*view_guard, at.view)
                 .ok_or(RenderPassErrorInner::InvalidAttachment(at.view))?;
             check_multiview(color_view)?;
             add_view(color_view, "color")?;
@@ -839,7 +839,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                 let resolve_view = cmd_buf
                     .trackers
                     .views
-                    .extend(&*view_guard, resolve_target)
+                    .add_single(&*view_guard, resolve_target)
                     .ok_or(RenderPassErrorInner::InvalidAttachment(resolve_target))?;
 
                 check_multiview(resolve_view)?;
@@ -967,7 +967,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
             unsafe {
                 self.usage_scope
                     .textures
-                    .extend_refcount(
+                    .merge_single(
                         &*texture_guard,
                         ra.texture_id.value,
                         Some(ra.selector.clone()),
@@ -1159,7 +1159,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         let bind_group = cmd_buf
                             .trackers
                             .bind_groups
-                            .extend(&*bind_group_guard, bind_group_id)
+                            .add_single(&*bind_group_guard, bind_group_id)
                             .ok_or(RenderCommandError::InvalidBindGroup(bind_group_id))
                             .map_pass_err(scope)?;
                         bind_group
@@ -1169,7 +1169,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         // merge the resource tracker in
                         unsafe {
                             info.usage_scope
-                                .extend_from_bind_group(&*texture_guard, &bind_group.used)
+                                .merge_bind_group(&*texture_guard, &bind_group.used)
                                 .map_pass_err(scope)?;
                         }
                         //Note: stateless trackers are not merged: the lifetime reference
@@ -1223,7 +1223,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         let pipeline = cmd_buf
                             .trackers
                             .render_pipelines
-                            .extend(&*render_pipeline_guard, pipeline_id)
+                            .add_single(&*render_pipeline_guard, pipeline_id)
                             .ok_or(RenderCommandError::InvalidPipeline(pipeline_id))
                             .map_pass_err(scope)?;
 
@@ -1334,7 +1334,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         let buffer: &Buffer<A> = info
                             .usage_scope
                             .buffers
-                            .extend(&*buffer_guard, buffer_id, hal::BufferUses::INDEX)
+                            .merge_single(&*buffer_guard, buffer_id, hal::BufferUses::INDEX)
                             .map_pass_err(scope)?;
                         check_buffer_usage(buffer.usage, BufferUsages::INDEX)
                             .map_pass_err(scope)?;
@@ -1380,7 +1380,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         let buffer: &Buffer<A> = info
                             .usage_scope
                             .buffers
-                            .extend(&*buffer_guard, buffer_id, hal::BufferUses::VERTEX)
+                            .merge_single(&*buffer_guard, buffer_id, hal::BufferUses::VERTEX)
                             .map_pass_err(scope)?;
                         check_buffer_usage(buffer.usage, BufferUsages::VERTEX)
                             .map_pass_err(scope)?;
@@ -1637,7 +1637,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         let indirect_buffer: &Buffer<A> = info
                             .usage_scope
                             .buffers
-                            .extend(&*buffer_guard, buffer_id, hal::BufferUses::INDIRECT)
+                            .merge_single(&*buffer_guard, buffer_id, hal::BufferUses::INDIRECT)
                             .map_pass_err(scope)?;
                         check_buffer_usage(indirect_buffer.usage, BufferUsages::INDIRECT)
                             .map_pass_err(scope)?;
@@ -1707,7 +1707,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         let indirect_buffer: &Buffer<A> = info
                             .usage_scope
                             .buffers
-                            .extend(&*buffer_guard, buffer_id, hal::BufferUses::INDIRECT)
+                            .merge_single(&*buffer_guard, buffer_id, hal::BufferUses::INDIRECT)
                             .map_pass_err(scope)?;
                         check_buffer_usage(indirect_buffer.usage, BufferUsages::INDIRECT)
                             .map_pass_err(scope)?;
@@ -1720,7 +1720,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         let count_buffer: &Buffer<A> = info
                             .usage_scope
                             .buffers
-                            .extend(&*buffer_guard, count_buffer_id, hal::BufferUses::INDIRECT)
+                            .merge_single(
+                                &*buffer_guard,
+                                count_buffer_id,
+                                hal::BufferUses::INDIRECT,
+                            )
                             .map_pass_err(scope)?;
                         check_buffer_usage(count_buffer.usage, BufferUsages::INDIRECT)
                             .map_pass_err(scope)?;
@@ -1826,7 +1830,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         let query_set: &resource::QuerySet<A> = cmd_buf
                             .trackers
                             .query_sets
-                            .extend(&*query_set_guard, query_set_id)
+                            .add_single(&*query_set_guard, query_set_id)
                             .ok_or(RenderCommandError::InvalidQuerySet(query_set_id))
                             .map_pass_err(scope)?;
 
@@ -1848,7 +1852,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         let query_set: &resource::QuerySet<A> = cmd_buf
                             .trackers
                             .query_sets
-                            .extend(&*query_set_guard, query_set_id)
+                            .add_single(&*query_set_guard, query_set_id)
                             .ok_or(RenderCommandError::InvalidQuerySet(query_set_id))
                             .map_pass_err(scope)?;
 
@@ -1873,7 +1877,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         let bundle: &command::RenderBundle<A> = cmd_buf
                             .trackers
                             .bundles
-                            .extend(&*bundle_guard, bundle_id)
+                            .add_single(&*bundle_guard, bundle_id)
                             .ok_or(RenderCommandError::InvalidRenderBundle(bundle_id))
                             .map_pass_err(scope)?;
 
@@ -1928,11 +1932,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                         unsafe {
                             info.usage_scope
-                                .extend_from_render_bundle(&*texture_guard, &bundle.used)
+                                .merge_render_bundle(&*texture_guard, &bundle.used)
                                 .map_pass_err(scope)?;
                             cmd_buf
                                 .trackers
-                                .change_state_from_render_bundle(&bundle.used)
+                                .add_from_render_bundle(&bundle.used)
                                 .map_pass_err(scope)?;
                         };
                         state.reset_bundle();

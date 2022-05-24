@@ -1542,7 +1542,7 @@ impl<A: HalApi> Device<A> {
 
         let buffer = used
             .buffers
-            .extend(storage, bb.buffer_id, internal_use)
+            .add_single(storage, bb.buffer_id, internal_use)
             .ok_or(Error::InvalidBuffer(bb.buffer_id))?;
         check_buffer_usage(buffer.usage, pub_usage)?;
         let raw_buffer = buffer
@@ -1622,7 +1622,7 @@ impl<A: HalApi> Device<A> {
         // if it was deleted by the user.
         let texture = used
             .textures
-            .extend_with_refcount(
+            .add_single(
                 texture_guard,
                 view.parent_id.value.0,
                 view.parent_id.ref_count.clone(),
@@ -1737,7 +1737,7 @@ impl<A: HalApi> Device<A> {
                         wgt::BindingType::Sampler(ty) => {
                             let sampler = used
                                 .samplers
-                                .extend(&*sampler_guard, id)
+                                .add_single(&*sampler_guard, id)
                                 .ok_or(Error::InvalidSampler(id))?;
 
                             // Allowed sampler values for filtering and comparison
@@ -1786,7 +1786,7 @@ impl<A: HalApi> Device<A> {
                     for &id in bindings_array.iter() {
                         let sampler = used
                             .samplers
-                            .extend(&*sampler_guard, id)
+                            .add_single(&*sampler_guard, id)
                             .ok_or(Error::InvalidSampler(id))?;
                         hal_samplers.push(&sampler.raw);
                     }
@@ -1796,7 +1796,7 @@ impl<A: HalApi> Device<A> {
                 Br::TextureView(id) => {
                     let view = used
                         .views
-                        .extend(&*texture_view_guard, id)
+                        .add_single(&*texture_view_guard, id)
                         .ok_or(Error::InvalidTextureView(id))?;
                     let (pub_usage, internal_use) = Self::texture_use_parameters(
                         binding,
@@ -1827,7 +1827,7 @@ impl<A: HalApi> Device<A> {
                     for &id in bindings_array.iter() {
                         let view = used
                             .views
-                            .extend(&*texture_view_guard, id)
+                            .add_single(&*texture_view_guard, id)
                             .ok_or(Error::InvalidTextureView(id))?;
                         let (pub_usage, internal_use) =
                             Self::texture_use_parameters(binding, decl, view,
@@ -3185,7 +3185,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .trackers
                 .lock()
                 .buffers
-                .init(id, ref_count, buffer_use);
+                .insert_single(id, ref_count, buffer_use);
 
             return (id.0, None);
         };
@@ -3452,11 +3452,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let id = fid.assign(texture, &mut token);
             log::info!("Created texture {:?} with {:?}", id, desc);
 
-            device
-                .trackers
-                .lock()
-                .textures
-                .init(id.0, ref_count, hal::TextureUses::UNINITIALIZED);
+            device.trackers.lock().textures.insert_single(
+                id.0,
+                ref_count,
+                hal::TextureUses::UNINITIALIZED,
+            );
 
             return (id.0, None);
         };
@@ -3528,11 +3528,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let id = fid.assign(texture, &mut token);
             log::info!("Created texture {:?} with {:?}", id, desc);
 
-            device
-                .trackers
-                .lock()
-                .textures
-                .init(id.0, ref_count, hal::TextureUses::UNINITIALIZED);
+            device.trackers.lock().textures.insert_single(
+                id.0,
+                ref_count,
+                hal::TextureUses::UNINITIALIZED,
+            );
 
             return (id.0, None);
         };
@@ -3691,7 +3691,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let ref_count = view.life_guard.add_ref();
             let id = fid.assign(view, &mut token);
 
-            device.trackers.lock().views.init(id, ref_count);
+            device.trackers.lock().views.insert_single(id, ref_count);
             return (id.0, None);
         };
 
@@ -3784,7 +3784,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let ref_count = sampler.life_guard.add_ref();
             let id = fid.assign(sampler, &mut token);
 
-            device.trackers.lock().samplers.init(id, ref_count);
+            device.trackers.lock().samplers.insert_single(id, ref_count);
 
             return (id.0, None);
         };
@@ -4045,7 +4045,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let id = fid.assign(bind_group, &mut token);
             log::debug!("Bind group {:?}", id,);
 
-            device.trackers.lock().bind_groups.init(id, ref_count);
+            device
+                .trackers
+                .lock()
+                .bind_groups
+                .insert_single(id, ref_count);
             return (id.0, None);
         };
 
@@ -4352,7 +4356,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let ref_count = render_bundle.life_guard.add_ref();
             let id = fid.assign(render_bundle, &mut token);
 
-            device.trackers.lock().bundles.init(id, ref_count);
+            device.trackers.lock().bundles.insert_single(id, ref_count);
             return (id.0, None);
         };
 
@@ -4427,7 +4431,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let ref_count = query_set.life_guard.add_ref();
             let id = fid.assign(query_set, &mut token);
 
-            device.trackers.lock().query_sets.init(id, ref_count);
+            device
+                .trackers
+                .lock()
+                .query_sets
+                .insert_single(id, ref_count);
 
             return (id.0, None);
         };
@@ -4518,7 +4526,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let id = fid.assign(pipeline, &mut token);
             log::info!("Created render pipeline {:?} with {:?}", id, desc);
 
-            device.trackers.lock().render_pipelines.init(id, ref_count);
+            device
+                .trackers
+                .lock()
+                .render_pipelines
+                .insert_single(id, ref_count);
 
             return (id.0, None);
         };
@@ -4655,7 +4667,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let id = fid.assign(pipeline, &mut token);
             log::info!("Created compute pipeline {:?} with {:?}", id, desc);
 
-            device.trackers.lock().compute_pipelines.init(id, ref_count);
+            device
+                .trackers
+                .lock()
+                .compute_pipelines
+                .insert_single(id, ref_count);
             return (id.0, None);
         };
 
@@ -5134,7 +5150,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let mut trackers = device.trackers.lock();
             trackers
                 .buffers
-                .change_state(&*buffer_guard, buffer_id, internal_use);
+                .set_single(&*buffer_guard, buffer_id, internal_use);
             trackers.buffers.drain();
 
             ret

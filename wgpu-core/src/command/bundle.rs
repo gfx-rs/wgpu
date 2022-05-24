@@ -233,7 +233,7 @@ impl RenderBundleEncoder {
                     let bind_group: &binding_model::BindGroup<A> = state
                         .trackers
                         .bind_groups
-                        .extend(&*bind_group_guard, bind_group_id)
+                        .add_single(&*bind_group_guard, bind_group_id)
                         .ok_or(RenderCommandError::InvalidBindGroup(bind_group_id))
                         .map_pass_err(scope)?;
                     if bind_group.dynamic_binding_info.len() != offsets.len() {
@@ -267,7 +267,7 @@ impl RenderBundleEncoder {
                     unsafe {
                         state
                             .trackers
-                            .extend_from_bind_group(&*texture_guard, &bind_group.used)
+                            .merge_bind_group(&*texture_guard, &bind_group.used)
                             .map_pass_err(scope)?
                     };
                     //Note: stateless trackers are not merged: the lifetime reference
@@ -281,7 +281,7 @@ impl RenderBundleEncoder {
                     let pipeline: &pipeline::RenderPipeline<A> = state
                         .trackers
                         .render_pipelines
-                        .extend(&*pipeline_guard, pipeline_id)
+                        .add_single(&*pipeline_guard, pipeline_id)
                         .ok_or(RenderCommandError::InvalidPipeline(pipeline_id))
                         .map_pass_err(scope)?;
 
@@ -321,7 +321,7 @@ impl RenderBundleEncoder {
                     let buffer: &resource::Buffer<A> = state
                         .trackers
                         .buffers
-                        .extend(&*buffer_guard, buffer_id, hal::BufferUses::INDEX)
+                        .merge_single(&*buffer_guard, buffer_id, hal::BufferUses::INDEX)
                         .map_pass_err(scope)?;
                     check_buffer_usage(buffer.usage, wgt::BufferUsages::INDEX)
                         .map_pass_err(scope)?;
@@ -348,7 +348,7 @@ impl RenderBundleEncoder {
                     let buffer: &resource::Buffer<A> = state
                         .trackers
                         .buffers
-                        .extend(&*buffer_guard, buffer_id, hal::BufferUses::VERTEX)
+                        .merge_single(&*buffer_guard, buffer_id, hal::BufferUses::VERTEX)
                         .map_pass_err(scope)?;
                     check_buffer_usage(buffer.usage, wgt::BufferUsages::VERTEX)
                         .map_pass_err(scope)?;
@@ -473,7 +473,7 @@ impl RenderBundleEncoder {
                     let buffer: &resource::Buffer<A> = state
                         .trackers
                         .buffers
-                        .extend(&*buffer_guard, buffer_id, hal::BufferUses::INDIRECT)
+                        .merge_single(&*buffer_guard, buffer_id, hal::BufferUses::INDIRECT)
                         .map_pass_err(scope)?;
                     check_buffer_usage(buffer.usage, wgt::BufferUsages::INDIRECT)
                         .map_pass_err(scope)?;
@@ -506,7 +506,7 @@ impl RenderBundleEncoder {
                     let buffer: &resource::Buffer<A> = state
                         .trackers
                         .buffers
-                        .extend(&*buffer_guard, buffer_id, hal::BufferUses::INDIRECT)
+                        .merge_single(&*buffer_guard, buffer_id, hal::BufferUses::INDIRECT)
                         .map_pass_err(scope)?;
                     check_buffer_usage(buffer.usage, wgt::BufferUsages::INDIRECT)
                         .map_pass_err(scope)?;
