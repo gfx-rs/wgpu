@@ -248,6 +248,17 @@ pub struct BasePassRef<'a, C> {
     pub push_constant_data: &'a [u32],
 }
 
+/// A stream of commands for a render pass or compute pass.
+///
+/// This also contains side tables referred to by certain commands,
+/// like dynamic offsets for [`SetBindGroup`] or string data for
+/// [`InsertDebugMarker`].
+///
+/// Render passes use `BasePass<RenderCommand>`, whereas compute
+/// passes use `BasePass<ComputeCommand>`.
+///
+/// [`SetBindGroup`]: RenderCommand::SetBindGroup
+/// [`InsertDebugMarker`]: RenderCommand::InsertDebugMarker
 #[doc(hidden)]
 #[derive(Debug)]
 #[cfg_attr(
@@ -260,9 +271,22 @@ pub struct BasePassRef<'a, C> {
 )]
 pub struct BasePass<C> {
     pub label: Option<String>,
+
+    /// The stream of commands.
     pub commands: Vec<C>,
+
+    /// Dynamic offsets consumed by [`SetBindGroup`] commands in `commands`.
+    ///
+    /// Each successive `SetBindGroup` consumes the next
+    /// [`num_dynamic_offsets`] values from this list.
     pub dynamic_offsets: Vec<wgt::DynamicOffset>,
+
+    /// Strings used by debug instructions.
+    ///
+    /// Each successive [`PushDebugGroup`] or [`InsertDebugMarker`]
+    /// instruction consumes the next `len` bytes from this vector.
     pub string_data: Vec<u8>,
+
     pub push_constant_data: Vec<u32>,
 }
 

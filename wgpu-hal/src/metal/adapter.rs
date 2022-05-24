@@ -181,20 +181,24 @@ impl crate::Adapter<super::Api> for super::Adapter {
                 flags
             }
             Tf::Depth32Float | Tf::Depth32FloatStencil8 => {
-                let mut flats =
+                let mut flags =
                     Tfc::DEPTH_STENCIL_ATTACHMENT | Tfc::MULTISAMPLE | msaa_resolve_apple3x_if;
                 if pc.format_depth32float_filter {
-                    flats |= Tfc::SAMPLED_LINEAR
+                    flags |= Tfc::SAMPLED_LINEAR
                 }
-                flats
+                flags
             }
-            Tf::Depth24Plus => Tfc::empty(),
-            Tf::Depth24PlusStencil8 => {
-                if pc.msaa_desktop {
-                    Tfc::DEPTH_STENCIL_ATTACHMENT | Tfc::SAMPLED_LINEAR | Tfc::MULTISAMPLE
+            Tf::Depth24Plus | Tf::Depth24PlusStencil8 => {
+                let mut flags = Tfc::DEPTH_STENCIL_ATTACHMENT | Tfc::MULTISAMPLE;
+                if pc.format_depth24_stencil8 {
+                    flags |= Tfc::SAMPLED_LINEAR | Tfc::MULTISAMPLE_RESOLVE
                 } else {
-                    Tfc::empty()
+                    flags |= msaa_resolve_apple3x_if;
+                    if pc.format_depth32float_filter {
+                        flags |= Tfc::SAMPLED_LINEAR
+                    }
                 }
+                flags
             }
             Tf::Rgb9e5Ufloat => {
                 if pc.msaa_apple3 {

@@ -758,6 +758,9 @@ impl super::Queue {
             C::ClearStencil(value) => {
                 gl.clear_buffer_i32_slice(glow::STENCIL, 0, &[value as i32]);
             }
+            C::ClearDepthAndStencil(depth, stencil_value) => {
+                gl.clear_buffer_depth_stencil(glow::DEPTH_STENCIL, 0, depth, stencil_value as i32);
+            }
             C::BufferBarrier(raw, usage) => {
                 let mut flags = 0;
                 if usage.contains(crate::BufferUses::VERTEX) {

@@ -133,6 +133,22 @@ impl super::Swapchain {
 }
 
 impl super::Instance {
+    pub fn entry(&self) -> &ash::Entry {
+        &self.shared.entry
+    }
+
+    pub fn raw_instance(&self) -> &ash::Instance {
+        &self.shared.raw
+    }
+
+    pub fn driver_api_version(&self) -> u32 {
+        self.shared.driver_api_version
+    }
+
+    pub fn extensions(&self) -> &[&'static CStr] {
+        &self.extensions[..]
+    }
+
     pub fn required_extensions(
         entry: &ash::Entry,
         flags: crate::InstanceFlags,
@@ -266,6 +282,7 @@ impl super::Instance {
                 get_physical_device_properties,
                 entry,
                 has_nv_optimus,
+                driver_api_version,
             }),
             extensions,
         })

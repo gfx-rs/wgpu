@@ -1113,6 +1113,10 @@ impl super::Instance {
 }
 
 impl super::Adapter {
+    pub fn raw_physical_device(&self) -> ash::vk::PhysicalDevice {
+        self.raw
+    }
+
     pub fn required_device_extensions(&self, features: wgt::Features) -> Vec<&'static CStr> {
         let (supported_extensions, unsupported_extensions) = self
             .phd_capabilities

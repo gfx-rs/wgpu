@@ -168,6 +168,16 @@ impl RenderBundleEncoder {
         self.parent_id
     }
 
+    /// Convert this encoder's commands into a [`RenderBundle`].
+    ///
+    /// We want executing a [`RenderBundle`] to be quick, so we take
+    /// this opportunity to clean up the [`RenderBundleEncoder`]'s
+    /// command stream and gather metadata about it that will help
+    /// keep [`ExecuteBundle`] simple and fast. We remove redundant
+    /// commands (along with their side data), note resource usage,
+    /// and accumulate buffer and texture initialization actions.
+    ///
+    /// [`ExecuteBundle`]: RenderCommand::ExecuteBundle
     pub(crate) fn finish<A: HalApi, G: GlobalIdentityHandlerFactory>(
         self,
         desc: &RenderBundleDescriptor,
@@ -194,20 +204,19 @@ impl RenderBundleEncoder {
             vertex: (0..hal::MAX_VERTEX_BUFFERS)
                 .map(|_| VertexState::new())
                 .collect(),
-            bind: (0..hal::MAX_BIND_GROUPS)
-                .map(|_| BindState::new())
-                .collect(),
+            bind: (0..hal::MAX_BIND_GROUPS).map(|_| None).collect(),
             push_constant_ranges: PushConstantState::new(),
-            raw_dynamic_offsets: Vec::new(),
             flat_dynamic_offsets: Vec::new(),
             used_bind_groups: 0,
             pipeline: None,
         };
         let mut commands = Vec::new();
-        let mut base = self.base.as_ref();
         let mut pipeline_layout_id = None::<id::Valid<id::PipelineLayoutId>>;
         let mut buffer_memory_init_actions = Vec::new();
         let mut texture_memory_init_actions = Vec::new();
+
+        let base = self.base.as_ref();
+        let mut next_dynamic_offset = 0;
 
         for &command in base.commands {
             match command {
@@ -227,8 +236,12 @@ impl RenderBundleEncoder {
                         .map_pass_err(scope);
                     }
 
-                    let offsets = &base.dynamic_offsets[..num_dynamic_offsets as usize];
-                    base.dynamic_offsets = &base.dynamic_offsets[num_dynamic_offsets as usize..];
+                    // Identify the next `num_dynamic_offsets` entries from `base.dynamic_offsets`.
+                    let num_dynamic_offsets = num_dynamic_offsets as usize;
+                    let offsets_range =
+                        next_dynamic_offset..next_dynamic_offset + num_dynamic_offsets;
+                    next_dynamic_offset = offsets_range.end;
+                    let offsets = &base.dynamic_offsets[offsets_range.clone()];
 
                     let bind_group: &binding_model::BindGroup<A> = state
                         .trackers
@@ -263,7 +276,7 @@ impl RenderBundleEncoder {
                     buffer_memory_init_actions.extend_from_slice(&bind_group.used_buffer_ranges);
                     texture_memory_init_actions.extend_from_slice(&bind_group.used_texture_ranges);
 
-                    state.set_bind_group(index, bind_group_id, bind_group.layout_id, offsets);
+                    state.set_bind_group(index, bind_group_id, bind_group.layout_id, offsets_range);
                     unsafe {
                         state
                             .trackers
@@ -415,7 +428,7 @@ impl RenderBundleEncoder {
                         .map_pass_err(scope);
                     }
                     commands.extend(state.flush_vertices());
-                    commands.extend(state.flush_binds());
+                    commands.extend(state.flush_binds(base.dynamic_offsets));
                     commands.push(command);
                 }
                 RenderCommand::DrawIndexed {
@@ -452,7 +465,7 @@ impl RenderBundleEncoder {
                     }
                     commands.extend(state.index.flush());
                     commands.extend(state.flush_vertices());
-                    commands.extend(state.flush_binds());
+                    commands.extend(state.flush_binds(base.dynamic_offsets));
                     commands.push(command);
                 }
                 RenderCommand::MultiDrawIndirect {
@@ -485,7 +498,7 @@ impl RenderBundleEncoder {
                     ));
 
                     commands.extend(state.flush_vertices());
-                    commands.extend(state.flush_binds());
+                    commands.extend(state.flush_binds(base.dynamic_offsets));
                     commands.push(command);
                 }
                 RenderCommand::MultiDrawIndirect {
@@ -519,7 +532,7 @@ impl RenderBundleEncoder {
 
                     commands.extend(state.index.flush());
                     commands.extend(state.flush_vertices());
-                    commands.extend(state.flush_binds());
+                    commands.extend(state.flush_binds(base.dynamic_offsets));
                     commands.push(command);
                 }
                 RenderCommand::MultiDrawIndirect { .. }
@@ -832,6 +845,15 @@ impl<A: HalApi> Resource for RenderBundle<A> {
     }
 }
 
+/// A render bundle's current index buffer state.
+///
+/// [`RenderBundleEncoder::finish`] uses this to drop redundant
+/// `SetIndexBuffer` commands from the final [`RenderBundle`]. It
+/// records index buffer state changes here, and then calls this
+/// type's [`flush`] method before any indexed draw command to produce
+/// a `SetIndexBuffer` command if one is necessary.
+///
+/// [`flush`]: IndexState::flush
 #[derive(Debug)]
 struct IndexState {
     buffer: Option<id::BufferId>,
@@ -842,6 +864,7 @@ struct IndexState {
 }
 
 impl IndexState {
+    /// Return a fresh state: no index buffer has been set yet.
     fn new() -> Self {
         Self {
             buffer: None,
@@ -852,6 +875,9 @@ impl IndexState {
         }
     }
 
+    /// Return the number of entries in the current index buffer.
+    ///
+    /// Panic if no index buffer has been set.
     fn limit(&self) -> u32 {
         assert!(self.buffer.is_some());
         let bytes_per_index = match self.format {
@@ -861,6 +887,8 @@ impl IndexState {
         ((self.range.end - self.range.start) / bytes_per_index) as u32
     }
 
+    /// Prepare for an indexed draw, producing a `SetIndexBuffer`
+    /// command if necessary.
     fn flush(&mut self) -> Option<RenderCommand> {
         if self.is_dirty {
             self.is_dirty = false;
@@ -875,6 +903,7 @@ impl IndexState {
         }
     }
 
+    /// Set the current index buffer's format.
     fn set_format(&mut self, format: wgt::IndexFormat) {
         if self.format != format {
             self.format = format;
@@ -882,6 +911,7 @@ impl IndexState {
         }
     }
 
+    /// Set the current index buffer.
     fn set_buffer(&mut self, id: id::BufferId, range: Range<wgt::BufferAddress>) {
         self.buffer = Some(id);
         self.range = range;
@@ -889,6 +919,15 @@ impl IndexState {
     }
 }
 
+/// The state of a single vertex buffer slot during render bundle encoding.
+///
+/// [`RenderBundleEncoder::finish`] uses this to drop redundant
+/// `SetVertexBuffer` commands from the final [`RenderBundle`]. It
+/// records one vertex buffer slot's state changes here, and then
+/// calls this type's [`flush`] method just before any draw command to
+/// produce a `SetVertexBuffer` commands if one is necessary.
+///
+/// [`flush`]: IndexState::flush
 #[derive(Debug)]
 struct VertexState {
     buffer: Option<id::BufferId>,
@@ -899,6 +938,8 @@ struct VertexState {
 }
 
 impl VertexState {
+    /// Construct a fresh `VertexState`: no buffer has been set for
+    /// this slot.
     fn new() -> Self {
         Self {
             buffer: None,
@@ -909,12 +950,16 @@ impl VertexState {
         }
     }
 
+    /// Set this slot's vertex buffer.
     fn set_buffer(&mut self, buffer_id: id::BufferId, range: Range<wgt::BufferAddress>) {
         self.buffer = Some(buffer_id);
         self.range = range;
         self.is_dirty = true;
     }
 
+    /// Generate a `SetVertexBuffer` command for this slot, if necessary.
+    ///
+    /// `slot` is the index of the vertex buffer slot that `self` tracks.
     fn flush(&mut self, slot: u32) -> Option<RenderCommand> {
         if self.is_dirty {
             self.is_dirty = false;
@@ -930,39 +975,22 @@ impl VertexState {
     }
 }
 
+/// A bind group that has been set at a particular index during render bundle encoding.
 #[derive(Debug)]
 struct BindState {
-    bind_group: Option<(id::BindGroupId, id::BindGroupLayoutId)>,
+    /// The id of the bind group set at this index.
+    bind_group_id: id::BindGroupId,
+
+    /// The layout of `group`.
+    layout_id: id::Valid<id::BindGroupLayoutId>,
+
+    /// The range of dynamic offsets for this bind group, in the original
+    /// command stream's `BassPass::dynamic_offsets` array.
     dynamic_offsets: Range<usize>,
+
+    /// True if this index's contents have been changed since the last time we
+    /// generated a `SetBindGroup` command.
     is_dirty: bool,
-}
-
-impl BindState {
-    fn new() -> Self {
-        Self {
-            bind_group: None,
-            dynamic_offsets: 0..0,
-            is_dirty: false,
-        }
-    }
-
-    fn set_group(
-        &mut self,
-        bind_group_id: id::BindGroupId,
-        layout_id: id::BindGroupLayoutId,
-        dyn_offset: usize,
-        dyn_count: usize,
-    ) -> bool {
-        match self.bind_group {
-            Some((bg_id, _)) if bg_id == bind_group_id && dyn_count == 0 => false,
-            _ => {
-                self.bind_group = Some((bind_group_id, layout_id));
-                self.dynamic_offsets = dyn_offset..dyn_offset + dyn_count;
-                self.is_dirty = true;
-                true
-            }
-        }
-    }
 }
 
 #[derive(Debug)]
@@ -1001,14 +1029,37 @@ struct VertexLimitState {
     instance_limit_slot: u32,
 }
 
+/// State for analyzing and cleaning up bundle command streams.
+///
+/// To minimize state updates, [`RenderBundleEncoder::finish`]
+/// actually just applies commands like [`SetBindGroup`] and
+/// [`SetIndexBuffer`] to the simulated state stored here, and then
+/// calls the `flush_foo` methods before draw calls to produce the
+/// update commands we actually need.
 struct State<A: HalApi> {
+    /// Resources used by this bundle. This will become [`RenderBundle::used`].
     trackers: RenderBundleScope<A>,
+
+    /// The current index buffer. We flush this state before indexed
+    /// draw commands.
     index: IndexState,
+
+    /// The state of each vertex buffer slot.
     vertex: ArrayVec<VertexState, { hal::MAX_VERTEX_BUFFERS }>,
-    bind: ArrayVec<BindState, { hal::MAX_BIND_GROUPS }>,
+
+    /// The bind group set at each index, if any.
+    bind: ArrayVec<Option<BindState>, { hal::MAX_BIND_GROUPS }>,
+
     push_constant_ranges: PushConstantState,
-    raw_dynamic_offsets: Vec<wgt::DynamicOffset>,
+
+    /// Dynamic offset values used by the cleaned-up command sequence.
+    ///
+    /// This becomes the final [`RenderBundle`]'s [`BasePass`]'s
+    /// [`dynamic_offsets`] list.
+    ///
+    /// [`dynamic_offsets`]: BasePass::dynamic_offsets
     flat_dynamic_offsets: Vec<wgt::DynamicOffset>,
+
     used_bind_groups: usize,
     pipeline: Option<id::RenderPipelineId>,
 }
@@ -1044,11 +1095,10 @@ impl<A: HalApi> State<A> {
         vert_state
     }
 
-    fn invalidate_group_from(&mut self, slot: usize) {
-        for bind in self.bind[slot..].iter_mut() {
-            if bind.bind_group.is_some() {
-                bind.is_dirty = true;
-            }
+    /// Mark all non-empty bind group table entries from `index` onwards as dirty.
+    fn invalidate_group_from(&mut self, index: usize) {
+        for contents in self.bind[index..].iter_mut().flatten() {
+            contents.is_dirty = true;
         }
     }
 
@@ -1057,17 +1107,30 @@ impl<A: HalApi> State<A> {
         slot: u8,
         bind_group_id: id::BindGroupId,
         layout_id: id::Valid<id::BindGroupLayoutId>,
-        offsets: &[wgt::DynamicOffset],
+        dynamic_offsets: Range<usize>,
     ) {
-        if self.bind[slot as usize].set_group(
-            bind_group_id,
-            layout_id.0,
-            self.raw_dynamic_offsets.len(),
-            offsets.len(),
-        ) {
-            self.invalidate_group_from(slot as usize + 1);
+        // If this call wouldn't actually change this index's state, we can
+        // return early.  (If there are dynamic offsets, the range will always
+        // be different.)
+        if dynamic_offsets.is_empty() {
+            if let Some(ref contents) = self.bind[slot as usize] {
+                if contents.bind_group_id == bind_group_id {
+                    return;
+                }
+            }
         }
-        self.raw_dynamic_offsets.extend(offsets);
+
+        // Record the index's new state.
+        self.bind[slot as usize] = Some(BindState {
+            bind_group_id,
+            layout_id,
+            dynamic_offsets,
+            is_dirty: true,
+        });
+
+        // Once we've changed the bind group at a particular index, all
+        // subsequent indices need to be rewritten.
+        self.invalidate_group_from(slot as usize + 1);
     }
 
     fn set_pipeline(
@@ -1098,8 +1161,8 @@ impl<A: HalApi> State<A> {
             self.bind
                 .iter()
                 .zip(layout_ids)
-                .position(|(bs, layout_id)| match bs.bind_group {
-                    Some((_, bgl_id)) => bgl_id != layout_id.0,
+                .position(|(entry, &layout_id)| match *entry {
+                    Some(ref contents) => contents.layout_id != layout_id,
                     None => false,
                 })
         };
@@ -1137,29 +1200,37 @@ impl<A: HalApi> State<A> {
             .flat_map(|(i, vs)| vs.flush(i as u32))
     }
 
-    fn flush_binds(&mut self) -> impl Iterator<Item = RenderCommand> + '_ {
-        for bs in self.bind[..self.used_bind_groups].iter() {
-            if bs.is_dirty {
+    /// Generate `SetBindGroup` commands for any bind groups that need to be updated.
+    fn flush_binds(
+        &mut self,
+        dynamic_offsets: &[wgt::DynamicOffset],
+    ) -> impl Iterator<Item = RenderCommand> + '_ {
+        // Append each dirty bind group's dynamic offsets to `flat_dynamic_offsets`.
+        for contents in self.bind[..self.used_bind_groups].iter().flatten() {
+            if contents.is_dirty {
                 self.flat_dynamic_offsets
-                    .extend_from_slice(&self.raw_dynamic_offsets[bs.dynamic_offsets.clone()]);
+                    .extend_from_slice(&dynamic_offsets[contents.dynamic_offsets.clone()]);
             }
         }
-        self.bind
+
+        // Then, generate `SetBindGroup` commands to update the dirty bind
+        // groups. After this, all bind groups are clean.
+        self.bind[..self.used_bind_groups]
             .iter_mut()
-            .take(self.used_bind_groups)
             .enumerate()
-            .flat_map(|(i, bs)| {
-                if bs.is_dirty {
-                    bs.is_dirty = false;
-                    Some(RenderCommand::SetBindGroup {
-                        index: i as u8,
-                        bind_group_id: bs.bind_group.unwrap().0,
-                        num_dynamic_offsets: (bs.dynamic_offsets.end - bs.dynamic_offsets.start)
-                            as u8,
-                    })
-                } else {
-                    None
+            .flat_map(|(i, entry)| {
+                if let Some(ref mut contents) = *entry {
+                    if contents.is_dirty {
+                        contents.is_dirty = false;
+                        let offsets = &contents.dynamic_offsets;
+                        return Some(RenderCommand::SetBindGroup {
+                            index: i as u8,
+                            bind_group_id: contents.bind_group_id,
+                            num_dynamic_offsets: (offsets.end - offsets.start) as u8,
+                        });
+                    }
                 }
+                None
             })
     }
 }
