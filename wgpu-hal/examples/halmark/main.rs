@@ -685,7 +685,7 @@ impl<A: hal::Api> Example<A> {
         let target_barrier1 = hal::TextureBarrier {
             texture: surface_tex.borrow(),
             range: wgt::ImageSubresourceRange::default(),
-            usage: hal::TextureUses::COLOR_TARGET..hal::TextureUses::empty(),
+            usage: hal::TextureUses::COLOR_TARGET..hal::TextureUses::PRESENT,
         };
         unsafe {
             ctx.encoder.end_render_pass();

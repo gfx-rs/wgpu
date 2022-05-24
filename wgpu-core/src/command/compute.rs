@@ -14,8 +14,9 @@ use crate::{
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Storage, Token},
     id,
     init_tracker::MemoryInitKind,
-    resource::{Buffer, Texture},
-    track::{StatefulTrackerSubset, TrackerSet, UsageConflict, UseExtendError},
+    pipeline,
+    resource::{self, Buffer, Texture},
+    track::{Tracker, UsageConflict, UsageScope},
     validation::{check_buffer_usage, MissingBufferUsageError},
     Label,
 };
@@ -228,15 +229,14 @@ where
     }
 }
 
-#[derive(Debug)]
-struct State {
+struct State<A: HalApi> {
     binder: Binder,
     pipeline: Option<id::ComputePipelineId>,
-    trackers: StatefulTrackerSubset,
+    scope: UsageScope<A>,
     debug_scope_depth: u32,
 }
 
-impl State {
+impl<A: HalApi> State<A> {
     fn is_ready(&self) -> Result<(), DispatchError> {
         let bind_mask = self.binder.invalid_mask();
         if bind_mask != 0 {
@@ -253,32 +253,36 @@ impl State {
         Ok(())
     }
 
-    fn flush_states<A: HalApi>(
+    fn flush_states(
         &mut self,
         raw_encoder: &mut A::CommandEncoder,
-        base_trackers: &mut TrackerSet,
+        base_trackers: &mut Tracker<A>,
         bind_group_guard: &Storage<BindGroup<A>, id::BindGroupId>,
         buffer_guard: &Storage<Buffer<A>, id::BufferId>,
         texture_guard: &Storage<Texture<A>, id::TextureId>,
     ) -> Result<(), UsageConflict> {
         for id in self.binder.list_active() {
-            self.trackers.merge_extend(&bind_group_guard[id].used)?;
-            //Note: stateless trackers are not merged: the lifetime reference
+            unsafe {
+                self.scope
+                    .merge_bind_group(texture_guard, &bind_group_guard[id].used)?
+            };
+            // Note: stateless trackers are not merged: the lifetime reference
             // is held to the bind group itself.
+        }
+
+        for id in self.binder.list_active() {
+            unsafe {
+                base_trackers.set_and_remove_from_usage_scope_sparse(
+                    texture_guard,
+                    &mut self.scope,
+                    &bind_group_guard[id].used,
+                )
+            }
         }
 
         log::trace!("Encoding dispatch barriers");
 
-        CommandBuffer::insert_barriers(
-            raw_encoder,
-            base_trackers,
-            &self.trackers.buffers,
-            &self.trackers.textures,
-            buffer_guard,
-            texture_guard,
-        );
-
-        self.trackers.clear();
+        CommandBuffer::drain_barriers(raw_encoder, base_trackers, buffer_guard, texture_guard);
         Ok(())
     }
 }
@@ -338,13 +342,25 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut state = State {
             binder: Binder::new(),
             pipeline: None,
-            trackers: StatefulTrackerSubset::new(A::VARIANT),
+            scope: UsageScope::new(&*buffer_guard, &*texture_guard),
             debug_scope_depth: 0,
         };
         let mut temp_offsets = Vec::new();
         let mut dynamic_offset_count = 0;
         let mut string_offset = 0;
         let mut active_query = None;
+
+        cmd_buf.trackers.set_size(
+            Some(&*buffer_guard),
+            Some(&*texture_guard),
+            None,
+            None,
+            Some(&*bind_group_guard),
+            Some(&*pipeline_guard),
+            None,
+            None,
+            Some(&*query_set_guard),
+        );
 
         let hal_desc = hal::ComputePassDescriptor { label: base.label };
         unsafe {
@@ -379,11 +395,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     );
                     dynamic_offset_count += num_dynamic_offsets as usize;
 
-                    let bind_group = cmd_buf
+                    let bind_group: &BindGroup<A> = cmd_buf
                         .trackers
                         .bind_groups
-                        .use_extend(&*bind_group_guard, bind_group_id, (), ())
-                        .map_err(|_| ComputePassErrorInner::InvalidBindGroup(bind_group_id))
+                        .add_single(&*bind_group_guard, bind_group_id)
+                        .ok_or(ComputePassErrorInner::InvalidBindGroup(bind_group_id))
                         .map_pass_err(scope)?;
                     bind_group
                         .validate_dynamic_bindings(&temp_offsets, &cmd_buf.limits)
@@ -434,11 +450,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                     state.pipeline = Some(pipeline_id);
 
-                    let pipeline = cmd_buf
+                    let pipeline: &pipeline::ComputePipeline<A> = cmd_buf
                         .trackers
-                        .compute_pipes
-                        .use_extend(&*pipeline_guard, pipeline_id, (), ())
-                        .map_err(|_| ComputePassErrorInner::InvalidPipeline(pipeline_id))
+                        .compute_pipelines
+                        .add_single(&*pipeline_guard, pipeline_id)
+                        .ok_or(ComputePassErrorInner::InvalidPipeline(pipeline_id))
                         .map_pass_err(scope)?;
 
                     unsafe {
@@ -587,11 +603,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .require_downlevel_flags(wgt::DownlevelFlags::INDIRECT_EXECUTION)
                         .map_pass_err(scope)?;
 
-                    let indirect_buffer = state
-                        .trackers
+                    let indirect_buffer: &Buffer<A> = state
+                        .scope
                         .buffers
-                        .use_extend(&*buffer_guard, buffer_id, (), hal::BufferUses::INDIRECT)
-                        .map_err(|_| ComputePassErrorInner::InvalidIndirectBuffer(buffer_id))
+                        .merge_single(&*buffer_guard, buffer_id, hal::BufferUses::INDIRECT)
                         .map_pass_err(scope)?;
                     check_buffer_usage(indirect_buffer.usage, wgt::BufferUsages::INDIRECT)
                         .map_pass_err(scope)?;
@@ -670,16 +685,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 } => {
                     let scope = PassErrorScope::WriteTimestamp;
 
-                    let query_set = cmd_buf
+                    let query_set: &resource::QuerySet<A> = cmd_buf
                         .trackers
                         .query_sets
-                        .use_extend(&*query_set_guard, query_set_id, (), ())
-                        .map_err(|e| match e {
-                            UseExtendError::InvalidResource => {
-                                ComputePassErrorInner::InvalidQuerySet(query_set_id)
-                            }
-                            _ => unreachable!(),
-                        })
+                        .add_single(&*query_set_guard, query_set_id)
+                        .ok_or(ComputePassErrorInner::InvalidQuerySet(query_set_id))
                         .map_pass_err(scope)?;
 
                     query_set
@@ -692,16 +702,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 } => {
                     let scope = PassErrorScope::BeginPipelineStatisticsQuery;
 
-                    let query_set = cmd_buf
+                    let query_set: &resource::QuerySet<A> = cmd_buf
                         .trackers
                         .query_sets
-                        .use_extend(&*query_set_guard, query_set_id, (), ())
-                        .map_err(|e| match e {
-                            UseExtendError::InvalidResource => {
-                                ComputePassErrorInner::InvalidQuerySet(query_set_id)
-                            }
-                            _ => unreachable!(),
-                        })
+                        .add_single(&*query_set_guard, query_set_id)
+                        .ok_or(ComputePassErrorInner::InvalidQuerySet(query_set_id))
                         .map_pass_err(scope)?;
 
                     query_set

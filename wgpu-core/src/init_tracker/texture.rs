@@ -26,7 +26,7 @@ pub(crate) fn has_copy_partial_init_tracker_coverage(
 impl From<TextureSelector> for TextureInitRange {
     fn from(selector: TextureSelector) -> Self {
         TextureInitRange {
-            mip_range: selector.levels,
+            mip_range: selector.mips,
             layer_range: selector.layers,
         }
     }

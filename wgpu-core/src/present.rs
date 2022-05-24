@@ -174,7 +174,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     initialization_status: TextureInitTracker::new(1, 1),
                     full_range: track::TextureSelector {
                         layers: 0..1,
-                        levels: 0..1,
+                        mips: 0..1,
                     },
                     life_guard: LifeGuard::new("<Surface>"),
                     clear_mode: resource::TextureClearMode::RenderPass {
@@ -187,20 +187,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 let id = fid.assign(texture, &mut token);
 
                 {
-                    use track::ResourceState as _;
                     // register it in the device tracker as uninitialized
                     let mut trackers = device.trackers.lock();
-                    let mut ts = track::TextureState::default();
-                    let _ = ts.change(
-                        id,
-                        track::TextureSelector {
-                            layers: 0..1,
-                            levels: 0..1,
-                        },
+                    trackers.textures.insert_single(
+                        id.0,
+                        ref_count.clone(),
                         hal::TextureUses::UNINITIALIZED,
-                        None,
                     );
-                    let _ = trackers.textures.init(id, ref_count.clone(), ts);
                 }
 
                 if present.acquired_texture.is_some() {
@@ -273,6 +266,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             // The texture ID got added to the device tracker by `submit()`,
             // and now we are moving it away.
+            log::debug!(
+                "Removing swapchain texture {:?} from the device tracker",
+                texture_id.value
+            );
             device.trackers.lock().textures.remove(texture_id.value);
 
             let (texture, _) = hub.textures.unregister(texture_id.value.0, &mut token);

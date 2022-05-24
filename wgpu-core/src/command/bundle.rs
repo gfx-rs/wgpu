@@ -34,7 +34,7 @@ invalidations or index format changes.
 #![allow(clippy::reversed_empty_ranges)]
 
 use crate::{
-    binding_model::buffer_binding_type_alignment,
+    binding_model::{self, buffer_binding_type_alignment},
     command::{
         BasePass, BindGroupStateChange, DrawError, MapPassErr, PassErrorScope, RenderCommand,
         RenderCommandError, StateChange,
@@ -48,8 +48,9 @@ use crate::{
     hub::{GlobalIdentityHandlerFactory, HalApi, Hub, Resource, Storage, Token},
     id,
     init_tracker::{BufferInitTrackerAction, MemoryInitKind, TextureInitTrackerAction},
-    pipeline::PipelineFlags,
-    track::{TrackerSet, UsageConflict},
+    pipeline::{self, PipelineFlags},
+    resource,
+    track::RenderBundleScope,
     validation::check_buffer_usage,
     Label, LabelHelpers, LifeGuard, Stored,
 };
@@ -117,7 +118,7 @@ impl RenderBundleEncoder {
                 },
                 sample_count: {
                     let sc = desc.sample_count;
-                    if sc == 0 || sc > 32 || !conv::is_power_of_two(sc) {
+                    if sc == 0 || sc > 32 || !conv::is_power_of_two_u32(sc) {
                         return Err(CreateRenderBundleError::InvalidSampleCount(sc));
                     }
                     sc
@@ -177,20 +178,28 @@ impl RenderBundleEncoder {
     /// and accumulate buffer and texture initialization actions.
     ///
     /// [`ExecuteBundle`]: RenderCommand::ExecuteBundle
-    pub(crate) fn finish<A: hal::Api, G: GlobalIdentityHandlerFactory>(
+    pub(crate) fn finish<A: HalApi, G: GlobalIdentityHandlerFactory>(
         self,
         desc: &RenderBundleDescriptor,
         device: &Device<A>,
         hub: &Hub<A, G>,
         token: &mut Token<Device<A>>,
-    ) -> Result<RenderBundle, RenderBundleError> {
+    ) -> Result<RenderBundle<A>, RenderBundleError> {
         let (pipeline_layout_guard, mut token) = hub.pipeline_layouts.read(token);
         let (bind_group_guard, mut token) = hub.bind_groups.read(&mut token);
         let (pipeline_guard, mut token) = hub.render_pipelines.read(&mut token);
-        let (buffer_guard, _) = hub.buffers.read(&mut token);
+        let (query_set_guard, mut token) = hub.query_sets.read(&mut token);
+        let (buffer_guard, mut token) = hub.buffers.read(&mut token);
+        let (texture_guard, _) = hub.textures.read(&mut token);
 
         let mut state = State {
-            trackers: TrackerSet::new(self.parent_id.backend()),
+            trackers: RenderBundleScope::new(
+                &*buffer_guard,
+                &*texture_guard,
+                &*bind_group_guard,
+                &*pipeline_guard,
+                &*query_set_guard,
+            ),
             index: IndexState::new(),
             vertex: (0..hal::MAX_VERTEX_BUFFERS)
                 .map(|_| VertexState::new())
@@ -234,11 +243,11 @@ impl RenderBundleEncoder {
                     next_dynamic_offset = offsets_range.end;
                     let offsets = &base.dynamic_offsets[offsets_range.clone()];
 
-                    let bind_group = state
+                    let bind_group: &binding_model::BindGroup<A> = state
                         .trackers
                         .bind_groups
-                        .use_extend(&*bind_group_guard, bind_group_id, (), ())
-                        .map_err(|_| RenderCommandError::InvalidBindGroup(bind_group_id))
+                        .add_single(&*bind_group_guard, bind_group_id)
+                        .ok_or(RenderCommandError::InvalidBindGroup(bind_group_id))
                         .map_pass_err(scope)?;
                     if bind_group.dynamic_binding_info.len() != offsets.len() {
                         return Err(RenderCommandError::InvalidDynamicOffsetCount {
@@ -268,10 +277,12 @@ impl RenderBundleEncoder {
                     texture_memory_init_actions.extend_from_slice(&bind_group.used_texture_ranges);
 
                     state.set_bind_group(index, bind_group_id, bind_group.layout_id, offsets_range);
-                    state
-                        .trackers
-                        .merge_extend_stateful(&bind_group.used)
-                        .map_pass_err(scope)?;
+                    unsafe {
+                        state
+                            .trackers
+                            .merge_bind_group(&*texture_guard, &bind_group.used)
+                            .map_pass_err(scope)?
+                    };
                     //Note: stateless trackers are not merged: the lifetime reference
                     // is held to the bind group itself.
                 }
@@ -280,11 +291,11 @@ impl RenderBundleEncoder {
 
                     state.pipeline = Some(pipeline_id);
 
-                    let pipeline = state
+                    let pipeline: &pipeline::RenderPipeline<A> = state
                         .trackers
-                        .render_pipes
-                        .use_extend(&*pipeline_guard, pipeline_id, (), ())
-                        .map_err(|_| RenderCommandError::InvalidPipeline(pipeline_id))
+                        .render_pipelines
+                        .add_single(&*pipeline_guard, pipeline_id)
+                        .ok_or(RenderCommandError::InvalidPipeline(pipeline_id))
                         .map_pass_err(scope)?;
 
                     self.context
@@ -320,11 +331,11 @@ impl RenderBundleEncoder {
                     size,
                 } => {
                     let scope = PassErrorScope::SetIndexBuffer(buffer_id);
-                    let buffer = state
+                    let buffer: &resource::Buffer<A> = state
                         .trackers
                         .buffers
-                        .use_extend(&*buffer_guard, buffer_id, (), hal::BufferUses::INDEX)
-                        .unwrap();
+                        .merge_single(&*buffer_guard, buffer_id, hal::BufferUses::INDEX)
+                        .map_pass_err(scope)?;
                     check_buffer_usage(buffer.usage, wgt::BufferUsages::INDEX)
                         .map_pass_err(scope)?;
 
@@ -347,11 +358,11 @@ impl RenderBundleEncoder {
                     size,
                 } => {
                     let scope = PassErrorScope::SetVertexBuffer(buffer_id);
-                    let buffer = state
+                    let buffer: &resource::Buffer<A> = state
                         .trackers
                         .buffers
-                        .use_extend(&*buffer_guard, buffer_id, (), hal::BufferUses::VERTEX)
-                        .unwrap();
+                        .merge_single(&*buffer_guard, buffer_id, hal::BufferUses::VERTEX)
+                        .map_pass_err(scope)?;
                     check_buffer_usage(buffer.usage, wgt::BufferUsages::VERTEX)
                         .map_pass_err(scope)?;
 
@@ -472,11 +483,11 @@ impl RenderBundleEncoder {
                         .require_downlevel_flags(wgt::DownlevelFlags::INDIRECT_EXECUTION)
                         .map_pass_err(scope)?;
 
-                    let buffer = state
+                    let buffer: &resource::Buffer<A> = state
                         .trackers
                         .buffers
-                        .use_extend(&*buffer_guard, buffer_id, (), hal::BufferUses::INDIRECT)
-                        .unwrap();
+                        .merge_single(&*buffer_guard, buffer_id, hal::BufferUses::INDIRECT)
+                        .map_pass_err(scope)?;
                     check_buffer_usage(buffer.usage, wgt::BufferUsages::INDIRECT)
                         .map_pass_err(scope)?;
 
@@ -505,11 +516,10 @@ impl RenderBundleEncoder {
                         .require_downlevel_flags(wgt::DownlevelFlags::INDIRECT_EXECUTION)
                         .map_pass_err(scope)?;
 
-                    let buffer = state
+                    let buffer: &resource::Buffer<A> = state
                         .trackers
                         .buffers
-                        .use_extend(&*buffer_guard, buffer_id, (), hal::BufferUses::INDIRECT)
-                        .map_err(|err| RenderCommandError::Buffer(buffer_id, err))
+                        .merge_single(&*buffer_guard, buffer_id, hal::BufferUses::INDIRECT)
                         .map_pass_err(scope)?;
                     check_buffer_usage(buffer.usage, wgt::BufferUsages::INDIRECT)
                         .map_pass_err(scope)?;
@@ -612,24 +622,23 @@ pub type RenderBundleDescriptor<'a> = wgt::RenderBundleDescriptor<Label<'a>>;
 //Note: here, `RenderBundle` is just wrapping a raw stream of render commands.
 // The plan is to back it by an actual Vulkan secondary buffer, D3D12 Bundle,
 // or Metal indirect command buffer.
-#[derive(Debug)]
-pub struct RenderBundle {
+pub struct RenderBundle<A: HalApi> {
     // Normalized command stream. It can be executed verbatim,
     // without re-binding anything on the pipeline change.
     base: BasePass<RenderCommand>,
     pub(super) is_ds_read_only: bool,
     pub(crate) device_id: Stored<id::DeviceId>,
-    pub(crate) used: TrackerSet,
+    pub(crate) used: RenderBundleScope<A>,
     pub(super) buffer_memory_init_actions: Vec<BufferInitTrackerAction>,
     pub(super) texture_memory_init_actions: Vec<TextureInitTrackerAction>,
     pub(super) context: RenderPassContext,
     pub(crate) life_guard: LifeGuard,
 }
 
-unsafe impl Send for RenderBundle {}
-unsafe impl Sync for RenderBundle {}
+unsafe impl<A: HalApi> Send for RenderBundle<A> {}
+unsafe impl<A: HalApi> Sync for RenderBundle<A> {}
 
-impl RenderBundle {
+impl<A: HalApi> RenderBundle<A> {
     /// Actually encode the contents into a native command buffer.
     ///
     /// This is partially duplicating the logic of `command_encoder_run_render_pass`.
@@ -639,7 +648,7 @@ impl RenderBundle {
     /// Note that the function isn't expected to fail, generally.
     /// All the validation has already been done by this point.
     /// The only failure condition is if some of the used buffers are destroyed.
-    pub(super) unsafe fn execute<A: HalApi>(
+    pub(super) unsafe fn execute(
         &self,
         raw: &mut A::CommandEncoder,
         pipeline_layout_guard: &Storage<
@@ -828,7 +837,7 @@ impl RenderBundle {
     }
 }
 
-impl Resource for RenderBundle {
+impl<A: HalApi> Resource for RenderBundle<A> {
     const TYPE: &'static str = "RenderBundle";
 
     fn life_guard(&self) -> &LifeGuard {
@@ -1027,10 +1036,9 @@ struct VertexLimitState {
 /// [`SetIndexBuffer`] to the simulated state stored here, and then
 /// calls the `flush_foo` methods before draw calls to produce the
 /// update commands we actually need.
-#[derive(Debug)]
-struct State {
+struct State<A: HalApi> {
     /// Resources used by this bundle. This will become [`RenderBundle::used`].
-    trackers: TrackerSet,
+    trackers: RenderBundleScope<A>,
 
     /// The current index buffer. We flush this state before indexed
     /// draw commands.
@@ -1056,7 +1064,7 @@ struct State {
     pipeline: Option<id::RenderPipelineId>,
 }
 
-impl State {
+impl<A: HalApi> State<A> {
     fn vertex_limits(&self) -> VertexLimitState {
         let mut vert_state = VertexLimitState {
             vertex_limit: u32::MAX,
@@ -1234,8 +1242,6 @@ pub(super) enum RenderBundleErrorInner {
     Device(#[from] DeviceError),
     #[error(transparent)]
     RenderCommand(RenderCommandError),
-    #[error(transparent)]
-    ResourceUsageConflict(#[from] UsageConflict),
     #[error(transparent)]
     Draw(#[from] DrawError),
     #[error(transparent)]

@@ -1,126 +1,131 @@
+/*! Resource State and Lifetime Trackers
+ *
+ * These structures are responsible for keeping track of resource state,
+ * generating barriers where needed, and making sure resources are kept
+ * alive until the trackers die.
+ *
+ * ## General Architecture
+ *
+ * Tracking is some of the hottest code in the entire codebase, so the trackers
+ * are designed to be as cache efficient as possible. They store resource state
+ * in flat vectors, storing metadata SOA style, one vector per type of metadata.
+ *
+ * A lot of the tracker code is deeply unsafe, using unchecked accesses all over
+ * to make performance as good as possible. However, for all unsafe accesses, there
+ * is a corresponding debug assert the checks if that access is valid. This helps
+ * get bugs caught fast, while still letting users not need to pay for the bounds
+ * checks.
+ *
+ * In wgpu, resource IDs are allocated and re-used, so will always be as low
+ * as reasonably possible. This allows us to use the ID as an index into an array.
+ *
+ * ## Statefulness
+ *
+ * There are two main types of trackers, stateful and stateless.
+ *
+ * Stateful trackers are for buffers and textures. They both have
+ * resource state attached to them which needs to be used to generate
+ * automatic synchronization. Because of the different requirements of
+ * buffers and textures, they have two separate tracking structures.
+ *
+ * Stateless trackers only store metadata and own the given resource.
+ *
+ * ## Use Case
+ *
+ * Within each type of tracker, the trackers are further split into 3 different
+ * use cases, Bind Group, Usage Scope, and a full Tracker.
+ *
+ * Bind Group trackers are just a list of different resources, their refcount,
+ * and how they are used. Textures are used via a selector and a usage type.
+ * Buffers by just a usage type. Stateless resources don't have a usage type.
+ *
+ * Usage Scope trackers are only for stateful resources. These trackers represent
+ * a single [`UsageScope`] in the spec. When a use is added to a usage scope,
+ * it is merged with all other uses of that resource in that scope. If there
+ * is a usage conflict, merging will fail and an error will be reported.
+ *
+ * Full trackers represent a before and after state of a resource. These
+ * are used for tracking on the device and on command buffers. The before
+ * state represents the state the resource is first used as in the command buffer,
+ * the after state is the state the command buffer leaves the resource in.
+ * These double ended buffers can then be used to generate the needed transitions
+ * between command buffers.
+ *
+ * ## Dense Datastructure with Sparse Data
+ *
+ * This tracking system is based on having completely dense data, but trackers do
+ * not always contain every resource. Some resources (or even most resources) go
+ * unused in any given command buffer. So to help speed up the process of iterating
+ * through possibly thousands of resources, we use a bit vector to represent if
+ * a resource is in the buffer or not. This allows us extremely efficient memory
+ * utilization, as well as being able to bail out of whole blocks of 32-64 resources
+ * with a single usize comparison with zero. In practice this means that merging
+ * partially resident buffers is extremely quick.
+ *
+ * The main advantage of this dense datastructure is that we can do merging
+ * of trackers in an extremely efficient fashion that results in us doing linear
+ * scans down a couple of buffers. CPUs and their caches absolutely eat this up.
+ *
+ * ## Stateful Resource Operations
+ *
+ * All operations on stateful trackers boil down to one of four operations:
+ * - `insert(tracker, new_state)` adds a resource with a given state to the tracker
+ *   for the first time.
+ * - `merge(tracker, new_state)` merges this new state with the previous state, checking
+ *   for usage conflicts.
+ * - `barrier(tracker, new_state)` compares the given state to the existing state and
+ *   generates the needed barriers.
+ * - `update(tracker, new_state)` takes the given new state and overrides the old state.
+ *
+ * This allows us to compose the operations to form the various kinds of tracker merges
+ * that need to happen in the codebase. For each resource in the given merger, the following
+ * operation applies:
+ *
+ * UsageScope <- Resource = insert(scope, usage) OR merge(scope, usage)
+ * UsageScope <- UsageScope = insert(scope, scope) OR merge(scope, scope)
+ * CommandBuffer <- UsageScope = insert(buffer.start, buffer.end, scope) OR barrier(buffer.end, scope) + update(buffer.end, scope)
+ * Deivce <- CommandBuffer = insert(device.start, device.end, buffer.start, buffer.end) OR barrier(device.end, buffer.start) + update(device.end, buffer.end)
+ *
+ * [`UsageScope`]: https://gpuweb.github.io/gpuweb/#programming-model-synchronization
+!*/
+
 mod buffer;
 mod range;
+mod stateless;
 mod texture;
 
 use crate::{
-    hub,
-    id::{self, TypedId, Valid},
-    resource, Epoch, FastHashMap, Index, RefCount,
+    binding_model, command, conv, hub,
+    id::{self, TypedId},
+    pipeline, resource, Epoch, LifeGuard, RefCount,
 };
 
-use std::{
-    collections::hash_map::Entry, fmt, marker::PhantomData, num::NonZeroU32, ops, vec::Drain,
-};
+use bit_vec::BitVec;
+use std::{borrow::Cow, fmt, marker::PhantomData, mem, num::NonZeroU32, ops};
 use thiserror::Error;
 
-pub(crate) use buffer::BufferState;
-pub(crate) use texture::{TextureSelector, TextureState};
-
-/// A single unit of state tracking. It keeps an initial
-/// usage as well as the last/current one, similar to `Range`.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Unit<U> {
-    first: Option<U>,
-    last: U,
-}
-
-impl<U: Copy> Unit<U> {
-    /// Create a new unit from a given usage.
-    fn new(usage: U) -> Self {
-        Self {
-            first: None,
-            last: usage,
-        }
-    }
-
-    /// Return a usage to link to.
-    fn port(&self) -> U {
-        self.first.unwrap_or(self.last)
-    }
-}
-
-/// The main trait that abstracts away the tracking logic of
-/// a particular resource type, like a buffer or a texture.
-pub(crate) trait ResourceState: Clone + Default {
-    /// Corresponding `HUB` identifier.
-    type Id: Copy + fmt::Debug + TypedId;
-    /// A type specifying the sub-resources.
-    type Selector: fmt::Debug;
-    /// Usage type for a `Unit` of a sub-resource.
-    type Usage: fmt::Debug;
-
-    /// Check if all the selected sub-resources have the same
-    /// usage, and return it.
-    ///
-    /// Returns `None` if no sub-resources
-    /// are intersecting with the selector, or their usage
-    /// isn't consistent.
-    fn query(&self, selector: Self::Selector) -> Option<Self::Usage>;
-
-    /// Change the last usage of the selected sub-resources.
-    ///
-    /// If `output` is specified, it's filled with the
-    /// `PendingTransition` objects corresponding to smaller
-    /// sub-resource transitions. The old usage is replaced by
-    /// the new one.
-    ///
-    /// If `output` is `None`, the old usage is extended with
-    /// the new usage. The error is returned if it's not possible,
-    /// specifying the conflicting transition. Extension can only
-    /// be done for read-only usages.
-    fn change(
-        &mut self,
-        id: Valid<Self::Id>,
-        selector: Self::Selector,
-        usage: Self::Usage,
-        output: Option<&mut Vec<PendingTransition<Self>>>,
-    ) -> Result<(), PendingTransition<Self>>;
-
-    /// Merge the state of this resource tracked by a different instance
-    /// with the current one.
-    ///
-    /// Same rules for `output` apply as with `change()`: last usage state
-    /// is either replaced (when `output` is provided) with a
-    /// `PendingTransition` pushed to this vector, or extended with the
-    /// other read-only usage, unless there is a usage conflict, and
-    /// the error is generated (returning the conflict).
-    fn merge(
-        &mut self,
-        id: Valid<Self::Id>,
-        other: &Self,
-        output: Option<&mut Vec<PendingTransition<Self>>>,
-    ) -> Result<(), PendingTransition<Self>>;
-
-    /// Try to optimize the internal representation.
-    fn optimize(&mut self);
-}
-
-/// Structure wrapping the abstract tracking state with the relevant resource
-/// data, such as the reference count and the epoch.
-#[derive(Clone)]
-struct Resource<S> {
-    ref_count: RefCount,
-    state: S,
-    epoch: Epoch,
-}
+pub(crate) use buffer::{BufferBindGroupState, BufferTracker, BufferUsageScope};
+pub(crate) use stateless::{StatelessBindGroupSate, StatelessTracker};
+pub(crate) use texture::{
+    TextureBindGroupState, TextureSelector, TextureTracker, TextureUsageScope,
+};
 
 /// A structure containing all the information about a particular resource
 /// transition. User code should be able to generate a pipeline barrier
 /// based on the contents.
 #[derive(Debug, PartialEq)]
-pub(crate) struct PendingTransition<S: ResourceState> {
-    pub id: Valid<S::Id>,
+pub(crate) struct PendingTransition<S: ResourceUses> {
+    pub id: u32,
     pub selector: S::Selector,
-    pub usage: ops::Range<S::Usage>,
+    pub usage: ops::Range<S>,
 }
 
-impl PendingTransition<BufferState> {
+impl PendingTransition<hal::BufferUses> {
     /// Produce the hal barrier corresponding to the transition.
     pub fn into_hal<'a, A: hal::Api>(
         self,
         buf: &'a resource::Buffer<A>,
     ) -> hal::BufferBarrier<'a, A> {
-        log::trace!("\tbuffer -> {:?}", self);
         let buffer = buf.raw.as_ref().expect("Buffer is destroyed");
         hal::BufferBarrier {
             buffer,
@@ -129,549 +134,611 @@ impl PendingTransition<BufferState> {
     }
 }
 
-impl From<PendingTransition<BufferState>> for UsageConflict {
-    fn from(e: PendingTransition<BufferState>) -> Self {
-        Self::Buffer {
-            id: e.id.0,
-            combined_use: e.usage.end,
-        }
-    }
-}
-
-impl PendingTransition<TextureState> {
+impl PendingTransition<hal::TextureUses> {
     /// Produce the hal barrier corresponding to the transition.
     pub fn into_hal<'a, A: hal::Api>(
         self,
         tex: &'a resource::Texture<A>,
     ) -> hal::TextureBarrier<'a, A> {
-        log::trace!("\ttexture -> {:?}", self);
         let texture = tex.inner.as_raw().expect("Texture is destroyed");
+
+        // These showing up in a barrier is always a bug
+        debug_assert_ne!(self.usage.start, hal::TextureUses::UNKNOWN);
+        debug_assert_ne!(self.usage.end, hal::TextureUses::UNKNOWN);
+
+        let mip_count = self.selector.mips.end - self.selector.mips.start;
+        debug_assert_ne!(mip_count, 0);
+        let layer_count = self.selector.layers.end - self.selector.layers.start;
+        debug_assert_ne!(layer_count, 0);
+
         hal::TextureBarrier {
             texture,
             range: wgt::ImageSubresourceRange {
                 aspect: wgt::TextureAspect::All,
-                base_mip_level: self.selector.levels.start,
-                mip_level_count: NonZeroU32::new(
-                    self.selector.levels.end - self.selector.levels.start,
-                ),
+                base_mip_level: self.selector.mips.start,
+                mip_level_count: unsafe { Some(NonZeroU32::new_unchecked(mip_count)) },
                 base_array_layer: self.selector.layers.start,
-                array_layer_count: NonZeroU32::new(
-                    self.selector.layers.end - self.selector.layers.start,
-                ),
+                array_layer_count: unsafe { Some(NonZeroU32::new_unchecked(layer_count)) },
             },
             usage: self.usage,
         }
     }
 }
 
-impl From<PendingTransition<TextureState>> for UsageConflict {
-    fn from(e: PendingTransition<TextureState>) -> Self {
-        Self::Texture {
-            id: e.id.0,
-            mip_levels: e.selector.levels.start..e.selector.levels.end,
-            array_layers: e.selector.layers.start..e.selector.layers.end,
-            combined_use: e.usage.end,
+/// The uses that a resource or subresource can be in.
+pub(crate) trait ResourceUses:
+    fmt::Debug + ops::BitAnd<Output = Self> + ops::BitOr<Output = Self> + PartialEq + Sized + Copy
+{
+    /// All flags that are exclusive.
+    const EXCLUSIVE: Self;
+
+    /// The relevant resource ID type.
+    type Id: Copy + fmt::Debug + TypedId;
+    /// The selector used by this resource.
+    type Selector: fmt::Debug;
+
+    /// Turn the resource into a pile of bits.
+    fn bits(self) -> u16;
+    /// Returns true if the all the uses are ordered.
+    fn all_ordered(self) -> bool;
+    /// Returns true if any of the uses are exclusive.
+    fn any_exclusive(self) -> bool;
+}
+
+/// Returns true if the given states violates the usage scope rule
+/// of any(inclusive) XOR one(exclusive)
+fn invalid_resource_state<T: ResourceUses>(state: T) -> bool {
+    // Is power of two also means "is one bit set". We check for this as if
+    // we're in any exclusive state, we must only be in a single state.
+    state.any_exclusive() && !conv::is_power_of_two_u16(state.bits())
+}
+
+/// Returns true if the transition from one state to another does not require
+/// a barrier.
+fn skip_barrier<T: ResourceUses>(old_state: T, new_state: T) -> bool {
+    // If the state didn't change and all the usages are ordered, the hardware
+    // will guarentee the order of accesses, so we do not need to issue a barrier at all
+    old_state == new_state && old_state.all_ordered()
+}
+
+/// Resizes the given bitvec to the given size. I'm not sure why this is hard to do but it is.
+fn resize_bitvec<B: bit_vec::BitBlock>(vec: &mut BitVec<B>, size: usize) {
+    let owned_size_to_grow = size.checked_sub(vec.len());
+    if let Some(delta) = owned_size_to_grow {
+        if delta != 0 {
+            vec.grow(delta, false);
         }
+    } else {
+        vec.truncate(size);
     }
 }
 
-#[derive(Clone, Debug, Error)]
-pub enum UseExtendError<U: fmt::Debug> {
-    #[error("resource is invalid")]
-    InvalidResource,
-    #[error("total usage {0:?} is not valid")]
-    Conflict(U),
+/// Produces an iterator that yields the indexes of all bits that are set in the bitvec.
+///
+/// Will skip entire usize's worth of bits if they are all false.
+fn iterate_bitvec_indices(ownership: &BitVec<usize>) -> impl Iterator<Item = usize> + '_ {
+    const BITS_PER_BLOCK: usize = mem::size_of::<usize>() * 8;
+
+    let size = ownership.len();
+
+    ownership
+        .blocks()
+        .enumerate()
+        .filter(|&(_, word)| word != 0)
+        .flat_map(move |(word_index, mut word)| {
+            let bit_start = word_index * BITS_PER_BLOCK;
+            let bit_end = (bit_start + BITS_PER_BLOCK).min(size);
+
+            (bit_start..bit_end).filter(move |_| {
+                let active = word & 0b1 != 0;
+                word >>= 1;
+
+                active
+            })
+        })
 }
 
-/// A tracker for all resources of a given type.
-pub(crate) struct ResourceTracker<S: ResourceState> {
-    /// An association of known resource indices with their tracked states.
-    map: FastHashMap<Index, Resource<S>>,
-    /// Temporary storage for collecting transitions.
-    temp: Vec<PendingTransition<S>>,
-    /// The backend variant for all the tracked resources.
-    backend: wgt::Backend,
-}
-
-impl<S: ResourceState + fmt::Debug> fmt::Debug for ResourceTracker<S> {
-    fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        self.map
-            .iter()
-            .map(|(&index, res)| ((index, res.epoch), &res.state))
-            .collect::<FastHashMap<_, _>>()
-            .fmt(formatter)
-    }
-}
-
-#[allow(
-    // Explicit lifetimes are easier to reason about here.
-    clippy::needless_lifetimes,
-)]
-impl<S: ResourceState> ResourceTracker<S> {
-    /// Create a new empty tracker.
-    pub fn new(backend: wgt::Backend) -> Self {
-        Self {
-            map: FastHashMap::default(),
-            temp: Vec::new(),
-            backend,
-        }
-    }
-
-    /// Remove an id from the tracked map.
-    pub(crate) fn remove(&mut self, id: Valid<S::Id>) -> bool {
-        let (index, epoch, backend) = id.0.unzip();
-        debug_assert_eq!(backend, self.backend);
-        match self.map.remove(&index) {
-            Some(resource) => {
-                assert_eq!(resource.epoch, epoch);
-                true
-            }
-            None => false,
-        }
-    }
-
-    /// Remove the resource `id`, only if `self` is holding the last reference to it.
-    ///
-    /// Return `true` if we did remove the resource; the underlying hal resource
-    /// is ready to be freed.
-    ///
-    /// This is generally only meaningful to apply to members of
-    /// [`Device::trackers`], which holds all resources allocated with that
-    /// [`Device`]. Other trackers should never be the final reference.
-    ///
-    /// [`Device`]: crate::device::Device
-    /// [`Device::trackers`]: crate::device::Device::trackers
-    pub(crate) fn remove_abandoned(&mut self, id: Valid<S::Id>) -> bool {
-        let (index, epoch, backend) = id.0.unzip();
-        debug_assert_eq!(backend, self.backend);
-        match self.map.entry(index) {
-            // This code explicitly ignores requests for IDs that are no longer valid,
-            // i.e. corresponding to removed entries, or entries that got re-filled
-            // with new elements (having different epochs).
-            // This is needed because of the asynchronous nature of the device internals.
-            // As such, by the time a resource is added to the suspected list, it may
-            // already be fully removed from all the trackers (and be a stale ID).
-            // see https://github.com/gfx-rs/wgpu/issues/1996
-            Entry::Occupied(e) => {
-                // see https://github.com/gfx-rs/wgpu/issues/1996
-                if e.get().epoch == epoch && e.get().ref_count.load() == 1 {
-                    e.remove();
-                    true
-                } else {
-                    false
-                }
-            }
-            _ => false,
-        }
-    }
-
-    /// Try to optimize the internal representation.
-    pub(crate) fn optimize(&mut self) {
-        for resource in self.map.values_mut() {
-            resource.state.optimize();
-        }
-    }
-
-    /// Return an iterator over used resources keys.
-    pub fn used<'a>(&'a self) -> impl 'a + Iterator<Item = Valid<S::Id>> {
-        let backend = self.backend;
-        self.map
-            .iter()
-            .map(move |(&index, resource)| Valid(S::Id::zip(index, resource.epoch, backend)))
-    }
-
-    pub fn get_ref_count(&self, id: Valid<S::Id>) -> &RefCount {
-        let (index, _, _) = id.0.unzip();
-        &self.map[&index].ref_count
-    }
-
-    /// Return true if there is nothing here.
-    pub fn is_empty(&self) -> bool {
-        self.map.is_empty()
-    }
-
-    /// Clear the tracked contents.
-    pub fn clear(&mut self) {
-        self.map.clear();
-    }
-
-    /// Begin tracking a new resource `id` in state `state`.
-    ///
-    /// Hold `ref_count` in the tracker.
-    ///
-    /// Returns false if the resource is already registered.
-    pub(crate) fn init(
-        &mut self,
-        id: Valid<S::Id>,
-        ref_count: RefCount,
-        state: S,
-    ) -> Result<(), &S> {
-        let (index, epoch, backend) = id.0.unzip();
-        debug_assert_eq!(backend, self.backend);
-        match self.map.entry(index) {
-            Entry::Vacant(e) => {
-                e.insert(Resource {
-                    ref_count,
-                    state,
-                    epoch,
-                });
-                Ok(())
-            }
-            Entry::Occupied(e) => Err(&e.into_mut().state),
-        }
-    }
-
-    /// Query the usage of a resource selector.
-    ///
-    /// Returns `Some(Usage)` only if this usage is consistent
-    /// across the given selector.
-    #[allow(unused)] // TODO: figure out if this needs to be removed
-    pub fn query(&self, id: Valid<S::Id>, selector: S::Selector) -> Option<S::Usage> {
-        let (index, epoch, backend) = id.0.unzip();
-        debug_assert_eq!(backend, self.backend);
-        let res = self.map.get(&index)?;
-        assert_eq!(res.epoch, epoch);
-        res.state.query(selector)
-    }
-
-    /// Make sure that a resource is tracked, and return a mutable reference to it.
-    ///
-    /// If the resource isn't tracked, start it in the default state, and take a
-    /// clone of `ref_count`.
-    ///
-    /// The `self_backend` and `map` arguments should be the `backend` and `map`
-    /// fields of a `ResourceTracker`. Ideally this function would just take
-    /// `&mut self` and access those from there, but that would upset the borrow
-    /// checker in some callers, who want to borrow `ResourceTracker::temp`
-    /// alongside our return value. The approach taken here has the caller
-    /// borrow both `map` and `temp`, so the borrow checker can see that they
-    /// don't alias.
-    fn get_or_insert<'a>(
-        self_backend: wgt::Backend,
-        map: &'a mut FastHashMap<Index, Resource<S>>,
-        id: Valid<S::Id>,
-        ref_count: &RefCount,
-    ) -> &'a mut Resource<S> {
-        let (index, epoch, backend) = id.0.unzip();
-        debug_assert_eq!(self_backend, backend);
-        match map.entry(index) {
-            Entry::Vacant(e) => e.insert(Resource {
-                ref_count: ref_count.clone(),
-                state: S::default(),
-                epoch,
-            }),
-            Entry::Occupied(e) => {
-                assert_eq!(e.get().epoch, epoch);
-                e.into_mut()
-            }
-        }
-    }
-
-    /// Return a mutable reference to `id`'s state.
-    fn get<'a>(
-        self_backend: wgt::Backend,
-        map: &'a mut FastHashMap<Index, Resource<S>>,
-        id: Valid<S::Id>,
-    ) -> &'a mut Resource<S> {
-        let (index, epoch, backend) = id.0.unzip();
-        debug_assert_eq!(self_backend, backend);
-        let e = map.get_mut(&index).unwrap();
-        assert_eq!(e.epoch, epoch);
-        e
-    }
-
-    /// Extend the usage of `id`, tracking it if necessary.
-    ///
-    /// Returns conflicting transition as an error.
-    pub(crate) fn change_extend(
-        &mut self,
-        id: Valid<S::Id>,
-        ref_count: &RefCount,
-        selector: S::Selector,
-        usage: S::Usage,
-    ) -> Result<(), PendingTransition<S>> {
-        Self::get_or_insert(self.backend, &mut self.map, id, ref_count)
-            .state
-            .change(id, selector, usage, None)
-    }
-
-    /// Replace the usage of a specified resource.
-    pub(crate) fn change_replace(
-        &mut self,
-        id: Valid<S::Id>,
-        ref_count: &RefCount,
-        selector: S::Selector,
-        usage: S::Usage,
-    ) -> Drain<PendingTransition<S>> {
-        let res = Self::get_or_insert(self.backend, &mut self.map, id, ref_count);
-        res.state
-            .change(id, selector, usage, Some(&mut self.temp))
-            .ok(); //TODO: unwrap?
-        self.temp.drain(..)
-    }
-
-    /// Replace the usage of a specified already tracked resource.
-    /// (panics if the resource is not yet tracked)
-    pub(crate) fn change_replace_tracked(
-        &mut self,
-        id: Valid<S::Id>,
-        selector: S::Selector,
-        usage: S::Usage,
-    ) -> Drain<PendingTransition<S>> {
-        let res = Self::get(self.backend, &mut self.map, id);
-        res.state
-            .change(id, selector, usage, Some(&mut self.temp))
-            .ok();
-        self.temp.drain(..)
-    }
-
-    /// Merge another tracker into `self` by extending the current states
-    /// without any transitions.
-    pub(crate) fn merge_extend(&mut self, other: &Self) -> Result<(), PendingTransition<S>> {
-        debug_assert_eq!(self.backend, other.backend);
-        for (&index, new) in other.map.iter() {
-            match self.map.entry(index) {
-                Entry::Vacant(e) => {
-                    e.insert(new.clone());
-                }
-                Entry::Occupied(e) => {
-                    assert_eq!(
-                        e.get().epoch,
-                        new.epoch,
-                        "ID {:?} wasn't properly removed",
-                        S::Id::zip(index, e.get().epoch, self.backend)
-                    );
-                    let id = Valid(S::Id::zip(index, new.epoch, self.backend));
-                    e.into_mut().state.merge(id, &new.state, None)?;
-                }
-            }
-        }
-        Ok(())
-    }
-
-    /// Merge another tracker, adding it's transitions to `self`.
-    /// Transitions the current usage to the new one.
-    pub(crate) fn merge_replace<'a>(&'a mut self, other: &'a Self) -> Drain<PendingTransition<S>> {
-        for (&index, new) in other.map.iter() {
-            match self.map.entry(index) {
-                Entry::Vacant(e) => {
-                    e.insert(new.clone());
-                }
-                Entry::Occupied(e) => {
-                    assert_eq!(
-                        e.get().epoch,
-                        new.epoch,
-                        "ID {:?} wasn't properly removed",
-                        S::Id::zip(index, e.get().epoch, self.backend)
-                    );
-                    let id = Valid(S::Id::zip(index, new.epoch, self.backend));
-                    e.into_mut()
-                        .state
-                        .merge(id, &new.state, Some(&mut self.temp))
-                        .ok(); //TODO: unwrap?
-                }
-            }
-        }
-        self.temp.drain(..)
-    }
-
-    /// Use a given resource provided by an `Id` with the specified usage.
-    /// Combines storage access by 'Id' with the transition that extends
-    /// the last read-only usage, if possible.
-    ///
-    /// Returns the old usage as an error if there is a conflict.
-    pub(crate) fn use_extend<'a, T: 'a + hub::Resource>(
-        &mut self,
-        storage: &'a hub::Storage<T, S::Id>,
-        id: S::Id,
-        selector: S::Selector,
-        usage: S::Usage,
-    ) -> Result<&'a T, UseExtendError<S::Usage>> {
-        let item = storage
-            .get(id)
-            .map_err(|_| UseExtendError::InvalidResource)?;
-        self.change_extend(
-            Valid(id),
-            item.life_guard().ref_count.as_ref().unwrap(),
-            selector,
-            usage,
-        )
-        .map(|()| item)
-        .map_err(|pending| UseExtendError::Conflict(pending.usage.end))
-    }
-
-    /// Use a given resource provided by an `Id` with the specified usage.
-    /// Combines storage access by 'Id' with the transition that replaces
-    /// the last usage with a new one, returning an iterator over these
-    /// transitions.
-    pub(crate) fn use_replace<'a, T: 'a + hub::Resource>(
-        &mut self,
-        storage: &'a hub::Storage<T, S::Id>,
-        id: S::Id,
-        selector: S::Selector,
-        usage: S::Usage,
-    ) -> Result<(&'a T, Drain<PendingTransition<S>>), S::Id> {
-        let item = storage.get(id).map_err(|_| id)?;
-        let drain = self.change_replace(
-            Valid(id),
-            item.life_guard().ref_count.as_ref().unwrap(),
-            selector,
-            usage,
-        );
-        Ok((item, drain))
-    }
-}
-
-impl<I: Copy + fmt::Debug + TypedId> ResourceState for PhantomData<I> {
-    type Id = I;
-    type Selector = ();
-    type Usage = ();
-
-    fn query(&self, _selector: Self::Selector) -> Option<Self::Usage> {
-        Some(())
-    }
-
-    fn change(
-        &mut self,
-        _id: Valid<Self::Id>,
-        _selector: Self::Selector,
-        _usage: Self::Usage,
-        _output: Option<&mut Vec<PendingTransition<Self>>>,
-    ) -> Result<(), PendingTransition<Self>> {
-        Ok(())
-    }
-
-    fn merge(
-        &mut self,
-        _id: Valid<Self::Id>,
-        _other: &Self,
-        _output: Option<&mut Vec<PendingTransition<Self>>>,
-    ) -> Result<(), PendingTransition<Self>> {
-        Ok(())
-    }
-
-    fn optimize(&mut self) {}
-}
-
-pub const DUMMY_SELECTOR: () = ();
-
-#[derive(Clone, Debug, Error)]
+#[derive(Clone, Debug, Error, PartialEq)]
 pub enum UsageConflict {
-    #[error(
-        "Attempted to use buffer {id:?} as a combination of {combined_use:?} within a usage scope."
-    )]
+    #[error("Attempted to use buffer {id:?} which is invalid.")]
+    BufferInvalid { id: id::BufferId },
+    #[error("Attempted to use texture {id:?} which is invalid.")]
+    TextureInvalid { id: id::TextureId },
+    #[error("Attempted to use buffer {id:?} with {invalid_use}.")]
     Buffer {
         id: id::BufferId,
-        combined_use: hal::BufferUses,
+        invalid_use: InvalidUse<hal::BufferUses>,
     },
-    #[error("Attempted to use texture {id:?} mips {mip_levels:?} layers {array_layers:?} as a combination of {combined_use:?} within a usage scope.")]
+    #[error("Attempted to use a texture {id:?} mips {mip_levels:?} layers {array_layers:?} with {invalid_use}.")]
     Texture {
         id: id::TextureId,
         mip_levels: ops::Range<u32>,
         array_layers: ops::Range<u32>,
-        combined_use: hal::TextureUses,
+        invalid_use: InvalidUse<hal::TextureUses>,
     },
 }
-
-/// A set of trackers for all relevant resources.
-///
-/// `Device` uses this to track all resources allocated from that device.
-/// Resources like `BindGroup`, `CommandBuffer`, and so on that may own a
-/// variety of other resources also use a value of this type to keep track of
-/// everything they're depending on.
-#[derive(Debug)]
-pub(crate) struct TrackerSet {
-    pub buffers: ResourceTracker<BufferState>,
-    pub textures: ResourceTracker<TextureState>,
-    pub views: ResourceTracker<PhantomData<id::TextureViewId>>,
-    pub bind_groups: ResourceTracker<PhantomData<id::BindGroupId>>,
-    pub samplers: ResourceTracker<PhantomData<id::SamplerId>>,
-    pub compute_pipes: ResourceTracker<PhantomData<id::ComputePipelineId>>,
-    pub render_pipes: ResourceTracker<PhantomData<id::RenderPipelineId>>,
-    pub bundles: ResourceTracker<PhantomData<id::RenderBundleId>>,
-    pub query_sets: ResourceTracker<PhantomData<id::QuerySetId>>,
-}
-
-impl TrackerSet {
-    /// Create an empty set.
-    pub fn new(backend: wgt::Backend) -> Self {
-        Self {
-            buffers: ResourceTracker::new(backend),
-            textures: ResourceTracker::new(backend),
-            views: ResourceTracker::new(backend),
-            bind_groups: ResourceTracker::new(backend),
-            samplers: ResourceTracker::new(backend),
-            compute_pipes: ResourceTracker::new(backend),
-            render_pipes: ResourceTracker::new(backend),
-            bundles: ResourceTracker::new(backend),
-            query_sets: ResourceTracker::new(backend),
+impl UsageConflict {
+    fn from_buffer(
+        id: id::BufferId,
+        current_state: hal::BufferUses,
+        new_state: hal::BufferUses,
+    ) -> Self {
+        Self::Buffer {
+            id,
+            invalid_use: InvalidUse {
+                current_state,
+                new_state,
+            },
         }
     }
 
-    /// Clear all the trackers.
-    pub fn _clear(&mut self) {
-        self.buffers.clear();
-        self.textures.clear();
-        self.views.clear();
-        self.bind_groups.clear();
-        self.samplers.clear();
-        self.compute_pipes.clear();
-        self.render_pipes.clear();
-        self.bundles.clear();
-        self.query_sets.clear();
+    fn from_texture(
+        id: id::TextureId,
+        selector: TextureSelector,
+        current_state: hal::TextureUses,
+        new_state: hal::TextureUses,
+    ) -> Self {
+        Self::Texture {
+            id,
+            mip_levels: selector.mips,
+            array_layers: selector.layers,
+            invalid_use: InvalidUse {
+                current_state,
+                new_state,
+            },
+        }
+    }
+}
+
+/// Pretty print helper that shows helpful descriptions of a conflicting usage.
+#[derive(Clone, Debug, PartialEq)]
+pub struct InvalidUse<T> {
+    current_state: T,
+    new_state: T,
+}
+
+impl<T: ResourceUses> fmt::Display for InvalidUse<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let current = self.current_state;
+        let new = self.new_state;
+
+        let current_exclusive = current & T::EXCLUSIVE;
+        let new_exclusive = new & T::EXCLUSIVE;
+
+        let exclusive = current_exclusive | new_exclusive;
+
+        // The text starts with "tried to use X resource with {self}"
+        write!(
+            f,
+            "conflicting usages. Current usage {current:?} and new usage {new:?}. \
+            {exclusive:?} is an exclusive usage and cannot be used with any other\
+            usages within the usage scope (renderpass or compute dispatch)"
+        )
+    }
+}
+
+/// SOA container for storing metadata of a resource.
+///
+/// This contins the ownership bitvec, the refcount of
+/// the resource, and the epoch of the object's full ID.
+#[derive(Debug)]
+pub(crate) struct ResourceMetadata<A: hub::HalApi> {
+    owned: BitVec<usize>,
+    ref_counts: Vec<Option<RefCount>>,
+    epochs: Vec<Epoch>,
+
+    _phantom: PhantomData<A>,
+}
+impl<A: hub::HalApi> ResourceMetadata<A> {
+    pub fn new() -> Self {
+        Self {
+            owned: BitVec::default(),
+            ref_counts: Vec::new(),
+            epochs: Vec::new(),
+
+            _phantom: PhantomData,
+        }
     }
 
-    /// Try to optimize the tracking representation.
+    pub fn set_size(&mut self, size: usize) {
+        self.ref_counts.resize(size, None);
+        self.epochs.resize(size, u32::MAX);
+
+        resize_bitvec(&mut self.owned, size);
+    }
+
+    /// Ensures a given index is in bounds for all arrays and does
+    /// sanity checks of the presence of a refcount.
+    ///
+    /// In release mode this function is completely empty and is removed.
+    fn debug_assert_in_bounds(&self, index: usize) {
+        debug_assert!(index < self.owned.len());
+        debug_assert!(index < self.ref_counts.len());
+        debug_assert!(index < self.epochs.len());
+
+        debug_assert!(if self.owned.get(index).unwrap() {
+            self.ref_counts[index].is_some()
+        } else {
+            true
+        });
+    }
+
+    /// Returns true if the tracker owns no resources.
+    ///
+    /// This is a O(n) operation.
+    fn is_empty(&self) -> bool {
+        !self.owned.any()
+    }
+
+    /// Returns ids for all resources we own.
+    fn used<Id: TypedId>(&self) -> impl Iterator<Item = id::Valid<Id>> + '_ {
+        if !self.owned.is_empty() {
+            self.debug_assert_in_bounds(self.owned.len() - 1)
+        };
+        iterate_bitvec_indices(&self.owned).map(move |index| {
+            let epoch = unsafe { *self.epochs.get_unchecked(index) };
+            id::Valid(Id::zip(index as u32, epoch, A::VARIANT))
+        })
+    }
+
+    /// Resets the metadata for a given index to sane "invalid" values.
+    unsafe fn reset(&mut self, index: usize) {
+        *self.ref_counts.get_unchecked_mut(index) = None;
+        *self.epochs.get_unchecked_mut(index) = u32::MAX;
+        self.owned.set(index, false);
+    }
+}
+
+/// A source of resource metadata.
+///
+/// This is used to abstract over the various places
+/// trackers can get new resource metadata from.
+enum ResourceMetadataProvider<'a, A: hub::HalApi> {
+    /// Comes directly from explicit values.
+    Direct {
+        epoch: Epoch,
+        ref_count: Cow<'a, RefCount>,
+    },
+    /// Comes from another metadata tracker.
+    Indirect { metadata: &'a ResourceMetadata<A> },
+    /// The epoch is given directly, but the life count comes from the resource itself.
+    Resource { epoch: Epoch },
+}
+impl<A: hub::HalApi> ResourceMetadataProvider<'_, A> {
+    /// Get the epoch and an owned refcount from this.
+    ///
+    /// # Safety
+    ///
+    /// - The index must be in bounds of the metadata tracker if this uses an indirect source.
+    /// - life_guard must be Some if this uses a Resource source.
+    #[inline(always)]
+    unsafe fn get_own(self, life_guard: Option<&LifeGuard>, index: usize) -> (Epoch, RefCount) {
+        match self {
+            ResourceMetadataProvider::Direct { epoch, ref_count } => {
+                (epoch, ref_count.into_owned())
+            }
+            ResourceMetadataProvider::Indirect { metadata } => {
+                metadata.debug_assert_in_bounds(index);
+                (
+                    *metadata.epochs.get_unchecked(index),
+                    metadata
+                        .ref_counts
+                        .get_unchecked(index)
+                        .clone()
+                        .unwrap_unchecked(),
+                )
+            }
+            ResourceMetadataProvider::Resource { epoch } => {
+                debug_assert!(life_guard.is_some());
+                (epoch, life_guard.unwrap_unchecked().add_ref())
+            }
+        }
+    }
+    /// Get the epoch from this.
+    ///
+    /// # Safety
+    ///
+    /// - The index must be in bounds of the metadata tracker if this uses an indirect source.
+    #[inline(always)]
+    unsafe fn get_epoch(self, index: usize) -> Epoch {
+        match self {
+            ResourceMetadataProvider::Direct { epoch, .. }
+            | ResourceMetadataProvider::Resource { epoch, .. } => epoch,
+            ResourceMetadataProvider::Indirect { metadata } => {
+                metadata.debug_assert_in_bounds(index);
+                *metadata.epochs.get_unchecked(index)
+            }
+        }
+    }
+}
+
+/// All the usages that a bind group contains. The uses are not deduplicated in any way
+/// and may include conflicting uses. This is fully compliant by the WebGPU spec.
+///
+/// All bind group states are sorted by their ID so that when adding to a tracker,
+/// they are added in the most efficient order possible (assending order).
+pub(crate) struct BindGroupStates<A: hub::HalApi> {
+    pub buffers: BufferBindGroupState<A>,
+    pub textures: TextureBindGroupState<A>,
+    pub views: StatelessBindGroupSate<resource::TextureView<A>, id::TextureViewId>,
+    pub samplers: StatelessBindGroupSate<resource::Sampler<A>, id::SamplerId>,
+}
+
+impl<A: hub::HalApi> BindGroupStates<A> {
+    pub fn new() -> Self {
+        Self {
+            buffers: BufferBindGroupState::new(),
+            textures: TextureBindGroupState::new(),
+            views: StatelessBindGroupSate::new(),
+            samplers: StatelessBindGroupSate::new(),
+        }
+    }
+
+    /// Optimize the bind group states by sorting them by ID.
+    ///
+    /// When this list of states is merged into a tracker, the memory
+    /// accesses will be in a constant assending order.
     pub fn optimize(&mut self) {
         self.buffers.optimize();
         self.textures.optimize();
         self.views.optimize();
-        self.bind_groups.optimize();
         self.samplers.optimize();
-        self.compute_pipes.optimize();
-        self.render_pipes.optimize();
-        self.bundles.optimize();
-        self.query_sets.optimize();
+    }
+}
+
+/// This is a render bundle specific usage scope. It includes stateless resources
+/// that are not normally included in a usage scope, but are used by render bundles
+/// and need to be owned by the render bundles.
+pub(crate) struct RenderBundleScope<A: hub::HalApi> {
+    pub buffers: BufferUsageScope<A>,
+    pub textures: TextureUsageScope<A>,
+    // Don't need to track views and samplers, they are never used directly, only by bind groups.
+    pub bind_groups: StatelessTracker<A, binding_model::BindGroup<A>, id::BindGroupId>,
+    pub render_pipelines: StatelessTracker<A, pipeline::RenderPipeline<A>, id::RenderPipelineId>,
+    pub query_sets: StatelessTracker<A, resource::QuerySet<A>, id::QuerySetId>,
+}
+
+impl<A: hub::HalApi> RenderBundleScope<A> {
+    /// Create the render bundle scope and pull the maximum IDs from the hubs.
+    pub fn new(
+        buffers: &hub::Storage<resource::Buffer<A>, id::BufferId>,
+        textures: &hub::Storage<resource::Texture<A>, id::TextureId>,
+        bind_groups: &hub::Storage<binding_model::BindGroup<A>, id::BindGroupId>,
+        render_pipelines: &hub::Storage<pipeline::RenderPipeline<A>, id::RenderPipelineId>,
+        query_sets: &hub::Storage<resource::QuerySet<A>, id::QuerySetId>,
+    ) -> Self {
+        let mut value = Self {
+            buffers: BufferUsageScope::new(),
+            textures: TextureUsageScope::new(),
+            bind_groups: StatelessTracker::new(),
+            render_pipelines: StatelessTracker::new(),
+            query_sets: StatelessTracker::new(),
+        };
+
+        value.buffers.set_size(buffers.len());
+        value.textures.set_size(textures.len());
+        value.bind_groups.set_size(bind_groups.len());
+        value.render_pipelines.set_size(render_pipelines.len());
+        value.query_sets.set_size(query_sets.len());
+
+        value
     }
 
-    /// Merge only the stateful trackers of another instance by extending
-    /// the usage. Returns a conflict if any.
-    pub fn merge_extend_stateful(&mut self, other: &Self) -> Result<(), UsageConflict> {
-        self.buffers.merge_extend(&other.buffers)?;
-        self.textures.merge_extend(&other.textures)?;
+    /// Merge the inner contents of a bind group into the render bundle tracker.
+    ///
+    /// Only stateful things are merged in here, all other resources are owned
+    /// indirectly by the bind group.
+    ///
+    /// # Safety
+    ///
+    /// The maximum ID given by each bind group resource must be less than the
+    /// length of the storage given at the call to `new`.
+    pub unsafe fn merge_bind_group(
+        &mut self,
+        textures: &hub::Storage<resource::Texture<A>, id::TextureId>,
+        bind_group: &BindGroupStates<A>,
+    ) -> Result<(), UsageConflict> {
+        self.buffers.merge_bind_group(&bind_group.buffers)?;
+        self.textures
+            .merge_bind_group(textures, &bind_group.textures)?;
+
+        Ok(())
+    }
+}
+
+/// A usage scope tracker. Only needs to store stateful resources as stateless
+/// resources cannot possibly have a usage conflict.
+#[derive(Debug)]
+pub(crate) struct UsageScope<A: hub::HalApi> {
+    pub buffers: BufferUsageScope<A>,
+    pub textures: TextureUsageScope<A>,
+}
+
+impl<A: hub::HalApi> UsageScope<A> {
+    /// Create the render bundle scope and pull the maximum IDs from the hubs.
+    pub fn new(
+        buffers: &hub::Storage<resource::Buffer<A>, id::BufferId>,
+        textures: &hub::Storage<resource::Texture<A>, id::TextureId>,
+    ) -> Self {
+        let mut value = Self {
+            buffers: BufferUsageScope::new(),
+            textures: TextureUsageScope::new(),
+        };
+
+        value.buffers.set_size(buffers.len());
+        value.textures.set_size(textures.len());
+
+        value
+    }
+
+    /// Merge the inner contents of a bind group into the usage scope.
+    ///
+    /// Only stateful things are merged in here, all other resources are owned
+    /// indirectly by the bind group.
+    ///
+    /// # Safety
+    ///
+    /// The maximum ID given by each bind group resource must be less than the
+    /// length of the storage given at the call to `new`.
+    pub unsafe fn merge_bind_group(
+        &mut self,
+        textures: &hub::Storage<resource::Texture<A>, id::TextureId>,
+        bind_group: &BindGroupStates<A>,
+    ) -> Result<(), UsageConflict> {
+        self.buffers.merge_bind_group(&bind_group.buffers)?;
+        self.textures
+            .merge_bind_group(textures, &bind_group.textures)?;
+
         Ok(())
     }
 
-    pub fn backend(&self) -> wgt::Backend {
-        self.buffers.backend
+    /// Merge the inner contents of a bind group into the usage scope.
+    ///
+    /// Only stateful things are merged in here, all other resources are owned
+    /// indirectly by a bind group or are merged directly into the command buffer tracker.
+    ///
+    /// # Safety
+    ///
+    /// The maximum ID given by each bind group resource must be less than the
+    /// length of the storage given at the call to `new`.
+    pub unsafe fn merge_render_bundle(
+        &mut self,
+        textures: &hub::Storage<resource::Texture<A>, id::TextureId>,
+        render_bundle: &RenderBundleScope<A>,
+    ) -> Result<(), UsageConflict> {
+        self.buffers.merge_usage_scope(&render_bundle.buffers)?;
+        self.textures
+            .merge_usage_scope(textures, &render_bundle.textures)?;
+
+        Ok(())
     }
 }
 
-#[derive(Debug)]
-pub(crate) struct StatefulTrackerSubset {
-    pub buffers: ResourceTracker<BufferState>,
-    pub textures: ResourceTracker<TextureState>,
+/// A full double sided tracker used by CommandBuffers and the Device.
+pub(crate) struct Tracker<A: hub::HalApi> {
+    pub buffers: BufferTracker<A>,
+    pub textures: TextureTracker<A>,
+    pub views: StatelessTracker<A, resource::TextureView<A>, id::TextureViewId>,
+    pub samplers: StatelessTracker<A, resource::Sampler<A>, id::SamplerId>,
+    pub bind_groups: StatelessTracker<A, binding_model::BindGroup<A>, id::BindGroupId>,
+    pub compute_pipelines: StatelessTracker<A, pipeline::ComputePipeline<A>, id::ComputePipelineId>,
+    pub render_pipelines: StatelessTracker<A, pipeline::RenderPipeline<A>, id::RenderPipelineId>,
+    pub bundles: StatelessTracker<A, command::RenderBundle<A>, id::RenderBundleId>,
+    pub query_sets: StatelessTracker<A, resource::QuerySet<A>, id::QuerySetId>,
 }
 
-impl StatefulTrackerSubset {
-    /// Create an empty set.
-    pub fn new(backend: wgt::Backend) -> Self {
+impl<A: hub::HalApi> Tracker<A> {
+    pub fn new() -> Self {
         Self {
-            buffers: ResourceTracker::new(backend),
-            textures: ResourceTracker::new(backend),
+            buffers: BufferTracker::new(),
+            textures: TextureTracker::new(),
+            views: StatelessTracker::new(),
+            samplers: StatelessTracker::new(),
+            bind_groups: StatelessTracker::new(),
+            compute_pipelines: StatelessTracker::new(),
+            render_pipelines: StatelessTracker::new(),
+            bundles: StatelessTracker::new(),
+            query_sets: StatelessTracker::new(),
         }
     }
 
-    /// Clear all the trackers.
-    pub fn clear(&mut self) {
-        self.buffers.clear();
-        self.textures.clear();
+    /// Pull the maximum IDs from the hubs.
+    pub fn set_size(
+        &mut self,
+        buffers: Option<&hub::Storage<resource::Buffer<A>, id::BufferId>>,
+        textures: Option<&hub::Storage<resource::Texture<A>, id::TextureId>>,
+        views: Option<&hub::Storage<resource::TextureView<A>, id::TextureViewId>>,
+        samplers: Option<&hub::Storage<resource::Sampler<A>, id::SamplerId>>,
+        bind_groups: Option<&hub::Storage<binding_model::BindGroup<A>, id::BindGroupId>>,
+        compute_pipelines: Option<
+            &hub::Storage<pipeline::ComputePipeline<A>, id::ComputePipelineId>,
+        >,
+        render_pipelines: Option<&hub::Storage<pipeline::RenderPipeline<A>, id::RenderPipelineId>>,
+        bundles: Option<&hub::Storage<command::RenderBundle<A>, id::RenderBundleId>>,
+        query_sets: Option<&hub::Storage<resource::QuerySet<A>, id::QuerySetId>>,
+    ) {
+        if let Some(buffers) = buffers {
+            self.buffers.set_size(buffers.len());
+        };
+        if let Some(textures) = textures {
+            self.textures.set_size(textures.len());
+        };
+        if let Some(views) = views {
+            self.views.set_size(views.len());
+        };
+        if let Some(samplers) = samplers {
+            self.samplers.set_size(samplers.len());
+        };
+        if let Some(bind_groups) = bind_groups {
+            self.bind_groups.set_size(bind_groups.len());
+        };
+        if let Some(compute_pipelines) = compute_pipelines {
+            self.compute_pipelines.set_size(compute_pipelines.len());
+        }
+        if let Some(render_pipelines) = render_pipelines {
+            self.render_pipelines.set_size(render_pipelines.len());
+        };
+        if let Some(bundles) = bundles {
+            self.bundles.set_size(bundles.len());
+        };
+        if let Some(query_sets) = query_sets {
+            self.query_sets.set_size(query_sets.len());
+        };
     }
 
-    /// Merge all the trackers of another tracker the usage.
-    pub fn merge_extend(&mut self, other: &TrackerSet) -> Result<(), UsageConflict> {
-        self.buffers.merge_extend(&other.buffers)?;
-        self.textures.merge_extend(&other.textures)?;
+    /// Iterates through all resources in the given bind group and adopts
+    /// the state given for those resources in the UsageScope. It also
+    /// removes all touched resources from the usage scope.
+    ///
+    /// If a transition is needed to get the resources into the needed state,
+    /// those transitions are stored within the tracker. A subsequent
+    /// call to [`Self::drain`] is needed to get those transitions.
+    ///
+    /// This is a really funky method used by Compute Passes to generate
+    /// barriers after a call to dispatch without needing to iterate
+    /// over all elements in the usage scope. We use each the
+    /// bind group as a source of which IDs to look at. The bind groups
+    /// must have first been added to the usage scope.
+    ///
+    /// Only stateful things are merged in here, all other resources are owned
+    /// indirectly by the bind group.
+    ///
+    /// # Safety
+    ///
+    /// The maximum ID given by each bind group resource must be less than the
+    /// value given to `set_size`
+    pub unsafe fn set_and_remove_from_usage_scope_sparse(
+        &mut self,
+        textures: &hub::Storage<resource::Texture<A>, id::TextureId>,
+        scope: &mut UsageScope<A>,
+        bind_group: &BindGroupStates<A>,
+    ) {
+        self.buffers
+            .set_and_remove_from_usage_scope_sparse(&mut scope.buffers, &bind_group.buffers);
+        self.textures.set_and_remove_from_usage_scope_sparse(
+            textures,
+            &mut scope.textures,
+            &bind_group.textures,
+        );
+    }
+
+    /// Tracks the stateless resources from the given renderbundle. It is expected
+    /// that the stateful resources will get merged into a usage scope first.
+    ///
+    /// # Safety
+    ///
+    /// The maximum ID given by each bind group resource must be less than the
+    /// value given to `set_size`
+    pub unsafe fn add_from_render_bundle(
+        &mut self,
+        render_bundle: &RenderBundleScope<A>,
+    ) -> Result<(), UsageConflict> {
+        self.bind_groups
+            .add_from_tracker(&render_bundle.bind_groups);
+        self.render_pipelines
+            .add_from_tracker(&render_bundle.render_pipelines);
+        self.query_sets.add_from_tracker(&render_bundle.query_sets);
+
         Ok(())
     }
 }

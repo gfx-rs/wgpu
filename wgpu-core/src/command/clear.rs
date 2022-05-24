@@ -4,13 +4,12 @@ use std::{num::NonZeroU32, ops::Range};
 use crate::device::trace::Command as TraceCommand;
 use crate::{
     command::CommandBuffer,
-    device::Device,
     get_lowest_common_denom,
-    hub::{Global, GlobalIdentityHandlerFactory, HalApi, Resource, Token},
+    hub::{self, Global, GlobalIdentityHandlerFactory, HalApi, Token},
     id::{BufferId, CommandEncoderId, DeviceId, TextureId, Valid},
     init_tracker::{MemoryInitKind, TextureInitRange},
     resource::{Texture, TextureClearMode},
-    track::{ResourceTracker, TextureSelector, TextureState},
+    track::{TextureSelector, TextureTracker},
 };
 
 use hal::{auxil::align_to, CommandEncoder as _};
@@ -90,8 +89,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (dst_buffer, dst_pending) = cmd_buf
             .trackers
             .buffers
-            .use_replace(&*buffer_guard, dst, (), hal::BufferUses::COPY_DST)
-            .map_err(ClearError::InvalidBuffer)?;
+            .set_single(&*buffer_guard, dst, hal::BufferUses::COPY_DST)
+            .ok_or(ClearError::InvalidBuffer(dst))?;
         let dst_raw = dst_buffer
             .raw
             .as_ref()
@@ -139,7 +138,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let dst_barrier = dst_pending.map(|pending| pending.into_hal(dst_buffer));
         let cmd_buf_raw = cmd_buf.encoder.open();
         unsafe {
-            cmd_buf_raw.transition_buffers(dst_barrier);
+            cmd_buf_raw.transition_buffers(dst_barrier.into_iter());
             cmd_buf_raw.clear_buffer(dst_raw, offset..end);
         }
         Ok(())
@@ -191,13 +190,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         // Check if subresource level range is valid
         let subresource_level_end = match subresource_range.mip_level_count {
             Some(count) => subresource_range.base_mip_level + count.get(),
-            None => dst_texture.full_range.levels.end,
+            None => dst_texture.full_range.mips.end,
         };
-        if dst_texture.full_range.levels.start > subresource_range.base_mip_level
-            || dst_texture.full_range.levels.end < subresource_level_end
+        if dst_texture.full_range.mips.start > subresource_range.base_mip_level
+            || dst_texture.full_range.mips.end < subresource_level_end
         {
             return Err(ClearError::InvalidTextureLevelRange {
-                texture_level_range: dst_texture.full_range.levels.clone(),
+                texture_level_range: dst_texture.full_range.mips.clone(),
                 subresource_base_mip_level: subresource_range.base_mip_level,
                 subresource_mip_level_count: subresource_range.mip_level_count,
             });
@@ -217,48 +216,34 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             });
         }
 
+        let device = &device_guard[cmd_buf.device_id.value];
+
         clear_texture(
+            &*texture_guard,
             Valid(dst),
-            dst_texture,
             TextureInitRange {
                 mip_range: subresource_range.base_mip_level..subresource_level_end,
                 layer_range: subresource_range.base_array_layer..subresource_layer_end,
             },
             cmd_buf.encoder.open(),
             &mut cmd_buf.trackers.textures,
-            &device_guard[cmd_buf.device_id.value],
+            &device.alignments,
+            &device.zero_buffer,
         )
     }
 }
 
-pub(crate) fn clear_texture<A: hal::Api>(
+pub(crate) fn clear_texture<A: HalApi>(
+    storage: &hub::Storage<Texture<A>, TextureId>,
     dst_texture_id: Valid<TextureId>,
-    dst_texture: &Texture<A>,
     range: TextureInitRange,
     encoder: &mut A::CommandEncoder,
-    texture_tracker: &mut ResourceTracker<TextureState>,
-    device: &Device<A>,
-) -> Result<(), ClearError> {
-    clear_texture_no_device(
-        dst_texture_id,
-        dst_texture,
-        range,
-        encoder,
-        texture_tracker,
-        &device.alignments,
-        &device.zero_buffer,
-    )
-}
-
-pub(crate) fn clear_texture_no_device<A: hal::Api>(
-    dst_texture_id: Valid<TextureId>,
-    dst_texture: &Texture<A>,
-    range: TextureInitRange,
-    encoder: &mut A::CommandEncoder,
-    texture_tracker: &mut ResourceTracker<TextureState>,
+    texture_tracker: &mut TextureTracker<A>,
     alignments: &hal::Alignments,
     zero_buffer: &A::Buffer,
 ) -> Result<(), ClearError> {
+    let dst_texture = &storage[dst_texture_id];
+
     let dst_raw = dst_texture
         .inner
         .as_raw()
@@ -277,7 +262,7 @@ pub(crate) fn clear_texture_no_device<A: hal::Api>(
     };
 
     let selector = TextureSelector {
-        levels: range.mip_range.clone(),
+        mips: range.mip_range.clone(),
         layers: range.layer_range.clone(),
     };
 
@@ -287,14 +272,13 @@ pub(crate) fn clear_texture_no_device<A: hal::Api>(
     // On the other hand, when coming via command_encoder_clear_texture, the life_guard is still there since in order to call it a texture object is needed.
     //
     // We could in theory distinguish these two scenarios in the internal clear_texture api in order to remove this check and call the cheaper change_replace_tracked whenever possible.
-    let dst_barrier = if let Some(ref_count) = dst_texture.life_guard().ref_count.as_ref() {
-        texture_tracker.change_replace(dst_texture_id, ref_count, selector, clear_usage)
-    } else {
-        texture_tracker.change_replace_tracked(dst_texture_id, selector, clear_usage)
-    }
-    .map(|pending| pending.into_hal(dst_texture));
+    let dst_barrier = texture_tracker
+        .set_single(storage, dst_texture_id.0, selector, clear_usage)
+        .unwrap()
+        .1
+        .map(|pending| pending.into_hal(dst_texture));
     unsafe {
-        encoder.transition_textures(dst_barrier);
+        encoder.transition_textures(dst_barrier.into_iter());
     }
 
     // Record actual clearing

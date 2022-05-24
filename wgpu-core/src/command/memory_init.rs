@@ -4,11 +4,11 @@ use hal::CommandEncoder;
 
 use crate::{
     device::Device,
-    hub::Storage,
+    hub::{HalApi, Storage},
     id::{self, TextureId},
     init_tracker::*,
     resource::{Buffer, Texture},
-    track::{ResourceTracker, TextureState, TrackerSet},
+    track::{TextureTracker, Tracker},
     FastHashMap,
 };
 
@@ -121,36 +121,37 @@ impl CommandBufferTextureMemoryActions {
 // Utility function that takes discarded surfaces from (several calls to) register_init_action and initializes them on the spot.
 // Takes care of barriers as well!
 pub(crate) fn fixup_discarded_surfaces<
-    A: hal::Api,
+    A: HalApi,
     InitIter: Iterator<Item = TextureSurfaceDiscard>,
 >(
     inits: InitIter,
     encoder: &mut A::CommandEncoder,
     texture_guard: &Storage<Texture<A>, TextureId>,
-    texture_tracker: &mut ResourceTracker<TextureState>,
+    texture_tracker: &mut TextureTracker<A>,
     device: &Device<A>,
 ) {
     for init in inits {
         clear_texture(
+            texture_guard,
             id::Valid(init.texture),
-            texture_guard.get(init.texture).unwrap(),
             TextureInitRange {
                 mip_range: init.mip_level..(init.mip_level + 1),
                 layer_range: init.layer..(init.layer + 1),
             },
             encoder,
             texture_tracker,
-            device,
+            &device.alignments,
+            &device.zero_buffer,
         )
         .unwrap();
     }
 }
 
-impl<A: hal::Api> BakedCommands<A> {
+impl<A: HalApi> BakedCommands<A> {
     // inserts all buffer initializations that are going to be needed for executing the commands and updates resource init states accordingly
     pub(crate) fn initialize_buffer_memory(
         &mut self,
-        device_tracker: &mut TrackerSet,
+        device_tracker: &mut Tracker<A>,
         buffer_guard: &mut Storage<Buffer<A>, id::BufferId>,
     ) -> Result<(), DestroyedBufferError> {
         // Gather init ranges for each buffer so we can collapse them.
@@ -202,11 +203,11 @@ impl<A: hal::Api> BakedCommands<A> {
 
             // Don't do use_replace since the buffer may already no longer have a ref_count.
             // However, we *know* that it is currently in use, so the tracker must already know about it.
-            let transition = device_tracker.buffers.change_replace_tracked(
-                id::Valid(buffer_id),
-                (),
-                hal::BufferUses::COPY_DST,
-            );
+            let transition = device_tracker
+                .buffers
+                .set_single(buffer_guard, buffer_id, hal::BufferUses::COPY_DST)
+                .unwrap()
+                .1;
 
             let buffer = buffer_guard
                 .get_mut(buffer_id)
@@ -214,8 +215,11 @@ impl<A: hal::Api> BakedCommands<A> {
             let raw_buf = buffer.raw.as_ref().ok_or(DestroyedBufferError(buffer_id))?;
 
             unsafe {
-                self.encoder
-                    .transition_buffers(transition.map(|pending| pending.into_hal(buffer)));
+                self.encoder.transition_buffers(
+                    transition
+                        .map(|pending| pending.into_hal(buffer))
+                        .into_iter(),
+                );
             }
 
             for range in ranges.iter() {
@@ -234,7 +238,7 @@ impl<A: hal::Api> BakedCommands<A> {
     // any textures that are left discarded by this command buffer will be marked as uninitialized
     pub(crate) fn initialize_texture_memory(
         &mut self,
-        device_tracker: &mut TrackerSet,
+        device_tracker: &mut Tracker<A>,
         texture_guard: &mut Storage<Texture<A>, TextureId>,
         device: &Device<A>,
     ) -> Result<(), DestroyedTextureError> {
@@ -274,12 +278,13 @@ impl<A: hal::Api> BakedCommands<A> {
             // TODO: Could we attempt some range collapsing here?
             for range in ranges.drain(..) {
                 clear_texture(
+                    texture_guard,
                     id::Valid(texture_use.id),
-                    &*texture,
                     range,
                     &mut self.encoder,
                     &mut device_tracker.textures,
-                    device,
+                    &device.alignments,
+                    &device.zero_buffer,
                 )
                 .unwrap();
             }

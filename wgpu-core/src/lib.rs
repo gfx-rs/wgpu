@@ -4,6 +4,8 @@
  */
 
 #![allow(
+    // It is much clearer to assert negative conditions with eq! false
+    clippy::bool_assert_comparison,
     // We use loops for getting early-out of scope without closures.
     clippy::never_loop,
     // We don't use syntax sugar where it's not necessary.
@@ -16,6 +18,8 @@
     clippy::new_without_default,
     // Needless updates are more scaleable, easier to play with features.
     clippy::needless_update,
+    // Need many arguments for some core functions to be able to re-use code in many situations.
+    clippy::too_many_arguments,
     // For some reason `rustc` can warn about these in const generics even
     // though they are required.
     unused_braces,

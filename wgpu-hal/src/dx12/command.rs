@@ -287,7 +287,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                     StateAfter: s1,
                 };
                 self.temp.barriers.push(raw);
-            } else if barrier.usage.start == crate::BufferUses::STORAGE_WRITE {
+            } else if barrier.usage.start == crate::BufferUses::STORAGE_READ_WRITE {
                 let mut raw = d3d12::D3D12_RESOURCE_BARRIER {
                     Type: d3d12::D3D12_RESOURCE_BARRIER_TYPE_UAV,
                     Flags: d3d12::D3D12_RESOURCE_BARRIER_FLAG_NONE,
@@ -382,7 +382,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                         }
                     }
                 }
-            } else if barrier.usage.start == crate::TextureUses::STORAGE_WRITE {
+            } else if barrier.usage.start == crate::TextureUses::STORAGE_READ_WRITE {
                 let mut raw = d3d12::D3D12_RESOURCE_BARRIER {
                     Type: d3d12::D3D12_RESOURCE_BARRIER_TYPE_UAV,
                     Flags: d3d12::D3D12_RESOURCE_BARRIER_FLAG_NONE,

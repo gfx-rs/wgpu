@@ -10,7 +10,7 @@ mod transfer;
 
 use std::slice;
 
-pub(crate) use self::clear::clear_texture_no_device;
+pub(crate) use self::clear::clear_texture;
 pub use self::{
     bundle::*, clear::ClearError, compute::*, draw::*, query::*, render::*, transfer::*,
 };
@@ -19,11 +19,11 @@ use self::memory_init::CommandBufferTextureMemoryActions;
 
 use crate::error::{ErrorFormatter, PrettyError};
 use crate::init_tracker::BufferInitTrackerAction;
+use crate::track::{Tracker, UsageScope};
 use crate::{
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Storage, Token},
     id,
     resource::{Buffer, Texture},
-    track::{BufferState, ResourceTracker, TextureState, TrackerSet},
     Label, Stored,
 };
 
@@ -81,10 +81,10 @@ impl<A: hal::Api> CommandEncoder<A> {
     }
 }
 
-pub struct BakedCommands<A: hal::Api> {
+pub struct BakedCommands<A: HalApi> {
     pub(crate) encoder: A::CommandEncoder,
     pub(crate) list: Vec<A::CommandBuffer>,
-    pub(crate) trackers: TrackerSet,
+    pub(crate) trackers: Tracker<A>,
     buffer_memory_init_actions: Vec<BufferInitTrackerAction>,
     texture_memory_actions: CommandBufferTextureMemoryActions,
 }
@@ -92,11 +92,11 @@ pub struct BakedCommands<A: hal::Api> {
 pub(crate) struct DestroyedBufferError(pub id::BufferId);
 pub(crate) struct DestroyedTextureError(pub id::TextureId);
 
-pub struct CommandBuffer<A: hal::Api> {
+pub struct CommandBuffer<A: HalApi> {
     encoder: CommandEncoder<A>,
     status: CommandEncoderStatus,
     pub(crate) device_id: Stored<id::DeviceId>,
-    pub(crate) trackers: TrackerSet,
+    pub(crate) trackers: Tracker<A>,
     buffer_memory_init_actions: Vec<BufferInitTrackerAction>,
     texture_memory_actions: CommandBufferTextureMemoryActions,
     limits: wgt::Limits,
@@ -124,7 +124,7 @@ impl<A: HalApi> CommandBuffer<A> {
             },
             status: CommandEncoderStatus::Recording,
             device_id,
-            trackers: TrackerSet::new(A::VARIANT),
+            trackers: Tracker::new(),
             buffer_memory_init_actions: Default::default(),
             texture_memory_actions: Default::default(),
             limits,
@@ -138,23 +138,52 @@ impl<A: HalApi> CommandBuffer<A> {
         }
     }
 
-    pub(crate) fn insert_barriers(
+    pub(crate) fn insert_barriers_from_tracker(
         raw: &mut A::CommandEncoder,
-        base: &mut TrackerSet,
-        head_buffers: &ResourceTracker<BufferState>,
-        head_textures: &ResourceTracker<TextureState>,
+        base: &mut Tracker<A>,
+        head: &Tracker<A>,
         buffer_guard: &Storage<Buffer<A>, id::BufferId>,
         texture_guard: &Storage<Texture<A>, id::TextureId>,
     ) {
         profiling::scope!("insert_barriers");
-        debug_assert_eq!(A::VARIANT, base.backend());
 
-        let buffer_barriers = base.buffers.merge_replace(head_buffers).map(|pending| {
-            let buf = &buffer_guard[pending.id];
+        base.buffers.set_from_tracker(&head.buffers);
+        base.textures
+            .set_from_tracker(&*texture_guard, &head.textures);
+
+        Self::drain_barriers(raw, base, buffer_guard, texture_guard);
+    }
+
+    pub(crate) fn insert_barriers_from_scope(
+        raw: &mut A::CommandEncoder,
+        base: &mut Tracker<A>,
+        head: &UsageScope<A>,
+        buffer_guard: &Storage<Buffer<A>, id::BufferId>,
+        texture_guard: &Storage<Texture<A>, id::TextureId>,
+    ) {
+        profiling::scope!("insert_barriers");
+
+        base.buffers.set_from_usage_scope(&head.buffers);
+        base.textures
+            .set_from_usage_scope(&*texture_guard, &head.textures);
+
+        Self::drain_barriers(raw, base, buffer_guard, texture_guard);
+    }
+
+    pub(crate) fn drain_barriers(
+        raw: &mut A::CommandEncoder,
+        base: &mut Tracker<A>,
+        buffer_guard: &Storage<Buffer<A>, id::BufferId>,
+        texture_guard: &Storage<Texture<A>, id::TextureId>,
+    ) {
+        profiling::scope!("drain_barriers");
+
+        let buffer_barriers = base.buffers.drain().map(|pending| {
+            let buf = unsafe { &buffer_guard.get_unchecked(pending.id) };
             pending.into_hal(buf)
         });
-        let texture_barriers = base.textures.merge_replace(head_textures).map(|pending| {
-            let tex = &texture_guard[pending.id];
+        let texture_barriers = base.textures.drain().map(|pending| {
+            let tex = unsafe { texture_guard.get_unchecked(pending.id) };
             pending.into_hal(tex)
         });
 
@@ -165,7 +194,7 @@ impl<A: HalApi> CommandBuffer<A> {
     }
 }
 
-impl<A: hal::Api> CommandBuffer<A> {
+impl<A: HalApi> CommandBuffer<A> {
     fn get_encoder_mut(
         storage: &mut Storage<Self, id::CommandEncoderId>,
         id: id::CommandEncoderId,
@@ -198,7 +227,7 @@ impl<A: hal::Api> CommandBuffer<A> {
     }
 }
 
-impl<A: hal::Api> crate::hub::Resource for CommandBuffer<A> {
+impl<A: HalApi> crate::hub::Resource for CommandBuffer<A> {
     const TYPE: &'static str = "CommandBuffer";
 
     fn life_guard(&self) -> &crate::LifeGuard {
@@ -321,7 +350,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     cmd_buf.status = CommandEncoderStatus::Finished;
                     //Note: if we want to stop tracking the swapchain texture view,
                     // this is the place to do it.
-                    log::trace!("Command buffer {:?} {:#?}", encoder_id, cmd_buf.trackers);
+                    log::trace!("Command buffer {:?}", encoder_id);
                     None
                 }
                 CommandEncoderStatus::Finished => Some(CommandEncoderError::NotRecording),

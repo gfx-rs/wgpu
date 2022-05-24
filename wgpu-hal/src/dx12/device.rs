@@ -428,7 +428,7 @@ impl crate::Device<super::Api> for super::Device {
                 || !desc.usage.intersects(
                     crate::TextureUses::RESOURCE
                         | crate::TextureUses::STORAGE_READ
-                        | crate::TextureUses::STORAGE_WRITE,
+                        | crate::TextureUses::STORAGE_READ_WRITE,
                 ) {
                 auxil::dxgi::conv::map_texture_format(desc.format)
             } else {
@@ -516,10 +516,9 @@ impl crate::Device<super::Api> for super::Device {
             } else {
                 None
             },
-            handle_uav: if desc
-                .usage
-                .intersects(crate::TextureUses::STORAGE_READ | crate::TextureUses::STORAGE_WRITE)
-            {
+            handle_uav: if desc.usage.intersects(
+                crate::TextureUses::STORAGE_READ | crate::TextureUses::STORAGE_READ_WRITE,
+            ) {
                 let raw_desc = view_desc.to_uav();
                 let handle = self.srv_uav_pool.lock().alloc_handle();
                 self.raw.CreateUnorderedAccessView(

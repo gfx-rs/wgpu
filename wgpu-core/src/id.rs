@@ -64,9 +64,9 @@ impl<T> From<SerialId> for Id<T> {
 }
 
 impl<T> Id<T> {
-    #[cfg(test)]
-    pub(crate) fn dummy() -> Valid<Self> {
-        Valid(Id(NonZeroId::new(1).unwrap(), PhantomData))
+    #[allow(dead_code)]
+    pub(crate) fn dummy(index: u32) -> Valid<Self> {
+        Valid(Id::zip(index, 1, Backend::Empty))
     }
 
     pub fn backend(self) -> Backend {
@@ -135,7 +135,7 @@ pub(crate) struct Valid<I>(pub I);
 /// Most `wgpu-core` clients should not use this trait. Unusual clients that
 /// need to construct `Id` values directly, or access their components, like the
 /// WGPU recording player, may use this trait to do so.
-pub trait TypedId {
+pub trait TypedId: Copy {
     fn zip(index: Index, epoch: Epoch, backend: Backend) -> Self;
     fn unzip(self) -> (Index, Epoch, Backend);
 }
@@ -184,7 +184,7 @@ pub type CommandBufferId = Id<crate::command::CommandBuffer<Dummy>>;
 pub type RenderPassEncoderId = *mut crate::command::RenderPass;
 pub type ComputePassEncoderId = *mut crate::command::ComputePass;
 pub type RenderBundleEncoderId = *mut crate::command::RenderBundleEncoder;
-pub type RenderBundleId = Id<crate::command::RenderBundle>;
+pub type RenderBundleId = Id<crate::command::RenderBundle<Dummy>>;
 pub type QuerySetId = Id<crate::resource::QuerySet<Dummy>>;
 
 #[test]

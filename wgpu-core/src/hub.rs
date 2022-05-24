@@ -194,6 +194,14 @@ impl<T, I: id::TypedId> Storage<T, I> {
         result
     }
 
+    pub(crate) unsafe fn get_unchecked(&self, id: u32) -> &T {
+        match self.map[id as usize] {
+            Element::Occupied(ref v, _) => v,
+            Element::Vacant => panic!("{}[{}] does not exist", self.kind, id),
+            Element::Error(_, _) => panic!(""),
+        }
+    }
+
     pub(crate) fn label_for_invalid_id(&self, id: I) -> &str {
         let (index, _, _) = id.unzip();
         match self.map.get(index as usize) {
@@ -266,6 +274,10 @@ impl<T, I: id::TypedId> Storage<T, I> {
             })
     }
 
+    pub(crate) fn len(&self) -> usize {
+        self.map.len()
+    }
+
     fn generate_report(&self) -> StorageReport {
         let mut report = StorageReport {
             element_size: mem::size_of::<T>(),
@@ -298,56 +310,56 @@ pub enum Root {}
 impl Access<Instance> for Root {}
 impl Access<Surface> for Root {}
 impl Access<Surface> for Instance {}
-impl<A: hal::Api> Access<Adapter<A>> for Root {}
-impl<A: hal::Api> Access<Adapter<A>> for Surface {}
-impl<A: hal::Api> Access<Device<A>> for Root {}
-impl<A: hal::Api> Access<Device<A>> for Surface {}
-impl<A: hal::Api> Access<Device<A>> for Adapter<A> {}
-impl<A: hal::Api> Access<PipelineLayout<A>> for Root {}
-impl<A: hal::Api> Access<PipelineLayout<A>> for Device<A> {}
-impl<A: hal::Api> Access<PipelineLayout<A>> for RenderBundle {}
-impl<A: hal::Api> Access<BindGroupLayout<A>> for Root {}
-impl<A: hal::Api> Access<BindGroupLayout<A>> for Device<A> {}
-impl<A: hal::Api> Access<BindGroupLayout<A>> for PipelineLayout<A> {}
-impl<A: hal::Api> Access<BindGroup<A>> for Root {}
-impl<A: hal::Api> Access<BindGroup<A>> for Device<A> {}
-impl<A: hal::Api> Access<BindGroup<A>> for BindGroupLayout<A> {}
-impl<A: hal::Api> Access<BindGroup<A>> for PipelineLayout<A> {}
-impl<A: hal::Api> Access<BindGroup<A>> for CommandBuffer<A> {}
-impl<A: hal::Api> Access<CommandBuffer<A>> for Root {}
-impl<A: hal::Api> Access<CommandBuffer<A>> for Device<A> {}
-impl<A: hal::Api> Access<RenderBundle> for Device<A> {}
-impl<A: hal::Api> Access<RenderBundle> for CommandBuffer<A> {}
-impl<A: hal::Api> Access<ComputePipeline<A>> for Device<A> {}
-impl<A: hal::Api> Access<ComputePipeline<A>> for BindGroup<A> {}
-impl<A: hal::Api> Access<RenderPipeline<A>> for Device<A> {}
-impl<A: hal::Api> Access<RenderPipeline<A>> for BindGroup<A> {}
-impl<A: hal::Api> Access<RenderPipeline<A>> for ComputePipeline<A> {}
-impl<A: hal::Api> Access<QuerySet<A>> for Root {}
-impl<A: hal::Api> Access<QuerySet<A>> for Device<A> {}
-impl<A: hal::Api> Access<QuerySet<A>> for CommandBuffer<A> {}
-impl<A: hal::Api> Access<QuerySet<A>> for RenderPipeline<A> {}
-impl<A: hal::Api> Access<QuerySet<A>> for ComputePipeline<A> {}
-impl<A: hal::Api> Access<QuerySet<A>> for Sampler<A> {}
-impl<A: hal::Api> Access<ShaderModule<A>> for Device<A> {}
-impl<A: hal::Api> Access<ShaderModule<A>> for BindGroupLayout<A> {}
-impl<A: hal::Api> Access<Buffer<A>> for Root {}
-impl<A: hal::Api> Access<Buffer<A>> for Device<A> {}
-impl<A: hal::Api> Access<Buffer<A>> for BindGroupLayout<A> {}
-impl<A: hal::Api> Access<Buffer<A>> for BindGroup<A> {}
-impl<A: hal::Api> Access<Buffer<A>> for CommandBuffer<A> {}
-impl<A: hal::Api> Access<Buffer<A>> for ComputePipeline<A> {}
-impl<A: hal::Api> Access<Buffer<A>> for RenderPipeline<A> {}
-impl<A: hal::Api> Access<Buffer<A>> for QuerySet<A> {}
-impl<A: hal::Api> Access<Texture<A>> for Root {}
-impl<A: hal::Api> Access<Texture<A>> for Device<A> {}
-impl<A: hal::Api> Access<Texture<A>> for Buffer<A> {}
-impl<A: hal::Api> Access<TextureView<A>> for Root {}
-impl<A: hal::Api> Access<TextureView<A>> for Device<A> {}
-impl<A: hal::Api> Access<TextureView<A>> for Texture<A> {}
-impl<A: hal::Api> Access<Sampler<A>> for Root {}
-impl<A: hal::Api> Access<Sampler<A>> for Device<A> {}
-impl<A: hal::Api> Access<Sampler<A>> for TextureView<A> {}
+impl<A: HalApi> Access<Adapter<A>> for Root {}
+impl<A: HalApi> Access<Adapter<A>> for Surface {}
+impl<A: HalApi> Access<Device<A>> for Root {}
+impl<A: HalApi> Access<Device<A>> for Surface {}
+impl<A: HalApi> Access<Device<A>> for Adapter<A> {}
+impl<A: HalApi> Access<PipelineLayout<A>> for Root {}
+impl<A: HalApi> Access<PipelineLayout<A>> for Device<A> {}
+impl<A: HalApi> Access<PipelineLayout<A>> for RenderBundle<A> {}
+impl<A: HalApi> Access<BindGroupLayout<A>> for Root {}
+impl<A: HalApi> Access<BindGroupLayout<A>> for Device<A> {}
+impl<A: HalApi> Access<BindGroupLayout<A>> for PipelineLayout<A> {}
+impl<A: HalApi> Access<BindGroup<A>> for Root {}
+impl<A: HalApi> Access<BindGroup<A>> for Device<A> {}
+impl<A: HalApi> Access<BindGroup<A>> for BindGroupLayout<A> {}
+impl<A: HalApi> Access<BindGroup<A>> for PipelineLayout<A> {}
+impl<A: HalApi> Access<BindGroup<A>> for CommandBuffer<A> {}
+impl<A: HalApi> Access<CommandBuffer<A>> for Root {}
+impl<A: HalApi> Access<CommandBuffer<A>> for Device<A> {}
+impl<A: HalApi> Access<RenderBundle<A>> for Device<A> {}
+impl<A: HalApi> Access<RenderBundle<A>> for CommandBuffer<A> {}
+impl<A: HalApi> Access<ComputePipeline<A>> for Device<A> {}
+impl<A: HalApi> Access<ComputePipeline<A>> for BindGroup<A> {}
+impl<A: HalApi> Access<RenderPipeline<A>> for Device<A> {}
+impl<A: HalApi> Access<RenderPipeline<A>> for BindGroup<A> {}
+impl<A: HalApi> Access<RenderPipeline<A>> for ComputePipeline<A> {}
+impl<A: HalApi> Access<QuerySet<A>> for Root {}
+impl<A: HalApi> Access<QuerySet<A>> for Device<A> {}
+impl<A: HalApi> Access<QuerySet<A>> for CommandBuffer<A> {}
+impl<A: HalApi> Access<QuerySet<A>> for RenderPipeline<A> {}
+impl<A: HalApi> Access<QuerySet<A>> for ComputePipeline<A> {}
+impl<A: HalApi> Access<QuerySet<A>> for Sampler<A> {}
+impl<A: HalApi> Access<ShaderModule<A>> for Device<A> {}
+impl<A: HalApi> Access<ShaderModule<A>> for BindGroupLayout<A> {}
+impl<A: HalApi> Access<Buffer<A>> for Root {}
+impl<A: HalApi> Access<Buffer<A>> for Device<A> {}
+impl<A: HalApi> Access<Buffer<A>> for BindGroupLayout<A> {}
+impl<A: HalApi> Access<Buffer<A>> for BindGroup<A> {}
+impl<A: HalApi> Access<Buffer<A>> for CommandBuffer<A> {}
+impl<A: HalApi> Access<Buffer<A>> for ComputePipeline<A> {}
+impl<A: HalApi> Access<Buffer<A>> for RenderPipeline<A> {}
+impl<A: HalApi> Access<Buffer<A>> for QuerySet<A> {}
+impl<A: HalApi> Access<Texture<A>> for Root {}
+impl<A: HalApi> Access<Texture<A>> for Device<A> {}
+impl<A: HalApi> Access<Texture<A>> for Buffer<A> {}
+impl<A: HalApi> Access<TextureView<A>> for Root {}
+impl<A: HalApi> Access<TextureView<A>> for Device<A> {}
+impl<A: HalApi> Access<TextureView<A>> for Texture<A> {}
+impl<A: HalApi> Access<Sampler<A>> for Root {}
+impl<A: HalApi> Access<Sampler<A>> for Device<A> {}
+impl<A: HalApi> Access<Sampler<A>> for TextureView<A> {}
 
 #[cfg(debug_assertions)]
 thread_local! {
@@ -614,7 +626,7 @@ impl HubReport {
     }
 }
 
-pub struct Hub<A: hal::Api, F: GlobalIdentityHandlerFactory> {
+pub struct Hub<A: HalApi, F: GlobalIdentityHandlerFactory> {
     pub adapters: Registry<Adapter<A>, id::AdapterId, F>,
     pub devices: Registry<Device<A>, id::DeviceId, F>,
     pub pipeline_layouts: Registry<PipelineLayout<A>, id::PipelineLayoutId, F>,
@@ -622,7 +634,7 @@ pub struct Hub<A: hal::Api, F: GlobalIdentityHandlerFactory> {
     pub bind_group_layouts: Registry<BindGroupLayout<A>, id::BindGroupLayoutId, F>,
     pub bind_groups: Registry<BindGroup<A>, id::BindGroupId, F>,
     pub command_buffers: Registry<CommandBuffer<A>, id::CommandBufferId, F>,
-    pub render_bundles: Registry<RenderBundle, id::RenderBundleId, F>,
+    pub render_bundles: Registry<RenderBundle<A>, id::RenderBundleId, F>,
     pub render_pipelines: Registry<RenderPipeline<A>, id::RenderPipelineId, F>,
     pub compute_pipelines: Registry<ComputePipeline<A>, id::ComputePipelineId, F>,
     pub query_sets: Registry<QuerySet<A>, id::QuerySetId, F>,
@@ -1006,6 +1018,25 @@ pub trait HalApi: hal::Api {
     fn hub<G: GlobalIdentityHandlerFactory>(global: &Global<G>) -> &Hub<Self, G>;
     fn get_surface(surface: &Surface) -> &HalSurface<Self>;
     fn get_surface_mut(surface: &mut Surface) -> &mut HalSurface<Self>;
+}
+
+impl HalApi for hal::api::Empty {
+    const VARIANT: Backend = Backend::Empty;
+    fn create_instance_from_hal(_: &str, _: Self::Instance) -> Instance {
+        unimplemented!("called empty api")
+    }
+    fn instance_as_hal(_: &Instance) -> Option<&Self::Instance> {
+        unimplemented!("called empty api")
+    }
+    fn hub<G: GlobalIdentityHandlerFactory>(_: &Global<G>) -> &Hub<Self, G> {
+        unimplemented!("called empty api")
+    }
+    fn get_surface(_: &Surface) -> &HalSurface<Self> {
+        unimplemented!("called empty api")
+    }
+    fn get_surface_mut(_: &mut Surface) -> &mut HalSurface<Self> {
+        unimplemented!("called empty api")
+    }
 }
 
 #[cfg(vulkan)]
