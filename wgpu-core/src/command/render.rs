@@ -131,20 +131,40 @@ pub struct RenderPassDepthStencilAttachment {
 }
 
 impl RenderPassDepthStencilAttachment {
-    fn is_read_only(&self, aspects: hal::FormatAspects) -> Result<bool, RenderPassErrorInner> {
-        if aspects.contains(hal::FormatAspects::DEPTH) && !self.depth.read_only {
-            return Ok(false);
+    /// Validate the given aspects' read-only flags against their load
+    /// and store ops.
+    ///
+    /// When an aspect is read-only, its load and store ops must be
+    /// `LoadOp::Load` and `StoreOp::Store`.
+    ///
+    /// On success, return a pair `(depth, stencil)` indicating
+    /// whether the depth and stencil passes are read-only.
+    fn depth_stencil_read_only(
+        &self,
+        aspects: hal::FormatAspects,
+    ) -> Result<(bool, bool), RenderPassErrorInner> {
+        let mut depth_read_only = true;
+        let mut stencil_read_only = true;
+
+        if aspects.contains(hal::FormatAspects::DEPTH) {
+            if self.depth.read_only
+                && (self.depth.load_op, self.depth.store_op) != (LoadOp::Load, StoreOp::Store)
+            {
+                return Err(RenderPassErrorInner::InvalidDepthOps);
+            }
+            depth_read_only = self.depth.read_only;
         }
-        if (self.depth.load_op, self.depth.store_op) != (LoadOp::Load, StoreOp::Store) {
-            return Err(RenderPassErrorInner::InvalidDepthOps);
+
+        if aspects.contains(hal::FormatAspects::STENCIL) {
+            if self.stencil.read_only
+                && (self.stencil.load_op, self.stencil.store_op) != (LoadOp::Load, StoreOp::Store)
+            {
+                return Err(RenderPassErrorInner::InvalidStencilOps);
+            }
+            stencil_read_only = self.stencil.read_only;
         }
-        if aspects.contains(hal::FormatAspects::STENCIL) && !self.stencil.read_only {
-            return Ok(false);
-        }
-        if (self.stencil.load_op, self.stencil.store_op) != (LoadOp::Load, StoreOp::Store) {
-            return Err(RenderPassErrorInner::InvalidStencilOps);
-        }
-        Ok(true)
+
+        Ok((depth_read_only, stencil_read_only))
     }
 }
 
@@ -474,8 +494,18 @@ pub enum RenderPassErrorInner {
     ResourceUsageConflict(#[from] UsageConflict),
     #[error("render bundle has incompatible targets, {0}")]
     IncompatibleBundleTargets(#[from] RenderPassCompatibilityError),
-    #[error("render bundle has an incompatible read-only depth/stencil flag: bundle is {bundle}, while the pass is {pass}")]
-    IncompatibleBundleRods { pass: bool, bundle: bool },
+    #[error(
+        "render bundle has incompatible read-only flags: \
+             bundle has flags depth = {bundle_depth} and stencil = {bundle_stencil}, \
+             while the pass has flags depth = {pass_depth} and stencil = {pass_stencil}. \
+             Read-only renderpasses are only compatible with read-only bundles for that aspect."
+    )]
+    IncompatibleBundleRods {
+        pass_depth: bool,
+        pass_stencil: bool,
+        bundle_depth: bool,
+        bundle_stencil: bool,
+    },
     #[error(transparent)]
     RenderCommand(#[from] RenderCommandError),
     #[error(transparent)]
@@ -565,7 +595,8 @@ struct RenderPassInfo<'a, A: HalApi> {
     context: RenderPassContext,
     usage_scope: UsageScope<A>,
     render_attachments: AttachmentDataVec<RenderAttachment<'a>>, // All render attachments, including depth/stencil
-    is_ds_read_only: bool,
+    is_depth_read_only: bool,
+    is_stencil_read_only: bool,
     extent: wgt::Extent3d,
     _phantom: PhantomData<A>,
 
@@ -626,7 +657,8 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
         // We default to false intentionally, even if depth-stencil isn't used at all.
         // This allows us to use the primary raw pipeline in `RenderPipeline`,
         // instead of the special read-only one, which would be `None`.
-        let mut is_ds_read_only = false;
+        let mut is_depth_read_only = false;
+        let mut is_stencil_read_only = false;
 
         let mut render_attachments = AttachmentDataVec::<RenderAttachment>::new();
         let mut discarded_surfaces = AttachmentDataVec::new();
@@ -786,8 +818,9 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                 }
             }
 
-            let usage = if at.is_read_only(ds_aspects)? {
-                is_ds_read_only = true;
+            (is_depth_read_only, is_stencil_read_only) = at.depth_stencil_read_only(ds_aspects)?;
+
+            let usage = if is_depth_read_only && is_stencil_read_only {
                 hal::TextureUses::DEPTH_STENCIL_READ | hal::TextureUses::RESOURCE
             } else {
                 hal::TextureUses::DEPTH_STENCIL_WRITE
@@ -937,7 +970,8 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
             context,
             usage_scope: UsageScope::new(buffer_guard, texture_guard),
             render_attachments,
-            is_ds_read_only,
+            is_depth_read_only,
+            is_stencil_read_only,
             extent,
             _phantom: PhantomData,
             pending_discard_init_fixups,
@@ -1234,8 +1268,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                         state.pipeline_flags = pipeline.flags;
 
-                        if pipeline.flags.contains(PipelineFlags::WRITES_DEPTH_STENCIL)
-                            && info.is_ds_read_only
+                        if (pipeline.flags.contains(PipelineFlags::WRITES_DEPTH)
+                            && info.is_depth_read_only)
+                            || (pipeline.flags.contains(PipelineFlags::WRITES_STENCIL)
+                                && info.is_stencil_read_only)
                         {
                             return Err(RenderCommandError::IncompatiblePipelineRods)
                                 .map_pass_err(scope);
@@ -1890,10 +1926,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .map_err(RenderPassErrorInner::IncompatibleBundleTargets)
                             .map_pass_err(scope)?;
 
-                        if info.is_ds_read_only != bundle.is_ds_read_only {
+                        if (info.is_depth_read_only && !bundle.is_depth_read_only)
+                            || (info.is_stencil_read_only && !bundle.is_stencil_read_only)
+                        {
                             return Err(RenderPassErrorInner::IncompatibleBundleRods {
-                                pass: info.is_ds_read_only,
-                                bundle: bundle.is_ds_read_only,
+                                pass_depth: info.is_depth_read_only,
+                                pass_stencil: info.is_stencil_read_only,
+                                bundle_depth: bundle.is_depth_read_only,
+                                bundle_stencil: bundle.is_stencil_read_only,
                             })
                             .map_pass_err(scope);
                         }
