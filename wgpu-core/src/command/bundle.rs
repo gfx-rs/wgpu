@@ -355,7 +355,6 @@ impl RenderBundleEncoder {
                     pipeline_layout_id = Some(pipeline.layout_id.value);
 
                     state.set_pipeline(
-                        pipeline.strip_index_format,
                         &pipeline.vertex_strides,
                         &layout.bind_group_layout_ids,
                         &layout.push_constant_ranges,
@@ -918,7 +917,6 @@ impl<A: HalApi> Resource for RenderBundle<A> {
 struct IndexState {
     buffer: Option<id::BufferId>,
     format: wgt::IndexFormat,
-    pipeline_format: Option<wgt::IndexFormat>,
     range: Range<wgt::BufferAddress>,
     is_dirty: bool,
 }
@@ -929,7 +927,6 @@ impl IndexState {
         Self {
             buffer: None,
             format: wgt::IndexFormat::default(),
-            pipeline_format: None,
             range: 0..0,
             is_dirty: false,
         }
@@ -1195,13 +1192,10 @@ impl<A: HalApi> State<A> {
 
     fn set_pipeline(
         &mut self,
-        index_format: Option<wgt::IndexFormat>,
         vertex_strides: &[(wgt::BufferAddress, wgt::VertexStepMode)],
         layout_ids: &[id::Valid<id::BindGroupLayoutId>],
         push_constant_layouts: &[wgt::PushConstantRange],
     ) {
-        self.index.pipeline_format = index_format;
-
         for (vs, &(stride, step_mode)) in self.vertex.iter_mut().zip(vertex_strides) {
             if vs.stride != stride || vs.rate != step_mode {
                 vs.stride = stride;
