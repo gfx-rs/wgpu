@@ -60,8 +60,7 @@ impl Span {
         *self != Self::default()
     }
 
-    /// Returns the 1-based line number and column of the this span in
-    /// the provided source.
+    /// Return a [`SourceLocation`] for this span in the provided source.
     pub fn location(&self, source: &str) -> SourceLocation {
         let prefix = &source[..self.start as usize];
         let line_number = prefix.matches('\n').count() as u32 + 1;
@@ -86,10 +85,13 @@ impl From<Range<usize>> for Span {
     }
 }
 
-/// A human-readable representation for span, tailored for text source.
+/// A human-readable representation for a span, tailored for text source.
 ///
-/// Corresponds to the positional members of `GPUCompilationMessage` from the WebGPU specification,
-/// using utf8 instead of utf16 as reference encoding.
+/// Corresponds to the positional members of [`GPUCompilationMessage`][gcm] from
+/// the WebGPU specification, except that `offset` and `length` are in bytes
+/// (UTF-8 code units), instead of UTF-16 code units.
+///
+/// [gcm]: https://www.w3.org/TR/webgpu/#gpucompilationmessage
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct SourceLocation {
     /// 1-based line number.
@@ -220,6 +222,7 @@ impl<E> WithSpan<E> {
     }
 
     #[cfg(feature = "span")]
+    /// Return a [`SourceLocation`] for our first span, if we have one.
     pub fn location(&self, source: &str) -> Option<SourceLocation> {
         if self.spans.is_empty() {
             return None;
@@ -229,6 +232,7 @@ impl<E> WithSpan<E> {
     }
 
     #[cfg(not(feature = "span"))]
+    /// Return a [`SourceLocation`] for our first span, if we have one.
     pub fn location(&self, _source: &str) -> Option<SourceLocation> {
         None
     }

@@ -1366,8 +1366,7 @@ impl ParseError {
         writer.into_string()
     }
 
-    /// Returns the 1-based line number and column of the first label in the
-    /// error message.
+    /// Returns a [`SourceLocation`] for the first label in the error message.
     pub fn location(&self, source: &str) -> Option<SourceLocation> {
         self.labels
             .get(0)
