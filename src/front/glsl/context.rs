@@ -1174,6 +1174,10 @@ impl Context {
                             self.emit_end(&mut reject_body);
                         }
                     }
+                } else {
+                    // Technically there's nothing to flush but later we will need to
+                    // add some expressions that must not be emitted.
+                    self.emit_end(body)
                 }
 
                 // We need to get the type of the resulting expression to create the local,
