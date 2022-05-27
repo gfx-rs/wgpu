@@ -356,6 +356,19 @@ fn ternary(a_20: bool) {
     return;
 }
 
+fn testMatrixMultiplication(a_22: mat4x3<f32>, b_18: mat4x4<f32>) {
+    var a_23: mat4x3<f32>;
+    var b_19: mat4x4<f32>;
+    var c_2: mat4x3<f32>;
+
+    a_23 = a_22;
+    b_19 = b_18;
+    let _e5 = a_23;
+    let _e6 = b_19;
+    c_2 = (_e5 * _e6);
+    return;
+}
+
 fn main_1() {
     var local_5: f32;
 

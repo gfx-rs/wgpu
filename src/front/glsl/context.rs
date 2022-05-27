@@ -617,11 +617,14 @@ impl Context {
                             width: right_width,
                         },
                     ) => {
+                        let dimensions_ok = if op == BinaryOperator::Multiply {
+                            left_columns == right_rows
+                        } else {
+                            left_columns == right_columns && left_rows == right_rows
+                        };
+
                         // Check that the two arguments have the same dimensions
-                        if left_columns != right_columns
-                            || left_rows != right_rows
-                            || left_width != right_width
-                        {
+                        if !dimensions_ok || left_width != right_width {
                             parser.errors.push(Error {
                                 kind: ErrorKind::SemanticError(
                                     format!(

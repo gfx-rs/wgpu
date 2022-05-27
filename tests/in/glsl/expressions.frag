@@ -128,6 +128,10 @@ void ternary(bool a) {
     uint nested = a ? (a ? (a ? 2u : 3) : 4u) : 5;
 }
 
+void testMatrixMultiplication(mat4x3 a, mat4x4 b) {
+    mat4x3 c = a * b;
+}
+
 out vec4 o_color;
 void main() {
     privatePointer(global);
