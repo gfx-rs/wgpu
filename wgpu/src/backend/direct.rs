@@ -1,8 +1,8 @@
 use crate::{
-    backend::native_gpu_future, AdapterInfo, BindGroupDescriptor, BindGroupLayoutDescriptor,
-    BindingResource, BufferBinding, CommandEncoderDescriptor, ComputePassDescriptor,
-    ComputePipelineDescriptor, DownlevelCapabilities, Features, Label, Limits, LoadOp, MapMode,
-    Operations, PipelineLayoutDescriptor, RenderBundleEncoderDescriptor, RenderPipelineDescriptor,
+    AdapterInfo, BindGroupDescriptor, BindGroupLayoutDescriptor, BindingResource, BufferBinding,
+    CommandEncoderDescriptor, ComputePassDescriptor, ComputePipelineDescriptor,
+    DownlevelCapabilities, Features, Label, Limits, LoadOp, MapMode, Operations,
+    PipelineLayoutDescriptor, RenderBundleEncoderDescriptor, RenderPipelineDescriptor,
     SamplerDescriptor, ShaderModuleDescriptor, ShaderModuleDescriptorSpirV, ShaderSource,
     SurfaceStatus, TextureDescriptor, TextureFormat, TextureViewDescriptor,
 };
@@ -805,8 +805,6 @@ impl crate::Context for Context {
     #[allow(clippy::type_complexity)]
     type RequestDeviceFuture =
         Ready<Result<(Self::DeviceId, Self::QueueId), crate::RequestDeviceError>>;
-    type MapAsyncFuture = native_gpu_future::GpuFuture<Result<(), crate::BufferAsyncError>>;
-    type OnSubmittedWorkDoneFuture = native_gpu_future::GpuFuture<()>;
     type PopErrorScopeFuture = Ready<Option<crate::Error>>;
 
     fn init(backends: wgt::Backends) -> Self {
@@ -1622,28 +1620,20 @@ impl crate::Context for Context {
         buffer: &Self::BufferId,
         mode: MapMode,
         range: Range<wgt::BufferAddress>,
-    ) -> Self::MapAsyncFuture {
-        let (future, completion) = native_gpu_future::new_gpu_future();
-
-        extern "C" fn buffer_map_future_wrapper(
-            status: wgc::resource::BufferMapAsyncStatus,
-            user_data: *mut u8,
-        ) {
-            let completion =
-                unsafe { native_gpu_future::GpuFutureCompletion::from_raw(user_data as _) };
-            completion.complete(match status {
-                wgc::resource::BufferMapAsyncStatus::Success => Ok(()),
-                _ => Err(crate::BufferAsyncError),
-            })
-        }
-
+        callback: impl FnOnce(Result<(), crate::BufferAsyncError>) + Send + 'static,
+    ) {
         let operation = wgc::resource::BufferMapOperation {
             host: match mode {
                 MapMode::Read => wgc::device::HostMap::Read,
                 MapMode::Write => wgc::device::HostMap::Write,
             },
-            callback: buffer_map_future_wrapper,
-            user_data: completion.into_raw() as _,
+            callback: wgc::resource::BufferMapCallback::from_rust(Box::new(|status| {
+                let res = match status {
+                    wgc::resource::BufferMapAsyncStatus::Success => Ok(()),
+                    _ => Err(crate::BufferAsyncError),
+                };
+                callback(res);
+            })),
         };
 
         let global = &self.0;
@@ -1651,7 +1641,6 @@ impl crate::Context for Context {
             Ok(()) => (),
             Err(cause) => self.handle_error_nolabel(&buffer.error_sink, cause, "Buffer::map_async"),
         }
-        future
     }
 
     fn buffer_get_mapped_range(
@@ -2216,26 +2205,15 @@ impl crate::Context for Context {
     fn queue_on_submitted_work_done(
         &self,
         queue: &Self::QueueId,
-    ) -> Self::OnSubmittedWorkDoneFuture {
-        let (future, completion) = native_gpu_future::new_gpu_future();
-
-        extern "C" fn submitted_work_done_future_wrapper(user_data: *mut u8) {
-            let completion =
-                unsafe { native_gpu_future::GpuFutureCompletion::from_raw(user_data as _) };
-            completion.complete(())
-        }
-
-        let closure = wgc::device::queue::SubmittedWorkDoneClosure {
-            callback: submitted_work_done_future_wrapper,
-            user_data: completion.into_raw() as _,
-        };
+        callback: Box<dyn FnOnce() + Send + 'static>,
+    ) {
+        let closure = wgc::device::queue::SubmittedWorkDoneClosure::from_rust(callback);
 
         let global = &self.0;
         let res = wgc::gfx_select!(queue => global.queue_on_submitted_work_done(*queue, closure));
         if let Err(cause) = res {
             self.handle_error_fatal(cause, "Queue::on_submitted_work_done");
         }
-        future
     }
 
     fn device_start_capture(&self, device: &Self::DeviceId) {

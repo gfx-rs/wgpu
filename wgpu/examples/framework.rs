@@ -517,7 +517,7 @@ pub fn test<E: Example>(mut params: FrameworkRefTest) {
             ctx.queue.submit(Some(cmd_buf.finish()));
 
             let dst_buffer_slice = dst_buffer.slice(..);
-            let _ = dst_buffer_slice.map_async(wgpu::MapMode::Read);
+            dst_buffer_slice.map_async(wgpu::MapMode::Read, |_| ());
             ctx.device.poll(wgpu::Maintain::Wait);
             let bytes = dst_buffer_slice.get_mapped_range().to_vec();
 

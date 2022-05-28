@@ -380,11 +380,11 @@ impl framework::Example for Example {
 
         queue.submit(Some(init_encoder.finish()));
         if let Some(ref query_sets) = query_sets {
-            // We can ignore the future as we're about to wait for the device.
-            let _ = query_sets
+            // We can ignore the callback as we're about to wait for the device.
+            query_sets
                 .data_buffer
                 .slice(..)
-                .map_async(wgpu::MapMode::Read);
+                .map_async(wgpu::MapMode::Read, |_| ());
             // Wait for device to be done rendering mipmaps
             device.poll(wgpu::Maintain::Wait);
             // This is guaranteed to be ready.

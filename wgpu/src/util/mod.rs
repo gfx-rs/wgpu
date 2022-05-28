@@ -6,7 +6,7 @@ mod encoder;
 mod indirect;
 mod init;
 
-use std::future::Future;
+use std::sync::Arc;
 use std::{
     borrow::Cow,
     mem::{align_of, size_of},
@@ -70,7 +70,7 @@ pub fn make_spirv_raw(data: &[u8]) -> Cow<[u32]> {
 }
 
 /// CPU accessible buffer used to download data back from the GPU.
-pub struct DownloadBuffer(super::Buffer, super::BufferMappedRange);
+pub struct DownloadBuffer(Arc<super::Buffer>, super::BufferMappedRange);
 
 impl DownloadBuffer {
     /// Asynchronously read the contents of a buffer.
@@ -78,18 +78,19 @@ impl DownloadBuffer {
         device: &super::Device,
         queue: &super::Queue,
         buffer: &super::BufferSlice,
-    ) -> impl Future<Output = Result<Self, super::BufferAsyncError>> + Send {
+        callback: impl FnOnce(Result<Self, super::BufferAsyncError>) + Send + 'static,
+    ) {
         let size = match buffer.size {
             Some(size) => size.into(),
             None => buffer.buffer.map_context.lock().total_size - buffer.offset,
         };
 
-        let download = device.create_buffer(&super::BufferDescriptor {
+        let download = Arc::new(device.create_buffer(&super::BufferDescriptor {
             size,
             usage: super::BufferUsages::COPY_DST | super::BufferUsages::MAP_READ,
             mapped_at_creation: false,
             label: None,
-        });
+        }));
 
         let mut encoder =
             device.create_command_encoder(&super::CommandEncoderDescriptor { label: None });
@@ -97,13 +98,22 @@ impl DownloadBuffer {
         let command_buffer: super::CommandBuffer = encoder.finish();
         queue.submit(Some(command_buffer));
 
-        let fut = download.slice(..).map_async(super::MapMode::Read);
-        async move {
-            fut.await?;
-            let mapped_range =
-                super::Context::buffer_get_mapped_range(&*download.context, &download.id, 0..size);
-            Ok(Self(download, mapped_range))
-        }
+        download
+            .clone()
+            .slice(..)
+            .map_async(super::MapMode::Read, move |result| {
+                if let Err(e) = result {
+                    callback(Err(e));
+                    return;
+                }
+
+                let mapped_range = super::Context::buffer_get_mapped_range(
+                    &*download.context,
+                    &download.id,
+                    0..size,
+                );
+                callback(Ok(Self(download, mapped_range)));
+            });
     }
 }
 

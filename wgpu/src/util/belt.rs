@@ -3,44 +3,10 @@ use crate::{
     CommandEncoder, Device, MapMode,
 };
 use std::fmt;
-use std::pin::Pin;
-use std::task::{self, Poll};
-use std::{future::Future, sync::mpsc};
-
-// Given a vector of futures, poll each in parallel until all are ready.
-struct Join<F> {
-    futures: Vec<Option<F>>,
-}
-
-impl<F: Future<Output = ()>> Future for Join<F> {
-    type Output = ();
-
-    fn poll(self: Pin<&mut Self>, cx: &mut task::Context) -> Poll<Self::Output> {
-        // This is safe because we have no Drop implementation to violate the Pin requirements and
-        // do not provide any means of moving the inner futures.
-        let all_ready = unsafe {
-            // Poll all remaining futures, removing all that are ready
-            self.get_unchecked_mut().futures.iter_mut().all(|opt| {
-                if let Some(future) = opt {
-                    if Pin::new_unchecked(future).poll(cx) == Poll::Ready(()) {
-                        *opt = None;
-                    }
-                }
-
-                opt.is_none()
-            })
-        };
-
-        if all_ready {
-            Poll::Ready(())
-        } else {
-            Poll::Pending
-        }
-    }
-}
+use std::sync::{mpsc, Arc};
 
 struct Chunk {
-    buffer: Buffer,
+    buffer: Arc<Buffer>,
     size: BufferAddress,
     offset: BufferAddress,
 }
@@ -116,12 +82,12 @@ impl StagingBelt {
         } else {
             let size = self.chunk_size.max(size.get());
             Chunk {
-                buffer: device.create_buffer(&BufferDescriptor {
+                buffer: Arc::new(device.create_buffer(&BufferDescriptor {
                     label: Some("(wgpu internal) StagingBelt staging buffer"),
                     size,
                     usage: BufferUsages::MAP_WRITE | BufferUsages::COPY_SRC,
                     mapped_at_creation: true,
-                }),
+                })),
                 size,
                 offset: 0,
             }
@@ -158,31 +124,23 @@ impl StagingBelt {
     /// Recall all of the closed buffers back to be reused.
     ///
     /// This has to be called after the command encoders written to `write_buffer` are submitted!
-    pub fn recall(&mut self) -> impl Future<Output = ()> + Send {
+    pub fn recall(&mut self) {
         while let Ok(mut chunk) = self.receiver.try_recv() {
             chunk.offset = 0;
             self.free_chunks.push(chunk);
         }
 
         let sender = &self.sender;
-        let futures = self
-            .closed_chunks
-            .drain(..)
-            .map(|chunk| {
-                let sender = sender.clone();
-                let async_buffer = chunk.buffer.slice(..).map_async(MapMode::Write);
-
-                Some(async move {
-                    // The result is ignored
-                    async_buffer.await.ok();
-
-                    // The only possible error is the other side disconnecting, which is fine
+        for chunk in self.closed_chunks.drain(..) {
+            let sender = sender.clone();
+            chunk
+                .buffer
+                .clone()
+                .slice(..)
+                .map_async(MapMode::Write, move |_| {
                     let _ = sender.send(chunk);
-                })
-            })
-            .collect::<Vec<_>>();
-
-        Join { futures }
+                });
+        }
     }
 }
 

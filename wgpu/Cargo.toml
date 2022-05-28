@@ -123,6 +123,7 @@ bitflags = "1"
 bytemuck = { version = "1.4", features = ["derive"] }
 glam = "0.20.2"
 ddsfile = "0.5"
+futures-intrusive = "0.4"
 log = "0.4"
 # Opt out of noise's "default-features" to avoid "image" feature as a dependency count optimization.
 # This will not be required in the next release since it has been removed from the default feature in https://github.com/Razaekel/noise-rs/commit/1af9e1522236b2c584fb9a02150c9c67a5e6bb04#diff-2e9d962a08321605940b5a657135052fbcef87b5e360662bb527c96d9a615542
