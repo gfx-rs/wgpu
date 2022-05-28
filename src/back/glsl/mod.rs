@@ -3347,7 +3347,7 @@ const fn glsl_storage_format(format: crate::StorageFormat) -> &'static str {
         Sf::Rg16Uint => "rg16ui",
         Sf::Rg16Sint => "rg16i",
         Sf::Rg16Float => "rg16f",
-        Sf::Rgba8Unorm => "rgba8ui",
+        Sf::Rgba8Unorm => "rgba8",
         Sf::Rgba8Snorm => "rgba8_snorm",
         Sf::Rgba8Uint => "rgba8ui",
         Sf::Rgba8Sint => "rgba8i",
