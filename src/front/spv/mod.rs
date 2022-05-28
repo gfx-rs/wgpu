@@ -2393,6 +2393,34 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         },
                     );
                 }
+                Op::BitReverse | Op::BitCount => {
+                    inst.expect(4)?;
+
+                    let result_type_id = self.next()?;
+                    let result_id = self.next()?;
+                    let base_id = self.next()?;
+                    let base_lexp = self.lookup_expression.lookup(base_id)?;
+                    let base_handle = get_expr_handle!(base_id, base_lexp);
+                    let expr = crate::Expression::Math {
+                        fun: match inst.op {
+                            Op::BitReverse => crate::MathFunction::ReverseBits,
+                            Op::BitCount => crate::MathFunction::CountOneBits,
+                            _ => unreachable!(),
+                        },
+                        arg: base_handle,
+                        arg1: None,
+                        arg2: None,
+                        arg3: None,
+                    };
+                    self.lookup_expression.insert(
+                        result_id,
+                        LookupExpression {
+                            handle: ctx.expressions.append(expr, span),
+                            type_id: result_type_id,
+                            block_id,
+                        },
+                    );
+                }
                 Op::OuterProduct => {
                     inst.expect(5)?;
 
