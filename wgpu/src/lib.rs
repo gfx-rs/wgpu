@@ -788,6 +788,8 @@ impl Drop for ShaderModule {
 #[non_exhaustive]
 pub enum ShaderSource<'a> {
     /// SPIR-V module represented as a slice of words.
+    ///
+    /// See also: [`util::make_spirv`], [`include_spirv`]
     #[cfg(feature = "spirv")]
     #[cfg_attr(docsrs, doc(cfg(feature = "spirv")))]
     SpirV(Cow<'a, [u32]>),
