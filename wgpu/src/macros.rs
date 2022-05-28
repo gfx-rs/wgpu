@@ -44,6 +44,8 @@ fn test_vertex_attr_array() {
 /// Macro to load a SPIR-V module statically.
 ///
 /// It ensures the word alignment as well as the magic number.
+///
+/// Return type: [`crate::ShaderModuleDescriptor`]
 #[macro_export]
 #[cfg(feature = "spirv")]
 macro_rules! include_spirv {
