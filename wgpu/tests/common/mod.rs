@@ -121,6 +121,17 @@ impl TestParameters {
         self
     }
 
+    /// Mark the test as always failing and needing to be skipped, equivilant to specific_failure(None, None, None)
+    pub fn skip(mut self) -> Self {
+        self.failures.push(FailureCase {
+            backends: None,
+            vendor: None,
+            adapter: None,
+            skip: true,
+        });
+        self
+    }
+
     /// Mark the test as always failing on a specific backend, equivilant to specific_failure(backend, None, None)
     pub fn backend_failure(mut self, backends: wgpu::Backends) -> Self {
         self.failures.push(FailureCase {
