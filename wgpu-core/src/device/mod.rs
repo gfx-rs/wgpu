@@ -1017,16 +1017,6 @@ impl<A: HalApi> Device<A> {
             format_features: texture.format_features,
             extent,
             samples: texture.desc.sample_count,
-            // once a storage - forever a storage
-            sampled_internal_use: if texture
-                .desc
-                .usage
-                .contains(wgt::TextureUsages::STORAGE_BINDING)
-            {
-                hal::TextureUses::RESOURCE | hal::TextureUses::STORAGE_READ
-            } else {
-                hal::TextureUses::RESOURCE
-            },
             selector,
             life_guard: LifeGuard::new(desc.label.borrow_or_default()),
         })
@@ -1996,7 +1986,7 @@ impl<A: HalApi> Device<A> {
                 }
                 Ok((
                     wgt::TextureUsages::TEXTURE_BINDING,
-                    view.sampled_internal_use,
+                    hal::TextureUses::RESOURCE,
                 ))
             }
             wgt::BindingType::StorageTexture {

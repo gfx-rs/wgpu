@@ -385,8 +385,6 @@ pub struct TextureView<A: hal::Api> {
     pub(crate) format_features: wgt::TextureFormatFeatures,
     pub(crate) extent: wgt::Extent3d,
     pub(crate) samples: u32,
-    /// Internal use of this texture view when used as `BindingType::Texture`.
-    pub(crate) sampled_internal_use: hal::TextureUses,
     pub(crate) selector: TextureSelector,
     pub(crate) life_guard: LifeGuard,
 }
