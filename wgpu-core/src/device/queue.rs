@@ -12,7 +12,7 @@ use crate::{
     id,
     init_tracker::{has_copy_partial_init_tracker_coverage, TextureInitRange},
     resource::{BufferAccessError, BufferMapState, TextureInner},
-    track, FastHashSet,
+    track, FastHashSet, SubmissionIndex,
 };
 
 use hal::{CommandEncoder as _, Device as _, Queue as _};
@@ -38,6 +38,13 @@ pub struct SubmittedWorkDoneClosure {
 
 unsafe impl Send for SubmittedWorkDoneClosure {}
 unsafe impl Sync for SubmittedWorkDoneClosure {}
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct WrappedSubmissionIndex {
+    pub queue_id: id::QueueId,
+    pub index: SubmissionIndex,
+}
 
 struct StagingData<A: hal::Api> {
     buffer: A::Buffer,
@@ -580,10 +587,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         queue_id: id::QueueId,
         command_buffer_ids: &[id::CommandBufferId],
-    ) -> Result<(), QueueSubmitError> {
+    ) -> Result<WrappedSubmissionIndex, QueueSubmitError> {
         profiling::scope!("submit", "Queue");
 
-        let callbacks = {
+        let (submit_index, callbacks) = {
             let hub = A::hub(self);
             let mut token = Token::root();
 
@@ -918,24 +925,28 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             // This will schedule destruction of all resources that are no longer needed
             // by the user but used in the command stream, among other things.
-            let (closures, _) = match device.maintain(hub, false, &mut token) {
+            let (closures, _) = match device.maintain(hub, false, None, &mut token) {
                 Ok(closures) => closures,
                 Err(WaitIdleError::Device(err)) => return Err(QueueSubmitError::Queue(err)),
                 Err(WaitIdleError::StuckGpu) => return Err(QueueSubmitError::StuckGpu),
+                Err(WaitIdleError::WrongSubmissionIndex(..)) => unreachable!(),
             };
 
             device.pending_writes.temp_resources = pending_write_resources;
             device.temp_suspected.clear();
             device.lock_life(&mut token).post_submit();
 
-            closures
+            (submit_index, closures)
         };
 
         // the closures should execute with nothing locked!
         unsafe {
             callbacks.fire();
         }
-        Ok(())
+        Ok(WrappedSubmissionIndex {
+            queue_id,
+            index: submit_index,
+        })
     }
 
     pub fn queue_get_timestamp_period<A: HalApi>(

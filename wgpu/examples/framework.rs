@@ -518,7 +518,7 @@ pub fn test<E: Example>(mut params: FrameworkRefTest) {
 
             let dst_buffer_slice = dst_buffer.slice(..);
             let _ = dst_buffer_slice.map_async(wgpu::MapMode::Read);
-            ctx.device.poll(wgpu::Maintain::Wait);
+            ctx.device.poll(wgpu::Maintain::Wait(None));
             let bytes = dst_buffer_slice.get_mapped_range().to_vec();
 
             test_common::image::compare_image_output(

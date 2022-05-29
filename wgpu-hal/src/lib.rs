@@ -304,6 +304,7 @@ pub trait Device<A: Api>: Send + Sync {
     unsafe fn create_fence(&self) -> Result<A::Fence, DeviceError>;
     unsafe fn destroy_fence(&self, fence: A::Fence);
     unsafe fn get_fence_value(&self, fence: &A::Fence) -> Result<FenceValue, DeviceError>;
+    /// Calling wait with a lower value than the current fence value will immediately return.
     unsafe fn wait(
         &self,
         fence: &A::Fence,

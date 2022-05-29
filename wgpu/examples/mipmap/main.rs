@@ -386,7 +386,7 @@ impl framework::Example for Example {
                 .slice(..)
                 .map_async(wgpu::MapMode::Read);
             // Wait for device to be done rendering mipmaps
-            device.poll(wgpu::Maintain::Wait);
+            device.poll(wgpu::Maintain::Wait(None));
             // This is guaranteed to be ready.
             let timestamp_view = query_sets
                 .data_buffer

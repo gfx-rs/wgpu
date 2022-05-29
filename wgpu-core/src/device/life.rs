@@ -224,6 +224,8 @@ struct ActiveSubmission<A: hal::Api> {
 pub enum WaitIdleError {
     #[error(transparent)]
     Device(#[from] DeviceError),
+    #[error("Tried to wait using a submission index from the wrong device. Submission index is from device {0:?}. Called poll on device {1:?}.")]
+    WrongSubmissionIndex(id::QueueId, id::DeviceId),
     #[error("GPU got stuck :(")]
     StuckGpu,
 }

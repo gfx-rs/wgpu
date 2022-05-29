@@ -187,6 +187,7 @@ trait Context: Debug + Send + Sized + Sync {
     type SurfaceId: Debug + Send + Sync + 'static;
 
     type SurfaceOutputDetail: Send;
+    type SubmissionIndex: Debug + Copy + Clone + Send + 'static;
 
     type RequestAdapterFuture: Future<Output = Option<Self::AdapterId>> + Send;
     type RequestDeviceFuture: Future<Output = Result<(Self::DeviceId, Self::QueueId), RequestDeviceError>>
@@ -490,7 +491,7 @@ trait Context: Debug + Send + Sized + Sync {
         &self,
         queue: &Self::QueueId,
         command_buffers: I,
-    );
+    ) -> Self::SubmissionIndex;
     fn queue_get_timestamp_period(&self, queue: &Self::QueueId) -> f32;
     fn queue_on_submitted_work_done(
         &self,
@@ -550,13 +551,24 @@ pub struct Device {
     id: <C as Context>::DeviceId,
 }
 
-/// Passed to [`Device::poll`] to control if it should block or not. This has no effect on
-/// the web.
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+/// Identifier for a particular call to [`Queue::submit`]. Can be used
+/// as part of an argument to [`Device::poll`] to block for a particular
+/// submission to finish.
+#[derive(Debug, Copy, Clone)]
+pub struct SubmissionIndex(<C as Context>::SubmissionIndex);
+
+/// Passed to [`Device::poll`] to control how and if it should block.
+#[derive(Clone)]
 pub enum Maintain {
-    /// Block
-    Wait,
-    /// Don't block
+    /// Block until the callbacks for the given submission will resolve on their own.
+    ///
+    /// If the submission index is None it will wait for the most recent submission.
+    ///
+    /// On native this will block the thread until the submission is finished.
+    ///
+    /// On web this is a no-op but all the callbacks will automatically fire.
+    Wait(Option<SubmissionIndex>),
+    /// Check the device for a single time without blocking.
     Poll,
 }
 
@@ -3366,14 +3378,19 @@ impl Queue {
     }
 
     /// Submits a series of finished command buffers for execution.
-    pub fn submit<I: IntoIterator<Item = CommandBuffer>>(&self, command_buffers: I) {
-        Context::queue_submit(
+    pub fn submit<I: IntoIterator<Item = CommandBuffer>>(
+        &self,
+        command_buffers: I,
+    ) -> SubmissionIndex {
+        let raw = Context::queue_submit(
             &*self.context,
             &self.id,
             command_buffers
                 .into_iter()
                 .map(|mut comb| comb.id.take().unwrap()),
         );
+
+        SubmissionIndex(raw)
     }
 
     /// Gets the amount of nanoseconds each tick of a timestamp query represents.
