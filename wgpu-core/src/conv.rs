@@ -19,9 +19,11 @@ pub fn is_valid_copy_src_texture_format(format: wgt::TextureFormat) -> bool {
 pub fn is_valid_copy_dst_texture_format(format: wgt::TextureFormat) -> bool {
     use wgt::TextureFormat as Tf;
     match format {
-        Tf::Depth32Float | Tf::Depth32FloatStencil8 | Tf::Depth24Plus | Tf::Depth24PlusStencil8 => {
-            false
-        }
+        Tf::Depth32Float
+        | Tf::Depth32FloatStencil8
+        | Tf::Depth24Plus
+        | Tf::Depth24PlusStencil8
+        | Tf::Depth24UnormStencil8 => false,
         _ => true,
     }
 }

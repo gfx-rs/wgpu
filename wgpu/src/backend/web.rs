@@ -546,6 +546,7 @@ fn map_texture_format(texture_format: wgt::TextureFormat) -> web_sys::GpuTexture
         TextureFormat::Depth32FloatStencil8 => tf::Depth32floatStencil8,
         TextureFormat::Depth24Plus => tf::Depth24plus,
         TextureFormat::Depth24PlusStencil8 => tf::Depth24plusStencil8,
+        TextureFormat::Depth24UnormStencil8 => tf::Depth24unormStencil8,
         _ => unimplemented!(),
     }
 }
@@ -595,6 +596,7 @@ fn map_texture_format_from_web_sys(
         tf::Depth32floatStencil8 => TextureFormat::Depth32FloatStencil8,
         tf::Depth24plus => TextureFormat::Depth24Plus,
         tf::Depth24plusStencil8 => TextureFormat::Depth24PlusStencil8,
+        tf::Depth24unormStencil8 => TextureFormat::Depth24UnormStencil8,
         _ => unimplemented!(),
     }
 }
@@ -1091,8 +1093,14 @@ impl crate::Context for Context {
         let possible_features = [
             //TODO: update the name
             (wgt::Features::DEPTH_CLIP_CONTROL, Gfn::DepthClamping),
-            // TODO (_, Gfn::Depth24unormStencil8),
-            // TODO (_, Gfn::Depth32floatStencil8),
+            (
+                wgt::Features::DEPTH24UNORM_STENCIL8,
+                Gfn::Depth24unormStencil8,
+            ),
+            (
+                wgt::Features::DEPTH32FLOAT_STENCIL8,
+                Gfn::Depth32floatStencil8,
+            ),
             (
                 wgt::Features::PIPELINE_STATISTICS_QUERY,
                 Gfn::PipelineStatisticsQuery,
