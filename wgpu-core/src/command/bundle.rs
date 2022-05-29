@@ -1206,7 +1206,6 @@ impl<A: HalApi> State<A> {
             if vs.stride != stride || vs.rate != step_mode {
                 vs.stride = stride;
                 vs.rate = step_mode;
-                vs.is_dirty = true;
             }
         }
 
