@@ -30,6 +30,6 @@ fn fs_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
 }
 
 @fragment
-fn fs_wire() -> @location(0) vec4<f32> {
+fn fs_wire(vertex: VertexOutput) -> @location(0) vec4<f32> {
     return vec4<f32>(0.0, 0.5, 0.0, 0.5);
 }
