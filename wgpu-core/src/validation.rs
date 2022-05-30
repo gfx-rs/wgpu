@@ -707,7 +707,8 @@ impl NumericType {
             Tf::Depth32Float
             | Tf::Depth32FloatStencil8
             | Tf::Depth24Plus
-            | Tf::Depth24PlusStencil8 => {
+            | Tf::Depth24PlusStencil8
+            | Tf::Depth24UnormStencil8 => {
                 panic!("Unexpected depth format")
             }
             Tf::Rgb9e5Ufloat => (NumericDimension::Vector(Vs::Tri), Sk::Float),

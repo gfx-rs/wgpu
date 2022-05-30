@@ -49,7 +49,7 @@ pub fn map_texture_format(format: wgt::TextureFormat) -> dxgiformat::DXGI_FORMAT
         Tf::Depth32Float => DXGI_FORMAT_D32_FLOAT,
         Tf::Depth32FloatStencil8 => DXGI_FORMAT_D32_FLOAT_S8X24_UINT,
         Tf::Depth24Plus => DXGI_FORMAT_D24_UNORM_S8_UINT,
-        Tf::Depth24PlusStencil8 => DXGI_FORMAT_D24_UNORM_S8_UINT,
+        Tf::Depth24PlusStencil8 | Tf::Depth24UnormStencil8 => DXGI_FORMAT_D24_UNORM_S8_UINT,
         Tf::Rgb9e5Ufloat => DXGI_FORMAT_R9G9B9E5_SHAREDEXP,
         Tf::Bc1RgbaUnorm => DXGI_FORMAT_BC1_UNORM,
         Tf::Bc1RgbaUnormSrgb => DXGI_FORMAT_BC1_UNORM_SRGB,
@@ -100,9 +100,9 @@ pub fn map_texture_format_nodepth(format: wgt::TextureFormat) -> dxgiformat::DXG
         wgt::TextureFormat::Depth32FloatStencil8 => {
             dxgiformat::DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS
         }
-        wgt::TextureFormat::Depth24Plus | wgt::TextureFormat::Depth24PlusStencil8 => {
-            dxgiformat::DXGI_FORMAT_R24_UNORM_X8_TYPELESS
-        }
+        wgt::TextureFormat::Depth24Plus
+        | wgt::TextureFormat::Depth24PlusStencil8
+        | wgt::TextureFormat::Depth24UnormStencil8 => dxgiformat::DXGI_FORMAT_R24_UNORM_X8_TYPELESS,
         _ => {
             assert_eq!(
                 crate::FormatAspects::from(format),
@@ -117,9 +117,9 @@ pub fn map_texture_format_depth_typeless(format: wgt::TextureFormat) -> dxgiform
     match format {
         wgt::TextureFormat::Depth32Float => dxgiformat::DXGI_FORMAT_R32_TYPELESS,
         wgt::TextureFormat::Depth32FloatStencil8 => dxgiformat::DXGI_FORMAT_R32G8X24_TYPELESS,
-        wgt::TextureFormat::Depth24Plus | wgt::TextureFormat::Depth24PlusStencil8 => {
-            dxgiformat::DXGI_FORMAT_R24G8_TYPELESS
-        }
+        wgt::TextureFormat::Depth24Plus
+        | wgt::TextureFormat::Depth24PlusStencil8
+        | wgt::TextureFormat::Depth24UnormStencil8 => dxgiformat::DXGI_FORMAT_R24G8_TYPELESS,
         _ => unreachable!(),
     }
 }
