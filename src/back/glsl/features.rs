@@ -38,6 +38,10 @@ bitflags::bitflags! {
         const FMA = 1 << 18;
         /// Texture samples query
         const TEXTURE_SAMPLES = 1 << 19;
+        /// Texture levels query
+        const TEXTURE_LEVELS = 1 << 20;
+        /// Image size query
+        const IMAGE_SIZE = 1 << 21;
     }
 }
 
@@ -104,9 +108,11 @@ impl FeaturesManager {
         check_feature!(DYNAMIC_ARRAY_SIZE, 430, 310);
         check_feature!(MULTI_VIEW, 140, 310);
         // Only available on glsl core, this means that opengl es can't query the number
-        // of samples in a image and neither do bound checks on the sample argument
-        // of texelFecth
+        // of samples nor levels in a image and neither do bound checks on the sample nor
+        // the level argument of texelFecth
         check_feature!(TEXTURE_SAMPLES, 150);
+        check_feature!(TEXTURE_LEVELS, 130);
+        check_feature!(IMAGE_SIZE, 430, 310);
 
         // Return an error if there are missing features
         if missing.is_empty() {
@@ -221,6 +227,11 @@ impl FeaturesManager {
                 out,
                 "#extension GL_ARB_shader_texture_image_samples : require"
             )?;
+        }
+
+        if self.0.contains(Features::TEXTURE_LEVELS) && version < Version::Desktop(430) {
+            // https://www.khronos.org/registry/OpenGL/extensions/ARB/ARB_texture_query_levels.txt
+            writeln!(out, "#extension GL_ARB_texture_query_levels : require")?;
         }
 
         Ok(())
@@ -376,26 +387,74 @@ impl<'a, W> Writer<'a, W> {
             }
         }
 
-        // Loop trough all expressions in both functions and entry points
+        // We will need to pass some of the members to a closure, so we need
+        // to separate them otherwise the borrow checker will complain, this
+        // shouldn't be needed in rust 2021
+        let &mut Self {
+            module,
+            info,
+            ref mut features,
+            entry_point,
+            entry_point_idx,
+            ref policies,
+            ..
+        } = self;
+
+        // Loop trough all expressions in both functions and the entry point
         // to check for needed features
-        for (_, expr) in self
-            .module
+        for (expressions, info) in module
             .functions
             .iter()
-            .flat_map(|(_, f)| f.expressions.iter())
-            .chain(self.entry_point.function.expressions.iter())
+            .map(|(h, f)| (&f.expressions, &info[h]))
+            .chain(std::iter::once((
+                &entry_point.function.expressions,
+                info.get_entry_point(entry_point_idx as usize),
+            )))
         {
-            match *expr {
+            for (_, expr) in expressions.iter() {
+                match *expr {
                 // Check for fused multiply add use
                 Expression::Math { fun, .. } if fun == MathFunction::Fma => {
-                    self.features.request(Features::FMA)
+                    features.request(Features::FMA)
                 }
-                // Check for samples query
+                // Check for queries that neeed aditonal features
                 Expression::ImageQuery {
-                    query: crate::ImageQuery::NumSamples,
+                    image,
+                    query,
                     ..
-                } => self.features.request(Features::TEXTURE_SAMPLES),
+                } => match query {
+                    // Storage images use `imageSize` which is only available
+                    // in glsl > 420
+                    //
+                    // layers queries are also implemented as size queries
+                    crate::ImageQuery::Size { .. } | crate::ImageQuery::NumLayers => {
+                        if let TypeInner::Image {
+                            class: crate::ImageClass::Storage { .. }, ..
+                        } = *info[image].ty.inner_with(&module.types) {
+                            features.request(Features::IMAGE_SIZE)
+                        }
+                    },
+                    crate::ImageQuery::NumLevels => features.request(Features::TEXTURE_LEVELS),
+                    crate::ImageQuery::NumSamples => features.request(Features::TEXTURE_SAMPLES),
+                }
+                ,
+                // Check for image loads that needs bound checking on the sample
+                // or level argument since this requires a feature
+                Expression::ImageLoad {
+                    sample, level, ..
+                } => {
+                    if policies.image != crate::proc::BoundsCheckPolicy::Unchecked {
+                        if sample.is_some() {
+                            features.request(Features::TEXTURE_SAMPLES)
+                        }
+
+                        if level.is_some() {
+                            features.request(Features::TEXTURE_LEVELS)
+                        }
+                    }
+                }
                 _ => {}
+            }
             }
         }
 

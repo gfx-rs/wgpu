@@ -455,6 +455,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                     ))?,
                     &params.glsl,
                     &pipeline_options,
+                    params.bounds_check_policies,
                 )
                 .unwrap_pretty();
                 writer.write()?;

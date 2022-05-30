@@ -4,6 +4,9 @@
 
 using metal::uint;
 
+constant metal::int2 const_type_4_ = {0, 0};
+constant metal::int3 const_type_7_ = {0, 0, 0};
+constant metal::float4 const_type_2_ = {0.0, 0.0, 0.0, 0.0};
 
 metal::float4 test_textureLoad_1d(
     int coords,
@@ -119,4 +122,30 @@ void test_textureStore_3d(
 ) {
     image_storage_3d.write(value_3, metal::min(metal::uint3(coords_11), metal::uint3(image_storage_3d.get_width(), image_storage_3d.get_height(), image_storage_3d.get_depth()) - 1));
     return;
+}
+
+struct fragment_shaderOutput {
+    metal::float4 member [[color(0)]];
+};
+fragment fragment_shaderOutput fragment_shader(
+  metal::texture1d<float, metal::access::sample> image_1d [[user(fake0)]]
+, metal::texture2d<float, metal::access::sample> image_2d [[user(fake0)]]
+, metal::texture2d_array<float, metal::access::sample> image_2d_array [[user(fake0)]]
+, metal::texture3d<float, metal::access::sample> image_3d [[user(fake0)]]
+, metal::texture2d_ms<float, metal::access::read> image_multisampled_2d [[user(fake0)]]
+, metal::texture1d<float, metal::access::write> image_storage_1d [[user(fake0)]]
+, metal::texture2d<float, metal::access::write> image_storage_2d [[user(fake0)]]
+, metal::texture2d_array<float, metal::access::write> image_storage_2d_array [[user(fake0)]]
+, metal::texture3d<float, metal::access::write> image_storage_3d [[user(fake0)]]
+) {
+    metal::float4 _e14 = test_textureLoad_1d(0, 0, image_1d);
+    metal::float4 _e17 = test_textureLoad_2d(const_type_4_, 0, image_2d);
+    metal::float4 _e21 = test_textureLoad_2d_array(const_type_4_, 0, 0, image_2d_array);
+    metal::float4 _e24 = test_textureLoad_3d(const_type_7_, 0, image_3d);
+    metal::float4 _e27 = test_textureLoad_multisampled_2d(const_type_4_, 0, image_multisampled_2d);
+    test_textureStore_1d(0, const_type_2_, image_storage_1d);
+    test_textureStore_2d(const_type_4_, const_type_2_, image_storage_2d);
+    test_textureStore_2d_array(const_type_4_, 0, const_type_2_, image_storage_2d_array);
+    test_textureStore_3d(const_type_7_, const_type_2_, image_storage_3d);
+    return fragment_shaderOutput { metal::float4(0.0, 0.0, 0.0, 0.0) };
 }

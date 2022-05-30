@@ -12,7 +12,6 @@ to output a [`Module`](crate::Module) into glsl
 - 420
 - 430
 - 450
-- 460
 
 ### ES
 - 300
@@ -68,6 +67,10 @@ mod keywords;
 pub const SUPPORTED_CORE_VERSIONS: &[u16] = &[330, 400, 410, 420, 430, 440, 450];
 /// List of supported `es` GLSL versions.
 pub const SUPPORTED_ES_VERSIONS: &[u16] = &[300, 310, 320];
+
+/// The suffix of the variable that will hold the calculated clamped level
+/// of detail for bounds checking in `ImageLoad`
+const CLAMPED_LOD_SUFFIX: &str = "_clamped_lod";
 
 /// Mapping between resources and bindings.
 pub type BindingMap = std::collections::BTreeMap<crate::ResourceBinding, u8>;
@@ -375,6 +378,8 @@ pub struct Writer<'a, W> {
     out: W,
     /// User defined configuration to be used.
     options: &'a Options,
+    /// The bound checking policies to be used
+    policies: proc::BoundsCheckPolicies,
 
     // Internal State
     /// Features manager used to store all the needed features and write them.
@@ -410,6 +415,7 @@ impl<'a, W: Write> Writer<'a, W> {
         info: &'a valid::ModuleInfo,
         options: &'a Options,
         pipeline_options: &'a PipelineOptions,
+        policies: proc::BoundsCheckPolicies,
     ) -> Result<Self, Error> {
         // Check if the requested version is supported
         if !options.version.is_supported() {
@@ -437,6 +443,8 @@ impl<'a, W: Write> Writer<'a, W> {
             info,
             out,
             options,
+            policies,
+
             namer,
             features: FeaturesManager::new(),
             names,
@@ -1635,6 +1643,27 @@ impl<'a, W: Write> Writer<'a, W> {
                         None
                     };
 
+                    // If we are going to write an `ImageLoad` next and the target image
+                    // is sampled and we are using the `Restrict` policy for bounds
+                    // checking images we need to write a local holding the clamped lod.
+                    if let crate::Expression::ImageLoad {
+                        image,
+                        level: Some(level_expr),
+                        ..
+                    } = ctx.expressions[handle]
+                    {
+                        if let TypeInner::Image {
+                            class: crate::ImageClass::Sampled { .. },
+                            ..
+                        } = *ctx.info[image].ty.inner_with(&self.module.types)
+                        {
+                            if let proc::BoundsCheckPolicy::Restrict = self.policies.image {
+                                write!(self.out, "{}", level)?;
+                                self.write_clamped_lod(ctx, handle, image, level_expr)?
+                            }
+                        }
+                    }
+
                     if let Some(name) = expr_name {
                         write!(self.out, "{}", level)?;
                         self.write_named_expr(handle, name, ctx)?;
@@ -1933,19 +1962,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 value,
             } => {
                 write!(self.out, "{}", level)?;
-                // This will only panic if the module is invalid
-                let dim = match *ctx.info[image].ty.inner_with(&self.module.types) {
-                    TypeInner::Image { dim, .. } => dim,
-                    _ => unreachable!(),
-                };
-
-                write!(self.out, "imageStore(")?;
-                self.write_expr(image, ctx)?;
-                write!(self.out, ", ")?;
-                self.write_texture_coordinates(coordinate, array_index, dim, ctx)?;
-                write!(self.out, ", ")?;
-                self.write_expr(value, ctx)?;
-                writeln!(self.out, ");")?;
+                self.write_image_store(ctx, image, coordinate, array_index, value)?
             }
             // A `Call` is written `name(arguments)` where `arguments` is a comma separated expressions list
             Statement::Call {
@@ -2320,51 +2337,13 @@ impl<'a, W: Write> Writer<'a, W> {
                 // End the function
                 write!(self.out, ")")?
             }
-            // `ImageLoad` is also a bit complicated.
-            // There are two functions one for sampled
-            // images another for storage images, the former uses `texelFetch` and the latter uses
-            // `imageLoad`.
-            // Furthermore we have `index` which is always `Some` for sampled images
-            // and `None` for storage images, so we end up with two functions:
-            // `texelFetch(image, coordinate, index)` - for sampled images
-            // `imageLoad(image, coordinate)` - for storage images
             Expression::ImageLoad {
                 image,
                 coordinate,
                 array_index,
                 sample,
                 level,
-            } => {
-                // This will only panic if the module is invalid
-                let (dim, class) = match *ctx.info[image].ty.inner_with(&self.module.types) {
-                    TypeInner::Image {
-                        dim,
-                        arrayed: _,
-                        class,
-                    } => (dim, class),
-                    _ => unreachable!(),
-                };
-
-                let fun_name = match class {
-                    crate::ImageClass::Sampled { .. } => "texelFetch",
-                    crate::ImageClass::Storage { .. } => "imageLoad",
-                    // TODO: Is there even a function for this?
-                    crate::ImageClass::Depth { multi: _ } => {
-                        return Err(Error::Custom("TODO: depth sample loads".to_string()))
-                    }
-                };
-
-                write!(self.out, "{}(", fun_name)?;
-                self.write_expr(image, ctx)?;
-                write!(self.out, ", ")?;
-                self.write_texture_coordinates(coordinate, array_index, dim, ctx)?;
-
-                if let Some(sample_or_level) = sample.or(level) {
-                    write!(self.out, ", ")?;
-                    self.write_expr(sample_or_level, ctx)?;
-                }
-                write!(self.out, ")")?;
-            }
+            } => self.write_image_load(expr, ctx, image, coordinate, array_index, sample, level)?,
             // Query translates into one of the:
             // - textureSize/imageSize
             // - textureQueryLevels
@@ -2961,25 +2940,71 @@ impl<'a, W: Write> Writer<'a, W> {
         Ok(())
     }
 
-    fn write_texture_coordinates(
+    /// Helper function to write the local holding the clamped lod
+    fn write_clamped_lod(
         &mut self,
+        ctx: &back::FunctionCtx,
+        expr: Handle<crate::Expression>,
+        image: Handle<crate::Expression>,
+        level_expr: Handle<crate::Expression>,
+    ) -> Result<(), Error> {
+        // Define our local and start a call to `clamp`
+        write!(
+            self.out,
+            "int {}{}{} = clamp(",
+            back::BAKE_PREFIX,
+            expr.index(),
+            CLAMPED_LOD_SUFFIX
+        )?;
+        // Write the lod that will be clamped
+        self.write_expr(level_expr, ctx)?;
+        // Set the min value to 0 and start a call to `textureQueryLevels` to get
+        // the maximum value
+        write!(self.out, ", 0, textureQueryLevels(")?;
+        // Write the target image as an argument to `textureQueryLevels`
+        self.write_expr(image, ctx)?;
+        // Close the call to `textureQueryLevels` subtract 1 from it since
+        // the lod argument is 0 based, close the `clamp` call and end the
+        // local declaration statement.
+        writeln!(self.out, ") - 1);")?;
+
+        Ok(())
+    }
+
+    // Helper method used to retrieve how many elements a coordinate vector
+    // for the images operations need.
+    fn get_coordinate_vector_size(&self, dim: crate::ImageDimension, arrayed: bool) -> u8 {
+        // openGL es doesn't have 1D images so we need workaround it
+        let tex_1d_hack = dim == crate::ImageDimension::D1 && self.options.version.is_es();
+        // Get how many components the coordinate vector needs for the dimensions only
+        let tex_coord_size = match dim {
+            crate::ImageDimension::D1 => 1,
+            crate::ImageDimension::D2 => 2,
+            crate::ImageDimension::D3 => 3,
+            crate::ImageDimension::Cube => 2,
+        };
+        // Calculate the true size of the coordinate vector by adding 1 for arrayed images
+        // and another 1 if we need to workaround 1D images by making them 2D
+        tex_coord_size + tex_1d_hack as u8 + arrayed as u8
+    }
+
+    /// Helper method to write the coordinate vector for image operations
+    fn write_texture_coord(
+        &mut self,
+        ctx: &back::FunctionCtx,
+        vector_size: u8,
         coordinate: Handle<crate::Expression>,
         array_index: Option<Handle<crate::Expression>>,
-        dim: crate::ImageDimension,
-        ctx: &back::FunctionCtx,
+        // Emulate 1D images as 2D for profiles that don't support it (glsl es)
+        tex_1d_hack: bool,
     ) -> Result<(), Error> {
-        use crate::ImageDimension as IDim;
-
-        let tex_1d_hack = dim == IDim::D1 && self.options.version.is_es();
         match array_index {
+            // If the image needs an array indice we need to add it to the end of our
+            // coordinate vector, to do so we will use the `ivec(ivec, scalar)`
+            // constructor notation (NOTE: the inner `ivec` can also be a scalar, this
+            // is important for 1D arrayed images).
             Some(layer_expr) => {
-                let tex_coord_size = match dim {
-                    IDim::D1 => 2,
-                    IDim::D2 => 3,
-                    IDim::D3 => 4,
-                    IDim::Cube => 4,
-                };
-                write!(self.out, "ivec{}(", tex_coord_size + tex_1d_hack as u8)?;
+                write!(self.out, "ivec{}(", vector_size)?;
                 self.write_expr(coordinate, ctx)?;
                 write!(self.out, ", ")?;
                 // If we are replacing sampler1D with sampler2D we also need
@@ -2990,16 +3015,326 @@ impl<'a, W: Write> Writer<'a, W> {
                 self.write_expr(layer_expr, ctx)?;
                 write!(self.out, ")")?;
             }
+            // Otherwise write just the expression (and the 1D hack if needed)
             None => {
                 if tex_1d_hack {
                     write!(self.out, "ivec2(")?;
                 }
                 self.write_expr(coordinate, ctx)?;
                 if tex_1d_hack {
-                    write!(self.out, ", 0.0)")?;
+                    write!(self.out, ", 0)")?;
                 }
             }
         }
+
+        Ok(())
+    }
+
+    /// Helper method to write the `ImageStore` statement
+    fn write_image_store(
+        &mut self,
+        ctx: &back::FunctionCtx,
+        image: Handle<crate::Expression>,
+        coordinate: Handle<crate::Expression>,
+        array_index: Option<Handle<crate::Expression>>,
+        value: Handle<crate::Expression>,
+    ) -> Result<(), Error> {
+        use crate::ImageDimension as IDim;
+
+        // NOTE: openGL requires that `imageStore`s have no effets when the texel is invalid
+        // so we don't need to generate bounds checks (OpenGL 4.2 Core §3.9.20)
+
+        // This will only panic if the module is invalid
+        let dim = match *ctx.info[image].ty.inner_with(&self.module.types) {
+            TypeInner::Image { dim, .. } => dim,
+            _ => unreachable!(),
+        };
+
+        // Begin our call to `imageStore`
+        write!(self.out, "imageStore(")?;
+        self.write_expr(image, ctx)?;
+        // Separate the image argument from the coordinates
+        write!(self.out, ", ")?;
+
+        // openGL es doesn't have 1D images so we need workaround it
+        let tex_1d_hack = dim == IDim::D1 && self.options.version.is_es();
+        // Write the coordinate vector
+        self.write_texture_coord(
+            ctx,
+            // Get the size of the coordinate vector
+            self.get_coordinate_vector_size(dim, array_index.is_some()),
+            coordinate,
+            array_index,
+            tex_1d_hack,
+        )?;
+
+        // Separate the coordinate from the value to write and write the expression
+        // of the value to write.
+        write!(self.out, ", ")?;
+        self.write_expr(value, ctx)?;
+        // End the call to `imageStore` and the statement.
+        writeln!(self.out, ");")?;
+
+        Ok(())
+    }
+
+    /// Helper method for writing an `ImageLoad` expression.
+    #[allow(clippy::too_many_arguments)]
+    fn write_image_load(
+        &mut self,
+        handle: Handle<crate::Expression>,
+        ctx: &back::FunctionCtx,
+        image: Handle<crate::Expression>,
+        coordinate: Handle<crate::Expression>,
+        array_index: Option<Handle<crate::Expression>>,
+        sample: Option<Handle<crate::Expression>>,
+        level: Option<Handle<crate::Expression>>,
+    ) -> Result<(), Error> {
+        use crate::ImageDimension as IDim;
+
+        // `ImageLoad` is a bit complicated.
+        // There are two functions one for sampled
+        // images another for storage images, the former uses `texelFetch` and the
+        // latter uses `imageLoad`.
+        //
+        // Furthermore we have `level` which is always `Some` for sampled images
+        // and `None` for storage images, so we end up with two functions:
+        // - `texelFetch(image, coordinate, level)` for sampled images
+        // - `imageLoad(image, coordinate)` for storage images
+        //
+        // Finally we also have to consider bounds checking, for storage images
+        // this is easy since openGL requires that invalid texels always return
+        // 0, for sampled images we need to either verify that all arguments are
+        // in bounds (`ReadZeroSkipWrite`) or make them a valid texel (`Restrict`).
+
+        // This will only panic if the module is invalid
+        let (dim, class) = match *ctx.info[image].ty.inner_with(&self.module.types) {
+            TypeInner::Image {
+                dim,
+                arrayed: _,
+                class,
+            } => (dim, class),
+            _ => unreachable!(),
+        };
+
+        // Get the name of the function to be used for the load operation
+        // and the policy to be used with it.
+        let (fun_name, policy) = match class {
+            // Sampled images inherit the policy from the user passed policies
+            crate::ImageClass::Sampled { .. } => ("texelFetch", self.policies.image),
+            crate::ImageClass::Storage { .. } => {
+                // OpenGL 4.2 Core §3.9.20 defines that out of bounds texels in `imageLoad`s
+                // always return zero values so we don't need to generate bounds checks
+                ("imageLoad", proc::BoundsCheckPolicy::Unchecked)
+            }
+            // TODO: Is there even a function for this?
+            crate::ImageClass::Depth { multi: _ } => {
+                return Err(Error::Custom(
+                    "WGSL `textureLoad` from depth textures is not supported in GLSL".to_string(),
+                ))
+            }
+        };
+
+        // openGL es doesn't have 1D images so we need workaround it
+        let tex_1d_hack = dim == IDim::D1 && self.options.version.is_es();
+        // Get the size of the coordinate vector
+        let vector_size = self.get_coordinate_vector_size(dim, array_index.is_some());
+
+        if let proc::BoundsCheckPolicy::ReadZeroSkipWrite = policy {
+            // To write the bounds checks for `ReadZeroSkipWrite` we will use a
+            // ternary operator since we are in the middle of an expression and
+            // need to return a value.
+            //
+            // NOTE: glsl does short circuit when evaluating logical
+            // expressions so we can be sure that after we test a
+            // condition it will be true for the next ones
+
+            // Write parantheses around the ternary operator to prevent problems with
+            // expressions emitted before or after it having more precedence
+            write!(self.out, "(",)?;
+
+            // The lod check needs to precede the size check since we need
+            // to use the lod to get the size of the image at that level.
+            if let Some(level_expr) = level {
+                self.write_expr(level_expr, ctx)?;
+                write!(self.out, " < textureQueryLevels(",)?;
+                self.write_expr(image, ctx)?;
+                // Chain the next check
+                write!(self.out, ") && ")?;
+            }
+
+            // Check that the sample arguments doesn't exceed the number of samples
+            if let Some(sample_expr) = sample {
+                self.write_expr(sample_expr, ctx)?;
+                write!(self.out, " < textureSamples(",)?;
+                self.write_expr(image, ctx)?;
+                // Chain the next check
+                write!(self.out, ") && ")?;
+            }
+
+            // We now need to write the size checks for the coordinates and array index
+            // first we write the comparation function in case the image is 1D non arrayed
+            // (and no 1D to 2D hack was needed) we are comparing scalars so the less than
+            // operator will suffice, but otherwise we'll be comparing two vectors so we'll
+            // need to use the `lessThan` function but it returns a vector of booleans (one
+            // for each comparison) so we need to fold it all in one scalar boolean, since
+            // we want all comparisons to pass we use the `all` function which will only
+            // return `true` if all the elements of the boolean vector are also `true`.
+            //
+            // So we'll end with one of the following forms
+            // - `coord < textureSize(image, lod)` for 1D images
+            // - `all(lessThan(coord, textureSize(image, lod)))` for normal images
+            // - `all(lessThan(ivec(coord, array_index), textureSize(image, lod)))`
+            //    for arrayed images
+            // - `all(lessThan(coord, textureSize(image)))` for multi sampled images
+
+            if vector_size != 1 {
+                write!(self.out, "all(lessThan(")?;
+            }
+
+            // Write the coordinate vector
+            self.write_texture_coord(ctx, vector_size, coordinate, array_index, tex_1d_hack)?;
+
+            if vector_size != 1 {
+                // If we used the `lessThan` function we need to separate the
+                // coordinates from the image size.
+                write!(self.out, ", ")?;
+            } else {
+                // If we didn't use it (ie. 1D images) we perform the comparsion
+                // using the less than operator.
+                write!(self.out, " < ")?;
+            }
+
+            // Call `textureSize` to get our image size
+            write!(self.out, "textureSize(")?;
+            self.write_expr(image, ctx)?;
+            // `textureSize` uses the lod as a second argument for mipmapped images
+            if let Some(level_expr) = level {
+                // Separate the image from the lod
+                write!(self.out, ", ")?;
+                self.write_expr(level_expr, ctx)?;
+            }
+            // Close the `textureSize` call
+            write!(self.out, ")")?;
+
+            if vector_size != 1 {
+                // Close the `all` and `lessThan` calls
+                write!(self.out, "))")?;
+            }
+
+            // Finally end the condition part of the ternary operator
+            write!(self.out, " ? ")?;
+        }
+
+        // Begin the call to the function used to load the texel
+        write!(self.out, "{}(", fun_name)?;
+        self.write_expr(image, ctx)?;
+        write!(self.out, ", ")?;
+
+        // If we are using `Restrict` bounds checking we need to pass valid texel
+        // coordinates, to do so we use the `clamp` function to get a value between
+        // 0 and the image size - 1 (indexing begins at 0)
+        if let proc::BoundsCheckPolicy::Restrict = policy {
+            write!(self.out, "clamp(")?;
+        }
+
+        // Write the coordinate vector
+        self.write_texture_coord(ctx, vector_size, coordinate, array_index, tex_1d_hack)?;
+
+        // If we are using `Restrict` bounds checking we need to write the rest of the
+        // clamp we initiated before writing the coordinates.
+        if let proc::BoundsCheckPolicy::Restrict = policy {
+            // Write the min value 0
+            if vector_size == 1 {
+                write!(self.out, ", 0")?;
+            } else {
+                write!(self.out, ", ivec{}(0)", vector_size)?;
+            }
+            // Start the `textureSize` call to use as the max value.
+            write!(self.out, ", textureSize(")?;
+            self.write_expr(image, ctx)?;
+            // If the image is mipmapped we need to add the lod argument to the
+            // `textureSize` call, but this needs to be the clamped lod, this should
+            // have been generated earlier and put in a local.
+            if class.is_mipmapped() {
+                write!(
+                    self.out,
+                    ", {}{}{}",
+                    back::BAKE_PREFIX,
+                    handle.index(),
+                    CLAMPED_LOD_SUFFIX
+                )?;
+            }
+            // Close the `textureSize` call
+            write!(self.out, ")")?;
+
+            // Subtract 1 from the `textureSize` call since the coordinates are zero based.
+            if vector_size == 1 {
+                write!(self.out, " - 1")?;
+            } else {
+                write!(self.out, " - ivec{}(1)", vector_size)?;
+            }
+
+            // Close the `clamp` call
+            write!(self.out, ")")?;
+
+            // Add the clamped lod (if present) as the second argument to the
+            // image load function.
+            if level.is_some() {
+                write!(
+                    self.out,
+                    ", {}{}{}",
+                    back::BAKE_PREFIX,
+                    handle.index(),
+                    CLAMPED_LOD_SUFFIX
+                )?;
+            }
+
+            // If a sample argument is needed we need to clamp it between 0 and
+            // the number of samples the image has.
+            if let Some(sample_expr) = sample {
+                write!(self.out, ", clamp(")?;
+                self.write_expr(sample_expr, ctx)?;
+                // Set the min value to 0 and start the call to `textureSamples`
+                write!(self.out, ", 0, textureSamples(")?;
+                self.write_expr(image, ctx)?;
+                // Close the `textureSamples` call, subtract 1 from it since the sample
+                // argument is zero based, and close the `clamp` call
+                writeln!(self.out, ") - 1)")?;
+            }
+        } else if let Some(sample_or_level) = sample.or(level) {
+            // If no bounds checking is need just add the sample or level argument
+            // after the coordinates
+            write!(self.out, ", ")?;
+            self.write_expr(sample_or_level, ctx)?;
+        }
+
+        // Close the image load function.
+        write!(self.out, ")")?;
+
+        // If we were using the `ReadZeroSkipWrite` policy we need to end the first branch
+        // (which is taken if the condition is `true`) with a colon (`:`) and write the
+        // second branch which is just a 0 value.
+        if let proc::BoundsCheckPolicy::ReadZeroSkipWrite = policy {
+            // Get the kind of the output value.
+            let kind = match class {
+                // Only sampled images can reach here since storage images
+                // don't need bounds checks and depth images aren't implmented
+                crate::ImageClass::Sampled { kind, .. } => kind,
+                _ => unreachable!(),
+            };
+
+            // End the first branch
+            write!(self.out, " : ")?;
+            // Write the 0 value
+            write!(self.out, "{}vec4(", glsl_scalar(kind, 4)?.prefix,)?;
+            self.write_zero_init_scalar(kind)?;
+            // Close the zero value constructor
+            write!(self.out, ")")?;
+            // Close the parantheses surrounding our ternary
+            write!(self.out, ")")?;
+        }
+
         Ok(())
     }
 

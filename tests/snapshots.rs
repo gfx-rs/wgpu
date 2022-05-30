@@ -153,7 +153,16 @@ fn check_targets(module: &naga::Module, name: &str, targets: Targets) {
                 if params.glsl_exclude_list.contains(&ep.name) {
                     continue;
                 }
-                write_output_glsl(module, &info, &dest, name, ep.stage, &ep.name, &params.glsl);
+                write_output_glsl(
+                    module,
+                    &info,
+                    &dest,
+                    name,
+                    ep.stage,
+                    &ep.name,
+                    &params.glsl,
+                    params.bounds_check_policies,
+                );
             }
         }
     }
@@ -273,6 +282,7 @@ fn write_output_glsl(
     stage: naga::ShaderStage,
     ep_name: &str,
     options: &naga::back::glsl::Options,
+    bounds_check_policies: naga::proc::BoundsCheckPolicies,
 ) {
     use naga::back::glsl;
 
@@ -284,8 +294,15 @@ fn write_output_glsl(
     };
 
     let mut buffer = String::new();
-    let mut writer = glsl::Writer::new(&mut buffer, module, info, options, &pipeline_options)
-        .expect("GLSL init failed");
+    let mut writer = glsl::Writer::new(
+        &mut buffer,
+        module,
+        info,
+        options,
+        &pipeline_options,
+        bounds_check_policies,
+    )
+    .expect("GLSL init failed");
     writer.write().expect("GLSL write failed");
 
     fs::write(
@@ -489,9 +506,12 @@ fn convert_wgsl() {
         ("bounds-check-restrict", Targets::SPIRV | Targets::METAL),
         (
             "bounds-check-image-restrict",
-            Targets::SPIRV | Targets::METAL,
+            Targets::SPIRV | Targets::METAL | Targets::GLSL,
         ),
-        ("bounds-check-image-rzsw", Targets::SPIRV | Targets::METAL),
+        (
+            "bounds-check-image-rzsw",
+            Targets::SPIRV | Targets::METAL | Targets::GLSL,
+        ),
         ("policy-mix", Targets::SPIRV | Targets::METAL),
         (
             "texture-arg",
