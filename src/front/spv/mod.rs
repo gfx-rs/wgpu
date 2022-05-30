@@ -306,7 +306,8 @@ struct LookupExpression {
     ///
     /// Note that, while a SPIR-V result id can be used in any block dominated
     /// by its definition, a Naga `Expression` is only in scope for the rest of
-    /// its subtree. `Parser::get_expr_handle` takes care of
+    /// its subtree. `Parser::get_expr_handle` takes care of spilling the result
+    /// to a `LocalVariable` which can then be used anywhere.
     handle: Handle<crate::Expression>,
 
     /// The SPIR-V type of this result.
