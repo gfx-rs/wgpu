@@ -126,7 +126,9 @@ async fn create_png(
 ) {
     // Note that we're not calling `.await` here.
     let buffer_slice = output_buffer.slice(..);
-    let buffer_future = buffer_slice.map_async(wgpu::MapMode::Read);
+    // Sets the buffer up for mapping, sending over the result of the mapping back to us when it is finished.
+    let (sender, receiver) = futures_intrusive::channel::shared::oneshot_channel();
+    buffer_slice.map_async(wgpu::MapMode::Read, move |v| sender.send(v).unwrap());
 
     // Poll the device in a blocking manner so that our future resolves.
     // In an actual application, `device.poll(...)` should
@@ -138,7 +140,7 @@ async fn create_png(
         return;
     }
 
-    if let Ok(()) = buffer_future.await {
+    if let Some(Ok(())) = receiver.receive().await {
         let padded_buffer = buffer_slice.get_mapped_range();
 
         let mut png_encoder = png::Encoder::new(
@@ -214,18 +216,15 @@ mod tests {
 
     #[test]
     fn ensure_generated_data_matches_expected() {
-        pollster::block_on(assert_generated_data_matches_expected());
+        assert_generated_data_matches_expected();
     }
 
-    async fn assert_generated_data_matches_expected() {
+    fn assert_generated_data_matches_expected() {
         let (device, output_buffer, dimensions) =
             create_red_image_with_dimensions(100usize, 200usize).await;
         let buffer_slice = output_buffer.slice(..);
-        let buffer_future = buffer_slice.map_async(wgpu::MapMode::Read);
+        buffer_slice.map_async(wgpu::MapMode::Read, |_| ());
         device.poll(wgpu::Maintain::Wait);
-        buffer_future
-            .await
-            .expect("failed to map buffer slice for capture test");
         let padded_buffer = buffer_slice.get_mapped_range();
         let expected_buffer_size = dimensions.padded_bytes_per_row * dimensions.height;
         assert_eq!(padded_buffer.len(), expected_buffer_size);

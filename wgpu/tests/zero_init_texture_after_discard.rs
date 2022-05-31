@@ -282,7 +282,7 @@ fn copy_texture_to_buffer(
 fn assert_buffer_is_zero(readback_buffer: &wgpu::Buffer, device: &wgpu::Device) {
     {
         let buffer_slice = readback_buffer.slice(..);
-        let _ = buffer_slice.map_async(wgpu::MapMode::Read);
+        buffer_slice.map_async(wgpu::MapMode::Read, |_| ());
         device.poll(wgpu::Maintain::Wait);
         let buffer_view = buffer_slice.get_mapped_range();
 

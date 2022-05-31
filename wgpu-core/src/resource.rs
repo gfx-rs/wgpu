@@ -23,7 +23,6 @@ pub enum BufferMapAsyncStatus {
     ContextLost,
 }
 
-#[derive(Debug)]
 pub(crate) enum BufferMapState<A: hal::Api> {
     /// Mapped at creation.
     Init {
@@ -46,27 +45,65 @@ pub(crate) enum BufferMapState<A: hal::Api> {
 unsafe impl<A: hal::Api> Send for BufferMapState<A> {}
 unsafe impl<A: hal::Api> Sync for BufferMapState<A> {}
 
-pub type BufferMapCallback = unsafe extern "C" fn(status: BufferMapAsyncStatus, userdata: *mut u8);
-
 #[repr(C)]
-#[derive(Debug)]
+pub struct BufferMapCallbackC {
+    callback: unsafe extern "C" fn(status: BufferMapAsyncStatus, user_data: *mut u8),
+    user_data: *mut u8,
+}
+
+unsafe impl Send for BufferMapCallbackC {}
+
+pub struct BufferMapCallback {
+    // We wrap this so creating the enum in the C variant can be unsafe,
+    // allowing our call function to be safe.
+    inner: BufferMapCallbackInner,
+}
+
+enum BufferMapCallbackInner {
+    Rust {
+        callback: Box<dyn FnOnce(BufferMapAsyncStatus) + Send + 'static>,
+    },
+    C {
+        inner: BufferMapCallbackC,
+    },
+}
+
+impl BufferMapCallback {
+    pub fn from_rust(callback: Box<dyn FnOnce(BufferMapAsyncStatus) + Send + 'static>) -> Self {
+        Self {
+            inner: BufferMapCallbackInner::Rust { callback },
+        }
+    }
+
+    /// # Safety
+    ///
+    /// - The callback pointer must be valid to call with the provided user_data pointer.
+    /// - Both pointers must point to 'static data as the callback may happen at an unspecified time.
+    pub unsafe fn from_c(inner: BufferMapCallbackC) -> Self {
+        Self {
+            inner: BufferMapCallbackInner::C { inner },
+        }
+    }
+
+    pub(crate) fn call(self, status: BufferMapAsyncStatus) {
+        match self.inner {
+            BufferMapCallbackInner::Rust { callback } => callback(status),
+            // SAFETY: the contract of the call to from_c says that this unsafe is sound.
+            BufferMapCallbackInner::C { inner } => unsafe {
+                (inner.callback)(status, inner.user_data)
+            },
+        }
+    }
+
+    pub(crate) fn call_error(self) {
+        log::error!("wgpu_buffer_map_async failed: buffer mapping is pending");
+        self.call(BufferMapAsyncStatus::Error);
+    }
+}
+
 pub struct BufferMapOperation {
     pub host: HostMap,
     pub callback: BufferMapCallback,
-    pub user_data: *mut u8,
-}
-
-//TODO: clarify if/why this is needed here
-unsafe impl Send for BufferMapOperation {}
-unsafe impl Sync for BufferMapOperation {}
-
-impl BufferMapOperation {
-    pub(crate) fn call_error(self) {
-        log::error!("wgpu_buffer_map_async failed: buffer mapping is pending");
-        unsafe {
-            (self.callback)(BufferMapAsyncStatus::Error, self.user_data);
-        }
-    }
 }
 
 #[derive(Clone, Debug, Error)]
@@ -105,7 +142,6 @@ pub enum BufferAccessError {
     },
 }
 
-#[derive(Debug)]
 pub(crate) struct BufferPendingMapping {
     pub range: Range<wgt::BufferAddress>,
     pub op: BufferMapOperation,
@@ -115,7 +151,6 @@ pub(crate) struct BufferPendingMapping {
 
 pub type BufferDescriptor<'a> = wgt::BufferDescriptor<Label<'a>>;
 
-#[derive(Debug)]
 pub struct Buffer<A: hal::Api> {
     pub(crate) raw: Option<A::Buffer>,
     pub(crate) device_id: Stored<DeviceId>,

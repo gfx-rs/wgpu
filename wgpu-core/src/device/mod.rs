@@ -141,14 +141,14 @@ impl UserClosures {
         self.submissions.extend(other.submissions);
     }
 
-    unsafe fn fire(self) {
-        //Note: this logic is specifically moved out of `handle_mapping()` in order to
+    fn fire(self) {
+        // Note: this logic is specifically moved out of `handle_mapping()` in order to
         // have nothing locked by the time we execute users callback code.
         for (operation, status) in self.mappings {
-            (operation.callback)(status, operation.user_data);
+            operation.callback.call(status);
         }
         for closure in self.submissions {
-            (closure.callback)(closure.user_data);
+            closure.call();
         }
     }
 }
@@ -4968,9 +4968,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .map_err(|_| DeviceError::Invalid)?
                 .maintain(hub, force_wait, &mut token)?
         };
-        unsafe {
-            closures.fire();
-        }
+
+        closures.fire();
+
         Ok(queue_empty)
     }
 
@@ -5048,9 +5048,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 self.poll_devices::<hal::api::Gles>(force_wait, &mut closures)? && all_queue_empty;
         }
 
-        unsafe {
-            closures.fire();
-        }
+        closures.fire();
 
         Ok(all_queue_empty)
     }
@@ -5157,7 +5155,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     return Err(resource::BufferAccessError::AlreadyMapped);
                 }
                 resource::BufferMapState::Waiting(_) => {
-                    op.call_error();
+                    op.callback.call_error();
                     return Ok(());
                 }
                 resource::BufferMapState::Idle => {
@@ -5374,9 +5372,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         //Note: outside inner function so no locks are held when calling the callback
         let closure = self.buffer_unmap_inner::<A>(buffer_id)?;
         if let Some((operation, status)) = closure {
-            unsafe {
-                (operation.callback)(status, operation.user_data);
-            }
+            operation.callback.call(status);
         }
         Ok(())
     }

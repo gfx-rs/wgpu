@@ -398,7 +398,7 @@ impl framework::Example for Skybox {
         view: &wgpu::TextureView,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        spawner: &framework::Spawner,
+        _spawner: &framework::Spawner,
     ) {
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
@@ -457,8 +457,7 @@ impl framework::Example for Skybox {
 
         queue.submit(std::iter::once(encoder.finish()));
 
-        let belt_future = self.staging_belt.recall();
-        spawner.spawn_local(belt_future);
+        self.staging_belt.recall();
     }
 }
 

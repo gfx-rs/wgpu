@@ -28,16 +28,56 @@ use thiserror::Error;
 /// without a concrete moment of when it can be cleared.
 const WRITE_COMMAND_BUFFERS_PER_POOL: usize = 64;
 
-pub type OnSubmittedWorkDoneCallback = unsafe extern "C" fn(user_data: *mut u8);
 #[repr(C)]
-#[derive(Clone, Copy, Debug)]
-pub struct SubmittedWorkDoneClosure {
-    pub callback: OnSubmittedWorkDoneCallback,
-    pub user_data: *mut u8,
+pub struct SubmittedWorkDoneClosureC {
+    callback: unsafe extern "C" fn(user_data: *mut u8),
+    user_data: *mut u8,
 }
 
-unsafe impl Send for SubmittedWorkDoneClosure {}
-unsafe impl Sync for SubmittedWorkDoneClosure {}
+unsafe impl Send for SubmittedWorkDoneClosureC {}
+
+pub struct SubmittedWorkDoneClosure {
+    // We wrap this so creating the enum in the C variant can be unsafe,
+    // allowing our call function to be safe.
+    inner: SubmittedWorkDoneClosureInner,
+}
+
+enum SubmittedWorkDoneClosureInner {
+    Rust {
+        callback: Box<dyn FnOnce() + Send + 'static>,
+    },
+    C {
+        inner: SubmittedWorkDoneClosureC,
+    },
+}
+
+impl SubmittedWorkDoneClosure {
+    pub fn from_rust(callback: Box<dyn FnOnce() + Send + 'static>) -> Self {
+        Self {
+            inner: SubmittedWorkDoneClosureInner::Rust { callback },
+        }
+    }
+
+    /// # Safety
+    ///
+    /// - The callback pointer must be valid to call with the provided user_data pointer.
+    /// - Both pointers must point to 'static data as the callback may happen at an unspecified time.
+    pub unsafe fn from_c(inner: SubmittedWorkDoneClosureC) -> Self {
+        Self {
+            inner: SubmittedWorkDoneClosureInner::C { inner },
+        }
+    }
+
+    pub(crate) fn call(self) {
+        match self.inner {
+            SubmittedWorkDoneClosureInner::Rust { callback } => callback(),
+            // SAFETY: the contract of the call to from_c says that this unsafe is sound.
+            SubmittedWorkDoneClosureInner::C { inner } => unsafe {
+                (inner.callback)(inner.user_data)
+            },
+        }
+    }
+}
 
 struct StagingData<A: hal::Api> {
     buffer: A::Buffer,
@@ -932,9 +972,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
 
         // the closures should execute with nothing locked!
-        unsafe {
-            callbacks.fire();
-        }
+        callbacks.fire();
+
         Ok(())
     }
 
@@ -957,7 +996,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         closure: SubmittedWorkDoneClosure,
     ) -> Result<(), InvalidQueue> {
         //TODO: flush pending writes
-        let added = {
+        let closure_opt = {
             let hub = A::hub(self);
             let mut token = Token::root();
             let (device_guard, mut token) = hub.devices.read(&mut token);
@@ -966,10 +1005,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Err(_) => return Err(InvalidQueue),
             }
         };
-        if !added {
-            unsafe {
-                (closure.callback)(closure.user_data);
-            }
+        if let Some(closure) = closure_opt {
+            closure.call();
         }
         Ok(())
     }
