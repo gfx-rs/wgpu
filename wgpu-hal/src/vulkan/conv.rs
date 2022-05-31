@@ -49,6 +49,7 @@ impl super::PrivateCapabilities {
             Tf::Rgba32Sint => F::R32G32B32A32_SINT,
             Tf::Rgba32Float => F::R32G32B32A32_SFLOAT,
             Tf::Depth32Float => F::D32_SFLOAT,
+            Tf::Depth32FloatStencil8 => F::D32_SFLOAT_S8_UINT,
             Tf::Depth24Plus => {
                 if self.texture_d24 {
                     F::X8_D24_UNORM_PACK32
@@ -63,6 +64,7 @@ impl super::PrivateCapabilities {
                     F::D32_SFLOAT_S8_UINT
                 }
             }
+            Tf::Depth24UnormStencil8 => F::D24_UNORM_S8_UINT,
             Tf::Rgb9e5Ufloat => F::E5B9G9R9_UFLOAT_PACK32,
             Tf::Bc1RgbaUnorm => F::BC1_RGBA_UNORM_BLOCK,
             Tf::Bc1RgbaUnormSrgb => F::BC1_RGBA_SRGB_BLOCK,
@@ -199,7 +201,7 @@ pub fn derive_image_layout(
             vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL
         }
         _ => {
-            if usage.is_empty() {
+            if usage == crate::TextureUses::PRESENT {
                 vk::ImageLayout::PRESENT_SRC_KHR
             } else if is_color {
                 vk::ImageLayout::GENERAL
@@ -229,7 +231,7 @@ pub fn map_texture_usage(usage: crate::TextureUses) -> vk::ImageUsageFlags {
     ) {
         flags |= vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT;
     }
-    if usage.intersects(crate::TextureUses::STORAGE_READ | crate::TextureUses::STORAGE_WRITE) {
+    if usage.intersects(crate::TextureUses::STORAGE_READ | crate::TextureUses::STORAGE_READ_WRITE) {
         flags |= vk::ImageUsageFlags::STORAGE;
     }
     flags
@@ -275,12 +277,12 @@ pub fn map_texture_usage_to_barrier(
         stages |= shader_stages;
         access |= vk::AccessFlags::SHADER_READ;
     }
-    if usage.contains(crate::TextureUses::STORAGE_WRITE) {
+    if usage.contains(crate::TextureUses::STORAGE_READ_WRITE) {
         stages |= shader_stages;
-        access |= vk::AccessFlags::SHADER_WRITE;
+        access |= vk::AccessFlags::SHADER_READ | vk::AccessFlags::SHADER_WRITE;
     }
 
-    if usage == crate::TextureUses::UNINITIALIZED || usage.is_empty() {
+    if usage == crate::TextureUses::UNINITIALIZED || usage == crate::TextureUses::PRESENT {
         (
             vk::PipelineStageFlags::TOP_OF_PIPE,
             vk::AccessFlags::empty(),
@@ -308,7 +310,7 @@ pub fn map_vk_image_usage(usage: vk::ImageUsageFlags) -> crate::TextureUses {
         bits |= crate::TextureUses::DEPTH_STENCIL_READ | crate::TextureUses::DEPTH_STENCIL_WRITE;
     }
     if usage.contains(vk::ImageUsageFlags::STORAGE) {
-        bits |= crate::TextureUses::STORAGE_READ | crate::TextureUses::STORAGE_WRITE;
+        bits |= crate::TextureUses::STORAGE_READ | crate::TextureUses::STORAGE_READ_WRITE;
     }
     bits
 }
@@ -456,7 +458,7 @@ pub fn map_buffer_usage(usage: crate::BufferUses) -> vk::BufferUsageFlags {
     if usage.contains(crate::BufferUses::UNIFORM) {
         flags |= vk::BufferUsageFlags::UNIFORM_BUFFER;
     }
-    if usage.intersects(crate::BufferUses::STORAGE_READ | crate::BufferUses::STORAGE_WRITE) {
+    if usage.intersects(crate::BufferUses::STORAGE_READ | crate::BufferUses::STORAGE_READ_WRITE) {
         flags |= vk::BufferUsageFlags::STORAGE_BUFFER;
     }
     if usage.contains(crate::BufferUses::INDEX) {
@@ -504,9 +506,9 @@ pub fn map_buffer_usage_to_barrier(
         stages |= shader_stages;
         access |= vk::AccessFlags::SHADER_READ;
     }
-    if usage.intersects(crate::BufferUses::STORAGE_WRITE) {
+    if usage.intersects(crate::BufferUses::STORAGE_READ_WRITE) {
         stages |= shader_stages;
-        access |= vk::AccessFlags::SHADER_WRITE;
+        access |= vk::AccessFlags::SHADER_READ | vk::AccessFlags::SHADER_WRITE;
     }
     if usage.contains(crate::BufferUses::INDEX) {
         stages |= vk::PipelineStageFlags::VERTEX_INPUT;

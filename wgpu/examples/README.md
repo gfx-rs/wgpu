@@ -21,7 +21,6 @@ All framework-based examples render to the window and are reftested against the 
 | implicit layout              |        |           |        | :star: |           |        |        |                |        |                     |
 | sampled color textures       | :star: | :star:    | :star: | :star: |           |        | :star: | :star:         | :star: | :star:              |
 | storage textures             | :star: |           |        |        |           |        |        |                |        |                     |
-| binding array                |        |           |        |        |           |        |        | :star:         |        |                     |
 | comparison samplers          |        |           |        |        |           | :star: |        |                |        |                     |
 | subresource views            |        |           |        | :star: |           | :star: |        |                |        |                     |
 | cubemaps                     |        |           |        |        |           |        | :star: |                |        |                     |
@@ -36,9 +35,9 @@ All framework-based examples render to the window and are reftested against the 
 | compute passes               | :star: |           |        |        |           |        |        |                |        |                     |
 | error scopes                 |        |           | :star: |        |           |        |        |                |        |                     |
 | *optional extensions*        |        |           |        |        |           |        |        | :star:         |        |                     |
-| - SPIR-V shaders             |        |           |        |        |           |        |        | :star:         |        |                     |
-| - binding indexing           |        |           |        |        |           |        |        | :star:         |        |                     |
-| - push constants             |        |           |        |        |           |        |        | :star:         |        |                     |
+| - SPIR-V shaders             |        |           |        |        |           |        |        |                |        |                     |
+| - binding array              |        |           |        |        |           |        |        | :star:         |        |                     |
+| - push constants             |        |           |        |        |           |        |        |                |        |                     |
 | - depth clamping             |        |           |        |        |           | :star: |        |                |        |                     |
 | - compressed textures        |        |           |        |        |           |        | :star: |                |        |                     |
 | - polygon mode               |        |           | :star: |        |           |        |        |                |        |                     |

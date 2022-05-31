@@ -79,7 +79,7 @@ fn extension() -> deno_core::Extension {
         ])
         .js(deno_core::include_js_files!(
           prefix "deno:cts_runner",
-          "src/bootstrap.js",
+          "bootstrap.js",
         ))
         .build()
 }

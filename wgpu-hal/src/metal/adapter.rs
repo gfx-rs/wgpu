@@ -180,21 +180,31 @@ impl crate::Adapter<super::Api> for super::Adapter {
                 };
                 flags
             }
-            Tf::Depth32Float => {
-                let mut flats =
+            Tf::Depth32Float | Tf::Depth32FloatStencil8 => {
+                let mut flags =
                     Tfc::DEPTH_STENCIL_ATTACHMENT | Tfc::MULTISAMPLE | msaa_resolve_apple3x_if;
                 if pc.format_depth32float_filter {
-                    flats |= Tfc::SAMPLED_LINEAR
+                    flags |= Tfc::SAMPLED_LINEAR
                 }
-                flats
+                flags
             }
-            Tf::Depth24Plus => Tfc::empty(),
-            Tf::Depth24PlusStencil8 => {
-                if pc.msaa_desktop {
-                    Tfc::DEPTH_STENCIL_ATTACHMENT | Tfc::SAMPLED_LINEAR | Tfc::MULTISAMPLE
+            Tf::Depth24Plus | Tf::Depth24PlusStencil8 => {
+                let mut flags = Tfc::DEPTH_STENCIL_ATTACHMENT | Tfc::MULTISAMPLE;
+                if pc.format_depth24_stencil8 {
+                    flags |= Tfc::SAMPLED_LINEAR | Tfc::MULTISAMPLE_RESOLVE
                 } else {
-                    Tfc::empty()
+                    flags |= msaa_resolve_apple3x_if;
+                    if pc.format_depth32float_filter {
+                        flags |= Tfc::SAMPLED_LINEAR
+                    }
                 }
+                flags
+            }
+            Tf::Depth24UnormStencil8 => {
+                Tfc::DEPTH_STENCIL_ATTACHMENT
+                    | Tfc::SAMPLED_LINEAR
+                    | Tfc::MULTISAMPLE
+                    | Tfc::MULTISAMPLE_RESOLVE
             }
             Tf::Rgb9e5Ufloat => {
                 if pc.msaa_apple3 {
@@ -202,7 +212,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
                 } else if pc.msaa_desktop {
                     Tfc::SAMPLED_LINEAR
                 } else {
-                    Tfc::STORAGE
+                    Tfc::SAMPLED_LINEAR
                         | Tfc::COLOR_ATTACHMENT
                         | Tfc::COLOR_ATTACHMENT_BLEND
                         | Tfc::MULTISAMPLE
@@ -523,10 +533,7 @@ impl super::PrivateCapabilities {
                 MUTABLE_COMPARISON_SAMPLER_SUPPORT,
             ),
             sampler_clamp_to_border: Self::supports_any(device, SAMPLER_CLAMP_TO_BORDER_SUPPORT),
-            sampler_lod_average: {
-                // TODO: Clarify minimum macOS version with Apple (43707452)
-                version.at_least((10, 13), (9, 0))
-            },
+            sampler_lod_average: { version.at_least((11, 0), (9, 0)) },
             base_instance: Self::supports_any(device, BASE_INSTANCE_SUPPORT),
             base_vertex_instance_drawing: Self::supports_any(device, BASE_VERTEX_INSTANCE_SUPPORT),
             dual_source_blending: Self::supports_any(device, DUAL_SOURCE_BLEND_SUPPORT),
@@ -665,7 +672,7 @@ impl super::PrivateCapabilities {
             max_varying_components: if device
                 .supports_feature_set(MTLFeatureSet::macOS_GPUFamily1_v1)
             {
-                128
+                124
             } else {
                 60
             },
@@ -680,11 +687,7 @@ impl super::PrivateCapabilities {
             } else {
                 512
             },
-            max_total_threadgroup_memory: if device
-                .supports_feature_set(MTLFeatureSet::iOS_GPUFamily4_v2)
-            {
-                64 << 10
-            } else if Self::supports_any(
+            max_total_threadgroup_memory: if Self::supports_any(
                 device,
                 &[
                     MTLFeatureSet::iOS_GPUFamily4_v1,
@@ -755,7 +758,9 @@ impl super::PrivateCapabilities {
             | F::PUSH_CONSTANTS
             | F::POLYGON_MODE_LINE
             | F::CLEAR_TEXTURE
-            | F::TEXTURE_FORMAT_16BIT_NORM;
+            | F::TEXTURE_FORMAT_16BIT_NORM
+            | F::SHADER_FLOAT16
+            | F::DEPTH32FLOAT_STENCIL8;
 
         features.set(F::TEXTURE_COMPRESSION_ASTC_LDR, self.format_astc);
         features.set(F::TEXTURE_COMPRESSION_ASTC_HDR, self.format_astc_hdr);
@@ -763,6 +768,7 @@ impl super::PrivateCapabilities {
         features.set(F::TEXTURE_COMPRESSION_ETC2, self.format_eac_etc);
 
         features.set(F::DEPTH_CLIP_CONTROL, self.supports_depth_clip_control);
+        features.set(F::DEPTH24UNORM_STENCIL8, self.format_depth24_stencil8);
 
         features.set(
             F::TEXTURE_BINDING_ARRAY
@@ -833,13 +839,12 @@ impl super::PrivateCapabilities {
                 max_push_constant_size: 0x1000,
                 min_uniform_buffer_offset_alignment: self.buffer_alignment as u32,
                 min_storage_buffer_offset_alignment: self.buffer_alignment as u32,
-                //TODO: double-check how these match Metal feature set tables
                 max_inter_stage_shader_components: self.max_varying_components,
                 max_compute_workgroup_storage_size: self.max_total_threadgroup_memory,
                 max_compute_invocations_per_workgroup: self.max_threads_per_group,
-                max_compute_workgroup_size_x: 256,
-                max_compute_workgroup_size_y: 256,
-                max_compute_workgroup_size_z: 64,
+                max_compute_workgroup_size_x: self.max_threads_per_group,
+                max_compute_workgroup_size_y: self.max_threads_per_group,
+                max_compute_workgroup_size_z: self.max_threads_per_group,
                 max_compute_workgroups_per_dimension: 0xFFFF,
             },
             alignments: crate::Alignments {
@@ -896,6 +901,7 @@ impl super::PrivateCapabilities {
             Tf::Rgba32Sint => RGBA32Sint,
             Tf::Rgba32Float => RGBA32Float,
             Tf::Depth32Float => Depth32Float,
+            Tf::Depth32FloatStencil8 => Depth32Float_Stencil8,
             Tf::Depth24Plus => {
                 if self.format_depth24_stencil8 {
                     Depth24Unorm_Stencil8
@@ -910,6 +916,7 @@ impl super::PrivateCapabilities {
                     Depth32Float_Stencil8
                 }
             }
+            Tf::Depth24UnormStencil8 => Depth24Unorm_Stencil8,
             Tf::Rgb9e5Ufloat => RGB9E5Float,
             Tf::Bc1RgbaUnorm => BC1_RGBA,
             Tf::Bc1RgbaUnormSrgb => BC1_RGBA_sRGB,

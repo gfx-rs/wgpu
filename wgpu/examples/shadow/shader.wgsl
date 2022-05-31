@@ -16,7 +16,7 @@ struct Entity {
 @binding(0)
 var<uniform> u_entity: Entity;
 
-@stage(vertex)
+@vertex
 fn vs_bake(@location(0) position: vec4<i32>) -> @builtin(position) vec4<f32> {
     return u_globals.view_proj * u_entity.world * vec4<f32>(position);
 }
@@ -27,18 +27,18 @@ struct VertexOutput {
     @location(1) world_position: vec4<f32>
 };
 
-@stage(vertex)
+@vertex
 fn vs_main(
     @location(0) position: vec4<i32>,
     @location(1) normal: vec4<i32>,
 ) -> VertexOutput {
     let w = u_entity.world;
     let world_pos = u_entity.world * vec4<f32>(position);
-    var out: VertexOutput;
-    out.world_normal = mat3x3<f32>(w.x.xyz, w.y.xyz, w.z.xyz) * vec3<f32>(normal.xyz);
-    out.world_position = world_pos;
-    out.proj_position = u_globals.view_proj * world_pos;
-    return out;
+    var result: VertexOutput;
+    result.world_normal = mat3x3<f32>(w.x.xyz, w.y.xyz, w.z.xyz) * vec3<f32>(normal.xyz);
+    result.world_position = world_pos;
+    result.proj_position = u_globals.view_proj * world_pos;
+    return result;
 }
 
 // fragment shader
@@ -78,17 +78,17 @@ fn fetch_shadow(light_id: u32, homogeneous_coords: vec4<f32>) -> f32 {
 let c_ambient: vec3<f32> = vec3<f32>(0.05, 0.05, 0.05);
 let c_max_lights: u32 = 10u;
 
-@stage(fragment)
-fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-    let normal = normalize(in.world_normal);
+@fragment
+fn fs_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
+    let normal = normalize(vertex.world_normal);
     // accumulate color
     var color: vec3<f32> = c_ambient;
     for(var i = 0u; i < min(u_globals.num_lights.x, c_max_lights); i += 1u) {
         let light = s_lights[i];
         // project into the light space
-        let shadow = fetch_shadow(i, light.proj * in.world_position);
+        let shadow = fetch_shadow(i, light.proj * vertex.world_position);
         // compute Lambertian diffuse term
-        let light_dir = normalize(light.pos.xyz - in.world_position.xyz);
+        let light_dir = normalize(light.pos.xyz - vertex.world_position.xyz);
         let diffuse = max(0.0, dot(normal, light_dir));
         // add light contribution
         color += shadow * diffuse * light.color.xyz;
@@ -98,16 +98,16 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 }
 
 // The fragment entrypoint used when storage buffers are not available for the lights
-@stage(fragment)
-fn fs_main_without_storage(in: VertexOutput) -> @location(0) vec4<f32> {
-    let normal = normalize(in.world_normal);
+@fragment
+fn fs_main_without_storage(vertex: VertexOutput) -> @location(0) vec4<f32> {
+    let normal = normalize(vertex.world_normal);
     var color: vec3<f32> = c_ambient;
     for(var i = 0u; i < min(u_globals.num_lights.x, c_max_lights); i += 1u) {
         // This line is the only difference from the entrypoint above. It uses the lights
         // uniform instead of the lights storage buffer
         let light = u_lights[i];
-        let shadow = fetch_shadow(i, light.proj * in.world_position);
-        let light_dir = normalize(light.pos.xyz - in.world_position.xyz);
+        let shadow = fetch_shadow(i, light.proj * vertex.world_position);
+        let light_dir = normalize(light.pos.xyz - vertex.world_position.xyz);
         let diffuse = max(0.0, dot(normal, light_dir));
         color += shadow * diffuse * light.color.xyz;
     }

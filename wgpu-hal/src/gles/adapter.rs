@@ -98,6 +98,7 @@ impl super::Adapter {
         // opengl has no way to discern device_type, so we can try to infer it from the renderer string
         let strings_that_imply_integrated = [
             " xpress", // space here is on purpose so we don't match express
+            "amd renoir",
             "radeon hd 4200",
             "radeon hd 4250",
             "radeon hd 4290",
@@ -134,7 +135,7 @@ impl super::Adapter {
         } else if strings_that_imply_cpu.iter().any(|&s| renderer.contains(s)) {
             wgt::DeviceType::Cpu
         } else {
-            wgt::DeviceType::DiscreteGpu
+            wgt::DeviceType::Other
         };
 
         // source: Sascha Willems at Vulkan
@@ -284,6 +285,10 @@ impl super::Adapter {
                 && (vertex_shader_storage_blocks != 0 || vertex_ssbo_false_zero),
         );
         downlevel_flags.set(wgt::DownlevelFlags::FRAGMENT_STORAGE, supports_storage);
+        downlevel_flags.set(
+            wgt::DownlevelFlags::ANISOTROPIC_FILTERING,
+            extensions.contains("EXT_texture_filter_anisotropic"),
+        );
 
         let mut features = wgt::Features::empty()
             | wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
@@ -654,7 +659,11 @@ impl crate::Adapter<super::Api> for super::Adapter {
             Tf::Rgba32Uint => renderable | storage,
             Tf::Rgba32Sint => renderable | storage,
             Tf::Rgba32Float => unfilterable | storage,
-            Tf::Depth32Float | Tf::Depth24Plus | Tf::Depth24PlusStencil8 => depth,
+            Tf::Depth32Float
+            | Tf::Depth32FloatStencil8
+            | Tf::Depth24Plus
+            | Tf::Depth24PlusStencil8
+            | Tf::Depth24UnormStencil8 => depth,
             Tf::Rgb9e5Ufloat
             | Tf::Bc1RgbaUnorm
             | Tf::Bc1RgbaUnormSrgb

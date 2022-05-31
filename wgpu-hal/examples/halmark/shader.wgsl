@@ -23,7 +23,7 @@ struct VertexOutput {
     @location(1) color: vec4<f32>,
 };
 
-@stage(vertex)
+@vertex
 fn vs_main(@builtin(vertex_index) vi: u32) -> VertexOutput {
     let tc = vec2<f32>(f32(vi & 1u), 0.5 * f32(vi & 2u));
     let offset = vec2<f32>(tc.x * globals.size.x, tc.y * globals.size.y);
@@ -34,12 +34,12 @@ fn vs_main(@builtin(vertex_index) vi: u32) -> VertexOutput {
 
 @group(0)
 @binding(1)
-var texture: texture_2d<f32>;
+var tex: texture_2d<f32>;
 @group(0)
 @binding(2)
 var sam: sampler;
 
-@stage(fragment)
-fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-    return in.color * textureSampleLevel(texture, sam, in.tex_coords, 0.0);
+@fragment
+fn fs_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
+    return vertex.color * textureSampleLevel(tex, sam, vertex.tex_coords, 0.0);
 }

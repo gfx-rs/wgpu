@@ -47,6 +47,14 @@ impl Context {
         ))
     }
 
+    #[cfg(any(not(target_arch = "wasm32"), feature = "webgl2"))]
+    pub unsafe fn instance_as_hal<A: wgc::hub::HalApi, F: FnOnce(Option<&A::Instance>) -> R, R>(
+        &self,
+        hal_instance_callback: F,
+    ) -> R {
+        self.0.instance_as_hal::<A, F, R>(hal_instance_callback)
+    }
+
     pub(crate) fn global(&self) -> &wgc::hub::Global<wgc::hub::IdentityManagerFactory> {
         &self.0
     }
@@ -65,6 +73,16 @@ impl Context {
         hal_adapter: hal::ExposedAdapter<A>,
     ) -> wgc::id::AdapterId {
         self.0.create_adapter_from_hal(hal_adapter, PhantomData)
+    }
+
+    #[cfg(any(not(target_arch = "wasm32"), feature = "webgl2"))]
+    pub unsafe fn adapter_as_hal<A: wgc::hub::HalApi, F: FnOnce(Option<&A::Adapter>) -> R, R>(
+        &self,
+        adapter: wgc::id::AdapterId,
+        hal_adapter_callback: F,
+    ) -> R {
+        self.0
+            .adapter_as_hal::<A, F, R>(adapter, hal_adapter_callback)
     }
 
     #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
@@ -347,15 +365,19 @@ mod pass_impl {
             wgpu_compute_pass_end_pipeline_statistics_query(self)
         }
 
-        fn dispatch(&mut self, x: u32, y: u32, z: u32) {
-            wgpu_compute_pass_dispatch(self, x, y, z)
+        fn dispatch_workgroups(&mut self, x: u32, y: u32, z: u32) {
+            wgpu_compute_pass_dispatch_workgroups(self, x, y, z)
         }
-        fn dispatch_indirect(
+        fn dispatch_workgroups_indirect(
             &mut self,
             indirect_buffer: &super::Buffer,
             indirect_offset: wgt::BufferAddress,
         ) {
-            wgpu_compute_pass_dispatch_indirect(self, indirect_buffer.id, indirect_offset)
+            wgpu_compute_pass_dispatch_workgroups_indirect(
+                self,
+                indirect_buffer.id,
+                indirect_offset,
+            )
         }
     }
 
@@ -846,10 +868,10 @@ impl crate::Context for Context {
         ready(id.ok())
     }
 
-    fn instance_poll_all_devices(&self, force_wait: bool) {
+    fn instance_poll_all_devices(&self, force_wait: bool) -> bool {
         let global = &self.0;
         match global.poll_all_devices(force_wait) {
-            Ok(()) => (),
+            Ok(all_queue_empty) => all_queue_empty,
             Err(err) => self.handle_error_fatal(err, "Device::poll"),
         }
     }
@@ -1351,8 +1373,8 @@ impl crate::Context for Context {
         ));
         if let Some(cause) = error {
             if let wgc::pipeline::CreateRenderPipelineError::Internal { stage, ref error } = cause {
-                log::warn!("Shader translation error for stage {:?}: {}", stage, error);
-                log::warn!("Please report it to https://github.com/gfx-rs/naga");
+                log::error!("Shader translation error for stage {:?}: {}", stage, error);
+                log::error!("Please report it to https://github.com/gfx-rs/naga");
             }
             self.handle_error(
                 &device.error_sink,
@@ -1576,7 +1598,7 @@ impl crate::Context for Context {
         #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
         {
             match wgc::gfx_select!(device.id => global.device_poll(device.id, true)) {
-                Ok(()) => (),
+                Ok(_) => (),
                 Err(err) => self.handle_error_fatal(err, "Device::drop"),
             }
         }
@@ -1584,7 +1606,7 @@ impl crate::Context for Context {
         wgc::gfx_select!(device.id => global.device_drop(device.id));
     }
 
-    fn device_poll(&self, device: &Self::DeviceId, maintain: crate::Maintain) {
+    fn device_poll(&self, device: &Self::DeviceId, maintain: crate::Maintain) -> bool {
         let global = &self.0;
         match wgc::gfx_select!(device.id => global.device_poll(
             device.id,
@@ -1593,7 +1615,7 @@ impl crate::Context for Context {
                 crate::Maintain::Wait => true,
             }
         )) {
-            Ok(()) => (),
+            Ok(queue_empty) => queue_empty,
             Err(err) => self.handle_error_fatal(err, "Device::poll"),
         }
     }

@@ -7,7 +7,7 @@ use crate::{
     },
     hub::{GlobalIdentityHandlerFactory, HalApi, Hub, Token},
     id, resource,
-    track::TrackerSet,
+    track::{BindGroupStates, RenderBundleScope, Tracker},
     RefCount, Stored, SubmissionIndex,
 };
 use smallvec::SmallVec;
@@ -68,16 +68,20 @@ impl SuspectedResources {
         self.query_sets.extend_from_slice(&other.query_sets);
     }
 
-    pub(super) fn add_trackers(&mut self, trackers: &TrackerSet) {
+    pub(super) fn add_render_bundle_scope<A: HalApi>(&mut self, trackers: &RenderBundleScope<A>) {
+        self.buffers.extend(trackers.buffers.used());
+        self.textures.extend(trackers.textures.used());
+        self.bind_groups.extend(trackers.bind_groups.used());
+        self.render_pipelines
+            .extend(trackers.render_pipelines.used());
+        self.query_sets.extend(trackers.query_sets.used());
+    }
+
+    pub(super) fn add_bind_group_states<A: HalApi>(&mut self, trackers: &BindGroupStates<A>) {
         self.buffers.extend(trackers.buffers.used());
         self.textures.extend(trackers.textures.used());
         self.texture_views.extend(trackers.views.used());
         self.samplers.extend(trackers.samplers.used());
-        self.bind_groups.extend(trackers.bind_groups.used());
-        self.compute_pipelines.extend(trackers.compute_pipes.used());
-        self.render_pipelines.extend(trackers.render_pipes.used());
-        self.render_bundles.extend(trackers.bundles.used());
-        self.query_sets.extend(trackers.query_sets.used());
     }
 }
 
@@ -273,7 +277,8 @@ pub(super) struct LifetimeTracker<A: hal::Api> {
     /// Textures can be used in the upcoming submission by `write_texture`.
     pub future_suspected_textures: Vec<Stored<id::TextureId>>,
 
-    /// Resources that are suspected for destruction.
+    /// Resources whose user handle has died (i.e. drop/destroy has been called)
+    /// and will likely be ready for destruction soon.
     pub suspected_resources: SuspectedResources,
 
     /// Resources used by queue submissions still in flight. One entry per
@@ -491,7 +496,7 @@ impl<A: HalApi> LifetimeTracker<A> {
     pub(super) fn triage_suspected<G: GlobalIdentityHandlerFactory>(
         &mut self,
         hub: &Hub<A, G>,
-        trackers: &Mutex<TrackerSet>,
+        trackers: &Mutex<Tracker<A>>,
         #[cfg(feature = "trace")] trace: Option<&Mutex<trace::Trace>>,
         token: &mut Token<super::Device<A>>,
     ) {
@@ -510,7 +515,7 @@ impl<A: HalApi> LifetimeTracker<A> {
                     }
 
                     if let Some(res) = hub.render_bundles.unregister_locked(id.0, &mut *guard) {
-                        self.suspected_resources.add_trackers(&res.used);
+                        self.suspected_resources.add_render_bundle_scope(&res.used);
                     }
                 }
             }
@@ -529,7 +534,7 @@ impl<A: HalApi> LifetimeTracker<A> {
                     }
 
                     if let Some(res) = hub.bind_groups.unregister_locked(id.0, &mut *guard) {
-                        self.suspected_resources.add_trackers(&res.used);
+                        self.suspected_resources.add_bind_group_states(&res.used);
 
                         self.suspected_resources
                             .bind_group_layouts
@@ -670,7 +675,7 @@ impl<A: HalApi> LifetimeTracker<A> {
             let mut trackers = trackers.lock();
 
             for id in self.suspected_resources.compute_pipelines.drain(..) {
-                if trackers.compute_pipes.remove_abandoned(id) {
+                if trackers.compute_pipelines.remove_abandoned(id) {
                     log::debug!("Compute pipeline {:?} will be destroyed", id);
                     #[cfg(feature = "trace")]
                     if let Some(t) = trace {
@@ -695,7 +700,7 @@ impl<A: HalApi> LifetimeTracker<A> {
             let mut trackers = trackers.lock();
 
             for id in self.suspected_resources.render_pipelines.drain(..) {
-                if trackers.render_pipes.remove_abandoned(id) {
+                if trackers.render_pipelines.remove_abandoned(id) {
                     log::debug!("Render pipeline {:?} will be destroyed", id);
                     #[cfg(feature = "trace")]
                     if let Some(t) = trace {
@@ -829,7 +834,7 @@ impl<A: HalApi> LifetimeTracker<A> {
         &mut self,
         hub: &Hub<A, G>,
         raw: &A::Device,
-        trackers: &Mutex<TrackerSet>,
+        trackers: &Mutex<Tracker<A>>,
         token: &mut Token<super::Device<A>>,
     ) -> Vec<super::BufferMapPendingClosure> {
         if self.ready_to_map.is_empty() {

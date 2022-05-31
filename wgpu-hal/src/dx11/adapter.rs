@@ -193,8 +193,8 @@ impl super::Adapter {
 
         let limits = wgt::Limits {
             max_texture_dimension_1d: max_texture_dimension_2d,
-            max_texture_dimension_2d: max_texture_dimension_2d,
-            max_texture_dimension_3d: max_texture_dimension_3d,
+            max_texture_dimension_2d,
+            max_texture_dimension_3d,
             max_texture_array_layers: max_texture_dimension_3d,
             max_bind_groups: u32::MAX,
             max_dynamic_uniform_buffers_per_pipeline_layout: max_constant_buffers,
@@ -206,7 +206,7 @@ impl super::Adapter {
             max_uniform_buffers_per_shader_stage: max_constant_buffers,
             max_uniform_buffer_binding_size: 1 << 16,
             max_storage_buffer_binding_size: u32::MAX,
-            max_vertex_buffers: max_vertex_buffers,
+            max_vertex_buffers,
             max_vertex_attributes: max_vertex_buffers,
             max_vertex_buffer_array_stride: u32::MAX,
             max_push_constant_size: 1 << 16,

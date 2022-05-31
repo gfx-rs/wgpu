@@ -27,11 +27,13 @@ webgl = ["web-sys"]
 [dependencies]
 arrayvec = "0.7"
 bitflags = "1.0"
+bit-vec = "0.6"
 codespan-reporting = "0.11"
 copyless = "0.1"
 fxhash = "0.2"
 log = "0.4"
-parking_lot = "0.11"
+# parking_lot 0.12 switches from `winapi` to `windows`; permit either
+parking_lot = ">=0.11,<0.13"
 profiling = { version = "1", default-features = false }
 raw-window-handle = { version = "0.4", optional = true }
 ron = { version = "0.7", optional = true }
@@ -41,7 +43,7 @@ thiserror = "1"
 
 [dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-rev = "f90e563"
+rev = "571302e"
 #version = "0.8"
 features = ["span", "validate", "wgsl-in"]
 

@@ -263,6 +263,8 @@ pub enum StageError {
         #[source]
         error: InputError,
     },
+    #[error("location[{location}] is provided by the previous stage output but is not consumed as input by this stage.")]
+    InputNotConsumed { location: wgt::ShaderLocation },
 }
 
 fn map_storage_format_to_naga(format: wgt::TextureFormat) -> Option<naga::StorageFormat> {
@@ -702,7 +704,11 @@ impl NumericType {
                 (NumericDimension::Vector(Vs::Quad), Sk::Sint)
             }
             Tf::Rg11b10Float => (NumericDimension::Vector(Vs::Tri), Sk::Float),
-            Tf::Depth32Float | Tf::Depth24Plus | Tf::Depth24PlusStencil8 => {
+            Tf::Depth32Float
+            | Tf::Depth32FloatStencil8
+            | Tf::Depth24Plus
+            | Tf::Depth24PlusStencil8
+            | Tf::Depth24UnormStencil8 => {
                 panic!("Unexpected depth format")
             }
             Tf::Rgb9e5Ufloat => (NumericDimension::Vector(Vs::Tri), Sk::Float),
@@ -867,10 +873,14 @@ impl Interface {
                 Some(ref br) => br.clone(),
                 _ => continue,
             };
-            let ty = match module.types[var.ty].inner {
-                naga::TypeInner::Struct { members: _, span } => ResourceType::Buffer {
-                    size: wgt::BufferSize::new(span as u64).unwrap(),
-                },
+            let naga_ty = &module.types[var.ty].inner;
+
+            let inner_ty = match *naga_ty {
+                naga::TypeInner::BindingArray { base, .. } => &module.types[base].inner,
+                ref ty => ty,
+            };
+
+            let ty = match *inner_ty {
                 naga::TypeInner::Image {
                     dim,
                     arrayed,
@@ -884,10 +894,9 @@ impl Interface {
                 naga::TypeInner::Array { stride, .. } => ResourceType::Buffer {
                     size: wgt::BufferSize::new(stride as u64).unwrap(),
                 },
-                ref other => {
-                    log::error!("Unexpected resource type: {:?}", other);
-                    continue;
-                }
+                ref other => ResourceType::Buffer {
+                    size: wgt::BufferSize::new(other.size(&module.constants) as u64).unwrap(),
+                },
             };
             let handle = resources.append(
                 Resource {
@@ -903,7 +912,7 @@ impl Interface {
 
         let mut entry_points = FastHashMap::default();
         entry_points.reserve(module.entry_points.len());
-        for (index, entry_point) in (&module.entry_points).iter().enumerate() {
+        for (index, entry_point) in module.entry_points.iter().enumerate() {
             let info = info.get_entry_point(index);
             let mut ep = EntryPoint::default();
             for arg in entry_point.function.arguments.iter() {
@@ -1149,6 +1158,21 @@ impl Interface {
                     }
                 }
                 Varying::BuiltIn(_) => {}
+            }
+        }
+
+        // Check all vertex outputs and make sure the fragment shader consumes them.
+        if shader_stage == naga::ShaderStage::Fragment {
+            for &index in inputs.keys() {
+                // This is a linear scan, but the count should be low enough that this should be fine.
+                let found = entry_point.inputs.iter().any(|v| match *v {
+                    Varying::Local { location, .. } => location == index,
+                    Varying::BuiltIn(_) => false,
+                });
+
+                if !found {
+                    return Err(StageError::InputNotConsumed { location: index });
+                }
             }
         }
 

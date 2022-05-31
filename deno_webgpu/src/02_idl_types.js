@@ -120,6 +120,7 @@
       "texture-compression-astc",
       "timestamp-query",
       "indirect-first-instance",
+      "shader-f16",
       // extended from spec
       "mappable-primary-buffers",
       "texture-binding-array",
@@ -539,6 +540,15 @@
     ],
   );
 
+  // ENUM: GPUMipmapFilterMode
+  webidl.converters["GPUMipmapFilterMode"] = webidl.createEnumConverter(
+    "GPUMipmapFilterMode",
+    [
+      "nearest",
+      "linear",
+    ],
+  );
+
   // ENUM: GPUCompareFunction
   webidl.converters["GPUCompareFunction"] = webidl.createEnumConverter(
     "GPUCompareFunction",
@@ -583,7 +593,7 @@
     },
     {
       key: "mipmapFilter",
-      converter: webidl.converters["GPUFilterMode"],
+      converter: webidl.converters["GPUMipmapFilterMode"],
       defaultValue: "nearest",
     },
     {
@@ -937,7 +947,10 @@
 
   // DICTIONARY: GPUPipelineDescriptorBase
   const dictMembersGPUPipelineDescriptorBase = [
-    { key: "layout", converter: webidl.converters["GPUPipelineLayout"] },
+    {
+      key: "layout",
+      converter: webidl.converters["GPUPipelineLayout"],
+    },
   ];
   webidl.converters["GPUPipelineDescriptorBase"] = webidl
     .createDictionaryConverter(

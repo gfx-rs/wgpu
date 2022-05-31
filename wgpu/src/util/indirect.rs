@@ -54,7 +54,7 @@ impl DrawIndexedIndirect {
     }
 }
 
-/// The structure expected in `indirect_buffer` for [`ComputePass::dispatch_indirect`](crate::ComputePass::dispatch_indirect).
+/// The structure expected in `indirect_buffer` for [`ComputePass::dispatch_workgroups_indirect`](crate::ComputePass::dispatch_workgroups_indirect).
 ///
 /// x, y and z denote the number of work groups to dispatch in each dimension.
 #[repr(C)]

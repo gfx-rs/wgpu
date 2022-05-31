@@ -667,6 +667,11 @@ enum Command {
     ClearColorI(u32, [i32; 4]),
     ClearDepth(f32),
     ClearStencil(u32),
+    // Clearing both the depth and stencil buffer individually appears to
+    // result in the stencil buffer failing to clear, atleast in WebGL.
+    // It is also more efficient to emit a single command instead of two for
+    // this.
+    ClearDepthAndStencil(f32, u32),
     BufferBarrier(glow::Buffer, crate::BufferUses),
     TextureBarrier(crate::TextureUses),
     SetViewport {

@@ -230,7 +230,11 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         }
         for bar in barriers {
             // GLES only synchronizes storage -> anything explicitly
-            if !bar.usage.start.contains(crate::BufferUses::STORAGE_WRITE) {
+            if !bar
+                .usage
+                .start
+                .contains(crate::BufferUses::STORAGE_READ_WRITE)
+            {
                 continue;
             }
             self.cmd_buffer
@@ -253,7 +257,11 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         let mut combined_usage = crate::TextureUses::empty();
         for bar in barriers {
             // GLES only synchronizes storage -> anything explicitly
-            if !bar.usage.start.contains(crate::TextureUses::STORAGE_WRITE) {
+            if !bar
+                .usage
+                .start
+                .contains(crate::TextureUses::STORAGE_READ_WRITE)
+            {
                 continue;
             }
             // unlike buffers, there is no need for a concrete texture
@@ -520,12 +528,19 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             }
         }
         if let Some(ref dsat) = desc.depth_stencil_attachment {
-            if !dsat.depth_ops.contains(crate::AttachmentOps::LOAD) {
+            let clear_depth = !dsat.depth_ops.contains(crate::AttachmentOps::LOAD);
+            let clear_stencil = !dsat.stencil_ops.contains(crate::AttachmentOps::LOAD);
+
+            if clear_depth && clear_stencil {
+                self.cmd_buffer.commands.push(C::ClearDepthAndStencil(
+                    dsat.clear_value.0,
+                    dsat.clear_value.1,
+                ));
+            } else if clear_depth {
                 self.cmd_buffer
                     .commands
                     .push(C::ClearDepth(dsat.clear_value.0));
-            }
-            if !dsat.stencil_ops.contains(crate::AttachmentOps::LOAD) {
+            } else if clear_stencil {
                 self.cmd_buffer
                     .commands
                     .push(C::ClearStencil(dsat.clear_value.1));

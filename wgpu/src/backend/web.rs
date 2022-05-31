@@ -128,10 +128,10 @@ impl crate::ComputePassInner<Context> for ComputePass {
         // self.0.pop_debug_group();
     }
 
-    fn dispatch(&mut self, x: u32, y: u32, z: u32) {
+    fn dispatch_workgroups(&mut self, x: u32, y: u32, z: u32) {
         self.0.dispatch_with_y_and_z(x, y, z);
     }
-    fn dispatch_indirect(
+    fn dispatch_workgroups_indirect(
         &mut self,
         indirect_buffer: &Sendable<web_sys::GpuBuffer>,
         indirect_offset: wgt::BufferAddress,
@@ -543,8 +543,10 @@ fn map_texture_format(texture_format: wgt::TextureFormat) -> web_sys::GpuTexture
         TextureFormat::Rgba32Sint => tf::Rgba32sint,
         TextureFormat::Rgba32Float => tf::Rgba32float,
         TextureFormat::Depth32Float => tf::Depth32float,
+        TextureFormat::Depth32FloatStencil8 => tf::Depth32floatStencil8,
         TextureFormat::Depth24Plus => tf::Depth24plus,
         TextureFormat::Depth24PlusStencil8 => tf::Depth24plusStencil8,
+        TextureFormat::Depth24UnormStencil8 => tf::Depth24unormStencil8,
         _ => unimplemented!(),
     }
 }
@@ -591,8 +593,10 @@ fn map_texture_format_from_web_sys(
         tf::Rgba32sint => TextureFormat::Rgba32Sint,
         tf::Rgba32float => TextureFormat::Rgba32Float,
         tf::Depth32float => TextureFormat::Depth32Float,
+        tf::Depth32floatStencil8 => TextureFormat::Depth32FloatStencil8,
         tf::Depth24plus => TextureFormat::Depth24Plus,
         tf::Depth24plusStencil8 => TextureFormat::Depth24PlusStencil8,
+        tf::Depth24unormStencil8 => TextureFormat::Depth24UnormStencil8,
         _ => unimplemented!(),
     }
 }
@@ -1066,8 +1070,9 @@ impl crate::Context for Context {
         )
     }
 
-    fn instance_poll_all_devices(&self, _force_wait: bool) {
+    fn instance_poll_all_devices(&self, _force_wait: bool) -> bool {
         // Devices are automatically polled.
+        true
     }
 
     fn adapter_request_device(
@@ -1088,8 +1093,14 @@ impl crate::Context for Context {
         let possible_features = [
             //TODO: update the name
             (wgt::Features::DEPTH_CLIP_CONTROL, Gfn::DepthClamping),
-            // TODO (_, Gfn::Depth24unormStencil8),
-            // TODO (_, Gfn::Depth32floatStencil8),
+            (
+                wgt::Features::DEPTH24UNORM_STENCIL8,
+                Gfn::Depth24unormStencil8,
+            ),
+            (
+                wgt::Features::DEPTH32FLOAT_STENCIL8,
+                Gfn::Depth32floatStencil8,
+            ),
             (
                 wgt::Features::PIPELINE_STATISTICS_QUERY,
                 Gfn::PipelineStatisticsQuery,
@@ -1691,8 +1702,9 @@ impl crate::Context for Context {
         // Device is dropped automatically
     }
 
-    fn device_poll(&self, _device: &Self::DeviceId, _maintain: crate::Maintain) {
+    fn device_poll(&self, _device: &Self::DeviceId, _maintain: crate::Maintain) -> bool {
         // Device is polled automatically
+        true
     }
 
     fn device_on_uncaptured_error(

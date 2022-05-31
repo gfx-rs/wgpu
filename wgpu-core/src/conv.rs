@@ -1,6 +1,10 @@
 use crate::resource;
 
-pub fn is_power_of_two(val: u32) -> bool {
+pub fn is_power_of_two_u16(val: u16) -> bool {
+    val != 0 && (val & (val - 1)) == 0
+}
+
+pub fn is_power_of_two_u32(val: u32) -> bool {
     val != 0 && (val & (val - 1)) == 0
 }
 
@@ -15,7 +19,11 @@ pub fn is_valid_copy_src_texture_format(format: wgt::TextureFormat) -> bool {
 pub fn is_valid_copy_dst_texture_format(format: wgt::TextureFormat) -> bool {
     use wgt::TextureFormat as Tf;
     match format {
-        Tf::Depth32Float | Tf::Depth24Plus | Tf::Depth24PlusStencil8 => false,
+        Tf::Depth32Float
+        | Tf::Depth32FloatStencil8
+        | Tf::Depth24Plus
+        | Tf::Depth24PlusStencil8
+        | Tf::Depth24UnormStencil8 => false,
         _ => true,
     }
 }
@@ -51,7 +59,7 @@ pub fn map_buffer_usage(usage: wgt::BufferUsages) -> hal::BufferUses {
         usage.contains(wgt::BufferUsages::UNIFORM),
     );
     u.set(
-        hal::BufferUses::STORAGE_READ | hal::BufferUses::STORAGE_WRITE,
+        hal::BufferUses::STORAGE_READ | hal::BufferUses::STORAGE_READ_WRITE,
         usage.contains(wgt::BufferUsages::STORAGE),
     );
     u.set(
@@ -79,7 +87,7 @@ pub fn map_texture_usage(
         usage.contains(wgt::TextureUsages::TEXTURE_BINDING),
     );
     u.set(
-        hal::TextureUses::STORAGE_READ | hal::TextureUses::STORAGE_WRITE,
+        hal::TextureUses::STORAGE_READ | hal::TextureUses::STORAGE_READ_WRITE,
         usage.contains(wgt::TextureUsages::STORAGE_BINDING),
     );
     let is_color = aspect.contains(hal::FormatAspects::COLOR);
@@ -146,7 +154,7 @@ pub fn check_texture_dimension_size(
             return Err(Tde::LimitExceeded { dim, given, limit });
         }
     }
-    if sample_size == 0 || sample_size > sample_limit || !is_power_of_two(sample_size) {
+    if sample_size == 0 || sample_size > sample_limit || !is_power_of_two_u32(sample_size) {
         return Err(Tde::InvalidSampleCount(sample_size));
     }
 

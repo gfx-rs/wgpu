@@ -493,21 +493,7 @@ impl super::Queue {
                             glow::CompressedPixelUnpackData::Slice(src_data)
                         }
                     };
-                    log::error!(
-                        "bytes_per_row: {}, \
-                         minimum_rows_per_image: {}, \
-                         rows_per_image: {}, \
-                         bytes_per_image: {}, \
-                         minimum_bytes_per_image: {}, \
-                         bytes_in_upload: {}\
-                        ",
-                        bytes_per_row,
-                        minimum_rows_per_image,
-                        rows_per_image,
-                        bytes_per_image,
-                        minimum_bytes_per_image,
-                        bytes_in_upload
-                    );
+
                     match dst_target {
                         glow::TEXTURE_3D
                         | glow::TEXTURE_CUBE_MAP_ARRAY
@@ -772,6 +758,9 @@ impl super::Queue {
             C::ClearStencil(value) => {
                 gl.clear_buffer_i32_slice(glow::STENCIL, 0, &[value as i32]);
             }
+            C::ClearDepthAndStencil(depth, stencil_value) => {
+                gl.clear_buffer_depth_stencil(glow::DEPTH_STENCIL, 0, depth, stencil_value as i32);
+            }
             C::BufferBarrier(raw, usage) => {
                 let mut flags = 0;
                 if usage.contains(crate::BufferUses::VERTEX) {
@@ -801,9 +790,9 @@ impl super::Queue {
                 if usage.intersects(crate::BufferUses::MAP_READ | crate::BufferUses::MAP_WRITE) {
                     flags |= glow::BUFFER_UPDATE_BARRIER_BIT;
                 }
-                if usage
-                    .intersects(crate::BufferUses::STORAGE_READ | crate::BufferUses::STORAGE_WRITE)
-                {
+                if usage.intersects(
+                    crate::BufferUses::STORAGE_READ | crate::BufferUses::STORAGE_READ_WRITE,
+                ) {
                     flags |= glow::SHADER_STORAGE_BARRIER_BIT;
                 }
                 gl.memory_barrier(flags);
@@ -814,7 +803,7 @@ impl super::Queue {
                     flags |= glow::TEXTURE_FETCH_BARRIER_BIT;
                 }
                 if usage.intersects(
-                    crate::TextureUses::STORAGE_READ | crate::TextureUses::STORAGE_WRITE,
+                    crate::TextureUses::STORAGE_READ | crate::TextureUses::STORAGE_READ_WRITE,
                 ) {
                     flags |= glow::SHADER_IMAGE_ACCESS_BARRIER_BIT;
                 }

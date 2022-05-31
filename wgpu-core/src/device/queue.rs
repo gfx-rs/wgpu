@@ -174,7 +174,7 @@ impl<A: hal::Api> PendingWrites<A> {
         if !self.is_active {
             unsafe {
                 self.command_encoder
-                    .begin_encoding(Some("_PendingWrites"))
+                    .begin_encoding(Some("(wgpu internal) PendingWrites"))
                     .unwrap();
             }
             self.is_active = true;
@@ -192,11 +192,11 @@ impl<A: hal::Api> PendingWrites<A> {
     }
 }
 
-impl<A: hal::Api> super::Device<A> {
+impl<A: HalApi> super::Device<A> {
     fn prepare_stage(&mut self, size: wgt::BufferAddress) -> Result<StagingData<A>, DeviceError> {
         profiling::scope!("prepare_stage");
         let stage_desc = hal::BufferDescriptor {
-            label: Some("_Staging"),
+            label: Some("(wgpu internal) Staging"),
             size,
             usage: hal::BufferUses::MAP_WRITE | hal::BufferUses::COPY_SRC,
             memory_flags: hal::MemoryFlags::TRANSIENT,
@@ -286,8 +286,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut trackers = device.trackers.lock();
         let (dst, transition) = trackers
             .buffers
-            .use_replace(&*buffer_guard, buffer_id, (), hal::BufferUses::COPY_DST)
-            .map_err(TransferError::InvalidBuffer)?;
+            .set_single(&*buffer_guard, buffer_id, hal::BufferUses::COPY_DST)
+            .ok_or(TransferError::InvalidBuffer(buffer_id))?;
         let dst_raw = dst
             .raw
             .as_ref()
@@ -451,9 +451,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     .drain(init_layer_range)
                     .collect::<Vec<std::ops::Range<u32>>>()
                 {
-                    crate::command::clear_texture_no_device(
+                    crate::command::clear_texture(
+                        &*texture_guard,
                         id::Valid(destination.texture),
-                        &*dst,
                         TextureInitRange {
                             mip_range: destination.mip_level..(destination.mip_level + 1),
                             layer_range,
@@ -473,13 +473,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let (dst, transition) = trackers
             .textures
-            .use_replace(
+            .set_single(
                 &*texture_guard,
                 destination.texture,
                 selector,
                 hal::TextureUses::COPY_DST,
             )
-            .unwrap();
+            .ok_or(TransferError::InvalidTexture(destination.texture))?;
 
         let (hal_copy_size, array_layer_count) =
             validate_texture_copy_range(destination, &dst.desc, CopySide::Destination, size)?;
@@ -561,7 +561,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .ok_or(TransferError::InvalidTexture(destination.texture))?;
 
         unsafe {
-            encoder.transition_textures(transition.map(|pending| pending.into_hal(dst)));
+            encoder
+                .transition_textures(transition.map(|pending| pending.into_hal(dst)).into_iter());
             encoder.transition_buffers(iter::once(barrier));
             encoder.copy_buffer_to_texture(&stage.buffer, dst_raw, regions);
         }
@@ -594,7 +595,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             device.active_submission_index += 1;
             let submit_index = device.active_submission_index;
             let mut active_executions = Vec::new();
-            let mut used_surface_textures = track::ResourceTracker::new(A::VARIANT);
+            let mut used_surface_textures = track::TextureUsageScope::new();
 
             {
                 let (mut command_buffer_guard, mut token) = hub.command_buffers.write(&mut token);
@@ -616,12 +617,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     //Note: locking the trackers has to be done after the storages
                     let mut trackers = device.trackers.lock();
 
+                    used_surface_textures.set_size(texture_guard.len());
+
                     //TODO: if multiple command buffers are submitted, we can re-use the last
                     // native command buffer of the previous chain instead of always creating
                     // a temporary one, since the chains are not finished.
 
                     // finish all the command buffers first
                     for &cmb_id in command_buffer_ids {
+                        #[allow(unused_mut)]
                         let mut cmdbuf = match hub
                             .command_buffers
                             .unregister_locked(cmb_id, &mut *command_buffer_guard)
@@ -642,7 +646,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         }
 
                         // optimize the tracked states
-                        cmdbuf.trackers.optimize();
+                        // cmdbuf.trackers.optimize();
 
                         // update submission IDs
                         for id in cmdbuf.trackers.buffers.used() {
@@ -669,32 +673,34 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         }
                         for id in cmdbuf.trackers.textures.used() {
                             let texture = &mut texture_guard[id];
-                            match texture.inner {
+                            let should_extend = match texture.inner {
                                 TextureInner::Native { raw: None } => {
                                     return Err(QueueSubmitError::DestroyedTexture(id.0));
                                 }
-                                TextureInner::Native { raw: Some(_) } => {}
+                                TextureInner::Native { raw: Some(_) } => false,
                                 TextureInner::Surface {
                                     ref mut has_work, ..
                                 } => {
-                                    use track::ResourceState as _;
-
                                     *has_work = true;
-                                    let ref_count = cmdbuf.trackers.textures.get_ref_count(id);
-                                    //TODO: better error handling here?
-                                    // register it in the temporary tracker.
-                                    let mut ts = track::TextureState::default();
-                                    let _ = ts.change(
-                                        id,
-                                        texture.full_range.clone(),
-                                        hal::TextureUses::empty(), //present
-                                        None,
-                                    );
-                                    let _ = used_surface_textures.init(id, ref_count.clone(), ts);
+                                    true
                                 }
-                            }
+                            };
                             if !texture.life_guard.use_at(submit_index) {
                                 device.temp_suspected.textures.push(id);
+                            }
+                            if should_extend {
+                                unsafe {
+                                    let ref_count = cmdbuf.trackers.textures.get_ref_count(id);
+                                    used_surface_textures
+                                        .merge_single(
+                                            &*texture_guard,
+                                            id,
+                                            None,
+                                            ref_count,
+                                            hal::TextureUses::PRESENT,
+                                        )
+                                        .unwrap();
+                                };
                             }
                         }
                         for id in cmdbuf.trackers.views.used() {
@@ -717,13 +723,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 sampler_guard[sub_id].life_guard.use_at(submit_index);
                             }
                         }
-                        assert!(cmdbuf.trackers.samplers.is_empty());
-                        for id in cmdbuf.trackers.compute_pipes.used() {
+                        // assert!(cmdbuf.trackers.samplers.is_empty());
+                        for id in cmdbuf.trackers.compute_pipelines.used() {
                             if !compute_pipe_guard[id].life_guard.use_at(submit_index) {
                                 device.temp_suspected.compute_pipelines.push(id);
                             }
                         }
-                        for id in cmdbuf.trackers.render_pipes.used() {
+                        for id in cmdbuf.trackers.render_pipelines.used() {
                             if !render_pipe_guard[id].life_guard.use_at(submit_index) {
                                 device.temp_suspected.render_pipelines.push(id);
                             }
@@ -741,11 +747,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             // We need to update the submission indices for the contained
                             // state-less (!) resources as well, excluding the bind groups.
                             // They don't get deleted too early if the bundle goes out of scope.
-                            for sub_id in bundle.used.compute_pipes.used() {
-                                compute_pipe_guard[sub_id].life_guard.use_at(submit_index);
-                            }
-                            for sub_id in bundle.used.render_pipes.used() {
+                            for sub_id in bundle.used.render_pipelines.used() {
                                 render_pipe_guard[sub_id].life_guard.use_at(submit_index);
+                            }
+                            for sub_id in bundle.used.query_sets.used() {
+                                query_set_guard[sub_id].life_guard.use_at(submit_index);
                             }
                         }
 
@@ -754,7 +760,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         unsafe {
                             baked
                                 .encoder
-                                .begin_encoding(Some("_Transit"))
+                                .begin_encoding(Some("(wgpu internal) Transit"))
                                 .map_err(DeviceError::from)?
                         };
                         log::trace!("Stitching command buffer {:?} before submission", cmb_id);
@@ -766,11 +772,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .map_err(|err| QueueSubmitError::DestroyedTexture(err.0))?;
                         //Note: stateless trackers are not merged:
                         // device already knows these resources exist.
-                        CommandBuffer::insert_barriers(
+                        CommandBuffer::insert_barriers_from_tracker(
                             &mut baked.encoder,
                             &mut *trackers,
-                            &baked.trackers.buffers,
-                            &baked.trackers.textures,
+                            &baked.trackers,
                             &*buffer_guard,
                             &*texture_guard,
                         );
@@ -785,22 +790,22 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             unsafe {
                                 baked
                                     .encoder
-                                    .begin_encoding(Some("_Present"))
+                                    .begin_encoding(Some("(wgpu internal) Present"))
                                     .map_err(DeviceError::from)?
                             };
-                            let texture_barriers = trackers
+                            trackers
                                 .textures
-                                .merge_replace(&used_surface_textures)
-                                .map(|pending| {
-                                    let tex = &texture_guard[pending.id];
-                                    pending.into_hal(tex)
-                                });
+                                .set_from_usage_scope(&*texture_guard, &used_surface_textures);
+                            let texture_barriers = trackers.textures.drain().map(|pending| {
+                                let tex = unsafe { texture_guard.get_unchecked(pending.id) };
+                                pending.into_hal(tex)
+                            });
                             let present = unsafe {
                                 baked.encoder.transition_textures(texture_barriers);
                                 baked.encoder.end_encoding().unwrap()
                             };
                             baked.list.push(present);
-                            used_surface_textures.clear();
+                            used_surface_textures = track::TextureUsageScope::new();
                         }
 
                         // done
@@ -810,7 +815,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         });
                     }
 
-                    log::trace!("Device after submission {}: {:#?}", submit_index, trackers);
+                    log::trace!("Device after submission {}", submit_index);
                 }
 
                 let super::Device {
@@ -830,6 +835,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     let (_, mut token) = hub.buffers.read(&mut token); // skip token
                     let (mut texture_guard, _) = hub.textures.write(&mut token);
 
+                    used_surface_textures.set_size(texture_guard.len());
+
                     for &id in pending_writes.dst_textures.iter() {
                         let texture = texture_guard.get_mut(id).unwrap();
                         match texture.inner {
@@ -840,39 +847,39 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             TextureInner::Surface {
                                 ref mut has_work, ..
                             } => {
-                                use track::ResourceState as _;
-
                                 *has_work = true;
                                 let ref_count = texture.life_guard.add_ref();
-                                //TODO: better error handling here?
-                                // register it in the temporary tracker.
-                                let mut ts = track::TextureState::default();
-                                let _ = ts.change(
-                                    id::Valid(id),
-                                    texture.full_range.clone(),
-                                    hal::TextureUses::empty(), //present
-                                    None,
-                                );
-                                let _ = used_surface_textures.init(id::Valid(id), ref_count, ts);
+                                unsafe {
+                                    used_surface_textures
+                                        .merge_single(
+                                            &*texture_guard,
+                                            id::Valid(id),
+                                            None,
+                                            &ref_count,
+                                            hal::TextureUses::PRESENT,
+                                        )
+                                        .unwrap()
+                                };
                             }
                         }
                     }
 
                     if !used_surface_textures.is_empty() {
                         let mut trackers = device.trackers.lock();
-                        let texture_barriers = trackers
+
+                        trackers
                             .textures
-                            .merge_replace(&used_surface_textures)
-                            .map(|pending| {
-                                let tex = &texture_guard[pending.id];
-                                pending.into_hal(tex)
-                            });
+                            .set_from_usage_scope(&*texture_guard, &used_surface_textures);
+                        let texture_barriers = trackers.textures.drain().map(|pending| {
+                            let tex = unsafe { texture_guard.get_unchecked(pending.id) };
+                            pending.into_hal(tex)
+                        });
+
                         unsafe {
                             pending_writes
                                 .command_encoder
                                 .transition_textures(texture_barriers);
                         };
-                        used_surface_textures.clear();
                     }
                 }
 
