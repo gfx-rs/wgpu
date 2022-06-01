@@ -255,6 +255,7 @@ fn backends(c: &mut Criterion) {
                         info,
                         &options,
                         &pipeline_options,
+                        naga::proc::BoundsCheckPolicies::default(),
                     ) {
                         Ok(mut writer) => {
                             let _ = writer.write(); // can error if unsupported
