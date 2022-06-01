@@ -48,6 +48,11 @@ jobs:
           args: --all-features --workspace
       - name: Check snapshots
         run: git diff --exit-code -- tests/out
+      - uses: actions-rs/cargo@v1
+        name: Check benchmarks
+        with:
+          command: check
+          args: --benches
   clippy:
     name: Clippy
     runs-on: ubuntu-latest
@@ -75,7 +80,6 @@ jobs:
           profile: minimal
           toolchain: stable
           override: true
-      - run: rustup component add clippy
       - uses: actions-rs/cargo@v1
         with:
           command: doc
