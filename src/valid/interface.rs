@@ -135,6 +135,16 @@ impl VaryingContext<'_> {
                 }
                 self.built_ins.insert(canonical);
 
+                let required = match built_in {
+                    Bi::ClipDistance => Capabilities::CLIP_DISTANCE,
+                    Bi::CullDistance => Capabilities::CULL_DISTANCE,
+                    Bi::PrimitiveIndex => Capabilities::PRIMITIVE_INDEX,
+                    _ => Capabilities::empty(),
+                };
+                if !self.capabilities.contains(required) {
+                    return Err(VaryingError::UnsupportedCapability(required));
+                }
+
                 let width = 4;
                 let (visible, type_good) = match built_in {
                     Bi::BaseInstance | Bi::BaseVertex | Bi::InstanceIndex | Bi::VertexIndex => (
@@ -206,21 +216,14 @@ impl VaryingContext<'_> {
                                 width: crate::BOOL_WIDTH,
                             },
                     ),
-                    Bi::PrimitiveIndex => {
-                        if !self.capabilities.contains(Capabilities::PRIMITIVE_INDEX) {
-                            return Err(VaryingError::UnsupportedCapability(
-                                Capabilities::PRIMITIVE_INDEX,
-                            ));
-                        }
-                        (
-                            self.stage == St::Fragment && !self.output,
-                            *ty_inner
-                                == Ti::Scalar {
-                                    kind: Sk::Uint,
-                                    width,
-                                },
-                        )
-                    }
+                    Bi::PrimitiveIndex => (
+                        self.stage == St::Fragment && !self.output,
+                        *ty_inner
+                            == Ti::Scalar {
+                                kind: Sk::Uint,
+                                width,
+                            },
+                    ),
                     Bi::SampleIndex => (
                         self.stage == St::Fragment && !self.output,
                         *ty_inner

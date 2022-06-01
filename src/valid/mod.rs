@@ -82,11 +82,11 @@ bitflags::bitflags! {
     #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
     #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
     pub struct Capabilities: u8 {
-        /// Support for `AddressSpace:PushConstant`.
+        /// Support for [`AddressSpace:PushConstant`].
         const PUSH_CONSTANT = 0x1;
         /// Float values with width = 8.
         const FLOAT64 = 0x2;
-        /// Support for `Builtin:PrimitiveIndex`.
+        /// Support for [`Builtin:PrimitiveIndex`].
         const PRIMITIVE_INDEX = 0x4;
         /// Support for non-uniform indexing of sampled textures and storage buffer arrays.
         const SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING = 0x8;
@@ -94,6 +94,10 @@ bitflags::bitflags! {
         const UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING = 0x10;
         /// Support for non-uniform indexing of samplers.
         const SAMPLER_NON_UNIFORM_INDEXING = 0x20;
+        /// Support for [`Builtin::ClipDistance`].
+        const CLIP_DISTANCE = 0x40;
+        /// Support for [`Builtin::CullDistance`].
+        const CULL_DISTANCE = 0x80;
     }
 }
 

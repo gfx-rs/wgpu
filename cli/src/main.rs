@@ -317,12 +317,23 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         _ => return Err(CliError("Unknown input file extension").into()),
     };
 
+    // Decide which capabilities our output formats can support.
+    let validation_caps =
+        output_paths
+            .iter()
+            .fold(naga::valid::Capabilities::all(), |caps, path| {
+                use naga::valid::Capabilities as C;
+                let missing = match Path::new(path).extension().and_then(|ex| ex.to_str()) {
+                    Some("wgsl") => C::CLIP_DISTANCE | C::CULL_DISTANCE,
+                    Some("metal") => C::CULL_DISTANCE,
+                    _ => C::empty(),
+                };
+                caps & !missing
+            });
+
     // validate the IR
-    let info = match naga::valid::Validator::new(
-        params.validation_flags,
-        naga::valid::Capabilities::all(),
-    )
-    .validate(&module)
+    let info = match naga::valid::Validator::new(params.validation_flags, validation_caps)
+        .validate(&module)
     {
         Ok(info) => Some(info),
         Err(error) => {
