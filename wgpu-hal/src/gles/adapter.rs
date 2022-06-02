@@ -706,18 +706,20 @@ impl crate::Adapter<super::Api> for super::Adapter {
     ) -> Option<crate::SurfaceCapabilities> {
         if surface.presentable {
             Some(crate::SurfaceCapabilities {
-                formats: if surface.supports_srgb() {
-                    vec![
-                        wgt::TextureFormat::Rgba8UnormSrgb,
-                        #[cfg(not(target_arch = "wasm32"))]
-                        wgt::TextureFormat::Bgra8UnormSrgb,
-                    ]
-                } else {
-                    vec![
+                formats: {
+                    let mut formats = vec![
                         wgt::TextureFormat::Rgba8Unorm,
                         #[cfg(not(target_arch = "wasm32"))]
                         wgt::TextureFormat::Bgra8Unorm,
-                    ]
+                    ];
+                    if surface.supports_srgb() {
+                        formats.append(&mut vec![
+                            wgt::TextureFormat::Rgba8UnormSrgb,
+                            #[cfg(not(target_arch = "wasm32"))]
+                            wgt::TextureFormat::Bgra8UnormSrgb,
+                        ]);
+                    }
+                    formats
                 },
                 present_modes: vec![wgt::PresentMode::Fifo], //TODO
                 composite_alpha_modes: vec![crate::CompositeAlphaMode::Opaque], //TODO
