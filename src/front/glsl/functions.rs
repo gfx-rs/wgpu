@@ -671,6 +671,13 @@ impl Parser {
                 let overload_param_ty = &self.module.types[*overload_parameter].inner;
                 let call_arg_ty = self.resolve_type(ctx, call_argument.0, call_argument.1)?;
 
+                log::trace!(
+                    "Testing parameter {}\n\tOverload = {:?}\n\tCall = {:?}",
+                    i,
+                    overload_param_ty,
+                    call_arg_ty
+                );
+
                 // Storage images cannot be directly compared since while the access is part of the
                 // type in naga's IR, in glsl they are a qualifier and don't enter in the match as
                 // long as the access needed is satisfied.

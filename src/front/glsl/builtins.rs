@@ -2237,20 +2237,26 @@ pub fn sampled_to_depth(
     meta: Span,
     errors: &mut Vec<Error>,
 ) {
+    // Get the a mutable type handle of the underlying image storage
     let ty = match ctx[image] {
         Expression::GlobalVariable(handle) => &mut module.global_variables.get_mut(handle).ty,
         Expression::FunctionArgument(i) => {
+            // Mark the function argument as carrying a depth texture
             ctx.parameters_info[i as usize].depth = true;
+            // NOTE: We need to later also change the parameter type
             &mut ctx.arguments[i as usize].ty
         }
         _ => {
+            // Only globals and function arguments are allowed to carry an image
             return errors.push(Error {
                 kind: ErrorKind::SemanticError("Not a valid texture expression".into()),
                 meta,
-            })
+            });
         }
     };
+
     match module.types[*ty].inner {
+        // Update the image class to depth in case it already isn't
         TypeInner::Image {
             class,
             dim,
@@ -2270,6 +2276,7 @@ pub fn sampled_to_depth(
                 )
             }
             ImageClass::Depth { .. } => {}
+            // Other image classes aren't allowed to be transformed to depth
             _ => errors.push(Error {
                 kind: ErrorKind::SemanticError("Not a texture".into()),
                 meta,
@@ -2280,6 +2287,15 @@ pub fn sampled_to_depth(
             meta,
         }),
     };
+
+    // Copy the handle to allow borrowing the `ctx` again
+    let ty = *ty;
+
+    // If the image was passed trough a function argument we also need to change
+    // the corresponding parameter
+    if let Expression::FunctionArgument(i) = ctx[image] {
+        ctx.parameters[i as usize] = ty;
+    }
 }
 
 bitflags::bitflags! {
