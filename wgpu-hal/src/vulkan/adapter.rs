@@ -1237,6 +1237,10 @@ impl super::Adapter {
                 capabilities.push(spv::Capability::MultiView);
             }
 
+            if features.contains(wgt::Features::SHADER_PRIMITIVE_INDEX) {
+                capabilities.push(spv::Capability::Geometry);
+            }
+
             if features.intersects(
                 wgt::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING
                     | wgt::Features::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
