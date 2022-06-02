@@ -89,8 +89,8 @@ pub enum RenderCommandError {
     PushConstants(#[from] PushConstantUploadError),
     #[error("Invalid Viewport parameters")]
     InvalidViewport,
-    #[error("Invalid ScissorRect parameters")]
-    InvalidScissorRect,
+    #[error("Scissor {0:?} is not contained in the render target {1:?}")]
+    InvalidScissorRect(Rect<u32>, wgt::Extent3d),
     #[error("Support for {0} is not implemented yet")]
     Unimplemented(&'static str),
 }

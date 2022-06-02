@@ -1510,7 +1510,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             || rect.x + rect.w > info.extent.width
                             || rect.y + rect.h > info.extent.height
                         {
-                            return Err(RenderCommandError::InvalidScissorRect).map_pass_err(scope);
+                            return Err(RenderCommandError::InvalidScissorRect(*rect, info.extent))
+                                .map_pass_err(scope);
                         }
                         let r = hal::Rect {
                             x: rect.x,
