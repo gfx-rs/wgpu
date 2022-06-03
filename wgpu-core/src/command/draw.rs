@@ -87,8 +87,10 @@ pub enum RenderCommandError {
     MissingTextureUsage(#[from] MissingTextureUsageError),
     #[error(transparent)]
     PushConstants(#[from] PushConstantUploadError),
-    #[error("Invalid Viewport parameters")]
-    InvalidViewport,
+    #[error("Viewport width {0} and/or height {1} are less than or equal to 0")]
+    InvalidViewportDimension(f32, f32),
+    #[error("Viewport minDepth {0} and/or maxDepth {1} are not in [0, 1]")]
+    InvalidViewportDepth(f32, f32),
     #[error("Scissor {0:?} is not contained in the render target {1:?}")]
     InvalidScissorRect(Rect<u32>, wgt::Extent3d),
     #[error("Support for {0} is not implemented yet")]

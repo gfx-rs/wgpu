@@ -1451,14 +1451,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         depth_max,
                     } => {
                         let scope = PassErrorScope::SetViewport;
-                        if rect.w <= 0.0
-                            || rect.h <= 0.0
-                            || depth_min < 0.0
-                            || depth_min > 1.0
-                            || depth_max < 0.0
-                            || depth_max > 1.0
-                        {
-                            return Err(RenderCommandError::InvalidViewport).map_pass_err(scope);
+                        if rect.w <= 0.0 || rect.h <= 0.0 {
+                            return Err(RenderCommandError::InvalidViewportDimension(
+                                rect.w, rect.h,
+                            ))
+                            .map_pass_err(scope);
+                        }
+                        if !(0.0..=1.0).contains(&depth_min) || !(0.0..=1.0).contains(&depth_max) {
+                            return Err(RenderCommandError::InvalidViewportDepth(
+                                depth_min, depth_max,
+                            ))
+                            .map_pass_err(scope);
                         }
                         let r = hal::Rect {
                             x: rect.x,
