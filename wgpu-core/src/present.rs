@@ -123,7 +123,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let _ = device;
 
         let suf = A::get_surface_mut(surface);
-        let (texture_id, status) = match unsafe { suf.raw.acquire_texture(FRAME_TIMEOUT_MS) } {
+        let (texture_id, status) = match unsafe {
+            suf.raw
+                .acquire_texture(Some(std::time::Duration::from_millis(
+                    FRAME_TIMEOUT_MS as u64,
+                )))
+        } {
             Ok(Some(ast)) => {
                 let clear_view_desc = hal::TextureViewDescriptor {
                     label: Some("(wgpu internal) clear surface texture view"),

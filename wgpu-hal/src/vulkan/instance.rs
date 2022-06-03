@@ -707,10 +707,14 @@ impl crate::Surface<super::Api> for super::Surface {
 
     unsafe fn acquire_texture(
         &mut self,
-        timeout_ms: u32,
+        timeout: Option<std::time::Duration>,
     ) -> Result<Option<crate::AcquiredSurfaceTexture<super::Api>>, crate::SurfaceError> {
         let sc = self.swapchain.as_mut().unwrap();
-        let timeout_ns = timeout_ms as u64 * super::MILLIS_TO_NANOS;
+
+        let timeout_ns = match timeout {
+            Some(duration) => duration.as_nanos() as u64,
+            None => u64::MAX,
+        };
 
         // will block if no image is available
         let (index, suboptimal) =
