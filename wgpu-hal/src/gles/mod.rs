@@ -616,6 +616,7 @@ enum Command {
         dst: glow::Texture,
         dst_target: BindTarget,
         copy: crate::TextureCopy,
+        dst_array_layer_count: u32,
     },
     CopyBufferToTexture {
         src: Buffer,
