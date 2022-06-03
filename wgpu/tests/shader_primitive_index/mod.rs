@@ -223,7 +223,7 @@ fn capture_rgba_u8_texture(
 
     encoder.copy_texture_to_buffer(
         wgpu::ImageCopyTexture {
-            texture: &&color_texture,
+            texture: &color_texture,
             mip_level: 0,
             origin: wgpu::Origin3d::ZERO,
             aspect: wgpu::TextureAspect::All,
@@ -247,8 +247,7 @@ fn capture_rgba_u8_texture(
     // Chunk rows from output buffer, take actual pixel
     // bytes from each row and flatten into a vector.
     data.chunks_exact(bytes_per_row as usize)
-        .map(|x| x.iter().take(4 * texture_size.width as usize))
-        .flatten()
-        .map(|x| *x)
+        .flat_map(|x| x.iter().take(4 * texture_size.width as usize))
+        .copied()
         .collect()
 }
