@@ -1026,6 +1026,9 @@ bitflags::bitflags! {
         ///
         /// GLES/WebGL don't support this.
         const DEPTH_TEXTURE_AND_BUFFER_COPIES = 1 << 13;
+
+        /// Supports rendering to floating-point textures.
+        const COLOR_ATTACHMENT_FLOAT = 1 << 14;
     }
 }
 

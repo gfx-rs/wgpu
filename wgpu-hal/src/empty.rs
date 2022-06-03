@@ -84,6 +84,7 @@ impl crate::Adapter<Api> for Context {
     unsafe fn texture_format_capabilities(
         &self,
         format: wgt::TextureFormat,
+        capabilities: &crate::Capabilities
     ) -> crate::TextureFormatCapabilities {
         crate::TextureFormatCapabilities::empty()
     }
