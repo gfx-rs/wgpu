@@ -607,7 +607,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
     unsafe fn texture_format_capabilities(
         &self,
         format: wgt::TextureFormat,
-        capabilities: &crate::Capabilities
+        capabilities: &crate::Capabilities,
     ) -> crate::TextureFormatCapabilities {
         use crate::TextureFormatCapabilities as Tfc;
         use wgt::TextureFormat as Tf;
@@ -625,7 +625,11 @@ impl crate::Adapter<super::Api> for super::Adapter {
         let filterable_renderable = filterable | renderable | Tfc::COLOR_ATTACHMENT_BLEND;
         let storage = Tfc::STORAGE | Tfc::STORAGE_READ_WRITE;
 
-        let float_renderable = if capabilities.downlevel.flags.contains(wgt::DownlevelFlags::COLOR_ATTACHMENT_FLOAT) {
+        let float_renderable = if capabilities
+            .downlevel
+            .flags
+            .contains(wgt::DownlevelFlags::COLOR_ATTACHMENT_FLOAT)
+        {
             Tfc::COLOR_ATTACHMENT | Tfc::COLOR_ATTACHMENT_BLEND
         } else {
             Tfc::empty()
