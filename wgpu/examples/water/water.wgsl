@@ -250,3 +250,20 @@ fn fs_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
 
     return vec4<f32>(depth_colour, clamped * (1.0 - vertex.f_Fresnel));
 }
+
+// This is the same as fs_main above, but with the depth calculation removed, because it is
+// unsupported for some adapters.
+@fragment
+fn fs_without_depth_read(vertex: VertexOutput) -> @location(0) vec4<f32> {
+    let reflection_colour = textureSample(reflection, colour_sampler, vertex.f_WaterScreenPos.xy).xyz;
+    let normalized_coords = vertex.position.xy / vec2<f32>(uniforms.time_size_width.w, uniforms.viewport_height);
+
+    let dist = 1.5;
+    let clamped = pow(smoothstep(0.0, 1.5, dist), 4.8);
+
+    let final_colour = vertex.f_Light + reflection_colour;
+    let t = smoothstep(1.0, 5.0, dist) * 0.2; //TODO: splat for mix()?
+    let depth_colour = mix(final_colour, water_colour, vec3<f32>(t, t, t));
+
+    return vec4<f32>(depth_colour, clamped * (1.0 - vertex.f_Fresnel));
+}

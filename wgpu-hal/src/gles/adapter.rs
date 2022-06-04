@@ -289,6 +289,9 @@ impl super::Adapter {
             wgt::DownlevelFlags::ANISOTROPIC_FILTERING,
             extensions.contains("EXT_texture_filter_anisotropic"),
         );
+        if cfg!(not(target_arch = "wasm32")) {
+            downlevel_flags.set(wgt::DownlevelFlags::READ_ONLY_DEPTH_STENCIL, true);
+        }
 
         let mut features = wgt::Features::empty()
             | wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES

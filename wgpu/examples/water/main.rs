@@ -269,7 +269,7 @@ impl Example {
 impl framework::Example for Example {
     fn init(
         config: &wgpu::SurfaceConfiguration,
-        _adapter: &wgpu::Adapter,
+        adapter: &wgpu::Adapter,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
     ) -> Self {
@@ -504,6 +504,13 @@ impl framework::Example for Example {
             source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("water.wgsl"))),
         });
 
+        // Check for read-only depth stencil support so we can use a different fragment shader
+        // entrypoint if it is unsupported on the current adapter.
+        let read_only_depth_stencil = adapter
+            .get_downlevel_capabilities()
+            .flags
+            .contains(wgpu::DownlevelFlags::READ_ONLY_DEPTH_STENCIL);
+
         // Create the render pipelines. These describe how the data will flow through the GPU, and what
         // constraints and modifiers it will have.
         let water_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -528,7 +535,11 @@ impl framework::Example for Example {
             // Fragment shader and output targets
             fragment: Some(wgpu::FragmentState {
                 module: &water_module,
-                entry_point: "fs_main",
+                entry_point: if read_only_depth_stencil {
+                    "fs_main"
+                } else {
+                    "fs_without_depth_read"
+                },
                 // Describes how the colour will be interpolated
                 // and assigned to the output attachment.
                 targets: &[wgpu::ColorTargetState {
