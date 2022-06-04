@@ -505,6 +505,7 @@ impl super::Adapter {
                     shading_language_version,
                     max_texture_size,
                 }),
+                downlevel_flags,
             },
             info: Self::make_info(vendor, renderer),
             features,
@@ -607,7 +608,6 @@ impl crate::Adapter<super::Api> for super::Adapter {
     unsafe fn texture_format_capabilities(
         &self,
         format: wgt::TextureFormat,
-        capabilities: &crate::Capabilities,
     ) -> crate::TextureFormatCapabilities {
         use crate::TextureFormatCapabilities as Tfc;
         use wgt::TextureFormat as Tf;
@@ -625,9 +625,8 @@ impl crate::Adapter<super::Api> for super::Adapter {
         let filterable_renderable = filterable | renderable | Tfc::COLOR_ATTACHMENT_BLEND;
         let storage = Tfc::STORAGE | Tfc::STORAGE_READ_WRITE;
 
-        let float_renderable = if capabilities
-            .downlevel
-            .flags
+        let float_renderable = if self
+            .downlevel_flags
             .contains(wgt::DownlevelFlags::COLOR_ATTACHMENT_FLOAT)
         {
             Tfc::COLOR_ATTACHMENT | Tfc::COLOR_ATTACHMENT_BLEND

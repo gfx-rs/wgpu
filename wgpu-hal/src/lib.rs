@@ -212,7 +212,6 @@ pub trait Adapter<A: Api>: Send + Sync {
     unsafe fn texture_format_capabilities(
         &self,
         format: wgt::TextureFormat,
-        capabilities: &Capabilities,
     ) -> TextureFormatCapabilities;
 
     /// Returns the capabilities of working with a specified surface.

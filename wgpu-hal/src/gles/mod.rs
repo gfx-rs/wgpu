@@ -188,6 +188,7 @@ struct AdapterShared {
 
 pub struct Adapter {
     shared: Arc<AdapterShared>,
+    downlevel_flags: wgt::DownlevelFlags,
 }
 
 pub struct Device {
