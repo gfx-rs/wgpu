@@ -58,7 +58,7 @@ fn wait() {
         let cmd_buf = generate_dummy_work(&ctx);
 
         ctx.queue.submit(Some(cmd_buf));
-        ctx.device.poll(Maintain::Wait(None));
+        ctx.device.poll(Maintain::Wait);
     })
 }
 
@@ -68,8 +68,8 @@ fn double_wait() {
         let cmd_buf = generate_dummy_work(&ctx);
 
         ctx.queue.submit(Some(cmd_buf));
-        ctx.device.poll(Maintain::Wait(None));
-        ctx.device.poll(Maintain::Wait(None));
+        ctx.device.poll(Maintain::Wait);
+        ctx.device.poll(Maintain::Wait);
     })
 }
 
@@ -79,7 +79,7 @@ fn wait_on_submission() {
         let cmd_buf = generate_dummy_work(&ctx);
 
         let index = ctx.queue.submit(Some(cmd_buf));
-        ctx.device.poll(Maintain::Wait(Some(index)));
+        ctx.device.poll(Maintain::WaitForSubmissionIndex(index));
     })
 }
 
@@ -89,8 +89,8 @@ fn double_wait_on_submission() {
         let cmd_buf = generate_dummy_work(&ctx);
 
         let index = ctx.queue.submit(Some(cmd_buf));
-        ctx.device.poll(Maintain::Wait(Some(index)));
-        ctx.device.poll(Maintain::Wait(Some(index)));
+        ctx.device.poll(Maintain::WaitForSubmissionIndex(index));
+        ctx.device.poll(Maintain::WaitForSubmissionIndex(index));
     })
 }
 
@@ -102,7 +102,7 @@ fn wait_out_of_order() {
 
         let index1 = ctx.queue.submit(Some(cmd_buf1));
         let index2 = ctx.queue.submit(Some(cmd_buf2));
-        ctx.device.poll(Maintain::Wait(Some(index2)));
-        ctx.device.poll(Maintain::Wait(Some(index1)));
+        ctx.device.poll(Maintain::WaitForSubmissionIndex(index2));
+        ctx.device.poll(Maintain::WaitForSubmissionIndex(index1));
     })
 }

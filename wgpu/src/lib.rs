@@ -557,21 +557,6 @@ pub struct Device {
 #[derive(Debug, Copy, Clone)]
 pub struct SubmissionIndex(<C as Context>::SubmissionIndex);
 
-/// Passed to [`Device::poll`] to control how and if it should block.
-#[derive(Clone)]
-pub enum Maintain {
-    /// On native backends, block until the given submission has
-    /// completed execution, and any callbacks have been invoked.
-    /// 
-    /// On the web, this has no effect. Callbacks are invoked from the
-    /// window event loop.
-    ///
-    /// If the submission index is `None`, wait for the most recent submission.
-    Wait(Option<SubmissionIndex>),
-    /// Check the device for a single time without blocking.
-    Poll,
-}
-
 /// The main purpose of this struct is to resolve mapped ranges (convert sizes
 /// to end points), and to ensure that the sub-ranges don't intersect.
 #[derive(Debug)]
@@ -1263,6 +1248,9 @@ pub type TextureDescriptor<'a> = wgt::TextureDescriptor<Label<'a>>;
 /// Corresponds to [WebGPU `GPUQuerySetDescriptor`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpuquerysetdescriptor).
 pub type QuerySetDescriptor<'a> = wgt::QuerySetDescriptor<Label<'a>>;
+pub use wgt::Maintain as MaintainBase;
+/// Passed to [`Device::poll`] to control how and if it should block.
+pub type Maintain = wgt::Maintain<SubmissionIndex>;
 
 /// Describes a [`TextureView`].
 ///

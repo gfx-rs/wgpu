@@ -120,7 +120,7 @@ impl Test<'_> {
         }
 
         println!("\t\t\tWaiting...");
-        wgc::gfx_select!(device => global.device_poll(device, true, None)).unwrap();
+        wgc::gfx_select!(device => global.device_poll(device, wgt::Maintain::Wait)).unwrap();
 
         for expect in self.expectations {
             println!("\t\t\tChecking {}", expect.name);

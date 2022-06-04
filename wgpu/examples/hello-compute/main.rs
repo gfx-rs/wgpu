@@ -153,7 +153,7 @@ async fn execute_gpu_inner(
     // Poll the device in a blocking manner so that our future resolves.
     // In an actual application, `device.poll(...)` should
     // be called in an event loop or on another thread.
-    device.poll(wgpu::Maintain::Wait(None));
+    device.poll(wgpu::Maintain::Wait);
 
     // Awaits until `buffer_future` can be read from
     if let Ok(()) = buffer_future.await {
