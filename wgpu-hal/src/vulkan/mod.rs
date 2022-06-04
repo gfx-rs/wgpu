@@ -87,6 +87,7 @@ struct InstanceShared {
     get_physical_device_properties: Option<khr::GetPhysicalDeviceProperties2>,
     entry: ash::Entry,
     has_nv_optimus: bool,
+    android_sdk_version: u32,
     driver_api_version: u32,
 }
 
