@@ -1,7 +1,7 @@
 use std::future::Future;
+use std::str::FromStr;
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::{Duration, Instant};
-use std::str::FromStr;
 #[cfg(target_arch = "wasm32")]
 use web_sys::{ImageBitmapRenderingContext, OffscreenCanvas};
 use winit::{
@@ -129,27 +129,30 @@ async fn setup<E: Example>(title: &str) -> Setup {
         use winit::platform::web::WindowExtWebSys;
 
         let query_string = web_sys::window().unwrap().location().search().unwrap();
-        if let Some(offscreen_canvas_param) = parse_url_query_string(&query_string, "offscreen_canvas") {
+        if let Some(offscreen_canvas_param) =
+            parse_url_query_string(&query_string, "offscreen_canvas")
+        {
             if FromStr::from_str(offscreen_canvas_param) == Ok(true) {
                 log::info!("Creating OffscreenCanvasSetup");
 
-                let offscreen_canvas = OffscreenCanvas::new(1024, 768).expect("couldn't create OffscreenCanvas");
+                let offscreen_canvas =
+                    OffscreenCanvas::new(1024, 768).expect("couldn't create OffscreenCanvas");
 
-                let bitmap_renderer = window.canvas()
+                let bitmap_renderer = window
+                    .canvas()
                     .get_context("bitmaprenderer")
                     .expect("couldn't create ImageBitmapRenderingContext (Result)")
                     .expect("couldn't create ImageBitmapRenderingContext (Option)")
                     .dyn_into::<ImageBitmapRenderingContext>()
                     .expect("couldn't convert into ImageBitmapRenderingContext");
 
-                offscreen_canvas_setup = Some(OffscreenCanvasSetup{
+                offscreen_canvas_setup = Some(OffscreenCanvasSetup {
                     offscreen_canvas,
                     bitmap_renderer,
                 })
             }
         }
     };
-
 
     log::info!("Initializing the surface...");
 
@@ -165,7 +168,8 @@ async fn setup<E: Example>(title: &str) -> Setup {
         let surface = {
             if let Some(offscreen_canvas_setup) = &offscreen_canvas_setup {
                 log::info!("Creating surface from OffscreenCanvas");
-                instance.create_surface_from_offscreen_canvas(&offscreen_canvas_setup.offscreen_canvas)
+                instance
+                    .create_surface_from_offscreen_canvas(&offscreen_canvas_setup.offscreen_canvas)
             } else {
                 instance.create_surface(&window)
             }
@@ -384,11 +388,14 @@ fn start<E: Example>(
 
                 #[cfg(target_arch = "wasm32")]
                 {
-                    if let Some (offscreen_canvas_setup) = &offscreen_canvas_setup {
-                        let image_bitmap = offscreen_canvas_setup.offscreen_canvas
+                    if let Some(offscreen_canvas_setup) = &offscreen_canvas_setup {
+                        let image_bitmap = offscreen_canvas_setup
+                            .offscreen_canvas
                             .transfer_to_image_bitmap()
                             .expect("couldn't transfer offscreen canvas to image bitmap.");
-                        offscreen_canvas_setup.bitmap_renderer.transfer_from_image_bitmap(&image_bitmap);
+                        offscreen_canvas_setup
+                            .bitmap_renderer
+                            .transfer_from_image_bitmap(&image_bitmap);
 
                         log::info!("Transferring OffscreenCanvas to ImageBitmapRenderer");
                     }
