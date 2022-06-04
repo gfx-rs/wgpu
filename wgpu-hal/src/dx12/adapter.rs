@@ -41,6 +41,10 @@ impl super::Adapter {
         }
     }
 
+    pub fn raw_adapter(&self) -> &native::DxgiAdapter {
+        &self.raw
+    }
+
     #[allow(trivial_casts)]
     pub(super) fn expose(
         adapter: native::DxgiAdapter,
