@@ -76,11 +76,10 @@ struct Setup {
     adapter: wgpu::Adapter,
     device: wgpu::Device,
     queue: wgpu::Queue,
+    #[cfg(target_arch = "wasm32")]
     offscreen_canvas_setup: Option<OffscreenCanvasSetup>,
 }
 
-#[cfg(not(target_arch = "wasm32"))]
-struct OffscreenCanvasSetup {}
 #[cfg(target_arch = "wasm32")]
 struct OffscreenCanvasSetup {
     offscreen_canvas: OffscreenCanvas,
@@ -123,6 +122,7 @@ async fn setup<E: Example>(title: &str) -> Setup {
             .expect("couldn't append canvas to document body");
     }
 
+    #[cfg(target_arch = "wasm32")]
     let mut offscreen_canvas_setup: Option<OffscreenCanvasSetup> = None;
     #[cfg(target_arch = "wasm32")]
     {
@@ -238,11 +238,24 @@ async fn setup<E: Example>(title: &str) -> Setup {
         adapter,
         device,
         queue,
+        #[cfg(target_arch = "wasm32")]
         offscreen_canvas_setup,
     }
 }
 
 fn start<E: Example>(
+    #[cfg(not(target_arch = "wasm32"))]
+    Setup {
+        window,
+        event_loop,
+        instance,
+        size,
+        surface,
+        adapter,
+        device,
+        queue,
+    }: Setup,
+    #[cfg(target_arch = "wasm32")]
     Setup {
         window,
         event_loop,
