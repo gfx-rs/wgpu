@@ -8,13 +8,13 @@ members = [
     "wgpu-hal",
     "wgpu-info",
     "wgpu-types",
-    "run-wasm",
+    "run-wasm"
 ]
 exclude = [
     "cts_runner",
-    "deno_webgpu",
+    "deno_webgpu"
 ]
-default-members = ["wgpu", "wgpu-hal", "wgpu-info"]
+default-members = ["wgpu", "wgpu-hal"]
 
 [patch."https://github.com/gfx-rs/naga"]
 #naga = { path = "../naga" }

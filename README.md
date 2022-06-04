@@ -140,7 +140,7 @@ cargo nextest run --no-fail-fast
 `wgpu-info` can run the tests once for each adapter on your system.
 
 ```
-cargo run --bin wgpu-info -- cargo nextest run --no-fail-fast
+cargo run -p wgpu-info -- cargo nextest run --no-fail-fast
 ```
 
 Then to run an example's image comparison tests, run:
