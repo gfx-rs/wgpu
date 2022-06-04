@@ -560,13 +560,13 @@ pub struct SubmissionIndex(<C as Context>::SubmissionIndex);
 /// Passed to [`Device::poll`] to control how and if it should block.
 #[derive(Clone)]
 pub enum Maintain {
-    /// Block until the callbacks for the given submission will resolve on their own.
+    /// On native backends, block until the given submission has
+    /// completed execution, and any callbacks have been invoked.
+    /// 
+    /// On the web, this has no effect. Callbacks are invoked from the
+    /// window event loop.
     ///
-    /// If the submission index is None it will wait for the most recent submission.
-    ///
-    /// On native this will block the thread until the submission is finished.
-    ///
-    /// On web this is a no-op but all the callbacks will automatically fire.
+    /// If the submission index is `None`, wait for the most recent submission.
     Wait(Option<SubmissionIndex>),
     /// Check the device for a single time without blocking.
     Poll,
