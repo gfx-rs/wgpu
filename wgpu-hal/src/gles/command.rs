@@ -327,7 +327,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 dst: dst_raw,
                 dst_target,
                 copy,
-                dst_array_layer_count: dst.array_layer_count,
+                dst_is_cubemap: dst.is_cubemap,
             })
         }
     }

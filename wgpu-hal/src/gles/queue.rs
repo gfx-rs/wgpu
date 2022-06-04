@@ -308,7 +308,7 @@ impl super::Queue {
                 src_target,
                 dst,
                 dst_target,
-                dst_array_layer_count,
+                dst_is_cubemap,
                 ref copy,
             } => {
                 //TODO: handle 3D copies
@@ -333,7 +333,7 @@ impl super::Queue {
                 }
 
                 gl.bind_texture(dst_target, Some(dst));
-                if dst_array_layer_count == 6 {
+                if dst_is_cubemap {
                     gl.copy_tex_sub_image_2d(
                         CUBEMAP_FACES[copy.dst_base.array_layer as usize],
                         copy.dst_base.mip_level as i32,
