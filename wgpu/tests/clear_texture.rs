@@ -333,6 +333,22 @@ fn clear_texture_d32_s8() {
 }
 
 #[test]
+fn clear_texture_d24_s8() {
+    initialize_test(
+        TestParameters::default()
+            .features(wgpu::Features::CLEAR_TEXTURE | wgpu::Features::DEPTH24UNORM_STENCIL8),
+        |ctx| {
+            clear_texture_tests(
+                &ctx,
+                &[wgpu::TextureFormat::Depth24UnormStencil8],
+                false,
+                false,
+            );
+        },
+    )
+}
+
+#[test]
 fn clear_texture_2d_bc() {
     initialize_test(
         TestParameters::default()

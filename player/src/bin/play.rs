@@ -181,7 +181,7 @@ fn main() {
                 },
                 Event::LoopDestroyed => {
                     log::info!("Closing");
-                    gfx_select!(device => global.device_poll(device, true, None)).unwrap();
+                    gfx_select!(device => global.device_poll(device, wgt::Maintain::Wait)).unwrap();
                 }
                 _ => {}
             }

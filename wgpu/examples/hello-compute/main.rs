@@ -147,8 +147,9 @@ async fn execute_gpu_inner(
 
     // Note that we're not calling `.await` here.
     let buffer_slice = staging_buffer.slice(..);
-    // Gets the future representing when `staging_buffer` can be read from
-    let buffer_future = buffer_slice.map_async(wgpu::MapMode::Read);
+    // Sets the buffer up for mapping, sending over the result of the mapping back to us when it is finished.
+    let (sender, receiver) = futures_intrusive::channel::shared::oneshot_channel();
+    buffer_slice.map_async(wgpu::MapMode::Read, move |v| sender.send(v).unwrap());
 
     // Poll the device in a blocking manner so that our future resolves.
     // In an actual application, `device.poll(...)` should
@@ -156,7 +157,7 @@ async fn execute_gpu_inner(
     device.poll(wgpu::Maintain::Wait);
 
     // Awaits until `buffer_future` can be read from
-    if let Ok(()) = buffer_future.await {
+    if let Some(Ok(())) = receiver.receive().await {
         // Gets contents of buffer
         let data = buffer_slice.get_mapped_range();
         // Since contents are got in bytes, this converts these bytes back to u32

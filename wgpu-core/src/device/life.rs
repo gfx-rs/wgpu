@@ -442,15 +442,18 @@ impl<A: hal::Api> LifetimeTracker<A> {
         }
     }
 
-    pub fn add_work_done_closure(&mut self, closure: SubmittedWorkDoneClosure) -> bool {
+    pub fn add_work_done_closure(
+        &mut self,
+        closure: SubmittedWorkDoneClosure,
+    ) -> Option<SubmittedWorkDoneClosure> {
         match self.active.last_mut() {
             Some(active) => {
                 active.work_done_closures.push(closure);
-                true
+                None
             }
             // Note: we can't immediately invoke the closure, since it assumes
             // nothing is currently locked in the hubs.
-            None => false,
+            None => Some(closure),
         }
     }
 }

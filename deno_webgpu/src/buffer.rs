@@ -83,36 +83,27 @@ pub async fn op_webgpu_buffer_get_map_async(
             .get::<super::WebGpuDevice>(device_rid)?;
         device = device_resource.0;
 
-        let boxed_sender = Box::new(sender);
-        let sender_ptr = Box::into_raw(boxed_sender) as *mut u8;
-
-        extern "C" fn buffer_map_future_wrapper(
-            status: wgpu_core::resource::BufferMapAsyncStatus,
-            user_data: *mut u8,
-        ) {
-            let sender_ptr = user_data as *mut oneshot::Sender<Result<(), AnyError>>;
-            let boxed_sender = unsafe { Box::from_raw(sender_ptr) };
-            boxed_sender
+        let callback = Box::new(move |status| {
+            sender
                 .send(match status {
                     wgpu_core::resource::BufferMapAsyncStatus::Success => Ok(()),
                     _ => unreachable!(), // TODO
                 })
                 .unwrap();
-        }
+        });
 
         // TODO(lucacasonato): error handling
         let maybe_err = gfx_select!(buffer => instance.buffer_map_async(
-          buffer,
-          offset..(offset + size),
-          wgpu_core::resource::BufferMapOperation {
-            host: match mode {
-              1 => wgpu_core::device::HostMap::Read,
-              2 => wgpu_core::device::HostMap::Write,
-              _ => unreachable!(),
-            },
-            callback: buffer_map_future_wrapper,
-            user_data: sender_ptr,
-          }
+            buffer,
+            offset..(offset + size),
+            wgpu_core::resource::BufferMapOperation {
+                host: match mode {
+                    1 => wgpu_core::device::HostMap::Read,
+                    2 => wgpu_core::device::HostMap::Write,
+                    _ => unreachable!(),
+                },
+                callback: wgpu_core::resource::BufferMapCallback::from_rust(callback),
+            }
         ))
         .err();
 

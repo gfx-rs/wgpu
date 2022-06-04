@@ -14,7 +14,7 @@ use std::{
     fs::{read_to_string, File},
     io::{Read, Seek, SeekFrom},
     path::{Path, PathBuf},
-    ptr, slice,
+    slice,
 };
 
 #[derive(serde::Deserialize)]
@@ -55,7 +55,7 @@ struct Test<'a> {
     actions: Vec<wgc::device::trace::Action<'a>>,
 }
 
-extern "C" fn map_callback(status: wgc::resource::BufferMapAsyncStatus, _user_data: *mut u8) {
+fn map_callback(status: wgc::resource::BufferMapAsyncStatus) {
     match status {
         wgc::resource::BufferMapAsyncStatus::Success => (),
         _ => panic!("Unable to map"),
@@ -112,8 +112,9 @@ impl Test<'_> {
                 expect.offset .. expect.offset+expect.data.len() as wgt::BufferAddress,
                 wgc::resource::BufferMapOperation {
                     host: wgc::device::HostMap::Read,
-                    callback: map_callback,
-                    user_data: ptr::null_mut(),
+                    callback: wgc::resource::BufferMapCallback::from_rust(
+                        Box::new(map_callback)
+                    ),
                 }
             ))
             .unwrap();

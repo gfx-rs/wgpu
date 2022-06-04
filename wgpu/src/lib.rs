@@ -192,8 +192,6 @@ trait Context: Debug + Send + Sized + Sync {
     type RequestAdapterFuture: Future<Output = Option<Self::AdapterId>> + Send;
     type RequestDeviceFuture: Future<Output = Result<(Self::DeviceId, Self::QueueId), RequestDeviceError>>
         + Send;
-    type MapAsyncFuture: Future<Output = Result<(), BufferAsyncError>> + Send;
-    type OnSubmittedWorkDoneFuture: Future<Output = ()> + Send;
     type PopErrorScopeFuture: Future<Output = Option<Error>> + Send;
 
     fn init(backends: Backends) -> Self;
@@ -337,7 +335,11 @@ trait Context: Debug + Send + Sized + Sync {
         buffer: &Self::BufferId,
         mode: MapMode,
         range: Range<BufferAddress>,
-    ) -> Self::MapAsyncFuture;
+        // Note: we keep this as an `impl` through the context because the native backend
+        // needs to wrap it with a wrapping closure. queue_on_submitted_work_done doesn't
+        // need this wrapping closure, so can be made a Box immediately.
+        callback: impl FnOnce(Result<(), BufferAsyncError>) + Send + 'static,
+    );
     fn buffer_get_mapped_range(
         &self,
         buffer: &Self::BufferId,
@@ -496,7 +498,12 @@ trait Context: Debug + Send + Sized + Sync {
     fn queue_on_submitted_work_done(
         &self,
         queue: &Self::QueueId,
-    ) -> Self::OnSubmittedWorkDoneFuture;
+        // Note: we force the caller to box this because neither backend needs to
+        // wrap the callback and this prevents us from needing to make more functions
+        // generic than we have to. `buffer_map_async` needs to be wrapped on the native
+        // backend, so we don't box until after it has been wrapped.
+        callback: Box<dyn FnOnce() + Send + 'static>,
+    );
 
     fn device_start_capture(&self, device: &Self::DeviceId);
     fn device_stop_capture(&self, device: &Self::DeviceId);
@@ -2379,20 +2386,20 @@ impl Buffer {
 }
 
 impl<'a> BufferSlice<'a> {
-    //TODO: fn slice(&self) -> Self
-
-    /// Map the buffer. Buffer is ready to map once the future is resolved.
+    /// Map the buffer. Buffer is ready to map once the callback is called.
     ///
-    /// For the future to complete, `device.poll(...)` must be called elsewhere in the runtime, possibly integrated
-    /// into an event loop, run on a separate thread, or continually polled in the same task runtime that this
-    /// future will be run on.
+    /// For the callback to complete, either `queue.submit(..)`, `instance.poll_all(..)`, or `device.poll(..)`
+    /// must be called elsewhere in the runtime, possibly integrated into an event loop or run on a separate thread.
     ///
-    /// It's expected that wgpu will eventually supply its own event loop infrastructure that will be easy to integrate
-    /// into other event loops, like winit's.
+    /// The callback will be called on the thread that first calls the above functions after the gpu work
+    /// has completed. There are no restrictions on the code you can run in the callback, however on native the
+    /// call to the function will not complete until the callback returns, so prefer keeping callbacks short
+    /// and used to set flags, send messages, etc.
     pub fn map_async(
         &self,
         mode: MapMode,
-    ) -> impl Future<Output = Result<(), BufferAsyncError>> + Send {
+        callback: impl FnOnce(Result<(), BufferAsyncError>) + Send + 'static,
+    ) {
         let mut mc = self.buffer.map_context.lock();
         assert_eq!(
             mc.initial_range,
@@ -2411,6 +2418,7 @@ impl<'a> BufferSlice<'a> {
             &self.buffer.id,
             mode,
             self.offset..end,
+            callback,
         )
     }
 
@@ -3388,10 +3396,19 @@ impl Queue {
         Context::queue_get_timestamp_period(&*self.context, &self.id)
     }
 
-    /// Returns a future that resolves once all the work submitted by this point
-    /// is done processing on GPU.
-    pub fn on_submitted_work_done(&self) -> impl Future<Output = ()> + Send {
-        Context::queue_on_submitted_work_done(&*self.context, &self.id)
+    /// Registers a callback when the previous call to submit finishes running on the gpu. This callback
+    /// being called implies that all mapped buffer callbacks attached to the same submission have also
+    /// been called.
+    ///
+    /// For the callback to complete, either `queue.submit(..)`, `instance.poll_all(..)`, or `device.poll(..)`
+    /// must be called elsewhere in the runtime, possibly integrated into an event loop or run on a separate thread.
+    ///
+    /// The callback will be called on the thread that first calls the above functions after the gpu work
+    /// has completed. There are no restrictions on the code you can run in the callback, however on native the
+    /// call to the function will not complete until the callback returns, so prefer keeping callbacks short
+    /// and used to set flags, send messages, etc.
+    pub fn on_submitted_work_done(&self, callback: impl FnOnce() + Send + 'static) {
+        Context::queue_on_submitted_work_done(&*self.context, &self.id, Box::new(callback))
     }
 }
 

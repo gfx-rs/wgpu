@@ -65,7 +65,7 @@ impl super::AdapterShared {
                 glow::DEPTH_COMPONENT,
                 glow::UNSIGNED_NORMALIZED,
             ),
-            Tf::Depth24PlusStencil8 => (
+            Tf::Depth24PlusStencil8 | Tf::Depth24UnormStencil8 => (
                 glow::DEPTH24_STENCIL8,
                 glow::DEPTH_COMPONENT,
                 glow::UNSIGNED_INT,

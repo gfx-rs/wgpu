@@ -41,6 +41,10 @@ impl super::Adapter {
         }
     }
 
+    pub fn raw_adapter(&self) -> &native::DxgiAdapter {
+        &self.raw
+    }
+
     #[allow(trivial_casts)]
     pub(super) fn expose(
         adapter: native::DxgiAdapter,
@@ -185,6 +189,7 @@ impl super::Adapter {
 
         let mut features = wgt::Features::empty()
             | wgt::Features::DEPTH_CLIP_CONTROL
+            | wgt::Features::DEPTH24UNORM_STENCIL8
             | wgt::Features::DEPTH32FLOAT_STENCIL8
             | wgt::Features::INDIRECT_FIRST_INSTANCE
             | wgt::Features::MAPPABLE_PRIMARY_BUFFERS

@@ -1,10 +1,12 @@
 #![allow(clippy::type_complexity)]
 
 use std::{
+    cell::RefCell,
     fmt,
     future::Future,
     ops::Range,
     pin::Pin,
+    rc::Rc,
     task::{self, Poll},
 };
 use wasm_bindgen::{prelude::*, JsCast};
@@ -546,6 +548,7 @@ fn map_texture_format(texture_format: wgt::TextureFormat) -> web_sys::GpuTexture
         TextureFormat::Depth32FloatStencil8 => tf::Depth32floatStencil8,
         TextureFormat::Depth24Plus => tf::Depth24plus,
         TextureFormat::Depth24PlusStencil8 => tf::Depth24plusStencil8,
+        TextureFormat::Depth24UnormStencil8 => tf::Depth24unormStencil8,
         _ => unimplemented!(),
     }
 }
@@ -595,6 +598,7 @@ fn map_texture_format_from_web_sys(
         tf::Depth32floatStencil8 => TextureFormat::Depth32FloatStencil8,
         tf::Depth24plus => TextureFormat::Depth24Plus,
         tf::Depth24plusStencil8 => TextureFormat::Depth24PlusStencil8,
+        tf::Depth24unormStencil8 => TextureFormat::Depth24UnormStencil8,
         _ => unimplemented!(),
     }
 }
@@ -933,10 +937,6 @@ fn future_request_device(
         .map_err(|_| crate::RequestDeviceError)
 }
 
-fn future_map_async(result: JsFutureResult) -> Result<(), crate::BufferAsyncError> {
-    result.map(|_| ()).map_err(|_| crate::BufferAsyncError)
-}
-
 fn future_pop_error_scope(result: JsFutureResult) -> Option<crate::Error> {
     match result {
         Ok(js_value) if js_value.is_object() => {
@@ -1005,12 +1005,6 @@ impl crate::Context for Context {
         wasm_bindgen_futures::JsFuture,
         fn(JsFutureResult) -> Result<(Self::DeviceId, Self::QueueId), crate::RequestDeviceError>,
     >;
-    type MapAsyncFuture = MakeSendFuture<
-        wasm_bindgen_futures::JsFuture,
-        fn(JsFutureResult) -> Result<(), crate::BufferAsyncError>,
-    >;
-    type OnSubmittedWorkDoneFuture =
-        MakeSendFuture<wasm_bindgen_futures::JsFuture, fn(JsFutureResult) -> ()>;
     type PopErrorScopeFuture =
         MakeSendFuture<wasm_bindgen_futures::JsFuture, fn(JsFutureResult) -> Option<crate::Error>>;
 
@@ -1092,8 +1086,14 @@ impl crate::Context for Context {
         let possible_features = [
             //TODO: update the name
             (wgt::Features::DEPTH_CLIP_CONTROL, Gfn::DepthClamping),
-            // TODO (_, Gfn::Depth24unormStencil8),
-            // TODO (_, Gfn::Depth32floatStencil8),
+            (
+                wgt::Features::DEPTH24UNORM_STENCIL8,
+                Gfn::Depth24unormStencil8,
+            ),
+            (
+                wgt::Features::DEPTH32FLOAT_STENCIL8,
+                Gfn::Depth32floatStencil8,
+            ),
             (
                 wgt::Features::PIPELINE_STATISTICS_QUERY,
                 Gfn::PipelineStatisticsQuery,
@@ -1736,17 +1736,30 @@ impl crate::Context for Context {
         buffer: &Self::BufferId,
         mode: crate::MapMode,
         range: Range<wgt::BufferAddress>,
-    ) -> Self::MapAsyncFuture {
+        callback: impl FnOnce(Result<(), crate::BufferAsyncError>) + Send + 'static,
+    ) {
         let map_promise = buffer.0.map_async_with_f64_and_f64(
             map_map_mode(mode),
             range.start as f64,
             (range.end - range.start) as f64,
         );
 
-        MakeSendFuture::new(
-            wasm_bindgen_futures::JsFuture::from(map_promise),
-            future_map_async,
-        )
+        // Both the 'success' and 'rejected' closures need access to callback, but only one
+        // of them will ever run. We have them both hold a reference to a `Rc<RefCell<Option<impl FnOnce...>>>`,
+        // and then take ownership of callback when invoked.
+        //
+        // We also only need Rc's because these will only ever be called on our thread.
+        let rc_callback = Rc::new(RefCell::new(Some(callback)));
+
+        let rc_callback_clone = rc_callback.clone();
+        let closure_success = wasm_bindgen::closure::Closure::once(move |_| {
+            rc_callback.borrow_mut().take().unwrap()(Ok(()))
+        });
+        let closure_rejected = wasm_bindgen::closure::Closure::once(move |_| {
+            rc_callback_clone.borrow_mut().take().unwrap()(Err(crate::BufferAsyncError))
+        });
+
+        let _ = map_promise.then2(&closure_success, &closure_rejected);
     }
 
     fn buffer_get_mapped_range(
@@ -2216,7 +2229,8 @@ impl crate::Context for Context {
     fn queue_on_submitted_work_done(
         &self,
         _queue: &Self::QueueId,
-    ) -> Self::OnSubmittedWorkDoneFuture {
+        _callback: Box<dyn FnOnce() + Send + 'static>,
+    ) {
         unimplemented!()
     }
 

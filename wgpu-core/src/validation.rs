@@ -263,6 +263,8 @@ pub enum StageError {
         #[source]
         error: InputError,
     },
+    #[error("location[{location}] is provided by the previous stage output but is not consumed as input by this stage.")]
+    InputNotConsumed { location: wgt::ShaderLocation },
 }
 
 fn map_storage_format_to_naga(format: wgt::TextureFormat) -> Option<naga::StorageFormat> {
@@ -705,7 +707,8 @@ impl NumericType {
             Tf::Depth32Float
             | Tf::Depth32FloatStencil8
             | Tf::Depth24Plus
-            | Tf::Depth24PlusStencil8 => {
+            | Tf::Depth24PlusStencil8
+            | Tf::Depth24UnormStencil8 => {
                 panic!("Unexpected depth format")
             }
             Tf::Rgb9e5Ufloat => (NumericDimension::Vector(Vs::Tri), Sk::Float),
@@ -1155,6 +1158,21 @@ impl Interface {
                     }
                 }
                 Varying::BuiltIn(_) => {}
+            }
+        }
+
+        // Check all vertex outputs and make sure the fragment shader consumes them.
+        if shader_stage == naga::ShaderStage::Fragment {
+            for &index in inputs.keys() {
+                // This is a linear scan, but the count should be low enough that this should be fine.
+                let found = entry_point.inputs.iter().any(|v| match *v {
+                    Varying::Local { location, .. } => location == index,
+                    Varying::BuiltIn(_) => false,
+                });
+
+                if !found {
+                    return Err(StageError::InputNotConsumed { location: index });
+                }
             }
         }
 

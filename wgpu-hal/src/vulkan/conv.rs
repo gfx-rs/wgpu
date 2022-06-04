@@ -64,6 +64,7 @@ impl super::PrivateCapabilities {
                     F::D32_SFLOAT_S8_UINT
                 }
             }
+            Tf::Depth24UnormStencil8 => F::D24_UNORM_S8_UINT,
             Tf::Rgb9e5Ufloat => F::E5B9G9R9_UFLOAT_PACK32,
             Tf::Bc1RgbaUnorm => F::BC1_RGBA_UNORM_BLOCK,
             Tf::Bc1RgbaUnormSrgb => F::BC1_RGBA_SRGB_BLOCK,

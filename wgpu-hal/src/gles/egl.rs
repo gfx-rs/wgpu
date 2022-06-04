@@ -580,6 +580,24 @@ pub struct Instance {
     inner: Mutex<Inner>,
 }
 
+impl Instance {
+    pub fn raw_display(&self) -> egl::Display {
+        self.inner
+            .try_lock()
+            .expect("Could not lock instance. This is most-likely a deadlock.")
+            .egl
+            .display
+    }
+
+    /// Returns the version of the EGL display.
+    pub fn egl_version(&self) -> (i32, i32) {
+        self.inner
+            .try_lock()
+            .expect("Could not lock instance. This is most-likely a deadlock.")
+            .version
+    }
+}
+
 unsafe impl Send for Instance {}
 unsafe impl Sync for Instance {}
 
