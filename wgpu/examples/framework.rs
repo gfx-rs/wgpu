@@ -244,8 +244,7 @@ async fn setup<E: Example>(title: &str) -> Setup {
 }
 
 fn start<E: Example>(
-    #[cfg(not(target_arch = "wasm32"))]
-    Setup {
+    #[cfg(not(target_arch = "wasm32"))] Setup {
         window,
         event_loop,
         instance,
@@ -255,8 +254,7 @@ fn start<E: Example>(
         device,
         queue,
     }: Setup,
-    #[cfg(target_arch = "wasm32")]
-    Setup {
+    #[cfg(target_arch = "wasm32")] Setup {
         window,
         event_loop,
         instance,
