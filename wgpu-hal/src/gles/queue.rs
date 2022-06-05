@@ -308,10 +308,10 @@ impl super::Queue {
                 src_target,
                 dst,
                 dst_target,
+                dst_is_cubemap,
                 ref copy,
             } => {
                 //TODO: handle 3D copies
-                //TODO: handle cubemap copies
                 gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(self.copy_fbo));
                 if is_layered_target(src_target) {
                     //TODO: handle GLES without framebuffer_texture_3d
@@ -333,7 +333,18 @@ impl super::Queue {
                 }
 
                 gl.bind_texture(dst_target, Some(dst));
-                if is_layered_target(dst_target) {
+                if dst_is_cubemap {
+                    gl.copy_tex_sub_image_2d(
+                        CUBEMAP_FACES[copy.dst_base.array_layer as usize],
+                        copy.dst_base.mip_level as i32,
+                        copy.dst_base.origin.x as i32,
+                        copy.dst_base.origin.y as i32,
+                        copy.src_base.origin.x as i32,
+                        copy.src_base.origin.y as i32,
+                        copy.size.width as i32,
+                        copy.size.height as i32,
+                    );
+                } else if is_layered_target(dst_target) {
                     gl.copy_tex_sub_image_3d(
                         dst_target,
                         copy.dst_base.mip_level as i32,
