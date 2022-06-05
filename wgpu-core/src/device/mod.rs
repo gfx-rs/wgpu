@@ -428,6 +428,9 @@ impl<A: HalApi> Device<A> {
 
     /// Check this device for completed commands.
     ///
+    /// The `maintain` argument tells how the maintence function should behave, either
+    /// blocking or just polling the current state of the gpu.
+    ///
     /// Return a pair `(closures, queue_empty)`, where:
     ///
     /// - `closures` is a list of actions to take: mapping buffers, notifying the user
@@ -439,7 +442,7 @@ impl<A: HalApi> Device<A> {
     fn maintain<'this, 'token: 'this, G: GlobalIdentityHandlerFactory>(
         &'this self,
         hub: &Hub<A, G>,
-        force_wait: bool,
+        maintain: wgt::Maintain<queue::WrappedSubmissionIndex>,
         token: &mut Token<'token, Self>,
     ) -> Result<(UserClosures, bool), WaitIdleError> {
         profiling::scope!("maintain", "Device");
@@ -463,14 +466,21 @@ impl<A: HalApi> Device<A> {
         );
         life_tracker.triage_mapped(hub, token);
 
-        let last_done_index = if force_wait {
-            let current_index = self.active_submission_index;
+        let last_done_index = if maintain.is_wait() {
+            let index_to_wait_for = match maintain {
+                wgt::Maintain::WaitForSubmissionIndex(submission_index) => {
+                    // We don't need to check to see if the queue id matches
+                    // as we already checked this from inside the poll call.
+                    submission_index.index
+                }
+                _ => self.active_submission_index,
+            };
             unsafe {
                 self.raw
-                    .wait(&self.fence, current_index, CLEANUP_WAIT_MS)
+                    .wait(&self.fence, index_to_wait_for, CLEANUP_WAIT_MS)
                     .map_err(DeviceError::from)?
             };
-            current_index
+            index_to_wait_for
         } else {
             unsafe {
                 self.raw
@@ -4957,16 +4967,25 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn device_poll<A: HalApi>(
         &self,
         device_id: id::DeviceId,
-        force_wait: bool,
+        maintain: wgt::Maintain<queue::WrappedSubmissionIndex>,
     ) -> Result<bool, WaitIdleError> {
         let (closures, queue_empty) = {
+            if let wgt::Maintain::WaitForSubmissionIndex(submission_index) = maintain {
+                if submission_index.queue_id != device_id {
+                    return Err(WaitIdleError::WrongSubmissionIndex(
+                        submission_index.queue_id,
+                        device_id,
+                    ));
+                }
+            }
+
             let hub = A::hub(self);
             let mut token = Token::root();
             let (device_guard, mut token) = hub.devices.read(&mut token);
             device_guard
                 .get(device_id)
                 .map_err(|_| DeviceError::Invalid)?
-                .maintain(hub, force_wait, &mut token)?
+                .maintain(hub, maintain, &mut token)?
         };
 
         closures.fire();
@@ -4994,7 +5013,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let (device_guard, mut token) = hub.devices.read(&mut token);
 
             for (id, device) in device_guard.iter(A::VARIANT) {
-                let (cbs, queue_empty) = device.maintain(hub, force_wait, &mut token)?;
+                let maintain = if force_wait {
+                    wgt::Maintain::Wait
+                } else {
+                    wgt::Maintain::Poll
+                };
+                let (cbs, queue_empty) = device.maintain(hub, maintain, &mut token)?;
                 all_queue_empty = all_queue_empty && queue_empty;
 
                 // If the device's own `RefCount` clone is the only one left, and

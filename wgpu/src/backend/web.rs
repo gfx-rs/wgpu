@@ -995,6 +995,7 @@ impl crate::Context for Context {
     type SurfaceId = Sendable<web_sys::GpuCanvasContext>;
 
     type SurfaceOutputDetail = SurfaceOutputDetail;
+    type SubmissionIndex = ();
 
     type RequestAdapterFuture = MakeSendFuture<
         wasm_bindgen_futures::JsFuture,
@@ -2213,10 +2214,12 @@ impl crate::Context for Context {
         &self,
         queue: &Self::QueueId,
         command_buffers: I,
-    ) {
+    ) -> Self::SubmissionIndex {
         let temp_command_buffers = command_buffers.map(|i| i.0).collect::<js_sys::Array>();
 
         queue.0.submit(&temp_command_buffers);
+
+        // SubmissionIndex is (), so just let this function end
     }
 
     fn queue_get_timestamp_period(&self, _queue: &Self::QueueId) -> f32 {
