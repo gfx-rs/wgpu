@@ -22,7 +22,7 @@ use crate::init_tracker::BufferInitTrackerAction;
 use crate::registry;
 use crate::track::{Tracker, UsageScope};
 use crate::{
-    hub::{Global, GlobalIdentityHandlerFactory, HalApi, Storage, Token},
+    hub::{Global, GlobalIdentityHandlerFactory, HalApi},
     id,
     resource::{Buffer, Texture},
     Label, Stored,
@@ -180,7 +180,7 @@ impl<A: HalApi> CommandBuffer<A> {
         profiling::scope!("drain_barriers");
 
         let buffer_barriers = base.buffers.drain().map(|pending| {
-            let buf = unsafe { &buffer_guard.get_unchecked(pending.id) };
+            let buf = unsafe { buffer_guard.get_unchecked(pending.id) };
             pending.into_hal(buf)
         });
         let texture_barriers = base.textures.drain().map(|pending| {
@@ -343,10 +343,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("finish", "CommandEncoder");
 
         let hub = A::hub(self);
-        let mut token = Token::root();
-        let (mut cmd_buf_guard, _) = hub.command_buffers.write(&mut token);
 
-        let error = match cmd_buf_guard.get_mut(encoder_id) {
+        let error = match hub.command_buffers.get(encoder_id) {
             Ok(cmd_buf) => match cmd_buf.status {
                 CommandEncoderStatus::Recording => {
                     cmd_buf.encoder.close();
@@ -376,10 +374,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("push_debug_group", "CommandEncoder");
 
         let hub = A::hub(self);
-        let mut token = Token::root();
 
-        let (mut cmd_buf_guard, _) = hub.command_buffers.write(&mut token);
-        let cmd_buf = CommandBuffer::get_encoder_mut(&mut *cmd_buf_guard, encoder_id)?;
+        let cmd_buf = CommandBuffer::get_encoder_mut(&hub.command_buffers, encoder_id)?;
 
         #[cfg(feature = "trace")]
         if let Some(ref mut list) = cmd_buf.commands {
@@ -401,10 +397,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("insert_debug_marker", "CommandEncoder");
 
         let hub = A::hub(self);
-        let mut token = Token::root();
 
-        let (mut cmd_buf_guard, _) = hub.command_buffers.write(&mut token);
-        let cmd_buf = CommandBuffer::get_encoder_mut(&mut *cmd_buf_guard, encoder_id)?;
+        let cmd_buf = CommandBuffer::get_encoder_mut(&hub.command_buffers, encoder_id)?;
 
         #[cfg(feature = "trace")]
         if let Some(ref mut list) = cmd_buf.commands {
@@ -425,10 +419,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("pop_debug_marker", "CommandEncoder");
 
         let hub = A::hub(self);
-        let mut token = Token::root();
 
-        let (mut cmd_buf_guard, _) = hub.command_buffers.write(&mut token);
-        let cmd_buf = CommandBuffer::get_encoder_mut(&mut *cmd_buf_guard, encoder_id)?;
+        let cmd_buf = CommandBuffer::get_encoder_mut(&hub.command_buffers, encoder_id)?;
 
         #[cfg(feature = "trace")]
         if let Some(ref mut list) = cmd_buf.commands {

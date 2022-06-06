@@ -49,11 +49,12 @@ where
         }
     }
 
-    fn deallocate(&self, id: T::Id) {
+    pub fn unregister(&self, id: T::Id) -> Option<T> {
         let mut ident_guard = self.identity_manager.lock();
         let (index, epoch) = ident_guard.free(id);
-        unsafe { self.storage.free(index, epoch) }
+        let value = unsafe { self.storage.free(index, epoch) };
         drop(ident_guard);
+        value
     }
 
     pub fn contains(&self, id: T::Id) -> bool {
@@ -66,8 +67,8 @@ where
         self.storage.get(index, epoch).ok_or(hub::InvalidId)
     }
 
-    pub fn get_unchecked(&self, index: u32) -> Result<&T, hub::InvalidId> {
-        self.storage.get_unchecked(index).ok_or(hub::InvalidId)
+    pub fn get_unchecked(&self, index: u32) -> &T {
+        self.storage.get_unchecked(index).unwrap()
     }
 }
 
@@ -210,14 +211,14 @@ impl<T> Storage<T> {
     }
 
     // SAFETY: Must be called inside the identity manager lock.
-    unsafe fn free(&self, index: u32, epoch: u32) {
+    unsafe fn free(&self, index: u32, epoch: u32) -> Option<T> {
         let block = (index / 512) as usize;
         let data_index = (index % 512) as usize;
 
         let length = self.length.load(Ordering::Relaxed);
 
         if index >= length {
-            panic!("deallocating out of bounds");
+            return None;
         }
 
         // SAFETY: We have just bounds checked the index and we're inside the lock.
@@ -234,7 +235,9 @@ impl<T> Storage<T> {
         assert_eq!(old_status, ElementStatus::Occupied(epoch));
 
         let data_mut_ref = data_ref.get_mut();
-        data_mut_ref.assume_init_drop();
+        let data = mem::replace(&mut *data_mut_ref, DebugMaybeUninit::uninit()).assume_init();
+
+        Some(data)
     }
 }
 

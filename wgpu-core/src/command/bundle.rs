@@ -81,7 +81,7 @@ use crate::{
         SHADER_STAGE_COUNT,
     },
     error::{ErrorFormatter, PrettyError},
-    hub::{GlobalIdentityHandlerFactory, HalApi, Hub, Resource, Token},
+    hub::{GlobalIdentityHandlerFactory, HalApi, Hub, Resource},
     id,
     init_tracker::{BufferInitTrackerAction, MemoryInitKind, TextureInitTrackerAction},
     pipeline::{self, PipelineFlags},
@@ -219,22 +219,14 @@ impl RenderBundleEncoder {
         desc: &RenderBundleDescriptor,
         device: &Device<A>,
         hub: &Hub<A, G>,
-        token: &mut Token<Device<A>>,
     ) -> Result<RenderBundle<A>, RenderBundleError> {
-        let (pipeline_layout_guard, mut token) = hub.pipeline_layouts.read(token);
-        let (bind_group_guard, mut token) = hub.bind_groups.read(&mut token);
-        let (pipeline_guard, mut token) = hub.render_pipelines.read(&mut token);
-        let (query_set_guard, mut token) = hub.query_sets.read(&mut token);
-        let (buffer_guard, mut token) = hub.buffers.read(&mut token);
-        let (texture_guard, _) = hub.textures.read(&mut token);
-
         let mut state = State {
             trackers: RenderBundleScope::new(
-                &*buffer_guard,
-                &*texture_guard,
-                &*bind_group_guard,
-                &*pipeline_guard,
-                &*query_set_guard,
+                &hub.buffers,
+                &hub.textures,
+                &hub.bind_groups,
+                &hub.render_pipelines,
+                &hub.query_sets,
             ),
             index: IndexState::new(),
             vertex: (0..hal::MAX_VERTEX_BUFFERS)
@@ -266,7 +258,7 @@ impl RenderBundleEncoder {
                     let bind_group: &binding_model::BindGroup<A> = state
                         .trackers
                         .bind_groups
-                        .add_single(&*bind_group_guard, bind_group_id)
+                        .add_single(&hub.bind_groups, bind_group_id)
                         .ok_or(RenderCommandError::InvalidBindGroup(bind_group_id))
                         .map_pass_err(scope)?;
                     self.check_valid_to_use(bind_group.device_id.value)
@@ -319,7 +311,7 @@ impl RenderBundleEncoder {
                     unsafe {
                         state
                             .trackers
-                            .merge_bind_group(&*texture_guard, &bind_group.used)
+                            .merge_bind_group(&hub.textures, &bind_group.used)
                             .map_pass_err(scope)?
                     };
                     //Note: stateless trackers are not merged: the lifetime reference
@@ -333,7 +325,7 @@ impl RenderBundleEncoder {
                     let pipeline: &pipeline::RenderPipeline<A> = state
                         .trackers
                         .render_pipelines
-                        .add_single(&*pipeline_guard, pipeline_id)
+                        .add_single(&hub.render_pipelines, pipeline_id)
                         .ok_or(RenderCommandError::InvalidPipeline(pipeline_id))
                         .map_pass_err(scope)?;
                     self.check_valid_to_use(pipeline.device_id.value)
@@ -351,7 +343,7 @@ impl RenderBundleEncoder {
                             .map_pass_err(scope);
                     }
 
-                    let layout = &pipeline_layout_guard[pipeline.layout_id.value];
+                    let layout = &hub.pipeline_layouts[pipeline.layout_id.value];
                     pipeline_layout_id = Some(pipeline.layout_id.value);
 
                     state.set_pipeline(
@@ -375,7 +367,7 @@ impl RenderBundleEncoder {
                     let buffer: &resource::Buffer<A> = state
                         .trackers
                         .buffers
-                        .merge_single(&*buffer_guard, buffer_id, hal::BufferUses::INDEX)
+                        .merge_single(&hub.buffers, buffer_id, hal::BufferUses::INDEX)
                         .map_pass_err(scope)?;
                     self.check_valid_to_use(buffer.device_id.value)
                         .map_pass_err(scope)?;
@@ -404,7 +396,7 @@ impl RenderBundleEncoder {
                     let buffer: &resource::Buffer<A> = state
                         .trackers
                         .buffers
-                        .merge_single(&*buffer_guard, buffer_id, hal::BufferUses::VERTEX)
+                        .merge_single(&hub.buffers, buffer_id, hal::BufferUses::VERTEX)
                         .map_pass_err(scope)?;
                     self.check_valid_to_use(buffer.device_id.value)
                         .map_pass_err(scope)?;
@@ -434,7 +426,7 @@ impl RenderBundleEncoder {
                     let pipeline_layout_id = pipeline_layout_id
                         .ok_or(DrawError::MissingPipeline)
                         .map_pass_err(scope)?;
-                    let pipeline_layout = &pipeline_layout_guard[pipeline_layout_id];
+                    let pipeline_layout = &hub.pipeline_layouts[pipeline_layout_id];
 
                     pipeline_layout
                         .validate_push_constant_ranges(stages, offset, end_offset)
@@ -531,7 +523,7 @@ impl RenderBundleEncoder {
                     let buffer: &resource::Buffer<A> = state
                         .trackers
                         .buffers
-                        .merge_single(&*buffer_guard, buffer_id, hal::BufferUses::INDIRECT)
+                        .merge_single(&hub.buffers, buffer_id, hal::BufferUses::INDIRECT)
                         .map_pass_err(scope)?;
                     self.check_valid_to_use(buffer.device_id.value)
                         .map_pass_err(scope)?;
@@ -566,7 +558,7 @@ impl RenderBundleEncoder {
                     let buffer: &resource::Buffer<A> = state
                         .trackers
                         .buffers
-                        .merge_single(&*buffer_guard, buffer_id, hal::BufferUses::INDIRECT)
+                        .merge_single(&hub.buffers, buffer_id, hal::BufferUses::INDIRECT)
                         .map_pass_err(scope)?;
                     self.check_valid_to_use(buffer.device_id.value)
                         .map_pass_err(scope)?;

@@ -501,11 +501,11 @@ pub(crate) struct RenderBundleScope<A: hub::HalApi> {
 impl<A: hub::HalApi> RenderBundleScope<A> {
     /// Create the render bundle scope and pull the maximum IDs from the hubs.
     pub fn new(
-        buffers: &hub::Storage<resource::Buffer<A>, id::BufferId>,
-        textures: &hub::Storage<resource::Texture<A>, id::TextureId>,
-        bind_groups: &hub::Storage<binding_model::BindGroup<A>, id::BindGroupId>,
-        render_pipelines: &hub::Storage<pipeline::RenderPipeline<A>, id::RenderPipelineId>,
-        query_sets: &hub::Storage<resource::QuerySet<A>, id::QuerySetId>,
+        buffers: &registry::Registry<A, resource::Buffer<A>>,
+        textures: &registry::Registry<A, resource::Texture<A>>,
+        bind_groups: &registry::Registry<A, binding_model::BindGroup<A>>,
+        render_pipelines: &registry::Registry<A, pipeline::RenderPipeline<A>>,
+        query_sets: &registry::Registry<A, resource::QuerySet<A>>,
     ) -> Self {
         let mut value = Self {
             buffers: BufferUsageScope::new(),

@@ -4,12 +4,13 @@ use hal::CommandEncoder;
 
 use crate::{
     device::Device,
-    hub::{HalApi, Storage},
+    hub::HalApi,
     id::{self, TextureId},
     init_tracker::*,
+    registry,
     resource::{Buffer, Texture},
     track::{TextureTracker, Tracker},
-    FastHashMap, registry,
+    FastHashMap,
 };
 
 use super::{clear::clear_texture, BakedCommands, DestroyedBufferError, DestroyedTextureError};
@@ -59,11 +60,10 @@ impl CommandBufferTextureMemoryActions {
         //
         // We don't need to add MemoryInitKind::NeedsInitializedMemory to init_actions if a surface is part of the discard list.
         // But that would mean splitting up the action which is more than we'd win here.
-        self.init_actions
-            .extend(match textures.get(action.id) {
-                Ok(texture) => texture.initialization_status.check_action(action),
-                Err(_) => return immediately_necessary_clears, // texture no longer exists
-            });
+        self.init_actions.extend(match textures.get(action.id) {
+            Ok(texture) => texture.initialization_status.check_action(action),
+            Err(_) => return immediately_necessary_clears, // texture no longer exists
+        });
 
         // We expect very few discarded surfaces at any point in time which is why a simple linear search is likely best.
         // (i.e. most of the time self.discards is empty!)
@@ -152,14 +152,14 @@ impl<A: HalApi> BakedCommands<A> {
     pub(crate) fn initialize_buffer_memory(
         &mut self,
         device_tracker: &mut Tracker<A>,
-        buffer_guard: &mut Storage<Buffer<A>, id::BufferId>,
+        buffers: &registry::Registry<A, Buffer<A>>,
     ) -> Result<(), DestroyedBufferError> {
         // Gather init ranges for each buffer so we can collapse them.
         // It is not possible to do this at an earlier point since previously executed command buffer change the resource init state.
         let mut uninitialized_ranges_per_buffer = FastHashMap::default();
         for buffer_use in self.buffer_memory_init_actions.drain(..) {
-            let buffer = buffer_guard
-                .get_mut(buffer_use.id)
+            let buffer = buffers
+                .get(buffer_use.id)
                 .map_err(|_| DestroyedBufferError(buffer_use.id))?;
 
             // align the end to 4
@@ -205,19 +205,19 @@ impl<A: HalApi> BakedCommands<A> {
             // However, we *know* that it is currently in use, so the tracker must already know about it.
             let transition = device_tracker
                 .buffers
-                .set_single(buffer_guard, buffer_id, hal::BufferUses::COPY_DST)
+                .set_single(buffers, buffer_id, hal::BufferUses::COPY_DST)
                 .unwrap()
                 .1;
 
-            let buffer = buffer_guard
-                .get_mut(buffer_id)
+            let buffer = buffers
+                .get(buffer_id)
                 .map_err(|_| DestroyedBufferError(buffer_id))?;
             let raw_buf = buffer.raw.as_ref().ok_or(DestroyedBufferError(buffer_id))?;
 
             unsafe {
                 self.encoder.transition_buffers(
                     transition
-                        .map(|pending| pending.into_hal(buffer))
+                        .map(|pending| pending.into_hal(&*buffer))
                         .into_iter(),
                 );
             }
@@ -239,13 +239,13 @@ impl<A: HalApi> BakedCommands<A> {
     pub(crate) fn initialize_texture_memory(
         &mut self,
         device_tracker: &mut Tracker<A>,
-        texture_guard: &mut Storage<Texture<A>, TextureId>,
+        textures: &registry::Registry<A, Texture<A>>,
         device: &Device<A>,
     ) -> Result<(), DestroyedTextureError> {
         let mut ranges: Vec<TextureInitRange> = Vec::new();
         for texture_use in self.texture_memory_actions.drain_init_actions() {
-            let texture = texture_guard
-                .get_mut(texture_use.id)
+            let texture = textures
+                .get(texture_use.id)
                 .map_err(|_| DestroyedTextureError(texture_use.id))?;
 
             let use_range = texture_use.range;
@@ -278,7 +278,7 @@ impl<A: HalApi> BakedCommands<A> {
             // TODO: Could we attempt some range collapsing here?
             for range in ranges.drain(..) {
                 clear_texture(
-                    texture_guard,
+                    textures,
                     id::Valid(texture_use.id),
                     range,
                     &mut self.encoder,
@@ -292,8 +292,8 @@ impl<A: HalApi> BakedCommands<A> {
 
         // Now that all buffers/textures have the proper init state for before cmdbuf start, we discard init states for textures it left discarded after its execution.
         for surface_discard in self.texture_memory_actions.discards.iter() {
-            let texture = texture_guard
-                .get_mut(surface_discard.texture)
+            let texture = textures
+                .get(surface_discard.texture)
                 .map_err(|_| DestroyedTextureError(surface_discard.texture))?;
             texture
                 .initialization_status

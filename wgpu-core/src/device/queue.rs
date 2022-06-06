@@ -298,12 +298,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("write_buffer", "Queue");
 
         let hub = A::hub(self);
-        let mut token = Token::root();
-        let (mut device_guard, mut token) = hub.devices.write(&mut token);
-        let device = device_guard
-            .get_mut(queue_id)
+        let device = hub
+            .devices
+            .get(queue_id)
             .map_err(|_| DeviceError::Invalid)?;
-        let (buffer_guard, _) = hub.buffers.read(&mut token);
 
         #[cfg(feature = "trace")]
         if let Some(ref trace) = device.trace {
@@ -333,7 +331,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut trackers = device.trackers.lock();
         let (dst, transition) = trackers
             .buffers
-            .set_single(&*buffer_guard, buffer_id, hal::BufferUses::COPY_DST)
+            .set_single(&hub.buffers, buffer_id, hal::BufferUses::COPY_DST)
             .ok_or(TransferError::InvalidBuffer(buffer_id))?;
         let dst_raw = dst
             .raw
@@ -373,21 +371,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let encoder = device.pending_writes.activate();
         unsafe {
             encoder.transition_buffers(barriers);
-            encoder.copy_buffer_to_buffer(&stage.buffer, dst_raw, region.into_iter());
+            encoder.copy_buffer_to_buffer(&stage.buffer, &*dst_raw, region.into_iter());
         }
 
         device.pending_writes.consume(stage);
         device.pending_writes.dst_buffers.insert(buffer_id);
 
         // Ensure the overwritten bytes are marked as initialized so they don't need to be nulled prior to mapping or binding.
-        {
-            drop(buffer_guard);
-            let (mut buffer_guard, _) = hub.buffers.write(&mut token);
-
-            let dst = buffer_guard.get_mut(buffer_id).unwrap();
-            dst.initialization_status
-                .drain(buffer_offset..(buffer_offset + data_size));
-        }
+        dst.initialization_status
+            .drain(buffer_offset..(buffer_offset + data_size));
 
         Ok(())
     }
@@ -403,10 +395,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("write_texture", "Queue");
 
         let hub = A::hub(self);
-        let mut token = Token::root();
-        let (mut device_guard, mut token) = hub.devices.write(&mut token);
-        let device = device_guard
-            .get_mut(queue_id)
+        let device = hub
+            .devices
+            .get(queue_id)
             .map_err(|_| DeviceError::Invalid)?;
 
         #[cfg(feature = "trace")]
@@ -426,9 +417,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             return Ok(());
         }
 
-        let (mut texture_guard, _) = hub.textures.write(&mut token); // For clear we need write access to the texture. TODO: Can we acquire write lock later?
         let (selector, dst_base, texture_format) =
-            extract_texture_selector(destination, size, &*texture_guard)?;
+            extract_texture_selector(destination, size, &hub.textures)?;
         let format_desc = texture_format.describe();
         //Note: `_source_bytes_per_array_layer` is ignored since we have a staging copy,
         // and it can have a different value.
@@ -471,7 +461,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let stage_size = stage_bytes_per_row as u64 * block_rows_in_copy as u64;
         let stage = device.prepare_stage(stage_size)?;
 
-        let dst = texture_guard.get_mut(destination.texture).unwrap();
+        let dst = hub.textures.get(destination.texture).unwrap();
         if !dst.desc.usage.contains(wgt::TextureUsages::COPY_DST) {
             return Err(
                 TransferError::MissingCopyDstUsageFlag(None, Some(destination.texture)).into(),
@@ -499,7 +489,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     .collect::<Vec<std::ops::Range<u32>>>()
                 {
                     crate::command::clear_texture(
-                        &*texture_guard,
+                        &hub.textures,
                         id::Valid(destination.texture),
                         TextureInitRange {
                             mip_range: destination.mip_level..(destination.mip_level + 1),
@@ -521,7 +511,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (dst, transition) = trackers
             .textures
             .set_single(
-                &*texture_guard,
+                &hub.textures,
                 destination.texture,
                 selector,
                 hal::TextureUses::COPY_DST,
@@ -634,9 +624,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let hub = A::hub(self);
             let mut token = Token::root();
 
-            let (mut device_guard, mut token) = hub.devices.write(&mut token);
-            let device = device_guard
-                .get_mut(queue_id)
+            let device = hub
+                .devices
+                .get(queue_id)
                 .map_err(|_| DeviceError::Invalid)?;
             device.temp_suspected.clear();
             device.active_submission_index += 1;
@@ -645,26 +635,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let mut used_surface_textures = track::TextureUsageScope::new();
 
             {
-                let (mut command_buffer_guard, mut token) = hub.command_buffers.write(&mut token);
-
                 if !command_buffer_ids.is_empty() {
                     profiling::scope!("prepare");
 
-                    let (render_bundle_guard, mut token) = hub.render_bundles.read(&mut token);
-                    let (_, mut token) = hub.pipeline_layouts.read(&mut token);
-                    let (bind_group_guard, mut token) = hub.bind_groups.read(&mut token);
-                    let (compute_pipe_guard, mut token) = hub.compute_pipelines.read(&mut token);
-                    let (render_pipe_guard, mut token) = hub.render_pipelines.read(&mut token);
-                    let (mut buffer_guard, mut token) = hub.buffers.write(&mut token);
-                    let (mut texture_guard, mut token) = hub.textures.write(&mut token);
-                    let (texture_view_guard, mut token) = hub.texture_views.read(&mut token);
-                    let (sampler_guard, mut token) = hub.samplers.read(&mut token);
-                    let (query_set_guard, _) = hub.query_sets.read(&mut token);
-
-                    //Note: locking the trackers has to be done after the storages
                     let mut trackers = device.trackers.lock();
 
-                    used_surface_textures.set_size(texture_guard.len());
+                    used_surface_textures.set_size(hub.textures.len());
 
                     //TODO: if multiple command buffers are submitted, we can re-use the last
                     // native command buffer of the previous chain instead of always creating
@@ -673,10 +649,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     // finish all the command buffers first
                     for &cmb_id in command_buffer_ids {
                         #[allow(unused_mut)]
-                        let mut cmdbuf = match hub
-                            .command_buffers
-                            .unregister_locked(cmb_id, &mut *command_buffer_guard)
-                        {
+                        let mut cmdbuf = match hub.command_buffers.unregister(cmb_id) {
                             Some(cmdbuf) => cmdbuf,
                             None => continue,
                         };
@@ -697,9 +670,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                         // update submission IDs
                         for id in cmdbuf.trackers.buffers.used() {
-                            let buffer = &mut buffer_guard[id];
-                            let raw_buf = match buffer.raw {
-                                Some(ref raw) => raw,
+                            let buffer = &hub.buffers[id];
+                            let raw_buf = match buffer.raw.as_ref() {
+                                Some(raw) => raw,
                                 None => {
                                     return Err(QueueSubmitError::DestroyedBuffer(id.0));
                                 }
@@ -707,7 +680,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             if !buffer.life_guard.use_at(submit_index) {
                                 if let BufferMapState::Active { .. } = buffer.map_state {
                                     log::warn!("Dropped buffer has a pending mapping.");
-                                    unsafe { device.raw.unmap_buffer(raw_buf) }
+                                    unsafe { device.raw.unmap_buffer(&*raw_buf) }
                                         .map_err(DeviceError::from)?;
                                 }
                                 device.temp_suspected.buffers.push(id);
@@ -719,7 +692,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             }
                         }
                         for id in cmdbuf.trackers.textures.used() {
-                            let texture = &mut texture_guard[id];
+                            let texture = &hub.textures[id];
                             let should_extend = match texture.inner {
                                 TextureInner::Native { raw: None } => {
                                     return Err(QueueSubmitError::DestroyedTexture(id.0));
@@ -740,7 +713,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                     let ref_count = cmdbuf.trackers.textures.get_ref_count(id);
                                     used_surface_textures
                                         .merge_single(
-                                            &*texture_guard,
+                                            &hub.textures,
                                             id,
                                             None,
                                             ref_count,
@@ -751,12 +724,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             }
                         }
                         for id in cmdbuf.trackers.views.used() {
-                            if !texture_view_guard[id].life_guard.use_at(submit_index) {
+                            if !hub.texture_views[id].life_guard.use_at(submit_index) {
                                 device.temp_suspected.texture_views.push(id);
                             }
                         }
                         for id in cmdbuf.trackers.bind_groups.used() {
-                            let bg = &bind_group_guard[id];
+                            let bg = &hub.bind_groups[id];
                             if !bg.life_guard.use_at(submit_index) {
                                 device.temp_suspected.bind_groups.push(id);
                             }
@@ -764,30 +737,30 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             // state-less (!) resources as well, so that they don't get
                             // deleted too early if the parent bind group goes out of scope.
                             for sub_id in bg.used.views.used() {
-                                texture_view_guard[sub_id].life_guard.use_at(submit_index);
+                                hub.texture_views[sub_id].life_guard.use_at(submit_index);
                             }
                             for sub_id in bg.used.samplers.used() {
-                                sampler_guard[sub_id].life_guard.use_at(submit_index);
+                                hub.samplers[sub_id].life_guard.use_at(submit_index);
                             }
                         }
                         // assert!(cmdbuf.trackers.samplers.is_empty());
                         for id in cmdbuf.trackers.compute_pipelines.used() {
-                            if !compute_pipe_guard[id].life_guard.use_at(submit_index) {
+                            if !hub.compute_pipelines[id].life_guard.use_at(submit_index) {
                                 device.temp_suspected.compute_pipelines.push(id);
                             }
                         }
                         for id in cmdbuf.trackers.render_pipelines.used() {
-                            if !render_pipe_guard[id].life_guard.use_at(submit_index) {
+                            if !hub.render_pipelines[id].life_guard.use_at(submit_index) {
                                 device.temp_suspected.render_pipelines.push(id);
                             }
                         }
                         for id in cmdbuf.trackers.query_sets.used() {
-                            if !query_set_guard[id].life_guard.use_at(submit_index) {
+                            if !hub.query_sets[id].life_guard.use_at(submit_index) {
                                 device.temp_suspected.query_sets.push(id);
                             }
                         }
                         for id in cmdbuf.trackers.bundles.used() {
-                            let bundle = &render_bundle_guard[id];
+                            let bundle = &hub.render_bundles[id];
                             if !bundle.life_guard.use_at(submit_index) {
                                 device.temp_suspected.render_bundles.push(id);
                             }
@@ -795,10 +768,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             // state-less (!) resources as well, excluding the bind groups.
                             // They don't get deleted too early if the bundle goes out of scope.
                             for sub_id in bundle.used.render_pipelines.used() {
-                                render_pipe_guard[sub_id].life_guard.use_at(submit_index);
+                                hub.render_pipelines[sub_id].life_guard.use_at(submit_index);
                             }
                             for sub_id in bundle.used.query_sets.used() {
-                                query_set_guard[sub_id].life_guard.use_at(submit_index);
+                                hub.query_sets[sub_id].life_guard.use_at(submit_index);
                             }
                         }
 
@@ -812,10 +785,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         };
                         log::trace!("Stitching command buffer {:?} before submission", cmb_id);
                         baked
-                            .initialize_buffer_memory(&mut *trackers, &mut *buffer_guard)
+                            .initialize_buffer_memory(&mut *trackers, &hub.buffers)
                             .map_err(|err| QueueSubmitError::DestroyedBuffer(err.0))?;
                         baked
-                            .initialize_texture_memory(&mut *trackers, &mut *texture_guard, device)
+                            .initialize_texture_memory(&mut *trackers, &hub.textures, device)
                             .map_err(|err| QueueSubmitError::DestroyedTexture(err.0))?;
                         //Note: stateless trackers are not merged:
                         // device already knows these resources exist.
@@ -823,8 +796,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             &mut baked.encoder,
                             &mut *trackers,
                             &baked.trackers,
-                            &*buffer_guard,
-                            &*texture_guard,
+                            &hub.buffers,
+                            &hub.textures,
                         );
 
                         let transit = unsafe { baked.encoder.end_encoding().unwrap() };
@@ -842,9 +815,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             };
                             trackers
                                 .textures
-                                .set_from_usage_scope(&*texture_guard, &used_surface_textures);
+                                .set_from_usage_scope(&hub.textures, &used_surface_textures);
                             let texture_barriers = trackers.textures.drain().map(|pending| {
-                                let tex = unsafe { texture_guard.get_unchecked(pending.id) };
+                                let tex = unsafe { hub.textures.get_unchecked(pending.id) };
                                 pending.into_hal(tex)
                             });
                             let present = unsafe {
@@ -879,13 +852,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     // (2) it's doing the extra locking unconditionally
                     // Maybe we can only do so if any surfaces are being written to?
 
-                    let (_, mut token) = hub.buffers.read(&mut token); // skip token
-                    let (mut texture_guard, _) = hub.textures.write(&mut token);
-
-                    used_surface_textures.set_size(texture_guard.len());
+                    used_surface_textures.set_size(hub.textures.len());
 
                     for &id in pending_writes.dst_textures.iter() {
-                        let texture = texture_guard.get_mut(id).unwrap();
+                        let texture = hub.textures.get(id).unwrap();
                         match texture.inner {
                             TextureInner::Native { raw: None } => {
                                 return Err(QueueSubmitError::DestroyedTexture(id));
@@ -899,7 +869,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 unsafe {
                                     used_surface_textures
                                         .merge_single(
-                                            &*texture_guard,
+                                            &hub.textures,
                                             id::Valid(id),
                                             None,
                                             &ref_count,
@@ -916,9 +886,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                         trackers
                             .textures
-                            .set_from_usage_scope(&*texture_guard, &used_surface_textures);
+                            .set_from_usage_scope(&hub.textures, &used_surface_textures);
                         let texture_barriers = trackers.textures.drain().map(|pending| {
-                            let tex = unsafe { texture_guard.get_unchecked(pending.id) };
+                            let tex = unsafe { hub.textures.get_unchecked(pending.id) };
                             pending.into_hal(tex)
                         });
 
@@ -957,7 +927,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             // this will register the new submission to the life time tracker
             let mut pending_write_resources = mem::take(&mut device.pending_writes.temp_resources);
-            device.lock_life(&mut token).track_submission(
+            device.lock_life().track_submission(
                 submit_index,
                 pending_write_resources.drain(..),
                 active_executions,
@@ -965,7 +935,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             // This will schedule destruction of all resources that are no longer needed
             // by the user but used in the command stream, among other things.
-            let (closures, _) = match device.maintain(hub, wgt::Maintain::Wait, &mut token) {
+            let (closures, _) = match device.maintain(hub, wgt::Maintain::Wait) {
                 Ok(closures) => closures,
                 Err(WaitIdleError::Device(err)) => return Err(QueueSubmitError::Queue(err)),
                 Err(WaitIdleError::StuckGpu) => return Err(QueueSubmitError::StuckGpu),
@@ -974,7 +944,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             device.pending_writes.temp_resources = pending_write_resources;
             device.temp_suspected.clear();
-            device.lock_life(&mut token).post_submit();
+            device.lock_life().post_submit();
 
             (submit_index, closures)
         };
@@ -993,9 +963,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         queue_id: id::QueueId,
     ) -> Result<f32, InvalidQueue> {
         let hub = A::hub(self);
-        let mut token = Token::root();
-        let (device_guard, _) = hub.devices.read(&mut token);
-        match device_guard.get(queue_id) {
+        match hub.devices.get(queue_id) {
             Ok(device) => Ok(unsafe { device.queue.get_timestamp_period() }),
             Err(_) => Err(InvalidQueue),
         }
@@ -1009,10 +977,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         //TODO: flush pending writes
         let closure_opt = {
             let hub = A::hub(self);
-            let mut token = Token::root();
-            let (device_guard, mut token) = hub.devices.read(&mut token);
-            match device_guard.get(queue_id) {
-                Ok(device) => device.lock_life(&mut token).add_work_done_closure(closure),
+            match hub.devices.get(queue_id) {
+                Ok(device) => device.lock_life().add_work_done_closure(closure),
                 Err(_) => return Err(InvalidQueue),
             }
         };

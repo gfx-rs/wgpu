@@ -439,10 +439,9 @@ impl<A: HalApi> Device<A> {
         &'this self,
         hub: &Hub<A, G>,
         maintain: wgt::Maintain<queue::WrappedSubmissionIndex>,
-        token: &mut Token<'token, Self>,
     ) -> Result<(UserClosures, bool), WaitIdleError> {
         profiling::scope!("maintain", "Device");
-        let mut life_tracker = self.lock_life(token);
+        let mut life_tracker = self.lock_life();
 
         // Normally, `temp_suspected` exists only to save heap
         // allocations: it's cleared at the start of the function
@@ -458,9 +457,8 @@ impl<A: HalApi> Device<A> {
             &self.trackers,
             #[cfg(feature = "trace")]
             self.trace.as_ref(),
-            token,
         );
-        life_tracker.triage_mapped(hub, token);
+        life_tracker.triage_mapped(hub);
 
         let last_done_index = if maintain.is_wait() {
             let index_to_wait_for = match maintain {

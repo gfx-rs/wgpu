@@ -2,7 +2,10 @@ use crate::{
     device::{DeviceError, MissingDownlevelFlags, MissingFeatures, SHADER_STAGE_COUNT},
     error::{ErrorFormatter, PrettyError},
     hub::{HalApi, Resource},
-    id::{BindGroupLayoutId, BufferId, DeviceId, SamplerId, TextureId, TextureViewId, Valid, PipelineLayoutId, BindGroupId},
+    id::{
+        BindGroupId, BindGroupLayoutId, BufferId, DeviceId, PipelineLayoutId, SamplerId, TextureId,
+        TextureViewId, Valid,
+    },
     init_tracker::{BufferInitTrackerAction, TextureInitTrackerAction},
     track::{BindGroupStates, UsageConflict},
     validation::{MissingBufferUsageError, MissingTextureUsageError},

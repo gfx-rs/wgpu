@@ -2,7 +2,7 @@ use std::ops::{Deref, DerefMut};
 #[cfg(not(debug_assertions))]
 use std::{cell::UnsafeCell, mem::MaybeUninit};
 
-use parking_lot::{RwLock, RwLockReadGuard, MappedRwLockReadGuard};
+use parking_lot::{MappedRwLockReadGuard, RwLock, RwLockReadGuard};
 
 /// Unsafe cell that's actually an RW lock in debug.
 pub struct DebugUnsafeCell<T> {
@@ -72,6 +72,11 @@ impl<T> DebugMaybeUninit<T> {
         self.inner = Some(value);
     }
 
+    pub unsafe fn assume_init(self) -> T {
+        self.inner
+            .expect("DebugMaybeUninit detected assume-while-none")
+    }
+
     pub unsafe fn assume_init_ref(&self) -> &T {
         self.inner
             .as_ref()
@@ -99,6 +104,10 @@ impl<T> DebugMaybeUninit<T> {
         self.inner.write(value);
     }
 
+    pub unsafe fn assume_init(self) -> T {
+        self.inner.assume_init()
+    }
+
     pub unsafe fn assume_init_ref(&self) -> &T {
         self.inner.assume_init_ref()
     }
@@ -115,7 +124,7 @@ pub struct DestroyableResource<T> {
 impl<T> DestroyableResource<T> {
     pub fn new(value: T) -> Self {
         Self {
-            inner: RwLock::new(Some(value))
+            inner: RwLock::new(Some(value)),
         }
     }
 
@@ -128,6 +137,10 @@ impl<T> DestroyableResource<T> {
         } else {
             None
         }
+    }
+
+    pub fn into_inner(self) -> Option<T> {
+        self.inner.into_inner()
     }
 }
 

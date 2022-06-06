@@ -5,11 +5,12 @@ use crate::device::trace::Command as TraceCommand;
 use crate::{
     command::CommandBuffer,
     get_lowest_common_denom,
-    hub::{Global, GlobalIdentityHandlerFactory, HalApi, Token},
+    hub::{Global, GlobalIdentityHandlerFactory, HalApi},
     id::{BufferId, CommandEncoderId, DeviceId, TextureId, Valid},
     init_tracker::{MemoryInitKind, TextureInitRange},
+    registry,
     resource::{Texture, TextureClearMode},
-    track::{TextureSelector, TextureTracker}, registry,
+    track::{TextureSelector, TextureTracker},
 };
 
 use hal::{auxil::align_to, CommandEncoder as _};
@@ -75,11 +76,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("CommandEncoder::fill_buffer");
 
         let hub = A::hub(self);
-        let mut token = Token::root();
-        let (mut cmd_buf_guard, mut token) = hub.command_buffers.write(&mut token);
-        let cmd_buf = CommandBuffer::get_encoder_mut(&mut *cmd_buf_guard, command_encoder_id)
+        let cmd_buf = CommandBuffer::get_encoder_mut(&hub.command_buffers, command_encoder_id)
             .map_err(|_| ClearError::InvalidCommandEncoder(command_encoder_id))?;
-        let (buffer_guard, _) = hub.buffers.read(&mut token);
 
         #[cfg(feature = "trace")]
         if let Some(ref mut list) = cmd_buf.commands {
@@ -89,7 +87,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (dst_buffer, dst_pending) = cmd_buf
             .trackers
             .buffers
-            .set_single(&*buffer_guard, dst, hal::BufferUses::COPY_DST)
+            .set_single(&hub.buffers, dst, hal::BufferUses::COPY_DST)
             .ok_or(ClearError::InvalidBuffer(dst))?;
         let dst_raw = dst_buffer
             .raw
@@ -153,13 +151,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("CommandEncoder::clear_texture");
 
         let hub = A::hub(self);
-        let mut token = Token::root();
-        let (device_guard, mut token) = hub.devices.write(&mut token);
-        let (mut cmd_buf_guard, mut token) = hub.command_buffers.write(&mut token);
-        let cmd_buf = CommandBuffer::get_encoder_mut(&mut *cmd_buf_guard, command_encoder_id)
+        let cmd_buf = CommandBuffer::get_encoder_mut(&hub.command_buffers, command_encoder_id)
             .map_err(|_| ClearError::InvalidCommandEncoder(command_encoder_id))?;
-        let (_, mut token) = hub.buffers.read(&mut token); // skip token
-        let (texture_guard, _) = hub.textures.read(&mut token);
 
         #[cfg(feature = "trace")]
         if let Some(ref mut list) = cmd_buf.commands {
@@ -173,7 +166,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             return Err(ClearError::MissingClearTextureFeature);
         }
 
-        let dst_texture = texture_guard
+        let dst_texture = hub
+            .textures
             .get(dst)
             .map_err(|_| ClearError::InvalidTexture(dst))?;
 
@@ -216,10 +210,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             });
         }
 
-        let device = &device_guard[cmd_buf.device_id.value];
+        let device = &hub.devices[cmd_buf.device_id.value];
 
         clear_texture(
-            &*texture_guard,
+            &hub.textures,
             Valid(dst),
             TextureInitRange {
                 mip_range: subresource_range.base_mip_level..subresource_level_end,

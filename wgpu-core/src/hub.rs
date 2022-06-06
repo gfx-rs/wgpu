@@ -2,11 +2,12 @@ use crate::{
     binding_model::{BindGroup, BindGroupLayout, PipelineLayout},
     command::{CommandBuffer, RenderBundle},
     device::Device,
-    id::{self, TypedId},
+    id,
     instance::{Adapter, HalSurface, Instance, Surface},
     pipeline::{ComputePipeline, RenderPipeline, ShaderModule},
+    registry,
     resource::{Buffer, QuerySet, Sampler, Texture, TextureClearMode, TextureView},
-    Epoch, Index, registry,
+    Epoch, Index,
 };
 
 use parking_lot::{Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard};
@@ -422,10 +423,10 @@ pub trait IdentityHandler<I>: Debug {
 impl<I: id::TypedId + Debug> IdentityHandler<I> for Mutex<IdentityManager> {
     type Input = PhantomData<I>;
     fn process(&self, _id: Self::Input, backend: Backend) -> I {
-        self.lock().alloc(backend)
+        self.lock().alloc(backend).1
     }
     fn free(&self, id: I) {
-        self.lock().free(id)
+        self.lock().free(id);
     }
 }
 
@@ -533,6 +534,7 @@ where
     }
 
     pub fn assign(self, value: T) -> id::Valid<T::Id> {
+        use id::TypedId as _;
         let (index, epoch, _) = self.id.unzip();
         unsafe { self.data.fill(index, epoch, value) };
         id::Valid(self.id)
@@ -646,7 +648,7 @@ pub struct Hub<A: HalApi, F: GlobalIdentityHandlerFactory> {
     pub textures: registry::Registry<A, Texture<A>>,
     pub texture_views: registry::Registry<A, TextureView<A>>,
     pub samplers: registry::Registry<A, Sampler<A>>,
-    _phantom: PhantomData<F>
+    _phantom: PhantomData<F>,
 }
 
 impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<A, F> {
@@ -674,7 +676,11 @@ impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<A, F> {
     //TODO: instead of having a hacky `with_adapters` parameter,
     // we should have `clear_device(device_id)` that specifically destroys
     // everything related to a logical device.
-    fn clear(&self, surface_guard: &mut Storage<Surface, id::SurfaceId>, with_adapters: bool) {
+    unsafe fn clear(
+        &self,
+        surface_guard: &mut Storage<Surface, id::SurfaceId>,
+        with_adapters: bool,
+    ) {
         use crate::resource::TextureInner;
         use hal::{Device as _, Surface as _};
 
@@ -895,7 +901,7 @@ pub struct GlobalReport {
 
 pub struct Global<G: GlobalIdentityHandlerFactory> {
     pub instance: Instance,
-    pub surfaces: Registry<Surface, id::SurfaceId, G>,
+    pub surfaces: registry::Registry<hal::api::Empty, Surface>,
     hubs: Hubs<G>,
 }
 
@@ -904,7 +910,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("new", "Global");
         Self {
             instance: Instance::new(name, backends),
-            surfaces: Registry::without_backend(&factory, "Surface"),
+            surfaces: registry::Registry::new(),
             hubs: Hubs::new(&factory),
         }
     }
@@ -920,7 +926,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("new", "Global");
         Self {
             instance: A::create_instance_from_hal(name, hal_instance),
-            surfaces: Registry::without_backend(&factory, "Surface"),
+            surfaces: registry::Registry::new(),
             hubs: Hubs::new(&factory),
         }
     }
@@ -936,11 +942,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         hal_instance_callback(hal_instance)
     }
 
-    pub fn clear_backend<A: HalApi>(&self, _dummy: ()) {
+    pub unsafe fn clear_backend<A: HalApi>(&self, _dummy: ()) {
         let mut surface_guard = self.surfaces.data.write();
         let hub = A::hub(self);
         // this is used for tests, which keep the adapter
-        hub.clear(&mut *surface_guard, false);
+        unsafe { hub.clear(&mut *surface_guard, false) };
     }
 
     pub fn generate_report(&self) -> GlobalReport {
@@ -988,23 +994,23 @@ impl<G: GlobalIdentityHandlerFactory> Drop for Global<G> {
 
         // destroy hubs before the instance gets dropped
         #[cfg(vulkan)]
-        {
+        unsafe {
             self.hubs.vulkan.clear(&mut *surface_guard, true);
         }
         #[cfg(metal)]
-        {
+        unsafe {
             self.hubs.metal.clear(&mut *surface_guard, true);
         }
         #[cfg(dx12)]
-        {
+        unsafe {
             self.hubs.dx12.clear(&mut *surface_guard, true);
         }
         #[cfg(dx11)]
-        {
+        unsafe {
             self.hubs.dx11.clear(&mut *surface_guard, true);
         }
         #[cfg(gl)]
-        {
+        unsafe {
             self.hubs.gl.clear(&mut *surface_guard, true);
         }
 
@@ -1174,7 +1180,6 @@ fn _test_send_sync(global: &Global<IdentityManagerFactory>) {
 
 #[test]
 fn test_epoch_end_of_life() {
-    use id::TypedId as _;
     let mut man = IdentityManager::default();
     man.epochs.push(id::EPOCH_MASK);
     man.free.push(0);

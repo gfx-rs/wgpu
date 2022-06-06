@@ -880,7 +880,7 @@ unsafe fn texture_data_from_texture<A: hub::HalApi>(
     storage: &registry::Registry<A, Texture<A>>,
     index32: u32,
 ) -> (&LifeGuard, &TextureSelector) {
-    let texture = storage.get_unchecked(index32).unwrap();
+    let texture = storage.get_unchecked(index32);
     (&texture.life_guard, &texture.full_range)
 }
 

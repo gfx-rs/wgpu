@@ -4,22 +4,23 @@ use hal::CommandEncoder as _;
 use crate::device::trace::Command as TraceCommand;
 use crate::{
     command::{CommandBuffer, CommandEncoderError},
-    hub::{Global, GlobalIdentityHandlerFactory, HalApi, Storage, Token},
+    hub::{Global, GlobalIdentityHandlerFactory, HalApi},
     id::{self, Id, TypedId},
     init_tracker::MemoryInitKind,
+    registry,
     resource::QuerySet,
-    Epoch, FastHashMap, Index, registry,
+    Epoch, FastHashMap, Index,
 };
 use std::{iter, marker::PhantomData};
 use thiserror::Error;
 use wgt::BufferAddress;
 
 #[derive(Debug)]
-pub(super) struct QueryResetMap<A: hal::Api> {
+pub(super) struct QueryResetMap<A: HalApi> {
     map: FastHashMap<Index, (Vec<bool>, Epoch)>,
     _phantom: PhantomData<A>,
 }
-impl<A: hal::Api> QueryResetMap<A> {
+impl<A: HalApi> QueryResetMap<A> {
     pub fn new() -> Self {
         Self {
             map: FastHashMap::default(),
@@ -281,7 +282,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     ) -> Result<(), QueryError> {
         let hub = A::hub(self);
 
-        let cmd_buf = CommandBuffer::get_encoder_mut(&mut cmd_buf_guard, command_encoder_id)?;
+        let cmd_buf = CommandBuffer::get_encoder_mut(&hub.command_buffers, command_encoder_id)?;
         let raw_encoder = cmd_buf.encoder.open();
 
         #[cfg(feature = "trace")]
@@ -313,9 +314,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         destination_offset: BufferAddress,
     ) -> Result<(), QueryError> {
         let hub = A::hub(self);
-        let mut token = Token::root();
 
-        let cmd_buf = CommandBuffer::get_encoder_mut(&mut cmd_buf_guard, command_encoder_id)?;
+        let cmd_buf = CommandBuffer::get_encoder_mut(&hub.command_buffers, command_encoder_id)?;
         let raw_encoder = cmd_buf.encoder.open();
 
         #[cfg(feature = "trace")]

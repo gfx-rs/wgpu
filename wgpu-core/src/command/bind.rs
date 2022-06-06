@@ -1,10 +1,10 @@
 use crate::{
     binding_model::{BindGroup, LateMinBufferBindingSizeMismatch, PipelineLayout},
     device::SHADER_STAGE_COUNT,
-    hub::{HalApi, Storage},
+    hub::HalApi,
     id::{BindGroupId, BindGroupLayoutId, PipelineLayoutId, Valid},
     pipeline::LateSizedBufferGroup,
-    Stored, registry,
+    registry, Stored,
 };
 
 use arrayvec::ArrayVec;

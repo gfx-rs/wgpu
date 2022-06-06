@@ -503,12 +503,10 @@ impl<A: HalApi> LifetimeTracker<A> {
         hub: &Hub<A, G>,
         trackers: &Mutex<Tracker<A>>,
         #[cfg(feature = "trace")] trace: Option<&Mutex<trace::Trace>>,
-        token: &mut Token<super::Device<A>>,
     ) {
         profiling::scope!("triage_suspected");
 
         if !self.suspected_resources.render_bundles.is_empty() {
-            let (mut guard, _) = hub.render_bundles.write(token);
             let mut trackers = trackers.lock();
 
             while let Some(id) = self.suspected_resources.render_bundles.pop() {
@@ -519,7 +517,7 @@ impl<A: HalApi> LifetimeTracker<A> {
                         t.lock().add(trace::Action::DestroyRenderBundle(id.0));
                     }
 
-                    if let Some(res) = hub.render_bundles.unregister_locked(id.0, &mut *guard) {
+                    if let Some(res) = hub.render_bundles.unregister(id.0) {
                         self.suspected_resources.add_render_bundle_scope(&res.used);
                     }
                 }
@@ -527,7 +525,6 @@ impl<A: HalApi> LifetimeTracker<A> {
         }
 
         if !self.suspected_resources.bind_groups.is_empty() {
-            let (mut guard, _) = hub.bind_groups.write(token);
             let mut trackers = trackers.lock();
 
             while let Some(id) = self.suspected_resources.bind_groups.pop() {
@@ -538,7 +535,7 @@ impl<A: HalApi> LifetimeTracker<A> {
                         t.lock().add(trace::Action::DestroyBindGroup(id.0));
                     }
 
-                    if let Some(res) = hub.bind_groups.unregister_locked(id.0, &mut *guard) {
+                    if let Some(res) = hub.bind_groups.unregister(id.0) {
                         self.suspected_resources.add_bind_group_states(&res.used);
 
                         self.suspected_resources
@@ -558,7 +555,6 @@ impl<A: HalApi> LifetimeTracker<A> {
         }
 
         if !self.suspected_resources.texture_views.is_empty() {
-            let (mut guard, _) = hub.texture_views.write(token);
             let mut trackers = trackers.lock();
 
             let mut list = mem::take(&mut self.suspected_resources.texture_views);
@@ -570,7 +566,7 @@ impl<A: HalApi> LifetimeTracker<A> {
                         t.lock().add(trace::Action::DestroyTextureView(id.0));
                     }
 
-                    if let Some(res) = hub.texture_views.unregister_locked(id.0, &mut *guard) {
+                    if let Some(res) = hub.texture_views.unregister(id.0) {
                         self.suspected_resources.textures.push(res.parent_id.value);
                         let submit_index = res.life_guard.life_count();
                         self.active
@@ -586,7 +582,6 @@ impl<A: HalApi> LifetimeTracker<A> {
         }
 
         if !self.suspected_resources.textures.is_empty() {
-            let (mut guard, _) = hub.textures.write(token);
             let mut trackers = trackers.lock();
 
             for id in self.suspected_resources.textures.drain(..) {
@@ -597,7 +592,7 @@ impl<A: HalApi> LifetimeTracker<A> {
                         t.lock().add(trace::Action::DestroyTexture(id.0));
                     }
 
-                    if let Some(res) = hub.textures.unregister_locked(id.0, &mut *guard) {
+                    if let Some(res) = hub.textures.unregister(id.0) {
                         let submit_index = res.life_guard.life_count();
                         let raw = match res.inner {
                             resource::TextureInner::Native { raw: Some(raw) } => raw,
@@ -623,7 +618,6 @@ impl<A: HalApi> LifetimeTracker<A> {
         }
 
         if !self.suspected_resources.samplers.is_empty() {
-            let (mut guard, _) = hub.samplers.write(token);
             let mut trackers = trackers.lock();
 
             for id in self.suspected_resources.samplers.drain(..) {
@@ -634,7 +628,7 @@ impl<A: HalApi> LifetimeTracker<A> {
                         t.lock().add(trace::Action::DestroySampler(id.0));
                     }
 
-                    if let Some(res) = hub.samplers.unregister_locked(id.0, &mut *guard) {
+                    if let Some(res) = hub.samplers.unregister(id.0) {
                         let submit_index = res.life_guard.life_count();
                         self.active
                             .iter_mut()
@@ -648,7 +642,6 @@ impl<A: HalApi> LifetimeTracker<A> {
         }
 
         if !self.suspected_resources.buffers.is_empty() {
-            let (mut guard, _) = hub.buffers.write(token);
             let mut trackers = trackers.lock();
 
             for id in self.suspected_resources.buffers.drain(..) {
@@ -659,7 +652,7 @@ impl<A: HalApi> LifetimeTracker<A> {
                         t.lock().add(trace::Action::DestroyBuffer(id.0));
                     }
 
-                    if let Some(res) = hub.buffers.unregister_locked(id.0, &mut *guard) {
+                    if let Some(res) = hub.buffers.unregister(id.0) {
                         let submit_index = res.life_guard.life_count();
                         if let resource::BufferMapState::Init { stage_buffer, .. } = res.map_state {
                             self.free_resources.buffers.push(stage_buffer);
@@ -669,14 +662,13 @@ impl<A: HalApi> LifetimeTracker<A> {
                             .find(|a| a.index == submit_index)
                             .map_or(&mut self.free_resources, |a| &mut a.last_resources)
                             .buffers
-                            .extend(res.raw);
+                            .extend(res.raw.into_inner());
                     }
                 }
             }
         }
 
         if !self.suspected_resources.compute_pipelines.is_empty() {
-            let (mut guard, _) = hub.compute_pipelines.write(token);
             let mut trackers = trackers.lock();
 
             for id in self.suspected_resources.compute_pipelines.drain(..) {
@@ -687,7 +679,7 @@ impl<A: HalApi> LifetimeTracker<A> {
                         t.lock().add(trace::Action::DestroyComputePipeline(id.0));
                     }
 
-                    if let Some(res) = hub.compute_pipelines.unregister_locked(id.0, &mut *guard) {
+                    if let Some(res) = hub.compute_pipelines.unregister(id.0) {
                         let submit_index = res.life_guard.life_count();
                         self.active
                             .iter_mut()
@@ -701,7 +693,6 @@ impl<A: HalApi> LifetimeTracker<A> {
         }
 
         if !self.suspected_resources.render_pipelines.is_empty() {
-            let (mut guard, _) = hub.render_pipelines.write(token);
             let mut trackers = trackers.lock();
 
             for id in self.suspected_resources.render_pipelines.drain(..) {
@@ -712,7 +703,7 @@ impl<A: HalApi> LifetimeTracker<A> {
                         t.lock().add(trace::Action::DestroyRenderPipeline(id.0));
                     }
 
-                    if let Some(res) = hub.render_pipelines.unregister_locked(id.0, &mut *guard) {
+                    if let Some(res) = hub.render_pipelines.unregister(id.0) {
                         let submit_index = res.life_guard.life_count();
                         self.active
                             .iter_mut()
@@ -726,8 +717,6 @@ impl<A: HalApi> LifetimeTracker<A> {
         }
 
         if !self.suspected_resources.pipeline_layouts.is_empty() {
-            let (mut guard, _) = hub.pipeline_layouts.write(token);
-
             for Stored {
                 value: id,
                 ref_count,
@@ -741,7 +730,7 @@ impl<A: HalApi> LifetimeTracker<A> {
                         t.lock().add(trace::Action::DestroyPipelineLayout(id.0));
                     }
 
-                    if let Some(lay) = hub.pipeline_layouts.unregister_locked(id.0, &mut *guard) {
+                    if let Some(lay) = hub.pipeline_layouts.unregister(id.0) {
                         self.suspected_resources
                             .bind_group_layouts
                             .extend_from_slice(&lay.bind_group_layout_ids);
@@ -752,20 +741,21 @@ impl<A: HalApi> LifetimeTracker<A> {
         }
 
         if !self.suspected_resources.bind_group_layouts.is_empty() {
-            let (mut guard, _) = hub.bind_group_layouts.write(token);
-
             for id in self.suspected_resources.bind_group_layouts.drain(..) {
                 //Note: this has to happen after all the suspected pipelines are destroyed
                 //Note: nothing else can bump the refcount since the guard is locked exclusively
                 //Note: same BGL can appear multiple times in the list, but only the last
                 // encounter could drop the refcount to 0.
-                if guard[id].multi_ref_count.dec_and_check_empty() {
+                if hub.bind_group_layouts[id]
+                    .multi_ref_count
+                    .dec_and_check_empty()
+                {
                     log::debug!("Bind group layout {:?} will be destroyed", id);
                     #[cfg(feature = "trace")]
                     if let Some(t) = trace {
                         t.lock().add(trace::Action::DestroyBindGroupLayout(id.0));
                     }
-                    if let Some(lay) = hub.bind_group_layouts.unregister_locked(id.0, &mut *guard) {
+                    if let Some(lay) = hub.bind_group_layouts.unregister(id.0) {
                         self.free_resources.bind_group_layouts.push(lay.raw);
                     }
                 }
@@ -773,7 +763,6 @@ impl<A: HalApi> LifetimeTracker<A> {
         }
 
         if !self.suspected_resources.query_sets.is_empty() {
-            let (mut guard, _) = hub.query_sets.write(token);
             let mut trackers = trackers.lock();
 
             for id in self.suspected_resources.query_sets.drain(..) {
@@ -781,7 +770,7 @@ impl<A: HalApi> LifetimeTracker<A> {
                     log::debug!("Query set {:?} will be destroyed", id);
                     // #[cfg(feature = "trace")]
                     // trace.map(|t| t.lock().add(trace::Action::DestroyComputePipeline(id.0)));
-                    if let Some(res) = hub.query_sets.unregister_locked(id.0, &mut *guard) {
+                    if let Some(res) = hub.query_sets.unregister(id.0) {
                         let submit_index = res.life_guard.life_count();
                         self.active
                             .iter_mut()
@@ -799,19 +788,13 @@ impl<A: HalApi> LifetimeTracker<A> {
     /// GPU.
     ///
     /// See the documentation for [`LifetimeTracker`] for details.
-    pub(super) fn triage_mapped<G: GlobalIdentityHandlerFactory>(
-        &mut self,
-        hub: &Hub<A, G>,
-        token: &mut Token<super::Device<A>>,
-    ) {
+    pub(super) fn triage_mapped<G: GlobalIdentityHandlerFactory>(&mut self, hub: &Hub<A, G>) {
         if self.mapped.is_empty() {
             return;
         }
-        let (buffer_guard, _) = hub.buffers.read(token);
-
         for stored in self.mapped.drain(..) {
             let resource_id = stored.value;
-            let buf = &buffer_guard[resource_id];
+            let buf = &hub.buffers[resource_id];
 
             let submit_index = buf.life_guard.life_count();
             log::trace!(
@@ -845,21 +828,17 @@ impl<A: HalApi> LifetimeTracker<A> {
         if self.ready_to_map.is_empty() {
             return Vec::new();
         }
-        let (mut buffer_guard, _) = hub.buffers.write(token);
         let mut pending_callbacks: Vec<super::BufferMapPendingClosure> =
             Vec::with_capacity(self.ready_to_map.len());
         let mut trackers = trackers.lock();
         for buffer_id in self.ready_to_map.drain(..) {
-            let buffer = &mut buffer_guard[buffer_id];
+            let buffer = &mut hub.buffers[buffer_id];
             if buffer.life_guard.ref_count.is_none() && trackers.buffers.remove_abandoned(buffer_id)
             {
                 buffer.map_state = resource::BufferMapState::Idle;
                 log::debug!("Mapping request is dropped because the buffer is destroyed.");
-                if let Some(buf) = hub
-                    .buffers
-                    .unregister_locked(buffer_id.0, &mut *buffer_guard)
-                {
-                    self.free_resources.buffers.extend(buf.raw);
+                if let Some(buf) = hub.buffers.unregister(buffer_id.0) {
+                    self.free_resources.buffers.extend(buf.raw.into_inner());
                 }
             } else {
                 let mapping = match std::mem::replace(

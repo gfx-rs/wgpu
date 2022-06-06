@@ -3,9 +3,10 @@ use crate::{
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Resource, Token},
     id,
     init_tracker::{BufferInitTracker, TextureInitTracker},
+    sync::DestroyableResource,
     track::TextureSelector,
     validation::MissingBufferUsageError,
-    Label, LifeGuard, RefCount, Stored, sync::DestroyableResource,
+    Label, LifeGuard, RefCount, Stored,
 };
 
 use smallvec::SmallVec;

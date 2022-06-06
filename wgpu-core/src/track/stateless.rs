@@ -9,12 +9,16 @@ use std::marker::PhantomData;
 use crate::{
     hub,
     id::{TypedId, Valid},
+    registry,
     track::{iterate_bitvec_indices, ResourceMetadata},
-    RefCount, registry,
+    RefCount,
 };
 
 /// Stores all the resources that a bind group stores.
-pub(crate) struct StatelessBindGroupSate<A, T> where T: hub::Resource {
+pub(crate) struct StatelessBindGroupSate<A, T>
+where
+    T: hub::Resource,
+{
     resources: Vec<(Valid<T::Id>, RefCount)>,
 
     _phantom: PhantomData<(A, T)>,
@@ -44,7 +48,11 @@ impl<A: hub::HalApi, T: hub::Resource> StatelessBindGroupSate<A, T> {
     }
 
     /// Adds the given resource.
-    pub fn add_single<'a>(&mut self, storage: &'a registry::Registry<A, T>, id: T::Id) -> Option<&'a T> {
+    pub fn add_single<'a>(
+        &mut self,
+        storage: &'a registry::Registry<A, T>,
+        id: T::Id,
+    ) -> Option<&'a T> {
         let resource = storage.get(id).ok()?;
 
         self.resources
@@ -119,7 +127,11 @@ impl<A: hub::HalApi, T: hub::Resource> StatelessTracker<A, T> {
     ///
     /// If the ID is higher than the length of internal vectors,
     /// the vectors will be extended. A call to set_size is not needed.
-    pub fn add_single<'a>(&mut self, storage: &'a registry::Registry<A, T>, id: T::Id) -> Option<&'a T> {
+    pub fn add_single<'a>(
+        &mut self,
+        storage: &'a registry::Registry<A, T>,
+        id: T::Id,
+    ) -> Option<&'a T> {
         let item = storage.get(id).ok()?;
 
         let (index32, epoch, _) = id.unzip();

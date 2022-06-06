@@ -1053,7 +1053,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         // Spell out the type, to placate rust-analyzer.
         // https://github.com/rust-lang/rust-analyzer/issues/12247
         let cmd_buf: &mut CommandBuffer<A> =
-            CommandBuffer::get_encoder_mut(&hub.command_buffers, encoder_id).map_pass_err(init_scope)?;
+            CommandBuffer::get_encoder_mut(&hub.command_buffers, encoder_id)
+                .map_pass_err(init_scope)?;
         // close everything while the new command encoder is filled
         cmd_buf.encoder.close();
         // will be reset to true if recording is done without errors

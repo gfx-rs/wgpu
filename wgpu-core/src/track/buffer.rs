@@ -11,12 +11,13 @@ use super::PendingTransition;
 use crate::{
     hub,
     id::{BufferId, TypedId, Valid},
+    registry,
     resource::Buffer,
     track::{
         invalid_resource_state, iterate_bitvec_indices, skip_barrier, ResourceMetadata,
         ResourceMetadataProvider, ResourceUses, UsageConflict,
     },
-    LifeGuard, RefCount, registry,
+    LifeGuard, RefCount,
 };
 use hal::BufferUses;
 

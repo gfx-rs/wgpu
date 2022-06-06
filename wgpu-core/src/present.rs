@@ -95,18 +95,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("get_next_texture", "SwapChain");
 
         let hub = A::hub(self);
-        let mut token = Token::root();
         let fid = hub.textures.prepare(texture_id_in);
 
-        let (mut surface_guard, mut token) = self.surfaces.write(&mut token);
-        let surface = surface_guard
-            .get_mut(surface_id)
+        let surface = self
+            .surfaces
+            .get(surface_id)
             .map_err(|_| SurfaceError::Invalid)?;
-        let (device_guard, mut token) = hub.devices.read(&mut token);
 
         let (device, config) = match surface.presentation {
             Some(ref present) => {
-                let device = &device_guard[present.device_id.value];
+                let device = &hub.devices[present.device_id.value];
                 (device, present.config.clone())
             }
             None => return Err(SurfaceError::NotConfigured),
@@ -189,7 +187,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 };
 
                 let ref_count = texture.life_guard.add_ref();
-                let id = fid.assign(texture, &mut token);
+                let id = fid.assign(texture);
 
                 {
                     // register it in the device tracker as uninitialized
@@ -245,18 +243,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let hub = A::hub(self);
         let mut token = Token::root();
 
-        let (mut surface_guard, mut token) = self.surfaces.write(&mut token);
-        let surface = surface_guard
-            .get_mut(surface_id)
+        let surface = self
+            .surfaces
+            .get(surface_id)
             .map_err(|_| SurfaceError::Invalid)?;
-        let (mut device_guard, mut token) = hub.devices.write(&mut token);
 
         let present = match surface.presentation {
             Some(ref mut present) => present,
             None => return Err(SurfaceError::NotConfigured),
         };
 
-        let device = &mut device_guard[present.device_id.value];
+        let device = &hub.devices[present.device_id.value];
 
         #[cfg(feature = "trace")]
         if let Some(ref trace) = device.trace {
@@ -277,7 +274,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             );
             device.trackers.lock().textures.remove(texture_id.value);
 
-            let (texture, _) = hub.textures.unregister(texture_id.value.0, &mut token);
+            let (texture, _) = hub.textures.unregister(texture_id.value.0);
             if let Some(texture) = texture {
                 if let resource::TextureClearMode::RenderPass { clear_views, .. } =
                     texture.clear_mode
@@ -339,18 +336,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let hub = A::hub(self);
         let mut token = Token::root();
 
-        let (mut surface_guard, mut token) = self.surfaces.write(&mut token);
-        let surface = surface_guard
-            .get_mut(surface_id)
+        let surface = self
+            .surfaces
+            .get(surface_id)
             .map_err(|_| SurfaceError::Invalid)?;
-        let (mut device_guard, mut token) = hub.devices.write(&mut token);
 
         let present = match surface.presentation {
             Some(ref mut present) => present,
             None => return Err(SurfaceError::NotConfigured),
         };
 
-        let device = &mut device_guard[present.device_id.value];
+        let device = &hub.devices[present.device_id.value];
 
         #[cfg(feature = "trace")]
         if let Some(ref trace) = device.trace {
@@ -367,7 +363,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             // and now we are moving it away.
             device.trackers.lock().textures.remove(texture_id.value);
 
-            let (texture, _) = hub.textures.unregister(texture_id.value.0, &mut token);
+            let texture = hub.textures.unregister(texture_id.value.0);
             if let Some(texture) = texture {
                 let suf = A::get_surface_mut(surface);
                 match texture.inner {

@@ -462,7 +462,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
 
         let mut token = Token::root();
-        let id = self.surfaces.prepare(id_in).assign(surface, &mut token);
+        let id = self.surfaces.prepare(id_in).assign(surface);
         id.0
     }
 
@@ -519,14 +519,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
 
         let mut token = Token::root();
-        let id = self.surfaces.prepare(id_in).assign(surface, &mut token);
+        let id = self.surfaces.prepare(id_in).assign(surface);
         id.0
     }
 
     pub fn surface_drop(&self, id: SurfaceId) {
         profiling::scope!("drop", "Surface");
-        let mut token = Token::root();
-        let (surface, _) = self.surfaces.unregister(id, &mut token);
+        let surface = self.surfaces.unregister(id);
         self.instance.destroy_surface(surface.unwrap());
     }
 
@@ -548,16 +547,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         profiling::scope!("enumerating", &*format!("{:?}", A::VARIANT));
         let hub = HalApi::hub(self);
-        let mut token = Token::root();
 
         let hal_adapters = unsafe { inst.enumerate_adapters() };
         for raw in hal_adapters {
             let adapter = Adapter::new(raw);
             log::info!("Adapter {:?} {:?}", A::VARIANT, adapter.raw.info);
-            let id = hub
-                .adapters
-                .prepare(id_backend.clone())
-                .assign(adapter, &mut token);
+            let id = hub.adapters.prepare(id_backend.clone()).assign(adapter);
             list.push(id.0);
         }
     }
@@ -603,13 +598,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 None
             }
             None => {
-                let mut token = Token::root();
                 let adapter = Adapter::new(list.swap_remove(*selected));
                 log::info!("Adapter {:?} {:?}", A::VARIANT, adapter.raw.info);
                 let id = HalApi::hub(self)
                     .adapters
                     .prepare(new_id.unwrap())
-                    .assign(adapter, &mut token);
+                    .assign(adapter);
                 Some(id.0)
             }
         }
@@ -650,12 +644,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
         }
 
-        let mut token = Token::root();
-        let (surface_guard, _) = self.surfaces.read(&mut token);
         let compatible_surface = desc
             .compatible_surface
             .map(|id| {
-                surface_guard
+                self.surfaces
                     .get(id)
                     .map_err(|_| RequestAdapterError::InvalidSurface(id))
             })
@@ -709,8 +701,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         );
 
         // need to free the token to be used by `select`
-        drop(surface_guard);
-        drop(token);
         if device_types.is_empty() {
             return Err(RequestAdapterError::NotFound);
         }
@@ -802,9 +792,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         adapter_id: AdapterId,
     ) -> Result<wgt::AdapterInfo, InvalidAdapter> {
         let hub = A::hub(self);
-        let mut token = Token::root();
-        let (adapter_guard, _) = hub.adapters.read(&mut token);
-        adapter_guard
+        hub.adapters
             .get(adapter_id)
             .map(|adapter| adapter.raw.info.clone())
             .map_err(|_| InvalidAdapter)
@@ -816,9 +804,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         format: wgt::TextureFormat,
     ) -> Result<wgt::TextureFormatFeatures, InvalidAdapter> {
         let hub = A::hub(self);
-        let mut token = Token::root();
-        let (adapter_guard, _) = hub.adapters.read(&mut token);
-        adapter_guard
+        hub.adapters
             .get(adapter_id)
             .map(|adapter| adapter.get_texture_format_features(format))
             .map_err(|_| InvalidAdapter)
@@ -829,9 +815,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         adapter_id: AdapterId,
     ) -> Result<wgt::Features, InvalidAdapter> {
         let hub = A::hub(self);
-        let mut token = Token::root();
-        let (adapter_guard, _) = hub.adapters.read(&mut token);
-        adapter_guard
+        hub.adapters
             .get(adapter_id)
             .map(|adapter| adapter.raw.features)
             .map_err(|_| InvalidAdapter)
@@ -842,9 +826,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         adapter_id: AdapterId,
     ) -> Result<wgt::Limits, InvalidAdapter> {
         let hub = A::hub(self);
-        let mut token = Token::root();
-        let (adapter_guard, _) = hub.adapters.read(&mut token);
-        adapter_guard
+        hub.adapters
             .get(adapter_id)
             .map(|adapter| adapter.raw.capabilities.limits.clone())
             .map_err(|_| InvalidAdapter)
@@ -855,9 +837,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         adapter_id: AdapterId,
     ) -> Result<wgt::DownlevelCapabilities, InvalidAdapter> {
         let hub = A::hub(self);
-        let mut token = Token::root();
-        let (adapter_guard, _) = hub.adapters.read(&mut token);
-        adapter_guard
+        hub.adapters
             .get(adapter_id)
             .map(|adapter| adapter.raw.capabilities.downlevel.clone())
             .map_err(|_| InvalidAdapter)
@@ -867,16 +847,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("drop", "Adapter");
 
         let hub = A::hub(self);
-        let mut token = Token::root();
-        let (mut adapter_guard, _) = hub.adapters.write(&mut token);
 
-        let free = match adapter_guard.get_mut(adapter_id) {
+        let free = match hub.adapters.get(adapter_id) {
             Ok(adapter) => adapter.life_guard.ref_count.take().unwrap().load() == 1,
             Err(_) => true,
         };
         if free {
-            hub.adapters
-                .unregister_locked(adapter_id, &mut *adapter_guard);
+            hub.adapters.unregister(adapter_id);
         }
     }
 }
@@ -896,8 +873,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let fid = hub.devices.prepare(id_in);
 
         let error = loop {
-            let (adapter_guard, mut token) = hub.adapters.read(&mut token);
-            let adapter = match adapter_guard.get(adapter_id) {
+            let adapter = match hub.adapters.get(adapter_id) {
                 Ok(adapter) => adapter,
                 Err(_) => break RequestDeviceError::InvalidAdapter,
             };
@@ -905,11 +881,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(device) => device,
                 Err(e) => break e,
             };
-            let id = fid.assign(device, &mut token);
+            let id = fid.assign(device);
             return (id.0, None);
         };
 
-        let id = fid.assign_error(desc.label.borrow_or_default(), &mut token);
+        let id = fid.assign_error(desc.label.borrow_or_default());
         (id, Some(error))
     }
 
@@ -932,8 +908,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let fid = hub.devices.prepare(id_in);
 
         let error = loop {
-            let (adapter_guard, mut token) = hub.adapters.read(&mut token);
-            let adapter = match adapter_guard.get(adapter_id) {
+            let adapter = match hub.adapters.get(adapter_id) {
                 Ok(adapter) => adapter,
                 Err(_) => break RequestDeviceError::InvalidAdapter,
             };
@@ -942,11 +917,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     Ok(device) => device,
                     Err(e) => break e,
                 };
-            let id = fid.assign(device, &mut token);
+            let id = fid.assign(device);
             return (id.0, None);
         };
 
-        let id = fid.assign_error(desc.label.borrow_or_default(), &mut token);
+        let id = fid.assign_error(desc.label.borrow_or_default());
         (id, Some(error))
     }
 }
