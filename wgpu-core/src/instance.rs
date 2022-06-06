@@ -140,6 +140,7 @@ pub struct Surface {
 }
 
 impl crate::hub::Resource for Surface {
+    type Id = SurfaceId;
     const TYPE: &'static str = "Surface";
 
     fn life_guard(&self) -> &LifeGuard {
@@ -337,6 +338,7 @@ impl<A: HalApi> Adapter<A> {
 }
 
 impl<A: hal::Api> crate::hub::Resource for Adapter<A> {
+    type Id = AdapterId;
     const TYPE: &'static str = "Adapter";
 
     fn life_guard(&self) -> &LifeGuard {

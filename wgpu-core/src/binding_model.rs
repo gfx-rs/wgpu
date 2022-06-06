@@ -2,7 +2,7 @@ use crate::{
     device::{DeviceError, MissingDownlevelFlags, MissingFeatures, SHADER_STAGE_COUNT},
     error::{ErrorFormatter, PrettyError},
     hub::{HalApi, Resource},
-    id::{BindGroupLayoutId, BufferId, DeviceId, SamplerId, TextureId, TextureViewId, Valid},
+    id::{BindGroupLayoutId, BufferId, DeviceId, SamplerId, TextureId, TextureViewId, Valid, PipelineLayoutId, BindGroupId},
     init_tracker::{BufferInitTrackerAction, TextureInitTrackerAction},
     track::{BindGroupStates, UsageConflict},
     validation::{MissingBufferUsageError, MissingTextureUsageError},
@@ -442,6 +442,7 @@ pub struct BindGroupLayout<A: hal::Api> {
 }
 
 impl<A: hal::Api> Resource for BindGroupLayout<A> {
+    type Id = BindGroupLayoutId;
     const TYPE: &'static str = "BindGroupLayout";
 
     fn life_guard(&self) -> &LifeGuard {
@@ -636,6 +637,7 @@ impl<A: hal::Api> PipelineLayout<A> {
 }
 
 impl<A: hal::Api> Resource for PipelineLayout<A> {
+    type Id = PipelineLayoutId;
     const TYPE: &'static str = "PipelineLayout";
 
     fn life_guard(&self) -> &LifeGuard {
@@ -765,6 +767,7 @@ impl<A: HalApi> BindGroup<A> {
 }
 
 impl<A: HalApi> Resource for BindGroup<A> {
+    type Id = BindGroupId;
     const TYPE: &'static str = "BindGroup";
 
     fn life_guard(&self) -> &LifeGuard {

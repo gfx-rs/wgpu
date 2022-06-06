@@ -898,6 +898,7 @@ impl<A: HalApi> RenderBundle<A> {
 }
 
 impl<A: HalApi> Resource for RenderBundle<A> {
+    type Id = id::RenderBundleId;
     const TYPE: &'static str = "RenderBundle";
 
     fn life_guard(&self) -> &LifeGuard {

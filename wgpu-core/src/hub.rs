@@ -2,11 +2,11 @@ use crate::{
     binding_model::{BindGroup, BindGroupLayout, PipelineLayout},
     command::{CommandBuffer, RenderBundle},
     device::Device,
-    id,
+    id::{self, TypedId},
     instance::{Adapter, HalSurface, Instance, Surface},
     pipeline::{ComputePipeline, RenderPipeline, ShaderModule},
     resource::{Buffer, QuerySet, Sampler, Texture, TextureClearMode, TextureView},
-    Epoch, Index,
+    Epoch, Index, registry,
 };
 
 use parking_lot::{Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard};
@@ -61,20 +61,24 @@ impl IdentityManager {
     ///
     /// The backend is incorporated into the id, so that ids allocated with
     /// different `backend` values are always distinct.
-    pub fn alloc<I: id::TypedId>(&mut self, backend: Backend) -> I {
+    pub fn alloc<I: id::TypedId>(&mut self, backend: Backend) -> (Index, I) {
         match self.free.pop() {
-            Some(index) => I::zip(index, self.epochs[index as usize], backend),
+            Some(index) => {
+                let id = I::zip(index, self.epochs[index as usize], backend);
+                (index, id)
+            }
             None => {
                 let epoch = 1;
-                let id = I::zip(self.epochs.len() as Index, epoch, backend);
+                let index = self.epochs.len() as Index;
+                let id = I::zip(index, epoch, backend);
                 self.epochs.push(epoch);
-                id
+                (index, id)
             }
         }
     }
 
     /// Free `id`. It will never be returned from `alloc` again.
-    pub fn free<I: id::TypedId + Debug>(&mut self, id: I) {
+    pub fn free<I: id::TypedId>(&mut self, id: I) -> (Index, Epoch) {
         let (index, epoch, _backend) = id.unzip();
         let pe = &mut self.epochs[index as usize];
         assert_eq!(*pe, epoch);
@@ -84,6 +88,7 @@ impl IdentityManager {
             *pe = epoch + 1;
             self.free.push(index);
         }
+        (index, epoch)
     }
 }
 
@@ -464,6 +469,7 @@ impl GlobalIdentityHandlerFactory for IdentityManagerFactory {}
 pub type Input<G, I> = <<G as IdentityHandlerFactory<I>>::Filter as IdentityHandler<I>>::Input;
 
 pub trait Resource {
+    type Id: id::TypedId;
     const TYPE: &'static str;
     fn life_guard(&self) -> &crate::LifeGuard;
     fn label(&self) -> &str {
@@ -508,41 +514,39 @@ impl<T: Resource, I: id::TypedId, F: IdentityHandlerFactory<I>> Registry<T, I, F
 }
 
 #[must_use]
-pub(crate) struct FutureId<'a, I: id::TypedId, T> {
-    id: I,
-    data: &'a RwLock<Storage<T, I>>,
+pub(crate) struct FutureId<'a, T: Resource> {
+    id: T::Id,
+    data: &'a registry::Storage<T>,
 }
 
-impl<I: id::TypedId + Copy, T> FutureId<'_, I, T> {
+impl<T> FutureId<'_, T>
+where
+    T: Resource,
+{
     #[cfg(feature = "trace")]
-    pub fn id(&self) -> I {
+    pub fn id(&self) -> T::Id {
         self.id
     }
 
-    pub fn into_id(self) -> I {
+    pub fn into_id(self) -> T::Id {
         self.id
     }
 
-    pub fn assign<'a, A: Access<T>>(self, value: T, _: &'a mut Token<A>) -> id::Valid<I> {
-        self.data.write().insert(self.id, value);
+    pub fn assign<'a, A: Access<T>>(self, value: T, _: &'a mut Token<A>) -> id::Valid<T::Id> {
+        let (index, epoch, _) = self.id.unzip();
+        unsafe { self.data.fill(index, epoch, value) };
         id::Valid(self.id)
     }
 
-    pub fn assign_error<'a, A: Access<T>>(self, label: &str, _: &'a mut Token<A>) -> I {
-        self.data.write().insert_error(self.id, label);
+    pub fn assign_error<'a, A: Access<T>>(self, label: &str, _: &'a mut Token<A>) -> T::Id {
+        todo!();
         self.id
     }
 }
 
 impl<T: Resource, I: id::TypedId + Copy, F: IdentityHandlerFactory<I>> Registry<T, I, F> {
-    pub(crate) fn prepare(
-        &self,
-        id_in: <F::Filter as IdentityHandler<I>>::Input,
-    ) -> FutureId<I, T> {
-        FutureId {
-            id: self.identity.process(id_in, self.backend),
-            data: &self.data,
-        }
+    pub(crate) fn prepare(&self, id_in: <F::Filter as IdentityHandler<I>>::Input) -> FutureId<T> {
+        todo!()
     }
 
     pub(crate) fn read<'a, A: Access<T>>(
@@ -627,41 +631,43 @@ impl HubReport {
 }
 
 pub struct Hub<A: HalApi, F: GlobalIdentityHandlerFactory> {
-    pub adapters: Registry<Adapter<A>, id::AdapterId, F>,
-    pub devices: Registry<Device<A>, id::DeviceId, F>,
-    pub pipeline_layouts: Registry<PipelineLayout<A>, id::PipelineLayoutId, F>,
-    pub shader_modules: Registry<ShaderModule<A>, id::ShaderModuleId, F>,
-    pub bind_group_layouts: Registry<BindGroupLayout<A>, id::BindGroupLayoutId, F>,
-    pub bind_groups: Registry<BindGroup<A>, id::BindGroupId, F>,
-    pub command_buffers: Registry<CommandBuffer<A>, id::CommandBufferId, F>,
-    pub render_bundles: Registry<RenderBundle<A>, id::RenderBundleId, F>,
-    pub render_pipelines: Registry<RenderPipeline<A>, id::RenderPipelineId, F>,
-    pub compute_pipelines: Registry<ComputePipeline<A>, id::ComputePipelineId, F>,
-    pub query_sets: Registry<QuerySet<A>, id::QuerySetId, F>,
-    pub buffers: Registry<Buffer<A>, id::BufferId, F>,
-    pub textures: Registry<Texture<A>, id::TextureId, F>,
-    pub texture_views: Registry<TextureView<A>, id::TextureViewId, F>,
-    pub samplers: Registry<Sampler<A>, id::SamplerId, F>,
+    pub adapters: registry::Registry<A, Adapter<A>>,
+    pub devices: registry::Registry<A, Device<A>>,
+    pub pipeline_layouts: registry::Registry<A, PipelineLayout<A>>,
+    pub shader_modules: registry::Registry<A, ShaderModule<A>>,
+    pub bind_group_layouts: registry::Registry<A, BindGroupLayout<A>>,
+    pub bind_groups: registry::Registry<A, BindGroup<A>>,
+    pub command_buffers: registry::Registry<A, CommandBuffer<A>>,
+    pub render_bundles: registry::Registry<A, RenderBundle<A>>,
+    pub render_pipelines: registry::Registry<A, RenderPipeline<A>>,
+    pub compute_pipelines: registry::Registry<A, ComputePipeline<A>>,
+    pub query_sets: registry::Registry<A, QuerySet<A>>,
+    pub buffers: registry::Registry<A, Buffer<A>>,
+    pub textures: registry::Registry<A, Texture<A>>,
+    pub texture_views: registry::Registry<A, TextureView<A>>,
+    pub samplers: registry::Registry<A, Sampler<A>>,
+    _phantom: PhantomData<F>
 }
 
 impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<A, F> {
-    fn new(factory: &F) -> Self {
+    fn new(_factory: &F) -> Self {
         Self {
-            adapters: Registry::new(A::VARIANT, factory),
-            devices: Registry::new(A::VARIANT, factory),
-            pipeline_layouts: Registry::new(A::VARIANT, factory),
-            shader_modules: Registry::new(A::VARIANT, factory),
-            bind_group_layouts: Registry::new(A::VARIANT, factory),
-            bind_groups: Registry::new(A::VARIANT, factory),
-            command_buffers: Registry::new(A::VARIANT, factory),
-            render_bundles: Registry::new(A::VARIANT, factory),
-            render_pipelines: Registry::new(A::VARIANT, factory),
-            compute_pipelines: Registry::new(A::VARIANT, factory),
-            query_sets: Registry::new(A::VARIANT, factory),
-            buffers: Registry::new(A::VARIANT, factory),
-            textures: Registry::new(A::VARIANT, factory),
-            texture_views: Registry::new(A::VARIANT, factory),
-            samplers: Registry::new(A::VARIANT, factory),
+            adapters: registry::Registry::new(),
+            devices: registry::Registry::new(),
+            pipeline_layouts: registry::Registry::new(),
+            shader_modules: registry::Registry::new(),
+            bind_group_layouts: registry::Registry::new(),
+            bind_groups: registry::Registry::new(),
+            command_buffers: registry::Registry::new(),
+            render_bundles: registry::Registry::new(),
+            render_pipelines: registry::Registry::new(),
+            compute_pipelines: registry::Registry::new(),
+            query_sets: registry::Registry::new(),
+            buffers: registry::Registry::new(),
+            textures: registry::Registry::new(),
+            texture_views: registry::Registry::new(),
+            samplers: registry::Registry::new(),
+            _phantom: PhantomData,
         }
     }
 
@@ -976,7 +982,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
 impl<G: GlobalIdentityHandlerFactory> Drop for Global<G> {
     fn drop(&mut self) {
-        profiling::scope!("drop", "Global");
+        profiling::scope!("Global::drop");
         log::info!("Dropping Global");
         let mut surface_guard = self.surfaces.data.write();
 
@@ -1172,10 +1178,10 @@ fn test_epoch_end_of_life() {
     let mut man = IdentityManager::default();
     man.epochs.push(id::EPOCH_MASK);
     man.free.push(0);
-    let id1 = man.alloc::<id::BufferId>(Backend::Empty);
-    assert_eq!(id1.unzip().0, 0);
+    let (index1, id1) = man.alloc::<id::BufferId>(Backend::Empty);
+    assert_eq!(index1, 0);
     man.free(id1);
-    let id2 = man.alloc::<id::BufferId>(Backend::Empty);
+    let (index2, _) = man.alloc::<id::BufferId>(Backend::Empty);
     // confirm that the index 0 is no longer re-used
-    assert_eq!(id2.unzip().0, 1);
+    assert_eq!(index2, 1);
 }

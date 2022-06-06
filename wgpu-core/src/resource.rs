@@ -1,7 +1,7 @@
 use crate::{
     device::{DeviceError, HostMap, MissingFeatures},
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Resource, Token},
-    id::{AdapterId, DeviceId, SurfaceId, TextureId, Valid},
+    id,
     init_tracker::{BufferInitTracker, TextureInitTracker},
     track::TextureSelector,
     validation::MissingBufferUsageError,
@@ -153,7 +153,7 @@ pub type BufferDescriptor<'a> = wgt::BufferDescriptor<Label<'a>>;
 
 pub struct Buffer<A: hal::Api> {
     pub(crate) raw: Option<A::Buffer>,
-    pub(crate) device_id: Stored<DeviceId>,
+    pub(crate) device_id: Stored<id::DeviceId>,
     pub(crate) usage: wgt::BufferUsages,
     pub(crate) size: wgt::BufferAddress,
     pub(crate) initialization_status: BufferInitTracker,
@@ -177,6 +177,7 @@ pub enum CreateBufferError {
 }
 
 impl<A: hal::Api> Resource for Buffer<A> {
+    type Id = id::BufferId;
     const TYPE: &'static str = "Buffer";
 
     fn life_guard(&self) -> &LifeGuard {
@@ -193,7 +194,7 @@ pub(crate) enum TextureInner<A: hal::Api> {
     },
     Surface {
         raw: A::SurfaceTexture,
-        parent_id: Valid<SurfaceId>,
+        parent_id: id::Valid<id::SurfaceId>,
         has_work: bool,
     },
 }
@@ -224,7 +225,7 @@ pub enum TextureClearMode<A: hal::Api> {
 #[derive(Debug)]
 pub struct Texture<A: hal::Api> {
     pub(crate) inner: TextureInner<A>,
-    pub(crate) device_id: Stored<DeviceId>,
+    pub(crate) device_id: Stored<id::DeviceId>,
     pub(crate) desc: wgt::TextureDescriptor<()>,
     pub(crate) hal_usage: hal::TextureUses,
     pub(crate) format_features: wgt::TextureFormatFeatures,
@@ -265,7 +266,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     /// - The raw texture handle must not be manually destroyed
     pub unsafe fn texture_as_hal<A: HalApi, F: FnOnce(Option<&A::Texture>)>(
         &self,
-        id: TextureId,
+        id: id::TextureId,
         hal_texture_callback: F,
     ) {
         profiling::scope!("as_hal", "Texture");
@@ -284,7 +285,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     /// - The raw adapter handle must not be manually destroyed
     pub unsafe fn adapter_as_hal<A: HalApi, F: FnOnce(Option<&A::Adapter>) -> R, R>(
         &self,
-        id: AdapterId,
+        id: id::AdapterId,
         hal_adapter_callback: F,
     ) -> R {
         profiling::scope!("as_hal", "Adapter");
@@ -304,7 +305,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     /// - The raw device handle must not be manually destroyed
     pub unsafe fn device_as_hal<A: HalApi, F: FnOnce(Option<&A::Device>) -> R, R>(
         &self,
-        id: DeviceId,
+        id: id::DeviceId,
         hal_device_callback: F,
     ) -> R {
         profiling::scope!("as_hal", "Device");
@@ -365,6 +366,7 @@ pub enum CreateTextureError {
 }
 
 impl<A: hal::Api> Resource for Texture<A> {
+    type Id = id::TextureId;
     const TYPE: &'static str = "Texture";
 
     fn life_guard(&self) -> &LifeGuard {
@@ -413,8 +415,8 @@ pub struct TextureView<A: hal::Api> {
     pub(crate) raw: A::TextureView,
     // The parent's refcount is held alive, but the parent may still be deleted
     // if it's a surface texture. TODO: make this cleaner.
-    pub(crate) parent_id: Stored<TextureId>,
-    pub(crate) device_id: Stored<DeviceId>,
+    pub(crate) parent_id: Stored<id::TextureId>,
+    pub(crate) device_id: Stored<id::DeviceId>,
     //TODO: store device_id for quick access?
     pub(crate) desc: HalTextureViewDescriptor,
     pub(crate) format_features: wgt::TextureFormatFeatures,
@@ -468,6 +470,7 @@ pub enum CreateTextureViewError {
 pub enum TextureViewDestroyError {}
 
 impl<A: hal::Api> Resource for TextureView<A> {
+    type Id = id::TextureViewId;
     const TYPE: &'static str = "TextureView";
 
     fn life_guard(&self) -> &LifeGuard {
@@ -522,7 +525,7 @@ impl Default for SamplerDescriptor<'_> {
 #[derive(Debug)]
 pub struct Sampler<A: hal::Api> {
     pub(crate) raw: A::Sampler,
-    pub(crate) device_id: Stored<DeviceId>,
+    pub(crate) device_id: Stored<id::DeviceId>,
     pub(crate) life_guard: LifeGuard,
     /// `true` if this is a comparison sampler
     pub(crate) comparison: bool,
@@ -544,6 +547,7 @@ pub enum CreateSamplerError {
 }
 
 impl<A: hal::Api> Resource for Sampler<A> {
+    type Id = id::SamplerId;
     const TYPE: &'static str = "Sampler";
 
     fn life_guard(&self) -> &LifeGuard {
@@ -568,12 +572,13 @@ pub type QuerySetDescriptor<'a> = wgt::QuerySetDescriptor<Label<'a>>;
 #[derive(Debug)]
 pub struct QuerySet<A: hal::Api> {
     pub(crate) raw: A::QuerySet,
-    pub(crate) device_id: Stored<DeviceId>,
+    pub(crate) device_id: Stored<id::DeviceId>,
     pub(crate) life_guard: LifeGuard,
     pub(crate) desc: wgt::QuerySetDescriptor<()>,
 }
 
 impl<A: hal::Api> Resource for QuerySet<A> {
+    type Id = id::QuerySetId;
     const TYPE: &'static str = "QuerySet";
 
     fn life_guard(&self) -> &LifeGuard {

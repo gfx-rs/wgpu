@@ -228,6 +228,7 @@ impl<A: HalApi> CommandBuffer<A> {
 }
 
 impl<A: HalApi> crate::hub::Resource for CommandBuffer<A> {
+    type Id = id::CommandBufferId;
     const TYPE: &'static str = "CommandBuffer";
 
     fn life_guard(&self) -> &crate::LifeGuard {

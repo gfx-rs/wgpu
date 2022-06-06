@@ -2,7 +2,7 @@ use crate::{
     binding_model::{CreateBindGroupLayoutError, CreatePipelineLayoutError},
     device::{DeviceError, MissingDownlevelFlags, MissingFeatures, RenderPassContext},
     hub::Resource,
-    id::{DeviceId, PipelineLayoutId, ShaderModuleId},
+    id::{ComputePipelineId, DeviceId, PipelineLayoutId, RenderPipelineId, ShaderModuleId},
     validation, Label, LifeGuard, Stored,
 };
 use arrayvec::ArrayVec;
@@ -43,6 +43,7 @@ pub struct ShaderModule<A: hal::Api> {
 }
 
 impl<A: hal::Api> Resource for ShaderModule<A> {
+    type Id = ShaderModuleId;
     const TYPE: &'static str = "ShaderModule";
 
     fn life_guard(&self) -> &LifeGuard {
@@ -191,6 +192,7 @@ pub struct ComputePipeline<A: hal::Api> {
 }
 
 impl<A: hal::Api> Resource for ComputePipeline<A> {
+    type Id = ComputePipelineId;
     const TYPE: &'static str = "ComputePipeline";
 
     fn life_guard(&self) -> &LifeGuard {
@@ -370,6 +372,7 @@ pub struct RenderPipeline<A: hal::Api> {
 }
 
 impl<A: hal::Api> Resource for RenderPipeline<A> {
+    type Id = RenderPipelineId;
     const TYPE: &'static str = "RenderPipeline";
 
     fn life_guard(&self) -> &LifeGuard {

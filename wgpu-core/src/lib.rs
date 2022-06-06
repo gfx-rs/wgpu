@@ -42,9 +42,11 @@ pub mod hub;
 pub mod id;
 mod init_tracker;
 pub mod instance;
+pub mod registry;
 pub mod pipeline;
 pub mod present;
 pub mod resource;
+pub mod sync;
 mod track;
 mod validation;
 

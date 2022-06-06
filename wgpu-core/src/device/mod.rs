@@ -2927,6 +2927,7 @@ impl<A: HalApi> Device<A> {
 }
 
 impl<A: HalApi> crate::hub::Resource for Device<A> {
+    type Id = id::DeviceId;
     const TYPE: &'static str = "Device";
 
     fn life_guard(&self) -> &LifeGuard {
