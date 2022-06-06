@@ -5,6 +5,6 @@ mod clear_texture;
 mod device;
 mod example_wgsl;
 mod instance;
+mod shader_primitive_index;
 mod vertex_indices;
 mod zero_init_texture_after_discard;
-mod shader_primitive_index;

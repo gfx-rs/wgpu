@@ -1,8 +1,6 @@
-use std::num::NonZeroU32;
-
-use wgpu::util::DeviceExt;
-
 use crate::common::{initialize_test, TestParameters, TestingContext};
+use std::num::NonZeroU32;
+use wgpu::util::{align_to, DeviceExt};
 
 //
 // These tests render two triangles to a 2x2 render target. The first triangle
@@ -196,10 +194,6 @@ fn pulling_common(
     let data = capture_rgba_u8_texture(ctx, color_texture, texture_size);
 
     assert_eq!(data, expected);
-}
-
-fn align_to(n: u32, alignment: u32) -> u32 {
-    ((n + alignment - 1) / alignment) * alignment
 }
 
 fn capture_rgba_u8_texture(

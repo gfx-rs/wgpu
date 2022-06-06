@@ -1,5 +1,5 @@
 use crate::{
-    Buffer, BufferAddress, BufferDescriptor, BufferSize, BufferUsages, BufferViewMut,
+    util::align_to, Buffer, BufferAddress, BufferDescriptor, BufferSize, BufferUsages, BufferViewMut,
     CommandEncoder, Device, MapMode,
 };
 use std::fmt;
@@ -95,11 +95,7 @@ impl StagingBelt {
 
         encoder.copy_buffer_to_buffer(&chunk.buffer, chunk.offset, target, offset, size.get());
         let old_offset = chunk.offset;
-        chunk.offset += size.get();
-        let remainder = chunk.offset % crate::MAP_ALIGNMENT;
-        if remainder != 0 {
-            chunk.offset += crate::MAP_ALIGNMENT - remainder;
-        }
+        chunk.offset = align_to(chunk.offset + size.get(), crate::MAP_ALIGNMENT);
 
         self.active_chunks.push(chunk);
         self.active_chunks
