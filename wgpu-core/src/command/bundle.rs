@@ -1203,11 +1203,8 @@ impl<A: HalApi> State<A> {
         self.index.pipeline_format = index_format;
 
         for (vs, &(stride, step_mode)) in self.vertex.iter_mut().zip(vertex_strides) {
-            if vs.stride != stride || vs.rate != step_mode {
-                vs.stride = stride;
-                vs.rate = step_mode;
-                vs.is_dirty = true;
-            }
+            vs.stride = stride;
+            vs.rate = step_mode;
         }
 
         let push_constants_changed = self
