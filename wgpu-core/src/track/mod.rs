@@ -97,7 +97,7 @@ mod texture;
 use crate::{
     binding_model, command, conv, hub,
     id::{self, TypedId},
-    pipeline, resource, Epoch, LifeGuard, RefCount,
+    pipeline, registry, resource, Epoch, LifeGuard, RefCount,
 };
 
 use bit_vec::BitVec;
@@ -128,7 +128,7 @@ impl PendingTransition<hal::BufferUses> {
     ) -> hal::BufferBarrier<'a, A> {
         let buffer = buf.raw.as_ref().expect("Buffer is destroyed");
         hal::BufferBarrier {
-            buffer,
+            buffer: &*buffer,
             usage: self.usage,
         }
     }
@@ -460,8 +460,8 @@ impl<A: hub::HalApi> ResourceMetadataProvider<'_, A> {
 pub(crate) struct BindGroupStates<A: hub::HalApi> {
     pub buffers: BufferBindGroupState<A>,
     pub textures: TextureBindGroupState<A>,
-    pub views: StatelessBindGroupSate<resource::TextureView<A>, id::TextureViewId>,
-    pub samplers: StatelessBindGroupSate<resource::Sampler<A>, id::SamplerId>,
+    pub views: StatelessBindGroupSate<A, resource::TextureView<A>>,
+    pub samplers: StatelessBindGroupSate<A, resource::Sampler<A>>,
 }
 
 impl<A: hub::HalApi> BindGroupStates<A> {
@@ -493,9 +493,9 @@ pub(crate) struct RenderBundleScope<A: hub::HalApi> {
     pub buffers: BufferUsageScope<A>,
     pub textures: TextureUsageScope<A>,
     // Don't need to track views and samplers, they are never used directly, only by bind groups.
-    pub bind_groups: StatelessTracker<A, binding_model::BindGroup<A>, id::BindGroupId>,
-    pub render_pipelines: StatelessTracker<A, pipeline::RenderPipeline<A>, id::RenderPipelineId>,
-    pub query_sets: StatelessTracker<A, resource::QuerySet<A>, id::QuerySetId>,
+    pub bind_groups: StatelessTracker<A, binding_model::BindGroup<A>>,
+    pub render_pipelines: StatelessTracker<A, pipeline::RenderPipeline<A>>,
+    pub query_sets: StatelessTracker<A, resource::QuerySet<A>>,
 }
 
 impl<A: hub::HalApi> RenderBundleScope<A> {
@@ -535,7 +535,7 @@ impl<A: hub::HalApi> RenderBundleScope<A> {
     /// length of the storage given at the call to `new`.
     pub unsafe fn merge_bind_group(
         &mut self,
-        textures: &hub::Storage<resource::Texture<A>, id::TextureId>,
+        textures: &registry::Registry<A, resource::Texture<A>>,
         bind_group: &BindGroupStates<A>,
     ) -> Result<(), UsageConflict> {
         self.buffers.merge_bind_group(&bind_group.buffers)?;
@@ -557,8 +557,8 @@ pub(crate) struct UsageScope<A: hub::HalApi> {
 impl<A: hub::HalApi> UsageScope<A> {
     /// Create the render bundle scope and pull the maximum IDs from the hubs.
     pub fn new(
-        buffers: &hub::Storage<resource::Buffer<A>, id::BufferId>,
-        textures: &hub::Storage<resource::Texture<A>, id::TextureId>,
+        buffers: &registry::Registry<A, resource::Buffer<A>>,
+        textures: &registry::Registry<A, resource::Texture<A>>,
     ) -> Self {
         let mut value = Self {
             buffers: BufferUsageScope::new(),
@@ -582,7 +582,7 @@ impl<A: hub::HalApi> UsageScope<A> {
     /// length of the storage given at the call to `new`.
     pub unsafe fn merge_bind_group(
         &mut self,
-        textures: &hub::Storage<resource::Texture<A>, id::TextureId>,
+        textures: &registry::Registry<A, resource::Texture<A>>,
         bind_group: &BindGroupStates<A>,
     ) -> Result<(), UsageConflict> {
         self.buffers.merge_bind_group(&bind_group.buffers)?;
@@ -603,7 +603,7 @@ impl<A: hub::HalApi> UsageScope<A> {
     /// length of the storage given at the call to `new`.
     pub unsafe fn merge_render_bundle(
         &mut self,
-        textures: &hub::Storage<resource::Texture<A>, id::TextureId>,
+        textures: &registry::Registry<A, resource::Texture<A>>,
         render_bundle: &RenderBundleScope<A>,
     ) -> Result<(), UsageConflict> {
         self.buffers.merge_usage_scope(&render_bundle.buffers)?;
@@ -618,13 +618,13 @@ impl<A: hub::HalApi> UsageScope<A> {
 pub(crate) struct Tracker<A: hub::HalApi> {
     pub buffers: BufferTracker<A>,
     pub textures: TextureTracker<A>,
-    pub views: StatelessTracker<A, resource::TextureView<A>, id::TextureViewId>,
-    pub samplers: StatelessTracker<A, resource::Sampler<A>, id::SamplerId>,
-    pub bind_groups: StatelessTracker<A, binding_model::BindGroup<A>, id::BindGroupId>,
-    pub compute_pipelines: StatelessTracker<A, pipeline::ComputePipeline<A>, id::ComputePipelineId>,
-    pub render_pipelines: StatelessTracker<A, pipeline::RenderPipeline<A>, id::RenderPipelineId>,
-    pub bundles: StatelessTracker<A, command::RenderBundle<A>, id::RenderBundleId>,
-    pub query_sets: StatelessTracker<A, resource::QuerySet<A>, id::QuerySetId>,
+    pub views: StatelessTracker<A, resource::TextureView<A>>,
+    pub samplers: StatelessTracker<A, resource::Sampler<A>>,
+    pub bind_groups: StatelessTracker<A, binding_model::BindGroup<A>>,
+    pub compute_pipelines: StatelessTracker<A, pipeline::ComputePipeline<A>>,
+    pub render_pipelines: StatelessTracker<A, pipeline::RenderPipeline<A>>,
+    pub bundles: StatelessTracker<A, command::RenderBundle<A>>,
+    pub query_sets: StatelessTracker<A, resource::QuerySet<A>>,
 }
 
 impl<A: hub::HalApi> Tracker<A> {
@@ -645,17 +645,15 @@ impl<A: hub::HalApi> Tracker<A> {
     /// Pull the maximum IDs from the hubs.
     pub fn set_size(
         &mut self,
-        buffers: Option<&hub::Storage<resource::Buffer<A>, id::BufferId>>,
-        textures: Option<&hub::Storage<resource::Texture<A>, id::TextureId>>,
-        views: Option<&hub::Storage<resource::TextureView<A>, id::TextureViewId>>,
-        samplers: Option<&hub::Storage<resource::Sampler<A>, id::SamplerId>>,
-        bind_groups: Option<&hub::Storage<binding_model::BindGroup<A>, id::BindGroupId>>,
-        compute_pipelines: Option<
-            &hub::Storage<pipeline::ComputePipeline<A>, id::ComputePipelineId>,
-        >,
-        render_pipelines: Option<&hub::Storage<pipeline::RenderPipeline<A>, id::RenderPipelineId>>,
-        bundles: Option<&hub::Storage<command::RenderBundle<A>, id::RenderBundleId>>,
-        query_sets: Option<&hub::Storage<resource::QuerySet<A>, id::QuerySetId>>,
+        buffers: Option<&registry::Registry<A, resource::Buffer<A>>>,
+        textures: Option<&registry::Registry<A, resource::Texture<A>>>,
+        views: Option<&registry::Registry<A, resource::TextureView<A>>>,
+        samplers: Option<&registry::Registry<A, resource::Sampler<A>>>,
+        bind_groups: Option<&registry::Registry<A, binding_model::BindGroup<A>>>,
+        compute_pipelines: Option<&registry::Registry<A, pipeline::ComputePipeline<A>>>,
+        render_pipelines: Option<&registry::Registry<A, pipeline::RenderPipeline<A>>>,
+        bundles: Option<&registry::Registry<A, command::RenderBundle<A>>>,
+        query_sets: Option<&registry::Registry<A, resource::QuerySet<A>>>,
     ) {
         if let Some(buffers) = buffers {
             self.buffers.set_size(buffers.len());
@@ -709,7 +707,7 @@ impl<A: hub::HalApi> Tracker<A> {
     /// value given to `set_size`
     pub unsafe fn set_and_remove_from_usage_scope_sparse(
         &mut self,
-        textures: &hub::Storage<resource::Texture<A>, id::TextureId>,
+        textures: &registry::Registry<A, resource::Texture<A>>,
         scope: &mut UsageScope<A>,
         bind_group: &BindGroupStates<A>,
     ) {

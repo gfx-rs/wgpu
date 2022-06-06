@@ -8,7 +8,7 @@ use crate::{
     id::{self, Id, TypedId},
     init_tracker::MemoryInitKind,
     resource::QuerySet,
-    Epoch, FastHashMap, Index,
+    Epoch, FastHashMap, Index, registry,
 };
 use std::{iter, marker::PhantomData};
 use thiserror::Error;
@@ -45,12 +45,12 @@ impl<A: hal::Api> QueryResetMap<A> {
     pub fn reset_queries(
         self,
         raw_encoder: &mut A::CommandEncoder,
-        query_set_storage: &Storage<QuerySet<A>, id::QuerySetId>,
+        query_sets: &registry::Registry<A, QuerySet<A>>,
         backend: wgt::Backend,
     ) -> Result<(), id::QuerySetId> {
         for (query_set_id, (state, epoch)) in self.map.into_iter() {
             let id = Id::zip(query_set_id, epoch, backend);
-            let query_set = query_set_storage.get(id).map_err(|_| id)?;
+            let query_set = query_sets.get(id).map_err(|_| id)?;
 
             debug_assert_eq!(state.len(), query_set.desc.count as usize);
 
@@ -257,7 +257,7 @@ impl<A: HalApi> QuerySet<A> {
 
 pub(super) fn end_pipeline_statistics_query<A: HalApi>(
     raw_encoder: &mut A::CommandEncoder,
-    storage: &Storage<QuerySet<A>, id::QuerySetId>,
+    storage: &registry::Registry<A, QuerySet<A>>,
     active_query: &mut Option<(id::QuerySetId, u32)>,
 ) -> Result<(), QueryUseError> {
     if let Some((query_set_id, query_index)) = active_query.take() {
@@ -280,10 +280,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         query_index: u32,
     ) -> Result<(), QueryError> {
         let hub = A::hub(self);
-        let mut token = Token::root();
-
-        let (mut cmd_buf_guard, mut token) = hub.command_buffers.write(&mut token);
-        let (query_set_guard, _) = hub.query_sets.read(&mut token);
 
         let cmd_buf = CommandBuffer::get_encoder_mut(&mut cmd_buf_guard, command_encoder_id)?;
         let raw_encoder = cmd_buf.encoder.open();
@@ -299,7 +295,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let query_set = cmd_buf
             .trackers
             .query_sets
-            .add_single(&*query_set_guard, query_set_id)
+            .add_single(&hub.query_sets, query_set_id)
             .ok_or(QueryError::InvalidQuerySet(query_set_id))?;
 
         query_set.validate_and_write_timestamp(raw_encoder, query_set_id, query_index, None)?;
@@ -318,10 +314,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     ) -> Result<(), QueryError> {
         let hub = A::hub(self);
         let mut token = Token::root();
-
-        let (mut cmd_buf_guard, mut token) = hub.command_buffers.write(&mut token);
-        let (query_set_guard, mut token) = hub.query_sets.read(&mut token);
-        let (buffer_guard, _) = hub.buffers.read(&mut token);
 
         let cmd_buf = CommandBuffer::get_encoder_mut(&mut cmd_buf_guard, command_encoder_id)?;
         let raw_encoder = cmd_buf.encoder.open();
@@ -344,13 +336,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let query_set = cmd_buf
             .trackers
             .query_sets
-            .add_single(&*query_set_guard, query_set_id)
+            .add_single(&hub.query_sets, query_set_id)
             .ok_or(QueryError::InvalidQuerySet(query_set_id))?;
 
         let (dst_buffer, dst_pending) = cmd_buf
             .trackers
             .buffers
-            .set_single(&*buffer_guard, destination, hal::BufferUses::COPY_DST)
+            .set_single(&hub.buffers, destination, hal::BufferUses::COPY_DST)
             .ok_or(QueryError::InvalidBuffer(destination))?;
         let dst_barrier = dst_pending.map(|pending| pending.into_hal(dst_buffer));
 
@@ -404,7 +396,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             raw_encoder.copy_query_results(
                 &query_set.raw,
                 start_query..end_query,
-                dst_buffer.raw.as_ref().unwrap(),
+                &*dst_buffer.raw.as_ref().unwrap(),
                 destination_offset,
                 wgt::BufferSize::new_unchecked(stride as u64),
             );

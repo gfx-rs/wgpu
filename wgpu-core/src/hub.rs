@@ -532,13 +532,13 @@ where
         self.id
     }
 
-    pub fn assign<'a, A: Access<T>>(self, value: T, _: &'a mut Token<A>) -> id::Valid<T::Id> {
+    pub fn assign(self, value: T) -> id::Valid<T::Id> {
         let (index, epoch, _) = self.id.unzip();
         unsafe { self.data.fill(index, epoch, value) };
         id::Valid(self.id)
     }
 
-    pub fn assign_error<'a, A: Access<T>>(self, label: &str, _: &'a mut Token<A>) -> T::Id {
+    pub fn assign_error(self, label: &str) -> T::Id {
         todo!();
         self.id
     }

@@ -81,11 +81,11 @@ use crate::{
         SHADER_STAGE_COUNT,
     },
     error::{ErrorFormatter, PrettyError},
-    hub::{GlobalIdentityHandlerFactory, HalApi, Hub, Resource, Storage, Token},
+    hub::{GlobalIdentityHandlerFactory, HalApi, Hub, Resource, Token},
     id,
     init_tracker::{BufferInitTrackerAction, MemoryInitKind, TextureInitTrackerAction},
     pipeline::{self, PipelineFlags},
-    resource,
+    registry, resource,
     track::RenderBundleScope,
     validation::check_buffer_usage,
     Label, LabelHelpers, LifeGuard, Stored,
@@ -711,13 +711,10 @@ impl<A: HalApi> RenderBundle<A> {
     pub(super) unsafe fn execute(
         &self,
         raw: &mut A::CommandEncoder,
-        pipeline_layout_guard: &Storage<
-            crate::binding_model::PipelineLayout<A>,
-            id::PipelineLayoutId,
-        >,
-        bind_group_guard: &Storage<crate::binding_model::BindGroup<A>, id::BindGroupId>,
-        pipeline_guard: &Storage<crate::pipeline::RenderPipeline<A>, id::RenderPipelineId>,
-        buffer_guard: &Storage<crate::resource::Buffer<A>, id::BufferId>,
+        pipeline_layouts: &registry::Registry<A, crate::binding_model::PipelineLayout<A>>,
+        bind_groups: &registry::Registry<A, crate::binding_model::BindGroup<A>>,
+        pipelines: &registry::Registry<A, crate::pipeline::RenderPipeline<A>>,
+        buffers: &registry::Registry<A, crate::resource::Buffer<A>>,
     ) -> Result<(), ExecutionError> {
         let mut offsets = self.base.dynamic_offsets.as_slice();
         let mut pipeline_layout_id = None::<id::Valid<id::PipelineLayoutId>>;
@@ -732,9 +729,9 @@ impl<A: HalApi> RenderBundle<A> {
                     num_dynamic_offsets,
                     bind_group_id,
                 } => {
-                    let bind_group = bind_group_guard.get(bind_group_id).unwrap();
+                    let bind_group = bind_groups.get(bind_group_id).unwrap();
                     raw.set_bind_group(
-                        &pipeline_layout_guard[pipeline_layout_id.unwrap()].raw,
+                        &pipeline_layouts[pipeline_layout_id.unwrap()].raw,
                         index as u32,
                         &bind_group.raw,
                         &offsets[..num_dynamic_offsets as usize],
@@ -742,7 +739,7 @@ impl<A: HalApi> RenderBundle<A> {
                     offsets = &offsets[num_dynamic_offsets as usize..];
                 }
                 RenderCommand::SetPipeline(pipeline_id) => {
-                    let pipeline = pipeline_guard.get(pipeline_id).unwrap();
+                    let pipeline = pipelines.get(pipeline_id).unwrap();
                     raw.set_render_pipeline(&pipeline.raw);
 
                     pipeline_layout_id = Some(pipeline.layout_id.value);
@@ -753,14 +750,14 @@ impl<A: HalApi> RenderBundle<A> {
                     offset,
                     size,
                 } => {
-                    let buffer = buffer_guard
+                    let buffer = buffers
                         .get(buffer_id)
                         .unwrap()
                         .raw
                         .as_ref()
                         .ok_or(ExecutionError::DestroyedBuffer(buffer_id))?;
                     let bb = hal::BufferBinding {
-                        buffer,
+                        buffer: &*buffer,
                         offset,
                         size,
                     };
@@ -772,14 +769,14 @@ impl<A: HalApi> RenderBundle<A> {
                     offset,
                     size,
                 } => {
-                    let buffer = buffer_guard
+                    let buffer = buffers
                         .get(buffer_id)
                         .unwrap()
                         .raw
                         .as_ref()
                         .ok_or(ExecutionError::DestroyedBuffer(buffer_id))?;
                     let bb = hal::BufferBinding {
-                        buffer,
+                        buffer: &*buffer,
                         offset,
                         size,
                     };
@@ -792,7 +789,7 @@ impl<A: HalApi> RenderBundle<A> {
                     values_offset,
                 } => {
                     let pipeline_layout_id = pipeline_layout_id.unwrap();
-                    let pipeline_layout = &pipeline_layout_guard[pipeline_layout_id];
+                    let pipeline_layout = &pipeline_layouts[pipeline_layout_id];
 
                     if let Some(values_offset) = values_offset {
                         let values_end_offset =
@@ -845,13 +842,13 @@ impl<A: HalApi> RenderBundle<A> {
                     count: None,
                     indexed: false,
                 } => {
-                    let buffer = buffer_guard
+                    let buffer = buffers
                         .get(buffer_id)
                         .unwrap()
                         .raw
                         .as_ref()
                         .ok_or(ExecutionError::DestroyedBuffer(buffer_id))?;
-                    raw.draw_indirect(buffer, offset, 1);
+                    raw.draw_indirect(&*buffer, offset, 1);
                 }
                 RenderCommand::MultiDrawIndirect {
                     buffer_id,
@@ -859,13 +856,13 @@ impl<A: HalApi> RenderBundle<A> {
                     count: None,
                     indexed: true,
                 } => {
-                    let buffer = buffer_guard
+                    let buffer = buffers
                         .get(buffer_id)
                         .unwrap()
                         .raw
                         .as_ref()
                         .ok_or(ExecutionError::DestroyedBuffer(buffer_id))?;
-                    raw.draw_indexed_indirect(buffer, offset, 1);
+                    raw.draw_indexed_indirect(&*buffer, offset, 1);
                 }
                 RenderCommand::MultiDrawIndirect { .. }
                 | RenderCommand::MultiDrawIndirectCount { .. } => {

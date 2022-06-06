@@ -780,20 +780,19 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     ) -> AdapterId {
         profiling::scope!("create_adapter_from_hal", "Instance");
 
-        let mut token = Token::root();
         let fid = A::hub(self).adapters.prepare(input);
 
         match A::VARIANT {
             #[cfg(vulkan)]
-            Backend::Vulkan => fid.assign(Adapter::new(hal_adapter), &mut token).0,
+            Backend::Vulkan => fid.assign(Adapter::new(hal_adapter)).0,
             #[cfg(metal)]
-            Backend::Metal => fid.assign(Adapter::new(hal_adapter), &mut token).0,
+            Backend::Metal => fid.assign(Adapter::new(hal_adapter)).0,
             #[cfg(dx12)]
-            Backend::Dx12 => fid.assign(Adapter::new(hal_adapter), &mut token).0,
+            Backend::Dx12 => fid.assign(Adapter::new(hal_adapter)).0,
             #[cfg(dx11)]
-            Backend::Dx11 => fid.assign(Adapter::new(hal_adapter), &mut token).0,
+            Backend::Dx11 => fid.assign(Adapter::new(hal_adapter)).0,
             #[cfg(gl)]
-            Backend::Gl => fid.assign(Adapter::new(hal_adapter), &mut token).0,
+            Backend::Gl => fid.assign(Adapter::new(hal_adapter)).0,
             _ => unreachable!(),
         }
     }

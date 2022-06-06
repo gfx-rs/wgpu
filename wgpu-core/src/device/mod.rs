@@ -418,11 +418,7 @@ impl<A: HalApi> Device<A> {
         })
     }
 
-    fn lock_life<'this, 'token: 'this>(
-        &'this self,
-        //TODO: fix this - the token has to be borrowed for the lock
-        _token: &mut Token<'token, Self>,
-    ) -> MutexGuard<'this, life::LifetimeTracker<A>> {
+    fn lock_life(&self) -> MutexGuard<'_, life::LifetimeTracker<A>> {
         self.life_tracker.lock()
     }
 
@@ -2811,11 +2807,7 @@ impl<A: HalApi> Device<A> {
         }
     }
 
-    fn wait_for_submit(
-        &self,
-        submission_index: SubmissionIndex,
-        token: &mut Token<Self>,
-    ) -> Result<(), WaitIdleError> {
+    fn wait_for_submit(&self, submission_index: SubmissionIndex) -> Result<(), WaitIdleError> {
         let last_done_index = unsafe {
             self.raw
                 .get_fence_value(&self.fence)
@@ -2829,7 +2821,7 @@ impl<A: HalApi> Device<A> {
                     .map_err(DeviceError::from)?
             };
             let closures = self
-                .lock_life(token)
+                .lock_life()
                 .triage_submissions(submission_index, &self.command_allocator);
             assert!(
                 closures.is_empty(),
@@ -3080,12 +3072,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("create_buffer", "Device");
 
         let hub = A::hub(self);
-        let mut token = Token::root();
         let fid = hub.buffers.prepare(id_in);
 
-        let (device_guard, mut token) = hub.devices.read(&mut token);
         let error = loop {
-            let device = match device_guard.get(device_id) {
+            let device = match hub.devices.get(device_id) {
                 Ok(device) => device,
                 Err(_) => break DeviceError::Invalid.into(),
             };
@@ -3117,7 +3107,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     Err(e) => {
                         let raw = buffer.raw.unwrap();
                         device
-                            .lock_life(&mut token)
+                            .lock_life()
                             .schedule_resource_destruction(queue::TempResource::Buffer(raw), !0);
                         break e.into();
                     }
@@ -3143,7 +3133,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     Err(e) => {
                         let raw = buffer.raw.unwrap();
                         device
-                            .lock_life(&mut token)
+                            .lock_life()
                             .schedule_resource_destruction(queue::TempResource::Buffer(raw), !0);
                         break e;
                     }
@@ -3153,7 +3143,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     Ok(mapping) => mapping,
                     Err(e) => {
                         let raw = buffer.raw.unwrap();
-                        let mut life_lock = device.lock_life(&mut token);
+                        let mut life_lock = device.lock_life();
                         life_lock
                             .schedule_resource_destruction(queue::TempResource::Buffer(raw), !0);
                         life_lock.schedule_resource_destruction(
@@ -3179,7 +3169,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 hal::BufferUses::COPY_DST
             };
 
-            let id = fid.assign(buffer, &mut token);
+            let id = fid.assign(buffer);
             log::info!("Created buffer {:?} with {:?}", id, desc);
 
             device
@@ -3191,7 +3181,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             return (id.0, None);
         };
 
-        let id = fid.assign_error(desc.label.borrow_or_default(), &mut token);
+        let id = fid.assign_error(desc.label.borrow_or_default());
         (id, Some(error))
     }
 
@@ -3225,11 +3215,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     /// [`wgpu_types::BufferUsages`]: wgt::BufferUsages
     pub fn create_buffer_error<A: HalApi>(&self, id_in: Input<G, id::BufferId>, label: Label) {
         let hub = A::hub(self);
-        let mut token = Token::root();
         let fid = hub.buffers.prepare(id_in);
 
-        let (_, mut token) = hub.devices.read(&mut token);
-        fid.assign_error(label.borrow_or_default(), &mut token);
+        fid.assign_error(label.borrow_or_default());
     }
 
     #[cfg(feature = "replay")]
@@ -3239,42 +3227,41 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         buffer_id: id::BufferId,
     ) -> Result<(), WaitIdleError> {
         let hub = A::hub(self);
-        let mut token = Token::root();
-        let (device_guard, mut token) = hub.devices.read(&mut token);
         let last_submission = {
-            let (buffer_guard, _) = hub.buffers.write(&mut token);
-            match buffer_guard.get(buffer_id) {
+            match hub.buffers.get(buffer_id) {
                 Ok(buffer) => buffer.life_guard.life_count(),
                 Err(_) => return Ok(()),
             }
         };
 
-        device_guard
+        hub.devices
             .get(device_id)
             .map_err(|_| DeviceError::Invalid)?
-            .wait_for_submit(last_submission, &mut token)
+            .wait_for_submit(last_submission)
     }
 
+    /// # Safety
+    ///
+    /// Offers no protection against another user destroying the buffer at the same time.
     #[doc(hidden)]
-    pub fn device_set_buffer_sub_data<A: HalApi>(
+    pub unsafe fn device_set_buffer_sub_data<A: HalApi>(
         &self,
         device_id: id::DeviceId,
         buffer_id: id::BufferId,
         offset: BufferAddress,
         data: &[u8],
     ) -> Result<(), resource::BufferAccessError> {
-        profiling::scope!("set_buffer_sub_data", "Device");
+        profiling::scope!("Device::set_buffer_sub_data");
 
         let hub = A::hub(self);
-        let mut token = Token::root();
 
-        let (device_guard, mut token) = hub.devices.read(&mut token);
-        let (mut buffer_guard, _) = hub.buffers.write(&mut token);
-        let device = device_guard
+        let device = hub
+            .devices
             .get(device_id)
             .map_err(|_| DeviceError::Invalid)?;
-        let buffer = buffer_guard
-            .get_mut(buffer_id)
+        let buffer = hub
+            .buffers
+            .get(buffer_id)
             .map_err(|_| resource::BufferAccessError::Invalid)?;
         check_buffer_usage(buffer.usage, wgt::BufferUsages::MAP_WRITE)?;
         //assert!(buffer isn't used by the GPU);
@@ -3292,28 +3279,29 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         let raw_buf = buffer.raw.as_ref().unwrap();
-        unsafe {
-            let mapping = device
-                .raw
-                .map_buffer(raw_buf, offset..offset + data.len() as u64)
-                .map_err(DeviceError::from)?;
-            ptr::copy_nonoverlapping(data.as_ptr(), mapping.ptr.as_ptr(), data.len());
-            if !mapping.is_coherent {
-                device
-                    .raw
-                    .flush_mapped_ranges(raw_buf, iter::once(offset..offset + data.len() as u64));
-            }
+        let mapping = device
+            .raw
+            .map_buffer(raw_buf, offset..offset + data.len() as u64)
+            .map_err(DeviceError::from)?;
+        ptr::copy_nonoverlapping(data.as_ptr(), mapping.ptr.as_ptr(), data.len());
+        if !mapping.is_coherent {
             device
                 .raw
-                .unmap_buffer(raw_buf)
-                .map_err(DeviceError::from)?;
+                .flush_mapped_ranges(raw_buf, iter::once(offset..offset + data.len() as u64));
         }
+        device
+            .raw
+            .unmap_buffer(raw_buf)
+            .map_err(DeviceError::from)?;
 
         Ok(())
     }
 
+    /// # Safety
+    ///
+    /// Offers no protection against another user destroying the buffer at the same time.
     #[doc(hidden)]
-    pub fn device_get_buffer_sub_data<A: HalApi>(
+    pub unsafe fn device_get_buffer_sub_data<A: HalApi>(
         &self,
         device_id: id::DeviceId,
         buffer_id: id::BufferId,
@@ -3323,37 +3311,33 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("get_buffer_sub_data", "Device");
 
         let hub = A::hub(self);
-        let mut token = Token::root();
 
-        let (device_guard, mut token) = hub.devices.read(&mut token);
-        let (mut buffer_guard, _) = hub.buffers.write(&mut token);
-        let device = device_guard
+        let device = hub
+            .devices
             .get(device_id)
             .map_err(|_| DeviceError::Invalid)?;
-        let buffer = buffer_guard
-            .get_mut(buffer_id)
+        let buffer = hub
+            .buffers
+            .get(buffer_id)
             .map_err(|_| resource::BufferAccessError::Invalid)?;
         check_buffer_usage(buffer.usage, wgt::BufferUsages::MAP_READ)?;
         //assert!(buffer isn't used by the GPU);
 
         let raw_buf = buffer.raw.as_ref().unwrap();
-        unsafe {
-            let mapping = device
-                .raw
-                .map_buffer(raw_buf, offset..offset + data.len() as u64)
-                .map_err(DeviceError::from)?;
-            if !mapping.is_coherent {
-                device.raw.invalidate_mapped_ranges(
-                    raw_buf,
-                    iter::once(offset..offset + data.len() as u64),
-                );
-            }
-            ptr::copy_nonoverlapping(mapping.ptr.as_ptr(), data.as_mut_ptr(), data.len());
+        let mapping = device
+            .raw
+            .map_buffer(raw_buf, offset..offset + data.len() as u64)
+            .map_err(DeviceError::from)?;
+        if !mapping.is_coherent {
             device
                 .raw
-                .unmap_buffer(raw_buf)
-                .map_err(DeviceError::from)?;
+                .invalidate_mapped_ranges(raw_buf, iter::once(offset..offset + data.len() as u64));
         }
+        ptr::copy_nonoverlapping(mapping.ptr.as_ptr(), data.as_mut_ptr(), data.len());
+        device
+            .raw
+            .unmap_buffer(raw_buf)
+            .map_err(DeviceError::from)?;
 
         Ok(())
     }
@@ -3463,13 +3447,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("create_texture", "Device");
 
         let hub = A::hub(self);
-        let mut token = Token::root();
         let fid = hub.textures.prepare(id_in);
 
-        let (adapter_guard, mut token) = hub.adapters.read(&mut token);
-        let (device_guard, mut token) = hub.devices.read(&mut token);
         let error = loop {
-            let device = match device_guard.get(device_id) {
+            let device = match hub.devices.get(device_id) {
                 Ok(device) => device,
                 Err(_) => break DeviceError::Invalid.into(),
             };
@@ -3480,14 +3461,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     .add(trace::Action::CreateTexture(fid.id(), desc.clone()));
             }
 
-            let adapter = &adapter_guard[device.adapter_id.value];
+            let adapter = &hub.adapters[device.adapter_id.value];
             let texture = match device.create_texture(device_id, adapter, desc) {
                 Ok(texture) => texture,
                 Err(error) => break error,
             };
             let ref_count = texture.life_guard.add_ref();
 
-            let id = fid.assign(texture, &mut token);
+            let id = fid.assign(texture);
             log::info!("Created texture {:?} with {:?}", id, desc);
 
             device.trackers.lock().textures.insert_single(
@@ -3499,7 +3480,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             return (id.0, None);
         };
 
-        let id = fid.assign_error(desc.label.borrow_or_default(), &mut token);
+        let id = fid.assign_error(desc.label.borrow_or_default());
         (id, Some(error))
     }
 
@@ -3518,13 +3499,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("create_texture", "Device");
 
         let hub = A::hub(self);
-        let mut token = Token::root();
         let fid = hub.textures.prepare(id_in);
 
-        let (adapter_guard, mut token) = hub.adapters.read(&mut token);
-        let (device_guard, mut token) = hub.devices.read(&mut token);
         let error = loop {
-            let device = match device_guard.get(device_id) {
+            let device = match hub.devices.get(device_id) {
                 Ok(device) => device,
                 Err(_) => break DeviceError::Invalid.into(),
             };
@@ -3537,7 +3515,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     .add(trace::Action::CreateTexture(fid.id(), desc.clone()));
             }
 
-            let adapter = &adapter_guard[device.adapter_id.value];
+            let adapter = &hub.adapters[device.adapter_id.value];
 
             let format_features = match device
                 .describe_format_features(adapter, desc.format)
@@ -3563,7 +3541,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             let ref_count = texture.life_guard.add_ref();
 
-            let id = fid.assign(texture, &mut token);
+            let id = fid.assign(texture);
             log::info!("Created texture {:?} with {:?}", id, desc);
 
             device.trackers.lock().textures.insert_single(
@@ -3575,7 +3553,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             return (id.0, None);
         };
 
-        let id = fid.assign_error(desc.label.borrow_or_default(), &mut token);
+        let id = fid.assign_error(desc.label.borrow_or_default());
         (id, Some(error))
     }
 

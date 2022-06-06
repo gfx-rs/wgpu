@@ -4,7 +4,7 @@ use crate::{
     hub::{HalApi, Storage},
     id::{BindGroupId, BindGroupLayoutId, PipelineLayoutId, Valid},
     pipeline::LateSizedBufferGroup,
-    Stored,
+    Stored, registry,
 };
 
 use arrayvec::ArrayVec;
@@ -183,12 +183,12 @@ impl Binder {
 
     pub(super) fn change_pipeline_layout<'a, A: HalApi>(
         &'a mut self,
-        guard: &Storage<PipelineLayout<A>, PipelineLayoutId>,
+        storage: &registry::Registry<A, PipelineLayout<A>>,
         new_id: Valid<PipelineLayoutId>,
         late_sized_buffer_groups: &[LateSizedBufferGroup],
     ) -> (usize, &'a [EntryPayload]) {
         let old_id_opt = self.pipeline_layout_id.replace(new_id);
-        let new = &guard[new_id];
+        let new = &storage[new_id];
 
         let mut bind_range = self.manager.update_expectations(&new.bind_group_layout_ids);
 
@@ -215,7 +215,7 @@ impl Binder {
         }
 
         if let Some(old_id) = old_id_opt {
-            let old = &guard[old_id];
+            let old = &storage[old_id];
             // root constants are the base compatibility property
             if old.push_constant_ranges != new.push_constant_ranges {
                 bind_range.start = 0;

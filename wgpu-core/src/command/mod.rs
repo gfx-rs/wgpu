@@ -19,6 +19,7 @@ use self::memory_init::CommandBufferTextureMemoryActions;
 
 use crate::error::{ErrorFormatter, PrettyError};
 use crate::init_tracker::BufferInitTrackerAction;
+use crate::registry;
 use crate::track::{Tracker, UsageScope};
 use crate::{
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Storage, Token},
@@ -142,8 +143,8 @@ impl<A: HalApi> CommandBuffer<A> {
         raw: &mut A::CommandEncoder,
         base: &mut Tracker<A>,
         head: &Tracker<A>,
-        buffer_guard: &Storage<Buffer<A>, id::BufferId>,
-        texture_guard: &Storage<Texture<A>, id::TextureId>,
+        buffer_guard: &registry::Registry<A, Buffer<A>>,
+        texture_guard: &registry::Registry<A, Texture<A>>,
     ) {
         profiling::scope!("insert_barriers");
 
@@ -158,8 +159,8 @@ impl<A: HalApi> CommandBuffer<A> {
         raw: &mut A::CommandEncoder,
         base: &mut Tracker<A>,
         head: &UsageScope<A>,
-        buffer_guard: &Storage<Buffer<A>, id::BufferId>,
-        texture_guard: &Storage<Texture<A>, id::TextureId>,
+        buffer_guard: &registry::Registry<A, Buffer<A>>,
+        texture_guard: &registry::Registry<A, Texture<A>>,
     ) {
         profiling::scope!("insert_barriers");
 
@@ -173,8 +174,8 @@ impl<A: HalApi> CommandBuffer<A> {
     pub(crate) fn drain_barriers(
         raw: &mut A::CommandEncoder,
         base: &mut Tracker<A>,
-        buffer_guard: &Storage<Buffer<A>, id::BufferId>,
-        texture_guard: &Storage<Texture<A>, id::TextureId>,
+        buffer_guard: &registry::Registry<A, Buffer<A>>,
+        texture_guard: &registry::Registry<A, Texture<A>>,
     ) {
         profiling::scope!("drain_barriers");
 
@@ -196,17 +197,18 @@ impl<A: HalApi> CommandBuffer<A> {
 
 impl<A: HalApi> CommandBuffer<A> {
     fn get_encoder_mut(
-        storage: &mut Storage<Self, id::CommandEncoderId>,
+        storage: &registry::Registry<A, Self>,
         id: id::CommandEncoderId,
     ) -> Result<&mut Self, CommandEncoderError> {
-        match storage.get_mut(id) {
-            Ok(cmd_buf) => match cmd_buf.status {
-                CommandEncoderStatus::Recording => Ok(cmd_buf),
-                CommandEncoderStatus::Finished => Err(CommandEncoderError::NotRecording),
-                CommandEncoderStatus::Error => Err(CommandEncoderError::Invalid),
-            },
-            Err(_) => Err(CommandEncoderError::Invalid),
-        }
+        // match storage.get_mut(id) {
+        //     Ok(cmd_buf) => match cmd_buf.status {
+        //         CommandEncoderStatus::Recording => Ok(cmd_buf),
+        //         CommandEncoderStatus::Finished => Err(CommandEncoderError::NotRecording),
+        //         CommandEncoderStatus::Error => Err(CommandEncoderError::Invalid),
+        //     },
+        //     Err(_) => Err(CommandEncoderError::Invalid),
+        // }
+        todo!()
     }
 
     pub fn is_finished(&self) -> bool {

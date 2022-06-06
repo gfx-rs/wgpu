@@ -1,14 +1,14 @@
 use std::{
-    cell::UnsafeCell,
     marker::PhantomData,
-    mem::{self},
-    sync::atomic::{AtomicU32, AtomicUsize, Ordering},
+    mem,
+    sync::atomic::{AtomicU32, Ordering},
 };
 
 use parking_lot::Mutex;
 
 use crate::{
     hub,
+    id::{self, TypedId},
     sync::{DebugMaybeUninit, DebugUnsafeCell},
     Epoch,
 };
@@ -33,7 +33,11 @@ where
         }
     }
 
-    fn allocate(&self) -> hub::FutureId<'_, T> {
+    pub fn len(&self) -> usize {
+        self.storage.length.load(Ordering::Acquire) as usize
+    }
+
+    pub fn prepare<Q>(&self, _: Q) -> hub::FutureId<'_, T> {
         let mut ident_guard = self.identity_manager.lock();
         let (index, id) = ident_guard.alloc(A::VARIANT);
         unsafe { self.storage.ensure_index(index) }
@@ -50,6 +54,32 @@ where
         let (index, epoch) = ident_guard.free(id);
         unsafe { self.storage.free(index, epoch) }
         drop(ident_guard);
+    }
+
+    pub fn contains(&self, id: T::Id) -> bool {
+        let (index, epoch, _) = id.unzip();
+        self.storage.contains(index, epoch)
+    }
+
+    pub fn get(&self, id: T::Id) -> Result<&T, hub::InvalidId> {
+        let (index, epoch, _) = id.unzip();
+        self.storage.get(index, epoch).ok_or(hub::InvalidId)
+    }
+
+    pub fn get_unchecked(&self, index: u32) -> Result<&T, hub::InvalidId> {
+        self.storage.get_unchecked(index).ok_or(hub::InvalidId)
+    }
+}
+
+impl<A, T> std::ops::Index<id::Valid<T::Id>> for Registry<A, T>
+where
+    A: hub::HalApi,
+    T: hub::Resource,
+{
+    type Output = T;
+
+    fn index(&self, id: id::Valid<T::Id>) -> &Self::Output {
+        self.get(id.0).unwrap()
     }
 }
 
@@ -96,14 +126,87 @@ impl<T> Storage<T> {
         // SAFETY: We have reserved a slot in the block so this block is guarenteed to exist
         // and the slot will not be accessed by any other users.
         let block_option_ref = &*self.blocks[block].get();
-        let block_ptr = block_option_ref.as_deref().unwrap();
-        let data_ref = &block_ptr.data[data_index];
-        let status_ref = &block_ptr.status[data_index];
+        let block_ref = block_option_ref.as_deref().unwrap();
+        let data_ref = &block_ref.data[data_index];
+        let status_ref = &block_ref.status[data_index];
 
         let data_mut_ref = &mut *data_ref.get();
         data_mut_ref.write(value);
 
         *status_ref.lock() = ElementStatus::Occupied(epoch);
+    }
+
+    fn contains(&self, index: u32, epoch: u32) -> bool {
+        let block = (index / 512) as usize;
+        let data_index = (index % 512) as usize;
+
+        let length = self.length.load(Ordering::Acquire);
+
+        if index >= length {
+            return false;
+        }
+
+        // SAFETY: We have just bounds checked the index and we always check the
+        // status before accessing the data.
+        let block_option_ref = unsafe { self.blocks[block].get() };
+        let block_ref = block_option_ref.as_deref().unwrap();
+        let status_ref = &block_ref.status[data_index];
+
+        if *status_ref.lock() != ElementStatus::Occupied(epoch) {
+            return false;
+        }
+
+        true
+    }
+
+    fn get(&self, index: u32, epoch: u32) -> Option<&T> {
+        let block = (index / 512) as usize;
+        let data_index = (index % 512) as usize;
+
+        let length = self.length.load(Ordering::Acquire);
+
+        if index >= length {
+            return None;
+        }
+
+        // SAFETY: We have just bounds checked the index and we always check the
+        // status before accessing the data.
+        let block_option_ref = unsafe { self.blocks[block].get() };
+        let block_ref = block_option_ref.as_deref().unwrap();
+        let data_ref = &block_ref.data[data_index];
+        let status_ref = &block_ref.status[data_index];
+
+        if *status_ref.lock() != ElementStatus::Occupied(epoch) {
+            return None;
+        }
+
+        // TODO SAFETY: it isn't
+        Some(unsafe { data_ref.get().assume_init_ref() })
+    }
+
+    fn get_unchecked(&self, index: u32) -> Option<&T> {
+        let block = (index / 512) as usize;
+        let data_index = (index % 512) as usize;
+
+        let length = self.length.load(Ordering::Acquire);
+
+        if index >= length {
+            return None;
+        }
+
+        // SAFETY: We have just bounds checked the index and we always check the
+        // status before accessing the data.
+        let block_option_ref = unsafe { self.blocks[block].get() };
+        let block_ref = block_option_ref.as_deref().unwrap();
+        let data_ref = &block_ref.data[data_index];
+        let status_ref = &block_ref.status[data_index];
+
+        if let ElementStatus::Occupied(_) = *status_ref.lock() {
+            None
+        } else {
+            // TODO SAFETY: it isn't
+            Some(unsafe { data_ref.get().assume_init_ref() })
+        }
     }
 
     // SAFETY: Must be called inside the identity manager lock.
@@ -112,16 +215,16 @@ impl<T> Storage<T> {
         let data_index = (index % 512) as usize;
 
         let length = self.length.load(Ordering::Relaxed);
-        let allocated_length = (length + 511) & !511;
-        if index >= allocated_length {
+
+        if index >= length {
             panic!("deallocating out of bounds");
         }
 
         // SAFETY: We have just bounds checked the index and we're inside the lock.
         let block_option_ref = self.blocks[block].get();
-        let block_ptr = block_option_ref.as_deref().unwrap();
-        let data_ref = &block_ptr.data[data_index];
-        let status_ref = &block_ptr.status[data_index];
+        let block_ref = block_option_ref.as_deref().unwrap();
+        let data_ref = &block_ref.data[data_index];
+        let status_ref = &block_ref.status[data_index];
 
         // We set this to vacant first before destroying it, so that if a stray index comes through
         // later, it will see that this is vacant and error and not try to grab a reference to

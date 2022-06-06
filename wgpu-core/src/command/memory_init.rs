@@ -9,7 +9,7 @@ use crate::{
     init_tracker::*,
     resource::{Buffer, Texture},
     track::{TextureTracker, Tracker},
-    FastHashMap,
+    FastHashMap, registry,
 };
 
 use super::{clear::clear_texture, BakedCommands, DestroyedBufferError, DestroyedTextureError};
@@ -47,10 +47,10 @@ impl CommandBufferTextureMemoryActions {
     // Returns previously discarded surface that need to be initialized *immediately* now.
     // Only returns a non-empty list if action is MemoryInitKind::NeedsInitializedMemory.
     #[must_use]
-    pub(crate) fn register_init_action<A: hal::Api>(
+    pub(crate) fn register_init_action<A: HalApi>(
         &mut self,
         action: &TextureInitTrackerAction,
-        texture_guard: &Storage<Texture<A>, TextureId>,
+        textures: &registry::Registry<A, Texture<A>>,
     ) -> SurfacesInDiscardState {
         let mut immediately_necessary_clears = SurfacesInDiscardState::new();
 
@@ -60,7 +60,7 @@ impl CommandBufferTextureMemoryActions {
         // We don't need to add MemoryInitKind::NeedsInitializedMemory to init_actions if a surface is part of the discard list.
         // But that would mean splitting up the action which is more than we'd win here.
         self.init_actions
-            .extend(match texture_guard.get(action.id) {
+            .extend(match textures.get(action.id) {
                 Ok(texture) => texture.initialization_status.check_action(action),
                 Err(_) => return immediately_necessary_clears, // texture no longer exists
             });
@@ -100,11 +100,11 @@ impl CommandBufferTextureMemoryActions {
     }
 
     // Shortcut for register_init_action when it is known that the action is an implicit init, not requiring any immediate resource init.
-    pub(crate) fn register_implicit_init<A: hal::Api>(
+    pub(crate) fn register_implicit_init<A: HalApi>(
         &mut self,
         id: id::Valid<TextureId>,
         range: TextureInitRange,
-        texture_guard: &Storage<Texture<A>, TextureId>,
+        textures: &registry::Registry<A, Texture<A>>,
     ) {
         let must_be_empty = self.register_init_action(
             &TextureInitTrackerAction {
@@ -112,7 +112,7 @@ impl CommandBufferTextureMemoryActions {
                 range,
                 kind: MemoryInitKind::ImplicitlyInitialized,
             },
-            texture_guard,
+            textures,
         );
         assert!(must_be_empty.is_empty());
     }
@@ -126,13 +126,13 @@ pub(crate) fn fixup_discarded_surfaces<
 >(
     inits: InitIter,
     encoder: &mut A::CommandEncoder,
-    texture_guard: &Storage<Texture<A>, TextureId>,
+    textures: &registry::Registry<A, Texture<A>>,
     texture_tracker: &mut TextureTracker<A>,
     device: &Device<A>,
 ) {
     for init in inits {
         clear_texture(
-            texture_guard,
+            textures,
             id::Valid(init.texture),
             TextureInitRange {
                 mip_range: init.mip_level..(init.mip_level + 1),
@@ -227,7 +227,7 @@ impl<A: HalApi> BakedCommands<A> {
                 assert!(range.end % wgt::COPY_BUFFER_ALIGNMENT == 0, "Buffer {:?} has an uninitialized range with an end not aligned to 4 (end was {})", raw_buf, range.end);
 
                 unsafe {
-                    self.encoder.clear_buffer(raw_buf, range.clone());
+                    self.encoder.clear_buffer(&*raw_buf, range.clone());
                 }
             }
         }

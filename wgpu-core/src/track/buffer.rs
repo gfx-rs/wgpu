@@ -16,7 +16,7 @@ use crate::{
         invalid_resource_state, iterate_bitvec_indices, skip_barrier, ResourceMetadata,
         ResourceMetadataProvider, ResourceUses, UsageConflict,
     },
-    LifeGuard, RefCount,
+    LifeGuard, RefCount, registry,
 };
 use hal::BufferUses;
 
@@ -71,7 +71,7 @@ impl<A: hub::HalApi> BufferBindGroupState<A> {
     /// Adds the given resource with the given state.
     pub fn add_single<'a>(
         &mut self,
-        storage: &'a hub::Storage<Buffer<A>, BufferId>,
+        storage: &'a registry::Registry<A, Buffer<A>>,
         id: BufferId,
         state: BufferUses,
     ) -> Option<&'a Buffer<A>> {
@@ -212,7 +212,7 @@ impl<A: hub::HalApi> BufferUsageScope<A> {
     /// the vectors will be extended. A call to set_size is not needed.
     pub fn merge_single<'a>(
         &mut self,
-        storage: &'a hub::Storage<Buffer<A>, BufferId>,
+        storage: &'a registry::Registry<A, Buffer<A>>,
         id: BufferId,
         new_state: BufferUses,
     ) -> Result<&'a Buffer<A>, UsageConflict> {
@@ -345,7 +345,7 @@ impl<A: hub::HalApi> BufferTracker<A> {
     /// the vectors will be extended. A call to set_size is not needed.
     pub fn set_single<'a>(
         &mut self,
-        storage: &'a hub::Storage<Buffer<A>, BufferId>,
+        storage: &'a registry::Registry<A, Buffer<A>>,
         id: BufferId,
         state: BufferUses,
     ) -> Option<(&'a Buffer<A>, Option<PendingTransition<BufferUses>>)> {

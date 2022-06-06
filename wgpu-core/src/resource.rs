@@ -5,7 +5,7 @@ use crate::{
     init_tracker::{BufferInitTracker, TextureInitTracker},
     track::TextureSelector,
     validation::MissingBufferUsageError,
-    Label, LifeGuard, RefCount, Stored,
+    Label, LifeGuard, RefCount, Stored, sync::DestroyableResource,
 };
 
 use smallvec::SmallVec;
@@ -152,7 +152,7 @@ pub(crate) struct BufferPendingMapping {
 pub type BufferDescriptor<'a> = wgt::BufferDescriptor<Label<'a>>;
 
 pub struct Buffer<A: hal::Api> {
-    pub(crate) raw: Option<A::Buffer>,
+    pub(crate) raw: DestroyableResource<A::Buffer>,
     pub(crate) device_id: Stored<id::DeviceId>,
     pub(crate) usage: wgt::BufferUsages,
     pub(crate) size: wgt::BufferAddress,
@@ -272,9 +272,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("as_hal", "Texture");
 
         let hub = A::hub(self);
-        let mut token = Token::root();
-        let (guard, _) = hub.textures.read(&mut token);
-        let texture = guard.get(id).ok();
+        let texture = hub.textures.get(id).ok();
         let hal_texture = texture.map(|tex| tex.inner.as_raw().unwrap());
 
         hal_texture_callback(hal_texture);
@@ -293,8 +291,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let hub = A::hub(self);
         let mut token = Token::root();
 
-        let (guard, _) = hub.adapters.read(&mut token);
-        let adapter = guard.get(id).ok();
+        let adapter = hub.adapters.get(id).ok();
         let hal_adapter = adapter.map(|adapter| &adapter.raw.adapter);
 
         hal_adapter_callback(hal_adapter)
@@ -311,9 +308,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("as_hal", "Device");
 
         let hub = A::hub(self);
-        let mut token = Token::root();
-        let (guard, _) = hub.devices.read(&mut token);
-        let device = guard.get(id).ok();
+        let device = hub.devices.get(id).ok();
         let hal_device = device.map(|device| &device.raw);
 
         hal_device_callback(hal_device)

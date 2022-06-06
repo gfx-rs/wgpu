@@ -10,17 +10,17 @@ use crate::{
     hub,
     id::{TypedId, Valid},
     track::{iterate_bitvec_indices, ResourceMetadata},
-    RefCount,
+    RefCount, registry,
 };
 
 /// Stores all the resources that a bind group stores.
-pub(crate) struct StatelessBindGroupSate<T, Id: TypedId> {
-    resources: Vec<(Valid<Id>, RefCount)>,
+pub(crate) struct StatelessBindGroupSate<A, T> where T: hub::Resource {
+    resources: Vec<(Valid<T::Id>, RefCount)>,
 
-    _phantom: PhantomData<T>,
+    _phantom: PhantomData<(A, T)>,
 }
 
-impl<T: hub::Resource, Id: TypedId> StatelessBindGroupSate<T, Id> {
+impl<A: hub::HalApi, T: hub::Resource> StatelessBindGroupSate<A, T> {
     pub fn new() -> Self {
         Self {
             resources: Vec::new(),
@@ -39,12 +39,12 @@ impl<T: hub::Resource, Id: TypedId> StatelessBindGroupSate<T, Id> {
     }
 
     /// Returns a list of all resources tracked. May contain duplicates.
-    pub fn used(&self) -> impl Iterator<Item = Valid<Id>> + '_ {
+    pub fn used(&self) -> impl Iterator<Item = Valid<T::Id>> + '_ {
         self.resources.iter().map(|&(id, _)| id)
     }
 
     /// Adds the given resource.
-    pub fn add_single<'a>(&mut self, storage: &'a hub::Storage<T, Id>, id: Id) -> Option<&'a T> {
+    pub fn add_single<'a>(&mut self, storage: &'a registry::Registry<A, T>, id: T::Id) -> Option<&'a T> {
         let resource = storage.get(id).ok()?;
 
         self.resources
@@ -55,13 +55,13 @@ impl<T: hub::Resource, Id: TypedId> StatelessBindGroupSate<T, Id> {
 }
 
 /// Stores all resource state within a command buffer or device.
-pub(crate) struct StatelessTracker<A: hub::HalApi, T, Id: TypedId> {
+pub(crate) struct StatelessTracker<A: hub::HalApi, T> {
     metadata: ResourceMetadata<A>,
 
-    _phantom: PhantomData<(T, Id)>,
+    _phantom: PhantomData<T>,
 }
 
-impl<A: hub::HalApi, T: hub::Resource, Id: TypedId> StatelessTracker<A, T, Id> {
+impl<A: hub::HalApi, T: hub::Resource> StatelessTracker<A, T> {
     pub fn new() -> Self {
         Self {
             metadata: ResourceMetadata::new(),
@@ -90,7 +90,7 @@ impl<A: hub::HalApi, T: hub::Resource, Id: TypedId> StatelessTracker<A, T, Id> {
     }
 
     /// Returns a list of all resources tracked.
-    pub fn used(&self) -> impl Iterator<Item = Valid<Id>> + '_ {
+    pub fn used(&self) -> impl Iterator<Item = Valid<T::Id>> + '_ {
         self.metadata.used()
     }
 
@@ -100,7 +100,7 @@ impl<A: hub::HalApi, T: hub::Resource, Id: TypedId> StatelessTracker<A, T, Id> {
     ///
     /// If the ID is higher than the length of internal vectors,
     /// the vectors will be extended. A call to set_size is not needed.
-    pub fn insert_single(&mut self, id: Valid<Id>, ref_count: RefCount) {
+    pub fn insert_single(&mut self, id: Valid<T::Id>, ref_count: RefCount) {
         let (index32, epoch, _) = id.0.unzip();
         let index = index32 as usize;
 
@@ -119,7 +119,7 @@ impl<A: hub::HalApi, T: hub::Resource, Id: TypedId> StatelessTracker<A, T, Id> {
     ///
     /// If the ID is higher than the length of internal vectors,
     /// the vectors will be extended. A call to set_size is not needed.
-    pub fn add_single<'a>(&mut self, storage: &'a hub::Storage<T, Id>, id: Id) -> Option<&'a T> {
+    pub fn add_single<'a>(&mut self, storage: &'a registry::Registry<A, T>, id: T::Id) -> Option<&'a T> {
         let item = storage.get(id).ok()?;
 
         let (index32, epoch, _) = id.unzip();
@@ -179,7 +179,7 @@ impl<A: hub::HalApi, T: hub::Resource, Id: TypedId> StatelessTracker<A, T, Id> {
     ///
     /// If the ID is higher than the length of internal vectors,
     /// false will be returned.
-    pub fn remove_abandoned(&mut self, id: Valid<Id>) -> bool {
+    pub fn remove_abandoned(&mut self, id: Valid<T::Id>) -> bool {
         let (index32, epoch, _) = id.0.unzip();
         let index = index32 as usize;
 
