@@ -493,7 +493,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         id.0
     }
 
-    #[cfg(all(target_arch = "wasm32", feature = "webgl", not(target_os = "emscripten")))]
+    #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
     pub fn create_surface_webgl_canvas(
         &self,
         canvas: &web_sys::HtmlCanvasElement,
@@ -516,7 +516,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         id.0
     }
 
-    #[cfg(all(target_arch = "wasm32", feature = "webgl", not(target_os = "emscripten")))]
+    #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
     pub fn create_surface_webgl_offscreen_canvas(
         &self,
         canvas: &web_sys::OffscreenCanvas,

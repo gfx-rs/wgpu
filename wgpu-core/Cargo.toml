@@ -22,7 +22,6 @@ replay = ["serde", "wgt/replay", "arrayvec/serde", "naga/deserialize"]
 serial-pass = ["serde", "wgt/serde", "arrayvec/serde"]
 id32 = []
 vulkan-portability = ["hal/vulkan"]
-webgl = ["web-sys"]
 
 [dependencies]
 arrayvec = "0.7"
@@ -59,7 +58,7 @@ version = "0.12"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 hal = { path = "../wgpu-hal", package = "wgpu-hal", version = "0.12", features = ["gles"] }
-web-sys = { version = "0.3", features = ["HtmlCanvasElement"], optional = true }
+web-sys = { version = "0.3", features = ["HtmlCanvasElement"] }
 
 [target.'cfg(all(not(target_arch = "wasm32"), any(target_os = "ios", target_os = "macos")))'.dependencies]
 hal = { path = "../wgpu-hal", package = "wgpu-hal", version = "0.12", features = ["metal"] }
