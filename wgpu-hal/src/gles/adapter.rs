@@ -504,8 +504,9 @@ impl super::Adapter {
                     workarounds,
                     shading_language_version,
                     max_texture_size,
+                    is_ext_color_buffer_float_supported: downlevel_flags
+                        .contains(wgt::DownlevelFlags::COLOR_ATTACHMENT_FLOAT),
                 }),
-                downlevel_flags,
             },
             info: Self::make_info(vendor, renderer),
             features,
@@ -625,10 +626,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
         let filterable_renderable = filterable | renderable | Tfc::COLOR_ATTACHMENT_BLEND;
         let storage = Tfc::STORAGE | Tfc::STORAGE_READ_WRITE;
 
-        let float_renderable = if self
-            .downlevel_flags
-            .contains(wgt::DownlevelFlags::COLOR_ATTACHMENT_FLOAT)
-        {
+        let float_renderable = if self.shared.is_ext_color_buffer_float_supported {
             Tfc::COLOR_ATTACHMENT | Tfc::COLOR_ATTACHMENT_BLEND
         } else {
             Tfc::empty()
