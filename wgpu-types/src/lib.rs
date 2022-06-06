@@ -422,6 +422,7 @@ bitflags::bitflags! {
         /// Supported platforms:
         /// - DX12
         /// - Vulkan
+        /// - Metal (Emulated on top of `draw_indirect` and `draw_indexed_indirect`)
         ///
         /// This is a native only feature.
         const MULTI_DRAW_INDIRECT = 1 << 23;
