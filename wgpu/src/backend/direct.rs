@@ -800,6 +800,7 @@ impl crate::Context for Context {
     type SurfaceId = Surface;
 
     type SurfaceOutputDetail = SurfaceOutputDetail;
+    type SubmissionIndex = wgc::device::queue::WrappedSubmissionIndex;
 
     type RequestAdapterFuture = Ready<Option<Self::AdapterId>>;
     #[allow(clippy::type_complexity)]
@@ -1569,7 +1570,8 @@ impl crate::Context for Context {
 
         #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
         {
-            match wgc::gfx_select!(device.id => global.device_poll(device.id, true)) {
+            match wgc::gfx_select!(device.id => global.device_poll(device.id, wgt::Maintain::Wait))
+            {
                 Ok(_) => (),
                 Err(err) => self.handle_error_fatal(err, "Device::drop"),
             }
@@ -1580,12 +1582,10 @@ impl crate::Context for Context {
 
     fn device_poll(&self, device: &Self::DeviceId, maintain: crate::Maintain) -> bool {
         let global = &self.0;
+        let maintain_inner = maintain.map_index(|i| i.0);
         match wgc::gfx_select!(device.id => global.device_poll(
             device.id,
-            match maintain {
-                crate::Maintain::Poll => false,
-                crate::Maintain::Wait => true,
-            }
+            maintain_inner
         )) {
             Ok(queue_empty) => queue_empty,
             Err(err) => self.handle_error_fatal(err, "Device::poll"),
@@ -2179,12 +2179,12 @@ impl crate::Context for Context {
         &self,
         queue: &Self::QueueId,
         command_buffers: I,
-    ) {
+    ) -> Self::SubmissionIndex {
         let temp_command_buffers = command_buffers.collect::<SmallVec<[_; 4]>>();
 
         let global = &self.0;
         match wgc::gfx_select!(*queue => global.queue_submit(*queue, &temp_command_buffers)) {
-            Ok(()) => (),
+            Ok(index) => index,
             Err(err) => self.handle_error_fatal(err, "Queue::submit"),
         }
     }

@@ -214,10 +214,13 @@ impl super::Instance {
     /// - `raw_instance` must be created respecting `driver_api_version`, `extensions` and `flags`
     /// - `extensions` must be a superset of `required_extensions()` and must be created from the
     ///   same entry, driver_api_version and flags.
+    /// - `android_sdk_version` is ignored and can be `0` for all platforms besides Android
+    #[allow(clippy::too_many_arguments)]
     pub unsafe fn from_raw(
         entry: ash::Entry,
         raw_instance: ash::Instance,
         driver_api_version: u32,
+        android_sdk_version: u32,
         extensions: Vec<&'static CStr>,
         flags: crate::InstanceFlags,
         has_nv_optimus: bool,
@@ -283,6 +286,7 @@ impl super::Instance {
                 entry,
                 has_nv_optimus,
                 driver_api_version,
+                android_sdk_version,
             }),
             extensions,
         })
@@ -557,6 +561,28 @@ impl crate::Instance<super::Api> for super::Instance {
             layers
         };
 
+        #[cfg(target_os = "android")]
+        let android_sdk_version = {
+            // See: https://developer.android.com/reference/android/os/Build.VERSION_CODES
+            let mut prop = android_properties::getprop("ro.build.version.sdk");
+            if let Some(val) = prop.value() {
+                match val.parse::<u32>() {
+                    Ok(sdk_ver) => sdk_ver,
+                    Err(err) => {
+                        log::error!(
+                            "Couldn't parse Android's ro.build.version.sdk system property ({val}): {err}"
+                        );
+                        0
+                    }
+                }
+            } else {
+                log::error!("Couldn't read Android's ro.build.version.sdk system property");
+                0
+            }
+        };
+        #[cfg(not(target_os = "android"))]
+        let android_sdk_version = 0;
+
         let vk_instance = {
             let str_pointers = layers
                 .iter()
@@ -583,6 +609,7 @@ impl crate::Instance<super::Api> for super::Instance {
             entry,
             vk_instance,
             driver_api_version,
+            android_sdk_version,
             extensions,
             desc.flags,
             has_nv_optimus,
@@ -707,10 +734,27 @@ impl crate::Surface<super::Api> for super::Surface {
 
     unsafe fn acquire_texture(
         &mut self,
-        timeout_ms: u32,
+        timeout: Option<std::time::Duration>,
     ) -> Result<Option<crate::AcquiredSurfaceTexture<super::Api>>, crate::SurfaceError> {
         let sc = self.swapchain.as_mut().unwrap();
-        let timeout_ns = timeout_ms as u64 * super::MILLIS_TO_NANOS;
+
+        let mut timeout_ns = match timeout {
+            Some(duration) => duration.as_nanos() as u64,
+            None => u64::MAX,
+        };
+
+        // AcquireNextImageKHR on Android (prior to Android 11) doesn't support timeouts
+        // and will also log verbose warnings if tying to use a timeout.
+        //
+        // Android 10 implementation for reference:
+        // https://android.googlesource.com/platform/frameworks/native/+/refs/tags/android-mainline-10.0.0_r13/vulkan/libvulkan/swapchain.cpp#1426
+        // Android 11 implementation for reference:
+        // https://android.googlesource.com/platform/frameworks/native/+/refs/tags/android-mainline-11.0.0_r45/vulkan/libvulkan/swapchain.cpp#1438
+        //
+        // Android 11 corresponds to an SDK_INT/ro.build.version.sdk of 30
+        if cfg!(target_os = "android") && self.instance.android_sdk_version < 30 {
+            timeout_ns = u64::MAX;
+        }
 
         // will block if no image is available
         let (index, suboptimal) =

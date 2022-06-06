@@ -187,6 +187,7 @@ trait Context: Debug + Send + Sized + Sync {
     type SurfaceId: Debug + Send + Sync + 'static;
 
     type SurfaceOutputDetail: Send;
+    type SubmissionIndex: Debug + Copy + Clone + Send + 'static;
 
     type RequestAdapterFuture: Future<Output = Option<Self::AdapterId>> + Send;
     type RequestDeviceFuture: Future<Output = Result<(Self::DeviceId, Self::QueueId), RequestDeviceError>>
@@ -492,7 +493,7 @@ trait Context: Debug + Send + Sized + Sync {
         &self,
         queue: &Self::QueueId,
         command_buffers: I,
-    );
+    ) -> Self::SubmissionIndex;
     fn queue_get_timestamp_period(&self, queue: &Self::QueueId) -> f32;
     fn queue_on_submitted_work_done(
         &self,
@@ -557,15 +558,11 @@ pub struct Device {
     id: <C as Context>::DeviceId,
 }
 
-/// Passed to [`Device::poll`] to control if it should block or not. This has no effect on
-/// the web.
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub enum Maintain {
-    /// Block
-    Wait,
-    /// Don't block
-    Poll,
-}
+/// Identifier for a particular call to [`Queue::submit`]. Can be used
+/// as part of an argument to [`Device::poll`] to block for a particular
+/// submission to finish.
+#[derive(Debug, Copy, Clone)]
+pub struct SubmissionIndex(<C as Context>::SubmissionIndex);
 
 /// The main purpose of this struct is to resolve mapped ranges (convert sizes
 /// to end points), and to ensure that the sub-ranges don't intersect.
@@ -1258,6 +1255,9 @@ pub type TextureDescriptor<'a> = wgt::TextureDescriptor<Label<'a>>;
 /// Corresponds to [WebGPU `GPUQuerySetDescriptor`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpuquerysetdescriptor).
 pub type QuerySetDescriptor<'a> = wgt::QuerySetDescriptor<Label<'a>>;
+pub use wgt::Maintain as MaintainBase;
+/// Passed to [`Device::poll`] to control how and if it should block.
+pub type Maintain = wgt::Maintain<SubmissionIndex>;
 
 /// Describes a [`TextureView`].
 ///
@@ -3374,14 +3374,19 @@ impl Queue {
     }
 
     /// Submits a series of finished command buffers for execution.
-    pub fn submit<I: IntoIterator<Item = CommandBuffer>>(&self, command_buffers: I) {
-        Context::queue_submit(
+    pub fn submit<I: IntoIterator<Item = CommandBuffer>>(
+        &self,
+        command_buffers: I,
+    ) -> SubmissionIndex {
+        let raw = Context::queue_submit(
             &*self.context,
             &self.id,
             command_buffers
                 .into_iter()
                 .map(|mut comb| comb.id.take().unwrap()),
         );
+
+        SubmissionIndex(raw)
     }
 
     /// Gets the amount of nanoseconds each tick of a timestamp query represents.

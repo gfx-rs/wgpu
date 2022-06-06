@@ -5,7 +5,7 @@ use std::env;
 use std::fs::File;
 use std::io::Write;
 use std::mem::size_of;
-use wgpu::{Buffer, Device};
+use wgpu::{Buffer, Device, SubmissionIndex};
 
 async fn run(png_output_path: &str) {
     let args: Vec<_> = env::args().collect();
@@ -20,14 +20,22 @@ async fn run(png_output_path: &str) {
             return;
         }
     };
-    let (device, buffer, buffer_dimensions) = create_red_image_with_dimensions(width, height).await;
-    create_png(png_output_path, device, buffer, &buffer_dimensions).await;
+    let (device, buffer, buffer_dimensions, submission_index) =
+        create_red_image_with_dimensions(width, height).await;
+    create_png(
+        png_output_path,
+        device,
+        buffer,
+        &buffer_dimensions,
+        submission_index,
+    )
+    .await;
 }
 
 async fn create_red_image_with_dimensions(
     width: usize,
     height: usize,
-) -> (Device, Buffer, BufferDimensions) {
+) -> (Device, Buffer, BufferDimensions, SubmissionIndex) {
     let adapter = wgpu::Instance::new(
         wgpu::util::backend_bits_from_env().unwrap_or_else(wgpu::Backends::all),
     )
@@ -114,8 +122,8 @@ async fn create_red_image_with_dimensions(
         encoder.finish()
     };
 
-    queue.submit(Some(command_buffer));
-    (device, output_buffer, buffer_dimensions)
+    let index = queue.submit(Some(command_buffer));
+    (device, output_buffer, buffer_dimensions, index)
 }
 
 async fn create_png(
@@ -123,6 +131,7 @@ async fn create_png(
     device: Device,
     output_buffer: Buffer,
     buffer_dimensions: &BufferDimensions,
+    submission_index: SubmissionIndex,
 ) {
     // Note that we're not calling `.await` here.
     let buffer_slice = output_buffer.slice(..);
@@ -133,7 +142,9 @@ async fn create_png(
     // Poll the device in a blocking manner so that our future resolves.
     // In an actual application, `device.poll(...)` should
     // be called in an event loop or on another thread.
-    device.poll(wgpu::Maintain::Wait);
+    //
+    // We pass our submission index so we don't need to wait for any other possible submissions.
+    device.poll(wgpu::Maintain::WaitForSubmissionIndex(submission_index));
     // If a file system is available, write the buffer as a PNG
     let has_file_system_available = cfg!(not(target_arch = "wasm32"));
     if !has_file_system_available {

@@ -528,7 +528,7 @@ impl crate::Device<super::Api> for super::Device {
             depth: 1,
         };
 
-        let inner = if render_usage.contains(desc.usage)
+        let (inner, is_cubemap) = if render_usage.contains(desc.usage)
             && desc.dimension == wgt::TextureDimension::D2
             && desc.size.depth_or_array_layers == 1
         {
@@ -559,10 +559,10 @@ impl crate::Device<super::Api> for super::Device {
             }
 
             gl.bind_renderbuffer(glow::RENDERBUFFER, None);
-            super::TextureInner::Renderbuffer { raw }
+            (super::TextureInner::Renderbuffer { raw }, false)
         } else {
             let raw = gl.create_texture().unwrap();
-            let (target, is_3d) = match desc.dimension {
+            let (target, is_3d, is_cubemap) = match desc.dimension {
                 wgt::TextureDimension::D1 | wgt::TextureDimension::D2 => {
                     if desc.size.depth_or_array_layers > 1 {
                         //HACK: detect a cube map
@@ -575,17 +575,17 @@ impl crate::Device<super::Api> for super::Device {
                             None
                         };
                         match cube_count {
-                            None => (glow::TEXTURE_2D_ARRAY, true),
-                            Some(1) => (glow::TEXTURE_CUBE_MAP, false),
-                            Some(_) => (glow::TEXTURE_CUBE_MAP_ARRAY, true),
+                            None => (glow::TEXTURE_2D_ARRAY, true, false),
+                            Some(1) => (glow::TEXTURE_CUBE_MAP, false, true),
+                            Some(_) => (glow::TEXTURE_CUBE_MAP_ARRAY, true, true),
                         }
                     } else {
-                        (glow::TEXTURE_2D, false)
+                        (glow::TEXTURE_2D, false, false)
                     }
                 }
                 wgt::TextureDimension::D3 => {
                     copy_size.depth = desc.size.depth_or_array_layers;
-                    (glow::TEXTURE_3D, true)
+                    (glow::TEXTURE_3D, true, false)
                 }
             };
 
@@ -639,7 +639,7 @@ impl crate::Device<super::Api> for super::Device {
             }
 
             gl.bind_texture(target, None);
-            super::TextureInner::Texture { raw, target }
+            (super::TextureInner::Texture { raw, target }, is_cubemap)
         };
 
         Ok(super::Texture {
@@ -653,6 +653,7 @@ impl crate::Device<super::Api> for super::Device {
             format: desc.format,
             format_desc,
             copy_size,
+            is_cubemap,
         })
     }
     unsafe fn destroy_texture(&self, texture: super::Texture) {

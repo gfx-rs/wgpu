@@ -2290,6 +2290,43 @@ impl Default for ColorWrites {
     }
 }
 
+/// Passed to `Device::poll` to control how and if it should block.
+#[derive(Clone)]
+pub enum Maintain<T> {
+    /// On native backends, block until the given submission has
+    /// completed execution, and any callbacks have been invoked.
+    ///
+    /// On the web, this has no effect. Callbacks are invoked from the
+    /// window event loop.
+    WaitForSubmissionIndex(T),
+    /// Same as WaitForSubmissionIndex but waits for the most recent submission.
+    Wait,
+    /// Check the device for a single time without blocking.
+    Poll,
+}
+
+impl<T> Maintain<T> {
+    /// This maintain represents a wait of some kind.
+    pub fn is_wait(&self) -> bool {
+        match *self {
+            Self::WaitForSubmissionIndex(..) | Self::Wait => true,
+            Self::Poll => false,
+        }
+    }
+
+    /// Map on the wait index type.
+    pub fn map_index<U, F>(self, func: F) -> Maintain<U>
+    where
+        F: FnOnce(T) -> U,
+    {
+        match self {
+            Self::WaitForSubmissionIndex(i) => Maintain::WaitForSubmissionIndex(func(i)),
+            Self::Wait => Maintain::Wait,
+            Self::Poll => Maintain::Poll,
+        }
+    }
+}
+
 /// State of the stencil operation (fixed-pipeline stage).
 ///
 /// For use in [`DepthStencilState`].
