@@ -11,7 +11,7 @@ use crate::{
     },
     device::MissingDownlevelFlags,
     error::{ErrorFormatter, PrettyError},
-    hub::{Global, GlobalIdentityHandlerFactory, HalApi, Token},
+    hub::{Global, GlobalIdentityHandlerFactory, HalApi},
     id,
     init_tracker::MemoryInitKind,
     pipeline, registry,
@@ -308,7 +308,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let init_scope = PassErrorScope::Pass(encoder_id);
 
         let hub = A::hub(self);
-        let mut token = Token::root();
 
         // Spell out the type, to placate rust-analyzer.
         // https://github.com/rust-lang/rust-analyzer/issues/12247

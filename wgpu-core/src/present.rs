@@ -16,7 +16,7 @@ use crate::device::trace::Action;
 use crate::{
     conv,
     device::DeviceError,
-    hub::{Global, GlobalIdentityHandlerFactory, HalApi, Input, Token},
+    hub::{Global, GlobalIdentityHandlerFactory, HalApi, Input},
     id::{DeviceId, SurfaceId, TextureId, Valid},
     init_tracker::TextureInitTracker,
     resource, track, LifeGuard, Stored,
@@ -241,7 +241,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("present", "SwapChain");
 
         let hub = A::hub(self);
-        let mut token = Token::root();
 
         let surface = self
             .surfaces
@@ -274,7 +273,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             );
             device.trackers.lock().textures.remove(texture_id.value);
 
-            let (texture, _) = hub.textures.unregister(texture_id.value.0);
+            let texture = hub.textures.unregister(texture_id.value.0);
             if let Some(texture) = texture {
                 if let resource::TextureClearMode::RenderPass { clear_views, .. } =
                     texture.clear_mode
@@ -334,7 +333,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("discard", "SwapChain");
 
         let hub = A::hub(self);
-        let mut token = Token::root();
 
         let surface = self
             .surfaces

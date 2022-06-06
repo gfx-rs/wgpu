@@ -1,6 +1,6 @@
 use crate::{
     device::{DeviceError, HostMap, MissingFeatures},
-    hub::{Global, GlobalIdentityHandlerFactory, HalApi, Resource, Token},
+    hub::{Global, GlobalIdentityHandlerFactory, HalApi, Resource},
     id,
     init_tracker::{BufferInitTracker, TextureInitTracker},
     sync::DestroyableResource,
@@ -290,7 +290,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("as_hal", "Adapter");
 
         let hub = A::hub(self);
-        let mut token = Token::root();
 
         let adapter = hub.adapters.get(id).ok();
         let hal_adapter = adapter.map(|adapter| &adapter.raw.adapter);

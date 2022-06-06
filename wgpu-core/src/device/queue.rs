@@ -8,7 +8,7 @@ use crate::{
     conv,
     device::{DeviceError, WaitIdleError},
     get_lowest_common_denom,
-    hub::{Global, GlobalIdentityHandlerFactory, HalApi, Token},
+    hub::{Global, GlobalIdentityHandlerFactory, HalApi},
     id,
     init_tracker::{has_copy_partial_init_tracker_coverage, TextureInitRange},
     resource::{BufferAccessError, BufferMapState, TextureInner},
@@ -622,7 +622,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let (submit_index, callbacks) = {
             let hub = A::hub(self);
-            let mut token = Token::root();
 
             let device = hub
                 .devices

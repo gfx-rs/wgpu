@@ -1,6 +1,6 @@
 use crate::{
     device::{Device, DeviceDescriptor},
-    hub::{Global, GlobalIdentityHandlerFactory, HalApi, Input, Token},
+    hub::{Global, GlobalIdentityHandlerFactory, HalApi, Input},
     id::{AdapterId, DeviceId, SurfaceId, Valid},
     present::Presentation,
     LabelHelpers, LifeGuard, Stored, DOWNLEVEL_WARNING_MESSAGE,
@@ -461,7 +461,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             gl: init(hal::api::Gles, &self.instance.gl, handle),
         };
 
-        let mut token = Token::root();
         let id = self.surfaces.prepare(id_in).assign(surface);
         id.0
     }
@@ -490,7 +489,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             gl: None,
         };
 
-        let mut token = Token::root();
         let id = self.surfaces.prepare(id_in).assign(surface, &mut token);
         id.0
     }
@@ -518,7 +516,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             gl: None,
         };
 
-        let mut token = Token::root();
         let id = self.surfaces.prepare(id_in).assign(surface);
         id.0
     }
@@ -869,7 +866,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("request_device", "Adapter");
 
         let hub = A::hub(self);
-        let mut token = Token::root();
+
         let fid = hub.devices.prepare(id_in);
 
         let error = loop {
@@ -904,7 +901,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("create_device_from_hal", "Adapter");
 
         let hub = A::hub(self);
-        let mut token = Token::root();
+
         let fid = hub.devices.prepare(id_in);
 
         let error = loop {
