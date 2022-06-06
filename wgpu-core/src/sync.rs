@@ -139,6 +139,10 @@ impl<T> DestroyableResource<T> {
         }
     }
 
+    pub fn destroy(&self) -> Option<T> {
+        self.inner.write().take()
+    }
+
     pub fn into_inner(self) -> Option<T> {
         self.inner.into_inner()
     }

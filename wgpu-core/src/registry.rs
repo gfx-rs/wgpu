@@ -70,6 +70,22 @@ where
     pub fn get_unchecked(&self, index: u32) -> &T {
         self.storage.get_unchecked(index).unwrap()
     }
+
+    pub fn insert_error(&self, id: T::Id, implicit_failure: &str) {
+        todo!()
+    }
+
+    pub fn force_replace(&self, id: T::Id, value: T) {
+        todo!()
+    }
+
+    pub fn label_for_resource(&self, id: T::Id) -> String {
+        todo!()
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = (T::Id, T)> {
+        None.into_iter()
+    }
 }
 
 impl<A, T> std::ops::Index<id::Valid<T::Id>> for Registry<A, T>

@@ -5,7 +5,7 @@ use crate::{
         queue::{EncoderInFlight, SubmittedWorkDoneClosure, TempResource},
         DeviceError,
     },
-    hub::{GlobalIdentityHandlerFactory, HalApi, Hub, Token},
+    hub::{GlobalIdentityHandlerFactory, HalApi, Hub},
     id, resource,
     track::{BindGroupStates, RenderBundleScope, Tracker},
     RefCount, Stored, SubmissionIndex,
@@ -823,7 +823,6 @@ impl<A: HalApi> LifetimeTracker<A> {
         hub: &Hub<A, G>,
         raw: &A::Device,
         trackers: &Mutex<Tracker<A>>,
-        token: &mut Token<super::Device<A>>,
     ) -> Vec<super::BufferMapPendingClosure> {
         if self.ready_to_map.is_empty() {
             return Vec::new();
