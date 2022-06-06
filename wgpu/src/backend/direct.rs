@@ -181,7 +181,7 @@ impl Context {
         }
     }
 
-    #[cfg(all(target_arch = "wasm32", feature = "webgl"))]
+    #[cfg(all(target_arch = "wasm32", feature = "webgl", not(feature = "emscripten")))]
     pub fn instance_create_surface_from_canvas(
         self: &Arc<Self>,
         canvas: &web_sys::HtmlCanvasElement,
@@ -193,7 +193,7 @@ impl Context {
         }
     }
 
-    #[cfg(all(target_arch = "wasm32", feature = "webgl"))]
+    #[cfg(all(target_arch = "wasm32", feature = "webgl", not(feature = "emscripten")))]
     pub fn instance_create_surface_from_offscreen_canvas(
         self: &Arc<Self>,
         canvas: &web_sys::OffscreenCanvas,
