@@ -1,4 +1,5 @@
 use bytemuck::{Pod, Zeroable};
+use rand::{prelude::StdRng, Rng, SeedableRng};
 use std::{borrow::Cow, mem};
 use wgpu::util::DeviceExt;
 
@@ -35,6 +36,7 @@ struct Example {
     bunnies: Vec<Locals>,
     local_buffer: wgpu::Buffer,
     extent: [u32; 2],
+    rng: StdRng,
 }
 
 impl framework::Example for Example {
@@ -234,6 +236,8 @@ impl framework::Example for Example {
             label: None,
         });
 
+        let rng = rand::rngs::StdRng::seed_from_u64(64);
+
         Example {
             pipeline,
             global_group,
@@ -241,6 +245,7 @@ impl framework::Example for Example {
             bunnies: Vec::new(),
             local_buffer,
             extent: [config.width, config.height],
+            rng,
         }
     }
 
@@ -256,14 +261,14 @@ impl framework::Example for Example {
         } = event
         {
             let spawn_count = 64 + self.bunnies.len() / 2;
-            let color = rand::random::<u32>();
+            let color = self.rng.gen::<u32>();
             println!(
                 "Spawning {} bunnies, total at {}",
                 spawn_count,
                 self.bunnies.len() + spawn_count
             );
             for _ in 0..spawn_count {
-                let speed = rand::random::<f32>() * MAX_VELOCITY - (MAX_VELOCITY * 0.5);
+                let speed = self.rng.gen::<f32>() * MAX_VELOCITY - (MAX_VELOCITY * 0.5);
                 self.bunnies.push(Locals {
                     position: [0.0, 0.5 * (self.extent[1] as f32)],
                     velocity: [speed, 0.0],
