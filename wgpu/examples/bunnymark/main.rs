@@ -272,7 +272,7 @@ impl framework::Example for Example {
             );
             for _ in 0..spawn_count {
                 let rand_float = self.rng.next_u32() as f32 / u32::MAX as f32;
-                let speed = ran_float * MAX_VELOCITY - (MAX_VELOCITY * 0.5);
+                let speed = rand_float * MAX_VELOCITY - (MAX_VELOCITY * 0.5);
                 self.bunnies.push(Locals {
                     position: [0.0, 0.5 * (self.extent[1] as f32)],
                     velocity: [speed, 0.0],
