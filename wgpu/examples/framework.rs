@@ -499,7 +499,7 @@ pub fn test<E: Example>(mut params: FrameworkRefTest) {
                         modifiers: winit::event::ModifiersState::empty(),
                     },
                     device_id: unsafe { winit::event::DeviceId::dummy() },
-                    is_synthetic: true,
+                    is_synthetic: false,
                 });
 
                 // Step 3 extra frames
