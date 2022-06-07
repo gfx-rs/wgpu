@@ -489,7 +489,8 @@ pub fn test<E: Example>(mut params: FrameworkRefTest) {
             example.render(&dst_view, &ctx.device, &ctx.queue, &spawner);
 
             // Handle specific case for bunnymark
-            if (params.image_path == "/examples/bunnymark/screenshot.png") {
+            #[allow(deprecated)]
+            if params.image_path == "/examples/bunnymark/screenshot.png" {
                 // Press spacebar to spawn bunnies
                 example.update(winit::event::WindowEvent::KeyboardInput {
                     input: winit::event::KeyboardInput {
