@@ -1380,6 +1380,20 @@ impl<A: HalApi> Device<A> {
                         }
                         _ => (),
                     }
+                    match access {
+                        wgt::StorageTextureAccess::ReadOnly
+                        | wgt::StorageTextureAccess::ReadWrite
+                            if !self.features.contains(
+                                wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
+                            ) =>
+                        {
+                            return Err(binding_model::CreateBindGroupLayoutError::Entry {
+                                binding: entry.binding,
+                                error: binding_model::BindGroupLayoutEntryError::StorageTextureReadWrite,
+                            });
+                        }
+                        _ => (),
+                    }
                     (
                         Some(
                             wgt::Features::TEXTURE_BINDING_ARRAY
