@@ -1708,6 +1708,7 @@ impl Instance {
     ///
     /// - Raw Window Handle must be a valid object to create a surface upon and
     ///   must remain valid for the lifetime of the returned surface.
+    /// - If not called on the main thread, metal backend will panic.
     pub unsafe fn create_surface<W: raw_window_handle::HasRawWindowHandle>(
         &self,
         window: &W,
