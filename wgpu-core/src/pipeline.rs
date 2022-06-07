@@ -357,6 +357,25 @@ bitflags::bitflags! {
     }
 }
 
+/// How a render pipeline will retrieve attributes from a particular vertex buffer.
+#[derive(Clone, Copy, Debug)]
+pub struct VertexStep {
+    /// The byte stride in the buffer between one attribute value and the next.
+    pub stride: wgt::BufferAddress,
+
+    /// Whether the buffer is indexed by vertex number or instance number.
+    pub mode: wgt::VertexStepMode,
+}
+
+impl Default for VertexStep {
+    fn default() -> Self {
+        Self {
+            stride: 0,
+            mode: wgt::VertexStepMode::Vertex,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct RenderPipeline<A: hal::Api> {
     pub(crate) raw: A::RenderPipeline,
@@ -365,7 +384,7 @@ pub struct RenderPipeline<A: hal::Api> {
     pub(crate) pass_context: RenderPassContext,
     pub(crate) flags: PipelineFlags,
     pub(crate) strip_index_format: Option<wgt::IndexFormat>,
-    pub(crate) vertex_strides: Vec<(wgt::BufferAddress, wgt::VertexStepMode)>,
+    pub(crate) vertex_steps: Vec<VertexStep>,
     pub(crate) late_sized_buffer_groups: ArrayVec<LateSizedBufferGroup, { hal::MAX_BIND_GROUPS }>,
     pub(crate) life_guard: LifeGuard,
 }

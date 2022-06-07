@@ -376,7 +376,7 @@ impl RenderBundleEncoder {
                     state.pipeline_layout = Some(pipeline.layout_id.value);
 
                     state.set_pipeline(
-                        &pipeline.vertex_strides,
+                        &pipeline.vertex_steps,
                         &layout.bind_group_layout_ids,
                         &layout.push_constant_ranges,
                     );
@@ -996,8 +996,7 @@ impl IndexState {
 struct VertexState {
     buffer: Option<id::BufferId>,
     range: Range<wgt::BufferAddress>,
-    stride: wgt::BufferAddress,
-    rate: wgt::VertexStepMode,
+    step: pipeline::VertexStep,
     is_dirty: bool,
 }
 
@@ -1008,8 +1007,7 @@ impl VertexState {
         Self {
             buffer: None,
             range: 0..0,
-            stride: 0,
-            rate: wgt::VertexStepMode::Vertex,
+            step: pipeline::VertexStep::default(),
             is_dirty: false,
         }
     }
@@ -1149,11 +1147,11 @@ impl<A: HalApi> State<A> {
             instance_limit_slot: 0,
         };
         for (idx, vbs) in self.vertex.iter().enumerate() {
-            if vbs.stride == 0 {
+            if vbs.step.stride == 0 {
                 continue;
             }
-            let limit = ((vbs.range.end - vbs.range.start) / vbs.stride) as u32;
-            match vbs.rate {
+            let limit = ((vbs.range.end - vbs.range.start) / vbs.step.stride) as u32;
+            match vbs.step.mode {
                 wgt::VertexStepMode::Vertex => {
                     if limit < vert_state.vertex_limit {
                         vert_state.vertex_limit = limit;
@@ -1211,13 +1209,12 @@ impl<A: HalApi> State<A> {
 
     fn set_pipeline(
         &mut self,
-        vertex_strides: &[(wgt::BufferAddress, wgt::VertexStepMode)],
+        steps: &[pipeline::VertexStep],
         layout_ids: &[id::Valid<id::BindGroupLayoutId>],
         push_constant_layouts: &[wgt::PushConstantRange],
     ) {
-        for (vs, &(stride, step_mode)) in self.vertex.iter_mut().zip(vertex_strides) {
-            vs.stride = stride;
-            vs.rate = step_mode;
+        for (vs, &step) in self.vertex.iter_mut().zip(steps) {
+            vs.step = step;
         }
 
         let push_constants_changed = self

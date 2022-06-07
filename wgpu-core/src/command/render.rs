@@ -17,7 +17,7 @@ use crate::{
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Storage, Token},
     id,
     init_tracker::{MemoryInitKind, TextureInitRange, TextureInitTrackerAction},
-    pipeline::PipelineFlags,
+    pipeline::{self, PipelineFlags},
     resource::{self, Buffer, Texture, TextureView},
     track::{TextureSelector, UsageConflict, UsageScope},
     validation::{
@@ -298,16 +298,17 @@ impl IndexState {
 #[derive(Clone, Copy, Debug)]
 struct VertexBufferState {
     total_size: BufferAddress,
-    stride: BufferAddress,
-    rate: VertexStepMode,
+    step: pipeline::VertexStep,
     bound: bool,
 }
 
 impl VertexBufferState {
     const EMPTY: Self = Self {
         total_size: 0,
-        stride: 0,
-        rate: VertexStepMode::Vertex,
+        step: pipeline::VertexStep {
+            stride: 0,
+            mode: VertexStepMode::Vertex,
+        },
         bound: false,
     };
 }
@@ -332,11 +333,11 @@ impl VertexState {
         self.vertex_limit = u32::MAX;
         self.instance_limit = u32::MAX;
         for (idx, vbs) in self.inputs.iter().enumerate() {
-            if vbs.stride == 0 || !vbs.bound {
+            if vbs.step.stride == 0 || !vbs.bound {
                 continue;
             }
-            let limit = (vbs.total_size / vbs.stride) as u32;
-            match vbs.rate {
+            let limit = (vbs.total_size / vbs.step.stride) as u32;
+            match vbs.step.mode {
                 VertexStepMode::Vertex => {
                     if limit < self.vertex_limit {
                         self.vertex_limit = limit;
@@ -1340,24 +1341,25 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                         state.index.pipeline_format = pipeline.strip_index_format;
 
-                        let vertex_strides_len = pipeline.vertex_strides.len();
-                        state.vertex.buffers_required = vertex_strides_len as u32;
+                        let vertex_steps_len = pipeline.vertex_steps.len();
+                        state.vertex.buffers_required = vertex_steps_len as u32;
 
-                        while state.vertex.inputs.len() < vertex_strides_len {
+                        // Initialize each `vertex.inputs[i].step` from
+                        // `pipeline.vertex_steps[i]`.  Enlarge `vertex.inputs`
+                        // as necessary to accomodate all slots in the
+                        // pipeline. If `vertex.inputs` is longer, fill the
+                        // extra entries with default `VertexStep`s.
+                        while state.vertex.inputs.len() < vertex_steps_len {
                             state.vertex.inputs.push(VertexBufferState::EMPTY);
                         }
 
-                        // Update vertex buffer limits
-                        for (vbs, &(stride, rate)) in
-                            state.vertex.inputs.iter_mut().zip(&pipeline.vertex_strides)
-                        {
-                            vbs.stride = stride;
-                            vbs.rate = rate;
+                        // This is worse as a `zip`, but it's close.
+                        let mut steps = pipeline.vertex_steps.iter();
+                        for input in state.vertex.inputs.iter_mut() {
+                            input.step = steps.next().cloned().unwrap_or_default();
                         }
-                        for vbs in state.vertex.inputs.iter_mut().skip(vertex_strides_len) {
-                            vbs.stride = 0;
-                            vbs.rate = VertexStepMode::Vertex;
-                        }
+
+                        // Update vertex buffer limits.
                         state.vertex.update_limits();
                     }
                     RenderCommand::SetIndexBuffer {

@@ -2458,13 +2458,14 @@ impl<A: HalApi> Device<A> {
         let mut io = validation::StageIo::default();
         let mut validated_stages = wgt::ShaderStages::empty();
 
-        let mut vertex_strides = Vec::with_capacity(desc.vertex.buffers.len());
+        let mut vertex_steps = Vec::with_capacity(desc.vertex.buffers.len());
         let mut vertex_buffers = Vec::with_capacity(desc.vertex.buffers.len());
         let mut total_attributes = 0;
         for (i, vb_state) in desc.vertex.buffers.iter().enumerate() {
-            vertex_strides
-                .alloc()
-                .init((vb_state.array_stride, vb_state.step_mode));
+            vertex_steps.alloc().init(pipeline::VertexStep {
+                stride: vb_state.array_stride,
+                mode: vb_state.step_mode,
+            });
             if vb_state.attributes.is_empty() {
                 continue;
             }
@@ -2862,7 +2863,7 @@ impl<A: HalApi> Device<A> {
             pass_context,
             flags,
             strip_index_format: desc.primitive.strip_index_format,
-            vertex_strides,
+            vertex_steps,
             late_sized_buffer_groups,
             life_guard: LifeGuard::new(desc.label.borrow_or_default()),
         };
