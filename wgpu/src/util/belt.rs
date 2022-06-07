@@ -1,6 +1,6 @@
 use crate::{
-    util::align_to, Buffer, BufferAddress, BufferDescriptor, BufferSize, BufferUsages, BufferViewMut,
-    CommandEncoder, Device, MapMode,
+    util::align_to, Buffer, BufferAddress, BufferDescriptor, BufferSize, BufferUsages,
+    BufferViewMut, CommandEncoder, Device, MapMode,
 };
 use std::fmt;
 use std::sync::{mpsc, Arc};
