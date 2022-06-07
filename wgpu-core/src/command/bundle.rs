@@ -122,7 +122,8 @@ pub struct RenderBundleEncoder {
     base: BasePass<RenderCommand>,
     parent_id: id::DeviceId,
     pub(crate) context: RenderPassContext,
-    pub(crate) is_ds_read_only: bool,
+    pub(crate) is_depth_read_only: bool,
+    pub(crate) is_stencil_read_only: bool,
 
     // Resource binding dedupe state.
     #[cfg_attr(feature = "serial-pass", serde(skip))]
@@ -137,6 +138,20 @@ impl RenderBundleEncoder {
         parent_id: id::DeviceId,
         base: Option<BasePass<RenderCommand>>,
     ) -> Result<Self, CreateRenderBundleError> {
+        let (is_depth_read_only, is_stencil_read_only) = match desc.depth_stencil {
+            Some(ds) => {
+                let aspects = hal::FormatAspects::from(ds.format);
+                (
+                    !aspects.contains(hal::FormatAspects::DEPTH) || ds.depth_read_only,
+                    !aspects.contains(hal::FormatAspects::STENCIL) || ds.stencil_read_only,
+                )
+            }
+            // There's no depth/stencil attachment, so these values just don't
+            // matter.  Choose the most accommodating value, to simplify
+            // validation.
+            None => (true, true),
+        };
+
         //TODO: validate that attachment formats are renderable,
         // have expected aspects, support multisampling.
         Ok(Self {
@@ -161,15 +176,9 @@ impl RenderBundleEncoder {
                 },
                 multiview: desc.multiview,
             },
-            is_ds_read_only: match desc.depth_stencil {
-                Some(ds) => {
-                    let aspects = hal::FormatAspects::from(ds.format);
-                    (!aspects.contains(hal::FormatAspects::DEPTH) || ds.depth_read_only)
-                        && (!aspects.contains(hal::FormatAspects::STENCIL) || ds.stencil_read_only)
-                }
-                None => false,
-            },
 
+            is_depth_read_only,
+            is_stencil_read_only,
             current_bind_groups: BindGroupStateChange::new(),
             current_pipeline: StateChange::new(),
         })
@@ -188,7 +197,8 @@ impl RenderBundleEncoder {
                 sample_count: 0,
                 multiview: None,
             },
-            is_ds_read_only: false,
+            is_depth_read_only: false,
+            is_stencil_read_only: false,
 
             current_bind_groups: BindGroupStateChange::new(),
             current_pipeline: StateChange::new(),
@@ -344,8 +354,10 @@ impl RenderBundleEncoder {
                         .map_err(RenderCommandError::IncompatiblePipelineTargets)
                         .map_pass_err(scope)?;
 
-                    if pipeline.flags.contains(PipelineFlags::WRITES_DEPTH_STENCIL)
-                        && self.is_ds_read_only
+                    if (pipeline.flags.contains(PipelineFlags::WRITES_DEPTH)
+                        && self.is_depth_read_only)
+                        || (pipeline.flags.contains(PipelineFlags::WRITES_STENCIL)
+                            && self.is_stencil_read_only)
                     {
                         return Err(RenderCommandError::IncompatiblePipelineRods)
                             .map_pass_err(scope);
@@ -608,7 +620,8 @@ impl RenderBundleEncoder {
                 string_data: Vec::new(),
                 push_constant_data: Vec::new(),
             },
-            is_ds_read_only: self.is_ds_read_only,
+            is_depth_read_only: self.is_depth_read_only,
+            is_stencil_read_only: self.is_stencil_read_only,
             device_id: Stored {
                 value: id::Valid(self.parent_id),
                 ref_count: device.life_guard.add_ref(),
@@ -686,7 +699,8 @@ pub struct RenderBundle<A: HalApi> {
     // Normalized command stream. It can be executed verbatim,
     // without re-binding anything on the pipeline change.
     base: BasePass<RenderCommand>,
-    pub(super) is_ds_read_only: bool,
+    pub(super) is_depth_read_only: bool,
+    pub(super) is_stencil_read_only: bool,
     pub(crate) device_id: Stored<id::DeviceId>,
     pub(crate) used: RenderBundleScope<A>,
     pub(super) buffer_memory_init_actions: Vec<BufferInitTrackerAction>,

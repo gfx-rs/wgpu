@@ -2419,9 +2419,20 @@ impl DepthStencilState {
     pub fn is_depth_enabled(&self) -> bool {
         self.depth_compare != CompareFunction::Always || self.depth_write_enabled
     }
+
+    /// Returns true if the state doesn't mutate the depth buffer.
+    pub fn is_depth_read_only(&self) -> bool {
+        !self.depth_write_enabled
+    }
+
+    /// Returns true if the state doesn't mutate the stencil.
+    pub fn is_stencil_read_only(&self) -> bool {
+        self.stencil.is_read_only()
+    }
+
     /// Returns true if the state doesn't mutate either depth or stencil of the target.
     pub fn is_read_only(&self) -> bool {
-        !self.depth_write_enabled && self.stencil.is_read_only()
+        self.is_depth_read_only() && self.is_stencil_read_only()
     }
 }
 

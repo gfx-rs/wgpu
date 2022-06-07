@@ -2765,8 +2765,11 @@ impl<A: HalApi> Device<A> {
             if ds.stencil.is_enabled() && ds.stencil.needs_ref_value() {
                 flags |= pipeline::PipelineFlags::STENCIL_REFERENCE;
             }
-            if !ds.is_read_only() {
-                flags |= pipeline::PipelineFlags::WRITES_DEPTH_STENCIL;
+            if !ds.is_depth_read_only() {
+                flags |= pipeline::PipelineFlags::WRITES_DEPTH;
+            }
+            if !ds.is_stencil_read_only() {
+                flags |= pipeline::PipelineFlags::WRITES_STENCIL;
             }
         }
 
@@ -4378,7 +4381,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     desc: trace::new_render_bundle_encoder_descriptor(
                         desc.label.clone(),
                         &bundle_encoder.context,
-                        bundle_encoder.is_ds_read_only,
+                        bundle_encoder.is_depth_read_only,
+                        bundle_encoder.is_stencil_read_only,
                     ),
                     base: bundle_encoder.to_base_pass(),
                 });
