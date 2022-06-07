@@ -1,5 +1,8 @@
 use bytemuck::{Pod, Zeroable};
-use rand::{prelude::StdRng, Rng, SeedableRng};
+use rand_chacha::{
+    rand_core::{RngCore, SeedableRng},
+    ChaCha8Rng,
+};
 use std::{borrow::Cow, mem};
 use wgpu::util::DeviceExt;
 
@@ -36,7 +39,7 @@ struct Example {
     bunnies: Vec<Locals>,
     local_buffer: wgpu::Buffer,
     extent: [u32; 2],
-    rng: StdRng,
+    rng: ChaCha8Rng,
 }
 
 impl framework::Example for Example {
@@ -236,7 +239,7 @@ impl framework::Example for Example {
             label: None,
         });
 
-        let rng = rand::rngs::StdRng::seed_from_u64(64);
+        let rng = rand_chacha::ChaCha8Rng::seed_from_u64(64);
 
         Example {
             pipeline,
@@ -261,14 +264,15 @@ impl framework::Example for Example {
         } = event
         {
             let spawn_count = 64 + self.bunnies.len() / 2;
-            let color = self.rng.gen::<u32>();
+            let color = self.rng.next_u32();
             println!(
                 "Spawning {} bunnies, total at {}",
                 spawn_count,
                 self.bunnies.len() + spawn_count
             );
             for _ in 0..spawn_count {
-                let speed = self.rng.gen::<f32>() * MAX_VELOCITY - (MAX_VELOCITY * 0.5);
+                let rand_float = self.rng.next_u32() as f32 / u32::MAX as f32;
+                let speed = ran_float * MAX_VELOCITY - (MAX_VELOCITY * 0.5);
                 self.bunnies.push(Locals {
                     position: [0.0, 0.5 * (self.extent[1] as f32)],
                     velocity: [speed, 0.0],
