@@ -130,7 +130,7 @@ log = "0.4"
 noise = { version = "0.7", default-features = false }
 obj = "0.10"
 png = "0.17"
-nanorand = "0.7"
+nanorand = { version = "0.7", default-features = false, features = ["wyrand"] }
 winit = "0.26"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
