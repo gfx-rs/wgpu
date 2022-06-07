@@ -126,6 +126,16 @@ pub enum CreateShaderModuleError {
     MissingFeatures(#[from] MissingFeatures),
 }
 
+impl CreateShaderModuleError {
+    pub fn location(&self, source: &str) -> Option<naga::SourceLocation> {
+        match *self {
+            CreateShaderModuleError::Parsing(ref err) => err.inner.location(source),
+            CreateShaderModuleError::Validation(ref err) => err.inner.location(source),
+            _ => None,
+        }
+    }
+}
+
 /// Describes a programmable pipeline stage.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
