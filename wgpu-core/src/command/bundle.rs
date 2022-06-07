@@ -246,7 +246,7 @@ impl RenderBundleEncoder {
                 &*pipeline_guard,
                 &*query_set_guard,
             ),
-            index: IndexState::new(),
+            index: None,
             vertex: (0..hal::MAX_VERTEX_BUFFERS)
                 .map(|_| VertexState::new())
                 .collect(),
@@ -367,7 +367,6 @@ impl RenderBundleEncoder {
                     pipeline_layout_id = Some(pipeline.layout_id.value);
 
                     state.set_pipeline(
-                        pipeline.strip_index_format,
                         &pipeline.vertex_strides,
                         &layout.bind_group_layout_ids,
                         &layout.push_constant_ranges,
@@ -403,8 +402,7 @@ impl RenderBundleEncoder {
                         offset..end,
                         MemoryInitKind::NeedsInitializedMemory,
                     ));
-                    state.index.set_format(index_format);
-                    state.index.set_buffer(buffer_id, offset..end);
+                    state.set_index_buffer(buffer_id, index_format, offset..end);
                 }
                 RenderCommand::SetVertexBuffer {
                     slot,
@@ -500,9 +498,13 @@ impl RenderBundleEncoder {
                         indirect: false,
                         pipeline: state.pipeline,
                     };
+                    let index = match state.index {
+                        Some(ref index) => index,
+                        None => return Err(DrawError::MissingIndexBuffer).map_pass_err(scope),
+                    };
                     //TODO: validate that base_vertex + max_index() is within the provided range
                     let vertex_limits = state.vertex_limits();
-                    let index_limit = state.index.limit();
+                    let index_limit = index.limit();
                     let last_index = first_index + index_count;
                     if last_index > index_limit {
                         return Err(DrawError::IndexBeyondLimit {
@@ -520,7 +522,7 @@ impl RenderBundleEncoder {
                         })
                         .map_pass_err(scope);
                     }
-                    commands.extend(state.index.flush());
+                    commands.extend(state.flush_index());
                     commands.extend(state.flush_vertices());
                     commands.extend(state.flush_binds(base.dynamic_offsets));
                     commands.push(command);
@@ -591,7 +593,12 @@ impl RenderBundleEncoder {
                         MemoryInitKind::NeedsInitializedMemory,
                     ));
 
-                    commands.extend(state.index.flush());
+                    let index = match state.index {
+                        Some(ref mut index) => index,
+                        None => return Err(DrawError::MissingIndexBuffer).map_pass_err(scope),
+                    };
+
+                    commands.extend(index.flush());
                     commands.extend(state.flush_vertices());
                     commands.extend(state.flush_binds(base.dynamic_offsets));
                     commands.push(command);
@@ -921,39 +928,22 @@ impl<A: HalApi> Resource for RenderBundle<A> {
 
 /// A render bundle's current index buffer state.
 ///
-/// [`RenderBundleEncoder::finish`] uses this to drop redundant
-/// `SetIndexBuffer` commands from the final [`RenderBundle`]. It
-/// records index buffer state changes here, and then calls this
-/// type's [`flush`] method before any indexed draw command to produce
+/// [`RenderBundleEncoder::finish`] records the currently set index buffer here,
+/// and calls [`State::flush_index`] before any indexed draw command to produce
 /// a `SetIndexBuffer` command if one is necessary.
-///
-/// [`flush`]: IndexState::flush
 #[derive(Debug)]
 struct IndexState {
-    buffer: Option<id::BufferId>,
+    buffer: id::BufferId,
     format: wgt::IndexFormat,
-    pipeline_format: Option<wgt::IndexFormat>,
     range: Range<wgt::BufferAddress>,
     is_dirty: bool,
 }
 
 impl IndexState {
-    /// Return a fresh state: no index buffer has been set yet.
-    fn new() -> Self {
-        Self {
-            buffer: None,
-            format: wgt::IndexFormat::default(),
-            pipeline_format: None,
-            range: 0..0,
-            is_dirty: false,
-        }
-    }
-
     /// Return the number of entries in the current index buffer.
     ///
     /// Panic if no index buffer has been set.
     fn limit(&self) -> u32 {
-        assert!(self.buffer.is_some());
         let bytes_per_index = match self.format {
             wgt::IndexFormat::Uint16 => 2,
             wgt::IndexFormat::Uint32 => 4,
@@ -961,13 +951,13 @@ impl IndexState {
         ((self.range.end - self.range.start) / bytes_per_index) as u32
     }
 
-    /// Prepare for an indexed draw, producing a `SetIndexBuffer`
-    /// command if necessary.
+    /// Generate a `SetIndexBuffer` command to prepare for an indexed draw
+    /// command, if needed.
     fn flush(&mut self) -> Option<RenderCommand> {
         if self.is_dirty {
             self.is_dirty = false;
             Some(RenderCommand::SetIndexBuffer {
-                buffer_id: self.buffer.unwrap(),
+                buffer_id: self.buffer,
                 index_format: self.format,
                 offset: self.range.start,
                 size: wgt::BufferSize::new(self.range.end - self.range.start),
@@ -975,21 +965,6 @@ impl IndexState {
         } else {
             None
         }
-    }
-
-    /// Set the current index buffer's format.
-    fn set_format(&mut self, format: wgt::IndexFormat) {
-        if self.format != format {
-            self.format = format;
-            self.is_dirty = true;
-        }
-    }
-
-    /// Set the current index buffer.
-    fn set_buffer(&mut self, id: id::BufferId, range: Range<wgt::BufferAddress>) {
-        self.buffer = Some(id);
-        self.range = range;
-        self.is_dirty = true;
     }
 }
 
@@ -1114,9 +1089,9 @@ struct State<A: HalApi> {
     /// Resources used by this bundle. This will become [`RenderBundle::used`].
     trackers: RenderBundleScope<A>,
 
-    /// The current index buffer. We flush this state before indexed
-    /// draw commands.
-    index: IndexState,
+    /// The current index buffer, if one has been set. We flush this state
+    /// before indexed draw commands.
+    index: Option<IndexState>,
 
     /// The state of each vertex buffer slot.
     vertex: ArrayVec<VertexState, { hal::MAX_VERTEX_BUFFERS }>,
@@ -1209,13 +1184,10 @@ impl<A: HalApi> State<A> {
 
     fn set_pipeline(
         &mut self,
-        index_format: Option<wgt::IndexFormat>,
         vertex_strides: &[(wgt::BufferAddress, wgt::VertexStepMode)],
         layout_ids: &[id::Valid<id::BindGroupLayoutId>],
         push_constant_layouts: &[wgt::PushConstantRange],
     ) {
-        self.index.pipeline_format = index_format;
-
         for (vs, &(stride, step_mode)) in self.vertex.iter_mut().zip(vertex_strides) {
             vs.stride = stride;
             vs.rate = step_mode;
@@ -1240,6 +1212,38 @@ impl<A: HalApi> State<A> {
         if let Some(slot) = invalid_from {
             self.invalidate_group_from(slot);
         }
+    }
+
+    /// Set the bundle's current index buffer and its associated parameters.
+    fn set_index_buffer(
+        &mut self,
+        buffer: id::BufferId,
+        format: wgt::IndexFormat,
+        range: Range<wgt::BufferAddress>,
+    ) {
+        match self.index {
+            Some(ref current)
+                if current.buffer == buffer
+                    && current.format == format
+                    && current.range == range =>
+            {
+                return
+            }
+            _ => (),
+        }
+
+        self.index = Some(IndexState {
+            buffer,
+            format,
+            range,
+            is_dirty: true,
+        });
+    }
+
+    /// Generate a `SetIndexBuffer` command to prepare for an indexed draw
+    /// command, if needed.
+    fn flush_index(&mut self) -> Option<RenderCommand> {
+        self.index.as_mut().and_then(|index| index.flush())
     }
 
     fn flush_push_constants(&mut self) -> Option<impl Iterator<Item = RenderCommand>> {
