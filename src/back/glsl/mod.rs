@@ -2808,32 +2808,59 @@ impl<'a, W: Write> Writer<'a, W> {
                 let extract_bits = fun == Mf::ExtractBits;
                 let insert_bits = fun == Mf::InsertBits;
 
-                // we might need to cast to unsigned integers since
-                // GLSL's findLSB / findMSB always return signed integers
-                let need_extra_paren = {
-                    (fun == Mf::FindLsb || fun == Mf::FindMsb || fun == Mf::CountOneBits)
-                        && match *ctx.info[arg].ty.inner_with(&self.module.types) {
-                            crate::TypeInner::Scalar {
-                                kind: crate::ScalarKind::Uint,
-                                ..
-                            } => {
-                                write!(self.out, "uint(")?;
-                                true
-                            }
-                            crate::TypeInner::Vector {
-                                kind: crate::ScalarKind::Uint,
-                                size,
-                                ..
-                            } => {
-                                write!(self.out, "uvec{}(", size as u8)?;
-                                true
-                            }
-                            _ => false,
-                        }
+                // Some GLSL functions always return signed integers (like findMSB),
+                // so they need to be cast to uint if the argument is also an uint.
+                let needs_int_to_uint =
+                    matches!(fun, Mf::FindLsb | Mf::FindMsb | Mf::CountOneBits | Mf::Abs);
+
+                // Some GLSL functions only accept signed integers (like abs),
+                // so they need their argument cast from uint to int.
+                let needs_uint_to_int = matches!(fun, Mf::Abs);
+
+                // Check if the argument is an unsigned integer and return the vector size
+                // in case it's a vector
+                let maybe_uint_size = match *ctx.info[arg].ty.inner_with(&self.module.types) {
+                    crate::TypeInner::Scalar {
+                        kind: crate::ScalarKind::Uint,
+                        ..
+                    } => Some(None),
+                    crate::TypeInner::Vector {
+                        kind: crate::ScalarKind::Uint,
+                        size,
+                        ..
+                    } => Some(Some(size)),
+                    _ => None,
                 };
 
+                if let Some(maybe_size) = maybe_uint_size {
+                    // Cast to uint if the function needs it
+                    if needs_int_to_uint {
+                        match maybe_size {
+                            Some(size) => write!(self.out, "uvec{}(", size as u8)?,
+                            None => write!(self.out, "uint(")?,
+                        }
+                    }
+                }
+
                 write!(self.out, "{}(", fun_name)?;
+
+                if let Some(maybe_size) = maybe_uint_size {
+                    // Cast to int if the function needs it
+                    if needs_uint_to_int {
+                        match maybe_size {
+                            Some(size) => write!(self.out, "ivec{}(", size as u8)?,
+                            None => write!(self.out, "int(")?,
+                        }
+                    }
+                }
+
                 self.write_expr(arg, ctx)?;
+
+                // Close the cast from uint to int
+                if needs_uint_to_int && maybe_uint_size.is_some() {
+                    write!(self.out, ")")?
+                }
+
                 if let Some(arg) = arg1 {
                     write!(self.out, ", ")?;
                     if extract_bits {
@@ -2866,7 +2893,8 @@ impl<'a, W: Write> Writer<'a, W> {
                 }
                 write!(self.out, ")")?;
 
-                if need_extra_paren {
+                // Close the cast from int to uint
+                if needs_int_to_uint && maybe_uint_size.is_some() {
                     write!(self.out, ")")?
                 }
             }
