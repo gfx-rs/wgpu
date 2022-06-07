@@ -1556,7 +1556,7 @@ fn inject_common_builtin(
                 };
                 declaration.overloads.push(module.add_builtin(
                     vec![ty(), ty(), base_ty()],
-                    MacroCall::MathFunction(MathFunction::SmoothStep),
+                    MacroCall::SmoothStep { splatted: size },
                 ))
             }
         }
@@ -1604,6 +1604,12 @@ pub enum MacroCall {
     BitCast(Sk),
     Derivate(DerivativeAxis),
     Barrier,
+    /// SmoothStep needs a separate variant because it might need it's inputs
+    /// to be splatted depending on the overload
+    SmoothStep {
+        /// The size of the splat operation if some
+        splatted: Option<VectorSize>,
+    },
 }
 
 impl MacroCall {
@@ -2071,6 +2077,22 @@ impl MacroCall {
                 ctx.emit_restart(body);
                 body.push(crate::Statement::Barrier(crate::Barrier::all()), meta);
                 return Ok(None);
+            }
+            MacroCall::SmoothStep { splatted } => {
+                ctx.implicit_splat(parser, &mut args[0], meta, splatted)?;
+                ctx.implicit_splat(parser, &mut args[1], meta, splatted)?;
+
+                ctx.add_expression(
+                    Expression::Math {
+                        fun: MathFunction::SmoothStep,
+                        arg: args[0],
+                        arg1: args.get(1).copied(),
+                        arg2: args.get(2).copied(),
+                        arg3: None,
+                    },
+                    Span::default(),
+                    body,
+                )
             }
         }))
     }

@@ -44,6 +44,9 @@ fn main_1() {
     var stepOut: vec4<f32>;
     var rad: vec4<f32>;
     var deg: f32;
+    var smoothStepScalar: f32;
+    var smoothStepVector: vec4<f32>;
+    var smoothStepMixed: vec4<f32>;
 
     _ = vec4<f32>(1.0);
     _ = vec4<f32>(2.0);
@@ -205,6 +208,13 @@ fn main_1() {
     _ = _e233.x;
     let _e235 = a;
     deg = degrees(_e235.x);
+    smoothStepScalar = smoothstep(0.0, 1.0, 0.5);
+    _ = vec4<f32>(0.0);
+    _ = vec4<f32>(1.0);
+    _ = vec4<f32>(0.5);
+    smoothStepVector = smoothstep(vec4<f32>(0.0), vec4<f32>(1.0), vec4<f32>(0.5));
+    _ = vec4<f32>(0.5);
+    smoothStepMixed = smoothstep(vec4<f32>(0.0), vec4<f32>(1.0), vec4<f32>(0.5));
     return;
 }
 

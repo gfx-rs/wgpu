@@ -53,4 +53,7 @@ void main() {
     // float ldexpOut = ldexp(a.x, i);
     vec4 rad = radians(a);
     float deg = degrees(a.x);
+    float smoothStepScalar = smoothstep(0.0, 1.0, 0.5);
+    vec4 smoothStepVector = smoothstep(vec4(0.0), vec4(1.0), vec4(0.5));
+    vec4 smoothStepMixed = smoothstep(0.0, 1.0, vec4(0.5));
 }
