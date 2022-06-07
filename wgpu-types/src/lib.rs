@@ -422,6 +422,7 @@ bitflags::bitflags! {
         /// Supported platforms:
         /// - DX12
         /// - Vulkan
+        /// - Metal (Emulated on top of `draw_indirect` and `draw_indexed_indirect`)
         ///
         /// This is a native only feature.
         const MULTI_DRAW_INDIRECT = 1 << 23;
@@ -2287,6 +2288,43 @@ impl Default for ColorWrites {
     }
 }
 
+/// Passed to `Device::poll` to control how and if it should block.
+#[derive(Clone)]
+pub enum Maintain<T> {
+    /// On native backends, block until the given submission has
+    /// completed execution, and any callbacks have been invoked.
+    ///
+    /// On the web, this has no effect. Callbacks are invoked from the
+    /// window event loop.
+    WaitForSubmissionIndex(T),
+    /// Same as WaitForSubmissionIndex but waits for the most recent submission.
+    Wait,
+    /// Check the device for a single time without blocking.
+    Poll,
+}
+
+impl<T> Maintain<T> {
+    /// This maintain represents a wait of some kind.
+    pub fn is_wait(&self) -> bool {
+        match *self {
+            Self::WaitForSubmissionIndex(..) | Self::Wait => true,
+            Self::Poll => false,
+        }
+    }
+
+    /// Map on the wait index type.
+    pub fn map_index<U, F>(self, func: F) -> Maintain<U>
+    where
+        F: FnOnce(T) -> U,
+    {
+        match self {
+            Self::WaitForSubmissionIndex(i) => Maintain::WaitForSubmissionIndex(func(i)),
+            Self::Wait => Maintain::Wait,
+            Self::Poll => Maintain::Poll,
+        }
+    }
+}
+
 /// State of the stencil operation (fixed-pipeline stage).
 ///
 /// For use in [`DepthStencilState`].
@@ -2381,9 +2419,20 @@ impl DepthStencilState {
     pub fn is_depth_enabled(&self) -> bool {
         self.depth_compare != CompareFunction::Always || self.depth_write_enabled
     }
+
+    /// Returns true if the state doesn't mutate the depth buffer.
+    pub fn is_depth_read_only(&self) -> bool {
+        !self.depth_write_enabled
+    }
+
+    /// Returns true if the state doesn't mutate the stencil.
+    pub fn is_stencil_read_only(&self) -> bool {
+        self.stencil.is_read_only()
+    }
+
     /// Returns true if the state doesn't mutate either depth or stencil of the target.
     pub fn is_read_only(&self) -> bool {
-        !self.depth_write_enabled && self.stencil.is_read_only()
+        self.is_depth_read_only() && self.is_stencil_read_only()
     }
 }
 

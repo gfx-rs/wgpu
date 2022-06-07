@@ -5,7 +5,7 @@ use wasm_bindgen::JsCast;
 use super::TextureFormatDesc;
 
 /// A wrapper around a [`glow::Context`] to provide a fake `lock()` api that makes it compatible
-/// with the `AdapterContext` API fromt the EGL implementation.
+/// with the `AdapterContext` API from the EGL implementation.
 pub struct AdapterContext {
     pub glow_context: glow::Context,
 }
@@ -25,7 +25,62 @@ impl AdapterContext {
 
 #[derive(Debug)]
 pub struct Instance {
-    canvas: Mutex<Option<web_sys::HtmlCanvasElement>>,
+    webgl2_context: Mutex<Option<web_sys::WebGl2RenderingContext>>,
+}
+
+impl Instance {
+    pub fn create_surface_from_canvas(
+        &self,
+        canvas: &web_sys::HtmlCanvasElement,
+    ) -> Result<Surface, crate::InstanceError> {
+        let webgl2_context = canvas
+            .get_context_with_context_options("webgl2", &Self::create_context_options())
+            .expect("Cannot create WebGL2 context")
+            .and_then(|context| context.dyn_into::<web_sys::WebGl2RenderingContext>().ok())
+            .expect("Cannot convert into WebGL2 context");
+
+        *self.webgl2_context.lock() = Some(webgl2_context.clone());
+
+        Ok(Surface {
+            webgl2_context,
+            present_program: None,
+            swapchain: None,
+            texture: None,
+            presentable: true,
+        })
+    }
+
+    pub fn create_surface_from_offscreen_canvas(
+        &self,
+        canvas: &web_sys::OffscreenCanvas,
+    ) -> Result<Surface, crate::InstanceError> {
+        let webgl2_context = canvas
+            .get_context_with_context_options("webgl2", &Self::create_context_options())
+            .expect("Cannot create WebGL2 context")
+            .and_then(|context| context.dyn_into::<web_sys::WebGl2RenderingContext>().ok())
+            .expect("Cannot convert into WebGL2 context");
+
+        *self.webgl2_context.lock() = Some(webgl2_context.clone());
+
+        Ok(Surface {
+            webgl2_context,
+            present_program: None,
+            swapchain: None,
+            texture: None,
+            presentable: true,
+        })
+    }
+
+    fn create_context_options() -> js_sys::Object {
+        let context_options = js_sys::Object::new();
+        js_sys::Reflect::set(
+            &context_options,
+            &"antialias".into(),
+            &wasm_bindgen::JsValue::FALSE,
+        )
+        .expect("Cannot create context options");
+        context_options
+    }
 }
 
 // SAFE: WASM doesn't have threads
@@ -35,28 +90,14 @@ unsafe impl Send for Instance {}
 impl crate::Instance<super::Api> for Instance {
     unsafe fn init(_desc: &crate::InstanceDescriptor) -> Result<Self, crate::InstanceError> {
         Ok(Instance {
-            canvas: Mutex::new(None),
+            webgl2_context: Mutex::new(None),
         })
     }
 
     unsafe fn enumerate_adapters(&self) -> Vec<crate::ExposedAdapter<super::Api>> {
-        let canvas_guard = self.canvas.lock();
-        let gl = match *canvas_guard {
-            Some(ref canvas) => {
-                let context_options = js_sys::Object::new();
-                js_sys::Reflect::set(
-                    &context_options,
-                    &"antialias".into(),
-                    &wasm_bindgen::JsValue::FALSE,
-                )
-                .expect("Cannot create context options");
-                let webgl2_context = canvas
-                    .get_context_with_context_options("webgl2", &context_options)
-                    .expect("Cannot create WebGL2 context")
-                    .and_then(|context| context.dyn_into::<web_sys::WebGl2RenderingContext>().ok())
-                    .expect("Cannot convert into WebGL2 context");
-                glow::Context::from_webgl2_context(webgl2_context)
-            }
+        let context_guard = self.webgl2_context.lock();
+        let gl = match *context_guard {
+            Some(ref webgl2_context) => glow::Context::from_webgl2_context(webgl2_context.clone()),
             None => return Vec::new(),
         };
 
@@ -79,26 +120,18 @@ impl crate::Instance<super::Api> for Instance {
                 .dyn_into()
                 .expect("Failed to downcast to canvas type");
 
-            *self.canvas.lock() = Some(canvas.clone());
-
-            Ok(Surface {
-                canvas,
-                present_program: None,
-                swapchain: None,
-                texture: None,
-                presentable: true,
-            })
+            self.create_surface_from_canvas(&canvas)
         } else {
             unreachable!()
         }
     }
 
     unsafe fn destroy_surface(&self, surface: Surface) {
-        let mut canvas_option_ref = self.canvas.lock();
+        let mut context_option_ref = self.webgl2_context.lock();
 
-        if let Some(canvas) = canvas_option_ref.as_ref() {
-            if canvas == &surface.canvas {
-                *canvas_option_ref = None;
+        if let Some(context) = context_option_ref.as_ref() {
+            if context == &surface.webgl2_context {
+                *context_option_ref = None;
             }
         }
     }
@@ -106,7 +139,7 @@ impl crate::Instance<super::Api> for Instance {
 
 #[derive(Clone, Debug)]
 pub struct Surface {
-    canvas: web_sys::HtmlCanvasElement,
+    webgl2_context: web_sys::WebGl2RenderingContext,
     pub(super) swapchain: Option<Swapchain>,
     texture: Option<glow::Texture>,
     pub(super) presentable: bool,
@@ -253,7 +286,7 @@ impl crate::Surface<super::Api> for Surface {
 
     unsafe fn acquire_texture(
         &mut self,
-        _timeout_ms: u32,
+        _timeout_ms: Option<std::time::Duration>, //TODO
     ) -> Result<Option<crate::AcquiredSurfaceTexture<super::Api>>, crate::SurfaceError> {
         let sc = self.swapchain.as_ref().unwrap();
         let texture = super::Texture {
@@ -270,6 +303,7 @@ impl crate::Surface<super::Api> for Surface {
                 height: sc.extent.height,
                 depth: 1,
             },
+            is_cubemap: false,
         };
         Ok(Some(crate::AcquiredSurfaceTexture {
             texture,

@@ -193,10 +193,19 @@ pub trait Surface<A: Api>: Send + Sync {
 
     unsafe fn unconfigure(&mut self, device: &A::Device);
 
+    /// Returns the next texture to be presented by the swapchain for drawing
+    ///
+    /// A `timeout` of `None` means to wait indefinitely, with no timeout.
+    ///
+    /// # Portability
+    ///
+    /// Some backends can't support a timeout when acquiring a texture and
+    /// the timeout will be ignored.
+    ///
     /// Returns `None` on timing out.
     unsafe fn acquire_texture(
         &mut self,
-        timeout_ms: u32,
+        timeout: Option<std::time::Duration>,
     ) -> Result<Option<AcquiredSurfaceTexture<A>>, SurfaceError>;
     unsafe fn discard_texture(&mut self, texture: A::SurfaceTexture);
 }
@@ -304,6 +313,7 @@ pub trait Device<A: Api>: Send + Sync {
     unsafe fn create_fence(&self) -> Result<A::Fence, DeviceError>;
     unsafe fn destroy_fence(&self, fence: A::Fence);
     unsafe fn get_fence_value(&self, fence: &A::Fence) -> Result<FenceValue, DeviceError>;
+    /// Calling wait with a lower value than the current fence value will immediately return.
     unsafe fn wait(
         &self,
         fence: &A::Fence,

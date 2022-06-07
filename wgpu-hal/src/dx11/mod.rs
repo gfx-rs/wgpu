@@ -124,7 +124,7 @@ impl crate::Surface<Api> for Surface {
 
     unsafe fn acquire_texture(
         &mut self,
-        timeout_ms: u32,
+        _timeout: Option<std::time::Duration>,
     ) -> Result<Option<crate::AcquiredSurfaceTexture<Api>>, crate::SurfaceError> {
         todo!()
     }

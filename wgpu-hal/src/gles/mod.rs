@@ -262,6 +262,7 @@ pub struct Texture {
     #[allow(unused)]
     format_desc: TextureFormatDesc,
     copy_size: crate::CopyExtent,
+    is_cubemap: bool,
 }
 
 impl Texture {
@@ -281,6 +282,7 @@ impl Texture {
                 height: 0,
                 depth: 0,
             },
+            is_cubemap: false,
         }
     }
 }
@@ -616,6 +618,7 @@ enum Command {
         dst: glow::Texture,
         dst_target: BindTarget,
         copy: crate::TextureCopy,
+        dst_is_cubemap: bool,
     },
     CopyBufferToTexture {
         src: Buffer,

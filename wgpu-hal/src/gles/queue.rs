@@ -213,19 +213,39 @@ impl super::Queue {
                 ref range,
             } => match dst.raw {
                 Some(buffer) => {
-                    gl.bind_buffer(glow::COPY_READ_BUFFER, Some(self.zero_buffer));
-                    gl.bind_buffer(dst_target, Some(buffer));
-                    let mut dst_offset = range.start;
-                    while dst_offset < range.end {
-                        let size = (range.end - dst_offset).min(super::ZERO_BUFFER_SIZE as u64);
-                        gl.copy_buffer_sub_data(
-                            glow::COPY_READ_BUFFER,
-                            dst_target,
-                            0,
-                            dst_offset as i32,
-                            size as i32,
-                        );
-                        dst_offset += size;
+                    // When `INDEX_BUFFER_ROLE_CHANGE` isn't available, we can't copy into the
+                    // index buffer from the zero buffer. This would fail in Chrome with the
+                    // following message:
+                    //
+                    // > Cannot copy into an element buffer destination from a non-element buffer
+                    // > source
+                    //
+                    // Instead, we'll upload zeroes into the buffer.
+                    let can_use_zero_buffer = self
+                        .shared
+                        .private_caps
+                        .contains(super::PrivateCapabilities::INDEX_BUFFER_ROLE_CHANGE)
+                        || dst_target != glow::ELEMENT_ARRAY_BUFFER;
+
+                    if can_use_zero_buffer {
+                        gl.bind_buffer(glow::COPY_READ_BUFFER, Some(self.zero_buffer));
+                        gl.bind_buffer(dst_target, Some(buffer));
+                        let mut dst_offset = range.start;
+                        while dst_offset < range.end {
+                            let size = (range.end - dst_offset).min(super::ZERO_BUFFER_SIZE as u64);
+                            gl.copy_buffer_sub_data(
+                                glow::COPY_READ_BUFFER,
+                                dst_target,
+                                0,
+                                dst_offset as i32,
+                                size as i32,
+                            );
+                            dst_offset += size;
+                        }
+                    } else {
+                        gl.bind_buffer(dst_target, Some(buffer));
+                        let zeroes = vec![0u8; (range.end - range.start) as usize];
+                        gl.buffer_sub_data_u8_slice(dst_target, range.start as i32, &zeroes);
                     }
                 }
                 None => {
@@ -308,10 +328,10 @@ impl super::Queue {
                 src_target,
                 dst,
                 dst_target,
+                dst_is_cubemap,
                 ref copy,
             } => {
                 //TODO: handle 3D copies
-                //TODO: handle cubemap copies
                 gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(self.copy_fbo));
                 if is_layered_target(src_target) {
                     //TODO: handle GLES without framebuffer_texture_3d
@@ -333,7 +353,18 @@ impl super::Queue {
                 }
 
                 gl.bind_texture(dst_target, Some(dst));
-                if is_layered_target(dst_target) {
+                if dst_is_cubemap {
+                    gl.copy_tex_sub_image_2d(
+                        CUBEMAP_FACES[copy.dst_base.array_layer as usize],
+                        copy.dst_base.mip_level as i32,
+                        copy.dst_base.origin.x as i32,
+                        copy.dst_base.origin.y as i32,
+                        copy.src_base.origin.x as i32,
+                        copy.src_base.origin.y as i32,
+                        copy.size.width as i32,
+                        copy.size.height as i32,
+                    );
+                } else if is_layered_target(dst_target) {
                     gl.copy_tex_sub_image_3d(
                         dst_target,
                         copy.dst_base.mip_level as i32,

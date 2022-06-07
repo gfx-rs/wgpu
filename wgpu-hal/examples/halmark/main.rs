@@ -614,7 +614,7 @@ impl<A: hal::Api> Example<A> {
 
         let ctx = &mut self.contexts[self.context_index];
 
-        let surface_tex = unsafe { self.surface.acquire_texture(!0).unwrap().unwrap().texture };
+        let surface_tex = unsafe { self.surface.acquire_texture(None).unwrap().unwrap().texture };
 
         let target_barrier0 = hal::TextureBarrier {
             texture: surface_tex.borrow(),

@@ -352,7 +352,8 @@ bitflags::bitflags! {
     pub struct PipelineFlags: u32 {
         const BLEND_CONSTANT = 1 << 0;
         const STENCIL_REFERENCE = 1 << 1;
-        const WRITES_DEPTH_STENCIL = 1 << 2;
+        const WRITES_DEPTH = 1 << 2;
+        const WRITES_STENCIL = 1 << 3;
     }
 }
 

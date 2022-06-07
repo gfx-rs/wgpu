@@ -9,7 +9,7 @@ use objc::{
     declare::ClassDecl,
     msg_send,
     rc::autoreleasepool,
-    runtime::{Class, Object, Sel, BOOL, YES},
+    runtime::{Class, Object, Sel, BOOL, NO, YES},
     sel, sel_impl,
 };
 use parking_lot::Mutex;
@@ -74,6 +74,7 @@ impl super::Surface {
         }
     }
 
+    /// If not called on the main thread, this will panic.
     #[allow(clippy::transmute_ptr_to_ref)]
     pub unsafe fn from_view(
         view: *mut c_void,
@@ -82,6 +83,11 @@ impl super::Surface {
         let view = view as *mut Object;
         if view.is_null() {
             panic!("window does not have a valid contentView");
+        }
+
+        let is_main_thread: BOOL = msg_send![class!(NSThread), isMainThread];
+        if is_main_thread == NO {
+            panic!("create_surface cannot be called in non-ui thread.");
         }
 
         let main_layer: *mut Object = msg_send![view, layer];
@@ -216,7 +222,7 @@ impl crate::Surface<super::Api> for super::Surface {
 
     unsafe fn acquire_texture(
         &mut self,
-        _timeout_ms: u32, //TODO
+        _timeout_ms: Option<std::time::Duration>, //TODO
     ) -> Result<Option<crate::AcquiredSurfaceTexture<super::Api>>, crate::SurfaceError> {
         let render_layer = self.render_layer.lock();
         let (drawable, texture) = match autoreleasepool(|| {

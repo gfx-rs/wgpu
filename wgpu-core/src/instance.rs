@@ -493,6 +493,52 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         id.0
     }
 
+    #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
+    pub fn create_surface_webgl_canvas(
+        &self,
+        canvas: &web_sys::HtmlCanvasElement,
+        id_in: Input<G, SurfaceId>,
+    ) -> SurfaceId {
+        profiling::scope!("create_surface_webgl_canvas", "Instance");
+
+        let surface = Surface {
+            presentation: None,
+            gl: self.instance.gl.as_ref().map(|inst| HalSurface {
+                raw: {
+                    inst.create_surface_from_canvas(canvas)
+                        .expect("Create surface from canvas")
+                },
+            }),
+        };
+
+        let mut token = Token::root();
+        let id = self.surfaces.prepare(id_in).assign(surface, &mut token);
+        id.0
+    }
+
+    #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
+    pub fn create_surface_webgl_offscreen_canvas(
+        &self,
+        canvas: &web_sys::OffscreenCanvas,
+        id_in: Input<G, SurfaceId>,
+    ) -> SurfaceId {
+        profiling::scope!("create_surface_webgl_offscreen_canvas", "Instance");
+
+        let surface = Surface {
+            presentation: None,
+            gl: self.instance.gl.as_ref().map(|inst| HalSurface {
+                raw: {
+                    inst.create_surface_from_offscreen_canvas(canvas)
+                        .expect("Create surface from offscreen canvas")
+                },
+            }),
+        };
+
+        let mut token = Token::root();
+        let id = self.surfaces.prepare(id_in).assign(surface, &mut token);
+        id.0
+    }
+
     #[cfg(dx12)]
     /// # Safety
     ///
