@@ -2099,6 +2099,7 @@ dependencies = [
  "serde",
  "smallvec",
  "thiserror",
+ "web-sys",
  "wgpu-hal",
  "wgpu-types",
 ]
