@@ -10,12 +10,13 @@ use crate::{
     Epoch, Index,
 };
 
-use parking_lot::{Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard};
+use parking_lot::Mutex;
+use thiserror::Error;
 use wgt::Backend;
 
+use std::borrow::Cow;
 #[cfg(debug_assertions)]
-use std::cell::Cell;
-use std::{fmt::Debug, marker::PhantomData, mem, ops};
+use std::{fmt::Debug, marker::PhantomData};
 
 /// A simple structure to allocate [`Id`] identifiers.
 ///
@@ -124,8 +125,15 @@ impl StorageReport {
     }
 }
 
-#[derive(Clone, Debug)]
-pub(crate) struct InvalidId;
+#[derive(Clone, Debug, Error)]
+pub(crate) enum InvalidId {
+    #[error("Resource {index} is in the error state. This happens when resource creation fails with an error and the ID is re-used.")]
+    ResourceInError { index: u32 },
+    #[error("Resource {index} has been destroyed. The storage is currently empty.")]
+    Vacant { index: u32 },
+    #[error("Resource {index} has been destroyed. The storage is currently storing a new resource with epoch {new} (given epoch {old}).")]
+    WrongEpoch { index: u32, old: Epoch, new: Epoch },
+}
 
 pub trait IdentityHandler<I>: Debug {
     type Input: Clone + Debug;
@@ -216,12 +224,17 @@ where
     pub fn assign(self, value: T) -> id::Valid<T::Id> {
         use id::TypedId as _;
         let (index, epoch, _) = self.id.unzip();
-        unsafe { self.data.fill(index, epoch, value) };
+        unsafe { self.data.fill(index, epoch, Ok(value)) };
         id::Valid(self.id)
     }
 
     pub fn assign_error(self, label: &str) -> T::Id {
-        todo!();
+        use id::TypedId as _;
+        let (index, epoch, _) = self.id.unzip();
+        unsafe {
+            self.data
+                .fill(index, epoch, Err(Cow::Owned(String::from(label))))
+        };
         self.id
     }
 }
@@ -297,158 +310,126 @@ impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<A, F> {
     // everything related to a logical device.
     unsafe fn clear(
         &self,
-        surface_guard: &mut Storage<Surface, id::SurfaceId>,
+        surface_guard: &registry::Registry<hal::api::Empty, Surface>,
         with_adapters: bool,
     ) {
         use crate::resource::TextureInner;
         use hal::{Device as _, Surface as _};
 
-        let mut devices = self.devices.data.write();
-        for element in devices.map.iter_mut() {
-            if let Element::Occupied(ref mut device, _) = *element {
-                device.prepare_to_die();
-            }
+        for (_, device) in self.devices.iter_mut() {
+            device.prepare_to_die();
         }
 
         // destroy command buffers first, since otherwise DX12 isn't happy
-        for element in self.command_buffers.data.write().map.drain(..) {
-            if let Element::Occupied(command_buffer, _) = element {
-                let device = &devices[command_buffer.device_id.value];
-                device.destroy_command_buffer(command_buffer);
+        for command_buffer in self.command_buffers.remove_all() {
+            let device = &self.devices[command_buffer.device_id.value];
+            device.destroy_command_buffer(command_buffer);
+        }
+
+        for sampler in self.samplers.remove_all() {
+            unsafe {
+                self.devices[sampler.device_id.value]
+                    .raw
+                    .destroy_sampler(sampler.raw);
             }
         }
 
-        for element in self.samplers.data.write().map.drain(..) {
-            if let Element::Occupied(sampler, _) = element {
+        for texture_view in self.texture_views.remove_all() {
+            let device = &self.devices[texture_view.device_id.value];
+            unsafe {
+                device.raw.destroy_texture_view(texture_view.raw);
+            }
+        }
+
+        for texture in self.textures.remove_all() {
+            let device = &self.devices[texture.device_id.value];
+            if let TextureInner::Native { raw: Some(raw) } = texture.inner {
                 unsafe {
-                    devices[sampler.device_id.value]
-                        .raw
-                        .destroy_sampler(sampler.raw);
+                    device.raw.destroy_texture(raw);
                 }
             }
-        }
-
-        for element in self.texture_views.data.write().map.drain(..) {
-            if let Element::Occupied(texture_view, _) = element {
-                let device = &devices[texture_view.device_id.value];
-                unsafe {
-                    device.raw.destroy_texture_view(texture_view.raw);
-                }
-            }
-        }
-
-        for element in self.textures.data.write().map.drain(..) {
-            if let Element::Occupied(texture, _) = element {
-                let device = &devices[texture.device_id.value];
-                if let TextureInner::Native { raw: Some(raw) } = texture.inner {
+            if let TextureClearMode::RenderPass { clear_views, .. } = texture.clear_mode {
+                for view in clear_views {
                     unsafe {
-                        device.raw.destroy_texture(raw);
-                    }
-                }
-                if let TextureClearMode::RenderPass { clear_views, .. } = texture.clear_mode {
-                    for view in clear_views {
-                        unsafe {
-                            device.raw.destroy_texture_view(view);
-                        }
+                        device.raw.destroy_texture_view(view);
                     }
                 }
             }
         }
-        for element in self.buffers.data.write().map.drain(..) {
-            if let Element::Occupied(buffer, _) = element {
-                //TODO: unmap if needed
-                devices[buffer.device_id.value].destroy_buffer(buffer);
+        for buffer in self.buffers.remove_all() {
+            //TODO: unmap if needed
+            self.devices[buffer.device_id.value].destroy_buffer(buffer);
+        }
+        for bind_group in self.bind_groups.remove_all() {
+            let device = &self.devices[bind_group.device_id.value];
+            unsafe {
+                device.raw.destroy_bind_group(bind_group.raw);
             }
         }
-        for element in self.bind_groups.data.write().map.drain(..) {
-            if let Element::Occupied(bind_group, _) = element {
-                let device = &devices[bind_group.device_id.value];
+
+        for module in self.shader_modules.remove_all() {
+            let device = &self.devices[module.device_id.value];
+            unsafe {
+                device.raw.destroy_shader_module(module.raw);
+            }
+        }
+        for bgl in self.bind_group_layouts.remove_all() {
+            let device = &self.devices[bgl.device_id.value];
+            unsafe {
+                device.raw.destroy_bind_group_layout(bgl.raw);
+            }
+        }
+        for pipeline_layout in self.pipeline_layouts.remove_all() {
+            let device = &self.devices[pipeline_layout.device_id.value];
+            unsafe {
+                device.raw.destroy_pipeline_layout(pipeline_layout.raw);
+            }
+        }
+        for pipeline in self.compute_pipelines.remove_all() {
+            let device = &self.devices[pipeline.device_id.value];
+            unsafe {
+                device.raw.destroy_compute_pipeline(pipeline.raw);
+            }
+        }
+        for pipeline in self.render_pipelines.remove_all() {
+            let device = &self.devices[pipeline.device_id.value];
+            unsafe {
+                device.raw.destroy_render_pipeline(pipeline.raw);
+            }
+        }
+
+        for (_, surface) in surface_guard.iter_mut() {
+            if surface
+                .presentation
+                .as_ref()
+                .map_or(wgt::Backend::Empty, |p| p.backend())
+                != A::VARIANT
+            {
+                continue;
+            }
+            if let Some(present) = surface.presentation.take() {
+                let device = &self.devices[present.device_id.value];
+                let suf = A::get_surface_mut(surface);
                 unsafe {
-                    device.raw.destroy_bind_group(bind_group.raw);
+                    suf.raw.unconfigure(&device.raw);
+                    //TODO: we could destroy the surface here
                 }
             }
         }
 
-        for element in self.shader_modules.data.write().map.drain(..) {
-            if let Element::Occupied(module, _) = element {
-                let device = &devices[module.device_id.value];
-                unsafe {
-                    device.raw.destroy_shader_module(module.raw);
-                }
-            }
-        }
-        for element in self.bind_group_layouts.data.write().map.drain(..) {
-            if let Element::Occupied(bgl, _) = element {
-                let device = &devices[bgl.device_id.value];
-                unsafe {
-                    device.raw.destroy_bind_group_layout(bgl.raw);
-                }
-            }
-        }
-        for element in self.pipeline_layouts.data.write().map.drain(..) {
-            if let Element::Occupied(pipeline_layout, _) = element {
-                let device = &devices[pipeline_layout.device_id.value];
-                unsafe {
-                    device.raw.destroy_pipeline_layout(pipeline_layout.raw);
-                }
-            }
-        }
-        for element in self.compute_pipelines.data.write().map.drain(..) {
-            if let Element::Occupied(pipeline, _) = element {
-                let device = &devices[pipeline.device_id.value];
-                unsafe {
-                    device.raw.destroy_compute_pipeline(pipeline.raw);
-                }
-            }
-        }
-        for element in self.render_pipelines.data.write().map.drain(..) {
-            if let Element::Occupied(pipeline, _) = element {
-                let device = &devices[pipeline.device_id.value];
-                unsafe {
-                    device.raw.destroy_render_pipeline(pipeline.raw);
-                }
+        for query_set in self.query_sets.remove_all() {
+            let device = &self.devices[query_set.device_id.value];
+            unsafe {
+                device.raw.destroy_query_set(query_set.raw);
             }
         }
 
-        for element in surface_guard.map.iter_mut() {
-            if let Element::Occupied(ref mut surface, _epoch) = *element {
-                if surface
-                    .presentation
-                    .as_ref()
-                    .map_or(wgt::Backend::Empty, |p| p.backend())
-                    != A::VARIANT
-                {
-                    continue;
-                }
-                if let Some(present) = surface.presentation.take() {
-                    let device = &devices[present.device_id.value];
-                    let suf = A::get_surface_mut(surface);
-                    unsafe {
-                        suf.raw.unconfigure(&device.raw);
-                        //TODO: we could destroy the surface here
-                    }
-                }
-            }
-        }
-
-        for element in self.query_sets.data.write().map.drain(..) {
-            if let Element::Occupied(query_set, _) = element {
-                let device = &devices[query_set.device_id.value];
-                unsafe {
-                    device.raw.destroy_query_set(query_set.raw);
-                }
-            }
-        }
-
-        for element in devices.map.drain(..) {
-            if let Element::Occupied(device, _) = element {
-                device.dispose();
-            }
+        for device in self.devices.remove_all() {
+            device.dispose();
         }
 
         if with_adapters {
-            drop(devices);
-            self.adapters.data.write().map.clear();
+            self.adapters.remove_all();
         }
     }
 
@@ -562,10 +543,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub unsafe fn clear_backend<A: HalApi>(&self, _dummy: ()) {
-        let mut surface_guard = self.surfaces.data.write();
         let hub = A::hub(self);
         // this is used for tests, which keep the adapter
-        unsafe { hub.clear(&mut *surface_guard, false) };
+        unsafe { hub.clear(&self.surfaces, false) };
     }
 
     pub fn generate_report(&self) -> GlobalReport {
@@ -609,40 +589,39 @@ impl<G: GlobalIdentityHandlerFactory> Drop for Global<G> {
     fn drop(&mut self) {
         profiling::scope!("Global::drop");
         log::info!("Dropping Global");
-        let mut surface_guard = self.surfaces.data.write();
 
         // destroy hubs before the instance gets dropped
         #[cfg(vulkan)]
         unsafe {
-            self.hubs.vulkan.clear(&mut *surface_guard, true);
+            self.hubs.vulkan.clear(&self.surfaces, true);
         }
         #[cfg(metal)]
         unsafe {
-            self.hubs.metal.clear(&mut *surface_guard, true);
+            self.hubs.metal.clear(&self.surfaces, true);
         }
         #[cfg(dx12)]
         unsafe {
-            self.hubs.dx12.clear(&mut *surface_guard, true);
+            self.hubs.dx12.clear(&self.surfaces, true);
         }
         #[cfg(dx11)]
         unsafe {
-            self.hubs.dx11.clear(&mut *surface_guard, true);
+            self.hubs.dx11.clear(&self.surfaces, true);
         }
         #[cfg(gl)]
         unsafe {
-            self.hubs.gl.clear(&mut *surface_guard, true);
+            self.hubs.gl.clear(&self.surfaces, true);
         }
 
         // destroy surfaces
-        for element in surface_guard.map.drain(..) {
-            if let Element::Occupied(surface, _) = element {
+        unsafe {
+            for surface in self.surfaces.remove_all() {
                 self.instance.destroy_surface(surface);
             }
         }
     }
 }
 
-pub trait HalApi: hal::Api {
+pub trait HalApi: hal::Api + 'static {
     const VARIANT: Backend;
     fn create_instance_from_hal(name: &str, hal_instance: Self::Instance) -> Instance;
     fn instance_as_hal(instance: &Instance) -> Option<&Self::Instance>;

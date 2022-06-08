@@ -1,4 +1,5 @@
 use std::{
+    borrow::Cow,
     marker::PhantomData,
     mem,
     sync::atomic::{AtomicU32, Ordering},
@@ -33,10 +34,13 @@ where
         }
     }
 
-    pub fn len(&self) -> usize {
-        self.storage.length.load(Ordering::Acquire) as usize
+    /// Provides no authoritative value on the contents of the registry,
+    /// just "there is no id greater than"
+    pub fn max_index(&self) -> usize {
+        self.storage.max_index.load(Ordering::Acquire) as usize
     }
 
+    /// Safe to call concurrently.
     pub fn prepare<Q>(&self, _: Q) -> hub::FutureId<'_, T> {
         let mut ident_guard = self.identity_manager.lock();
         let (index, id) = ident_guard.alloc(A::VARIANT);
@@ -49,7 +53,11 @@ where
         }
     }
 
-    pub fn unregister(&self, id: T::Id) -> Option<T> {
+    /// # Safety
+    ///
+    /// - No calls to `contains`, `get`, `get_unchecked`, or `Index` may happen
+    ///   while this call is executing.
+    pub unsafe fn unregister(&self, id: T::Id) -> Option<T> {
         let mut ident_guard = self.identity_manager.lock();
         let (index, epoch) = ident_guard.free(id);
         let value = unsafe { self.storage.free(index, epoch) };
@@ -71,19 +79,50 @@ where
         self.storage.get_unchecked(index).unwrap()
     }
 
-    pub fn insert_error(&self, id: T::Id, implicit_failure: &str) {
-        todo!()
+    pub fn insert_error(&self, id: T::Id, implicit_failure: &'static str) {
+        let (index, epoch, _) = id.unzip();
+        unsafe {
+            self.storage
+                .fill(index, epoch, Err(Cow::Borrowed(implicit_failure)))
+        }
     }
 
     pub fn force_replace(&self, id: T::Id, value: T) {
-        todo!()
+        let (index, epoch, _) = id.unzip();
+        unsafe { self.storage.overwrite(index, epoch, value) }
     }
 
     pub fn label_for_resource(&self, id: T::Id) -> String {
-        todo!()
+        // TODO
+        String::from("TODO")
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = (T::Id, T)> {
+    pub fn iter(&self) -> impl Iterator<Item = (T::Id, &T)> {
+        IteratorDataAdapter {
+            data: self.identity_manager.lock(),
+            // SAFETY: The identity manager lock is taken and will be kept
+            // alive as long as the iterator is alive.
+            iter: unsafe { self.storage.iter(A::VARIANT) },
+        }
+    }
+
+    /// # Safety:
+    ///
+    /// This function must be called _as if_ it takes a &mut self argument.
+    ///
+    /// If this is called with anything other than exclusive access to the registry,
+    /// all bets are off.
+    pub unsafe fn iter_mut(&self) -> impl Iterator<Item = (T::Id, &mut T)> {
+        self.storage.iter_mut(A::VARIANT)
+    }
+
+    /// # Safety:
+    ///
+    /// This function must be called _as if_ it takes a &mut self argument.
+    ///
+    /// If this is called with anything other than exclusive access to the registry,
+    /// all bets are off.
+    pub unsafe fn remove_all(&self) -> impl Iterator<Item = T> {
         None.into_iter()
     }
 }
@@ -100,87 +139,68 @@ where
     }
 }
 
+struct IteratorDataAdapter<D, I> {
+    data: D,
+    iter: I,
+}
+
+impl<D, I> Iterator for IteratorDataAdapter<D, I>
+where
+    I: Iterator,
+{
+    type Item = I::Item;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iter.next()
+    }
+}
+
 pub struct Storage<T> {
     blocks: [DebugUnsafeCell<Option<Box<StorageBlock<512, T>>>>; 256],
-    length: AtomicU32,
+    max_index: AtomicU32,
 }
-impl<T> Storage<T> {
+impl<T> Storage<T>
+where
+    T: hub::Resource,
+{
     fn new() -> Self {
         Self {
             blocks: [(); 256].map(|_| DebugUnsafeCell::new(None)),
-            length: AtomicU32::new(0),
+            max_index: AtomicU32::new(0),
         }
     }
 
     // SAFETY: Must be called inside the identity manager lock.
     unsafe fn ensure_index(&self, index: u32) {
-        let length = self.length.load(Ordering::Relaxed);
-        if index < length {
+        let max_index = self.max_index.load(Ordering::Relaxed);
+        if index < max_index {
             return;
         }
-        assert_eq!(index, length);
+        assert_eq!(index, max_index);
 
-        let block = length / 512;
+        let block = max_index / 512;
         if block >= 256 {
             panic!("Too many resources allocated");
         }
 
-        let allocated_length = (length + 511) & !511;
+        let allocated_length = (max_index + 511) & !511;
         if index >= allocated_length {
             // SAFETY: we're the first to ever allocate this block, so we're the only one
             // who could get this mutable reference.
             let block = &mut *self.blocks[block as usize].get();
             *block = Some(Box::new(StorageBlock::new_uninit()));
         }
-        self.length.store(length + 1, Ordering::Release);
+        self.max_index.store(max_index + 1, Ordering::Release);
     }
 
-    pub unsafe fn fill(&self, index: u32, epoch: u32, value: T) {
-        // We know that these are all in bounds, because it was pre-allocated for us.
+    fn raw_refs(
+        &self,
+        index: u32,
+    ) -> Option<(&DebugUnsafeCell<DebugMaybeUninit<T>>, &Mutex<ElementStatus>)> {
         let block = (index / 512) as usize;
         let data_index = (index % 512) as usize;
 
-        // SAFETY: We have reserved a slot in the block so this block is guarenteed to exist
-        // and the slot will not be accessed by any other users.
-        let block_option_ref = &*self.blocks[block].get();
-        let block_ref = block_option_ref.as_deref().unwrap();
-        let data_ref = &block_ref.data[data_index];
-        let status_ref = &block_ref.status[data_index];
-
-        let data_mut_ref = &mut *data_ref.get();
-        data_mut_ref.write(value);
-
-        *status_ref.lock() = ElementStatus::Occupied(epoch);
-    }
-
-    fn contains(&self, index: u32, epoch: u32) -> bool {
-        let block = (index / 512) as usize;
-        let data_index = (index % 512) as usize;
-
-        let length = self.length.load(Ordering::Acquire);
-
-        if index >= length {
-            return false;
-        }
-
-        // SAFETY: We have just bounds checked the index and we always check the
-        // status before accessing the data.
-        let block_option_ref = unsafe { self.blocks[block].get() };
-        let block_ref = block_option_ref.as_deref().unwrap();
-        let status_ref = &block_ref.status[data_index];
-
-        if *status_ref.lock() != ElementStatus::Occupied(epoch) {
-            return false;
-        }
-
-        true
-    }
-
-    fn get(&self, index: u32, epoch: u32) -> Option<&T> {
-        let block = (index / 512) as usize;
-        let data_index = (index % 512) as usize;
-
-        let length = self.length.load(Ordering::Acquire);
+        let length = self.max_index.load(Ordering::Acquire);
 
         if index >= length {
             return None;
@@ -192,6 +212,57 @@ impl<T> Storage<T> {
         let block_ref = block_option_ref.as_deref().unwrap();
         let data_ref = &block_ref.data[data_index];
         let status_ref = &block_ref.status[data_index];
+
+        Some((data_ref, status_ref))
+    }
+
+    pub unsafe fn fill(&self, index: u32, epoch: u32, value: Result<T, Cow<'static, str>>) {
+        let (data_ref, status_ref) = self.raw_refs(index).unwrap_unchecked();
+
+        match value {
+            Ok(v) => {
+                // SAFETY: We have reserved a slot in the block so this block is guarenteed to exist
+                // and the slot will not be accessed by any other users.
+                let data_mut_ref = &mut *data_ref.get();
+                data_mut_ref.write(v);
+
+                *status_ref.lock() = ElementStatus::Occupied(epoch);
+            }
+            Err(e) => {
+                *status_ref.lock() = ElementStatus::Error(epoch, e);
+            }
+        }
+    }
+
+    pub unsafe fn overwrite(&self, index: u32, epoch: u32, value: T) {
+        let (data_ref, status_ref) = self.raw_refs(index).unwrap_unchecked();
+
+        let status = status_ref.lock();
+        let data_mut_ref = data_ref.get_mut();
+        if let ElementStatus::Occupied(_) = *status {
+            data_mut_ref.assume_init_drop();
+        }
+
+        data_mut_ref.write(value);
+
+        *status = ElementStatus::Occupied(epoch);
+    }
+
+    fn contains(&self, index: u32, epoch: u32) -> bool {
+        let (data_ref, status_ref) = match self.raw_refs(index) {
+            Some(v) => v,
+            None => return false,
+        };
+
+        if *status_ref.lock() != ElementStatus::Occupied(epoch) {
+            return false;
+        }
+
+        true
+    }
+
+    fn get(&self, index: u32, epoch: u32) -> Option<&T> {
+        let (data_ref, status_ref) = self.raw_refs(index)?;
 
         if *status_ref.lock() != ElementStatus::Occupied(epoch) {
             return None;
@@ -202,46 +273,19 @@ impl<T> Storage<T> {
     }
 
     fn get_unchecked(&self, index: u32) -> Option<&T> {
-        let block = (index / 512) as usize;
-        let data_index = (index % 512) as usize;
-
-        let length = self.length.load(Ordering::Acquire);
-
-        if index >= length {
-            return None;
-        }
-
-        // SAFETY: We have just bounds checked the index and we always check the
-        // status before accessing the data.
-        let block_option_ref = unsafe { self.blocks[block].get() };
-        let block_ref = block_option_ref.as_deref().unwrap();
-        let data_ref = &block_ref.data[data_index];
-        let status_ref = &block_ref.status[data_index];
+        let (data_ref, status_ref) = self.raw_refs(index)?;
 
         if let ElementStatus::Occupied(_) = *status_ref.lock() {
-            None
-        } else {
             // TODO SAFETY: it isn't
             Some(unsafe { data_ref.get().assume_init_ref() })
+        } else {
+            None
         }
     }
 
     // SAFETY: Must be called inside the identity manager lock.
     unsafe fn free(&self, index: u32, epoch: u32) -> Option<T> {
-        let block = (index / 512) as usize;
-        let data_index = (index % 512) as usize;
-
-        let length = self.length.load(Ordering::Relaxed);
-
-        if index >= length {
-            return None;
-        }
-
-        // SAFETY: We have just bounds checked the index and we're inside the lock.
-        let block_option_ref = self.blocks[block].get();
-        let block_ref = block_option_ref.as_deref().unwrap();
-        let data_ref = &block_ref.data[data_index];
-        let status_ref = &block_ref.status[data_index];
+        let (data_ref, status_ref) = self.raw_refs(index)?;
 
         // We set this to vacant first before destroying it, so that if a stray index comes through
         // later, it will see that this is vacant and error and not try to grab a reference to
@@ -254,6 +298,73 @@ impl<T> Storage<T> {
         let data = mem::replace(&mut *data_mut_ref, DebugMaybeUninit::uninit()).assume_init();
 
         Some(data)
+    }
+
+    fn iter_inner(
+        &self,
+        backend: wgt::Backend,
+    ) -> impl Iterator<
+        Item = (
+            T::Id,
+            &DebugUnsafeCell<DebugMaybeUninit<T>>,
+            &Mutex<ElementStatus>,
+        ),
+    > + '_ {
+        let elements_allocated = self.max_index.load(Ordering::Acquire) as usize;
+        let blocks_allocated = elements_allocated + 511 / 512;
+
+        self.blocks[0..blocks_allocated]
+            .iter()
+            .enumerate()
+            .flat_map(move |(block_idx, block_ref)| {
+                let block = unsafe { block_ref.get_debug_unchecked().as_ref().unwrap() };
+
+                let starting_idx = block_idx * 512;
+                let end_idx = ((block_idx + 1) * 512).min(elements_allocated);
+                let count = end_idx - starting_idx;
+                (0..count).filter_map(move |element_idx| {
+                    let total_idx = starting_idx + element_idx;
+
+                    let status_ref = &block.status[element_idx];
+                    let data_ref = &block.data[element_idx];
+
+                    let status = status_ref.lock();
+                    if let ElementStatus::Occupied(epoch) = *status {
+                        let id = T::Id::zip(total_idx as u32, epoch, backend);
+                        Some((id, data_ref, status_ref))
+                    } else {
+                        None
+                    }
+                })
+            })
+    }
+
+    /// # Safety
+    ///
+    /// - The this function must be called with the resource creation lock taken.
+    /// - The iterator must die before the resource creation lock dies.
+    unsafe fn iter(&self, backend: wgt::Backend) -> impl Iterator<Item = (T::Id, &T)> + '_ {
+        self.iter_inner(backend)
+            .map(|(id, cell, _)| (id, cell.get_debug_unchecked().assume_init_ref()))
+    }
+
+    /// # Safety
+    ///
+    /// - The this function must be called with exclusive access to self.
+    unsafe fn iter_mut(&self, backend: wgt::Backend) -> impl Iterator<Item = (T::Id, &mut T)> + '_ {
+        self.iter_inner(backend)
+            .map(|(id, cell, _)| (id, cell.get_debug_unchecked_mut().assume_init_mut()))
+    }
+
+    /// # Safety
+    ///
+    /// - The this function must be called with exclusive access to self.
+    unsafe fn remove_all(&self, backend: wgt::Backend) -> impl Iterator<Item = (T::Id, T)> + '_ {
+        self.iter_inner(backend).map(|(id, cell, status)| {
+            *status.lock() = ElementStatus::Vacant;
+            let value = mem::replace(&mut *cell.get_mut(), DebugMaybeUninit::uninit());
+            (id, value.assume_init())
+        })
     }
 }
 
@@ -276,5 +387,5 @@ impl<const count: usize, T> StorageBlock<count, T> {
 enum ElementStatus {
     Vacant,
     Occupied(Epoch),
-    Error(Epoch, String),
+    Error(Epoch, Cow<'static, str>),
 }

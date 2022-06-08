@@ -26,10 +26,18 @@ impl<T> DebugUnsafeCell<T> {
             .expect("DebugUnsafeCell detected read-while-write-locked")
     }
 
+    pub unsafe fn get_debug_unchecked(&self) -> &T {
+        &*self.inner.data_ptr()
+    }
+
     pub unsafe fn get_mut(&self) -> impl DerefMut<Target = T> + '_ {
         self.inner
             .try_write()
             .expect("DebugUnsafeCell detected write-while-locked")
+    }
+
+    pub unsafe fn get_debug_unchecked_mut(&self) -> &mut T {
+        &mut *self.inner.data_ptr()
     }
 }
 
@@ -45,7 +53,15 @@ impl<T> DebugUnsafeCell<T> {
         &*self.inner.get();
     }
 
+    pub unsafe fn get_debug_unchecked(&self) -> &T {
+        &*self.inner.get()
+    }
+
     pub unsafe fn get_mut(&self) -> impl DerefMut<Target = T> + '_ {
+        &mut *self.inner.get();
+    }
+
+    pub unsafe fn get_debug_unchecked_mut(&self) -> &mut T {
         &mut *self.inner.get();
     }
 }
@@ -83,6 +99,12 @@ impl<T> DebugMaybeUninit<T> {
             .expect("DebugMaybeUninit detected ref-while-none")
     }
 
+    pub unsafe fn assume_init_mut(&mut self) -> &mut T {
+        self.inner
+            .as_mut()
+            .expect("DebugMaybeUninit detected mut-while-none")
+    }
+
     pub unsafe fn assume_init_drop(&mut self) {
         assert!(
             self.inner.is_some(),
@@ -110,6 +132,10 @@ impl<T> DebugMaybeUninit<T> {
 
     pub unsafe fn assume_init_ref(&self) -> &T {
         self.inner.assume_init_ref()
+    }
+
+    pub unsafe fn assume_init_mut(&mut self) -> &mut T {
+        self.inner.assume_init_mut()
     }
 
     pub unsafe fn assume_init_drop(&mut self) {

@@ -515,11 +515,13 @@ impl<A: hub::HalApi> RenderBundleScope<A> {
             query_sets: StatelessTracker::new(),
         };
 
-        value.buffers.set_size(buffers.len());
-        value.textures.set_size(textures.len());
-        value.bind_groups.set_size(bind_groups.len());
-        value.render_pipelines.set_size(render_pipelines.len());
-        value.query_sets.set_size(query_sets.len());
+        value.buffers.set_size(buffers.max_index());
+        value.textures.set_size(textures.max_index());
+        value.bind_groups.set_size(bind_groups.max_index());
+        value
+            .render_pipelines
+            .set_size(render_pipelines.max_index());
+        value.query_sets.set_size(query_sets.max_index());
 
         value
     }
@@ -565,8 +567,8 @@ impl<A: hub::HalApi> UsageScope<A> {
             textures: TextureUsageScope::new(),
         };
 
-        value.buffers.set_size(buffers.len());
-        value.textures.set_size(textures.len());
+        value.buffers.set_size(buffers.max_index());
+        value.textures.set_size(textures.max_index());
 
         value
     }
@@ -656,31 +658,32 @@ impl<A: hub::HalApi> Tracker<A> {
         query_sets: Option<&registry::Registry<A, resource::QuerySet<A>>>,
     ) {
         if let Some(buffers) = buffers {
-            self.buffers.set_size(buffers.len());
+            self.buffers.set_size(buffers.max_index());
         };
         if let Some(textures) = textures {
-            self.textures.set_size(textures.len());
+            self.textures.set_size(textures.max_index());
         };
         if let Some(views) = views {
-            self.views.set_size(views.len());
+            self.views.set_size(views.max_index());
         };
         if let Some(samplers) = samplers {
-            self.samplers.set_size(samplers.len());
+            self.samplers.set_size(samplers.max_index());
         };
         if let Some(bind_groups) = bind_groups {
-            self.bind_groups.set_size(bind_groups.len());
+            self.bind_groups.set_size(bind_groups.max_index());
         };
         if let Some(compute_pipelines) = compute_pipelines {
-            self.compute_pipelines.set_size(compute_pipelines.len());
+            self.compute_pipelines
+                .set_size(compute_pipelines.max_index());
         }
         if let Some(render_pipelines) = render_pipelines {
-            self.render_pipelines.set_size(render_pipelines.len());
+            self.render_pipelines.set_size(render_pipelines.max_index());
         };
         if let Some(bundles) = bundles {
-            self.bundles.set_size(bundles.len());
+            self.bundles.set_size(bundles.max_index());
         };
         if let Some(query_sets) = query_sets {
-            self.query_sets.set_size(query_sets.len());
+            self.query_sets.set_size(query_sets.max_index());
         };
     }
 

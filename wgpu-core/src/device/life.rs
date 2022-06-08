@@ -506,9 +506,11 @@ impl<A: HalApi> LifetimeTracker<A> {
     ) {
         profiling::scope!("triage_suspected");
 
-        if !self.suspected_resources.render_bundles.is_empty() {
-            let mut trackers = trackers.lock();
+        // We have exclusive access to the trackers. If a resource is abandonded, this is the _only_
+        // way to get access to it, and we have it.
+        let mut trackers = trackers.lock();
 
+        if !self.suspected_resources.render_bundles.is_empty() {
             while let Some(id) = self.suspected_resources.render_bundles.pop() {
                 if trackers.bundles.remove_abandoned(id) {
                     log::debug!("Bundle {:?} will be destroyed", id);
@@ -517,7 +519,9 @@ impl<A: HalApi> LifetimeTracker<A> {
                         t.lock().add(trace::Action::DestroyRenderBundle(id.0));
                     }
 
-                    if let Some(res) = hub.render_bundles.unregister(id.0) {
+                    // SAFETY: Refcount has hit one so there should be no other way to access this value
+                    // besides through the very trackers we have exclusive access to.
+                    if let Some(res) = unsafe { hub.render_bundles.unregister(id.0) } {
                         self.suspected_resources.add_render_bundle_scope(&res.used);
                     }
                 }
@@ -525,8 +529,6 @@ impl<A: HalApi> LifetimeTracker<A> {
         }
 
         if !self.suspected_resources.bind_groups.is_empty() {
-            let mut trackers = trackers.lock();
-
             while let Some(id) = self.suspected_resources.bind_groups.pop() {
                 if trackers.bind_groups.remove_abandoned(id) {
                     log::debug!("Bind group {:?} will be destroyed", id);
@@ -535,7 +537,9 @@ impl<A: HalApi> LifetimeTracker<A> {
                         t.lock().add(trace::Action::DestroyBindGroup(id.0));
                     }
 
-                    if let Some(res) = hub.bind_groups.unregister(id.0) {
+                    // SAFETY: Refcount has hit one so there should be no other way to access this value
+                    // besides through the very trackers we have exclusive access to.
+                    if let Some(res) = unsafe { hub.bind_groups.unregister(id.0) } {
                         self.suspected_resources.add_bind_group_states(&res.used);
 
                         self.suspected_resources
@@ -555,8 +559,6 @@ impl<A: HalApi> LifetimeTracker<A> {
         }
 
         if !self.suspected_resources.texture_views.is_empty() {
-            let mut trackers = trackers.lock();
-
             let mut list = mem::take(&mut self.suspected_resources.texture_views);
             for id in list.drain(..) {
                 if trackers.views.remove_abandoned(id) {
@@ -566,7 +568,9 @@ impl<A: HalApi> LifetimeTracker<A> {
                         t.lock().add(trace::Action::DestroyTextureView(id.0));
                     }
 
-                    if let Some(res) = hub.texture_views.unregister(id.0) {
+                    // SAFETY: Refcount has hit one so there should be no other way to access this value
+                    // besides through the very trackers we have exclusive access to.
+                    if let Some(res) = unsafe { hub.texture_views.unregister(id.0) } {
                         self.suspected_resources.textures.push(res.parent_id.value);
                         let submit_index = res.life_guard.life_count();
                         self.active
@@ -582,8 +586,6 @@ impl<A: HalApi> LifetimeTracker<A> {
         }
 
         if !self.suspected_resources.textures.is_empty() {
-            let mut trackers = trackers.lock();
-
             for id in self.suspected_resources.textures.drain(..) {
                 if trackers.textures.remove_abandoned(id) {
                     log::debug!("Texture {:?} will be destroyed", id);
@@ -592,7 +594,9 @@ impl<A: HalApi> LifetimeTracker<A> {
                         t.lock().add(trace::Action::DestroyTexture(id.0));
                     }
 
-                    if let Some(res) = hub.textures.unregister(id.0) {
+                    // SAFETY: Refcount has hit one so there should be no other way to access this value
+                    // besides through the very trackers we have exclusive access to.
+                    if let Some(res) = unsafe { hub.textures.unregister(id.0) } {
                         let submit_index = res.life_guard.life_count();
                         let raw = match res.inner {
                             resource::TextureInner::Native { raw: Some(raw) } => raw,
@@ -618,8 +622,6 @@ impl<A: HalApi> LifetimeTracker<A> {
         }
 
         if !self.suspected_resources.samplers.is_empty() {
-            let mut trackers = trackers.lock();
-
             for id in self.suspected_resources.samplers.drain(..) {
                 if trackers.samplers.remove_abandoned(id) {
                     log::debug!("Sampler {:?} will be destroyed", id);
@@ -628,7 +630,9 @@ impl<A: HalApi> LifetimeTracker<A> {
                         t.lock().add(trace::Action::DestroySampler(id.0));
                     }
 
-                    if let Some(res) = hub.samplers.unregister(id.0) {
+                    // SAFETY: Refcount has hit one so there should be no other way to access this value
+                    // besides through the very trackers we have exclusive access to.
+                    if let Some(res) = unsafe { hub.samplers.unregister(id.0) } {
                         let submit_index = res.life_guard.life_count();
                         self.active
                             .iter_mut()
@@ -642,8 +646,6 @@ impl<A: HalApi> LifetimeTracker<A> {
         }
 
         if !self.suspected_resources.buffers.is_empty() {
-            let mut trackers = trackers.lock();
-
             for id in self.suspected_resources.buffers.drain(..) {
                 if trackers.buffers.remove_abandoned(id) {
                     log::debug!("Buffer {:?} will be destroyed", id);
@@ -652,7 +654,9 @@ impl<A: HalApi> LifetimeTracker<A> {
                         t.lock().add(trace::Action::DestroyBuffer(id.0));
                     }
 
-                    if let Some(res) = hub.buffers.unregister(id.0) {
+                    // SAFETY: Refcount has hit one so there should be no other way to access this value
+                    // besides through the very trackers we have exclusive access to.
+                    if let Some(res) = unsafe { hub.buffers.unregister(id.0) } {
                         let submit_index = res.life_guard.life_count();
                         if let resource::BufferMapState::Init { stage_buffer, .. } = res.map_state {
                             self.free_resources.buffers.push(stage_buffer);
@@ -669,8 +673,6 @@ impl<A: HalApi> LifetimeTracker<A> {
         }
 
         if !self.suspected_resources.compute_pipelines.is_empty() {
-            let mut trackers = trackers.lock();
-
             for id in self.suspected_resources.compute_pipelines.drain(..) {
                 if trackers.compute_pipelines.remove_abandoned(id) {
                     log::debug!("Compute pipeline {:?} will be destroyed", id);
@@ -679,7 +681,9 @@ impl<A: HalApi> LifetimeTracker<A> {
                         t.lock().add(trace::Action::DestroyComputePipeline(id.0));
                     }
 
-                    if let Some(res) = hub.compute_pipelines.unregister(id.0) {
+                    // SAFETY: Refcount has hit one so there should be no other way to access this value
+                    // besides through the very trackers we have exclusive access to.
+                    if let Some(res) = unsafe { hub.compute_pipelines.unregister(id.0) } {
                         let submit_index = res.life_guard.life_count();
                         self.active
                             .iter_mut()
@@ -693,8 +697,6 @@ impl<A: HalApi> LifetimeTracker<A> {
         }
 
         if !self.suspected_resources.render_pipelines.is_empty() {
-            let mut trackers = trackers.lock();
-
             for id in self.suspected_resources.render_pipelines.drain(..) {
                 if trackers.render_pipelines.remove_abandoned(id) {
                     log::debug!("Render pipeline {:?} will be destroyed", id);
@@ -703,7 +705,9 @@ impl<A: HalApi> LifetimeTracker<A> {
                         t.lock().add(trace::Action::DestroyRenderPipeline(id.0));
                     }
 
-                    if let Some(res) = hub.render_pipelines.unregister(id.0) {
+                    // SAFETY: Refcount has hit one so there should be no other way to access this value
+                    // besides through the very trackers we have exclusive access to.
+                    if let Some(res) = unsafe { hub.render_pipelines.unregister(id.0) } {
                         let submit_index = res.life_guard.life_count();
                         self.active
                             .iter_mut()
@@ -730,7 +734,9 @@ impl<A: HalApi> LifetimeTracker<A> {
                         t.lock().add(trace::Action::DestroyPipelineLayout(id.0));
                     }
 
-                    if let Some(lay) = hub.pipeline_layouts.unregister(id.0) {
+                    // SAFETY: Refcount has hit one so there should be no other way to access this value
+                    // besides through the suspected resources, which we have exclusive access to.
+                    if let Some(lay) = unsafe { hub.pipeline_layouts.unregister(id.0) } {
                         self.suspected_resources
                             .bind_group_layouts
                             .extend_from_slice(&lay.bind_group_layout_ids);
@@ -755,7 +761,9 @@ impl<A: HalApi> LifetimeTracker<A> {
                     if let Some(t) = trace {
                         t.lock().add(trace::Action::DestroyBindGroupLayout(id.0));
                     }
-                    if let Some(lay) = hub.bind_group_layouts.unregister(id.0) {
+                    // SAFETY: Refcount has hit zero so there should be no other way to access this value
+                    // besides through the suspected resources, which we have exclusive access to.
+                    if let Some(lay) = unsafe { hub.bind_group_layouts.unregister(id.0) } {
                         self.free_resources.bind_group_layouts.push(lay.raw);
                     }
                 }
@@ -763,14 +771,16 @@ impl<A: HalApi> LifetimeTracker<A> {
         }
 
         if !self.suspected_resources.query_sets.is_empty() {
-            let mut trackers = trackers.lock();
-
             for id in self.suspected_resources.query_sets.drain(..) {
                 if trackers.query_sets.remove_abandoned(id) {
                     log::debug!("Query set {:?} will be destroyed", id);
-                    // #[cfg(feature = "trace")]
-                    // trace.map(|t| t.lock().add(trace::Action::DestroyComputePipeline(id.0)));
-                    if let Some(res) = hub.query_sets.unregister(id.0) {
+
+                    #[cfg(feature = "trace")]
+                    trace.map(|t| t.lock().add(trace::Action::DestroyQuerySet(id.0)));
+
+                    // SAFETY: Refcount has hit one so there should be no other way to access this value
+                    // besides through the suspected resources, which we have exclusive access to.
+                    if let Some(res) = unsafe { hub.query_sets.unregister(id.0) } {
                         let submit_index = res.life_guard.life_count();
                         self.active
                             .iter_mut()
@@ -836,7 +846,10 @@ impl<A: HalApi> LifetimeTracker<A> {
             {
                 buffer.map_state = resource::BufferMapState::Idle;
                 log::debug!("Mapping request is dropped because the buffer is destroyed.");
-                if let Some(buf) = hub.buffers.unregister(buffer_id.0) {
+
+                // SAFETY: Refcount has hit one so there should be no other way to access this value
+                // besides through the very trackers we have exclusive access to.
+                if let Some(buf) = unsafe { hub.buffers.unregister(buffer_id.0) } {
                     self.free_resources.buffers.extend(buf.raw.into_inner());
                 }
             } else {

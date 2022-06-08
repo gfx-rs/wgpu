@@ -639,7 +639,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                     let mut trackers = device.trackers.lock();
 
-                    used_surface_textures.set_size(hub.textures.len());
+                    used_surface_textures.set_size(hub.textures.max_index());
 
                     //TODO: if multiple command buffers are submitted, we can re-use the last
                     // native command buffer of the previous chain instead of always creating
@@ -851,7 +851,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     // (2) it's doing the extra locking unconditionally
                     // Maybe we can only do so if any surfaces are being written to?
 
-                    used_surface_textures.set_size(hub.textures.len());
+                    used_surface_textures.set_size(hub.textures.max_index());
 
                     for &id in pending_writes.dst_textures.iter() {
                         let texture = hub.textures.get(id).unwrap();
