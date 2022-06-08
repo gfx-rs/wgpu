@@ -144,6 +144,23 @@ impl super::Device {
             .position(|ep| ep.name.as_str() == stage.entry_point)
             .ok_or(crate::PipelineError::EntryPoint(naga_stage))?;
 
+        use naga::proc::BoundsCheckPolicy;
+        // The image bounds checks require the TEXTURE_LEVELS feature available in GL core 1.3+.
+        let version = gl.version();
+        let image_check = if !version.is_embedded && (version.major, version.minor) >= (1, 3) {
+            BoundsCheckPolicy::ReadZeroSkipWrite
+        } else {
+            BoundsCheckPolicy::Unchecked
+        };
+
+        // Other bounds check are either provided by glsl or not implemented yet.
+        let policies = naga::proc::BoundsCheckPolicies {
+            index: BoundsCheckPolicy::Unchecked,
+            buffer: BoundsCheckPolicy::Unchecked,
+            image: image_check,
+            binding_array: BoundsCheckPolicy::Unchecked,
+        };
+
         let mut output = String::new();
         let mut writer = glsl::Writer::new(
             &mut output,
@@ -151,6 +168,7 @@ impl super::Device {
             &shader.info,
             &context.layout.naga_options,
             &pipeline_options,
+            policies,
         )
         .map_err(|e| {
             let msg = format!("{}", e);
