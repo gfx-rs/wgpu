@@ -360,7 +360,6 @@ impl PhysicalDeviceFeatures {
             | F::ADDRESS_MODE_CLAMP_TO_BORDER
             | F::ADDRESS_MODE_CLAMP_TO_ZERO
             | F::TIMESTAMP_QUERY
-            | F::PIPELINE_STATISTICS_QUERY
             | F::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
             | F::CLEAR_TEXTURE;
         let mut dl_flags = Df::all();
@@ -397,8 +396,10 @@ impl PhysicalDeviceFeatures {
             F::TEXTURE_COMPRESSION_BC,
             self.core.texture_compression_bc != 0,
         );
-        //if self.core.occlusion_query_precise != 0 {
-        //if self.core.pipeline_statistics_query != 0 { //TODO
+        features.set(
+            F::PIPELINE_STATISTICS_QUERY,
+            self.core.pipeline_statistics_query != 0,
+        );
         features.set(
             F::VERTEX_WRITABLE_STORAGE,
             self.core.vertex_pipeline_stores_and_atomics != 0,
