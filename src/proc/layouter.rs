@@ -151,32 +151,6 @@ impl Layouter {
         self.layouts.clear();
     }
 
-    /// Return the offset and span of a struct member.
-    ///
-    /// The member must fall at or after `offset`. The member's alignment and
-    /// size are `align` and `size` if given, defaulting to the values this
-    /// `Layouter` has previously determined for `ty`.
-    ///
-    /// The return value is the range of offsets within the containing struct to
-    /// reserve for this member, along with the alignment used. The containing
-    /// struct must have sufficient space and alignment to accommodate these.
-    pub fn member_placement(
-        &self,
-        offset: u32,
-        ty: Handle<crate::Type>,
-        align: Option<Alignment>,
-        size: Option<NonZeroU32>,
-    ) -> (ops::Range<u32>, Alignment) {
-        let layout = self.layouts[ty.index()];
-        let alignment = align.unwrap_or(layout.alignment);
-        let start = alignment.round_up(offset);
-        let span = match size {
-            Some(size) => size.get(),
-            None => layout.size,
-        };
-        (start..start + span, alignment)
-    }
-
     /// Extend this `Layouter` with layouts for any new entries in `types`.
     ///
     /// Ensure that every type in `types` has a corresponding [TypeLayout] in

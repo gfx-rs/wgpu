@@ -428,36 +428,54 @@ fn unknown_conservative_depth() {
 }
 
 #[test]
-fn struct_member_zero_size() {
+fn struct_member_size_too_low() {
     check(
         r#"
             struct Bar {
                 @size(0) data: array<f32>
             }
         "#,
-        r#"error: struct member size or alignment must not be 0
+        r#"error: struct member size must be at least 4
   ┌─ wgsl:3:23
   │
 3 │                 @size(0) data: array<f32>
-  │                       ^ struct member size or alignment must not be 0
+  │                       ^ must be at least 4
 
 "#,
     );
 }
 
 #[test]
-fn struct_member_zero_align() {
+fn struct_member_align_too_low() {
     check(
         r#"
             struct Bar {
-                @align(0) data: array<f32>
+                @align(8) data: vec3<f32>
             }
         "#,
-        r#"error: struct member size or alignment must not be 0
+        r#"error: struct member alignment must be at least 16
   ┌─ wgsl:3:24
   │
-3 │                 @align(0) data: array<f32>
-  │                        ^ struct member size or alignment must not be 0
+3 │                 @align(8) data: vec3<f32>
+  │                        ^ must be at least 16
+
+"#,
+    );
+}
+
+#[test]
+fn struct_member_non_po2_align() {
+    check(
+        r#"
+            struct Bar {
+                @align(7) data: array<f32>
+            }
+        "#,
+        r#"error: struct member alignment must be a power of 2
+  ┌─ wgsl:3:24
+  │
+3 │                 @align(7) data: array<f32>
+  │                        ^ must be a power of 2
 
 "#,
     );

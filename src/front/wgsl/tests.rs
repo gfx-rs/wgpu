@@ -91,7 +91,7 @@ fn parse_struct() {
         struct Bar {
             @size(16) x: vec2<i32>,
             @align(16) y: f32,
-            @size(32) @align(8) z: vec3<f32>,
+            @size(32) @align(128) z: vec3<f32>,
         };
         struct Empty {}
         var<storage,read_write> s: Foo;
