@@ -1085,6 +1085,9 @@ struct VertexLimitState {
 /// [`SetIndexBuffer`] to the simulated state stored here, and then
 /// calls the `flush_foo` methods before draw calls to produce the
 /// update commands we actually need.
+///
+/// [`SetBindGroup`]: RenderCommand::SetBindGroup
+/// [`SetIndexBuffer`]: RenderCommand::SetIndexBuffer
 struct State<A: HalApi> {
     /// Resources used by this bundle. This will become [`RenderBundle::used`].
     trackers: RenderBundleScope<A>,

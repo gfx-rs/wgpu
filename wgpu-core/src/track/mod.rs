@@ -690,9 +690,10 @@ impl<A: hub::HalApi> Tracker<A> {
     /// the state given for those resources in the UsageScope. It also
     /// removes all touched resources from the usage scope.
     ///
-    /// If a transition is needed to get the resources into the needed state,
-    /// those transitions are stored within the tracker. A subsequent
-    /// call to [`Self::drain`] is needed to get those transitions.
+    /// If a transition is needed to get the resources into the needed
+    /// state, those transitions are stored within the tracker. A
+    /// subsequent call to [`BufferTracker::drain`] or
+    /// [`TextureTracker::drain`] is needed to get those transitions.
     ///
     /// This is a really funky method used by Compute Passes to generate
     /// barriers after a call to dispatch without needing to iterate
