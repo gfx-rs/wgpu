@@ -461,7 +461,7 @@ impl<A: hal::Api> LifetimeTracker<A> {
 impl<A: HalApi> LifetimeTracker<A> {
     /// Identify resources to free, according to `trackers` and `self.suspected_resources`.
     ///
-    /// Given `trackers`, the [`TrackerSet`] belonging to same [`Device`] as
+    /// Given `trackers`, the [`Tracker`] belonging to same [`Device`] as
     /// `self`, and `hub`, the [`Hub`] to which that `Device` belongs:
     ///
     /// Remove from `trackers` each resource mentioned in
