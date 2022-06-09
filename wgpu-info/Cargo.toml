@@ -9,10 +9,6 @@ repository = "https://github.com/gfx-rs/wgpu"
 keywords = ["graphics"]
 license = "MIT OR Apache-2.0"
 
-# Even if you aren't actually building `wgpu-info`,
-# enabling the `angle` and `vulkan-portability` features of wgpu enables them for everything built in this workspace.
-# This includes the web examples, which fail to compile when Vulkan is enabled,
-# so disable that on web (by just disabling everything, since this won't compile for wasm anyway).
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+[dependencies]
 env_logger = "0.9"
-wgpu = { version = "0.12", path = "../wgpu", features = ["angle", "vulkan-portability"] }
+wgpu = { version = "0.12", path = "../wgpu" }
