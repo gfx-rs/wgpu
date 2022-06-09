@@ -1569,7 +1569,7 @@ impl Parser {
                 "bitcast" => {
                     let _ = lexer.next();
                     lexer.expect_generic_paren('<')?;
-                    let ((ty, _access), type_span) = lexer.capture_span(|lexer| {
+                    let (ty, type_span) = lexer.capture_span(|lexer| {
                         self.parse_type_decl(lexer, None, ctx.types, ctx.constants)
                     })?;
                     lexer.expect_generic_paren('>')?;
@@ -2738,11 +2738,11 @@ impl Parser {
         lexer: &mut Lexer<'a>,
         type_arena: &mut UniqueArena<crate::Type>,
         const_arena: &mut Arena<crate::Constant>,
-    ) -> Result<(&'a str, Span, Handle<crate::Type>, crate::StorageAccess), Error<'a>> {
+    ) -> Result<(&'a str, Span, Handle<crate::Type>), Error<'a>> {
         let (name, name_span) = lexer.next_ident_with_span()?;
         lexer.expect(Token::Separator(':'))?;
-        let (ty, access) = self.parse_type_decl(lexer, None, type_arena, const_arena)?;
-        Ok((name, name_span, ty, access))
+        let ty = self.parse_type_decl(lexer, None, type_arena, const_arena)?;
+        Ok((name, name_span, ty))
     }
 
     fn parse_variable_decl<'a>(
@@ -2772,7 +2772,7 @@ impl Parser {
         }
         let name = lexer.next_ident()?;
         lexer.expect(Token::Separator(':'))?;
-        let (ty, _access) = self.parse_type_decl(lexer, None, type_arena, const_arena)?;
+        let ty = self.parse_type_decl(lexer, None, type_arena, const_arena)?;
 
         let init = if lexer.skip(Token::Operation('=')) {
             let handle = self.parse_const_expression(lexer, type_arena, const_arena)?;
@@ -2844,7 +2844,7 @@ impl Parser {
                 return Err(Error::ReservedKeyword(span));
             }
             lexer.expect(Token::Separator(':'))?;
-            let (ty, _) = self.parse_type_decl(lexer, None, type_arena, const_arena)?;
+            let ty = self.parse_type_decl(lexer, None, type_arena, const_arena)?;
             ready = lexer.skip(Token::Separator(','));
 
             self.layouter.update(type_arena, const_arena).unwrap();
@@ -2999,7 +2999,7 @@ impl Parser {
                 let (ident, span) = lexer.next_ident_with_span()?;
                 let mut space = conv::map_address_space(ident, span)?;
                 lexer.expect(Token::Separator(','))?;
-                let (base, _access) = self.parse_type_decl(lexer, None, type_arena, const_arena)?;
+                let base = self.parse_type_decl(lexer, None, type_arena, const_arena)?;
                 if let crate::AddressSpace::Storage { ref mut access } = space {
                     *access = if lexer.skip(Token::Separator(',')) {
                         lexer.next_storage_access()?
@@ -3012,7 +3012,7 @@ impl Parser {
             }
             "array" => {
                 lexer.expect_generic_paren('<')?;
-                let (base, _access) = self.parse_type_decl(lexer, None, type_arena, const_arena)?;
+                let base = self.parse_type_decl(lexer, None, type_arena, const_arena)?;
                 let size = if lexer.skip(Token::Separator(',')) {
                     let const_handle =
                         self.parse_const_expression(lexer, type_arena, const_arena)?;
@@ -3030,7 +3030,7 @@ impl Parser {
             }
             "binding_array" => {
                 lexer.expect_generic_paren('<')?;
-                let (base, _access) = self.parse_type_decl(lexer, None, type_arena, const_arena)?;
+                let base = self.parse_type_decl(lexer, None, type_arena, const_arena)?;
                 let size = if lexer.skip(Token::Separator(',')) {
                     let const_handle =
                         self.parse_const_expression(lexer, type_arena, const_arena)?;
@@ -3245,7 +3245,7 @@ impl Parser {
         debug_name: Option<&'a str>,
         type_arena: &mut UniqueArena<crate::Type>,
         const_arena: &mut Arena<crate::Constant>,
-    ) -> Result<(Handle<crate::Type>, crate::StorageAccess), Error<'a>> {
+    ) -> Result<Handle<crate::Type>, Error<'a>> {
         self.push_scope(Scope::TypeDecl, lexer);
         let attribute = TypeAttributes::default();
 
@@ -3254,7 +3254,6 @@ impl Parser {
             return Err(Error::Unexpected(other, ExpectedToken::TypeAttribute));
         }
 
-        let storage_access = crate::StorageAccess::default();
         let (name, name_span) = lexer.next_ident_with_span()?;
         let handle = self.parse_type_decl_name(
             lexer,
@@ -3269,7 +3268,7 @@ impl Parser {
         // Only set span if it's the first occurrence of the type.
         // Type spans therefore should only be used for errors in type declarations;
         // use variable spans/expression spans/etc. otherwise
-        Ok((handle, storage_access))
+        Ok(handle)
     }
 
     /// Parse an assignment statement (will also parse increment and decrement statements)
@@ -3497,7 +3496,7 @@ impl Parser {
                             return Err(Error::ReservedKeyword(name_span));
                         }
                         let given_ty = if lexer.skip(Token::Separator(':')) {
-                            let (ty, _access) = self.parse_type_decl(
+                            let ty = self.parse_type_decl(
                                 lexer,
                                 None,
                                 context.types,
@@ -3558,7 +3557,7 @@ impl Parser {
                             return Err(Error::ReservedKeyword(name_span));
                         }
                         let given_ty = if lexer.skip(Token::Separator(':')) {
-                            let (ty, _access) = self.parse_type_decl(
+                            let ty = self.parse_type_decl(
                                 lexer,
                                 None,
                                 context.types,
@@ -4133,7 +4132,7 @@ impl Parser {
                 ));
             }
             let mut binding = self.parse_varying_binding(lexer)?;
-            let (param_name, param_name_span, param_type, _access) =
+            let (param_name, param_name_span, param_type) =
                 self.parse_variable_ident_decl(lexer, &mut module.types, &mut module.constants)?;
             if crate::keywords::wgsl::RESERVED.contains(&param_name) {
                 return Err(Error::ReservedKeyword(param_name_span));
@@ -4163,8 +4162,7 @@ impl Parser {
         // read return type
         let result = if lexer.skip(Token::Arrow) && !lexer.skip(Token::Word("void")) {
             let mut binding = self.parse_varying_binding(lexer)?;
-            let (ty, _access) =
-                self.parse_type_decl(lexer, None, &mut module.types, &mut module.constants)?;
+            let ty = self.parse_type_decl(lexer, None, &mut module.types, &mut module.constants)?;
             if let Some(ref mut binding) = binding {
                 binding.apply_default_interpolation(&module.types[ty].inner);
             }
@@ -4317,7 +4315,7 @@ impl Parser {
             (Token::Word("type"), _) => {
                 let name = lexer.next_ident()?;
                 lexer.expect(Token::Operation('='))?;
-                let (ty, _access) = self.parse_type_decl(
+                let ty = self.parse_type_decl(
                     lexer,
                     Some(name),
                     &mut module.types,
@@ -4341,7 +4339,7 @@ impl Parser {
                     });
                 }
                 let given_ty = if lexer.skip(Token::Separator(':')) {
-                    let (ty, _access) = self.parse_type_decl(
+                    let ty = self.parse_type_decl(
                         lexer,
                         None,
                         &mut module.types,

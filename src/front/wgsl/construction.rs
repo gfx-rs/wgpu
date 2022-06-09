@@ -196,9 +196,7 @@ fn parse_constructor_type<'a>(
         }
         (Token::Paren('<'), ConstructorType::PartialArray) => {
             lexer.expect_generic_paren('<')?;
-            let base = parser
-                .parse_type_decl(lexer, None, type_arena, const_arena)?
-                .0;
+            let base = parser.parse_type_decl(lexer, None, type_arena, const_arena)?;
             let size = if lexer.skip(Token::Separator(',')) {
                 let const_handle = parser.parse_const_expression(lexer, type_arena, const_arena)?;
                 ArraySize::Constant(const_handle)
