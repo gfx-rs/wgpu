@@ -126,10 +126,12 @@ impl framework::Example for Example {
         log::info!("Press left/right arrow keys to change sample_count.");
         let sample_count = 4;
 
-        let shader = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
-            label: None,
-            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
-        });
+        let shader = device
+            .create_shader_module(&wgpu::ShaderModuleDescriptor {
+                label: None,
+                source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
+            })
+            .unwrap();
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,

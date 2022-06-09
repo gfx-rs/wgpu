@@ -35,10 +35,12 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
         .expect("Failed to create device");
 
     // Load the shaders from disk
-    let shader = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
-        label: None,
-        source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
-    });
+    let shader = device
+        .create_shader_module(&wgpu::ShaderModuleDescriptor {
+            label: None,
+            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
+        })
+        .unwrap();
 
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: None,

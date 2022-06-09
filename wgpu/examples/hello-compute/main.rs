@@ -69,10 +69,12 @@ async fn execute_gpu_inner(
     numbers: &[u32],
 ) -> Option<Vec<u32>> {
     // Loads the shader from WGSL
-    let cs_module = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
-        label: None,
-        source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
-    });
+    let cs_module = device
+        .create_shader_module(&wgpu::ShaderModuleDescriptor {
+            label: None,
+            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
+        })
+        .unwrap();
 
     // Gets the size in bytes of the buffer.
     let slice_size = numbers.len() * std::mem::size_of::<u32>();

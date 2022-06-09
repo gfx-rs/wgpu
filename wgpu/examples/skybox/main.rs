@@ -170,10 +170,12 @@ impl framework::Example for Skybox {
         });
 
         // Create the render pipeline
-        let shader = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
-            label: None,
-            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
-        });
+        let shader = device
+            .create_shader_module(&wgpu::ShaderModuleDescriptor {
+                label: None,
+                source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
+            })
+            .unwrap();
 
         let camera = Camera {
             screen_size: (config.width, config.height),

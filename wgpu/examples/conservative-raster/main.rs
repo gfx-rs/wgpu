@@ -85,13 +85,14 @@ impl framework::Example for Example {
                 push_constant_ranges: &[],
             });
 
-        let shader_triangle_and_lines =
-            device.create_shader_module(&wgpu::ShaderModuleDescriptor {
+        let shader_triangle_and_lines = device
+            .create_shader_module(&wgpu::ShaderModuleDescriptor {
                 label: None,
                 source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!(
                     "triangle_and_lines.wgsl"
                 ))),
-            });
+            })
+            .unwrap();
 
         let pipeline_triangle_conservative =
             device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -197,10 +198,12 @@ impl framework::Example for Example {
                 bind_group_layouts: &[&bind_group_layout],
                 push_constant_ranges: &[],
             });
-            let shader = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
-                label: None,
-                source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("upscale.wgsl"))),
-            });
+            let shader = device
+                .create_shader_module(&wgpu::ShaderModuleDescriptor {
+                    label: None,
+                    source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("upscale.wgsl"))),
+                })
+                .unwrap();
             (
                 device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                     label: Some("Upscale"),

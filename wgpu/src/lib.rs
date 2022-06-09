@@ -259,7 +259,7 @@ trait Context: Debug + Send + Sized + Sync {
         device: &Self::DeviceId,
         desc: &ShaderModuleDescriptor,
         shader_bound_checks: wgt::ShaderBoundChecks,
-    ) -> Self::ShaderModuleId;
+    ) -> Result<Self::ShaderModuleId, crate::CreateShaderModuleError>;
     unsafe fn device_create_shader_module_spirv(
         &self,
         device: &Self::DeviceId,
@@ -1954,16 +1954,19 @@ impl Device {
     }
 
     /// Creates a shader module from either SPIR-V or WGSL source code.
-    pub fn create_shader_module(&self, desc: &ShaderModuleDescriptor) -> ShaderModule {
-        ShaderModule {
+    pub fn create_shader_module(
+        &self,
+        desc: &ShaderModuleDescriptor,
+    ) -> Result<ShaderModule, CreateShaderModuleError> {
+        Ok(ShaderModule {
             context: Arc::clone(&self.context),
             id: Context::device_create_shader_module(
                 &*self.context,
                 &self.id,
                 desc,
                 wgt::ShaderBoundChecks::new(),
-            ),
-        }
+            )?,
+        })
     }
 
     /// Creates a shader module from either SPIR-V or WGSL source code without runtime checks.
@@ -1979,16 +1982,16 @@ impl Device {
     pub unsafe fn create_shader_module_unchecked(
         &self,
         desc: &ShaderModuleDescriptor,
-    ) -> ShaderModule {
-        ShaderModule {
+    ) -> Result<ShaderModule, CreateShaderModuleError> {
+        Ok(ShaderModule {
             context: Arc::clone(&self.context),
             id: Context::device_create_shader_module(
                 &*self.context,
                 &self.id,
                 desc,
                 wgt::ShaderBoundChecks::unchecked(),
-            ),
-        }
+            )?,
+        })
     }
 
     /// Creates a shader module from SPIR-V binary directly.
@@ -2186,6 +2189,20 @@ impl Drop for Device {
             self.context.device_drop(&self.id);
         }
     }
+}
+
+/// Error when parsing shader source that isn't wgsl, thus converting to a naga module beforehand.
+#[derive(Debug)]
+pub enum CreateShaderModuleError {
+    /// Error parsing spirv source to naga module
+    #[cfg(feature = "spirv")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "spirv")))]
+    SpvParsing(naga::front::spv::Error),
+
+    /// Error parsing glsl source to naga module
+    #[cfg(feature = "glsl")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "glsl")))]
+    GlslParsing(Vec<naga::front::glsl::Error>),
 }
 
 /// Requesting a device failed.

@@ -11,7 +11,8 @@ fn pulling_common(
 ) {
     let shader = ctx
         .device
-        .create_shader_module(&wgpu::include_wgsl!("draw.vert.wgsl"));
+        .create_shader_module(&wgpu::include_wgsl!("draw.vert.wgsl"))
+        .unwrap();
 
     let bgl = ctx
         .device

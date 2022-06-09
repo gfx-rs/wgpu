@@ -87,7 +87,9 @@ impl framework::Example for Example {
         queue: &wgpu::Queue,
     ) -> Self {
         let mut uniform_workaround = false;
-        let base_shader_module = device.create_shader_module(&wgpu::include_wgsl!("indexing.wgsl"));
+        let base_shader_module = device
+            .create_shader_module(&wgpu::include_wgsl!("indexing.wgsl"))
+            .unwrap();
         let env_override = match std::env::var("WGPU_TEXTURE_ARRAY_STYLE") {
             Ok(value) => match &*value.to_lowercase() {
                 "nonuniform" | "non_uniform" => Some(true),
@@ -118,8 +120,9 @@ impl framework::Example for Example {
         // TODO: Because naga's capibilities are evaluated on validate, not on write, we cannot make a shader module with unsupported
         // capabilities even if we don't use it. So for now put it in a separate module.
         let fragment_shader_module = if !uniform_workaround {
-            non_uniform_shader_module =
-                device.create_shader_module(&wgpu::include_wgsl!("non_uniform_indexing.wgsl"));
+            non_uniform_shader_module = device
+                .create_shader_module(&wgpu::include_wgsl!("non_uniform_indexing.wgsl"))
+                .unwrap();
             &non_uniform_shader_module
         } else {
             &base_shader_module

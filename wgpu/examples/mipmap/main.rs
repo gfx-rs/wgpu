@@ -78,10 +78,12 @@ impl Example {
         query_sets: &Option<QuerySets>,
         mip_count: u32,
     ) {
-        let shader = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
-            label: None,
-            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("blit.wgsl"))),
-        });
+        let shader = device
+            .create_shader_module(&wgpu::ShaderModuleDescriptor {
+                label: None,
+                source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("blit.wgsl"))),
+            })
+            .unwrap();
 
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("blit"),
@@ -272,10 +274,12 @@ impl framework::Example for Example {
         });
 
         // Create the render pipeline
-        let shader = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
-            label: None,
-            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("draw.wgsl"))),
-        });
+        let shader = device
+            .create_shader_module(&wgpu::ShaderModuleDescriptor {
+                label: None,
+                source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("draw.wgsl"))),
+            })
+            .unwrap();
 
         let draw_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("draw"),

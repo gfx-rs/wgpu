@@ -1067,7 +1067,7 @@ impl crate::Context for Context {
         device: &Self::DeviceId,
         desc: &ShaderModuleDescriptor,
         shader_bound_checks: wgt::ShaderBoundChecks,
-    ) -> Self::ShaderModuleId {
+    ) -> Result<Self::ShaderModuleId, crate::CreateShaderModuleError> {
         let global = &self.0;
         let descriptor = wgc::pipeline::ShaderModuleDescriptor {
             label: desc.label.map(Borrowed),
@@ -1083,7 +1083,9 @@ impl crate::Context for Context {
                     block_ctx_dump_prefix: None,
                 };
                 let parser = naga::front::spv::Parser::new(spv.iter().cloned(), &options);
-                let module = parser.parse().unwrap();
+                let module = parser
+                    .parse()
+                    .map_err(crate::CreateShaderModuleError::SpvParsing)?;
                 wgc::pipeline::ShaderModuleSource::Naga(module)
             }
             #[cfg(feature = "glsl")]
@@ -1098,7 +1100,9 @@ impl crate::Context for Context {
                     defines: defines.clone(),
                 };
                 let mut parser = naga::front::glsl::Parser::default();
-                let module = parser.parse(&options, shader).unwrap();
+                let module = parser
+                    .parse(&options, shader)
+                    .map_err(crate::CreateShaderModuleError::GlslParsing)?;
 
                 wgc::pipeline::ShaderModuleSource::Naga(module)
             }
@@ -1116,7 +1120,7 @@ impl crate::Context for Context {
                 "Device::create_shader_module",
             );
         }
-        id
+        Ok(id)
     }
 
     unsafe fn device_create_shader_module_spirv(

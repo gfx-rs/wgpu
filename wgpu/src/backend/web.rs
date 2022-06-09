@@ -1256,7 +1256,7 @@ impl crate::Context for Context {
         device: &Self::DeviceId,
         desc: &crate::ShaderModuleDescriptor,
         _shader_bound_checks: wgt::ShaderBoundChecks,
-    ) -> Self::ShaderModuleId {
+    ) -> Result<Self::ShaderModuleId, crate::CreateShaderModuleError> {
         let mut descriptor = match desc.source {
             #[cfg(feature = "spirv")]
             crate::ShaderSource::SpirV(ref spv) => {
@@ -1268,7 +1268,9 @@ impl crate::Context for Context {
                     block_ctx_dump_prefix: None,
                 };
                 let spv_parser = front::spv::Parser::new(spv.iter().cloned(), &options);
-                let spv_module = spv_parser.parse().unwrap();
+                let spv_module = spv_parser
+                    .parse()
+                    .map_err(crate::CreateShaderModuleError::SpvParsing)?;
 
                 let mut validator = valid::Validator::new(
                     valid::ValidationFlags::all(),
@@ -1295,7 +1297,9 @@ impl crate::Context for Context {
                     defines: defines.clone(),
                 };
                 let mut parser = front::glsl::Parser::default();
-                let glsl_module = parser.parse(&options, shader).unwrap();
+                let glsl_module = parser
+                    .parse(&options, shader)
+                    .map_err(crate::CreateShaderModuleError::GlslParsing)?;
 
                 let mut validator = valid::Validator::new(
                     valid::ValidationFlags::all(),
@@ -1314,7 +1318,7 @@ impl crate::Context for Context {
         if let Some(label) = desc.label {
             descriptor.label(label);
         }
-        Sendable(device.0.create_shader_module(&descriptor))
+        Ok(Sendable(device.0.create_shader_module(&descriptor)))
     }
 
     fn device_create_bind_group_layout(

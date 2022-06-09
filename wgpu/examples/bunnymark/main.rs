@@ -44,12 +44,14 @@ impl framework::Example for Example {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
     ) -> Self {
-        let shader = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
-            label: None,
-            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!(
-                "../../../wgpu-hal/examples/halmark/shader.wgsl"
-            ))),
-        });
+        let shader = device
+            .create_shader_module(&wgpu::ShaderModuleDescriptor {
+                label: None,
+                source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!(
+                    "../../../wgpu-hal/examples/halmark/shader.wgsl"
+                ))),
+            })
+            .unwrap();
 
         let global_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {

@@ -5,6 +5,8 @@ mod clear_texture;
 mod device;
 mod example_wgsl;
 mod instance;
+#[cfg(feature = "glsl")]
+mod invalid_shader;
 mod poll;
 mod shader_primitive_index;
 mod vertex_indices;

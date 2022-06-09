@@ -449,10 +449,12 @@ impl framework::Example for Example {
             attributes: &vertex_attr,
         };
 
-        let shader = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
-            label: None,
-            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
-        });
+        let shader = device
+            .create_shader_module(&wgpu::ShaderModuleDescriptor {
+                label: None,
+                source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
+            })
+            .unwrap();
 
         let shadow_pass = {
             let uniform_size = mem::size_of::<GlobalUniforms>() as wgpu::BufferAddress;
