@@ -3377,8 +3377,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     let last_submit_index = buffer.life_guard.life_count();
                     (ref_count, last_submit_index, buffer.device_id.value)
                 }
-                Err(InvalidId) => {
-                    hub.buffers.unregister(buffer_id);
+                Err(InvalidId::ResourceInError { .. }) => {
+                    unsafe { hub.buffers.unregister(buffer_id) };
                     return;
                 }
             }
@@ -3601,7 +3601,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     let last_submit_index = texture.life_guard.life_count();
                     (ref_count, last_submit_index, texture.device_id.value)
                 }
-                Err(InvalidId) => {
+                Err(InvalidId::ResourceInError { .. }) => {
                     hub.textures.unregister(texture_id);
                     return;
                 }
@@ -3695,7 +3695,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     let last_submit_index = view.life_guard.life_count();
                     (last_submit_index, view.device_id.value)
                 }
-                Err(InvalidId) => {
+                Err(InvalidId::ResourceInError { .. }) => {
                     hub.texture_views.unregister(texture_view_id);
                     return Ok(());
                 }
@@ -3777,7 +3777,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     sampler.life_guard.ref_count.take();
                     sampler.device_id.value
                 }
-                Err(InvalidId) => {
+                Err(InvalidId::ResourceInError { .. }) => {
                     hub.samplers.unregister(sampler_id);
                     return;
                 }
@@ -3868,7 +3868,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let device_id = {
             match hub.bind_group_layouts.get(bind_group_layout_id) {
                 Ok(layout) => layout.device_id.value,
-                Err(InvalidId) => {
+                Err(InvalidId::ResourceInError { .. }) => {
                     hub.bind_group_layouts.unregister(bind_group_layout_id);
                     return;
                 }
@@ -3937,7 +3937,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     layout.device_id.value,
                     layout.life_guard.ref_count.take().unwrap(),
                 ),
-                Err(InvalidId) => {
+                Err(InvalidId::ResourceInError { .. }) => {
                     hub.pipeline_layouts.unregister(pipeline_layout_id);
                     return;
                 }
@@ -4019,7 +4019,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     bind_group.life_guard.ref_count.take();
                     bind_group.device_id.value
                 }
-                Err(InvalidId) => {
+                Err(InvalidId::ResourceInError { .. }) => {
                     hub.bind_groups.unregister(bind_group_id);
                     return;
                 }
@@ -4308,7 +4308,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     bundle.life_guard.ref_count.take();
                     bundle.device_id.value
                 }
-                Err(InvalidId) => {
+                Err(InvalidId::ResourceInError { .. }) => {
                     hub.render_bundles.unregister(render_bundle_id);
                     return;
                 }
@@ -4507,7 +4507,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     pipeline.life_guard.ref_count.take();
                     (pipeline.device_id.value, pipeline.layout_id.clone())
                 }
-                Err(InvalidId) => {
+                Err(InvalidId::ResourceInError { .. }) => {
                     hub.render_pipelines.unregister(render_pipeline_id);
                     return;
                 }
@@ -4630,7 +4630,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     pipeline.life_guard.ref_count.take();
                     (pipeline.device_id.value, pipeline.layout_id.clone())
                 }
-                Err(InvalidId) => {
+                Err(InvalidId::ResourceInError { .. }) => {
                     hub.compute_pipelines.unregister(compute_pipeline_id);
                     return;
                 }
@@ -4954,7 +4954,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let hub = A::hub(self);
         let mut free_adapter_id = None;
         {
-            let device = hub.devices.unregister(device_id);
+            let device = unsafe { hub.devices.unregister(device_id) };
             if let Some(mut device) = device {
                 // The things `Device::prepare_to_die` takes care are mostly
                 // unnecessary here. We know our queue is empty, so we don't
@@ -4975,7 +4975,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         // Free the adapter now that we've dropped the `Device` token.
         if let Some(free_adapter_id) = free_adapter_id {
-            let _ = hub.adapters.unregister(free_adapter_id);
+            let _ = unsafe { hub.adapters.unregister(free_adapter_id) };
         }
     }
 

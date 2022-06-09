@@ -273,8 +273,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             );
             device.trackers.lock().textures.remove(texture_id.value);
 
-            let texture = hub.textures.unregister(texture_id.value.0);
-            if let Some(texture) = texture {
+            let texture = unsafe { hub.textures.unregister(texture_id.value.0) };
+            if let Ok(texture) = texture {
                 if let resource::TextureClearMode::RenderPass { clear_views, .. } =
                     texture.clear_mode
                 {
@@ -361,8 +361,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             // and now we are moving it away.
             device.trackers.lock().textures.remove(texture_id.value);
 
-            let texture = hub.textures.unregister(texture_id.value.0);
-            if let Some(texture) = texture {
+            let texture = unsafe { hub.textures.unregister(texture_id.value.0) };
+            if let Ok(texture) = texture {
                 let suf = A::get_surface_mut(surface);
                 match texture.inner {
                     resource::TextureInner::Surface {

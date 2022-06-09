@@ -57,7 +57,7 @@ where
     ///
     /// - No calls to `contains`, `get`, `get_unchecked`, or `Index` may happen
     ///   while this call is executing.
-    pub unsafe fn unregister(&self, id: T::Id) -> Option<T> {
+    pub unsafe fn unregister(&self, id: T::Id) -> Result<T, hub::InvalidId> {
         let mut ident_guard = self.identity_manager.lock();
         let (index, epoch) = ident_guard.free(id);
         let value = unsafe { self.storage.free(index, epoch) };
@@ -72,7 +72,7 @@ where
 
     pub fn get(&self, id: T::Id) -> Result<&T, hub::InvalidId> {
         let (index, epoch, _) = id.unzip();
-        self.storage.get(index, epoch).ok_or(hub::InvalidId)
+        self.storage.get(index, epoch)
     }
 
     pub fn get_unchecked(&self, index: u32) -> &T {
@@ -196,14 +196,14 @@ where
     fn raw_refs(
         &self,
         index: u32,
-    ) -> Option<(&DebugUnsafeCell<DebugMaybeUninit<T>>, &Mutex<ElementStatus>)> {
+    ) -> Result<(&DebugUnsafeCell<DebugMaybeUninit<T>>, &Mutex<ElementStatus>), hub::InvalidId> {
         let block = (index / 512) as usize;
         let data_index = (index % 512) as usize;
 
         let length = self.max_index.load(Ordering::Acquire);
 
         if index >= length {
-            return None;
+            return Err(hub::InvalidId::Vacant { index });
         }
 
         // SAFETY: We have just bounds checked the index and we always check the
@@ -213,7 +213,7 @@ where
         let data_ref = &block_ref.data[data_index];
         let status_ref = &block_ref.status[data_index];
 
-        Some((data_ref, status_ref))
+        Ok((data_ref, status_ref))
     }
 
     pub unsafe fn fill(&self, index: u32, epoch: u32, value: Result<T, Cow<'static, str>>) {
@@ -250,8 +250,8 @@ where
 
     fn contains(&self, index: u32, epoch: u32) -> bool {
         let (data_ref, status_ref) = match self.raw_refs(index) {
-            Some(v) => v,
-            None => return false,
+            Ok(v) => v,
+            Err(_) => return false,
         };
 
         if *status_ref.lock() != ElementStatus::Occupied(epoch) {
@@ -261,30 +261,44 @@ where
         true
     }
 
-    fn get(&self, index: u32, epoch: u32) -> Option<&T> {
+    fn get(&self, index: u32, epoch: u32) -> Result<&T, hub::InvalidId> {
         let (data_ref, status_ref) = self.raw_refs(index)?;
 
-        if *status_ref.lock() != ElementStatus::Occupied(epoch) {
-            return None;
+        let status = *status_ref.lock();
+        match status {
+            ElementStatus::Occupied(stored_epoch) | ElementStatus::Error(stored_epoch, _)
+                if epoch != stored_epoch =>
+            {
+                Err(hub::InvalidId::WrongEpoch { index, old: stored_epoch, new: epoch })
+            }
+            ElementStatus::Occupied(_) => Ok(unsafe { data_ref.get().assume_init_ref() }),
+            ElementStatus::Error(_, error) => Err(hub::InvalidId::ResourceInError {
+                index,
+                error: error.clone(),
+            }),
+            ElementStatus::Vacant => Err(hub::InvalidId::Vacant { index }),
         }
-
-        // TODO SAFETY: it isn't
-        Some(unsafe { data_ref.get().assume_init_ref() })
     }
 
-    fn get_unchecked(&self, index: u32) -> Option<&T> {
+    fn get_unchecked(&self, index: u32) -> Result<&T, hub::InvalidId> {
         let (data_ref, status_ref) = self.raw_refs(index)?;
 
-        if let ElementStatus::Occupied(_) = *status_ref.lock() {
-            // TODO SAFETY: it isn't
-            Some(unsafe { data_ref.get().assume_init_ref() })
-        } else {
-            None
+        let status = *status_ref.lock();
+        match status {
+            ElementStatus::Occupied(_) => {
+                // TODO SAFETY: it isn't
+                Ok(unsafe { data_ref.get().assume_init_ref() })
+            }
+            ElementStatus::Error(_, error) => Err(hub::InvalidId::ResourceInError {
+                index,
+                error: error.clone(),
+            }),
+            ElementStatus::Vacant => Err(hub::InvalidId::Vacant { index }),
         }
     }
 
     // SAFETY: Must be called inside the identity manager lock.
-    unsafe fn free(&self, index: u32, epoch: u32) -> Option<T> {
+    unsafe fn free(&self, index: u32, epoch: u32) -> Result<T, hub::InvalidId> {
         let (data_ref, status_ref) = self.raw_refs(index)?;
 
         // We set this to vacant first before destroying it, so that if a stray index comes through
@@ -297,7 +311,7 @@ where
         let data_mut_ref = data_ref.get_mut();
         let data = mem::replace(&mut *data_mut_ref, DebugMaybeUninit::uninit()).assume_init();
 
-        Some(data)
+        Ok(data)
     }
 
     fn iter_inner(

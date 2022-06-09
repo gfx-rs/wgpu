@@ -127,8 +127,8 @@ impl StorageReport {
 
 #[derive(Clone, Debug, Error)]
 pub(crate) enum InvalidId {
-    #[error("Resource {index} is in the error state. This happens when resource creation fails with an error and the ID is re-used.")]
-    ResourceInError { index: u32 },
+    #[error("Resource {index} is in the error state because {error}. This happens when resource creation fails with an error and the ID is re-used.")]
+    ResourceInError { index: u32, error: Cow<'static, str> },
     #[error("Resource {index} has been destroyed. The storage is currently empty.")]
     Vacant { index: u32 },
     #[error("Resource {index} has been destroyed. The storage is currently storing a new resource with epoch {new} (given epoch {old}).")]

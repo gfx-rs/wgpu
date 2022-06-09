@@ -648,9 +648,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     // finish all the command buffers first
                     for &cmb_id in command_buffer_ids {
                         #[allow(unused_mut)]
-                        let mut cmdbuf = match hub.command_buffers.unregister(cmb_id) {
-                            Some(cmdbuf) => cmdbuf,
-                            None => continue,
+                        let mut cmdbuf = match unsafe { hub.command_buffers.unregister(cmb_id) } {
+                            Ok(cmdbuf) => cmdbuf,
+                            Err(_) => continue,
                         };
                         #[cfg(feature = "trace")]
                         if let Some(ref trace) = device.trace {

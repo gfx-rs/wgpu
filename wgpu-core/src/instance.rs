@@ -489,7 +489,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             gl: None,
         };
 
-        let id = self.surfaces.prepare(id_in).assign(surface, &mut token);
+        let id = self.surfaces.prepare(id_in).assign(surface);
         id.0
     }
 
@@ -522,7 +522,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     pub fn surface_drop(&self, id: SurfaceId) {
         profiling::scope!("drop", "Surface");
-        let surface = self.surfaces.unregister(id);
+        let surface = unsafe { self.surfaces.unregister(id) };
         self.instance.destroy_surface(surface.unwrap());
     }
 
@@ -850,7 +850,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             Err(_) => true,
         };
         if free {
-            hub.adapters.unregister(adapter_id);
+            unsafe { hub.adapters.unregister(adapter_id) };
         }
     }
 }

@@ -521,7 +521,7 @@ impl<A: HalApi> LifetimeTracker<A> {
 
                     // SAFETY: Refcount has hit one so there should be no other way to access this value
                     // besides through the very trackers we have exclusive access to.
-                    if let Some(res) = unsafe { hub.render_bundles.unregister(id.0) } {
+                    if let Ok(res) = unsafe { hub.render_bundles.unregister(id.0) } {
                         self.suspected_resources.add_render_bundle_scope(&res.used);
                     }
                 }
@@ -539,7 +539,7 @@ impl<A: HalApi> LifetimeTracker<A> {
 
                     // SAFETY: Refcount has hit one so there should be no other way to access this value
                     // besides through the very trackers we have exclusive access to.
-                    if let Some(res) = unsafe { hub.bind_groups.unregister(id.0) } {
+                    if let Ok(res) = unsafe { hub.bind_groups.unregister(id.0) } {
                         self.suspected_resources.add_bind_group_states(&res.used);
 
                         self.suspected_resources
@@ -570,7 +570,7 @@ impl<A: HalApi> LifetimeTracker<A> {
 
                     // SAFETY: Refcount has hit one so there should be no other way to access this value
                     // besides through the very trackers we have exclusive access to.
-                    if let Some(res) = unsafe { hub.texture_views.unregister(id.0) } {
+                    if let Ok(res) = unsafe { hub.texture_views.unregister(id.0) } {
                         self.suspected_resources.textures.push(res.parent_id.value);
                         let submit_index = res.life_guard.life_count();
                         self.active
@@ -596,7 +596,7 @@ impl<A: HalApi> LifetimeTracker<A> {
 
                     // SAFETY: Refcount has hit one so there should be no other way to access this value
                     // besides through the very trackers we have exclusive access to.
-                    if let Some(res) = unsafe { hub.textures.unregister(id.0) } {
+                    if let Ok(res) = unsafe { hub.textures.unregister(id.0) } {
                         let submit_index = res.life_guard.life_count();
                         let raw = match res.inner {
                             resource::TextureInner::Native { raw: Some(raw) } => raw,
@@ -632,7 +632,7 @@ impl<A: HalApi> LifetimeTracker<A> {
 
                     // SAFETY: Refcount has hit one so there should be no other way to access this value
                     // besides through the very trackers we have exclusive access to.
-                    if let Some(res) = unsafe { hub.samplers.unregister(id.0) } {
+                    if let Ok(res) = unsafe { hub.samplers.unregister(id.0) } {
                         let submit_index = res.life_guard.life_count();
                         self.active
                             .iter_mut()
@@ -656,7 +656,7 @@ impl<A: HalApi> LifetimeTracker<A> {
 
                     // SAFETY: Refcount has hit one so there should be no other way to access this value
                     // besides through the very trackers we have exclusive access to.
-                    if let Some(res) = unsafe { hub.buffers.unregister(id.0) } {
+                    if let Ok(res) = unsafe { hub.buffers.unregister(id.0) } {
                         let submit_index = res.life_guard.life_count();
                         if let resource::BufferMapState::Init { stage_buffer, .. } = res.map_state {
                             self.free_resources.buffers.push(stage_buffer);
@@ -683,7 +683,7 @@ impl<A: HalApi> LifetimeTracker<A> {
 
                     // SAFETY: Refcount has hit one so there should be no other way to access this value
                     // besides through the very trackers we have exclusive access to.
-                    if let Some(res) = unsafe { hub.compute_pipelines.unregister(id.0) } {
+                    if let Ok(res) = unsafe { hub.compute_pipelines.unregister(id.0) } {
                         let submit_index = res.life_guard.life_count();
                         self.active
                             .iter_mut()
@@ -707,7 +707,7 @@ impl<A: HalApi> LifetimeTracker<A> {
 
                     // SAFETY: Refcount has hit one so there should be no other way to access this value
                     // besides through the very trackers we have exclusive access to.
-                    if let Some(res) = unsafe { hub.render_pipelines.unregister(id.0) } {
+                    if let Ok(res) = unsafe { hub.render_pipelines.unregister(id.0) } {
                         let submit_index = res.life_guard.life_count();
                         self.active
                             .iter_mut()
@@ -736,7 +736,7 @@ impl<A: HalApi> LifetimeTracker<A> {
 
                     // SAFETY: Refcount has hit one so there should be no other way to access this value
                     // besides through the suspected resources, which we have exclusive access to.
-                    if let Some(lay) = unsafe { hub.pipeline_layouts.unregister(id.0) } {
+                    if let Ok(lay) = unsafe { hub.pipeline_layouts.unregister(id.0) } {
                         self.suspected_resources
                             .bind_group_layouts
                             .extend_from_slice(&lay.bind_group_layout_ids);
@@ -763,7 +763,7 @@ impl<A: HalApi> LifetimeTracker<A> {
                     }
                     // SAFETY: Refcount has hit zero so there should be no other way to access this value
                     // besides through the suspected resources, which we have exclusive access to.
-                    if let Some(lay) = unsafe { hub.bind_group_layouts.unregister(id.0) } {
+                    if let Ok(lay) = unsafe { hub.bind_group_layouts.unregister(id.0) } {
                         self.free_resources.bind_group_layouts.push(lay.raw);
                     }
                 }
@@ -780,7 +780,7 @@ impl<A: HalApi> LifetimeTracker<A> {
 
                     // SAFETY: Refcount has hit one so there should be no other way to access this value
                     // besides through the suspected resources, which we have exclusive access to.
-                    if let Some(res) = unsafe { hub.query_sets.unregister(id.0) } {
+                    if let Ok(res) = unsafe { hub.query_sets.unregister(id.0) } {
                         let submit_index = res.life_guard.life_count();
                         self.active
                             .iter_mut()
@@ -849,7 +849,7 @@ impl<A: HalApi> LifetimeTracker<A> {
 
                 // SAFETY: Refcount has hit one so there should be no other way to access this value
                 // besides through the very trackers we have exclusive access to.
-                if let Some(buf) = unsafe { hub.buffers.unregister(buffer_id.0) } {
+                if let Ok(buf) = unsafe { hub.buffers.unregister(buffer_id.0) } {
                     self.free_resources.buffers.extend(buf.raw.into_inner());
                 }
             } else {
