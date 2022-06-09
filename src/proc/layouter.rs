@@ -1,7 +1,86 @@
 use crate::arena::{Arena, BadHandle, Handle, UniqueArena};
-use std::{num::NonZeroU32, ops};
+use std::{fmt::Display, num::NonZeroU32, ops};
 
-pub type Alignment = NonZeroU32;
+/// A newtype struct where its only valid values are powers of 2
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+pub struct Alignment(NonZeroU32);
+
+impl Alignment {
+    pub const ONE: Self = Self(unsafe { NonZeroU32::new_unchecked(1) });
+    pub const TWO: Self = Self(unsafe { NonZeroU32::new_unchecked(2) });
+    pub const FOUR: Self = Self(unsafe { NonZeroU32::new_unchecked(4) });
+    pub const EIGHT: Self = Self(unsafe { NonZeroU32::new_unchecked(8) });
+    pub const SIXTEEN: Self = Self(unsafe { NonZeroU32::new_unchecked(16) });
+
+    pub const MIN_UNIFORM: Self = Self::SIXTEEN;
+
+    pub const fn new(n: u32) -> Option<Self> {
+        if n.is_power_of_two() {
+            // SAFETY: value can't be 0 since we just checked if it's a power of 2
+            Some(Self(unsafe { NonZeroU32::new_unchecked(n) }))
+        } else {
+            None
+        }
+    }
+
+    /// # Panics
+    /// If `width` is not a power of 2
+    pub fn from_width(width: u8) -> Self {
+        Self::new(width as u32).unwrap()
+    }
+
+    /// Returns whether or not `n` is a multiple of this alignment.
+    pub const fn is_aligned(&self, n: u32) -> bool {
+        // equivalent to: `n % self.0.get() == 0` but much faster
+        n & (self.0.get() - 1) == 0
+    }
+
+    /// Round `n` up to the nearest alignment boundary.
+    pub const fn round_up(&self, n: u32) -> u32 {
+        // equivalent to:
+        // match n % self.0.get() {
+        //     0 => n,
+        //     rem => n + (self.0.get() - rem),
+        // }
+        let mask = self.0.get() - 1;
+        (n + mask) & !mask
+    }
+}
+
+impl Display for Alignment {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.get().fmt(f)
+    }
+}
+
+impl ops::Mul<u32> for Alignment {
+    type Output = u32;
+
+    fn mul(self, rhs: u32) -> Self::Output {
+        self.0.get() * rhs
+    }
+}
+
+impl ops::Mul for Alignment {
+    type Output = Alignment;
+
+    fn mul(self, rhs: Alignment) -> Self::Output {
+        // SAFETY: both lhs and rhs are powers of 2, the result will be a power of 2
+        Self(unsafe { NonZeroU32::new_unchecked(self.0.get() * rhs.0.get()) })
+    }
+}
+
+impl From<crate::VectorSize> for Alignment {
+    fn from(size: crate::VectorSize) -> Self {
+        match size {
+            crate::VectorSize::Bi => Alignment::TWO,
+            crate::VectorSize::Tri => Alignment::FOUR,
+            crate::VectorSize::Quad => Alignment::FOUR,
+        }
+    }
+}
 
 /// Size and alignment information for a type.
 #[derive(Clone, Copy, Debug, Hash, PartialEq)]
@@ -15,7 +94,7 @@ pub struct TypeLayout {
 impl TypeLayout {
     /// Produce the stride as if this type is a base of an array.
     pub const fn to_stride(&self) -> u32 {
-        Layouter::round_up(self.alignment, self.size)
+        self.alignment.round_up(self.size)
     }
 }
 
@@ -49,8 +128,6 @@ pub enum LayoutErrorInner {
     InvalidArrayElementType(Handle<crate::Type>),
     #[error("Struct member[{0}] type {1:?} doesn't exist")]
     InvalidStructMemberType(u32, Handle<crate::Type>),
-    #[error("Zero width is not supported")]
-    ZeroWidth,
     #[error("Array size is a bad handle")]
     BadHandle(#[from] BadHandle),
 }
@@ -74,14 +151,6 @@ impl Layouter {
         self.layouts.clear();
     }
 
-    /// Round `offset` up to the nearest `alignment` boundary.
-    pub const fn round_up(alignment: Alignment, offset: u32) -> u32 {
-        match offset & (alignment.get() - 1) {
-            0 => offset,
-            other => offset + alignment.get() - other,
-        }
-    }
-
     /// Return the offset and span of a struct member.
     ///
     /// The member must fall at or after `offset`. The member's alignment and
@@ -100,7 +169,7 @@ impl Layouter {
     ) -> (ops::Range<u32>, Alignment) {
         let layout = self.layouts[ty.index()];
         let alignment = align.unwrap_or(layout.alignment);
-        let start = Self::round_up(alignment, offset);
+        let start = alignment.round_up(offset);
         let span = match size {
             Some(size) => size.get(),
             None => layout.size,
@@ -137,8 +206,7 @@ impl Layouter {
             let layout = match ty.inner {
                 Ti::Scalar { width, .. } | Ti::Atomic { width, .. } => TypeLayout {
                     size,
-                    alignment: Alignment::new(width as u32)
-                        .ok_or(LayoutErrorInner::ZeroWidth.with(ty_handle))?,
+                    alignment: Alignment::from_width(width),
                 },
                 Ti::Vector {
                     size: vec_size,
@@ -146,15 +214,7 @@ impl Layouter {
                     ..
                 } => TypeLayout {
                     size,
-                    alignment: {
-                        let count = if vec_size >= crate::VectorSize::Tri {
-                            4
-                        } else {
-                            2
-                        };
-                        Alignment::new(count * width as u32)
-                            .ok_or(LayoutErrorInner::ZeroWidth.with(ty_handle))?
-                    },
+                    alignment: { Alignment::from(vec_size) * Alignment::from_width(width) },
                 },
                 Ti::Matrix {
                     columns: _,
@@ -162,15 +222,11 @@ impl Layouter {
                     width,
                 } => TypeLayout {
                     size,
-                    alignment: {
-                        let count = if rows >= crate::VectorSize::Tri { 4 } else { 2 };
-                        Alignment::new(count * width as u32)
-                            .ok_or(LayoutErrorInner::ZeroWidth.with(ty_handle))?
-                    },
+                    alignment: { Alignment::from(rows) * Alignment::from_width(width) },
                 },
                 Ti::Pointer { .. } | Ti::ValuePointer { .. } => TypeLayout {
                     size,
-                    alignment: Alignment::new(1).unwrap(),
+                    alignment: Alignment::ONE,
                 },
                 Ti::Array {
                     base,
@@ -185,7 +241,7 @@ impl Layouter {
                     },
                 },
                 Ti::Struct { span, ref members } => {
-                    let mut alignment = Alignment::new(1).unwrap();
+                    let mut alignment = Alignment::ONE;
                     for (index, member) in members.iter().enumerate() {
                         alignment = if member.ty < ty_handle {
                             alignment.max(self[member.ty].alignment)
@@ -204,7 +260,7 @@ impl Layouter {
                 }
                 Ti::Image { .. } | Ti::Sampler { .. } | Ti::BindingArray { .. } => TypeLayout {
                     size,
-                    alignment: Alignment::new(1).unwrap(),
+                    alignment: Alignment::ONE,
                 },
             };
             debug_assert!(size <= layout.size);

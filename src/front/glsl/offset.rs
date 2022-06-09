@@ -16,7 +16,7 @@ use super::{
     error::{Error, ErrorKind},
     Span,
 };
-use crate::{front::align_up, Arena, Constant, Handle, Type, TypeInner, UniqueArena};
+use crate::{proc::Alignment, Arena, Constant, Handle, Type, TypeInner, UniqueArena};
 
 /// Struct with information needed for defining a struct member.
 ///
@@ -28,7 +28,7 @@ pub struct TypeAlignSpan {
     /// with a different stride set.
     pub ty: Handle<Type>,
     /// The alignment required by the type.
-    pub align: u32,
+    pub align: Alignment,
     /// The size of the type.
     pub span: u32,
 }
@@ -54,15 +54,15 @@ pub fn calculate_offset(
     let (align, span) = match types[ty].inner {
         // 1. If the member is a scalar consuming N basic machine units,
         // the base alignment is N.
-        TypeInner::Scalar { width, .. } => (width as u32, width as u32),
+        TypeInner::Scalar { width, .. } => (Alignment::from_width(width), width as u32),
         // 2. If the member is a two- or four-component vector with components
         // consuming N basic machine units, the base alignment is 2N or 4N, respectively.
         // 3. If the member is a three-component vector with components consuming N
         // basic machine units, the base alignment is 4N.
-        TypeInner::Vector { size, width, .. } => match size {
-            crate::VectorSize::Tri => (4 * width as u32, 3 * width as u32),
-            _ => (size as u32 * width as u32, size as u32 * width as u32),
-        },
+        TypeInner::Vector { size, width, .. } => (
+            Alignment::from(size) * Alignment::from_width(width),
+            size as u32 * width as u32,
+        ),
         // 4. If the member is an array of scalars or vectors, the base alignment and array
         // stride are set to match the base alignment of a single array element, according
         // to rules (1), (2), and (3), and rounded up to the base alignment of a vec4.
@@ -71,14 +71,14 @@ pub fn calculate_offset(
             let info = calculate_offset(base, meta, layout, types, constants, errors);
 
             let name = types[ty].name.clone();
-            let mut align = info.align;
-            let mut stride = (align).max(info.span);
 
             // See comment at the beginning of the function
-            if StructLayout::Std430 != layout {
-                stride = align_up(stride, 16);
-                align = align_up(align, 16);
-            }
+            let (align, stride) = if StructLayout::Std430 == layout {
+                (info.align, info.align.round_up(info.span))
+            } else {
+                let align = info.align.max(Alignment::MIN_UNIFORM);
+                (align, align.round_up(info.span))
+            };
 
             let span = match size {
                 crate::ArraySize::Constant(s) => {
@@ -111,14 +111,11 @@ pub fn calculate_offset(
             rows,
             width,
         } => {
-            let mut align = match rows {
-                crate::VectorSize::Tri => (4 * width as u32),
-                _ => (rows as u32 * width as u32),
-            };
+            let mut align = Alignment::from(rows) * Alignment::from_width(width);
 
             // See comment at the beginning of the function
             if StructLayout::Std430 != layout {
-                align = align_up(align, 16);
+                align = align.max(Alignment::MIN_UNIFORM);
             }
 
             // See comment on the error kind
@@ -133,15 +130,16 @@ pub fn calculate_offset(
         }
         TypeInner::Struct { ref members, .. } => {
             let mut span = 0;
-            let mut align = 0;
+            let mut align = Alignment::ONE;
             let mut members = members.clone();
             let name = types[ty].name.clone();
 
             for member in members.iter_mut() {
                 let info = calculate_offset(member.ty, meta, layout, types, constants, errors);
 
-                span = align_up(span, info.align);
-                align = align.max(info.align);
+                let member_alignment = info.align;
+                span = member_alignment.round_up(span);
+                align = member_alignment.max(align);
 
                 member.ty = info.ty;
                 member.offset = span;
@@ -149,7 +147,7 @@ pub fn calculate_offset(
                 span += info.span;
             }
 
-            span = align_up(span, align);
+            span = align.round_up(span);
 
             let ty_span = types.get_span(ty);
             ty = types.insert(
@@ -167,7 +165,7 @@ pub fn calculate_offset(
                 kind: ErrorKind::SemanticError("Invalid struct member type".into()),
                 meta,
             });
-            (1, 0)
+            (Alignment::ONE, 0)
         }
     };
 

@@ -12,6 +12,7 @@ use crate::{
         variables::{GlobalOrConstant, VarDeclaration},
         Error, ErrorKind, Parser, Span,
     },
+    proc::Alignment,
     AddressSpace, Block, Expression, FunctionResult, Handle, ScalarKind, Statement, StructMember,
     Type, TypeInner,
 };
@@ -570,7 +571,7 @@ impl<'source> ParsingContext<'source> {
         layout: StructLayout,
     ) -> Result<u32> {
         let mut span = 0;
-        let mut align = 0;
+        let mut align = Alignment::ONE;
 
         loop {
             // TODO: type_qualifier
@@ -593,8 +594,9 @@ impl<'source> ParsingContext<'source> {
                 &mut parser.errors,
             );
 
-            span = crate::front::align_up(span, info.align);
-            align = align.max(info.align);
+            let member_alignment = info.align;
+            span = member_alignment.round_up(span);
+            align = member_alignment.max(align);
 
             members.push(StructMember {
                 name: Some(name),
@@ -610,7 +612,7 @@ impl<'source> ParsingContext<'source> {
             }
         }
 
-        span = crate::front::align_up(span, align);
+        span = align.round_up(span);
 
         Ok(span)
     }

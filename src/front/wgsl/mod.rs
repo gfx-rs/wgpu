@@ -2816,7 +2816,7 @@ impl Parser {
                         let (value, span) =
                             lexer.capture_span(Self::parse_non_negative_i32_literal)?;
                         lexer.expect(Token::Paren(')'))?;
-                        align = Some(NonZeroU32::new(value).ok_or(Error::ZeroSizeOrAlign(span))?);
+                        align = Some(Alignment::new(value).ok_or(Error::ZeroSizeOrAlign(span))?);
                     }
                     (word, word_span) => bind_parser.parse(lexer, word, word_span)?,
                 }
@@ -2852,7 +2852,7 @@ impl Parser {
             });
         }
 
-        let span = Layouter::round_up(alignment, offset);
+        let span = alignment.round_up(offset);
         Ok((members, span))
     }
 

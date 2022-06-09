@@ -4,8 +4,6 @@ use crate::{
     proc::Alignment,
 };
 
-const UNIFORM_MIN_ALIGNMENT: Alignment = unsafe { Alignment::new_unchecked(16) };
-
 bitflags::bitflags! {
     /// Flags associated with [`Type`]s by [`Validator`].
     ///
@@ -67,14 +65,14 @@ bitflags::bitflags! {
 #[derive(Clone, Copy, Debug, thiserror::Error)]
 pub enum Disalignment {
     #[error("The array stride {stride} is not a multiple of the required alignment {alignment}")]
-    ArrayStride { stride: u32, alignment: u32 },
+    ArrayStride { stride: u32, alignment: Alignment },
     #[error("The struct span {span}, is not a multiple of the required alignment {alignment}")]
-    StructSpan { span: u32, alignment: u32 },
+    StructSpan { span: u32, alignment: Alignment },
     #[error("The struct member[{index}] offset {offset} is not a multiple of the required alignment {alignment}")]
     MemberOffset {
         index: u32,
         offset: u32,
-        alignment: u32,
+        alignment: Alignment,
     },
     #[error("The struct member[{index}] offset {offset} must be at least {expected}")]
     MemberOffsetAfterStruct {
@@ -134,8 +132,8 @@ pub enum TypeError {
     EmptyStruct,
 }
 
-// Only makes sense if `flags.contains(HOST_SHARED)`
-type LayoutCompatibility = Result<Option<Alignment>, (Handle<crate::Type>, Disalignment)>;
+// Only makes sense if `flags.contains(HOST_SHAREABLE)`
+type LayoutCompatibility = Result<Alignment, (Handle<crate::Type>, Disalignment)>;
 
 fn check_member_layout(
     accum: &mut LayoutCompatibility,
@@ -145,20 +143,18 @@ fn check_member_layout(
     parent_handle: Handle<crate::Type>,
 ) {
     *accum = match (*accum, member_layout) {
-        (Ok(cur_alignment), Ok(align)) => {
-            let align = align.unwrap().get();
-            if member.offset % align != 0 {
+        (Ok(cur_alignment), Ok(alignment)) => {
+            if alignment.is_aligned(member.offset) {
+                Ok(cur_alignment.max(alignment))
+            } else {
                 Err((
                     parent_handle,
                     Disalignment::MemberOffset {
                         index: member_index,
                         offset: member.offset,
-                        alignment: align,
+                        alignment,
                     },
                 ))
-            } else {
-                let combined_alignment = ((cur_alignment.unwrap().get() - 1) | (align - 1)) + 1;
-                Ok(Alignment::new(combined_alignment))
             }
         }
         (Err(e), _) | (_, Err(e)) => Err(e),
@@ -192,13 +188,12 @@ impl TypeInfo {
     const fn dummy() -> Self {
         TypeInfo {
             flags: TypeFlags::empty(),
-            uniform_layout: Ok(None),
-            storage_layout: Ok(None),
+            uniform_layout: Ok(Alignment::ONE),
+            storage_layout: Ok(Alignment::ONE),
         }
     }
 
-    const fn new(flags: TypeFlags, align: u32) -> Self {
-        let alignment = Alignment::new(align);
+    const fn new(flags: TypeFlags, alignment: Alignment) -> Self {
         TypeInfo {
             flags,
             uniform_layout: Ok(alignment),
@@ -248,7 +243,7 @@ impl super::Validator {
                         | TypeFlags::ARGUMENT
                         | TypeFlags::CONSTRUCTIBLE
                         | shareable,
-                    width as u32,
+                    Alignment::from_width(width),
                 )
             }
             Ti::Vector { size, kind, width } => {
@@ -260,7 +255,6 @@ impl super::Validator {
                 } else {
                     TypeFlags::empty()
                 };
-                let count = if size >= crate::VectorSize::Tri { 4 } else { 2 };
                 TypeInfo::new(
                     TypeFlags::DATA
                         | TypeFlags::SIZED
@@ -269,7 +263,7 @@ impl super::Validator {
                         | TypeFlags::ARGUMENT
                         | TypeFlags::CONSTRUCTIBLE
                         | shareable,
-                    count * (width as u32),
+                    Alignment::from(size) * Alignment::from_width(width),
                 )
             }
             Ti::Matrix {
@@ -280,7 +274,6 @@ impl super::Validator {
                 if !self.check_width(crate::ScalarKind::Float, width) {
                     return Err(TypeError::InvalidWidth(crate::ScalarKind::Float, width));
                 }
-                let count = if rows >= crate::VectorSize::Tri { 4 } else { 2 };
                 TypeInfo::new(
                     TypeFlags::DATA
                         | TypeFlags::SIZED
@@ -288,7 +281,7 @@ impl super::Validator {
                         | TypeFlags::HOST_SHAREABLE
                         | TypeFlags::ARGUMENT
                         | TypeFlags::CONSTRUCTIBLE,
-                    count * (width as u32),
+                    Alignment::from(rows) * Alignment::from_width(width),
                 )
             }
             Ti::Atomic { kind, width } => {
@@ -301,7 +294,7 @@ impl super::Validator {
                 }
                 TypeInfo::new(
                     TypeFlags::DATA | TypeFlags::SIZED | TypeFlags::HOST_SHAREABLE,
-                    width as u32,
+                    Alignment::from_width(width),
                 )
             }
             Ti::Pointer { base, space } => {
@@ -344,7 +337,10 @@ impl super::Validator {
 
                 // Pointers cannot be stored in variables, structure members, or
                 // array elements, so we do not mark them as `DATA`.
-                TypeInfo::new(argument_flag | TypeFlags::SIZED | TypeFlags::COPY, 0)
+                TypeInfo::new(
+                    argument_flag | TypeFlags::SIZED | TypeFlags::COPY,
+                    Alignment::ONE,
+                )
             }
             Ti::ValuePointer {
                 size: _,
@@ -371,7 +367,10 @@ impl super::Validator {
 
                 // Pointers cannot be stored in variables, structure members, or
                 // array elements, so we do not mark them as `DATA`.
-                TypeInfo::new(argument_flag | TypeFlags::SIZED | TypeFlags::COPY, 0)
+                TypeInfo::new(
+                    argument_flag | TypeFlags::SIZED | TypeFlags::COPY,
+                    Alignment::ONE,
+                )
             }
             Ti::Array { base, size, stride } => {
                 if base >= handle {
@@ -391,42 +390,27 @@ impl super::Validator {
                     });
                 }
 
-                let general_alignment = base_layout.alignment.get();
+                let general_alignment = base_layout.alignment;
                 let uniform_layout = match base_info.uniform_layout {
                     Ok(base_alignment) => {
-                        // combine the alignment requirements
-                        let align = base_alignment
-                            .unwrap()
-                            .get()
+                        let alignment = base_alignment
                             .max(general_alignment)
-                            .max(UNIFORM_MIN_ALIGNMENT.get());
-                        if stride % align != 0 {
-                            Err((
-                                handle,
-                                Disalignment::ArrayStride {
-                                    stride,
-                                    alignment: align,
-                                },
-                            ))
+                            .max(Alignment::MIN_UNIFORM);
+                        if alignment.is_aligned(stride) {
+                            Ok(alignment)
                         } else {
-                            Ok(Alignment::new(align))
+                            Err((handle, Disalignment::ArrayStride { stride, alignment }))
                         }
                     }
                     Err(e) => Err(e),
                 };
                 let storage_layout = match base_info.storage_layout {
                     Ok(base_alignment) => {
-                        let align = base_alignment.unwrap().get().max(general_alignment);
-                        if stride % align != 0 {
-                            Err((
-                                handle,
-                                Disalignment::ArrayStride {
-                                    stride,
-                                    alignment: align,
-                                },
-                            ))
+                        let alignment = base_alignment.max(general_alignment);
+                        if alignment.is_aligned(stride) {
+                            Ok(alignment)
                         } else {
-                            Ok(Alignment::new(align))
+                            Err((handle, Disalignment::ArrayStride { stride, alignment }))
                         }
                     }
                     Err(e) => Err(e),
@@ -509,9 +493,9 @@ impl super::Validator {
                         | TypeFlags::IO_SHAREABLE
                         | TypeFlags::ARGUMENT
                         | TypeFlags::CONSTRUCTIBLE,
-                    1,
+                    Alignment::ONE,
                 );
-                ti.uniform_layout = Ok(Some(UNIFORM_MIN_ALIGNMENT));
+                ti.uniform_layout = Ok(Alignment::MIN_UNIFORM);
 
                 let mut min_offset = 0;
 
@@ -536,7 +520,7 @@ impl super::Validator {
                     ti.flags &= base_info.flags;
 
                     if member.offset < min_offset {
-                        //HACK: this could be nicer. We want to allow some structures
+                        // HACK: this could be nicer. We want to allow some structures
                         // to not bother with offsets/alignments if they are never
                         // used for host sharing.
                         if member.offset == 0 {
@@ -549,7 +533,6 @@ impl super::Validator {
                         }
                     }
 
-                    //Note: `unwrap()` is fine because `Layouter` goes first and checks this
                     let base_size = types[member.ty].inner.size(constants);
                     min_offset = member.offset + base_size;
                     if min_offset > span {
@@ -581,7 +564,7 @@ impl super::Validator {
                     // the start of any following member must be at least roundUp(16, SizeOf(S)).
                     if let Some((span, offset)) = prev_struct_data {
                         let diff = member.offset - offset;
-                        let min = crate::valid::Layouter::round_up(UNIFORM_MIN_ALIGNMENT, span);
+                        let min = Alignment::MIN_UNIFORM.round_up(span);
                         if diff < min {
                             ti.uniform_layout = Err((
                                 handle,
@@ -616,16 +599,18 @@ impl super::Validator {
                     }
                 }
 
-                let alignment = self.layouter[handle].alignment.get();
-                if span % alignment != 0 {
+                let alignment = self.layouter[handle].alignment;
+                if !alignment.is_aligned(span) {
                     ti.uniform_layout = Err((handle, Disalignment::StructSpan { span, alignment }));
                     ti.storage_layout = Err((handle, Disalignment::StructSpan { span, alignment }));
                 }
 
                 ti
             }
-            Ti::Image { .. } | Ti::Sampler { .. } => TypeInfo::new(TypeFlags::ARGUMENT, 0),
-            Ti::BindingArray { .. } => TypeInfo::new(TypeFlags::empty(), 0),
+            Ti::Image { .. } | Ti::Sampler { .. } => {
+                TypeInfo::new(TypeFlags::ARGUMENT, Alignment::ONE)
+            }
+            Ti::BindingArray { .. } => TypeInfo::new(TypeFlags::empty(), Alignment::ONE),
         })
     }
 }

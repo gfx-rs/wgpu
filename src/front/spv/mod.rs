@@ -39,7 +39,7 @@ use function::*;
 
 use crate::{
     arena::{Arena, Handle, UniqueArena},
-    proc::Layouter,
+    proc::{Alignment, Layouter},
     FastHashMap, FastHashSet,
 };
 
@@ -4377,7 +4377,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         let mut member_lookups = Vec::with_capacity(members.capacity());
         let mut storage_access = crate::StorageAccess::empty();
         let mut span = 0;
-        let mut alignment = 1;
+        let mut alignment = Alignment::ONE;
         for i in 0..u32::from(inst.wc) - 2 {
             let type_id = self.next()?;
             let ty = self.lookup_type.lookup(type_id)?.handle;
@@ -4393,8 +4393,9 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 row_major: decor.matrix_major == Some(Majority::Row),
             });
 
-            span = crate::front::align_up(span, self.layouter[ty].alignment.get());
-            alignment = self.layouter[ty].alignment.get().max(alignment);
+            let member_alignment = self.layouter[ty].alignment;
+            span = member_alignment.round_up(span);
+            alignment = member_alignment.max(alignment);
 
             let mut binding = decor.io_binding().ok();
             if let Some(offset) = decor.offset {
@@ -4412,8 +4413,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             } = *inner
             {
                 if let Some(stride) = decor.matrix_stride {
-                    let aligned_rows = if rows > crate::VectorSize::Bi { 4 } else { 2 };
-                    let expected_stride = aligned_rows * width as u32;
+                    let expected_stride = Alignment::from(rows) * width as u32;
                     if stride.get() != expected_stride {
                         return Err(Error::UnsupportedMatrixStride {
                             stride: stride.get(),
@@ -4436,7 +4436,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             });
         }
 
-        span = crate::front::align_up(span, alignment);
+        span = alignment.round_up(span);
 
         let inner = crate::TypeInner::Struct { span, members };
 

@@ -113,10 +113,7 @@ impl super::TypeInner {
                 columns,
                 rows,
                 width,
-            } => {
-                let aligned_rows = if rows > crate::VectorSize::Bi { 4 } else { 2 };
-                columns as u32 * aligned_rows * width as u32
-            }
+            } => Alignment::from(rows) * width as u32 * columns as u32,
             Self::Pointer { .. } | Self::ValuePointer { .. } => POINTER_SPAN,
             Self::Array {
                 base: _,

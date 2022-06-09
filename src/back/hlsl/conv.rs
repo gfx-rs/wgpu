@@ -1,5 +1,7 @@
 use std::borrow::Cow;
 
+use crate::proc::Alignment;
+
 use super::Error;
 
 impl crate::ScalarKind {
@@ -49,8 +51,7 @@ impl crate::TypeInner {
                 rows,
                 width,
             } => {
-                let aligned_rows = if rows > crate::VectorSize::Bi { 4 } else { 2 };
-                let stride = aligned_rows * width as u32;
+                let stride = Alignment::from(rows) * width as u32;
                 let last_row_size = rows as u32 * width as u32;
                 ((columns as u32 - 1) * stride) + last_row_size
             }

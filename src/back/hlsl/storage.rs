@@ -6,7 +6,7 @@ HLSL backend uses byte address buffers for all storage buffers in IR.
 
 use super::{super::FunctionCtx, BackendResult, Error};
 use crate::{
-    proc::{NameKey, TypeResolution},
+    proc::{Alignment, NameKey, TypeResolution},
     Handle,
 };
 
@@ -130,11 +130,7 @@ impl<W: fmt::Write> super::Writer<'_, W> {
                 )?;
 
                 // Note: Matrices containing vec3s, due to padding, act like they contain vec4s.
-                let padded_rows = match rows {
-                    crate::VectorSize::Tri => 4,
-                    rows => rows as u32,
-                };
-                let row_stride = width as u32 * padded_rows;
+                let row_stride = Alignment::from(rows) * width as u32;
                 let iter = (0..columns as u32).map(|i| {
                     let ty_inner = crate::TypeInner::Vector {
                         size: rows,
@@ -277,11 +273,7 @@ impl<W: fmt::Write> super::Writer<'_, W> {
                 writeln!(self.out, ";")?;
 
                 // Note: Matrices containing vec3s, due to padding, act like they contain vec4s.
-                let padded_rows = match rows {
-                    crate::VectorSize::Tri => 4,
-                    rows => rows as u32,
-                };
-                let row_stride = width as u32 * padded_rows;
+                let row_stride = Alignment::from(rows) * width as u32;
 
                 // then iterate the stores
                 for i in 0..columns as u32 {
@@ -409,12 +401,7 @@ impl<W: fmt::Write> super::Writer<'_, W> {
                         stride: width as u32,
                     },
                     crate::TypeInner::Matrix { columns, width, .. } => Parent::Array {
-                        stride: width as u32
-                            * if columns > crate::VectorSize::Bi {
-                                4
-                            } else {
-                                2
-                            },
+                        stride: Alignment::from(columns) * width as u32,
                     },
                     _ => unreachable!(),
                 },
