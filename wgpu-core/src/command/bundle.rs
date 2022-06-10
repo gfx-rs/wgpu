@@ -255,9 +255,9 @@ impl RenderBundleEncoder {
             flat_dynamic_offsets: Vec::new(),
             used_bind_groups: 0,
             pipeline: None,
+            pipeline_layout: None,
         };
         let mut commands = Vec::new();
-        let mut pipeline_layout_id = None::<id::Valid<id::PipelineLayoutId>>;
         let mut buffer_memory_init_actions = Vec::new();
         let mut texture_memory_init_actions = Vec::new();
 
@@ -364,7 +364,7 @@ impl RenderBundleEncoder {
                     }
 
                     let layout = &pipeline_layout_guard[pipeline.layout_id.value];
-                    pipeline_layout_id = Some(pipeline.layout_id.value);
+                    state.pipeline_layout = Some(pipeline.layout_id.value);
 
                     state.set_pipeline(
                         &pipeline.vertex_strides,
@@ -441,7 +441,8 @@ impl RenderBundleEncoder {
                     let scope = PassErrorScope::SetPushConstant;
                     let end_offset = offset + size_bytes;
 
-                    let pipeline_layout_id = pipeline_layout_id
+                    let pipeline_layout_id = state
+                        .pipeline_layout
                         .ok_or(DrawError::MissingPipeline)
                         .map_pass_err(scope)?;
                     let pipeline_layout = &pipeline_layout_guard[pipeline_layout_id];
@@ -1114,6 +1115,7 @@ struct State<A: HalApi> {
 
     used_bind_groups: usize,
     pipeline: Option<id::RenderPipelineId>,
+    pipeline_layout: Option<id::Valid<id::PipelineLayoutId>>,
 }
 
 impl<A: HalApi> State<A> {
