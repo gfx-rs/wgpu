@@ -1708,6 +1708,7 @@ impl Instance {
     ///
     /// - Raw Window Handle must be a valid object to create a surface upon and
     ///   must remain valid for the lifetime of the returned surface.
+    /// - If not called on the main thread, metal backend will panic.
     pub unsafe fn create_surface<W: raw_window_handle::HasRawWindowHandle>(
         &self,
         window: &W,
@@ -1746,11 +1747,8 @@ impl Instance {
     /// # Safety
     ///
     /// - canvas must be a valid <canvas> element to create a surface upon.
-    #[cfg(all(target_arch = "wasm32", not(feature = "webgl")))]
-    pub unsafe fn create_surface_from_canvas(
-        &self,
-        canvas: &web_sys::HtmlCanvasElement,
-    ) -> Surface {
+    #[cfg(all(target_arch = "wasm32", not(feature = "emscripten")))]
+    pub fn create_surface_from_canvas(&self, canvas: &web_sys::HtmlCanvasElement) -> Surface {
         Surface {
             context: Arc::clone(&self.context),
             id: self.context.instance_create_surface_from_canvas(canvas),
@@ -1762,8 +1760,8 @@ impl Instance {
     /// # Safety
     ///
     /// - canvas must be a valid OffscreenCanvas to create a surface upon.
-    #[cfg(all(target_arch = "wasm32", not(feature = "webgl")))]
-    pub unsafe fn create_surface_from_offscreen_canvas(
+    #[cfg(all(target_arch = "wasm32", not(feature = "emscripten")))]
+    pub fn create_surface_from_offscreen_canvas(
         &self,
         canvas: &web_sys::OffscreenCanvas,
     ) -> Surface {

@@ -6,6 +6,8 @@ This is a command line utility that does two different functions.
 
 When called with no arguments, wgpu-info will list all adapters visible to wgpu and all the information about them we have.
 
+For OpenGL on platforms other than Linux add the `angle` feature, for Vulkan on macOS add the `vulkan-portability` feature.
+
 ```
 cargo run --bin wgpu-info
 ```

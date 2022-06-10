@@ -8,7 +8,7 @@ use parking_lot::Mutex;
 use std::{
     borrow::Cow,
     collections::{hash_map::Entry, BTreeMap},
-    ffi::CString,
+    ffi::{CStr, CString},
     num::NonZeroU32,
     ptr,
     sync::Arc,
@@ -21,8 +21,6 @@ impl super::DeviceShared {
         object: impl vk::Handle,
         name: &str,
     ) {
-        use std::ffi::CStr;
-
         let extension = match self.instance.debug_utils {
             Some(ref debug_utils) => &debug_utils.extension,
             None => return,
@@ -698,6 +696,18 @@ impl super::Device {
 
     pub fn raw_device(&self) -> &ash::Device {
         &self.shared.raw
+    }
+
+    pub fn raw_physical_device(&self) -> ash::vk::PhysicalDevice {
+        self.shared.physical_device
+    }
+
+    pub fn enabled_device_extensions(&self) -> &[&'static CStr] {
+        &self.shared.enabled_extensions
+    }
+
+    pub fn shared_instance(&self) -> &super::InstanceShared {
+        &self.shared.instance
     }
 }
 
