@@ -193,10 +193,11 @@ pub type Input<G, I> = <<G as IdentityHandlerFactory<I>>::Filter as IdentityHand
 pub trait Resource {
     type Id: id::TypedId;
     const TYPE: &'static str;
-    fn life_guard(&self) -> &crate::LifeGuard;
+    fn life_guard(&self) -> Option<&crate::LifeGuard>;
+    fn device_id(&self) -> id::Valid<id::DeviceId>;
     fn label(&self) -> &str {
         #[cfg(debug_assertions)]
-        return &self.life_guard().label;
+        return &self.life_guard().unwrap().label;
         #[cfg(not(debug_assertions))]
         return "";
     }
@@ -409,9 +410,9 @@ impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<A, F> {
             }
             if let Some(present) = surface.presentation.take() {
                 let device = &self.devices[present.device_id.value];
-                let suf = A::get_surface_mut(surface);
+                let suf = A::get_surface(surface);
                 unsafe {
-                    suf.raw.unconfigure(&device.raw);
+                    suf.raw.lock().unconfigure(&device.raw);
                     //TODO: we could destroy the surface here
                 }
             }
@@ -435,21 +436,21 @@ impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<A, F> {
 
     pub fn generate_report(&self) -> HubReport {
         HubReport {
-            adapters: self.adapters.data.read().generate_report(),
-            devices: self.devices.data.read().generate_report(),
-            pipeline_layouts: self.pipeline_layouts.data.read().generate_report(),
-            shader_modules: self.shader_modules.data.read().generate_report(),
-            bind_group_layouts: self.bind_group_layouts.data.read().generate_report(),
-            bind_groups: self.bind_groups.data.read().generate_report(),
-            command_buffers: self.command_buffers.data.read().generate_report(),
-            render_bundles: self.render_bundles.data.read().generate_report(),
-            render_pipelines: self.render_pipelines.data.read().generate_report(),
-            compute_pipelines: self.compute_pipelines.data.read().generate_report(),
-            query_sets: self.query_sets.data.read().generate_report(),
-            buffers: self.buffers.data.read().generate_report(),
-            textures: self.textures.data.read().generate_report(),
-            texture_views: self.texture_views.data.read().generate_report(),
-            samplers: self.samplers.data.read().generate_report(),
+            adapters: self.adapters.generate_report(),
+            devices: self.devices.generate_report(),
+            pipeline_layouts: self.pipeline_layouts.generate_report(),
+            shader_modules: self.shader_modules.generate_report(),
+            bind_group_layouts: self.bind_group_layouts.generate_report(),
+            bind_groups: self.bind_groups.generate_report(),
+            command_buffers: self.command_buffers.generate_report(),
+            render_bundles: self.render_bundles.generate_report(),
+            render_pipelines: self.render_pipelines.generate_report(),
+            compute_pipelines: self.compute_pipelines.generate_report(),
+            query_sets: self.query_sets.generate_report(),
+            buffers: self.buffers.generate_report(),
+            textures: self.textures.generate_report(),
+            texture_views: self.texture_views.generate_report(),
+            samplers: self.samplers.generate_report(),
         }
     }
 }
@@ -550,7 +551,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     pub fn generate_report(&self) -> GlobalReport {
         GlobalReport {
-            surfaces: self.surfaces.data.read().generate_report(),
+            surfaces: self.surfaces.generate_report(),
             #[cfg(vulkan)]
             vulkan: if self.instance.vulkan.is_some() {
                 Some(self.hubs.vulkan.generate_report())
@@ -627,7 +628,6 @@ pub trait HalApi: hal::Api + 'static {
     fn instance_as_hal(instance: &Instance) -> Option<&Self::Instance>;
     fn hub<G: GlobalIdentityHandlerFactory>(global: &Global<G>) -> &Hub<Self, G>;
     fn get_surface(surface: &Surface) -> &HalSurface<Self>;
-    fn get_surface_mut(surface: &mut Surface) -> &mut HalSurface<Self>;
 }
 
 impl HalApi for hal::api::Empty {
@@ -642,9 +642,6 @@ impl HalApi for hal::api::Empty {
         unimplemented!("called empty api")
     }
     fn get_surface(_: &Surface) -> &HalSurface<Self> {
-        unimplemented!("called empty api")
-    }
-    fn get_surface_mut(_: &mut Surface) -> &mut HalSurface<Self> {
         unimplemented!("called empty api")
     }
 }
@@ -668,9 +665,6 @@ impl HalApi for hal::api::Vulkan {
     fn get_surface(surface: &Surface) -> &HalSurface<Self> {
         surface.vulkan.as_ref().unwrap()
     }
-    fn get_surface_mut(surface: &mut Surface) -> &mut HalSurface<Self> {
-        surface.vulkan.as_mut().unwrap()
-    }
 }
 
 #[cfg(metal)]
@@ -691,9 +685,6 @@ impl HalApi for hal::api::Metal {
     }
     fn get_surface(surface: &Surface) -> &HalSurface<Self> {
         surface.metal.as_ref().unwrap()
-    }
-    fn get_surface_mut(surface: &mut Surface) -> &mut HalSurface<Self> {
-        surface.metal.as_mut().unwrap()
     }
 }
 
@@ -716,9 +707,6 @@ impl HalApi for hal::api::Dx12 {
     fn get_surface(surface: &Surface) -> &HalSurface<Self> {
         surface.dx12.as_ref().unwrap()
     }
-    fn get_surface_mut(surface: &mut Surface) -> &mut HalSurface<Self> {
-        surface.dx12.as_mut().unwrap()
-    }
 }
 
 #[cfg(dx11)]
@@ -739,9 +727,6 @@ impl HalApi for hal::api::Dx11 {
     }
     fn get_surface(surface: &Surface) -> &HalSurface<Self> {
         surface.dx11.as_ref().unwrap()
-    }
-    fn get_surface_mut(surface: &mut Surface) -> &mut HalSurface<Self> {
-        surface.dx11.as_mut().unwrap()
     }
 }
 
@@ -764,9 +749,6 @@ impl HalApi for hal::api::Gles {
     }
     fn get_surface(surface: &Surface) -> &HalSurface<Self> {
         surface.gl.as_ref().unwrap()
-    }
-    fn get_surface_mut(surface: &mut Surface) -> &mut HalSurface<Self> {
-        surface.gl.as_mut().unwrap()
     }
 }
 

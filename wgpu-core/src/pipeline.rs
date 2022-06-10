@@ -2,7 +2,7 @@ use crate::{
     binding_model::{CreateBindGroupLayoutError, CreatePipelineLayoutError},
     device::{DeviceError, MissingDownlevelFlags, MissingFeatures, RenderPassContext},
     hub::Resource,
-    id::{ComputePipelineId, DeviceId, PipelineLayoutId, RenderPipelineId, ShaderModuleId},
+    id::{ComputePipelineId, DeviceId, PipelineLayoutId, RenderPipelineId, ShaderModuleId, Valid},
     validation, Label, LifeGuard, Stored,
 };
 use arrayvec::ArrayVec;
@@ -46,8 +46,8 @@ impl<A: hal::Api> Resource for ShaderModule<A> {
     type Id = ShaderModuleId;
     const TYPE: &'static str = "ShaderModule";
 
-    fn life_guard(&self) -> &LifeGuard {
-        unreachable!()
+    fn life_guard(&self) -> Option<&LifeGuard> {
+        None
     }
 
     fn label(&self) -> &str {
@@ -55,6 +55,10 @@ impl<A: hal::Api> Resource for ShaderModule<A> {
         return &self.label;
         #[cfg(not(debug_assertions))]
         return "";
+    }
+
+    fn device_id(&self) -> Valid<DeviceId> {
+        self.device_id.value
     }
 }
 
@@ -195,8 +199,12 @@ impl<A: hal::Api> Resource for ComputePipeline<A> {
     type Id = ComputePipelineId;
     const TYPE: &'static str = "ComputePipeline";
 
-    fn life_guard(&self) -> &LifeGuard {
-        &self.life_guard
+    fn life_guard(&self) -> Option<&LifeGuard> {
+        Some(&self.life_guard)
+    }
+
+    fn device_id(&self) -> Valid<DeviceId> {
+        self.device_id.value
     }
 }
 
@@ -375,7 +383,11 @@ impl<A: hal::Api> Resource for RenderPipeline<A> {
     type Id = RenderPipelineId;
     const TYPE: &'static str = "RenderPipeline";
 
-    fn life_guard(&self) -> &LifeGuard {
-        &self.life_guard
+    fn life_guard(&self) -> Option<&LifeGuard> {
+        Some(&self.life_guard)
+    }
+
+    fn device_id(&self) -> Valid<DeviceId> {
+        self.device_id.value
     }
 }

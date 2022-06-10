@@ -890,8 +890,12 @@ impl<A: HalApi> Resource for RenderBundle<A> {
     type Id = id::RenderBundleId;
     const TYPE: &'static str = "RenderBundle";
 
-    fn life_guard(&self) -> &LifeGuard {
-        &self.life_guard
+    fn life_guard(&self) -> Option<&LifeGuard> {
+        Some(&self.life_guard)
+    }
+
+    fn device_id(&self) -> id::Valid<id::DeviceId> {
+        self.device_id.value
     }
 }
 

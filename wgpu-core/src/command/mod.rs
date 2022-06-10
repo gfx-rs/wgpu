@@ -233,12 +233,16 @@ impl<A: HalApi> crate::hub::Resource for CommandBuffer<A> {
     type Id = id::CommandBufferId;
     const TYPE: &'static str = "CommandBuffer";
 
-    fn life_guard(&self) -> &crate::LifeGuard {
-        unreachable!()
+    fn life_guard(&self) -> Option<&crate::LifeGuard> {
+        None
     }
 
     fn label(&self) -> &str {
         self.encoder.label.as_ref().map_or("", |s| s.as_str())
+    }
+    
+    fn device_id(&self) -> id::Valid<id::DeviceId> {
+        self.device_id.value
     }
 }
 

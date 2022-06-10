@@ -1,7 +1,7 @@
 use crate::{
     binding_model, command, conv,
     device::life::WaitIdleError,
-    hub::{Global, GlobalIdentityHandlerFactory, HalApi, Hub, Input, InvalidId},
+    hub::{Global, GlobalIdentityHandlerFactory, HalApi, Hub, Input},
     id,
     init_tracker::{
         BufferInitTracker, BufferInitTrackerAction, MemoryInitKind, TextureInitRange,
@@ -2906,8 +2906,11 @@ impl<A: HalApi> crate::hub::Resource for Device<A> {
     type Id = id::DeviceId;
     const TYPE: &'static str = "Device";
 
-    fn life_guard(&self) -> &LifeGuard {
-        &self.life_guard
+    fn life_guard(&self) -> Option<&LifeGuard> {
+        Some(&self.life_guard)
+    }
+    fn device_id(&self) -> id::Valid<id::DeviceId> {
+        unreachable!()
     }
 }
 
@@ -3370,17 +3373,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let hub = A::hub(self);
 
-        let (ref_count, last_submit_index, device_id) = {
-            match hub.buffers.get(buffer_id) {
-                Ok(buffer) => {
-                    let ref_count = buffer.life_guard.ref_count.take().unwrap();
-                    let last_submit_index = buffer.life_guard.life_count();
-                    (ref_count, last_submit_index, buffer.device_id.value)
-                }
-                Err(InvalidId::ResourceInError { .. }) => {
-                    unsafe { hub.buffers.unregister(buffer_id) };
-                    return;
-                }
+        let (_buffer, ref_count, last_submit_index, device_id) = unsafe {
+            match hub.buffers.drop_with_life_guard(buffer_id) {
+                Some(v) => v,
+                None => return,
             }
         };
 
@@ -3594,17 +3590,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let hub = A::hub(self);
 
-        let (ref_count, last_submit_index, device_id) = {
-            match hub.textures.get(texture_id) {
-                Ok(texture) => {
-                    let ref_count = texture.life_guard.ref_count.take().unwrap();
-                    let last_submit_index = texture.life_guard.life_count();
-                    (ref_count, last_submit_index, texture.device_id.value)
-                }
-                Err(InvalidId::ResourceInError { .. }) => {
-                    hub.textures.unregister(texture_id);
-                    return;
-                }
+        let (_texture, ref_count, last_submit_index, device_id) = unsafe {
+            match hub.textures.drop_with_life_guard(texture_id) {
+                Some(v) => v,
+                None => return,
             }
         };
 
@@ -3688,17 +3677,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let hub = A::hub(self);
 
-        let (last_submit_index, device_id) = {
-            match hub.texture_views.get(texture_view_id) {
-                Ok(view) => {
-                    let _ref_count = view.life_guard.ref_count.take();
-                    let last_submit_index = view.life_guard.life_count();
-                    (last_submit_index, view.device_id.value)
-                }
-                Err(InvalidId::ResourceInError { .. }) => {
-                    hub.texture_views.unregister(texture_view_id);
-                    return Ok(());
-                }
+        let (_view, ref_count, last_submit_index, device_id) = unsafe {
+            match hub.texture_views.drop_with_life_guard(texture_view_id) {
+                Some(v) => v,
+                None => return Ok(()),
             }
         };
 
@@ -3771,16 +3753,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let hub = A::hub(self);
 
-        let device_id = {
-            match hub.samplers.get(sampler_id) {
-                Ok(sampler) => {
-                    sampler.life_guard.ref_count.take();
-                    sampler.device_id.value
-                }
-                Err(InvalidId::ResourceInError { .. }) => {
-                    hub.samplers.unregister(sampler_id);
-                    return;
-                }
+        let device_id = unsafe {
+            match hub.samplers.drop_no_life_guard(sampler_id) {
+                Some(v) => v,
+                None => return,
             }
         };
 
@@ -3865,13 +3841,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         log::debug!("bind group layout {:?} is dropped", bind_group_layout_id);
 
         let hub = A::hub(self);
-        let device_id = {
-            match hub.bind_group_layouts.get(bind_group_layout_id) {
-                Ok(layout) => layout.device_id.value,
-                Err(InvalidId::ResourceInError { .. }) => {
-                    hub.bind_group_layouts.unregister(bind_group_layout_id);
-                    return;
-                }
+        let device_id = unsafe {
+            match hub
+                .bind_group_layouts
+                .drop_no_life_guard(bind_group_layout_id)
+            {
+                Some(v) => v,
+                None => return,
             }
         };
 
@@ -3931,16 +3907,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         log::debug!("pipeline layout {:?} is dropped", pipeline_layout_id);
 
         let hub = A::hub(self);
-        let (device_id, ref_count) = {
-            match hub.pipeline_layouts.get(pipeline_layout_id) {
-                Ok(layout) => (
-                    layout.device_id.value,
-                    layout.life_guard.ref_count.take().unwrap(),
-                ),
-                Err(InvalidId::ResourceInError { .. }) => {
-                    hub.pipeline_layouts.unregister(pipeline_layout_id);
-                    return;
-                }
+        let (_layout, ref_count, _last_submit_index, device_id) = unsafe {
+            match hub
+                .pipeline_layouts
+                .drop_with_life_guard(pipeline_layout_id)
+            {
+                Some(v) => v,
+                None => return,
             }
         };
 
@@ -4013,16 +3986,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let hub = A::hub(self);
 
-        let device_id = {
-            match hub.bind_groups.get(bind_group_id) {
-                Ok(bind_group) => {
-                    bind_group.life_guard.ref_count.take();
-                    bind_group.device_id.value
-                }
-                Err(InvalidId::ResourceInError { .. }) => {
-                    hub.bind_groups.unregister(bind_group_id);
-                    return;
-                }
+        let device_id = unsafe {
+            match hub.bind_groups.drop_no_life_guard(bind_group_id) {
+                Some(v) => v,
+                None => return,
             }
         };
 
@@ -4146,8 +4113,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let hub = A::hub(self);
 
-        let module = hub.shader_modules.unregister(shader_module_id);
-        if let Some(module) = module {
+        let module = unsafe { hub.shader_modules.unregister(shader_module_id) };
+        if let Ok(module) = module {
             let device = &hub.devices[module.device_id.value];
             #[cfg(feature = "trace")]
             if let Some(ref trace) = device.trace {
@@ -4218,8 +4185,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let hub = A::hub(self);
 
-        let cmdbuf = hub.command_buffers.unregister(command_encoder_id);
-        if let Some(cmdbuf) = cmdbuf {
+        let cmdbuf = unsafe { hub.command_buffers.unregister(command_encoder_id) };
+        if let Ok(cmdbuf) = cmdbuf {
             let device = &hub.devices[cmdbuf.device_id.value];
             device.untrack::<G>(hub, &cmdbuf.trackers);
         }
@@ -4302,16 +4269,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         log::debug!("render bundle {:?} is dropped", render_bundle_id);
         let hub = A::hub(self);
 
-        let device_id = {
-            match hub.render_bundles.get(render_bundle_id) {
-                Ok(bundle) => {
-                    bundle.life_guard.ref_count.take();
-                    bundle.device_id.value
-                }
-                Err(InvalidId::ResourceInError { .. }) => {
-                    hub.render_bundles.unregister(render_bundle_id);
-                    return;
-                }
+        let device_id = unsafe {
+            match hub.render_bundles.drop_no_life_guard(render_bundle_id) {
+                Some(v) => v,
+                None => return,
             }
         };
 
@@ -4501,16 +4462,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         log::debug!("render pipeline {:?} is dropped", render_pipeline_id);
         let hub = A::hub(self);
 
-        let (device_id, layout_id) = {
-            match hub.render_pipelines.get(render_pipeline_id) {
-                Ok(pipeline) => {
-                    pipeline.life_guard.ref_count.take();
-                    (pipeline.device_id.value, pipeline.layout_id.clone())
-                }
-                Err(InvalidId::ResourceInError { .. }) => {
-                    hub.render_pipelines.unregister(render_pipeline_id);
-                    return;
-                }
+        let (pipeline, _ref_count, _last_submit_index, device_id) = unsafe {
+            match hub
+                .render_pipelines
+                .drop_with_life_guard(render_pipeline_id)
+            {
+                Some(v) => v,
+                None => return,
             }
         };
 
@@ -4522,7 +4480,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         life_lock
             .suspected_resources
             .pipeline_layouts
-            .push(layout_id);
+            .push(pipeline.layout_id);
     }
 
     pub fn device_create_compute_pipeline<A: HalApi>(
@@ -4624,16 +4582,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         log::debug!("compute pipeline {:?} is dropped", compute_pipeline_id);
         let hub = A::hub(self);
 
-        let (device_id, layout_id) = {
-            match hub.compute_pipelines.get(compute_pipeline_id) {
-                Ok(pipeline) => {
-                    pipeline.life_guard.ref_count.take();
-                    (pipeline.device_id.value, pipeline.layout_id.clone())
-                }
-                Err(InvalidId::ResourceInError { .. }) => {
-                    hub.compute_pipelines.unregister(compute_pipeline_id);
-                    return;
-                }
+        let (pipeline, _ref_count, _last_submit_index, device_id) = unsafe {
+            match hub
+                .compute_pipelines
+                .drop_with_life_guard(compute_pipeline_id)
+            {
+                Some(v) => v,
+                None => return,
             }
         };
 
@@ -4645,7 +4600,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         life_lock
             .suspected_resources
             .pipeline_layouts
-            .push(layout_id);
+            .push(pipeline.layout_id);
     }
 
     pub fn surface_configure<A: HalApi>(
@@ -4721,7 +4676,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let caps = unsafe {
                 let suf = A::get_surface(surface);
                 let adapter = &hub.adapters[device.adapter_id.value];
-                match adapter.raw.adapter.surface_capabilities(&suf.raw) {
+                match adapter.raw.adapter.surface_capabilities(&suf.raw.lock()) {
                     Some(caps) => caps,
                     None => break E::UnsupportedQueueFamily,
                 }
@@ -4748,8 +4703,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
 
             match unsafe {
-                A::get_surface_mut(surface)
+                A::get_surface(surface)
                     .raw
+                    .lock()
                     .configure(&device.raw, &hal_config)
             } {
                 Ok(()) => (),
@@ -4955,7 +4911,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut free_adapter_id = None;
         {
             let device = unsafe { hub.devices.unregister(device_id) };
-            if let Some(mut device) = device {
+            if let Ok(mut device) = device {
                 // The things `Device::prepare_to_die` takes care are mostly
                 // unnecessary here. We know our queue is empty, so we don't
                 // need to wait for submissions or triage them. We know we were

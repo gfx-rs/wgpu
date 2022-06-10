@@ -120,9 +120,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         #[cfg(not(feature = "trace"))]
         let _ = device;
 
-        let suf = A::get_surface_mut(surface);
+        let suf = A::get_surface(surface);
         let (texture_id, status) = match unsafe {
             suf.raw
+                .lock()
                 .acquire_texture(Some(std::time::Duration::from_millis(
                     FRAME_TIMEOUT_MS as u64,
                 )))
@@ -285,7 +286,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     }
                 }
 
-                let suf = A::get_surface_mut(surface);
+                let suf = A::get_surface(surface);
                 match texture.inner {
                     resource::TextureInner::Surface {
                         raw,
@@ -297,10 +298,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             Err(hal::SurfaceError::Lost)
                         } else if !has_work {
                             log::error!("No work has been submitted for this frame");
-                            unsafe { suf.raw.discard_texture(raw) };
+                            unsafe { suf.raw.lock().discard_texture(raw) };
                             Err(hal::SurfaceError::Outdated)
                         } else {
-                            unsafe { device.queue.present(&mut suf.raw, raw) }
+                            unsafe { device.queue.present(&mut suf.raw.lock(), raw) }
                         }
                     }
                     resource::TextureInner::Native { .. } => unreachable!(),
@@ -363,7 +364,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             let texture = unsafe { hub.textures.unregister(texture_id.value.0) };
             if let Ok(texture) = texture {
-                let suf = A::get_surface_mut(surface);
+                let suf = A::get_surface(surface);
                 match texture.inner {
                     resource::TextureInner::Surface {
                         raw,
@@ -371,7 +372,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         has_work: _,
                     } => {
                         if surface_id == parent_id.0 {
-                            unsafe { suf.raw.discard_texture(raw) };
+                            unsafe { suf.raw.lock().discard_texture(raw) };
                         } else {
                             log::warn!("Surface texture is outdated");
                         }

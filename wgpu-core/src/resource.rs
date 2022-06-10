@@ -181,8 +181,12 @@ impl<A: hal::Api> Resource for Buffer<A> {
     type Id = id::BufferId;
     const TYPE: &'static str = "Buffer";
 
-    fn life_guard(&self) -> &LifeGuard {
-        &self.life_guard
+    fn life_guard(&self) -> Option<&LifeGuard> {
+        Some(&self.life_guard)
+    }
+
+    fn device_id(&self) -> id::Valid<id::DeviceId> {
+        self.device_id.value
     }
 }
 
@@ -364,8 +368,12 @@ impl<A: hal::Api> Resource for Texture<A> {
     type Id = id::TextureId;
     const TYPE: &'static str = "Texture";
 
-    fn life_guard(&self) -> &LifeGuard {
-        &self.life_guard
+    fn life_guard(&self) -> Option<&LifeGuard> {
+        Some(&self.life_guard)
+    }
+
+    fn device_id(&self) -> id::Valid<id::DeviceId> {
+        self.device_id.value
     }
 }
 
@@ -468,8 +476,12 @@ impl<A: hal::Api> Resource for TextureView<A> {
     type Id = id::TextureViewId;
     const TYPE: &'static str = "TextureView";
 
-    fn life_guard(&self) -> &LifeGuard {
-        &self.life_guard
+    fn life_guard(&self) -> Option<&LifeGuard> {
+        Some(&self.life_guard)
+    }
+
+    fn device_id(&self) -> id::Valid<id::DeviceId> {
+        self.device_id.value
     }
 }
 
@@ -545,8 +557,12 @@ impl<A: hal::Api> Resource for Sampler<A> {
     type Id = id::SamplerId;
     const TYPE: &'static str = "Sampler";
 
-    fn life_guard(&self) -> &LifeGuard {
-        &self.life_guard
+    fn life_guard(&self) -> Option<&LifeGuard> {
+        Some(&self.life_guard)
+    }
+
+    fn device_id(&self) -> id::Valid<id::DeviceId> {
+        self.device_id.value
     }
 }
 
@@ -576,8 +592,12 @@ impl<A: hal::Api> Resource for QuerySet<A> {
     type Id = id::QuerySetId;
     const TYPE: &'static str = "QuerySet";
 
-    fn life_guard(&self) -> &LifeGuard {
-        &self.life_guard
+    fn life_guard(&self) -> Option<&LifeGuard> {
+        Some(&self.life_guard)
+    }
+
+    fn device_id(&self) -> id::Valid<id::DeviceId> {
+        self.device_id.value
     }
 }
 

@@ -11,7 +11,7 @@ use crate::{
     hub,
     id::{self, TypedId},
     sync::{DebugMaybeUninit, DebugUnsafeCell},
-    Epoch,
+    Epoch, LifeGuard, RefCount, SubmissionIndex,
 };
 
 pub struct Registry<A, T> {
@@ -79,6 +79,59 @@ where
         self.storage.get_unchecked(index).unwrap()
     }
 
+    /// # Safety
+    ///
+    /// Inherets from [`Self::unregister`].
+    ///
+    /// - No calls to `contains`, `get`, `get_unchecked`, or `Index` may happen
+    ///   while this call is executing.
+    pub unsafe fn drop_no_life_guard(&self, id: T::Id) -> Option<id::Valid<id::DeviceId>> {
+        Some(self.drop_inner(id)?.2)
+    }
+
+    /// # Safety
+    ///
+    /// Inherets from [`Self::unregister`].
+    ///
+    /// - No calls to `contains`, `get`, `get_unchecked`, or `Index` may happen
+    ///   while this call is executing.
+    pub unsafe fn drop_with_life_guard(
+        &self,
+        id: T::Id,
+    ) -> Option<(&T, RefCount, SubmissionIndex, id::Valid<id::DeviceId>)> {
+        let (resource, life_guard, device_id) = self.drop_inner(id)?;
+        let life_guard = life_guard.unwrap();
+        Some((
+            resource,
+            life_guard.ref_count.take().unwrap(),
+            life_guard.life_count(),
+            device_id,
+        ))
+    }
+
+    /// # Safety
+    ///
+    /// Inherets from [`Self::unregister`].
+    ///
+    /// - No calls to `contains`, `get`, `get_unchecked`, or `Index` may happen
+    ///   while this call is executing.
+    unsafe fn drop_inner(
+        &self,
+        id: T::Id,
+    ) -> Option<(&T, Option<&LifeGuard>, id::Valid<id::DeviceId>)> {
+        match self.get(id) {
+            Ok(resource) => Some((resource, resource.life_guard(), resource.device_id())),
+            Err(hub::InvalidId::ResourceInError { .. }) => {
+                unsafe { self.unregister(id) };
+                None
+            }
+            Err(e) => {
+                log::error!("Tried to drop invalid {} id: {}", T::TYPE, e);
+                None
+            }
+        }
+    }
+
     pub fn insert_error(&self, id: T::Id, implicit_failure: &'static str) {
         let (index, epoch, _) = id.unzip();
         unsafe {
@@ -122,8 +175,12 @@ where
     ///
     /// If this is called with anything other than exclusive access to the registry,
     /// all bets are off.
-    pub unsafe fn remove_all(&self) -> impl Iterator<Item = T> {
-        None.into_iter()
+    pub unsafe fn remove_all(&self) -> impl Iterator<Item = T> + '_ {
+        self.storage.remove_all(A::VARIANT)
+    }
+
+    pub fn generate_report(&self) -> hub::StorageReport {
+        todo!()
     }
 }
 
@@ -196,7 +253,8 @@ where
     fn raw_refs(
         &self,
         index: u32,
-    ) -> Result<(&DebugUnsafeCell<DebugMaybeUninit<T>>, &Mutex<ElementStatus>), hub::InvalidId> {
+    ) -> Result<(&DebugUnsafeCell<DebugMaybeUninit<T>>, &Mutex<ElementStatus>), hub::InvalidId>
+    {
         let block = (index / 512) as usize;
         let data_index = (index % 512) as usize;
 
@@ -269,7 +327,11 @@ where
             ElementStatus::Occupied(stored_epoch) | ElementStatus::Error(stored_epoch, _)
                 if epoch != stored_epoch =>
             {
-                Err(hub::InvalidId::WrongEpoch { index, old: stored_epoch, new: epoch })
+                Err(hub::InvalidId::WrongEpoch {
+                    index,
+                    old: stored_epoch,
+                    new: epoch,
+                })
             }
             ElementStatus::Occupied(_) => Ok(unsafe { data_ref.get().assume_init_ref() }),
             ElementStatus::Error(_, error) => Err(hub::InvalidId::ResourceInError {
@@ -373,11 +435,11 @@ where
     /// # Safety
     ///
     /// - The this function must be called with exclusive access to self.
-    unsafe fn remove_all(&self, backend: wgt::Backend) -> impl Iterator<Item = (T::Id, T)> + '_ {
+    unsafe fn remove_all(&self, backend: wgt::Backend) -> impl Iterator<Item = T> + '_ {
         self.iter_inner(backend).map(|(id, cell, status)| {
             *status.lock() = ElementStatus::Vacant;
             let value = mem::replace(&mut *cell.get_mut(), DebugMaybeUninit::uninit());
-            (id, value.assume_init())
+            value.assume_init()
         })
     }
 }

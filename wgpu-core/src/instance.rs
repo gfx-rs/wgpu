@@ -6,6 +6,7 @@ use crate::{
     LabelHelpers, LifeGuard, Stored, DOWNLEVEL_WARNING_MESSAGE,
 };
 
+use parking_lot::Mutex;
 use wgt::{Backend, Backends, PowerPreference};
 
 use hal::{Adapter as _, Instance as _};
@@ -15,7 +16,7 @@ pub type RequestAdapterOptions = wgt::RequestAdapterOptions<SurfaceId>;
 type HalInstance<A> = <A as hal::Api>::Instance;
 //TODO: remove this
 pub struct HalSurface<A: hal::Api> {
-    pub raw: A::Surface,
+    pub raw: Mutex<A::Surface>,
     //pub acquired_texture: Option<A::SurfaceTexture>,
 }
 
@@ -108,7 +109,7 @@ impl Instance {
         ) {
             unsafe {
                 if let Some(suf) = surface {
-                    instance.as_ref().unwrap().destroy_surface(suf.raw);
+                    instance.as_ref().unwrap().destroy_surface(suf.raw.into_inner());
                 }
             }
         }
@@ -143,12 +144,16 @@ impl crate::hub::Resource for Surface {
     type Id = SurfaceId;
     const TYPE: &'static str = "Surface";
 
-    fn life_guard(&self) -> &LifeGuard {
-        unreachable!()
+    fn life_guard(&self) -> Option<&LifeGuard> {
+        None
     }
 
     fn label(&self) -> &str {
         "<Surface>"
+    }
+
+    fn device_id(&self) -> Valid<DeviceId> {
+        unreachable!()
     }
 }
 
@@ -174,7 +179,7 @@ impl Surface {
             adapter
                 .raw
                 .adapter
-                .surface_capabilities(&suf.raw)
+                .surface_capabilities(&suf.raw.lock())
                 .ok_or(GetSurfacePreferredFormatError::UnsupportedQueueFamily)?
         };
 
@@ -201,7 +206,7 @@ impl<A: HalApi> Adapter<A> {
 
     pub fn is_surface_supported(&self, surface: &Surface) -> bool {
         let suf = A::get_surface(surface);
-        unsafe { self.raw.adapter.surface_capabilities(&suf.raw) }.is_some()
+        unsafe { self.raw.adapter.surface_capabilities(&suf.raw.lock()) }.is_some()
     }
 
     pub(crate) fn get_texture_format_features(
@@ -341,8 +346,12 @@ impl<A: hal::Api> crate::hub::Resource for Adapter<A> {
     type Id = AdapterId;
     const TYPE: &'static str = "Adapter";
 
-    fn life_guard(&self) -> &LifeGuard {
-        &self.life_guard
+    fn life_guard(&self) -> Option<&LifeGuard> {
+        Some(&self.life_guard)
+    }
+
+    fn device_id(&self) -> Valid<DeviceId> {
+        unreachable!()
     }
 }
 
@@ -436,7 +445,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             inst.as_ref().and_then(|inst| unsafe {
                 match inst.create_surface(handle) {
                     Ok(raw) => Some(HalSurface {
-                        raw,
+                        raw: Mutex::new(raw),
                         //acquired_texture: None,
                     }),
                     Err(e) => {
@@ -479,7 +488,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 raw: {
                     // we don't want to link to metal-rs for this
                     #[allow(clippy::transmute_ptr_to_ref)]
-                    inst.create_surface_from_layer(unsafe { std::mem::transmute(layer) })
+                    Mutex::new(inst.create_surface_from_layer(unsafe { std::mem::transmute(layer) }))
                 },
                 //acquired_texture: None,
             }),
@@ -631,7 +640,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     if let Some(surface) = compatible_surface {
                         let suf_raw = &A::get_surface(surface).raw;
                         adapters.retain(|exposed| unsafe {
-                            exposed.adapter.surface_capabilities(suf_raw).is_some()
+                            exposed.adapter.surface_capabilities(&suf_raw.lock()).is_some()
                         });
                     }
                     device_types.extend(adapters.iter().map(|ad| ad.info.device_type));

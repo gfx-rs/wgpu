@@ -448,8 +448,11 @@ impl<A: hal::Api> Resource for BindGroupLayout<A> {
     type Id = BindGroupLayoutId;
     const TYPE: &'static str = "BindGroupLayout";
 
-    fn life_guard(&self) -> &LifeGuard {
-        unreachable!()
+    fn life_guard(&self) -> Option<&LifeGuard> {
+        None
+    }
+    fn device_id(&self) -> Valid<DeviceId> {
+        self.device_id.value
     }
 
     fn label(&self) -> &str {
@@ -643,8 +646,12 @@ impl<A: hal::Api> Resource for PipelineLayout<A> {
     type Id = PipelineLayoutId;
     const TYPE: &'static str = "PipelineLayout";
 
-    fn life_guard(&self) -> &LifeGuard {
-        &self.life_guard
+    fn life_guard(&self) -> Option<&LifeGuard> {
+        Some(&self.life_guard)
+    }
+
+    fn device_id(&self) -> Valid<DeviceId> {
+        self.device_id.value
     }
 }
 
@@ -773,8 +780,12 @@ impl<A: HalApi> Resource for BindGroup<A> {
     type Id = BindGroupId;
     const TYPE: &'static str = "BindGroup";
 
-    fn life_guard(&self) -> &LifeGuard {
-        &self.life_guard
+    fn life_guard(&self) -> Option<&LifeGuard> {
+        Some(&self.life_guard)
+    }
+
+    fn device_id(&self) -> Valid<DeviceId> {
+        self.device_id.value
     }
 }
 
