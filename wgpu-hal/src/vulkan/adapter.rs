@@ -608,7 +608,11 @@ unsafe impl Send for PhysicalDeviceCapabilities {}
 unsafe impl Sync for PhysicalDeviceCapabilities {}
 
 impl PhysicalDeviceCapabilities {
-    fn supports_extension(&self, extension: &CStr) -> bool {
+    pub fn properties(&self) -> vk::PhysicalDeviceProperties {
+        self.properties
+    }
+
+    pub fn supports_extension(&self, extension: &CStr) -> bool {
         self.supported_extensions
             .iter()
             .any(|ep| unsafe { CStr::from_ptr(ep.extension_name.as_ptr()) } == extension)
@@ -1125,6 +1129,14 @@ impl super::Adapter {
         self.raw
     }
 
+    pub fn physical_device_capabilities(&self) -> &PhysicalDeviceCapabilities {
+        &self.phd_capabilities
+    }
+
+    pub fn shared_instance(&self) -> &super::InstanceShared {
+        &self.instance
+    }
+
     pub fn required_device_extensions(&self, features: wgt::Features) -> Vec<&'static CStr> {
         let (supported_extensions, unsupported_extensions) = self
             .phd_capabilities
@@ -1299,6 +1311,8 @@ impl super::Adapter {
             raw: raw_device,
             handle_is_owned,
             instance: Arc::clone(&self.instance),
+            physical_device: self.raw,
+            enabled_extensions: enabled_extensions.into(),
             extension_fns: super::DeviceExtensionFunctions {
                 draw_indirect_count: indirect_count_fn,
                 timeline_semaphore: timeline_semaphore_fn,
