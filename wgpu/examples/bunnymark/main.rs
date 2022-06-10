@@ -364,13 +364,8 @@ fn bunnymark() {
         width: 1024,
         height: 768,
         optional_features: wgpu::Features::default(),
-        base_test_parameters: framework::test_common::TestParameters::default().specific_failure(
-            None,
-            None,
-            Some("Basic"),
-            false,
-        ),
-        tolerance: 1,
-        max_outliers: 50,
+        base_test_parameters: framework::test_common::TestParameters::default(),
+        tolerance: 10,
+        max_outliers: 53, // Bounded by WARP
     });
 }
