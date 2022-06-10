@@ -51,7 +51,14 @@ fn draw() {
     initialize_test(
         TestParameters::default()
             .test_features_limits()
-            .features(wgpu::Features::SHADER_PRIMITIVE_INDEX),
+            .features(wgpu::Features::SHADER_PRIMITIVE_INDEX)
+            // https://github.com/gfx-rs/wgpu/issues/2751
+            .specific_failure(
+                Some(wgt::Backends::VULKAN),
+                Some(0x1002), // AMD
+                Some("AMD RADV"),
+                false,
+            ),
         |ctx| {
             pulling_common(ctx, &expected, |rpass| {
                 rpass.draw(0..6, 0..1);
@@ -75,7 +82,14 @@ fn draw_indexed() {
     initialize_test(
         TestParameters::default()
             .test_features_limits()
-            .features(wgpu::Features::SHADER_PRIMITIVE_INDEX),
+            .features(wgpu::Features::SHADER_PRIMITIVE_INDEX)
+            // https://github.com/gfx-rs/wgpu/issues/2751
+            .specific_failure(
+                Some(wgt::Backends::VULKAN),
+                Some(0x1002), // AMD
+                Some("AMD RADV"),
+                false,
+            ),
         |ctx| {
             pulling_common(ctx, &expected, |rpass| {
                 rpass.draw_indexed(0..6, 0, 0..1);
