@@ -574,6 +574,27 @@ pub fn test<E: Example>(mut params: FrameworkRefTest) {
 
             example.render(&dst_view, &ctx.device, &ctx.queue, &spawner);
 
+            // Handle specific case for bunnymark
+            #[allow(deprecated)]
+            if params.image_path == "/examples/bunnymark/screenshot.png" {
+                // Press spacebar to spawn bunnies
+                example.update(winit::event::WindowEvent::KeyboardInput {
+                    input: winit::event::KeyboardInput {
+                        scancode: 0,
+                        state: winit::event::ElementState::Pressed,
+                        virtual_keycode: Some(winit::event::VirtualKeyCode::Space),
+                        modifiers: winit::event::ModifiersState::empty(),
+                    },
+                    device_id: unsafe { winit::event::DeviceId::dummy() },
+                    is_synthetic: false,
+                });
+
+                // Step 3 extra frames
+                for _ in 0..3 {
+                    example.render(&dst_view, &ctx.device, &ctx.queue, &spawner);
+                }
+            }
+
             let mut cmd_buf = ctx
                 .device
                 .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
