@@ -678,47 +678,10 @@ impl<A: HalApi> Device<A> {
         adapter: &crate::instance::Adapter<A>,
         desc: &resource::TextureDescriptor,
     ) -> Result<resource::Texture<A>, resource::CreateTextureError> {
-        let format_desc = desc.format.describe();
-
-        if desc.dimension != wgt::TextureDimension::D2 {
-            // Depth textures can only be 2D
-            if format_desc.sample_type == wgt::TextureSampleType::Depth {
-                return Err(resource::CreateTextureError::InvalidDepthDimension(
-                    desc.dimension,
-                    desc.format,
-                ));
-            }
-            // Renderable textures can only be 2D
-            if desc.usage.contains(wgt::TextureUsages::RENDER_ATTACHMENT) {
-                return Err(resource::CreateTextureError::InvalidDimensionUsages(
-                    wgt::TextureUsages::RENDER_ATTACHMENT,
-                    desc.dimension,
-                ));
-            }
-
-            // Compressed textures can only be 2D
-            if format_desc.is_compressed() {
-                return Err(resource::CreateTextureError::InvalidCompressedDimension(
-                    desc.dimension,
-                    desc.format,
-                ));
-            }
-        }
-
-        let format_features = self
-            .describe_format_features(adapter, desc.format)
-            .map_err(|error| resource::CreateTextureError::MissingFeatures(desc.format, error))?;
+        use resource::{CreateTextureError, TextureDimensionError};
 
         if desc.usage.is_empty() {
-            return Err(resource::CreateTextureError::EmptyUsage);
-        }
-
-        let missing_allowed_usages = desc.usage - format_features.allowed_usages;
-        if !missing_allowed_usages.is_empty() {
-            return Err(resource::CreateTextureError::InvalidFormatUsages(
-                missing_allowed_usages,
-                desc.format,
-            ));
+            return Err(CreateTextureError::EmptyUsage);
         }
 
         conv::check_texture_dimension_size(
@@ -728,14 +691,113 @@ impl<A: HalApi> Device<A> {
             &self.limits,
         )?;
 
+        let format_desc = desc.format.describe();
+
+        if desc.dimension != wgt::TextureDimension::D2 {
+            // Depth textures can only be 2D
+            if format_desc.sample_type == wgt::TextureSampleType::Depth {
+                return Err(CreateTextureError::InvalidDepthDimension(
+                    desc.dimension,
+                    desc.format,
+                ));
+            }
+            // Renderable textures can only be 2D
+            if desc.usage.contains(wgt::TextureUsages::RENDER_ATTACHMENT) {
+                return Err(CreateTextureError::InvalidDimensionUsages(
+                    wgt::TextureUsages::RENDER_ATTACHMENT,
+                    desc.dimension,
+                ));
+            }
+
+            // Compressed textures can only be 2D
+            if format_desc.is_compressed() {
+                return Err(CreateTextureError::InvalidCompressedDimension(
+                    desc.dimension,
+                    desc.format,
+                ));
+            }
+        }
+
+        if format_desc.is_compressed() {
+            let block_width = format_desc.block_dimensions.0 as u32;
+            let block_height = format_desc.block_dimensions.1 as u32;
+
+            if desc.size.width % block_width != 0 {
+                return Err(CreateTextureError::InvalidDimension(
+                    TextureDimensionError::NotMultipleOfBlockWidth {
+                        width: desc.size.width,
+                        block_width,
+                        format: desc.format,
+                    },
+                ));
+            }
+
+            if desc.size.height % block_height != 0 {
+                return Err(CreateTextureError::InvalidDimension(
+                    TextureDimensionError::NotMultipleOfBlockHeight {
+                        height: desc.size.height,
+                        block_height,
+                        format: desc.format,
+                    },
+                ));
+            }
+        }
+
+        if desc.sample_count > 1 {
+            if desc.mip_level_count != 1 {
+                return Err(CreateTextureError::InvalidMipLevelCount {
+                    requested: desc.mip_level_count,
+                    maximum: 1,
+                });
+            }
+
+            if desc.size.depth_or_array_layers != 1 {
+                return Err(CreateTextureError::InvalidDimension(
+                    TextureDimensionError::MultisampledDepthOrArrayLayer(
+                        desc.size.depth_or_array_layers,
+                    ),
+                ));
+            }
+
+            if desc.usage.contains(wgt::TextureUsages::STORAGE_BINDING) {
+                return Err(CreateTextureError::InvalidMultisampledStorageBinding);
+            }
+
+            if !desc.usage.contains(wgt::TextureUsages::RENDER_ATTACHMENT) {
+                return Err(CreateTextureError::MultisampledNotRenderAttachment);
+            }
+
+            if !format_desc
+                .guaranteed_format_features
+                .flags
+                .contains(wgt::TextureFormatFeatureFlags::MULTISAMPLE)
+            {
+                return Err(CreateTextureError::InvalidMultisampledFormat(desc.format));
+            }
+        }
+
         let mips = desc.mip_level_count;
         let max_levels_allowed = desc.size.max_mips(desc.dimension).min(hal::MAX_MIP_LEVELS);
         if mips == 0 || mips > max_levels_allowed {
-            return Err(resource::CreateTextureError::InvalidMipLevelCount {
+            return Err(CreateTextureError::InvalidMipLevelCount {
                 requested: mips,
                 maximum: max_levels_allowed,
             });
         }
+
+        let format_features = self
+            .describe_format_features(adapter, desc.format)
+            .map_err(|error| CreateTextureError::MissingFeatures(desc.format, error))?;
+
+        let missing_allowed_usages = desc.usage - format_features.allowed_usages;
+        if !missing_allowed_usages.is_empty() {
+            return Err(CreateTextureError::InvalidFormatUsages(
+                missing_allowed_usages,
+                desc.format,
+            ));
+        }
+
+        // TODO: validate missing TextureDescriptor::view_formats.
 
         // Enforce having COPY_DST/DEPTH_STENCIL_WRIT/COLOR_TARGET otherwise we wouldn't be able to initialize the texture.
         let hal_usage = conv::map_texture_usage(desc.usage, desc.format.into())

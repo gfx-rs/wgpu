@@ -3306,6 +3306,7 @@ pub struct TextureDescriptor<L> {
     pub format: TextureFormat,
     /// Allowed usages of the texture. If used in other ways, the operation will panic.
     pub usage: TextureUsages,
+    // TODO: missing view_formats https://www.w3.org/TR/webgpu/#dom-gputexturedescriptor-viewformats
 }
 
 impl<L> TextureDescriptor<L> {

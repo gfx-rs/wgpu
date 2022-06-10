@@ -116,14 +116,7 @@ pub fn check_texture_dimension_size(
     use wgt::TextureDimension::*;
 
     let (extent_limits, sample_limit) = match dimension {
-        D1 => (
-            [
-                limits.max_texture_dimension_1d,
-                1,
-                limits.max_texture_array_layers,
-            ],
-            1,
-        ),
+        D1 => ([limits.max_texture_dimension_1d, 1, 1], 1),
         D2 => (
             [
                 limits.max_texture_dimension_2d,
