@@ -6,6 +6,18 @@ times, on different encoders. Constructing a render bundle lets `wgpu` validate
 and analyze its commands up front, so that replaying a bundle can be more
 efficient than simply re-recording its commands each time.
 
+Not all commands are available in bundles; for example, a render bundle may not
+contain a [`RenderCommand::SetViewport`] command.
+
+Most of `wgpu`'s backend graphics APIs have something like bundles. For example,
+Vulkan calls them "secondary command buffers", and Metal calls them "indirect
+command buffers". Although we plan to take advantage of these platform features
+at some point in the future, for now `wgpu`'s implementation of render bundles
+does not use them: at the hal level, `wgpu` render bundles just replay the
+commands.
+
+## Render Bundle Isolation
+
 One important property of render bundles is that the draw calls in a render
 bundle depend solely on the pipeline and state established within the render
 bundle itself. A draw call in a bundle will never use a vertex buffer, say, that
@@ -17,14 +29,11 @@ Render passes are also isolated from the effects of bundles. After executing a
 render bundle, a render pass's pipeline, bind groups, and vertex and index
 buffers are are unset, so the bundle cannot affect later draw calls in the pass.
 
-Not all commands are available in bundles; for example, a render bundle may not
-contain a [`RenderCommand::SetViewport`] command.
-
-Most of `wgpu`'s backend graphics APIs have something like bundles. For example,
-Vulkan calls them "secondary command buffers", and Metal calls them "indirect
-command buffers". However, `wgpu`'s implementation of render bundles does not
-take advantage of those underlying platform features. At the hal level, `wgpu`
-render bundles just replay the commands.
+A render pass is not fully isolated from a bundle's effects on push constant
+values. Draw calls following a bundle's execution will see whatever values the
+bundle writes to push constant storage. Setting a pipeline initializes any push
+constant storage it could access to zero, and this initialization may also be
+visible after bundle execution.
 
 ## Render Bundle Lifecycle
 
@@ -372,6 +381,11 @@ impl RenderBundleEncoder {
                         &layout.push_constant_ranges,
                     );
                     commands.push(command);
+
+                    // If this pipeline's push constant ranges aren't the same
+                    // as the ones we were using previously (or if this is the
+                    // first pipeline to use push constants at all), then emit
+                    // commands to zero out the push constant values it will use.
                     if let Some(iter) = state.flush_push_constants() {
                         commands.extend(iter)
                     }
@@ -1045,7 +1059,15 @@ struct BindState {
 
 #[derive(Debug)]
 struct PushConstantState {
+    /// Push constant ranges used by the most recently set pipeline.
+    ///
+    /// Before any pipeline has been set, this is empty.
     ranges: ArrayVec<wgt::PushConstantRange, { SHADER_STAGE_COUNT }>,
+
+    /// True if this bundle has ever set a pipeline that uses push constants.
+    ///
+    /// If this is true, then every time we set a pipeline, we will emit
+    /// `SetPushConstant` commands to clear the push constants it uses.
     is_dirty: bool,
 }
 impl PushConstantState {
@@ -1251,6 +1273,9 @@ impl<A: HalApi> State<A> {
         self.index.as_mut().and_then(|index| index.flush())
     }
 
+    /// Return a sequence of commands to zero the push constant ranges that will
+    /// be used by the current pipeline. If no initialization is necessary,
+    /// return `None`.
     fn flush_push_constants(&mut self) -> Option<impl Iterator<Item = RenderCommand>> {
         let is_dirty = self.push_constant_ranges.is_dirty;
 
@@ -1265,7 +1290,7 @@ impl<A: HalApi> State<A> {
                         stages: range.stages,
                         offset: range.range.start,
                         size_bytes: range.range.end - range.range.start,
-                        values_offset: None,
+                        values_offset: None, // write zeros
                     }),
             )
         } else {
