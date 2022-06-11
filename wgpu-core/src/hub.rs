@@ -930,6 +930,18 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         hal_instance_callback(hal_instance)
     }
 
+    /// # Safety
+    ///
+    /// - The raw handles obtained from the Instance must not be manually destroyed
+    pub unsafe fn from_instance(factory: G, instance: Instance) -> Self {
+        profiling::scope!("new", "Global");
+        Self {
+            instance,
+            surfaces: Registry::without_backend(&factory, "Surface"),
+            hubs: Hubs::new(&factory),
+        }
+    }
+
     pub fn clear_backend<A: HalApi>(&self, _dummy: ()) {
         let mut surface_guard = self.surfaces.data.write();
         let hub = A::hub(self);

@@ -1648,13 +1648,29 @@ impl Instance {
     /// # Safety
     ///
     /// - The raw handle obtained from the hal Instance must not be manually destroyed
-    #[cfg(any(not(target_arch = "wasm32"), feature = "webgl2"))]
+    #[cfg(any(not(target_arch = "wasm32"), feature = "webgl"))]
     pub unsafe fn as_hal<A: wgc::hub::HalApi, F: FnOnce(Option<&A::Instance>) -> R, R>(
         &self,
         hal_instance_callback: F,
     ) -> R {
         self.context
             .instance_as_hal::<A, F, R>(hal_instance_callback)
+    }
+
+    /// Create an new instance of wgpu from a wgpu-core instance.
+    ///
+    /// # Arguments
+    ///
+    /// - `core_instance` - wgpu-core instance.
+    ///
+    /// # Safety
+    ///
+    /// Refer to the creation of wgpu-core Instance.
+    #[cfg(any(not(target_arch = "wasm32"), feature = "webgl"))]
+    pub unsafe fn from_core(core_instance: wgc::instance::Instance) -> Self {
+        Self {
+            context: Arc::new(C::from_core_instance(core_instance)),
+        }
     }
 
     /// Retrieves all available [`Adapter`]s that match the given [`Backends`].
@@ -1877,7 +1893,7 @@ impl Adapter {
     /// # Safety
     ///
     /// - The raw handle obtained from the hal Adapter must not be manually destroyed
-    #[cfg(any(not(target_arch = "wasm32"), feature = "webgl2"))]
+    #[cfg(any(not(target_arch = "wasm32"), feature = "webgl"))]
     pub unsafe fn as_hal<A: wgc::hub::HalApi, F: FnOnce(Option<&A::Adapter>) -> R, R>(
         &self,
         hal_adapter_callback: F,
