@@ -23,6 +23,7 @@ use crate::{
 };
 
 use hal::{Queue as _, Surface as _};
+use parking_lot::RwLock;
 use thiserror::Error;
 use wgt::SurfaceStatus as Status;
 
@@ -175,7 +176,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         flags: wgt::TextureFormatFeatureFlags::MULTISAMPLE
                             | wgt::TextureFormatFeatureFlags::MULTISAMPLE_RESOLVE,
                     },
-                    initialization_status: TextureInitTracker::new(1, 1),
+                    initialization_status: RwLock::new(TextureInitTracker::new(1, 1)),
                     full_range: track::TextureSelector {
                         layers: 0..1,
                         mips: 0..1,

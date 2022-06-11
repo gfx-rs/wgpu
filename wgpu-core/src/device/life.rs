@@ -841,7 +841,7 @@ impl<A: HalApi> LifetimeTracker<A> {
             Vec::with_capacity(self.ready_to_map.len());
         let mut trackers = trackers.lock();
         for buffer_id in self.ready_to_map.drain(..) {
-            let buffer = &mut hub.buffers[buffer_id];
+            let buffer = &hub.buffers[buffer_id];
             if buffer.life_guard.ref_count.is_none() && trackers.buffers.remove_abandoned(buffer_id)
             {
                 buffer.map_state = resource::BufferMapState::Idle;

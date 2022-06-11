@@ -8,6 +8,7 @@ mod query;
 mod render;
 mod transfer;
 
+use std::ops::DerefMut;
 use std::slice;
 
 pub(crate) use self::clear::clear_texture;
@@ -29,6 +30,7 @@ use crate::{
 };
 
 use hal::CommandEncoder as _;
+use parking_lot::Mutex;
 use thiserror::Error;
 
 #[cfg(feature = "trace")]
@@ -180,11 +182,11 @@ impl<A: HalApi> CommandBuffer<A> {
         profiling::scope!("drain_barriers");
 
         let buffer_barriers = base.buffers.drain().map(|pending| {
-            let buf = unsafe { buffer_guard.get_unchecked(pending.id) };
+            let buf = buffer_guard.get_unchecked(pending.id);
             pending.into_hal(buf)
         });
         let texture_barriers = base.textures.drain().map(|pending| {
-            let tex = unsafe { texture_guard.get_unchecked(pending.id) };
+            let tex = texture_guard.get_unchecked(pending.id);
             pending.into_hal(tex)
         });
 
@@ -196,19 +198,21 @@ impl<A: HalApi> CommandBuffer<A> {
 }
 
 impl<A: HalApi> CommandBuffer<A> {
-    fn get_encoder_mut(
-        storage: &registry::Registry<A, Self>,
+    fn get_encoder_mut<'a>(
+        storage: &'a registry::Registry<A, Mutex<Self>>,
         id: id::CommandEncoderId,
-    ) -> Result<&mut Self, CommandEncoderError> {
-        // match storage.get_mut(id) {
-        //     Ok(cmd_buf) => match cmd_buf.status {
-        //         CommandEncoderStatus::Recording => Ok(cmd_buf),
-        //         CommandEncoderStatus::Finished => Err(CommandEncoderError::NotRecording),
-        //         CommandEncoderStatus::Error => Err(CommandEncoderError::Invalid),
-        //     },
-        //     Err(_) => Err(CommandEncoderError::Invalid),
-        // }
-        todo!()
+    ) -> Result<impl DerefMut<Target = Self> + 'a, CommandEncoderError> {
+        match storage.get(id) {
+            Ok(cmd_buf_mutex) => {
+                let cmd_buf = cmd_buf_mutex.lock();
+                match cmd_buf.status {
+                    CommandEncoderStatus::Recording => Ok(cmd_buf),
+                    CommandEncoderStatus::Finished => Err(CommandEncoderError::NotRecording),
+                    CommandEncoderStatus::Error => Err(CommandEncoderError::Invalid),
+                }
+            }
+            Err(_) => Err(CommandEncoderError::Invalid),
+        }
     }
 
     pub fn is_finished(&self) -> bool {
@@ -229,7 +233,7 @@ impl<A: HalApi> CommandBuffer<A> {
     }
 }
 
-impl<A: HalApi> crate::hub::Resource for CommandBuffer<A> {
+impl<A: HalApi> crate::hub::Resource for Mutex<CommandBuffer<A>> {
     type Id = id::CommandBufferId;
     const TYPE: &'static str = "CommandBuffer";
 
@@ -238,11 +242,16 @@ impl<A: HalApi> crate::hub::Resource for CommandBuffer<A> {
     }
 
     fn label(&self) -> &str {
-        self.encoder.label.as_ref().map_or("", |s| s.as_str())
+        // self.lock()
+        //     .encoder
+        //     .label
+        //     .as_ref()
+        //     .map_or("", |s| s.as_str())
+        ""
     }
-    
+
     fn device_id(&self) -> id::Valid<id::DeviceId> {
-        self.device_id.value
+        self.lock().device_id.value
     }
 }
 
@@ -349,21 +358,24 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let hub = A::hub(self);
 
         let error = match hub.command_buffers.get(encoder_id) {
-            Ok(cmd_buf) => match cmd_buf.status {
-                CommandEncoderStatus::Recording => {
-                    cmd_buf.encoder.close();
-                    cmd_buf.status = CommandEncoderStatus::Finished;
-                    //Note: if we want to stop tracking the swapchain texture view,
-                    // this is the place to do it.
-                    log::trace!("Command buffer {:?}", encoder_id);
-                    None
+            Ok(cmd_buf_mutex) => {
+                let cmd_buf = &mut *cmd_buf_mutex.lock();
+                match cmd_buf.status {
+                    CommandEncoderStatus::Recording => {
+                        cmd_buf.encoder.close();
+                        cmd_buf.status = CommandEncoderStatus::Finished;
+                        //Note: if we want to stop tracking the swapchain texture view,
+                        // this is the place to do it.
+                        log::trace!("Command buffer {:?}", encoder_id);
+                        None
+                    }
+                    CommandEncoderStatus::Finished => Some(CommandEncoderError::NotRecording),
+                    CommandEncoderStatus::Error => {
+                        cmd_buf.encoder.discard();
+                        Some(CommandEncoderError::Invalid)
+                    }
                 }
-                CommandEncoderStatus::Finished => Some(CommandEncoderError::NotRecording),
-                CommandEncoderStatus::Error => {
-                    cmd_buf.encoder.discard();
-                    Some(CommandEncoderError::Invalid)
-                }
-            },
+            }
             Err(_) => Some(CommandEncoderError::Invalid),
         };
 
@@ -379,7 +391,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let hub = A::hub(self);
 
-        let cmd_buf = CommandBuffer::get_encoder_mut(&hub.command_buffers, encoder_id)?;
+        let cmd_buf = &mut *CommandBuffer::get_encoder_mut(&hub.command_buffers, encoder_id)?;
 
         #[cfg(feature = "trace")]
         if let Some(ref mut list) = cmd_buf.commands {
@@ -402,7 +414,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let hub = A::hub(self);
 
-        let cmd_buf = CommandBuffer::get_encoder_mut(&hub.command_buffers, encoder_id)?;
+        let cmd_buf = &mut *CommandBuffer::get_encoder_mut(&hub.command_buffers, encoder_id)?;
 
         #[cfg(feature = "trace")]
         if let Some(ref mut list) = cmd_buf.commands {
@@ -424,7 +436,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let hub = A::hub(self);
 
-        let cmd_buf = CommandBuffer::get_encoder_mut(&hub.command_buffers, encoder_id)?;
+        let cmd_buf = &mut *CommandBuffer::get_encoder_mut(&hub.command_buffers, encoder_id)?;
 
         #[cfg(feature = "trace")]
         if let Some(ref mut list) = cmd_buf.commands {

@@ -9,6 +9,7 @@ use crate::{
     Label, LifeGuard, RefCount, Stored,
 };
 
+use parking_lot::{Mutex, RwLock};
 use smallvec::SmallVec;
 use thiserror::Error;
 
@@ -157,8 +158,8 @@ pub struct Buffer<A: hal::Api> {
     pub(crate) device_id: Stored<id::DeviceId>,
     pub(crate) usage: wgt::BufferUsages,
     pub(crate) size: wgt::BufferAddress,
-    pub(crate) initialization_status: BufferInitTracker,
-    pub(crate) sync_mapped_writes: Option<hal::MemoryRange>,
+    pub(crate) initialization_status: RwLock<BufferInitTracker>,
+    pub(crate) sync_mapped_writes: Mutex<Option<hal::MemoryRange>>,
     pub(crate) life_guard: LifeGuard,
     pub(crate) map_state: BufferMapState<A>,
 }
@@ -234,7 +235,7 @@ pub struct Texture<A: hal::Api> {
     pub(crate) desc: wgt::TextureDescriptor<()>,
     pub(crate) hal_usage: hal::TextureUses,
     pub(crate) format_features: wgt::TextureFormatFeatures,
-    pub(crate) initialization_status: TextureInitTracker,
+    pub(crate) initialization_status: RwLock<TextureInitTracker>,
     pub(crate) full_range: TextureSelector,
     pub(crate) life_guard: LifeGuard,
     pub(crate) clear_mode: TextureClearMode<A>,

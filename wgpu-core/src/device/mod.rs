@@ -18,7 +18,7 @@ use crate::{
 use arrayvec::ArrayVec;
 use copyless::VecHelper as _;
 use hal::{CommandEncoder as _, Device as _};
-use parking_lot::{Mutex, MutexGuard};
+use parking_lot::{Mutex, MutexGuard, RwLock};
 use smallvec::SmallVec;
 use thiserror::Error;
 use wgt::{BufferAddress, TextureFormat, TextureViewDimension};
@@ -156,7 +156,7 @@ impl UserClosures {
 
 fn map_buffer<A: hal::Api>(
     raw: &A::Device,
-    buffer: &mut resource::Buffer<A>,
+    buffer: &resource::Buffer<A>,
     offset: BufferAddress,
     size: BufferAddress,
     kind: HostMap,
@@ -166,7 +166,7 @@ fn map_buffer<A: hal::Api>(
             .map_err(DeviceError::from)?
     };
 
-    buffer.sync_mapped_writes = match kind {
+    *buffer.sync_mapped_writes.lock() = match kind {
         HostMap::Read if !mapping.is_coherent => unsafe {
             raw.invalidate_mapped_ranges(
                 &*buffer.raw.as_ref().unwrap(),
@@ -188,8 +188,10 @@ fn map_buffer<A: hal::Api>(
     // we instead just initialize the memory here and make sure it is GPU visible, so this happens at max only once for every buffer region.
     //
     // If this is a write mapping zeroing out the memory here is the only reasonable way as all data is pushed to GPU anyways.
-    let zero_init_needs_flush_now = mapping.is_coherent && buffer.sync_mapped_writes.is_none(); // No need to flush if it is flushed later anyways.
-    for uninitialized_range in buffer.initialization_status.drain(offset..(size + offset)) {
+    let init_status = buffer.initialization_status.read();
+    let zero_init_needs_flush_now =
+        mapping.is_coherent && buffer.sync_mapped_writes.lock().is_none(); // No need to flush if it is flushed later anyways.
+    for uninitialized_range in init_status.drain(offset..(size + offset)) {
         let num_bytes = uninitialized_range.end - uninitialized_range.start;
         unsafe {
             ptr::write_bytes(
@@ -287,14 +289,14 @@ pub struct Device<A: HalApi> {
     life_tracker: Mutex<life::LifetimeTracker<A>>,
     /// Temporary storage for resource management functions. Cleared at the end
     /// of every call (unless an error occurs).
-    temp_suspected: life::SuspectedResources,
+    temp_suspected: Mutex<life::SuspectedResources>,
     pub(crate) alignments: hal::Alignments,
     pub(crate) limits: wgt::Limits,
     pub(crate) features: wgt::Features,
     pub(crate) downlevel: wgt::DownlevelCapabilities,
     //TODO: move this behind another mutex. This would allow several methods to switch
     // to borrow Device immutably, such as `write_buffer`, `write_texture`, and `buffer_unmap`.
-    pending_writes: queue::PendingWrites<A>,
+    pending_writes: Mutex<queue::PendingWrites<A>>,
     #[cfg(feature = "trace")]
     pub(crate) trace: Option<Mutex<trace::Trace>>,
 }
@@ -396,7 +398,7 @@ impl<A: HalApi> Device<A> {
             fence,
             trackers: Mutex::new(Tracker::new()),
             life_tracker: Mutex::new(life::LifetimeTracker::new()),
-            temp_suspected: life::SuspectedResources::default(),
+            temp_suspected: Mutex::new(life::SuspectedResources::default()),
             #[cfg(feature = "trace")]
             trace: trace_path.and_then(|path| match trace::Trace::new(path) {
                 Ok(mut trace) => {
@@ -415,7 +417,7 @@ impl<A: HalApi> Device<A> {
             limits: desc.limits.clone(),
             features: desc.features,
             downlevel,
-            pending_writes,
+            pending_writes: Mutex::new(pending_writes),
         })
     }
 
@@ -451,7 +453,7 @@ impl<A: HalApi> Device<A> {
         // `temp_suspected`.
         life_tracker
             .suspected_resources
-            .extend(&self.temp_suspected);
+            .extend(&self.temp_suspected.lock());
 
         life_tracker.triage_suspected(
             hub,
@@ -497,61 +499,61 @@ impl<A: HalApi> Device<A> {
     }
 
     fn untrack<'this, 'token: 'this, G: GlobalIdentityHandlerFactory>(
-        &'this mut self,
+        &'this self,
         hub: &Hub<A, G>,
         trackers: &Tracker<A>,
     ) {
-        self.temp_suspected.clear();
+        // We go through the temp_suspected which is much less hot lock than lock_life
+        let temp_suspected = self.temp_suspected.lock();
+        temp_suspected.clear();
         // As the tracker is cleared/dropped, we need to consider all the resources
         // that it references for destruction in the next GC pass.
         {
             for id in trackers.buffers.used() {
                 if hub.buffers[id].life_guard.ref_count.is_none() {
-                    self.temp_suspected.buffers.push(id);
+                    temp_suspected.buffers.push(id);
                 }
             }
             for id in trackers.textures.used() {
                 if hub.textures[id].life_guard.ref_count.is_none() {
-                    self.temp_suspected.textures.push(id);
+                    temp_suspected.textures.push(id);
                 }
             }
             for id in trackers.views.used() {
                 if hub.texture_views[id].life_guard.ref_count.is_none() {
-                    self.temp_suspected.texture_views.push(id);
+                    temp_suspected.texture_views.push(id);
                 }
             }
             for id in trackers.bind_groups.used() {
                 if hub.bind_groups[id].life_guard.ref_count.is_none() {
-                    self.temp_suspected.bind_groups.push(id);
+                    temp_suspected.bind_groups.push(id);
                 }
             }
             for id in trackers.samplers.used() {
                 if hub.samplers[id].life_guard.ref_count.is_none() {
-                    self.temp_suspected.samplers.push(id);
+                    temp_suspected.samplers.push(id);
                 }
             }
             for id in trackers.compute_pipelines.used() {
                 if hub.compute_pipelines[id].life_guard.ref_count.is_none() {
-                    self.temp_suspected.compute_pipelines.push(id);
+                    temp_suspected.compute_pipelines.push(id);
                 }
             }
             for id in trackers.render_pipelines.used() {
                 if hub.render_pipelines[id].life_guard.ref_count.is_none() {
-                    self.temp_suspected.render_pipelines.push(id);
+                    temp_suspected.render_pipelines.push(id);
                 }
             }
             for id in trackers.query_sets.used() {
                 if hub.query_sets[id].life_guard.ref_count.is_none() {
-                    self.temp_suspected.query_sets.push(id);
+                    temp_suspected.query_sets.push(id);
                 }
             }
         }
 
-        self.lock_life()
-            .suspected_resources
-            .extend(&self.temp_suspected);
+        self.lock_life().suspected_resources.extend(&temp_suspected);
 
-        self.temp_suspected.clear();
+        temp_suspected.clear();
     }
 
     fn create_buffer(
@@ -615,8 +617,8 @@ impl<A: HalApi> Device<A> {
             },
             usage: desc.usage,
             size: desc.size,
-            initialization_status: BufferInitTracker::new(desc.size),
-            sync_mapped_writes: None,
+            initialization_status: RwLock::new(BufferInitTracker::new(desc.size)),
+            sync_mapped_writes: Mutex::new(None),
             map_state: resource::BufferMapState::Idle,
             life_guard: LifeGuard::new(desc.label.borrow_or_default()),
         })
@@ -644,10 +646,10 @@ impl<A: HalApi> Device<A> {
             desc: desc.map_label(|_| ()),
             hal_usage,
             format_features,
-            initialization_status: TextureInitTracker::new(
+            initialization_status: RwLock::new(TextureInitTracker::new(
                 desc.mip_level_count,
                 desc.array_layer_count(),
-            ),
+            )),
             full_range: TextureSelector {
                 mips: 0..desc.mip_level_count,
                 layers: 0..desc.array_layer_count(),
@@ -1582,7 +1584,7 @@ impl<A: HalApi> Device<A> {
         }
 
         assert_eq!(bb.offset % wgt::COPY_BUFFER_ALIGNMENT, 0);
-        used_buffer_ranges.extend(buffer.initialization_status.create_action(
+        used_buffer_ranges.extend(buffer.initialization_status.write().create_action(
             bb.buffer_id,
             bb.offset..bb.offset + bind_size,
             MemoryInitKind::NeedsInitializedMemory,
@@ -2877,7 +2879,7 @@ impl<A: HalApi> Device<A> {
 
     /// Wait for idle and remove resources that we can, before we die.
     pub(crate) fn prepare_to_die(&mut self) {
-        self.pending_writes.deactivate();
+        self.pending_writes.get_mut().deactivate();
         let mut life_tracker = self.life_tracker.lock();
         let current_index = self.active_submission_index;
         if let Err(error) = unsafe { self.raw.wait(&self.fence, current_index, CLEANUP_WAIT_MS) } {
@@ -2892,7 +2894,7 @@ impl<A: HalApi> Device<A> {
     }
 
     pub(crate) fn dispose(self) {
-        self.pending_writes.dispose(&self.raw);
+        self.pending_writes.into_inner().dispose(&self.raw);
         self.command_allocator.into_inner().dispose(&self.raw);
         unsafe {
             self.raw.destroy_buffer(self.zero_buffer);
@@ -3137,8 +3139,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 // Zero initialize memory and then mark both staging and buffer as initialized
                 // (it's guaranteed that this is the case by the time the buffer is usable)
                 unsafe { ptr::write_bytes(mapping.ptr.as_ptr(), 0, buffer.size as usize) };
-                buffer.initialization_status.drain(0..buffer.size);
-                stage.initialization_status.drain(0..buffer.size);
+                buffer.initialization_status.get_mut().drain(0..buffer.size);
+                stage.initialization_status.get_mut().drain(0..buffer.size);
 
                 buffer.map_state = resource::BufferMapState::Init {
                     ptr: mapping.ptr,
@@ -3334,8 +3336,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let hub = A::hub(self);
 
-        //TODO: lock pending writes separately, keep the device read-only
-
         log::info!("Buffer {:?} is destroyed", buffer_id);
         let buffer = hub
             .buffers
@@ -3355,9 +3355,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .ok_or(resource::DestroyError::AlreadyDestroyed)?;
         let temp = queue::TempResource::Buffer(raw);
 
-        if device.pending_writes.dst_buffers.contains(&buffer_id) {
-            device.pending_writes.temp_resources.push(temp);
+        let pending_writes = device.pending_writes.lock();
+        if pending_writes.dst_buffers.contains(&buffer_id) {
+            pending_writes.temp_resources.push(temp);
+            drop(pending_writes);
         } else {
+            drop(pending_writes);
             let last_submit_index = buffer.life_guard.life_count();
             device
                 .lock_life()
@@ -3382,15 +3385,20 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let device = &hub.devices[device_id];
         {
-            let mut life_lock = device.lock_life();
-            if device.pending_writes.dst_buffers.contains(&buffer_id) {
-                life_lock.future_suspected_buffers.push(Stored {
+            if device
+                .pending_writes
+                .lock()
+                .dst_buffers
+                .contains(&buffer_id)
+            {
+                device.lock_life().future_suspected_buffers.push(Stored {
                     value: id::Valid(buffer_id),
                     ref_count,
                 });
             } else {
                 drop(ref_count);
-                life_lock
+                device
+                    .lock_life()
                     .suspected_resources
                     .buffers
                     .push(id::Valid(buffer_id));
@@ -3504,7 +3512,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 texture.hal_usage |= hal::TextureUses::COPY_DST;
             }
 
-            texture.initialization_status = TextureInitTracker::new(desc.mip_level_count, 0);
+            *texture.initialization_status.get_mut() =
+                TextureInitTracker::new(desc.mip_level_count, 0);
 
             let ref_count = texture.life_guard.add_ref();
 
@@ -3563,9 +3572,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 let raw = raw.take().ok_or(resource::DestroyError::AlreadyDestroyed)?;
                 let temp = queue::TempResource::Texture(raw, clear_views);
 
-                if device.pending_writes.dst_textures.contains(&texture_id) {
-                    device.pending_writes.temp_resources.push(temp);
+                let pending_writes = device.pending_writes.lock();
+                if pending_writes.dst_textures.contains(&texture_id) {
+                    pending_writes.temp_resources.push(temp);
+                    drop(pending_writes);
                 } else {
+                    drop(pending_writes);
                     device
                         .lock_life()
                         .schedule_resource_destruction(temp, last_submit_index);
@@ -3599,15 +3611,20 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let device = &hub.devices[device_id];
         {
-            let mut life_lock = device.lock_life();
-            if device.pending_writes.dst_textures.contains(&texture_id) {
-                life_lock.future_suspected_textures.push(Stored {
+            if device
+                .pending_writes
+                .lock()
+                .dst_textures
+                .contains(&texture_id)
+            {
+                device.lock_life().future_suspected_textures.push(Stored {
                     value: id::Valid(texture_id),
                     ref_count,
                 });
             } else {
                 drop(ref_count);
-                life_lock
+                device
+                    .lock_life()
                     .suspected_resources
                     .textures
                     .push(id::Valid(texture_id));
@@ -4167,7 +4184,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 &desc.label,
             );
 
-            let id = fid.assign(command_buffer);
+            let id = fid.assign(Mutex::new(command_buffer));
             return (id.0, None);
         };
 
@@ -4186,9 +4203,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let hub = A::hub(self);
 
         let cmdbuf = unsafe { hub.command_buffers.unregister(command_encoder_id) };
-        if let Ok(cmdbuf) = cmdbuf {
-            let device = &hub.devices[cmdbuf.device_id.value];
-            device.untrack::<G>(hub, &cmdbuf.trackers);
+        if let Ok(cmd_buf_mutex) = cmdbuf {
+            let cmd_buf = cmd_buf_mutex.into_inner();
+            let device = &hub.devices[cmd_buf.device_id.value];
+            device.untrack::<G>(hub, &cmd_buf.trackers);
         }
     }
 
@@ -4917,7 +4935,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 // need to wait for submissions or triage them. We know we were
                 // just polled, so `life_tracker.free_resources` is empty.
                 debug_assert!(device.lock_life().queue_empty());
-                device.pending_writes.deactivate();
+                device.pending_writes.get_mut().deactivate();
 
                 // Adapter is only referenced by the device and itself.
                 // This isn't a robust way to destroy them, we should find a better one.
@@ -5122,7 +5140,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     buffer: &*raw_buf,
                     usage: hal::BufferUses::empty()..hal::BufferUses::COPY_DST,
                 };
-                let encoder = device.pending_writes.activate();
+                let pending_writes = device.pending_writes.lock();
+                let encoder = pending_writes.activate();
                 unsafe {
                     encoder.transition_buffers(
                         iter::once(transition_src).chain(iter::once(transition_dst)),
@@ -5131,10 +5150,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         encoder.copy_buffer_to_buffer(&stage_buffer, &*raw_buf, region.into_iter());
                     }
                 }
-                device
-                    .pending_writes
-                    .consume_temp(queue::TempResource::Buffer(stage_buffer));
-                device.pending_writes.dst_buffers.insert(buffer_id);
+                pending_writes.consume_temp(queue::TempResource::Buffer(stage_buffer));
+                pending_writes.dst_buffers.insert(buffer_id);
             }
             resource::BufferMapState::Idle => {
                 return Err(resource::BufferAccessError::NotMapped);

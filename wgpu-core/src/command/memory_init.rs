@@ -61,7 +61,7 @@ impl CommandBufferTextureMemoryActions {
         // We don't need to add MemoryInitKind::NeedsInitializedMemory to init_actions if a surface is part of the discard list.
         // But that would mean splitting up the action which is more than we'd win here.
         self.init_actions.extend(match textures.get(action.id) {
-            Ok(texture) => texture.initialization_status.check_action(action),
+            Ok(texture) => texture.initialization_status.read().check_action(action),
             Err(_) => return immediately_necessary_clears, // texture no longer exists
         });
 
@@ -171,6 +171,7 @@ impl<A: HalApi> BakedCommands<A> {
             };
             let uninitialized_ranges = buffer
                 .initialization_status
+                .write()
                 .drain(buffer_use.range.start..end);
 
             match buffer_use.kind {
@@ -249,8 +250,8 @@ impl<A: HalApi> BakedCommands<A> {
                 .map_err(|_| DestroyedTextureError(texture_use.id))?;
 
             let use_range = texture_use.range;
-            let affected_mip_trackers = texture
-                .initialization_status
+            let status = texture.initialization_status.write();
+            let affected_mip_trackers = status
                 .mips
                 .iter_mut()
                 .enumerate()
@@ -297,6 +298,7 @@ impl<A: HalApi> BakedCommands<A> {
                 .map_err(|_| DestroyedTextureError(surface_discard.texture))?;
             texture
                 .initialization_status
+                .write()
                 .discard(surface_discard.mip_level, surface_discard.layer);
         }
 

@@ -143,7 +143,8 @@ impl<A: hub::HalApi, T: hub::Resource> StatelessTracker<A, T> {
 
         unsafe {
             *self.metadata.epochs.get_unchecked_mut(index) = epoch;
-            *self.metadata.ref_counts.get_unchecked_mut(index) = Some(item.life_guard().unwrap().add_ref());
+            *self.metadata.ref_counts.get_unchecked_mut(index) =
+                Some(item.life_guard().unwrap().add_ref());
             self.metadata.owned.set(index, true);
         }
 

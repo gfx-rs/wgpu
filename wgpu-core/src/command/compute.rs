@@ -312,7 +312,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         // Spell out the type, to placate rust-analyzer.
         // https://github.com/rust-lang/rust-analyzer/issues/12247
         let cmd_buf: &mut CommandBuffer<A> =
-            CommandBuffer::get_encoder_mut(&hub.command_buffers, encoder_id)
+            &mut *CommandBuffer::get_encoder_mut(&hub.command_buffers, encoder_id)
                 .map_pass_err(init_scope)?;
         // will be reset to true if recording is done without errors
         cmd_buf.status = CommandEncoderStatus::Error;
@@ -396,7 +396,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     cmd_buf.buffer_memory_init_actions.extend(
                         bind_group.used_buffer_ranges.iter().filter_map(|action| {
                             match hub.buffers.get(action.id) {
-                                Ok(buffer) => buffer.initialization_status.check_action(action),
+                                Ok(buffer) => {
+                                    buffer.initialization_status.read().check_action(action)
+                                }
                                 Err(_) => None,
                             }
                         }),
@@ -618,7 +620,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     let stride = 3 * 4; // 3 integers, x/y/z group size
 
                     cmd_buf.buffer_memory_init_actions.extend(
-                        indirect_buffer.initialization_status.create_action(
+                        indirect_buffer.initialization_status.write().create_action(
                             buffer_id,
                             offset..(offset + stride),
                             MemoryInitKind::NeedsInitializedMemory,

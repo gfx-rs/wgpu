@@ -282,7 +282,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     ) -> Result<(), QueryError> {
         let hub = A::hub(self);
 
-        let cmd_buf = CommandBuffer::get_encoder_mut(&hub.command_buffers, command_encoder_id)?;
+        let cmd_buf =
+            &mut *CommandBuffer::get_encoder_mut(&hub.command_buffers, command_encoder_id)?;
         let raw_encoder = cmd_buf.encoder.open();
 
         #[cfg(feature = "trace")]
@@ -315,7 +316,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     ) -> Result<(), QueryError> {
         let hub = A::hub(self);
 
-        let cmd_buf = CommandBuffer::get_encoder_mut(&hub.command_buffers, command_encoder_id)?;
+        let cmd_buf =
+            &mut *CommandBuffer::get_encoder_mut(&hub.command_buffers, command_encoder_id)?;
         let raw_encoder = cmd_buf.encoder.open();
 
         #[cfg(feature = "trace")]
@@ -383,13 +385,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .into());
         }
 
-        cmd_buf
-            .buffer_memory_init_actions
-            .extend(dst_buffer.initialization_status.create_action(
+        cmd_buf.buffer_memory_init_actions.extend(
+            dst_buffer.initialization_status.write().create_action(
                 destination,
                 buffer_start_offset..buffer_end_offset,
                 MemoryInitKind::ImplicitlyInitialized,
-            ));
+            ),
+        );
 
         unsafe {
             raw_encoder.transition_buffers(dst_barrier.into_iter());

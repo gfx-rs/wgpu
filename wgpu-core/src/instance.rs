@@ -109,7 +109,10 @@ impl Instance {
         ) {
             unsafe {
                 if let Some(suf) = surface {
-                    instance.as_ref().unwrap().destroy_surface(suf.raw.into_inner());
+                    instance
+                        .as_ref()
+                        .unwrap()
+                        .destroy_surface(suf.raw.into_inner());
                 }
             }
         }
@@ -488,7 +491,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 raw: {
                     // we don't want to link to metal-rs for this
                     #[allow(clippy::transmute_ptr_to_ref)]
-                    Mutex::new(inst.create_surface_from_layer(unsafe { std::mem::transmute(layer) }))
+                    Mutex::new(
+                        inst.create_surface_from_layer(unsafe { std::mem::transmute(layer) }),
+                    )
                 },
                 //acquired_texture: None,
             }),
@@ -640,7 +645,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     if let Some(surface) = compatible_surface {
                         let suf_raw = &A::get_surface(surface).raw;
                         adapters.retain(|exposed| unsafe {
-                            exposed.adapter.surface_capabilities(&suf_raw.lock()).is_some()
+                            exposed
+                                .adapter
+                                .surface_capabilities(&suf_raw.lock())
+                                .is_some()
                         });
                     }
                     device_types.extend(adapters.iter().map(|ad| ad.info.device_type));

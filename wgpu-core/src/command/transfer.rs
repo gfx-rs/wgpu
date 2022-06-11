@@ -501,7 +501,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
         let hub = A::hub(self);
 
-        let cmd_buf = CommandBuffer::get_encoder_mut(&hub.command_buffers, command_encoder_id)?;
+        let cmd_buf =
+            &mut *CommandBuffer::get_encoder_mut(&hub.command_buffers, command_encoder_id)?;
 
         #[cfg(feature = "trace")]
         if let Some(ref mut list) = cmd_buf.commands {
@@ -580,20 +581,20 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         // Make sure source is initialized memory and mark dest as initialized.
-        cmd_buf
-            .buffer_memory_init_actions
-            .extend(dst_buffer.initialization_status.create_action(
+        cmd_buf.buffer_memory_init_actions.extend(
+            dst_buffer.initialization_status.write().create_action(
                 destination,
                 destination_offset..(destination_offset + size),
                 MemoryInitKind::ImplicitlyInitialized,
-            ));
-        cmd_buf
-            .buffer_memory_init_actions
-            .extend(src_buffer.initialization_status.create_action(
+            ),
+        );
+        cmd_buf.buffer_memory_init_actions.extend(
+            src_buffer.initialization_status.write().create_action(
                 source,
                 source_offset..(source_offset + size),
                 MemoryInitKind::NeedsInitializedMemory,
-            ));
+            ),
+        );
 
         let region = hal::BufferCopy {
             src_offset: source_offset,
@@ -619,7 +620,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let hub = A::hub(self);
 
-        let cmd_buf = CommandBuffer::get_encoder_mut(&hub.command_buffers, command_encoder_id)?;
+        let cmd_buf =
+            &mut *CommandBuffer::get_encoder_mut(&hub.command_buffers, command_encoder_id)?;
 
         let device = &hub.devices[cmd_buf.device_id.value];
 
@@ -701,13 +703,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             );
         }
 
-        cmd_buf
-            .buffer_memory_init_actions
-            .extend(src_buffer.initialization_status.create_action(
+        cmd_buf.buffer_memory_init_actions.extend(
+            src_buffer.initialization_status.write().create_action(
                 source.buffer,
                 source.layout.offset..(source.layout.offset + required_buffer_bytes_in_copy),
                 MemoryInitKind::NeedsInitializedMemory,
-            ));
+            ),
+        );
 
         let regions = (0..array_layer_count).map(|rel_array_layer| {
             let mut texture_base = dst_base.clone();
@@ -741,7 +743,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let hub = A::hub(self);
 
-        let cmd_buf = CommandBuffer::get_encoder_mut(&hub.command_buffers, command_encoder_id)?;
+        let cmd_buf =
+            &mut *CommandBuffer::get_encoder_mut(&hub.command_buffers, command_encoder_id)?;
 
         let device = &hub.devices[cmd_buf.device_id.value];
 
@@ -830,14 +833,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .into());
         }
 
-        cmd_buf
-            .buffer_memory_init_actions
-            .extend(dst_buffer.initialization_status.create_action(
+        cmd_buf.buffer_memory_init_actions.extend(
+            dst_buffer.initialization_status.write().create_action(
                 destination.buffer,
                 destination.layout.offset
                     ..(destination.layout.offset + required_buffer_bytes_in_copy),
                 MemoryInitKind::ImplicitlyInitialized,
-            ));
+            ),
+        );
 
         let regions = (0..array_layer_count).map(|rel_array_layer| {
             let mut texture_base = src_base.clone();
@@ -875,7 +878,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let hub = A::hub(self);
 
-        let cmd_buf = CommandBuffer::get_encoder_mut(&hub.command_buffers, command_encoder_id)?;
+        let mut cmd_buf = CommandBuffer::get_encoder_mut(&hub.command_buffers, command_encoder_id)?;
 
         let device = &hub.devices[cmd_buf.device_id.value];
 
@@ -902,8 +905,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         // Handle texture init *before* dealing with barrier transitions so we have an easier time inserting "immediate-inits" that may be required by prior discards in rare cases.
-        handle_src_texture_init(cmd_buf, device, source, copy_size, &hub.textures)?;
-        handle_dst_texture_init(cmd_buf, device, destination, copy_size, &hub.textures)?;
+        handle_src_texture_init(&mut cmd_buf, device, source, copy_size, &hub.textures)?;
+        handle_dst_texture_init(&mut cmd_buf, device, destination, copy_size, &hub.textures)?;
 
         let (src_texture, src_pending) = cmd_buf
             .trackers

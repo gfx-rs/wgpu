@@ -128,7 +128,10 @@ impl StorageReport {
 #[derive(Clone, Debug, Error)]
 pub(crate) enum InvalidId {
     #[error("Resource {index} is in the error state because {error}. This happens when resource creation fails with an error and the ID is re-used.")]
-    ResourceInError { index: u32, error: Cow<'static, str> },
+    ResourceInError {
+        index: u32,
+        error: Cow<'static, str>,
+    },
     #[error("Resource {index} has been destroyed. The storage is currently empty.")]
     Vacant { index: u32 },
     #[error("Resource {index} has been destroyed. The storage is currently storing a new resource with epoch {new} (given epoch {old}).")]
@@ -272,7 +275,7 @@ pub struct Hub<A: HalApi, F: GlobalIdentityHandlerFactory> {
     pub shader_modules: registry::Registry<A, ShaderModule<A>>,
     pub bind_group_layouts: registry::Registry<A, BindGroupLayout<A>>,
     pub bind_groups: registry::Registry<A, BindGroup<A>>,
-    pub command_buffers: registry::Registry<A, CommandBuffer<A>>,
+    pub command_buffers: registry::Registry<A, Mutex<CommandBuffer<A>>>,
     pub render_bundles: registry::Registry<A, RenderBundle<A>>,
     pub render_pipelines: registry::Registry<A, RenderPipeline<A>>,
     pub compute_pipelines: registry::Registry<A, ComputePipeline<A>>,
@@ -322,7 +325,8 @@ impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<A, F> {
         }
 
         // destroy command buffers first, since otherwise DX12 isn't happy
-        for command_buffer in self.command_buffers.remove_all() {
+        for command_buffer_mutex in self.command_buffers.remove_all() {
+            let command_buffer = command_buffer_mutex.into_inner();
             let device = &self.devices[command_buffer.device_id.value];
             device.destroy_command_buffer(command_buffer);
         }

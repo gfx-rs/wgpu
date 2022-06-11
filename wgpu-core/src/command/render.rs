@@ -1053,7 +1053,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         // Spell out the type, to placate rust-analyzer.
         // https://github.com/rust-lang/rust-analyzer/issues/12247
         let cmd_buf: &mut CommandBuffer<A> =
-            CommandBuffer::get_encoder_mut(&hub.command_buffers, encoder_id)
+            &mut *CommandBuffer::get_encoder_mut(&hub.command_buffers, encoder_id)
                 .map_pass_err(init_scope)?;
         // close everything while the new command encoder is filled
         cmd_buf.encoder.close();
@@ -1165,7 +1165,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     cmd_buf.buffer_memory_init_actions.extend(
                         bind_group.used_buffer_ranges.iter().filter_map(|action| {
                             match hub.buffers.get(action.id) {
-                                Ok(buffer) => buffer.initialization_status.check_action(action),
+                                Ok(buffer) => {
+                                    buffer.initialization_status.read().check_action(action)
+                                }
                                 Err(_) => None,
                             }
                         }),
@@ -1339,7 +1341,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     state.index.update_limit();
 
                     cmd_buf.buffer_memory_init_actions.extend(
-                        buffer.initialization_status.create_action(
+                        buffer.initialization_status.write().create_action(
                             buffer_id,
                             offset..end,
                             MemoryInitKind::NeedsInitializedMemory,
@@ -1388,7 +1390,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     vertex_state.bound = true;
 
                     cmd_buf.buffer_memory_init_actions.extend(
-                        buffer.initialization_status.create_action(
+                        buffer.initialization_status.write().create_action(
                             buffer_id,
                             offset..(offset + vertex_state.total_size),
                             MemoryInitKind::NeedsInitializedMemory,
@@ -1646,7 +1648,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     }
 
                     cmd_buf.buffer_memory_init_actions.extend(
-                        indirect_buffer.initialization_status.create_action(
+                        indirect_buffer.initialization_status.write().create_action(
                             buffer_id,
                             offset..end_offset,
                             MemoryInitKind::NeedsInitializedMemory,
@@ -1726,7 +1728,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .map_pass_err(scope);
                     }
                     cmd_buf.buffer_memory_init_actions.extend(
-                        indirect_buffer.initialization_status.create_action(
+                        indirect_buffer.initialization_status.write().create_action(
                             buffer_id,
                             offset..end_offset,
                             MemoryInitKind::NeedsInitializedMemory,
@@ -1744,7 +1746,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .map_pass_err(scope);
                     }
                     cmd_buf.buffer_memory_init_actions.extend(
-                        count_buffer.initialization_status.create_action(
+                        count_buffer.initialization_status.write().create_action(
                             count_buffer_id,
                             count_buffer_offset..end_count_offset,
                             MemoryInitKind::NeedsInitializedMemory,
@@ -1879,7 +1881,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .buffer_memory_init_actions
                             .iter()
                             .filter_map(|action| match hub.buffers.get(action.id) {
-                                Ok(buffer) => buffer.initialization_status.check_action(action),
+                                Ok(buffer) => {
+                                    buffer.initialization_status.read().check_action(action)
+                                }
                                 Err(_) => None,
                             }),
                     );
@@ -1953,7 +1957,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             super::CommandBuffer::insert_barriers_from_scope(
                 transit,
                 &mut cmd_buf.trackers,
-                &info.usage_scope,
+                &trackers,
                 &hub.buffers,
                 &hub.textures,
             );

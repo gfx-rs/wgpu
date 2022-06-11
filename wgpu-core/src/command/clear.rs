@@ -76,8 +76,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("CommandEncoder::fill_buffer");
 
         let hub = A::hub(self);
-        let cmd_buf = CommandBuffer::get_encoder_mut(&hub.command_buffers, command_encoder_id)
-            .map_err(|_| ClearError::InvalidCommandEncoder(command_encoder_id))?;
+        let cmd_buf =
+            &mut *CommandBuffer::get_encoder_mut(&hub.command_buffers, command_encoder_id)
+                .map_err(|_| ClearError::InvalidCommandEncoder(command_encoder_id))?;
 
         #[cfg(feature = "trace")]
         if let Some(ref mut list) = cmd_buf.commands {
@@ -125,13 +126,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         // Mark dest as initialized.
-        cmd_buf
-            .buffer_memory_init_actions
-            .extend(dst_buffer.initialization_status.create_action(
+        cmd_buf.buffer_memory_init_actions.extend(
+            dst_buffer.initialization_status.write().create_action(
                 dst,
                 offset..end,
                 MemoryInitKind::ImplicitlyInitialized,
-            ));
+            ),
+        );
         // actual hal barrier & operation
         let dst_barrier = dst_pending.map(|pending| pending.into_hal(dst_buffer));
         let cmd_buf_raw = cmd_buf.encoder.open();
@@ -151,8 +152,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("CommandEncoder::clear_texture");
 
         let hub = A::hub(self);
-        let cmd_buf = CommandBuffer::get_encoder_mut(&hub.command_buffers, command_encoder_id)
-            .map_err(|_| ClearError::InvalidCommandEncoder(command_encoder_id))?;
+        let cmd_buf =
+            &mut *CommandBuffer::get_encoder_mut(&hub.command_buffers, command_encoder_id)
+                .map_err(|_| ClearError::InvalidCommandEncoder(command_encoder_id))?;
 
         #[cfg(feature = "trace")]
         if let Some(ref mut list) = cmd_buf.commands {
