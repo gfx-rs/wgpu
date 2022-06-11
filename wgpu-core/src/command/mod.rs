@@ -287,6 +287,10 @@ pub struct BasePass<C> {
     /// instruction consumes the next `len` bytes from this vector.
     pub string_data: Vec<u8>,
 
+    /// Data used by `SetPushConstant` instructions.
+    ///
+    /// See the documentation for [`RenderCommand::SetPushConstant`]
+    /// and [`ComputeCommand::SetPushConstant`] for details.
     pub push_constant_data: Vec<u32>,
 }
 
