@@ -6,4 +6,5 @@ void main()
     float b = radians(1.0);
     float4 c = degrees(v);
     float4 d = radians(v);
+    int const_dot = dot(int2(0, 0), int2(0, 0));
 }

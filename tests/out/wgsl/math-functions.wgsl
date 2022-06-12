@@ -5,4 +5,5 @@ fn main() {
     let b = radians(1.0);
     let c = degrees(v);
     let d = radians(v);
+    let const_dot = dot(vec2<i32>(0, 0), vec2<i32>(0, 0));
 }

@@ -4,6 +4,7 @@
 
 using metal::uint;
 
+constant metal::int2 const_type = {0, 0};
 
 vertex void main_(
 ) {
@@ -12,4 +13,5 @@ vertex void main_(
     float b = ((1.0) * 0.017453292519943295474);
     metal::float4 c = ((v) * 57.295779513082322865);
     metal::float4 d = ((v) * 0.017453292519943295474);
+    int const_dot = ( + const_type.x * const_type.x + const_type.y * const_type.y);
 }

@@ -10,5 +10,6 @@ void main() {
     float b = radians(1.0);
     vec4 c = degrees(v);
     vec4 d = radians(v);
+    int const_dot = ( + ivec2(0, 0).x * ivec2(0, 0).x + ivec2(0, 0).y * ivec2(0, 0).y);
 }
 

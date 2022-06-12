@@ -1,25 +1,38 @@
 ; SPIR-V
 ; Version: 1.1
 ; Generator: rspirv
-; Bound: 16
+; Bound: 29
 OpCapability Shader
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
-OpEntryPoint Vertex %7 "main"
+OpEntryPoint Vertex %11 "main"
 %2 = OpTypeVoid
 %4 = OpTypeFloat 32
 %3 = OpConstant  %4  1.0
 %5 = OpConstant  %4  0.0
-%8 = OpTypeFunction %2
-%10 = OpTypeVector %4 4
-%7 = OpFunction  %2  None %8
-%6 = OpLabel
-OpBranch %9
-%9 = OpLabel
-%11 = OpCompositeConstruct  %10  %5 %5 %5 %5
-%12 = OpExtInst  %4  %1 Degrees %3
-%13 = OpExtInst  %4  %1 Radians %3
-%14 = OpExtInst  %10  %1 Degrees %11
-%15 = OpExtInst  %10  %1 Radians %11
+%7 = OpTypeInt 32 1
+%6 = OpConstant  %7  0
+%8 = OpTypeVector %7 2
+%9 = OpConstantComposite  %8  %6 %6
+%12 = OpTypeFunction %2
+%14 = OpTypeVector %4 4
+%21 = OpConstantNull  %7
+%11 = OpFunction  %2  None %12
+%10 = OpLabel
+OpBranch %13
+%13 = OpLabel
+%15 = OpCompositeConstruct  %14  %5 %5 %5 %5
+%16 = OpExtInst  %4  %1 Degrees %3
+%17 = OpExtInst  %4  %1 Radians %3
+%18 = OpExtInst  %14  %1 Degrees %15
+%19 = OpExtInst  %14  %1 Radians %15
+%22 = OpCompositeExtract  %7  %9 0
+%23 = OpCompositeExtract  %7  %9 0
+%24 = OpIMul  %7  %22 %23
+%25 = OpIAdd  %7  %21 %24
+%26 = OpCompositeExtract  %7  %9 1
+%27 = OpCompositeExtract  %7  %9 1
+%28 = OpIMul  %7  %26 %27
+%20 = OpIAdd  %7  %25 %28
 OpReturn
 OpFunctionEnd
