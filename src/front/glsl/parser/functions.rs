@@ -276,14 +276,26 @@ impl<'source> ParsingContext<'source> {
 
                 meta.subsume(end_meta);
 
-                // GLSL allows the last case to not have any `break` statement,
-                // this would mark it as fall trough but naga's IR requires that
-                // the last case must not be fall trough, so we mark need to mark
-                // the last case as not fall trough always.
-                //
                 // NOTE: do not unwrap here since a switch statement isn't required
                 // to have any cases.
                 if let Some(case) = cases.last_mut() {
+                    // GLSL requires that the last case not be empty, so we check
+                    // that here and produce an error otherwise (fall_trough must
+                    // also be checked because `break`s count as statements but
+                    // they aren't added to the body)
+                    if case.body.is_empty() && case.fall_through {
+                        parser.errors.push(Error {
+                            kind: ErrorKind::SemanticError(
+                                "last case/default label must be followed by statements".into(),
+                            ),
+                            meta,
+                        })
+                    }
+
+                    // GLSL allows the last case to not have any `break` statement,
+                    // this would mark it as fall trough but naga's IR requires that
+                    // the last case must not be fall trough, so we mark need to mark
+                    // the last case as not fall trough always.
                     case.fall_through = false;
                 }
 
