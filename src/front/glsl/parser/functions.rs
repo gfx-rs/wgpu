@@ -177,6 +177,8 @@ impl<'source> ParsingContext<'source> {
                 ctx.emit_restart(body);
 
                 let mut cases = Vec::new();
+                // Track if any default case is present in the switch statement.
+                let mut default_present = false;
 
                 self.expect(parser, TokenValue::LeftBrace)?;
                 loop {
@@ -215,6 +217,7 @@ impl<'source> ParsingContext<'source> {
                         }
                         TokenValue::Default => {
                             self.bump(parser)?;
+                            default_present = true;
                             crate::SwitchValue::Default
                         }
                         TokenValue::RightBrace => {
@@ -272,6 +275,28 @@ impl<'source> ParsingContext<'source> {
                 }
 
                 meta.subsume(end_meta);
+
+                // GLSL allows the last case to not have any `break` statement,
+                // this would mark it as fall trough but naga's IR requires that
+                // the last case must not be fall trough, so we mark need to mark
+                // the last case as not fall trough always.
+                //
+                // NOTE: do not unwrap here since a switch statement isn't required
+                // to have any cases.
+                if let Some(case) = cases.last_mut() {
+                    case.fall_through = false;
+                }
+
+                // Add an empty default case in case non was present, this is needed because
+                // naga's IR requires that all switch statements must have a default case but
+                // GLSL doesn't require that, so we might need to add an empty default case.
+                if !default_present {
+                    cases.push(SwitchCase {
+                        value: crate::SwitchValue::Default,
+                        body: Block::new(),
+                        fall_through: false,
+                    })
+                }
 
                 body.push(Statement::Switch { selector, cases }, meta);
 
