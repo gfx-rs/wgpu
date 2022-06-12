@@ -6,4 +6,5 @@ fn main() {
     let c = degrees(v);
     let d = radians(v);
     let const_dot = dot(vec2<i32>(0, 0), vec2<i32>(0, 0));
+    let first_leading_bit_abs = firstLeadingBit(abs(0u));
 }

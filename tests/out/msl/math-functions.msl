@@ -14,4 +14,5 @@ vertex void main_(
     metal::float4 c = ((v) * 57.295779513082322865);
     metal::float4 d = ((v) * 0.017453292519943295474);
     int const_dot = ( + const_type.x * const_type.x + const_type.y * const_type.y);
+    uint first_leading_bit_abs = (((metal::clz(metal::abs(0u)) + 1) % 33) - 1);
 }
