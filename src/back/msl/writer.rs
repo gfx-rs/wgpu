@@ -1223,20 +1223,30 @@ impl<W: Write> Writer<W> {
         arg: Handle<crate::Expression>,
         arg1: Handle<crate::Expression>,
         size: usize,
+        context: &ExpressionContext,
     ) -> BackendResult {
+        // Write parantheses around the dot product expression to prevent operators
+        // with different precedences from applying earlier.
         write!(self.out, "(")?;
 
-        let arg0_name = &self.named_expressions[&arg];
-        let arg1_name = &self.named_expressions[&arg1];
-
-        // This will print an extra '+' at the beginning but that is fine in msl
+        // Cycle trough all the components of the vector
         for index in 0..size {
             let component = back::COMPONENTS[index];
-            write!(
-                self.out,
-                " + {}.{} * {}.{}",
-                arg0_name, component, arg1_name, component
-            )?;
+            // Write the addition to the previous product
+            // This will print an extra '+' at the beginning but that is fine in msl
+            write!(self.out, " + ")?;
+            // Write the first vector expression, this expression is marked to be
+            // cached so unless it can't be cached (for example, it's a Constant)
+            // it shouldn't produce large expressions.
+            self.put_expression(arg, context, true)?;
+            // Access the current component on the first vector
+            write!(self.out, ".{} * ", component)?;
+            // Write the second vector expression, this expression is marked to be
+            // cached so unless it can't be cached (for example, it's a Constant)
+            // it shouldn't produce large expressions.
+            self.put_expression(arg1, context, true)?;
+            // Access the current component on the second vector
+            write!(self.out, ".{}", component)?;
         }
 
         write!(self.out, ")")?;
@@ -1654,7 +1664,7 @@ impl<W: Write> Writer<W> {
                             ..
                         } => "dot",
                         crate::TypeInner::Vector { size, .. } => {
-                            return self.put_dot_product(arg, arg1.unwrap(), size as usize)
+                            return self.put_dot_product(arg, arg1.unwrap(), size as usize, context)
                         }
                         _ => unreachable!(
                             "Correct TypeInner for dot product should be already validated"
