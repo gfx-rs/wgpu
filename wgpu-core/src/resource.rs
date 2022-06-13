@@ -336,8 +336,22 @@ pub enum TextureDimensionError {
         given: u32,
         limit: u32,
     },
-    #[error("sample count {0} is invalid")]
+    #[error("Sample count {0} is invalid")]
     InvalidSampleCount(u32),
+    #[error("Width {width} is not a multiple of {format:?}'s block width ({block_width})")]
+    NotMultipleOfBlockWidth {
+        width: u32,
+        block_width: u32,
+        format: wgt::TextureFormat,
+    },
+    #[error("Height {height} is not a multiple of {format:?}'s block height ({block_height})")]
+    NotMultipleOfBlockHeight {
+        height: u32,
+        block_height: u32,
+        format: wgt::TextureFormat,
+    },
+    #[error("Multisampled texture depth or array layers must be 1, got {0}")]
+    MultisampledDepthOrArrayLayer(u32),
 }
 
 #[derive(Clone, Debug, Error)]
@@ -360,6 +374,12 @@ pub enum CreateTextureError {
     InvalidFormatUsages(wgt::TextureUsages, wgt::TextureFormat),
     #[error("Texture usages {0:?} are not allowed on a texture of dimensions {1:?}")]
     InvalidDimensionUsages(wgt::TextureUsages, wgt::TextureDimension),
+    #[error("Texture usage STORAGE_BINDING is not allowed for multisampled textures")]
+    InvalidMultisampledStorageBinding,
+    #[error("Format {0:?} does not support multisampling")]
+    InvalidMultisampledFormat(wgt::TextureFormat),
+    #[error("Multisampled textures must have RENDER_ATTACHMENT usage")]
+    MultisampledNotRenderAttachment,
     #[error("Texture format {0:?} can't be used due to missing features.")]
     MissingFeatures(wgt::TextureFormat, #[source] MissingFeatures),
 }

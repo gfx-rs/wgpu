@@ -636,10 +636,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8fc3cb4d91f53b50155bdcfd23f6a4c39ae1969c2ae85982b135750cccaf5fce"
 dependencies = [
  "cfg-if 1.0.0",
- "js-sys",
  "libc",
  "wasi 0.9.0+wasi-snapshot-preview1",
- "wasm-bindgen",
 ]
 
 [[package]]
@@ -1052,6 +1050,12 @@ dependencies = [
  "thiserror",
  "unicode-xid",
 ]
+
+[[package]]
+name = "nanorand"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6a51313c5820b0b02bd422f4b44776fbf47961755c74ce64afc73bfad10226c3"
 
 [[package]]
 name = "ndk"
@@ -2061,12 +2065,12 @@ dependencies = [
  "js-sys",
  "log",
  "naga",
+ "nanorand",
  "noise",
  "obj",
  "parking_lot 0.12.0",
  "png",
  "pollster",
- "rand",
  "raw-window-handle",
  "serde",
  "smallvec",
@@ -2099,6 +2103,7 @@ dependencies = [
  "serde",
  "smallvec",
  "thiserror",
+ "web-sys",
  "wgpu-hal",
  "wgpu-types",
 ]

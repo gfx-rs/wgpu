@@ -213,19 +213,39 @@ impl super::Queue {
                 ref range,
             } => match dst.raw {
                 Some(buffer) => {
-                    gl.bind_buffer(glow::COPY_READ_BUFFER, Some(self.zero_buffer));
-                    gl.bind_buffer(dst_target, Some(buffer));
-                    let mut dst_offset = range.start;
-                    while dst_offset < range.end {
-                        let size = (range.end - dst_offset).min(super::ZERO_BUFFER_SIZE as u64);
-                        gl.copy_buffer_sub_data(
-                            glow::COPY_READ_BUFFER,
-                            dst_target,
-                            0,
-                            dst_offset as i32,
-                            size as i32,
-                        );
-                        dst_offset += size;
+                    // When `INDEX_BUFFER_ROLE_CHANGE` isn't available, we can't copy into the
+                    // index buffer from the zero buffer. This would fail in Chrome with the
+                    // following message:
+                    //
+                    // > Cannot copy into an element buffer destination from a non-element buffer
+                    // > source
+                    //
+                    // Instead, we'll upload zeroes into the buffer.
+                    let can_use_zero_buffer = self
+                        .shared
+                        .private_caps
+                        .contains(super::PrivateCapabilities::INDEX_BUFFER_ROLE_CHANGE)
+                        || dst_target != glow::ELEMENT_ARRAY_BUFFER;
+
+                    if can_use_zero_buffer {
+                        gl.bind_buffer(glow::COPY_READ_BUFFER, Some(self.zero_buffer));
+                        gl.bind_buffer(dst_target, Some(buffer));
+                        let mut dst_offset = range.start;
+                        while dst_offset < range.end {
+                            let size = (range.end - dst_offset).min(super::ZERO_BUFFER_SIZE as u64);
+                            gl.copy_buffer_sub_data(
+                                glow::COPY_READ_BUFFER,
+                                dst_target,
+                                0,
+                                dst_offset as i32,
+                                size as i32,
+                            );
+                            dst_offset += size;
+                        }
+                    } else {
+                        gl.bind_buffer(dst_target, Some(buffer));
+                        let zeroes = vec![0u8; (range.end - range.start) as usize];
+                        gl.buffer_sub_data_u8_slice(dst_target, range.start as i32, &zeroes);
                     }
                 }
                 None => {

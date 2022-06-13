@@ -1,6 +1,10 @@
 use std::future::Future;
+#[cfg(target_arch = "wasm32")]
+use std::str::FromStr;
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::{Duration, Instant};
+#[cfg(target_arch = "wasm32")]
+use web_sys::{ImageBitmapRenderingContext, OffscreenCanvas};
 use winit::{
     event::{self, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
@@ -72,6 +76,14 @@ struct Setup {
     adapter: wgpu::Adapter,
     device: wgpu::Device,
     queue: wgpu::Queue,
+    #[cfg(target_arch = "wasm32")]
+    offscreen_canvas_setup: Option<OffscreenCanvasSetup>,
+}
+
+#[cfg(target_arch = "wasm32")]
+struct OffscreenCanvasSetup {
+    offscreen_canvas: OffscreenCanvas,
+    bitmap_renderer: ImageBitmapRenderingContext,
 }
 
 async fn setup<E: Example>(title: &str) -> Setup {
@@ -110,6 +122,39 @@ async fn setup<E: Example>(title: &str) -> Setup {
             .expect("couldn't append canvas to document body");
     }
 
+    #[cfg(target_arch = "wasm32")]
+    let mut offscreen_canvas_setup: Option<OffscreenCanvasSetup> = None;
+    #[cfg(target_arch = "wasm32")]
+    {
+        use wasm_bindgen::JsCast;
+        use winit::platform::web::WindowExtWebSys;
+
+        let query_string = web_sys::window().unwrap().location().search().unwrap();
+        if let Some(offscreen_canvas_param) =
+            parse_url_query_string(&query_string, "offscreen_canvas")
+        {
+            if FromStr::from_str(offscreen_canvas_param) == Ok(true) {
+                log::info!("Creating OffscreenCanvasSetup");
+
+                let offscreen_canvas =
+                    OffscreenCanvas::new(1024, 768).expect("couldn't create OffscreenCanvas");
+
+                let bitmap_renderer = window
+                    .canvas()
+                    .get_context("bitmaprenderer")
+                    .expect("couldn't create ImageBitmapRenderingContext (Result)")
+                    .expect("couldn't create ImageBitmapRenderingContext (Option)")
+                    .dyn_into::<ImageBitmapRenderingContext>()
+                    .expect("couldn't convert into ImageBitmapRenderingContext");
+
+                offscreen_canvas_setup = Some(OffscreenCanvasSetup {
+                    offscreen_canvas,
+                    bitmap_renderer,
+                })
+            }
+        }
+    };
+
     log::info!("Initializing the surface...");
 
     let backend = wgpu::util::backend_bits_from_env().unwrap_or_else(wgpu::Backends::all);
@@ -117,7 +162,20 @@ async fn setup<E: Example>(title: &str) -> Setup {
     let instance = wgpu::Instance::new(backend);
     let (size, surface) = unsafe {
         let size = window.inner_size();
+
+        #[cfg(not(target_arch = "wasm32"))]
         let surface = instance.create_surface(&window);
+        #[cfg(target_arch = "wasm32")]
+        let surface = {
+            if let Some(offscreen_canvas_setup) = &offscreen_canvas_setup {
+                log::info!("Creating surface from OffscreenCanvas");
+                instance
+                    .create_surface_from_offscreen_canvas(&offscreen_canvas_setup.offscreen_canvas)
+            } else {
+                instance.create_surface(&window)
+            }
+        };
+
         (size, surface)
     };
     let adapter =
@@ -180,11 +238,13 @@ async fn setup<E: Example>(title: &str) -> Setup {
         adapter,
         device,
         queue,
+        #[cfg(target_arch = "wasm32")]
+        offscreen_canvas_setup,
     }
 }
 
 fn start<E: Example>(
-    Setup {
+    #[cfg(not(target_arch = "wasm32"))] Setup {
         window,
         event_loop,
         instance,
@@ -193,6 +253,17 @@ fn start<E: Example>(
         adapter,
         device,
         queue,
+    }: Setup,
+    #[cfg(target_arch = "wasm32")] Setup {
+        window,
+        event_loop,
+        instance,
+        size,
+        surface,
+        adapter,
+        device,
+        queue,
+        offscreen_canvas_setup,
     }: Setup,
 ) {
     let spawner = Spawner::new();
@@ -326,6 +397,21 @@ fn start<E: Example>(
                 example.render(&view, &device, &queue, &spawner);
 
                 frame.present();
+
+                #[cfg(target_arch = "wasm32")]
+                {
+                    if let Some(offscreen_canvas_setup) = &offscreen_canvas_setup {
+                        let image_bitmap = offscreen_canvas_setup
+                            .offscreen_canvas
+                            .transfer_to_image_bitmap()
+                            .expect("couldn't transfer offscreen canvas to image bitmap.");
+                        offscreen_canvas_setup
+                            .bitmap_renderer
+                            .transfer_from_image_bitmap(&image_bitmap);
+
+                        log::info!("Transferring OffscreenCanvas to ImageBitmapRenderer");
+                    }
+                }
             }
             _ => {}
         }
@@ -487,6 +573,27 @@ pub fn test<E: Example>(mut params: FrameworkRefTest) {
             );
 
             example.render(&dst_view, &ctx.device, &ctx.queue, &spawner);
+
+            // Handle specific case for bunnymark
+            #[allow(deprecated)]
+            if params.image_path == "/examples/bunnymark/screenshot.png" {
+                // Press spacebar to spawn bunnies
+                example.update(winit::event::WindowEvent::KeyboardInput {
+                    input: winit::event::KeyboardInput {
+                        scancode: 0,
+                        state: winit::event::ElementState::Pressed,
+                        virtual_keycode: Some(winit::event::VirtualKeyCode::Space),
+                        modifiers: winit::event::ModifiersState::empty(),
+                    },
+                    device_id: unsafe { winit::event::DeviceId::dummy() },
+                    is_synthetic: false,
+                });
+
+                // Step 3 extra frames
+                for _ in 0..3 {
+                    example.render(&dst_view, &ctx.device, &ctx.queue, &spawner);
+                }
+            }
 
             let mut cmd_buf = ctx
                 .device

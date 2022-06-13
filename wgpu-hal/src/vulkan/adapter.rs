@@ -360,7 +360,6 @@ impl PhysicalDeviceFeatures {
             | F::ADDRESS_MODE_CLAMP_TO_BORDER
             | F::ADDRESS_MODE_CLAMP_TO_ZERO
             | F::TIMESTAMP_QUERY
-            | F::PIPELINE_STATISTICS_QUERY
             | F::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
             | F::CLEAR_TEXTURE;
         let mut dl_flags = Df::all();
@@ -397,8 +396,10 @@ impl PhysicalDeviceFeatures {
             F::TEXTURE_COMPRESSION_BC,
             self.core.texture_compression_bc != 0,
         );
-        //if self.core.occlusion_query_precise != 0 {
-        //if self.core.pipeline_statistics_query != 0 { //TODO
+        features.set(
+            F::PIPELINE_STATISTICS_QUERY,
+            self.core.pipeline_statistics_query != 0,
+        );
         features.set(
             F::VERTEX_WRITABLE_STORAGE,
             self.core.vertex_pipeline_stores_and_atomics != 0,
@@ -607,7 +608,11 @@ unsafe impl Send for PhysicalDeviceCapabilities {}
 unsafe impl Sync for PhysicalDeviceCapabilities {}
 
 impl PhysicalDeviceCapabilities {
-    fn supports_extension(&self, extension: &CStr) -> bool {
+    pub fn properties(&self) -> vk::PhysicalDeviceProperties {
+        self.properties
+    }
+
+    pub fn supports_extension(&self, extension: &CStr) -> bool {
         self.supported_extensions
             .iter()
             .any(|ep| unsafe { CStr::from_ptr(ep.extension_name.as_ptr()) } == extension)
@@ -1124,6 +1129,14 @@ impl super::Adapter {
         self.raw
     }
 
+    pub fn physical_device_capabilities(&self) -> &PhysicalDeviceCapabilities {
+        &self.phd_capabilities
+    }
+
+    pub fn shared_instance(&self) -> &super::InstanceShared {
+        &self.instance
+    }
+
     pub fn required_device_extensions(&self, features: wgt::Features) -> Vec<&'static CStr> {
         let (supported_extensions, unsupported_extensions) = self
             .phd_capabilities
@@ -1237,6 +1250,10 @@ impl super::Adapter {
                 capabilities.push(spv::Capability::MultiView);
             }
 
+            if features.contains(wgt::Features::SHADER_PRIMITIVE_INDEX) {
+                capabilities.push(spv::Capability::Geometry);
+            }
+
             if features.intersects(
                 wgt::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING
                     | wgt::Features::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
@@ -1294,6 +1311,8 @@ impl super::Adapter {
             raw: raw_device,
             handle_is_owned,
             instance: Arc::clone(&self.instance),
+            physical_device: self.raw,
+            enabled_extensions: enabled_extensions.into(),
             extension_fns: super::DeviceExtensionFunctions {
                 draw_indirect_count: indirect_count_fn,
                 timeline_semaphore: timeline_semaphore_fn,

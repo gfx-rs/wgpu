@@ -6,6 +6,18 @@ times, on different encoders. Constructing a render bundle lets `wgpu` validate
 and analyze its commands up front, so that replaying a bundle can be more
 efficient than simply re-recording its commands each time.
 
+Not all commands are available in bundles; for example, a render bundle may not
+contain a [`RenderCommand::SetViewport`] command.
+
+Most of `wgpu`'s backend graphics APIs have something like bundles. For example,
+Vulkan calls them "secondary command buffers", and Metal calls them "indirect
+command buffers". Although we plan to take advantage of these platform features
+at some point in the future, for now `wgpu`'s implementation of render bundles
+does not use them: at the hal level, `wgpu` render bundles just replay the
+commands.
+
+## Render Bundle Isolation
+
 One important property of render bundles is that the draw calls in a render
 bundle depend solely on the pipeline and state established within the render
 bundle itself. A draw call in a bundle will never use a vertex buffer, say, that
@@ -17,14 +29,11 @@ Render passes are also isolated from the effects of bundles. After executing a
 render bundle, a render pass's pipeline, bind groups, and vertex and index
 buffers are are unset, so the bundle cannot affect later draw calls in the pass.
 
-Not all commands are available in bundles; for example, a render bundle may not
-contain a [`RenderCommand::SetViewport`] command.
-
-Most of `wgpu`'s backend graphics APIs have something like bundles. For example,
-Vulkan calls them "secondary command buffers", and Metal calls them "indirect
-command buffers". However, `wgpu`'s implementation of render bundles does not
-take advantage of those underlying platform features. At the hal level, `wgpu`
-render bundles just replay the commands.
+A render pass is not fully isolated from a bundle's effects on push constant
+values. Draw calls following a bundle's execution will see whatever values the
+bundle writes to push constant storage. Setting a pipeline initializes any push
+constant storage it could access to zero, and this initialization may also be
+visible after bundle execution.
 
 ## Render Bundle Lifecycle
 
@@ -122,7 +131,8 @@ pub struct RenderBundleEncoder {
     base: BasePass<RenderCommand>,
     parent_id: id::DeviceId,
     pub(crate) context: RenderPassContext,
-    pub(crate) is_ds_read_only: bool,
+    pub(crate) is_depth_read_only: bool,
+    pub(crate) is_stencil_read_only: bool,
 
     // Resource binding dedupe state.
     #[cfg_attr(feature = "serial-pass", serde(skip))]
@@ -137,6 +147,20 @@ impl RenderBundleEncoder {
         parent_id: id::DeviceId,
         base: Option<BasePass<RenderCommand>>,
     ) -> Result<Self, CreateRenderBundleError> {
+        let (is_depth_read_only, is_stencil_read_only) = match desc.depth_stencil {
+            Some(ds) => {
+                let aspects = hal::FormatAspects::from(ds.format);
+                (
+                    !aspects.contains(hal::FormatAspects::DEPTH) || ds.depth_read_only,
+                    !aspects.contains(hal::FormatAspects::STENCIL) || ds.stencil_read_only,
+                )
+            }
+            // There's no depth/stencil attachment, so these values just don't
+            // matter.  Choose the most accommodating value, to simplify
+            // validation.
+            None => (true, true),
+        };
+
         //TODO: validate that attachment formats are renderable,
         // have expected aspects, support multisampling.
         Ok(Self {
@@ -161,15 +185,9 @@ impl RenderBundleEncoder {
                 },
                 multiview: desc.multiview,
             },
-            is_ds_read_only: match desc.depth_stencil {
-                Some(ds) => {
-                    let aspects = hal::FormatAspects::from(ds.format);
-                    (!aspects.contains(hal::FormatAspects::DEPTH) || ds.depth_read_only)
-                        && (!aspects.contains(hal::FormatAspects::STENCIL) || ds.stencil_read_only)
-                }
-                None => false,
-            },
 
+            is_depth_read_only,
+            is_stencil_read_only,
             current_bind_groups: BindGroupStateChange::new(),
             current_pipeline: StateChange::new(),
         })
@@ -188,7 +206,8 @@ impl RenderBundleEncoder {
                 sample_count: 0,
                 multiview: None,
             },
-            is_ds_read_only: false,
+            is_depth_read_only: false,
+            is_stencil_read_only: false,
 
             current_bind_groups: BindGroupStateChange::new(),
             current_pipeline: StateChange::new(),
@@ -236,7 +255,7 @@ impl RenderBundleEncoder {
                 &*pipeline_guard,
                 &*query_set_guard,
             ),
-            index: IndexState::new(),
+            index: None,
             vertex: (0..hal::MAX_VERTEX_BUFFERS)
                 .map(|_| VertexState::new())
                 .collect(),
@@ -245,9 +264,9 @@ impl RenderBundleEncoder {
             flat_dynamic_offsets: Vec::new(),
             used_bind_groups: 0,
             pipeline: None,
+            pipeline_layout: None,
         };
         let mut commands = Vec::new();
-        let mut pipeline_layout_id = None::<id::Valid<id::PipelineLayoutId>>;
         let mut buffer_memory_init_actions = Vec::new();
         let mut texture_memory_init_actions = Vec::new();
 
@@ -344,23 +363,29 @@ impl RenderBundleEncoder {
                         .map_err(RenderCommandError::IncompatiblePipelineTargets)
                         .map_pass_err(scope)?;
 
-                    if pipeline.flags.contains(PipelineFlags::WRITES_DEPTH_STENCIL)
-                        && self.is_ds_read_only
+                    if (pipeline.flags.contains(PipelineFlags::WRITES_DEPTH)
+                        && self.is_depth_read_only)
+                        || (pipeline.flags.contains(PipelineFlags::WRITES_STENCIL)
+                            && self.is_stencil_read_only)
                     {
                         return Err(RenderCommandError::IncompatiblePipelineRods)
                             .map_pass_err(scope);
                     }
 
                     let layout = &pipeline_layout_guard[pipeline.layout_id.value];
-                    pipeline_layout_id = Some(pipeline.layout_id.value);
+                    state.pipeline_layout = Some(pipeline.layout_id.value);
 
                     state.set_pipeline(
-                        pipeline.strip_index_format,
                         &pipeline.vertex_strides,
                         &layout.bind_group_layout_ids,
                         &layout.push_constant_ranges,
                     );
                     commands.push(command);
+
+                    // If this pipeline's push constant ranges aren't the same
+                    // as the ones we were using previously (or if this is the
+                    // first pipeline to use push constants at all), then emit
+                    // commands to zero out the push constant values it will use.
                     if let Some(iter) = state.flush_push_constants() {
                         commands.extend(iter)
                     }
@@ -391,8 +416,7 @@ impl RenderBundleEncoder {
                         offset..end,
                         MemoryInitKind::NeedsInitializedMemory,
                     ));
-                    state.index.set_format(index_format);
-                    state.index.set_buffer(buffer_id, offset..end);
+                    state.set_index_buffer(buffer_id, index_format, offset..end);
                 }
                 RenderCommand::SetVertexBuffer {
                     slot,
@@ -431,7 +455,8 @@ impl RenderBundleEncoder {
                     let scope = PassErrorScope::SetPushConstant;
                     let end_offset = offset + size_bytes;
 
-                    let pipeline_layout_id = pipeline_layout_id
+                    let pipeline_layout_id = state
+                        .pipeline_layout
                         .ok_or(DrawError::MissingPipeline)
                         .map_pass_err(scope)?;
                     let pipeline_layout = &pipeline_layout_guard[pipeline_layout_id];
@@ -488,9 +513,13 @@ impl RenderBundleEncoder {
                         indirect: false,
                         pipeline: state.pipeline,
                     };
+                    let index = match state.index {
+                        Some(ref index) => index,
+                        None => return Err(DrawError::MissingIndexBuffer).map_pass_err(scope),
+                    };
                     //TODO: validate that base_vertex + max_index() is within the provided range
                     let vertex_limits = state.vertex_limits();
-                    let index_limit = state.index.limit();
+                    let index_limit = index.limit();
                     let last_index = first_index + index_count;
                     if last_index > index_limit {
                         return Err(DrawError::IndexBeyondLimit {
@@ -508,7 +537,7 @@ impl RenderBundleEncoder {
                         })
                         .map_pass_err(scope);
                     }
-                    commands.extend(state.index.flush());
+                    commands.extend(state.flush_index());
                     commands.extend(state.flush_vertices());
                     commands.extend(state.flush_binds(base.dynamic_offsets));
                     commands.push(command);
@@ -579,7 +608,12 @@ impl RenderBundleEncoder {
                         MemoryInitKind::NeedsInitializedMemory,
                     ));
 
-                    commands.extend(state.index.flush());
+                    let index = match state.index {
+                        Some(ref mut index) => index,
+                        None => return Err(DrawError::MissingIndexBuffer).map_pass_err(scope),
+                    };
+
+                    commands.extend(index.flush());
                     commands.extend(state.flush_vertices());
                     commands.extend(state.flush_binds(base.dynamic_offsets));
                     commands.push(command);
@@ -608,7 +642,8 @@ impl RenderBundleEncoder {
                 string_data: Vec::new(),
                 push_constant_data: Vec::new(),
             },
-            is_ds_read_only: self.is_ds_read_only,
+            is_depth_read_only: self.is_depth_read_only,
+            is_stencil_read_only: self.is_stencil_read_only,
             device_id: Stored {
                 value: id::Valid(self.parent_id),
                 ref_count: device.life_guard.add_ref(),
@@ -686,7 +721,8 @@ pub struct RenderBundle<A: HalApi> {
     // Normalized command stream. It can be executed verbatim,
     // without re-binding anything on the pipeline change.
     base: BasePass<RenderCommand>,
-    pub(super) is_ds_read_only: bool,
+    pub(super) is_depth_read_only: bool,
+    pub(super) is_stencil_read_only: bool,
     pub(crate) device_id: Stored<id::DeviceId>,
     pub(crate) used: RenderBundleScope<A>,
     pub(super) buffer_memory_init_actions: Vec<BufferInitTrackerAction>,
@@ -907,39 +943,22 @@ impl<A: HalApi> Resource for RenderBundle<A> {
 
 /// A render bundle's current index buffer state.
 ///
-/// [`RenderBundleEncoder::finish`] uses this to drop redundant
-/// `SetIndexBuffer` commands from the final [`RenderBundle`]. It
-/// records index buffer state changes here, and then calls this
-/// type's [`flush`] method before any indexed draw command to produce
+/// [`RenderBundleEncoder::finish`] records the currently set index buffer here,
+/// and calls [`State::flush_index`] before any indexed draw command to produce
 /// a `SetIndexBuffer` command if one is necessary.
-///
-/// [`flush`]: IndexState::flush
 #[derive(Debug)]
 struct IndexState {
-    buffer: Option<id::BufferId>,
+    buffer: id::BufferId,
     format: wgt::IndexFormat,
-    pipeline_format: Option<wgt::IndexFormat>,
     range: Range<wgt::BufferAddress>,
     is_dirty: bool,
 }
 
 impl IndexState {
-    /// Return a fresh state: no index buffer has been set yet.
-    fn new() -> Self {
-        Self {
-            buffer: None,
-            format: wgt::IndexFormat::default(),
-            pipeline_format: None,
-            range: 0..0,
-            is_dirty: false,
-        }
-    }
-
     /// Return the number of entries in the current index buffer.
     ///
     /// Panic if no index buffer has been set.
     fn limit(&self) -> u32 {
-        assert!(self.buffer.is_some());
         let bytes_per_index = match self.format {
             wgt::IndexFormat::Uint16 => 2,
             wgt::IndexFormat::Uint32 => 4,
@@ -947,13 +966,13 @@ impl IndexState {
         ((self.range.end - self.range.start) / bytes_per_index) as u32
     }
 
-    /// Prepare for an indexed draw, producing a `SetIndexBuffer`
-    /// command if necessary.
+    /// Generate a `SetIndexBuffer` command to prepare for an indexed draw
+    /// command, if needed.
     fn flush(&mut self) -> Option<RenderCommand> {
         if self.is_dirty {
             self.is_dirty = false;
             Some(RenderCommand::SetIndexBuffer {
-                buffer_id: self.buffer.unwrap(),
+                buffer_id: self.buffer,
                 index_format: self.format,
                 offset: self.range.start,
                 size: wgt::BufferSize::new(self.range.end - self.range.start),
@@ -961,21 +980,6 @@ impl IndexState {
         } else {
             None
         }
-    }
-
-    /// Set the current index buffer's format.
-    fn set_format(&mut self, format: wgt::IndexFormat) {
-        if self.format != format {
-            self.format = format;
-            self.is_dirty = true;
-        }
-    }
-
-    /// Set the current index buffer.
-    fn set_buffer(&mut self, id: id::BufferId, range: Range<wgt::BufferAddress>) {
-        self.buffer = Some(id);
-        self.range = range;
-        self.is_dirty = true;
     }
 }
 
@@ -1055,7 +1059,15 @@ struct BindState {
 
 #[derive(Debug)]
 struct PushConstantState {
+    /// Push constant ranges used by the most recently set pipeline.
+    ///
+    /// Before any pipeline has been set, this is empty.
     ranges: ArrayVec<wgt::PushConstantRange, { SHADER_STAGE_COUNT }>,
+
+    /// True if this bundle has ever set a pipeline that uses push constants.
+    ///
+    /// If this is true, then every time we set a pipeline, we will emit
+    /// `SetPushConstant` commands to clear the push constants it uses.
     is_dirty: bool,
 }
 impl PushConstantState {
@@ -1096,13 +1108,16 @@ struct VertexLimitState {
 /// [`SetIndexBuffer`] to the simulated state stored here, and then
 /// calls the `flush_foo` methods before draw calls to produce the
 /// update commands we actually need.
+///
+/// [`SetBindGroup`]: RenderCommand::SetBindGroup
+/// [`SetIndexBuffer`]: RenderCommand::SetIndexBuffer
 struct State<A: HalApi> {
     /// Resources used by this bundle. This will become [`RenderBundle::used`].
     trackers: RenderBundleScope<A>,
 
-    /// The current index buffer. We flush this state before indexed
-    /// draw commands.
-    index: IndexState,
+    /// The current index buffer, if one has been set. We flush this state
+    /// before indexed draw commands.
+    index: Option<IndexState>,
 
     /// The state of each vertex buffer slot.
     vertex: ArrayVec<VertexState, { hal::MAX_VERTEX_BUFFERS }>,
@@ -1122,6 +1137,7 @@ struct State<A: HalApi> {
 
     used_bind_groups: usize,
     pipeline: Option<id::RenderPipelineId>,
+    pipeline_layout: Option<id::Valid<id::PipelineLayoutId>>,
 }
 
 impl<A: HalApi> State<A> {
@@ -1195,19 +1211,13 @@ impl<A: HalApi> State<A> {
 
     fn set_pipeline(
         &mut self,
-        index_format: Option<wgt::IndexFormat>,
         vertex_strides: &[(wgt::BufferAddress, wgt::VertexStepMode)],
         layout_ids: &[id::Valid<id::BindGroupLayoutId>],
         push_constant_layouts: &[wgt::PushConstantRange],
     ) {
-        self.index.pipeline_format = index_format;
-
         for (vs, &(stride, step_mode)) in self.vertex.iter_mut().zip(vertex_strides) {
-            if vs.stride != stride || vs.rate != step_mode {
-                vs.stride = stride;
-                vs.rate = step_mode;
-                vs.is_dirty = true;
-            }
+            vs.stride = stride;
+            vs.rate = step_mode;
         }
 
         let push_constants_changed = self
@@ -1231,6 +1241,41 @@ impl<A: HalApi> State<A> {
         }
     }
 
+    /// Set the bundle's current index buffer and its associated parameters.
+    fn set_index_buffer(
+        &mut self,
+        buffer: id::BufferId,
+        format: wgt::IndexFormat,
+        range: Range<wgt::BufferAddress>,
+    ) {
+        match self.index {
+            Some(ref current)
+                if current.buffer == buffer
+                    && current.format == format
+                    && current.range == range =>
+            {
+                return
+            }
+            _ => (),
+        }
+
+        self.index = Some(IndexState {
+            buffer,
+            format,
+            range,
+            is_dirty: true,
+        });
+    }
+
+    /// Generate a `SetIndexBuffer` command to prepare for an indexed draw
+    /// command, if needed.
+    fn flush_index(&mut self) -> Option<RenderCommand> {
+        self.index.as_mut().and_then(|index| index.flush())
+    }
+
+    /// Return a sequence of commands to zero the push constant ranges that will
+    /// be used by the current pipeline. If no initialization is necessary,
+    /// return `None`.
     fn flush_push_constants(&mut self) -> Option<impl Iterator<Item = RenderCommand>> {
         let is_dirty = self.push_constant_ranges.is_dirty;
 
@@ -1245,7 +1290,7 @@ impl<A: HalApi> State<A> {
                         stages: range.stages,
                         offset: range.range.start,
                         size_bytes: range.range.end - range.range.start,
-                        values_offset: None,
+                        values_offset: None, // write zeros
                     }),
             )
         } else {

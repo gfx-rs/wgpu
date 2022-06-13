@@ -1,10 +1,7 @@
 // Flocking boids example with gpu compute update pass
 // adapted from https://github.com/austinEng/webgpu-samples/blob/master/src/examples/computeBoids.ts
 
-use rand::{
-    distributions::{Distribution, Uniform},
-    SeedableRng,
-};
+use nanorand::{Rng, WyRand};
 use std::{borrow::Cow, mem};
 use wgpu::util::DeviceExt;
 
@@ -183,13 +180,13 @@ impl framework::Example for Example {
         // buffer for all particles data of type [(posx,posy,velx,vely),...]
 
         let mut initial_particle_data = vec![0.0f32; (4 * NUM_PARTICLES) as usize];
-        let mut rng = rand::rngs::StdRng::seed_from_u64(42);
-        let unif = Uniform::new_inclusive(-1.0, 1.0);
+        let mut rng = WyRand::new_seed(42);
+        let mut unif = || rng.generate::<f32>() * 2f32 - 1f32; // Generate a num (-1, 1)
         for particle_instance_chunk in initial_particle_data.chunks_mut(4) {
-            particle_instance_chunk[0] = unif.sample(&mut rng); // posx
-            particle_instance_chunk[1] = unif.sample(&mut rng); // posy
-            particle_instance_chunk[2] = unif.sample(&mut rng) * 0.1; // velx
-            particle_instance_chunk[3] = unif.sample(&mut rng) * 0.1; // vely
+            particle_instance_chunk[0] = unif(); // posx
+            particle_instance_chunk[1] = unif(); // posy
+            particle_instance_chunk[2] = unif() * 0.1; // velx
+            particle_instance_chunk[3] = unif() * 0.1; // vely
         }
 
         // creates two buffers of particle data each of size NUM_PARTICLES

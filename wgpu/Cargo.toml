@@ -130,7 +130,7 @@ log = "0.4"
 noise = { version = "0.7", default-features = false }
 obj = "0.10"
 png = "0.17"
-rand = "0.7.2"
+nanorand = { version = "0.7", default-features = false, features = ["wyrand"] }
 winit = "0.26"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
@@ -281,6 +281,8 @@ web-sys = { version = "0.3.57", features = [
     "GpuVertexStepMode",
     "HtmlCanvasElement",
     "OffscreenCanvas",
+    "ImageBitmap",
+    "ImageBitmapRenderingContext",
     "Window"
 ] }
 js-sys = "0.3.57"
@@ -293,4 +295,3 @@ console_error_panic_hook = "0.1.6"
 console_log = "0.1.2"
 # We need the Location feature in the framework examples
 web-sys = { version = "0.3.53", features = ["Location"] }
-rand = { version = "0.7", features = ["wasm-bindgen"] }

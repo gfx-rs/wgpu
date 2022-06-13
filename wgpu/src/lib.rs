@@ -1708,6 +1708,7 @@ impl Instance {
     ///
     /// - Raw Window Handle must be a valid object to create a surface upon and
     ///   must remain valid for the lifetime of the returned surface.
+    /// - If not called on the main thread, metal backend will panic.
     pub unsafe fn create_surface<W: raw_window_handle::HasRawWindowHandle>(
         &self,
         window: &W,
@@ -1746,11 +1747,8 @@ impl Instance {
     /// # Safety
     ///
     /// - canvas must be a valid <canvas> element to create a surface upon.
-    #[cfg(all(target_arch = "wasm32", not(feature = "webgl")))]
-    pub unsafe fn create_surface_from_canvas(
-        &self,
-        canvas: &web_sys::HtmlCanvasElement,
-    ) -> Surface {
+    #[cfg(all(target_arch = "wasm32", not(feature = "emscripten")))]
+    pub fn create_surface_from_canvas(&self, canvas: &web_sys::HtmlCanvasElement) -> Surface {
         Surface {
             context: Arc::clone(&self.context),
             id: self.context.instance_create_surface_from_canvas(canvas),
@@ -1762,8 +1760,8 @@ impl Instance {
     /// # Safety
     ///
     /// - canvas must be a valid OffscreenCanvas to create a surface upon.
-    #[cfg(all(target_arch = "wasm32", not(feature = "webgl")))]
-    pub unsafe fn create_surface_from_offscreen_canvas(
+    #[cfg(all(target_arch = "wasm32", not(feature = "emscripten")))]
+    pub fn create_surface_from_offscreen_canvas(
         &self,
         canvas: &web_sys::OffscreenCanvas,
     ) -> Surface {
@@ -3018,34 +3016,46 @@ impl<'a> RenderPass<'a> {
 
 /// [`Features::PUSH_CONSTANTS`] must be enabled on the device in order to call these functions.
 impl<'a> RenderPass<'a> {
-    /// Set push constant data.
+    /// Set push constant data for subsequent draw calls.
     ///
-    /// Offset is measured in bytes, but must be a multiple of [`PUSH_CONSTANT_ALIGNMENT`].
+    /// Write the bytes in `data` at offset `offset` within push constant
+    /// storage, all of which are accessible by all the pipeline stages in
+    /// `stages`, and no others.  Both `offset` and the length of `data` must be
+    /// multiples of [`PUSH_CONSTANT_ALIGNMENT`], which is always 4.
     ///
-    /// Data size must be a multiple of 4 and must have an alignment of 4.
-    /// For example, with an offset of 4 and an array of `[u8; 8]`, that will write to the range
-    /// of 4..12.
+    /// For example, if `offset` is `4` and `data` is eight bytes long, this
+    /// call will write `data` to bytes `4..12` of push constant storage.
     ///
-    /// For each byte in the range of push constant data written, the union of the stages of all push constant
-    /// ranges that covers that byte must be exactly `stages`. There's no good way of explaining this simply,
-    /// so here are some examples:
+    /// # Stage matching
     ///
-    /// ```text
-    /// For the given ranges:
-    /// - 0..4 Vertex
-    /// - 4..8 Fragment
-    /// ```
+    /// Every byte in the affected range of push constant storage must be
+    /// accessible to exactly the same set of pipeline stages, which must match
+    /// `stages`. If there are two bytes of storage that are accessible by
+    /// different sets of pipeline stages - say, one is accessible by fragment
+    /// shaders, and the other is accessible by both fragment shaders and vertex
+    /// shaders - then no single `set_push_constants` call may affect both of
+    /// them; to write both, you must make multiple calls, each with the
+    /// appropriate `stages` value.
     ///
-    /// You would need to upload this in two set_push_constants calls. First for the `Vertex` range, second for the `Fragment` range.
+    /// Which pipeline stages may access a given byte is determined by the
+    /// pipeline's [`PushConstant`] global variable and (if it is a struct) its
+    /// members' offsets.
     ///
-    /// ```text
-    /// For the given ranges:
-    /// - 0..8  Vertex
-    /// - 4..12 Fragment
-    /// ```
+    /// For example, suppose you have twelve bytes of push constant storage,
+    /// where bytes `0..8` are accessed by the vertex shader, and bytes `4..12`
+    /// are accessed by the fragment shader. This means there are three byte
+    /// ranges each accessed by a different set of stages:
     ///
-    /// You would need to upload this in three set_push_constants calls. First for the `Vertex` only range 0..4, second
-    /// for the `Vertex | Fragment` range 4..8, third for the `Fragment` range 8..12.
+    /// - Bytes `0..4` are accessed only by the fragment shader.
+    ///
+    /// - Bytes `4..8` are accessed by both the fragment shader and the vertex shader.
+    ///
+    /// - Bytes `8..12 are accessed only by the vertex shader.
+    ///
+    /// To write all twelve bytes requires three `set_push_constants` calls, one
+    /// for each range, each passing the matching `stages` mask.
+    ///
+    /// [`PushConstant`]: https://docs.rs/naga/latest/naga/enum.StorageClass.html#variant.PushConstant
     pub fn set_push_constants(&mut self, stages: ShaderStages, offset: u32, data: &[u8]) {
         self.id.set_push_constants(stages, offset, data);
     }
@@ -3153,13 +3163,14 @@ impl<'a> ComputePass<'a> {
 
 /// [`Features::PUSH_CONSTANTS`] must be enabled on the device in order to call these functions.
 impl<'a> ComputePass<'a> {
-    /// Set push constant data.
+    /// Set push constant data for subsequent dispatch calls.
     ///
-    /// Offset is measured in bytes, but must be a multiple of [`PUSH_CONSTANT_ALIGNMENT`].
+    /// Write the bytes in `data` at offset `offset` within push constant
+    /// storage.  Both `offset` and the length of `data` must be
+    /// multiples of [`PUSH_CONSTANT_ALIGNMENT`], which is always 4.
     ///
-    /// Data size must be a multiple of 4 and must have an alignment of 4.
-    /// For example, with an offset of 4 and an array of `[u8; 8]`, that will write to the range
-    /// of 4..12.
+    /// For example, if `offset` is `4` and `data` is eight bytes long, this
+    /// call will write `data` to bytes `4..12` of push constant storage.
     pub fn set_push_constants(&mut self, offset: u32, data: &[u8]) {
         self.id.set_push_constants(offset, data);
     }

@@ -218,7 +218,7 @@ jobs:
         shell: bash
         run: |
           # run wgpu-info
-          cargo run --bin wgpu-info
+          cargo run --bin wgpu-info --features angle,vulkan-portability
           # run unit and player tests
           cargo nextest run -p wgpu-types -p wgpu-hal -p wgpu-core -p player --no-fail-fast
           # run native tests

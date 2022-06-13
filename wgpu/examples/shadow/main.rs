@@ -4,7 +4,7 @@ use std::{borrow::Cow, f32::consts, iter, mem, num::NonZeroU32, ops::Range, rc::
 mod framework;
 
 use bytemuck::{Pod, Zeroable};
-use wgpu::util::DeviceExt;
+use wgpu::util::{align_to, DeviceExt};
 
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
@@ -291,12 +291,7 @@ impl framework::Example for Example {
         let uniform_alignment = {
             let alignment =
                 device.limits().min_uniform_buffer_offset_alignment as wgpu::BufferAddress;
-            let rem = entity_uniform_size % alignment;
-            if rem != 0 {
-                entity_uniform_size + alignment - rem
-            } else {
-                entity_uniform_size
-            }
+            align_to(entity_uniform_size, alignment)
         };
         // Note: dynamic uniform offsets also have to be aligned to `Limits::min_uniform_buffer_offset_alignment`.
         let entity_uniform_buf = device.create_buffer(&wgpu::BufferDescriptor {

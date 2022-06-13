@@ -5,7 +5,7 @@ mod point_gen;
 
 use bytemuck::{Pod, Zeroable};
 use glam::Vec3;
-use rand::SeedableRng;
+use nanorand::{Rng, WyRand};
 use std::{borrow::Cow, f32::consts, iter, mem};
 use wgpu::util::DeviceExt;
 
@@ -285,13 +285,12 @@ impl framework::Example for Example {
         let terrain_noise = noise::OpenSimplex::new();
 
         // Random colouration
-        let mut terrain_random = rand::rngs::StdRng::seed_from_u64(42);
+        let mut terrain_random = WyRand::new_seed(42);
 
         // Generate terrain. The closure determines what each hexagon will look like.
         let terrain =
             point_gen::HexTerrainMesh::generate(SIZE, |point| -> point_gen::TerrainVertex {
                 use noise::NoiseFn;
-                use rand::Rng;
                 let noise = terrain_noise.get([point[0] as f64 / 5.0, point[1] as f64 / 5.0]) + 0.1;
 
                 let y = noise as f32 * 22.0;
@@ -314,7 +313,7 @@ impl framework::Example for Example {
                 const SNOW: [u8; 4] = [175, 224, 237, 255];
 
                 // Random colouration.
-                let random = terrain_random.gen::<f32>() * 0.2 + 0.9;
+                let random = terrain_random.generate::<f32>() * 0.2 + 0.9;
 
                 // Choose colour.
                 let colour = if y <= 0.0 {
