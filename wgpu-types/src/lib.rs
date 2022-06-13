@@ -1028,9 +1028,6 @@ bitflags::bitflags! {
         /// GLES/WebGL don't support this.
         const DEPTH_TEXTURE_AND_BUFFER_COPIES = 1 << 13;
 
-        /// Supports rendering to floating-point textures.
-        const COLOR_ATTACHMENT_FLOAT = 1 << 14;
-
         /// Supports all the texture usages described in WebGPU. If this isn't supported, you
         /// should call `get_texture_format_features` to get how you can use textures of a given format
         const WEBGPU_TEXTURE_FORMAT_SUPPORT = 1 << 15;

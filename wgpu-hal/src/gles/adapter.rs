@@ -289,10 +289,8 @@ impl super::Adapter {
             wgt::DownlevelFlags::ANISOTROPIC_FILTERING,
             extensions.contains("EXT_texture_filter_anisotropic"),
         );
-        downlevel_flags.set(
-            wgt::DownlevelFlags::COLOR_ATTACHMENT_FLOAT,
-            extensions.contains("EXT_color_buffer_float"),
-        );
+
+        let is_ext_color_buffer_float_supported = extensions.contains("EXT_color_buffer_float");
 
         let mut features = wgt::Features::empty()
             | wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
@@ -504,8 +502,7 @@ impl super::Adapter {
                     workarounds,
                     shading_language_version,
                     max_texture_size,
-                    is_ext_color_buffer_float_supported: downlevel_flags
-                        .contains(wgt::DownlevelFlags::COLOR_ATTACHMENT_FLOAT),
+                    is_ext_color_buffer_float_supported,
                 }),
             },
             info: Self::make_info(vendor, renderer),
