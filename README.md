@@ -68,12 +68,12 @@ We have a [wiki](https://github.com/gfx-rs/wgpu/wiki) that serves as a knowledge
 
    API   |    Windows                     |  Linux & Android          |    macOS & iOS      |
   -----  | ------------------------------ | ------------------------- | ------------------- |
-  Vulkan | :white_check_mark:             | :white_check_mark:        |                     |
+  Vulkan | :white_check_mark:             | :white_check_mark:        | :ok: (vulkan-portability) |
   Metal  |                                |                           | :white_check_mark:  |
   DX12   | :white_check_mark: (W10+ only) |                           |                     |
   DX11   | :hammer_and_wrench:            |                           |                     |
   GLES3  |                                | :ok:                      |                     |
-  Angle  | :ok:                           | :ok:                      | :hammer_and_wrench: |
+  Angle  | :ok:                           | :ok:                      | :ok: (macOS only) |
 
 :white_check_mark: = First Class Support — :ok: = Best Effort Support — :hammer_and_wrench: = Unsupported, but support in progress
 
@@ -97,7 +97,7 @@ To enable GLSL shaders, enable the `glsl` feature of wgpu.
 [Angle](http://angleproject.org) is a translation layer from GLES to other backends, developed by Google.
 We support running our GLES3 backend over it in order to reach platforms with GLES2 or DX11 support, which aren't accessible otherwise.
 In order to run with Angle, "angle" feature has to be enabled, and Angle libraries placed in a location visible to the application.
-These binaries can be downloaded from [gfbuild-angle](https://github.com/DileSoft/gfbuild-angle) artifacts.
+These binaries can be downloaded from [gfbuild-angle](https://github.com/DileSoft/gfbuild-angle) artifacts, [manual compilation](https://github.com/google/angle/blob/main/doc/DevSetup.md) may be required on Macs with Apple silicon. 
 
 On Windows, you generally need to copy them into the working directory, in the same directory as the executable, or somewhere in your path.
 On Linux, you can point to them using `LD_LIBRARY_PATH` environment.
@@ -108,7 +108,7 @@ All testing and example infrastructure shares the same set of environment variab
 
 - `WGPU_ADAPTER_NAME` with a substring of the name of the adapter you want to use (ex. `1080` will match `NVIDIA GeForce 1080ti`).
 - `WGPU_BACKEND` with a comma separated list of the backends you want to use (`vulkan`, `metal`, `dx12`, `dx11`, or `gl`).
-- `WGPU_POWER_PREFERENCE` with the power preference to choose when a specific adapter name isn't specified (`high` or `low`)
+- `WGPU_POWER_PREF` with the power preference to choose when a specific adapter name isn't specified (`high` or `low`)
 
 When running the CTS, use the variables `DENO_WEBGPU_ADAPTER_NAME`, `DENO_WEBGPU_BACKEND`, `DENO_WEBGPU_POWER_PREFERENCE`.
 
