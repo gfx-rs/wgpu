@@ -1030,7 +1030,7 @@ bitflags::bitflags! {
 
         /// Supports all the texture usages described in WebGPU. If this isn't supported, you
         /// should call `get_texture_format_features` to get how you can use textures of a given format
-        const WEBGPU_TEXTURE_FORMAT_SUPPORT = 1 << 15;
+        const WEBGPU_TEXTURE_FORMAT_SUPPORT = 1 << 14;
     }
 }
 
