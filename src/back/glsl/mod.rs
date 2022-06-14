@@ -2810,12 +2810,12 @@ impl<'a, W: Write> Writer<'a, W> {
 
                 // Some GLSL functions always return signed integers (like findMSB),
                 // so they need to be cast to uint if the argument is also an uint.
-                let needs_int_to_uint =
+                let ret_might_need_int_to_uint =
                     matches!(fun, Mf::FindLsb | Mf::FindMsb | Mf::CountOneBits | Mf::Abs);
 
                 // Some GLSL functions only accept signed integers (like abs),
                 // so they need their argument cast from uint to int.
-                let needs_uint_to_int = matches!(fun, Mf::Abs);
+                let arg_might_need_uint_to_int = matches!(fun, Mf::Abs);
 
                 // Check if the argument is an unsigned integer and return the vector size
                 // in case it's a vector
@@ -2832,9 +2832,9 @@ impl<'a, W: Write> Writer<'a, W> {
                     _ => None,
                 };
 
-                if let Some(maybe_size) = maybe_uint_size {
-                    // Cast to uint if the function needs it
-                    if needs_int_to_uint {
+                // Cast to uint if the function needs it
+                if ret_might_need_int_to_uint {
+                    if let Some(maybe_size) = maybe_uint_size {
                         match maybe_size {
                             Some(size) => write!(self.out, "uvec{}(", size as u8)?,
                             None => write!(self.out, "uint(")?,
@@ -2844,9 +2844,9 @@ impl<'a, W: Write> Writer<'a, W> {
 
                 write!(self.out, "{}(", fun_name)?;
 
-                if let Some(maybe_size) = maybe_uint_size {
-                    // Cast to int if the function needs it
-                    if needs_uint_to_int {
+                // Cast to int if the function needs it
+                if arg_might_need_uint_to_int {
+                    if let Some(maybe_size) = maybe_uint_size {
                         match maybe_size {
                             Some(size) => write!(self.out, "ivec{}(", size as u8)?,
                             None => write!(self.out, "int(")?,
@@ -2857,7 +2857,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 self.write_expr(arg, ctx)?;
 
                 // Close the cast from uint to int
-                if needs_uint_to_int && maybe_uint_size.is_some() {
+                if arg_might_need_uint_to_int && maybe_uint_size.is_some() {
                     write!(self.out, ")")?
                 }
 
@@ -2894,7 +2894,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 write!(self.out, ")")?;
 
                 // Close the cast from int to uint
-                if needs_int_to_uint && maybe_uint_size.is_some() {
+                if ret_might_need_int_to_uint && maybe_uint_size.is_some() {
                     write!(self.out, ")")?
                 }
             }
