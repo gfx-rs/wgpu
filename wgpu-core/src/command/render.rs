@@ -730,7 +730,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
         let mut depth_stencil = None;
 
         if let Some(at) = depth_stencil_attachment {
-            let view = cmd_buf
+            let view: &TextureView<A> = cmd_buf
                 .trackers
                 .views
                 .add_single(&*view_guard, at.view)
@@ -840,7 +840,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
         }
 
         for at in color_attachments {
-            let color_view = cmd_buf
+            let color_view: &TextureView<A> = cmd_buf
                 .trackers
                 .views
                 .add_single(&*view_guard, at.view)
@@ -870,7 +870,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
 
             let mut hal_resolve_target = None;
             if let Some(resolve_target) = at.resolve_target {
-                let resolve_view = cmd_buf
+                let resolve_view: &TextureView<A> = cmd_buf
                     .trackers
                     .views
                     .add_single(&*view_guard, resolve_target)
@@ -1191,7 +1191,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         );
                         dynamic_offset_count += num_dynamic_offsets as usize;
 
-                        let bind_group = cmd_buf
+                        let bind_group: &crate::binding_model::BindGroup<A> = cmd_buf
                             .trackers
                             .bind_groups
                             .add_single(&*bind_group_guard, bind_group_id)
@@ -1255,7 +1255,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         let scope = PassErrorScope::SetPipelineRender(pipeline_id);
                         state.pipeline = Some(pipeline_id);
 
-                        let pipeline = cmd_buf
+                        let pipeline: &pipeline::RenderPipeline<A> = cmd_buf
                             .trackers
                             .render_pipelines
                             .add_single(&*render_pipeline_guard, pipeline_id)
