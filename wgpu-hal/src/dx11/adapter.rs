@@ -130,6 +130,7 @@ impl super::Adapter {
 
         if feature_level >= FL11_0 {
             downlevel |= wgt::DownlevelFlags::INDIRECT_EXECUTION;
+            downlevel |= wgt::DownlevelFlags::WEBGPU_TEXTURE_FORMAT_SUPPORT;
             features |= wgt::Features::TEXTURE_COMPRESSION_BC;
         }
 

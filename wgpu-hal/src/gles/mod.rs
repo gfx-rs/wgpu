@@ -184,6 +184,7 @@ struct AdapterShared {
     workarounds: Workarounds,
     shading_language_version: naga::back::glsl::Version,
     max_texture_size: u32,
+    is_ext_color_buffer_float_supported: bool,
 }
 
 pub struct Adapter {
