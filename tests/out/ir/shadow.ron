@@ -324,7 +324,7 @@
             specialization: None,
             inner: Scalar(
                 width: 4,
-                value: Float(0),
+                value: Float(0.0),
             ),
         ),
         (
@@ -332,7 +332,7 @@
             specialization: None,
             inner: Scalar(
                 width: 4,
-                value: Float(1),
+                value: Float(1.0),
             ),
         ),
         (
@@ -400,7 +400,7 @@
             specialization: None,
             inner: Scalar(
                 width: 4,
-                value: Float(0),
+                value: Float(0.0),
             ),
         ),
         (
