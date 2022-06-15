@@ -60,6 +60,10 @@ struct Args {
     #[argh(switch)]
     keep_coordinate_space: bool,
 
+    /// in dot output, include only the control flow graph
+    #[argh(switch)]
+    dot_cfg_only: bool,
+
     /// specify file path to process STDIN as
     #[argh(option)]
     stdin_file_path: Option<String>,
@@ -476,7 +480,13 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             "dot" => {
                 use naga::back::dot;
 
-                let output = dot::write(&module, info.as_ref())?;
+                let output = dot::write(
+                    &module,
+                    info.as_ref(),
+                    naga::back::dot::Options {
+                        cfg_only: args.dot_cfg_only,
+                    },
+                )?;
                 fs::write(output_path, output)?;
             }
             "hlsl" => {

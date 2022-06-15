@@ -173,7 +173,7 @@ fn check_targets(module: &naga::Module, name: &str, targets: Targets) {
     #[cfg(feature = "dot-out")]
     {
         if targets.contains(Targets::DOT) {
-            let string = naga::back::dot::write(module, Some(&info)).unwrap();
+            let string = naga::back::dot::write(module, Some(&info), Default::default()).unwrap();
             fs::write(dest.join(format!("dot/{}.dot", name)), string).unwrap();
         }
     }

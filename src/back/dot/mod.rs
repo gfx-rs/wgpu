@@ -17,24 +17,70 @@ use std::{
     fmt::{Error as FmtError, Write as _},
 };
 
+/// Configuration options for the dot backend
+#[derive(Default)]
+pub struct Options {
+    /// Only emit function bodies
+    pub cfg_only: bool,
+}
+
+/// Identifier used to address a graph node
+type NodeId = usize;
+
+/// Stores the target nodes for control flow statements
+#[derive(Default, Clone, Copy)]
+struct Targets {
+    /// The node, if some, where continue operations will land
+    continue_target: Option<usize>,
+    /// The node, if some, where break operations will land
+    break_target: Option<usize>,
+}
+
+/// Stores information about the graph of statements
 #[derive(Default)]
 struct StatementGraph {
+    /// List of node names
     nodes: Vec<&'static str>,
-    flow: Vec<(usize, usize, &'static str)>,
-    dependencies: Vec<(usize, Handle<crate::Expression>, &'static str)>,
-    emits: Vec<(usize, Handle<crate::Expression>)>,
-    calls: Vec<(usize, Handle<crate::Function>)>,
+    /// List of edges of the control flow, the items are defined as
+    /// (from, to, label)
+    flow: Vec<(NodeId, NodeId, &'static str)>,
+    /// List of implicit edges of the control flow, used for jump
+    /// operations such as continue or break, the items are defined as
+    /// (from, to, label, color_id)
+    jumps: Vec<(NodeId, NodeId, &'static str, usize)>,
+    /// List of dependency relationships between a statement node and
+    /// expressions
+    dependencies: Vec<(NodeId, Handle<crate::Expression>, &'static str)>,
+    /// List of expression emitted by statement node
+    emits: Vec<(NodeId, Handle<crate::Expression>)>,
+    /// List of function call by statement node
+    calls: Vec<(NodeId, Handle<crate::Function>)>,
 }
 
 impl StatementGraph {
-    fn add(&mut self, block: &[crate::Statement]) -> usize {
+    /// Adds a new block to the statement graph, returning the first and last node, respectively
+    fn add(&mut self, block: &[crate::Statement], targets: Targets) -> (NodeId, NodeId) {
         use crate::Statement as S;
+
+        // The first node of the block isn't a statement but a virtual node
         let root = self.nodes.len();
         self.nodes.push(if root == 0 { "Root" } else { "Node" });
+        // Track the last placed node, this will be returned to the caller and
+        // will also be used to generate the control flow edges
+        let mut last_node = root;
         for statement in block {
+            // Reserve a new node for the current statement and link it to the
+            // node of the previous statement
             let id = self.nodes.len();
-            self.flow.push((id - 1, id, ""));
+            self.flow.push((last_node, id, ""));
             self.nodes.push(""); // reserve space
+
+            // Track the node identifier for the merge node, the merge node is
+            // the last node of a statement, normally this is the node itself,
+            // but for control flow statements such as `if`s and `switch`s this
+            // is a virtual node where all branches merge back.
+            let mut merge_id = id;
+
             self.nodes[id] = match *statement {
                 S::Emit(ref range) => {
                     for handle in range.clone() {
@@ -42,13 +88,34 @@ impl StatementGraph {
                     }
                     "Emit"
                 }
-                S::Break => "Break",       //TODO: loop context
-                S::Continue => "Continue", //TODO: loop context
-                S::Kill => "Kill",         //TODO: link to the beginning
+                S::Kill => "Kill", //TODO: link to the beginning
+                S::Break => {
+                    // Try to link to the break target, otherwise produce
+                    // a broken connection
+                    if let Some(target) = targets.break_target {
+                        self.jumps.push((id, target, "Break", 5))
+                    } else {
+                        self.jumps.push((id, root, "Broken", 7))
+                    }
+                    "Break"
+                }
+                S::Continue => {
+                    // Try to link to the continue target, otherwise produce
+                    // a broken connection
+                    if let Some(target) = targets.continue_target {
+                        self.jumps.push((id, target, "Continue", 5))
+                    } else {
+                        self.jumps.push((id, root, "Broken", 7))
+                    }
+                    "Continue"
+                }
                 S::Barrier(_flags) => "Barrier",
                 S::Block(ref b) => {
-                    let other = self.add(b);
+                    let (other, last) = self.add(b, targets);
                     self.flow.push((id, other, ""));
+                    // All following nodes should connect to the end of the block
+                    // statement so change the merge id to it.
+                    merge_id = last;
                     "Block"
                 }
                 S::If {
@@ -57,10 +124,18 @@ impl StatementGraph {
                     ref reject,
                 } => {
                     self.dependencies.push((id, condition, "condition"));
-                    let accept_id = self.add(accept);
+                    let (accept_id, accept_last) = self.add(accept, targets);
                     self.flow.push((id, accept_id, "accept"));
-                    let reject_id = self.add(reject);
+                    let (reject_id, reject_last) = self.add(reject, targets);
                     self.flow.push((id, reject_id, "reject"));
+
+                    // Create a merge node, link the branches to it and set it
+                    // as the merge node to make the next statement node link to it
+                    merge_id = self.nodes.len();
+                    self.nodes.push("Merge");
+                    self.flow.push((accept_last, merge_id, ""));
+                    self.flow.push((reject_last, merge_id, ""));
+
                     "If"
                 }
                 S::Switch {
@@ -68,13 +143,26 @@ impl StatementGraph {
                     ref cases,
                 } => {
                     self.dependencies.push((id, selector, "selector"));
+
+                    // Create a merge node and set it as the merge node to make
+                    // the next statement node link to it
+                    merge_id = self.nodes.len();
+                    self.nodes.push("Merge");
+
+                    // Create a new targets structure and set the break target
+                    // to the merge node
+                    let mut targets = targets;
+                    targets.break_target = Some(merge_id);
+
                     for case in cases {
-                        let case_id = self.add(&case.body);
+                        let (case_id, case_last) = self.add(&case.body, targets);
                         let label = match case.value {
                             crate::SwitchValue::Integer(_) => "case",
                             crate::SwitchValue::Default => "default",
                         };
                         self.flow.push((id, case_id, label));
+                        // Link the last node of the branch to the merge node
+                        self.flow.push((case_last, merge_id, ""));
                     }
                     "Switch"
                 }
@@ -83,13 +171,32 @@ impl StatementGraph {
                     ref continuing,
                     break_if,
                 } => {
-                    let body_id = self.add(body);
+                    // Create a new targets structure and set the break target
+                    // to the merge node, this must happen before generating the
+                    // continuing block since it can break.
+                    let mut targets = targets;
+                    targets.break_target = Some(id);
+
+                    let (continuing_id, continuing_last) = self.add(continuing, targets);
+
+                    // Set the the continue target to the beginning
+                    // of the newly generated continuing block
+                    targets.continue_target = Some(continuing_id);
+
+                    let (body_id, body_last) = self.add(body, targets);
+
                     self.flow.push((id, body_id, "body"));
-                    let continuing_id = self.add(continuing);
-                    self.flow.push((body_id, continuing_id, "continuing"));
+
+                    // Link the last node of the body to the continuing block
+                    self.flow.push((body_last, continuing_id, "continuing"));
+                    // Link the last node of the continuing block back to the
+                    // beginning of the loop body
+                    self.flow.push((continuing_last, body_id, "continuing"));
+
                     if let Some(expr) = break_if {
-                        self.dependencies.push((id, expr, "break if"));
+                        self.dependencies.push((continuing_id, expr, "break if"));
                     }
+
                     "Loop"
                 }
                 S::Return { value } => {
@@ -146,8 +253,10 @@ impl StatementGraph {
                     "Atomic"
                 }
             };
+            // Set the last node to the merge node
+            last_node = merge_id;
         }
-        root
+        (root, last_node)
     }
 }
 
@@ -171,24 +280,96 @@ fn write_fun(
     prefix: String,
     fun: &crate::Function,
     info: Option<&FunctionInfo>,
+    options: &Options,
+) -> Result<(), FmtError> {
+    writeln!(output, "\t\tnode [ style=filled ]")?;
+
+    if !options.cfg_only {
+        for (handle, var) in fun.local_variables.iter() {
+            writeln!(
+                output,
+                "\t\t{}_l{} [ shape=hexagon label=\"{:?} '{}'\" ]",
+                prefix,
+                handle.index(),
+                handle,
+                name(&var.name),
+            )?;
+        }
+
+        write_function_expressions(output, &prefix, fun, info)?;
+    }
+
+    let mut sg = StatementGraph::default();
+    sg.add(&fun.body, Targets::default());
+    for (index, label) in sg.nodes.into_iter().enumerate() {
+        writeln!(
+            output,
+            "\t\t{}_s{} [ shape=square label=\"{}\" ]",
+            prefix, index, label,
+        )?;
+    }
+    for (from, to, label) in sg.flow {
+        writeln!(
+            output,
+            "\t\t{}_s{} -> {}_s{} [ arrowhead=tee label=\"{}\" ]",
+            prefix, from, prefix, to, label,
+        )?;
+    }
+    for (from, to, label, color_id) in sg.jumps {
+        writeln!(
+            output,
+            "\t\t{}_s{} -> {}_s{} [ arrowhead=tee style=dashed color=\"{}\" label=\"{}\" ]",
+            prefix, from, prefix, to, COLORS[color_id], label,
+        )?;
+    }
+
+    if !options.cfg_only {
+        for (to, expr, label) in sg.dependencies {
+            writeln!(
+                output,
+                "\t\t{}_e{} -> {}_s{} [ label=\"{}\" ]",
+                prefix,
+                expr.index(),
+                prefix,
+                to,
+                label,
+            )?;
+        }
+        for (from, to) in sg.emits {
+            writeln!(
+                output,
+                "\t\t{}_s{} -> {}_e{} [ style=dotted ]",
+                prefix,
+                from,
+                prefix,
+                to.index(),
+            )?;
+        }
+    }
+
+    for (from, function) in sg.calls {
+        writeln!(
+            output,
+            "\t\t{}_s{} -> f{}_s0",
+            prefix,
+            from,
+            function.index(),
+        )?;
+    }
+
+    Ok(())
+}
+
+fn write_function_expressions(
+    output: &mut String,
+    prefix: &str,
+    fun: &crate::Function,
+    info: Option<&FunctionInfo>,
 ) -> Result<(), FmtError> {
     enum Payload<'a> {
         Arguments(&'a [Handle<crate::Expression>]),
         Local(Handle<crate::LocalVariable>),
         Global(Handle<crate::GlobalVariable>),
-    }
-
-    writeln!(output, "\t\tnode [ style=filled ]")?;
-
-    for (handle, var) in fun.local_variables.iter() {
-        writeln!(
-            output,
-            "\t\t{}_l{} [ shape=hexagon label=\"{:?} '{}'\" ]",
-            prefix,
-            handle.index(),
-            handle,
-            name(&var.name),
-        )?;
     }
 
     let mut edges = crate::FastHashMap::<&str, _>::default();
@@ -431,76 +612,35 @@ fn write_fun(
         }
     }
 
-    let mut sg = StatementGraph::default();
-    sg.add(&fun.body);
-    for (index, label) in sg.nodes.into_iter().enumerate() {
-        writeln!(
-            output,
-            "\t\t{}_s{} [ shape=square label=\"{}\" ]",
-            prefix, index, label,
-        )?;
-    }
-    for (from, to, label) in sg.flow {
-        writeln!(
-            output,
-            "\t\t{}_s{} -> {}_s{} [ arrowhead=tee label=\"{}\" ]",
-            prefix, from, prefix, to, label,
-        )?;
-    }
-    for (to, expr, label) in sg.dependencies {
-        writeln!(
-            output,
-            "\t\t{}_e{} -> {}_s{} [ label=\"{}\" ]",
-            prefix,
-            expr.index(),
-            prefix,
-            to,
-            label,
-        )?;
-    }
-    for (from, to) in sg.emits {
-        writeln!(
-            output,
-            "\t\t{}_s{} -> {}_e{} [ style=dotted ]",
-            prefix,
-            from,
-            prefix,
-            to.index(),
-        )?;
-    }
-    for (from, function) in sg.calls {
-        writeln!(
-            output,
-            "\t\t{}_s{} -> f{}_s0",
-            prefix,
-            from,
-            function.index(),
-        )?;
-    }
-
     Ok(())
 }
 
 /// Write shader module to a [`String`].
-pub fn write(module: &crate::Module, mod_info: Option<&ModuleInfo>) -> Result<String, FmtError> {
+pub fn write(
+    module: &crate::Module,
+    mod_info: Option<&ModuleInfo>,
+    options: Options,
+) -> Result<String, FmtError> {
     use std::fmt::Write as _;
 
     let mut output = String::new();
     output += "digraph Module {\n";
 
-    writeln!(output, "\tsubgraph cluster_globals {{")?;
-    writeln!(output, "\t\tlabel=\"Globals\"")?;
-    for (handle, var) in module.global_variables.iter() {
-        writeln!(
-            output,
-            "\t\tg{} [ shape=hexagon label=\"{:?} {:?}/'{}'\" ]",
-            handle.index(),
-            handle,
-            var.space,
-            name(&var.name),
-        )?;
+    if !options.cfg_only {
+        writeln!(output, "\tsubgraph cluster_globals {{")?;
+        writeln!(output, "\t\tlabel=\"Globals\"")?;
+        for (handle, var) in module.global_variables.iter() {
+            writeln!(
+                output,
+                "\t\tg{} [ shape=hexagon label=\"{:?} {:?}/'{}'\" ]",
+                handle.index(),
+                handle,
+                var.space,
+                name(&var.name),
+            )?;
+        }
+        writeln!(output, "\t}}")?;
     }
-    writeln!(output, "\t}}")?;
 
     for (handle, fun) in module.functions.iter() {
         let prefix = format!("f{}", handle.index());
@@ -512,7 +652,7 @@ pub fn write(module: &crate::Module, mod_info: Option<&ModuleInfo>) -> Result<St
             name(&fun.name)
         )?;
         let info = mod_info.map(|a| &a[handle]);
-        write_fun(&mut output, prefix, fun, info)?;
+        write_fun(&mut output, prefix, fun, info, &options)?;
         writeln!(output, "\t}}")?;
     }
     for (ep_index, ep) in module.entry_points.iter().enumerate() {
@@ -520,7 +660,7 @@ pub fn write(module: &crate::Module, mod_info: Option<&ModuleInfo>) -> Result<St
         writeln!(output, "\tsubgraph cluster_{} {{", prefix)?;
         writeln!(output, "\t\tlabel=\"{:?}/'{}'\"", ep.stage, ep.name)?;
         let info = mod_info.map(|a| a.get_entry_point(ep_index));
-        write_fun(&mut output, prefix, &ep.function, info)?;
+        write_fun(&mut output, prefix, &ep.function, info, &options)?;
         writeln!(output, "\t}}")?;
     }
 
