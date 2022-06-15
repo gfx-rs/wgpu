@@ -1189,6 +1189,18 @@ impl<A: HalApi> Device<A> {
             }
             pipeline::ShaderModuleSource::Naga(module) => (module, String::new()),
         };
+        for (_, var) in module.global_variables.iter() {
+            match var.binding {
+                Some(ref br) if br.group >= self.limits.max_bind_groups => {
+                    return Err(pipeline::CreateShaderModuleError::InvalidGroupIndex {
+                        bind: br.clone(),
+                        group: br.group,
+                        limit: self.limits.max_bind_groups,
+                    });
+                }
+                _ => continue,
+            };
+        }
 
         use naga::valid::Capabilities as Caps;
         profiling::scope!("naga::validate");
