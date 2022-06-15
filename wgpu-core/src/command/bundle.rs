@@ -255,16 +255,11 @@ impl RenderBundleEncoder {
                 &*pipeline_guard,
                 &*query_set_guard,
             ),
-            index: None,
-            vertex: (0..hal::MAX_VERTEX_BUFFERS)
-                .map(|_| VertexState::new())
-                .collect(),
-            bind: (0..hal::MAX_BIND_GROUPS).map(|_| None).collect(),
-            push_constant_ranges: PushConstantState::new(),
-            flat_dynamic_offsets: Vec::new(),
-            used_bind_groups: 0,
             pipeline: None,
-            pipeline_layout: None,
+            bind: (0..hal::MAX_BIND_GROUPS).map(|_| None).collect(),
+            vertex: (0..hal::MAX_VERTEX_BUFFERS).map(|_| None).collect(),
+            index: None,
+            flat_dynamic_offsets: Vec::new(),
         };
         let mut commands = Vec::new();
         let mut buffer_memory_init_actions = Vec::new();
@@ -347,8 +342,6 @@ impl RenderBundleEncoder {
                 RenderCommand::SetPipeline(pipeline_id) => {
                     let scope = PassErrorScope::SetPipelineRender(pipeline_id);
 
-                    state.pipeline = Some(pipeline_id);
-
                     let pipeline: &pipeline::RenderPipeline<A> = state
                         .trackers
                         .render_pipelines
@@ -373,22 +366,17 @@ impl RenderBundleEncoder {
                     }
 
                     let layout = &pipeline_layout_guard[pipeline.layout_id.value];
-                    state.pipeline_layout = Some(pipeline.layout_id.value);
+                    let pipeline_state = PipelineState::new(pipeline_id, pipeline, layout);
 
-                    state.set_pipeline(
-                        &pipeline.vertex_steps,
-                        &layout.bind_group_layout_ids,
-                        &layout.push_constant_ranges,
-                    );
                     commands.push(command);
 
-                    // If this pipeline's push constant ranges aren't the same
-                    // as the ones we were using previously (or if this is the
-                    // first pipeline to use push constants at all), then emit
-                    // commands to zero out the push constant values it will use.
-                    if let Some(iter) = state.flush_push_constants() {
+                    // If this pipeline uses push constants, zero out their values.
+                    if let Some(iter) = pipeline_state.zero_push_constants() {
                         commands.extend(iter)
                     }
+
+                    state.invalidate_bind_groups(&pipeline_state, layout);
+                    state.pipeline = Some(pipeline_state);
                 }
                 RenderCommand::SetIndexBuffer {
                     buffer_id,
@@ -444,7 +432,7 @@ impl RenderBundleEncoder {
                         offset..end,
                         MemoryInitKind::NeedsInitializedMemory,
                     ));
-                    state.vertex[slot as usize].set_buffer(buffer_id, offset..end);
+                    state.vertex[slot as usize] = Some(VertexState::new(buffer_id, offset..end));
                 }
                 RenderCommand::SetPushConstant {
                     stages,
@@ -455,11 +443,8 @@ impl RenderBundleEncoder {
                     let scope = PassErrorScope::SetPushConstant;
                     let end_offset = offset + size_bytes;
 
-                    let pipeline_layout_id = state
-                        .pipeline_layout
-                        .ok_or(DrawError::MissingPipeline)
-                        .map_pass_err(scope)?;
-                    let pipeline_layout = &pipeline_layout_guard[pipeline_layout_id];
+                    let pipeline = state.pipeline(scope)?;
+                    let pipeline_layout = &pipeline_layout_guard[pipeline.layout_id];
 
                     pipeline_layout
                         .validate_push_constant_ranges(stages, offset, end_offset)
@@ -476,9 +461,11 @@ impl RenderBundleEncoder {
                     let scope = PassErrorScope::Draw {
                         indexed: false,
                         indirect: false,
-                        pipeline: state.pipeline,
+                        pipeline: state.pipeline_id(),
                     };
-                    let vertex_limits = state.vertex_limits();
+                    let pipeline = state.pipeline(scope)?;
+                    let used_bind_groups = pipeline.used_bind_groups;
+                    let vertex_limits = state.vertex_limits(pipeline);
                     let last_vertex = first_vertex + vertex_count;
                     if last_vertex > vertex_limits.vertex_limit {
                         return Err(DrawError::VertexBeyondLimit {
@@ -498,7 +485,7 @@ impl RenderBundleEncoder {
                         .map_pass_err(scope);
                     }
                     commands.extend(state.flush_vertices());
-                    commands.extend(state.flush_binds(base.dynamic_offsets));
+                    commands.extend(state.flush_binds(used_bind_groups, base.dynamic_offsets));
                     commands.push(command);
                 }
                 RenderCommand::DrawIndexed {
@@ -511,14 +498,16 @@ impl RenderBundleEncoder {
                     let scope = PassErrorScope::Draw {
                         indexed: true,
                         indirect: false,
-                        pipeline: state.pipeline,
+                        pipeline: state.pipeline_id(),
                     };
+                    let pipeline = state.pipeline(scope)?;
+                    let used_bind_groups = pipeline.used_bind_groups;
                     let index = match state.index {
                         Some(ref index) => index,
                         None => return Err(DrawError::MissingIndexBuffer).map_pass_err(scope),
                     };
                     //TODO: validate that base_vertex + max_index() is within the provided range
-                    let vertex_limits = state.vertex_limits();
+                    let vertex_limits = state.vertex_limits(pipeline);
                     let index_limit = index.limit();
                     let last_index = first_index + index_count;
                     if last_index > index_limit {
@@ -539,7 +528,7 @@ impl RenderBundleEncoder {
                     }
                     commands.extend(state.flush_index());
                     commands.extend(state.flush_vertices());
-                    commands.extend(state.flush_binds(base.dynamic_offsets));
+                    commands.extend(state.flush_binds(used_bind_groups, base.dynamic_offsets));
                     commands.push(command);
                 }
                 RenderCommand::MultiDrawIndirect {
@@ -551,11 +540,14 @@ impl RenderBundleEncoder {
                     let scope = PassErrorScope::Draw {
                         indexed: false,
                         indirect: true,
-                        pipeline: state.pipeline,
+                        pipeline: state.pipeline_id(),
                     };
                     device
                         .require_downlevel_flags(wgt::DownlevelFlags::INDIRECT_EXECUTION)
                         .map_pass_err(scope)?;
+
+                    let pipeline = state.pipeline(scope)?;
+                    let used_bind_groups = pipeline.used_bind_groups;
 
                     let buffer: &resource::Buffer<A> = state
                         .trackers
@@ -574,7 +566,7 @@ impl RenderBundleEncoder {
                     ));
 
                     commands.extend(state.flush_vertices());
-                    commands.extend(state.flush_binds(base.dynamic_offsets));
+                    commands.extend(state.flush_binds(used_bind_groups, base.dynamic_offsets));
                     commands.push(command);
                 }
                 RenderCommand::MultiDrawIndirect {
@@ -586,11 +578,14 @@ impl RenderBundleEncoder {
                     let scope = PassErrorScope::Draw {
                         indexed: true,
                         indirect: true,
-                        pipeline: state.pipeline,
+                        pipeline: state.pipeline_id(),
                     };
                     device
                         .require_downlevel_flags(wgt::DownlevelFlags::INDIRECT_EXECUTION)
                         .map_pass_err(scope)?;
+
+                    let pipeline = state.pipeline(scope)?;
+                    let used_bind_groups = pipeline.used_bind_groups;
 
                     let buffer: &resource::Buffer<A> = state
                         .trackers
@@ -615,7 +610,7 @@ impl RenderBundleEncoder {
 
                     commands.extend(index.flush());
                     commands.extend(state.flush_vertices());
-                    commands.extend(state.flush_binds(base.dynamic_offsets));
+                    commands.extend(state.flush_binds(used_bind_groups, base.dynamic_offsets));
                     commands.push(command);
                 }
                 RenderCommand::MultiDrawIndirect { .. }
@@ -994,29 +989,18 @@ impl IndexState {
 /// [`flush`]: IndexState::flush
 #[derive(Debug)]
 struct VertexState {
-    buffer: Option<id::BufferId>,
+    buffer: id::BufferId,
     range: Range<wgt::BufferAddress>,
-    step: pipeline::VertexStep,
     is_dirty: bool,
 }
 
 impl VertexState {
-    /// Construct a fresh `VertexState`: no buffer has been set for
-    /// this slot.
-    fn new() -> Self {
+    fn new(buffer: id::BufferId, range: Range<wgt::BufferAddress>) -> Self {
         Self {
-            buffer: None,
-            range: 0..0,
-            step: pipeline::VertexStep::default(),
-            is_dirty: false,
+            buffer,
+            range,
+            is_dirty: true,
         }
-    }
-
-    /// Set this slot's vertex buffer.
-    fn set_buffer(&mut self, buffer_id: id::BufferId, range: Range<wgt::BufferAddress>) {
-        self.buffer = Some(buffer_id);
-        self.range = range;
-        self.is_dirty = true;
     }
 
     /// Generate a `SetVertexBuffer` command for this slot, if necessary.
@@ -1027,7 +1011,7 @@ impl VertexState {
             self.is_dirty = false;
             Some(RenderCommand::SetVertexBuffer {
                 slot,
-                buffer_id: self.buffer.unwrap(),
+                buffer_id: self.buffer,
                 offset: self.range.start,
                 size: wgt::BufferSize::new(self.range.end - self.range.start),
             })
@@ -1056,38 +1040,6 @@ struct BindState {
 }
 
 #[derive(Debug)]
-struct PushConstantState {
-    /// Push constant ranges used by the most recently set pipeline.
-    ///
-    /// Before any pipeline has been set, this is empty.
-    ranges: ArrayVec<wgt::PushConstantRange, { SHADER_STAGE_COUNT }>,
-
-    /// True if this bundle has ever set a pipeline that uses push constants.
-    ///
-    /// If this is true, then every time we set a pipeline, we will emit
-    /// `SetPushConstant` commands to clear the push constants it uses.
-    is_dirty: bool,
-}
-impl PushConstantState {
-    fn new() -> Self {
-        Self {
-            ranges: ArrayVec::new(),
-            is_dirty: false,
-        }
-    }
-
-    fn set_push_constants(&mut self, new_ranges: &[wgt::PushConstantRange]) -> bool {
-        if &*self.ranges != new_ranges {
-            self.ranges = new_ranges.iter().cloned().collect();
-            self.is_dirty = true;
-            true
-        } else {
-            false
-        }
-    }
-}
-
-#[derive(Debug)]
 struct VertexLimitState {
     /// Length of the shortest vertex rate vertex buffer
     vertex_limit: u32,
@@ -1097,6 +1049,64 @@ struct VertexLimitState {
     instance_limit: u32,
     /// Buffer slot which the shortest instance rate vertex buffer is bound to
     instance_limit_slot: u32,
+}
+
+/// The bundle's current pipeline, and some cached information needed for validation.
+struct PipelineState {
+    /// The pipeline's id.
+    id: id::RenderPipelineId,
+
+    /// The id of the pipeline's layout.
+    layout_id: id::Valid<id::PipelineLayoutId>,
+
+    /// How this pipeline's vertex shader traverses each vertex buffer, indexed
+    /// by vertex buffer slot number.
+    steps: Vec<pipeline::VertexStep>,
+
+    /// Ranges of push constants this pipeline uses, copied from the pipeline
+    /// layout.
+    push_constant_ranges: ArrayVec<wgt::PushConstantRange, { SHADER_STAGE_COUNT }>,
+
+    /// The number of bind groups this pipeline uses.
+    used_bind_groups: usize,
+}
+
+impl PipelineState {
+    fn new<A: HalApi>(
+        pipeline_id: id::RenderPipelineId,
+        pipeline: &pipeline::RenderPipeline<A>,
+        layout: &binding_model::PipelineLayout<A>,
+    ) -> Self {
+        Self {
+            id: pipeline_id,
+            layout_id: pipeline.layout_id.value,
+            steps: pipeline.vertex_steps.to_vec(),
+            push_constant_ranges: layout.push_constant_ranges.iter().cloned().collect(),
+            used_bind_groups: layout.bind_group_layout_ids.len(),
+        }
+    }
+
+    /// Return a sequence of commands to zero the push constant ranges this
+    /// pipeline uses. If no initialization is necessary, return `None`.
+    fn zero_push_constants(&self) -> Option<impl Iterator<Item = RenderCommand>> {
+        if !self.push_constant_ranges.is_empty() {
+            let nonoverlapping_ranges =
+                super::bind::compute_nonoverlapping_ranges(&self.push_constant_ranges);
+
+            Some(
+                nonoverlapping_ranges
+                    .into_iter()
+                    .map(|range| RenderCommand::SetPushConstant {
+                        stages: range.stages,
+                        offset: range.range.start,
+                        size_bytes: range.range.end - range.range.start,
+                        values_offset: None, // write zeros
+                    }),
+            )
+        } else {
+            None
+        }
+    }
 }
 
 /// State for analyzing and cleaning up bundle command streams.
@@ -1113,17 +1123,18 @@ struct State<A: HalApi> {
     /// Resources used by this bundle. This will become [`RenderBundle::used`].
     trackers: RenderBundleScope<A>,
 
-    /// The current index buffer, if one has been set. We flush this state
-    /// before indexed draw commands.
-    index: Option<IndexState>,
-
-    /// The state of each vertex buffer slot.
-    vertex: ArrayVec<VertexState, { hal::MAX_VERTEX_BUFFERS }>,
+    /// The currently set pipeline, if any.
+    pipeline: Option<PipelineState>,
 
     /// The bind group set at each index, if any.
     bind: ArrayVec<Option<BindState>, { hal::MAX_BIND_GROUPS }>,
 
-    push_constant_ranges: PushConstantState,
+    /// The state of each vertex buffer slot.
+    vertex: ArrayVec<Option<VertexState>, { hal::MAX_VERTEX_BUFFERS }>,
+
+    /// The current index buffer, if one has been set. We flush this state
+    /// before indexed draw commands.
+    index: Option<IndexState>,
 
     /// Dynamic offset values used by the cleaned-up command sequence.
     ///
@@ -1132,36 +1143,31 @@ struct State<A: HalApi> {
     ///
     /// [`dynamic_offsets`]: BasePass::dynamic_offsets
     flat_dynamic_offsets: Vec<wgt::DynamicOffset>,
-
-    used_bind_groups: usize,
-    pipeline: Option<id::RenderPipelineId>,
-    pipeline_layout: Option<id::Valid<id::PipelineLayoutId>>,
 }
 
 impl<A: HalApi> State<A> {
-    fn vertex_limits(&self) -> VertexLimitState {
+    fn vertex_limits(&self, pipeline: &PipelineState) -> VertexLimitState {
         let mut vert_state = VertexLimitState {
             vertex_limit: u32::MAX,
             vertex_limit_slot: 0,
             instance_limit: u32::MAX,
             instance_limit_slot: 0,
         };
-        for (idx, vbs) in self.vertex.iter().enumerate() {
-            if vbs.step.stride == 0 {
-                continue;
-            }
-            let limit = ((vbs.range.end - vbs.range.start) / vbs.step.stride) as u32;
-            match vbs.step.mode {
-                wgt::VertexStepMode::Vertex => {
-                    if limit < vert_state.vertex_limit {
-                        vert_state.vertex_limit = limit;
-                        vert_state.vertex_limit_slot = idx as _;
+        for (idx, (vbs, step)) in self.vertex.iter().zip(&pipeline.steps).enumerate() {
+            if let Some(ref vbs) = *vbs {
+                let limit = ((vbs.range.end - vbs.range.start) / step.stride) as u32;
+                match step.mode {
+                    wgt::VertexStepMode::Vertex => {
+                        if limit < vert_state.vertex_limit {
+                            vert_state.vertex_limit = limit;
+                            vert_state.vertex_limit_slot = idx as _;
+                        }
                     }
-                }
-                wgt::VertexStepMode::Instance => {
-                    if limit < vert_state.instance_limit {
-                        vert_state.instance_limit = limit;
-                        vert_state.instance_limit_slot = idx as _;
+                    wgt::VertexStepMode::Instance => {
+                        if limit < vert_state.instance_limit {
+                            vert_state.instance_limit = limit;
+                            vert_state.instance_limit_slot = idx as _;
+                        }
                     }
                 }
             }
@@ -1169,8 +1175,21 @@ impl<A: HalApi> State<A> {
         vert_state
     }
 
+    /// Return the id of the current pipeline, if any.
+    fn pipeline_id(&self) -> Option<id::RenderPipelineId> {
+        self.pipeline.as_ref().map(|p| p.id)
+    }
+
+    /// Return the current pipeline state. Return an error if none is set.
+    fn pipeline(&self, scope: PassErrorScope) -> Result<&PipelineState, RenderBundleError> {
+        self.pipeline
+            .as_ref()
+            .ok_or(DrawError::MissingPipeline)
+            .map_pass_err(scope)
+    }
+
     /// Mark all non-empty bind group table entries from `index` onwards as dirty.
-    fn invalidate_group_from(&mut self, index: usize) {
+    fn invalidate_bind_group_from(&mut self, index: usize) {
         for contents in self.bind[index..].iter_mut().flatten() {
             contents.is_dirty = true;
         }
@@ -1204,37 +1223,56 @@ impl<A: HalApi> State<A> {
 
         // Once we've changed the bind group at a particular index, all
         // subsequent indices need to be rewritten.
-        self.invalidate_group_from(slot as usize + 1);
+        self.invalidate_bind_group_from(slot as usize + 1);
     }
 
-    fn set_pipeline(
+    /// Determine which bind group slots need to be re-set after a pipeline change.
+    ///
+    /// Given that we are switching from the current pipeline state to `new`,
+    /// whose layout is `layout`, mark all the bind group slots that we need to
+    /// emit new `SetBindGroup` commands for as dirty.
+    ///
+    /// According to `wgpu_hal`'s rules:
+    ///
+    /// - If the layout of any bind group slot changes, then that slot and
+    ///   all following slots must have their bind groups re-established.
+    ///
+    /// - Changing the push constant ranges at all requires re-establishing
+    ///   all bind groups.
+    fn invalidate_bind_groups(
         &mut self,
-        steps: &[pipeline::VertexStep],
-        layout_ids: &[id::Valid<id::BindGroupLayoutId>],
-        push_constant_layouts: &[wgt::PushConstantRange],
+        new: &PipelineState,
+        layout: &binding_model::PipelineLayout<A>,
     ) {
-        for (vs, &step) in self.vertex.iter_mut().zip(steps) {
-            vs.step = step;
-        }
+        match self.pipeline {
+            None => {
+                // Establishing entirely new pipeline state.
+                self.invalidate_bind_group_from(0);
+            }
+            Some(ref old) => {
+                if old.id == new.id {
+                    // Everything is derived from the pipeline, so if the id has
+                    // not changed, there's no need to consider anything else.
+                    return;
+                }
 
-        let push_constants_changed = self
-            .push_constant_ranges
-            .set_push_constants(push_constant_layouts);
-
-        self.used_bind_groups = layout_ids.len();
-        let invalid_from = if push_constants_changed {
-            Some(0)
-        } else {
-            self.bind
-                .iter()
-                .zip(layout_ids)
-                .position(|(entry, &layout_id)| match *entry {
-                    Some(ref contents) => contents.layout_id != layout_id,
-                    None => false,
-                })
-        };
-        if let Some(slot) = invalid_from {
-            self.invalidate_group_from(slot);
+                // Any push constant change invalidates all groups.
+                if old.push_constant_ranges != new.push_constant_ranges {
+                    self.invalidate_bind_group_from(0);
+                } else {
+                    let first_changed = self
+                        .bind
+                        .iter()
+                        .zip(&layout.bind_group_layout_ids)
+                        .position(|(entry, &layout_id)| match *entry {
+                            Some(ref contents) => contents.layout_id != layout_id,
+                            None => false,
+                        });
+                    if let Some(slot) = first_changed {
+                        self.invalidate_bind_group_from(slot);
+                    }
+                }
+            }
         }
     }
 
@@ -1270,45 +1308,21 @@ impl<A: HalApi> State<A> {
         self.index.as_mut().and_then(|index| index.flush())
     }
 
-    /// Return a sequence of commands to zero the push constant ranges that will
-    /// be used by the current pipeline. If no initialization is necessary,
-    /// return `None`.
-    fn flush_push_constants(&mut self) -> Option<impl Iterator<Item = RenderCommand>> {
-        let is_dirty = self.push_constant_ranges.is_dirty;
-
-        if is_dirty {
-            let nonoverlapping_ranges =
-                super::bind::compute_nonoverlapping_ranges(&self.push_constant_ranges.ranges);
-
-            Some(
-                nonoverlapping_ranges
-                    .into_iter()
-                    .map(|range| RenderCommand::SetPushConstant {
-                        stages: range.stages,
-                        offset: range.range.start,
-                        size_bytes: range.range.end - range.range.start,
-                        values_offset: None, // write zeros
-                    }),
-            )
-        } else {
-            None
-        }
-    }
-
     fn flush_vertices(&mut self) -> impl Iterator<Item = RenderCommand> + '_ {
         self.vertex
             .iter_mut()
             .enumerate()
-            .flat_map(|(i, vs)| vs.flush(i as u32))
+            .flat_map(|(i, vs)| vs.as_mut().and_then(|vs| vs.flush(i as u32)))
     }
 
     /// Generate `SetBindGroup` commands for any bind groups that need to be updated.
     fn flush_binds(
         &mut self,
+        used_bind_groups: usize,
         dynamic_offsets: &[wgt::DynamicOffset],
     ) -> impl Iterator<Item = RenderCommand> + '_ {
         // Append each dirty bind group's dynamic offsets to `flat_dynamic_offsets`.
-        for contents in self.bind[..self.used_bind_groups].iter().flatten() {
+        for contents in self.bind[..used_bind_groups].iter().flatten() {
             if contents.is_dirty {
                 self.flat_dynamic_offsets
                     .extend_from_slice(&dynamic_offsets[contents.dynamic_offsets.clone()]);
@@ -1317,7 +1331,7 @@ impl<A: HalApi> State<A> {
 
         // Then, generate `SetBindGroup` commands to update the dirty bind
         // groups. After this, all bind groups are clean.
-        self.bind[..self.used_bind_groups]
+        self.bind[..used_bind_groups]
             .iter_mut()
             .enumerate()
             .flat_map(|(i, entry)| {
