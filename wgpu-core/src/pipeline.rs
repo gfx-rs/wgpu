@@ -124,6 +124,14 @@ pub enum CreateShaderModuleError {
     Validation(#[from] ShaderError<naga::WithSpan<naga::valid::ValidationError>>),
     #[error(transparent)]
     MissingFeatures(#[from] MissingFeatures),
+    #[error(
+        "shader global {bind:?} uses a group index {group} that exceeds the max_bind_groups limit of {limit}."
+    )]
+    InvalidGroupIndex {
+        bind: naga::ResourceBinding,
+        group: u32,
+        limit: u32,
+    },
 }
 
 impl CreateShaderModuleError {
