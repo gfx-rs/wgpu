@@ -196,6 +196,7 @@ pub type DeviceId = Id<crate::device::Device<Dummy>>;
 pub type QueueId = DeviceId;
 // Resource
 pub type BufferId = Id<crate::resource::Buffer<Dummy>>;
+pub type StagingBufferId = Id<crate::resource::StagingBuffer<Dummy>>;
 pub type TextureViewId = Id<crate::resource::TextureView<Dummy>>;
 pub type TextureId = Id<crate::resource::Texture<Dummy>>;
 pub type SamplerId = Id<crate::resource::Sampler<Dummy>>;

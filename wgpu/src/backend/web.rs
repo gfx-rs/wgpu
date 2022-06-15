@@ -2175,6 +2175,24 @@ impl crate::Context for Context {
             );
     }
 
+    fn queue_create_staging_buffer(
+        &self,
+        _queue: &Self::QueueId,
+        size: wgt::BufferSize,
+    ) -> QueueWriteBuffer {
+        QueueWriteBuffer(vec![0; size.get() as usize].into_boxed_slice())
+    }
+
+    fn queue_write_staging_buffer(
+        &self,
+        queue: &Self::QueueId,
+        buffer: &Self::BufferId,
+        offset: wgt::BufferAddress,
+        staging_buffer: &QueueWriteBuffer,
+    ) {
+        self.queue_write_buffer(queue, buffer, offset, staging_buffer)
+    }
+
     fn queue_write_texture(
         &self,
         queue: &Self::QueueId,
@@ -2239,6 +2257,23 @@ impl crate::Context for Context {
 }
 
 pub(crate) type SurfaceOutputDetail = ();
+
+#[derive(Debug)]
+pub struct QueueWriteBuffer(Box<[u8]>);
+
+impl std::ops::Deref for QueueWriteBuffer {
+    type Target = [u8];
+
+    fn deref(&self) -> &Self::Target {
+        panic!("QueueWriteBuffer is write-only!");
+    }
+}
+
+impl std::ops::DerefMut for QueueWriteBuffer {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
 
 #[derive(Debug)]
 pub struct BufferMappedRange {

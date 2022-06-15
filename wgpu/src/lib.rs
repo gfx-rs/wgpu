@@ -43,7 +43,7 @@ pub use wgt::{
     QUERY_SIZE, VERTEX_STRIDE_ALIGNMENT,
 };
 
-use backend::{BufferMappedRange, Context as C};
+use backend::{BufferMappedRange, Context as C, QueueWriteBuffer};
 
 /// Filter for error scopes.
 #[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
@@ -480,6 +480,18 @@ trait Context: Debug + Send + Sized + Sync {
         buffer: &Self::BufferId,
         offset: BufferAddress,
         data: &[u8],
+    );
+    fn queue_create_staging_buffer(
+        &self,
+        queue: &Self::QueueId,
+        size: BufferSize,
+    ) -> QueueWriteBuffer;
+    fn queue_write_staging_buffer(
+        &self,
+        queue: &Self::QueueId,
+        buffer: &Self::BufferId,
+        offset: BufferAddress,
+        staging_buffer: &QueueWriteBuffer,
     );
     fn queue_write_texture(
         &self,
@@ -3355,6 +3367,40 @@ impl<'a> RenderBundleEncoder<'a> {
     }
 }
 
+/// A write-only view into a staging buffer
+pub struct QueueWriteBufferView<'a> {
+    queue: &'a Queue,
+    buffer: &'a Buffer,
+    offset: BufferAddress,
+    inner: QueueWriteBuffer,
+}
+
+impl<'a> std::ops::Deref for QueueWriteBufferView<'a> {
+    type Target = [u8];
+
+    fn deref(&self) -> &Self::Target {
+        panic!("QueueWriteBufferView is write-only!");
+    }
+}
+
+impl<'a> std::ops::DerefMut for QueueWriteBufferView<'a> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
+    }
+}
+
+impl<'a> Drop for QueueWriteBufferView<'a> {
+    fn drop(&mut self) {
+        Context::queue_write_staging_buffer(
+            &*self.queue.context,
+            &self.queue.id,
+            &self.buffer.id,
+            self.offset,
+            &self.inner,
+        );
+    }
+}
+
 impl Queue {
     /// Schedule a data write into `buffer` starting at `offset`.
     ///
@@ -3365,6 +3411,33 @@ impl Queue {
     /// This method fails if `data` overruns the size of `buffer` starting at `offset`.
     pub fn write_buffer(&self, buffer: &Buffer, offset: BufferAddress, data: &[u8]) {
         Context::queue_write_buffer(&*self.context, &self.id, &buffer.id, offset, data)
+    }
+
+    /// Schedule a data write into `buffer` starting at `offset` via the returned [QueueWriteBufferView].
+    ///
+    /// The returned value can be dereferenced to a `&mut [u8]`.
+    ///
+    /// Dropping the returned value fails if `size` is greater than the size of `buffer` starting at `offset`.
+    ///
+    /// Dereferencing the returned value to a `&[u8]` panics!
+    ///
+    /// This method is intended to have low performance costs.
+    /// As such, the write is not immediately submitted, and instead enqueued
+    /// internally to happen at the start of the next `submit()` call.
+    #[must_use]
+    pub fn write_buffer_with<'a>(
+        &'a self,
+        buffer: &'a Buffer,
+        offset: BufferAddress,
+        size: BufferSize,
+    ) -> QueueWriteBufferView<'a> {
+        let staging_buffer = Context::queue_create_staging_buffer(&*self.context, &self.id, size);
+        QueueWriteBufferView {
+            queue: self,
+            buffer,
+            offset,
+            inner: staging_buffer,
+        }
     }
 
     /// Schedule a data write into `texture`.
