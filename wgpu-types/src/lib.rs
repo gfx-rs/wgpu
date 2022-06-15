@@ -737,6 +737,8 @@ pub struct Limits {
     /// The maximum value for each dimension of a `ComputePass::dispatch(x, y, z)` operation.
     /// Defaults to 65535.
     pub max_compute_workgroups_per_dimension: u32,
+    /// The maximum size of a buffer
+    pub max_buffer_size: u32,
 }
 
 impl Default for Limits {
@@ -769,6 +771,8 @@ impl Default for Limits {
             max_compute_workgroup_size_y: 256,
             max_compute_workgroup_size_z: 64,
             max_compute_workgroups_per_dimension: 65535,
+            // Some drivers run into overflows when manipulating larger buffer sizes.
+            max_buffer_size: std::i32::MAX as u32,
         }
     }
 }
@@ -804,6 +808,7 @@ impl Limits {
             max_compute_workgroup_size_y: 256,
             max_compute_workgroup_size_z: 64,
             max_compute_workgroups_per_dimension: 65535,
+            max_buffer_size: 134_217_728, // 128MB is the guaranteed supported SSBO size in GL
         }
     }
 
@@ -921,6 +926,7 @@ impl Limits {
         compare!(max_compute_workgroup_size_y, Less);
         compare!(max_compute_workgroup_size_z, Less);
         compare!(max_compute_workgroups_per_dimension, Less);
+        compare!(max_buffer_size, Less);
     }
 }
 

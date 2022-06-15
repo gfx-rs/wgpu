@@ -60,6 +60,7 @@ mod inner {
             max_compute_workgroup_size_y,
             max_compute_workgroup_size_z,
             max_compute_workgroups_per_dimension,
+            max_buffer_size,
         } = limits;
         println!("\t\tMax Texture Dimension 1d:                        {}", max_texture_dimension_1d);
         println!("\t\tMax Texture Dimension 2d:                        {}", max_texture_dimension_2d);
@@ -72,6 +73,7 @@ mod inner {
         println!("\t\tMax Samplers Per Shader Stage:                   {}", max_samplers_per_shader_stage);
         println!("\t\tMax Storage Buffers Per Shader Stage:            {}", max_storage_buffers_per_shader_stage);
         println!("\t\tMax Storage Textures Per Shader Stage:           {}", max_storage_textures_per_shader_stage);
+        println!("\t\tMax buffer size:                                 {}", max_buffer_size);
         println!("\t\tMax Uniform Buffers Per Shader Stage:            {}", max_uniform_buffers_per_shader_stage);
         println!("\t\tMax Uniform Buffer Binding Size:                 {}", max_uniform_buffer_binding_size);
         println!("\t\tMax Storage Buffer Binding Size:                 {}", max_storage_buffer_binding_size);

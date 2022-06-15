@@ -768,6 +768,10 @@ impl PhysicalDeviceCapabilities {
             .min(limits.max_compute_work_group_count[1])
             .min(limits.max_compute_work_group_count[2]);
 
+        // Vulkan does not expose a maximum size for buffers, however some drivers run into integer
+        // overflows with sizes larger than what fits 32 bits integers.
+        let max_buffer_size = std::i32::MAX as u32;
+
         wgt::Limits {
             max_texture_dimension_1d: limits.max_image_dimension1_d,
             max_texture_dimension_2d: limits.max_image_dimension2_d,
@@ -808,6 +812,7 @@ impl PhysicalDeviceCapabilities {
             max_compute_workgroup_size_y: max_compute_workgroup_sizes[1],
             max_compute_workgroup_size_z: max_compute_workgroup_sizes[2],
             max_compute_workgroups_per_dimension,
+            max_buffer_size,
         }
     }
 

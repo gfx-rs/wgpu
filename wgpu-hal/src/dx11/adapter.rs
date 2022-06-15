@@ -220,6 +220,7 @@ impl super::Adapter {
             max_compute_workgroup_size_y: max_workgroup_size_xy,
             max_compute_workgroup_size_z: max_workgroup_size_z,
             max_compute_workgroups_per_dimension,
+            max_buffer_size: std::i32::MAX as u32,
         };
 
         //

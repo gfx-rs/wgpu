@@ -3180,6 +3180,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     .add(trace::Action::CreateBuffer(fid.id(), desc));
             }
 
+            let max_size = device.limits.max_buffer_size as BufferAddress;
+            if desc.size > max_size {
+                break resource::CreateBufferError::MaxBufferSize {
+                    requested: desc.size,
+                    maximum: max_size,
+                };
+            }
+
             let mut buffer = match device.create_buffer(device_id, desc, false) {
                 Ok(buffer) => buffer,
                 Err(e) => break e,
