@@ -37,6 +37,28 @@ enum ExpressionPointer {
     },
 }
 
+/// The termination statement to be added to the end of the block
+pub enum BlockExit {
+    /// Generates an OpReturn (void return)
+    Return,
+    /// Generates an OpBranch to the specified block
+    Branch {
+        /// The branch target block
+        target: Word,
+    },
+    /// Translates a loop `break if` into an `OpBranchConditional` to the
+    /// merge block if true (the merge block is passed through [`LoopContext::break_id`]
+    /// or else to the loop header (passed through [`preamble_id`])
+    ///
+    /// [`preamble_id`]: Self::BreakIf::preamble_id
+    BreakIf {
+        /// The condition of the `break if`
+        condition: Handle<crate::Expression>,
+        /// The loop header block id
+        preamble_id: Word,
+    },
+}
+
 impl Writer {
     // Flip Y coordinate to adjust for coordinate space difference
     // between SPIR-V and our IR.
@@ -1491,7 +1513,7 @@ impl<'w> BlockContext<'w> {
         &mut self,
         label_id: Word,
         statements: &[crate::Statement],
-        exit_id: Option<Word>,
+        exit: BlockExit,
         loop_context: LoopContext,
     ) -> Result<(), Error> {
         let mut block = Block::new(label_id);
@@ -1508,7 +1530,12 @@ impl<'w> BlockContext<'w> {
                     self.function.consume(block, Instruction::branch(scope_id));
 
                     let merge_id = self.gen_id();
-                    self.write_block(scope_id, block_statements, Some(merge_id), loop_context)?;
+                    self.write_block(
+                        scope_id,
+                        block_statements,
+                        BlockExit::Branch { target: merge_id },
+                        loop_context,
+                    )?;
 
                     block = Block::new(merge_id);
                 }
@@ -1546,10 +1573,20 @@ impl<'w> BlockContext<'w> {
                     );
 
                     if let Some(block_id) = accept_id {
-                        self.write_block(block_id, accept, Some(merge_id), loop_context)?;
+                        self.write_block(
+                            block_id,
+                            accept,
+                            BlockExit::Branch { target: merge_id },
+                            loop_context,
+                        )?;
                     }
                     if let Some(block_id) = reject_id {
-                        self.write_block(block_id, reject, Some(merge_id), loop_context)?;
+                        self.write_block(
+                            block_id,
+                            reject,
+                            BlockExit::Branch { target: merge_id },
+                            loop_context,
+                        )?;
                     }
 
                     block = Block::new(merge_id);
@@ -1611,7 +1648,9 @@ impl<'w> BlockContext<'w> {
                         self.write_block(
                             *label_id,
                             &case.body,
-                            Some(case_finish_id),
+                            BlockExit::Branch {
+                                target: case_finish_id,
+                            },
                             inner_context,
                         )?;
                     }
@@ -1619,7 +1658,12 @@ impl<'w> BlockContext<'w> {
                     // If no default was encountered write a empty block to satisfy the presence of
                     // a block the default label
                     if !reached_default {
-                        self.write_block(default_id, &[], Some(merge_id), inner_context)?;
+                        self.write_block(
+                            default_id,
+                            &[],
+                            BlockExit::Branch { target: merge_id },
+                            inner_context,
+                        )?;
                     }
 
                     block = Block::new(merge_id);
@@ -1627,6 +1671,7 @@ impl<'w> BlockContext<'w> {
                 crate::Statement::Loop {
                     ref body,
                     ref continuing,
+                    break_if,
                 } => {
                     let preamble_id = self.gen_id();
                     self.function
@@ -1649,17 +1694,29 @@ impl<'w> BlockContext<'w> {
                     self.write_block(
                         body_id,
                         body,
-                        Some(continuing_id),
+                        BlockExit::Branch {
+                            target: continuing_id,
+                        },
                         LoopContext {
                             continuing_id: Some(continuing_id),
                             break_id: Some(merge_id),
                         },
                     )?;
 
+                    let exit = match break_if {
+                        Some(condition) => BlockExit::BreakIf {
+                            condition,
+                            preamble_id,
+                        },
+                        None => BlockExit::Branch {
+                            target: preamble_id,
+                        },
+                    };
+
                     self.write_block(
                         continuing_id,
                         continuing,
-                        Some(preamble_id),
+                        exit,
                         LoopContext {
                             continuing_id: None,
                             break_id: Some(merge_id),
@@ -1955,12 +2012,10 @@ impl<'w> BlockContext<'w> {
             }
         }
 
-        let termination = match exit_id {
-            Some(id) => Instruction::branch(id),
-            // This can happen if the last branch had all the paths
-            // leading out of the graph (i.e. returning).
-            // Or it may be the end of the self.function.
-            None => match self.ir_function.result {
+        let termination = match exit {
+            // We're generating code for the top-level Block of the function, so we
+            // need to end it with some kind of return instruction.
+            BlockExit::Return => match self.ir_function.result {
                 Some(ref result) if self.function.entry_point_context.is_none() => {
                     let type_id = self.get_type_id(LookupType::Handle(result.ty));
                     let null_id = self.writer.write_constant_null(type_id);
@@ -1968,6 +2023,19 @@ impl<'w> BlockContext<'w> {
                 }
                 _ => Instruction::return_void(),
             },
+            BlockExit::Branch { target } => Instruction::branch(target),
+            BlockExit::BreakIf {
+                condition,
+                preamble_id,
+            } => {
+                let condition_id = self.cached[condition];
+
+                Instruction::branch_conditional(
+                    condition_id,
+                    loop_context.break_id.unwrap(),
+                    preamble_id,
+                )
+            }
         };
 
         self.function.consume(block, termination);

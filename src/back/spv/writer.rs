@@ -574,7 +574,12 @@ impl Writer {
         context
             .function
             .consume(prelude, Instruction::branch(main_id));
-        context.write_block(main_id, &ir_function.body, None, LoopContext::default())?;
+        context.write_block(
+            main_id,
+            &ir_function.body,
+            super::block::BlockExit::Return,
+            LoopContext::default(),
+        )?;
 
         // Consume the `BlockContext`, ending its borrows and letting the
         // `Writer` steal back its cached expression table and temp_list.

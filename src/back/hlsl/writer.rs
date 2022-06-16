@@ -1497,18 +1497,27 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             Statement::Loop {
                 ref body,
                 ref continuing,
+                break_if,
             } => {
                 let l2 = level.next();
-                if !continuing.is_empty() {
+                if !continuing.is_empty() || break_if.is_some() {
                     let gate_name = self.namer.call("loop_init");
                     writeln!(self.out, "{}bool {} = true;", level, gate_name)?;
                     writeln!(self.out, "{}while(true) {{", level)?;
                     writeln!(self.out, "{}if (!{}) {{", l2, gate_name)?;
+                    let l3 = l2.next();
                     for sta in continuing.iter() {
-                        self.write_stmt(module, sta, func_ctx, l2.next())?;
+                        self.write_stmt(module, sta, func_ctx, l3)?;
                     }
-                    writeln!(self.out, "{}}}", level.next())?;
-                    writeln!(self.out, "{}{} = false;", level.next(), gate_name)?;
+                    if let Some(condition) = break_if {
+                        write!(self.out, "{}if (", l3)?;
+                        self.write_expr(module, condition, func_ctx)?;
+                        writeln!(self.out, ") {{")?;
+                        writeln!(self.out, "{}break;", l3.next())?;
+                        writeln!(self.out, "{}}}", l3)?;
+                    }
+                    writeln!(self.out, "{}}}", l2)?;
+                    writeln!(self.out, "{}{} = false;", l2, gate_name)?;
                 } else {
                     writeln!(self.out, "{}while(true) {{", level)?;
                 }

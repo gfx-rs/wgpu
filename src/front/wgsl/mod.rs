@@ -125,6 +125,8 @@ pub enum Error<'a> {
     BadIncrDecrReferenceType(Span),
     InvalidResolve(ResolveError),
     InvalidForInitializer(Span),
+    /// A break if appeared outside of a continuing block
+    InvalidBreakIf(Span),
     InvalidGatherComponent(Span, u32),
     InvalidConstructorComponentType(Span, i32),
     InvalidIdentifierUnderscore(Span),
@@ -305,6 +307,11 @@ impl<'a> Error<'a> {
             Error::InvalidForInitializer(ref bad_span) => ParseError {
                 message: format!("for(;;) initializer is not an assignment or a function call: '{}'", &source[bad_span.clone()]),
                 labels: vec![(bad_span.clone(), "not an assignment or function call".into())],
+                notes: vec![],
+            },
+            Error::InvalidBreakIf(ref bad_span) => ParseError {
+                message: "A break if is only allowed in a continuing block".to_string(),
+                labels: vec![(bad_span.clone(), "not in a continuing block".into())],
                 notes: vec![],
             },
             Error::InvalidGatherComponent(ref bad_span, component) => ParseError {
@@ -3811,26 +3818,7 @@ impl Parser {
 
                         Some(crate::Statement::Switch { selector, cases })
                     }
-                    "loop" => {
-                        let _ = lexer.next();
-                        let mut body = crate::Block::new();
-                        let mut continuing = crate::Block::new();
-                        lexer.expect(Token::Paren('{'))?;
-
-                        loop {
-                            if lexer.skip(Token::Word("continuing")) {
-                                continuing = self.parse_block(lexer, context.reborrow(), false)?;
-                                lexer.expect(Token::Paren('}'))?;
-                                break;
-                            }
-                            if lexer.skip(Token::Paren('}')) {
-                                break;
-                            }
-                            self.parse_statement(lexer, context.reborrow(), &mut body, false)?;
-                        }
-
-                        Some(crate::Statement::Loop { body, continuing })
-                    }
+                    "loop" => Some(self.parse_loop(lexer, context.reborrow(), &mut emitter)?),
                     "while" => {
                         let _ = lexer.next();
                         let mut body = crate::Block::new();
@@ -3863,6 +3851,7 @@ impl Parser {
                         Some(crate::Statement::Loop {
                             body,
                             continuing: crate::Block::new(),
+                            break_if: None,
                         })
                     }
                     "for" => {
@@ -3935,10 +3924,22 @@ impl Parser {
                             self.parse_statement(lexer, context.reborrow(), &mut body, false)?;
                         }
 
-                        Some(crate::Statement::Loop { body, continuing })
+                        Some(crate::Statement::Loop {
+                            body,
+                            continuing,
+                            break_if: None,
+                        })
                     }
                     "break" => {
-                        let _ = lexer.next();
+                        let (_, mut span) = lexer.next();
+                        // Check if the next token is an `if`, this indicates
+                        // that the user tried to type out a `break if` which
+                        // is illegal in this position.
+                        let (peeked_token, peeked_span) = lexer.peek();
+                        if let Token::Word("if") = peeked_token {
+                            span.end = peeked_span.end;
+                            return Err(Error::InvalidBreakIf(span));
+                        }
                         Some(crate::Statement::Break)
                     }
                     "continue" => {
@@ -4039,6 +4040,84 @@ impl Parser {
             }
         }
         Ok(())
+    }
+
+    fn parse_loop<'a>(
+        &mut self,
+        lexer: &mut Lexer<'a>,
+        mut context: StatementContext<'a, '_, '_>,
+        emitter: &mut super::Emitter,
+    ) -> Result<crate::Statement, Error<'a>> {
+        let _ = lexer.next();
+        let mut body = crate::Block::new();
+        let mut continuing = crate::Block::new();
+        let mut break_if = None;
+        lexer.expect(Token::Paren('{'))?;
+
+        loop {
+            if lexer.skip(Token::Word("continuing")) {
+                // Branch for the `continuing` block, this must be
+                // the last thing in the loop body
+
+                // Expect a opening brace to start the continuing block
+                lexer.expect(Token::Paren('{'))?;
+                loop {
+                    if lexer.skip(Token::Word("break")) {
+                        // Branch for the `break if` statement, this statement
+                        // has the form `break if <expr>;` and must be the last
+                        // statement in a continuing block
+
+                        // The break must be followed by an `if` to form
+                        // the break if
+                        lexer.expect(Token::Word("if"))?;
+
+                        // Start the emitter to begin parsing an expression
+                        emitter.start(context.expressions);
+                        let condition = self.parse_general_expression(
+                            lexer,
+                            context.as_expression(&mut body, emitter),
+                        )?;
+                        // Add all emits to the continuing body
+                        continuing.extend(emitter.finish(context.expressions));
+                        // Set the condition of the break if to the newly parsed
+                        // expression
+                        break_if = Some(condition);
+
+                        // Expext a semicolon to close the statement
+                        lexer.expect(Token::Separator(';'))?;
+                        // Expect a closing brace to close the continuing block,
+                        // since the break if must be the last statement
+                        lexer.expect(Token::Paren('}'))?;
+                        // Stop parsing the continuing block
+                        break;
+                    } else if lexer.skip(Token::Paren('}')) {
+                        // If we encounter a closing brace it means we have reached
+                        // the end of the continuing block and should stop processing
+                        break;
+                    } else {
+                        // Otherwise try to parse a statement
+                        self.parse_statement(lexer, context.reborrow(), &mut continuing, false)?;
+                    }
+                }
+                // Since the continuing block must be the last part of the loop body,
+                // we expect to see a closing brace to end the loop body
+                lexer.expect(Token::Paren('}'))?;
+                break;
+            }
+            if lexer.skip(Token::Paren('}')) {
+                // If we encounter a closing brace it means we have reached
+                // the end of the loop body and should stop processing
+                break;
+            }
+            // Otherwise try to parse a statement
+            self.parse_statement(lexer, context.reborrow(), &mut body, false)?;
+        }
+
+        Ok(crate::Statement::Loop {
+            body,
+            continuing,
+            break_if,
+        })
     }
 
     fn parse_block<'a>(

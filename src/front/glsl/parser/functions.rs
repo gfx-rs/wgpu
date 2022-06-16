@@ -358,6 +358,7 @@ impl<'source> ParsingContext<'source> {
                     Statement::Loop {
                         body: loop_body,
                         continuing: Block::new(),
+                        break_if: None,
                     },
                     meta,
                 );
@@ -411,6 +412,7 @@ impl<'source> ParsingContext<'source> {
                     Statement::Loop {
                         body: loop_body,
                         continuing: Block::new(),
+                        break_if: None,
                     },
                     meta,
                 );
@@ -513,6 +515,7 @@ impl<'source> ParsingContext<'source> {
                     Statement::Loop {
                         body: block,
                         continuing,
+                        break_if: None,
                     },
                     meta,
                 );

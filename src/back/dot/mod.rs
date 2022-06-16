@@ -81,11 +81,15 @@ impl StatementGraph {
                 S::Loop {
                     ref body,
                     ref continuing,
+                    break_if,
                 } => {
                     let body_id = self.add(body);
                     self.flow.push((id, body_id, "body"));
                     let continuing_id = self.add(continuing);
                     self.flow.push((body_id, continuing_id, "continuing"));
+                    if let Some(expr) = break_if {
+                        self.dependencies.push((id, expr, "break if"));
+                    }
                     "Loop"
                 }
                 S::Return { value } => {

@@ -2552,14 +2552,23 @@ impl<W: Write> Writer<W> {
                 crate::Statement::Loop {
                     ref body,
                     ref continuing,
+                    break_if,
                 } => {
-                    if !continuing.is_empty() {
+                    if !continuing.is_empty() || break_if.is_some() {
                         let gate_name = self.namer.call("loop_init");
                         writeln!(self.out, "{}bool {} = true;", level, gate_name)?;
                         writeln!(self.out, "{}while(true) {{", level)?;
                         let lif = level.next();
+                        let lcontinuing = lif.next();
                         writeln!(self.out, "{}if (!{}) {{", lif, gate_name)?;
-                        self.put_block(lif.next(), continuing, context)?;
+                        self.put_block(lcontinuing, continuing, context)?;
+                        if let Some(condition) = break_if {
+                            write!(self.out, "{}if (", lcontinuing)?;
+                            self.put_expression(condition, &context.expression, true)?;
+                            writeln!(self.out, ") {{")?;
+                            writeln!(self.out, "{}break;", lcontinuing.next())?;
+                            writeln!(self.out, "{}}}", lcontinuing)?;
+                        }
                         writeln!(self.out, "{}}}", lif)?;
                         writeln!(self.out, "{}{} = false;", lif, gate_name)?;
                     } else {

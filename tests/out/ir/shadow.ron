@@ -1320,6 +1320,7 @@
                             value: 120,
                         ),
                     ],
+                    break_if: None,
                 ),
                 Emit((
                     start: 120,

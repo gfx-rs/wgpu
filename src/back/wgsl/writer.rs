@@ -908,6 +908,7 @@ impl<W: Write> Writer<W> {
             Statement::Loop {
                 ref body,
                 ref continuing,
+                break_if,
             } => {
                 write!(self.out, "{}", level)?;
                 writeln!(self.out, "loop {{")?;
@@ -917,11 +918,26 @@ impl<W: Write> Writer<W> {
                     self.write_stmt(module, sta, func_ctx, l2)?;
                 }
 
-                if !continuing.is_empty() {
+                // The continuing is optional so we don't need to write it if
+                // it is empty, but the `break if` counts as a continuing statement
+                // so even if `continuing` is empty we must generate it if a
+                // `break if` exists
+                if !continuing.is_empty() || break_if.is_some() {
                     writeln!(self.out, "{}continuing {{", l2)?;
                     for sta in continuing.iter() {
                         self.write_stmt(module, sta, func_ctx, l2.next())?;
                     }
+
+                    // The `break if` is always the last
+                    // statement of the `continuing` block
+                    if let Some(condition) = break_if {
+                        // The trailing space is important
+                        write!(self.out, "{}break if ", l2.next())?;
+                        self.write_expr(module, condition, func_ctx)?;
+                        // Close the `break if` statement
+                        writeln!(self.out, ";")?;
+                    }
+
                     writeln!(self.out, "{}}}", l2)?;
                 }
 

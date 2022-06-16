@@ -1800,15 +1800,24 @@ impl<'a, W: Write> Writer<'a, W> {
             Statement::Loop {
                 ref body,
                 ref continuing,
+                break_if,
             } => {
-                if !continuing.is_empty() {
+                if !continuing.is_empty() || break_if.is_some() {
                     let gate_name = self.namer.call("loop_init");
                     writeln!(self.out, "{}bool {} = true;", level, gate_name)?;
                     writeln!(self.out, "{}while(true) {{", level)?;
                     let l2 = level.next();
+                    let l3 = l2.next();
                     writeln!(self.out, "{}if (!{}) {{", l2, gate_name)?;
                     for sta in continuing {
-                        self.write_stmt(sta, ctx, l2.next())?;
+                        self.write_stmt(sta, ctx, l3)?;
+                    }
+                    if let Some(condition) = break_if {
+                        write!(self.out, "{}if (", l3)?;
+                        self.write_expr(condition, ctx)?;
+                        writeln!(self.out, ") {{")?;
+                        writeln!(self.out, "{}break;", l3.next())?;
+                        writeln!(self.out, "{}}}", l3)?;
                     }
                     writeln!(self.out, "{}}}", l2)?;
                     writeln!(self.out, "{}{} = false;", level.next(), gate_name)?;

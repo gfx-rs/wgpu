@@ -499,6 +499,7 @@ impl super::Validator {
                 S::Loop {
                     ref body,
                     ref continuing,
+                    break_if,
                 } => {
                     // special handling for block scoping is needed here,
                     // because the continuing{} block inherits the scope
@@ -520,6 +521,20 @@ impl super::Validator {
                             &context.with_abilities(ControlFlowAbility::empty()),
                         )?
                         .stages;
+
+                    if let Some(condition) = break_if {
+                        match *context.resolve_type(condition, &self.valid_expression_set)? {
+                            Ti::Scalar {
+                                kind: crate::ScalarKind::Bool,
+                                width: _,
+                            } => {}
+                            _ => {
+                                return Err(FunctionError::InvalidIfType(condition)
+                                    .with_span_handle(condition, context.expressions))
+                            }
+                        }
+                    }
+
                     for handle in self.valid_expression_list.drain(base_expression_count..) {
                         self.valid_expression_set.remove(handle.index());
                     }

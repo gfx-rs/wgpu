@@ -531,6 +531,10 @@ fn convert_wgsl() {
             "binding-arrays",
             Targets::WGSL | Targets::HLSL | Targets::METAL | Targets::SPIRV,
         ),
+        (
+            "break-if",
+            Targets::WGSL | Targets::GLSL | Targets::SPIRV | Targets::HLSL | Targets::METAL,
+        ),
     ];
 
     for &(name, targets) in inputs.iter() {

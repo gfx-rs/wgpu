@@ -3565,6 +3565,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 S::Loop {
                     ref mut body,
                     ref mut continuing,
+                    break_if: _,
                 } => {
                     self.patch_statements(body, expressions, fun_parameter_sampling)?;
                     self.patch_statements(continuing, expressions, fun_parameter_sampling)?;

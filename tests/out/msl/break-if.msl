@@ -1,0 +1,69 @@
+// language: metal2.0
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+using metal::uint;
+
+
+void breakIfEmpty(
+) {
+    bool loop_init = true;
+    while(true) {
+        if (!loop_init) {
+            if (true) {
+                break;
+            }
+        }
+        loop_init = false;
+    }
+    return;
+}
+
+void breakIfEmptyBody(
+    bool a
+) {
+    bool b = {};
+    bool c = {};
+    bool loop_init_1 = true;
+    while(true) {
+        if (!loop_init_1) {
+            b = a;
+            bool _e2 = b;
+            c = a != _e2;
+            bool _e5 = c;
+            bool unnamed = a == _e5;
+            if (a == c) {
+                break;
+            }
+        }
+        loop_init_1 = false;
+    }
+    return;
+}
+
+void breakIf(
+    bool a_1
+) {
+    bool d = {};
+    bool e = {};
+    bool loop_init_2 = true;
+    while(true) {
+        if (!loop_init_2) {
+            bool _e5 = e;
+            bool unnamed_1 = a_1 == _e5;
+            if (a_1 == e) {
+                break;
+            }
+        }
+        loop_init_2 = false;
+        d = a_1;
+        bool _e2 = d;
+        e = a_1 != _e2;
+    }
+    return;
+}
+
+kernel void main_(
+) {
+    return;
+}

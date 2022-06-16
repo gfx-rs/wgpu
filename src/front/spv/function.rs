@@ -556,7 +556,11 @@ impl<'function> BlockContext<'function> {
                         let continuing = lower_impl(blocks, bodies, continuing);
 
                         block.push(
-                            crate::Statement::Loop { body, continuing },
+                            crate::Statement::Loop {
+                                body,
+                                continuing,
+                                break_if: None,
+                            },
                             crate::Span::default(),
                         )
                     }

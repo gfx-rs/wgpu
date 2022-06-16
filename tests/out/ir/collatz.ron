@@ -261,6 +261,7 @@
                         ),
                     ],
                     continuing: [],
+                    break_if: None,
                 ),
                 Emit((
                     start: 24,

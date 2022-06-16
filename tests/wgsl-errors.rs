@@ -1556,3 +1556,44 @@ fn host_shareable_types() {
         }
     }
 }
+
+#[test]
+fn misplaced_break_if() {
+    check(
+        "
+        fn test_misplaced_break_if() {
+            loop {
+                break if true;
+            }
+        }
+        ",
+        r###"error: A break if is only allowed in a continuing block
+  ┌─ wgsl:4:17
+  │
+4 │                 break if true;
+  │                 ^^^^^^^^ not in a continuing block
+
+"###,
+    );
+}
+
+#[test]
+fn break_if_bad_condition() {
+    check_validation! {
+        "
+        fn test_break_if_bad_condition() {
+            loop {
+                continuing {
+                    break if 1;
+                }
+            }
+        }
+        ":
+        Err(
+            naga::valid::ValidationError::Function {
+                error: naga::valid::FunctionError::InvalidIfType(_),
+                ..
+            },
+        )
+    }
+}

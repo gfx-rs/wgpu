@@ -841,6 +841,7 @@ impl FunctionInfo {
                 S::Loop {
                     ref body,
                     ref continuing,
+                    break_if: _,
                 } => {
                     let body_uniformity =
                         self.process_block(body, other_functions, disruptor, expression_arena)?;
