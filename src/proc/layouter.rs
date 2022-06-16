@@ -128,6 +128,8 @@ pub enum LayoutErrorInner {
     InvalidArrayElementType(Handle<crate::Type>),
     #[error("Struct member[{0}] type {1:?} doesn't exist")]
     InvalidStructMemberType(u32, Handle<crate::Type>),
+    #[error("Type width must be a power of two")]
+    NonPowerOfTwoWidth,
     #[error("Array size is a bad handle")]
     BadHandle(#[from] BadHandle),
 }
@@ -178,26 +180,35 @@ impl Layouter {
                 .try_size(constants)
                 .map_err(|error| LayoutErrorInner::BadHandle(error).with(ty_handle))?;
             let layout = match ty.inner {
-                Ti::Scalar { width, .. } | Ti::Atomic { width, .. } => TypeLayout {
-                    size,
-                    alignment: Alignment::from_width(width),
-                },
+                Ti::Scalar { width, .. } | Ti::Atomic { width, .. } => {
+                    let alignment = Alignment::new(width as u32)
+                        .ok_or(LayoutErrorInner::NonPowerOfTwoWidth.with(ty_handle))?;
+                    TypeLayout { size, alignment }
+                }
                 Ti::Vector {
                     size: vec_size,
                     width,
                     ..
-                } => TypeLayout {
-                    size,
-                    alignment: { Alignment::from(vec_size) * Alignment::from_width(width) },
-                },
+                } => {
+                    let alignment = Alignment::new(width as u32)
+                        .ok_or(LayoutErrorInner::NonPowerOfTwoWidth.with(ty_handle))?;
+                    TypeLayout {
+                        size,
+                        alignment: Alignment::from(vec_size) * alignment,
+                    }
+                }
                 Ti::Matrix {
                     columns: _,
                     rows,
                     width,
-                } => TypeLayout {
-                    size,
-                    alignment: { Alignment::from(rows) * Alignment::from_width(width) },
-                },
+                } => {
+                    let alignment = Alignment::new(width as u32)
+                        .ok_or(LayoutErrorInner::NonPowerOfTwoWidth.with(ty_handle))?;
+                    TypeLayout {
+                        size,
+                        alignment: Alignment::from(rows) * alignment,
+                    }
+                }
                 Ti::Pointer { .. } | Ti::ValuePointer { .. } => TypeLayout {
                     size,
                     alignment: Alignment::ONE,
