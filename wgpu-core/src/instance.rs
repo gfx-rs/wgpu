@@ -130,7 +130,7 @@ impl Instance {
 }
 
 pub struct Surface {
-    pub(crate) presentation: Option<Presentation>,
+    pub(crate) presentation: Mutex<Option<Presentation>>,
     #[cfg(vulkan)]
     pub vulkan: Option<HalSurface<hal::api::Vulkan>>,
     #[cfg(metal)]
@@ -460,7 +460,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         let surface = Surface {
-            presentation: None,
+            presentation: Mutex::new(None),
             #[cfg(vulkan)]
             vulkan: init(hal::api::Vulkan, &self.instance.vulkan, handle),
             #[cfg(metal)]
@@ -486,7 +486,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("create_surface_metal", "Instance");
 
         let surface = Surface {
-            presentation: None,
+            presentation: Mutex::new(None),
             metal: self.instance.metal.as_ref().map(|inst| HalSurface {
                 raw: {
                     // we don't want to link to metal-rs for this

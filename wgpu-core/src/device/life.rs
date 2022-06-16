@@ -658,7 +658,7 @@ impl<A: HalApi> LifetimeTracker<A> {
                     // besides through the very trackers we have exclusive access to.
                     if let Ok(res) = unsafe { hub.buffers.unregister(id.0) } {
                         let submit_index = res.life_guard.life_count();
-                        if let resource::BufferMapState::Init { stage_buffer, .. } = res.map_state {
+                        if let resource::BufferMapState::Init { stage_buffer, .. } = res.map_state.into_inner() {
                             self.free_resources.buffers.push(stage_buffer);
                         }
                         self.active
@@ -844,7 +844,7 @@ impl<A: HalApi> LifetimeTracker<A> {
             let buffer = &hub.buffers[buffer_id];
             if buffer.life_guard.ref_count.is_none() && trackers.buffers.remove_abandoned(buffer_id)
             {
-                buffer.map_state = resource::BufferMapState::Idle;
+                *buffer.map_state.lock() = resource::BufferMapState::Idle;
                 log::debug!("Mapping request is dropped because the buffer is destroyed.");
 
                 // SAFETY: Refcount has hit one so there should be no other way to access this value
@@ -853,8 +853,9 @@ impl<A: HalApi> LifetimeTracker<A> {
                     self.free_resources.buffers.extend(buf.raw.into_inner());
                 }
             } else {
+                let mut map_state = buffer.map_state.lock();
                 let mapping = match std::mem::replace(
-                    &mut buffer.map_state,
+                    &mut *map_state,
                     resource::BufferMapState::Idle,
                 ) {
                     resource::BufferMapState::Waiting(pending_mapping) => pending_mapping,
@@ -863,7 +864,7 @@ impl<A: HalApi> LifetimeTracker<A> {
                     // Mapping queued at least twice by map -> unmap -> map
                     // and was already successfully mapped below
                     active @ resource::BufferMapState::Active { .. } => {
-                        buffer.map_state = active;
+                        *map_state = active;
                         continue;
                     }
                     _ => panic!("No pending mapping."),
@@ -874,7 +875,7 @@ impl<A: HalApi> LifetimeTracker<A> {
                     let size = mapping.range.end - mapping.range.start;
                     match super::map_buffer(raw, buffer, mapping.range.start, size, host) {
                         Ok(ptr) => {
-                            buffer.map_state = resource::BufferMapState::Active {
+                            *map_state = resource::BufferMapState::Active {
                                 ptr,
                                 range: mapping.range.start..mapping.range.start + size,
                                 host,

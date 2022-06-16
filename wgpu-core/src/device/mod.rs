@@ -12,7 +12,7 @@ use crate::{
     track::{BindGroupStates, TextureSelector, Tracker},
     validation::{self, check_buffer_usage, check_texture_usage},
     FastHashMap, Label, LabelHelpers as _, LifeGuard, MultiRefCount, RefCount, Stored,
-    SubmissionIndex, DOWNLEVEL_ERROR_MESSAGE,
+    SubmissionIndex, DOWNLEVEL_ERROR_MESSAGE, AtomicSubmissionIndex,
 };
 
 use arrayvec::ArrayVec;
@@ -23,7 +23,7 @@ use smallvec::SmallVec;
 use thiserror::Error;
 use wgt::{BufferAddress, TextureFormat, TextureViewDimension};
 
-use std::{borrow::Cow, iter, mem, num::NonZeroU32, ops::Range, ptr};
+use std::{borrow::Cow, iter, mem, num::NonZeroU32, ops::Range, ptr, sync::atomic::Ordering};
 
 mod life;
 pub mod queue;
@@ -188,7 +188,7 @@ fn map_buffer<A: hal::Api>(
     // we instead just initialize the memory here and make sure it is GPU visible, so this happens at max only once for every buffer region.
     //
     // If this is a write mapping zeroing out the memory here is the only reasonable way as all data is pushed to GPU anyways.
-    let init_status = buffer.initialization_status.read();
+    let mut init_status = buffer.initialization_status.write();
     let zero_init_needs_flush_now =
         mapping.is_coherent && buffer.sync_mapped_writes.lock().is_none(); // No need to flush if it is flushed later anyways.
     for uninitialized_range in init_status.drain(offset..(size + offset)) {
@@ -262,7 +262,7 @@ impl<A: hal::Api> CommandAllocator<A> {
 pub struct Device<A: HalApi> {
     pub(crate) raw: A::Device,
     pub(crate) adapter_id: Stored<id::AdapterId>,
-    pub(crate) queue: A::Queue,
+    pub(crate) queue: RwLock<A::Queue>,
     pub(crate) zero_buffer: A::Buffer,
     //pub(crate) cmd_allocator: command::CommandAllocator<A>,
     //mem_allocator: Mutex<alloc::MemoryAllocator<A>>,
@@ -278,8 +278,8 @@ pub struct Device<A: HalApi> {
     ref_count: RefCount,
 
     command_allocator: Mutex<CommandAllocator<A>>,
-    pub(crate) active_submission_index: SubmissionIndex,
-    fence: A::Fence,
+    pub(crate) active_submission_index: AtomicSubmissionIndex,
+    fence: RwLock<A::Fence>,
 
     /// All live resources allocated with this [`Device`].
     ///
@@ -389,13 +389,13 @@ impl<A: HalApi> Device<A> {
         Ok(Self {
             raw: open.device,
             adapter_id,
-            queue: open.queue,
+            queue: RwLock::new(open.queue),
             zero_buffer,
             life_guard,
             ref_count,
             command_allocator: Mutex::new(com_alloc),
-            active_submission_index: 0,
-            fence,
+            active_submission_index: AtomicSubmissionIndex::new(0),
+            fence: RwLock::new(fence),
             trackers: Mutex::new(Tracker::new()),
             life_tracker: Mutex::new(life::LifetimeTracker::new()),
             temp_suspected: Mutex::new(life::SuspectedResources::default()),
@@ -470,18 +470,18 @@ impl<A: HalApi> Device<A> {
                     // as we already checked this from inside the poll call.
                     submission_index.index
                 }
-                _ => self.active_submission_index,
+                _ => self.active_submission_index.load(Ordering::Acquire),
             };
             unsafe {
                 self.raw
-                    .wait(&self.fence, index_to_wait_for, CLEANUP_WAIT_MS)
+                    .wait(&self.fence.read(), index_to_wait_for, CLEANUP_WAIT_MS)
                     .map_err(DeviceError::from)?
             };
             index_to_wait_for
         } else {
             unsafe {
                 self.raw
-                    .get_fence_value(&self.fence)
+                    .get_fence_value(&self.fence.read())
                     .map_err(DeviceError::from)?
             }
         };
@@ -504,7 +504,7 @@ impl<A: HalApi> Device<A> {
         trackers: &Tracker<A>,
     ) {
         // We go through the temp_suspected which is much less hot lock than lock_life
-        let temp_suspected = self.temp_suspected.lock();
+        let mut temp_suspected = self.temp_suspected.lock();
         temp_suspected.clear();
         // As the tracker is cleared/dropped, we need to consider all the resources
         // that it references for destruction in the next GC pass.
@@ -619,7 +619,7 @@ impl<A: HalApi> Device<A> {
             size: desc.size,
             initialization_status: RwLock::new(BufferInitTracker::new(desc.size)),
             sync_mapped_writes: Mutex::new(None),
-            map_state: resource::BufferMapState::Idle,
+            map_state: Mutex::new(resource::BufferMapState::Idle),
             life_guard: LifeGuard::new(desc.label.borrow_or_default()),
         })
     }
@@ -2796,14 +2796,14 @@ impl<A: HalApi> Device<A> {
     fn wait_for_submit(&self, submission_index: SubmissionIndex) -> Result<(), WaitIdleError> {
         let last_done_index = unsafe {
             self.raw
-                .get_fence_value(&self.fence)
+                .get_fence_value(&self.fence.read())
                 .map_err(DeviceError::from)?
         };
         if last_done_index < submission_index {
             log::info!("Waiting for submission {:?}", submission_index);
             unsafe {
                 self.raw
-                    .wait(&self.fence, submission_index, !0)
+                    .wait(&self.fence.read(), submission_index, !0)
                     .map_err(DeviceError::from)?
             };
             let closures = self
@@ -2881,8 +2881,8 @@ impl<A: HalApi> Device<A> {
     pub(crate) fn prepare_to_die(&mut self) {
         self.pending_writes.get_mut().deactivate();
         let mut life_tracker = self.life_tracker.lock();
-        let current_index = self.active_submission_index;
-        if let Err(error) = unsafe { self.raw.wait(&self.fence, current_index, CLEANUP_WAIT_MS) } {
+        let current_index = *self.active_submission_index.get_mut();
+        if let Err(error) = unsafe { self.raw.wait(&self.fence.read(), current_index, CLEANUP_WAIT_MS) } {
             log::error!("failed to wait for the device: {:?}", error);
         }
         let _ = life_tracker.triage_submissions(current_index, &self.command_allocator);
@@ -2898,8 +2898,8 @@ impl<A: HalApi> Device<A> {
         self.command_allocator.into_inner().dispose(&self.raw);
         unsafe {
             self.raw.destroy_buffer(self.zero_buffer);
-            self.raw.destroy_fence(self.fence);
-            self.raw.exit(self.queue);
+            self.raw.destroy_fence(self.fence.into_inner());
+            self.raw.exit(self.queue.into_inner());
         }
     }
 }
@@ -3093,7 +3093,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         break e.into();
                     }
                 };
-                buffer.map_state = resource::BufferMapState::Active {
+                *buffer.map_state.get_mut() = resource::BufferMapState::Active {
                     ptr,
                     range: 0..map_size,
                     host: HostMap::Write,
@@ -3142,7 +3142,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 buffer.initialization_status.get_mut().drain(0..buffer.size);
                 stage.initialization_status.get_mut().drain(0..buffer.size);
 
-                buffer.map_state = resource::BufferMapState::Init {
+                *buffer.map_state.get_mut() = resource::BufferMapState::Init {
                     ptr: mapping.ptr,
                     needs_flush: !mapping.is_coherent,
                     stage_buffer,
@@ -3355,7 +3355,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .ok_or(resource::DestroyError::AlreadyDestroyed)?;
         let temp = queue::TempResource::Buffer(raw);
 
-        let pending_writes = device.pending_writes.lock();
+        let mut pending_writes = device.pending_writes.lock();
         if pending_writes.dst_buffers.contains(&buffer_id) {
             pending_writes.temp_resources.push(temp);
             drop(pending_writes);
@@ -3561,7 +3561,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let last_submit_index = texture.life_guard.life_count();
 
         let clear_views =
-            match std::mem::replace(&mut texture.clear_mode, resource::TextureClearMode::None) {
+            match texture.clear_mode {
                 resource::TextureClearMode::BufferCopy => SmallVec::new(),
                 resource::TextureClearMode::RenderPass { clear_views, .. } => clear_views,
                 resource::TextureClearMode::None => SmallVec::new(),
@@ -3572,7 +3572,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 let raw = raw.take().ok_or(resource::DestroyError::AlreadyDestroyed)?;
                 let temp = queue::TempResource::Texture(raw, clear_views);
 
-                let pending_writes = device.pending_writes.lock();
+                let mut pending_writes = device.pending_writes.lock();
                 if pending_writes.dst_textures.contains(&texture_id) {
                     pending_writes.temp_resources.push(temp);
                     drop(pending_writes);
@@ -3694,7 +3694,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let hub = A::hub(self);
 
-        let (_view, ref_count, last_submit_index, device_id) = unsafe {
+        let (_view, _ref_count, last_submit_index, device_id) = unsafe {
             match hub.texture_views.drop_with_life_guard(texture_view_id) {
                 Some(v) => v,
                 None => return Ok(()),
@@ -4168,7 +4168,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let encoder = match device
                 .command_allocator
                 .lock()
-                .acquire_encoder(&device.raw, &device.queue)
+                .acquire_encoder(&device.raw, &device.queue.read())
             {
                 Ok(raw) => raw,
                 Err(_) => break DeviceError::OutOfMemory,
@@ -4498,7 +4498,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         life_lock
             .suspected_resources
             .pipeline_layouts
-            .push(pipeline.layout_id);
+            .push(pipeline.layout_id.clone());
     }
 
     pub fn device_create_compute_pipeline<A: HalApi>(
@@ -4618,7 +4618,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         life_lock
             .suspected_resources
             .pipeline_layouts
-            .push(pipeline.layout_id);
+            .push(pipeline.layout_id.clone());
     }
 
     pub fn surface_configure<A: HalApi>(
@@ -4739,13 +4739,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 }
             }
 
-            if let Some(present) = surface.presentation.take() {
+            let mut present = surface.presentation.lock();
+            if let Some(present) = present.take() {
                 if present.acquired_texture.is_some() {
                     break E::PreviousOutputExists;
                 }
             }
 
-            surface.presentation = Some(present::Presentation {
+            *present = Some(present::Presentation {
                 device_id: Stored {
                     value: id::Valid(device_id),
                     ref_count: device.life_guard.add_ref(),
@@ -4979,7 +4980,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .map_err(|_| resource::BufferAccessError::Invalid)?;
 
             check_buffer_usage(buffer.usage, pub_usage)?;
-            buffer.map_state = match buffer.map_state {
+            let mut map_state = buffer.map_state.lock();
+            *map_state = match *map_state {
                 resource::BufferMapState::Init { .. } | resource::BufferMapState::Active { .. } => {
                     return Err(resource::BufferAccessError::AlreadyMapped);
                 }
@@ -4995,6 +4997,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     })
                 }
             };
+            drop(map_state);
             log::debug!("Buffer {:?} map state -> Waiting", buffer_id);
 
             let device = &hub.devices[buffer.device_id.value];
@@ -5046,7 +5049,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             return Err(resource::BufferAccessError::UnalignedRangeSize { range_size });
         }
 
-        match buffer.map_state {
+        match *buffer.map_state.lock() {
             resource::BufferMapState::Init { ptr, .. } => {
                 // offset (u64) can not be < 0, so no need to validate the lower bound
                 if offset + range_size > buffer.size {
@@ -5090,10 +5093,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .buffers
             .get(buffer_id)
             .map_err(|_| resource::BufferAccessError::Invalid)?;
-        let device = &mut hub.devices[buffer.device_id.value];
+        let device = &hub.devices[buffer.device_id.value];
 
         log::debug!("Buffer {:?} map state -> Idle", buffer_id);
-        match mem::replace(&mut buffer.map_state, resource::BufferMapState::Idle) {
+        match mem::replace(&mut *buffer.map_state.lock(), resource::BufferMapState::Idle) {
             resource::BufferMapState::Init {
                 ptr,
                 stage_buffer,
@@ -5126,7 +5129,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     .as_ref()
                     .ok_or(resource::BufferAccessError::Destroyed)?;
 
-                buffer.life_guard.use_at(device.active_submission_index + 1);
+                buffer.life_guard.use_at(device.active_submission_index.load(Ordering::Acquire) + 1);
                 let region = wgt::BufferSize::new(buffer.size).map(|size| hal::BufferCopy {
                     src_offset: 0,
                     dst_offset: 0,
@@ -5140,7 +5143,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     buffer: &*raw_buf,
                     usage: hal::BufferUses::empty()..hal::BufferUses::COPY_DST,
                 };
-                let pending_writes = device.pending_writes.lock();
+                let mut pending_writes = device.pending_writes.lock();
                 let encoder = pending_writes.activate();
                 unsafe {
                     encoder.transition_buffers(

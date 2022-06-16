@@ -18,7 +18,7 @@ use crate::{
 use hal::{CommandEncoder as _, Device as _, Queue as _};
 use parking_lot::Mutex;
 use smallvec::SmallVec;
-use std::{iter, mem, num::NonZeroU32, ptr};
+use std::{iter, mem, num::NonZeroU32, ptr, sync::atomic::Ordering};
 use thiserror::Error;
 
 /// Number of command buffers that we generate from the same pool
@@ -340,7 +340,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         if !dst.usage.contains(wgt::BufferUsages::COPY_DST) {
             return Err(TransferError::MissingCopyDstUsageFlag(Some(buffer_id), None).into());
         }
-        dst.life_guard.use_at(device.active_submission_index + 1);
+        dst.life_guard
+            .use_at(device.active_submission_index.load(Ordering::Acquire) + 1);
 
         if data_size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
             return Err(TransferError::UnalignedCopySize(data_size).into());
@@ -368,7 +369,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             usage: hal::BufferUses::MAP_WRITE..hal::BufferUses::COPY_SRC,
         })
         .chain(transition.map(|pending| pending.into_hal(dst)));
-        let pending_writes = device.pending_writes.lock();
+        let mut pending_writes = device.pending_writes.lock();
         let encoder = pending_writes.activate();
         unsafe {
             encoder.transition_buffers(barriers);
@@ -377,6 +378,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         pending_writes.consume(stage);
         pending_writes.dst_buffers.insert(buffer_id);
+        drop(pending_writes);
 
         // Ensure the overwritten bytes are marked as initialized so they don't need to be nulled prior to mapping or binding.
         dst.initialization_status
@@ -471,7 +473,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         let mut trackers = device.trackers.lock();
-        let pending_writes = device.pending_writes.lock();
+        let mut pending_writes = device.pending_writes.lock();
         let encoder = pending_writes.activate();
 
         // If the copy does not fully cover the layers, we need to initialize to zero *first* as we don't keep track of partial texture layer inits.
@@ -482,7 +484,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         } else {
             destination.origin.z..destination.origin.z + size.depth_or_array_layers
         };
-        let dst_init_status = dst.initialization_status.write();
+        let mut dst_init_status = dst.initialization_status.write();
         if dst_init_status.mips[destination.mip_level as usize]
             .check(init_layer_range.clone())
             .is_some()
@@ -524,7 +526,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let (hal_copy_size, array_layer_count) =
             validate_texture_copy_range(destination, &dst.desc, CopySide::Destination, size)?;
-        dst.life_guard.use_at(device.active_submission_index + 1);
+        dst.life_guard
+            .use_at(device.active_submission_index.load(Ordering::Acquire) + 1);
 
         let bytes_per_row = if let Some(bytes_per_row) = data_layout.bytes_per_row {
             bytes_per_row.get()
@@ -629,8 +632,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .get(queue_id)
                 .map_err(|_| DeviceError::Invalid)?;
             device.temp_suspected.lock().clear();
-            device.active_submission_index += 1;
-            let submit_index = device.active_submission_index;
+            let submit_index = device
+                .active_submission_index
+                .fetch_add(1, Ordering::AcqRel)
+                + 1;
             let mut active_executions = Vec::new();
             let mut used_surface_textures = track::TextureUsageScope::new();
 
@@ -676,14 +681,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             }
                         };
                         if !buffer.life_guard.use_at(submit_index) {
-                            if let BufferMapState::Active { .. } = buffer.map_state {
+                            if let BufferMapState::Active { .. } = *buffer.map_state.lock() {
                                 log::warn!("Dropped buffer has a pending mapping.");
                                 unsafe { device.raw.unmap_buffer(&*raw_buf) }
                                     .map_err(DeviceError::from)?;
                             }
                             temp_suspected.buffers.push(id);
                         } else {
-                            match buffer.map_state {
+                            match *buffer.map_state.lock() {
                                 BufferMapState::Idle => (),
                                 _ => panic!("Buffer {:?} is still mapped", id),
                             }
@@ -697,9 +702,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             }
                             TextureInner::Native { raw: Some(_) } => false,
                             TextureInner::Surface {
-                                ref mut has_work, ..
+                                ref has_work, ..
                             } => {
-                                *has_work = true;
+                                has_work.store(true, Ordering::Release);
                                 true
                             }
                         };
@@ -839,8 +844,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let pending_writes = &mut *device.pending_writes.lock();
 
             let super::Device {
-                ref mut queue,
-                ref mut fence,
+                ref queue,
+                ref fence,
                 ..
             } = *device;
 
@@ -861,9 +866,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         }
                         TextureInner::Native { raw: Some(_) } => {}
                         TextureInner::Surface {
-                            ref mut has_work, ..
+                            ref has_work, ..
                         } => {
-                            *has_work = true;
+                            has_work.store(true, Ordering::Release);
                             let ref_count = texture.life_guard.add_ref();
                             unsafe {
                                 used_surface_textures
@@ -909,14 +914,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 )
                 .collect::<Vec<_>>();
             unsafe {
+                let mut queue = device.queue.write();
+                let mut fence = device.fence.write();
                 queue
-                    .submit(&refs, Some((fence, submit_index)))
+                    .submit(&refs, Some((&mut fence, submit_index)))
                     .map_err(DeviceError::from)?;
             }
 
             profiling::scope!("cleanup");
             if let Some(pending_execution) =
-                pending_writes.post_submit(&device.command_allocator, &device.raw, &device.queue)
+                pending_writes.post_submit(&device.command_allocator, &device.raw, &device.queue.read())
             {
                 active_executions.push(pending_execution);
             }
@@ -961,7 +968,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     ) -> Result<f32, InvalidQueue> {
         let hub = A::hub(self);
         match hub.devices.get(queue_id) {
-            Ok(device) => Ok(unsafe { device.queue.get_timestamp_period() }),
+            Ok(device) => Ok(unsafe { device.queue.read().get_timestamp_period() }),
             Err(_) => Err(InvalidQueue),
         }
     }

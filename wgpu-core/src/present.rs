@@ -9,7 +9,7 @@ When this texture is presented, we remove it from the device tracker as well as
 extract it from the hub.
 !*/
 
-use std::borrow::Borrow;
+use std::{borrow::Borrow, sync::atomic::{AtomicBool, Ordering}};
 
 #[cfg(feature = "trace")]
 use crate::device::trace::Action;
@@ -103,7 +103,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .get(surface_id)
             .map_err(|_| SurfaceError::Invalid)?;
 
-        let (device, config) = match surface.presentation {
+        let (device, config) = match *surface.presentation.lock() {
             Some(ref present) => {
                 let device = &hub.devices[present.device_id.value];
                 (device, present.config.clone())
@@ -149,12 +149,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     .map_err(DeviceError::from)?,
                 );
 
-                let present = surface.presentation.as_mut().unwrap();
+                let mut present = surface.presentation.lock();
+                let present = present.as_mut().unwrap();
                 let texture = resource::Texture {
                     inner: resource::TextureInner::Surface {
                         raw: ast.texture,
                         parent_id: Valid(surface_id),
-                        has_work: false,
+                        has_work: AtomicBool::new(false),
                     },
                     device_id: present.device_id.clone(),
                     desc: wgt::TextureDescriptor {
@@ -249,7 +250,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .get(surface_id)
             .map_err(|_| SurfaceError::Invalid)?;
 
-        let present = match surface.presentation {
+        let mut present = surface.presentation.lock();
+        let present = match *present {
             Some(ref mut present) => present,
             None => return Err(SurfaceError::NotConfigured),
         };
@@ -297,12 +299,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         if surface_id != parent_id.0 {
                             log::error!("Presented frame is from a different surface");
                             Err(hal::SurfaceError::Lost)
-                        } else if !has_work {
+                        } else if !has_work.load(Ordering::Acquire) {
                             log::error!("No work has been submitted for this frame");
                             unsafe { suf.raw.lock().discard_texture(raw) };
                             Err(hal::SurfaceError::Outdated)
                         } else {
-                            unsafe { device.queue.present(&mut suf.raw.lock(), raw) }
+                            unsafe { device.queue.write().present(&mut suf.raw.lock(), raw) }
                         }
                     }
                     resource::TextureInner::Native { .. } => unreachable!(),
@@ -341,7 +343,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .get(surface_id)
             .map_err(|_| SurfaceError::Invalid)?;
 
-        let present = match surface.presentation {
+        let mut present = surface.presentation.lock();
+        let present = match *present {
             Some(ref mut present) => present,
             None => return Err(SurfaceError::NotConfigured),
         };

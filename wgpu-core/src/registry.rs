@@ -60,7 +60,7 @@ where
     pub unsafe fn unregister(&self, id: T::Id) -> Result<T, hub::InvalidId> {
         let mut ident_guard = self.identity_manager.lock();
         let (index, epoch) = ident_guard.free(id);
-        let value = unsafe { self.storage.free(index, epoch) };
+        let value = self.storage.free(index, epoch);
         drop(ident_guard);
         value
     }
@@ -122,7 +122,7 @@ where
         match self.get(id) {
             Ok(resource) => Some((resource, resource.life_guard(), resource.device_id())),
             Err(hub::InvalidId::ResourceInError { .. }) => {
-                unsafe { self.unregister(id) };
+                self.unregister(id);
                 None
             }
             Err(e) => {
@@ -244,7 +244,7 @@ where
         if index >= allocated_length {
             // SAFETY: we're the first to ever allocate this block, so we're the only one
             // who could get this mutable reference.
-            let block = &mut *self.blocks[block as usize].get();
+            let block = &mut *self.blocks[block as usize].get_mut();
             *block = Some(Box::new(StorageBlock::new_uninit()));
         }
         self.max_index.store(max_index + 1, Ordering::Release);
@@ -266,7 +266,7 @@ where
 
         // SAFETY: We have just bounds checked the index and we always check the
         // status before accessing the data.
-        let block_option_ref = unsafe { self.blocks[block].get() };
+        let block_option_ref = unsafe { self.blocks[block].get_debug_unchecked() };
         let block_ref = block_option_ref.as_deref().unwrap();
         let data_ref = &block_ref.data[data_index];
         let status_ref = &block_ref.status[data_index];
@@ -281,7 +281,7 @@ where
             Ok(v) => {
                 // SAFETY: We have reserved a slot in the block so this block is guarenteed to exist
                 // and the slot will not be accessed by any other users.
-                let data_mut_ref = &mut *data_ref.get();
+                let data_mut_ref = &mut *data_ref.get_mut();
                 data_mut_ref.write(v);
 
                 *status_ref.lock() = ElementStatus::Occupied(epoch);
@@ -295,8 +295,8 @@ where
     pub unsafe fn overwrite(&self, index: u32, epoch: u32, value: T) {
         let (data_ref, status_ref) = self.raw_refs(index).unwrap_unchecked();
 
-        let status = status_ref.lock();
-        let data_mut_ref = data_ref.get_mut();
+        let mut status = status_ref.lock();
+        let mut data_mut_ref = data_ref.get_mut();
         if let ElementStatus::Occupied(_) = *status {
             data_mut_ref.assume_init_drop();
         }
@@ -307,7 +307,7 @@ where
     }
 
     fn contains(&self, index: u32, epoch: u32) -> bool {
-        let (data_ref, status_ref) = match self.raw_refs(index) {
+        let (_data_ref, status_ref) = match self.raw_refs(index) {
             Ok(v) => v,
             Err(_) => return false,
         };
@@ -322,8 +322,8 @@ where
     fn get(&self, index: u32, epoch: u32) -> Result<&T, hub::InvalidId> {
         let (data_ref, status_ref) = self.raw_refs(index)?;
 
-        let status = *status_ref.lock();
-        match status {
+        let status = &*status_ref.lock();
+        match *status {
             ElementStatus::Occupied(stored_epoch) | ElementStatus::Error(stored_epoch, _)
                 if epoch != stored_epoch =>
             {
@@ -333,8 +333,8 @@ where
                     new: epoch,
                 })
             }
-            ElementStatus::Occupied(_) => Ok(unsafe { data_ref.get().assume_init_ref() }),
-            ElementStatus::Error(_, error) => Err(hub::InvalidId::ResourceInError {
+            ElementStatus::Occupied(_) => Ok(unsafe { data_ref.get_debug_unchecked().assume_init_ref() }),
+            ElementStatus::Error(_, ref error) => Err(hub::InvalidId::ResourceInError {
                 index,
                 error: error.clone(),
             }),
@@ -345,13 +345,13 @@ where
     fn get_unchecked(&self, index: u32) -> Result<&T, hub::InvalidId> {
         let (data_ref, status_ref) = self.raw_refs(index)?;
 
-        let status = *status_ref.lock();
-        match status {
+        let status = status_ref.lock();
+        match *status {
             ElementStatus::Occupied(_) => {
                 // TODO SAFETY: it isn't
-                Ok(unsafe { data_ref.get().assume_init_ref() })
+                Ok(unsafe { data_ref.get_debug_unchecked().assume_init_ref() })
             }
-            ElementStatus::Error(_, error) => Err(hub::InvalidId::ResourceInError {
+            ElementStatus::Error(_, ref error) => Err(hub::InvalidId::ResourceInError {
                 index,
                 error: error.clone(),
             }),
@@ -370,7 +370,7 @@ where
         let old_status = mem::replace(&mut *status_ref.lock(), ElementStatus::Vacant);
         assert_eq!(old_status, ElementStatus::Occupied(epoch));
 
-        let data_mut_ref = data_ref.get_mut();
+        let mut data_mut_ref = data_ref.get_mut();
         let data = mem::replace(&mut *data_mut_ref, DebugMaybeUninit::uninit()).assume_init();
 
         Ok(data)
@@ -436,7 +436,7 @@ where
     ///
     /// - The this function must be called with exclusive access to self.
     unsafe fn remove_all(&self, backend: wgt::Backend) -> impl Iterator<Item = T> + '_ {
-        self.iter_inner(backend).map(|(id, cell, status)| {
+        self.iter_inner(backend).map(|(_, cell, status)| {
             *status.lock() = ElementStatus::Vacant;
             let value = mem::replace(&mut *cell.get_mut(), DebugMaybeUninit::uninit());
             value.assume_init()

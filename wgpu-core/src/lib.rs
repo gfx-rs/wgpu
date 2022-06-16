@@ -54,12 +54,18 @@ pub use hal::{api, MAX_BIND_GROUPS, MAX_COLOR_TARGETS, MAX_VERTEX_BUFFERS};
 
 use atomic::{AtomicUsize, Ordering};
 
-use std::{borrow::Cow, os::raw::c_char, ptr, sync::atomic};
+use std::{
+    borrow::Cow,
+    os::raw::c_char,
+    ptr,
+    sync::atomic, mem::ManuallyDrop,
+};
 
 /// The index of a queue submission.
 ///
 /// These are the values stored in `Device::fence`.
 type SubmissionIndex = hal::FenceValue;
+type AtomicSubmissionIndex = atomic::AtomicU64;
 
 type Index = u32;
 type Epoch = u32;
@@ -77,6 +83,45 @@ impl<'a> LabelHelpers<'a> for Label<'a> {
     }
     fn borrow_or_default(&'a self) -> &'a str {
         self.borrow_option().unwrap_or_default()
+    }
+}
+
+#[derive(Debug)]
+struct AtomicOptionalRefCount(atomic::AtomicPtr<AtomicUsize>);
+
+impl AtomicOptionalRefCount {
+    fn from_ref_count(ref_count: RefCount) -> Self {
+        Self (atomic::AtomicPtr::new(ref_count.0.as_ptr()))
+    }
+
+    fn as_ref_count(&self) -> Option<ManuallyDrop<RefCount>> {
+        let ptr = self.0.load(Ordering::Acquire);
+        let non_null = ptr::NonNull::new(ptr)?;
+        let ref_count = RefCount(non_null);
+
+        Some(ManuallyDrop::new(ref_count))
+    }
+
+    fn is_some(&self) -> bool {
+        self.as_ref_count().is_some()
+    }
+
+    fn is_none(&self) -> bool {
+        !self.is_some()
+    }
+
+    fn take(&self) -> Option<RefCount> {
+        let ptr = self.0.swap(ptr::null_mut(), Ordering::AcqRel);
+        let non_null = ptr::NonNull::new(ptr)?;
+
+        Some(RefCount(non_null))
+    }
+}
+
+impl Drop for AtomicOptionalRefCount {
+    fn drop(&mut self) {
+        // Turn this into a real refcount, then drop it if it needs to drop.
+        drop(self.take());
     }
 }
 
@@ -177,7 +222,7 @@ pub struct LifeGuard {
     ///
     /// Any `Stored<T>` value holds a clone of this `RefCount` along with the id
     /// of a `T` resource.
-    ref_count: Option<RefCount>,
+    ref_count: AtomicOptionalRefCount,
 
     /// The index of the last queue submission in which the resource
     /// was used.
@@ -197,7 +242,7 @@ impl LifeGuard {
     #[allow(unused_variables)]
     fn new(label: &str) -> Self {
         Self {
-            ref_count: Some(RefCount::new()),
+            ref_count: AtomicOptionalRefCount::from_ref_count(RefCount::new()),
             submission_index: AtomicUsize::new(0),
             #[cfg(debug_assertions)]
             label: label.to_string(),
@@ -205,7 +250,7 @@ impl LifeGuard {
     }
 
     fn add_ref(&self) -> RefCount {
-        self.ref_count.clone().unwrap()
+        ManuallyDrop::into_inner(self.ref_count.as_ref_count().unwrap())
     }
 
     /// Record that this resource will be used by the queue submission with the
@@ -215,7 +260,7 @@ impl LifeGuard {
     fn use_at(&self, submit_index: SubmissionIndex) -> bool {
         self.submission_index
             .store(submit_index as _, Ordering::Release);
-        self.ref_count.is_some()
+        self.ref_count.as_ref_count().is_some()
     }
 
     fn life_count(&self) -> SubmissionIndex {

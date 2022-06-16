@@ -13,7 +13,7 @@ use parking_lot::{Mutex, RwLock};
 use smallvec::SmallVec;
 use thiserror::Error;
 
-use std::{borrow::Borrow, num::NonZeroU8, ops::Range, ptr::NonNull};
+use std::{borrow::Borrow, num::NonZeroU8, ops::Range, ptr::NonNull, sync::atomic::AtomicBool};
 
 #[repr(C)]
 #[derive(Debug)]
@@ -161,7 +161,7 @@ pub struct Buffer<A: hal::Api> {
     pub(crate) initialization_status: RwLock<BufferInitTracker>,
     pub(crate) sync_mapped_writes: Mutex<Option<hal::MemoryRange>>,
     pub(crate) life_guard: LifeGuard,
-    pub(crate) map_state: BufferMapState<A>,
+    pub(crate) map_state: Mutex<BufferMapState<A>>,
 }
 
 #[derive(Clone, Debug, Error)]
@@ -201,7 +201,7 @@ pub(crate) enum TextureInner<A: hal::Api> {
     Surface {
         raw: A::SurfaceTexture,
         parent_id: id::Valid<id::SurfaceId>,
-        has_work: bool,
+        has_work: AtomicBool,
     },
 }
 

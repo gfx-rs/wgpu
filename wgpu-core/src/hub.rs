@@ -332,32 +332,24 @@ impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<A, F> {
         }
 
         for sampler in self.samplers.remove_all() {
-            unsafe {
-                self.devices[sampler.device_id.value]
-                    .raw
-                    .destroy_sampler(sampler.raw);
-            }
+            self.devices[sampler.device_id.value]
+                .raw
+                .destroy_sampler(sampler.raw);
         }
 
         for texture_view in self.texture_views.remove_all() {
             let device = &self.devices[texture_view.device_id.value];
-            unsafe {
-                device.raw.destroy_texture_view(texture_view.raw);
-            }
+            device.raw.destroy_texture_view(texture_view.raw);
         }
 
         for texture in self.textures.remove_all() {
             let device = &self.devices[texture.device_id.value];
             if let TextureInner::Native { raw: Some(raw) } = texture.inner {
-                unsafe {
-                    device.raw.destroy_texture(raw);
-                }
+                device.raw.destroy_texture(raw);
             }
             if let TextureClearMode::RenderPass { clear_views, .. } = texture.clear_mode {
                 for view in clear_views {
-                    unsafe {
-                        device.raw.destroy_texture_view(view);
-                    }
+                    device.raw.destroy_texture_view(view);
                 }
             }
         }
@@ -367,66 +359,51 @@ impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<A, F> {
         }
         for bind_group in self.bind_groups.remove_all() {
             let device = &self.devices[bind_group.device_id.value];
-            unsafe {
-                device.raw.destroy_bind_group(bind_group.raw);
-            }
+            device.raw.destroy_bind_group(bind_group.raw);
         }
 
         for module in self.shader_modules.remove_all() {
             let device = &self.devices[module.device_id.value];
-            unsafe {
-                device.raw.destroy_shader_module(module.raw);
-            }
+            device.raw.destroy_shader_module(module.raw);
         }
         for bgl in self.bind_group_layouts.remove_all() {
             let device = &self.devices[bgl.device_id.value];
-            unsafe {
-                device.raw.destroy_bind_group_layout(bgl.raw);
-            }
+            device.raw.destroy_bind_group_layout(bgl.raw);
         }
         for pipeline_layout in self.pipeline_layouts.remove_all() {
             let device = &self.devices[pipeline_layout.device_id.value];
-            unsafe {
-                device.raw.destroy_pipeline_layout(pipeline_layout.raw);
-            }
+            device.raw.destroy_pipeline_layout(pipeline_layout.raw);
         }
         for pipeline in self.compute_pipelines.remove_all() {
             let device = &self.devices[pipeline.device_id.value];
-            unsafe {
-                device.raw.destroy_compute_pipeline(pipeline.raw);
-            }
+            device.raw.destroy_compute_pipeline(pipeline.raw);
         }
         for pipeline in self.render_pipelines.remove_all() {
             let device = &self.devices[pipeline.device_id.value];
-            unsafe {
-                device.raw.destroy_render_pipeline(pipeline.raw);
-            }
+            device.raw.destroy_render_pipeline(pipeline.raw);
         }
 
         for (_, surface) in surface_guard.iter_mut() {
-            if surface
-                .presentation
+            let mut present_guard = surface.presentation.lock();
+            if present_guard
                 .as_ref()
                 .map_or(wgt::Backend::Empty, |p| p.backend())
                 != A::VARIANT
             {
                 continue;
             }
-            if let Some(present) = surface.presentation.take() {
+            if let Some(present) = present_guard.take() {
+                drop(present_guard);
                 let device = &self.devices[present.device_id.value];
                 let suf = A::get_surface(surface);
-                unsafe {
-                    suf.raw.lock().unconfigure(&device.raw);
-                    //TODO: we could destroy the surface here
-                }
+                suf.raw.lock().unconfigure(&device.raw);
+                //TODO: we could destroy the surface here
             }
         }
 
         for query_set in self.query_sets.remove_all() {
             let device = &self.devices[query_set.device_id.value];
-            unsafe {
-                device.raw.destroy_query_set(query_set.raw);
-            }
+            device.raw.destroy_query_set(query_set.raw);
         }
 
         for device in self.devices.remove_all() {
@@ -550,7 +527,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub unsafe fn clear_backend<A: HalApi>(&self, _dummy: ()) {
         let hub = A::hub(self);
         // this is used for tests, which keep the adapter
-        unsafe { hub.clear(&self.surfaces, false) };
+        hub.clear(&self.surfaces, false);
     }
 
     pub fn generate_report(&self) -> GlobalReport {
