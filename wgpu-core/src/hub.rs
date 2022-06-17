@@ -194,6 +194,7 @@ impl GlobalIdentityHandlerFactory for IdentityManagerFactory {}
 pub type Input<G, I> = <<G as IdentityHandlerFactory<I>>::Filter as IdentityHandler<I>>::Input;
 
 pub trait Resource {
+    type Raw;
     type Id: id::TypedId;
     const TYPE: &'static str;
     fn life_guard(&self) -> Option<&crate::LifeGuard>;
@@ -344,8 +345,10 @@ impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<A, F> {
 
         for texture in self.textures.remove_all() {
             let device = &self.devices[texture.device_id.value];
-            if let TextureInner::Native { raw: Some(raw) } = texture.inner {
-                device.raw.destroy_texture(raw);
+            if let TextureInner::Native { raw } = texture.inner {
+                if let Some(raw) = raw.into_inner() {
+                    device.raw.destroy_texture(raw);
+                }
             }
             if let TextureClearMode::RenderPass { clear_views, .. } = texture.clear_mode {
                 for view in clear_views {

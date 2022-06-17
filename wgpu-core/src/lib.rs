@@ -36,6 +36,7 @@
 pub mod binding_model;
 pub mod command;
 mod conv;
+mod destroy;
 pub mod device;
 pub mod error;
 pub mod hub;
@@ -54,12 +55,7 @@ pub use hal::{api, MAX_BIND_GROUPS, MAX_COLOR_TARGETS, MAX_VERTEX_BUFFERS};
 
 use atomic::{AtomicUsize, Ordering};
 
-use std::{
-    borrow::Cow,
-    os::raw::c_char,
-    ptr,
-    sync::atomic, mem::ManuallyDrop,
-};
+use std::{borrow::Cow, mem::ManuallyDrop, os::raw::c_char, ptr, sync::atomic};
 
 /// The index of a queue submission.
 ///
@@ -91,7 +87,7 @@ struct AtomicOptionalRefCount(atomic::AtomicPtr<AtomicUsize>);
 
 impl AtomicOptionalRefCount {
     fn from_ref_count(ref_count: RefCount) -> Self {
-        Self (atomic::AtomicPtr::new(ref_count.0.as_ptr()))
+        Self(atomic::AtomicPtr::new(ref_count.0.as_ptr()))
     }
 
     fn as_ref_count(&self) -> Option<ManuallyDrop<RefCount>> {

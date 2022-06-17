@@ -445,6 +445,7 @@ pub struct BindGroupLayout<A: hal::Api> {
 }
 
 impl<A: hal::Api> Resource for BindGroupLayout<A> {
+    type Raw = A::BindGroupLayout;
     type Id = BindGroupLayoutId;
     const TYPE: &'static str = "BindGroupLayout";
 
@@ -643,6 +644,7 @@ impl<A: hal::Api> PipelineLayout<A> {
 }
 
 impl<A: hal::Api> Resource for PipelineLayout<A> {
+    type Raw = A::PipelineLayout;
     type Id = PipelineLayoutId;
     const TYPE: &'static str = "PipelineLayout";
 
@@ -777,6 +779,7 @@ impl<A: HalApi> BindGroup<A> {
 }
 
 impl<A: HalApi> Resource for BindGroup<A> {
+    type Raw = A::BindGroup;
     type Id = BindGroupId;
     const TYPE: &'static str = "BindGroup";
 

@@ -1,9 +1,9 @@
 use crate::{
+    destroy::{DestructableResource, ReadDestructionGuard},
     device::{DeviceError, HostMap, MissingFeatures},
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Resource},
     id,
     init_tracker::{BufferInitTracker, TextureInitTracker},
-    sync::DestroyableResource,
     track::TextureSelector,
     validation::MissingBufferUsageError,
     Label, LifeGuard, RefCount, Stored,
@@ -154,7 +154,7 @@ pub(crate) struct BufferPendingMapping {
 pub type BufferDescriptor<'a> = wgt::BufferDescriptor<Label<'a>>;
 
 pub struct Buffer<A: hal::Api> {
-    pub(crate) raw: DestroyableResource<A::Buffer>,
+    pub(crate) raw: DestructableResource<Self>,
     pub(crate) device_id: Stored<id::DeviceId>,
     pub(crate) usage: wgt::BufferUsages,
     pub(crate) size: wgt::BufferAddress,
@@ -179,6 +179,7 @@ pub enum CreateBufferError {
 }
 
 impl<A: hal::Api> Resource for Buffer<A> {
+    type Raw = A::Buffer;
     type Id = id::BufferId;
     const TYPE: &'static str = "Buffer";
 
@@ -196,7 +197,7 @@ pub type TextureDescriptor<'a> = wgt::TextureDescriptor<Label<'a>>;
 #[derive(Debug)]
 pub(crate) enum TextureInner<A: hal::Api> {
     Native {
-        raw: Option<A::Texture>,
+        raw: DestructableResource<Texture<A>>,
     },
     Surface {
         raw: A::SurfaceTexture,
@@ -206,10 +207,9 @@ pub(crate) enum TextureInner<A: hal::Api> {
 }
 
 impl<A: hal::Api> TextureInner<A> {
-    pub fn as_raw(&self) -> Option<&A::Texture> {
+    pub fn as_raw<'a>(&'a self, guard: ReadDestructionGuard<'a>) -> Option<&'a A::Texture> {
         match *self {
-            Self::Native { raw: Some(ref tex) } => Some(tex),
-            Self::Native { raw: None } => None,
+            Self::Native { raw } => raw.as_ref(guard),
             Self::Surface { ref raw, .. } => Some(raw.borrow()),
         }
     }
@@ -366,6 +366,7 @@ pub enum CreateTextureError {
 }
 
 impl<A: hal::Api> Resource for Texture<A> {
+    type Raw = A::Texture;
     type Id = id::TextureId;
     const TYPE: &'static str = "Texture";
 
@@ -474,6 +475,7 @@ pub enum CreateTextureViewError {
 pub enum TextureViewDestroyError {}
 
 impl<A: hal::Api> Resource for TextureView<A> {
+    type Raw = A::TextureView;
     type Id = id::TextureViewId;
     const TYPE: &'static str = "TextureView";
 
@@ -555,6 +557,7 @@ pub enum CreateSamplerError {
 }
 
 impl<A: hal::Api> Resource for Sampler<A> {
+    type Raw = A::Sampler;
     type Id = id::SamplerId;
     const TYPE: &'static str = "Sampler";
 
@@ -590,6 +593,7 @@ pub struct QuerySet<A: hal::Api> {
 }
 
 impl<A: hal::Api> Resource for QuerySet<A> {
+    type Raw = A::QuerySet;
     type Id = id::QuerySetId;
     const TYPE: &'static str = "QuerySet";
 

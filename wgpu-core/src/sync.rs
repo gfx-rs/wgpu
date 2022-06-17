@@ -2,7 +2,7 @@ use std::ops::{Deref, DerefMut};
 #[cfg(not(debug_assertions))]
 use std::{cell::UnsafeCell, mem::MaybeUninit};
 
-use parking_lot::{MappedRwLockReadGuard, RwLock, RwLockReadGuard};
+use parking_lot::{RwLock};
 
 /// Unsafe cell that's actually an RW lock in debug.
 pub struct DebugUnsafeCell<T> {
@@ -142,36 +142,3 @@ impl<T> DebugMaybeUninit<T> {
         self.inner.assume_init_drop()
     }
 }
-
-pub struct DestroyableResource<T> {
-    inner: RwLock<Option<T>>,
-}
-
-impl<T> DestroyableResource<T> {
-    pub fn new(value: T) -> Self {
-        Self {
-            inner: RwLock::new(Some(value)),
-        }
-    }
-
-    pub fn as_ref(&self) -> Option<DestroyableResourceGuard<'_, T>> {
-        let option = self.inner.read();
-        if option.is_some() {
-            Some(RwLockReadGuard::map(option, |o| unsafe {
-                o.as_ref().unwrap_unchecked()
-            }))
-        } else {
-            None
-        }
-    }
-
-    pub fn destroy(&self) -> Option<T> {
-        self.inner.write().take()
-    }
-
-    pub fn into_inner(self) -> Option<T> {
-        self.inner.into_inner()
-    }
-}
-
-type DestroyableResourceGuard<'a, T> = MappedRwLockReadGuard<'a, T>;

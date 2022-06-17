@@ -144,6 +144,7 @@ pub struct Surface {
 }
 
 impl crate::hub::Resource for Surface {
+    type Raw = ();
     type Id = SurfaceId;
     const TYPE: &'static str = "Surface";
 
@@ -346,6 +347,7 @@ impl<A: HalApi> Adapter<A> {
 }
 
 impl<A: hal::Api> crate::hub::Resource for Adapter<A> {
+    type Raw = A::Adapter;
     type Id = AdapterId;
     const TYPE: &'static str = "Adapter";
 

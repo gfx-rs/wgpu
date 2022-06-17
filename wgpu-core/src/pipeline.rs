@@ -43,6 +43,7 @@ pub struct ShaderModule<A: hal::Api> {
 }
 
 impl<A: hal::Api> Resource for ShaderModule<A> {
+    type Raw = A::ShaderModule;
     type Id = ShaderModuleId;
     const TYPE: &'static str = "ShaderModule";
 
@@ -196,6 +197,7 @@ pub struct ComputePipeline<A: hal::Api> {
 }
 
 impl<A: hal::Api> Resource for ComputePipeline<A> {
+    type Raw = A::ComputePipeline;
     type Id = ComputePipelineId;
     const TYPE: &'static str = "ComputePipeline";
 
@@ -380,6 +382,7 @@ pub struct RenderPipeline<A: hal::Api> {
 }
 
 impl<A: hal::Api> Resource for RenderPipeline<A> {
+    type Raw = A::RenderPipeline;
     type Id = RenderPipelineId;
     const TYPE: &'static str = "RenderPipeline";
 

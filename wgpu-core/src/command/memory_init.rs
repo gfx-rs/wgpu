@@ -169,9 +169,10 @@ impl<A: HalApi> BakedCommands<A> {
             } else {
                 buffer_use.range.end + wgt::COPY_BUFFER_ALIGNMENT - end_remainder
             };
-            let uninitialized_ranges = buffer
+            let mut init_status = buffer
                 .initialization_status
-                .write()
+                .write();
+            let uninitialized_ranges = init_status
                 .drain(buffer_use.range.start..end);
 
             match buffer_use.kind {
@@ -250,7 +251,7 @@ impl<A: HalApi> BakedCommands<A> {
                 .map_err(|_| DestroyedTextureError(texture_use.id))?;
 
             let use_range = texture_use.range;
-            let status = texture.initialization_status.write();
+            let mut status = texture.initialization_status.write();
             let affected_mip_trackers = status
                 .mips
                 .iter_mut()

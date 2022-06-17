@@ -234,6 +234,7 @@ impl<A: HalApi> CommandBuffer<A> {
 }
 
 impl<A: HalApi> crate::hub::Resource for Mutex<CommandBuffer<A>> {
+    type Raw = A::CommandBuffer;
     type Id = id::CommandBufferId;
     const TYPE: &'static str = "CommandBuffer";
 

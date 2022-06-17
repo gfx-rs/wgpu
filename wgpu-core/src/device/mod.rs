@@ -1,5 +1,6 @@
 use crate::{
     binding_model, command, conv,
+    destroy::DestructableResource,
     device::life::WaitIdleError,
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Hub, Input},
     id,
@@ -8,11 +9,10 @@ use crate::{
         TextureInitTracker, TextureInitTrackerAction,
     },
     instance, pipeline, present, registry, resource,
-    sync::DestroyableResource,
     track::{BindGroupStates, TextureSelector, Tracker},
     validation::{self, check_buffer_usage, check_texture_usage},
-    FastHashMap, Label, LabelHelpers as _, LifeGuard, MultiRefCount, RefCount, Stored,
-    SubmissionIndex, DOWNLEVEL_ERROR_MESSAGE, AtomicSubmissionIndex,
+    AtomicSubmissionIndex, FastHashMap, Label, LabelHelpers as _, LifeGuard, MultiRefCount,
+    RefCount, Stored, SubmissionIndex, DOWNLEVEL_ERROR_MESSAGE,
 };
 
 use arrayvec::ArrayVec;
@@ -610,7 +610,7 @@ impl<A: HalApi> Device<A> {
         let buffer = unsafe { self.raw.create_buffer(&hal_desc) }.map_err(DeviceError::from)?;
 
         Ok(resource::Buffer {
-            raw: DestroyableResource::new(buffer),
+            raw: DestructableResource::new(buffer),
             device_id: Stored {
                 value: id::Valid(self_id),
                 ref_count: self.life_guard.add_ref(),
@@ -2882,7 +2882,10 @@ impl<A: HalApi> Device<A> {
         self.pending_writes.get_mut().deactivate();
         let mut life_tracker = self.life_tracker.lock();
         let current_index = *self.active_submission_index.get_mut();
-        if let Err(error) = unsafe { self.raw.wait(&self.fence.read(), current_index, CLEANUP_WAIT_MS) } {
+        if let Err(error) = unsafe {
+            self.raw
+                .wait(&self.fence.read(), current_index, CLEANUP_WAIT_MS)
+        } {
             log::error!("failed to wait for the device: {:?}", error);
         }
         let _ = life_tracker.triage_submissions(current_index, &self.command_allocator);
@@ -3560,12 +3563,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let last_submit_index = texture.life_guard.life_count();
 
-        let clear_views =
-            match texture.clear_mode {
-                resource::TextureClearMode::BufferCopy => SmallVec::new(),
-                resource::TextureClearMode::RenderPass { clear_views, .. } => clear_views,
-                resource::TextureClearMode::None => SmallVec::new(),
-            };
+        let clear_views = match texture.clear_mode {
+            resource::TextureClearMode::BufferCopy => SmallVec::new(),
+            resource::TextureClearMode::RenderPass { clear_views, .. } => clear_views,
+            resource::TextureClearMode::None => SmallVec::new(),
+        };
 
         match texture.inner {
             resource::TextureInner::Native { ref mut raw } => {
@@ -5096,7 +5098,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let device = &hub.devices[buffer.device_id.value];
 
         log::debug!("Buffer {:?} map state -> Idle", buffer_id);
-        match mem::replace(&mut *buffer.map_state.lock(), resource::BufferMapState::Idle) {
+        match mem::replace(
+            &mut *buffer.map_state.lock(),
+            resource::BufferMapState::Idle,
+        ) {
             resource::BufferMapState::Init {
                 ptr,
                 stage_buffer,
@@ -5129,7 +5134,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     .as_ref()
                     .ok_or(resource::BufferAccessError::Destroyed)?;
 
-                buffer.life_guard.use_at(device.active_submission_index.load(Ordering::Acquire) + 1);
+                buffer
+                    .life_guard
+                    .use_at(device.active_submission_index.load(Ordering::Acquire) + 1);
                 let region = wgt::BufferSize::new(buffer.size).map(|size| hal::BufferCopy {
                     src_offset: 0,
                     dst_offset: 0,
