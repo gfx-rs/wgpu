@@ -152,14 +152,14 @@ impl crate::hub::Resource for Surface {
 }
 
 impl Surface {
-    pub fn get_preferred_format<A: HalApi>(
+    pub fn get_supported_formats<A: HalApi>(
         &self,
         adapter: &Adapter<A>,
-    ) -> Result<wgt::TextureFormat, GetSurfacePreferredFormatError> {
+    ) -> Result<Vec<wgt::TextureFormat>, GetSurfacePreferredFormatError> {
         // Check the four formats mentioned in the WebGPU spec.
         // Also, prefer sRGB over linear as it is better in
         // representing perceived colors.
-        let preferred_formats = [
+        let candidate_formats = [
             wgt::TextureFormat::Bgra8UnormSrgb,
             wgt::TextureFormat::Rgba8UnormSrgb,
             wgt::TextureFormat::Bgra8Unorm,
@@ -177,10 +177,16 @@ impl Surface {
                 .ok_or(GetSurfacePreferredFormatError::UnsupportedQueueFamily)?
         };
 
-        preferred_formats
+        let supported_formats = candidate_formats
             .iter()
             .cloned()
-            .find(|preferred| caps.formats.contains(preferred))
+            .filter(|candidate| caps.formats.contains(candidate))
+            .collect::<Vec<wgt::TextureFormat>>();
+
+        // Error if no formats supported
+        supported_formats
+            .is_empty()
+            .then(|| supported_formats)
             .ok_or(GetSurfacePreferredFormatError::NotFound)
     }
 }

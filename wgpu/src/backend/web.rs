@@ -1188,12 +1188,12 @@ impl crate::Context for Context {
         format.describe().guaranteed_format_features
     }
 
-    fn surface_get_preferred_format(
+    fn surface_get_supported_formats(
         &self,
         surface: &Self::SurfaceId,
         adapter: &Self::AdapterId,
-    ) -> Option<wgt::TextureFormat> {
-        let format = map_texture_format_from_web_sys(surface.0.get_preferred_format(&adapter.0));
+    ) -> Option<Vec<wgt::TextureFormat>> {
+        let format = map_texture_format_from_web_sys(surface.0.get_supported_formats(&adapter.0));
         Some(format)
     }
 

@@ -225,11 +225,11 @@ trait Context: Debug + Send + Sized + Sync {
         format: TextureFormat,
     ) -> TextureFormatFeatures;
 
-    fn surface_get_preferred_format(
+    fn surface_get_supported_formats(
         &self,
         surface: &Self::SurfaceId,
         adapter: &Self::AdapterId,
-    ) -> Option<TextureFormat>;
+    ) -> Option<Vec<TextureFormat>>;
     fn surface_configure(
         &self,
         surface: &Self::SurfaceId,
@@ -3438,8 +3438,8 @@ impl Surface {
     /// Returns an optimal texture format to use for the [`Surface`] with this adapter.
     ///
     /// Returns None if the surface is incompatible with the adapter.
-    pub fn get_preferred_format(&self, adapter: &Adapter) -> Option<TextureFormat> {
-        Context::surface_get_preferred_format(&*self.context, &self.id, &adapter.id)
+    pub fn get_supported_formats(&self, adapter: &Adapter) -> Option<Vec<TextureFormat>> {
+        Context::surface_get_supported_formats(&*self.context, &self.id, &adapter.id)
     }
 
     /// Initializes [`Surface`] for presentation.
