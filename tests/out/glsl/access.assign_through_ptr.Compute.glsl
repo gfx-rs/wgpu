@@ -5,6 +5,11 @@ precision highp int;
 
 layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 
+struct GlobalConst {
+    uint a;
+    uvec3 b;
+    int c;
+};
 struct AlignedWrapper {
     int value;
 };
@@ -15,8 +20,8 @@ shared uint val;
 
 
 float read_from_private(inout float foo_1) {
-    float _e4 = foo_1;
-    return _e4;
+    float _e5 = foo_1;
+    return _e5;
 }
 
 float test_arr_as_arg(float a[5][10]) {

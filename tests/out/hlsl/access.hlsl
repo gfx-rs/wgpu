@@ -1,4 +1,13 @@
 
+struct GlobalConst {
+    uint a;
+    int _pad1_0;
+    int _pad1_1;
+    int _pad1_2;
+    uint3 b;
+    int c;
+};
+
 struct AlignedWrapper {
     int value;
     int _end_pad_0;
@@ -7,6 +16,14 @@ struct AlignedWrapper {
 struct Baz {
     float2 m_0; float2 m_1; float2 m_2;
 };
+
+GlobalConst ConstructGlobalConst(uint arg0, uint3 arg1, int arg2) {
+    GlobalConst ret = (GlobalConst)0;
+    ret.a = arg0;
+    ret.b = arg1;
+    ret.c = arg2;
+    return ret;
+}
 
 typedef float ret_Constructarray10_float_[10];
 ret_Constructarray10_float_ Constructarray10_float_(float arg0, float arg1, float arg2, float arg3, float arg4, float arg5, float arg6, float arg7, float arg8, float arg9) {
@@ -20,6 +37,7 @@ ret_Constructarray5_array10_float__ Constructarray5_array10_float__(float arg0[1
     return ret;
 }
 
+static GlobalConst global_const = ConstructGlobalConst(0u, uint3(0u, 0u, 0u), 0);
 RWByteAddressBuffer bar : register(u0);
 cbuffer baz : register(b1) { Baz baz; }
 RWByteAddressBuffer qux : register(u2);
@@ -64,42 +82,42 @@ void test_matrix_within_struct_accesses()
     int idx = 1;
     Baz t = (Baz)0;
 
-    int _expr5 = idx;
-    idx = (_expr5 - 1);
+    int _expr6 = idx;
+    idx = (_expr6 - 1);
     float3x2 unnamed = GetMatmOnBaz(baz);
     float2 unnamed_1 = GetMatmOnBaz(baz)[0];
-    int _expr15 = idx;
-    float2 unnamed_2 = GetMatmOnBaz(baz)[_expr15];
+    int _expr16 = idx;
+    float2 unnamed_2 = GetMatmOnBaz(baz)[_expr16];
     float unnamed_3 = GetMatmOnBaz(baz)[0][1];
-    int _expr27 = idx;
-    float unnamed_4 = GetMatmOnBaz(baz)[0][_expr27];
-    int _expr31 = idx;
-    float unnamed_5 = GetMatmOnBaz(baz)[_expr31][1];
-    int _expr37 = idx;
-    int _expr39 = idx;
-    float unnamed_6 = GetMatmOnBaz(baz)[_expr37][_expr39];
+    int _expr28 = idx;
+    float unnamed_4 = GetMatmOnBaz(baz)[0][_expr28];
+    int _expr32 = idx;
+    float unnamed_5 = GetMatmOnBaz(baz)[_expr32][1];
+    int _expr38 = idx;
+    int _expr40 = idx;
+    float unnamed_6 = GetMatmOnBaz(baz)[_expr38][_expr40];
     t = ConstructBaz(float3x2((1.0).xx, (2.0).xx, (3.0).xx));
-    int _expr51 = idx;
-    idx = (_expr51 + 1);
+    int _expr52 = idx;
+    idx = (_expr52 + 1);
     SetMatmOnBaz(t, float3x2((6.0).xx, (5.0).xx, (4.0).xx));
     t.m_0 = (9.0).xx;
-    int _expr68 = idx;
-    SetMatVecmOnBaz(t, (90.0).xx, _expr68);
+    int _expr69 = idx;
+    SetMatVecmOnBaz(t, (90.0).xx, _expr69);
     t.m_0[1] = 10.0;
-    int _expr81 = idx;
-    t.m_0[_expr81] = 20.0;
-    int _expr85 = idx;
-    SetMatScalarmOnBaz(t, 30.0, _expr85, 1);
-    int _expr91 = idx;
-    int _expr93 = idx;
-    SetMatScalarmOnBaz(t, 40.0, _expr91, _expr93);
+    int _expr82 = idx;
+    t.m_0[_expr82] = 20.0;
+    int _expr86 = idx;
+    SetMatScalarmOnBaz(t, 30.0, _expr86, 1);
+    int _expr92 = idx;
+    int _expr94 = idx;
+    SetMatScalarmOnBaz(t, 40.0, _expr92, _expr94);
     return;
 }
 
 float read_from_private(inout float foo_1)
 {
-    float _expr4 = foo_1;
-    return _expr4;
+    float _expr5 = foo_1;
+    return _expr5;
 }
 
 float test_arr_as_arg(float a[5][10])
@@ -139,14 +157,14 @@ float4 foo_vert(uint vi : SV_VertexID) : SV_Position
     float b = asfloat(bar.Load(0+48+0));
     int a_1 = asint(bar.Load(0+(((NagaBufferLengthRW(bar) - 120) / 8) - 2u)*8+120));
     int2 c_1 = asint(qux.Load2(0));
-    const float _e30 = read_from_private(foo);
+    const float _e31 = read_from_private(foo);
     {
         int _result[5]=Constructarray5_int_(a_1, int(b), 3, 4, 5);
         for(int _i=0; _i<5; ++_i) c[_i] = _result[_i];
     }
     c[(vi + 1u)] = 42;
     int value = c[vi];
-    const float _e44 = test_arr_as_arg(Constructarray5_array10_float__(Constructarray10_float_(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), Constructarray10_float_(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), Constructarray10_float_(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), Constructarray10_float_(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), Constructarray10_float_(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)));
+    const float _e45 = test_arr_as_arg(Constructarray5_array10_float__(Constructarray10_float_(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), Constructarray10_float_(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), Constructarray10_float_(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), Constructarray10_float_(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), Constructarray10_float_(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)));
     return float4(mul(float4((value).xxxx), _matrix), 2.0);
 }
 
@@ -182,22 +200,22 @@ void atomics()
     int tmp = (int)0;
 
     int value_1 = asint(bar.Load(96));
-    int _e8; bar.InterlockedAdd(96, 5, _e8);
-    tmp = _e8;
-    int _e11; bar.InterlockedAdd(96, -5, _e11);
-    tmp = _e11;
-    int _e14; bar.InterlockedAnd(96, 5, _e14);
-    tmp = _e14;
-    int _e17; bar.InterlockedOr(96, 5, _e17);
-    tmp = _e17;
-    int _e20; bar.InterlockedXor(96, 5, _e20);
-    tmp = _e20;
-    int _e23; bar.InterlockedMin(96, 5, _e23);
-    tmp = _e23;
-    int _e26; bar.InterlockedMax(96, 5, _e26);
-    tmp = _e26;
-    int _e29; bar.InterlockedExchange(96, 5, _e29);
-    tmp = _e29;
+    int _e9; bar.InterlockedAdd(96, 5, _e9);
+    tmp = _e9;
+    int _e12; bar.InterlockedAdd(96, -5, _e12);
+    tmp = _e12;
+    int _e15; bar.InterlockedAnd(96, 5, _e15);
+    tmp = _e15;
+    int _e18; bar.InterlockedOr(96, 5, _e18);
+    tmp = _e18;
+    int _e21; bar.InterlockedXor(96, 5, _e21);
+    tmp = _e21;
+    int _e24; bar.InterlockedMin(96, 5, _e24);
+    tmp = _e24;
+    int _e27; bar.InterlockedMax(96, 5, _e27);
+    tmp = _e27;
+    int _e30; bar.InterlockedExchange(96, 5, _e30);
+    tmp = _e30;
     bar.Store(96, asuint(value_1));
     return;
 }

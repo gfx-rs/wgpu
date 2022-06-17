@@ -364,6 +364,8 @@ pub struct Writer<W> {
     put_expression_stack_pointers: FastHashSet<*const ()>,
     #[cfg(test)]
     put_block_stack_pointers: FastHashSet<*const ()>,
+    /// Set of (struct type, struct field index) denoting which fields require
+    /// padding inserted **before** them (i.e. between fields at index - 1 and index)
     struct_member_pads: FastHashSet<(Handle<crate::Type>, u32)>,
 }
 
@@ -3092,6 +3094,10 @@ impl<W: Write> Writer<W> {
                     };
                     write!(self.out, "constant {} {} = {{", ty_name, name,)?;
                     for (i, &sub_handle) in components.iter().enumerate() {
+                        // insert padding initialization, if needed
+                        if self.struct_member_pads.contains(&(ty, i as u32)) {
+                            write!(self.out, ", {{}}")?;
+                        }
                         let separator = if i != 0 { ", " } else { "" };
                         let coco = ConstantContext {
                             handle: sub_handle,

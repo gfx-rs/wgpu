@@ -3,6 +3,11 @@
 precision highp float;
 precision highp int;
 
+struct GlobalConst {
+    uint a;
+    uvec3 b;
+    int c;
+};
 struct AlignedWrapper {
     int value;
 };
@@ -17,13 +22,13 @@ layout(std430) buffer Bar_block_0Fragment {
     AlignedWrapper data[];
 } _group_0_binding_0_fs;
 
-layout(std430) buffer type_9_block_1Fragment { ivec2 _group_0_binding_2_fs; };
+layout(std430) buffer type_11_block_1Fragment { ivec2 _group_0_binding_2_fs; };
 
 layout(location = 0) out vec4 _fs2p_location0;
 
 float read_from_private(inout float foo_1) {
-    float _e4 = foo_1;
-    return _e4;
+    float _e5 = foo_1;
+    return _e5;
 }
 
 float test_arr_as_arg(float a[5][10]) {

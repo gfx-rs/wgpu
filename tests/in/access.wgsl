@@ -1,5 +1,13 @@
 // This snapshot tests accessing various containers, dereferencing pointers.
 
+struct GlobalConst {
+    a: u32,
+    b: vec3<u32>,
+    c: i32,
+}
+// tests msl padding insertion for global constants
+var<private> global_const: GlobalConst = GlobalConst(0u, vec3<u32>(0u, 0u, 0u), 0);
+
 struct AlignedWrapper {
 	@align(8) value: i32
 }
