@@ -55,8 +55,8 @@ void main() {
     bool loop_init = true;
     while(true) {
         if (!loop_init) {
-        uint _e86 = i;
-        i = (_e86 + 1u);
+            uint _e86 = i;
+            i = (_e86 + 1u);
         }
         loop_init = false;
         uint _e37 = i;

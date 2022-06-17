@@ -52,8 +52,8 @@ void main() {
     bool loop_init = true;
     while(true) {
         if (!loop_init) {
-        uint _e20 = i_1;
-        i_1 = (_e20 + 1u);
+            uint _e20 = i_1;
+            i_1 = (_e20 + 1u);
         }
         loop_init = false;
         uint _e14 = i_1;

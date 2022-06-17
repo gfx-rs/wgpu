@@ -1805,11 +1805,12 @@ impl<'a, W: Write> Writer<'a, W> {
                     let gate_name = self.namer.call("loop_init");
                     writeln!(self.out, "{}bool {} = true;", level, gate_name)?;
                     writeln!(self.out, "{}while(true) {{", level)?;
-                    writeln!(self.out, "{}if (!{}) {{", level.next(), gate_name)?;
+                    let l2 = level.next();
+                    writeln!(self.out, "{}if (!{}) {{", l2, gate_name)?;
                     for sta in continuing {
-                        self.write_stmt(sta, ctx, level.next())?;
+                        self.write_stmt(sta, ctx, l2.next())?;
                     }
-                    writeln!(self.out, "{}}}", level.next())?;
+                    writeln!(self.out, "{}}}", l2)?;
                     writeln!(self.out, "{}{} = false;", level.next(), gate_name)?;
                 } else {
                     writeln!(self.out, "{}while(true) {{", level)?;
