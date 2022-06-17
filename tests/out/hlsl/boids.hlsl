@@ -47,8 +47,8 @@ void main(uint3 global_invocation_id : SV_DispatchThreadID)
     bool loop_init = true;
     while(true) {
         if (!loop_init) {
-        uint _expr86 = i;
-        i = (_expr86 + 1u);
+            uint _expr86 = i;
+            i = (_expr86 + 1u);
         }
         loop_init = false;
         uint _expr37 = i;

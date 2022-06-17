@@ -95,8 +95,8 @@ float4 fs_main(FragmentInput_fs_main fragmentinput_fs_main) : SV_Target0
     bool loop_init = true;
     while(true) {
         if (!loop_init) {
-        uint _expr20 = i;
-        i = (_expr20 + 1u);
+            uint _expr20 = i;
+            i = (_expr20 + 1u);
         }
         loop_init = false;
         uint _expr14 = i;
@@ -129,8 +129,8 @@ float4 fs_main_without_storage(FragmentInput_fs_main_without_storage fragmentinp
     bool loop_init_1 = true;
     while(true) {
         if (!loop_init_1) {
-        uint _expr20 = i_1;
-        i_1 = (_expr20 + 1u);
+            uint _expr20 = i_1;
+            i_1 = (_expr20 + 1u);
         }
         loop_init_1 = false;
         uint _expr14 = i_1;

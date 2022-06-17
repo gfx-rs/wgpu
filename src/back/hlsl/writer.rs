@@ -1505,7 +1505,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     writeln!(self.out, "{}while(true) {{", level)?;
                     writeln!(self.out, "{}if (!{}) {{", l2, gate_name)?;
                     for sta in continuing.iter() {
-                        self.write_stmt(module, sta, func_ctx, l2)?;
+                        self.write_stmt(module, sta, func_ctx, l2.next())?;
                     }
                     writeln!(self.out, "{}}}", level.next())?;
                     writeln!(self.out, "{}{} = false;", level.next(), gate_name)?;
