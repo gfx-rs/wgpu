@@ -213,7 +213,9 @@ web-sys = { version = "0.3.57", features = [
     "GpuFragmentState",
     "GpuFrontFace",
     "GpuImageCopyBuffer",
+    "GpuImageCopyExternalImage",
     "GpuImageCopyTexture",
+    "GpuImageCopyTextureTagged",
     "GpuImageDataLayout",
     "GpuIndexFormat",
     "GpuLoadOp",
@@ -280,6 +282,7 @@ web-sys = { version = "0.3.57", features = [
     "GpuVertexState",
     "GpuVertexStepMode",
     "HtmlCanvasElement",
+    "ImageBitmap",
     "OffscreenCanvas",
     "Window"
 ] }

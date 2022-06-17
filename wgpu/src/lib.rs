@@ -3373,6 +3373,17 @@ impl Queue {
         Context::queue_write_texture(&*self.context, &self.id, texture, data, data_layout, size)
     }
 
+    /// Schedule a copy of data from `image` into `texture`
+    #[cfg(all(target_arch = "wasm32", not(feature = "webgl")))]
+    pub fn copy_external_image_to_texture(
+        &self,
+        image: &web_sys::ImageBitmap,
+        texture: ImageCopyTexture,
+        size: Extent3d,
+    ) {
+        self.context.queue_copy_external_image_to_texture(&self.id, image, texture, size)
+    }
+
     /// Submits a series of finished command buffers for execution.
     pub fn submit<I: IntoIterator<Item = CommandBuffer>>(
         &self,
