@@ -182,7 +182,7 @@ pub struct RenderPassDescriptor<'a> {
 pub struct RenderPass {
     base: BasePass<RenderCommand>,
     parent_id: id::CommandEncoderId,
-    color_targets: ArrayVec<RenderPassColorAttachment, { hal::MAX_COLOR_TARGETS }>,
+    color_targets: ArrayVec<RenderPassColorAttachment, { hal::MAX_COLOR_ATTACHMENTS }>,
     depth_stencil_target: Option<RenderPassDepthStencilAttachment>,
 
     // Resource binding dedupe state.
@@ -589,7 +589,7 @@ impl<A: hal::Api> TextureView<A> {
     }
 }
 
-const MAX_TOTAL_ATTACHMENTS: usize = hal::MAX_COLOR_TARGETS + hal::MAX_COLOR_TARGETS + 1;
+const MAX_TOTAL_ATTACHMENTS: usize = hal::MAX_COLOR_ATTACHMENTS + hal::MAX_COLOR_ATTACHMENTS + 1;
 type AttachmentDataVec<T> = ArrayVec<T, MAX_TOTAL_ATTACHMENTS>;
 
 struct RenderPassInfo<'a, A: HalApi> {
@@ -726,7 +726,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
             Ok(())
         };
 
-        let mut colors = ArrayVec::<hal::ColorAttachment<A>, { hal::MAX_COLOR_TARGETS }>::new();
+        let mut colors = ArrayVec::<hal::ColorAttachment<A>, { hal::MAX_COLOR_ATTACHMENTS }>::new();
         let mut depth_stencil = None;
 
         if let Some(at) = depth_stencil_attachment {

@@ -41,7 +41,7 @@ use ash::{
 use parking_lot::Mutex;
 
 const MILLIS_TO_NANOS: u64 = 1_000_000;
-const MAX_TOTAL_ATTACHMENTS: usize = crate::MAX_COLOR_TARGETS * 2 + 1;
+const MAX_TOTAL_ATTACHMENTS: usize = crate::MAX_COLOR_ATTACHMENTS * 2 + 1;
 
 pub type DropGuard = Box<dyn std::any::Any + Send + Sync>;
 
@@ -212,7 +212,7 @@ struct DepthStencilAttachmentKey {
 
 #[derive(Clone, Eq, Default, Hash, PartialEq)]
 struct RenderPassKey {
-    colors: ArrayVec<ColorAttachmentKey, { crate::MAX_COLOR_TARGETS }>,
+    colors: ArrayVec<ColorAttachmentKey, { crate::MAX_COLOR_ATTACHMENTS }>,
     depth_stencil: Option<DepthStencilAttachmentKey>,
     sample_count: u32,
     multiview: Option<NonZeroU32>,
