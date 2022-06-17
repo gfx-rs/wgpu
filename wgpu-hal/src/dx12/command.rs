@@ -580,7 +580,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     unsafe fn begin_render_pass(&mut self, desc: &crate::RenderPassDescriptor<super::Api>) {
         self.begin_pass(super::PassKind::Render, desc.label);
 
-        let mut color_views = [native::CpuDescriptor { ptr: 0 }; crate::MAX_COLOR_TARGETS];
+        let mut color_views = [native::CpuDescriptor { ptr: 0 }; crate::MAX_COLOR_ATTACHMENTS];
         for (rtv, cat) in color_views.iter_mut().zip(desc.color_attachments.iter()) {
             *rtv = cat.target.view.handle_rtv.unwrap().raw;
         }

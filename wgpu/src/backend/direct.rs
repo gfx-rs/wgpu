@@ -2027,7 +2027,7 @@ impl crate::Context for Context {
                 resolve_target: ca.resolve_target.map(|rt| rt.id),
                 channel: map_pass_channel(Some(&ca.ops)),
             })
-            .collect::<ArrayVec<_, { wgc::MAX_COLOR_TARGETS }>>();
+            .collect::<ArrayVec<_, { wgc::MAX_COLOR_ATTACHMENTS }>>();
 
         let depth_stencil = desc.depth_stencil_attachment.as_ref().map(|dsa| {
             wgc::command::RenderPassDepthStencilAttachment {

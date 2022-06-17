@@ -168,7 +168,7 @@ impl RenderBundleEncoder {
             parent_id,
             context: RenderPassContext {
                 attachments: AttachmentData {
-                    colors: if desc.color_formats.len() > hal::MAX_COLOR_TARGETS {
+                    colors: if desc.color_formats.len() > hal::MAX_COLOR_ATTACHMENTS {
                         return Err(CreateRenderBundleError::TooManyColorAttachments);
                     } else {
                         desc.color_formats.iter().cloned().collect()

@@ -52,8 +52,8 @@ pub enum HostMap {
 #[derive(Clone, Debug, Hash, PartialEq)]
 #[cfg_attr(feature = "serial-pass", derive(serde::Deserialize, serde::Serialize))]
 pub(crate) struct AttachmentData<T> {
-    pub colors: ArrayVec<T, { hal::MAX_COLOR_TARGETS }>,
-    pub resolves: ArrayVec<T, { hal::MAX_COLOR_TARGETS }>,
+    pub colors: ArrayVec<T, { hal::MAX_COLOR_ATTACHMENTS }>,
+    pub resolves: ArrayVec<T, { hal::MAX_COLOR_ATTACHMENTS }>,
     pub depth_stencil: Option<T>,
 }
 impl<T: PartialEq> Eq for AttachmentData<T> {}
@@ -78,8 +78,8 @@ pub(crate) struct RenderPassContext {
 pub enum RenderPassCompatibilityError {
     #[error("Incompatible color attachment: the renderpass expected {0:?} but was given {1:?}")]
     IncompatibleColorAttachment(
-        ArrayVec<TextureFormat, { hal::MAX_COLOR_TARGETS }>,
-        ArrayVec<TextureFormat, { hal::MAX_COLOR_TARGETS }>,
+        ArrayVec<TextureFormat, { hal::MAX_COLOR_ATTACHMENTS }>,
+        ArrayVec<TextureFormat, { hal::MAX_COLOR_ATTACHMENTS }>,
     ),
     #[error(
         "Incompatible depth-stencil attachment: the renderpass expected {0:?} but was given {1:?}"
