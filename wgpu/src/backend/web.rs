@@ -553,7 +553,7 @@ fn map_texture_format(texture_format: wgt::TextureFormat) -> web_sys::GpuTexture
     }
 }
 
-fn map_texture_format_from_web_sys(
+fn _map_texture_format_from_web_sys(
     texture_format: web_sys::GpuTextureFormat,
 ) -> wgt::TextureFormat {
     use web_sys::GpuTextureFormat as tf;
@@ -1190,11 +1190,16 @@ impl crate::Context for Context {
 
     fn surface_get_supported_formats(
         &self,
-        surface: &Self::SurfaceId,
-        adapter: &Self::AdapterId,
+        _surface: &Self::SurfaceId,
+        _adapter: &Self::AdapterId,
     ) -> Option<Vec<wgt::TextureFormat>> {
-        let format = map_texture_format_from_web_sys(surface.0.get_supported_formats(&adapter.0));
-        Some(format)
+        // https://gpuweb.github.io/gpuweb/#supported-context-formats
+        let formats = vec![
+            wgt::TextureFormat::Bgra8Unorm,
+            wgt::TextureFormat::Rgba8Unorm,
+            wgt::TextureFormat::Rgba16Float,
+        ];
+        Some(formats)
     }
 
     fn surface_configure(
