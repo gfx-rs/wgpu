@@ -3018,7 +3018,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         surface_id: id::SurfaceId,
         adapter_id: id::AdapterId,
     ) -> Result<Vec<TextureFormat>, instance::GetSurfacePreferredFormatError> {
-        profiling::scope!("surface_get_supported_formats");
+        profiling::scope!("Surface::get_supported_formats");
         let hub = A::hub(self);
         let mut token = Token::root();
 
