@@ -156,17 +156,6 @@ impl Surface {
         &self,
         adapter: &Adapter<A>,
     ) -> Result<Vec<wgt::TextureFormat>, GetSurfacePreferredFormatError> {
-        // Check the four formats mentioned in the WebGPU spec.
-        // Also, prefer sRGB over linear as it is better in
-        // representing perceived colors.
-        let candidate_formats = [
-            wgt::TextureFormat::Bgra8UnormSrgb,
-            wgt::TextureFormat::Rgba8UnormSrgb,
-            wgt::TextureFormat::Bgra8Unorm,
-            wgt::TextureFormat::Rgba8Unorm,
-            wgt::TextureFormat::Rgba16Float,
-        ];
-
         let suf = A::get_surface(self);
         let caps = unsafe {
             profiling::scope!("surface_capabilities");
