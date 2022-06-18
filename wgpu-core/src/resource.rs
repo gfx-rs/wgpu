@@ -47,8 +47,8 @@ unsafe impl<A: hal::Api> Sync for BufferMapState<A> {}
 
 #[repr(C)]
 pub struct BufferMapCallbackC {
-    callback: unsafe extern "C" fn(status: BufferMapAsyncStatus, user_data: *mut u8),
-    user_data: *mut u8,
+    pub callback: unsafe extern "C" fn(status: BufferMapAsyncStatus, user_data: *mut u8),
+    pub user_data: *mut u8,
 }
 
 unsafe impl Send for BufferMapCallbackC {}
