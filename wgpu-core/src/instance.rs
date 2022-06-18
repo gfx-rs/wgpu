@@ -177,16 +177,9 @@ impl Surface {
                 .ok_or(GetSurfacePreferredFormatError::UnsupportedQueueFamily)?
         };
 
-        let supported_formats = candidate_formats
-            .iter()
-            .cloned()
-            .filter(|candidate| caps.formats.contains(candidate))
-            .collect::<Vec<wgt::TextureFormat>>();
-
-        // Error if no formats supported
-        supported_formats
+        caps.formats
             .is_empty()
-            .then(|| supported_formats)
+            .then(|| caps.formats)
             .ok_or(GetSurfacePreferredFormatError::NotFound)
     }
 }
