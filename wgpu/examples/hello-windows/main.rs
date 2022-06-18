@@ -33,7 +33,7 @@ impl ViewportDesc {
 
         let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-            format: self
+            format: *self
                 .surface
                 .get_supported_formats(adapter)
                 .unwrap()

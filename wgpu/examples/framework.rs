@@ -198,7 +198,7 @@ fn start<E: Example>(
     let spawner = Spawner::new();
     let mut config = wgpu::SurfaceConfiguration {
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-        format: surface
+        format: *surface
             .get_supported_formats(&adapter)
             .unwrap()
             .first()
