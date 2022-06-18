@@ -269,7 +269,11 @@ fn start<E: Example>(
     let spawner = Spawner::new();
     let mut config = wgpu::SurfaceConfiguration {
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-        format: surface.get_preferred_format(&adapter).unwrap(),
+        format: *surface
+            .get_supported_formats(&adapter)
+            .unwrap()
+            .first()
+            .unwrap(),
         width: size.width,
         height: size.height,
         present_mode: wgpu::PresentMode::Mailbox,

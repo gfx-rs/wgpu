@@ -958,17 +958,17 @@ impl crate::Context for Context {
         }
     }
 
-    fn surface_get_preferred_format(
+    fn surface_get_supported_formats(
         &self,
         surface: &Self::SurfaceId,
         adapter: &Self::AdapterId,
-    ) -> Option<TextureFormat> {
+    ) -> Option<Vec<TextureFormat>> {
         let global = &self.0;
-        match wgc::gfx_select!(adapter => global.surface_get_preferred_format(surface.id, *adapter))
+        match wgc::gfx_select!(adapter => global.surface_get_supported_formats(surface.id, *adapter))
         {
-            Ok(format) => Some(format),
+            Ok(formats) => Some(formats),
             Err(wgc::instance::GetSurfacePreferredFormatError::UnsupportedQueueFamily) => None,
-            Err(err) => self.handle_error_fatal(err, "Surface::get_preferred_format"),
+            Err(err) => self.handle_error_fatal(err, "Surface::get_supported_formats"),
         }
     }
 

@@ -3105,12 +3105,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .map_err(|_| instance::IsSurfaceSupportedError::InvalidSurface)?;
         Ok(adapter.is_surface_supported(surface))
     }
-    pub fn surface_get_preferred_format<A: HalApi>(
+    pub fn surface_get_supported_formats<A: HalApi>(
         &self,
         surface_id: id::SurfaceId,
         adapter_id: id::AdapterId,
-    ) -> Result<TextureFormat, instance::GetSurfacePreferredFormatError> {
-        profiling::scope!("surface_get_preferred_format");
+    ) -> Result<Vec<TextureFormat>, instance::GetSurfacePreferredFormatError> {
+        profiling::scope!("Surface::get_supported_formats");
         let hub = A::hub(self);
         let mut token = Token::root();
 
@@ -3123,7 +3123,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .get(surface_id)
             .map_err(|_| instance::GetSurfacePreferredFormatError::InvalidSurface)?;
 
-        surface.get_preferred_format(adapter)
+        surface.get_supported_formats(adapter)
     }
 
     pub fn device_features<A: HalApi>(
