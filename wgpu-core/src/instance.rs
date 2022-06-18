@@ -166,10 +166,11 @@ impl Surface {
                 .ok_or(GetSurfacePreferredFormatError::UnsupportedQueueFamily)?
         };
 
-        caps.formats
-            .is_empty()
-            .then(|| caps.formats)
-            .ok_or(GetSurfacePreferredFormatError::NotFound)
+        if caps.formats.is_empty() {
+            return Err(GetSurfacePreferredFormatError::NotFound);
+        }
+
+        Ok(caps.formats)
     }
 }
 
