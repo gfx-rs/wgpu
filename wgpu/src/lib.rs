@@ -3447,11 +3447,30 @@ impl Drop for SurfaceTexture {
 
 impl Surface {
     /// Returns a vec of supported texture formats to use for the [`Surface`] with this adapter.
-    /// Note: The first format in the vector is preferred
     ///
     /// Returns None if the surface is incompatible with the adapter.
     pub fn get_supported_formats(&self, adapter: &Adapter) -> Option<Vec<TextureFormat>> {
         Context::surface_get_supported_formats(&*self.context, &self.id, &adapter.id)
+    }
+
+    /// Returns an optimal texture format to use for the [`Surface`] with this adapter.
+    pub fn get_preferred_format(&self, adapter: &Adapter) -> Option<wgt::TextureFormat> {
+        // Check the four formats mentioned in the WebGPU spec.
+        // Also, prefer sRGB over linear as it is better in
+        // representing perceived colors.
+        let preferred_formats = [
+            wgt::TextureFormat::Bgra8UnormSrgb,
+            wgt::TextureFormat::Rgba8UnormSrgb,
+            wgt::TextureFormat::Bgra8Unorm,
+            wgt::TextureFormat::Rgba8Unorm,
+            wgt::TextureFormat::Rgba16Float,
+        ];
+
+        let formats = self.get_supported_formats(adapter)?;
+        preferred_formats
+            .iter()
+            .cloned()
+            .find(|preferred| formats.contains(preferred))
     }
 
     /// Initializes [`Surface`] for presentation.
