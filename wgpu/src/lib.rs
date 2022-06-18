@@ -3435,7 +3435,8 @@ impl Drop for SurfaceTexture {
 }
 
 impl Surface {
-    /// Returns an optimal texture format to use for the [`Surface`] with this adapter.
+    /// Returns a vec of supported texture formats to use for the [`Surface`] with this adapter.
+    /// Note: The first format in the vector is preferred
     ///
     /// Returns None if the surface is incompatible with the adapter.
     pub fn get_supported_formats(&self, adapter: &Adapter) -> Option<Vec<TextureFormat>> {
