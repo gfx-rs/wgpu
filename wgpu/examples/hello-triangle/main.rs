@@ -49,7 +49,7 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
     let swapchain_format = surface
         .get_supported_formats(&adapter)
         .unwrap()
-        .pop()
+        .first()
         .unwrap();
 
     let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {

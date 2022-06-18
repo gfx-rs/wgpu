@@ -37,7 +37,7 @@ impl ViewportDesc {
                 .surface
                 .get_supported_formats(adapter)
                 .unwrap()
-                .pop()
+                .first()
                 .unwrap(),
             width: size.width,
             height: size.height,
