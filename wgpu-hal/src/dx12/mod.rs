@@ -287,7 +287,7 @@ enum PassKind {
 
 struct PassState {
     has_label: bool,
-    resolves: ArrayVec<PassResolve, { crate::MAX_COLOR_TARGETS }>,
+    resolves: ArrayVec<PassResolve, { crate::MAX_COLOR_ATTACHMENTS }>,
     layout: PipelineLayoutShared,
     root_elements: [RootElement; MAX_ROOT_ELEMENTS],
     dirty_root_elements: u64,

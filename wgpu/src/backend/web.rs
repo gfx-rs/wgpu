@@ -553,56 +553,6 @@ fn map_texture_format(texture_format: wgt::TextureFormat) -> web_sys::GpuTexture
     }
 }
 
-fn map_texture_format_from_web_sys(
-    texture_format: web_sys::GpuTextureFormat,
-) -> wgt::TextureFormat {
-    use web_sys::GpuTextureFormat as tf;
-    use wgt::TextureFormat;
-    match texture_format {
-        tf::R8unorm => TextureFormat::R8Unorm,
-        tf::R8snorm => TextureFormat::R8Snorm,
-        tf::R8uint => TextureFormat::R8Uint,
-        tf::R8sint => TextureFormat::R8Sint,
-        tf::R16uint => TextureFormat::R16Uint,
-        tf::R16sint => TextureFormat::R16Sint,
-        tf::R16float => TextureFormat::R16Float,
-        tf::Rg8unorm => TextureFormat::Rg8Unorm,
-        tf::Rg8snorm => TextureFormat::Rg8Snorm,
-        tf::Rg8uint => TextureFormat::Rg8Uint,
-        tf::Rg8sint => TextureFormat::Rg8Sint,
-        tf::R32uint => TextureFormat::R32Uint,
-        tf::R32sint => TextureFormat::R32Sint,
-        tf::R32float => TextureFormat::R32Float,
-        tf::Rg16uint => TextureFormat::Rg16Uint,
-        tf::Rg16sint => TextureFormat::Rg16Sint,
-        tf::Rg16float => TextureFormat::Rg16Float,
-        tf::Rgba8unorm => TextureFormat::Rgba8Unorm,
-        tf::Rgba8unormSrgb => TextureFormat::Rgba8UnormSrgb,
-        tf::Rgba8snorm => TextureFormat::Rgba8Snorm,
-        tf::Rgba8uint => TextureFormat::Rgba8Uint,
-        tf::Rgba8sint => TextureFormat::Rgba8Sint,
-        tf::Bgra8unorm => TextureFormat::Bgra8Unorm,
-        tf::Bgra8unormSrgb => TextureFormat::Bgra8UnormSrgb,
-        tf::Rgb10a2unorm => TextureFormat::Rgb10a2Unorm,
-        tf::Rg11b10ufloat => TextureFormat::Rg11b10Float,
-        tf::Rg32uint => TextureFormat::Rg32Uint,
-        tf::Rg32sint => TextureFormat::Rg32Sint,
-        tf::Rg32float => TextureFormat::Rg32Float,
-        tf::Rgba16uint => TextureFormat::Rgba16Uint,
-        tf::Rgba16sint => TextureFormat::Rgba16Sint,
-        tf::Rgba16float => TextureFormat::Rgba16Float,
-        tf::Rgba32uint => TextureFormat::Rgba32Uint,
-        tf::Rgba32sint => TextureFormat::Rgba32Sint,
-        tf::Rgba32float => TextureFormat::Rgba32Float,
-        tf::Depth32float => TextureFormat::Depth32Float,
-        tf::Depth32floatStencil8 => TextureFormat::Depth32FloatStencil8,
-        tf::Depth24plus => TextureFormat::Depth24Plus,
-        tf::Depth24plusStencil8 => TextureFormat::Depth24PlusStencil8,
-        tf::Depth24unormStencil8 => TextureFormat::Depth24UnormStencil8,
-        _ => unimplemented!(),
-    }
-}
-
 fn map_texture_component_type(
     sample_type: wgt::TextureSampleType,
 ) -> web_sys::GpuTextureSampleType {
@@ -1188,13 +1138,18 @@ impl crate::Context for Context {
         format.describe().guaranteed_format_features
     }
 
-    fn surface_get_preferred_format(
+    fn surface_get_supported_formats(
         &self,
-        surface: &Self::SurfaceId,
-        adapter: &Self::AdapterId,
-    ) -> Option<wgt::TextureFormat> {
-        let format = map_texture_format_from_web_sys(surface.0.get_preferred_format(&adapter.0));
-        Some(format)
+        _surface: &Self::SurfaceId,
+        _adapter: &Self::AdapterId,
+    ) -> Option<Vec<wgt::TextureFormat>> {
+        // https://gpuweb.github.io/gpuweb/#supported-context-formats
+        let formats = vec![
+            wgt::TextureFormat::Bgra8Unorm,
+            wgt::TextureFormat::Rgba8Unorm,
+            wgt::TextureFormat::Rgba16Float,
+        ];
+        Some(formats)
     }
 
     fn surface_configure(

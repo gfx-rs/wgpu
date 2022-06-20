@@ -130,6 +130,24 @@ pub enum CreateShaderModuleError {
     Validation(#[from] ShaderError<naga::WithSpan<naga::valid::ValidationError>>),
     #[error(transparent)]
     MissingFeatures(#[from] MissingFeatures),
+    #[error(
+        "shader global {bind:?} uses a group index {group} that exceeds the max_bind_groups limit of {limit}."
+    )]
+    InvalidGroupIndex {
+        bind: naga::ResourceBinding,
+        group: u32,
+        limit: u32,
+    },
+}
+
+impl CreateShaderModuleError {
+    pub fn location(&self, source: &str) -> Option<naga::SourceLocation> {
+        match *self {
+            CreateShaderModuleError::Parsing(ref err) => err.inner.location(source),
+            CreateShaderModuleError::Validation(ref err) => err.inner.location(source),
+            _ => None,
+        }
+    }
 }
 
 /// Describes a programmable pipeline stage.
@@ -364,7 +382,27 @@ bitflags::bitflags! {
     pub struct PipelineFlags: u32 {
         const BLEND_CONSTANT = 1 << 0;
         const STENCIL_REFERENCE = 1 << 1;
-        const WRITES_DEPTH_STENCIL = 1 << 2;
+        const WRITES_DEPTH = 1 << 2;
+        const WRITES_STENCIL = 1 << 3;
+    }
+}
+
+/// How a render pipeline will retrieve attributes from a particular vertex buffer.
+#[derive(Clone, Copy, Debug)]
+pub struct VertexStep {
+    /// The byte stride in the buffer between one attribute value and the next.
+    pub stride: wgt::BufferAddress,
+
+    /// Whether the buffer is indexed by vertex number or instance number.
+    pub mode: wgt::VertexStepMode,
+}
+
+impl Default for VertexStep {
+    fn default() -> Self {
+        Self {
+            stride: 0,
+            mode: wgt::VertexStepMode::Vertex,
+        }
     }
 }
 
@@ -376,7 +414,7 @@ pub struct RenderPipeline<A: hal::Api> {
     pub(crate) pass_context: RenderPassContext,
     pub(crate) flags: PipelineFlags,
     pub(crate) strip_index_format: Option<wgt::IndexFormat>,
-    pub(crate) vertex_strides: Vec<(wgt::BufferAddress, wgt::VertexStepMode)>,
+    pub(crate) vertex_steps: Vec<VertexStep>,
     pub(crate) late_sized_buffer_groups: ArrayVec<LateSizedBufferGroup, { hal::MAX_BIND_GROUPS }>,
     pub(crate) life_guard: LifeGuard,
 }
