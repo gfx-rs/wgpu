@@ -2,7 +2,7 @@ use std::future::Future;
 #[cfg(target_arch = "wasm32")]
 use std::str::FromStr;
 #[cfg(not(target_arch = "wasm32"))]
-use std::time::{Duration, Instant};
+use std::time::Instant;
 #[cfg(target_arch = "wasm32")]
 use web_sys::{ImageBitmapRenderingContext, OffscreenCanvas};
 use winit::{
@@ -276,15 +276,13 @@ fn start<E: Example>(
             .unwrap(),
         width: size.width,
         height: size.height,
-        present_mode: wgpu::PresentMode::Mailbox,
+        present_mode: wgpu::PresentMode::Fifo,
     };
     surface.configure(&device, &config);
 
     log::info!("Initializing the example...");
     let mut example = E::init(&config, &adapter, &device, &queue);
 
-    #[cfg(not(target_arch = "wasm32"))]
-    let mut last_update_inst = Instant::now();
     #[cfg(not(target_arch = "wasm32"))]
     let mut last_frame_inst = Instant::now();
     #[cfg(not(target_arch = "wasm32"))]
@@ -301,28 +299,8 @@ fn start<E: Example>(
         match event {
             event::Event::RedrawEventsCleared => {
                 #[cfg(not(target_arch = "wasm32"))]
-                {
-                    // Clamp to some max framerate to avoid busy-looping too much
-                    // (we might be in wgpu::PresentMode::Mailbox, thus discarding superfluous frames)
-                    //
-                    // winit has window.current_monitor().video_modes() but that is a list of all full screen video modes.
-                    // So without extra dependencies it's a bit tricky to get the max refresh rate we can run the window on.
-                    // Therefore we just go with 60fps - sorry 120hz+ folks!
-                    let target_frametime = Duration::from_secs_f64(1.0 / 60.0);
-                    let time_since_last_frame = last_update_inst.elapsed();
-                    if time_since_last_frame >= target_frametime {
-                        window.request_redraw();
-                        last_update_inst = Instant::now();
-                    } else {
-                        *control_flow = ControlFlow::WaitUntil(
-                            Instant::now() + target_frametime - time_since_last_frame,
-                        );
-                    }
+                spawner.run_until_stalled();
 
-                    spawner.run_until_stalled();
-                }
-
-                #[cfg(target_arch = "wasm32")]
                 window.request_redraw();
             }
             event::Event::WindowEvent {
