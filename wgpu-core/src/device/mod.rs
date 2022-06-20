@@ -267,6 +267,10 @@ pub struct Device<A: HalApi> {
     pub(crate) raw: A::Device,
     pub(crate) adapter_id: Stored<id::AdapterId>,
     pub(crate) queue: RwLock<A::Queue>,
+    /// A mutex used to prevent parallel submissions. We don't use the queue lock
+    /// because we don't want to lock out read-only uses of the queue for the entirety
+    /// of the time submit is running.
+    pub(crate) submission_lock: Mutex<()>,
     pub(crate) zero_buffer: A::Buffer,
     //pub(crate) cmd_allocator: command::CommandAllocator<A>,
     //mem_allocator: Mutex<alloc::MemoryAllocator<A>>,
@@ -395,6 +399,7 @@ impl<A: HalApi> Device<A> {
             raw: open.device,
             adapter_id,
             queue: RwLock::new(open.queue),
+            submission_lock: Mutex::new(()),
             zero_buffer,
             life_guard,
             ref_count,

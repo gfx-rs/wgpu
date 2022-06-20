@@ -639,10 +639,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .map_err(|_| DeviceError::Invalid)?;
             let destruction_guard = device.destruction_lock.read();
             device.temp_suspected.lock().clear();
-            let submit_index = device
-                .active_submission_index
-                .fetch_add(1, Ordering::AcqRel)
-                + 1;
+
+            // We lock the submission lock immediately -- this prevents parallel submits
+            // and eliminates various races with active_submission index.
+            let mut submission_lock_guard = device.submission_lock.lock();
+            // We don't actually increment the submission index until the submission is completely done.
+            // If we increment it now, a poll on another thread can come along and wait for a submission
+            // that hasn't been signaled yet.
+            //
+            // Because the submission lock is already locked, we can't race against ourselves.
+            let submit_index = device.active_submission_index.load(Ordering::Relaxed) + 1;
+
             let mut active_executions = Vec::new();
             let mut used_surface_textures = track::TextureUsageScope::new();
 
@@ -956,6 +963,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             device.pending_writes.lock().temp_resources = pending_write_resources;
             device.temp_suspected.lock().clear();
             device.lock_life().post_submit();
+
+            // Update the submission index to the submission we just triggered.
+            device.active_submission_index.store(submit_index, Ordering::Relaxed);
+            // We're done with the submission and have updated the submission index,
+            // so we can let go of the lock to let other submissions in.
+            drop(submission_lock_guard);
 
             (submit_index, closures)
         };
