@@ -181,6 +181,32 @@ impl Context {
         }
     }
 
+    #[cfg(all(target_arch = "wasm32", feature = "webgl", not(feature = "emscripten")))]
+    pub fn instance_create_surface_from_canvas(
+        self: &Arc<Self>,
+        canvas: &web_sys::HtmlCanvasElement,
+    ) -> Surface {
+        let id = self.0.create_surface_webgl_canvas(canvas, PhantomData);
+        Surface {
+            id,
+            configured_device: Mutex::default(),
+        }
+    }
+
+    #[cfg(all(target_arch = "wasm32", feature = "webgl", not(feature = "emscripten")))]
+    pub fn instance_create_surface_from_offscreen_canvas(
+        self: &Arc<Self>,
+        canvas: &web_sys::OffscreenCanvas,
+    ) -> Surface {
+        let id = self
+            .0
+            .create_surface_webgl_offscreen_canvas(canvas, PhantomData);
+        Surface {
+            id,
+            configured_device: Mutex::default(),
+        }
+    }
+
     #[cfg(target_os = "windows")]
     pub unsafe fn create_surface_from_visual(
         self: &Arc<Self>,
@@ -932,17 +958,17 @@ impl crate::Context for Context {
         }
     }
 
-    fn surface_get_preferred_format(
+    fn surface_get_supported_formats(
         &self,
         surface: &Self::SurfaceId,
         adapter: &Self::AdapterId,
-    ) -> Option<TextureFormat> {
+    ) -> Option<Vec<TextureFormat>> {
         let global = &self.0;
-        match wgc::gfx_select!(adapter => global.surface_get_preferred_format(surface.id, *adapter))
+        match wgc::gfx_select!(adapter => global.surface_get_supported_formats(surface.id, *adapter))
         {
-            Ok(format) => Some(format),
+            Ok(formats) => Some(formats),
             Err(wgc::instance::GetSurfacePreferredFormatError::UnsupportedQueueFamily) => None,
-            Err(err) => self.handle_error_fatal(err, "Surface::get_preferred_format"),
+            Err(err) => self.handle_error_fatal(err, "Surface::get_supported_formats"),
         }
     }
 
@@ -2001,7 +2027,7 @@ impl crate::Context for Context {
                 resolve_target: ca.resolve_target.map(|rt| rt.id),
                 channel: map_pass_channel(Some(&ca.ops)),
             })
-            .collect::<ArrayVec<_, { wgc::MAX_COLOR_TARGETS }>>();
+            .collect::<ArrayVec<_, { wgc::MAX_COLOR_ATTACHMENTS }>>();
 
         let depth_stencil = desc.depth_stencil_attachment.as_ref().map(|dsa| {
             wgc::command::RenderPassDepthStencilAttachment {

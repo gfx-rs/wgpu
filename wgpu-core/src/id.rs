@@ -22,6 +22,35 @@ const BACKEND_SHIFT: usize = INDEX_BITS * 2 - BACKEND_BITS;
 pub const EPOCH_MASK: u32 = (1 << (EPOCH_BITS)) - 1;
 type Dummy = hal::api::Empty;
 
+/// An identifier for a wgpu object.
+///
+/// An `Id<T>` value identifies a value stored in a [`Global`]'s [`Hub`]'s [`Storage`].
+/// `Storage` implements [`Index`] and [`IndexMut`], accepting `Id` values as indices.
+///
+/// ## Note on `Id` typing
+///
+/// You might assume that an `Id<T>` can only be used to retrieve a resource of
+/// type `T`, but that is not quite the case. The id types in `wgpu-core`'s
+/// public API ([`TextureId`], for example) can refer to resources belonging to
+/// any backend, but the corresponding resource types ([`Texture<A>`], for
+/// example) are always parameterized by a specific backend `A`.
+///
+/// So the `T` in `Id<T>` is usually a resource type like `Texture<Empty>`,
+/// where [`Empty`] is the `wgpu_hal` dummy back end. These empty types are
+/// never actually used, beyond just making sure you access each `Storage` with
+/// the right kind of identifier. The members of [`Hub<A>`] pair up each
+/// `X<Empty>` type with the resource type `X<A>`, for some specific backend
+/// `A`.
+///
+/// [`Global`]: crate::hub::Global
+/// [`Hub`]: crate::hub::Hub
+/// [`Hub<A>`]: crate::hub::Hub
+/// [`Storage`]: crate::hub::Storage
+/// [`Texture<A>`]: crate::resource::Texture
+/// [`Index`]: std::ops::Index
+/// [`IndexMut`]: std::ops::IndexMut
+/// [`Registry`]: crate::hub::Registry
+/// [`Empty`]: hal::api::Empty
 #[repr(transparent)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize), serde(into = "SerialId"))]
 #[cfg_attr(

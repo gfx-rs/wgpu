@@ -48,7 +48,7 @@ pub mod resource;
 mod track;
 mod validation;
 
-pub use hal::{api, MAX_BIND_GROUPS, MAX_COLOR_TARGETS, MAX_VERTEX_BUFFERS};
+pub use hal::{api, MAX_BIND_GROUPS, MAX_COLOR_ATTACHMENTS, MAX_VERTEX_BUFFERS};
 
 use atomic::{AtomicUsize, Ordering};
 
@@ -238,36 +238,50 @@ If you are running this program on native and not in a browser and wish to work 
 Adapter::downlevel_properties or Device::downlevel_properties to get a listing of the features the current \
 platform supports.";
 
-/// Call a `Global` method, dispatching dynamically to the appropriate back end.
+/// Dispatch on an [`Id`]'s backend to a backend-generic method.
 ///
 /// Uses of this macro have the form:
 ///
 /// ```ignore
 ///
-///     gfx_select!(id => global.method(args...))
+///     gfx_select!(id => value.method(args...))
 ///
 /// ```
 ///
-/// where `id` is some [`id::Id`] resource id, `global` is a [`hub::Global`],
-/// and `method` is any method on [`Global`] that takes a single generic
-/// parameter that implements [`hal::Api`] (for example,
-/// [`Global::device_create_buffer`]).
+/// This expands to an expression that calls `value.method::<A>(args...)` for
+/// the backend `A` selected by `id`. The expansion matches on `id.backend()`,
+/// with an arm for each backend type in [`wgpu_types::Backend`] which calls the
+/// specialization of `method` for the given backend. This allows resource
+/// identifiers to select backends dynamically, even though many `wgpu_core`
+/// methods are compiled and optimized for a specific back end.
 ///
-/// The `wgpu-core` crate can support multiple back ends simultaneously (Vulkan,
-/// Metal, etc.), depending on features and availability. Each [`Id`]'s value
-/// indicates which back end its resource belongs to. This macro does a switch
-/// on `id`'s back end, and calls the `Global` method specialized for that back
-/// end.
+/// This macro is typically used to call methods on [`wgpu_core::hub::Global`],
+/// many of which take a single `hal::Api` type parameter. For example, to
+/// create a new buffer on the device indicated by `device_id`, one would say:
 ///
-/// Internally to `wgpu-core`, most types take the back end (some type that
-/// implements `hal::Api`) as a generic parameter, so their methods are compiled
-/// with full knowledge of which back end they're working with. This macro
-/// serves as the boundary between dynamic `Id` values provided by `wgpu-core`'s
-/// users and the crate's mostly-monomorphized implementation, selecting the
-/// `hal::Api` implementation appropriate to the `Id` value's back end.
+/// ```ignore
+/// gfx_select!(device_id => global.device_create_buffer(device_id, ...))
+/// ```
 ///
-/// [`Global`]: hub::Global
-/// [`Global::device_create_buffer`]: hub::Global::device_create_buffer
+/// where the `device_create_buffer` method is defined like this:
+///
+/// ```ignore
+/// impl<...> Global<...> {
+///    pub fn device_create_buffer<A: hal::Api>(&self, ...) -> ...
+///    { ... }
+/// }
+/// ```
+///
+/// That `gfx_select!` call uses `device_id`'s backend to select the right
+/// backend type `A` for a call to `Global::device_create_buffer<A>`.
+///
+/// However, there's nothing about this macro that is specific to `hub::Global`.
+/// For example, Firefox's embedding of `wgpu_core` defines its own types with
+/// methods that take `hal::Api` type parameters. Firefox uses `gfx_select!` to
+/// dynamically dispatch to the right specialization based on the resource's id.
+///
+/// [`wgpu_types::Backend`]: wgt::Backend
+/// [`wgpu_core::hub::Global`]: crate::hub::Global
 /// [`Id`]: id::Id
 #[macro_export]
 macro_rules! gfx_select {

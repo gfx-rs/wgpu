@@ -30,8 +30,8 @@ const WRITE_COMMAND_BUFFERS_PER_POOL: usize = 64;
 
 #[repr(C)]
 pub struct SubmittedWorkDoneClosureC {
-    callback: unsafe extern "C" fn(user_data: *mut u8),
-    user_data: *mut u8,
+    pub callback: unsafe extern "C" fn(user_data: *mut u8),
+    pub user_data: *mut u8,
 }
 
 unsafe impl Send for SubmittedWorkDoneClosureC {}

@@ -24,6 +24,8 @@ use thiserror::Error;
 pub enum BindGroupLayoutEntryError {
     #[error("cube dimension is not expected for texture storage")]
     StorageTextureCube,
+    #[error("Read-write and read-only storage textures are not allowed by webgpu, they require the native only feature TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES")]
+    StorageTextureReadWrite,
     #[error("arrays of bindings unsupported for this type of binding")]
     ArrayUnsupported,
     #[error(transparent)]

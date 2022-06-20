@@ -152,21 +152,10 @@ impl crate::hub::Resource for Surface {
 }
 
 impl Surface {
-    pub fn get_preferred_format<A: HalApi>(
+    pub fn get_supported_formats<A: HalApi>(
         &self,
         adapter: &Adapter<A>,
-    ) -> Result<wgt::TextureFormat, GetSurfacePreferredFormatError> {
-        // Check the four formats mentioned in the WebGPU spec.
-        // Also, prefer sRGB over linear as it is better in
-        // representing perceived colors.
-        let preferred_formats = [
-            wgt::TextureFormat::Bgra8UnormSrgb,
-            wgt::TextureFormat::Rgba8UnormSrgb,
-            wgt::TextureFormat::Bgra8Unorm,
-            wgt::TextureFormat::Rgba8Unorm,
-            wgt::TextureFormat::Rgba16Float,
-        ];
-
+    ) -> Result<Vec<wgt::TextureFormat>, GetSurfacePreferredFormatError> {
         let suf = A::get_surface(self);
         let caps = unsafe {
             profiling::scope!("surface_capabilities");
@@ -177,11 +166,11 @@ impl Surface {
                 .ok_or(GetSurfacePreferredFormatError::UnsupportedQueueFamily)?
         };
 
-        preferred_formats
-            .iter()
-            .cloned()
-            .find(|preferred| caps.formats.contains(preferred))
-            .ok_or(GetSurfacePreferredFormatError::NotFound)
+        if caps.formats.is_empty() {
+            return Err(GetSurfacePreferredFormatError::NotFound);
+        }
+
+        Ok(caps.formats)
     }
 }
 
@@ -486,6 +475,52 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             vulkan: None,
             #[cfg(gl)]
             gl: None,
+        };
+
+        let mut token = Token::root();
+        let id = self.surfaces.prepare(id_in).assign(surface, &mut token);
+        id.0
+    }
+
+    #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
+    pub fn create_surface_webgl_canvas(
+        &self,
+        canvas: &web_sys::HtmlCanvasElement,
+        id_in: Input<G, SurfaceId>,
+    ) -> SurfaceId {
+        profiling::scope!("create_surface_webgl_canvas", "Instance");
+
+        let surface = Surface {
+            presentation: None,
+            gl: self.instance.gl.as_ref().map(|inst| HalSurface {
+                raw: {
+                    inst.create_surface_from_canvas(canvas)
+                        .expect("Create surface from canvas")
+                },
+            }),
+        };
+
+        let mut token = Token::root();
+        let id = self.surfaces.prepare(id_in).assign(surface, &mut token);
+        id.0
+    }
+
+    #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
+    pub fn create_surface_webgl_offscreen_canvas(
+        &self,
+        canvas: &web_sys::OffscreenCanvas,
+        id_in: Input<G, SurfaceId>,
+    ) -> SurfaceId {
+        profiling::scope!("create_surface_webgl_offscreen_canvas", "Instance");
+
+        let surface = Surface {
+            presentation: None,
+            gl: self.instance.gl.as_ref().map(|inst| HalSurface {
+                raw: {
+                    inst.create_surface_from_offscreen_canvas(canvas)
+                        .expect("Create surface from offscreen canvas")
+                },
+            }),
         };
 
         let mut token = Token::root();

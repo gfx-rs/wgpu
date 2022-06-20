@@ -1,4 +1,5 @@
 use crate::common::{initialize_test, TestParameters, TestingContext};
+use wgpu::util::align_to;
 
 static TEXTURE_FORMATS_UNCOMPRESSED: &[wgpu::TextureFormat] = &[
     wgpu::TextureFormat::R8Unorm,
@@ -239,10 +240,6 @@ fn single_texture_clear_test(
     // TODO: Read back and check zeroness?
 }
 
-fn round_up(value: u32, alignment: u32) -> u32 {
-    ((value + alignment - 1) / alignment) * alignment
-}
-
 fn clear_texture_tests(
     ctx: &TestingContext,
     formats: &[wgpu::TextureFormat],
@@ -251,8 +248,8 @@ fn clear_texture_tests(
 ) {
     for &format in formats {
         let desc = format.describe();
-        let rounded_width = round_up(64, desc.block_dimensions.0 as u32);
-        let rounded_height = round_up(64, desc.block_dimensions.1 as u32);
+        let rounded_width = align_to(64, desc.block_dimensions.0 as u32);
+        let rounded_height = align_to(64, desc.block_dimensions.1 as u32);
 
         // 1D texture
         if supports_1d {

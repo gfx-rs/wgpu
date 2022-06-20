@@ -422,6 +422,7 @@ bitflags::bitflags! {
         /// Supported platforms:
         /// - DX12
         /// - Vulkan
+        /// - Metal (Emulated on top of `draw_indirect` and `draw_indexed_indirect`)
         ///
         /// This is a native only feature.
         const MULTI_DRAW_INDIRECT = 1 << 23;
@@ -1026,6 +1027,10 @@ bitflags::bitflags! {
         ///
         /// GLES/WebGL don't support this.
         const DEPTH_TEXTURE_AND_BUFFER_COPIES = 1 << 13;
+
+        /// Supports all the texture usages described in WebGPU. If this isn't supported, you
+        /// should call `get_texture_format_features` to get how you can use textures of a given format
+        const WEBGPU_TEXTURE_FORMAT_SUPPORT = 1 << 14;
     }
 }
 
@@ -2418,9 +2423,20 @@ impl DepthStencilState {
     pub fn is_depth_enabled(&self) -> bool {
         self.depth_compare != CompareFunction::Always || self.depth_write_enabled
     }
+
+    /// Returns true if the state doesn't mutate the depth buffer.
+    pub fn is_depth_read_only(&self) -> bool {
+        !self.depth_write_enabled
+    }
+
+    /// Returns true if the state doesn't mutate the stencil.
+    pub fn is_stencil_read_only(&self) -> bool {
+        self.stencil.is_read_only()
+    }
+
     /// Returns true if the state doesn't mutate either depth or stencil of the target.
     pub fn is_read_only(&self) -> bool {
-        !self.depth_write_enabled && self.stencil.is_read_only()
+        self.is_depth_read_only() && self.is_stencil_read_only()
     }
 }
 
@@ -3294,6 +3310,7 @@ pub struct TextureDescriptor<L> {
     pub format: TextureFormat,
     /// Allowed usages of the texture. If used in other ways, the operation will panic.
     pub usage: TextureUsages,
+    // TODO: missing view_formats https://www.w3.org/TR/webgpu/#dom-gputexturedescriptor-viewformats
 }
 
 impl<L> TextureDescriptor<L> {

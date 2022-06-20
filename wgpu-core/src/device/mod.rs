@@ -52,8 +52,8 @@ pub enum HostMap {
 #[derive(Clone, Debug, Hash, PartialEq)]
 #[cfg_attr(feature = "serial-pass", derive(serde::Deserialize, serde::Serialize))]
 pub(crate) struct AttachmentData<T> {
-    pub colors: ArrayVec<T, { hal::MAX_COLOR_TARGETS }>,
-    pub resolves: ArrayVec<T, { hal::MAX_COLOR_TARGETS }>,
+    pub colors: ArrayVec<T, { hal::MAX_COLOR_ATTACHMENTS }>,
+    pub resolves: ArrayVec<T, { hal::MAX_COLOR_ATTACHMENTS }>,
     pub depth_stencil: Option<T>,
 }
 impl<T: PartialEq> Eq for AttachmentData<T> {}
@@ -78,8 +78,8 @@ pub(crate) struct RenderPassContext {
 pub enum RenderPassCompatibilityError {
     #[error("Incompatible color attachment: the renderpass expected {0:?} but was given {1:?}")]
     IncompatibleColorAttachment(
-        ArrayVec<TextureFormat, { hal::MAX_COLOR_TARGETS }>,
-        ArrayVec<TextureFormat, { hal::MAX_COLOR_TARGETS }>,
+        ArrayVec<TextureFormat, { hal::MAX_COLOR_ATTACHMENTS }>,
+        ArrayVec<TextureFormat, { hal::MAX_COLOR_ATTACHMENTS }>,
     ),
     #[error(
         "Incompatible depth-stencil attachment: the renderpass expected {0:?} but was given {1:?}"
@@ -678,47 +678,10 @@ impl<A: HalApi> Device<A> {
         adapter: &crate::instance::Adapter<A>,
         desc: &resource::TextureDescriptor,
     ) -> Result<resource::Texture<A>, resource::CreateTextureError> {
-        let format_desc = desc.format.describe();
-
-        if desc.dimension != wgt::TextureDimension::D2 {
-            // Depth textures can only be 2D
-            if format_desc.sample_type == wgt::TextureSampleType::Depth {
-                return Err(resource::CreateTextureError::InvalidDepthDimension(
-                    desc.dimension,
-                    desc.format,
-                ));
-            }
-            // Renderable textures can only be 2D
-            if desc.usage.contains(wgt::TextureUsages::RENDER_ATTACHMENT) {
-                return Err(resource::CreateTextureError::InvalidDimensionUsages(
-                    wgt::TextureUsages::RENDER_ATTACHMENT,
-                    desc.dimension,
-                ));
-            }
-
-            // Compressed textures can only be 2D
-            if format_desc.is_compressed() {
-                return Err(resource::CreateTextureError::InvalidCompressedDimension(
-                    desc.dimension,
-                    desc.format,
-                ));
-            }
-        }
-
-        let format_features = self
-            .describe_format_features(adapter, desc.format)
-            .map_err(|error| resource::CreateTextureError::MissingFeatures(desc.format, error))?;
+        use resource::{CreateTextureError, TextureDimensionError};
 
         if desc.usage.is_empty() {
-            return Err(resource::CreateTextureError::EmptyUsage);
-        }
-
-        let missing_allowed_usages = desc.usage - format_features.allowed_usages;
-        if !missing_allowed_usages.is_empty() {
-            return Err(resource::CreateTextureError::InvalidFormatUsages(
-                missing_allowed_usages,
-                desc.format,
-            ));
+            return Err(CreateTextureError::EmptyUsage);
         }
 
         conv::check_texture_dimension_size(
@@ -728,14 +691,113 @@ impl<A: HalApi> Device<A> {
             &self.limits,
         )?;
 
+        let format_desc = desc.format.describe();
+
+        if desc.dimension != wgt::TextureDimension::D2 {
+            // Depth textures can only be 2D
+            if format_desc.sample_type == wgt::TextureSampleType::Depth {
+                return Err(CreateTextureError::InvalidDepthDimension(
+                    desc.dimension,
+                    desc.format,
+                ));
+            }
+            // Renderable textures can only be 2D
+            if desc.usage.contains(wgt::TextureUsages::RENDER_ATTACHMENT) {
+                return Err(CreateTextureError::InvalidDimensionUsages(
+                    wgt::TextureUsages::RENDER_ATTACHMENT,
+                    desc.dimension,
+                ));
+            }
+
+            // Compressed textures can only be 2D
+            if format_desc.is_compressed() {
+                return Err(CreateTextureError::InvalidCompressedDimension(
+                    desc.dimension,
+                    desc.format,
+                ));
+            }
+        }
+
+        if format_desc.is_compressed() {
+            let block_width = format_desc.block_dimensions.0 as u32;
+            let block_height = format_desc.block_dimensions.1 as u32;
+
+            if desc.size.width % block_width != 0 {
+                return Err(CreateTextureError::InvalidDimension(
+                    TextureDimensionError::NotMultipleOfBlockWidth {
+                        width: desc.size.width,
+                        block_width,
+                        format: desc.format,
+                    },
+                ));
+            }
+
+            if desc.size.height % block_height != 0 {
+                return Err(CreateTextureError::InvalidDimension(
+                    TextureDimensionError::NotMultipleOfBlockHeight {
+                        height: desc.size.height,
+                        block_height,
+                        format: desc.format,
+                    },
+                ));
+            }
+        }
+
+        if desc.sample_count > 1 {
+            if desc.mip_level_count != 1 {
+                return Err(CreateTextureError::InvalidMipLevelCount {
+                    requested: desc.mip_level_count,
+                    maximum: 1,
+                });
+            }
+
+            if desc.size.depth_or_array_layers != 1 {
+                return Err(CreateTextureError::InvalidDimension(
+                    TextureDimensionError::MultisampledDepthOrArrayLayer(
+                        desc.size.depth_or_array_layers,
+                    ),
+                ));
+            }
+
+            if desc.usage.contains(wgt::TextureUsages::STORAGE_BINDING) {
+                return Err(CreateTextureError::InvalidMultisampledStorageBinding);
+            }
+
+            if !desc.usage.contains(wgt::TextureUsages::RENDER_ATTACHMENT) {
+                return Err(CreateTextureError::MultisampledNotRenderAttachment);
+            }
+
+            if !format_desc
+                .guaranteed_format_features
+                .flags
+                .contains(wgt::TextureFormatFeatureFlags::MULTISAMPLE)
+            {
+                return Err(CreateTextureError::InvalidMultisampledFormat(desc.format));
+            }
+        }
+
         let mips = desc.mip_level_count;
         let max_levels_allowed = desc.size.max_mips(desc.dimension).min(hal::MAX_MIP_LEVELS);
         if mips == 0 || mips > max_levels_allowed {
-            return Err(resource::CreateTextureError::InvalidMipLevelCount {
+            return Err(CreateTextureError::InvalidMipLevelCount {
                 requested: mips,
                 maximum: max_levels_allowed,
             });
         }
+
+        let format_features = self
+            .describe_format_features(adapter, desc.format)
+            .map_err(|error| CreateTextureError::MissingFeatures(desc.format, error))?;
+
+        let missing_allowed_usages = desc.usage - format_features.allowed_usages;
+        if !missing_allowed_usages.is_empty() {
+            return Err(CreateTextureError::InvalidFormatUsages(
+                missing_allowed_usages,
+                desc.format,
+            ));
+        }
+
+        // TODO: validate missing TextureDescriptor::view_formats.
 
         // Enforce having COPY_DST/DEPTH_STENCIL_WRIT/COLOR_TARGET otherwise we wouldn't be able to initialize the texture.
         let hal_usage = conv::map_texture_usage(desc.usage, desc.format.into())
@@ -1127,6 +1189,18 @@ impl<A: HalApi> Device<A> {
             }
             pipeline::ShaderModuleSource::Naga(module) => (module, String::new()),
         };
+        for (_, var) in module.global_variables.iter() {
+            match var.binding {
+                Some(ref br) if br.group >= self.limits.max_bind_groups => {
+                    return Err(pipeline::CreateShaderModuleError::InvalidGroupIndex {
+                        bind: br.clone(),
+                        group: br.group,
+                        limit: self.limits.max_bind_groups,
+                    });
+                }
+                _ => continue,
+            };
+        }
 
         use naga::valid::Capabilities as Caps;
         profiling::scope!("naga::validate");
@@ -1377,6 +1451,20 @@ impl<A: HalApi> Device<A> {
                                 binding: entry.binding,
                                 error: binding_model::BindGroupLayoutEntryError::StorageTextureCube,
                             })
+                        }
+                        _ => (),
+                    }
+                    match access {
+                        wgt::StorageTextureAccess::ReadOnly
+                        | wgt::StorageTextureAccess::ReadWrite
+                            if !self.features.contains(
+                                wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
+                            ) =>
+                        {
+                            return Err(binding_model::CreateBindGroupLayoutError::Entry {
+                                binding: entry.binding,
+                                error: binding_model::BindGroupLayoutEntryError::StorageTextureReadWrite,
+                            });
                         }
                         _ => (),
                     }
@@ -2382,13 +2470,14 @@ impl<A: HalApi> Device<A> {
         let mut io = validation::StageIo::default();
         let mut validated_stages = wgt::ShaderStages::empty();
 
-        let mut vertex_strides = Vec::with_capacity(desc.vertex.buffers.len());
+        let mut vertex_steps = Vec::with_capacity(desc.vertex.buffers.len());
         let mut vertex_buffers = Vec::with_capacity(desc.vertex.buffers.len());
         let mut total_attributes = 0;
         for (i, vb_state) in desc.vertex.buffers.iter().enumerate() {
-            vertex_strides
-                .alloc()
-                .init((vb_state.array_stride, vb_state.step_mode));
+            vertex_steps.alloc().init(pipeline::VertexStep {
+                stride: vb_state.array_stride,
+                mode: vb_state.step_mode,
+            });
             if vb_state.attributes.is_empty() {
                 continue;
             }
@@ -2765,8 +2854,11 @@ impl<A: HalApi> Device<A> {
             if ds.stencil.is_enabled() && ds.stencil.needs_ref_value() {
                 flags |= pipeline::PipelineFlags::STENCIL_REFERENCE;
             }
-            if !ds.is_read_only() {
-                flags |= pipeline::PipelineFlags::WRITES_DEPTH_STENCIL;
+            if !ds.is_depth_read_only() {
+                flags |= pipeline::PipelineFlags::WRITES_DEPTH;
+            }
+            if !ds.is_stencil_read_only() {
+                flags |= pipeline::PipelineFlags::WRITES_STENCIL;
             }
         }
 
@@ -2783,7 +2875,7 @@ impl<A: HalApi> Device<A> {
             pass_context,
             flags,
             strip_index_format: desc.primitive.strip_index_format,
-            vertex_strides,
+            vertex_steps,
             late_sized_buffer_groups,
             life_guard: LifeGuard::new(desc.label.borrow_or_default()),
         };
@@ -3013,12 +3105,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .map_err(|_| instance::IsSurfaceSupportedError::InvalidSurface)?;
         Ok(adapter.is_surface_supported(surface))
     }
-    pub fn surface_get_preferred_format<A: HalApi>(
+    pub fn surface_get_supported_formats<A: HalApi>(
         &self,
         surface_id: id::SurfaceId,
         adapter_id: id::AdapterId,
-    ) -> Result<TextureFormat, instance::GetSurfacePreferredFormatError> {
-        profiling::scope!("surface_get_preferred_format");
+    ) -> Result<Vec<TextureFormat>, instance::GetSurfacePreferredFormatError> {
+        profiling::scope!("Surface::get_supported_formats");
         let hub = A::hub(self);
         let mut token = Token::root();
 
@@ -3031,7 +3123,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .get(surface_id)
             .map_err(|_| instance::GetSurfacePreferredFormatError::InvalidSurface)?;
 
-        surface.get_preferred_format(adapter)
+        surface.get_supported_formats(adapter)
     }
 
     pub fn device_features<A: HalApi>(
@@ -4378,7 +4470,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     desc: trace::new_render_bundle_encoder_descriptor(
                         desc.label.clone(),
                         &bundle_encoder.context,
-                        bundle_encoder.is_ds_read_only,
+                        bundle_encoder.is_depth_read_only,
+                        bundle_encoder.is_stencil_read_only,
                     ),
                     base: bundle_encoder.to_base_pass(),
                 });
