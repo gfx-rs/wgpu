@@ -142,14 +142,16 @@ impl<A: HalApi> CommandBuffer<A> {
         }
     }
 
-    pub(crate) fn insert_barriers_from_tracker(
+    pub(crate) fn insert_barriers_from_tracker<F>(
         raw: &mut A::CommandEncoder,
         base: &mut Tracker<A>,
         head: &Tracker<A>,
-        buffer_guard: &registry::Registry<A, Buffer<A>>,
-        texture_guard: &registry::Registry<A, Texture<A>>,
+        buffer_guard: &registry::Registry<A, Buffer<A>, F>,
+        texture_guard: &registry::Registry<A, Texture<A>, F>,
         destruction_guard: &ReadDestructionGuard<'_>,
-    ) {
+    ) where
+        F: GlobalIdentityHandlerFactory,
+    {
         profiling::scope!("insert_barriers");
 
         base.buffers.set_from_tracker(&head.buffers);
@@ -159,14 +161,16 @@ impl<A: HalApi> CommandBuffer<A> {
         Self::drain_barriers(raw, base, buffer_guard, texture_guard, destruction_guard);
     }
 
-    pub(crate) fn insert_barriers_from_scope(
+    pub(crate) fn insert_barriers_from_scope<F>(
         raw: &mut A::CommandEncoder,
         base: &mut Tracker<A>,
         head: &UsageScope<A>,
-        buffer_guard: &registry::Registry<A, Buffer<A>>,
-        texture_guard: &registry::Registry<A, Texture<A>>,
+        buffer_guard: &registry::Registry<A, Buffer<A>, F>,
+        texture_guard: &registry::Registry<A, Texture<A>, F>,
         destruction_guard: &ReadDestructionGuard<'_>,
-    ) {
+    ) where
+        F: GlobalIdentityHandlerFactory,
+    {
         profiling::scope!("insert_barriers");
 
         base.buffers.set_from_usage_scope(&head.buffers);
@@ -176,13 +180,15 @@ impl<A: HalApi> CommandBuffer<A> {
         Self::drain_barriers(raw, base, buffer_guard, texture_guard, destruction_guard);
     }
 
-    pub(crate) fn drain_barriers(
+    pub(crate) fn drain_barriers<F>(
         raw: &mut A::CommandEncoder,
         base: &mut Tracker<A>,
-        buffer_guard: &registry::Registry<A, Buffer<A>>,
-        texture_guard: &registry::Registry<A, Texture<A>>,
+        buffer_guard: &registry::Registry<A, Buffer<A>, F>,
+        texture_guard: &registry::Registry<A, Texture<A>, F>,
         destruction_guard: &ReadDestructionGuard<'_>,
-    ) {
+    ) where
+        F: GlobalIdentityHandlerFactory,
+    {
         profiling::scope!("drain_barriers");
 
         let buffer_barriers = base.buffers.drain().map(|pending| {
@@ -202,10 +208,13 @@ impl<A: HalApi> CommandBuffer<A> {
 }
 
 impl<A: HalApi> CommandBuffer<A> {
-    fn get_encoder_mut<'a>(
-        storage: &'a registry::Registry<A, Mutex<Self>>,
+    fn get_encoder_mut<'a, F>(
+        storage: &'a registry::Registry<A, Mutex<Self>, F>,
         id: id::CommandEncoderId,
-    ) -> Result<impl DerefMut<Target = Self> + 'a, CommandEncoderError> {
+    ) -> Result<impl DerefMut<Target = Self> + 'a, CommandEncoderError>
+    where
+        F: GlobalIdentityHandlerFactory,
+    {
         match storage.get(id) {
             Ok(cmd_buf_mutex) => {
                 let cmd_buf = cmd_buf_mutex.lock();

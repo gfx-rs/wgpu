@@ -237,8 +237,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 }
 
-pub(crate) fn clear_texture<A: HalApi>(
-    storage: &registry::Registry<A, Texture<A>>,
+pub(crate) fn clear_texture<A, F>(
+    storage: &registry::Registry<A, Texture<A>, F>,
     dst_texture_id: Valid<TextureId>,
     range: TextureInitRange,
     encoder: &mut A::CommandEncoder,
@@ -246,7 +246,11 @@ pub(crate) fn clear_texture<A: HalApi>(
     alignments: &hal::Alignments,
     zero_buffer: &A::Buffer,
     destruction_guard: &ReadDestructionGuard,
-) -> Result<(), ClearError> {
+) -> Result<(), ClearError>
+where
+    A: HalApi,
+    F: GlobalIdentityHandlerFactory,
+{
     let dst_texture = &storage[dst_texture_id];
 
     let dst_raw = dst_texture

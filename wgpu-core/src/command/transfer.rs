@@ -154,11 +154,15 @@ pub enum CopyError {
     Transfer(#[from] TransferError),
 }
 
-pub(crate) fn extract_texture_selector<A: HalApi>(
+pub(crate) fn extract_texture_selector<A, F>(
     copy_texture: &ImageCopyTexture,
     copy_size: &Extent3d,
-    textures: &registry::Registry<A, Texture<A>>,
-) -> Result<(TextureSelector, hal::TextureCopyBase, wgt::TextureFormat), TransferError> {
+    textures: &registry::Registry<A, Texture<A>, F>,
+) -> Result<(TextureSelector, hal::TextureCopyBase, wgt::TextureFormat), TransferError>
+where
+    A: HalApi,
+    F: GlobalIdentityHandlerFactory,
+{
     let texture = textures
         .get(copy_texture.texture)
         .map_err(|_| TransferError::InvalidTexture(copy_texture.texture))?;
@@ -383,15 +387,18 @@ pub(crate) fn validate_texture_copy_range(
     Ok((copy_extent, array_layer_count))
 }
 
-fn handle_texture_init<A: HalApi>(
+fn handle_texture_init<A, F>(
     init_kind: MemoryInitKind,
     cmd_buf: &mut CommandBuffer<A>,
     device: &Device<A>,
     copy_texture: &ImageCopyTexture,
     copy_size: &Extent3d,
-    textures: &registry::Registry<A, Texture<A>>,
+    textures: &registry::Registry<A, Texture<A>, F>,
     destruction_guard: &ReadDestructionGuard<'_>,
-) {
+) where
+    A: HalApi,
+    F: GlobalIdentityHandlerFactory,
+{
     let init_action = TextureInitTrackerAction {
         id: copy_texture.texture,
         range: TextureInitRange {
@@ -430,14 +437,18 @@ fn handle_texture_init<A: HalApi>(
 }
 
 // Ensures the source texture of a transfer is in the right initialization state and records the state for after the transfer operation.
-fn handle_src_texture_init<A: HalApi>(
+fn handle_src_texture_init<A, F>(
     cmd_buf: &mut CommandBuffer<A>,
     device: &Device<A>,
     source: &ImageCopyTexture,
     copy_size: &Extent3d,
-    textures: &registry::Registry<A, Texture<A>>,
+    textures: &registry::Registry<A, Texture<A>, F>,
     destruction_guard: &ReadDestructionGuard<'_>,
-) -> Result<(), TransferError> {
+) -> Result<(), TransferError>
+where
+    A: HalApi,
+    F: GlobalIdentityHandlerFactory,
+{
     let _ = textures
         .get(source.texture)
         .map_err(|_| TransferError::InvalidTexture(source.texture))?;
@@ -455,14 +466,18 @@ fn handle_src_texture_init<A: HalApi>(
 }
 
 // Ensures the destination texture of a transfer is in the right initialization state and records the state for after the transfer operation.
-fn handle_dst_texture_init<A: HalApi>(
+fn handle_dst_texture_init<A, F>(
     cmd_buf: &mut CommandBuffer<A>,
     device: &Device<A>,
     destination: &ImageCopyTexture,
     copy_size: &Extent3d,
-    textures: &registry::Registry<A, Texture<A>>,
+    textures: &registry::Registry<A, Texture<A>, F>,
     destruction_guard: &ReadDestructionGuard<'_>,
-) -> Result<(), TransferError> {
+) -> Result<(), TransferError>
+where
+    A: HalApi,
+    F: GlobalIdentityHandlerFactory,
+{
     let texture = textures
         .get(destination.texture)
         .map_err(|_| TransferError::InvalidTexture(destination.texture))?;

@@ -1,7 +1,7 @@
 use crate::{
     binding_model::{BindGroup, LateMinBufferBindingSizeMismatch, PipelineLayout},
     device::SHADER_STAGE_COUNT,
-    hub::HalApi,
+    hub::{GlobalIdentityHandlerFactory, HalApi},
     id::{BindGroupId, BindGroupLayoutId, PipelineLayoutId, Valid},
     pipeline::LateSizedBufferGroup,
     registry, Stored,
@@ -181,12 +181,16 @@ impl Binder {
         }
     }
 
-    pub(super) fn change_pipeline_layout<'a, A: HalApi>(
+    pub(super) fn change_pipeline_layout<'a, A, F>(
         &'a mut self,
-        storage: &registry::Registry<A, PipelineLayout<A>>,
+        storage: &registry::Registry<A, PipelineLayout<A>, F>,
         new_id: Valid<PipelineLayoutId>,
         late_sized_buffer_groups: &[LateSizedBufferGroup],
-    ) -> (usize, &'a [EntryPayload]) {
+    ) -> (usize, &'a [EntryPayload])
+    where
+        A: HalApi,
+        F: GlobalIdentityHandlerFactory,
+    {
         let old_id_opt = self.pipeline_layout_id.replace(new_id);
         let new = &storage[new_id];
 

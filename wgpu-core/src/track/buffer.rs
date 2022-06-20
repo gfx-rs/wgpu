@@ -70,12 +70,15 @@ impl<A: hub::HalApi> BufferBindGroupState<A> {
     }
 
     /// Adds the given resource with the given state.
-    pub fn add_single<'a>(
+    pub fn add_single<'a, F>(
         &mut self,
-        storage: &'a registry::Registry<A, Buffer<A>>,
+        storage: &'a registry::Registry<A, Buffer<A>, F>,
         id: BufferId,
         state: BufferUses,
-    ) -> Option<&'a Buffer<A>> {
+    ) -> Option<&'a Buffer<A>>
+    where
+        F: hub::IdentityHandlerFactory<BufferId>,
+    {
         let buffer = storage.get(id).ok()?;
 
         self.buffers
@@ -211,12 +214,15 @@ impl<A: hub::HalApi> BufferUsageScope<A> {
     ///
     /// If the ID is higher than the length of internal vectors,
     /// the vectors will be extended. A call to set_size is not needed.
-    pub fn merge_single<'a>(
+    pub fn merge_single<'a, F>(
         &mut self,
-        storage: &'a registry::Registry<A, Buffer<A>>,
+        storage: &'a registry::Registry<A, Buffer<A>, F>,
         id: BufferId,
         new_state: BufferUses,
-    ) -> Result<&'a Buffer<A>, UsageConflict> {
+    ) -> Result<&'a Buffer<A>, UsageConflict>
+    where
+        F: hub::IdentityHandlerFactory<BufferId>,
+    {
         let buffer = storage
             .get(id)
             .map_err(|_| UsageConflict::BufferInvalid { id })?;
@@ -344,12 +350,15 @@ impl<A: hub::HalApi> BufferTracker<A> {
     ///
     /// If the ID is higher than the length of internal vectors,
     /// the vectors will be extended. A call to set_size is not needed.
-    pub fn set_single<'a>(
+    pub fn set_single<'a, F>(
         &mut self,
-        storage: &'a registry::Registry<A, Buffer<A>>,
+        storage: &'a registry::Registry<A, Buffer<A>, F>,
         id: BufferId,
         state: BufferUses,
-    ) -> Option<(&'a Buffer<A>, Option<PendingTransition<BufferUses>>)> {
+    ) -> Option<(&'a Buffer<A>, Option<PendingTransition<BufferUses>>)>
+    where
+        F: hub::IdentityHandlerFactory<BufferId>,
+    {
         let value = storage.get(id).ok()?;
 
         let (index32, epoch, _) = id.unzip();

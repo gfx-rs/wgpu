@@ -48,11 +48,14 @@ impl<A: hub::HalApi, T: hub::Resource> StatelessBindGroupSate<A, T> {
     }
 
     /// Adds the given resource.
-    pub fn add_single<'a>(
+    pub fn add_single<'a, F>(
         &mut self,
-        storage: &'a registry::Registry<A, T>,
+        storage: &'a registry::Registry<A, T, F>,
         id: T::Id,
-    ) -> Option<&'a T> {
+    ) -> Option<&'a T>
+    where
+        F: hub::IdentityHandlerFactory<T::Id>,
+    {
         let resource = storage.get(id).ok()?;
 
         self.resources
@@ -127,11 +130,14 @@ impl<A: hub::HalApi, T: hub::Resource> StatelessTracker<A, T> {
     ///
     /// If the ID is higher than the length of internal vectors,
     /// the vectors will be extended. A call to set_size is not needed.
-    pub fn add_single<'a>(
+    pub fn add_single<'a, F>(
         &mut self,
-        storage: &'a registry::Registry<A, T>,
+        storage: &'a registry::Registry<A, T, F>,
         id: T::Id,
-    ) -> Option<&'a T> {
+    ) -> Option<&'a T>
+    where
+        F: hub::IdentityHandlerFactory<T::Id>,
+    {
         let item = storage.get(id).ok()?;
 
         let (index32, epoch, _) = id.unzip();

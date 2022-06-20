@@ -576,13 +576,15 @@ struct RenderPassInfo<'a, A: HalApi> {
 }
 
 impl<'a, A: HalApi> RenderPassInfo<'a, A> {
-    fn add_pass_texture_init_actions<V>(
+    fn add_pass_texture_init_actions<V, F>(
         channel: &PassChannel<V>,
         texture_memory_actions: &mut CommandBufferTextureMemoryActions,
         view: &TextureView<A>,
-        textures: &registry::Registry<A, Texture<A>>,
+        textures: &registry::Registry<A, Texture<A>, F>,
         pending_discard_init_fixups: &mut SurfacesInDiscardState,
-    ) {
+    ) where
+        F: GlobalIdentityHandlerFactory,
+    {
         if channel.load_op == LoadOp::Load {
             pending_discard_init_fixups.extend(texture_memory_actions.register_init_action(
                 &TextureInitTrackerAction {
@@ -612,16 +614,19 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
         }
     }
 
-    fn start(
+    fn start<F>(
         device: &Device<A>,
         label: Option<&str>,
         color_attachments: &[RenderPassColorAttachment],
         depth_stencil_attachment: Option<&RenderPassDepthStencilAttachment>,
         cmd_buf: &mut CommandBuffer<A>,
-        views: &'a registry::Registry<A, TextureView<A>>,
-        buffers: &'a registry::Registry<A, Buffer<A>>,
-        textures: &'a registry::Registry<A, Texture<A>>,
-    ) -> Result<Self, RenderPassErrorInner> {
+        views: &'a registry::Registry<A, TextureView<A>, F>,
+        buffers: &'a registry::Registry<A, Buffer<A>, F>,
+        textures: &'a registry::Registry<A, Texture<A>, F>,
+    ) -> Result<Self, RenderPassErrorInner>
+    where
+        F: GlobalIdentityHandlerFactory,
+    {
         profiling::scope!("start", "RenderPassInfo");
 
         // We default to false intentionally, even if depth-stencil isn't used at all.
@@ -947,11 +952,14 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
         })
     }
 
-    fn finish(
+    fn finish<F>(
         mut self,
         raw: &mut A::CommandEncoder,
-        textures: &registry::Registry<A, Texture<A>>,
-    ) -> Result<(UsageScope<A>, SurfacesInDiscardState), RenderPassErrorInner> {
+        textures: &registry::Registry<A, Texture<A>, F>,
+    ) -> Result<(UsageScope<A>, SurfacesInDiscardState), RenderPassErrorInner>
+    where
+        F: GlobalIdentityHandlerFactory,
+    {
         profiling::scope!("finish", "RenderPassInfo");
         unsafe {
             raw.end_render_pass();

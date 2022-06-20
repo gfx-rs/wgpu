@@ -15,11 +15,14 @@ pub struct IdentityPassThrough<I>(PhantomData<I>);
 
 impl<I: Clone + Debug + wgc::id::TypedId> wgc::hub::IdentityHandler<I> for IdentityPassThrough<I> {
     type Input = I;
-    fn process(&self, id: I, backend: wgt::Backend) -> I {
+    fn process(&mut self, id: I, backend: wgt::Backend) -> (wgc::Index, I) {
         let (index, epoch, _backend) = id.unzip();
-        I::zip(index, epoch, backend)
+        (index, I::zip(index, epoch, backend))
     }
-    fn free(&self, _id: I) {}
+    fn free(&mut self, id: I) -> (wgc::Index, wgc::Epoch) {
+        let (index, epoch, _) = id.unzip();
+        (index, epoch)
+    }
 }
 
 pub struct IdentityPassThroughFactory;

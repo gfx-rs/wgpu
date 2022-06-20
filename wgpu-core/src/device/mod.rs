@@ -1247,11 +1247,14 @@ impl<A: HalApi> Device<A> {
         })
     }
 
-    fn deduplicate_bind_group_layout(
+    fn deduplicate_bind_group_layout<F>(
         self_id: id::DeviceId,
         entry_map: &binding_model::BindEntryMap,
-        bind_group_layouts: &registry::Registry<A, binding_model::BindGroupLayout<A>>,
-    ) -> Option<id::BindGroupLayoutId> {
+        bind_group_layouts: &registry::Registry<A, binding_model::BindGroupLayout<A>, F>,
+    ) -> Option<id::BindGroupLayoutId>
+    where
+        F: GlobalIdentityHandlerFactory,
+    {
         bind_group_layouts
             .iter()
             .find(|&(_, bgl)| bgl.device_id.value.0 == self_id && bgl.entries == *entry_map)
@@ -1261,10 +1264,13 @@ impl<A: HalApi> Device<A> {
             })
     }
 
-    fn get_introspection_bind_group_layouts<'a>(
+    fn get_introspection_bind_group_layouts<'a, F>(
         pipeline_layout: &binding_model::PipelineLayout<A>,
-        bind_group_layouts: &'a registry::Registry<A, binding_model::BindGroupLayout<A>>,
-    ) -> ArrayVec<&'a binding_model::BindEntryMap, { hal::MAX_BIND_GROUPS }> {
+        bind_group_layouts: &'a registry::Registry<A, binding_model::BindGroupLayout<A>, F>,
+    ) -> ArrayVec<&'a binding_model::BindEntryMap, { hal::MAX_BIND_GROUPS }>
+    where
+        F: GlobalIdentityHandlerFactory,
+    {
         pipeline_layout
             .bind_group_layout_ids
             .iter()
@@ -1274,11 +1280,14 @@ impl<A: HalApi> Device<A> {
 
     /// Generate information about late-validated buffer bindings for pipelines.
     //TODO: should this be combined with `get_introspection_bind_group_layouts` in some way?
-    fn make_late_sized_buffer_groups<'a>(
+    fn make_late_sized_buffer_groups<'a, F>(
         shader_binding_sizes: &FastHashMap<naga::ResourceBinding, wgt::BufferSize>,
         layout: &binding_model::PipelineLayout<A>,
-        bind_group_layouts: &'a registry::Registry<A, binding_model::BindGroupLayout<A>>,
-    ) -> ArrayVec<pipeline::LateSizedBufferGroup, { hal::MAX_BIND_GROUPS }> {
+        bind_group_layouts: &'a registry::Registry<A, binding_model::BindGroupLayout<A>, F>,
+    ) -> ArrayVec<pipeline::LateSizedBufferGroup, { hal::MAX_BIND_GROUPS }>
+    where
+        F: GlobalIdentityHandlerFactory,
+    {
         // Given the shader-required binding sizes and the pipeline layout,
         // return the filtered list of them in the layout order,
         // removing those with given `min_binding_size`.
@@ -1485,7 +1494,7 @@ impl<A: HalApi> Device<A> {
         })
     }
 
-    fn create_buffer_binding<'a>(
+    fn create_buffer_binding<'a, F>(
         bb: &binding_model::BufferBinding,
         binding: u32,
         decl: &wgt::BindGroupLayoutEntry,
@@ -1493,10 +1502,13 @@ impl<A: HalApi> Device<A> {
         dynamic_binding_info: &mut Vec<binding_model::BindGroupDynamicBindingData>,
         late_buffer_binding_sizes: &mut FastHashMap<u32, wgt::BufferSize>,
         used: &mut BindGroupStates<A>,
-        storage: &'a registry::Registry<A, resource::Buffer<A>>,
+        storage: &'a registry::Registry<A, resource::Buffer<A>, F>,
         limits: &wgt::Limits,
         destruction_guard: &'a ReadDestructionGuard<'a>,
-    ) -> Result<hal::BufferBinding<'a, A>, binding_model::CreateBindGroupError> {
+    ) -> Result<hal::BufferBinding<'a, A>, binding_model::CreateBindGroupError>
+    where
+        F: GlobalIdentityHandlerFactory,
+    {
         use crate::binding_model::CreateBindGroupError as Error;
 
         let (binding_ty, dynamic, min_size) = match decl.ty {
@@ -1610,14 +1622,17 @@ impl<A: HalApi> Device<A> {
         })
     }
 
-    fn create_texture_binding(
+    fn create_texture_binding<F>(
         view: &resource::TextureView<A>,
-        textures: &registry::Registry<A, resource::Texture<A>>,
+        textures: &registry::Registry<A, resource::Texture<A>, F>,
         internal_use: hal::TextureUses,
         pub_usage: wgt::TextureUsages,
         used: &mut BindGroupStates<A>,
         used_texture_ranges: &mut Vec<TextureInitTrackerAction>,
-    ) -> Result<(), binding_model::CreateBindGroupError> {
+    ) -> Result<(), binding_model::CreateBindGroupError>
+    where
+        F: GlobalIdentityHandlerFactory,
+    {
         // Careful here: the texture may no longer have its own ref count,
         // if it was deleted by the user.
         let texture = used
@@ -2059,12 +2074,15 @@ impl<A: HalApi> Device<A> {
         }
     }
 
-    fn create_pipeline_layout(
+    fn create_pipeline_layout<F>(
         &self,
         self_id: id::DeviceId,
         desc: &binding_model::PipelineLayoutDescriptor,
-        bgl_guard: &registry::Registry<A, binding_model::BindGroupLayout<A>>,
-    ) -> Result<binding_model::PipelineLayout<A>, binding_model::CreatePipelineLayoutError> {
+        bgl_guard: &registry::Registry<A, binding_model::BindGroupLayout<A>, F>,
+    ) -> Result<binding_model::PipelineLayout<A>, binding_model::CreatePipelineLayoutError>
+    where
+        F: GlobalIdentityHandlerFactory,
+    {
         use crate::binding_model::CreatePipelineLayoutError as Error;
 
         let bind_group_layouts_count = desc.bind_group_layouts.len();
@@ -2167,14 +2185,17 @@ impl<A: HalApi> Device<A> {
 
     //TODO: refactor this. It's the only method of `Device` that registers new objects
     // (the pipeline layout).
-    fn derive_pipeline_layout(
+    fn derive_pipeline_layout<F>(
         &self,
         self_id: id::DeviceId,
         implicit_context: Option<ImplicitPipelineContext>,
         mut derived_group_layouts: ArrayVec<binding_model::BindEntryMap, { hal::MAX_BIND_GROUPS }>,
-        bind_group_layouts: &registry::Registry<A, binding_model::BindGroupLayout<A>>,
-        pipeline_layouts: &registry::Registry<A, binding_model::PipelineLayout<A>>,
-    ) -> Result<id::PipelineLayoutId, pipeline::ImplicitLayoutError> {
+        bind_group_layouts: &registry::Registry<A, binding_model::BindGroupLayout<A>, F>,
+        pipeline_layouts: &registry::Registry<A, binding_model::PipelineLayout<A>, F>,
+    ) -> Result<id::PipelineLayoutId, pipeline::ImplicitLayoutError>
+    where
+        F: GlobalIdentityHandlerFactory,
+    {
         while derived_group_layouts
             .last()
             .map_or(false, |map| map.is_empty())

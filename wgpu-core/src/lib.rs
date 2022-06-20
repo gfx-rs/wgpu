@@ -55,7 +55,13 @@ pub use hal::{api, MAX_BIND_GROUPS, MAX_COLOR_TARGETS, MAX_VERTEX_BUFFERS};
 
 use atomic::{AtomicUsize, Ordering};
 
-use std::{borrow::Cow, mem::{ManuallyDrop, self}, os::raw::c_char, ptr, sync::atomic};
+use std::{
+    borrow::Cow,
+    mem::{self, ManuallyDrop},
+    os::raw::c_char,
+    ptr,
+    sync::atomic,
+};
 
 /// The index of a queue submission.
 ///
@@ -63,8 +69,8 @@ use std::{borrow::Cow, mem::{ManuallyDrop, self}, os::raw::c_char, ptr, sync::at
 type SubmissionIndex = hal::FenceValue;
 type AtomicSubmissionIndex = atomic::AtomicU64;
 
-type Index = u32;
-type Epoch = u32;
+pub type Index = u32;
+pub type Epoch = u32;
 
 pub type RawString = *const c_char;
 pub type Label<'a> = Option<Cow<'a, str>>;

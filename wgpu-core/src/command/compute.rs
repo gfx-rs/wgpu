@@ -254,15 +254,18 @@ impl<A: HalApi> State<A> {
         Ok(())
     }
 
-    fn flush_states(
+    fn flush_states<F>(
         &mut self,
         raw_encoder: &mut A::CommandEncoder,
         base_trackers: &mut Tracker<A>,
-        bind_groups: &registry::Registry<A, BindGroup<A>>,
-        buffers: &registry::Registry<A, Buffer<A>>,
-        textures: &registry::Registry<A, Texture<A>>,
+        bind_groups: &registry::Registry<A, BindGroup<A>, F>,
+        buffers: &registry::Registry<A, Buffer<A>, F>,
+        textures: &registry::Registry<A, Texture<A>, F>,
         destruction_guard: &ReadDestructionGuard<'_>,
-    ) -> Result<(), UsageConflict> {
+    ) -> Result<(), UsageConflict>
+    where
+        F: GlobalIdentityHandlerFactory,
+    {
         for id in self.binder.list_active() {
             unsafe {
                 self.scope

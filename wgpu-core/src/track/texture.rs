@@ -182,14 +182,17 @@ impl<A: hub::HalApi> TextureBindGroupState<A> {
     }
 
     /// Adds the given resource with the given state.
-    pub fn add_single<'a>(
+    pub fn add_single<'a, F>(
         &mut self,
-        storage: &'a registry::Registry<A, Texture<A>>,
+        storage: &'a registry::Registry<A, Texture<A>, F>,
         id: TextureId,
         ref_count: RefCount,
         selector: Option<TextureSelector>,
         state: TextureUses,
-    ) -> Option<&'a Texture<A>> {
+    ) -> Option<&'a Texture<A>>
+    where
+        F: hub::IdentityHandlerFactory<TextureId>,
+    {
         let value = storage.get(id).ok()?;
 
         self.textures.push((Valid(id), selector, ref_count, state));
@@ -276,11 +279,14 @@ impl<A: hub::HalApi> TextureUsageScope<A> {
     ///
     /// If the given tracker uses IDs higher than the length of internal vectors,
     /// the vectors will be extended. A call to set_size is not needed.
-    pub fn merge_usage_scope(
+    pub fn merge_usage_scope<F>(
         &mut self,
-        storage: &registry::Registry<A, Texture<A>>,
+        storage: &registry::Registry<A, Texture<A>, F>,
         scope: &Self,
-    ) -> Result<(), UsageConflict> {
+    ) -> Result<(), UsageConflict>
+    where
+        F: hub::IdentityHandlerFactory<TextureId>,
+    {
         let incoming_size = scope.set.simple.len();
         if incoming_size > self.set.simple.len() {
             self.set_size(incoming_size);
@@ -322,11 +328,14 @@ impl<A: hub::HalApi> TextureUsageScope<A> {
     ///
     /// [`Self::set_size`] must be called with the maximum possible Buffer ID before this
     /// method is called.
-    pub unsafe fn merge_bind_group(
+    pub unsafe fn merge_bind_group<F>(
         &mut self,
-        storage: &registry::Registry<A, Texture<A>>,
+        storage: &registry::Registry<A, Texture<A>, F>,
         bind_group: &TextureBindGroupState<A>,
-    ) -> Result<(), UsageConflict> {
+    ) -> Result<(), UsageConflict>
+    where
+        F: hub::IdentityHandlerFactory<TextureId>,
+    {
         for &(id, ref selector, ref ref_count, state) in &bind_group.textures {
             self.merge_single(storage, id, selector.clone(), ref_count, state)?;
         }
@@ -347,14 +356,17 @@ impl<A: hub::HalApi> TextureUsageScope<A> {
     ///
     /// [`Self::set_size`] must be called with the maximum possible Buffer ID before this
     /// method is called.
-    pub unsafe fn merge_single(
+    pub unsafe fn merge_single<F>(
         &mut self,
-        storage: &registry::Registry<A, Texture<A>>,
+        storage: &registry::Registry<A, Texture<A>, F>,
         id: Valid<TextureId>,
         selector: Option<TextureSelector>,
         ref_count: &RefCount,
         new_state: TextureUses,
-    ) -> Result<(), UsageConflict> {
+    ) -> Result<(), UsageConflict>
+    where
+        F: hub::IdentityHandlerFactory<TextureId>,
+    {
         let (index32, epoch, _) = id.0.unzip();
         let index = index32 as usize;
 
@@ -518,13 +530,16 @@ impl<A: hub::HalApi> TextureTracker<A> {
     ///
     /// If the ID is higher than the length of internal vectors,
     /// the vectors will be extended. A call to set_size is not needed.
-    pub fn set_single<'a>(
+    pub fn set_single<'a, F>(
         &mut self,
-        storage: &'a registry::Registry<A, Texture<A>>,
+        storage: &'a registry::Registry<A, Texture<A>, F>,
         id: TextureId,
         selector: TextureSelector,
         new_state: TextureUses,
-    ) -> Option<(&'a Texture<A>, Drain<'_, PendingTransition<TextureUses>>)> {
+    ) -> Option<(&'a Texture<A>, Drain<'_, PendingTransition<TextureUses>>)>
+    where
+        F: hub::IdentityHandlerFactory<TextureId>,
+    {
         let texture = storage.get(id).ok()?;
 
         let (index32, epoch, _) = id.unzip();
@@ -563,11 +578,13 @@ impl<A: hub::HalApi> TextureTracker<A> {
     ///
     /// If the ID is higher than the length of internal vectors,
     /// the vectors will be extended. A call to set_size is not needed.
-    pub fn set_from_tracker(
+    pub fn set_from_tracker<F>(
         &mut self,
-        storage: &registry::Registry<A, Texture<A>>,
+        storage: &registry::Registry<A, Texture<A>, F>,
         tracker: &Self,
-    ) {
+    ) where
+        F: hub::IdentityHandlerFactory<TextureId>,
+    {
         let incoming_size = tracker.start_set.simple.len();
         if incoming_size > self.start_set.simple.len() {
             self.set_size(incoming_size);
@@ -609,11 +626,13 @@ impl<A: hub::HalApi> TextureTracker<A> {
     ///
     /// If the ID is higher than the length of internal vectors,
     /// the vectors will be extended. A call to set_size is not needed.
-    pub fn set_from_usage_scope(
+    pub fn set_from_usage_scope<F>(
         &mut self,
-        storage: &registry::Registry<A, Texture<A>>,
+        storage: &registry::Registry<A, Texture<A>, F>,
         scope: &TextureUsageScope<A>,
-    ) {
+    ) where
+        F: hub::IdentityHandlerFactory<TextureId>,
+    {
         let incoming_size = scope.set.simple.len();
         if incoming_size > self.start_set.simple.len() {
             self.set_size(incoming_size);
@@ -661,12 +680,14 @@ impl<A: hub::HalApi> TextureTracker<A> {
     ///
     /// [`Self::set_size`] must be called with the maximum possible Buffer ID before this
     /// method is called.
-    pub unsafe fn set_and_remove_from_usage_scope_sparse(
+    pub unsafe fn set_and_remove_from_usage_scope_sparse<F>(
         &mut self,
-        storage: &registry::Registry<A, Texture<A>>,
+        storage: &registry::Registry<A, Texture<A>, F>,
         scope: &mut TextureUsageScope<A>,
         bind_group_state: &TextureBindGroupState<A>,
-    ) {
+    ) where
+        F: hub::IdentityHandlerFactory<TextureId>,
+    {
         let incoming_size = scope.set.simple.len();
         if incoming_size > self.start_set.simple.len() {
             self.set_size(incoming_size);
@@ -876,10 +897,14 @@ impl<'a> TextureStateProvider<'a> {
 /// Helper function that gets what is needed from the texture storage
 /// out of the texture storage.
 #[inline(always)]
-unsafe fn texture_data_from_texture<A: hub::HalApi>(
-    storage: &registry::Registry<A, Texture<A>>,
+unsafe fn texture_data_from_texture<A, F>(
+    storage: &registry::Registry<A, Texture<A>, F>,
     index32: u32,
-) -> (&LifeGuard, &TextureSelector) {
+) -> (&LifeGuard, &TextureSelector)
+where
+    F: hub::IdentityHandlerFactory<TextureId>,
+    A: hub::HalApi,
+{
     let texture = storage.get_unchecked(index32);
     (&texture.life_guard, &texture.full_range)
 }

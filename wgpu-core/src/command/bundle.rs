@@ -709,15 +709,18 @@ impl<A: HalApi> RenderBundle<A> {
     /// Note that the function isn't expected to fail, generally.
     /// All the validation has already been done by this point.
     /// The only failure condition is if some of the used buffers are destroyed.
-    pub(super) unsafe fn execute(
+    pub(super) unsafe fn execute<F>(
         &self,
         raw: &mut A::CommandEncoder,
-        pipeline_layouts: &registry::Registry<A, crate::binding_model::PipelineLayout<A>>,
-        bind_groups: &registry::Registry<A, crate::binding_model::BindGroup<A>>,
-        pipelines: &registry::Registry<A, crate::pipeline::RenderPipeline<A>>,
-        buffers: &registry::Registry<A, crate::resource::Buffer<A>>,
+        pipeline_layouts: &registry::Registry<A, crate::binding_model::PipelineLayout<A>, F>,
+        bind_groups: &registry::Registry<A, crate::binding_model::BindGroup<A>, F>,
+        pipelines: &registry::Registry<A, crate::pipeline::RenderPipeline<A>, F>,
+        buffers: &registry::Registry<A, crate::resource::Buffer<A>, F>,
         destruction_guard: &ReadDestructionGuard<'_>,
-    ) -> Result<(), ExecutionError> {
+    ) -> Result<(), ExecutionError>
+    where
+        F: GlobalIdentityHandlerFactory,
+    {
         let mut offsets = self.base.dynamic_offsets.as_slice();
         let mut pipeline_layout_id = None::<id::Valid<id::PipelineLayoutId>>;
         if let Some(ref label) = self.base.label {

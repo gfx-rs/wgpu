@@ -97,7 +97,7 @@ mod texture;
 use crate::{
     binding_model, command, conv,
     destroy::ReadDestructionGuard,
-    hub,
+    hub::{self, GlobalIdentityHandlerFactory},
     id::{self, TypedId},
     pipeline, registry, resource, Epoch, LifeGuard, RefCount,
 };
@@ -510,13 +510,16 @@ pub(crate) struct RenderBundleScope<A: hub::HalApi> {
 
 impl<A: hub::HalApi> RenderBundleScope<A> {
     /// Create the render bundle scope and pull the maximum IDs from the hubs.
-    pub fn new(
-        buffers: &registry::Registry<A, resource::Buffer<A>>,
-        textures: &registry::Registry<A, resource::Texture<A>>,
-        bind_groups: &registry::Registry<A, binding_model::BindGroup<A>>,
-        render_pipelines: &registry::Registry<A, pipeline::RenderPipeline<A>>,
-        query_sets: &registry::Registry<A, resource::QuerySet<A>>,
-    ) -> Self {
+    pub fn new<F>(
+        buffers: &registry::Registry<A, resource::Buffer<A>, F>,
+        textures: &registry::Registry<A, resource::Texture<A>, F>,
+        bind_groups: &registry::Registry<A, binding_model::BindGroup<A>, F>,
+        render_pipelines: &registry::Registry<A, pipeline::RenderPipeline<A>, F>,
+        query_sets: &registry::Registry<A, resource::QuerySet<A>, F>,
+    ) -> Self
+    where
+        F: GlobalIdentityHandlerFactory,
+    {
         let mut value = Self {
             buffers: BufferUsageScope::new(),
             textures: TextureUsageScope::new(),
@@ -545,11 +548,14 @@ impl<A: hub::HalApi> RenderBundleScope<A> {
     ///
     /// The maximum ID given by each bind group resource must be less than the
     /// length of the storage given at the call to `new`.
-    pub unsafe fn merge_bind_group(
+    pub unsafe fn merge_bind_group<F>(
         &mut self,
-        textures: &registry::Registry<A, resource::Texture<A>>,
+        textures: &registry::Registry<A, resource::Texture<A>, F>,
         bind_group: &BindGroupStates<A>,
-    ) -> Result<(), UsageConflict> {
+    ) -> Result<(), UsageConflict>
+    where
+        F: GlobalIdentityHandlerFactory,
+    {
         self.buffers.merge_bind_group(&bind_group.buffers)?;
         self.textures
             .merge_bind_group(textures, &bind_group.textures)?;
@@ -568,10 +574,13 @@ pub(crate) struct UsageScope<A: hub::HalApi> {
 
 impl<A: hub::HalApi> UsageScope<A> {
     /// Create the render bundle scope and pull the maximum IDs from the hubs.
-    pub fn new(
-        buffers: &registry::Registry<A, resource::Buffer<A>>,
-        textures: &registry::Registry<A, resource::Texture<A>>,
-    ) -> Self {
+    pub fn new<F>(
+        buffers: &registry::Registry<A, resource::Buffer<A>, F>,
+        textures: &registry::Registry<A, resource::Texture<A>, F>,
+    ) -> Self
+    where
+        F: GlobalIdentityHandlerFactory,
+    {
         let mut value = Self {
             buffers: BufferUsageScope::new(),
             textures: TextureUsageScope::new(),
@@ -592,11 +601,14 @@ impl<A: hub::HalApi> UsageScope<A> {
     ///
     /// The maximum ID given by each bind group resource must be less than the
     /// length of the storage given at the call to `new`.
-    pub unsafe fn merge_bind_group(
+    pub unsafe fn merge_bind_group<F>(
         &mut self,
-        textures: &registry::Registry<A, resource::Texture<A>>,
+        textures: &registry::Registry<A, resource::Texture<A>, F>,
         bind_group: &BindGroupStates<A>,
-    ) -> Result<(), UsageConflict> {
+    ) -> Result<(), UsageConflict>
+    where
+        F: GlobalIdentityHandlerFactory,
+    {
         self.buffers.merge_bind_group(&bind_group.buffers)?;
         self.textures
             .merge_bind_group(textures, &bind_group.textures)?;
@@ -613,11 +625,14 @@ impl<A: hub::HalApi> UsageScope<A> {
     ///
     /// The maximum ID given by each bind group resource must be less than the
     /// length of the storage given at the call to `new`.
-    pub unsafe fn merge_render_bundle(
+    pub unsafe fn merge_render_bundle<F>(
         &mut self,
-        textures: &registry::Registry<A, resource::Texture<A>>,
+        textures: &registry::Registry<A, resource::Texture<A>, F>,
         render_bundle: &RenderBundleScope<A>,
-    ) -> Result<(), UsageConflict> {
+    ) -> Result<(), UsageConflict>
+    where
+        F: GlobalIdentityHandlerFactory,
+    {
         self.buffers.merge_usage_scope(&render_bundle.buffers)?;
         self.textures
             .merge_usage_scope(textures, &render_bundle.textures)?;
@@ -655,18 +670,20 @@ impl<A: hub::HalApi> Tracker<A> {
     }
 
     /// Pull the maximum IDs from the hubs.
-    pub fn set_size(
+    pub fn set_size<F>(
         &mut self,
-        buffers: Option<&registry::Registry<A, resource::Buffer<A>>>,
-        textures: Option<&registry::Registry<A, resource::Texture<A>>>,
-        views: Option<&registry::Registry<A, resource::TextureView<A>>>,
-        samplers: Option<&registry::Registry<A, resource::Sampler<A>>>,
-        bind_groups: Option<&registry::Registry<A, binding_model::BindGroup<A>>>,
-        compute_pipelines: Option<&registry::Registry<A, pipeline::ComputePipeline<A>>>,
-        render_pipelines: Option<&registry::Registry<A, pipeline::RenderPipeline<A>>>,
-        bundles: Option<&registry::Registry<A, command::RenderBundle<A>>>,
-        query_sets: Option<&registry::Registry<A, resource::QuerySet<A>>>,
-    ) {
+        buffers: Option<&registry::Registry<A, resource::Buffer<A>, F>>,
+        textures: Option<&registry::Registry<A, resource::Texture<A>, F>>,
+        views: Option<&registry::Registry<A, resource::TextureView<A>, F>>,
+        samplers: Option<&registry::Registry<A, resource::Sampler<A>, F>>,
+        bind_groups: Option<&registry::Registry<A, binding_model::BindGroup<A>, F>>,
+        compute_pipelines: Option<&registry::Registry<A, pipeline::ComputePipeline<A>, F>>,
+        render_pipelines: Option<&registry::Registry<A, pipeline::RenderPipeline<A>, F>>,
+        bundles: Option<&registry::Registry<A, command::RenderBundle<A>, F>>,
+        query_sets: Option<&registry::Registry<A, resource::QuerySet<A>, F>>,
+    ) where
+        F: GlobalIdentityHandlerFactory,
+    {
         if let Some(buffers) = buffers {
             self.buffers.set_size(buffers.max_index());
         };
@@ -718,12 +735,14 @@ impl<A: hub::HalApi> Tracker<A> {
     ///
     /// The maximum ID given by each bind group resource must be less than the
     /// value given to `set_size`
-    pub unsafe fn set_and_remove_from_usage_scope_sparse(
+    pub unsafe fn set_and_remove_from_usage_scope_sparse<F>(
         &mut self,
-        textures: &registry::Registry<A, resource::Texture<A>>,
+        textures: &registry::Registry<A, resource::Texture<A>, F>,
         scope: &mut UsageScope<A>,
         bind_group: &BindGroupStates<A>,
-    ) {
+    ) where
+        F: GlobalIdentityHandlerFactory,
+    {
         self.buffers
             .set_and_remove_from_usage_scope_sparse(&mut scope.buffers, &bind_group.buffers);
         self.textures.set_and_remove_from_usage_scope_sparse(

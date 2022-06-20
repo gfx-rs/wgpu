@@ -5,7 +5,7 @@ use hal::CommandEncoder;
 use crate::{
     destroy::ReadDestructionGuard,
     device::Device,
-    hub::HalApi,
+    hub::{GlobalIdentityHandlerFactory, HalApi},
     id::{self, TextureId},
     init_tracker::*,
     registry,
@@ -49,11 +49,15 @@ impl CommandBufferTextureMemoryActions {
     // Returns previously discarded surface that need to be initialized *immediately* now.
     // Only returns a non-empty list if action is MemoryInitKind::NeedsInitializedMemory.
     #[must_use]
-    pub(crate) fn register_init_action<A: HalApi>(
+    pub(crate) fn register_init_action<A, F>(
         &mut self,
         action: &TextureInitTrackerAction,
-        textures: &registry::Registry<A, Texture<A>>,
-    ) -> SurfacesInDiscardState {
+        textures: &registry::Registry<A, Texture<A>, F>,
+    ) -> SurfacesInDiscardState
+    where
+        A: HalApi,
+        F: GlobalIdentityHandlerFactory,
+    {
         let mut immediately_necessary_clears = SurfacesInDiscardState::new();
 
         // Note that within a command buffer we may stack arbitrary memory init actions on the same texture
@@ -101,12 +105,15 @@ impl CommandBufferTextureMemoryActions {
     }
 
     // Shortcut for register_init_action when it is known that the action is an implicit init, not requiring any immediate resource init.
-    pub(crate) fn register_implicit_init<A: HalApi>(
+    pub(crate) fn register_implicit_init<A, F>(
         &mut self,
         id: id::Valid<TextureId>,
         range: TextureInitRange,
-        textures: &registry::Registry<A, Texture<A>>,
-    ) {
+        textures: &registry::Registry<A, Texture<A>, F>,
+    ) where
+        A: HalApi,
+        F: GlobalIdentityHandlerFactory,
+    {
         let must_be_empty = self.register_init_action(
             &TextureInitTrackerAction {
                 id: id.0,
@@ -121,17 +128,18 @@ impl CommandBufferTextureMemoryActions {
 
 // Utility function that takes discarded surfaces from (several calls to) register_init_action and initializes them on the spot.
 // Takes care of barriers as well!
-pub(crate) fn fixup_discarded_surfaces<
-    A: HalApi,
-    InitIter: Iterator<Item = TextureSurfaceDiscard>,
->(
+pub(crate) fn fixup_discarded_surfaces<A, F, InitIter>(
     inits: InitIter,
     encoder: &mut A::CommandEncoder,
-    textures: &registry::Registry<A, Texture<A>>,
+    textures: &registry::Registry<A, Texture<A>, F>,
     texture_tracker: &mut TextureTracker<A>,
     device: &Device<A>,
     destruction_guard: &ReadDestructionGuard<'_>,
-) {
+) where
+    A: HalApi,
+    F: GlobalIdentityHandlerFactory,
+    InitIter: Iterator<Item = TextureSurfaceDiscard>,
+{
     for init in inits {
         clear_texture(
             textures,
@@ -152,12 +160,15 @@ pub(crate) fn fixup_discarded_surfaces<
 
 impl<A: HalApi> BakedCommands<A> {
     // inserts all buffer initializations that are going to be needed for executing the commands and updates resource init states accordingly
-    pub(crate) fn initialize_buffer_memory(
+    pub(crate) fn initialize_buffer_memory<F>(
         &mut self,
         device_tracker: &mut Tracker<A>,
-        buffers: &registry::Registry<A, Buffer<A>>,
+        buffers: &registry::Registry<A, Buffer<A>, F>,
         destruction_guard: &ReadDestructionGuard<'_>,
-    ) -> Result<(), DestroyedBufferError> {
+    ) -> Result<(), DestroyedBufferError>
+    where
+        F: GlobalIdentityHandlerFactory,
+    {
         // Gather init ranges for each buffer so we can collapse them.
         // It is not possible to do this at an earlier point since previously executed command buffer change the resource init state.
         let mut uninitialized_ranges_per_buffer = FastHashMap::default();
@@ -242,13 +253,16 @@ impl<A: HalApi> BakedCommands<A> {
 
     // inserts all texture initializations that are going to be needed for executing the commands and updates resource init states accordingly
     // any textures that are left discarded by this command buffer will be marked as uninitialized
-    pub(crate) fn initialize_texture_memory(
+    pub(crate) fn initialize_texture_memory<F>(
         &mut self,
         device_tracker: &mut Tracker<A>,
-        textures: &registry::Registry<A, Texture<A>>,
+        textures: &registry::Registry<A, Texture<A>, F>,
         device: &Device<A>,
         destruction_guard: &ReadDestructionGuard<'_>,
-    ) -> Result<(), DestroyedTextureError> {
+    ) -> Result<(), DestroyedTextureError>
+    where
+        F: GlobalIdentityHandlerFactory,
+    {
         let mut ranges: Vec<TextureInitRange> = Vec::new();
         for texture_use in self.texture_memory_actions.drain_init_actions() {
             let texture = textures

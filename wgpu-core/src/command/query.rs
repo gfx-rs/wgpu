@@ -43,12 +43,15 @@ impl<A: HalApi> QueryResetMap<A> {
         std::mem::replace(&mut vec_pair.0[query as usize], true)
     }
 
-    pub fn reset_queries(
+    pub fn reset_queries<F>(
         self,
         raw_encoder: &mut A::CommandEncoder,
-        query_sets: &registry::Registry<A, QuerySet<A>>,
+        query_sets: &registry::Registry<A, QuerySet<A>, F>,
         backend: wgt::Backend,
-    ) -> Result<(), id::QuerySetId> {
+    ) -> Result<(), id::QuerySetId>
+    where
+        F: GlobalIdentityHandlerFactory,
+    {
         for (query_set_id, (state, epoch)) in self.map.into_iter() {
             let id = Id::zip(query_set_id, epoch, backend);
             let query_set = query_sets.get(id).map_err(|_| id)?;
@@ -256,11 +259,15 @@ impl<A: HalApi> QuerySet<A> {
     }
 }
 
-pub(super) fn end_pipeline_statistics_query<A: HalApi>(
+pub(super) fn end_pipeline_statistics_query<A, F>(
     raw_encoder: &mut A::CommandEncoder,
-    storage: &registry::Registry<A, QuerySet<A>>,
+    storage: &registry::Registry<A, QuerySet<A>, F>,
     active_query: &mut Option<(id::QuerySetId, u32)>,
-) -> Result<(), QueryUseError> {
+) -> Result<(), QueryUseError>
+where
+    A: HalApi,
+    F: GlobalIdentityHandlerFactory,
+{
     if let Some((query_set_id, query_index)) = active_query.take() {
         // We can unwrap here as the validity was validated when the active query was set
         let query_set = storage.get(query_set_id).unwrap();

@@ -10,7 +10,7 @@ use parking_lot::Mutex;
 use thiserror::Error;
 
 use crate::{
-    hub,
+    hub::{self, IdentityHandler},
     id::{self, TypedId},
     sync::{DebugMaybeUninit, DebugUnsafeCell},
     Epoch, LifeGuard, RefCount, SubmissionIndex,
@@ -66,22 +66,27 @@ where
     }
 }
 
-pub struct Registry<A, T> {
+pub struct Registry<A, T, F>
+where
+    T: hub::Resource,
+    F: hub::IdentityHandlerFactory<T::Id>,
+{
     storage: Storage<T>,
-    identity_manager: Mutex<hub::IdentityManager>,
+    identity_manager: Mutex<F::Filter>,
 
     _phantom: PhantomData<A>,
 }
 
-impl<A, T> Registry<A, T>
+impl<A, T, F> Registry<A, T, F>
 where
     A: hub::HalApi,
     T: hub::Resource,
+    F: hub::IdentityHandlerFactory<T::Id>,
 {
-    pub fn new() -> Self {
+    pub fn new(factory: &F) -> Self {
         Self {
             storage: Storage::new(),
-            identity_manager: Mutex::new(hub::IdentityManager::default()),
+            identity_manager: Mutex::new(factory.spawn()),
             _phantom: PhantomData,
         }
     }
@@ -93,9 +98,12 @@ where
     }
 
     /// Safe to call concurrently.
-    pub(crate) fn prepare<Q>(&self, _: Q) -> FutureId<'_, T> {
+    pub(crate) fn prepare(
+        &self,
+        input: <F::Filter as IdentityHandler<T::Id>>::Input,
+    ) -> FutureId<'_, T> {
         let mut ident_guard = self.identity_manager.lock();
-        let (index, id) = ident_guard.alloc(A::VARIANT);
+        let (index, id) = ident_guard.process(input, A::VARIANT);
         unsafe { self.storage.ensure_index(index) }
         drop(ident_guard);
 
@@ -238,10 +246,11 @@ where
     }
 }
 
-impl<A, T> std::ops::Index<id::Valid<T::Id>> for Registry<A, T>
+impl<A, T, F> std::ops::Index<id::Valid<T::Id>> for Registry<A, T, F>
 where
     A: hub::HalApi,
     T: hub::Resource,
+    F: hub::IdentityHandlerFactory<T::Id>,
 {
     type Output = T;
 

@@ -107,17 +107,17 @@ impl StorageReport {
 
 pub trait IdentityHandler<I>: Debug {
     type Input: Clone + Debug;
-    fn process(&self, id: Self::Input, backend: Backend) -> I;
-    fn free(&self, id: I);
+    fn process(&mut self, id: Self::Input, backend: Backend) -> (Index, I);
+    fn free(&mut self, id: I) -> (Index, Epoch);
 }
 
-impl<I: id::TypedId + Debug> IdentityHandler<I> for Mutex<IdentityManager> {
+impl<I: id::TypedId + Debug> IdentityHandler<I> for IdentityManager {
     type Input = PhantomData<I>;
-    fn process(&self, _id: Self::Input, backend: Backend) -> I {
-        self.lock().alloc(backend).1
+    fn process(&mut self, _id: Self::Input, backend: Backend) -> (Index, I) {
+        self.alloc(backend)
     }
-    fn free(&self, id: I) {
-        self.lock().free(id);
+    fn free(&mut self, id: I) -> (Index, Epoch) {
+        self.free(id)
     }
 }
 
@@ -130,9 +130,9 @@ pub trait IdentityHandlerFactory<I> {
 pub struct IdentityManagerFactory;
 
 impl<I: id::TypedId + Debug> IdentityHandlerFactory<I> for IdentityManagerFactory {
-    type Filter = Mutex<IdentityManager>;
+    type Filter = IdentityManager;
     fn spawn(&self) -> Self::Filter {
-        Mutex::new(IdentityManager::default())
+        IdentityManager::default()
     }
 }
 
@@ -200,43 +200,41 @@ impl HubReport {
 }
 
 pub struct Hub<A: HalApi, F: GlobalIdentityHandlerFactory> {
-    pub adapters: registry::Registry<A, Adapter<A>>,
-    pub devices: registry::Registry<A, Device<A>>,
-    pub pipeline_layouts: registry::Registry<A, PipelineLayout<A>>,
-    pub shader_modules: registry::Registry<A, ShaderModule<A>>,
-    pub bind_group_layouts: registry::Registry<A, BindGroupLayout<A>>,
-    pub bind_groups: registry::Registry<A, BindGroup<A>>,
-    pub command_buffers: registry::Registry<A, Mutex<CommandBuffer<A>>>,
-    pub render_bundles: registry::Registry<A, RenderBundle<A>>,
-    pub render_pipelines: registry::Registry<A, RenderPipeline<A>>,
-    pub compute_pipelines: registry::Registry<A, ComputePipeline<A>>,
-    pub query_sets: registry::Registry<A, QuerySet<A>>,
-    pub buffers: registry::Registry<A, Buffer<A>>,
-    pub textures: registry::Registry<A, Texture<A>>,
-    pub texture_views: registry::Registry<A, TextureView<A>>,
-    pub samplers: registry::Registry<A, Sampler<A>>,
-    _phantom: PhantomData<F>,
+    pub adapters: registry::Registry<A, Adapter<A>, F>,
+    pub devices: registry::Registry<A, Device<A>, F>,
+    pub pipeline_layouts: registry::Registry<A, PipelineLayout<A>, F>,
+    pub shader_modules: registry::Registry<A, ShaderModule<A>, F>,
+    pub bind_group_layouts: registry::Registry<A, BindGroupLayout<A>, F>,
+    pub bind_groups: registry::Registry<A, BindGroup<A>, F>,
+    pub command_buffers: registry::Registry<A, Mutex<CommandBuffer<A>>, F>,
+    pub render_bundles: registry::Registry<A, RenderBundle<A>, F>,
+    pub render_pipelines: registry::Registry<A, RenderPipeline<A>, F>,
+    pub compute_pipelines: registry::Registry<A, ComputePipeline<A>, F>,
+    pub query_sets: registry::Registry<A, QuerySet<A>, F>,
+    pub buffers: registry::Registry<A, Buffer<A>, F>,
+    pub textures: registry::Registry<A, Texture<A>, F>,
+    pub texture_views: registry::Registry<A, TextureView<A>, F>,
+    pub samplers: registry::Registry<A, Sampler<A>, F>,
 }
 
 impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<A, F> {
-    fn new(_factory: &F) -> Self {
+    fn new(factory: &F) -> Self {
         Self {
-            adapters: registry::Registry::new(),
-            devices: registry::Registry::new(),
-            pipeline_layouts: registry::Registry::new(),
-            shader_modules: registry::Registry::new(),
-            bind_group_layouts: registry::Registry::new(),
-            bind_groups: registry::Registry::new(),
-            command_buffers: registry::Registry::new(),
-            render_bundles: registry::Registry::new(),
-            render_pipelines: registry::Registry::new(),
-            compute_pipelines: registry::Registry::new(),
-            query_sets: registry::Registry::new(),
-            buffers: registry::Registry::new(),
-            textures: registry::Registry::new(),
-            texture_views: registry::Registry::new(),
-            samplers: registry::Registry::new(),
-            _phantom: PhantomData,
+            adapters: registry::Registry::new(factory),
+            devices: registry::Registry::new(factory),
+            pipeline_layouts: registry::Registry::new(factory),
+            shader_modules: registry::Registry::new(factory),
+            bind_group_layouts: registry::Registry::new(factory),
+            bind_groups: registry::Registry::new(factory),
+            command_buffers: registry::Registry::new(factory),
+            render_bundles: registry::Registry::new(factory),
+            render_pipelines: registry::Registry::new(factory),
+            compute_pipelines: registry::Registry::new(factory),
+            query_sets: registry::Registry::new(factory),
+            buffers: registry::Registry::new(factory),
+            textures: registry::Registry::new(factory),
+            texture_views: registry::Registry::new(factory),
+            samplers: registry::Registry::new(factory),
         }
     }
 
@@ -245,9 +243,11 @@ impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<A, F> {
     // everything related to a logical device.
     unsafe fn clear(
         &self,
-        surface_guard: &registry::Registry<hal::api::Empty, Surface>,
+        surface_guard: &registry::Registry<hal::api::Empty, Surface, F>,
         with_adapters: bool,
-    ) {
+    ) where
+        F: GlobalIdentityHandlerFactory,
+    {
         use crate::resource::TextureInner;
         use hal::{Device as _, Surface as _};
 
@@ -418,7 +418,7 @@ pub struct GlobalReport {
 
 pub struct Global<G: GlobalIdentityHandlerFactory> {
     pub instance: Instance,
-    pub surfaces: registry::Registry<hal::api::Empty, Surface>,
+    pub surfaces: registry::Registry<hal::api::Empty, Surface, G>,
     hubs: Hubs<G>,
 }
 
@@ -427,7 +427,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("new", "Global");
         Self {
             instance: Instance::new(name, backends),
-            surfaces: registry::Registry::new(),
+            surfaces: registry::Registry::new(&factory),
             hubs: Hubs::new(&factory),
         }
     }
@@ -443,7 +443,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("new", "Global");
         Self {
             instance: A::create_instance_from_hal(name, hal_instance),
-            surfaces: registry::Registry::new(),
+            surfaces: registry::Registry::new(&factory),
             hubs: Hubs::new(&factory),
         }
     }
