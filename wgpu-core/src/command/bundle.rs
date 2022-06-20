@@ -76,6 +76,7 @@ use crate::{
         RenderCommandError, StateChange,
     },
     conv,
+    destroy::ReadDestructionGuard,
     device::{
         AttachmentData, Device, DeviceError, MissingDownlevelFlags, RenderPassContext,
         SHADER_STAGE_COUNT,
@@ -715,6 +716,7 @@ impl<A: HalApi> RenderBundle<A> {
         bind_groups: &registry::Registry<A, crate::binding_model::BindGroup<A>>,
         pipelines: &registry::Registry<A, crate::pipeline::RenderPipeline<A>>,
         buffers: &registry::Registry<A, crate::resource::Buffer<A>>,
+        destruction_guard: &ReadDestructionGuard<'_>,
     ) -> Result<(), ExecutionError> {
         let mut offsets = self.base.dynamic_offsets.as_slice();
         let mut pipeline_layout_id = None::<id::Valid<id::PipelineLayoutId>>;
@@ -754,7 +756,7 @@ impl<A: HalApi> RenderBundle<A> {
                         .get(buffer_id)
                         .unwrap()
                         .raw
-                        .as_ref()
+                        .as_ref(destruction_guard)
                         .ok_or(ExecutionError::DestroyedBuffer(buffer_id))?;
                     let bb = hal::BufferBinding {
                         buffer: &*buffer,
@@ -773,7 +775,7 @@ impl<A: HalApi> RenderBundle<A> {
                         .get(buffer_id)
                         .unwrap()
                         .raw
-                        .as_ref()
+                        .as_ref(destruction_guard)
                         .ok_or(ExecutionError::DestroyedBuffer(buffer_id))?;
                     let bb = hal::BufferBinding {
                         buffer: &*buffer,
@@ -846,7 +848,7 @@ impl<A: HalApi> RenderBundle<A> {
                         .get(buffer_id)
                         .unwrap()
                         .raw
-                        .as_ref()
+                        .as_ref(destruction_guard)
                         .ok_or(ExecutionError::DestroyedBuffer(buffer_id))?;
                     raw.draw_indirect(&*buffer, offset, 1);
                 }
@@ -860,7 +862,7 @@ impl<A: HalApi> RenderBundle<A> {
                         .get(buffer_id)
                         .unwrap()
                         .raw
-                        .as_ref()
+                        .as_ref(destruction_guard)
                         .ok_or(ExecutionError::DestroyedBuffer(buffer_id))?;
                     raw.draw_indexed_indirect(&*buffer, offset, 1);
                 }
@@ -895,6 +897,7 @@ impl<A: HalApi> RenderBundle<A> {
 }
 
 impl<A: HalApi> Resource for RenderBundle<A> {
+    type Raw = ();
     type Id = id::RenderBundleId;
     const TYPE: &'static str = "RenderBundle";
 

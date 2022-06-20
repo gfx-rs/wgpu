@@ -4,6 +4,7 @@ use std::{num::NonZeroU32, ops::Range};
 use crate::device::trace::Command as TraceCommand;
 use crate::{
     command::CommandBuffer,
+    destroy::ReadDestructionGuard,
     get_lowest_common_denom,
     hub::{Global, GlobalIdentityHandlerFactory, HalApi},
     id::{BufferId, CommandEncoderId, DeviceId, TextureId, Valid},
@@ -90,9 +91,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .buffers
             .set_single(&hub.buffers, dst, hal::BufferUses::COPY_DST)
             .ok_or(ClearError::InvalidBuffer(dst))?;
+
+        let device = &hub.devices[dst_buffer.device_id.value];
+        let destruction_guard = device.destruction_lock.read();
+
         let dst_raw = dst_buffer
             .raw
-            .as_ref()
+            .as_ref(&destruction_guard)
             .ok_or(ClearError::InvalidBuffer(dst))?;
         if !dst_buffer.usage.contains(BufferUsages::COPY_DST) {
             return Err(ClearError::MissingCopyDstUsageFlag(Some(dst), None));
@@ -134,7 +139,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             ),
         );
         // actual hal barrier & operation
-        let dst_barrier = dst_pending.map(|pending| pending.into_hal(dst_buffer));
+        let dst_barrier =
+            dst_pending.map(|pending| pending.into_hal(dst_buffer, &destruction_guard));
         let cmd_buf_raw = cmd_buf.encoder.open();
         unsafe {
             cmd_buf_raw.transition_buffers(dst_barrier.into_iter());
@@ -213,6 +219,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         let device = &hub.devices[cmd_buf.device_id.value];
+        let destruction_guard = device.destruction_lock.read();
 
         clear_texture(
             &hub.textures,
@@ -225,6 +232,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             &mut cmd_buf.trackers.textures,
             &device.alignments,
             &device.zero_buffer,
+            &destruction_guard,
         )
     }
 }
@@ -237,16 +245,18 @@ pub(crate) fn clear_texture<A: HalApi>(
     texture_tracker: &mut TextureTracker<A>,
     alignments: &hal::Alignments,
     zero_buffer: &A::Buffer,
+    destruction_guard: &ReadDestructionGuard,
 ) -> Result<(), ClearError> {
     let dst_texture = &storage[dst_texture_id];
 
     let dst_raw = dst_texture
         .inner
-        .as_raw()
+        .as_raw(destruction_guard)
         .ok_or(ClearError::InvalidTexture(dst_texture_id.0))?;
 
     // Issue the right barrier.
-    let clear_usage = match dst_texture.clear_mode {
+    let clear_mode = dst_texture.clear_mode.read();
+    let clear_usage = match *clear_mode {
         TextureClearMode::BufferCopy => hal::TextureUses::COPY_DST,
         TextureClearMode::RenderPass {
             is_color: false, ..
@@ -272,13 +282,13 @@ pub(crate) fn clear_texture<A: HalApi>(
         .set_single(storage, dst_texture_id.0, selector, clear_usage)
         .unwrap()
         .1
-        .map(|pending| pending.into_hal(dst_texture));
+        .map(|pending| pending.into_hal(dst_texture, destruction_guard));
     unsafe {
         encoder.transition_textures(dst_barrier.into_iter());
     }
 
     // Record actual clearing
-    match dst_texture.clear_mode {
+    match *clear_mode {
         TextureClearMode::BufferCopy => clear_texture_via_buffer_copies::<A>(
             &dst_texture.desc,
             alignments,
@@ -402,11 +412,12 @@ fn clear_texture_via_render_passes<A: hal::Api>(
             range.layer_range.clone()
         };
         for depth_or_layer in layer_or_depth_range {
+            let view = dst_texture.get_clear_view(mip_level, depth_or_layer);
             let color_attachments_tmp;
             let (color_attachments, depth_stencil_attachment) = if is_color {
                 color_attachments_tmp = [hal::ColorAttachment {
                     target: hal::Attachment {
-                        view: dst_texture.get_clear_view(mip_level, depth_or_layer),
+                        view: &*view,
                         usage: hal::TextureUses::COLOR_TARGET,
                     },
                     resolve_target: None,
@@ -419,7 +430,7 @@ fn clear_texture_via_render_passes<A: hal::Api>(
                     &[][..],
                     Some(hal::DepthStencilAttachment {
                         target: hal::Attachment {
-                            view: dst_texture.get_clear_view(mip_level, depth_or_layer),
+                            view: &*view,
                             usage: hal::TextureUses::DEPTH_STENCIL_WRITE,
                         },
                         depth_ops: hal::AttachmentOps::STORE,

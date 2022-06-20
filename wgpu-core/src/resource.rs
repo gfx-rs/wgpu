@@ -9,7 +9,7 @@ use crate::{
     Label, LifeGuard, RefCount, Stored,
 };
 
-use parking_lot::{Mutex, RwLock};
+use parking_lot::{MappedRwLockReadGuard, Mutex, RwLock, RwLockReadGuard};
 use smallvec::SmallVec;
 use thiserror::Error;
 
@@ -207,9 +207,12 @@ pub(crate) enum TextureInner<A: hal::Api> {
 }
 
 impl<A: hal::Api> TextureInner<A> {
-    pub fn as_raw<'a>(&'a self, guard: ReadDestructionGuard<'a>) -> Option<&'a A::Texture> {
+    pub fn as_raw<'a>(
+        &'a self,
+        destruction_guard: &'a ReadDestructionGuard<'a>,
+    ) -> Option<&'a A::Texture> {
         match *self {
-            Self::Native { raw } => raw.as_ref(guard),
+            Self::Native { ref raw } => raw.as_ref(destruction_guard),
             Self::Surface { ref raw, .. } => Some(raw.borrow()),
         }
     }
@@ -238,12 +241,17 @@ pub struct Texture<A: hal::Api> {
     pub(crate) initialization_status: RwLock<TextureInitTracker>,
     pub(crate) full_range: TextureSelector,
     pub(crate) life_guard: LifeGuard,
-    pub(crate) clear_mode: TextureClearMode<A>,
+    pub(crate) clear_mode: RwLock<TextureClearMode<A>>,
 }
 
 impl<A: hal::Api> Texture<A> {
-    pub(crate) fn get_clear_view(&self, mip_level: u32, depth_or_layer: u32) -> &A::TextureView {
-        match self.clear_mode {
+    pub(crate) fn get_clear_view(
+        &self,
+        mip_level: u32,
+        depth_or_layer: u32,
+    ) -> MappedRwLockReadGuard<'_, A::TextureView> {
+        let guard = self.clear_mode.read();
+        RwLockReadGuard::map(guard, |guard| match *guard {
             TextureClearMode::BufferCopy => {
                 panic!("Given texture is cleared with buffer copies, not render passes")
             }
@@ -262,7 +270,7 @@ impl<A: hal::Api> Texture<A> {
                 } + depth_or_layer;
                 &clear_views[index as usize]
             }
-        }
+        })
     }
 }
 
@@ -279,9 +287,20 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let hub = A::hub(self);
         let texture = hub.textures.get(id).ok();
-        let hal_texture = texture.map(|tex| tex.inner.as_raw().unwrap());
 
-        hal_texture_callback(hal_texture);
+        match texture {
+            Some(texture) => {
+                let device = &hub.devices[texture.device_id.value];
+                let destruction_guard = device.destruction_lock.read();
+
+                let hal_texture = texture.inner.as_raw(&destruction_guard);
+
+                hal_texture_callback(hal_texture);
+            }
+            None => {
+                hal_texture_callback(None);
+            }
+        }
     }
 
     /// # Safety

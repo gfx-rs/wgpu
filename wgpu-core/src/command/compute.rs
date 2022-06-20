@@ -9,6 +9,7 @@ use crate::{
         BasePass, BasePassRef, BindGroupStateChange, CommandBuffer, CommandEncoderError,
         CommandEncoderStatus, MapPassErr, PassErrorScope, QueryUseError, StateChange,
     },
+    destroy::ReadDestructionGuard,
     device::MissingDownlevelFlags,
     error::{ErrorFormatter, PrettyError},
     hub::{Global, GlobalIdentityHandlerFactory, HalApi},
@@ -260,6 +261,7 @@ impl<A: HalApi> State<A> {
         bind_groups: &registry::Registry<A, BindGroup<A>>,
         buffers: &registry::Registry<A, Buffer<A>>,
         textures: &registry::Registry<A, Texture<A>>,
+        destruction_guard: &ReadDestructionGuard<'_>,
     ) -> Result<(), UsageConflict> {
         for id in self.binder.list_active() {
             unsafe {
@@ -282,7 +284,13 @@ impl<A: HalApi> State<A> {
 
         log::trace!("Encoding dispatch barriers");
 
-        CommandBuffer::drain_barriers(raw_encoder, base_trackers, buffers, textures);
+        CommandBuffer::drain_barriers(
+            raw_encoder,
+            base_trackers,
+            buffers,
+            textures,
+            destruction_guard,
+        );
         Ok(())
     }
 }
@@ -319,6 +327,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let raw = cmd_buf.encoder.open();
 
         let device = &hub.devices[cmd_buf.device_id.value];
+        let destruction_guard = device.destruction_lock.read();
 
         #[cfg(feature = "trace")]
         if let Some(ref mut list) = cmd_buf.commands {
@@ -549,6 +558,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         &hub.textures,
                         &mut cmd_buf.trackers.textures,
                         device,
+                        &destruction_guard,
                     );
 
                     state.is_ready().map_pass_err(scope)?;
@@ -559,6 +569,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             &hub.bind_groups,
                             &hub.buffers,
                             &hub.textures,
+                            &destruction_guard,
                         )
                         .map_pass_err(scope)?;
 
@@ -613,7 +624,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                     let buf_raw = indirect_buffer
                         .raw
-                        .as_ref()
+                        .as_ref(&destruction_guard)
                         .ok_or(ComputePassErrorInner::InvalidIndirectBuffer(buffer_id))
                         .map_pass_err(scope)?;
 
@@ -634,6 +645,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             &hub.bind_groups,
                             &hub.buffers,
                             &hub.textures,
+                            &destruction_guard,
                         )
                         .map_pass_err(scope)?;
                     unsafe {
@@ -731,6 +743,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             &hub.textures,
             &mut cmd_buf.trackers.textures,
             device,
+            &destruction_guard,
         );
 
         Ok(())

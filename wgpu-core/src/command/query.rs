@@ -346,7 +346,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .buffers
             .set_single(&hub.buffers, destination, hal::BufferUses::COPY_DST)
             .ok_or(QueryError::InvalidBuffer(destination))?;
-        let dst_barrier = dst_pending.map(|pending| pending.into_hal(dst_buffer));
+        let device = &hub.devices[dst_buffer.device_id.value];
+        let destruction_guard = device.destruction_lock.read();
+        let dst_barrier =
+            dst_pending.map(|pending| pending.into_hal(dst_buffer, &destruction_guard));
 
         if !dst_buffer.usage.contains(wgt::BufferUsages::COPY_DST) {
             return Err(ResolveError::MissingBufferUsage.into());
@@ -398,7 +401,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             raw_encoder.copy_query_results(
                 &query_set.raw,
                 start_query..end_query,
-                &*dst_buffer.raw.as_ref().unwrap(),
+                &*dst_buffer.raw.as_ref(&destruction_guard).unwrap(),
                 destination_offset,
                 wgt::BufferSize::new_unchecked(stride as u64),
             );

@@ -1,6 +1,6 @@
 use crate::{
     binding_model, command, conv,
-    destroy::DestructableResource,
+    destroy::{self, DestructableResource, ReadDestructionGuard},
     device::life::WaitIdleError,
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Hub, Input},
     id,
@@ -160,16 +160,20 @@ fn map_buffer<A: hal::Api>(
     offset: BufferAddress,
     size: BufferAddress,
     kind: HostMap,
+    destruction_guard: &ReadDestructionGuard<'_>,
 ) -> Result<ptr::NonNull<u8>, resource::BufferAccessError> {
     let mapping = unsafe {
-        raw.map_buffer(&*buffer.raw.as_ref().unwrap(), offset..offset + size)
-            .map_err(DeviceError::from)?
+        raw.map_buffer(
+            &*buffer.raw.as_ref(destruction_guard).unwrap(),
+            offset..offset + size,
+        )
+        .map_err(DeviceError::from)?
     };
 
     *buffer.sync_mapped_writes.lock() = match kind {
         HostMap::Read if !mapping.is_coherent => unsafe {
             raw.invalidate_mapped_ranges(
-                &*buffer.raw.as_ref().unwrap(),
+                &*buffer.raw.as_ref(destruction_guard).unwrap(),
                 iter::once(offset..offset + size),
             );
             None
@@ -206,7 +210,7 @@ fn map_buffer<A: hal::Api>(
         if zero_init_needs_flush_now {
             unsafe {
                 raw.flush_mapped_ranges(
-                    &*buffer.raw.as_ref().unwrap(),
+                    &*buffer.raw.as_ref(destruction_guard).unwrap(),
                     iter::once(uninitialized_range.start..uninitialized_range.start + num_bytes),
                 )
             };
@@ -297,6 +301,7 @@ pub struct Device<A: HalApi> {
     //TODO: move this behind another mutex. This would allow several methods to switch
     // to borrow Device immutably, such as `write_buffer`, `write_texture`, and `buffer_unmap`.
     pending_writes: Mutex<queue::PendingWrites<A>>,
+    pub(crate) destruction_lock: destroy::DeviceDestructionLock,
     #[cfg(feature = "trace")]
     pub(crate) trace: Option<Mutex<trace::Trace>>,
 }
@@ -399,6 +404,7 @@ impl<A: HalApi> Device<A> {
             trackers: Mutex::new(Tracker::new()),
             life_tracker: Mutex::new(life::LifetimeTracker::new()),
             temp_suspected: Mutex::new(life::SuspectedResources::default()),
+            destruction_lock: destroy::DeviceDestructionLock::new(),
             #[cfg(feature = "trace")]
             trace: trace_path.and_then(|path| match trace::Trace::new(path) {
                 Ok(mut trace) => {
@@ -488,7 +494,12 @@ impl<A: HalApi> Device<A> {
 
         let submission_closures =
             life_tracker.triage_submissions(last_done_index, &self.command_allocator);
-        let mapping_closures = life_tracker.handle_mapping(hub, &self.raw, &self.trackers);
+
+        let destruction_guard = self.destruction_lock.read();
+        let mapping_closures =
+            life_tracker.handle_mapping(hub, &self.raw, &self.trackers, &destruction_guard);
+        drop(destruction_guard);
+
         life_tracker.cleanup(&self.raw);
 
         let closures = UserClosures {
@@ -637,7 +648,7 @@ impl<A: HalApi> Device<A> {
 
         resource::Texture {
             inner: resource::TextureInner::Native {
-                raw: Some(hal_texture),
+                raw: DestructableResource::new(hal_texture),
             },
             device_id: Stored {
                 value: id::Valid(self_id),
@@ -655,7 +666,7 @@ impl<A: HalApi> Device<A> {
                 layers: 0..desc.array_layer_count(),
             },
             life_guard: LifeGuard::new(desc.label.borrow_or_default()),
-            clear_mode,
+            clear_mode: RwLock::new(clear_mode),
         }
     }
 
@@ -824,9 +835,10 @@ impl<A: HalApi> Device<A> {
         texture_id: id::TextureId,
         desc: &resource::TextureViewDescriptor,
     ) -> Result<resource::TextureView<A>, resource::CreateTextureViewError> {
+        let destruction_guard = self.destruction_lock.read();
         let texture_raw = texture
             .inner
-            .as_raw()
+            .as_raw(&destruction_guard)
             .ok_or(resource::CreateTextureViewError::InvalidTexture)?;
 
         let view_dim = match desc.dimension {
@@ -1483,6 +1495,7 @@ impl<A: HalApi> Device<A> {
         used: &mut BindGroupStates<A>,
         storage: &'a registry::Registry<A, resource::Buffer<A>>,
         limits: &wgt::Limits,
+        destruction_guard: &'a ReadDestructionGuard<'a>,
     ) -> Result<hal::BufferBinding<'a, A>, binding_model::CreateBindGroupError> {
         use crate::binding_model::CreateBindGroupError as Error;
 
@@ -1534,7 +1547,7 @@ impl<A: HalApi> Device<A> {
         check_buffer_usage(buffer.usage, pub_usage)?;
         let raw_buffer = buffer
             .raw
-            .as_ref()
+            .as_ref(destruction_guard)
             .ok_or(Error::InvalidBuffer(bb.buffer_id))?;
 
         let (bind_size, bind_end) = match bb.size {
@@ -1651,6 +1664,8 @@ impl<A: HalApi> Device<A> {
             }
         }
 
+        let destruction_guard = self.destruction_lock.read();
+
         // TODO: arrayvec/smallvec, or re-use allocations
         // Record binding info for dynamic offset validation
         let mut dynamic_binding_info = Vec::new();
@@ -1686,6 +1701,7 @@ impl<A: HalApi> Device<A> {
                         &mut used,
                         &hub.buffers,
                         &self.limits,
+                        &destruction_guard,
                     )?;
 
                     let res_index = hal_buffers.len();
@@ -1708,6 +1724,7 @@ impl<A: HalApi> Device<A> {
                             &mut used,
                             &hub.buffers,
                             &self.limits,
+                            &destruction_guard,
                         )?;
                         hal_buffers.push(bb);
                     }
@@ -2860,7 +2877,7 @@ impl<A: HalApi> Device<A> {
 
 impl<A: HalApi> Device<A> {
     pub(crate) fn destroy_buffer(&self, buffer: resource::Buffer<A>) {
-        if let Some(raw) = buffer.raw.destroy() {
+        if let Some(raw) = buffer.raw.into_inner() {
             unsafe {
                 self.raw.destroy_buffer(raw);
             }
@@ -2908,6 +2925,7 @@ impl<A: HalApi> Device<A> {
 }
 
 impl<A: HalApi> crate::hub::Resource for Device<A> {
+    type Raw = A::Device;
     type Id = id::DeviceId;
     const TYPE: &'static str = "Device";
 
@@ -3086,10 +3104,18 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             } else if desc.usage.contains(wgt::BufferUsages::MAP_WRITE) {
                 // buffer is mappable, so we are just doing that at start
                 let map_size = buffer.size;
-                let ptr = match map_buffer(&device.raw, &mut buffer, 0, map_size, HostMap::Write) {
+                let destruction_guard = device.destruction_lock.read();
+                let ptr = match map_buffer(
+                    &device.raw,
+                    &mut buffer,
+                    0,
+                    map_size,
+                    HostMap::Write,
+                    &destruction_guard,
+                ) {
                     Ok(ptr) => ptr,
                     Err(e) => {
-                        let raw = buffer.raw.destroy().unwrap();
+                        let raw = buffer.raw.into_inner().unwrap();
                         device
                             .lock_life()
                             .schedule_resource_destruction(queue::TempResource::Buffer(raw), !0);
@@ -3115,18 +3141,18 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 let mut stage = match device.create_buffer(device_id, &stage_desc, true) {
                     Ok(stage) => stage,
                     Err(e) => {
-                        let raw = buffer.raw.destroy().unwrap();
+                        let raw = buffer.raw.into_inner().unwrap();
                         device
                             .lock_life()
                             .schedule_resource_destruction(queue::TempResource::Buffer(raw), !0);
                         break e;
                     }
                 };
-                let stage_buffer = stage.raw.destroy().unwrap();
+                let stage_buffer = stage.raw.into_inner().unwrap();
                 let mapping = match unsafe { device.raw.map_buffer(&stage_buffer, 0..stage.size) } {
                     Ok(mapping) => mapping,
                     Err(e) => {
-                        let raw = buffer.raw.destroy().unwrap();
+                        let raw = buffer.raw.into_inner().unwrap();
                         let mut life_lock = device.lock_life();
                         life_lock
                             .schedule_resource_destruction(queue::TempResource::Buffer(raw), !0);
@@ -3224,11 +3250,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .wait_for_submit(last_submission)
     }
 
-    /// # Safety
-    ///
-    /// Offers no protection against another user destroying the buffer at the same time.
     #[doc(hidden)]
-    pub unsafe fn device_set_buffer_sub_data<A: HalApi>(
+    pub fn device_set_buffer_sub_data<A: HalApi>(
         &self,
         device_id: id::DeviceId,
         buffer_id: id::BufferId,
@@ -3243,6 +3266,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .devices
             .get(device_id)
             .map_err(|_| DeviceError::Invalid)?;
+        let destruction_guard = device.destruction_lock.read();
         let buffer = hub
             .buffers
             .get(buffer_id)
@@ -3262,28 +3286,27 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             });
         }
 
-        let raw_buf = buffer.raw.as_ref().unwrap();
-        let mapping = device
-            .raw
-            .map_buffer(&*raw_buf, offset..offset + data.len() as u64)
-            .map_err(DeviceError::from)?;
-        ptr::copy_nonoverlapping(data.as_ptr(), mapping.ptr.as_ptr(), data.len());
-        if !mapping.is_coherent {
+        unsafe {
+            let raw_buf = buffer.raw.as_ref(&destruction_guard).unwrap();
+            let mapping = device
+                .raw
+                .map_buffer(&*raw_buf, offset..offset + data.len() as u64)
+                .map_err(DeviceError::from)?;
+            ptr::copy_nonoverlapping(data.as_ptr(), mapping.ptr.as_ptr(), data.len());
+            if !mapping.is_coherent {
+                device
+                    .raw
+                    .flush_mapped_ranges(&*raw_buf, iter::once(offset..offset + data.len() as u64));
+            }
             device
                 .raw
-                .flush_mapped_ranges(&*raw_buf, iter::once(offset..offset + data.len() as u64));
+                .unmap_buffer(&*raw_buf)
+                .map_err(DeviceError::from)?;
         }
-        device
-            .raw
-            .unmap_buffer(&*raw_buf)
-            .map_err(DeviceError::from)?;
 
         Ok(())
     }
 
-    /// # Safety
-    ///
-    /// Offers no protection against another user destroying the buffer at the same time.
     #[doc(hidden)]
     pub unsafe fn device_get_buffer_sub_data<A: HalApi>(
         &self,
@@ -3300,6 +3323,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .devices
             .get(device_id)
             .map_err(|_| DeviceError::Invalid)?;
+        let destruction_guard = device.destruction_lock.read();
         let buffer = hub
             .buffers
             .get(buffer_id)
@@ -3307,7 +3331,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         check_buffer_usage(buffer.usage, wgt::BufferUsages::MAP_READ)?;
         //assert!(buffer isn't used by the GPU);
 
-        let raw_buf = buffer.raw.as_ref().unwrap();
+        let raw_buf = buffer.raw.as_ref(&destruction_guard).unwrap();
         let mapping = device
             .raw
             .map_buffer(&*raw_buf, offset..offset + data.len() as u64)
@@ -3346,6 +3370,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .map_err(|_| resource::DestroyError::Invalid)?;
 
         let device = &hub.devices[buffer.device_id.value];
+        let mut destruction_guard = match device.destruction_lock.destroy_buffers(buffer_id) {
+            Some(d) => d,
+            None => return Ok(()),
+        };
 
         #[cfg(feature = "trace")]
         if let Some(ref trace) = device.trace {
@@ -3354,7 +3382,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let raw = buffer
             .raw
-            .destroy()
+            .destroy(&mut destruction_guard)
             .ok_or(resource::DestroyError::AlreadyDestroyed)?;
         let temp = queue::TempResource::Buffer(raw);
 
@@ -3555,6 +3583,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .map_err(|_| resource::DestroyError::Invalid)?;
 
         let device = &hub.devices[texture.device_id.value];
+        let mut destruction_guard = match device.destruction_lock.destroy_textures(texture_id) {
+            Some(d) => d,
+            None => return Ok(()),
+        };
 
         #[cfg(feature = "trace")]
         if let Some(ref trace) = device.trace {
@@ -3563,15 +3595,21 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let last_submit_index = texture.life_guard.life_count();
 
-        let clear_views = match texture.clear_mode {
+        let mut clear_mode = texture.clear_mode.write();
+        let clear_views = match *clear_mode {
             resource::TextureClearMode::BufferCopy => SmallVec::new(),
-            resource::TextureClearMode::RenderPass { clear_views, .. } => clear_views,
+            resource::TextureClearMode::RenderPass {
+                ref mut clear_views,
+                ..
+            } => mem::take(clear_views),
             resource::TextureClearMode::None => SmallVec::new(),
         };
 
         match texture.inner {
-            resource::TextureInner::Native { ref mut raw } => {
-                let raw = raw.take().ok_or(resource::DestroyError::AlreadyDestroyed)?;
+            resource::TextureInner::Native { ref raw } => {
+                let raw = raw
+                    .destroy(&mut destruction_guard)
+                    .ok_or(resource::DestroyError::AlreadyDestroyed)?;
                 let temp = queue::TempResource::Texture(raw, clear_views);
 
                 let mut pending_writes = device.pending_writes.lock();
@@ -5096,6 +5134,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .get(buffer_id)
             .map_err(|_| resource::BufferAccessError::Invalid)?;
         let device = &hub.devices[buffer.device_id.value];
+        let destruction_guard = device.destruction_lock.read();
 
         log::debug!("Buffer {:?} map state -> Idle", buffer_id);
         match mem::replace(
@@ -5131,7 +5170,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                 let raw_buf = buffer
                     .raw
-                    .as_ref()
+                    .as_ref(&destruction_guard)
                     .ok_or(resource::BufferAccessError::Destroyed)?;
 
                 buffer
@@ -5190,7 +5229,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 unsafe {
                     device
                         .raw
-                        .unmap_buffer(&*buffer.raw.as_ref().unwrap())
+                        .unmap_buffer(&*buffer.raw.as_ref(&destruction_guard).unwrap())
                         .map_err(DeviceError::from)?
                 };
             }

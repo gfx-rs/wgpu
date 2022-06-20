@@ -869,7 +869,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             Err(_) => true,
         };
         if free {
-            unsafe { hub.adapters.unregister(adapter_id) };
+            let _ = unsafe { hub.adapters.unregister(adapter_id) };
         }
     }
 }

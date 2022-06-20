@@ -3,6 +3,7 @@ use std::{collections::hash_map::Entry, ops::Range, vec::Drain};
 use hal::CommandEncoder;
 
 use crate::{
+    destroy::ReadDestructionGuard,
     device::Device,
     hub::HalApi,
     id::{self, TextureId},
@@ -129,6 +130,7 @@ pub(crate) fn fixup_discarded_surfaces<
     textures: &registry::Registry<A, Texture<A>>,
     texture_tracker: &mut TextureTracker<A>,
     device: &Device<A>,
+    destruction_guard: &ReadDestructionGuard<'_>,
 ) {
     for init in inits {
         clear_texture(
@@ -142,6 +144,7 @@ pub(crate) fn fixup_discarded_surfaces<
             texture_tracker,
             &device.alignments,
             &device.zero_buffer,
+            destruction_guard,
         )
         .unwrap();
     }
@@ -153,6 +156,7 @@ impl<A: HalApi> BakedCommands<A> {
         &mut self,
         device_tracker: &mut Tracker<A>,
         buffers: &registry::Registry<A, Buffer<A>>,
+        destruction_guard: &ReadDestructionGuard<'_>,
     ) -> Result<(), DestroyedBufferError> {
         // Gather init ranges for each buffer so we can collapse them.
         // It is not possible to do this at an earlier point since previously executed command buffer change the resource init state.
@@ -169,11 +173,8 @@ impl<A: HalApi> BakedCommands<A> {
             } else {
                 buffer_use.range.end + wgt::COPY_BUFFER_ALIGNMENT - end_remainder
             };
-            let mut init_status = buffer
-                .initialization_status
-                .write();
-            let uninitialized_ranges = init_status
-                .drain(buffer_use.range.start..end);
+            let mut init_status = buffer.initialization_status.write();
+            let uninitialized_ranges = init_status.drain(buffer_use.range.start..end);
 
             match buffer_use.kind {
                 MemoryInitKind::ImplicitlyInitialized => {}
@@ -214,12 +215,15 @@ impl<A: HalApi> BakedCommands<A> {
             let buffer = buffers
                 .get(buffer_id)
                 .map_err(|_| DestroyedBufferError(buffer_id))?;
-            let raw_buf = buffer.raw.as_ref().ok_or(DestroyedBufferError(buffer_id))?;
+            let raw_buf = buffer
+                .raw
+                .as_ref(destruction_guard)
+                .ok_or(DestroyedBufferError(buffer_id))?;
 
             unsafe {
                 self.encoder.transition_buffers(
                     transition
-                        .map(|pending| pending.into_hal(&*buffer))
+                        .map(|pending| pending.into_hal(&*buffer, destruction_guard))
                         .into_iter(),
                 );
             }
@@ -243,6 +247,7 @@ impl<A: HalApi> BakedCommands<A> {
         device_tracker: &mut Tracker<A>,
         textures: &registry::Registry<A, Texture<A>>,
         device: &Device<A>,
+        destruction_guard: &ReadDestructionGuard<'_>,
     ) -> Result<(), DestroyedTextureError> {
         let mut ranges: Vec<TextureInitRange> = Vec::new();
         for texture_use in self.texture_memory_actions.drain_init_actions() {
@@ -287,6 +292,7 @@ impl<A: HalApi> BakedCommands<A> {
                     &mut device_tracker.textures,
                     &device.alignments,
                     &device.zero_buffer,
+                    destruction_guard,
                 )
                 .unwrap();
             }

@@ -2,7 +2,7 @@ use std::ops::{Deref, DerefMut};
 #[cfg(not(debug_assertions))]
 use std::{cell::UnsafeCell, mem::MaybeUninit};
 
-use parking_lot::{RwLock};
+use parking_lot::RwLock;
 
 /// Unsafe cell that's actually an RW lock in debug.
 pub struct DebugUnsafeCell<T> {

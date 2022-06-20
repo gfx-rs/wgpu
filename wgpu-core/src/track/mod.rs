@@ -95,7 +95,9 @@ mod stateless;
 mod texture;
 
 use crate::{
-    binding_model, command, conv, hub,
+    binding_model, command, conv,
+    destroy::ReadDestructionGuard,
+    hub,
     id::{self, TypedId},
     pipeline, registry, resource, Epoch, LifeGuard, RefCount,
 };
@@ -125,8 +127,12 @@ impl PendingTransition<hal::BufferUses> {
     pub fn into_hal<'a, A: hal::Api>(
         self,
         buf: &'a resource::Buffer<A>,
+        destruction_guard: &'a ReadDestructionGuard<'a>,
     ) -> hal::BufferBarrier<'a, A> {
-        let buffer = buf.raw.as_ref().expect("Buffer is destroyed");
+        let buffer = buf
+            .raw
+            .as_ref(destruction_guard)
+            .expect("Buffer is destroyed");
         hal::BufferBarrier {
             buffer: &*buffer,
             usage: self.usage,
@@ -139,8 +145,12 @@ impl PendingTransition<hal::TextureUses> {
     pub fn into_hal<'a, A: hal::Api>(
         self,
         tex: &'a resource::Texture<A>,
+        destruction_guard: &'a ReadDestructionGuard<'a>,
     ) -> hal::TextureBarrier<'a, A> {
-        let texture = tex.inner.as_raw().expect("Texture is destroyed");
+        let texture = tex
+            .inner
+            .as_raw(destruction_guard)
+            .expect("Texture is destroyed");
 
         // These showing up in a barrier is always a bug
         debug_assert_ne!(self.usage.start, hal::TextureUses::UNKNOWN);

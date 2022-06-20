@@ -128,7 +128,7 @@ impl<T> Ord for Id<T> {
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
-pub(crate) struct Valid<I>(pub I);
+pub struct Valid<I>(pub I);
 
 /// Trait carrying methods for direct `Id` access.
 ///

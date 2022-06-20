@@ -1,6 +1,7 @@
 #[cfg(feature = "trace")]
 use crate::device::trace;
 use crate::{
+    destroy::ReadDestructionGuard,
     device::{
         queue::{EncoderInFlight, SubmittedWorkDoneClosure, TempResource},
         DeviceError,
@@ -599,7 +600,10 @@ impl<A: HalApi> LifetimeTracker<A> {
                     if let Ok(res) = unsafe { hub.textures.unregister(id.0) } {
                         let submit_index = res.life_guard.life_count();
                         let raw = match res.inner {
-                            resource::TextureInner::Native { raw: Some(raw) } => raw,
+                            resource::TextureInner::Native { raw } => match raw.into_inner() {
+                                Some(r) => r,
+                                None => continue,
+                            },
                             _ => continue,
                         };
                         let non_referenced_resources = self
@@ -610,7 +614,7 @@ impl<A: HalApi> LifetimeTracker<A> {
 
                         non_referenced_resources.textures.push(raw);
                         if let resource::TextureClearMode::RenderPass { clear_views, .. } =
-                            res.clear_mode
+                            res.clear_mode.into_inner()
                         {
                             non_referenced_resources
                                 .texture_views
@@ -658,7 +662,9 @@ impl<A: HalApi> LifetimeTracker<A> {
                     // besides through the very trackers we have exclusive access to.
                     if let Ok(res) = unsafe { hub.buffers.unregister(id.0) } {
                         let submit_index = res.life_guard.life_count();
-                        if let resource::BufferMapState::Init { stage_buffer, .. } = res.map_state.into_inner() {
+                        if let resource::BufferMapState::Init { stage_buffer, .. } =
+                            res.map_state.into_inner()
+                        {
                             self.free_resources.buffers.push(stage_buffer);
                         }
                         self.active
@@ -833,6 +839,7 @@ impl<A: HalApi> LifetimeTracker<A> {
         hub: &Hub<A, G>,
         raw: &A::Device,
         trackers: &Mutex<Tracker<A>>,
+        destruction_guard: &ReadDestructionGuard<'_>,
     ) -> Vec<super::BufferMapPendingClosure> {
         if self.ready_to_map.is_empty() {
             return Vec::new();
@@ -854,26 +861,31 @@ impl<A: HalApi> LifetimeTracker<A> {
                 }
             } else {
                 let mut map_state = buffer.map_state.lock();
-                let mapping = match std::mem::replace(
-                    &mut *map_state,
-                    resource::BufferMapState::Idle,
-                ) {
-                    resource::BufferMapState::Waiting(pending_mapping) => pending_mapping,
-                    // Mapping cancelled
-                    resource::BufferMapState::Idle => continue,
-                    // Mapping queued at least twice by map -> unmap -> map
-                    // and was already successfully mapped below
-                    active @ resource::BufferMapState::Active { .. } => {
-                        *map_state = active;
-                        continue;
-                    }
-                    _ => panic!("No pending mapping."),
-                };
+                let mapping =
+                    match std::mem::replace(&mut *map_state, resource::BufferMapState::Idle) {
+                        resource::BufferMapState::Waiting(pending_mapping) => pending_mapping,
+                        // Mapping cancelled
+                        resource::BufferMapState::Idle => continue,
+                        // Mapping queued at least twice by map -> unmap -> map
+                        // and was already successfully mapped below
+                        active @ resource::BufferMapState::Active { .. } => {
+                            *map_state = active;
+                            continue;
+                        }
+                        _ => panic!("No pending mapping."),
+                    };
                 let status = if mapping.range.start != mapping.range.end {
                     log::debug!("Buffer {:?} map state -> Active", buffer_id);
                     let host = mapping.op.host;
                     let size = mapping.range.end - mapping.range.start;
-                    match super::map_buffer(raw, buffer, mapping.range.start, size, host) {
+                    match super::map_buffer(
+                        raw,
+                        buffer,
+                        mapping.range.start,
+                        size,
+                        host,
+                        destruction_guard,
+                    ) {
                         Ok(ptr) => {
                             *map_state = resource::BufferMapState::Active {
                                 ptr,

@@ -18,6 +18,7 @@ pub use self::{
 
 use self::memory_init::CommandBufferTextureMemoryActions;
 
+use crate::destroy::ReadDestructionGuard;
 use crate::error::{ErrorFormatter, PrettyError};
 use crate::init_tracker::BufferInitTrackerAction;
 use crate::registry;
@@ -147,6 +148,7 @@ impl<A: HalApi> CommandBuffer<A> {
         head: &Tracker<A>,
         buffer_guard: &registry::Registry<A, Buffer<A>>,
         texture_guard: &registry::Registry<A, Texture<A>>,
+        destruction_guard: &ReadDestructionGuard<'_>,
     ) {
         profiling::scope!("insert_barriers");
 
@@ -154,7 +156,7 @@ impl<A: HalApi> CommandBuffer<A> {
         base.textures
             .set_from_tracker(&*texture_guard, &head.textures);
 
-        Self::drain_barriers(raw, base, buffer_guard, texture_guard);
+        Self::drain_barriers(raw, base, buffer_guard, texture_guard, destruction_guard);
     }
 
     pub(crate) fn insert_barriers_from_scope(
@@ -163,6 +165,7 @@ impl<A: HalApi> CommandBuffer<A> {
         head: &UsageScope<A>,
         buffer_guard: &registry::Registry<A, Buffer<A>>,
         texture_guard: &registry::Registry<A, Texture<A>>,
+        destruction_guard: &ReadDestructionGuard<'_>,
     ) {
         profiling::scope!("insert_barriers");
 
@@ -170,7 +173,7 @@ impl<A: HalApi> CommandBuffer<A> {
         base.textures
             .set_from_usage_scope(&*texture_guard, &head.textures);
 
-        Self::drain_barriers(raw, base, buffer_guard, texture_guard);
+        Self::drain_barriers(raw, base, buffer_guard, texture_guard, destruction_guard);
     }
 
     pub(crate) fn drain_barriers(
@@ -178,16 +181,17 @@ impl<A: HalApi> CommandBuffer<A> {
         base: &mut Tracker<A>,
         buffer_guard: &registry::Registry<A, Buffer<A>>,
         texture_guard: &registry::Registry<A, Texture<A>>,
+        destruction_guard: &ReadDestructionGuard<'_>,
     ) {
         profiling::scope!("drain_barriers");
 
         let buffer_barriers = base.buffers.drain().map(|pending| {
             let buf = buffer_guard.get_unchecked(pending.id);
-            pending.into_hal(buf)
+            pending.into_hal(buf, destruction_guard)
         });
         let texture_barriers = base.textures.drain().map(|pending| {
             let tex = texture_guard.get_unchecked(pending.id);
-            pending.into_hal(tex)
+            pending.into_hal(tex, destruction_guard)
         });
 
         unsafe {

@@ -1070,6 +1070,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         let device = &hub.devices[cmd_buf.device_id.value];
+        let destruction_guard = device.destruction_lock.read();
         cmd_buf.encoder.open_pass(base.label);
 
         log::trace!(
@@ -1327,7 +1328,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     check_buffer_usage(buffer.usage, BufferUsages::INDEX).map_pass_err(scope)?;
                     let buf_raw = buffer
                         .raw
-                        .as_ref()
+                        .as_ref(&destruction_guard)
                         .ok_or(RenderCommandError::DestroyedBuffer(buffer_id))
                         .map_pass_err(scope)?;
 
@@ -1372,7 +1373,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     check_buffer_usage(buffer.usage, BufferUsages::VERTEX).map_pass_err(scope)?;
                     let buf_raw = buffer
                         .raw
-                        .as_ref()
+                        .as_ref(&destruction_guard)
                         .ok_or(RenderCommandError::DestroyedBuffer(buffer_id))
                         .map_pass_err(scope)?;
 
@@ -1630,7 +1631,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .map_pass_err(scope)?;
                     let indirect_raw = indirect_buffer
                         .raw
-                        .as_ref()
+                        .as_ref(&destruction_guard)
                         .ok_or(RenderCommandError::DestroyedBuffer(buffer_id))
                         .map_pass_err(scope)?;
 
@@ -1700,7 +1701,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .map_pass_err(scope)?;
                     let indirect_raw = indirect_buffer
                         .raw
-                        .as_ref()
+                        .as_ref(&destruction_guard)
                         .ok_or(RenderCommandError::DestroyedBuffer(buffer_id))
                         .map_pass_err(scope)?;
 
@@ -1713,7 +1714,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .map_pass_err(scope)?;
                     let count_raw = count_buffer
                         .raw
-                        .as_ref()
+                        .as_ref(&destruction_guard)
                         .ok_or(RenderCommandError::DestroyedBuffer(count_buffer_id))
                         .map_pass_err(scope)?;
 
@@ -1902,6 +1903,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             &hub.bind_groups,
                             &hub.render_pipelines,
                             &hub.buffers,
+                            &destruction_guard,
                         )
                     }
                     .map_err(|e| match e {
@@ -1943,6 +1945,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 &hub.textures,
                 &mut cmd_buf.trackers.textures,
                 device,
+                &destruction_guard,
             );
 
             query_reset_state
@@ -1960,6 +1963,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 &trackers,
                 &hub.buffers,
                 &hub.textures,
+                &destruction_guard,
             );
         }
 

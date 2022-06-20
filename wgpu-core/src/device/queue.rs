@@ -302,6 +302,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .devices
             .get(queue_id)
             .map_err(|_| DeviceError::Invalid)?;
+        let destruction_guard = device.destruction_lock.read();
 
         #[cfg(feature = "trace")]
         if let Some(ref trace) = device.trace {
@@ -335,7 +336,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .ok_or(TransferError::InvalidBuffer(buffer_id))?;
         let dst_raw = dst
             .raw
-            .as_ref()
+            .as_ref(&destruction_guard)
             .ok_or(TransferError::InvalidBuffer(buffer_id))?;
         if !dst.usage.contains(wgt::BufferUsages::COPY_DST) {
             return Err(TransferError::MissingCopyDstUsageFlag(Some(buffer_id), None).into());
@@ -368,7 +369,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             buffer: &stage.buffer,
             usage: hal::BufferUses::MAP_WRITE..hal::BufferUses::COPY_SRC,
         })
-        .chain(transition.map(|pending| pending.into_hal(dst)));
+        .chain(transition.map(|pending| pending.into_hal(dst, &destruction_guard)));
         let mut pending_writes = device.pending_writes.lock();
         let encoder = pending_writes.activate();
         unsafe {
@@ -403,6 +404,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .devices
             .get(queue_id)
             .map_err(|_| DeviceError::Invalid)?;
+        let destruction_guard = device.destruction_lock.read();
 
         #[cfg(feature = "trace")]
         if let Some(ref trace) = device.trace {
@@ -505,6 +507,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         &mut trackers.textures,
                         &device.alignments,
                         &device.zero_buffer,
+                        &destruction_guard,
                     )
                     .map_err(QueueWriteError::from)?;
                 }
@@ -601,12 +604,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let dst_raw = dst
             .inner
-            .as_raw()
+            .as_raw(&destruction_guard)
             .ok_or(TransferError::InvalidTexture(destination.texture))?;
 
         unsafe {
-            encoder
-                .transition_textures(transition.map(|pending| pending.into_hal(dst)).into_iter());
+            encoder.transition_textures(
+                transition
+                    .map(|pending| pending.into_hal(dst, &destruction_guard))
+                    .into_iter(),
+            );
             encoder.transition_buffers(iter::once(barrier));
             encoder.copy_buffer_to_texture(&stage.buffer, dst_raw, regions);
         }
@@ -631,6 +637,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .devices
                 .get(queue_id)
                 .map_err(|_| DeviceError::Invalid)?;
+            let destruction_guard = device.destruction_lock.read();
             device.temp_suspected.lock().clear();
             let submit_index = device
                 .active_submission_index
@@ -674,7 +681,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     // update submission IDs
                     for id in cmdbuf.trackers.buffers.used() {
                         let buffer = &hub.buffers[id];
-                        let raw_buf = match buffer.raw.as_ref() {
+                        let raw_buf = match buffer.raw.as_ref(&destruction_guard) {
                             Some(raw) => raw,
                             None => {
                                 return Err(QueueSubmitError::DestroyedBuffer(id.0));
@@ -697,13 +704,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     for id in cmdbuf.trackers.textures.used() {
                         let texture = &hub.textures[id];
                         let should_extend = match texture.inner {
-                            TextureInner::Native { raw: None } => {
-                                return Err(QueueSubmitError::DestroyedTexture(id.0));
+                            TextureInner::Native { ref raw } => {
+                                match raw.as_ref(&destruction_guard) {
+                                    Some(_) => false,
+                                    None => return Err(QueueSubmitError::DestroyedTexture(id.0)),
+                                }
                             }
-                            TextureInner::Native { raw: Some(_) } => false,
-                            TextureInner::Surface {
-                                ref has_work, ..
-                            } => {
+                            TextureInner::Surface { ref has_work, .. } => {
                                 has_work.store(true, Ordering::Release);
                                 true
                             }
@@ -788,10 +795,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     };
                     log::trace!("Stitching command buffer {:?} before submission", cmb_id);
                     baked
-                        .initialize_buffer_memory(&mut *trackers, &hub.buffers)
+                        .initialize_buffer_memory(&mut *trackers, &hub.buffers, &destruction_guard)
                         .map_err(|err| QueueSubmitError::DestroyedBuffer(err.0))?;
                     baked
-                        .initialize_texture_memory(&mut *trackers, &hub.textures, device)
+                        .initialize_texture_memory(
+                            &mut *trackers,
+                            &hub.textures,
+                            device,
+                            &destruction_guard,
+                        )
                         .map_err(|err| QueueSubmitError::DestroyedTexture(err.0))?;
                     //Note: stateless trackers are not merged:
                     // device already knows these resources exist.
@@ -801,6 +813,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         &baked.trackers,
                         &hub.buffers,
                         &hub.textures,
+                        &destruction_guard,
                     );
 
                     let transit = unsafe { baked.encoder.end_encoding().unwrap() };
@@ -820,8 +833,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .textures
                             .set_from_usage_scope(&hub.textures, &used_surface_textures);
                         let texture_barriers = trackers.textures.drain().map(|pending| {
-                            let tex = unsafe { hub.textures.get_unchecked(pending.id) };
-                            pending.into_hal(tex)
+                            let tex = hub.textures.get_unchecked(pending.id);
+                            pending.into_hal(tex, &destruction_guard)
                         });
                         let present = unsafe {
                             baked.encoder.transition_textures(texture_barriers);
@@ -843,12 +856,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             let pending_writes = &mut *device.pending_writes.lock();
 
-            let super::Device {
-                ref queue,
-                ref fence,
-                ..
-            } = *device;
-
             {
                 //TODO: these blocks have a few organizational issues and should be refactored
                 // (1) it's similar to the code we have per-command-buffer (at the begin and end)
@@ -861,13 +868,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 for &id in pending_writes.dst_textures.iter() {
                     let texture = hub.textures.get(id).unwrap();
                     match texture.inner {
-                        TextureInner::Native { raw: None } => {
-                            return Err(QueueSubmitError::DestroyedTexture(id));
-                        }
-                        TextureInner::Native { raw: Some(_) } => {}
-                        TextureInner::Surface {
-                            ref has_work, ..
-                        } => {
+                        TextureInner::Native { ref raw } => match raw.as_ref(&destruction_guard) {
+                            Some(_) => {}
+                            None => return Err(QueueSubmitError::DestroyedTexture(id)),
+                        },
+                        TextureInner::Surface { ref has_work, .. } => {
                             has_work.store(true, Ordering::Release);
                             let ref_count = texture.life_guard.add_ref();
                             unsafe {
@@ -892,8 +897,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .textures
                         .set_from_usage_scope(&hub.textures, &used_surface_textures);
                     let texture_barriers = trackers.textures.drain().map(|pending| {
-                        let tex = unsafe { hub.textures.get_unchecked(pending.id) };
-                        pending.into_hal(tex)
+                        let tex = hub.textures.get_unchecked(pending.id);
+                        pending.into_hal(tex, &destruction_guard)
                     });
 
                     unsafe {
@@ -922,9 +927,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
 
             profiling::scope!("cleanup");
-            if let Some(pending_execution) =
-                pending_writes.post_submit(&device.command_allocator, &device.raw, &device.queue.read())
-            {
+            if let Some(pending_execution) = pending_writes.post_submit(
+                &device.command_allocator,
+                &device.raw,
+                &device.queue.read(),
+            ) {
                 active_executions.push(pending_execution);
             }
 

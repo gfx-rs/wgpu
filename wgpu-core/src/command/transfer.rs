@@ -3,6 +3,7 @@ use crate::device::trace::Command as TraceCommand;
 use crate::{
     command::{clear_texture, CommandBuffer, CommandEncoderError},
     conv,
+    destroy::ReadDestructionGuard,
     device::{Device, MissingDownlevelFlags},
     error::{ErrorFormatter, PrettyError},
     hub::{Global, GlobalIdentityHandlerFactory, HalApi},
@@ -389,6 +390,7 @@ fn handle_texture_init<A: HalApi>(
     copy_texture: &ImageCopyTexture,
     copy_size: &Extent3d,
     textures: &registry::Registry<A, Texture<A>>,
+    destruction_guard: &ReadDestructionGuard<'_>,
 ) {
     let init_action = TextureInitTrackerAction {
         id: copy_texture.texture,
@@ -420,6 +422,7 @@ fn handle_texture_init<A: HalApi>(
                 &mut cmd_buf.trackers.textures,
                 &device.alignments,
                 &device.zero_buffer,
+                destruction_guard,
             )
             .unwrap();
         }
@@ -433,6 +436,7 @@ fn handle_src_texture_init<A: HalApi>(
     source: &ImageCopyTexture,
     copy_size: &Extent3d,
     textures: &registry::Registry<A, Texture<A>>,
+    destruction_guard: &ReadDestructionGuard<'_>,
 ) -> Result<(), TransferError> {
     let _ = textures
         .get(source.texture)
@@ -445,6 +449,7 @@ fn handle_src_texture_init<A: HalApi>(
         source,
         copy_size,
         textures,
+        destruction_guard,
     );
     Ok(())
 }
@@ -456,6 +461,7 @@ fn handle_dst_texture_init<A: HalApi>(
     destination: &ImageCopyTexture,
     copy_size: &Extent3d,
     textures: &registry::Registry<A, Texture<A>>,
+    destruction_guard: &ReadDestructionGuard<'_>,
 ) -> Result<(), TransferError> {
     let texture = textures
         .get(destination.texture)
@@ -480,6 +486,7 @@ fn handle_dst_texture_init<A: HalApi>(
         destination,
         copy_size,
         textures,
+        destruction_guard,
     );
     Ok(())
 }
@@ -520,15 +527,20 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .buffers
             .set_single(&hub.buffers, source, hal::BufferUses::COPY_SRC)
             .ok_or(TransferError::InvalidBuffer(source))?;
+
+        let device = &hub.devices[src_buffer.device_id.value];
+        let destruction_guard = device.destruction_lock.read();
+
         let src_raw = src_buffer
             .raw
-            .as_ref()
+            .as_ref(&destruction_guard)
             .ok_or(TransferError::InvalidBuffer(source))?;
         if !src_buffer.usage.contains(BufferUsages::COPY_SRC) {
             return Err(TransferError::MissingCopySrcUsageFlag.into());
         }
         // expecting only a single barrier
-        let src_barrier = src_pending.map(|pending| pending.into_hal(src_buffer));
+        let src_barrier =
+            src_pending.map(|pending| pending.into_hal(src_buffer, &destruction_guard));
 
         let (dst_buffer, dst_pending) = cmd_buf
             .trackers
@@ -537,12 +549,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .ok_or(TransferError::InvalidBuffer(destination))?;
         let dst_raw = dst_buffer
             .raw
-            .as_ref()
+            .as_ref(&destruction_guard)
             .ok_or(TransferError::InvalidBuffer(destination))?;
         if !dst_buffer.usage.contains(BufferUsages::COPY_DST) {
             return Err(TransferError::MissingCopyDstUsageFlag(Some(destination), None).into());
         }
-        let dst_barrier = dst_pending.map(|pending| pending.into_hal(dst_buffer));
+        let dst_barrier =
+            dst_pending.map(|pending| pending.into_hal(dst_buffer, &destruction_guard));
 
         if size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
             return Err(TransferError::UnalignedCopySize(size).into());
@@ -624,6 +637,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             &mut *CommandBuffer::get_encoder_mut(&hub.command_buffers, command_encoder_id)?;
 
         let device = &hub.devices[cmd_buf.device_id.value];
+        let destruction_guard = device.destruction_lock.read();
 
         #[cfg(feature = "trace")]
         if let Some(ref mut list) = cmd_buf.commands {
@@ -643,21 +657,30 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             extract_texture_selector(destination, copy_size, &hub.textures)?;
 
         // Handle texture init *before* dealing with barrier transitions so we have an easier time inserting "immediate-inits" that may be required by prior discards in rare cases.
-        handle_dst_texture_init(cmd_buf, device, destination, copy_size, &hub.textures)?;
+        handle_dst_texture_init(
+            cmd_buf,
+            device,
+            destination,
+            copy_size,
+            &hub.textures,
+            &destruction_guard,
+        )?;
 
         let (src_buffer, src_pending) = cmd_buf
             .trackers
             .buffers
             .set_single(&hub.buffers, source.buffer, hal::BufferUses::COPY_SRC)
             .ok_or(TransferError::InvalidBuffer(source.buffer))?;
+
         let src_raw = src_buffer
             .raw
-            .as_ref()
+            .as_ref(&destruction_guard)
             .ok_or(TransferError::InvalidBuffer(source.buffer))?;
         if !src_buffer.usage.contains(BufferUsages::COPY_SRC) {
             return Err(TransferError::MissingCopySrcUsageFlag.into());
         }
-        let src_barrier = src_pending.map(|pending| pending.into_hal(src_buffer));
+        let src_barrier =
+            src_pending.map(|pending| pending.into_hal(src_buffer, &destruction_guard));
 
         let (dst_texture, dst_pending) = cmd_buf
             .trackers
@@ -671,14 +694,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .ok_or(TransferError::InvalidTexture(destination.texture))?;
         let dst_raw = dst_texture
             .inner
-            .as_raw()
+            .as_raw(&destruction_guard)
             .ok_or(TransferError::InvalidTexture(destination.texture))?;
         if !dst_texture.desc.usage.contains(TextureUsages::COPY_DST) {
             return Err(
                 TransferError::MissingCopyDstUsageFlag(None, Some(destination.texture)).into(),
             );
         }
-        let dst_barrier = dst_pending.map(|pending| pending.into_hal(dst_texture));
+        let dst_barrier =
+            dst_pending.map(|pending| pending.into_hal(dst_texture, &destruction_guard));
 
         let format_desc = dst_texture.desc.format.describe();
         let (hal_copy_size, array_layer_count) = validate_texture_copy_range(
@@ -747,6 +771,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             &mut *CommandBuffer::get_encoder_mut(&hub.command_buffers, command_encoder_id)?;
 
         let device = &hub.devices[cmd_buf.device_id.value];
+        let destruction_guard = device.destruction_lock.read();
 
         #[cfg(feature = "trace")]
         if let Some(ref mut list) = cmd_buf.commands {
@@ -765,7 +790,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (src_range, src_base, _) = extract_texture_selector(source, copy_size, &hub.textures)?;
 
         // Handle texture init *before* dealing with barrier transitions so we have an easier time inserting "immediate-inits" that may be required by prior discards in rare cases.
-        handle_src_texture_init(cmd_buf, device, source, copy_size, &hub.textures)?;
+        handle_src_texture_init(
+            cmd_buf,
+            device,
+            source,
+            copy_size,
+            &hub.textures,
+            &destruction_guard,
+        )?;
 
         let (src_texture, src_pending) = cmd_buf
             .trackers
@@ -779,12 +811,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .ok_or(TransferError::InvalidTexture(source.texture))?;
         let src_raw = src_texture
             .inner
-            .as_raw()
+            .as_raw(&destruction_guard)
             .ok_or(TransferError::InvalidTexture(source.texture))?;
         if !src_texture.desc.usage.contains(TextureUsages::COPY_SRC) {
             return Err(TransferError::MissingCopySrcUsageFlag.into());
         }
-        let src_barrier = src_pending.map(|pending| pending.into_hal(src_texture));
+        let src_barrier =
+            src_pending.map(|pending| pending.into_hal(src_texture, &destruction_guard));
 
         let (dst_buffer, dst_pending) = cmd_buf
             .trackers
@@ -793,14 +826,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .ok_or(TransferError::InvalidBuffer(destination.buffer))?;
         let dst_raw = dst_buffer
             .raw
-            .as_ref()
+            .as_ref(&destruction_guard)
             .ok_or(TransferError::InvalidBuffer(destination.buffer))?;
         if !dst_buffer.usage.contains(BufferUsages::COPY_DST) {
             return Err(
                 TransferError::MissingCopyDstUsageFlag(Some(destination.buffer), None).into(),
             );
         }
-        let dst_barrier = dst_pending.map(|pending| pending.into_hal(dst_buffer));
+        let dst_barrier =
+            dst_pending.map(|pending| pending.into_hal(dst_buffer, &destruction_guard));
 
         let format_desc = src_texture.desc.format.describe();
         let (hal_copy_size, array_layer_count) =
@@ -881,6 +915,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut cmd_buf = CommandBuffer::get_encoder_mut(&hub.command_buffers, command_encoder_id)?;
 
         let device = &hub.devices[cmd_buf.device_id.value];
+        let destruction_guard = device.destruction_lock.read();
 
         #[cfg(feature = "trace")]
         if let Some(ref mut list) = cmd_buf.commands {
@@ -905,8 +940,22 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         // Handle texture init *before* dealing with barrier transitions so we have an easier time inserting "immediate-inits" that may be required by prior discards in rare cases.
-        handle_src_texture_init(&mut cmd_buf, device, source, copy_size, &hub.textures)?;
-        handle_dst_texture_init(&mut cmd_buf, device, destination, copy_size, &hub.textures)?;
+        handle_src_texture_init(
+            &mut cmd_buf,
+            device,
+            source,
+            copy_size,
+            &hub.textures,
+            &destruction_guard,
+        )?;
+        handle_dst_texture_init(
+            &mut cmd_buf,
+            device,
+            destination,
+            copy_size,
+            &hub.textures,
+            &destruction_guard,
+        )?;
 
         let (src_texture, src_pending) = cmd_buf
             .trackers
@@ -918,9 +967,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 hal::TextureUses::COPY_SRC,
             )
             .ok_or(TransferError::InvalidTexture(source.texture))?;
+
         let src_raw = src_texture
             .inner
-            .as_raw()
+            .as_raw(&destruction_guard)
             .ok_or(TransferError::InvalidTexture(source.texture))?;
         if !src_texture.desc.usage.contains(TextureUsages::COPY_SRC) {
             return Err(TransferError::MissingCopySrcUsageFlag.into());
@@ -929,7 +979,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         //TODO: try to avoid this the collection. It's needed because both
         // `src_pending` and `dst_pending` try to hold `trackers.textures` mutably.
         let mut barriers: ArrayVec<_, 2> = src_pending
-            .map(|pending| pending.into_hal(src_texture))
+            .map(|pending| pending.into_hal(src_texture, &destruction_guard))
             .into_iter()
             .collect();
 
@@ -945,7 +995,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .ok_or(TransferError::InvalidTexture(destination.texture))?;
         let dst_raw = dst_texture
             .inner
-            .as_raw()
+            .as_raw(&destruction_guard)
             .ok_or(TransferError::InvalidTexture(destination.texture))?;
         if !dst_texture.desc.usage.contains(TextureUsages::COPY_DST) {
             return Err(
@@ -965,7 +1015,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .into());
         }
 
-        barriers.extend(dst_pending.map(|pending| pending.into_hal(dst_texture)));
+        barriers
+            .extend(dst_pending.map(|pending| pending.into_hal(dst_texture, &destruction_guard)));
 
         let (src_copy_size, array_layer_count) =
             validate_texture_copy_range(source, &src_texture.desc, CopySide::Source, copy_size)?;

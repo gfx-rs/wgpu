@@ -11,7 +11,14 @@ pub struct DeviceDestructionLock {
 }
 
 impl DeviceDestructionLock {
-    fn read(&self) -> ReadDestructionGuard<'_> {
+    pub fn new() -> Self {
+        Self {
+            inner: RwLock::new(()),
+            buffer_destruction_queue: Mutex::new(Vec::new()),
+            texture_destruction_queue: Mutex::new(Vec::new()),
+        }
+    }
+    pub fn read(&self) -> ReadDestructionGuard<'_> {
         ReadDestructionGuard {
             inner: self.inner.read(),
             buffer_destruction_queue: &self.buffer_destruction_queue,
@@ -19,7 +26,7 @@ impl DeviceDestructionLock {
         }
     }
 
-    fn destroy_buffers(
+    pub fn destroy_buffers(
         &self,
         buffer: id::BufferId,
     ) -> Option<WriteDestructionGuard<'_, id::BufferId>> {
@@ -35,7 +42,7 @@ impl DeviceDestructionLock {
         }
     }
 
-    fn destroy_textures(
+    pub fn destroy_textures(
         &self,
         texture: id::TextureId,
     ) -> Option<WriteDestructionGuard<'_, id::TextureId>> {
@@ -59,7 +66,7 @@ pub struct ReadDestructionGuard<'a> {
 }
 
 impl ReadDestructionGuard<'_> {
-    fn run_pending_destructions(self) {
+    pub fn run_pending_destructions(self) {
         // get a reference to the underlying lock
         let lock = RwLockReadGuard::rwlock(&self.inner);
         // drop the guard
@@ -119,14 +126,14 @@ where
         }
     }
 
-    pub fn as_ref<'a>(&self, _guard: ReadDestructionGuard<'a>) -> Option<&'a T::Raw> {
+    pub fn as_ref<'a>(&self, _guard: &'a ReadDestructionGuard<'_>) -> Option<&'a T::Raw> {
         // Safe as we have the read destruction guard
         let option = unsafe { &*self.inner.get() };
 
         option.as_ref()
     }
 
-    pub fn destroy<'a>(&self, _guard: WriteDestructionGuard<'a, T::Id>) -> Option<T::Raw> {
+    pub fn destroy<'a>(&self, _guard: &'a mut WriteDestructionGuard<'_, T::Id>) -> Option<T::Raw> {
         // Safe as we have the write destruction guard
         let option = unsafe { &mut *self.inner.get() };
 

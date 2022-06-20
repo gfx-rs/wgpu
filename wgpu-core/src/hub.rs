@@ -11,10 +11,8 @@ use crate::{
 };
 
 use parking_lot::Mutex;
-use thiserror::Error;
 use wgt::Backend;
 
-use std::borrow::Cow;
 #[cfg(debug_assertions)]
 use std::{fmt::Debug, marker::PhantomData};
 
@@ -94,23 +92,6 @@ impl IdentityManager {
     }
 }
 
-/// An entry in a `Storage::map` table.
-#[derive(Debug)]
-enum Element<T> {
-    /// There are no live ids with this index.
-    Vacant,
-
-    /// There is one live id with this index, allocated at the given
-    /// epoch.
-    Occupied(T, Epoch),
-
-    /// Like `Occupied`, but an error occurred when creating the
-    /// resource.
-    ///
-    /// The given `String` is the resource's descriptor label.
-    Error(Epoch, String),
-}
-
 #[derive(Clone, Debug, Default)]
 pub struct StorageReport {
     pub num_occupied: usize,
@@ -125,18 +106,7 @@ impl StorageReport {
     }
 }
 
-#[derive(Clone, Debug, Error)]
-pub(crate) enum InvalidId {
-    #[error("Resource {index} is in the error state because {error}. This happens when resource creation fails with an error and the ID is re-used.")]
-    ResourceInError {
-        index: u32,
-        error: Cow<'static, str>,
-    },
-    #[error("Resource {index} has been destroyed. The storage is currently empty.")]
-    Vacant { index: u32 },
-    #[error("Resource {index} has been destroyed. The storage is currently storing a new resource with epoch {new} (given epoch {old}).")]
-    WrongEpoch { index: u32, old: Epoch, new: Epoch },
-}
+
 
 pub trait IdentityHandler<I>: Debug {
     type Input: Clone + Debug;
@@ -204,43 +174,6 @@ pub trait Resource {
         return &self.life_guard().unwrap().label;
         #[cfg(not(debug_assertions))]
         return "";
-    }
-}
-
-#[must_use]
-pub(crate) struct FutureId<'a, T: Resource> {
-    id: T::Id,
-    data: &'a registry::Storage<T>,
-}
-
-impl<T> FutureId<'_, T>
-where
-    T: Resource,
-{
-    #[cfg(feature = "trace")]
-    pub fn id(&self) -> T::Id {
-        self.id
-    }
-
-    pub fn into_id(self) -> T::Id {
-        self.id
-    }
-
-    pub fn assign(self, value: T) -> id::Valid<T::Id> {
-        use id::TypedId as _;
-        let (index, epoch, _) = self.id.unzip();
-        unsafe { self.data.fill(index, epoch, Ok(value)) };
-        id::Valid(self.id)
-    }
-
-    pub fn assign_error(self, label: &str) -> T::Id {
-        use id::TypedId as _;
-        let (index, epoch, _) = self.id.unzip();
-        unsafe {
-            self.data
-                .fill(index, epoch, Err(Cow::Owned(String::from(label))))
-        };
-        self.id
     }
 }
 
@@ -350,7 +283,9 @@ impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<A, F> {
                     device.raw.destroy_texture(raw);
                 }
             }
-            if let TextureClearMode::RenderPass { clear_views, .. } = texture.clear_mode {
+            if let TextureClearMode::RenderPass { clear_views, .. } =
+                texture.clear_mode.into_inner()
+            {
                 for view in clear_views {
                     device.raw.destroy_texture_view(view);
                 }
@@ -414,7 +349,7 @@ impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<A, F> {
         }
 
         if with_adapters {
-            self.adapters.remove_all();
+            self.adapters.remove_all().for_each(drop);
         }
     }
 

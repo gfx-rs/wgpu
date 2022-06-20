@@ -9,7 +9,10 @@ When this texture is presented, we remove it from the device tracker as well as
 extract it from the hub.
 !*/
 
-use std::{borrow::Borrow, sync::atomic::{AtomicBool, Ordering}};
+use std::{
+    borrow::Borrow,
+    sync::atomic::{AtomicBool, Ordering},
+};
 
 #[cfg(feature = "trace")]
 use crate::device::trace::Action;
@@ -183,10 +186,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         mips: 0..1,
                     },
                     life_guard: LifeGuard::new("<Surface>"),
-                    clear_mode: resource::TextureClearMode::RenderPass {
+                    clear_mode: RwLock::new(resource::TextureClearMode::RenderPass {
                         clear_views,
                         is_color: true,
-                    },
+                    }),
                 };
 
                 let ref_count = texture.life_guard.add_ref();
@@ -280,7 +283,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let texture = unsafe { hub.textures.unregister(texture_id.value.0) };
             if let Ok(texture) = texture {
                 if let resource::TextureClearMode::RenderPass { clear_views, .. } =
-                    texture.clear_mode
+                    texture.clear_mode.into_inner()
                 {
                     for clear_view in clear_views {
                         unsafe {

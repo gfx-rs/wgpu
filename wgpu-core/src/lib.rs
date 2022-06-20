@@ -132,7 +132,7 @@ impl Drop for AtomicOptionalRefCount {
 /// `Clone`, so every `RefCount` is implicitly tied to some
 /// [`LifeGuard`].
 #[derive(Debug)]
-struct RefCount(ptr::NonNull<AtomicUsize>);
+pub struct RefCount(ptr::NonNull<AtomicUsize>);
 
 unsafe impl Send for RefCount {}
 unsafe impl Sync for RefCount {}
@@ -162,8 +162,12 @@ impl Clone for RefCount {
 impl Drop for RefCount {
     fn drop(&mut self) {
         unsafe {
-            if self.0.as_ref().fetch_sub(1, Ordering::AcqRel) == 1 {
+            let old_ref_count = self.0.as_ref().fetch_sub(1, Ordering::AcqRel);
+            if old_ref_count == 1 {
                 drop(Box::from_raw(self.0.as_ptr()));
+            }
+            if old_ref_count == 0 {
+                panic!("Double free!");
             }
         }
     }
@@ -246,7 +250,7 @@ impl LifeGuard {
     }
 
     fn add_ref(&self) -> RefCount {
-        ManuallyDrop::into_inner(self.ref_count.as_ref_count().unwrap())
+        ManuallyDrop::into_inner(dbg!(self.ref_count.as_ref_count()).clone().unwrap())
     }
 
     /// Record that this resource will be used by the queue submission with the

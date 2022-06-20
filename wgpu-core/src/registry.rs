@@ -1,11 +1,13 @@
 use std::{
     borrow::Cow,
+    cell::UnsafeCell,
     marker::PhantomData,
     mem,
     sync::atomic::{AtomicU32, Ordering},
 };
 
 use parking_lot::Mutex;
+use thiserror::Error;
 
 use crate::{
     hub,
@@ -13,6 +15,56 @@ use crate::{
     sync::{DebugMaybeUninit, DebugUnsafeCell},
     Epoch, LifeGuard, RefCount, SubmissionIndex,
 };
+
+#[derive(Clone, Debug, Error)]
+pub enum InvalidId {
+    #[error("Resource {index} is in the error state because {error}. This happens when resource creation fails with an error and the ID is re-used.")]
+    ResourceInError {
+        index: u32,
+        error: Cow<'static, str>,
+    },
+    #[error("Resource {index} has been destroyed. The storage is currently empty.")]
+    Vacant { index: u32 },
+    #[error("Resource {index} has been destroyed. The storage is currently storing a new resource with epoch {new} (given epoch {old}).")]
+    WrongEpoch { index: u32, old: Epoch, new: Epoch },
+}
+
+#[must_use]
+pub(crate) struct FutureId<'a, T: hub::Resource> {
+    id: T::Id,
+    data: &'a Storage<T>,
+}
+
+impl<T> FutureId<'_, T>
+where
+    T: hub::Resource,
+{
+    #[cfg(feature = "trace")]
+    pub fn id(&self) -> T::Id {
+        self.id
+    }
+
+    pub fn into_id(self) -> T::Id {
+        self.id
+    }
+
+    pub fn assign(self, value: T) -> id::Valid<T::Id> {
+        use id::TypedId as _;
+        let (index, epoch, _) = self.id.unzip();
+        unsafe { self.data.fill(index, epoch, Ok(value)) };
+        id::Valid(self.id)
+    }
+
+    pub fn assign_error(self, label: &str) -> T::Id {
+        use id::TypedId as _;
+        let (index, epoch, _) = self.id.unzip();
+        unsafe {
+            self.data
+                .fill(index, epoch, Err(Cow::Owned(String::from(label))))
+        };
+        self.id
+    }
+}
 
 pub struct Registry<A, T> {
     storage: Storage<T>,
@@ -41,13 +93,13 @@ where
     }
 
     /// Safe to call concurrently.
-    pub fn prepare<Q>(&self, _: Q) -> hub::FutureId<'_, T> {
+    pub(crate) fn prepare<Q>(&self, _: Q) -> FutureId<'_, T> {
         let mut ident_guard = self.identity_manager.lock();
         let (index, id) = ident_guard.alloc(A::VARIANT);
         unsafe { self.storage.ensure_index(index) }
         drop(ident_guard);
 
-        hub::FutureId {
+        FutureId {
             id,
             data: &self.storage,
         }
@@ -57,7 +109,7 @@ where
     ///
     /// - No calls to `contains`, `get`, `get_unchecked`, or `Index` may happen
     ///   while this call is executing.
-    pub unsafe fn unregister(&self, id: T::Id) -> Result<T, hub::InvalidId> {
+    pub unsafe fn unregister(&self, id: T::Id) -> Result<T, InvalidId> {
         let mut ident_guard = self.identity_manager.lock();
         let (index, epoch) = ident_guard.free(id);
         let value = self.storage.free(index, epoch);
@@ -70,7 +122,7 @@ where
         self.storage.contains(index, epoch)
     }
 
-    pub fn get(&self, id: T::Id) -> Result<&T, hub::InvalidId> {
+    pub fn get(&self, id: T::Id) -> Result<&T, InvalidId> {
         let (index, epoch, _) = id.unzip();
         self.storage.get(index, epoch)
     }
@@ -85,7 +137,7 @@ where
     ///
     /// - No calls to `contains`, `get`, `get_unchecked`, or `Index` may happen
     ///   while this call is executing.
-    pub unsafe fn drop_no_life_guard(&self, id: T::Id) -> Option<id::Valid<id::DeviceId>> {
+    pub(crate) unsafe fn drop_no_life_guard(&self, id: T::Id) -> Option<id::Valid<id::DeviceId>> {
         Some(self.drop_inner(id)?.2)
     }
 
@@ -95,7 +147,7 @@ where
     ///
     /// - No calls to `contains`, `get`, `get_unchecked`, or `Index` may happen
     ///   while this call is executing.
-    pub unsafe fn drop_with_life_guard(
+    pub(crate) unsafe fn drop_with_life_guard(
         &self,
         id: T::Id,
     ) -> Option<(&T, RefCount, SubmissionIndex, id::Valid<id::DeviceId>)> {
@@ -121,8 +173,8 @@ where
     ) -> Option<(&T, Option<&LifeGuard>, id::Valid<id::DeviceId>)> {
         match self.get(id) {
             Ok(resource) => Some((resource, resource.life_guard(), resource.device_id())),
-            Err(hub::InvalidId::ResourceInError { .. }) => {
-                self.unregister(id);
+            Err(InvalidId::ResourceInError { .. }) => {
+                self.unregister(id).ok()?;
                 None
             }
             Err(e) => {
@@ -146,13 +198,15 @@ where
     }
 
     pub fn label_for_resource(&self, id: T::Id) -> String {
-        // TODO
-        String::from("TODO")
+        match self.get(id) {
+            Ok(resource) => resource.label().to_owned(),
+            Err(_) => format!("{:?}", id),
+        }
     }
 
     pub fn iter(&self) -> impl Iterator<Item = (T::Id, &T)> {
         IteratorDataAdapter {
-            data: self.identity_manager.lock(),
+            _data: self.identity_manager.lock(),
             // SAFETY: The identity manager lock is taken and will be kept
             // alive as long as the iterator is alive.
             iter: unsafe { self.storage.iter(A::VARIANT) },
@@ -197,7 +251,7 @@ where
 }
 
 struct IteratorDataAdapter<D, I> {
-    data: D,
+    _data: D,
     iter: I,
 }
 
@@ -212,17 +266,22 @@ where
     }
 }
 
+const STORAGE_BLOCK_SIZE: usize = 32;
+
 pub struct Storage<T> {
-    blocks: [DebugUnsafeCell<Option<Box<StorageBlock<512, T>>>>; 256],
+    blocks: [UnsafeCell<Option<Box<StorageBlock<STORAGE_BLOCK_SIZE, T>>>>; 256],
     max_index: AtomicU32,
 }
+unsafe impl<T> Send for Storage<T> where T: Send {}
+unsafe impl<T> Sync for Storage<T> where T: Sync {}
+
 impl<T> Storage<T>
 where
     T: hub::Resource,
 {
     fn new() -> Self {
         Self {
-            blocks: [(); 256].map(|_| DebugUnsafeCell::new(None)),
+            blocks: [(); 256].map(|_| UnsafeCell::new(None)),
             max_index: AtomicU32::new(0),
         }
     }
@@ -235,17 +294,18 @@ where
         }
         assert_eq!(index, max_index);
 
-        let block = max_index / 512;
+        let block = max_index / STORAGE_BLOCK_SIZE as u32;
         if block >= 256 {
             panic!("Too many resources allocated");
         }
 
-        let allocated_length = (max_index + 511) & !511;
+        let block_size_minus_one = (STORAGE_BLOCK_SIZE - 1) as u32;
+        let allocated_length = (max_index + block_size_minus_one) & !block_size_minus_one;
         if index >= allocated_length {
             // SAFETY: we're the first to ever allocate this block, so we're the only one
             // who could get this mutable reference.
-            let block = &mut *self.blocks[block as usize].get_mut();
-            *block = Some(Box::new(StorageBlock::new_uninit()));
+            let block = self.blocks[block as usize].get();
+            block.write(Some(Box::new(StorageBlock::new_uninit())));
         }
         self.max_index.store(max_index + 1, Ordering::Release);
     }
@@ -253,20 +313,19 @@ where
     fn raw_refs(
         &self,
         index: u32,
-    ) -> Result<(&DebugUnsafeCell<DebugMaybeUninit<T>>, &Mutex<ElementStatus>), hub::InvalidId>
-    {
-        let block = (index / 512) as usize;
-        let data_index = (index % 512) as usize;
+    ) -> Result<(&DebugUnsafeCell<DebugMaybeUninit<T>>, &Mutex<ElementStatus>), InvalidId> {
+        let block = index as usize / STORAGE_BLOCK_SIZE;
+        let data_index = index as usize % STORAGE_BLOCK_SIZE;
 
         let length = self.max_index.load(Ordering::Acquire);
 
         if index >= length {
-            return Err(hub::InvalidId::Vacant { index });
+            return Err(InvalidId::Vacant { index });
         }
 
         // SAFETY: We have just bounds checked the index and we always check the
         // status before accessing the data.
-        let block_option_ref = unsafe { self.blocks[block].get_debug_unchecked() };
+        let block_option_ref = unsafe { &*self.blocks[block].get() };
         let block_ref = block_option_ref.as_deref().unwrap();
         let data_ref = &block_ref.data[data_index];
         let status_ref = &block_ref.status[data_index];
@@ -319,7 +378,7 @@ where
         true
     }
 
-    fn get(&self, index: u32, epoch: u32) -> Result<&T, hub::InvalidId> {
+    fn get(&self, index: u32, epoch: u32) -> Result<&T, InvalidId> {
         let (data_ref, status_ref) = self.raw_refs(index)?;
 
         let status = &*status_ref.lock();
@@ -327,22 +386,24 @@ where
             ElementStatus::Occupied(stored_epoch) | ElementStatus::Error(stored_epoch, _)
                 if epoch != stored_epoch =>
             {
-                Err(hub::InvalidId::WrongEpoch {
+                Err(InvalidId::WrongEpoch {
                     index,
                     old: stored_epoch,
                     new: epoch,
                 })
             }
-            ElementStatus::Occupied(_) => Ok(unsafe { data_ref.get_debug_unchecked().assume_init_ref() }),
-            ElementStatus::Error(_, ref error) => Err(hub::InvalidId::ResourceInError {
+            ElementStatus::Occupied(_) => {
+                Ok(unsafe { data_ref.get_debug_unchecked().assume_init_ref() })
+            }
+            ElementStatus::Error(_, ref error) => Err(InvalidId::ResourceInError {
                 index,
                 error: error.clone(),
             }),
-            ElementStatus::Vacant => Err(hub::InvalidId::Vacant { index }),
+            ElementStatus::Vacant => Err(InvalidId::Vacant { index }),
         }
     }
 
-    fn get_unchecked(&self, index: u32) -> Result<&T, hub::InvalidId> {
+    fn get_unchecked(&self, index: u32) -> Result<&T, InvalidId> {
         let (data_ref, status_ref) = self.raw_refs(index)?;
 
         let status = status_ref.lock();
@@ -351,16 +412,16 @@ where
                 // TODO SAFETY: it isn't
                 Ok(unsafe { data_ref.get_debug_unchecked().assume_init_ref() })
             }
-            ElementStatus::Error(_, ref error) => Err(hub::InvalidId::ResourceInError {
+            ElementStatus::Error(_, ref error) => Err(InvalidId::ResourceInError {
                 index,
                 error: error.clone(),
             }),
-            ElementStatus::Vacant => Err(hub::InvalidId::Vacant { index }),
+            ElementStatus::Vacant => Err(InvalidId::Vacant { index }),
         }
     }
 
     // SAFETY: Must be called inside the identity manager lock.
-    unsafe fn free(&self, index: u32, epoch: u32) -> Result<T, hub::InvalidId> {
+    unsafe fn free(&self, index: u32, epoch: u32) -> Result<T, InvalidId> {
         let (data_ref, status_ref) = self.raw_refs(index)?;
 
         // We set this to vacant first before destroying it, so that if a stray index comes through
@@ -387,16 +448,16 @@ where
         ),
     > + '_ {
         let elements_allocated = self.max_index.load(Ordering::Acquire) as usize;
-        let blocks_allocated = elements_allocated + 511 / 512;
+        let blocks_allocated = elements_allocated + STORAGE_BLOCK_SIZE - 1 / STORAGE_BLOCK_SIZE;
 
         self.blocks[0..blocks_allocated]
             .iter()
             .enumerate()
             .flat_map(move |(block_idx, block_ref)| {
-                let block = unsafe { block_ref.get_debug_unchecked().as_ref().unwrap() };
+                let block = unsafe { &*block_ref.get() }.as_ref().unwrap();
 
-                let starting_idx = block_idx * 512;
-                let end_idx = ((block_idx + 1) * 512).min(elements_allocated);
+                let starting_idx = block_idx * STORAGE_BLOCK_SIZE;
+                let end_idx = ((block_idx + 1) * STORAGE_BLOCK_SIZE).min(elements_allocated);
                 let count = end_idx - starting_idx;
                 (0..count).filter_map(move |element_idx| {
                     let total_idx = starting_idx + element_idx;
@@ -444,17 +505,17 @@ where
     }
 }
 
-struct StorageBlock<const count: usize, T> {
-    data: [DebugUnsafeCell<DebugMaybeUninit<T>>; count],
+struct StorageBlock<const COUNT: usize, T> {
+    data: [DebugUnsafeCell<DebugMaybeUninit<T>>; COUNT],
     // TODO: this can be an atomic
-    status: [Mutex<ElementStatus>; count],
+    status: [Mutex<ElementStatus>; COUNT],
 }
 
-impl<const count: usize, T> StorageBlock<count, T> {
+impl<const COUNT: usize, T> StorageBlock<COUNT, T> {
     fn new_uninit() -> Self {
         Self {
-            data: [(); count].map(|_| DebugUnsafeCell::new(DebugMaybeUninit::uninit())),
-            status: [(); count].map(|_| Mutex::new(ElementStatus::Vacant)),
+            data: [(); COUNT].map(|_| DebugUnsafeCell::new(DebugMaybeUninit::uninit())),
+            status: [(); COUNT].map(|_| Mutex::new(ElementStatus::Vacant)),
         }
     }
 }
