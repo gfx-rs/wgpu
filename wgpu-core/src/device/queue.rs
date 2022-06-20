@@ -854,7 +854,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 log::trace!("Device after submission {}", submit_index);
             }
 
-            let pending_writes = &mut *device.pending_writes.lock();
+            let mut pending_writes = device.pending_writes.lock();
 
             {
                 //TODO: these blocks have a few organizational issues and should be refactored

@@ -2,6 +2,7 @@ use std::ops::{Deref, DerefMut};
 #[cfg(not(debug_assertions))]
 use std::{cell::UnsafeCell, mem::MaybeUninit};
 
+#[cfg(debug_assertions)]
 use parking_lot::RwLock;
 
 /// Unsafe cell that's actually an RW lock in debug.
@@ -50,7 +51,7 @@ impl<T> DebugUnsafeCell<T> {
     }
 
     pub unsafe fn get(&self) -> impl Deref<Target = T> + '_ {
-        &*self.inner.get();
+        &*self.inner.get()
     }
 
     pub unsafe fn get_debug_unchecked(&self) -> &T {
@@ -58,11 +59,11 @@ impl<T> DebugUnsafeCell<T> {
     }
 
     pub unsafe fn get_mut(&self) -> impl DerefMut<Target = T> + '_ {
-        &mut *self.inner.get();
+        &mut *self.inner.get()
     }
 
     pub unsafe fn get_debug_unchecked_mut(&self) -> &mut T {
-        &mut *self.inner.get();
+        &mut *self.inner.get()
     }
 }
 

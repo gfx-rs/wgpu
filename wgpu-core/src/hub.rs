@@ -13,7 +13,6 @@ use crate::{
 use parking_lot::Mutex;
 use wgt::Backend;
 
-#[cfg(debug_assertions)]
 use std::{fmt::Debug, marker::PhantomData};
 
 /// A simple structure to allocate [`Id`] identifiers.
@@ -105,8 +104,6 @@ impl StorageReport {
         self.num_occupied + self.num_vacant + self.num_error == 0
     }
 }
-
-
 
 pub trait IdentityHandler<I>: Debug {
     type Input: Clone + Debug;

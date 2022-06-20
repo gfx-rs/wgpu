@@ -155,7 +155,7 @@ impl Test<'_> {
             }
         }
 
-        wgc::gfx_select!(device => global.clear_backend(()));
+        unsafe { wgc::gfx_select!(device => global.clear_backend(())) };
     }
 }
 

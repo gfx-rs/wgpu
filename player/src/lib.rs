@@ -371,7 +371,7 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
                 let (encoder, error) = self.device_create_command_encoder::<A>(
                     device,
                     &wgt::CommandEncoderDescriptor { label: None },
-                    comb_manager.alloc(device.backend()),
+                    comb_manager.alloc(device.backend()).1,
                 );
                 if let Some(e) = error {
                     panic!("{:?}", e);

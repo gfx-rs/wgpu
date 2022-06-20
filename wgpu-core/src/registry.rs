@@ -448,7 +448,7 @@ where
         ),
     > + '_ {
         let elements_allocated = self.max_index.load(Ordering::Acquire) as usize;
-        let blocks_allocated = elements_allocated + STORAGE_BLOCK_SIZE - 1 / STORAGE_BLOCK_SIZE;
+        let blocks_allocated = (elements_allocated + STORAGE_BLOCK_SIZE - 1) / STORAGE_BLOCK_SIZE;
 
         self.blocks[0..blocks_allocated]
             .iter()
