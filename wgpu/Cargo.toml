@@ -294,6 +294,13 @@ parking_lot = ">=0.11,<0.13"
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 console_error_panic_hook = "0.1.6"
 console_log = "0.1.2"
-# We need the Location feature in the framework examples
-web-sys = { version = "0.3.53", features = ["Location"] }
+# We need these features in the framework examples
+web-sys = { version = "0.3.53", features = [
+    "Location",
+    "Blob",
+    "RequestInit",
+    "RequestMode",
+    "Request",
+    "Response"
+] }
 rand = { version = "0.7", features = ["wasm-bindgen"] }

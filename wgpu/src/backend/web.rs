@@ -872,7 +872,9 @@ fn map_texture_copy_view(view: crate::ImageCopyTexture) -> web_sys::GpuImageCopy
     mapped
 }
 
-fn map_tagged_texture_copy_view(view: crate::ImageCopyTexture) -> web_sys::GpuImageCopyTextureTagged {
+fn map_tagged_texture_copy_view(
+    view: crate::ImageCopyTexture,
+) -> web_sys::GpuImageCopyTextureTagged {
     let mut mapped = web_sys::GpuImageCopyTextureTagged::new(&view.texture.id.0);
     mapped.mip_level(view.mip_level);
     mapped.origin(&map_origin_3d(view.origin));

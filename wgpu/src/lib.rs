@@ -3381,7 +3381,8 @@ impl Queue {
         texture: ImageCopyTexture,
         size: Extent3d,
     ) {
-        self.context.queue_copy_external_image_to_texture(&self.id, image, texture, size)
+        self.context
+            .queue_copy_external_image_to_texture(&self.id, image, texture, size)
     }
 
     /// Submits a series of finished command buffers for execution.
