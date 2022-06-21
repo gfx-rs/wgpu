@@ -860,8 +860,8 @@ fn map_store_op(store: bool) -> web_sys::GpuStoreOp {
 
 fn map_map_mode(mode: crate::MapMode) -> u32 {
     match mode {
-        crate::MapMode::Read => web_sys::GpuMapMode::READ,
-        crate::MapMode::Write => web_sys::GpuMapMode::WRITE,
+        crate::MapMode::Read => web_sys::GPUMapMode::READ,
+        crate::MapMode::Write => web_sys::GPUMapMode::WRITE,
     }
 }
 

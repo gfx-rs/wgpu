@@ -158,8 +158,8 @@ rev = "0b60f410"
 features = ["wgsl-out"]
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-wasm-bindgen = "0.2.80"
-web-sys = { version = "0.3.57", features = [
+wasm-bindgen = "0.2.81"
+web-sys = { version = "0.3.58", features = [
     "Document",
     "Navigator",
     "Node",
@@ -182,12 +182,10 @@ web-sys = { version = "0.3.57", features = [
     "GpuBufferBindingLayout",
     "GpuBufferBindingType",
     "GpuBufferDescriptor",
-    "GpuBufferUsage",
     "GpuCanvasContext",
     "GpuCanvasConfiguration",
     "GpuColorDict",
     "GpuColorTargetState",
-    "GpuColorWrite",
     "GpuCommandBuffer",
     "GpuCommandBufferDescriptor",
     "GpuCommandEncoder",
@@ -217,7 +215,7 @@ web-sys = { version = "0.3.57", features = [
     "GpuImageDataLayout",
     "GpuIndexFormat",
     "GpuLoadOp",
-    "GpuMapMode",
+    "gpu_map_mode",
     "GpuMultisampleState",
     "GpuObjectDescriptorBase",
     "GpuOrigin2dDict",
@@ -226,7 +224,6 @@ web-sys = { version = "0.3.57", features = [
     "GpuPipelineDescriptorBase",
     "GpuPipelineLayout",
     "GpuPipelineLayoutDescriptor",
-    "GpuPipelineStatisticName",
     "GpuPowerPreference",
     "GpuPrimitiveState",
     "GpuPrimitiveTopology",
@@ -252,7 +249,6 @@ web-sys = { version = "0.3.57", features = [
     "GpuSamplerDescriptor",
     "GpuShaderModule",
     "GpuShaderModuleDescriptor",
-    "GpuShaderStage",
     "GpuStencilFaceState",
     "GpuStencilOperation",
     "GpuStorageTextureAccess",
@@ -267,7 +263,6 @@ web-sys = { version = "0.3.57", features = [
     "GpuTextureDimension",
     "GpuTextureFormat",
     "GpuTextureSampleType",
-    "GpuTextureUsage",
     "GpuTextureView",
     "GpuTextureViewDescriptor",
     "GpuTextureViewDimension",
@@ -283,10 +278,10 @@ web-sys = { version = "0.3.57", features = [
     "OffscreenCanvas",
     "ImageBitmap",
     "ImageBitmapRenderingContext",
-    "Window"
+    "Window",
 ] }
-js-sys = "0.3.57"
-wasm-bindgen-futures = "0.4.30"
+js-sys = "0.3.58"
+wasm-bindgen-futures = "0.4.31"
 # parking_lot 0.12 switches from `winapi` to `windows`; permit either
 parking_lot = ">=0.11,<0.13"
 
