@@ -436,6 +436,10 @@ fn convert_wgsl() {
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::WGSL,
         ),
         (
+            "bitcast",
+            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::WGSL,
+        ),
+        (
             "boids",
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
         ),

@@ -1,0 +1,15 @@
+(
+	msl: (
+		lang_version: (1, 2),
+		per_stage_map: (
+			cs: (
+				resources: {
+				},
+				sizes_buffer: Some(0),
+			)
+		),
+		inline_samplers: [],
+		spirv_cross_compatibility: false,
+		fake_missing_bindings: false,
+	),
+)
