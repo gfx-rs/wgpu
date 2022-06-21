@@ -151,7 +151,7 @@ impl State {
             opts.mode(RequestMode::Cors);
 
             let url = "https://raw.githubusercontent.com/gfx-rs/wgpu/f4c01052ef709e010f4e228d7d7d668f0166b3f5/logo.png";
-            let request = Request::new_with_str_and_init(&url, &opts).unwrap();
+            let request = Request::new_with_str_and_init(url, &opts).unwrap();
 
             let web_window = web_sys::window().unwrap();
             let resp_value = JsFuture::from(web_window.fetch_with_request(&request))
