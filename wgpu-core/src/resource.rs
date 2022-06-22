@@ -330,7 +330,7 @@ pub enum TextureErrorDimension {
 pub enum TextureDimensionError {
     #[error("Dimension {0:?} is zero")]
     Zero(TextureErrorDimension),
-    #[error("Dimension {0:?} value {given} exceeds the limit of {limit}")]
+    #[error("Dimension {dim:?} value {given} exceeds the limit of {limit}")]
     LimitExceeded {
         dim: TextureErrorDimension,
         given: u32,
