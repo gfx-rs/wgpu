@@ -3323,6 +3323,18 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         fid.assign_error(label.borrow_or_default(), &mut token);
     }
 
+    /// Assign `id_in` an error with the given `label`.
+    ///
+    /// See `create_buffer_error` for more context and explaination.
+    pub fn create_texture_error<A: HalApi>(&self, id_in: Input<G, id::TextureId>, label: Label) {
+        let hub = A::hub(self);
+        let mut token = Token::root();
+        let fid = hub.textures.prepare(id_in);
+
+        let (_, mut token) = hub.devices.read(&mut token);
+        fid.assign_error(label.borrow_or_default(), &mut token);
+    }
+
     #[cfg(feature = "replay")]
     pub fn device_wait_for_buffer<A: HalApi>(
         &self,
