@@ -157,7 +157,7 @@ impl Surface {
         adapter: &Adapter<A>,
     ) -> Result<Vec<wgt::TextureFormat>, GetSurfacePreferredFormatError> {
         let suf = A::get_surface(self);
-        let caps = unsafe {
+        let mut caps = unsafe {
             profiling::scope!("surface_capabilities");
             adapter
                 .raw
@@ -166,9 +166,8 @@ impl Surface {
                 .ok_or(GetSurfacePreferredFormatError::UnsupportedQueueFamily)?
         };
 
-        if caps.formats.is_empty() {
-            return Err(GetSurfacePreferredFormatError::NotFound);
-        }
+        // TODO: maybe remove once we support texture view changing srgb-ness
+        caps.formats.sort_by_key(|f| !f.describe().srgb);
 
         Ok(caps.formats)
     }
@@ -343,8 +342,6 @@ pub enum IsSurfaceSupportedError {
 
 #[derive(Clone, Debug, Error)]
 pub enum GetSurfacePreferredFormatError {
-    #[error("no suitable format found")]
-    NotFound,
     #[error("invalid adapter")]
     InvalidAdapter,
     #[error("invalid surface")]

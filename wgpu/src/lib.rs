@@ -229,7 +229,7 @@ trait Context: Debug + Send + Sized + Sync {
         &self,
         surface: &Self::SurfaceId,
         adapter: &Self::AdapterId,
-    ) -> Option<Vec<TextureFormat>>;
+    ) -> Vec<TextureFormat>;
     fn surface_configure(
         &self,
         surface: &Self::SurfaceId,
@@ -3449,8 +3449,8 @@ impl Surface {
     /// Returns a vec of supported texture formats to use for the [`Surface`] with this adapter.
     /// Note: The first format in the vector is preferred
     ///
-    /// Returns None if the surface is incompatible with the adapter.
-    pub fn get_supported_formats(&self, adapter: &Adapter) -> Option<Vec<TextureFormat>> {
+    /// Returns an empty vector if the surface is incompatible with the adapter.
+    pub fn get_supported_formats(&self, adapter: &Adapter) -> Vec<TextureFormat> {
         Context::surface_get_supported_formats(&*self.context, &self.id, &adapter.id)
     }
 

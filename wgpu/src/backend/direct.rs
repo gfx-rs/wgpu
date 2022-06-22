@@ -962,12 +962,12 @@ impl crate::Context for Context {
         &self,
         surface: &Self::SurfaceId,
         adapter: &Self::AdapterId,
-    ) -> Option<Vec<TextureFormat>> {
+    ) -> Vec<TextureFormat> {
         let global = &self.0;
         match wgc::gfx_select!(adapter => global.surface_get_supported_formats(surface.id, *adapter))
         {
-            Ok(formats) => Some(formats),
-            Err(wgc::instance::GetSurfacePreferredFormatError::UnsupportedQueueFamily) => None,
+            Ok(formats) => formats,
+            Err(wgc::instance::GetSurfacePreferredFormatError::UnsupportedQueueFamily) => vec![],
             Err(err) => self.handle_error_fatal(err, "Surface::get_supported_formats"),
         }
     }
