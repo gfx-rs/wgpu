@@ -847,6 +847,7 @@ impl super::PrivateCapabilities {
                 max_compute_workgroup_size_y: self.max_threads_per_group,
                 max_compute_workgroup_size_z: self.max_threads_per_group,
                 max_compute_workgroups_per_dimension: 0xFFFF,
+                max_buffer_size: self.max_buffer_size,
             },
             alignments: crate::Alignments {
                 buffer_copy_offset: wgt::BufferSize::new(self.buffer_alignment).unwrap(),

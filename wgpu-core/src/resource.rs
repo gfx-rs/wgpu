@@ -174,6 +174,8 @@ pub enum CreateBufferError {
     EmptyUsage,
     #[error("`MAP` usage can only be combined with the opposite `COPY`, requested {0:?}")]
     UsageMismatch(wgt::BufferUsages),
+    #[error("Buffer size {requested} is greater than the maximum buffer size ({maximum})")]
+    MaxBufferSize { requested: u64, maximum: u64 },
 }
 
 impl<A: hal::Api> Resource for Buffer<A> {

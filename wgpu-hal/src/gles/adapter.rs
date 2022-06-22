@@ -461,6 +461,7 @@ impl super::Adapter {
                 0
             },
             max_compute_workgroups_per_dimension,
+            max_buffer_size: i32::MAX as u64,
         };
 
         let mut workarounds = super::Workarounds::empty();

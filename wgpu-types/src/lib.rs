@@ -737,6 +737,11 @@ pub struct Limits {
     /// The maximum value for each dimension of a `ComputePass::dispatch(x, y, z)` operation.
     /// Defaults to 65535.
     pub max_compute_workgroups_per_dimension: u32,
+    /// A limit above which buffer allocations are guaranteed to fail.
+    ///
+    /// Buffer allocations below the maximum buffer size may not succed depending on available memory,
+    /// fragmentation and other factors.
+    pub max_buffer_size: u64,
 }
 
 impl Default for Limits {
@@ -769,6 +774,7 @@ impl Default for Limits {
             max_compute_workgroup_size_y: 256,
             max_compute_workgroup_size_z: 64,
             max_compute_workgroups_per_dimension: 65535,
+            max_buffer_size: 1 << 30,
         }
     }
 }
@@ -804,6 +810,7 @@ impl Limits {
             max_compute_workgroup_size_y: 256,
             max_compute_workgroup_size_z: 64,
             max_compute_workgroups_per_dimension: 65535,
+            max_buffer_size: 1 << 28,
         }
     }
 
@@ -876,7 +883,7 @@ impl Limits {
         &self,
         allowed: &Self,
         fatal: bool,
-        mut fail_fn: impl FnMut(&'static str, u32, u32),
+        mut fail_fn: impl FnMut(&'static str, u64, u64),
     ) {
         use std::cmp::Ordering;
 
@@ -885,7 +892,7 @@ impl Limits {
                 match self.$name.cmp(&allowed.$name) {
                     Ordering::$ordering | Ordering::Equal => (),
                     _ => {
-                        fail_fn(stringify!($name), self.$name, allowed.$name);
+                        fail_fn(stringify!($name), self.$name as u64, allowed.$name as u64);
                         if fatal {
                             return;
                         }
@@ -921,6 +928,7 @@ impl Limits {
         compare!(max_compute_workgroup_size_y, Less);
         compare!(max_compute_workgroup_size_z, Less);
         compare!(max_compute_workgroups_per_dimension, Less);
+        compare!(max_buffer_size, Less);
     }
 }
 

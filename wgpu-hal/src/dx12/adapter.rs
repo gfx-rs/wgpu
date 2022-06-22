@@ -282,6 +282,7 @@ impl super::Adapter {
                     max_compute_workgroup_size_z: d3d12::D3D12_CS_THREAD_GROUP_MAX_Z,
                     max_compute_workgroups_per_dimension:
                         d3d12::D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION,
+                    max_buffer_size: u64::MAX,
                 },
                 alignments: crate::Alignments {
                     buffer_copy_offset: wgt::BufferSize::new(

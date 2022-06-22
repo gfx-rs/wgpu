@@ -768,6 +768,15 @@ impl PhysicalDeviceCapabilities {
             .min(limits.max_compute_work_group_count[1])
             .min(limits.max_compute_work_group_count[2]);
 
+        // Prevent very large buffers on mesa and most android devices.
+        let is_nvidia = self.properties.vendor_id == crate::auxil::db::nvidia::VENDOR;
+        let max_buffer_size =
+            if (cfg!(target_os = "linux") || cfg!(target_os = "android")) && !is_nvidia {
+                i32::MAX as u64
+            } else {
+                u64::MAX
+            };
+
         wgt::Limits {
             max_texture_dimension_1d: limits.max_image_dimension1_d,
             max_texture_dimension_2d: limits.max_image_dimension2_d,
@@ -808,6 +817,7 @@ impl PhysicalDeviceCapabilities {
             max_compute_workgroup_size_y: max_compute_workgroup_sizes[1],
             max_compute_workgroup_size_z: max_compute_workgroup_sizes[2],
             max_compute_workgroups_per_dimension,
+            max_buffer_size,
         }
     }
 
