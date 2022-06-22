@@ -342,8 +342,6 @@ pub enum IsSurfaceSupportedError {
 
 #[derive(Clone, Debug, Error)]
 pub enum GetSurfacePreferredFormatError {
-    #[error("no suitable format found")]
-    NotFound,
     #[error("invalid adapter")]
     InvalidAdapter,
     #[error("invalid surface")]

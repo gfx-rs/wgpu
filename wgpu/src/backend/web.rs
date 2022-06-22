@@ -1142,14 +1142,13 @@ impl crate::Context for Context {
         &self,
         _surface: &Self::SurfaceId,
         _adapter: &Self::AdapterId,
-    ) -> Option<Vec<wgt::TextureFormat>> {
+    ) -> Vec<wgt::TextureFormat> {
         // https://gpuweb.github.io/gpuweb/#supported-context-formats
-        let formats = vec![
+        vec![
             wgt::TextureFormat::Bgra8Unorm,
             wgt::TextureFormat::Rgba8Unorm,
             wgt::TextureFormat::Rgba16Float,
-        ];
-        Some(formats)
+        ]
     }
 
     fn surface_configure(
