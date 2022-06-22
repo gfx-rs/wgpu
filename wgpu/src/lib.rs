@@ -813,6 +813,10 @@ pub enum ShaderSource<'a> {
     },
     /// WGSL module as a string slice.
     Wgsl(Cow<'a, str>),
+    /// Naga module.
+    #[cfg(feature = "naga")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "naga")))]
+    Naga(naga::Module),
 }
 
 /// Descriptor for use with [`Device::create_shader_module`].

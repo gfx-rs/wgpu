@@ -1108,6 +1108,8 @@ impl crate::Context for Context {
                 wgc::pipeline::ShaderModuleSource::Naga(module)
             }
             ShaderSource::Wgsl(ref code) => wgc::pipeline::ShaderModuleSource::Wgsl(Borrowed(code)),
+            #[cfg(feature = "naga")]
+            ShaderSource::Naga(module) => wgc::pipeline::ShaderModuleSource::Naga(module),
         };
         let (id, error) = wgc::gfx_select!(
             device.id => global.device_create_shader_module(device.id, &descriptor, source, PhantomData)
