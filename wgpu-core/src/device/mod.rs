@@ -576,6 +576,14 @@ impl<A: HalApi> Device<A> {
         transient: bool,
     ) -> Result<resource::Buffer<A>, resource::CreateBufferError> {
         debug_assert_eq!(self_id.backend(), A::VARIANT);
+
+        if desc.size > self.limits.max_buffer_size {
+            return Err(resource::CreateBufferError::MaxBufferSize {
+                requested: desc.size,
+                maximum: self.limits.max_buffer_size,
+            });
+        }
+
         let mut usage = conv::map_buffer_usage(desc.usage);
 
         if desc.usage.is_empty() {

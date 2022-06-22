@@ -23,8 +23,8 @@ pub struct HalSurface<A: hal::Api> {
 #[error("Limit '{name}' value {requested} is better than allowed {allowed}")]
 pub struct FailedLimit {
     name: &'static str,
-    requested: u32,
-    allowed: u32,
+    requested: u64,
+    allowed: u64,
 }
 
 fn check_limits(requested: &wgt::Limits, allowed: &wgt::Limits) -> Vec<FailedLimit> {

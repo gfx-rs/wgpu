@@ -47,6 +47,7 @@ mod inner {
             max_uniform_buffers_per_shader_stage,
             max_uniform_buffer_binding_size,
             max_storage_buffer_binding_size,
+            max_buffer_size,
             max_vertex_buffers,
             max_vertex_attributes,
             max_vertex_buffer_array_stride,
@@ -75,6 +76,7 @@ mod inner {
         println!("\t\tMax Uniform Buffers Per Shader Stage:            {}", max_uniform_buffers_per_shader_stage);
         println!("\t\tMax Uniform Buffer Binding Size:                 {}", max_uniform_buffer_binding_size);
         println!("\t\tMax Storage Buffer Binding Size:                 {}", max_storage_buffer_binding_size);
+        println!("\t\tMax Buffer Size:                                 {}", max_buffer_size);
         println!("\t\tMax Vertex Buffers:                              {}", max_vertex_buffers);
         println!("\t\tMax Vertex Attributes:                           {}", max_vertex_attributes);
         println!("\t\tMax Vertex Buffer Array Stride:                  {}", max_vertex_buffer_array_stride);
