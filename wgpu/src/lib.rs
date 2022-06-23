@@ -3422,15 +3422,13 @@ impl Queue {
 
     /// Schedule a data write into `buffer` starting at `offset` via the returned [QueueWriteBufferView].
     ///
-    /// The returned value can be dereferenced to a `&mut [u8]`.
-    ///
-    /// Dropping the returned value fails if `size` is greater than the size of `buffer` starting at `offset`.
-    ///
-    /// Dereferencing the returned value to a `&[u8]` panics!
+    /// The returned value can be dereferenced to a `&mut [u8]`; dereferencing it to a `&[u8]` panics!
     ///
     /// This method is intended to have low performance costs.
     /// As such, the write is not immediately submitted, and instead enqueued
     /// internally to happen at the start of the next `submit()` call.
+    ///
+    /// This method fails if `size` is greater than the size of `buffer` starting at `offset`.
     #[must_use]
     pub fn write_buffer_with<'a>(
         &'a self,
