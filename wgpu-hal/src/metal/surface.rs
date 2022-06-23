@@ -173,7 +173,7 @@ impl crate::Surface<super::Api> for super::Surface {
         let display_sync = match config.present_mode {
             wgt::PresentMode::Fifo => true,
             wgt::PresentMode::Immediate => false,
-            _ => unreachable!("Unsupported present mode: {:?}", config.present_mode),
+            m => unreachable!("Unsupported present mode: {m:?}"),
         };
         let drawable_size = CGSize::new(config.extent.width as f64, config.extent.height as f64);
 

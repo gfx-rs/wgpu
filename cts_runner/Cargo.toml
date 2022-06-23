@@ -4,7 +4,7 @@ version = "0.1.0"
 authors = [
 	"Luca Casonato <hello@lcas.dev>",
 ]
-edition = "2018"
+edition = "2021"
 description = "CTS runner for wgpu"
 license = "MIT OR Apache-2.0"
 publish = false
