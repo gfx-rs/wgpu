@@ -772,6 +772,7 @@ impl crate::Queue<Api> for Queue {
             wgt::PresentMode::Immediate => (0, dxgi::DXGI_PRESENT_ALLOW_TEARING),
             wgt::PresentMode::Mailbox => (0, 0),
             wgt::PresentMode::Fifo => (1, 0),
+            m => unreachable!("Cannot make surface with present mode {m:?}"),
         };
 
         profiling::scope!("IDXGISwapchain3::Present");

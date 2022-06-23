@@ -1618,7 +1618,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
 
         let formats = raw_surface_formats
             .into_iter()
-            .map(|sf| self.private_caps.map_texture_format(sf.format))
+            .filter_map(conv::map_vk_surface_formats)
             .collect();
         Some(crate::SurfaceCapabilities {
             formats,
