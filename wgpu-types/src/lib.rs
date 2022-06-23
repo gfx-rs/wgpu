@@ -2926,7 +2926,7 @@ pub enum PresentMode {
     /// off the queue to display. If there is no frame to display, it will present the same
     /// frame again until the next vblank.
     ///
-    /// When a present command is executed on the gpu, the presented  image is added on the queue.
+    /// When a present command is executed on the gpu, the presented image is added on the queue.
     ///
     /// No tearing will be observed.
     ///
