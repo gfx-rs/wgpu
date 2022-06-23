@@ -425,7 +425,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
             }
         };
 
-        let mut present_modes = vec![wgt::PresentMode::Fifo];
+        let mut present_modes = vec![wgt::PresentMode::Mailbox, wgt::PresentMode::Fifo];
         #[allow(trivial_casts)]
         if let Some(factory5) = surface.factory.as_factory5() {
             let mut allow_tearing: minwindef::BOOL = minwindef::FALSE;

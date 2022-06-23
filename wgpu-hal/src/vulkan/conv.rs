@@ -405,7 +405,10 @@ pub fn map_present_mode(mode: wgt::PresentMode) -> vk::PresentModeKHR {
         wgt::PresentMode::Immediate => vk::PresentModeKHR::IMMEDIATE,
         wgt::PresentMode::Mailbox => vk::PresentModeKHR::MAILBOX,
         wgt::PresentMode::Fifo => vk::PresentModeKHR::FIFO,
-        //wgt::PresentMode::Relaxed => vk::PresentModeKHR::FIFO_RELAXED,
+        wgt::PresentMode::FifoRelaxed => vk::PresentModeKHR::FIFO_RELAXED,
+        wgt::PresentMode::AutoNoVsync | wgt::PresentMode::AutoVsync => {
+            unreachable!("Cannot create swapchain with Auto PresentationMode")
+        }
     }
 }
 

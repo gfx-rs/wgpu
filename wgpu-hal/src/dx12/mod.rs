@@ -770,8 +770,8 @@ impl crate::Queue<Api> for Queue {
 
         let (interval, flags) = match sc.present_mode {
             wgt::PresentMode::Immediate => (0, dxgi::DXGI_PRESENT_ALLOW_TEARING),
+            wgt::PresentMode::Mailbox => (0, 0),
             wgt::PresentMode::Fifo => (1, 0),
-            wgt::PresentMode::Mailbox => (1, 0),
         };
 
         profiling::scope!("IDXGISwapchain3::Present");
