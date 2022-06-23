@@ -143,7 +143,7 @@ impl crate::ComputePassInner<Context> for ComputePass {
     }
 
     fn write_timestamp(&mut self, _query_set: &(), _query_index: u32) {
-        // Not available in gecko yet
+        panic!("WRITE_TIMESTAMP_INSIDE_PASSES feature must be enabled to call write_timestamp in a compute pass")
     }
 
     fn begin_pipeline_statistics_query(&mut self, _query_set: &(), _query_index: u32) {
@@ -493,7 +493,7 @@ impl crate::RenderPassInner<Context> for RenderPass {
     }
 
     fn write_timestamp(&mut self, _query_set: &(), _query_index: u32) {
-        // Not available in gecko yet
+        panic!("WRITE_TIMESTAMP_INSIDE_PASSES feature must be enabled to call write_timestamp in a compute pass")
     }
 
     fn begin_pipeline_statistics_query(&mut self, _query_set: &(), _query_index: u32) {

@@ -606,11 +606,29 @@ bitflags::bitflags! {
         ///
         /// This is a native only feature.
         const ADDRESS_MODE_CLAMP_TO_ZERO = Self::TEXTURE_FORMAT_16BIT_NORM.bits << 1;
+        /// Enables ASTC HDR family of compressed textures.
+        ///
+        /// Compressed textures sacrifice some quality in exchange for significantly reduced
+        /// bandwidth usage.
+        ///
+        /// Support for this feature guarantees availability of [`TextureUsages::COPY_SRC | TextureUsages::COPY_DST | TextureUsages::TEXTURE_BINDING`] for BCn formats.
+        /// [`Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES`] may enable additional usages.
+        ///
         /// Supported Platforms:
         /// - Metal
         ///
         /// This is a native-only feature.
         const TEXTURE_COMPRESSION_ASTC_HDR = Self::ADDRESS_MODE_CLAMP_TO_ZERO.bits << 1;
+        /// Allows for timestamp queries inside renderpasses. Metal does not allow this
+        /// on Apple GPUs.
+        ///
+        /// Implies [`Features::TIMESTAMP_QUERIES`] is supported.
+        ///
+        /// Supported platforms:
+        /// - Vulkan
+        /// - DX12
+        /// - Metal (Intel and AMD GPUs)
+        const WRITE_TIMESTAMP_INSIDE_PASSES = Self::TEXTURE_COMPRESSION_ASTC_HDR.bits << 1;
     }
 }
 

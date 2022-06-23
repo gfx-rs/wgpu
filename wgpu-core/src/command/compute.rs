@@ -9,7 +9,7 @@ use crate::{
         BasePass, BasePassRef, BindGroupStateChange, CommandBuffer, CommandEncoderError,
         CommandEncoderStatus, MapPassErr, PassErrorScope, QueryUseError, StateChange,
     },
-    device::MissingDownlevelFlags,
+    device::{MissingDownlevelFlags, MissingFeatures},
     error::{ErrorFormatter, PrettyError},
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Storage, Token},
     id,
@@ -191,6 +191,8 @@ pub enum ComputePassErrorInner {
     PushConstants(#[from] PushConstantUploadError),
     #[error(transparent)]
     QueryUse(#[from] QueryUseError),
+    #[error(transparent)]
+    MissingFeatures(#[from] MissingFeatures),
     #[error(transparent)]
     MissingDownlevelFlags(#[from] MissingDownlevelFlags),
 }
@@ -697,6 +699,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     query_index,
                 } => {
                     let scope = PassErrorScope::WriteTimestamp;
+
+                    device
+                        .require_features(wgt::Features::WRITE_TIMESTAMP_INSIDE_PASSES)
+                        .map_pass_err(scope)?;
 
                     let query_set: &resource::QuerySet<A> = cmd_buf
                         .trackers
