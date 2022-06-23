@@ -155,7 +155,7 @@ impl Surface {
     pub fn get_supported_formats<A: HalApi>(
         &self,
         adapter: &Adapter<A>,
-    ) -> Result<Vec<wgt::TextureFormat>, GetSurfacePreferredFormatError> {
+    ) -> Result<Vec<wgt::TextureFormat>, GetSurfaceSupportError> {
         let suf = A::get_surface(self);
         let mut caps = unsafe {
             profiling::scope!("surface_capabilities");
@@ -163,13 +163,30 @@ impl Surface {
                 .raw
                 .adapter
                 .surface_capabilities(&suf.raw)
-                .ok_or(GetSurfacePreferredFormatError::UnsupportedQueueFamily)?
+                .ok_or(GetSurfaceSupportError::UnsupportedQueueFamily)?
         };
 
         // TODO: maybe remove once we support texture view changing srgb-ness
         caps.formats.sort_by_key(|f| !f.describe().srgb);
 
         Ok(caps.formats)
+    }
+
+    pub fn get_supported_modes<A: HalApi>(
+        &self,
+        adapter: &Adapter<A>,
+    ) -> Result<Vec<wgt::PresentMode>, GetSurfaceSupportError> {
+        let suf = A::get_surface(self);
+        let caps = unsafe {
+            profiling::scope!("surface_capabilities");
+            adapter
+                .raw
+                .adapter
+                .surface_capabilities(&suf.raw)
+                .ok_or(GetSurfaceSupportError::UnsupportedQueueFamily)?
+        };
+
+        Ok(caps.present_modes)
     }
 }
 
@@ -341,7 +358,7 @@ pub enum IsSurfaceSupportedError {
 }
 
 #[derive(Clone, Debug, Error)]
-pub enum GetSurfacePreferredFormatError {
+pub enum GetSurfaceSupportError {
     #[error("invalid adapter")]
     InvalidAdapter,
     #[error("invalid surface")]

@@ -75,6 +75,11 @@ pub enum ConfigureSurfaceError {
         requested: wgt::TextureFormat,
         available: Vec<wgt::TextureFormat>,
     },
+    #[error("requested present mode {requested:?} is not in the list of supported present modes: {available:?}")]
+    UnsupportedPresentMode {
+        requested: wgt::PresentMode,
+        available: Vec<wgt::PresentMode>,
+    },
     #[error("requested usage is not supported")]
     UnsupportedUsage,
 }
