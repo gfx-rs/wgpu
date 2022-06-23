@@ -105,7 +105,7 @@ fn pulling_common(
 ) {
     let shader = ctx
         .device
-        .create_shader_module(&wgpu::include_wgsl!("primitive_index.wgsl"));
+        .create_shader_module(wgpu::include_wgsl!("primitive_index.wgsl"));
 
     let two_triangles_xy: [f32; 12] = [
         -1.0, -1.0, 0.0, -1.0, -0.5, 0.0, // left triangle, negative x, negative y

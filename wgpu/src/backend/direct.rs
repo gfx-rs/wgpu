@@ -1070,7 +1070,7 @@ impl crate::Context for Context {
     fn device_create_shader_module(
         &self,
         device: &Self::DeviceId,
-        desc: &ShaderModuleDescriptor,
+        desc: ShaderModuleDescriptor,
         shader_bound_checks: wgt::ShaderBoundChecks,
     ) -> Self::ShaderModuleId {
         let global = &self.0;
