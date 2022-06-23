@@ -1616,22 +1616,9 @@ impl crate::Adapter<super::Api> for super::Adapter {
             }
         };
 
-        let supported_formats = [
-            wgt::TextureFormat::Rgba8Unorm,
-            wgt::TextureFormat::Rgba8UnormSrgb,
-            wgt::TextureFormat::Bgra8Unorm,
-            wgt::TextureFormat::Bgra8UnormSrgb,
-            wgt::TextureFormat::Rgba16Float,
-        ];
-        let formats = supported_formats
-            .iter()
-            .cloned()
-            .filter(|&format| {
-                let vk_format = self.private_caps.map_texture_format(format);
-                raw_surface_formats
-                    .iter()
-                    .any(|sf| sf.format == vk_format || sf.format == vk::Format::UNDEFINED)
-            })
+        let formats = raw_surface_formats
+            .into_iter()
+            .map(|sf| self.private_caps.map_texture_format(sf.format))
             .collect();
         Some(crate::SurfaceCapabilities {
             formats,

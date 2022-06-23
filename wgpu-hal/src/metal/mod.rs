@@ -180,6 +180,7 @@ struct PrivateCapabilities {
     format_rgba8_srgb_no_write: bool,
     format_rgb10a2_unorm_all: bool,
     format_rgb10a2_unorm_no_write: bool,
+    format_rgb10a2_unorm_surface: bool,
     format_rgb10a2_uint_color: bool,
     format_rgb10a2_uint_color_write: bool,
     format_rg11b10_all: bool,
