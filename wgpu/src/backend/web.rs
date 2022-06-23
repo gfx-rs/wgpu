@@ -1209,7 +1209,7 @@ impl crate::Context for Context {
     fn device_create_shader_module(
         &self,
         device: &Self::DeviceId,
-        desc: &crate::ShaderModuleDescriptor,
+        desc: crate::ShaderModuleDescriptor,
         _shader_bound_checks: wgt::ShaderBoundChecks,
     ) -> Self::ShaderModuleId {
         let mut descriptor = match desc.source {

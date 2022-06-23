@@ -257,7 +257,7 @@ trait Context: Debug + Send + Sized + Sync {
     fn device_create_shader_module(
         &self,
         device: &Self::DeviceId,
-        desc: &ShaderModuleDescriptor,
+        desc: ShaderModuleDescriptor,
         shader_bound_checks: wgt::ShaderBoundChecks,
     ) -> Self::ShaderModuleId;
     unsafe fn device_create_shader_module_spirv(
@@ -1954,7 +1954,7 @@ impl Device {
     }
 
     /// Creates a shader module from either SPIR-V or WGSL source code.
-    pub fn create_shader_module(&self, desc: &ShaderModuleDescriptor) -> ShaderModule {
+    pub fn create_shader_module(&self, desc: ShaderModuleDescriptor) -> ShaderModule {
         ShaderModule {
             context: Arc::clone(&self.context),
             id: Context::device_create_shader_module(
@@ -1978,7 +1978,7 @@ impl Device {
     /// This has no effect on web.
     pub unsafe fn create_shader_module_unchecked(
         &self,
-        desc: &ShaderModuleDescriptor,
+        desc: ShaderModuleDescriptor,
     ) -> ShaderModule {
         ShaderModule {
             context: Arc::clone(&self.context),

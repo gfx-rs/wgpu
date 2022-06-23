@@ -494,11 +494,11 @@ impl framework::Example for Example {
         });
 
         // Upload/compile them to GPU code.
-        let terrain_module = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
+        let terrain_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("terrain"),
             source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("terrain.wgsl"))),
         });
-        let water_module = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
+        let water_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("water"),
             source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("water.wgsl"))),
         });

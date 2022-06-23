@@ -69,7 +69,7 @@ async fn execute_gpu_inner(
     numbers: &[u32],
 ) -> Option<Vec<u32>> {
     // Loads the shader from WGSL
-    let cs_module = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
+    let cs_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: None,
         source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
     });

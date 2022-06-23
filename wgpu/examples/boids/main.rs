@@ -46,11 +46,11 @@ impl framework::Example for Example {
         device: &wgpu::Device,
         _queue: &wgpu::Queue,
     ) -> Self {
-        let compute_shader = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
+        let compute_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
             source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("compute.wgsl"))),
         });
-        let draw_shader = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
+        let draw_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
             source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("draw.wgsl"))),
         });
