@@ -2175,6 +2175,16 @@ impl crate::Context for Context {
             );
     }
 
+    fn queue_validate_write_buffer(
+        &self,
+        _queue: &Self::QueueId,
+        _buffer: &Self::BufferId,
+        _offset: wgt::BufferAddress,
+        _size: wgt::BufferSize,
+    ) {
+        // TODO
+    }
+
     fn queue_create_staging_buffer(
         &self,
         _queue: &Self::QueueId,

@@ -2180,6 +2180,22 @@ impl crate::Context for Context {
         }
     }
 
+    fn queue_validate_write_buffer(
+        &self,
+        queue: &Self::QueueId,
+        buffer: &Self::BufferId,
+        offset: wgt::BufferAddress,
+        size: wgt::BufferSize,
+    ) {
+        let global = &self.0;
+        match wgc::gfx_select!(
+            *queue => global.queue_validate_write_buffer(*queue, buffer.id, offset, size.get())
+        ) {
+            Ok(()) => (),
+            Err(err) => self.handle_error_fatal(err, "Queue::write_buffer_with"),
+        }
+    }
+
     fn queue_create_staging_buffer(
         &self,
         queue: &Self::QueueId,

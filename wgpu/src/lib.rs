@@ -481,6 +481,13 @@ trait Context: Debug + Send + Sized + Sync {
         offset: BufferAddress,
         data: &[u8],
     );
+    fn queue_validate_write_buffer(
+        &self,
+        queue: &Self::QueueId,
+        buffer: &Self::BufferId,
+        offset: wgt::BufferAddress,
+        size: wgt::BufferSize,
+    );
     fn queue_create_staging_buffer(
         &self,
         queue: &Self::QueueId,
@@ -3431,6 +3438,7 @@ impl Queue {
         offset: BufferAddress,
         size: BufferSize,
     ) -> QueueWriteBufferView<'a> {
+        Context::queue_validate_write_buffer(&*self.context, &self.id, &buffer.id, offset, size);
         let staging_buffer = Context::queue_create_staging_buffer(&*self.context, &self.id, size);
         QueueWriteBufferView {
             queue: self,

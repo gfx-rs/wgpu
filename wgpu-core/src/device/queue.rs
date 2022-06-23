@@ -298,12 +298,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("write_buffer", "Queue");
 
         let hub = A::hub(self);
-        let mut token = Token::root();
-        let (mut device_guard, mut token) = hub.devices.write(&mut token);
+        let root_token = &mut Token::root();
+
+        let (mut device_guard, ref mut device_token) = hub.devices.write(root_token);
         let device = device_guard
             .get_mut(queue_id)
             .map_err(|_| DeviceError::Invalid)?;
-        let (buffer_guard, _) = hub.buffers.read(&mut token);
 
         let data_size = data.len() as wgt::BufferAddress;
 
@@ -332,37 +332,153 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             staging_buffer.flush(&device.raw)?;
         };
 
+        self.queue_write_staging_buffer_impl(
+            device,
+            device_token,
+            staging_buffer,
+            buffer_id,
+            buffer_offset,
+        )
+    }
+
+    pub fn queue_create_staging_buffer<A: HalApi>(
+        &self,
+        queue_id: id::QueueId,
+        buffer_size: wgt::BufferSize,
+        id_in: Input<G, id::StagingBufferId>,
+    ) -> Result<(id::StagingBufferId, *mut u8), QueueWriteError> {
+        let hub = A::hub(self);
+        let root_token = &mut Token::root();
+
+        let (mut device_guard, ref mut device_token) = hub.devices.write(root_token);
+        let device = device_guard
+            .get_mut(queue_id)
+            .map_err(|_| DeviceError::Invalid)?;
+
+        let (staging_buffer, staging_buffer_ptr) =
+            device.prepare_staging_buffer(buffer_size.get())?;
+
+        let fid = hub.staging_buffers.prepare(id_in);
+        let id = fid.assign(staging_buffer, device_token);
+
+        Ok((id.0, staging_buffer_ptr))
+    }
+
+    pub fn queue_write_staging_buffer<A: HalApi>(
+        &self,
+        queue_id: id::QueueId,
+        buffer_id: id::BufferId,
+        buffer_offset: wgt::BufferAddress,
+        staging_buffer_id: id::StagingBufferId,
+    ) -> Result<(), QueueWriteError> {
+        profiling::scope!("write_buffer_with", "Queue");
+
+        let hub = A::hub(self);
+        let root_token = &mut Token::root();
+
+        let (mut device_guard, ref mut device_token) = hub.devices.write(root_token);
+        let device = device_guard
+            .get_mut(queue_id)
+            .map_err(|_| DeviceError::Invalid)?;
+
+        let staging_buffer = hub
+            .staging_buffers
+            .unregister(staging_buffer_id, device_token)
+            .0
+            .ok_or(TransferError::InvalidBuffer(buffer_id))?;
+
+        unsafe { staging_buffer.flush(&device.raw)? };
+
+        self.queue_write_staging_buffer_impl(
+            device,
+            device_token,
+            staging_buffer,
+            buffer_id,
+            buffer_offset,
+        )
+    }
+
+    pub fn queue_validate_write_buffer<A: HalApi>(
+        &self,
+        _queue_id: id::QueueId,
+        buffer_id: id::BufferId,
+        buffer_offset: u64,
+        buffer_size: u64,
+    ) -> Result<(), QueueWriteError> {
+        let hub = A::hub(self);
+        let root_token = &mut Token::root();
+
+        let (_, ref mut device_token) = hub.devices.read(root_token);
+
+        let buffer_guard = hub.buffers.read(device_token).0;
+        let buffer = buffer_guard
+            .get(buffer_id)
+            .map_err(|_| TransferError::InvalidBuffer(buffer_id))?;
+
+        self.queue_validate_write_buffer_impl(buffer, buffer_id, buffer_offset, buffer_size)?;
+
+        Ok(())
+    }
+
+    fn queue_validate_write_buffer_impl<A: HalApi>(
+        &self,
+        buffer: &super::resource::Buffer<A>,
+        buffer_id: id::BufferId,
+        buffer_offset: u64,
+        buffer_size: u64,
+    ) -> Result<(), TransferError> {
+        if !buffer.usage.contains(wgt::BufferUsages::COPY_DST) {
+            return Err(TransferError::MissingCopyDstUsageFlag(
+                Some(buffer_id),
+                None,
+            ));
+        }
+        if buffer_size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
+            return Err(TransferError::UnalignedCopySize(buffer_size));
+        }
+        if buffer_offset % wgt::COPY_BUFFER_ALIGNMENT != 0 {
+            return Err(TransferError::UnalignedBufferOffset(buffer_offset));
+        }
+        if buffer_offset + buffer_size > buffer.size {
+            return Err(TransferError::BufferOverrun {
+                start_offset: buffer_offset,
+                end_offset: buffer_offset + buffer_size,
+                buffer_size: buffer.size,
+                side: CopySide::Destination,
+            });
+        }
+
+        Ok(())
+    }
+
+    fn queue_write_staging_buffer_impl<A: HalApi>(
+        &self,
+        device: &mut super::Device<A>,
+        device_token: &mut Token<super::Device<A>>,
+        staging_buffer: StagingBuffer<A>,
+        buffer_id: id::BufferId,
+        buffer_offset: u64,
+    ) -> Result<(), QueueWriteError> {
+        let hub = A::hub(self);
+
+        let buffer_guard = hub.buffers.read(device_token).0;
+
         let mut trackers = device.trackers.lock();
         let (dst, transition) = trackers
             .buffers
-            .set_single(&*buffer_guard, buffer_id, hal::BufferUses::COPY_DST)
+            .set_single(&buffer_guard, buffer_id, hal::BufferUses::COPY_DST)
             .ok_or(TransferError::InvalidBuffer(buffer_id))?;
         let dst_raw = dst
             .raw
             .as_ref()
             .ok_or(TransferError::InvalidBuffer(buffer_id))?;
-        if !dst.usage.contains(wgt::BufferUsages::COPY_DST) {
-            return Err(TransferError::MissingCopyDstUsageFlag(Some(buffer_id), None).into());
-        }
+
+        let src_buffer_size = staging_buffer.size;
+        self.queue_validate_write_buffer_impl(dst, buffer_id, buffer_offset, src_buffer_size)?;
+
         dst.life_guard.use_at(device.active_submission_index + 1);
 
-        if data_size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
-            return Err(TransferError::UnalignedCopySize(data_size).into());
-        }
-        if buffer_offset % wgt::COPY_BUFFER_ALIGNMENT != 0 {
-            return Err(TransferError::UnalignedBufferOffset(buffer_offset).into());
-        }
-        if buffer_offset + data_size > dst.size {
-            return Err(TransferError::BufferOverrun {
-                start_offset: buffer_offset,
-                end_offset: buffer_offset + data_size,
-                buffer_size: dst.size,
-                side: CopySide::Destination,
-            }
-            .into());
-        }
-
-        let region = wgt::BufferSize::new(data_size).map(|size| hal::BufferCopy {
+        let region = wgt::BufferSize::new(src_buffer_size).map(|size| hal::BufferCopy {
             src_offset: 0,
             dst_offset: buffer_offset,
             size,
@@ -384,120 +500,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         // Ensure the overwritten bytes are marked as initialized so they don't need to be nulled prior to mapping or binding.
         {
             drop(buffer_guard);
-            let (mut buffer_guard, _) = hub.buffers.write(&mut token);
+            let mut buffer_guard = hub.buffers.write(device_token).0;
 
             let dst = buffer_guard.get_mut(buffer_id).unwrap();
             dst.initialization_status
-                .drain(buffer_offset..(buffer_offset + data_size));
-        }
-
-        Ok(())
-    }
-
-    pub fn queue_create_staging_buffer<A: HalApi>(
-        &self,
-        queue_id: id::QueueId,
-        buffer_size: wgt::BufferSize,
-        id_in: Input<G, id::StagingBufferId>,
-    ) -> Result<(id::StagingBufferId, *mut u8), QueueWriteError> {
-        let hub = A::hub(self);
-        let mut token = Token::root();
-        let fid = hub.staging_buffers.prepare(id_in);
-        let (mut device_guard, mut token) = hub.devices.write(&mut token);
-        let device = device_guard
-            .get_mut(queue_id)
-            .map_err(|_| DeviceError::Invalid)?;
-
-        let data_size = buffer_size.get();
-
-        let (staging_buffer, staging_buffer_ptr) = device.prepare_staging_buffer(data_size)?;
-
-        let id = fid.assign(staging_buffer, &mut token);
-        Ok((id.0, staging_buffer_ptr))
-    }
-
-    pub fn queue_write_staging_buffer<A: HalApi>(
-        &self,
-        queue_id: id::QueueId,
-        buffer_id: id::BufferId,
-        buffer_offset: wgt::BufferAddress,
-        staging_buffer: id::StagingBufferId,
-    ) -> Result<(), QueueWriteError> {
-        profiling::scope!("write_buffer_with", "Queue");
-
-        let hub = A::hub(self);
-        let mut token = Token::root();
-        let (mut device_guard, mut token) = hub.devices.write(&mut token);
-        let device = device_guard
-            .get_mut(queue_id)
-            .map_err(|_| DeviceError::Invalid)?;
-
-        let (src_buffer, _) = hub.staging_buffers.unregister(staging_buffer, &mut token);
-        let src_buffer = src_buffer.ok_or(TransferError::InvalidBuffer(buffer_id))?;
-
-        let data_size = src_buffer.size;
-
-        unsafe { src_buffer.flush(&device.raw)? };
-
-        let (buffer_guard, _) = hub.buffers.read(&mut token);
-
-        let mut trackers = device.trackers.lock();
-        let (dst, transition) = trackers
-            .buffers
-            .set_single(&*buffer_guard, buffer_id, hal::BufferUses::COPY_DST)
-            .ok_or(TransferError::InvalidBuffer(buffer_id))?;
-        let dst_raw = dst
-            .raw
-            .as_ref()
-            .ok_or(TransferError::InvalidBuffer(buffer_id))?;
-        if !dst.usage.contains(wgt::BufferUsages::COPY_DST) {
-            return Err(TransferError::MissingCopyDstUsageFlag(Some(buffer_id), None).into());
-        }
-        dst.life_guard.use_at(device.active_submission_index + 1);
-
-        if data_size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
-            return Err(TransferError::UnalignedCopySize(data_size).into());
-        }
-        if buffer_offset % wgt::COPY_BUFFER_ALIGNMENT != 0 {
-            return Err(TransferError::UnalignedBufferOffset(buffer_offset).into());
-        }
-        if buffer_offset + data_size > dst.size {
-            return Err(TransferError::BufferOverrun {
-                start_offset: buffer_offset,
-                end_offset: buffer_offset + data_size,
-                buffer_size: dst.size,
-                side: CopySide::Destination,
-            }
-            .into());
-        }
-
-        let region = wgt::BufferSize::new(data_size).map(|size| hal::BufferCopy {
-            src_offset: 0,
-            dst_offset: buffer_offset,
-            size,
-        });
-        let barriers = iter::once(hal::BufferBarrier {
-            buffer: &src_buffer.raw,
-            usage: hal::BufferUses::MAP_WRITE..hal::BufferUses::COPY_SRC,
-        })
-        .chain(transition.map(|pending| pending.into_hal(dst)));
-        let encoder = device.pending_writes.activate();
-        unsafe {
-            encoder.transition_buffers(barriers);
-            encoder.copy_buffer_to_buffer(&src_buffer.raw, dst_raw, region.into_iter());
-        }
-
-        device.pending_writes.consume(src_buffer);
-        device.pending_writes.dst_buffers.insert(buffer_id);
-
-        // Ensure the overwritten bytes are marked as initialized so they don't need to be nulled prior to mapping or binding.
-        {
-            drop(buffer_guard);
-            let (mut buffer_guard, _) = hub.buffers.write(&mut token);
-
-            let dst = buffer_guard.get_mut(buffer_id).unwrap();
-            dst.initialization_status
-                .drain(buffer_offset..(buffer_offset + data_size));
+                .drain(buffer_offset..(buffer_offset + src_buffer_size));
         }
 
         Ok(())
