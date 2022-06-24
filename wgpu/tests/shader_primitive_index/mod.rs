@@ -152,11 +152,11 @@ fn pulling_common(
             fragment: Some(wgpu::FragmentState {
                 entry_point: "fs_main",
                 module: &shader,
-                targets: &[wgpu::ColorTargetState {
+                targets: &[Some(wgpu::ColorTargetState {
                     format: wgpu::TextureFormat::Rgba8Unorm,
                     blend: None,
                     write_mask: wgpu::ColorWrites::ALL,
-                }],
+                })],
             }),
             multiview: None,
         });
@@ -184,14 +184,14 @@ fn pulling_common(
         .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
 
     let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-        color_attachments: &[wgpu::RenderPassColorAttachment {
+        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
             ops: wgpu::Operations {
                 load: wgpu::LoadOp::Clear(wgpu::Color::WHITE),
                 store: true,
             },
             resolve_target: None,
             view: &color_view,
-        }],
+        })],
         depth_stencil_attachment: None,
         label: None,
     });

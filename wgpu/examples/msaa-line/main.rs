@@ -60,7 +60,7 @@ impl Example {
             fragment: Some(wgpu::FragmentState {
                 module: shader,
                 entry_point: "fs_main",
-                targets: &[config.format.into()],
+                targets: &[Some(config.format.into())],
             }),
             primitive: wgpu::PrimitiveState {
                 topology: wgpu::PrimitiveTopology::LineList,
@@ -77,7 +77,7 @@ impl Example {
         let mut encoder =
             device.create_render_bundle_encoder(&wgpu::RenderBundleEncoderDescriptor {
                 label: None,
-                color_formats: &[config.format],
+                color_formats: &[Some(config.format)],
                 depth_stencil: None,
                 sample_count,
                 multiview: None,
@@ -275,7 +275,7 @@ impl framework::Example for Example {
             encoder
                 .begin_render_pass(&wgpu::RenderPassDescriptor {
                     label: None,
-                    color_attachments: &[rpass_color_attachment],
+                    color_attachments: &[Some(rpass_color_attachment)],
                     depth_stencil_attachment: None,
                 })
                 .execute_bundles(iter::once(&self.bundle));

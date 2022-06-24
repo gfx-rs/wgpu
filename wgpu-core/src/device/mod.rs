@@ -20,7 +20,7 @@ use hal::{CommandEncoder as _, Device as _};
 use parking_lot::{Mutex, MutexGuard};
 use smallvec::SmallVec;
 use thiserror::Error;
-use wgt::{BufferAddress, TextureFormat, TextureViewDimension};
+use wgt::{BufferAddress, ColorTargetState, TextureFormat, TextureViewDimension};
 
 use std::{borrow::Cow, iter, mem, num::NonZeroU32, ops::Range, ptr};
 
@@ -52,7 +52,7 @@ pub enum HostMap {
 #[derive(Clone, Debug, Hash, PartialEq)]
 #[cfg_attr(feature = "serial-pass", derive(serde::Deserialize, serde::Serialize))]
 pub(crate) struct AttachmentData<T> {
-    pub colors: ArrayVec<T, { hal::MAX_COLOR_ATTACHMENTS }>,
+    pub colors: ArrayVec<Option<T>, { hal::MAX_COLOR_ATTACHMENTS }>,
     pub resolves: ArrayVec<T, { hal::MAX_COLOR_ATTACHMENTS }>,
     pub depth_stencil: Option<T>,
 }
@@ -60,7 +60,7 @@ impl<T: PartialEq> Eq for AttachmentData<T> {}
 impl<T> AttachmentData<T> {
     pub(crate) fn map<U, F: Fn(&T) -> U>(&self, fun: F) -> AttachmentData<U> {
         AttachmentData {
-            colors: self.colors.iter().map(&fun).collect(),
+            colors: self.colors.iter().map(|c| c.as_ref().map(&fun)).collect(),
             resolves: self.resolves.iter().map(&fun).collect(),
             depth_stencil: self.depth_stencil.as_ref().map(&fun),
         }
@@ -78,8 +78,8 @@ pub(crate) struct RenderPassContext {
 pub enum RenderPassCompatibilityError {
     #[error("Incompatible color attachment: the renderpass expected {0:?} but was given {1:?}")]
     IncompatibleColorAttachment(
-        ArrayVec<TextureFormat, { hal::MAX_COLOR_ATTACHMENTS }>,
-        ArrayVec<TextureFormat, { hal::MAX_COLOR_ATTACHMENTS }>,
+        ArrayVec<Option<TextureFormat>, { hal::MAX_COLOR_ATTACHMENTS }>,
+        ArrayVec<Option<TextureFormat>, { hal::MAX_COLOR_ATTACHMENTS }>,
     ),
     #[error(
         "Incompatible depth-stencil attachment: the renderpass expected {0:?} but was given {1:?}"
@@ -2465,9 +2465,11 @@ impl<A: HalApi> Device<A> {
             .map_or(&[][..], |fragment| &fragment.targets);
         let depth_stencil_state = desc.depth_stencil.as_ref();
 
-        if !color_targets.is_empty() && {
-            let first = &color_targets[0];
-            color_targets[1..]
+        let cts: ArrayVec<&ColorTargetState, { hal::MAX_COLOR_ATTACHMENTS }> =
+            color_targets.iter().filter_map(|x| x.as_ref()).collect();
+        if !cts.is_empty() && {
+            let first = &cts[0];
+            cts[1..]
                 .iter()
                 .any(|ct| ct.write_mask != first.write_mask || ct.blend != first.blend)
         } {
@@ -2580,29 +2582,32 @@ impl<A: HalApi> Device<A> {
         }
 
         for (i, cs) in color_targets.iter().enumerate() {
-            let error = loop {
-                let format_features = self.describe_format_features(adapter, cs.format)?;
-                if !format_features
-                    .allowed_usages
-                    .contains(wgt::TextureUsages::RENDER_ATTACHMENT)
-                {
-                    break Some(pipeline::ColorStateError::FormatNotRenderable(cs.format));
-                }
-                if cs.blend.is_some() && !format_features.flags.contains(Tfff::FILTERABLE) {
-                    break Some(pipeline::ColorStateError::FormatNotBlendable(cs.format));
-                }
-                if !hal::FormatAspects::from(cs.format).contains(hal::FormatAspects::COLOR) {
-                    break Some(pipeline::ColorStateError::FormatNotColor(cs.format));
-                }
-                if desc.multisample.count > 1 && !format_features.flags.contains(Tfff::MULTISAMPLE)
-                {
-                    break Some(pipeline::ColorStateError::FormatNotMultisampled(cs.format));
-                }
+            if let Some(cs) = cs.as_ref() {
+                let error = loop {
+                    let format_features = self.describe_format_features(adapter, cs.format)?;
+                    if !format_features
+                        .allowed_usages
+                        .contains(wgt::TextureUsages::RENDER_ATTACHMENT)
+                    {
+                        break Some(pipeline::ColorStateError::FormatNotRenderable(cs.format));
+                    }
+                    if cs.blend.is_some() && !format_features.flags.contains(Tfff::FILTERABLE) {
+                        break Some(pipeline::ColorStateError::FormatNotBlendable(cs.format));
+                    }
+                    if !hal::FormatAspects::from(cs.format).contains(hal::FormatAspects::COLOR) {
+                        break Some(pipeline::ColorStateError::FormatNotColor(cs.format));
+                    }
+                    if desc.multisample.count > 1
+                        && !format_features.flags.contains(Tfff::MULTISAMPLE)
+                    {
+                        break Some(pipeline::ColorStateError::FormatNotMultisampled(cs.format));
+                    }
 
-                break None;
-            };
-            if let Some(e) = error {
-                return Err(pipeline::CreateRenderPipelineError::ColorState(i as u8, e));
+                    break None;
+                };
+                if let Some(e) = error {
+                    return Err(pipeline::CreateRenderPipelineError::ColorState(i as u8, e));
+                }
             }
         }
 
@@ -2754,13 +2759,22 @@ impl<A: HalApi> Device<A> {
         };
 
         if validated_stages.contains(wgt::ShaderStages::FRAGMENT) {
-            for (i, state) in color_targets.iter().enumerate() {
-                match io.get(&(i as wgt::ShaderLocation)) {
-                    Some(output) => {
-                        validation::check_texture_format(state.format, &output.ty).map_err(
+            for (i, output) in io.iter() {
+                match color_targets.get(*i as usize) {
+                    Some(state) => {
+                        let format = if let Some(st) = state.as_ref() {
+                            st.format
+                        } else {
+                            return Err(
+                                pipeline::CreateRenderPipelineError::InvalidFragmentOutputLocation(
+                                    *i,
+                                ),
+                            );
+                        };
+                        validation::check_texture_format(format, &output.ty).map_err(
                             |pipeline| {
                                 pipeline::CreateRenderPipelineError::ColorState(
-                                    i as u8,
+                                    *i as u8,
                                     pipeline::ColorStateError::IncompatibleFormat {
                                         pipeline,
                                         shader: output.ty,
@@ -2769,14 +2783,7 @@ impl<A: HalApi> Device<A> {
                             },
                         )?;
                     }
-                    None if state.write_mask.is_empty() => {}
-                    None => {
-                        log::warn!("Missing fragment output[{}], expected {:?}", i, state,);
-                        return Err(pipeline::CreateRenderPipelineError::ColorState(
-                            i as u8,
-                            pipeline::ColorStateError::Missing,
-                        ));
-                    }
+                    None => (),
                 }
             }
         }
@@ -2850,7 +2857,10 @@ impl<A: HalApi> Device<A> {
 
         let pass_context = RenderPassContext {
             attachments: AttachmentData {
-                colors: color_targets.iter().map(|state| state.format).collect(),
+                colors: color_targets
+                    .iter()
+                    .map(|state| state.as_ref().map(|s| s.format))
+                    .collect(),
                 resolves: ArrayVec::new(),
                 depth_stencil: depth_stencil_state.as_ref().map(|state| state.format),
             },
@@ -2859,7 +2869,7 @@ impl<A: HalApi> Device<A> {
         };
 
         let mut flags = pipeline::PipelineFlags::empty();
-        for state in color_targets.iter() {
+        for state in color_targets.iter().filter_map(|s| s.as_ref()) {
             if let Some(ref bs) = state.blend {
                 if bs.color.uses_constant() | bs.alpha.uses_constant() {
                     flags |= pipeline::PipelineFlags::BLEND_CONSTANT;

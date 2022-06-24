@@ -841,6 +841,12 @@ impl crate::Device<super::Api> for super::Device {
 
         for (i, ct) in desc.color_targets.iter().enumerate() {
             let at_descriptor = descriptor.color_attachments().object_at(i as u64).unwrap();
+            let ct = if let Some(color_target) = ct.as_ref() {
+                color_target
+            } else {
+                at_descriptor.set_pixel_format(mtl::MTLPixelFormat::Invalid);
+                continue;
+            };
 
             let raw_format = self.shared.private_caps.map_format(ct.format);
             at_descriptor.set_pixel_format(raw_format);

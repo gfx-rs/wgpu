@@ -249,7 +249,7 @@ pub struct FragmentState<'a> {
     /// The compiled fragment stage and its entry point.
     pub stage: ProgrammableStageDescriptor<'a>,
     /// The effect of draw calls on the color aspect of the output target.
-    pub targets: Cow<'a, [wgt::ColorTargetState]>,
+    pub targets: Cow<'a, [Option<wgt::ColorTargetState>]>,
 }
 
 /// Describes a render (graphics) pipeline.
@@ -317,6 +317,8 @@ pub enum CreateRenderPipelineError {
     Device(#[from] DeviceError),
     #[error("pipeline layout is invalid")]
     InvalidLayout,
+    #[error("fragment output @location({0}) is invalid")]
+    InvalidFragmentOutputLocation(u32),
     #[error("unable to derive an implicit layout")]
     Implicit(#[from] ImplicitLayoutError),
     #[error("color state [{0}] is invalid")]
