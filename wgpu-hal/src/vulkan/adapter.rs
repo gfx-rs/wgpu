@@ -1059,19 +1059,18 @@ impl super::Instance {
                 || phd_capabilities.supports_extension(vk::KhrMaintenance1Fn::name()),
             imageless_framebuffers: match phd_features.vulkan_1_2 {
                 Some(features) => features.imageless_framebuffer == vk::TRUE,
-                None => match phd_features.imageless_framebuffer {
-                    Some(ref ext) => ext.imageless_framebuffer != 0,
-                    None => false,
-                },
+                None => phd_features
+                    .imageless_framebuffer
+                    .map_or(false, |ext| ext.imageless_framebuffer != 0),
             },
+            // imageless_framebuffers: false,
             image_view_usage: phd_capabilities.properties.api_version >= vk::API_VERSION_1_1
                 || phd_capabilities.supports_extension(vk::KhrMaintenance2Fn::name()),
             timeline_semaphores: match phd_features.vulkan_1_2 {
                 Some(features) => features.timeline_semaphore == vk::TRUE,
-                None => match phd_features.timeline_semaphore {
-                    Some(ref ext) => ext.timeline_semaphore != 0,
-                    None => false,
-                },
+                None => phd_features
+                    .timeline_semaphore
+                    .map_or(false, |ext| ext.timeline_semaphore != 0),
             },
             texture_d24: unsafe {
                 self.shared
@@ -1093,13 +1092,15 @@ impl super::Instance {
             robust_buffer_access: phd_features.core.robust_buffer_access != 0,
             robust_image_access: match phd_features.robustness2 {
                 Some(ref f) => f.robust_image_access2 != 0,
-                None => match phd_features.image_robustness {
-                    Some(ref f) => f.robust_image_access != 0,
-                    None => false,
-                },
+                None => phd_features
+                    .image_robustness
+                    .map_or(false, |ext| ext.robust_image_access != 0),
             },
         };
-
+        println!(
+            "caps.imageless_framebuffers {}",
+            private_caps.imageless_framebuffers
+        );
         let capabilities = crate::Capabilities {
             limits: phd_capabilities.to_wgpu_limits(&phd_features),
             alignments: phd_capabilities.to_hal_alignments(),
