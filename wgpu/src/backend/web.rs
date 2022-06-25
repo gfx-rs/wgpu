@@ -1,5 +1,6 @@
 #![allow(clippy::type_complexity)]
 
+use js_sys::Promise;
 use std::{
     cell::RefCell,
     fmt,
@@ -897,6 +898,48 @@ fn future_pop_error_scope(result: JsFutureResult) -> Option<crate::Error> {
     }
 }
 
+/// Calls `callback(success_value)` when the promise completes successfully, calls `callback(failure_value)`
+/// when the promise completes unsuccessfully.
+fn register_then_closures<F, T>(promise: &Promise, callback: F, success_value: T, failure_value: T)
+where
+    F: FnOnce(T) + 'static,
+    T: 'static,
+{
+    // Both the 'success' and 'rejected' closures need access to callback, but only one
+    // of them will ever run. We have them both hold a reference to a `Rc<RefCell<Option<impl FnOnce...>>>`,
+    // and then take ownership of callback when invoked.
+    //
+    // We also only need Rc's because these will only ever be called on our thread.
+    //
+    // We also store the actual closure types inside this Rc, as the closures need to be kept alive
+    // until they are actually called by the callback. It is valid to drop a closure inside of a callback.
+    // This allows us to keep the closures alive without leaking them.
+    let rc_callback: Rc<RefCell<Option<(_, _, F)>>> = Rc::new(RefCell::new(None));
+
+    let rc_callback_clone1 = rc_callback.clone();
+    let rc_callback_clone2 = rc_callback.clone();
+    let closure_success = wasm_bindgen::closure::Closure::once(move |_| {
+        let (success_closure, rejection_closure, callback) =
+            rc_callback_clone1.borrow_mut().take().unwrap();
+        callback(success_value);
+        // drop the closures, including ourselves, which will free any captured memory.
+        drop((success_closure, rejection_closure));
+    });
+    let closure_rejected = wasm_bindgen::closure::Closure::once(move |_| {
+        let (success_closure, rejection_closure, callback) =
+            rc_callback_clone2.borrow_mut().take().unwrap();
+        callback(failure_value);
+        // drop the closures, including ourselves, which will free any captured memory.
+        drop((success_closure, rejection_closure));
+    });
+
+    // Calling then before setting the value in the Rc seems like a race, but it isn't
+    // because the promise callback will run on this thread, so there is no race.
+    let _ = promise.then2(&closure_success, &closure_rejected);
+
+    *rc_callback.borrow_mut() = Some((closure_success, closure_rejected, callback));
+}
+
 impl Context {
     pub fn instance_create_surface_from_canvas(
         &self,
@@ -1685,35 +1728,22 @@ impl crate::Context for Context {
         )
     }
 
-    fn buffer_map_async(
+    fn buffer_map_async<F>(
         &self,
         buffer: &Self::BufferId,
         mode: crate::MapMode,
         range: Range<wgt::BufferAddress>,
-        callback: impl FnOnce(Result<(), crate::BufferAsyncError>) + Send + 'static,
-    ) {
+        callback: F,
+    ) where
+        F: FnOnce(Result<(), crate::BufferAsyncError>) + Send + 'static,
+    {
         let map_promise = buffer.0.map_async_with_f64_and_f64(
             map_map_mode(mode),
             range.start as f64,
             (range.end - range.start) as f64,
         );
 
-        // Both the 'success' and 'rejected' closures need access to callback, but only one
-        // of them will ever run. We have them both hold a reference to a `Rc<RefCell<Option<impl FnOnce...>>>`,
-        // and then take ownership of callback when invoked.
-        //
-        // We also only need Rc's because these will only ever be called on our thread.
-        let rc_callback = Rc::new(RefCell::new(Some(callback)));
-
-        let rc_callback_clone = rc_callback.clone();
-        let closure_success = wasm_bindgen::closure::Closure::once(move |_| {
-            rc_callback.borrow_mut().take().unwrap()(Ok(()))
-        });
-        let closure_rejected = wasm_bindgen::closure::Closure::once(move |_| {
-            rc_callback_clone.borrow_mut().take().unwrap()(Err(crate::BufferAsyncError))
-        });
-
-        let _ = map_promise.then2(&closure_success, &closure_rejected);
+        register_then_closures(&map_promise, callback, Ok(()), Err(crate::BufferAsyncError));
     }
 
     fn buffer_get_mapped_range(

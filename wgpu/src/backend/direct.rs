@@ -1641,13 +1641,15 @@ impl crate::Context for Context {
         ready(scope.error)
     }
 
-    fn buffer_map_async(
+    fn buffer_map_async<F>(
         &self,
         buffer: &Self::BufferId,
         mode: MapMode,
         range: Range<wgt::BufferAddress>,
-        callback: impl FnOnce(Result<(), crate::BufferAsyncError>) + Send + 'static,
-    ) {
+        callback: F,
+    ) where
+        F: FnOnce(Result<(), crate::BufferAsyncError>) + Send + 'static,
+    {
         let operation = wgc::resource::BufferMapOperation {
             host: match mode {
                 MapMode::Read => wgc::device::HostMap::Read,

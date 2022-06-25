@@ -330,7 +330,7 @@ trait Context: Debug + Send + Sized + Sync {
     fn device_push_error_scope(&self, device: &Self::DeviceId, filter: ErrorFilter);
     fn device_pop_error_scope(&self, device: &Self::DeviceId) -> Self::PopErrorScopeFuture;
 
-    fn buffer_map_async(
+    fn buffer_map_async<F>(
         &self,
         buffer: &Self::BufferId,
         mode: MapMode,
@@ -338,8 +338,9 @@ trait Context: Debug + Send + Sized + Sync {
         // Note: we keep this as an `impl` through the context because the native backend
         // needs to wrap it with a wrapping closure. queue_on_submitted_work_done doesn't
         // need this wrapping closure, so can be made a Box immediately.
-        callback: impl FnOnce(Result<(), BufferAsyncError>) + Send + 'static,
-    );
+        callback: F,
+    ) where
+        F: FnOnce(Result<(), BufferAsyncError>) + Send + 'static;
     fn buffer_get_mapped_range(
         &self,
         buffer: &Self::BufferId,
