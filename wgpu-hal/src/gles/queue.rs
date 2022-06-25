@@ -428,13 +428,28 @@ impl super::Queue {
                         }
                     };
                     match dst_target {
-                        glow::TEXTURE_3D | glow::TEXTURE_2D_ARRAY => {
+                        glow::TEXTURE_3D => {
                             gl.tex_sub_image_3d(
                                 dst_target,
                                 copy.texture_base.mip_level as i32,
                                 copy.texture_base.origin.x as i32,
                                 copy.texture_base.origin.y as i32,
                                 copy.texture_base.origin.z as i32,
+                                copy.size.width as i32,
+                                copy.size.height as i32,
+                                copy.size.depth as i32,
+                                format_desc.external,
+                                format_desc.data_type,
+                                unpack_data,
+                            );
+                        }
+                        glow::TEXTURE_2D_ARRAY => {
+                            gl.tex_sub_image_3d(
+                                dst_target,
+                                copy.texture_base.mip_level as i32,
+                                copy.texture_base.origin.x as i32,
+                                copy.texture_base.origin.y as i32,
+                                copy.texture_base.array_layer as i32,
                                 copy.size.width as i32,
                                 copy.size.height as i32,
                                 copy.size.depth as i32,
