@@ -1,6 +1,8 @@
+use winapi::shared::{dxgi1_5, minwindef};
+
 use super::SurfaceTarget;
 use crate::auxil::{self, dxgi::result::HResult as _};
-use std::sync::Arc;
+use std::{mem, sync::Arc};
 
 impl Drop for super::Instance {
     fn drop(&mut self) {
@@ -37,11 +39,28 @@ impl crate::Instance<super::Api> for super::Instance {
             desc.flags,
         )?;
 
+        let mut supports_allow_tearing = false;
+        #[allow(trivial_casts)]
+        if let Some(factory5) = factory.as_factory5() {
+            let mut allow_tearing: minwindef::BOOL = minwindef::FALSE;
+            let hr = factory5.CheckFeatureSupport(
+                dxgi1_5::DXGI_FEATURE_PRESENT_ALLOW_TEARING,
+                &mut allow_tearing as *mut _ as *mut _,
+                mem::size_of::<minwindef::BOOL>() as _,
+            );
+
+            match hr.into_result() {
+                Err(err) => log::warn!("Unable to check for tearing support: {}", err),
+                Ok(()) => supports_allow_tearing = true,
+            }
+        }
+
         Ok(Self {
             // The call to create_factory will only succeed if we get a factory4, so this is safe.
             factory,
             library: Arc::new(lib_main),
             _lib_dxgi: lib_dxgi,
+            supports_allow_tearing,
             flags: desc.flags,
         })
     }
@@ -54,6 +73,7 @@ impl crate::Instance<super::Api> for super::Instance {
             raw_window_handle::RawWindowHandle::Win32(handle) => Ok(super::Surface {
                 factory: self.factory,
                 target: SurfaceTarget::WndHandle(handle.hwnd as *mut _),
+                supports_allow_tearing: self.supports_allow_tearing,
                 swap_chain: None,
             }),
             _ => Err(crate::InstanceError),
