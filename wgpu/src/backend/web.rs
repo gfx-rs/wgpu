@@ -1556,17 +1556,20 @@ impl crate::Context for Context {
             let targets = frag
                 .targets
                 .iter()
-                .map(|target| {
-                    let mapped_format = map_texture_format(target.format);
-                    let mut mapped_color_state = web_sys::GpuColorTargetState::new(mapped_format);
-                    if let Some(ref bs) = target.blend {
-                        let alpha = map_blend_component(&bs.alpha);
-                        let color = map_blend_component(&bs.color);
-                        let mapped_blend_state = web_sys::GpuBlendState::new(&alpha, &color);
-                        mapped_color_state.blend(&mapped_blend_state);
-                    }
-                    mapped_color_state.write_mask(target.write_mask.bits());
-                    mapped_color_state
+                .filter_map(|t| {
+                    t.as_ref().map(|target| {
+                        let mapped_format = map_texture_format(target.format);
+                        let mut mapped_color_state =
+                            web_sys::GpuColorTargetState::new(mapped_format);
+                        if let Some(ref bs) = target.blend {
+                            let alpha = map_blend_component(&bs.alpha);
+                            let color = map_blend_component(&bs.color);
+                            let mapped_blend_state = web_sys::GpuBlendState::new(&alpha, &color);
+                            mapped_color_state.blend(&mapped_blend_state);
+                        }
+                        mapped_color_state.write_mask(target.write_mask.bits());
+                        mapped_color_state
+                    })
                 })
                 .collect::<js_sys::Array>();
             let mapped_fragment_desc =
@@ -1690,7 +1693,10 @@ impl crate::Context for Context {
         let mapped_color_formats = desc
             .color_formats
             .iter()
-            .map(|cf| wasm_bindgen::JsValue::from(map_texture_format(*cf)))
+            .filter_map(|cf| {
+                cf.as_ref()
+                    .map(|format| wasm_bindgen::JsValue::from(map_texture_format(*format)))
+            })
             .collect::<js_sys::Array>();
         let mut mapped_desc = web_sys::GpuRenderBundleEncoderDescriptor::new(&mapped_color_formats);
         if let Some(label) = desc.label {
@@ -1985,25 +1991,31 @@ impl crate::Context for Context {
         let mapped_color_attachments = desc
             .color_attachments
             .iter()
-            .map(|ca| {
-                let load_value = match ca.ops.load {
-                    crate::LoadOp::Clear(color) => wasm_bindgen::JsValue::from(map_color(color)),
-                    crate::LoadOp::Load => wasm_bindgen::JsValue::from(web_sys::GpuLoadOp::Load),
-                };
+            .filter_map(|attachment| {
+                attachment.as_ref().map(|ca| {
+                    let load_value = match ca.ops.load {
+                        crate::LoadOp::Clear(color) => {
+                            wasm_bindgen::JsValue::from(map_color(color))
+                        }
+                        crate::LoadOp::Load => {
+                            wasm_bindgen::JsValue::from(web_sys::GpuLoadOp::Load)
+                        }
+                    };
 
-                let mut mapped_color_attachment = web_sys::GpuRenderPassColorAttachment::new(
-                    &load_value,
-                    map_store_op(ca.ops.store),
-                    &ca.view.id.0,
-                );
+                    let mut mapped_color_attachment = web_sys::GpuRenderPassColorAttachment::new(
+                        &load_value,
+                        map_store_op(ca.ops.store),
+                        &ca.view.id.0,
+                    );
 
-                if let Some(rt) = ca.resolve_target {
-                    mapped_color_attachment.resolve_target(&rt.id.0);
-                }
+                    if let Some(rt) = ca.resolve_target {
+                        mapped_color_attachment.resolve_target(&rt.id.0);
+                    }
 
-                mapped_color_attachment.store_op(map_store_op(ca.ops.store));
+                    mapped_color_attachment.store_op(map_store_op(ca.ops.store));
 
-                mapped_color_attachment
+                    mapped_color_attachment
+                })
             })
             .collect::<js_sys::Array>();
 
