@@ -1869,6 +1869,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     } => {
                         let scope = PassErrorScope::WriteTimestamp;
 
+                        device
+                            .require_features(wgt::Features::WRITE_TIMESTAMP_INSIDE_PASSES)
+                            .map_pass_err(scope)?;
+
                         let query_set: &resource::QuerySet<A> = cmd_buf
                             .trackers
                             .query_sets

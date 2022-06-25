@@ -360,6 +360,7 @@ impl PhysicalDeviceFeatures {
             | F::ADDRESS_MODE_CLAMP_TO_BORDER
             | F::ADDRESS_MODE_CLAMP_TO_ZERO
             | F::TIMESTAMP_QUERY
+            | F::WRITE_TIMESTAMP_INSIDE_PASSES
             | F::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
             | F::CLEAR_TEXTURE;
         let mut dl_flags = Df::all();
