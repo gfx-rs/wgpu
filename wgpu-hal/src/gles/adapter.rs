@@ -212,6 +212,9 @@ impl super::Adapter {
             naga::back::glsl::Version::Embedded(value)
         };
 
+        // ANGLE provides renderer strings like: "ANGLE (Apple, Apple M1 Pro, OpenGL 4.1)"
+        let is_angle = renderer.contains("ANGLE");
+
         let vertex_shader_storage_blocks = if supports_storage {
             gl.get_parameter_i32(glow::MAX_VERTEX_SHADER_STORAGE_BLOCKS) as u32
         } else {
@@ -288,6 +291,10 @@ impl super::Adapter {
         downlevel_flags.set(
             wgt::DownlevelFlags::ANISOTROPIC_FILTERING,
             extensions.contains("EXT_texture_filter_anisotropic"),
+        );
+        downlevel_flags.set(
+            wgt::DownlevelFlags::BUFFER_BINDINGS_NOT_16_BYTE_ALIGNED,
+            !(cfg!(target_arch = "wasm32") || is_angle),
         );
 
         let is_ext_color_buffer_float_supported = extensions.contains("EXT_color_buffer_float");

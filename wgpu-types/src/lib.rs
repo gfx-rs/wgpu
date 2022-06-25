@@ -1039,6 +1039,11 @@ bitflags::bitflags! {
         /// Supports all the texture usages described in WebGPU. If this isn't supported, you
         /// should call `get_texture_format_features` to get how you can use textures of a given format
         const WEBGPU_TEXTURE_FORMAT_SUPPORT = 1 << 14;
+
+        /// Supports buffer bindings with sizes that aren't a multiple of 16.
+        ///
+        /// WebGL doesn't support this.
+        const BUFFER_BINDINGS_NOT_16_BYTE_ALIGNED = 1 << 15;
     }
 }
 
