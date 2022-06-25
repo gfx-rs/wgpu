@@ -134,10 +134,10 @@ impl super::Device {
             },
             private_caps,
             shared: Arc::new(shared),
-            rtv_pool: Mutex::new(descriptor::CpuPool::new(
+            rtv_pool: Arc::new(Mutex::new(descriptor::CpuPool::new(
                 raw,
                 native::DescriptorHeapType::Rtv,
-            )),
+            ))),
             dsv_pool: Mutex::new(descriptor::CpuPool::new(
                 raw,
                 native::DescriptorHeapType::Dsv,
@@ -306,7 +306,11 @@ impl super::Device {
 
 impl crate::Device<super::Api> for super::Device {
     unsafe fn exit(self, queue: super::Queue) {
-        self.rtv_pool.into_inner().destroy();
+        Arc::try_unwrap(self.rtv_pool)
+            .ok()
+            .unwrap()
+            .into_inner()
+            .destroy();
         self.dsv_pool.into_inner().destroy();
         self.srv_uav_pool.into_inner().destroy();
         self.sampler_pool.into_inner().destroy();
@@ -658,6 +662,7 @@ impl crate::Device<super::Api> for super::Device {
             allocator,
             device: self.raw,
             shared: Arc::clone(&self.shared),
+            rtv_pool: Arc::clone(&self.rtv_pool),
             list: None,
             free_lists: Vec::new(),
             pass: super::PassState::new(),
@@ -1283,7 +1288,9 @@ impl crate::Device<super::Api> for super::Device {
         let mut rtv_formats = [dxgiformat::DXGI_FORMAT_UNKNOWN;
             d3d12::D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT as usize];
         for (rtv_format, ct) in rtv_formats.iter_mut().zip(desc.color_targets) {
-            *rtv_format = auxil::dxgi::conv::map_texture_format(ct.format);
+            if let Some(ct) = ct.as_ref() {
+                *rtv_format = auxil::dxgi::conv::map_texture_format(ct.format);
+            }
         }
 
         let bias = desc

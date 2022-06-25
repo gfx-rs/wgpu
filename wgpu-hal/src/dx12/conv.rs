@@ -267,7 +267,7 @@ fn map_blend_component(
 }
 
 pub fn map_render_targets(
-    color_targets: &[wgt::ColorTargetState],
+    color_targets: &[Option<wgt::ColorTargetState>],
 ) -> [d3d12::D3D12_RENDER_TARGET_BLEND_DESC; d3d12::D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT as usize]
 {
     let dummy_target = d3d12::D3D12_RENDER_TARGET_BLEND_DESC {
@@ -285,17 +285,19 @@ pub fn map_render_targets(
     let mut raw_targets = [dummy_target; d3d12::D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT as usize];
 
     for (raw, ct) in raw_targets.iter_mut().zip(color_targets.iter()) {
-        raw.RenderTargetWriteMask = ct.write_mask.bits() as u8;
-        if let Some(ref blend) = ct.blend {
-            let (color_op, color_src, color_dst) = map_blend_component(&blend.color, false);
-            let (alpha_op, alpha_src, alpha_dst) = map_blend_component(&blend.alpha, true);
-            raw.BlendEnable = 1;
-            raw.BlendOp = color_op;
-            raw.SrcBlend = color_src;
-            raw.DestBlend = color_dst;
-            raw.BlendOpAlpha = alpha_op;
-            raw.SrcBlendAlpha = alpha_src;
-            raw.DestBlendAlpha = alpha_dst;
+        if let Some(ct) = ct.as_ref() {
+            raw.RenderTargetWriteMask = ct.write_mask.bits() as u8;
+            if let Some(ref blend) = ct.blend {
+                let (color_op, color_src, color_dst) = map_blend_component(&blend.color, false);
+                let (alpha_op, alpha_src, alpha_dst) = map_blend_component(&blend.alpha, true);
+                raw.BlendEnable = 1;
+                raw.BlendOp = color_op;
+                raw.SrcBlend = color_src;
+                raw.DestBlend = color_dst;
+                raw.BlendOpAlpha = alpha_op;
+                raw.SrcBlendAlpha = alpha_src;
+                raw.DestBlendAlpha = alpha_dst;
+            }
         }
     }
 

@@ -221,7 +221,7 @@ pub struct Device {
     private_caps: PrivateCapabilities,
     shared: Arc<DeviceShared>,
     // CPU only pools
-    rtv_pool: Mutex<descriptor::CpuPool>,
+    rtv_pool: Arc<Mutex<descriptor::CpuPool>>,
     dsv_pool: Mutex<descriptor::CpuPool>,
     srv_uav_pool: Mutex<descriptor::CpuPool>,
     sampler_pool: Mutex<descriptor::CpuPool>,
@@ -329,6 +329,7 @@ pub struct CommandEncoder {
     allocator: native::CommandAllocator,
     device: native::Device,
     shared: Arc<DeviceShared>,
+    rtv_pool: Arc<Mutex<descriptor::CpuPool>>,
     list: Option<native::GraphicsCommandList>,
     free_lists: Vec<native::GraphicsCommandList>,
     pass: PassState,
