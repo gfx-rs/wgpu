@@ -108,11 +108,11 @@ impl super::DeviceShared {
                                 .build();
                             vk_attachments.push(vk_attachment);
                         } else {
-                            resolve_refs.push(unused.clone());
+                            resolve_refs.push(unused);
                         };
                     } else {
-                        color_refs.push(unused.clone());
-                        resolve_refs.push(unused.clone());
+                        color_refs.push(unused);
+                        resolve_refs.push(unused);
                     }
                 }
 

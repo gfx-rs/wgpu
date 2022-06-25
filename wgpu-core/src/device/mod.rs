@@ -2760,30 +2760,23 @@ impl<A: HalApi> Device<A> {
 
         if validated_stages.contains(wgt::ShaderStages::FRAGMENT) {
             for (i, output) in io.iter() {
-                match color_targets.get(*i as usize) {
-                    Some(state) => {
-                        let format = if let Some(st) = state.as_ref() {
-                            st.format
-                        } else {
-                            return Err(
-                                pipeline::CreateRenderPipelineError::InvalidFragmentOutputLocation(
-                                    *i,
-                                ),
-                            );
-                        };
-                        validation::check_texture_format(format, &output.ty).map_err(
-                            |pipeline| {
-                                pipeline::CreateRenderPipelineError::ColorState(
-                                    *i as u8,
-                                    pipeline::ColorStateError::IncompatibleFormat {
-                                        pipeline,
-                                        shader: output.ty,
-                                    },
-                                )
+                if let Some(state) = color_targets.get(*i as usize) {
+                    let format = if let Some(st) = state.as_ref() {
+                        st.format
+                    } else {
+                        return Err(
+                            pipeline::CreateRenderPipelineError::InvalidFragmentOutputLocation(*i),
+                        );
+                    };
+                    validation::check_texture_format(format, &output.ty).map_err(|pipeline| {
+                        pipeline::CreateRenderPipelineError::ColorState(
+                            *i as u8,
+                            pipeline::ColorStateError::IncompatibleFormat {
+                                pipeline,
+                                shader: output.ty,
                             },
-                        )?;
-                    }
-                    None => (),
+                        )
+                    })?;
                 }
             }
         }

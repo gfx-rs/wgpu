@@ -260,7 +260,7 @@ impl From<GpuMultisampleState> for wgpu_types::MultisampleState {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct GpuFragmentState {
-    targets: Vec<wgpu_types::ColorTargetState>,
+    targets: Vec<Option<wgpu_types::ColorTargetState>>,
     module: u32,
     entry_point: String,
     // TODO(lucacasonato): constants

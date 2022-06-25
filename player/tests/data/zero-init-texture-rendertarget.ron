@@ -46,7 +46,7 @@
                     push_constant_data: [],
                 ),
                 target_colors: [
-                    (
+                    Some((
                         view: Id(0, 1, Empty),
                         resolve_target: None,
                         channel: (
@@ -57,7 +57,7 @@
                             ),
                             read_only: false,
                         ),
-                    ),
+                    )),
                 ],
                 target_depth_stencil: None,
             ),

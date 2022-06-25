@@ -78,7 +78,7 @@ pub fn op_webgpu_command_encoder_begin_render_pass(
     state: &mut OpState,
     command_encoder_rid: ResourceId,
     label: Option<String>,
-    color_attachments: Vec<GpuRenderPassColorAttachment>,
+    color_attachments: Vec<Option<GpuRenderPassColorAttachment>>,
     depth_stencil_attachment: Option<GpuRenderPassDepthStencilAttachment>,
     _occlusion_query_set: Option<u32>, // not yet implemented
 ) -> Result<WebGpuResult, AnyError> {
@@ -89,30 +89,35 @@ pub fn op_webgpu_command_encoder_begin_render_pass(
     let color_attachments = color_attachments
         .into_iter()
         .map(|color_attachment| {
-            let texture_view_resource = state
-                .resource_table
-                .get::<super::texture::WebGpuTextureView>(color_attachment.view)?;
+            let rp_at = if let Some(at) = color_attachment.as_ref() {
+                let texture_view_resource = state
+                    .resource_table
+                    .get::<super::texture::WebGpuTextureView>(at.view)?;
 
-            let resolve_target = color_attachment
-                .resolve_target
-                .map(|rid| {
-                    state
-                        .resource_table
-                        .get::<super::texture::WebGpuTextureView>(rid)
+                let resolve_target = at
+                    .resolve_target
+                    .map(|rid| {
+                        state
+                            .resource_table
+                            .get::<super::texture::WebGpuTextureView>(rid)
+                    })
+                    .transpose()?
+                    .map(|texture| texture.0);
+
+                Some(wgpu_core::command::RenderPassColorAttachment {
+                    view: texture_view_resource.0,
+                    resolve_target,
+                    channel: wgpu_core::command::PassChannel {
+                        load_op: at.load_op,
+                        store_op: at.store_op,
+                        clear_value: at.clear_value.unwrap_or_default(),
+                        read_only: false,
+                    },
                 })
-                .transpose()?
-                .map(|texture| texture.0);
-
-            Ok(wgpu_core::command::RenderPassColorAttachment {
-                view: texture_view_resource.0,
-                resolve_target,
-                channel: wgpu_core::command::PassChannel {
-                    load_op: color_attachment.load_op,
-                    store_op: color_attachment.store_op,
-                    clear_value: color_attachment.clear_value.unwrap_or_default(),
-                    read_only: false,
-                },
-            })
+            } else {
+                None
+            };
+            Ok(rp_at)
         })
         .collect::<Result<Vec<_>, AnyError>>()?;
 

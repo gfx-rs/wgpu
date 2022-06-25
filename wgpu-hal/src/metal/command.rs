@@ -353,7 +353,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             //TODO: set visibility results buffer
 
             for (i, at) in desc.color_attachments.iter().enumerate() {
-                if let Some(at) = at {
+                if let Some(at) = at.as_ref() {
                     let at_descriptor = descriptor.color_attachments().object_at(i as u64).unwrap();
                     at_descriptor.set_texture(Some(&at.target.view.raw));
                     if let Some(ref resolve) = at.resolve_target {
