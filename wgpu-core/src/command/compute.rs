@@ -268,6 +268,7 @@ impl<A: HalApi> State<A> {
         Ok(())
     }
 
+    // `extra_buffer` is there to represent the indirect buffer that is also part of the usage scope.
     fn flush_states(
         &mut self,
         raw_encoder: &mut A::CommandEncoder,
@@ -275,6 +276,7 @@ impl<A: HalApi> State<A> {
         bind_group_guard: &Storage<BindGroup<A>, id::BindGroupId>,
         buffer_guard: &Storage<Buffer<A>, id::BufferId>,
         texture_guard: &Storage<Texture<A>, id::TextureId>,
+        indirect_buffer: Option<id::Valid<id::BufferId>>,
     ) -> Result<(), UsageConflict> {
         for id in self.binder.list_active() {
             unsafe {
@@ -293,6 +295,13 @@ impl<A: HalApi> State<A> {
                     &bind_group_guard[id].used,
                 )
             }
+        }
+
+        // Add the state of the indirect buffer if it hasn't been hit before.
+        unsafe {
+            base_trackers
+                .buffers
+                .set_and_remove_from_usage_scope_sparse(&mut self.scope.buffers, indirect_buffer);
         }
 
         log::trace!("Encoding dispatch barriers");
@@ -584,6 +593,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             &*bind_group_guard,
                             &*buffer_guard,
                             &*texture_guard,
+                            None,
                         )
                         .map_pass_err(scope)?;
 
@@ -659,6 +669,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             &*bind_group_guard,
                             &*buffer_guard,
                             &*texture_guard,
+                            Some(id::Valid(buffer_id)),
                         )
                         .map_pass_err(scope)?;
                     unsafe {
