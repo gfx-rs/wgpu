@@ -556,11 +556,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("instance_create_surface_from_visual", "Instance");
 
         let surface = Surface {
-            presentation: None,
+            presentation: Mutex::new(None),
             #[cfg(vulkan)]
             vulkan: None,
             dx12: self.instance.dx12.as_ref().map(|inst| HalSurface {
-                raw: { inst.create_surface_from_visual(visual as _) },
+                raw: Mutex::new({ inst.create_surface_from_visual(visual as _) }),
             }),
             dx11: None,
             #[cfg(gl)]

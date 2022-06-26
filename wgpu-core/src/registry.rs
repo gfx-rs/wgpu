@@ -1,8 +1,9 @@
 use std::{
+    alloc::{alloc, Layout},
     borrow::Cow,
     cell::UnsafeCell,
     marker::PhantomData,
-    mem,
+    mem, ptr,
     sync::atomic::{AtomicU32, Ordering},
 };
 
@@ -314,7 +315,7 @@ where
             // SAFETY: we're the first to ever allocate this block, so we're the only one
             // who could get this mutable reference.
             let block = self.blocks[block as usize].get();
-            block.write(Some(Box::new(StorageBlock::new_uninit())));
+            block.write(Some(StorageBlock::new_uninit()));
         }
         self.max_index.store(max_index + 1, Ordering::Release);
     }
@@ -521,10 +522,27 @@ struct StorageBlock<const COUNT: usize, T> {
 }
 
 impl<const COUNT: usize, T> StorageBlock<COUNT, T> {
-    fn new_uninit() -> Self {
-        Self {
-            data: [(); COUNT].map(|_| DebugUnsafeCell::new(DebugMaybeUninit::uninit())),
-            status: [(); COUNT].map(|_| Mutex::new(ElementStatus::Vacant)),
+    fn new_uninit() -> Box<Self> {
+        // We need to initialize the storage block inside the box, or else we'll stack overflow in debug.
+        unsafe {
+            // Allocate memory for us
+            let layout = Layout::new::<Self>();
+            let ptr = alloc(layout) as *mut Self;
+
+            // Get pointers to the sub members
+            let data_ptr = ptr::addr_of_mut!((*ptr).data[0]);
+            let status_ptr = ptr::addr_of_mut!((*ptr).status[0]);
+
+            // Fill in the sub members
+            for i in 0..COUNT {
+                data_ptr
+                    .add(i)
+                    .write(DebugUnsafeCell::new(DebugMaybeUninit::uninit()));
+                status_ptr.add(i).write(Mutex::new(ElementStatus::Vacant))
+            }
+
+            // Turn it into a Box
+            Box::from_raw(ptr)
         }
     }
 }
