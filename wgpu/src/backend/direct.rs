@@ -47,7 +47,6 @@ impl Context {
         ))
     }
 
-    #[cfg(any(not(target_arch = "wasm32"), feature = "webgl"))]
     pub unsafe fn instance_as_hal<A: wgc::hub::HalApi, F: FnOnce(Option<&A::Instance>) -> R, R>(
         &self,
         hal_instance_callback: F,
@@ -55,7 +54,6 @@ impl Context {
         self.0.instance_as_hal::<A, F, R>(hal_instance_callback)
     }
 
-    #[cfg(any(not(target_arch = "wasm32"), feature = "webgl"))]
     pub unsafe fn from_core_instance(core_instance: wgc::instance::Instance) -> Self {
         Self(wgc::hub::Global::from_instance(
             wgc::hub::IdentityManagerFactory,
@@ -83,7 +81,6 @@ impl Context {
         self.0.create_adapter_from_hal(hal_adapter, PhantomData)
     }
 
-    #[cfg(any(not(target_arch = "wasm32"), feature = "webgl"))]
     pub unsafe fn adapter_as_hal<A: wgc::hub::HalApi, F: FnOnce(Option<&A::Adapter>) -> R, R>(
         &self,
         adapter: wgc::id::AdapterId,
