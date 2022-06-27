@@ -1002,7 +1002,7 @@ impl crate::Device<super::Api> for super::Device {
 
         let color_targets = {
             let mut targets = Vec::new();
-            for ct in desc.color_targets.iter() {
+            for ct in desc.color_targets.iter().filter_map(|at| at.as_ref()) {
                 targets.push(super::ColorTargetDesc {
                     mask: ct.write_mask,
                     blend: ct.blend.as_ref().map(conv::map_blend),

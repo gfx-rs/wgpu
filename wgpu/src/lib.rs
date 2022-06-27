@@ -1413,7 +1413,7 @@ pub struct RenderPassDescriptor<'tex, 'desc> {
     /// Debug label of the render pass. This will show up in graphics debuggers for easy identification.
     pub label: Label<'desc>,
     /// The color attachments of the render pass.
-    pub color_attachments: &'desc [RenderPassColorAttachment<'tex>],
+    pub color_attachments: &'desc [Option<RenderPassColorAttachment<'tex>>],
     /// The depth and stencil attachment of the render pass, if any.
     pub depth_stencil_attachment: Option<RenderPassDepthStencilAttachment<'tex>>,
 }
@@ -1465,7 +1465,7 @@ pub struct FragmentState<'a> {
     /// void with this name in the shader.
     pub entry_point: &'a str,
     /// The color state of the render targets.
-    pub targets: &'a [ColorTargetState],
+    pub targets: &'a [Option<ColorTargetState>],
 }
 
 /// Describes a render (graphics) pipeline.
@@ -1567,7 +1567,7 @@ pub struct RenderBundleEncoderDescriptor<'a> {
     pub label: Label<'a>,
     /// The formats of the color attachments that this render bundle is capable to rendering to. This
     /// must match the formats of the color attachments in the renderpass this render bundle is executed in.
-    pub color_formats: &'a [TextureFormat],
+    pub color_formats: &'a [Option<TextureFormat>],
     /// Information about the depth attachment that this render bundle is capable to rendering to. This
     /// must match the format of the depth attachments in the renderpass this render bundle is executed in.
     pub depth_stencil: Option<RenderBundleDepthStencil>,

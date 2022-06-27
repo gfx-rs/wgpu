@@ -212,7 +212,7 @@ struct DepthStencilAttachmentKey {
 
 #[derive(Clone, Eq, Default, Hash, PartialEq)]
 struct RenderPassKey {
-    colors: ArrayVec<ColorAttachmentKey, { crate::MAX_COLOR_ATTACHMENTS }>,
+    colors: ArrayVec<Option<ColorAttachmentKey>, { crate::MAX_COLOR_ATTACHMENTS }>,
     depth_stencil: Option<DepthStencilAttachmentKey>,
     sample_count: u32,
     multiview: Option<NonZeroU32>,

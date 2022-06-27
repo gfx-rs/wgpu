@@ -32,7 +32,7 @@ impl Resource for WebGpuRenderBundle {
 pub struct CreateRenderBundleEncoderArgs {
     device_rid: ResourceId,
     label: Option<String>,
-    color_formats: Vec<wgpu_types::TextureFormat>,
+    color_formats: Vec<Option<wgpu_types::TextureFormat>>,
     depth_stencil_format: Option<wgpu_types::TextureFormat>,
     sample_count: u32,
     depth_read_only: bool,

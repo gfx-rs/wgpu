@@ -91,14 +91,14 @@ async fn create_red_image_with_dimensions(
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
         encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: None,
-            color_attachments: &[wgpu::RenderPassColorAttachment {
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                 view: &texture.create_view(&wgpu::TextureViewDescriptor::default()),
                 resolve_target: None,
                 ops: wgpu::Operations {
                     load: wgpu::LoadOp::Clear(wgpu::Color::RED),
                     store: true,
                 },
-            }],
+            })],
             depth_stencil_attachment: None,
         });
 

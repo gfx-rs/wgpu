@@ -613,7 +613,7 @@ dictionary GPUMultisampleState {
 };
 
 dictionary GPUFragmentState : GPUProgrammableStage {
-    required sequence<GPUColorTargetState> targets;
+    required sequence<GPUColorTargetState?> targets;
 };
 
 dictionary GPUColorTargetState {
@@ -908,7 +908,7 @@ GPURenderPassEncoder includes GPUBindingCommandsMixin;
 GPURenderPassEncoder includes GPURenderCommandsMixin;
 
 dictionary GPURenderPassDescriptor : GPUObjectDescriptorBase {
-    required sequence<GPURenderPassColorAttachment> colorAttachments;
+    required sequence<GPURenderPassColorAttachment?> colorAttachments;
     GPURenderPassDepthStencilAttachment depthStencilAttachment;
     GPUQuerySet occlusionQuerySet;
 };
@@ -947,7 +947,7 @@ enum GPUStoreOp {
 };
 
 dictionary GPURenderPassLayout: GPUObjectDescriptorBase {
-    required sequence<GPUTextureFormat> colorFormats;
+    required sequence<GPUTextureFormat?> colorFormats;
     GPUTextureFormat depthStencilFormat;
     GPUSize32 sampleCount = 1;
 };

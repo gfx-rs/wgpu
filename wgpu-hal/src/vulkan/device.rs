@@ -71,46 +71,54 @@ impl super::DeviceShared {
                 let mut resolve_refs = Vec::with_capacity(color_refs.capacity());
                 let mut ds_ref = None;
                 let samples = vk::SampleCountFlags::from_raw(e.key().sample_count);
-
+                let unused = vk::AttachmentReference {
+                    attachment: vk::ATTACHMENT_UNUSED,
+                    layout: vk::ImageLayout::UNDEFINED,
+                };
                 for cat in e.key().colors.iter() {
-                    color_refs.push(vk::AttachmentReference {
-                        attachment: vk_attachments.len() as u32,
-                        layout: cat.base.layout,
-                    });
-                    vk_attachments.push({
-                        let (load_op, store_op) = conv::map_attachment_ops(cat.base.ops);
-                        vk::AttachmentDescription::builder()
-                            .format(cat.base.format)
-                            .samples(samples)
-                            .load_op(load_op)
-                            .store_op(store_op)
-                            .initial_layout(cat.base.layout)
-                            .final_layout(cat.base.layout)
-                            .build()
-                    });
-                    let at_ref = if let Some(ref rat) = cat.resolve {
-                        let at_ref = vk::AttachmentReference {
+                    let (color_ref, resolve_ref) = if let Some(cat) = cat.as_ref() {
+                        let color_ref = vk::AttachmentReference {
                             attachment: vk_attachments.len() as u32,
-                            layout: rat.layout,
+                            layout: cat.base.layout,
                         };
-                        let (load_op, store_op) = conv::map_attachment_ops(rat.ops);
-                        let vk_attachment = vk::AttachmentDescription::builder()
-                            .format(rat.format)
-                            .samples(vk::SampleCountFlags::TYPE_1)
-                            .load_op(load_op)
-                            .store_op(store_op)
-                            .initial_layout(rat.layout)
-                            .final_layout(rat.layout)
-                            .build();
-                        vk_attachments.push(vk_attachment);
-                        at_ref
+                        vk_attachments.push({
+                            let (load_op, store_op) = conv::map_attachment_ops(cat.base.ops);
+                            vk::AttachmentDescription::builder()
+                                .format(cat.base.format)
+                                .samples(samples)
+                                .load_op(load_op)
+                                .store_op(store_op)
+                                .initial_layout(cat.base.layout)
+                                .final_layout(cat.base.layout)
+                                .build()
+                        });
+                        let resolve_ref = if let Some(ref rat) = cat.resolve {
+                            let (load_op, store_op) = conv::map_attachment_ops(rat.ops);
+                            let vk_attachment = vk::AttachmentDescription::builder()
+                                .format(rat.format)
+                                .samples(vk::SampleCountFlags::TYPE_1)
+                                .load_op(load_op)
+                                .store_op(store_op)
+                                .initial_layout(rat.layout)
+                                .final_layout(rat.layout)
+                                .build();
+                            vk_attachments.push(vk_attachment);
+
+                            vk::AttachmentReference {
+                                attachment: vk_attachments.len() as u32 - 1,
+                                layout: rat.layout,
+                            }
+                        } else {
+                            unused
+                        };
+
+                        (color_ref, resolve_ref)
                     } else {
-                        vk::AttachmentReference {
-                            attachment: vk::ATTACHMENT_UNUSED,
-                            layout: vk::ImageLayout::UNDEFINED,
-                        }
+                        (unused, unused)
                     };
-                    resolve_refs.push(at_ref);
+
+                    color_refs.push(color_ref);
+                    resolve_refs.push(resolve_ref);
                 }
 
                 if let Some(ref ds) = e.key().depth_stencil {
@@ -1574,30 +1582,39 @@ impl crate::Device<super::Api> for super::Device {
 
         let mut vk_attachments = Vec::with_capacity(desc.color_targets.len());
         for cat in desc.color_targets {
-            let vk_format = self.shared.private_caps.map_texture_format(cat.format);
-            compatible_rp_key.colors.push(super::ColorAttachmentKey {
-                base: super::AttachmentKey::compatible(
-                    vk_format,
-                    vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
-                ),
-                resolve: None,
-            });
+            let (key, attarchment) = if let Some(cat) = cat.as_ref() {
+                let mut vk_attachment = vk::PipelineColorBlendAttachmentState::builder()
+                    .color_write_mask(vk::ColorComponentFlags::from_raw(cat.write_mask.bits()));
+                if let Some(ref blend) = cat.blend {
+                    let (color_op, color_src, color_dst) = conv::map_blend_component(&blend.color);
+                    let (alpha_op, alpha_src, alpha_dst) = conv::map_blend_component(&blend.alpha);
+                    vk_attachment = vk_attachment
+                        .blend_enable(true)
+                        .color_blend_op(color_op)
+                        .src_color_blend_factor(color_src)
+                        .dst_color_blend_factor(color_dst)
+                        .alpha_blend_op(alpha_op)
+                        .src_alpha_blend_factor(alpha_src)
+                        .dst_alpha_blend_factor(alpha_dst);
+                }
 
-            let mut vk_attachment = vk::PipelineColorBlendAttachmentState::builder()
-                .color_write_mask(vk::ColorComponentFlags::from_raw(cat.write_mask.bits()));
-            if let Some(ref blend) = cat.blend {
-                let (color_op, color_src, color_dst) = conv::map_blend_component(&blend.color);
-                let (alpha_op, alpha_src, alpha_dst) = conv::map_blend_component(&blend.alpha);
-                vk_attachment = vk_attachment
-                    .blend_enable(true)
-                    .color_blend_op(color_op)
-                    .src_color_blend_factor(color_src)
-                    .dst_color_blend_factor(color_dst)
-                    .alpha_blend_op(alpha_op)
-                    .src_alpha_blend_factor(alpha_src)
-                    .dst_alpha_blend_factor(alpha_dst);
-            }
-            vk_attachments.push(vk_attachment.build());
+                let vk_format = self.shared.private_caps.map_texture_format(cat.format);
+                (
+                    Some(super::ColorAttachmentKey {
+                        base: super::AttachmentKey::compatible(
+                            vk_format,
+                            vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+                        ),
+                        resolve: None,
+                    }),
+                    vk_attachment.build(),
+                )
+            } else {
+                (None, vk::PipelineColorBlendAttachmentState::default())
+            };
+
+            compatible_rp_key.colors.push(key);
+            vk_attachments.push(attarchment);
         }
 
         let vk_color_blend = vk::PipelineColorBlendStateCreateInfo::builder()

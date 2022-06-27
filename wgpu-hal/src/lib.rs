@@ -1024,7 +1024,7 @@ pub struct RenderPipelineDescriptor<'a, A: Api> {
     /// The fragment stage for this pipeline.
     pub fragment_stage: Option<ProgrammableStage<'a, A>>,
     /// The effect of draw calls on the color aspect of the output target.
-    pub color_targets: &'a [wgt::ColorTargetState],
+    pub color_targets: &'a [Option<wgt::ColorTargetState>],
     /// If the pipeline will be used with a multiview render pass, this indicates how many array
     /// layers the attachments will have.
     pub multiview: Option<NonZeroU32>,
@@ -1179,7 +1179,7 @@ pub struct RenderPassDescriptor<'a, A: Api> {
     pub label: Label<'a>,
     pub extent: wgt::Extent3d,
     pub sample_count: u32,
-    pub color_attachments: &'a [ColorAttachment<'a, A>],
+    pub color_attachments: &'a [Option<ColorAttachment<'a, A>>],
     pub depth_stencil_attachment: Option<DepthStencilAttachment<'a, A>>,
     pub multiview: Option<NonZeroU32>,
 }

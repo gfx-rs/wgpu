@@ -408,7 +408,7 @@ fn clear_texture_via_render_passes<A: hal::Api>(
         for depth_or_layer in layer_or_depth_range {
             let color_attachments_tmp;
             let (color_attachments, depth_stencil_attachment) = if is_color {
-                color_attachments_tmp = [hal::ColorAttachment {
+                color_attachments_tmp = [Some(hal::ColorAttachment {
                     target: hal::Attachment {
                         view: dst_texture.get_clear_view(mip_level, depth_or_layer),
                         usage: hal::TextureUses::COLOR_TARGET,
@@ -416,7 +416,7 @@ fn clear_texture_via_render_passes<A: hal::Api>(
                     resolve_target: None,
                     ops: hal::AttachmentOps::STORE,
                     clear_value: wgt::Color::TRANSPARENT,
-                }];
+                })];
                 (&color_attachments_tmp[..], None)
             } else {
                 (

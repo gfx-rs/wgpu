@@ -173,7 +173,7 @@ impl RenderPassDepthStencilAttachment {
 pub struct RenderPassDescriptor<'a> {
     pub label: Label<'a>,
     /// The color attachments of the render pass.
-    pub color_attachments: Cow<'a, [RenderPassColorAttachment]>,
+    pub color_attachments: Cow<'a, [Option<RenderPassColorAttachment>]>,
     /// The depth and stencil attachment of the render pass, if any.
     pub depth_stencil_attachment: Option<&'a RenderPassDepthStencilAttachment>,
 }
@@ -182,7 +182,7 @@ pub struct RenderPassDescriptor<'a> {
 pub struct RenderPass {
     base: BasePass<RenderCommand>,
     parent_id: id::CommandEncoderId,
-    color_targets: ArrayVec<RenderPassColorAttachment, { hal::MAX_COLOR_ATTACHMENTS }>,
+    color_targets: ArrayVec<Option<RenderPassColorAttachment>, { hal::MAX_COLOR_ATTACHMENTS }>,
     depth_stencil_target: Option<RenderPassDepthStencilAttachment>,
 
     // Resource binding dedupe state.
@@ -441,7 +441,7 @@ pub enum RenderPassErrorInner {
     InvalidDepthStencilAttachmentFormat(wgt::TextureFormat),
     #[error("attachment format {0:?} can not be resolved")]
     UnsupportedResolveTargetFormat(wgt::TextureFormat),
-    #[error("necessary attachments are missing")]
+    #[error("missing color or depth_stencil attachments, at least one is required.")]
     MissingAttachments,
     #[error("attachments have differing sizes: {previous:?} is followed by {mismatch:?}")]
     AttachmentsDimensionMismatch {
@@ -646,7 +646,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
     fn start(
         device: &Device<A>,
         label: Option<&str>,
-        color_attachments: &[RenderPassColorAttachment],
+        color_attachments: &[Option<RenderPassColorAttachment>],
         depth_stencil_attachment: Option<&RenderPassDepthStencilAttachment>,
         cmd_buf: &mut CommandBuffer<A>,
         view_guard: &'a Storage<TextureView<A>, id::TextureViewId>,
@@ -722,11 +722,15 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                     expected: sample_count,
                 });
             }
+            if sample_count != 1 && sample_count != 4 {
+                return Err(RenderPassErrorInner::InvalidSampleCount(sample_count));
+            }
             attachment_type_name = type_name;
             Ok(())
         };
 
-        let mut colors = ArrayVec::<hal::ColorAttachment<A>, { hal::MAX_COLOR_ATTACHMENTS }>::new();
+        let mut colors =
+            ArrayVec::<Option<hal::ColorAttachment<A>>, { hal::MAX_COLOR_ATTACHMENTS }>::new();
         let mut depth_stencil = None;
 
         if let Some(at) = depth_stencil_attachment {
@@ -840,6 +844,12 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
         }
 
         for at in color_attachments {
+            let at = if let Some(attachment) = at.as_ref() {
+                attachment
+            } else {
+                colors.push(None);
+                continue;
+            };
             let color_view: &TextureView<A> = cmd_buf
                 .trackers
                 .views
@@ -919,7 +929,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                 });
             }
 
-            colors.push(hal::ColorAttachment {
+            colors.push(Some(hal::ColorAttachment {
                 target: hal::Attachment {
                     view: &color_view.raw,
                     usage: hal::TextureUses::COLOR_TARGET,
@@ -927,28 +937,30 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                 resolve_target: hal_resolve_target,
                 ops: at.channel.hal_ops(),
                 clear_value: at.channel.clear_value,
-            });
+            }));
         }
 
-        if sample_count != 1 && sample_count != 4 {
-            return Err(RenderPassErrorInner::InvalidSampleCount(sample_count));
-        }
+        let extent = extent.ok_or(RenderPassErrorInner::MissingAttachments)?;
+        let multiview = detected_multiview.expect("Multiview was not detected, no attachments");
 
         let view_data = AttachmentData {
             colors: color_attachments
                 .iter()
-                .map(|at| view_guard.get(at.view).unwrap())
+                .map(|at| at.as_ref().map(|at| view_guard.get(at.view).unwrap()))
                 .collect(),
             resolves: color_attachments
                 .iter()
-                .filter_map(|at| at.resolve_target)
-                .map(|attachment| view_guard.get(attachment).unwrap())
+                .filter_map(|at| match *at {
+                    Some(RenderPassColorAttachment {
+                        resolve_target: Some(resolve),
+                        ..
+                    }) => Some(view_guard.get(resolve).unwrap()),
+                    _ => None,
+                })
                 .collect(),
             depth_stencil: depth_stencil_attachment.map(|at| view_guard.get(at.view).unwrap()),
         };
-        let extent = extent.ok_or(RenderPassErrorInner::MissingAttachments)?;
 
-        let multiview = detected_multiview.expect("Multiview was not detected, no attachments");
         let context = RenderPassContext {
             attachments: view_data.map(|view| view.desc.format),
             sample_count,
@@ -1076,7 +1088,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         encoder_id: id::CommandEncoderId,
         base: BasePassRef<RenderCommand>,
-        color_attachments: &[RenderPassColorAttachment],
+        color_attachments: &[Option<RenderPassColorAttachment>],
         depth_stencil_attachment: Option<&RenderPassDepthStencilAttachment>,
     ) -> Result<(), RenderPassError> {
         profiling::scope!("run_render_pass", "CommandEncoder");

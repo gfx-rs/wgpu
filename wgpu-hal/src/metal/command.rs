@@ -353,24 +353,26 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             //TODO: set visibility results buffer
 
             for (i, at) in desc.color_attachments.iter().enumerate() {
-                let at_descriptor = descriptor.color_attachments().object_at(i as u64).unwrap();
-                at_descriptor.set_texture(Some(&at.target.view.raw));
-                if let Some(ref resolve) = at.resolve_target {
-                    //Note: the selection of levels and slices is already handled by `TextureView`
-                    at_descriptor.set_resolve_texture(Some(&resolve.view.raw));
+                if let Some(at) = at.as_ref() {
+                    let at_descriptor = descriptor.color_attachments().object_at(i as u64).unwrap();
+                    at_descriptor.set_texture(Some(&at.target.view.raw));
+                    if let Some(ref resolve) = at.resolve_target {
+                        //Note: the selection of levels and slices is already handled by `TextureView`
+                        at_descriptor.set_resolve_texture(Some(&resolve.view.raw));
+                    }
+                    let load_action = if at.ops.contains(crate::AttachmentOps::LOAD) {
+                        mtl::MTLLoadAction::Load
+                    } else {
+                        at_descriptor.set_clear_color(conv::map_clear_color(&at.clear_value));
+                        mtl::MTLLoadAction::Clear
+                    };
+                    let store_action = conv::map_store_action(
+                        at.ops.contains(crate::AttachmentOps::STORE),
+                        at.resolve_target.is_some(),
+                    );
+                    at_descriptor.set_load_action(load_action);
+                    at_descriptor.set_store_action(store_action);
                 }
-                let load_action = if at.ops.contains(crate::AttachmentOps::LOAD) {
-                    mtl::MTLLoadAction::Load
-                } else {
-                    at_descriptor.set_clear_color(conv::map_clear_color(&at.clear_value));
-                    mtl::MTLLoadAction::Clear
-                };
-                let store_action = conv::map_store_action(
-                    at.ops.contains(crate::AttachmentOps::STORE),
-                    at.resolve_target.is_some(),
-                );
-                at_descriptor.set_load_action(load_action);
-                at_descriptor.set_store_action(store_action);
             }
 
             if let Some(ref at) = desc.depth_stencil_attachment {

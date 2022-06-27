@@ -2031,10 +2031,13 @@ impl crate::Context for Context {
         let colors = desc
             .color_attachments
             .iter()
-            .map(|ca| wgc::command::RenderPassColorAttachment {
-                view: ca.view.id,
-                resolve_target: ca.resolve_target.map(|rt| rt.id),
-                channel: map_pass_channel(Some(&ca.ops)),
+            .map(|ca| {
+                ca.as_ref()
+                    .map(|at| wgc::command::RenderPassColorAttachment {
+                        view: at.view.id,
+                        resolve_target: at.resolve_target.map(|rt| rt.id),
+                        channel: map_pass_channel(Some(&at.ops)),
+                    })
             })
             .collect::<ArrayVec<_, { wgc::MAX_COLOR_ATTACHMENTS }>>();
 
