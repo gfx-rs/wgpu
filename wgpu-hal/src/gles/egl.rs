@@ -790,9 +790,7 @@ impl crate::Instance<super::Api> for Instance {
                         display,
                         WindowSystemInterface {
                             kind: WindowKind::X11,
-                            library: libloading::Library::new("libX11.so")
-                                .ok()
-                                .map(|x| Arc::new(x)),
+                            library: libloading::Library::new("libX11.so").ok().map(Arc::new),
                         },
                     )
                     .map_err(|_| crate::InstanceError)?;
