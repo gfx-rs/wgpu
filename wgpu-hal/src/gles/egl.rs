@@ -764,6 +764,7 @@ impl crate::Instance<super::Api> for Instance {
         let mut inner = self.inner.lock();
 
         match raw_window_handle {
+            #[cfg(not(feature = "emscripten"))]
             Rwh::Xlib(handle) => {
                 // If Wayland EGLDisplay was created, but we got an X window, recreate the context
                 // https://github.com/gfx-rs/wgpu/issues/2762
