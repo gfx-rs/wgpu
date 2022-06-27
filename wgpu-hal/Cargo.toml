@@ -91,7 +91,7 @@ web-sys = { version = "0.3", features = ["Window", "HtmlCanvasElement", "WebGl2R
 js-sys = { version = "0.3" }
 
 [target.'cfg(target_os = "android")'.dependencies]
-android-properties = "0.2"
+android_system_properties = "0.1.1"
 
 [dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
