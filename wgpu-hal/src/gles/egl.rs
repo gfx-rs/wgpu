@@ -407,6 +407,7 @@ struct Inner {
     wl_display: Option<*mut raw::c_void>,
     /// Method by which the framebuffer should support srgb
     srgb_kind: SrgbFrameBufferKind,
+    wsi: WindowSystemInterface,
 }
 
 impl Inner {
@@ -414,6 +415,7 @@ impl Inner {
         flags: crate::InstanceFlags,
         egl: Arc<EglInstance>,
         display: egl::Display,
+        wsi: WindowSystemInterface,
     ) -> Result<Self, crate::InstanceError> {
         let version = egl.initialize(display).map_err(|_| crate::InstanceError)?;
         let vendor = egl.query_string(Some(display), egl::VENDOR).unwrap();
@@ -541,6 +543,7 @@ impl Inner {
             config,
             wl_display: None,
             srgb_kind,
+            wsi,
         })
     }
 }
@@ -575,7 +578,6 @@ struct WindowSystemInterface {
 }
 
 pub struct Instance {
-    wsi: WindowSystemInterface,
     flags: crate::InstanceFlags,
     inner: Mutex<Inner>,
 }
@@ -733,13 +735,17 @@ impl crate::Instance<super::Api> for Instance {
             (function)(Some(egl_debug_proc), attributes.as_ptr());
         }
 
-        let inner = Inner::create(desc.flags, egl, display)?;
-
-        Ok(Instance {
-            wsi: WindowSystemInterface {
+        let inner = Inner::create(
+            desc.flags,
+            egl,
+            display,
+            WindowSystemInterface {
                 library: wsi_library,
                 kind: wsi_kind,
             },
+        )?;
+
+        Ok(Instance {
             flags: desc.flags,
             inner: Mutex::new(inner),
         })
@@ -758,8 +764,48 @@ impl crate::Instance<super::Api> for Instance {
         let mut inner = self.inner.lock();
 
         match raw_window_handle {
-            Rwh::Xlib(_) => {}
-            Rwh::Xcb(_) => {}
+            Rwh::Xlib(handle) => {
+                // If Wayland EGLDisplay was created, but we got an X window, recreate the context
+                // https://github.com/gfx-rs/wgpu/issues/2762
+                if inner.wl_display.is_some() || inner.wsi.kind == WindowKind::Wayland {
+                    log::warn!("Re-initializing Gles context due to Xlib window");
+
+                    use std::ops::DerefMut;
+                    let display_attributes = [egl::ATTRIB_NONE];
+                    let display = inner
+                        .egl
+                        .instance
+                        .upcast::<egl::EGL1_5>()
+                        .unwrap()
+                        .get_platform_display(
+                            EGL_PLATFORM_X11_KHR,
+                            handle.display,
+                            &display_attributes,
+                        )
+                        .unwrap();
+
+                    let new_inner = Inner::create(
+                        self.flags,
+                        Arc::clone(&inner.egl.instance),
+                        display,
+                        WindowSystemInterface {
+                            kind: WindowKind::X11,
+                            library: libloading::Library::new("libX11.so")
+                                .ok()
+                                .map(|x| Arc::new(x)),
+                        },
+                    )
+                    .map_err(|_| crate::InstanceError)?;
+
+                    let old_inner = std::mem::replace(inner.deref_mut(), new_inner);
+                    inner.wl_display = None;
+                    drop(old_inner);
+                }
+            }
+            Rwh::Xcb(_) => {
+                // TODO: support Xcb context reinit
+                // https://www.khronos.org/registry/EGL/extensions/EXT/EGL_EXT_platform_xcb.txt
+            }
             Rwh::Win32(_) => {}
             Rwh::AppKit(_) => {}
             #[cfg(target_os = "android")]
@@ -805,9 +851,13 @@ impl crate::Instance<super::Api> for Instance {
                         )
                         .unwrap();
 
-                    let new_inner =
-                        Inner::create(self.flags, Arc::clone(&inner.egl.instance), display)
-                            .map_err(|_| crate::InstanceError)?;
+                    let new_inner = Inner::create(
+                        self.flags,
+                        Arc::clone(&inner.egl.instance),
+                        display,
+                        inner.wsi.clone(),
+                    )
+                    .map_err(|_| crate::InstanceError)?;
 
                     let old_inner = std::mem::replace(inner.deref_mut(), new_inner);
                     inner.wl_display = Some(handle.display);
@@ -826,7 +876,7 @@ impl crate::Instance<super::Api> for Instance {
 
         Ok(Surface {
             egl: inner.egl.clone(),
-            wsi: self.wsi.clone(),
+            wsi: inner.wsi.clone(),
             config: inner.config,
             presentable: inner.supports_native_window,
             raw_window_handle,
