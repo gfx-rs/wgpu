@@ -185,6 +185,6 @@ The list of currently enabled CTS tests can be found [here](./cts_runner/test.ls
 
 wgpu uses the coordinate systems of D3D and Metal:
 
-Render | Depth | Texture
--------|-------|--------
-![render_coordinates](./etc/render_coordinates.png) | ![depth_coordinates](./etc/depth_coordinates.png) | ![texture_coordinates](./etc/texture_coordinates.png)
+Render | Texture
+-------|--------
+![render_coordinates](./etc/render_coordinates.png) | ![texture_coordinates](./etc/texture_coordinates.png)
