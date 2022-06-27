@@ -20,8 +20,20 @@ typedef metal::float2 type_6[1];
 struct type_8 {
     metal::float4 inner[20];
 };
+struct type_11 {
+    metal::float2x4 inner[2];
+};
+struct type_12 {
+    type_11 inner[2];
+};
+struct type_14 {
+    metal::float4x2 inner[2];
+};
+struct type_15 {
+    type_14 inner[2];
+};
 constant metal::float3 const_type_4_ = {0.0, 0.0, 0.0};
-constant metal::float3x3 const_type_11_ = {const_type_4_, const_type_4_, const_type_4_};
+constant metal::float3x3 const_type_17_ = {const_type_4_, const_type_4_, const_type_4_};
 
 void test_msl_packed_vec3_as_arg(
     metal::float3 arg
@@ -36,14 +48,14 @@ void test_msl_packed_vec3_(
     alignment.v3_ = metal::float3(1.0);
     alignment.v3_[0] = 1.0;
     alignment.v3_[0] = 2.0;
-    int _e21 = idx;
-    alignment.v3_[_e21] = 3.0;
+    int _e23 = idx;
+    alignment.v3_[_e23] = 3.0;
     Foo data = alignment;
     metal::float3 unnamed = data.v3_;
     metal::float2 unnamed_1 = metal::float3(data.v3_).zx;
     test_msl_packed_vec3_as_arg(data.v3_);
-    metal::float3 unnamed_2 = metal::float3(data.v3_) * const_type_11_;
-    metal::float3 unnamed_3 = const_type_11_ * metal::float3(data.v3_);
+    metal::float3 unnamed_2 = metal::float3(data.v3_) * const_type_17_;
+    metal::float3 unnamed_3 = const_type_17_ * metal::float3(data.v3_);
     metal::float3 unnamed_4 = data.v3_ * 2.0;
     metal::float3 unnamed_5 = 2.0 * data.v3_;
 }
@@ -54,24 +66,29 @@ kernel void main_(
 , device Foo& alignment [[user(fake0)]]
 , device type_6 const& dummy [[user(fake0)]]
 , constant type_8& float_vecs [[user(fake0)]]
-, constant metal::float4& global_vec [[user(fake0)]]
-, constant metal::float4x4& global_mat [[user(fake0)]]
+, constant metal::float3& global_vec [[user(fake0)]]
+, constant metal::float3x2& global_mat [[user(fake0)]]
+, constant type_12& global_nested_arrays_of_matrices_2x4_ [[user(fake0)]]
+, constant type_15& global_nested_arrays_of_matrices_4x2_ [[user(fake0)]]
 , constant _mslBufferSizes& _buffer_sizes [[user(fake0)]]
 ) {
     float Foo_1 = 1.0;
     bool at = true;
     test_msl_packed_vec3_(alignment);
-    metal::float4x4 _e10 = global_mat;
-    metal::float4 _e11 = global_vec;
-    wg.inner[6] = (_e10 * _e11).x;
-    float _e19 = dummy[1].y;
-    wg.inner[5] = _e19;
-    float _e25 = float_vecs.inner[0].w;
-    wg.inner[4] = _e25;
-    float _e29 = alignment.v1_;
-    wg.inner[3] = _e29;
-    float _e34 = alignment.v3_[0];
-    wg.inner[2] = _e34;
+    metal::float4x2 _e16 = global_nested_arrays_of_matrices_4x2_.inner[0].inner[0];
+    metal::float4 _e23 = global_nested_arrays_of_matrices_2x4_.inner[0].inner[0][0];
+    wg.inner[7] = (_e16 * _e23).x;
+    metal::float3x2 _e28 = global_mat;
+    metal::float3 _e29 = global_vec;
+    wg.inner[6] = (_e28 * _e29).x;
+    float _e37 = dummy[1].y;
+    wg.inner[5] = _e37;
+    float _e43 = float_vecs.inner[0].w;
+    wg.inner[4] = _e43;
+    float _e47 = alignment.v1_;
+    wg.inner[3] = _e47;
+    float _e52 = alignment.v3_[0];
+    wg.inner[2] = _e52;
     alignment.v1_ = 4.0;
     wg.inner[1] = static_cast<float>(1 + (_buffer_sizes.size3 - 0 - 8) / 8);
     metal::atomic_store_explicit(&at_1, 2u, metal::memory_order_relaxed);

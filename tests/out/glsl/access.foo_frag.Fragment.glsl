@@ -14,6 +14,9 @@ struct AlignedWrapper {
 struct Baz {
     mat3x2 m;
 };
+struct MatCx2InArray {
+    mat4x2 am[2];
+};
 layout(std430) buffer Bar_block_0Fragment {
     mat4x3 _matrix;
     mat2x2 matrix_array[2];
@@ -27,8 +30,8 @@ layout(std430) buffer type_11_block_1Fragment { ivec2 _group_0_binding_2_fs; };
 layout(location = 0) out vec4 _fs2p_location0;
 
 float read_from_private(inout float foo_1) {
-    float _e5 = foo_1;
-    return _e5;
+    float _e6 = foo_1;
+    return _e6;
 }
 
 float test_arr_as_arg(float a[5][10]) {

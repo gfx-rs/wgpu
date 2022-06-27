@@ -20,6 +20,10 @@ struct Baz {
     m: mat3x2<f32>,
 }
 
+struct MatCx2InArray {
+    am: array<mat4x2<f32>,2>,
+}
+
 var<private> global_const: GlobalConst = GlobalConst(0u, vec3<u32>(0u, 0u, 0u), 0);
 @group(0) @binding(0) 
 var<storage, read_write> bar: Bar;
@@ -27,6 +31,8 @@ var<storage, read_write> bar: Bar;
 var<uniform> baz: Baz;
 @group(0) @binding(2) 
 var<storage, read_write> qux: vec2<i32>;
+@group(0) @binding(3) 
+var<uniform> nested_mat_cx2_: MatCx2InArray;
 var<workgroup> val: u32;
 
 fn test_matrix_within_struct_accesses() {
@@ -65,9 +71,47 @@ fn test_matrix_within_struct_accesses() {
     return;
 }
 
+fn test_matrix_within_array_within_struct_accesses() {
+    var idx_1: i32 = 1;
+    var t_1: MatCx2InArray;
+
+    let _e7 = idx_1;
+    idx_1 = (_e7 - 1);
+    _ = nested_mat_cx2_.am;
+    _ = nested_mat_cx2_.am[0];
+    _ = nested_mat_cx2_.am[0][0];
+    let _e25 = idx_1;
+    _ = nested_mat_cx2_.am[0][_e25];
+    _ = nested_mat_cx2_.am[0][0][1];
+    let _e41 = idx_1;
+    _ = nested_mat_cx2_.am[0][0][_e41];
+    let _e47 = idx_1;
+    _ = nested_mat_cx2_.am[0][_e47][1];
+    let _e55 = idx_1;
+    let _e57 = idx_1;
+    _ = nested_mat_cx2_.am[0][_e55][_e57];
+    t_1 = MatCx2InArray(array<mat4x2<f32>,2>(mat4x2<f32>(vec2<f32>(0.0, 0.0), vec2<f32>(0.0, 0.0), vec2<f32>(0.0, 0.0), vec2<f32>(0.0, 0.0)), mat4x2<f32>(vec2<f32>(0.0, 0.0), vec2<f32>(0.0, 0.0), vec2<f32>(0.0, 0.0), vec2<f32>(0.0, 0.0))));
+    let _e63 = idx_1;
+    idx_1 = (_e63 + 1);
+    t_1.am = array<mat4x2<f32>,2>(mat4x2<f32>(vec2<f32>(0.0, 0.0), vec2<f32>(0.0, 0.0), vec2<f32>(0.0, 0.0), vec2<f32>(0.0, 0.0)), mat4x2<f32>(vec2<f32>(0.0, 0.0), vec2<f32>(0.0, 0.0), vec2<f32>(0.0, 0.0), vec2<f32>(0.0, 0.0)));
+    t_1.am[0] = mat4x2<f32>(vec2<f32>(8.0), vec2<f32>(7.0), vec2<f32>(6.0), vec2<f32>(5.0));
+    t_1.am[0][0] = vec2<f32>(9.0);
+    let _e90 = idx_1;
+    t_1.am[0][_e90] = vec2<f32>(90.0);
+    t_1.am[0][0][1] = 10.0;
+    let _e107 = idx_1;
+    t_1.am[0][0][_e107] = 20.0;
+    let _e113 = idx_1;
+    t_1.am[0][_e113][1] = 30.0;
+    let _e121 = idx_1;
+    let _e123 = idx_1;
+    t_1.am[0][_e121][_e123] = 40.0;
+    return;
+}
+
 fn read_from_private(foo_1: ptr<function, f32>) -> f32 {
-    let _e5 = (*foo_1);
-    return _e5;
+    let _e6 = (*foo_1);
+    return _e6;
 }
 
 fn test_arr_as_arg(a: array<array<f32,10>,5>) -> f32 {
@@ -87,17 +131,18 @@ fn foo_vert(@builtin(vertex_index) vi: u32) -> @builtin(position) vec4<f32> {
     let baz_1 = foo;
     foo = 1.0;
     test_matrix_within_struct_accesses();
+    test_matrix_within_array_within_struct_accesses();
     let _matrix = bar._matrix;
     let arr = bar.arr;
     let b = bar._matrix[3][0];
     let a_1 = bar.data[(arrayLength((&bar.data)) - 2u)].value;
     let c_1 = qux;
     let data_pointer = (&bar.data[0].value);
-    let _e31 = read_from_private((&foo));
+    let _e32 = read_from_private((&foo));
     c = array<i32,5>(a_1, i32(b), 3, 4, 5);
     c[(vi + 1u)] = 42;
     let value = c[vi];
-    let _e45 = test_arr_as_arg(array<array<f32,10>,5>(array<f32,10>(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), array<f32,10>(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), array<f32,10>(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), array<f32,10>(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), array<f32,10>(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)));
+    let _e46 = test_arr_as_arg(array<array<f32,10>,5>(array<f32,10>(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), array<f32,10>(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), array<f32,10>(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), array<f32,10>(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), array<f32,10>(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)));
     return vec4<f32>((_matrix * vec4<f32>(vec4<i32>(value))), 2.0);
 }
 
@@ -116,22 +161,22 @@ fn atomics() {
     var tmp: i32;
 
     let value_1 = atomicLoad((&bar.atom));
-    let _e9 = atomicAdd((&bar.atom), 5);
-    tmp = _e9;
-    let _e12 = atomicSub((&bar.atom), 5);
-    tmp = _e12;
-    let _e15 = atomicAnd((&bar.atom), 5);
-    tmp = _e15;
-    let _e18 = atomicOr((&bar.atom), 5);
-    tmp = _e18;
-    let _e21 = atomicXor((&bar.atom), 5);
-    tmp = _e21;
-    let _e24 = atomicMin((&bar.atom), 5);
-    tmp = _e24;
-    let _e27 = atomicMax((&bar.atom), 5);
-    tmp = _e27;
-    let _e30 = atomicExchange((&bar.atom), 5);
-    tmp = _e30;
+    let _e10 = atomicAdd((&bar.atom), 5);
+    tmp = _e10;
+    let _e13 = atomicSub((&bar.atom), 5);
+    tmp = _e13;
+    let _e16 = atomicAnd((&bar.atom), 5);
+    tmp = _e16;
+    let _e19 = atomicOr((&bar.atom), 5);
+    tmp = _e19;
+    let _e22 = atomicXor((&bar.atom), 5);
+    tmp = _e22;
+    let _e25 = atomicMin((&bar.atom), 5);
+    tmp = _e25;
+    let _e28 = atomicMax((&bar.atom), 5);
+    tmp = _e28;
+    let _e31 = atomicExchange((&bar.atom), 5);
+    tmp = _e31;
     atomicStore((&bar.atom), value_1);
     return;
 }

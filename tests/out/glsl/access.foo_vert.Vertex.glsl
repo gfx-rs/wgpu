@@ -14,6 +14,9 @@ struct AlignedWrapper {
 struct Baz {
     mat3x2 m;
 };
+struct MatCx2InArray {
+    mat4x2 am[2];
+};
 layout(std430) buffer Bar_block_0Vertex {
     mat4x3 _matrix;
     mat2x2 matrix_array[2];
@@ -25,6 +28,8 @@ layout(std430) buffer Bar_block_0Vertex {
 uniform Baz_block_1Vertex { Baz _group_0_binding_1_vs; };
 
 layout(std430) buffer type_11_block_2Vertex { ivec2 _group_0_binding_2_vs; };
+
+uniform MatCx2InArray_block_3Vertex { MatCx2InArray _group_0_binding_3_vs; };
 
 
 void test_matrix_within_struct_accesses() {
@@ -62,9 +67,46 @@ void test_matrix_within_struct_accesses() {
     return;
 }
 
+void test_matrix_within_array_within_struct_accesses() {
+    int idx_1 = 1;
+    MatCx2InArray t_1 = MatCx2InArray(mat4x2[2](mat4x2(0.0), mat4x2(0.0)));
+    int _e7 = idx_1;
+    idx_1 = (_e7 - 1);
+    mat4x2 unnamed_7[2] = _group_0_binding_3_vs.am;
+    mat4x2 unnamed_8 = _group_0_binding_3_vs.am[0];
+    vec2 unnamed_9 = _group_0_binding_3_vs.am[0][0];
+    int _e25 = idx_1;
+    vec2 unnamed_10 = _group_0_binding_3_vs.am[0][_e25];
+    float unnamed_11 = _group_0_binding_3_vs.am[0][0][1];
+    int _e41 = idx_1;
+    float unnamed_12 = _group_0_binding_3_vs.am[0][0][_e41];
+    int _e47 = idx_1;
+    float unnamed_13 = _group_0_binding_3_vs.am[0][_e47][1];
+    int _e55 = idx_1;
+    int _e57 = idx_1;
+    float unnamed_14 = _group_0_binding_3_vs.am[0][_e55][_e57];
+    t_1 = MatCx2InArray(mat4x2[2](mat4x2(vec2(0.0, 0.0), vec2(0.0, 0.0), vec2(0.0, 0.0), vec2(0.0, 0.0)), mat4x2(vec2(0.0, 0.0), vec2(0.0, 0.0), vec2(0.0, 0.0), vec2(0.0, 0.0))));
+    int _e63 = idx_1;
+    idx_1 = (_e63 + 1);
+    t_1.am = mat4x2[2](mat4x2(vec2(0.0, 0.0), vec2(0.0, 0.0), vec2(0.0, 0.0), vec2(0.0, 0.0)), mat4x2(vec2(0.0, 0.0), vec2(0.0, 0.0), vec2(0.0, 0.0), vec2(0.0, 0.0)));
+    t_1.am[0] = mat4x2(vec2(8.0), vec2(7.0), vec2(6.0), vec2(5.0));
+    t_1.am[0][0] = vec2(9.0);
+    int _e90 = idx_1;
+    t_1.am[0][_e90] = vec2(90.0);
+    t_1.am[0][0][1] = 10.0;
+    int _e107 = idx_1;
+    t_1.am[0][0][_e107] = 20.0;
+    int _e113 = idx_1;
+    t_1.am[0][_e113][1] = 30.0;
+    int _e121 = idx_1;
+    int _e123 = idx_1;
+    t_1.am[0][_e121][_e123] = 40.0;
+    return;
+}
+
 float read_from_private(inout float foo_1) {
-    float _e5 = foo_1;
-    return _e5;
+    float _e6 = foo_1;
+    return _e6;
 }
 
 float test_arr_as_arg(float a[5][10]) {
@@ -83,16 +125,17 @@ void main() {
     float baz_1 = foo;
     foo = 1.0;
     test_matrix_within_struct_accesses();
+    test_matrix_within_array_within_struct_accesses();
     mat4x3 _matrix = _group_0_binding_0_vs._matrix;
     uvec2 arr[2] = _group_0_binding_0_vs.arr;
     float b = _group_0_binding_0_vs._matrix[3][0];
     int a_1 = _group_0_binding_0_vs.data[(uint(_group_0_binding_0_vs.data.length()) - 2u)].value;
     ivec2 c_1 = _group_0_binding_2_vs;
-    float _e31 = read_from_private(foo);
+    float _e32 = read_from_private(foo);
     c = int[5](a_1, int(b), 3, 4, 5);
     c[(vi + 1u)] = 42;
     int value = c[vi];
-    float _e45 = test_arr_as_arg(float[5][10](float[10](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), float[10](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), float[10](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), float[10](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), float[10](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)));
+    float _e46 = test_arr_as_arg(float[5][10](float[10](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), float[10](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), float[10](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), float[10](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), float[10](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)));
     gl_Position = vec4((_matrix * vec4(ivec4(value))), 2.0);
     gl_Position.yz = vec2(-gl_Position.y, gl_Position.z * 2.0 - gl_Position.w);
     return;

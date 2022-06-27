@@ -20,10 +20,16 @@ var<storage> dummy: array<vec2<f32>>;
 var<uniform> float_vecs: array<vec4<f32>, 20>;
 
 @group(0) @binding(4)
-var<uniform> global_vec: vec4<f32>;
+var<uniform> global_vec: vec3<f32>;
 
 @group(0) @binding(5)
-var<uniform> global_mat: mat4x4<f32>;
+var<uniform> global_mat: mat3x2<f32>;
+
+@group(0) @binding(6)
+var<uniform> global_nested_arrays_of_matrices_2x4: array<array<mat2x4<f32>, 2>, 2>;
+
+@group(0) @binding(7)
+var<uniform> global_nested_arrays_of_matrices_4x2: array<array<mat4x2<f32>, 2>, 2>;
 
 fn test_msl_packed_vec3_as_arg(arg: vec3<f32>) {}
 
@@ -56,6 +62,7 @@ fn test_msl_packed_vec3() {
 fn main() {
     test_msl_packed_vec3();
 
+    wg[7] = (global_nested_arrays_of_matrices_4x2[0][0] * global_nested_arrays_of_matrices_2x4[0][0][0]).x;
     wg[6] = (global_mat * global_vec).x;
     wg[5] = dummy[1].y;
     wg[4] = float_vecs[0].w;

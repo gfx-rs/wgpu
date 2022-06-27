@@ -16,6 +16,9 @@ struct AlignedWrapper {
 struct Baz {
     mat3x2 m;
 };
+struct MatCx2InArray {
+    mat4x2 am[2];
+};
 layout(std430) buffer Bar_block_0Compute {
     mat4x3 _matrix;
     mat2x2 matrix_array[2];
@@ -26,8 +29,8 @@ layout(std430) buffer Bar_block_0Compute {
 
 
 float read_from_private(inout float foo_1) {
-    float _e5 = foo_1;
-    return _e5;
+    float _e6 = foo_1;
+    return _e6;
 }
 
 float test_arr_as_arg(float a[5][10]) {
@@ -42,22 +45,22 @@ void assign_through_ptr_fn(inout uint p) {
 void main() {
     int tmp = 0;
     int value = _group_0_binding_0_cs.atom;
-    int _e9 = atomicAdd(_group_0_binding_0_cs.atom, 5);
-    tmp = _e9;
-    int _e12 = atomicAdd(_group_0_binding_0_cs.atom, -5);
-    tmp = _e12;
-    int _e15 = atomicAnd(_group_0_binding_0_cs.atom, 5);
-    tmp = _e15;
-    int _e18 = atomicOr(_group_0_binding_0_cs.atom, 5);
-    tmp = _e18;
-    int _e21 = atomicXor(_group_0_binding_0_cs.atom, 5);
-    tmp = _e21;
-    int _e24 = atomicMin(_group_0_binding_0_cs.atom, 5);
-    tmp = _e24;
-    int _e27 = atomicMax(_group_0_binding_0_cs.atom, 5);
-    tmp = _e27;
-    int _e30 = atomicExchange(_group_0_binding_0_cs.atom, 5);
-    tmp = _e30;
+    int _e10 = atomicAdd(_group_0_binding_0_cs.atom, 5);
+    tmp = _e10;
+    int _e13 = atomicAdd(_group_0_binding_0_cs.atom, -5);
+    tmp = _e13;
+    int _e16 = atomicAnd(_group_0_binding_0_cs.atom, 5);
+    tmp = _e16;
+    int _e19 = atomicOr(_group_0_binding_0_cs.atom, 5);
+    tmp = _e19;
+    int _e22 = atomicXor(_group_0_binding_0_cs.atom, 5);
+    tmp = _e22;
+    int _e25 = atomicMin(_group_0_binding_0_cs.atom, 5);
+    tmp = _e25;
+    int _e28 = atomicMax(_group_0_binding_0_cs.atom, 5);
+    tmp = _e28;
+    int _e31 = atomicExchange(_group_0_binding_0_cs.atom, 5);
+    tmp = _e31;
     _group_0_binding_0_cs.atom = value;
     return;
 }

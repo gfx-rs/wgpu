@@ -150,6 +150,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             .map(|ep| (ep.stage, ep.function.result.clone()))
             .collect::<Vec<(ShaderStage, Option<crate::FunctionResult>)>>();
 
+        self.write_all_mat_cx2_typedefs_and_functions(module)?;
+
         // Write all structs
         for (handle, ty) in module.types.iter() {
             if let TypeInner::Struct { ref members, span } = ty.inner {
@@ -661,19 +663,41 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
 
         if global.space == crate::AddressSpace::Uniform {
             write!(self.out, " {{ ")?;
-            // Even though Naga IR matrices are column-major, we must describe
-            // matrices passed from the CPU as being in row-major order.  See
-            // the module-level comments for details.
-            if let TypeInner::Matrix { .. } = module.types[global.ty].inner {
-                write!(self.out, "row_major ")?;
+
+            let matrix_data = get_inner_matrix_data(module, global.ty);
+
+            // We treat matrices of the form `matCx2` as a sequence of C `vec2`s.
+            // See the module-level block comment in mod.rs for details.
+            if let Some(MatrixType {
+                columns,
+                rows: crate::VectorSize::Bi,
+                width: 4,
+            }) = matrix_data
+            {
+                write!(
+                    self.out,
+                    "__mat{}x2 {}",
+                    columns as u8,
+                    &self.names[&NameKey::GlobalVariable(handle)]
+                )?;
+            } else {
+                // Even though Naga IR matrices are column-major, we must describe
+                // matrices passed from the CPU as being in row-major order.
+                // See the module-level block comment in mod.rs for details.
+                if matrix_data.is_some() {
+                    write!(self.out, "row_major ")?;
+                }
+
+                self.write_type(module, global.ty)?;
+                let sub_name = &self.names[&NameKey::GlobalVariable(handle)];
+                write!(self.out, " {}", sub_name)?;
             }
-            self.write_type(module, global.ty)?;
-            let sub_name = &self.names[&NameKey::GlobalVariable(handle)];
-            write!(self.out, " {}", sub_name)?;
+
             // need to write the array size if the type was emitted with `write_type`
             if let TypeInner::Array { base, size, .. } = module.types[global.ty].inner {
                 self.write_array_size(module, base, size)?;
             }
+
             writeln!(self.out, "; }}")?;
         } else {
             writeln!(self.out, ";")?;
@@ -801,16 +825,31 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             write!(self.out, "{}", back::INDENT)?;
 
             match module.types[member.ty].inner {
-                TypeInner::Array {
-                    base,
-                    size,
-                    stride: _,
-                } => {
+                TypeInner::Array { base, size, .. } => {
                     // HLSL arrays are written as `type name[size]`
-                    if let TypeInner::Matrix { .. } = module.types[base].inner {
-                        write!(self.out, "row_major ")?;
+
+                    let matrix_data = get_inner_matrix_data(module, member.ty);
+
+                    // We treat matrices of the form `matCx2` as a sequence of C `vec2`s.
+                    // See the module-level block comment in mod.rs for details.
+                    if let Some(MatrixType {
+                        columns,
+                        rows: crate::VectorSize::Bi,
+                        width: 4,
+                    }) = matrix_data
+                    {
+                        write!(self.out, "__mat{}x2", columns as u8)?;
+                    } else {
+                        // Even though Naga IR matrices are column-major, we must describe
+                        // matrices passed from the CPU as being in row-major order.
+                        // See the module-level block comment in mod.rs for details.
+                        if matrix_data.is_some() {
+                            write!(self.out, "row_major ")?;
+                        }
+
+                        self.write_type(module, base)?;
                     }
-                    self.write_type(module, base)?;
+
                     // Write `name`
                     write!(
                         self.out,
@@ -820,8 +859,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     // Write [size]
                     self.write_array_size(module, base, size)?;
                 }
-                // We treat matrices of the form `matCx2` as a sequence of C `vec2`s
-                // (see top level module docs for details).
+                // We treat matrices of the form `matCx2` as a sequence of C `vec2`s.
+                // See the module-level block comment in mod.rs for details.
                 TypeInner::Matrix {
                     rows,
                     columns,
@@ -848,6 +887,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         self.write_modifier(binding)?;
                     }
 
+                    // Even though Naga IR matrices are column-major, we must describe
+                    // matrices passed from the CPU as being in row-major order.
+                    // See the module-level block comment in mod.rs for details.
                     if let TypeInner::Matrix { .. } = module.types[member.ty].inner {
                         write!(self.out, "row_major ")?;
                     }
@@ -1285,17 +1327,6 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             }
             Statement::Store { pointer, value } => {
                 let ty_inner = func_ctx.info[pointer].ty.inner_with(&module.types);
-                let array_info = match *ty_inner {
-                    TypeInner::Pointer { base, .. } => match module.types[base].inner {
-                        crate::TypeInner::Array {
-                            size: crate::ArraySize::Constant(ch),
-                            ..
-                        } => Some((ch, base)),
-                        _ => None,
-                    },
-                    _ => None,
-                };
-
                 if let Some(crate::AddressSpace::Storage { .. }) = ty_inner.pointer_space() {
                     let var_handle = self.fill_access_chain(module, pointer, func_ctx)?;
                     self.write_storage_store(
@@ -1305,26 +1336,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         func_ctx,
                         level,
                     )?;
-                } else if let Some((const_handle, base_ty)) = array_info {
-                    let size = module.constants[const_handle].to_array_length().unwrap();
-                    writeln!(self.out, "{}{{", level)?;
-                    write!(self.out, "{}", level.next())?;
-                    self.write_type(module, base_ty)?;
-                    write!(self.out, " _result[{}]=", size)?;
-                    self.write_expr(module, value, func_ctx)?;
-                    writeln!(self.out, ";")?;
-                    write!(
-                        self.out,
-                        "{}for(int _i=0; _i<{}; ++_i) ",
-                        level.next(),
-                        size
-                    )?;
-                    self.write_expr(module, pointer, func_ctx)?;
-                    writeln!(self.out, "[_i] = _result[_i];")?;
-                    writeln!(self.out, "{}}}", level)?;
                 } else {
-                    // We treat matrices of the form `matCx2` as a sequence of C `vec2`s
-                    // (see top level module docs for details).
+                    // We treat matrices of the form `matCx2` as a sequence of C `vec2`s.
+                    // See the module-level block comment in mod.rs for details.
                     //
                     // We handle matrix Stores here directly (including sub accesses for Vectors and Scalars).
                     // Loads are handled by `Expression::AccessIndex` (since sub accesses work fine for Loads).
@@ -1487,10 +1501,132 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                             writeln!(self.out, ");")?;
                         }
                     } else {
-                        self.write_expr(module, pointer, func_ctx)?;
-                        write!(self.out, " = ")?;
-                        self.write_expr(module, value, func_ctx)?;
-                        writeln!(self.out, ";")?
+                        // We handle `Store`s to __matCx2 column vectors and scalar elements via
+                        // the previously injected functions __set_col_of_matCx2 / __set_el_of_matCx2.
+                        struct MatrixData {
+                            columns: crate::VectorSize,
+                            base: Handle<crate::Expression>,
+                        }
+
+                        enum Index {
+                            Expression(Handle<crate::Expression>),
+                            Static(u32),
+                        }
+
+                        let mut matrix = None;
+                        let mut vector = None;
+                        let mut scalar = None;
+
+                        let mut current_expr = pointer;
+                        for _ in 0..3 {
+                            let resolved = func_ctx.info[current_expr].ty.inner_with(&module.types);
+                            match (resolved, &func_ctx.expressions[current_expr]) {
+                                (
+                                    &TypeInner::ValuePointer {
+                                        size: Some(crate::VectorSize::Bi),
+                                        ..
+                                    },
+                                    &crate::Expression::Access { base, index },
+                                ) => {
+                                    vector = Some(index);
+                                    current_expr = base;
+                                }
+                                (
+                                    &TypeInner::ValuePointer { size: None, .. },
+                                    &crate::Expression::Access { base, index },
+                                ) => {
+                                    scalar = Some(Index::Expression(index));
+                                    current_expr = base;
+                                }
+                                (
+                                    &TypeInner::ValuePointer { size: None, .. },
+                                    &crate::Expression::AccessIndex { base, index },
+                                ) => {
+                                    scalar = Some(Index::Static(index));
+                                    current_expr = base;
+                                }
+                                _ => {
+                                    if let Some(MatrixType {
+                                        columns,
+                                        rows: crate::VectorSize::Bi,
+                                        width: 4,
+                                    }) = get_inner_matrix_of_struct_array_member(
+                                        module,
+                                        current_expr,
+                                        func_ctx,
+                                        true,
+                                    ) {
+                                        matrix = Some(MatrixData {
+                                            columns,
+                                            base: current_expr,
+                                        });
+                                    }
+
+                                    break;
+                                }
+                            }
+                        }
+
+                        if let (Some(MatrixData { columns, base }), Some(vec_index)) =
+                            (matrix, vector)
+                        {
+                            if scalar.is_some() {
+                                write!(self.out, "__set_el_of_mat{}x2", columns as u8)?;
+                            } else {
+                                write!(self.out, "__set_col_of_mat{}x2", columns as u8)?;
+                            }
+                            write!(self.out, "(")?;
+                            self.write_expr(module, base, func_ctx)?;
+                            write!(self.out, ", ")?;
+                            self.write_expr(module, vec_index, func_ctx)?;
+
+                            if let Some(scalar_index) = scalar {
+                                write!(self.out, ", ")?;
+                                match scalar_index {
+                                    Index::Static(index) => {
+                                        write!(self.out, "{}", index)?;
+                                    }
+                                    Index::Expression(index) => {
+                                        self.write_expr(module, index, func_ctx)?;
+                                    }
+                                }
+                            }
+
+                            write!(self.out, ", ")?;
+                            self.write_expr(module, value, func_ctx)?;
+
+                            writeln!(self.out, ");")?;
+                        } else {
+                            self.write_expr(module, pointer, func_ctx)?;
+                            write!(self.out, " = ")?;
+
+                            // We cast the RHS of this store in cases where the LHS
+                            // is a struct member with type:
+                            //  - matCx2 or
+                            //  - a (possibly nested) array of matCx2's
+                            if let Some(MatrixType {
+                                columns,
+                                rows: crate::VectorSize::Bi,
+                                width: 4,
+                            }) = get_inner_matrix_of_struct_array_member(
+                                module, pointer, func_ctx, false,
+                            ) {
+                                let mut resolved =
+                                    func_ctx.info[pointer].ty.inner_with(&module.types);
+                                if let TypeInner::Pointer { base, .. } = *resolved {
+                                    resolved = &module.types[base].inner;
+                                }
+
+                                write!(self.out, "(__mat{}x2", columns as u8)?;
+                                if let TypeInner::Array { base, size, .. } = *resolved {
+                                    self.write_array_size(module, base, size)?;
+                                }
+                                write!(self.out, ")")?;
+                            }
+
+                            self.write_expr(module, value, func_ctx)?;
+                            writeln!(self.out, ";")?
+                        }
                     }
                 }
             }
@@ -1863,6 +1999,26 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 {
                     // do nothing, the chain is written on `Load`/`Store`
                 } else {
+                    // We use the function __get_col_of_matCx2 here in cases
+                    // where `base`s type resolves to a matCx2 and is part of a
+                    // struct member with type of (possibly nested) array of matCx2's.
+                    //
+                    // Note that this only works for `Load`s and we handle
+                    // `Store`s differently in `Statement::Store`.
+                    if let Some(MatrixType {
+                        columns,
+                        rows: crate::VectorSize::Bi,
+                        width: 4,
+                    }) = get_inner_matrix_of_struct_array_member(module, base, func_ctx, true)
+                    {
+                        write!(self.out, "__get_col_of_mat{}x2(", columns as u8)?;
+                        self.write_expr(module, base, func_ctx)?;
+                        write!(self.out, ", ")?;
+                        self.write_expr(module, index, func_ctx)?;
+                        write!(self.out, ")")?;
+                        return Ok(());
+                    }
+
                     let base_ty_res = &func_ctx.info[base].ty;
                     let resolved = base_ty_res.inner_with(&module.types);
 
@@ -1895,18 +2051,64 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 {
                     // do nothing, the chain is written on `Load`/`Store`
                 } else {
+                    fn write_access<W: fmt::Write>(
+                        writer: &mut super::Writer<'_, W>,
+                        resolved: &TypeInner,
+                        base_ty_handle: Option<Handle<crate::Type>>,
+                        index: u32,
+                    ) -> BackendResult {
+                        match *resolved {
+                            TypeInner::Vector { .. } => {
+                                // Write vector access as a swizzle
+                                write!(writer.out, ".{}", back::COMPONENTS[index as usize])?
+                            }
+                            TypeInner::Matrix { .. }
+                            | TypeInner::Array { .. }
+                            | TypeInner::BindingArray { .. }
+                            | TypeInner::ValuePointer { .. } => write!(writer.out, "[{}]", index)?,
+                            TypeInner::Struct { .. } => {
+                                // This will never panic in case the type is a `Struct`, this is not true
+                                // for other types so we can only check while inside this match arm
+                                let ty = base_ty_handle.unwrap();
+
+                                write!(
+                                    writer.out,
+                                    ".{}",
+                                    &writer.names[&NameKey::StructMember(ty, index)]
+                                )?
+                            }
+                            ref other => {
+                                return Err(Error::Custom(format!("Cannot index {:?}", other)))
+                            }
+                        }
+                        Ok(())
+                    }
+
+                    // We write the matrix column access in a special way since
+                    // the type of `base` is our special __matCx2 struct.
+                    if let Some(MatrixType {
+                        rows: crate::VectorSize::Bi,
+                        width: 4,
+                        ..
+                    }) = get_inner_matrix_of_struct_array_member(module, base, func_ctx, true)
+                    {
+                        self.write_expr(module, base, func_ctx)?;
+                        write!(self.out, "._{}", index)?;
+                        return Ok(());
+                    }
+
                     let base_ty_res = &func_ctx.info[base].ty;
                     let mut resolved = base_ty_res.inner_with(&module.types);
                     let base_ty_handle = match *resolved {
-                        TypeInner::Pointer { base, space: _ } => {
+                        TypeInner::Pointer { base, .. } => {
                             resolved = &module.types[base].inner;
                             Some(base)
                         }
                         _ => base_ty_res.handle(),
                     };
 
-                    // We treat matrices of the form `matCx2` as a sequence of C `vec2`s
-                    // (see top level module docs for details).
+                    // We treat matrices of the form `matCx2` as a sequence of C `vec2`s.
+                    // See the module-level block comment in mod.rs for details.
                     //
                     // We handle matrix reconstruction here for Loads.
                     // Stores are handled directly by `Statement::Store`.
@@ -1929,34 +2131,10 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                             }
                             _ => {}
                         }
-                    };
+                    }
 
                     self.write_expr(module, base, func_ctx)?;
-
-                    match *resolved {
-                        TypeInner::Vector { .. } => {
-                            // Write vector access as a swizzle
-                            write!(self.out, ".{}", back::COMPONENTS[index as usize])?
-                        }
-                        TypeInner::Matrix { .. }
-                        | TypeInner::Array { .. }
-                        | TypeInner::BindingArray { .. }
-                        | TypeInner::ValuePointer { .. } => write!(self.out, "[{}]", index)?,
-                        TypeInner::Struct { .. } => {
-                            // This will never panic in case the type is a `Struct`, this is not true
-                            // for other types so we can only check while inside this match arm
-                            let ty = base_ty_handle.unwrap();
-
-                            write!(
-                                self.out,
-                                ".{}",
-                                &self.names[&NameKey::StructMember(ty, index)]
-                            )?
-                        }
-                        ref other => {
-                            return Err(Error::Custom(format!("Cannot index {:?}", other)))
-                        }
-                    }
+                    write_access(self, resolved, base_ty_handle, index)?;
                 }
             }
             Expression::FunctionArgument(pos) => {
@@ -2127,7 +2305,42 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         self.write_storage_load(module, var_handle, result_ty, func_ctx)?;
                     }
                     _ => {
+                        let mut close_paren = false;
+
+                        // We cast the value loaded to a native HLSL floatCx2
+                        // in cases where it is of type:
+                        //  - __matCx2 or
+                        //  - a (possibly nested) array of __matCx2's
+                        if let Some(MatrixType {
+                            rows: crate::VectorSize::Bi,
+                            width: 4,
+                            ..
+                        }) = get_inner_matrix_of_struct_array_member(
+                            module, pointer, func_ctx, false,
+                        )
+                        .or_else(|| get_inner_matrix_of_global_uniform(module, pointer, func_ctx))
+                        {
+                            let mut resolved = func_ctx.info[pointer].ty.inner_with(&module.types);
+                            if let TypeInner::Pointer { base, .. } = *resolved {
+                                resolved = &module.types[base].inner;
+                            }
+
+                            write!(self.out, "((")?;
+                            if let TypeInner::Array { base, size, .. } = *resolved {
+                                self.write_type(module, base)?;
+                                self.write_array_size(module, base, size)?;
+                            } else {
+                                self.write_value_type(module, resolved)?;
+                            }
+                            write!(self.out, ")")?;
+                            close_paren = true;
+                        }
+
                         self.write_expr(module, pointer, func_ctx)?;
+
+                        if close_paren {
+                            write!(self.out, ")")?;
+                        }
                     }
                 }
             }
@@ -2585,4 +2798,140 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         }
         Ok(())
     }
+}
+
+pub(super) struct MatrixType {
+    pub(super) columns: crate::VectorSize,
+    pub(super) rows: crate::VectorSize,
+    pub(super) width: crate::Bytes,
+}
+
+pub(super) fn get_inner_matrix_data(
+    module: &Module,
+    handle: Handle<crate::Type>,
+) -> Option<MatrixType> {
+    match module.types[handle].inner {
+        TypeInner::Matrix {
+            columns,
+            rows,
+            width,
+        } => Some(MatrixType {
+            columns,
+            rows,
+            width,
+        }),
+        TypeInner::Array { base, .. } => get_inner_matrix_data(module, base),
+        _ => None,
+    }
+}
+
+/// Returns the matrix data if the access chain starting at `base`:
+/// - starts with an expression with resolved type of [`TypeInner::Matrix`] if `direct = true`
+/// - contains one or more expressions with resolved type of [`TypeInner::Array`] of [`TypeInner::Matrix`]
+/// - ends at an expression with resolved type of [`TypeInner::Struct`]
+pub(super) fn get_inner_matrix_of_struct_array_member(
+    module: &Module,
+    base: Handle<crate::Expression>,
+    func_ctx: &back::FunctionCtx<'_>,
+    direct: bool,
+) -> Option<MatrixType> {
+    let mut mat_data = None;
+    let mut array_base = None;
+
+    let mut current_base = base;
+    loop {
+        let mut resolved = func_ctx.info[current_base].ty.inner_with(&module.types);
+        if let TypeInner::Pointer { base, .. } = *resolved {
+            resolved = &module.types[base].inner;
+        };
+
+        match *resolved {
+            TypeInner::Matrix {
+                columns,
+                rows,
+                width,
+            } => {
+                mat_data = Some(MatrixType {
+                    columns,
+                    rows,
+                    width,
+                })
+            }
+            TypeInner::Array { base, .. } => {
+                array_base = Some(base);
+            }
+            TypeInner::Struct { .. } => {
+                if let Some(array_base) = array_base {
+                    if direct {
+                        return mat_data;
+                    } else {
+                        return get_inner_matrix_data(module, array_base);
+                    }
+                }
+
+                break;
+            }
+            _ => break,
+        }
+
+        current_base = match func_ctx.expressions[current_base] {
+            crate::Expression::Access { base, .. } => base,
+            crate::Expression::AccessIndex { base, .. } => base,
+            _ => break,
+        };
+    }
+    None
+}
+
+/// Returns the matrix data if the access chain starting at `base`:
+/// - starts with an expression with resolved type of [`TypeInner::Matrix`]
+/// - contains zero or more expressions with resolved type of [`TypeInner::Array`] of [`TypeInner::Matrix`]
+/// - ends with an [`Expression::GlobalVariable`](crate::Expression::GlobalVariable) in [`AddressSpace::Uniform`](crate::AddressSpace::Uniform)
+fn get_inner_matrix_of_global_uniform(
+    module: &Module,
+    base: Handle<crate::Expression>,
+    func_ctx: &back::FunctionCtx<'_>,
+) -> Option<MatrixType> {
+    let mut mat_data = None;
+    let mut array_base = None;
+
+    let mut current_base = base;
+    loop {
+        let mut resolved = func_ctx.info[current_base].ty.inner_with(&module.types);
+        if let TypeInner::Pointer { base, .. } = *resolved {
+            resolved = &module.types[base].inner;
+        };
+
+        match *resolved {
+            TypeInner::Matrix {
+                columns,
+                rows,
+                width,
+            } => {
+                mat_data = Some(MatrixType {
+                    columns,
+                    rows,
+                    width,
+                })
+            }
+            TypeInner::Array { base, .. } => {
+                array_base = Some(base);
+            }
+            _ => break,
+        }
+
+        current_base = match func_ctx.expressions[current_base] {
+            crate::Expression::Access { base, .. } => base,
+            crate::Expression::AccessIndex { base, .. } => base,
+            crate::Expression::GlobalVariable(handle)
+                if module.global_variables[handle].space == crate::AddressSpace::Uniform =>
+            {
+                return mat_data.or_else(|| {
+                    array_base.and_then(|array_base| get_inner_matrix_data(module, array_base))
+                })
+            }
+            _ => break,
+        };
+    }
+    None
 }

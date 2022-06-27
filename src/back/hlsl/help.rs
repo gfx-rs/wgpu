@@ -54,6 +54,11 @@ pub(super) struct WrappedStructMatrixAccess {
     pub(super) index: u32,
 }
 
+#[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
+pub(super) struct WrappedMatCx2 {
+    pub(super) columns: crate::VectorSize,
+}
+
 /// HLSL backend requires its own `ImageQuery` enum.
 ///
 /// It is used inside `WrappedImageQuery` and should be unique per ImageQuery function.
@@ -461,12 +466,36 @@ impl<'a, W: Write> super::Writer<'a, W> {
                                 )?;
                             }
                         }
-                        _ => {
-                            writeln!(
-                                self.out,
-                                "{}{}.{} = {}{};",
-                                INDENT, RETURN_VARIABLE_NAME, field_name, ARGUMENT_VARIABLE_NAME, i,
-                            )?;
+                        ref other => {
+                            // We cast arrays of native HLSL `floatCx2`s to arrays of `matCx2`s
+                            // (where the inner matrix is represented by a struct with C `float2` members).
+                            // See the module-level block comment in mod.rs for details.
+                            if let Some(super::writer::MatrixType {
+                                columns,
+                                rows: crate::VectorSize::Bi,
+                                width: 4,
+                            }) = super::writer::get_inner_matrix_data(module, member.ty)
+                            {
+                                write!(
+                                    self.out,
+                                    "{}{}.{} = (__mat{}x2",
+                                    INDENT, RETURN_VARIABLE_NAME, field_name, columns as u8
+                                )?;
+                                if let crate::TypeInner::Array { base, size, .. } = *other {
+                                    self.write_array_size(module, base, size)?;
+                                }
+                                writeln!(self.out, "){}{};", ARGUMENT_VARIABLE_NAME, i,)?;
+                            } else {
+                                writeln!(
+                                    self.out,
+                                    "{}{}.{} = {}{};",
+                                    INDENT,
+                                    RETURN_VARIABLE_NAME,
+                                    field_name,
+                                    ARGUMENT_VARIABLE_NAME,
+                                    i,
+                                )?;
+                            }
                         }
                     }
                 }
@@ -1048,6 +1077,119 @@ impl<'a, W: Write> super::Writer<'a, W> {
             }
             write!(self.out, ")")?;
         }
+        Ok(())
+    }
+
+    pub(super) fn write_mat_cx2_typedef_and_functions(
+        &mut self,
+        WrappedMatCx2 { columns }: WrappedMatCx2,
+    ) -> BackendResult {
+        use crate::back::INDENT;
+
+        // typedef
+        write!(self.out, "typedef struct {{ ")?;
+        for i in 0..columns as u8 {
+            write!(self.out, "float2 _{}; ", i)?;
+        }
+        writeln!(self.out, "}} __mat{}x2;", columns as u8)?;
+
+        // __get_col_of_mat
+        writeln!(
+            self.out,
+            "float2 __get_col_of_mat{}x2(__mat{}x2 mat, uint idx) {{",
+            columns as u8, columns as u8
+        )?;
+        writeln!(self.out, "{}switch(idx) {{", INDENT)?;
+        for i in 0..columns as u8 {
+            writeln!(self.out, "{}case {}: {{ return mat._{}; }}", INDENT, i, i)?;
+        }
+        writeln!(self.out, "{}default: {{ return (float2)0; }}", INDENT)?;
+        writeln!(self.out, "{}}}", INDENT)?;
+        writeln!(self.out, "}}")?;
+
+        // __set_col_of_mat
+        writeln!(
+            self.out,
+            "void __set_col_of_mat{}x2(__mat{}x2 mat, uint idx, float2 value) {{",
+            columns as u8, columns as u8
+        )?;
+        writeln!(self.out, "{}switch(idx) {{", INDENT)?;
+        for i in 0..columns as u8 {
+            writeln!(
+                self.out,
+                "{}case {}: {{ mat._{} = value; break; }}",
+                INDENT, i, i
+            )?;
+        }
+        writeln!(self.out, "{}}}", INDENT)?;
+        writeln!(self.out, "}}")?;
+
+        // __set_el_of_mat
+        writeln!(
+            self.out,
+            "void __set_el_of_mat{}x2(__mat{}x2 mat, uint idx, uint vec_idx, float value) {{",
+            columns as u8, columns as u8
+        )?;
+        writeln!(self.out, "{}switch(idx) {{", INDENT)?;
+        for i in 0..columns as u8 {
+            writeln!(
+                self.out,
+                "{}case {}: {{ mat._{}[vec_idx] = value; break; }}",
+                INDENT, i, i
+            )?;
+        }
+        writeln!(self.out, "{}}}", INDENT)?;
+        writeln!(self.out, "}}")?;
+
+        writeln!(self.out)?;
+
+        Ok(())
+    }
+
+    pub(super) fn write_all_mat_cx2_typedefs_and_functions(
+        &mut self,
+        module: &crate::Module,
+    ) -> BackendResult {
+        for (handle, _) in module.global_variables.iter() {
+            let global = &module.global_variables[handle];
+
+            if global.space == crate::AddressSpace::Uniform {
+                if let Some(super::writer::MatrixType {
+                    columns,
+                    rows: crate::VectorSize::Bi,
+                    width: 4,
+                }) = super::writer::get_inner_matrix_data(module, global.ty)
+                {
+                    let entry = WrappedMatCx2 { columns };
+                    if !self.wrapped.mat_cx2s.contains(&entry) {
+                        self.write_mat_cx2_typedef_and_functions(entry)?;
+                        self.wrapped.mat_cx2s.insert(entry);
+                    }
+                }
+            }
+        }
+
+        for (_, ty) in module.types.iter() {
+            if let crate::TypeInner::Struct { ref members, .. } = ty.inner {
+                for member in members.iter() {
+                    if let crate::TypeInner::Array { .. } = module.types[member.ty].inner {
+                        if let Some(super::writer::MatrixType {
+                            columns,
+                            rows: crate::VectorSize::Bi,
+                            width: 4,
+                        }) = super::writer::get_inner_matrix_data(module, member.ty)
+                        {
+                            let entry = WrappedMatCx2 { columns };
+                            if !self.wrapped.mat_cx2s.contains(&entry) {
+                                self.write_mat_cx2_typedef_and_functions(entry)?;
+                                self.wrapped.mat_cx2s.insert(entry);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         Ok(())
     }
 }

@@ -61,6 +61,43 @@ fn test_matrix_within_struct_accesses() {
     t.m[idx][idx] = 40.0;
 }
 
+struct MatCx2InArray {
+	am: array<mat4x2<f32>, 2>,
+}
+
+@group(0) @binding(3)
+var<uniform> nested_mat_cx2: MatCx2InArray;
+
+fn test_matrix_within_array_within_struct_accesses() {
+	var idx = 1;
+
+    idx--;
+
+	// loads
+    _ = nested_mat_cx2.am;
+    _ = nested_mat_cx2.am[0];
+    _ = nested_mat_cx2.am[0][0];
+    _ = nested_mat_cx2.am[0][idx];
+    _ = nested_mat_cx2.am[0][0][1];
+    _ = nested_mat_cx2.am[0][0][idx];
+    _ = nested_mat_cx2.am[0][idx][1];
+    _ = nested_mat_cx2.am[0][idx][idx];
+
+    var t = MatCx2InArray(array<mat4x2<f32>, 2>());
+
+    idx++;
+
+	// stores
+    t.am = array<mat4x2<f32>, 2>();
+    t.am[0] = mat4x2<f32>(vec2<f32>(8.0), vec2<f32>(7.0), vec2<f32>(6.0), vec2<f32>(5.0));
+    t.am[0][0] = vec2<f32>(9.0);
+    t.am[0][idx] = vec2<f32>(90.0);
+    t.am[0][0][1] = 10.0;
+    t.am[0][0][idx] = 20.0;
+    t.am[0][idx][1] = 30.0;
+    t.am[0][idx][idx] = 40.0;
+}
+
 fn read_from_private(foo: ptr<function, f32>) -> f32 {
     return *foo;
 }
@@ -77,6 +114,7 @@ fn foo_vert(@builtin(vertex_index) vi: u32) -> @builtin(position) vec4<f32> {
     foo = 1.0;
 
 	test_matrix_within_struct_accesses();
+	test_matrix_within_array_within_struct_accesses();
 
     // test storage loads
 	let _matrix = bar._matrix;

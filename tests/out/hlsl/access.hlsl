@@ -1,4 +1,52 @@
 
+typedef struct { float2 _0; float2 _1; } __mat2x2;
+float2 __get_col_of_mat2x2(__mat2x2 mat, uint idx) {
+    switch(idx) {
+    case 0: { return mat._0; }
+    case 1: { return mat._1; }
+    default: { return (float2)0; }
+    }
+}
+void __set_col_of_mat2x2(__mat2x2 mat, uint idx, float2 value) {
+    switch(idx) {
+    case 0: { mat._0 = value; break; }
+    case 1: { mat._1 = value; break; }
+    }
+}
+void __set_el_of_mat2x2(__mat2x2 mat, uint idx, uint vec_idx, float value) {
+    switch(idx) {
+    case 0: { mat._0[vec_idx] = value; break; }
+    case 1: { mat._1[vec_idx] = value; break; }
+    }
+}
+
+typedef struct { float2 _0; float2 _1; float2 _2; float2 _3; } __mat4x2;
+float2 __get_col_of_mat4x2(__mat4x2 mat, uint idx) {
+    switch(idx) {
+    case 0: { return mat._0; }
+    case 1: { return mat._1; }
+    case 2: { return mat._2; }
+    case 3: { return mat._3; }
+    default: { return (float2)0; }
+    }
+}
+void __set_col_of_mat4x2(__mat4x2 mat, uint idx, float2 value) {
+    switch(idx) {
+    case 0: { mat._0 = value; break; }
+    case 1: { mat._1 = value; break; }
+    case 2: { mat._2 = value; break; }
+    case 3: { mat._3 = value; break; }
+    }
+}
+void __set_el_of_mat4x2(__mat4x2 mat, uint idx, uint vec_idx, float value) {
+    switch(idx) {
+    case 0: { mat._0[vec_idx] = value; break; }
+    case 1: { mat._1[vec_idx] = value; break; }
+    case 2: { mat._2[vec_idx] = value; break; }
+    case 3: { mat._3[vec_idx] = value; break; }
+    }
+}
+
 struct GlobalConst {
     uint a;
     int _pad1_0;
@@ -17,11 +65,21 @@ struct Baz {
     float2 m_0; float2 m_1; float2 m_2;
 };
 
+struct MatCx2InArray {
+    __mat4x2 am[2];
+};
+
 GlobalConst ConstructGlobalConst(uint arg0, uint3 arg1, int arg2) {
     GlobalConst ret = (GlobalConst)0;
     ret.a = arg0;
     ret.b = arg1;
     ret.c = arg2;
+    return ret;
+}
+
+typedef float4x2 ret_Constructarray2_float4x2_[2];
+ret_Constructarray2_float4x2_ Constructarray2_float4x2_(float4x2 arg0, float4x2 arg1) {
+    float4x2 ret[2] = { arg0, arg1 };
     return ret;
 }
 
@@ -41,6 +99,7 @@ static GlobalConst global_const = ConstructGlobalConst(0u, uint3(0u, 0u, 0u), 0)
 RWByteAddressBuffer bar : register(u0);
 cbuffer baz : register(b1) { Baz baz; }
 RWByteAddressBuffer qux : register(u2);
+cbuffer nested_mat_cx2_ : register(b3) { MatCx2InArray nested_mat_cx2_; }
 groupshared uint val;
 
 float3x2 GetMatmOnBaz(Baz obj) {
@@ -114,10 +173,55 @@ void test_matrix_within_struct_accesses()
     return;
 }
 
+MatCx2InArray ConstructMatCx2InArray(float4x2 arg0[2]) {
+    MatCx2InArray ret = (MatCx2InArray)0;
+    ret.am = (__mat4x2[2])arg0;
+    return ret;
+}
+
+void test_matrix_within_array_within_struct_accesses()
+{
+    int idx_1 = 1;
+    MatCx2InArray t_1 = (MatCx2InArray)0;
+
+    int _expr7 = idx_1;
+    idx_1 = (_expr7 - 1);
+    float4x2 unnamed_7[2] = ((float4x2[2])nested_mat_cx2_.am);
+    float4x2 unnamed_8 = ((float4x2)nested_mat_cx2_.am[0]);
+    float2 unnamed_9 = nested_mat_cx2_.am[0]._0;
+    int _expr25 = idx_1;
+    float2 unnamed_10 = __get_col_of_mat4x2(nested_mat_cx2_.am[0], _expr25);
+    float unnamed_11 = nested_mat_cx2_.am[0]._0[1];
+    int _expr41 = idx_1;
+    float unnamed_12 = nested_mat_cx2_.am[0]._0[_expr41];
+    int _expr47 = idx_1;
+    float unnamed_13 = __get_col_of_mat4x2(nested_mat_cx2_.am[0], _expr47)[1];
+    int _expr55 = idx_1;
+    int _expr57 = idx_1;
+    float unnamed_14 = __get_col_of_mat4x2(nested_mat_cx2_.am[0], _expr55)[_expr57];
+    t_1 = ConstructMatCx2InArray(Constructarray2_float4x2_(float4x2(float2(0.0, 0.0), float2(0.0, 0.0), float2(0.0, 0.0), float2(0.0, 0.0)), float4x2(float2(0.0, 0.0), float2(0.0, 0.0), float2(0.0, 0.0), float2(0.0, 0.0))));
+    int _expr63 = idx_1;
+    idx_1 = (_expr63 + 1);
+    t_1.am = (__mat4x2[2])Constructarray2_float4x2_(float4x2(float2(0.0, 0.0), float2(0.0, 0.0), float2(0.0, 0.0), float2(0.0, 0.0)), float4x2(float2(0.0, 0.0), float2(0.0, 0.0), float2(0.0, 0.0), float2(0.0, 0.0)));
+    t_1.am[0] = (__mat4x2)float4x2((8.0).xx, (7.0).xx, (6.0).xx, (5.0).xx);
+    t_1.am[0]._0 = (9.0).xx;
+    int _expr90 = idx_1;
+    __set_col_of_mat4x2(t_1.am[0], _expr90, (90.0).xx);
+    t_1.am[0]._0[1] = 10.0;
+    int _expr107 = idx_1;
+    t_1.am[0]._0[_expr107] = 20.0;
+    int _expr113 = idx_1;
+    __set_el_of_mat4x2(t_1.am[0], _expr113, 1, 30.0);
+    int _expr121 = idx_1;
+    int _expr123 = idx_1;
+    __set_el_of_mat4x2(t_1.am[0], _expr121, _expr123, 40.0);
+    return;
+}
+
 float read_from_private(inout float foo_1)
 {
-    float _expr5 = foo_1;
-    return _expr5;
+    float _expr6 = foo_1;
+    return _expr6;
 }
 
 float test_arr_as_arg(float a[5][10])
@@ -152,19 +256,17 @@ float4 foo_vert(uint vi : SV_VertexID) : SV_Position
     float baz_1 = foo;
     foo = 1.0;
     test_matrix_within_struct_accesses();
+    test_matrix_within_array_within_struct_accesses();
     float4x3 _matrix = float4x3(asfloat(bar.Load3(0+0)), asfloat(bar.Load3(0+16)), asfloat(bar.Load3(0+32)), asfloat(bar.Load3(0+48)));
     uint2 arr[2] = {asuint(bar.Load2(104+0)), asuint(bar.Load2(104+8))};
     float b = asfloat(bar.Load(0+48+0));
     int a_1 = asint(bar.Load(0+(((NagaBufferLengthRW(bar) - 120) / 8) - 2u)*8+120));
     int2 c_1 = asint(qux.Load2(0));
-    const float _e31 = read_from_private(foo);
-    {
-        int _result[5]=Constructarray5_int_(a_1, int(b), 3, 4, 5);
-        for(int _i=0; _i<5; ++_i) c[_i] = _result[_i];
-    }
+    const float _e32 = read_from_private(foo);
+    c = Constructarray5_int_(a_1, int(b), 3, 4, 5);
     c[(vi + 1u)] = 42;
     int value = c[vi];
-    const float _e45 = test_arr_as_arg(Constructarray5_array10_float__(Constructarray10_float_(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), Constructarray10_float_(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), Constructarray10_float_(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), Constructarray10_float_(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), Constructarray10_float_(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)));
+    const float _e46 = test_arr_as_arg(Constructarray5_array10_float__(Constructarray10_float_(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), Constructarray10_float_(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), Constructarray10_float_(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), Constructarray10_float_(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), Constructarray10_float_(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)));
     return float4(mul(float4((value).xxxx), _matrix), 2.0);
 }
 
@@ -200,22 +302,22 @@ void atomics()
     int tmp = (int)0;
 
     int value_1 = asint(bar.Load(96));
-    int _e9; bar.InterlockedAdd(96, 5, _e9);
-    tmp = _e9;
-    int _e12; bar.InterlockedAdd(96, -5, _e12);
-    tmp = _e12;
-    int _e15; bar.InterlockedAnd(96, 5, _e15);
-    tmp = _e15;
-    int _e18; bar.InterlockedOr(96, 5, _e18);
-    tmp = _e18;
-    int _e21; bar.InterlockedXor(96, 5, _e21);
-    tmp = _e21;
-    int _e24; bar.InterlockedMin(96, 5, _e24);
-    tmp = _e24;
-    int _e27; bar.InterlockedMax(96, 5, _e27);
-    tmp = _e27;
-    int _e30; bar.InterlockedExchange(96, 5, _e30);
-    tmp = _e30;
+    int _e10; bar.InterlockedAdd(96, 5, _e10);
+    tmp = _e10;
+    int _e13; bar.InterlockedAdd(96, -5, _e13);
+    tmp = _e13;
+    int _e16; bar.InterlockedAnd(96, 5, _e16);
+    tmp = _e16;
+    int _e19; bar.InterlockedOr(96, 5, _e19);
+    tmp = _e19;
+    int _e22; bar.InterlockedXor(96, 5, _e22);
+    tmp = _e22;
+    int _e25; bar.InterlockedMin(96, 5, _e25);
+    tmp = _e25;
+    int _e28; bar.InterlockedMax(96, 5, _e28);
+    tmp = _e28;
+    int _e31; bar.InterlockedExchange(96, 5, _e31);
+    tmp = _e31;
     bar.Store(96, asuint(value_1));
     return;
 }

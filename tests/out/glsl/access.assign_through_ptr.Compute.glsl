@@ -16,12 +16,15 @@ struct AlignedWrapper {
 struct Baz {
     mat3x2 m;
 };
+struct MatCx2InArray {
+    mat4x2 am[2];
+};
 shared uint val;
 
 
 float read_from_private(inout float foo_1) {
-    float _e5 = foo_1;
-    return _e5;
+    float _e6 = foo_1;
+    return _e6;
 }
 
 float test_arr_as_arg(float a[5][10]) {
