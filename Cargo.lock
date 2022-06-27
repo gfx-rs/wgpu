@@ -35,16 +35,19 @@ dependencies = [
 ]
 
 [[package]]
-name = "android-properties"
-version = "0.2.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fc7eb209b1518d6bb87b283c20095f5228ecda460da70b44f0802523dea6da04"
-
-[[package]]
 name = "android_glue"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "000444226fcff248f2bc4c7625be32c63caccfecc2723a2b9f78a7487a49c407"
+
+[[package]]
+name = "android_system_properties"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "40906ab18de39e789f964079c6cee50adfb8290fc17bc87f4df76057edc47368"
+dependencies = [
+ "libc",
+]
 
 [[package]]
 name = "anyhow"
@@ -2112,7 +2115,7 @@ dependencies = [
 name = "wgpu-hal"
 version = "0.12.0"
 dependencies = [
- "android-properties",
+ "android_system_properties",
  "arrayvec",
  "ash",
  "bit-set",
