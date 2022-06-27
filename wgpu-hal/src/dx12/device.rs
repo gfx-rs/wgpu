@@ -125,6 +125,20 @@ impl super::Device {
             )?,
         };
 
+        let mut rtv_pool = descriptor::CpuPool::new(raw, native::DescriptorHeapType::Rtv);
+        let null_rtv_handle = rtv_pool.alloc_handle();
+        // A null pResource is used to initialize a null descriptor,
+        // which guarantees D3D11-like null binding behavior (reading 0s, writes are discarded)
+        raw.create_render_target_view(
+            native::WeakPtr::null(),
+            &native::RenderTargetViewDesc::texture_2d(
+                winapi::shared::dxgiformat::DXGI_FORMAT_R8G8B8A8_UNORM,
+                0,
+                0,
+            ),
+            null_rtv_handle.raw,
+        );
+
         Ok(super::Device {
             raw,
             present_queue,
@@ -134,10 +148,7 @@ impl super::Device {
             },
             private_caps,
             shared: Arc::new(shared),
-            rtv_pool: Arc::new(Mutex::new(descriptor::CpuPool::new(
-                raw,
-                native::DescriptorHeapType::Rtv,
-            ))),
+            rtv_pool: Mutex::new(rtv_pool),
             dsv_pool: Mutex::new(descriptor::CpuPool::new(
                 raw,
                 native::DescriptorHeapType::Dsv,
@@ -153,6 +164,7 @@ impl super::Device {
             library: Arc::clone(library),
             #[cfg(feature = "renderdoc")]
             render_doc: Default::default(),
+            null_rtv_handle,
         })
     }
 
@@ -306,11 +318,8 @@ impl super::Device {
 
 impl crate::Device<super::Api> for super::Device {
     unsafe fn exit(self, queue: super::Queue) {
-        Arc::try_unwrap(self.rtv_pool)
-            .ok()
-            .unwrap()
-            .into_inner()
-            .destroy();
+        self.rtv_pool.lock().free_handle(self.null_rtv_handle);
+        self.rtv_pool.into_inner().destroy();
         self.dsv_pool.into_inner().destroy();
         self.srv_uav_pool.into_inner().destroy();
         self.sampler_pool.into_inner().destroy();
@@ -662,7 +671,7 @@ impl crate::Device<super::Api> for super::Device {
             allocator,
             device: self.raw,
             shared: Arc::clone(&self.shared),
-            rtv_pool: Arc::clone(&self.rtv_pool),
+            null_rtv_handle: self.null_rtv_handle.clone(),
             list: None,
             free_lists: Vec::new(),
             pass: super::PassState::new(),

@@ -379,7 +379,6 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 if let Some(ref at) = cat.resolve_target {
                     vk_clear_values.push(mem::zeroed());
                     vk_image_views.push(at.view.raw);
-                    println!("fb_key.attachments: {:?}", &at.view.attachment.raw);
                     fb_key.attachments.push(at.view.attachment.clone());
                 }
 

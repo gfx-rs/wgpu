@@ -430,7 +430,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             .color_attachments
             .first()
             .filter(|at| at.is_some())
-            .map(|at| &at.as_ref().unwrap().target.view.inner)
+            .and_then(|at| at.as_ref().map(|at| &at.target.view.inner))
         {
             // default framebuffer (provided externally)
             Some(&super::TextureInner::DefaultRenderbuffer) => {

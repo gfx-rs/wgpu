@@ -20,7 +20,7 @@ use hal::{CommandEncoder as _, Device as _};
 use parking_lot::{Mutex, MutexGuard};
 use smallvec::SmallVec;
 use thiserror::Error;
-use wgt::{BufferAddress, ColorTargetState, TextureFormat, TextureViewDimension};
+use wgt::{BufferAddress, TextureFormat, TextureViewDimension};
 
 use std::{borrow::Cow, iter, mem, num::NonZeroU32, ops::Range, ptr};
 
@@ -2465,7 +2465,7 @@ impl<A: HalApi> Device<A> {
             .map_or(&[][..], |fragment| &fragment.targets);
         let depth_stencil_state = desc.depth_stencil.as_ref();
 
-        let cts: ArrayVec<&ColorTargetState, { hal::MAX_COLOR_ATTACHMENTS }> =
+        let cts: ArrayVec<_, { hal::MAX_COLOR_ATTACHMENTS }> =
             color_targets.iter().filter_map(|x| x.as_ref()).collect();
         if !cts.is_empty() && {
             let first = &cts[0];
@@ -2760,23 +2760,31 @@ impl<A: HalApi> Device<A> {
 
         if validated_stages.contains(wgt::ShaderStages::FRAGMENT) {
             for (i, output) in io.iter() {
-                if let Some(state) = color_targets.get(*i as usize) {
-                    let format = if let Some(st) = state.as_ref() {
-                        st.format
-                    } else {
+                match color_targets.get(*i as usize) {
+                    Some(&Some(ref state)) => {
+                        validation::check_texture_format(state.format, &output.ty).map_err(
+                            |pipeline| {
+                                pipeline::CreateRenderPipelineError::ColorState(
+                                    *i as u8,
+                                    pipeline::ColorStateError::IncompatibleFormat {
+                                        pipeline,
+                                        shader: output.ty,
+                                    },
+                                )
+                            },
+                        )?;
+                    }
+                    Some(&None) => {
                         return Err(
                             pipeline::CreateRenderPipelineError::InvalidFragmentOutputLocation(*i),
                         );
-                    };
-                    validation::check_texture_format(format, &output.ty).map_err(|pipeline| {
-                        pipeline::CreateRenderPipelineError::ColorState(
+                    }
+                    _ => {
+                        return Err(pipeline::CreateRenderPipelineError::ColorState(
                             *i as u8,
-                            pipeline::ColorStateError::IncompatibleFormat {
-                                pipeline,
-                                shader: output.ty,
-                            },
-                        )
-                    })?;
+                            pipeline::ColorStateError::Missing,
+                        ));
+                    }
                 }
             }
         }

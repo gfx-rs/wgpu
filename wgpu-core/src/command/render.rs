@@ -950,8 +950,13 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                 .collect(),
             resolves: color_attachments
                 .iter()
-                .filter_map(|at| at.as_ref().map(|at| at.resolve_target))
-                .filter_map(|attachment| attachment.as_ref().map(|at| view_guard.get(*at).unwrap()))
+                .filter_map(|at| match *at {
+                    Some(RenderPassColorAttachment {
+                        resolve_target: Some(resolve),
+                        ..
+                    }) => Some(view_guard.get(resolve).unwrap()),
+                    _ => None,
+                })
                 .collect(),
             depth_stencil: depth_stencil_attachment.map(|at| view_guard.get(at.view).unwrap()),
         };

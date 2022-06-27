@@ -76,11 +76,11 @@ impl super::DeviceShared {
                     layout: vk::ImageLayout::UNDEFINED,
                 };
                 for cat in e.key().colors.iter() {
-                    if let Some(cat) = cat.as_ref() {
-                        color_refs.push(vk::AttachmentReference {
+                    let (color_ref, resolve_ref) = if let Some(cat) = cat.as_ref() {
+                        let color_ref = vk::AttachmentReference {
                             attachment: vk_attachments.len() as u32,
                             layout: cat.base.layout,
-                        });
+                        };
                         vk_attachments.push({
                             let (load_op, store_op) = conv::map_attachment_ops(cat.base.ops);
                             vk::AttachmentDescription::builder()
@@ -92,11 +92,7 @@ impl super::DeviceShared {
                                 .final_layout(cat.base.layout)
                                 .build()
                         });
-                        if let Some(ref rat) = cat.resolve {
-                            resolve_refs.push(vk::AttachmentReference {
-                                attachment: vk_attachments.len() as u32,
-                                layout: rat.layout,
-                            });
+                        let resolve_ref = if let Some(ref rat) = cat.resolve {
                             let (load_op, store_op) = conv::map_attachment_ops(rat.ops);
                             let vk_attachment = vk::AttachmentDescription::builder()
                                 .format(rat.format)
@@ -107,13 +103,22 @@ impl super::DeviceShared {
                                 .final_layout(rat.layout)
                                 .build();
                             vk_attachments.push(vk_attachment);
+
+                            vk::AttachmentReference {
+                                attachment: vk_attachments.len() as u32 - 1,
+                                layout: rat.layout,
+                            }
                         } else {
-                            resolve_refs.push(unused);
+                            unused
                         };
+
+                        (color_ref, resolve_ref)
                     } else {
-                        color_refs.push(unused);
-                        resolve_refs.push(unused);
-                    }
+                        (unused, unused)
+                    };
+
+                    color_refs.push(color_ref);
+                    resolve_refs.push(resolve_ref);
                 }
 
                 if let Some(ref ds) = e.key().depth_stencil {
@@ -1577,18 +1582,7 @@ impl crate::Device<super::Api> for super::Device {
 
         let mut vk_attachments = Vec::with_capacity(desc.color_targets.len());
         for cat in desc.color_targets {
-            if let Some(cat) = cat.as_ref() {
-                let vk_format = self.shared.private_caps.map_texture_format(cat.format);
-                compatible_rp_key
-                    .colors
-                    .push(Some(super::ColorAttachmentKey {
-                        base: super::AttachmentKey::compatible(
-                            vk_format,
-                            vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
-                        ),
-                        resolve: None,
-                    }));
-
+            let (key, attarchment) = if let Some(cat) = cat.as_ref() {
                 let mut vk_attachment = vk::PipelineColorBlendAttachmentState::builder()
                     .color_write_mask(vk::ColorComponentFlags::from_raw(cat.write_mask.bits()));
                 if let Some(ref blend) = cat.blend {
@@ -1603,11 +1597,24 @@ impl crate::Device<super::Api> for super::Device {
                         .src_alpha_blend_factor(alpha_src)
                         .dst_alpha_blend_factor(alpha_dst);
                 }
-                vk_attachments.push(vk_attachment.build());
+
+                let vk_format = self.shared.private_caps.map_texture_format(cat.format);
+                (
+                    Some(super::ColorAttachmentKey {
+                        base: super::AttachmentKey::compatible(
+                            vk_format,
+                            vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+                        ),
+                        resolve: None,
+                    }),
+                    vk_attachment.build(),
+                )
             } else {
-                vk_attachments.push(vk::PipelineColorBlendAttachmentState::default());
-                compatible_rp_key.colors.push(None);
-            }
+                (None, vk::PipelineColorBlendAttachmentState::default())
+            };
+
+            compatible_rp_key.colors.push(key);
+            vk_attachments.push(attarchment);
         }
 
         let vk_color_blend = vk::PipelineColorBlendStateCreateInfo::builder()

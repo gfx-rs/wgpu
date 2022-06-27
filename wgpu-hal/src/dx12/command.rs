@@ -580,32 +580,14 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     unsafe fn begin_render_pass(&mut self, desc: &crate::RenderPassDescriptor<super::Api>) {
         self.begin_pass(super::PassKind::Render, desc.label);
         let mut color_views = [native::CpuDescriptor { ptr: 0 }; crate::MAX_COLOR_ATTACHMENTS];
-        let mut null_rtv_handle: Option<super::descriptor::Handle> = None;
         for (rtv, cat) in color_views.iter_mut().zip(desc.color_attachments.iter()) {
             if let Some(cat) = cat.as_ref() {
                 *rtv = cat.target.view.handle_rtv.unwrap().raw;
             } else {
-                if null_rtv_handle.is_none() {
-                    let handle = self.rtv_pool.lock().alloc_handle();
-                    // A null pResource is used to initialize a null descriptor,
-                    // which guarantees D3D11-like null binding behavior (reading 0s, writes are discarded)
-                    self.device.create_render_target_view(
-                        native::WeakPtr::null(),
-                        &native::RenderTargetViewDesc::texture_2d(
-                            winapi::shared::dxgiformat::DXGI_FORMAT_R8G8B8A8_UNORM,
-                            0,
-                            0,
-                        ),
-                        handle.raw,
-                    );
-                    null_rtv_handle = Some(handle);
-                }
-                *rtv = null_rtv_handle.unwrap().raw;
+                *rtv = self.null_rtv_handle.raw;
             }
         }
-        if let Some(handle) = null_rtv_handle {
-            self.rtv_pool.lock().free_handle(handle);
-        }
+
         let ds_view = match desc.depth_stencil_attachment {
             None => ptr::null(),
             Some(ref ds) => {

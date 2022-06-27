@@ -1063,7 +1063,6 @@ impl super::Instance {
                     .imageless_framebuffer
                     .map_or(false, |ext| ext.imageless_framebuffer != 0),
             },
-            // imageless_framebuffers: false,
             image_view_usage: phd_capabilities.properties.api_version >= vk::API_VERSION_1_1
                 || phd_capabilities.supports_extension(vk::KhrMaintenance2Fn::name()),
             timeline_semaphores: match phd_features.vulkan_1_2 {
@@ -1097,10 +1096,6 @@ impl super::Instance {
                     .map_or(false, |ext| ext.robust_image_access != 0),
             },
         };
-        println!(
-            "caps.imageless_framebuffers {}",
-            private_caps.imageless_framebuffers
-        );
         let capabilities = crate::Capabilities {
             limits: phd_capabilities.to_wgpu_limits(&phd_features),
             alignments: phd_capabilities.to_hal_alignments(),
