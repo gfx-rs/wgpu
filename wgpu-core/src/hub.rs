@@ -899,7 +899,7 @@ pub struct Global<G: GlobalIdentityHandlerFactory> {
 
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn new(name: &str, factory: G, backends: wgt::Backends) -> Self {
-        profiling::scope!("new", "Global");
+        profiling::scope!("Global::new");
         Self {
             instance: Instance::new(name, backends),
             surfaces: Registry::without_backend(&factory, "Surface"),
@@ -915,7 +915,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         factory: G,
         hal_instance: A::Instance,
     ) -> Self {
-        profiling::scope!("new", "Global");
+        profiling::scope!("Global::new");
         Self {
             instance: A::create_instance_from_hal(name, hal_instance),
             surfaces: Registry::without_backend(&factory, "Surface"),
@@ -938,7 +938,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     ///
     /// - The raw handles obtained from the Instance must not be manually destroyed
     pub unsafe fn from_instance(factory: G, instance: Instance) -> Self {
-        profiling::scope!("new", "Global");
+        profiling::scope!("Global::new");
         Self {
             instance,
             surfaces: Registry::without_backend(&factory, "Surface"),
@@ -992,7 +992,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
 impl<G: GlobalIdentityHandlerFactory> Drop for Global<G> {
     fn drop(&mut self) {
-        profiling::scope!("drop", "Global");
+        profiling::scope!("Global::drop");
         log::info!("Dropping Global");
         let mut surface_guard = self.surfaces.data.write();
 

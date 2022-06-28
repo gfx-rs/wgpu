@@ -653,7 +653,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
         buffer_guard: &'a Storage<Buffer<A>, id::BufferId>,
         texture_guard: &'a Storage<Texture<A>, id::TextureId>,
     ) -> Result<Self, RenderPassErrorInner> {
-        profiling::scope!("start", "RenderPassInfo");
+        profiling::scope!("RenderPassInfo::start");
 
         // We default to false intentionally, even if depth-stencil isn't used at all.
         // This allows us to use the primary raw pipeline in `RenderPipeline`,
@@ -998,7 +998,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
         raw: &mut A::CommandEncoder,
         texture_guard: &Storage<Texture<A>, id::TextureId>,
     ) -> Result<(UsageScope<A>, SurfacesInDiscardState), RenderPassErrorInner> {
-        profiling::scope!("finish", "RenderPassInfo");
+        profiling::scope!("RenderPassInfo::finish");
         unsafe {
             raw.end_render_pass();
         }
@@ -1091,7 +1091,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         color_attachments: &[Option<RenderPassColorAttachment>],
         depth_stencil_attachment: Option<&RenderPassDepthStencilAttachment>,
     ) -> Result<(), RenderPassError> {
-        profiling::scope!("run_render_pass", "CommandEncoder");
+        profiling::scope!("CommandEncoder::run_render_pass");
         let init_scope = PassErrorScope::Pass(encoder_id);
 
         let hub = A::hub(self);

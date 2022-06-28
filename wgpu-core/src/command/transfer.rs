@@ -493,7 +493,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         destination_offset: BufferAddress,
         size: BufferAddress,
     ) -> Result<(), CopyError> {
-        profiling::scope!("copy_buffer_to_buffer", "CommandEncoder");
+        profiling::scope!("CommandEncoder::copy_buffer_to_buffer");
 
         if source == destination {
             return Err(TransferError::SameSourceDestinationBuffer.into());
@@ -617,7 +617,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         destination: &ImageCopyTexture,
         copy_size: &Extent3d,
     ) -> Result<(), CopyError> {
-        profiling::scope!("copy_buffer_to_texture", "CommandEncoder");
+        profiling::scope!("CommandEncoder::copy_buffer_to_texture");
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -744,7 +744,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         destination: &ImageCopyBuffer,
         copy_size: &Extent3d,
     ) -> Result<(), CopyError> {
-        profiling::scope!("copy_texture_to_buffer", "CommandEncoder");
+        profiling::scope!("CommandEncoder::copy_texture_to_buffer");
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -888,7 +888,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         destination: &ImageCopyTexture,
         copy_size: &Extent3d,
     ) -> Result<(), CopyError> {
-        profiling::scope!("copy_texture_to_texture", "CommandEncoder");
+        profiling::scope!("CommandEncoder::copy_texture_to_texture");
 
         let hub = A::hub(self);
         let mut token = Token::root();

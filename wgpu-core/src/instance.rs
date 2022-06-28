@@ -408,7 +408,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         handle: &impl raw_window_handle::HasRawWindowHandle,
         id_in: Input<G, SurfaceId>,
     ) -> SurfaceId {
-        profiling::scope!("create_surface", "Instance");
+        profiling::scope!("Instance::create_surface");
 
         //Note: using a dummy argument to work around the following error:
         //> cannot provide explicit generic arguments when `impl Trait` is used in argument position
@@ -456,7 +456,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         layer: *mut std::ffi::c_void,
         id_in: Input<G, SurfaceId>,
     ) -> SurfaceId {
-        profiling::scope!("create_surface_metal", "Instance");
+        profiling::scope!("Instance::create_surface_metal");
 
         let surface = Surface {
             presentation: None,
@@ -485,7 +485,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         canvas: &web_sys::HtmlCanvasElement,
         id_in: Input<G, SurfaceId>,
     ) -> SurfaceId {
-        profiling::scope!("create_surface_webgl_canvas", "Instance");
+        profiling::scope!("Instance::create_surface_webgl_canvas");
 
         let surface = Surface {
             presentation: None,
@@ -508,7 +508,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         canvas: &web_sys::OffscreenCanvas,
         id_in: Input<G, SurfaceId>,
     ) -> SurfaceId {
-        profiling::scope!("create_surface_webgl_offscreen_canvas", "Instance");
+        profiling::scope!("Instance::create_surface_webgl_offscreen_canvas");
 
         let surface = Surface {
             presentation: None,
@@ -534,7 +534,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         visual: *mut std::ffi::c_void,
         id_in: Input<G, SurfaceId>,
     ) -> SurfaceId {
-        profiling::scope!("instance_create_surface_from_visual", "Instance");
+        profiling::scope!("Instance::instance_create_surface_from_visual");
 
         let surface = Surface {
             presentation: None,
@@ -554,7 +554,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn surface_drop(&self, id: SurfaceId) {
-        profiling::scope!("drop", "Surface");
+        profiling::scope!("Surface::drop");
         let mut token = Token::root();
         let (surface, _) = self.surfaces.unregister(id, &mut token);
         self.instance.destroy_surface(surface.unwrap());
@@ -593,7 +593,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn enumerate_adapters(&self, inputs: AdapterInputs<Input<G, AdapterId>>) -> Vec<AdapterId> {
-        profiling::scope!("enumerate_adapters", "Instance");
+        profiling::scope!("Instance::enumerate_adapters");
 
         let mut adapters = Vec::new();
 
@@ -650,7 +650,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         desc: &RequestAdapterOptions,
         inputs: AdapterInputs<Input<G, AdapterId>>,
     ) -> Result<AdapterId, RequestAdapterError> {
-        profiling::scope!("pick_adapter", "Instance");
+        profiling::scope!("Instance::pick_adapter");
 
         fn gather<A: HalApi, I: Clone>(
             _: A,
@@ -808,7 +808,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         hal_adapter: hal::ExposedAdapter<A>,
         input: Input<G, AdapterId>,
     ) -> AdapterId {
-        profiling::scope!("create_adapter_from_hal", "Instance");
+        profiling::scope!("Instance::create_adapter_from_hal");
 
         let mut token = Token::root();
         let fid = A::hub(self).adapters.prepare(input);
@@ -895,7 +895,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn adapter_drop<A: HalApi>(&self, adapter_id: AdapterId) {
-        profiling::scope!("drop", "Adapter");
+        profiling::scope!("Adapter::drop");
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -920,7 +920,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         trace_path: Option<&std::path::Path>,
         id_in: Input<G, DeviceId>,
     ) -> (DeviceId, Option<RequestDeviceError>) {
-        profiling::scope!("request_device", "Adapter");
+        profiling::scope!("Adapter::request_device");
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -956,7 +956,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         trace_path: Option<&std::path::Path>,
         id_in: Input<G, DeviceId>,
     ) -> (DeviceId, Option<RequestDeviceError>) {
-        profiling::scope!("create_device_from_hal", "Adapter");
+        profiling::scope!("Adapter::create_device_from_hal");
 
         let hub = A::hub(self);
         let mut token = Token::root();
