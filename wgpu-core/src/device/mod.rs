@@ -818,8 +818,8 @@ impl<A: HalApi> Device<A> {
                 if format_features
                     .allowed_usages
                     .contains(wgt::TextureUsages::RENDER_ATTACHMENT)
-                    && desc.dimension != wgt::TextureDimension::D3
-                // Render targets into 3D textures are not
+                    && desc.dimension == wgt::TextureDimension::D2
+                // Render targets dimension must be 2d
                 {
                     hal::TextureUses::COLOR_TARGET
                 } else {
