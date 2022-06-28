@@ -288,7 +288,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         id: TextureId,
         hal_texture_callback: F,
     ) {
-        profiling::scope!("as_hal", "Texture");
+        profiling::scope!("Texture::as_hal");
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -307,7 +307,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         id: AdapterId,
         hal_adapter_callback: F,
     ) -> R {
-        profiling::scope!("as_hal", "Adapter");
+        profiling::scope!("Adapter::as_hal");
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -327,7 +327,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         id: DeviceId,
         hal_device_callback: F,
     ) -> R {
-        profiling::scope!("as_hal", "Device");
+        profiling::scope!("Device::as_hal");
 
         let hub = A::hub(self);
         let mut token = Token::root();

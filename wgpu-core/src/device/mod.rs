@@ -445,7 +445,7 @@ impl<A: HalApi> Device<A> {
         maintain: wgt::Maintain<queue::WrappedSubmissionIndex>,
         token: &mut Token<'token, Self>,
     ) -> Result<(UserClosures, bool), WaitIdleError> {
-        profiling::scope!("maintain", "Device");
+        profiling::scope!("Device::maintain");
         let mut life_tracker = self.lock_life(token);
 
         // Normally, `temp_suspected` exists only to save heap
@@ -3195,7 +3195,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         desc: &resource::BufferDescriptor,
         id_in: Input<G, id::BufferId>,
     ) -> (id::BufferId, Option<resource::CreateBufferError>) {
-        profiling::scope!("create_buffer", "Device");
+        profiling::scope!("Device::create_buffer");
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -3393,7 +3393,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         offset: BufferAddress,
         data: &[u8],
     ) -> Result<(), resource::BufferAccessError> {
-        profiling::scope!("set_buffer_sub_data", "Device");
+        profiling::scope!("Device::set_buffer_sub_data");
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -3450,7 +3450,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         offset: BufferAddress,
         data: &mut [u8],
     ) -> Result<(), resource::BufferAccessError> {
-        profiling::scope!("get_buffer_sub_data", "Device");
+        profiling::scope!("Device::get_buffer_sub_data");
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -3496,7 +3496,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         buffer_id: id::BufferId,
     ) -> Result<(), resource::DestroyError> {
-        profiling::scope!("destroy", "Buffer");
+        profiling::scope!("Buffer::destroy");
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -3537,7 +3537,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn buffer_drop<A: HalApi>(&self, buffer_id: id::BufferId, wait: bool) {
-        profiling::scope!("drop", "Buffer");
+        profiling::scope!("Buffer::drop");
         log::debug!("buffer {:?} is dropped", buffer_id);
 
         let hub = A::hub(self);
@@ -3590,7 +3590,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         desc: &resource::TextureDescriptor,
         id_in: Input<G, id::TextureId>,
     ) -> (id::TextureId, Option<resource::CreateTextureError>) {
-        profiling::scope!("create_texture", "Device");
+        profiling::scope!("Device::create_texture");
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -3645,7 +3645,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         desc: &resource::TextureDescriptor,
         id_in: Input<G, id::TextureId>,
     ) -> (id::TextureId, Option<resource::CreateTextureError>) {
-        profiling::scope!("create_texture", "Device");
+        profiling::scope!("Device::create_texture");
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -3717,7 +3717,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         texture_id: id::TextureId,
     ) -> Result<(), resource::DestroyError> {
-        profiling::scope!("destroy", "Texture");
+        profiling::scope!("Texture::destroy");
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -3775,7 +3775,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn texture_drop<A: HalApi>(&self, texture_id: id::TextureId, wait: bool) {
-        profiling::scope!("drop", "Texture");
+        profiling::scope!("Texture::drop");
         log::debug!("texture {:?} is dropped", texture_id);
 
         let hub = A::hub(self);
@@ -3829,7 +3829,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         desc: &resource::TextureViewDescriptor,
         id_in: Input<G, id::TextureViewId>,
     ) -> (id::TextureViewId, Option<resource::CreateTextureViewError>) {
-        profiling::scope!("create_view", "Texture");
+        profiling::scope!("Texture::create_view");
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -3876,7 +3876,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         texture_view_id: id::TextureViewId,
         wait: bool,
     ) -> Result<(), resource::TextureViewDestroyError> {
-        profiling::scope!("drop", "TextureView");
+        profiling::scope!("TextureView::drop");
         log::debug!("texture view {:?} is dropped", texture_view_id);
 
         let hub = A::hub(self);
@@ -3926,7 +3926,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         desc: &resource::SamplerDescriptor,
         id_in: Input<G, id::SamplerId>,
     ) -> (id::SamplerId, Option<resource::CreateSamplerError>) {
-        profiling::scope!("create_sampler", "Device");
+        profiling::scope!("Device::create_sampler");
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -3966,7 +3966,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn sampler_drop<A: HalApi>(&self, sampler_id: id::SamplerId) {
-        profiling::scope!("drop", "Sampler");
+        profiling::scope!("Sampler::drop");
         log::debug!("sampler {:?} is dropped", sampler_id);
 
         let hub = A::hub(self);
@@ -4004,7 +4004,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         id::BindGroupLayoutId,
         Option<binding_model::CreateBindGroupLayoutError>,
     ) {
-        profiling::scope!("create_bind_group_layout", "Device");
+        profiling::scope!("Device::create_bind_group_layout");
 
         let mut token = Token::root();
         let hub = A::hub(self);
@@ -4066,7 +4066,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn bind_group_layout_drop<A: HalApi>(&self, bind_group_layout_id: id::BindGroupLayoutId) {
-        profiling::scope!("drop", "BindGroupLayout");
+        profiling::scope!("BindGroupLayout::drop");
         log::debug!("bind group layout {:?} is dropped", bind_group_layout_id);
 
         let hub = A::hub(self);
@@ -4100,7 +4100,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         id::PipelineLayoutId,
         Option<binding_model::CreatePipelineLayoutError>,
     ) {
-        profiling::scope!("create_pipeline_layout", "Device");
+        profiling::scope!("Device::create_pipeline_layout");
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -4140,7 +4140,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn pipeline_layout_drop<A: HalApi>(&self, pipeline_layout_id: id::PipelineLayoutId) {
-        profiling::scope!("drop", "PipelineLayout");
+        profiling::scope!("PipelineLayout::drop");
         log::debug!("pipeline layout {:?} is dropped", pipeline_layout_id);
 
         let hub = A::hub(self);
@@ -4177,7 +4177,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         desc: &binding_model::BindGroupDescriptor,
         id_in: Input<G, id::BindGroupId>,
     ) -> (id::BindGroupId, Option<binding_model::CreateBindGroupError>) {
-        profiling::scope!("create_bind_group", "Device");
+        profiling::scope!("Device::create_bind_group");
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -4230,7 +4230,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn bind_group_drop<A: HalApi>(&self, bind_group_id: id::BindGroupId) {
-        profiling::scope!("drop", "BindGroup");
+        profiling::scope!("BindGroup::drop");
         log::debug!("bind group {:?} is dropped", bind_group_id);
 
         let hub = A::hub(self);
@@ -4269,7 +4269,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         id::ShaderModuleId,
         Option<pipeline::CreateShaderModuleError>,
     ) {
-        profiling::scope!("create_shader_module", "Device");
+        profiling::scope!("Device::create_shader_module");
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -4329,7 +4329,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         id::ShaderModuleId,
         Option<pipeline::CreateShaderModuleError>,
     ) {
-        profiling::scope!("create_shader_module", "Device");
+        profiling::scope!("Device::create_shader_module");
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -4371,7 +4371,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn shader_module_drop<A: HalApi>(&self, shader_module_id: id::ShaderModuleId) {
-        profiling::scope!("drop", "ShaderModule");
+        profiling::scope!("ShaderModule::drop");
         log::debug!("shader module {:?} is dropped", shader_module_id);
 
         let hub = A::hub(self);
@@ -4398,7 +4398,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         desc: &wgt::CommandEncoderDescriptor<Label>,
         id_in: Input<G, id::CommandEncoderId>,
     ) -> (id::CommandEncoderId, Option<DeviceError>) {
-        profiling::scope!("create_command_encoder", "Device");
+        profiling::scope!("Device::create_command_encoder");
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -4446,7 +4446,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn command_encoder_drop<A: HalApi>(&self, command_encoder_id: id::CommandEncoderId) {
-        profiling::scope!("drop", "CommandEncoder");
+        profiling::scope!("CommandEncoder::drop");
         log::debug!("command encoder {:?} is dropped", command_encoder_id);
 
         let hub = A::hub(self);
@@ -4463,7 +4463,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn command_buffer_drop<A: HalApi>(&self, command_buffer_id: id::CommandBufferId) {
-        profiling::scope!("drop", "CommandBuffer");
+        profiling::scope!("CommandBuffer::drop");
         log::debug!("command buffer {:?} is dropped", command_buffer_id);
         self.command_encoder_drop::<A>(command_buffer_id)
     }
@@ -4476,7 +4476,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         id::RenderBundleEncoderId,
         Option<command::CreateRenderBundleError>,
     ) {
-        profiling::scope!("create_render_bundle_encoder", "Device");
+        profiling::scope!("Device::create_render_bundle_encoder");
         let (encoder, error) = match command::RenderBundleEncoder::new(desc, device_id, None) {
             Ok(encoder) => (encoder, None),
             Err(e) => (command::RenderBundleEncoder::dummy(device_id), Some(e)),
@@ -4490,7 +4490,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         desc: &command::RenderBundleDescriptor,
         id_in: Input<G, id::RenderBundleId>,
     ) -> (id::RenderBundleId, Option<command::RenderBundleError>) {
-        profiling::scope!("finish", "RenderBundleEncoder");
+        profiling::scope!("RenderBundleEncoder::finish");
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -4538,7 +4538,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn render_bundle_drop<A: HalApi>(&self, render_bundle_id: id::RenderBundleId) {
-        profiling::scope!("drop", "RenderBundle");
+        profiling::scope!("RenderBundle::drop");
         log::debug!("render bundle {:?} is dropped", render_bundle_id);
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -4572,7 +4572,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         desc: &resource::QuerySetDescriptor,
         id_in: Input<G, id::QuerySetId>,
     ) -> (id::QuerySetId, Option<resource::CreateQuerySetError>) {
-        profiling::scope!("create_query_set", "Device");
+        profiling::scope!("Device::create_query_set");
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -4614,7 +4614,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn query_set_drop<A: HalApi>(&self, query_set_id: id::QuerySetId) {
-        profiling::scope!("drop", "QuerySet");
+        profiling::scope!("QuerySet::drop");
         log::debug!("query set {:?} is dropped", query_set_id);
 
         let hub = A::hub(self);
@@ -4654,7 +4654,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         id::RenderPipelineId,
         Option<pipeline::CreateRenderPipelineError>,
     ) {
-        profiling::scope!("create_render_pipeline", "Device");
+        profiling::scope!("Device::create_render_pipeline");
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -4756,7 +4756,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn render_pipeline_drop<A: HalApi>(&self, render_pipeline_id: id::RenderPipelineId) {
-        profiling::scope!("drop", "RenderPipeline");
+        profiling::scope!("RenderPipeline::drop");
         log::debug!("render pipeline {:?} is dropped", render_pipeline_id);
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -4798,7 +4798,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         id::ComputePipelineId,
         Option<pipeline::CreateComputePipelineError>,
     ) {
-        profiling::scope!("create_compute_pipeline", "Device");
+        profiling::scope!("Device::create_compute_pipeline");
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -4896,7 +4896,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn compute_pipeline_drop<A: HalApi>(&self, compute_pipeline_id: id::ComputePipelineId) {
-        profiling::scope!("drop", "ComputePipeline");
+        profiling::scope!("ComputePipeline::drop");
         log::debug!("compute pipeline {:?} is dropped", compute_pipeline_id);
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -5232,7 +5232,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn device_drop<A: HalApi>(&self, device_id: id::DeviceId) {
-        profiling::scope!("drop", "Device");
+        profiling::scope!("Device::drop");
         log::debug!("device {:?} is dropped", device_id);
 
         let hub = A::hub(self);
@@ -5285,7 +5285,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         range: Range<BufferAddress>,
         op: resource::BufferMapOperation,
     ) -> Result<(), resource::BufferAccessError> {
-        profiling::scope!("map_async", "Buffer");
+        profiling::scope!("Buffer::map_async");
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -5352,7 +5352,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         offset: BufferAddress,
         size: Option<BufferAddress>,
     ) -> Result<(*mut u8, u64), resource::BufferAccessError> {
-        profiling::scope!("get_mapped_range", "Buffer");
+        profiling::scope!("Buffer::get_mapped_range");
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -5412,7 +5412,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         buffer_id: id::BufferId,
     ) -> Result<Option<BufferMapPendingClosure>, resource::BufferAccessError> {
-        profiling::scope!("unmap", "Buffer");
+        profiling::scope!("Buffer::unmap");
 
         let hub = A::hub(self);
         let mut token = Token::root();

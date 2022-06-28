@@ -295,7 +295,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         buffer_offset: wgt::BufferAddress,
         data: &[u8],
     ) -> Result<(), QueueWriteError> {
-        profiling::scope!("write_buffer", "Queue");
+        profiling::scope!("Queue::write_buffer");
 
         let hub = A::hub(self);
         let root_token = &mut Token::root();
@@ -371,7 +371,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         buffer_offset: wgt::BufferAddress,
         staging_buffer_id: id::StagingBufferId,
     ) -> Result<(), QueueWriteError> {
-        profiling::scope!("write_buffer_with", "Queue");
+        profiling::scope!("Queue::write_buffer_with");
 
         let hub = A::hub(self);
         let root_token = &mut Token::root();
@@ -518,7 +518,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         data_layout: &wgt::ImageDataLayout,
         size: &wgt::Extent3d,
     ) -> Result<(), QueueWriteError> {
-        profiling::scope!("write_texture", "Queue");
+        profiling::scope!("Queue::write_texture");
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -737,7 +737,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         queue_id: id::QueueId,
         command_buffer_ids: &[id::CommandBufferId],
     ) -> Result<WrappedSubmissionIndex, QueueSubmitError> {
-        profiling::scope!("submit", "Queue");
+        profiling::scope!("Queue::submit");
 
         let (submit_index, callbacks) = {
             let hub = A::hub(self);
