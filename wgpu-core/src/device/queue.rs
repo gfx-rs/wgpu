@@ -326,8 +326,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let (staging_buffer, staging_buffer_ptr) = device.prepare_staging_buffer(data_size)?;
 
-        profiling::scope!("copy");
         unsafe {
+            profiling::scope!("copy");
             ptr::copy_nonoverlapping(data.as_ptr(), staging_buffer_ptr, data.len());
             staging_buffer.flush(&device.raw)?;
         };
