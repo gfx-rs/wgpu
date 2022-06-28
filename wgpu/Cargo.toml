@@ -158,8 +158,7 @@ rev = "27d38aae"
 features = ["wgsl-out"]
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-wasm-bindgen = "0.2.80"
-web-sys = { version = "0.3.57", features = [
+web-sys = { version = "0.3.58", features = [
     "Document",
     "Navigator",
     "Node",
@@ -167,6 +166,7 @@ web-sys = { version = "0.3.57", features = [
     "Gpu",
     "GpuAdapter",
     "GpuAddressMode",
+    "GpuAutoLayoutMode",
     "GpuBindGroup",
     "GpuBindGroupDescriptor",
     "GpuBindGroupEntry",
@@ -182,12 +182,10 @@ web-sys = { version = "0.3.57", features = [
     "GpuBufferBindingLayout",
     "GpuBufferBindingType",
     "GpuBufferDescriptor",
-    "GpuBufferUsage",
     "GpuCanvasContext",
     "GpuCanvasConfiguration",
     "GpuColorDict",
     "GpuColorTargetState",
-    "GpuColorWrite",
     "GpuCommandBuffer",
     "GpuCommandBufferDescriptor",
     "GpuCommandEncoder",
@@ -206,6 +204,7 @@ web-sys = { version = "0.3.57", features = [
     "GpuDeviceDescriptor",
     "GpuDeviceLostInfo",
     "GpuDeviceLostReason",
+    "GpuError",
     "GpuErrorFilter",
     "GpuExtent3dDict",
     "GpuFeatureName",
@@ -217,7 +216,8 @@ web-sys = { version = "0.3.57", features = [
     "GpuImageDataLayout",
     "GpuIndexFormat",
     "GpuLoadOp",
-    "GpuMapMode",
+    "gpu_map_mode",
+    "GpuMipmapFilterMode",
     "GpuMultisampleState",
     "GpuObjectDescriptorBase",
     "GpuOrigin2dDict",
@@ -226,7 +226,6 @@ web-sys = { version = "0.3.57", features = [
     "GpuPipelineDescriptorBase",
     "GpuPipelineLayout",
     "GpuPipelineLayoutDescriptor",
-    "GpuPipelineStatisticName",
     "GpuPowerPreference",
     "GpuPrimitiveState",
     "GpuPrimitiveTopology",
@@ -252,7 +251,6 @@ web-sys = { version = "0.3.57", features = [
     "GpuSamplerDescriptor",
     "GpuShaderModule",
     "GpuShaderModuleDescriptor",
-    "GpuShaderStage",
     "GpuStencilFaceState",
     "GpuStencilOperation",
     "GpuStorageTextureAccess",
@@ -267,7 +265,6 @@ web-sys = { version = "0.3.57", features = [
     "GpuTextureDimension",
     "GpuTextureFormat",
     "GpuTextureSampleType",
-    "GpuTextureUsage",
     "GpuTextureView",
     "GpuTextureViewDescriptor",
     "GpuTextureViewDimension",
@@ -285,8 +282,9 @@ web-sys = { version = "0.3.57", features = [
     "ImageBitmapRenderingContext",
     "Window"
 ] }
-js-sys = "0.3.57"
-wasm-bindgen-futures = "0.4.30"
+wasm-bindgen = "0.2.81"
+js-sys = "0.3.58"
+wasm-bindgen-futures = "0.4.31"
 # parking_lot 0.12 switches from `winapi` to `windows`; permit either
 parking_lot = ">=0.11,<0.13"
 
@@ -294,4 +292,4 @@ parking_lot = ">=0.11,<0.13"
 console_error_panic_hook = "0.1.6"
 console_log = "0.1.2"
 # We need the Location feature in the framework examples
-web-sys = { version = "0.3.53", features = ["Location"] }
+web-sys = { version = "0.3.58", features = ["Location"] }
