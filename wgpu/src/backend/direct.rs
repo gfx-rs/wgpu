@@ -2192,6 +2192,58 @@ impl crate::Context for Context {
         }
     }
 
+    fn queue_validate_write_buffer(
+        &self,
+        queue: &Self::QueueId,
+        buffer: &Self::BufferId,
+        offset: wgt::BufferAddress,
+        size: wgt::BufferSize,
+    ) {
+        let global = &self.0;
+        match wgc::gfx_select!(
+            *queue => global.queue_validate_write_buffer(*queue, buffer.id, offset, size.get())
+        ) {
+            Ok(()) => (),
+            Err(err) => self.handle_error_fatal(err, "Queue::write_buffer_with"),
+        }
+    }
+
+    fn queue_create_staging_buffer(
+        &self,
+        queue: &Self::QueueId,
+        size: wgt::BufferSize,
+    ) -> QueueWriteBuffer {
+        let global = &self.0;
+        match wgc::gfx_select!(
+            *queue => global.queue_create_staging_buffer(*queue, size, PhantomData)
+        ) {
+            Ok((buffer_id, ptr)) => QueueWriteBuffer {
+                buffer_id,
+                mapping: BufferMappedRange {
+                    ptr,
+                    size: size.get() as usize,
+                },
+            },
+            Err(err) => self.handle_error_fatal(err, "Queue::write_buffer_with"),
+        }
+    }
+
+    fn queue_write_staging_buffer(
+        &self,
+        queue: &Self::QueueId,
+        buffer: &Self::BufferId,
+        offset: wgt::BufferAddress,
+        staging_buffer: &QueueWriteBuffer,
+    ) {
+        let global = &self.0;
+        match wgc::gfx_select!(
+            *queue => global.queue_write_staging_buffer(*queue, buffer.id, offset, staging_buffer.buffer_id)
+        ) {
+            Ok(()) => (),
+            Err(err) => self.handle_error_fatal(err, "Queue::write_buffer_with"),
+        }
+    }
+
     fn queue_write_texture(
         &self,
         queue: &Self::QueueId,
@@ -2322,6 +2374,27 @@ impl fmt::Debug for ErrorSinkRaw {
 fn default_error_handler(err: crate::Error) {
     log::error!("Handling wgpu errors as fatal by default");
     panic!("wgpu error: {}\n", err);
+}
+
+#[derive(Debug)]
+pub struct QueueWriteBuffer {
+    buffer_id: wgc::id::StagingBufferId,
+    mapping: BufferMappedRange,
+}
+
+impl std::ops::Deref for QueueWriteBuffer {
+    type Target = [u8];
+
+    fn deref(&self) -> &Self::Target {
+        panic!("QueueWriteBuffer is write-only!");
+    }
+}
+
+impl std::ops::DerefMut for QueueWriteBuffer {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        use crate::BufferMappedRangeSlice;
+        self.mapping.slice_mut()
+    }
 }
 
 #[derive(Debug)]

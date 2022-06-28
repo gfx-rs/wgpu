@@ -5,7 +5,7 @@ use crate::{
     id,
     instance::{Adapter, HalSurface, Instance, Surface},
     pipeline::{ComputePipeline, RenderPipeline, ShaderModule},
-    resource::{Buffer, QuerySet, Sampler, Texture, TextureClearMode, TextureView},
+    resource::{Buffer, QuerySet, Sampler, StagingBuffer, Texture, TextureClearMode, TextureView},
     Epoch, Index,
 };
 
@@ -351,6 +351,7 @@ impl<A: HalApi> Access<Buffer<A>> for CommandBuffer<A> {}
 impl<A: HalApi> Access<Buffer<A>> for ComputePipeline<A> {}
 impl<A: HalApi> Access<Buffer<A>> for RenderPipeline<A> {}
 impl<A: HalApi> Access<Buffer<A>> for QuerySet<A> {}
+impl<A: HalApi> Access<StagingBuffer<A>> for Device<A> {}
 impl<A: HalApi> Access<Texture<A>> for Root {}
 impl<A: HalApi> Access<Texture<A>> for Device<A> {}
 impl<A: HalApi> Access<Texture<A>> for Buffer<A> {}
@@ -452,6 +453,7 @@ pub trait GlobalIdentityHandlerFactory:
     + IdentityHandlerFactory<id::ComputePipelineId>
     + IdentityHandlerFactory<id::QuerySetId>
     + IdentityHandlerFactory<id::BufferId>
+    + IdentityHandlerFactory<id::StagingBufferId>
     + IdentityHandlerFactory<id::TextureId>
     + IdentityHandlerFactory<id::TextureViewId>
     + IdentityHandlerFactory<id::SamplerId>
@@ -639,6 +641,7 @@ pub struct Hub<A: HalApi, F: GlobalIdentityHandlerFactory> {
     pub compute_pipelines: Registry<ComputePipeline<A>, id::ComputePipelineId, F>,
     pub query_sets: Registry<QuerySet<A>, id::QuerySetId, F>,
     pub buffers: Registry<Buffer<A>, id::BufferId, F>,
+    pub staging_buffers: Registry<StagingBuffer<A>, id::StagingBufferId, F>,
     pub textures: Registry<Texture<A>, id::TextureId, F>,
     pub texture_views: Registry<TextureView<A>, id::TextureViewId, F>,
     pub samplers: Registry<Sampler<A>, id::SamplerId, F>,
@@ -659,6 +662,7 @@ impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<A, F> {
             compute_pipelines: Registry::new(A::VARIANT, factory),
             query_sets: Registry::new(A::VARIANT, factory),
             buffers: Registry::new(A::VARIANT, factory),
+            staging_buffers: Registry::new(A::VARIANT, factory),
             textures: Registry::new(A::VARIANT, factory),
             texture_views: Registry::new(A::VARIANT, factory),
             samplers: Registry::new(A::VARIANT, factory),

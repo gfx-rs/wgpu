@@ -186,6 +186,24 @@ impl<A: hal::Api> Resource for Buffer<A> {
     }
 }
 
+pub struct StagingBuffer<A: hal::Api> {
+    pub(crate) raw: A::Buffer,
+    pub(crate) size: wgt::BufferAddress,
+    pub(crate) is_coherent: bool,
+}
+
+impl<A: hal::Api> Resource for StagingBuffer<A> {
+    const TYPE: &'static str = "StagingBuffer";
+
+    fn life_guard(&self) -> &LifeGuard {
+        unreachable!()
+    }
+
+    fn label(&self) -> &str {
+        "<StagingBuffer>"
+    }
+}
+
 pub type TextureDescriptor<'a> = wgt::TextureDescriptor<Label<'a>>;
 
 #[derive(Debug)]
