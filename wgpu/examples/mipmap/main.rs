@@ -158,7 +158,8 @@ impl Example {
                     view: &views[target_mip],
                     resolve_target: None,
                     ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color::WHITE),
+                        clear_value: Some(wgpu::Color::WHITE),
+                        load: wgpu::LoadOp::Clear,
                         store: true,
                     },
                 })],
@@ -465,7 +466,8 @@ impl framework::Example for Example {
                     view,
                     resolve_target: None,
                     ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(clear_color),
+                        clear_value: Some(clear_color),
+                        load: wgpu::LoadOp::Clear,
                         store: true,
                     },
                 })],

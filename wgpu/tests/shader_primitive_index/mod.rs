@@ -186,7 +186,8 @@ fn pulling_common(
     let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
         color_attachments: &[Some(wgpu::RenderPassColorAttachment {
             ops: wgpu::Operations {
-                load: wgpu::LoadOp::Clear(wgpu::Color::WHITE),
+                clear_value: Some(wgpu::Color::WHITE),
+                load: wgpu::LoadOp::Clear,
                 store: true,
             },
             resolve_target: None,

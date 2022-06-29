@@ -1160,16 +1160,16 @@ pub struct BufferBinding<'a> {
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
-pub enum LoadOp<V> {
-    /// Clear with a specified value.
-    Clear(V),
+pub enum LoadOp {
+    /// Clear with a clear_value.
+    Clear,
     /// Load from memory.
     Load,
 }
 
-impl<V: Default> Default for LoadOp<V> {
+impl Default for LoadOp {
     fn default() -> Self {
-        Self::Clear(Default::default())
+        Self::Clear
     }
 }
 
@@ -1178,8 +1178,10 @@ impl<V: Default> Default for LoadOp<V> {
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub struct Operations<V> {
+    /// The value to clear view to prior to executing the render pass if load is LoadOp::Clear.
+    pub clear_value: Option<V>,
     /// How data should be read through this attachment.
-    pub load: LoadOp<V>,
+    pub load: LoadOp,
     /// Whether data will be written to through this attachment.
     pub store: bool,
 }
@@ -1187,6 +1189,7 @@ pub struct Operations<V> {
 impl<V: Default> Default for Operations<V> {
     fn default() -> Self {
         Self {
+            clear_value: Default::default(),
             load: Default::default(),
             store: true,
         }

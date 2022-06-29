@@ -376,7 +376,8 @@ impl framework::Example for Example {
                 view,
                 resolve_target: None,
                 ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                    clear_value: Some(wgpu::Color::BLACK),
+                    load: wgpu::LoadOp::Clear,
                     store: true,
                 },
             })],

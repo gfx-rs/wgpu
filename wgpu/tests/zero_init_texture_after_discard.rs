@@ -18,6 +18,7 @@ fn discarding_color_target_resets_texture_init_state_check_visible_on_copy_after
                     view: &texture.create_view(&wgpu::TextureViewDescriptor::default()),
                     resolve_target: None,
                     ops: wgpu::Operations {
+                        clear_value: None,
                         load: wgpu::LoadOp::Load,
                         store: false, // discard!
                     },
@@ -53,6 +54,7 @@ fn discarding_color_target_resets_texture_init_state_check_visible_on_copy_in_sa
                     view: &texture.create_view(&wgpu::TextureViewDescriptor::default()),
                     resolve_target: None,
                     ops: wgpu::Operations {
+                        clear_value: None,
                         load: wgpu::LoadOp::Load,
                         store: false, // discard!
                     },
@@ -89,10 +91,12 @@ fn discarding_depth_target_resets_texture_init_state_check_visible_on_copy_in_sa
                         depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                             view: &texture.create_view(&wgpu::TextureViewDescriptor::default()),
                             depth_ops: Some(wgpu::Operations {
+                                clear_value: None,
                                 load: wgpu::LoadOp::Load,
                                 store: false, // discard!
                             }),
                             stencil_ops: Some(wgpu::Operations {
+                                clear_value: None,
                                 load: wgpu::LoadOp::Load,
                                 store: false, // discard!
                             }),
@@ -125,11 +129,13 @@ fn discarding_either_depth_or_stencil_aspect() {
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                     view: &texture.create_view(&wgpu::TextureViewDescriptor::default()),
                     depth_ops: Some(wgpu::Operations {
+                        clear_value: None,
                         load: wgpu::LoadOp::Load,
                         store: false, // discard!
                     }),
                     stencil_ops: Some(wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(0),
+                        clear_value: Some(0),
+                        load: wgpu::LoadOp::Clear,
                         store: true,
                     }),
                 }),
@@ -146,10 +152,12 @@ fn discarding_either_depth_or_stencil_aspect() {
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                     view: &texture.create_view(&wgpu::TextureViewDescriptor::default()),
                     depth_ops: Some(wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(0.0),
+                        clear_value: Some(0.0),
+                        load: wgpu::LoadOp::Clear,
                         store: true,
                     }),
                     stencil_ops: Some(wgpu::Operations {
+                        clear_value: None,
                         load: wgpu::LoadOp::Load,
                         store: false, // discard!
                     }),
@@ -223,11 +231,13 @@ fn create_white_texture_and_readback_buffer(
             depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                 view: &texture.create_view(&wgpu::TextureViewDescriptor::default()),
                 depth_ops: Some(wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(1.0),
+                    clear_value: Some(1.0),
+                    load: wgpu::LoadOp::Clear,
                     store: true,
                 }),
                 stencil_ops: Some(wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(0xFFFFFFFF),
+                    clear_value: Some(0xFFFFFFFF),
+                    load: wgpu::LoadOp::Clear,
                     store: true,
                 }),
             }),

@@ -95,7 +95,8 @@ async fn create_red_image_with_dimensions(
                 view: &texture.create_view(&wgpu::TextureViewDescriptor::default()),
                 resolve_target: None,
                 ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color::RED),
+                    clear_value: Some(wgpu::Color::RED),
+                    load: wgpu::LoadOp::Clear,
                     store: true,
                 },
             })],

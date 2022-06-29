@@ -424,19 +424,21 @@ impl framework::Example for Skybox {
                     view,
                     resolve_target: None,
                     ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color {
+                        clear_value: Some(wgpu::Color {
                             r: 0.1,
                             g: 0.2,
                             b: 0.3,
                             a: 1.0,
                         }),
+                        load: wgpu::LoadOp::Clear,
                         store: true,
                     },
                 })],
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                     view: &self.depth_view,
                     depth_ops: Some(wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(1.0),
+                        clear_value: Some(1.0),
+                        load: wgpu::LoadOp::Clear,
                         store: false,
                     }),
                     stencil_ops: None,

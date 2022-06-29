@@ -127,7 +127,8 @@ async fn run(event_loop: EventLoop<()>, viewports: Vec<(Window, wgpu::Color)>) {
                                 view: &view,
                                 resolve_target: None,
                                 ops: wgpu::Operations {
-                                    load: wgpu::LoadOp::Clear(viewport.desc.background),
+                                    clear_value: Some(viewport.desc.background),
+                                    load: wgpu::LoadOp::Clear,
                                     store: true,
                                 },
                             })],

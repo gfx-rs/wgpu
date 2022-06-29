@@ -2014,12 +2014,8 @@ impl crate::Context for Context {
             .iter()
             .map(|attachment| match attachment {
                 Some(ca) => {
-                    let mut clear_value: Option<wasm_bindgen::JsValue> = None;
                     let load_value = match ca.ops.load {
-                        crate::LoadOp::Clear(color) => {
-                            clear_value = Some(wasm_bindgen::JsValue::from(map_color(color)));
-                            web_sys::GpuLoadOp::Clear
-                        }
+                        crate::LoadOp::Clear => web_sys::GpuLoadOp::Clear,
                         crate::LoadOp::Load => web_sys::GpuLoadOp::Load,
                     };
 
@@ -2028,8 +2024,9 @@ impl crate::Context for Context {
                         map_store_op(ca.ops.store),
                         &ca.view.id.0,
                     );
-                    if let Some(cv) = clear_value {
-                        mapped_color_attachment.clear_value(&cv);
+                    if let Some(cv) = ca.ops.clear_value {
+                        mapped_color_attachment
+                            .clear_value(&wasm_bindgen::JsValue::from(map_color(cv)));
                     }
                     if let Some(rt) = ca.resolve_target {
                         mapped_color_attachment.resolve_target(&rt.id.0);
@@ -2049,30 +2046,38 @@ impl crate::Context for Context {
         }
 
         if let Some(dsa) = &desc.depth_stencil_attachment {
-            let (depth_load_op, depth_store_op) = match dsa.depth_ops {
+            let (depth_load_op, depth_store_op, depth_clear_value) = match dsa.depth_ops {
                 Some(ref ops) => {
                     let load_op = match ops.load {
-                        crate::LoadOp::Clear(_) => web_sys::GpuLoadOp::Clear,
+                        crate::LoadOp::Clear => web_sys::GpuLoadOp::Clear,
                         crate::LoadOp::Load => web_sys::GpuLoadOp::Load,
                     };
-                    (load_op, map_store_op(ops.store))
+                    (load_op, map_store_op(ops.store), ops.clear_value)
                 }
-                None => (web_sys::GpuLoadOp::Load, web_sys::GpuStoreOp::Store),
+                None => (web_sys::GpuLoadOp::Load, web_sys::GpuStoreOp::Store, None),
             };
-            let (stencil_load_op, stencil_store_op) = match dsa.stencil_ops {
+            let (stencil_load_op, stencil_store_op, stencil_clear_value) = match dsa.stencil_ops {
                 Some(ref ops) => {
                     let load_op = match ops.load {
-                        crate::LoadOp::Clear(_) => web_sys::GpuLoadOp::Clear,
+                        crate::LoadOp::Clear => web_sys::GpuLoadOp::Clear,
                         crate::LoadOp::Load => web_sys::GpuLoadOp::Load,
                     };
-                    (load_op, map_store_op(ops.store))
+                    (load_op, map_store_op(ops.store), ops.clear_value)
                 }
-                None => (web_sys::GpuLoadOp::Load, web_sys::GpuStoreOp::Store),
+                None => (web_sys::GpuLoadOp::Load, web_sys::GpuStoreOp::Store, None),
             };
+
             let mut mapped_depth_stencil_attachment =
                 web_sys::GpuRenderPassDepthStencilAttachment::new(&dsa.view.id.0);
+            if let Some(clear_value) = depth_clear_value {
+                mapped_depth_stencil_attachment.depth_clear_value(clear_value);
+            }
             mapped_depth_stencil_attachment.depth_load_op(depth_load_op);
             mapped_depth_stencil_attachment.depth_store_op(depth_store_op);
+
+            if let Some(clear_value) = stencil_clear_value {
+                mapped_depth_stencil_attachment.stencil_clear_value(clear_value);
+            }
             mapped_depth_stencil_attachment.stencil_load_op(stencil_load_op);
             mapped_depth_stencil_attachment.stencil_store_op(stencil_store_op);
             mapped_desc.depth_stencil_attachment(&mapped_depth_stencil_attachment);

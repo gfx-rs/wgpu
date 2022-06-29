@@ -739,7 +739,8 @@ impl framework::Example for Example {
                     view: &self.reflect_view,
                     resolve_target: None,
                     ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(back_color),
+                        clear_value: Some(back_color),
+                        load: wgpu::LoadOp::Clear,
                         store: true,
                     },
                 })],
@@ -748,7 +749,8 @@ impl framework::Example for Example {
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                     view: &self.depth_buffer,
                     depth_ops: Some(wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(1.0),
+                        clear_value: Some(1.0),
+                        load: wgpu::LoadOp::Clear,
                         store: true,
                     }),
                     stencil_ops: None,
@@ -766,14 +768,16 @@ impl framework::Example for Example {
                     view,
                     resolve_target: None,
                     ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(back_color),
+                        clear_value: Some(back_color),
+                        load: wgpu::LoadOp::Clear,
                         store: true,
                     },
                 })],
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                     view: &self.depth_buffer,
                     depth_ops: Some(wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(1.0),
+                        clear_value: Some(1.0),
+                        load: wgpu::LoadOp::Clear,
                         store: true,
                     }),
                     stencil_ops: None,
@@ -793,6 +797,7 @@ impl framework::Example for Example {
                     view,
                     resolve_target: None,
                     ops: wgpu::Operations {
+                        clear_value: None,
                         load: wgpu::LoadOp::Load,
                         store: true,
                     },

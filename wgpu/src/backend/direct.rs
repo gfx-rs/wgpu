@@ -739,7 +739,8 @@ fn map_pass_channel<V: Copy + Default>(
 ) -> wgc::command::PassChannel<V> {
     match ops {
         Some(&Operations {
-            load: LoadOp::Clear(clear_value),
+            clear_value,
+            load: LoadOp::Clear,
             store,
         }) => wgc::command::PassChannel {
             load_op: wgc::command::LoadOp::Clear,
@@ -748,10 +749,11 @@ fn map_pass_channel<V: Copy + Default>(
             } else {
                 wgc::command::StoreOp::Discard
             },
-            clear_value,
+            clear_value: clear_value.map_or(V::default(), |cv| cv),
             read_only: false,
         },
         Some(&Operations {
+            clear_value: _,
             load: LoadOp::Load,
             store,
         }) => wgc::command::PassChannel {
