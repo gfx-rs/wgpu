@@ -40,7 +40,7 @@ Bottom level categories:
 
 ## Unreleased
 
-## wgpu-0.13 (2022-06-29)
+## wgpu-0.13 (2022-06-30)
 
 ### Major Changes
 
