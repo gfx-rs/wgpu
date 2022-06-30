@@ -209,7 +209,10 @@ impl super::Adapter {
             log::info!("SL version: {}", &sl_version);
             let (sl_major, sl_minor) = Self::parse_version(&sl_version).ok()?;
             let value = sl_major as u16 * 100 + sl_minor as u16 * 10;
-            naga::back::glsl::Version::Embedded(value)
+            naga::back::glsl::Version::Embedded {
+                version: value,
+                is_webgl: cfg!(target_arch = "wasm32"),
+            }
         };
 
         // ANGLE provides renderer strings like: "ANGLE (Apple, Apple M1 Pro, OpenGL 4.1)"

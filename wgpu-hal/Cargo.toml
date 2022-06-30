@@ -1,6 +1,6 @@
 [package]
 name = "wgpu-hal"
-version = "0.12.0"
+version = "0.13.0"
 authors = ["wgpu developers"]
 edition = "2021"
 description = "WebGPU hardware abstraction layer"
@@ -63,7 +63,7 @@ range-alloc = { version = "0.1", optional = true }
 [dependencies.wgt]
 package = "wgpu-types"
 path = "../wgpu-types"
-version = "0.12"
+version = "0.13"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 egl = { package = "khronos-egl", version = "4.1", features = ["dynamic"], optional = true }
@@ -94,16 +94,16 @@ js-sys = { version = "0.3" }
 android_system_properties = "0.1.1"
 
 [dependencies.naga]
-git = "https://github.com/gfx-rs/naga"
-rev = "27d38aae"
-#version = "0.8"
+#git = "https://github.com/gfx-rs/naga"
+#rev = "27d38aae"
+version = "0.9"
 
 # DEV dependencies
 
 [dev-dependencies.naga]
-git = "https://github.com/gfx-rs/naga"
-rev = "27d38aae"
-#version = "0.8"
+#git = "https://github.com/gfx-rs/naga"
+#rev = "27d38aae"
+version = "0.9"
 features = ["wgsl-in"]
 
 [dev-dependencies]
