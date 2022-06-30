@@ -20,6 +20,7 @@ use std::{
     slice,
     sync::Arc,
 };
+use wgt::PresentMode;
 
 const LABEL: &str = "label";
 
@@ -972,7 +973,21 @@ impl crate::Context for Context {
         match wgc::gfx_select!(adapter => global.surface_get_supported_formats(surface.id, *adapter))
         {
             Ok(formats) => formats,
-            Err(wgc::instance::GetSurfacePreferredFormatError::UnsupportedQueueFamily) => vec![],
+            Err(wgc::instance::GetSurfaceSupportError::UnsupportedQueueFamily) => vec![],
+            Err(err) => self.handle_error_fatal(err, "Surface::get_supported_formats"),
+        }
+    }
+
+    fn surface_get_supported_modes(
+        &self,
+        surface: &Self::SurfaceId,
+        adapter: &Self::AdapterId,
+    ) -> Vec<PresentMode> {
+        let global = &self.0;
+        match wgc::gfx_select!(adapter => global.surface_get_supported_modes(surface.id, *adapter))
+        {
+            Ok(modes) => modes,
+            Err(wgc::instance::GetSurfaceSupportError::UnsupportedQueueFamily) => vec![],
             Err(err) => self.handle_error_fatal(err, "Surface::get_supported_formats"),
         }
     }

@@ -4,7 +4,7 @@ version = "0.1.0"
 authors = [
 	"Dzmitry Malyshau <kvark@mozilla.com>",
 ]
-edition = "2018"
+edition = "2021"
 description = "WebGPU trace player"
 homepage = "https://github.com/gfx-rs/wgpu"
 repository = "https://github.com/gfx-rs/wgpu"

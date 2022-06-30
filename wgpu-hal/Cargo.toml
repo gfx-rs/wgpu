@@ -2,7 +2,7 @@
 name = "wgpu-hal"
 version = "0.12.0"
 authors = ["wgpu developers"]
-edition = "2018"
+edition = "2021"
 description = "WebGPU hardware abstraction layer"
 homepage = "https://github.com/gfx-rs/wgpu"
 repository = "https://github.com/gfx-rs/wgpu"

@@ -88,6 +88,7 @@ const ZERO_BUFFER_SIZE: wgt::BufferAddress = 256 << 10;
 pub struct Instance {
     factory: native::DxgiFactory,
     library: Arc<native::D3D12Lib>,
+    supports_allow_tearing: bool,
     _lib_dxgi: native::DxgiLib,
     flags: crate::InstanceFlags,
 }
@@ -100,6 +101,7 @@ impl Instance {
         Surface {
             factory: self.factory,
             target: SurfaceTarget::Visual(native::WeakPtr::from_raw(visual)),
+            supports_allow_tearing: self.supports_allow_tearing,
             swap_chain: None,
         }
     }
@@ -128,6 +130,7 @@ enum SurfaceTarget {
 pub struct Surface {
     factory: native::DxgiFactory,
     target: SurfaceTarget,
+    supports_allow_tearing: bool,
     swap_chain: Option<SwapChain>,
 }
 
@@ -556,11 +559,11 @@ impl crate::Surface<Api> for Surface {
         config: &crate::SurfaceConfiguration,
     ) -> Result<(), crate::SurfaceError> {
         let mut flags = dxgi::DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT;
-        match config.present_mode {
-            wgt::PresentMode::Immediate => {
-                flags |= dxgi::DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
-            }
-            _ => {}
+        // We always set ALLOW_TEARING on the swapchain no matter
+        // what kind of swapchain we want because ResizeBuffers
+        // cannot change if ALLOW_TEARING is applied to the swapchain.
+        if self.supports_allow_tearing {
+            flags |= dxgi::DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
         }
 
         let non_srgb_format = auxil::dxgi::conv::map_texture_format_nosrgb(config.format);
@@ -771,9 +774,11 @@ impl crate::Queue<Api> for Queue {
         sc.acquired_count -= 1;
 
         let (interval, flags) = match sc.present_mode {
+            // We only allow immediate if ALLOW_TEARING is valid.
             wgt::PresentMode::Immediate => (0, dxgi::DXGI_PRESENT_ALLOW_TEARING),
+            wgt::PresentMode::Mailbox => (0, 0),
             wgt::PresentMode::Fifo => (1, 0),
-            wgt::PresentMode::Mailbox => (1, 0),
+            m => unreachable!("Cannot make surface with present mode {m:?}"),
         };
 
         profiling::scope!("IDXGISwapchain3::Present");

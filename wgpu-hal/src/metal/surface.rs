@@ -170,7 +170,11 @@ impl crate::Surface<super::Api> for super::Surface {
 
         let render_layer = self.render_layer.lock();
         let framebuffer_only = config.usage == crate::TextureUses::COLOR_TARGET;
-        let display_sync = config.present_mode != wgt::PresentMode::Immediate;
+        let display_sync = match config.present_mode {
+            wgt::PresentMode::Fifo => true,
+            wgt::PresentMode::Immediate => false,
+            m => unreachable!("Unsupported present mode: {m:?}"),
+        };
         let drawable_size = CGSize::new(config.extent.width as f64, config.extent.height as f64);
 
         match config.composite_alpha_mode {

@@ -1207,12 +1207,23 @@ impl crate::Context for Context {
         ]
     }
 
+    fn surface_get_supported_modes(
+        &self,
+        _surface: &Self::SurfaceId,
+        _adapter: &Self::AdapterId,
+    ) -> Vec<wgt::PresentMode> {
+        vec![wgt::PresentMode::Fifo]
+    }
+
     fn surface_configure(
         &self,
         surface: &Self::SurfaceId,
         device: &Self::DeviceId,
         config: &wgt::SurfaceConfiguration,
     ) {
+        if let wgt::PresentMode::Mailbox | wgt::PresentMode::Immediate = config.present_mode {
+            panic!("Only FIFO/Auto* is supported on web");
+        }
         let mut mapped =
             web_sys::GpuCanvasConfiguration::new(&device.0, map_texture_format(config.format));
         mapped.usage(config.usage.bits());

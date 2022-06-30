@@ -3134,7 +3134,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         surface_id: id::SurfaceId,
         adapter_id: id::AdapterId,
-    ) -> Result<Vec<TextureFormat>, instance::GetSurfacePreferredFormatError> {
+    ) -> Result<Vec<TextureFormat>, instance::GetSurfaceSupportError> {
         profiling::scope!("Surface::get_supported_formats");
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -3143,12 +3143,32 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (adapter_guard, mut _token) = hub.adapters.read(&mut token);
         let adapter = adapter_guard
             .get(adapter_id)
-            .map_err(|_| instance::GetSurfacePreferredFormatError::InvalidAdapter)?;
+            .map_err(|_| instance::GetSurfaceSupportError::InvalidAdapter)?;
         let surface = surface_guard
             .get(surface_id)
-            .map_err(|_| instance::GetSurfacePreferredFormatError::InvalidSurface)?;
+            .map_err(|_| instance::GetSurfaceSupportError::InvalidSurface)?;
 
         surface.get_supported_formats(adapter)
+    }
+    pub fn surface_get_supported_modes<A: HalApi>(
+        &self,
+        surface_id: id::SurfaceId,
+        adapter_id: id::AdapterId,
+    ) -> Result<Vec<wgt::PresentMode>, instance::GetSurfaceSupportError> {
+        profiling::scope!("Surface::get_supported_modes");
+        let hub = A::hub(self);
+        let mut token = Token::root();
+
+        let (surface_guard, mut token) = self.surfaces.read(&mut token);
+        let (adapter_guard, mut _token) = hub.adapters.read(&mut token);
+        let adapter = adapter_guard
+            .get(adapter_id)
+            .map_err(|_| instance::GetSurfaceSupportError::InvalidAdapter)?;
+        let surface = surface_guard
+            .get(surface_id)
+            .map_err(|_| instance::GetSurfaceSupportError::InvalidSurface)?;
+
+        surface.get_supported_modes(adapter)
     }
 
     pub fn device_features<A: HalApi>(
@@ -4955,11 +4975,40 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 );
             }
             if !caps.present_modes.contains(&config.present_mode) {
-                log::warn!(
-                    "Surface does not support present mode: {:?}, falling back to FIFO",
-                    config.present_mode,
+                let new_mode = loop {
+                    // Automatic present mode checks.
+                    //
+                    // The "Automatic" modes are never supported by the backends.
+                    match config.present_mode {
+                        wgt::PresentMode::AutoVsync => {
+                            if caps.present_modes.contains(&wgt::PresentMode::FifoRelaxed) {
+                                break wgt::PresentMode::FifoRelaxed;
+                            }
+                            if caps.present_modes.contains(&wgt::PresentMode::Fifo) {
+                                break wgt::PresentMode::Fifo;
+                            }
+                        }
+                        wgt::PresentMode::AutoNoVsync => {
+                            if caps.present_modes.contains(&wgt::PresentMode::Immediate) {
+                                break wgt::PresentMode::Immediate;
+                            }
+                            if caps.present_modes.contains(&wgt::PresentMode::Mailbox) {
+                                break wgt::PresentMode::Mailbox;
+                            }
+                        }
+                        _ => {}
+                    }
+                    return Err(E::UnsupportedPresentMode {
+                        requested: config.present_mode,
+                        available: caps.present_modes.clone(),
+                    });
+                };
+
+                log::info!(
+                    "Automatically choosing presentation mode by rule {:?}. Chose {new_mode:?}",
+                    config.present_mode
                 );
-                config.present_mode = wgt::PresentMode::Fifo;
+                config.present_mode = new_mode;
             }
             if !caps.formats.contains(&config.format) {
                 return Err(E::UnsupportedFormat {

@@ -281,13 +281,18 @@ impl crate::Adapter<super::Api> for super::Adapter {
             None
         };
 
+        let mut formats = vec![
+            wgt::TextureFormat::Bgra8Unorm,
+            wgt::TextureFormat::Bgra8UnormSrgb,
+            wgt::TextureFormat::Rgba16Float,
+        ];
+        if self.shared.private_caps.format_rgb10a2_unorm_surface {
+            formats.push(wgt::TextureFormat::Rgb10a2Unorm);
+        }
+
         let pc = &self.shared.private_caps;
         Some(crate::SurfaceCapabilities {
-            formats: vec![
-                wgt::TextureFormat::Bgra8Unorm,
-                wgt::TextureFormat::Bgra8UnormSrgb,
-                wgt::TextureFormat::Rgba16Float,
-            ],
+            formats,
             //Note: this is hardcoded in `CAMetalLayer` documentation
             swap_chain_sizes: if pc.can_set_maximum_drawables_count {
                 2..=3
@@ -575,6 +580,7 @@ impl super::PrivateCapabilities {
             format_rgba8_srgb_no_write: !Self::supports_any(device, RGBA8_SRGB),
             format_rgb10a2_unorm_all: Self::supports_any(device, RGB10A2UNORM_ALL),
             format_rgb10a2_unorm_no_write: !Self::supports_any(device, RGB10A2UNORM_ALL),
+            format_rgb10a2_unorm_surface: os_is_mac,
             format_rgb10a2_uint_color: !Self::supports_any(device, RGB10A2UINT_COLOR_WRITE),
             format_rgb10a2_uint_color_write: Self::supports_any(device, RGB10A2UINT_COLOR_WRITE),
             format_rg11b10_all: Self::supports_any(device, RG11B10FLOAT_ALL),

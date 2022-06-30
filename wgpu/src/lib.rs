@@ -230,6 +230,11 @@ trait Context: Debug + Send + Sized + Sync {
         surface: &Self::SurfaceId,
         adapter: &Self::AdapterId,
     ) -> Vec<TextureFormat>;
+    fn surface_get_supported_modes(
+        &self,
+        surface: &Self::SurfaceId,
+        adapter: &Self::AdapterId,
+    ) -> Vec<PresentMode>;
     fn surface_configure(
         &self,
         surface: &Self::SurfaceId,
@@ -3552,6 +3557,13 @@ impl Surface {
     /// Returns an empty vector if the surface is incompatible with the adapter.
     pub fn get_supported_formats(&self, adapter: &Adapter) -> Vec<TextureFormat> {
         Context::surface_get_supported_formats(&*self.context, &self.id, &adapter.id)
+    }
+
+    /// Returns a vec of supported presentation modes to use for the [`Surface`] with this adapter.
+    ///
+    /// Returns an empty vector if the surface is incompatible with the adapter.
+    pub fn get_supported_modes(&self, adapter: &Adapter) -> Vec<PresentMode> {
+        Context::surface_get_supported_modes(&*self.context, &self.id, &adapter.id)
     }
 
     /// Initializes [`Surface`] for presentation.
