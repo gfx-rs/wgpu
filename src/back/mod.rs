@@ -59,7 +59,7 @@ struct FunctionCtx<'a> {
     named_expressions: &'a crate::NamedExpressions,
 }
 
-impl<'a> FunctionCtx<'_> {
+impl FunctionCtx<'_> {
     /// Helper method that generates a [`NameKey`](crate::proc::NameKey) for a local in the current function
     const fn name_key(&self, local: crate::Handle<crate::LocalVariable>) -> crate::proc::NameKey {
         match self.ty {

@@ -484,7 +484,6 @@ impl FunctionInfo {
                     return Err(ExpressionError::MissingCapabilities(needed_caps));
                 }
 
-                let _ = ();
                 Uniformity {
                     non_uniform_result: self
                         .add_assignable_ref(base, &mut assignable_global)

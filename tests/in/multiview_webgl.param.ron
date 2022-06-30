@@ -1,0 +1,11 @@
+(
+    glsl: (
+		version: Embedded (
+            version: 300,
+			is_webgl: true
+		),
+		writer_flags: (bits: 0),
+		binding_map: {},
+	),
+	glsl_multiview: Some(2),
+)

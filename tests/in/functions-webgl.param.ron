@@ -1,6 +1,9 @@
 (
 	glsl: (
-		version: Embedded(300),
+		version: Embedded(
+			version: 300,
+			is_webgl: false
+		),
 		writer_flags: (bits: 0),
 		binding_map: {},
 	),
