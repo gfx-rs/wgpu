@@ -280,8 +280,6 @@ pub struct RenderPipelineDescriptor<'a> {
 
 #[derive(Clone, Debug, Error)]
 pub enum ColorStateError {
-    #[error("output is missing")]
-    Missing,
     #[error("format {0:?} is not renderable")]
     FormatNotRenderable(wgt::TextureFormat),
     #[error("format {0:?} is not blendable")]
@@ -317,8 +315,6 @@ pub enum CreateRenderPipelineError {
     Device(#[from] DeviceError),
     #[error("pipeline layout is invalid")]
     InvalidLayout,
-    #[error("fragment output @location({0}) is invalid")]
-    InvalidFragmentOutputLocation(u32),
     #[error("unable to derive an implicit layout")]
     Implicit(#[from] ImplicitLayoutError),
     #[error("color state [{0}] is invalid")]

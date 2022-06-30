@@ -2774,16 +2774,14 @@ impl<A: HalApi> Device<A> {
                             },
                         )?;
                     }
-                    Some(&None) => {
-                        return Err(
-                            pipeline::CreateRenderPipelineError::InvalidFragmentOutputLocation(*i),
-                        );
-                    }
                     _ => {
-                        return Err(pipeline::CreateRenderPipelineError::ColorState(
-                            *i as u8,
-                            pipeline::ColorStateError::Missing,
-                        ));
+                        log::info!(
+                            "The fragment stage {:?} output @location({}) values are ignored",
+                            fragment_stage
+                                .as_ref()
+                                .map_or("", |stage| stage.entry_point),
+                            i
+                        );
                     }
                 }
             }
