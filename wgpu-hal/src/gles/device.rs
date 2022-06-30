@@ -134,6 +134,7 @@ impl super::Device {
         let pipeline_options = glsl::PipelineOptions {
             shader_stage: naga_stage,
             entry_point: stage.entry_point.to_string(),
+            multiview: None,
         };
 
         let shader = &stage.module.naga;
@@ -226,7 +227,7 @@ impl super::Device {
         // Create empty fragment shader if only vertex shader is present
         if has_stages == wgt::ShaderStages::VERTEX {
             let version = match self.shared.shading_language_version {
-                naga::back::glsl::Version::Embedded(v) => v,
+                naga::back::glsl::Version::Embedded { version, .. } => version,
                 naga::back::glsl::Version::Desktop(_) => unreachable!(),
             };
             let shader_src = format!("#version {} es \n void main(void) {{}}", version,);
