@@ -1,6 +1,6 @@
 # Change Log
 
-## v0.9 (TBD)
+## v0.9 (2022-06-30)
 
 - Fix minimal-versions of dependencies ([#1840](https://github.com/gfx-rs/naga/pull/1840)) **@teoxoy**
 - Update MSRV to 1.56 ([#1838](https://github.com/gfx-rs/naga/pull/1838)) **@teoxoy**
@@ -60,6 +60,7 @@ Main breaking changes
 
 Specification Changes (relavant changes have also been applied to the WGSL backend)
 
+- Add support for `break if` ([#1993](https://github.com/gfx-rs/naga/pull/1993)) **@JCapucho**
 - Update number literal format ([#1863](https://github.com/gfx-rs/naga/pull/1863)) **@teoxoy**
 - Allow non-ascii characters in identifiers ([#1849](https://github.com/gfx-rs/naga/pull/1849)) **@teoxoy**
 - Update reserved keywords ([#1847](https://github.com/gfx-rs/naga/pull/1847), [#1870](https://github.com/gfx-rs/naga/pull/1870), [#1905](https://github.com/gfx-rs/naga/pull/1905)) **@teoxoy** **@Gordon-F**
@@ -76,6 +77,7 @@ Specification Changes (relavant changes have also been applied to the WGSL backe
 
 Improvements
 
+- Implement complete validation for size and align attributes ([#1979](https://github.com/gfx-rs/naga/pull/1979)) **@teoxoy**
 - Implement `firstTrailingBit`/`firstLeadingBit` u32 overloads ([#1865](https://github.com/gfx-rs/naga/pull/1865)) **@teoxoy**
 - Add error for non-floating-point matrix ([#1917](https://github.com/gfx-rs/naga/pull/1917)) **@grovesNL**
 - Implement partial vector & matrix identity constructors ([#1916](https://github.com/gfx-rs/naga/pull/1916)) **@teoxoy**
@@ -99,12 +101,16 @@ SPV-IN
 
 - Implement `OpBitReverse` and `OpBitCount` ([#1954](https://github.com/gfx-rs/naga/pull/1954)) **@JCapucho**
 - Add `MultiView` to `SUPPORTED_CAPABILITIES` ([#1934](https://github.com/gfx-rs/naga/pull/1934)) **@expenses**
-- Translate `OpSMod` and `OpFMod` correctly ([#1867](https://github.com/gfx-rs/naga/pull/1867)) **@teoxoy**
+- Translate `OpSMod` and `OpFMod` correctly ([#1867](https://github.com/gfx-rs/naga/pull/1867), [#1995](https://github.com/gfx-rs/naga/pull/1995)) **@teoxoy** **@JCapucho**
 - Error on unsupported `MatrixStride` ([#1805](https://github.com/gfx-rs/naga/pull/1805)) **@teoxoy**
 - Align array stride for undecorated arrays ([#1724](https://github.com/gfx-rs/naga/pull/1724)) **@JCapucho**
 
 GLSL-IN
 
+- Don't allow empty last case in switch ([#1981](https://github.com/gfx-rs/naga/pull/1981)) **@JCapucho**
+- Fix last case falltrough and empty switch ([#1981](https://github.com/gfx-rs/naga/pull/1981)) **@JCapucho**
+- Splat inputs for smoothstep if needed ([#1976](https://github.com/gfx-rs/naga/pull/1976)) **@JCapucho**
+- Fix parameter not changing to depth ([#1967](https://github.com/gfx-rs/naga/pull/1967)) **@JCapucho**
 - Fix matrix multiplication check ([#1953](https://github.com/gfx-rs/naga/pull/1953)) **@JCapucho**
 - Fix panic (stop emitter in conditional) ([#1952](https://github.com/gfx-rs/naga/pull/1952)) **@JCapucho**
 - Translate `mod` fn correctly ([#1867](https://github.com/gfx-rs/naga/pull/1867)) **@teoxoy**
@@ -151,6 +157,8 @@ SPV-OUT
 
 MSL-OUT
 
+- Insert padding initialization for global constants ([#1988](https://github.com/gfx-rs/naga/pull/1988)) **@teoxoy**
+- Don't rely on cached expressions ([#1975](https://github.com/gfx-rs/naga/pull/1975)) **@JCapucho**
 - Fix pointers to private or workgroup address spaces possibly being read only ([#1901](https://github.com/gfx-rs/naga/pull/1901)) **@teoxoy**
 - Zero init variables in function address space ([#1871](https://github.com/gfx-rs/naga/pull/1871)) **@teoxoy**
 - Make binding arrays play nice with bounds checks ([#1855](https://github.com/gfx-rs/naga/pull/1855)) **@cwfitzgerald**
@@ -168,6 +176,7 @@ MSL-OUT
 
 HLSL-OUT
 
+- More `matCx2` fixes (#1989) ([#1989](https://github.com/gfx-rs/naga/pull/1989)) **@teoxoy**
 - Fix fallthrough in switch statements ([#1920](https://github.com/gfx-rs/naga/pull/1920)) **@teoxoy**
 - Fix missing break statements ([#1919](https://github.com/gfx-rs/naga/pull/1919)) **@teoxoy**
 - Fix `countOneBits` and `reverseBits` for signed integers ([#1928](https://github.com/gfx-rs/naga/pull/1928)) **@hasali19**
@@ -190,6 +199,9 @@ HLSL-OUT
 
 GLSL-OUT
 
+- Fix vector bitcasts (#1966) ([#1966](https://github.com/gfx-rs/naga/pull/1966)) **@expenses**
+- Perform casts in int only math functions ([#1978](https://github.com/gfx-rs/naga/pull/1978)) **@JCapucho**
+- Don't rely on cached expressions ([#1975](https://github.com/gfx-rs/naga/pull/1975)) **@JCapucho**
 - Fix type error for `countOneBits` implementation ([#1897](https://github.com/gfx-rs/naga/pull/1897)) **@hasali19**
 - Fix storage format for `Rgba8Unorm` ([#1955](https://github.com/gfx-rs/naga/pull/1955)) **@JCapucho**
 - Implement bounds checks for `ImageLoad` ([#1889](https://github.com/gfx-rs/naga/pull/1889)) **@JCapucho**
