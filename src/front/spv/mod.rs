@@ -2045,11 +2045,16 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         body_idx,
                     );
 
+                    let result_ty = self.lookup_type.lookup(result_type_id)?;
+                    let inner = &ctx.type_arena[result_ty.handle].inner;
+                    let kind = inner.scalar_kind().unwrap();
+                    let size = inner.size(ctx.const_arena) as u8;
+
                     let left_cast = ctx.expressions.append(
                         crate::Expression::As {
                             expr: left,
                             kind: crate::ScalarKind::Float,
-                            convert: None,
+                            convert: Some(size),
                         },
                         span,
                     );
@@ -2057,7 +2062,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         crate::Expression::As {
                             expr: right,
                             kind: crate::ScalarKind::Float,
-                            convert: None,
+                            convert: Some(size),
                         },
                         span,
                     );
@@ -2079,16 +2084,11 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         },
                         span,
                     );
-                    let result_ty = self.lookup_type.lookup(result_type_id)?;
-                    let kind = ctx.type_arena[result_ty.handle]
-                        .inner
-                        .scalar_kind()
-                        .unwrap();
                     let cast = ctx.expressions.append(
                         crate::Expression::As {
                             expr: floor,
                             kind,
-                            convert: None,
+                            convert: Some(size),
                         },
                         span,
                     );
