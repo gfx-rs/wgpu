@@ -174,6 +174,21 @@ Limits {
 }
 ```
 
+`Features::CLEAR_COMMANDS` is now unnecessary and no longer exists. The feature to clear buffers and textures is now part of upstream WebGPU.
+
+```diff
+DeviceDescriptor {
+  // ...
+  features: wgpu::Features::VERTEX_WRITABLE_STORAGE
+    | wgpu::Features::MAPPABLE_PRIMARY_BUFFERS
+    | wgpu::Features::TEXTURE_BINDING_ARRAY
+    | wgpu::Features::BUFFER_BINDING_ARRAY
+    | wgpu::Features::STORAGE_RESOURCE_BINDING_ARRAY
+-    | wgpu::Features::CLEAR_COMMANDS
+  ,
+}
+```
+
 ### Added/New Features
 
 #### General
