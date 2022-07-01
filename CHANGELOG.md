@@ -165,6 +165,15 @@ Extent3d {
 + }.max_mips(wgpu::TextureDimension::D3)
 ```
 
+`Limits` has a new field, [`max_buffer_size`](https://docs.rs/wgpu/0.13.0/wgpu/struct.Limits.html#structfield.max_buffer_size) (not an issue if you don't define limits manually):
+
+```diff
+Limits {
+  // ...
++ max_buffer_size: 256 * 1024 * 1024, // adjust as you see fit
+}
+```
+
 ### Added/New Features
 
 #### General
