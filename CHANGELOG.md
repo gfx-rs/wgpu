@@ -1,5 +1,9 @@
 # Change Log
 
+## v0.5.0 (2022-07-01)
+  - add COM helpers
+  - enable D3D11 adapter use
+
 ## v0.4.1 (2021-08-18)
   - expose all indirect argument types
   - expose methods for setting root constants
