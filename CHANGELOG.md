@@ -97,7 +97,7 @@ based GPUs, such as mobile devices and Apple's M chips.
 
 `Features::TIMESTAMP_QUERIES` now allows for calling `write_timestamp` only on `CommandEncoder`s.
 
-`Features::WRITE_TIMESTAMP_INSIDE_PASSES` is needed to calling `write_timestamp` on `RenderPassEncoder`s or `ComputePassEncoder`s.
+`Features::WRITE_TIMESTAMP_INSIDE_PASSES` is needed to call `write_timestamp` on `RenderPassEncoder`s or `ComputePassEncoder`s.
 
 #### map_async
 
