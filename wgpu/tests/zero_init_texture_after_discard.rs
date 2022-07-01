@@ -14,14 +14,14 @@ fn discarding_color_target_resets_texture_init_state_check_visible_on_copy_after
                 .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
             encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Color Discard"),
-                color_attachments: &[wgpu::RenderPassColorAttachment {
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: &texture.create_view(&wgpu::TextureViewDescriptor::default()),
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Load,
                         store: false, // discard!
                     },
-                }],
+                })],
                 depth_stencil_attachment: None,
             });
             ctx.queue.submit([encoder.finish()]);
@@ -49,14 +49,14 @@ fn discarding_color_target_resets_texture_init_state_check_visible_on_copy_in_sa
                 .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
             encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Color Discard"),
-                color_attachments: &[wgpu::RenderPassColorAttachment {
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: &texture.create_view(&wgpu::TextureViewDescriptor::default()),
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Load,
                         store: false, // discard!
                     },
-                }],
+                })],
                 depth_stencil_attachment: None,
             });
             copy_texture_to_buffer(&mut encoder, &texture, &readback_buffer);

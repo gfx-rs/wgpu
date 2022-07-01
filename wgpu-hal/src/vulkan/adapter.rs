@@ -360,6 +360,7 @@ impl PhysicalDeviceFeatures {
             | F::ADDRESS_MODE_CLAMP_TO_BORDER
             | F::ADDRESS_MODE_CLAMP_TO_ZERO
             | F::TIMESTAMP_QUERY
+            | F::WRITE_TIMESTAMP_INSIDE_PASSES
             | F::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
             | F::CLEAR_TEXTURE;
         let mut dl_flags = Df::all();
@@ -768,6 +769,15 @@ impl PhysicalDeviceCapabilities {
             .min(limits.max_compute_work_group_count[1])
             .min(limits.max_compute_work_group_count[2]);
 
+        // Prevent very large buffers on mesa and most android devices.
+        let is_nvidia = self.properties.vendor_id == crate::auxil::db::nvidia::VENDOR;
+        let max_buffer_size =
+            if (cfg!(target_os = "linux") || cfg!(target_os = "android")) && !is_nvidia {
+                i32::MAX as u64
+            } else {
+                u64::MAX
+            };
+
         wgt::Limits {
             max_texture_dimension_1d: limits.max_image_dimension1_d,
             max_texture_dimension_2d: limits.max_image_dimension2_d,
@@ -808,6 +818,7 @@ impl PhysicalDeviceCapabilities {
             max_compute_workgroup_size_y: max_compute_workgroup_sizes[1],
             max_compute_workgroup_size_z: max_compute_workgroup_sizes[2],
             max_compute_workgroups_per_dimension,
+            max_buffer_size,
         }
     }
 
@@ -1048,19 +1059,17 @@ impl super::Instance {
                 || phd_capabilities.supports_extension(vk::KhrMaintenance1Fn::name()),
             imageless_framebuffers: match phd_features.vulkan_1_2 {
                 Some(features) => features.imageless_framebuffer == vk::TRUE,
-                None => match phd_features.imageless_framebuffer {
-                    Some(ref ext) => ext.imageless_framebuffer != 0,
-                    None => false,
-                },
+                None => phd_features
+                    .imageless_framebuffer
+                    .map_or(false, |ext| ext.imageless_framebuffer != 0),
             },
             image_view_usage: phd_capabilities.properties.api_version >= vk::API_VERSION_1_1
                 || phd_capabilities.supports_extension(vk::KhrMaintenance2Fn::name()),
             timeline_semaphores: match phd_features.vulkan_1_2 {
                 Some(features) => features.timeline_semaphore == vk::TRUE,
-                None => match phd_features.timeline_semaphore {
-                    Some(ref ext) => ext.timeline_semaphore != 0,
-                    None => false,
-                },
+                None => phd_features
+                    .timeline_semaphore
+                    .map_or(false, |ext| ext.timeline_semaphore != 0),
             },
             texture_d24: unsafe {
                 self.shared
@@ -1082,13 +1091,11 @@ impl super::Instance {
             robust_buffer_access: phd_features.core.robust_buffer_access != 0,
             robust_image_access: match phd_features.robustness2 {
                 Some(ref f) => f.robust_image_access2 != 0,
-                None => match phd_features.image_robustness {
-                    Some(ref f) => f.robust_image_access != 0,
-                    None => false,
-                },
+                None => phd_features
+                    .image_robustness
+                    .map_or(false, |ext| ext.robust_image_access != 0),
             },
         };
-
         let capabilities = crate::Capabilities {
             limits: phd_capabilities.to_wgpu_limits(&phd_features),
             alignments: phd_capabilities.to_hal_alignments(),
@@ -1606,22 +1613,9 @@ impl crate::Adapter<super::Api> for super::Adapter {
             }
         };
 
-        let supported_formats = [
-            wgt::TextureFormat::Rgba8Unorm,
-            wgt::TextureFormat::Rgba8UnormSrgb,
-            wgt::TextureFormat::Bgra8Unorm,
-            wgt::TextureFormat::Bgra8UnormSrgb,
-            wgt::TextureFormat::Rgba16Float,
-        ];
-        let formats = supported_formats
-            .iter()
-            .cloned()
-            .filter(|&format| {
-                let vk_format = self.private_caps.map_texture_format(format);
-                raw_surface_formats
-                    .iter()
-                    .any(|sf| sf.format == vk_format || sf.format == vk::Format::UNDEFINED)
-            })
+        let formats = raw_surface_formats
+            .into_iter()
+            .filter_map(conv::map_vk_surface_formats)
             .collect();
         Some(crate::SurfaceCapabilities {
             formats,

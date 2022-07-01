@@ -163,7 +163,7 @@ fn fill_screen(exposed: &hal::ExposedAdapter<hal::api::Gles>, width: u32, height
             depth_or_array_layers: 1,
         },
         sample_count: 1,
-        color_attachments: &[hal::ColorAttachment {
+        color_attachments: &[Some(hal::ColorAttachment {
             target: hal::Attachment {
                 view: &view,
                 usage: hal::TextureUses::COLOR_TARGET,
@@ -171,7 +171,7 @@ fn fill_screen(exposed: &hal::ExposedAdapter<hal::api::Gles>, width: u32, height
             resolve_target: None,
             ops: hal::AttachmentOps::STORE,
             clear_value: wgt::Color::BLUE,
-        }],
+        })],
         depth_stencil_attachment: None,
         multiview: None,
     };

@@ -46,7 +46,7 @@ impl framework::Example for Example {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
     ) -> Self {
-        let shader = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
+        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
             source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!(
                 "../../../wgpu-hal/examples/halmark/shader.wgsl"
@@ -116,11 +116,11 @@ impl framework::Example for Example {
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
                 entry_point: "fs_main",
-                targets: &[wgpu::ColorTargetState {
+                targets: &[Some(wgpu::ColorTargetState {
                     format: config.format,
                     blend: Some(wgpu::BlendState::ALPHA_BLENDING),
                     write_mask: wgpu::ColorWrites::default(),
-                }],
+                })],
             }),
             primitive: wgpu::PrimitiveState {
                 topology: wgpu::PrimitiveTopology::TriangleStrip,
@@ -329,14 +329,14 @@ impl framework::Example for Example {
             };
             let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: None,
-                color_attachments: &[wgpu::RenderPassColorAttachment {
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(clear_color),
                         store: true,
                     },
-                }],
+                })],
                 depth_stencil_attachment: None,
             });
             rpass.set_pipeline(&self.pipeline);

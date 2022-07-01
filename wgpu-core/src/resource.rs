@@ -174,6 +174,8 @@ pub enum CreateBufferError {
     EmptyUsage,
     #[error("`MAP` usage can only be combined with the opposite `COPY`, requested {0:?}")]
     UsageMismatch(wgt::BufferUsages),
+    #[error("Buffer size {requested} is greater than the maximum buffer size ({maximum})")]
+    MaxBufferSize { requested: u64, maximum: u64 },
 }
 
 impl<A: hal::Api> Resource for Buffer<A> {
@@ -181,6 +183,24 @@ impl<A: hal::Api> Resource for Buffer<A> {
 
     fn life_guard(&self) -> &LifeGuard {
         &self.life_guard
+    }
+}
+
+pub struct StagingBuffer<A: hal::Api> {
+    pub(crate) raw: A::Buffer,
+    pub(crate) size: wgt::BufferAddress,
+    pub(crate) is_coherent: bool,
+}
+
+impl<A: hal::Api> Resource for StagingBuffer<A> {
+    const TYPE: &'static str = "StagingBuffer";
+
+    fn life_guard(&self) -> &LifeGuard {
+        unreachable!()
+    }
+
+    fn label(&self) -> &str {
+        "<StagingBuffer>"
     }
 }
 
@@ -268,7 +288,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         id: TextureId,
         hal_texture_callback: F,
     ) {
-        profiling::scope!("as_hal", "Texture");
+        profiling::scope!("Texture::as_hal");
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -287,7 +307,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         id: AdapterId,
         hal_adapter_callback: F,
     ) -> R {
-        profiling::scope!("as_hal", "Adapter");
+        profiling::scope!("Adapter::as_hal");
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -307,7 +327,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         id: DeviceId,
         hal_device_callback: F,
     ) -> R {
-        profiling::scope!("as_hal", "Device");
+        profiling::scope!("Device::as_hal");
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -330,7 +350,7 @@ pub enum TextureErrorDimension {
 pub enum TextureDimensionError {
     #[error("Dimension {0:?} is zero")]
     Zero(TextureErrorDimension),
-    #[error("Dimension {0:?} value {given} exceeds the limit of {limit}")]
+    #[error("Dimension {dim:?} value {given} exceeds the limit of {limit}")]
     LimitExceeded {
         dim: TextureErrorDimension,
         given: u32,

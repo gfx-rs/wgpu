@@ -1,8 +1,8 @@
 [package]
 name = "wgpu-types"
-version = "0.12.0"
+version = "0.13.0"
 authors = ["wgpu developers"]
-edition = "2018"
+edition = "2021"
 description = "WebGPU types"
 homepage = "https://github.com/gfx-rs/wgpu"
 repository = "https://github.com/gfx-rs/wgpu"

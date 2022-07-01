@@ -176,7 +176,7 @@ pub enum Command {
     },
     RunRenderPass {
         base: crate::command::BasePass<crate::command::RenderCommand>,
-        target_colors: Vec<crate::command::RenderPassColorAttachment>,
+        target_colors: Vec<Option<crate::command::RenderPassColorAttachment>>,
         target_depth_stencil: Option<crate::command::RenderPassDepthStencilAttachment>,
     },
 }

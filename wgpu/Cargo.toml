@@ -1,8 +1,8 @@
 [package]
 name = "wgpu"
-version = "0.12.0"
+version = "0.13.0"
 authors = ["wgpu developers"]
-edition = "2018"
+edition = "2021"
 description = "Rusty WebGPU API wrapper"
 homepage = "https://wgpu.rs/"
 repository = "https://github.com/gfx-rs/wgpu/tree/v0.12"
@@ -89,25 +89,25 @@ vulkan-portability = ["wgc/vulkan-portability"]
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies.wgc]
 package = "wgpu-core"
 path = "../wgpu-core"
-version = "0.12"
+version = "0.13"
 features = ["raw-window-handle"]
 
 [target.'cfg(target_arch = "wasm32")'.dependencies.wgc]
 package = "wgpu-core"
 path = "../wgpu-core"
-version = "0.12"
+version = "0.13"
 features = ["raw-window-handle"]
 optional = true
 
 [dependencies.wgt]
 package = "wgpu-types"
 path = "../wgpu-types"
-version = "0.12"
+version = "0.13"
 
 [target.'cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))'.dependencies.hal]
 package = "wgpu-hal"
 path = "../wgpu-hal"
-version = "0.12"
+version = "0.13"
 
 [dependencies]
 arrayvec = "0.7"
@@ -139,27 +139,26 @@ pollster = "0.2"
 env_logger = "0.9"
 
 [dependencies.naga]
-git = "https://github.com/gfx-rs/naga"
-rev = "0b60f410"
-#version = "0.8"
+#git = "https://github.com/gfx-rs/naga"
+#rev = "27d38aae"
+version = "0.9"
 optional = true
 
 # used to test all the example shaders
 [dev-dependencies.naga]
-git = "https://github.com/gfx-rs/naga"
-rev = "0b60f410"
-#version = "0.8"
+#git = "https://github.com/gfx-rs/naga"
+#rev = "27d38aae"
+version = "0.9"
 features = ["wgsl-in"]
 
 [target.'cfg(target_arch = "wasm32")'.dependencies.naga]
-git = "https://github.com/gfx-rs/naga"
-rev = "0b60f410"
-#version = "0.8"
+#git = "https://github.com/gfx-rs/naga"
+#rev = "27d38aae"
+version = "0.9"
 features = ["wgsl-out"]
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-wasm-bindgen = "0.2.80"
-web-sys = { version = "0.3.57", features = [
+web-sys = { version = "0.3.58", features = [
     "Document",
     "Navigator",
     "Node",
@@ -167,6 +166,7 @@ web-sys = { version = "0.3.57", features = [
     "Gpu",
     "GpuAdapter",
     "GpuAddressMode",
+    "GpuAutoLayoutMode",
     "GpuBindGroup",
     "GpuBindGroupDescriptor",
     "GpuBindGroupEntry",
@@ -182,12 +182,10 @@ web-sys = { version = "0.3.57", features = [
     "GpuBufferBindingLayout",
     "GpuBufferBindingType",
     "GpuBufferDescriptor",
-    "GpuBufferUsage",
     "GpuCanvasContext",
     "GpuCanvasConfiguration",
     "GpuColorDict",
     "GpuColorTargetState",
-    "GpuColorWrite",
     "GpuCommandBuffer",
     "GpuCommandBufferDescriptor",
     "GpuCommandEncoder",
@@ -206,6 +204,7 @@ web-sys = { version = "0.3.57", features = [
     "GpuDeviceDescriptor",
     "GpuDeviceLostInfo",
     "GpuDeviceLostReason",
+    "GpuError",
     "GpuErrorFilter",
     "GpuExtent3dDict",
     "GpuFeatureName",
@@ -219,7 +218,8 @@ web-sys = { version = "0.3.57", features = [
     "GpuImageDataLayout",
     "GpuIndexFormat",
     "GpuLoadOp",
-    "GpuMapMode",
+    "gpu_map_mode",
+    "GpuMipmapFilterMode",
     "GpuMultisampleState",
     "GpuObjectDescriptorBase",
     "GpuOrigin2dDict",
@@ -228,7 +228,6 @@ web-sys = { version = "0.3.57", features = [
     "GpuPipelineDescriptorBase",
     "GpuPipelineLayout",
     "GpuPipelineLayoutDescriptor",
-    "GpuPipelineStatisticName",
     "GpuPowerPreference",
     "GpuPrimitiveState",
     "GpuPrimitiveTopology",
@@ -254,7 +253,6 @@ web-sys = { version = "0.3.57", features = [
     "GpuSamplerDescriptor",
     "GpuShaderModule",
     "GpuShaderModuleDescriptor",
-    "GpuShaderStage",
     "GpuStencilFaceState",
     "GpuStencilOperation",
     "GpuStorageTextureAccess",
@@ -269,7 +267,6 @@ web-sys = { version = "0.3.57", features = [
     "GpuTextureDimension",
     "GpuTextureFormat",
     "GpuTextureSampleType",
-    "GpuTextureUsage",
     "GpuTextureView",
     "GpuTextureViewDescriptor",
     "GpuTextureViewDimension",
@@ -287,8 +284,9 @@ web-sys = { version = "0.3.57", features = [
     "ImageBitmapRenderingContext",
     "Window"
 ] }
-js-sys = "0.3.57"
-wasm-bindgen-futures = "0.4.30"
+wasm-bindgen = "0.2.81"
+js-sys = "0.3.58"
+wasm-bindgen-futures = "0.4.31"
 # parking_lot 0.12 switches from `winapi` to `windows`; permit either
 parking_lot = ">=0.11,<0.13"
 
@@ -296,7 +294,7 @@ parking_lot = ">=0.11,<0.13"
 console_error_panic_hook = "0.1.6"
 console_log = "0.1.2"
 # We need these features in the framework examples
-web-sys = { version = "0.3.53", features = [
+web-sys = { version = "0.3.58", features = [
     "Location",
     "Blob",
     "RequestInit",

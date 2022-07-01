@@ -170,7 +170,7 @@ impl framework::Example for Skybox {
         });
 
         // Create the render pipeline
-        let shader = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
+        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
             source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
         });
@@ -206,7 +206,7 @@ impl framework::Example for Skybox {
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
                 entry_point: "fs_sky",
-                targets: &[config.format.into()],
+                targets: &[Some(config.format.into())],
             }),
             primitive: wgpu::PrimitiveState {
                 front_face: wgpu::FrontFace::Cw,
@@ -237,7 +237,7 @@ impl framework::Example for Skybox {
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
                 entry_point: "fs_entity",
-                targets: &[config.format.into()],
+                targets: &[Some(config.format.into())],
             }),
             primitive: wgpu::PrimitiveState {
                 front_face: wgpu::FrontFace::Cw,
@@ -420,7 +420,7 @@ impl framework::Example for Skybox {
         {
             let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: None,
-                color_attachments: &[wgpu::RenderPassColorAttachment {
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view,
                     resolve_target: None,
                     ops: wgpu::Operations {
@@ -432,7 +432,7 @@ impl framework::Example for Skybox {
                         }),
                         store: true,
                     },
-                }],
+                })],
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                     view: &self.depth_view,
                     depth_ops: Some(wgpu::Operations {

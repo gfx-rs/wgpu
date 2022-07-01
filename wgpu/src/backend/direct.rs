@@ -20,6 +20,7 @@ use std::{
     slice,
     sync::Arc,
 };
+use wgt::PresentMode;
 
 const LABEL: &str = "label";
 
@@ -47,12 +48,18 @@ impl Context {
         ))
     }
 
-    #[cfg(any(not(target_arch = "wasm32"), feature = "webgl2"))]
     pub unsafe fn instance_as_hal<A: wgc::hub::HalApi, F: FnOnce(Option<&A::Instance>) -> R, R>(
         &self,
         hal_instance_callback: F,
     ) -> R {
         self.0.instance_as_hal::<A, F, R>(hal_instance_callback)
+    }
+
+    pub unsafe fn from_core_instance(core_instance: wgc::instance::Instance) -> Self {
+        Self(wgc::hub::Global::from_instance(
+            wgc::hub::IdentityManagerFactory,
+            core_instance,
+        ))
     }
 
     pub(crate) fn global(&self) -> &wgc::hub::Global<wgc::hub::IdentityManagerFactory> {
@@ -75,7 +82,6 @@ impl Context {
         self.0.create_adapter_from_hal(hal_adapter, PhantomData)
     }
 
-    #[cfg(any(not(target_arch = "wasm32"), feature = "webgl2"))]
     pub unsafe fn adapter_as_hal<A: wgc::hub::HalApi, F: FnOnce(Option<&A::Adapter>) -> R, R>(
         &self,
         adapter: wgc::id::AdapterId,
@@ -962,12 +968,26 @@ impl crate::Context for Context {
         &self,
         surface: &Self::SurfaceId,
         adapter: &Self::AdapterId,
-    ) -> Option<Vec<TextureFormat>> {
+    ) -> Vec<TextureFormat> {
         let global = &self.0;
         match wgc::gfx_select!(adapter => global.surface_get_supported_formats(surface.id, *adapter))
         {
-            Ok(formats) => Some(formats),
-            Err(wgc::instance::GetSurfacePreferredFormatError::UnsupportedQueueFamily) => None,
+            Ok(formats) => formats,
+            Err(wgc::instance::GetSurfaceSupportError::UnsupportedQueueFamily) => vec![],
+            Err(err) => self.handle_error_fatal(err, "Surface::get_supported_formats"),
+        }
+    }
+
+    fn surface_get_supported_modes(
+        &self,
+        surface: &Self::SurfaceId,
+        adapter: &Self::AdapterId,
+    ) -> Vec<PresentMode> {
+        let global = &self.0;
+        match wgc::gfx_select!(adapter => global.surface_get_supported_modes(surface.id, *adapter))
+        {
+            Ok(modes) => modes,
+            Err(wgc::instance::GetSurfaceSupportError::UnsupportedQueueFamily) => vec![],
             Err(err) => self.handle_error_fatal(err, "Surface::get_supported_formats"),
         }
     }
@@ -1065,7 +1085,7 @@ impl crate::Context for Context {
     fn device_create_shader_module(
         &self,
         device: &Self::DeviceId,
-        desc: &ShaderModuleDescriptor,
+        desc: ShaderModuleDescriptor,
         shader_bound_checks: wgt::ShaderBoundChecks,
     ) -> Self::ShaderModuleId {
         let global = &self.0;
@@ -1103,6 +1123,8 @@ impl crate::Context for Context {
                 wgc::pipeline::ShaderModuleSource::Naga(module)
             }
             ShaderSource::Wgsl(ref code) => wgc::pipeline::ShaderModuleSource::Wgsl(Borrowed(code)),
+            #[cfg(feature = "naga")]
+            ShaderSource::Naga(module) => wgc::pipeline::ShaderModuleSource::Naga(module),
         };
         let (id, error) = wgc::gfx_select!(
             device.id => global.device_create_shader_module(device.id, &descriptor, source, PhantomData)
@@ -1641,13 +1663,15 @@ impl crate::Context for Context {
         ready(scope.error)
     }
 
-    fn buffer_map_async(
+    fn buffer_map_async<F>(
         &self,
         buffer: &Self::BufferId,
         mode: MapMode,
         range: Range<wgt::BufferAddress>,
-        callback: impl FnOnce(Result<(), crate::BufferAsyncError>) + Send + 'static,
-    ) {
+        callback: F,
+    ) where
+        F: FnOnce(Result<(), crate::BufferAsyncError>) + Send + 'static,
+    {
         let operation = wgc::resource::BufferMapOperation {
             host: match mode {
                 MapMode::Read => wgc::device::HostMap::Read,
@@ -2022,10 +2046,13 @@ impl crate::Context for Context {
         let colors = desc
             .color_attachments
             .iter()
-            .map(|ca| wgc::command::RenderPassColorAttachment {
-                view: ca.view.id,
-                resolve_target: ca.resolve_target.map(|rt| rt.id),
-                channel: map_pass_channel(Some(&ca.ops)),
+            .map(|ca| {
+                ca.as_ref()
+                    .map(|at| wgc::command::RenderPassColorAttachment {
+                        view: at.view.id,
+                        resolve_target: at.resolve_target.map(|rt| rt.id),
+                        channel: map_pass_channel(Some(&at.ops)),
+                    })
             })
             .collect::<ArrayVec<_, { wgc::MAX_COLOR_ATTACHMENTS }>>();
 
@@ -2180,6 +2207,58 @@ impl crate::Context for Context {
         }
     }
 
+    fn queue_validate_write_buffer(
+        &self,
+        queue: &Self::QueueId,
+        buffer: &Self::BufferId,
+        offset: wgt::BufferAddress,
+        size: wgt::BufferSize,
+    ) {
+        let global = &self.0;
+        match wgc::gfx_select!(
+            *queue => global.queue_validate_write_buffer(*queue, buffer.id, offset, size.get())
+        ) {
+            Ok(()) => (),
+            Err(err) => self.handle_error_fatal(err, "Queue::write_buffer_with"),
+        }
+    }
+
+    fn queue_create_staging_buffer(
+        &self,
+        queue: &Self::QueueId,
+        size: wgt::BufferSize,
+    ) -> QueueWriteBuffer {
+        let global = &self.0;
+        match wgc::gfx_select!(
+            *queue => global.queue_create_staging_buffer(*queue, size, PhantomData)
+        ) {
+            Ok((buffer_id, ptr)) => QueueWriteBuffer {
+                buffer_id,
+                mapping: BufferMappedRange {
+                    ptr,
+                    size: size.get() as usize,
+                },
+            },
+            Err(err) => self.handle_error_fatal(err, "Queue::write_buffer_with"),
+        }
+    }
+
+    fn queue_write_staging_buffer(
+        &self,
+        queue: &Self::QueueId,
+        buffer: &Self::BufferId,
+        offset: wgt::BufferAddress,
+        staging_buffer: &QueueWriteBuffer,
+    ) {
+        let global = &self.0;
+        match wgc::gfx_select!(
+            *queue => global.queue_write_staging_buffer(*queue, buffer.id, offset, staging_buffer.buffer_id)
+        ) {
+            Ok(()) => (),
+            Err(err) => self.handle_error_fatal(err, "Queue::write_buffer_with"),
+        }
+    }
+
     fn queue_write_texture(
         &self,
         queue: &Self::QueueId,
@@ -2310,6 +2389,27 @@ impl fmt::Debug for ErrorSinkRaw {
 fn default_error_handler(err: crate::Error) {
     log::error!("Handling wgpu errors as fatal by default");
     panic!("wgpu error: {}\n", err);
+}
+
+#[derive(Debug)]
+pub struct QueueWriteBuffer {
+    buffer_id: wgc::id::StagingBufferId,
+    mapping: BufferMappedRange,
+}
+
+impl std::ops::Deref for QueueWriteBuffer {
+    type Target = [u8];
+
+    fn deref(&self) -> &Self::Target {
+        panic!("QueueWriteBuffer is write-only!");
+    }
+}
+
+impl std::ops::DerefMut for QueueWriteBuffer {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        use crate::BufferMappedRangeSlice;
+        self.mapping.slice_mut()
+    }
 }
 
 #[derive(Debug)]

@@ -4,7 +4,7 @@ use crate::{
 };
 use std::{mem, sync::Arc, thread};
 use winapi::{
-    shared::{dxgi, dxgi1_2, dxgi1_5, minwindef, windef, winerror},
+    shared::{dxgi, dxgi1_2, windef, winerror},
     um::{d3d12, d3d12sdklayers, winuser},
 };
 
@@ -202,6 +202,7 @@ impl super::Adapter {
             | wgt::Features::VERTEX_WRITABLE_STORAGE
             | wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
             | wgt::Features::TIMESTAMP_QUERY
+            | wgt::Features::WRITE_TIMESTAMP_INSIDE_PASSES
             | wgt::Features::TEXTURE_COMPRESSION_BC
             | wgt::Features::CLEAR_TEXTURE
             | wgt::Features::TEXTURE_FORMAT_16BIT_NORM;
@@ -282,6 +283,7 @@ impl super::Adapter {
                     max_compute_workgroup_size_z: d3d12::D3D12_CS_THREAD_GROUP_MAX_Z,
                     max_compute_workgroups_per_dimension:
                         d3d12::D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION,
+                    max_buffer_size: u64::MAX,
                 },
                 alignments: crate::Alignments {
                     buffer_copy_offset: wgt::BufferSize::new(
@@ -424,20 +426,9 @@ impl crate::Adapter<super::Api> for super::Adapter {
             }
         };
 
-        let mut present_modes = vec![wgt::PresentMode::Fifo];
-        #[allow(trivial_casts)]
-        if let Some(factory5) = surface.factory.as_factory5() {
-            let mut allow_tearing: minwindef::BOOL = minwindef::FALSE;
-            let hr = factory5.CheckFeatureSupport(
-                dxgi1_5::DXGI_FEATURE_PRESENT_ALLOW_TEARING,
-                &mut allow_tearing as *mut _ as *mut _,
-                mem::size_of::<minwindef::BOOL>() as _,
-            );
-
-            match hr.into_result() {
-                Err(err) => log::warn!("Unable to check for tearing support: {}", err),
-                Ok(()) => present_modes.push(wgt::PresentMode::Immediate),
-            }
+        let mut present_modes = vec![wgt::PresentMode::Mailbox, wgt::PresentMode::Fifo];
+        if surface.supports_allow_tearing {
+            present_modes.push(wgt::PresentMode::Immediate);
         }
 
         Some(crate::SurfaceCapabilities {

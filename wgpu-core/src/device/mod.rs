@@ -52,7 +52,7 @@ pub enum HostMap {
 #[derive(Clone, Debug, Hash, PartialEq)]
 #[cfg_attr(feature = "serial-pass", derive(serde::Deserialize, serde::Serialize))]
 pub(crate) struct AttachmentData<T> {
-    pub colors: ArrayVec<T, { hal::MAX_COLOR_ATTACHMENTS }>,
+    pub colors: ArrayVec<Option<T>, { hal::MAX_COLOR_ATTACHMENTS }>,
     pub resolves: ArrayVec<T, { hal::MAX_COLOR_ATTACHMENTS }>,
     pub depth_stencil: Option<T>,
 }
@@ -60,7 +60,7 @@ impl<T: PartialEq> Eq for AttachmentData<T> {}
 impl<T> AttachmentData<T> {
     pub(crate) fn map<U, F: Fn(&T) -> U>(&self, fun: F) -> AttachmentData<U> {
         AttachmentData {
-            colors: self.colors.iter().map(&fun).collect(),
+            colors: self.colors.iter().map(|c| c.as_ref().map(&fun)).collect(),
             resolves: self.resolves.iter().map(&fun).collect(),
             depth_stencil: self.depth_stencil.as_ref().map(&fun),
         }
@@ -78,8 +78,8 @@ pub(crate) struct RenderPassContext {
 pub enum RenderPassCompatibilityError {
     #[error("Incompatible color attachment: the renderpass expected {0:?} but was given {1:?}")]
     IncompatibleColorAttachment(
-        ArrayVec<TextureFormat, { hal::MAX_COLOR_ATTACHMENTS }>,
-        ArrayVec<TextureFormat, { hal::MAX_COLOR_ATTACHMENTS }>,
+        ArrayVec<Option<TextureFormat>, { hal::MAX_COLOR_ATTACHMENTS }>,
+        ArrayVec<Option<TextureFormat>, { hal::MAX_COLOR_ATTACHMENTS }>,
     ),
     #[error(
         "Incompatible depth-stencil attachment: the renderpass expected {0:?} but was given {1:?}"
@@ -445,7 +445,7 @@ impl<A: HalApi> Device<A> {
         maintain: wgt::Maintain<queue::WrappedSubmissionIndex>,
         token: &mut Token<'token, Self>,
     ) -> Result<(UserClosures, bool), WaitIdleError> {
-        profiling::scope!("maintain", "Device");
+        profiling::scope!("Device::maintain");
         let mut life_tracker = self.lock_life(token);
 
         // Normally, `temp_suspected` exists only to save heap
@@ -576,6 +576,14 @@ impl<A: HalApi> Device<A> {
         transient: bool,
     ) -> Result<resource::Buffer<A>, resource::CreateBufferError> {
         debug_assert_eq!(self_id.backend(), A::VARIANT);
+
+        if desc.size > self.limits.max_buffer_size {
+            return Err(resource::CreateBufferError::MaxBufferSize {
+                requested: desc.size,
+                maximum: self.limits.max_buffer_size,
+            });
+        }
+
         let mut usage = conv::map_buffer_usage(desc.usage);
 
         if desc.usage.is_empty() {
@@ -810,8 +818,8 @@ impl<A: HalApi> Device<A> {
                 if format_features
                     .allowed_usages
                     .contains(wgt::TextureUsages::RENDER_ATTACHMENT)
-                    && desc.dimension != wgt::TextureDimension::D3
-                // Render targets into 3D textures are not
+                    && desc.dimension == wgt::TextureDimension::D2
+                // Render targets dimension must be 2d
                 {
                     hal::TextureUses::COLOR_TARGET
                 } else {
@@ -2457,9 +2465,11 @@ impl<A: HalApi> Device<A> {
             .map_or(&[][..], |fragment| &fragment.targets);
         let depth_stencil_state = desc.depth_stencil.as_ref();
 
-        if !color_targets.is_empty() && {
-            let first = &color_targets[0];
-            color_targets[1..]
+        let cts: ArrayVec<_, { hal::MAX_COLOR_ATTACHMENTS }> =
+            color_targets.iter().filter_map(|x| x.as_ref()).collect();
+        if !cts.is_empty() && {
+            let first = &cts[0];
+            cts[1..]
                 .iter()
                 .any(|ct| ct.write_mask != first.write_mask || ct.blend != first.blend)
         } {
@@ -2572,29 +2582,32 @@ impl<A: HalApi> Device<A> {
         }
 
         for (i, cs) in color_targets.iter().enumerate() {
-            let error = loop {
-                let format_features = self.describe_format_features(adapter, cs.format)?;
-                if !format_features
-                    .allowed_usages
-                    .contains(wgt::TextureUsages::RENDER_ATTACHMENT)
-                {
-                    break Some(pipeline::ColorStateError::FormatNotRenderable(cs.format));
-                }
-                if cs.blend.is_some() && !format_features.flags.contains(Tfff::FILTERABLE) {
-                    break Some(pipeline::ColorStateError::FormatNotBlendable(cs.format));
-                }
-                if !hal::FormatAspects::from(cs.format).contains(hal::FormatAspects::COLOR) {
-                    break Some(pipeline::ColorStateError::FormatNotColor(cs.format));
-                }
-                if desc.multisample.count > 1 && !format_features.flags.contains(Tfff::MULTISAMPLE)
-                {
-                    break Some(pipeline::ColorStateError::FormatNotMultisampled(cs.format));
-                }
+            if let Some(cs) = cs.as_ref() {
+                let error = loop {
+                    let format_features = self.describe_format_features(adapter, cs.format)?;
+                    if !format_features
+                        .allowed_usages
+                        .contains(wgt::TextureUsages::RENDER_ATTACHMENT)
+                    {
+                        break Some(pipeline::ColorStateError::FormatNotRenderable(cs.format));
+                    }
+                    if cs.blend.is_some() && !format_features.flags.contains(Tfff::FILTERABLE) {
+                        break Some(pipeline::ColorStateError::FormatNotBlendable(cs.format));
+                    }
+                    if !hal::FormatAspects::from(cs.format).contains(hal::FormatAspects::COLOR) {
+                        break Some(pipeline::ColorStateError::FormatNotColor(cs.format));
+                    }
+                    if desc.multisample.count > 1
+                        && !format_features.flags.contains(Tfff::MULTISAMPLE)
+                    {
+                        break Some(pipeline::ColorStateError::FormatNotMultisampled(cs.format));
+                    }
 
-                break None;
-            };
-            if let Some(e) = error {
-                return Err(pipeline::CreateRenderPipelineError::ColorState(i as u8, e));
+                    break None;
+                };
+                if let Some(e) = error {
+                    return Err(pipeline::CreateRenderPipelineError::ColorState(i as u8, e));
+                }
             }
         }
 
@@ -2746,13 +2759,13 @@ impl<A: HalApi> Device<A> {
         };
 
         if validated_stages.contains(wgt::ShaderStages::FRAGMENT) {
-            for (i, state) in color_targets.iter().enumerate() {
-                match io.get(&(i as wgt::ShaderLocation)) {
-                    Some(output) => {
+            for (i, output) in io.iter() {
+                match color_targets.get(*i as usize) {
+                    Some(&Some(ref state)) => {
                         validation::check_texture_format(state.format, &output.ty).map_err(
                             |pipeline| {
                                 pipeline::CreateRenderPipelineError::ColorState(
-                                    i as u8,
+                                    *i as u8,
                                     pipeline::ColorStateError::IncompatibleFormat {
                                         pipeline,
                                         shader: output.ty,
@@ -2761,13 +2774,14 @@ impl<A: HalApi> Device<A> {
                             },
                         )?;
                     }
-                    None if state.write_mask.is_empty() => {}
-                    None => {
-                        log::warn!("Missing fragment output[{}], expected {:?}", i, state,);
-                        return Err(pipeline::CreateRenderPipelineError::ColorState(
-                            i as u8,
-                            pipeline::ColorStateError::Missing,
-                        ));
+                    _ => {
+                        log::info!(
+                            "The fragment stage {:?} output @location({}) values are ignored",
+                            fragment_stage
+                                .as_ref()
+                                .map_or("", |stage| stage.entry_point),
+                            i
+                        );
                     }
                 }
             }
@@ -2797,6 +2811,14 @@ impl<A: HalApi> Device<A> {
         // Multiview is only supported if the feature is enabled
         if desc.multiview.is_some() {
             self.require_features(wgt::Features::MULTIVIEW)?;
+        }
+
+        for size in shader_binding_sizes.values() {
+            if size.get() % 16 != 0 {
+                self.require_downlevel_flags(
+                    wgt::DownlevelFlags::BUFFER_BINDINGS_NOT_16_BYTE_ALIGNED,
+                )?;
+            }
         }
 
         let late_sized_buffer_groups =
@@ -2834,7 +2856,10 @@ impl<A: HalApi> Device<A> {
 
         let pass_context = RenderPassContext {
             attachments: AttachmentData {
-                colors: color_targets.iter().map(|state| state.format).collect(),
+                colors: color_targets
+                    .iter()
+                    .map(|state| state.as_ref().map(|s| s.format))
+                    .collect(),
                 resolves: ArrayVec::new(),
                 depth_stencil: depth_stencil_state.as_ref().map(|state| state.format),
             },
@@ -2843,7 +2868,7 @@ impl<A: HalApi> Device<A> {
         };
 
         let mut flags = pipeline::PipelineFlags::empty();
-        for state in color_targets.iter() {
+        for state in color_targets.iter().filter_map(|s| s.as_ref()) {
             if let Some(ref bs) = state.blend {
                 if bs.color.uses_constant() | bs.alpha.uses_constant() {
                     flags |= pipeline::PipelineFlags::BLEND_CONSTANT;
@@ -3109,7 +3134,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         surface_id: id::SurfaceId,
         adapter_id: id::AdapterId,
-    ) -> Result<Vec<TextureFormat>, instance::GetSurfacePreferredFormatError> {
+    ) -> Result<Vec<TextureFormat>, instance::GetSurfaceSupportError> {
         profiling::scope!("Surface::get_supported_formats");
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -3118,12 +3143,32 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (adapter_guard, mut _token) = hub.adapters.read(&mut token);
         let adapter = adapter_guard
             .get(adapter_id)
-            .map_err(|_| instance::GetSurfacePreferredFormatError::InvalidAdapter)?;
+            .map_err(|_| instance::GetSurfaceSupportError::InvalidAdapter)?;
         let surface = surface_guard
             .get(surface_id)
-            .map_err(|_| instance::GetSurfacePreferredFormatError::InvalidSurface)?;
+            .map_err(|_| instance::GetSurfaceSupportError::InvalidSurface)?;
 
         surface.get_supported_formats(adapter)
+    }
+    pub fn surface_get_supported_modes<A: HalApi>(
+        &self,
+        surface_id: id::SurfaceId,
+        adapter_id: id::AdapterId,
+    ) -> Result<Vec<wgt::PresentMode>, instance::GetSurfaceSupportError> {
+        profiling::scope!("Surface::get_supported_modes");
+        let hub = A::hub(self);
+        let mut token = Token::root();
+
+        let (surface_guard, mut token) = self.surfaces.read(&mut token);
+        let (adapter_guard, mut _token) = hub.adapters.read(&mut token);
+        let adapter = adapter_guard
+            .get(adapter_id)
+            .map_err(|_| instance::GetSurfaceSupportError::InvalidAdapter)?;
+        let surface = surface_guard
+            .get(surface_id)
+            .map_err(|_| instance::GetSurfaceSupportError::InvalidSurface)?;
+
+        surface.get_supported_modes(adapter)
     }
 
     pub fn device_features<A: HalApi>(
@@ -3168,7 +3213,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         desc: &resource::BufferDescriptor,
         id_in: Input<G, id::BufferId>,
     ) -> (id::BufferId, Option<resource::CreateBufferError>) {
-        profiling::scope!("create_buffer", "Device");
+        profiling::scope!("Device::create_buffer");
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -3323,6 +3368,18 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         fid.assign_error(label.borrow_or_default(), &mut token);
     }
 
+    /// Assign `id_in` an error with the given `label`.
+    ///
+    /// See `create_buffer_error` for more context and explaination.
+    pub fn create_texture_error<A: HalApi>(&self, id_in: Input<G, id::TextureId>, label: Label) {
+        let hub = A::hub(self);
+        let mut token = Token::root();
+        let fid = hub.textures.prepare(id_in);
+
+        let (_, mut token) = hub.devices.read(&mut token);
+        fid.assign_error(label.borrow_or_default(), &mut token);
+    }
+
     #[cfg(feature = "replay")]
     pub fn device_wait_for_buffer<A: HalApi>(
         &self,
@@ -3354,7 +3411,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         offset: BufferAddress,
         data: &[u8],
     ) -> Result<(), resource::BufferAccessError> {
-        profiling::scope!("set_buffer_sub_data", "Device");
+        profiling::scope!("Device::set_buffer_sub_data");
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -3411,7 +3468,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         offset: BufferAddress,
         data: &mut [u8],
     ) -> Result<(), resource::BufferAccessError> {
-        profiling::scope!("get_buffer_sub_data", "Device");
+        profiling::scope!("Device::get_buffer_sub_data");
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -3457,7 +3514,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         buffer_id: id::BufferId,
     ) -> Result<(), resource::DestroyError> {
-        profiling::scope!("destroy", "Buffer");
+        profiling::scope!("Buffer::destroy");
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -3498,7 +3555,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn buffer_drop<A: HalApi>(&self, buffer_id: id::BufferId, wait: bool) {
-        profiling::scope!("drop", "Buffer");
+        profiling::scope!("Buffer::drop");
         log::debug!("buffer {:?} is dropped", buffer_id);
 
         let hub = A::hub(self);
@@ -3551,7 +3608,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         desc: &resource::TextureDescriptor,
         id_in: Input<G, id::TextureId>,
     ) -> (id::TextureId, Option<resource::CreateTextureError>) {
-        profiling::scope!("create_texture", "Device");
+        profiling::scope!("Device::create_texture");
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -3606,7 +3663,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         desc: &resource::TextureDescriptor,
         id_in: Input<G, id::TextureId>,
     ) -> (id::TextureId, Option<resource::CreateTextureError>) {
-        profiling::scope!("create_texture", "Device");
+        profiling::scope!("Device::create_texture");
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -3678,7 +3735,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         texture_id: id::TextureId,
     ) -> Result<(), resource::DestroyError> {
-        profiling::scope!("destroy", "Texture");
+        profiling::scope!("Texture::destroy");
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -3736,7 +3793,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn texture_drop<A: HalApi>(&self, texture_id: id::TextureId, wait: bool) {
-        profiling::scope!("drop", "Texture");
+        profiling::scope!("Texture::drop");
         log::debug!("texture {:?} is dropped", texture_id);
 
         let hub = A::hub(self);
@@ -3790,7 +3847,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         desc: &resource::TextureViewDescriptor,
         id_in: Input<G, id::TextureViewId>,
     ) -> (id::TextureViewId, Option<resource::CreateTextureViewError>) {
-        profiling::scope!("create_view", "Texture");
+        profiling::scope!("Texture::create_view");
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -3837,7 +3894,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         texture_view_id: id::TextureViewId,
         wait: bool,
     ) -> Result<(), resource::TextureViewDestroyError> {
-        profiling::scope!("drop", "TextureView");
+        profiling::scope!("TextureView::drop");
         log::debug!("texture view {:?} is dropped", texture_view_id);
 
         let hub = A::hub(self);
@@ -3887,7 +3944,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         desc: &resource::SamplerDescriptor,
         id_in: Input<G, id::SamplerId>,
     ) -> (id::SamplerId, Option<resource::CreateSamplerError>) {
-        profiling::scope!("create_sampler", "Device");
+        profiling::scope!("Device::create_sampler");
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -3927,7 +3984,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn sampler_drop<A: HalApi>(&self, sampler_id: id::SamplerId) {
-        profiling::scope!("drop", "Sampler");
+        profiling::scope!("Sampler::drop");
         log::debug!("sampler {:?} is dropped", sampler_id);
 
         let hub = A::hub(self);
@@ -3965,7 +4022,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         id::BindGroupLayoutId,
         Option<binding_model::CreateBindGroupLayoutError>,
     ) {
-        profiling::scope!("create_bind_group_layout", "Device");
+        profiling::scope!("Device::create_bind_group_layout");
 
         let mut token = Token::root();
         let hub = A::hub(self);
@@ -4027,7 +4084,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn bind_group_layout_drop<A: HalApi>(&self, bind_group_layout_id: id::BindGroupLayoutId) {
-        profiling::scope!("drop", "BindGroupLayout");
+        profiling::scope!("BindGroupLayout::drop");
         log::debug!("bind group layout {:?} is dropped", bind_group_layout_id);
 
         let hub = A::hub(self);
@@ -4061,7 +4118,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         id::PipelineLayoutId,
         Option<binding_model::CreatePipelineLayoutError>,
     ) {
-        profiling::scope!("create_pipeline_layout", "Device");
+        profiling::scope!("Device::create_pipeline_layout");
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -4101,7 +4158,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn pipeline_layout_drop<A: HalApi>(&self, pipeline_layout_id: id::PipelineLayoutId) {
-        profiling::scope!("drop", "PipelineLayout");
+        profiling::scope!("PipelineLayout::drop");
         log::debug!("pipeline layout {:?} is dropped", pipeline_layout_id);
 
         let hub = A::hub(self);
@@ -4138,7 +4195,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         desc: &binding_model::BindGroupDescriptor,
         id_in: Input<G, id::BindGroupId>,
     ) -> (id::BindGroupId, Option<binding_model::CreateBindGroupError>) {
-        profiling::scope!("create_bind_group", "Device");
+        profiling::scope!("Device::create_bind_group");
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -4191,7 +4248,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn bind_group_drop<A: HalApi>(&self, bind_group_id: id::BindGroupId) {
-        profiling::scope!("drop", "BindGroup");
+        profiling::scope!("BindGroup::drop");
         log::debug!("bind group {:?} is dropped", bind_group_id);
 
         let hub = A::hub(self);
@@ -4230,7 +4287,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         id::ShaderModuleId,
         Option<pipeline::CreateShaderModuleError>,
     ) {
-        profiling::scope!("create_shader_module", "Device");
+        profiling::scope!("Device::create_shader_module");
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -4290,7 +4347,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         id::ShaderModuleId,
         Option<pipeline::CreateShaderModuleError>,
     ) {
-        profiling::scope!("create_shader_module", "Device");
+        profiling::scope!("Device::create_shader_module");
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -4332,7 +4389,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn shader_module_drop<A: HalApi>(&self, shader_module_id: id::ShaderModuleId) {
-        profiling::scope!("drop", "ShaderModule");
+        profiling::scope!("ShaderModule::drop");
         log::debug!("shader module {:?} is dropped", shader_module_id);
 
         let hub = A::hub(self);
@@ -4359,7 +4416,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         desc: &wgt::CommandEncoderDescriptor<Label>,
         id_in: Input<G, id::CommandEncoderId>,
     ) -> (id::CommandEncoderId, Option<DeviceError>) {
-        profiling::scope!("create_command_encoder", "Device");
+        profiling::scope!("Device::create_command_encoder");
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -4407,7 +4464,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn command_encoder_drop<A: HalApi>(&self, command_encoder_id: id::CommandEncoderId) {
-        profiling::scope!("drop", "CommandEncoder");
+        profiling::scope!("CommandEncoder::drop");
         log::debug!("command encoder {:?} is dropped", command_encoder_id);
 
         let hub = A::hub(self);
@@ -4424,7 +4481,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn command_buffer_drop<A: HalApi>(&self, command_buffer_id: id::CommandBufferId) {
-        profiling::scope!("drop", "CommandBuffer");
+        profiling::scope!("CommandBuffer::drop");
         log::debug!("command buffer {:?} is dropped", command_buffer_id);
         self.command_encoder_drop::<A>(command_buffer_id)
     }
@@ -4437,7 +4494,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         id::RenderBundleEncoderId,
         Option<command::CreateRenderBundleError>,
     ) {
-        profiling::scope!("create_render_bundle_encoder", "Device");
+        profiling::scope!("Device::create_render_bundle_encoder");
         let (encoder, error) = match command::RenderBundleEncoder::new(desc, device_id, None) {
             Ok(encoder) => (encoder, None),
             Err(e) => (command::RenderBundleEncoder::dummy(device_id), Some(e)),
@@ -4451,7 +4508,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         desc: &command::RenderBundleDescriptor,
         id_in: Input<G, id::RenderBundleId>,
     ) -> (id::RenderBundleId, Option<command::RenderBundleError>) {
-        profiling::scope!("finish", "RenderBundleEncoder");
+        profiling::scope!("RenderBundleEncoder::finish");
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -4499,7 +4556,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn render_bundle_drop<A: HalApi>(&self, render_bundle_id: id::RenderBundleId) {
-        profiling::scope!("drop", "RenderBundle");
+        profiling::scope!("RenderBundle::drop");
         log::debug!("render bundle {:?} is dropped", render_bundle_id);
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -4533,7 +4590,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         desc: &resource::QuerySetDescriptor,
         id_in: Input<G, id::QuerySetId>,
     ) -> (id::QuerySetId, Option<resource::CreateQuerySetError>) {
-        profiling::scope!("create_query_set", "Device");
+        profiling::scope!("Device::create_query_set");
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -4575,7 +4632,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn query_set_drop<A: HalApi>(&self, query_set_id: id::QuerySetId) {
-        profiling::scope!("drop", "QuerySet");
+        profiling::scope!("QuerySet::drop");
         log::debug!("query set {:?} is dropped", query_set_id);
 
         let hub = A::hub(self);
@@ -4615,7 +4672,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         id::RenderPipelineId,
         Option<pipeline::CreateRenderPipelineError>,
     ) {
-        profiling::scope!("create_render_pipeline", "Device");
+        profiling::scope!("Device::create_render_pipeline");
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -4717,7 +4774,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn render_pipeline_drop<A: HalApi>(&self, render_pipeline_id: id::RenderPipelineId) {
-        profiling::scope!("drop", "RenderPipeline");
+        profiling::scope!("RenderPipeline::drop");
         log::debug!("render pipeline {:?} is dropped", render_pipeline_id);
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -4759,7 +4816,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         id::ComputePipelineId,
         Option<pipeline::CreateComputePipelineError>,
     ) {
-        profiling::scope!("create_compute_pipeline", "Device");
+        profiling::scope!("Device::create_compute_pipeline");
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -4857,7 +4914,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn compute_pipeline_drop<A: HalApi>(&self, compute_pipeline_id: id::ComputePipelineId) {
-        profiling::scope!("drop", "ComputePipeline");
+        profiling::scope!("ComputePipeline::drop");
         log::debug!("compute pipeline {:?} is dropped", compute_pipeline_id);
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -4918,11 +4975,40 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 );
             }
             if !caps.present_modes.contains(&config.present_mode) {
-                log::warn!(
-                    "Surface does not support present mode: {:?}, falling back to FIFO",
-                    config.present_mode,
+                let new_mode = loop {
+                    // Automatic present mode checks.
+                    //
+                    // The "Automatic" modes are never supported by the backends.
+                    match config.present_mode {
+                        wgt::PresentMode::AutoVsync => {
+                            if caps.present_modes.contains(&wgt::PresentMode::FifoRelaxed) {
+                                break wgt::PresentMode::FifoRelaxed;
+                            }
+                            if caps.present_modes.contains(&wgt::PresentMode::Fifo) {
+                                break wgt::PresentMode::Fifo;
+                            }
+                        }
+                        wgt::PresentMode::AutoNoVsync => {
+                            if caps.present_modes.contains(&wgt::PresentMode::Immediate) {
+                                break wgt::PresentMode::Immediate;
+                            }
+                            if caps.present_modes.contains(&wgt::PresentMode::Mailbox) {
+                                break wgt::PresentMode::Mailbox;
+                            }
+                        }
+                        _ => {}
+                    }
+                    return Err(E::UnsupportedPresentMode {
+                        requested: config.present_mode,
+                        available: caps.present_modes.clone(),
+                    });
+                };
+
+                log::info!(
+                    "Automatically choosing presentation mode by rule {:?}. Chose {new_mode:?}",
+                    config.present_mode
                 );
-                config.present_mode = wgt::PresentMode::Fifo;
+                config.present_mode = new_mode;
             }
             if !caps.formats.contains(&config.format) {
                 return Err(E::UnsupportedFormat {
@@ -5193,7 +5279,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn device_drop<A: HalApi>(&self, device_id: id::DeviceId) {
-        profiling::scope!("drop", "Device");
+        profiling::scope!("Device::drop");
         log::debug!("device {:?} is dropped", device_id);
 
         let hub = A::hub(self);
@@ -5246,7 +5332,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         range: Range<BufferAddress>,
         op: resource::BufferMapOperation,
     ) -> Result<(), resource::BufferAccessError> {
-        profiling::scope!("map_async", "Buffer");
+        profiling::scope!("Buffer::map_async");
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -5313,7 +5399,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         offset: BufferAddress,
         size: Option<BufferAddress>,
     ) -> Result<(*mut u8, u64), resource::BufferAccessError> {
-        profiling::scope!("get_mapped_range", "Buffer");
+        profiling::scope!("Buffer::get_mapped_range");
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -5373,7 +5459,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         buffer_id: id::BufferId,
     ) -> Result<Option<BufferMapPendingClosure>, resource::BufferAccessError> {
-        profiling::scope!("unmap", "Buffer");
+        profiling::scope!("Buffer::unmap");
 
         let hub = A::hub(self);
         let mut token = Token::root();

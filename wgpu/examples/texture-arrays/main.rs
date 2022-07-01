@@ -87,7 +87,7 @@ impl framework::Example for Example {
         queue: &wgpu::Queue,
     ) -> Self {
         let mut uniform_workaround = false;
-        let base_shader_module = device.create_shader_module(&wgpu::include_wgsl!("indexing.wgsl"));
+        let base_shader_module = device.create_shader_module(wgpu::include_wgsl!("indexing.wgsl"));
         let env_override = match std::env::var("WGPU_TEXTURE_ARRAY_STYLE") {
             Ok(value) => match &*value.to_lowercase() {
                 "nonuniform" | "non_uniform" => Some(true),
@@ -119,7 +119,7 @@ impl framework::Example for Example {
         // capabilities even if we don't use it. So for now put it in a separate module.
         let fragment_shader_module = if !uniform_workaround {
             non_uniform_shader_module =
-                device.create_shader_module(&wgpu::include_wgsl!("non_uniform_indexing.wgsl"));
+                device.create_shader_module(wgpu::include_wgsl!("non_uniform_indexing.wgsl"));
             &non_uniform_shader_module
         } else {
             &base_shader_module
@@ -328,7 +328,7 @@ impl framework::Example for Example {
             fragment: Some(wgpu::FragmentState {
                 module: fragment_shader_module,
                 entry_point: fragment_entry_point,
-                targets: &[config.format.into()],
+                targets: &[Some(config.format.into())],
             }),
             primitive: wgpu::PrimitiveState {
                 front_face: wgpu::FrontFace::Ccw,
@@ -372,14 +372,14 @@ impl framework::Example for Example {
 
         let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: None,
-            color_attachments: &[wgpu::RenderPassColorAttachment {
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                 view,
                 resolve_target: None,
                 ops: wgpu::Operations {
                     load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
                     store: true,
                 },
-            }],
+            })],
             depth_stencil_attachment: None,
         });
 

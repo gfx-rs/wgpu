@@ -173,6 +173,12 @@ bitflags::bitflags! {
     #[repr(transparent)]
     #[derive(Default)]
     pub struct Features: u64 {
+        //
+        // ---- Start numbering at 1 << 0 ----
+        //
+        // WebGPU features:
+        //
+
         /// By default, polygon depth is clipped to 0-1 range before/during rasterization.
         /// Anything outside of that range is rejected, and respective fragments are not touched.
         ///
@@ -299,6 +305,13 @@ bitflags::bitflags! {
         ///
         /// This is a web and native feature.
         const SHADER_FLOAT16 = 1 << 9;
+
+        //
+        // ---- Restart Numbering for Native Features ---
+        //
+        // Native Features:
+        //
+
         /// Webgpu only allows the MAP_READ and MAP_WRITE buffer usage to be matched with
         /// COPY_DST and COPY_SRC respectively. This removes this requirement.
         ///
@@ -593,11 +606,29 @@ bitflags::bitflags! {
         ///
         /// This is a native only feature.
         const ADDRESS_MODE_CLAMP_TO_ZERO = 1 << 39;
+        /// Enables ASTC HDR family of compressed textures.
+        ///
+        /// Compressed textures sacrifice some quality in exchange for significantly reduced
+        /// bandwidth usage.
+        ///
+        /// Support for this feature guarantees availability of [`TextureUsages::COPY_SRC | TextureUsages::COPY_DST | TextureUsages::TEXTURE_BINDING`] for BCn formats.
+        /// [`Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES`] may enable additional usages.
+        ///
         /// Supported Platforms:
         /// - Metal
         ///
         /// This is a native-only feature.
         const TEXTURE_COMPRESSION_ASTC_HDR = 1 << 40;
+        /// Allows for timestamp queries inside renderpasses. Metal does not allow this
+        /// on Apple GPUs.
+        ///
+        /// Implies [`Features::TIMESTAMP_QUERIES`] is supported.
+        ///
+        /// Supported platforms:
+        /// - Vulkan
+        /// - DX12
+        /// - Metal (Intel and AMD GPUs)
+        const WRITE_TIMESTAMP_INSIDE_PASSES = 1 << 41;
     }
 }
 
@@ -737,6 +768,11 @@ pub struct Limits {
     /// The maximum value for each dimension of a `ComputePass::dispatch(x, y, z)` operation.
     /// Defaults to 65535.
     pub max_compute_workgroups_per_dimension: u32,
+    /// A limit above which buffer allocations are guaranteed to fail.
+    ///
+    /// Buffer allocations below the maximum buffer size may not succed depending on available memory,
+    /// fragmentation and other factors.
+    pub max_buffer_size: u64,
 }
 
 impl Default for Limits {
@@ -769,6 +805,7 @@ impl Default for Limits {
             max_compute_workgroup_size_y: 256,
             max_compute_workgroup_size_z: 64,
             max_compute_workgroups_per_dimension: 65535,
+            max_buffer_size: 1 << 30,
         }
     }
 }
@@ -804,6 +841,7 @@ impl Limits {
             max_compute_workgroup_size_y: 256,
             max_compute_workgroup_size_z: 64,
             max_compute_workgroups_per_dimension: 65535,
+            max_buffer_size: 1 << 28,
         }
     }
 
@@ -876,7 +914,7 @@ impl Limits {
         &self,
         allowed: &Self,
         fatal: bool,
-        mut fail_fn: impl FnMut(&'static str, u32, u32),
+        mut fail_fn: impl FnMut(&'static str, u64, u64),
     ) {
         use std::cmp::Ordering;
 
@@ -885,7 +923,7 @@ impl Limits {
                 match self.$name.cmp(&allowed.$name) {
                     Ordering::$ordering | Ordering::Equal => (),
                     _ => {
-                        fail_fn(stringify!($name), self.$name, allowed.$name);
+                        fail_fn(stringify!($name), self.$name as u64, allowed.$name as u64);
                         if fatal {
                             return;
                         }
@@ -921,6 +959,7 @@ impl Limits {
         compare!(max_compute_workgroup_size_y, Less);
         compare!(max_compute_workgroup_size_z, Less);
         compare!(max_compute_workgroups_per_dimension, Less);
+        compare!(max_buffer_size, Less);
     }
 }
 
@@ -1031,6 +1070,11 @@ bitflags::bitflags! {
         /// Supports all the texture usages described in WebGPU. If this isn't supported, you
         /// should call `get_texture_format_features` to get how you can use textures of a given format
         const WEBGPU_TEXTURE_FORMAT_SUPPORT = 1 << 14;
+
+        /// Supports buffer bindings with sizes that aren't a multiple of 16.
+        ///
+        /// WebGL doesn't support this.
+        const BUFFER_BINDINGS_NOT_16_BYTE_ALIGNED = 1 << 15;
     }
 }
 
@@ -2905,20 +2949,75 @@ impl<T> Default for CommandEncoderDescriptor<Option<T>> {
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub enum PresentMode {
-    /// The presentation engine does **not** wait for a vertical blanking period and
-    /// the request is presented immediately. This is a low-latency presentation mode,
-    /// but visible tearing may be observed. Will fallback to `Fifo` if unavailable on the
-    /// selected  platform and backend. Not optimal for mobile.
-    Immediate = 0,
-    /// The presentation engine waits for the next vertical blanking period to update
-    /// the current image, but frames may be submitted without delay. This is a low-latency
-    /// presentation mode and visible tearing will **not** be observed. Will fallback to `Fifo`
-    /// if unavailable on the selected platform and backend. Not optimal for mobile.
-    Mailbox = 1,
-    /// The presentation engine waits for the next vertical blanking period to update
-    /// the current image. The framerate will be capped at the display refresh rate,
-    /// corresponding to the `VSync`. Tearing cannot be observed. Optimal for mobile.
+    /// Chooses FifoRelaxed -> Fifo based on availability.
+    ///
+    /// Because of the fallback behavior, it is supported everywhere.
+    AutoVsync = 0,
+    /// Chooses Immediate -> Mailbox -> Fifo (on web) based on availability.
+    ///
+    /// Because of the fallback behavior, it is supported everywhere.
+    AutoNoVsync = 1,
+    /// Presentation frames are kept in a First-In-First-Out queue approximately 3 frames
+    /// long. Every vertical blanking period, the presentation engine will pop a frame
+    /// off the queue to display. If there is no frame to display, it will present the same
+    /// frame again until the next vblank.
+    ///
+    /// When a present command is executed on the gpu, the presented image is added on the queue.
+    ///
+    /// No tearing will be observed.
+    ///
+    /// Calls to get_current_texture will block until there is a spot in the queue.
+    ///
+    /// Supported on all platforms.
+    ///
+    /// If you don't know what mode to choose, choose this mode. This is traditionally called "Vsync On".
     Fifo = 2,
+    /// Presentation frames are kept in a First-In-First-Out queue approximately 3 frames
+    /// long. Every vertical blanking period, the presentation engine will pop a frame
+    /// off the queue to display. If there is no frame to display, it will present the
+    /// same frame until there is a frame in the queue. The moment there is a frame in the
+    /// queue, it will immediately pop the frame off the queue.
+    ///
+    /// When a present command is executed on the gpu, the presented image is added on the queue.
+    ///
+    /// Tearing will be observed if frames last more than one vblank as the front buffer.
+    ///
+    /// Calls to get_current_texture will block until there is a spot in the queue.
+    ///
+    /// Supported on AMD on Vulkan.
+    ///
+    /// This is traditionally called "Adaptive Vsync"
+    FifoRelaxed = 3,
+    /// Presentation frames are not queued at all. The moment a present command
+    /// is executed on the GPU, the presented image is swapped onto the front buffer
+    /// immediately.
+    ///
+    /// Tearing can be observed.
+    ///
+    /// Supported on most platforms except older DX12.
+    ///
+    /// This is traditionally called "Vsync Off".
+    Immediate = 4,
+    /// Presentation frames are kept in a single-frame queue. Every vertical blanking period,
+    /// the presentation engine will pop a frame from the queue. If there is no frame to display,
+    /// it will present the same frame again until the next vblank.
+    ///
+    /// When a present command is executed on the gpu, the frame will be put into the queue.
+    /// If there was already a frame in the queue, the new frame will _replace_ the old frame
+    /// on the queue.
+    ///
+    /// No tearing will be observed.
+    ///
+    /// Supported on DX11/12 on Windows 10, and NVidia on Vulkan.
+    ///
+    /// This is traditionally called "Fast Vsync"
+    Mailbox = 5,
+}
+
+impl Default for PresentMode {
+    fn default() -> Self {
+        Self::Fifo
+    }
 }
 
 bitflags::bitflags! {

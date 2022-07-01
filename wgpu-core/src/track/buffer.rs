@@ -467,8 +467,8 @@ impl<A: hub::HalApi> BufferTracker<A> {
     /// This is a really funky method used by Compute Passes to generate
     /// barriers after a call to dispatch without needing to iterate
     /// over all elements in the usage scope. We use each the
-    /// bind group as a source of which IDs to look at. The bind groups
-    /// must have first been added to the usage scope.
+    /// a given iterator of ids as a source of which IDs to look at.
+    /// All the IDs must have first been added to the usage scope.
     ///
     /// # Safety
     ///
@@ -477,15 +477,15 @@ impl<A: hub::HalApi> BufferTracker<A> {
     pub unsafe fn set_and_remove_from_usage_scope_sparse(
         &mut self,
         scope: &mut BufferUsageScope<A>,
-        bind_group_state: &BufferBindGroupState<A>,
+        id_source: impl IntoIterator<Item = Valid<BufferId>>,
     ) {
         let incoming_size = scope.state.len();
         if incoming_size > self.start.len() {
             self.set_size(incoming_size);
         }
 
-        for &(id, ref ref_count, _) in bind_group_state.buffers.iter() {
-            let (index32, epoch, _) = id.0.unzip();
+        for id in id_source {
+            let (index32, _, _) = id.0.unzip();
             let index = index32 as usize;
 
             scope.debug_assert_in_bounds(index);
@@ -504,9 +504,8 @@ impl<A: hub::HalApi> BufferTracker<A> {
                     state: &scope.state,
                 },
                 None,
-                ResourceMetadataProvider::Direct {
-                    epoch,
-                    ref_count: Cow::Borrowed(ref_count),
+                ResourceMetadataProvider::Indirect {
+                    metadata: &scope.metadata,
                 },
                 &mut self.temp,
             );

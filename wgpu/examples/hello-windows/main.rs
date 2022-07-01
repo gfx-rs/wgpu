@@ -33,12 +33,7 @@ impl ViewportDesc {
 
         let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-            format: *self
-                .surface
-                .get_supported_formats(adapter)
-                .unwrap()
-                .first()
-                .unwrap(),
+            format: self.surface.get_supported_formats(adapter)[0],
             width: size.width,
             height: size.height,
             present_mode: wgpu::PresentMode::Fifo,
@@ -128,14 +123,14 @@ async fn run(event_loop: EventLoop<()>, viewports: Vec<(Window, wgpu::Color)>) {
                     {
                         let _rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                             label: None,
-                            color_attachments: &[wgpu::RenderPassColorAttachment {
+                            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                                 view: &view,
                                 resolve_target: None,
                                 ops: wgpu::Operations {
                                     load: wgpu::LoadOp::Clear(viewport.desc.background),
                                     store: true,
                                 },
-                            }],
+                            })],
                             depth_stencil_attachment: None,
                         });
                     }

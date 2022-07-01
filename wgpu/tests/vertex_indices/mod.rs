@@ -11,7 +11,7 @@ fn pulling_common(
 ) {
     let shader = ctx
         .device
-        .create_shader_module(&wgpu::include_wgsl!("draw.vert.wgsl"));
+        .create_shader_module(wgpu::include_wgsl!("draw.vert.wgsl"));
 
     let bgl = ctx
         .device
@@ -71,11 +71,11 @@ fn pulling_common(
             fragment: Some(wgpu::FragmentState {
                 entry_point: "fs_main",
                 module: &shader,
-                targets: &[wgpu::ColorTargetState {
+                targets: &[Some(wgpu::ColorTargetState {
                     format: wgpu::TextureFormat::Rgba8Unorm,
                     blend: None,
                     write_mask: wgpu::ColorWrites::ALL,
-                }],
+                })],
             }),
             multiview: None,
         });
@@ -106,11 +106,11 @@ fn pulling_common(
         .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
 
     let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-        color_attachments: &[wgpu::RenderPassColorAttachment {
+        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
             ops: wgpu::Operations::default(),
             resolve_target: None,
             view: &dummy,
-        }],
+        })],
         depth_stencil_attachment: None,
         label: None,
     });

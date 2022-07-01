@@ -209,8 +209,14 @@ impl super::Adapter {
             log::info!("SL version: {}", &sl_version);
             let (sl_major, sl_minor) = Self::parse_version(&sl_version).ok()?;
             let value = sl_major as u16 * 100 + sl_minor as u16 * 10;
-            naga::back::glsl::Version::Embedded(value)
+            naga::back::glsl::Version::Embedded {
+                version: value,
+                is_webgl: cfg!(target_arch = "wasm32"),
+            }
         };
+
+        // ANGLE provides renderer strings like: "ANGLE (Apple, Apple M1 Pro, OpenGL 4.1)"
+        let is_angle = renderer.contains("ANGLE");
 
         let vertex_shader_storage_blocks = if supports_storage {
             gl.get_parameter_i32(glow::MAX_VERTEX_SHADER_STORAGE_BLOCKS) as u32
@@ -288,6 +294,10 @@ impl super::Adapter {
         downlevel_flags.set(
             wgt::DownlevelFlags::ANISOTROPIC_FILTERING,
             extensions.contains("EXT_texture_filter_anisotropic"),
+        );
+        downlevel_flags.set(
+            wgt::DownlevelFlags::BUFFER_BINDINGS_NOT_16_BYTE_ALIGNED,
+            !(cfg!(target_arch = "wasm32") || is_angle),
         );
 
         let is_ext_color_buffer_float_supported = extensions.contains("EXT_color_buffer_float");
@@ -461,6 +471,7 @@ impl super::Adapter {
                 0
             },
             max_compute_workgroups_per_dimension,
+            max_buffer_size: i32::MAX as u64,
         };
 
         let mut workarounds = super::Workarounds::empty();

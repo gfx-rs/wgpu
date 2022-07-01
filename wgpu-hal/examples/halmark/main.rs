@@ -238,11 +238,11 @@ impl<A: hal::Api> Example<A> {
             },
             depth_stencil: None,
             multisample: wgt::MultisampleState::default(),
-            color_targets: &[wgt::ColorTargetState {
+            color_targets: &[Some(wgt::ColorTargetState {
                 format: surface_config.format,
                 blend: Some(wgt::BlendState::ALPHA_BLENDING),
                 write_mask: wgt::ColorWrites::default(),
-            }],
+            })],
             multiview: None,
         };
         let pipeline = unsafe { device.create_render_pipeline(&pipeline_desc).unwrap() };
@@ -646,7 +646,7 @@ impl<A: hal::Api> Example<A> {
                 depth_or_array_layers: 1,
             },
             sample_count: 1,
-            color_attachments: &[hal::ColorAttachment {
+            color_attachments: &[Some(hal::ColorAttachment {
                 target: hal::Attachment {
                     view: &surface_tex_view,
                     usage: hal::TextureUses::COLOR_TARGET,
@@ -659,7 +659,7 @@ impl<A: hal::Api> Example<A> {
                     b: 0.3,
                     a: 1.0,
                 },
-            }],
+            })],
             depth_stencil_attachment: None,
             multiview: None,
         };

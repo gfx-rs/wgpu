@@ -240,7 +240,7 @@ impl framework::Example for Example {
             label: None,
         });
 
-        let shader = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
+        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
             source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
         });
@@ -273,7 +273,7 @@ impl framework::Example for Example {
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
                 entry_point: "fs_main",
-                targets: &[config.format.into()],
+                targets: &[Some(config.format.into())],
             }),
             primitive: wgpu::PrimitiveState {
                 cull_mode: Some(wgpu::Face::Back),
@@ -296,7 +296,7 @@ impl framework::Example for Example {
                 fragment: Some(wgpu::FragmentState {
                     module: &shader,
                     entry_point: "fs_wire",
-                    targets: &[wgpu::ColorTargetState {
+                    targets: &[Some(wgpu::ColorTargetState {
                         format: config.format,
                         blend: Some(wgpu::BlendState {
                             color: wgpu::BlendComponent {
@@ -307,7 +307,7 @@ impl framework::Example for Example {
                             alpha: wgpu::BlendComponent::REPLACE,
                         }),
                         write_mask: wgpu::ColorWrites::ALL,
-                    }],
+                    })],
                 }),
                 primitive: wgpu::PrimitiveState {
                     front_face: wgpu::FrontFace::Ccw,
@@ -364,7 +364,7 @@ impl framework::Example for Example {
         {
             let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: None,
-                color_attachments: &[wgpu::RenderPassColorAttachment {
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view,
                     resolve_target: None,
                     ops: wgpu::Operations {
@@ -376,7 +376,7 @@ impl framework::Example for Example {
                         }),
                         store: true,
                     },
-                }],
+                })],
                 depth_stencil_attachment: None,
             });
             rpass.push_debug_group("Prepare data for draw.");

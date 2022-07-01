@@ -46,11 +46,11 @@ impl framework::Example for Example {
         device: &wgpu::Device,
         _queue: &wgpu::Queue,
     ) -> Self {
-        let compute_shader = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
+        let compute_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
             source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("compute.wgsl"))),
         });
-        let draw_shader = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
+        let draw_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
             source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("draw.wgsl"))),
         });
@@ -151,7 +151,7 @@ impl framework::Example for Example {
             fragment: Some(wgpu::FragmentState {
                 module: &draw_shader,
                 entry_point: "main_fs",
-                targets: &[config.format.into()],
+                targets: &[Some(config.format.into())],
             }),
             primitive: wgpu::PrimitiveState::default(),
             depth_stencil: None,
@@ -272,7 +272,7 @@ impl framework::Example for Example {
         _spawner: &framework::Spawner,
     ) {
         // create render pass descriptor and its color attachments
-        let color_attachments = [wgpu::RenderPassColorAttachment {
+        let color_attachments = [Some(wgpu::RenderPassColorAttachment {
             view,
             resolve_target: None,
             ops: wgpu::Operations {
@@ -281,7 +281,7 @@ impl framework::Example for Example {
                 load: wgpu::LoadOp::Load,
                 store: true,
             },
-        }];
+        })];
         let render_pass_descriptor = wgpu::RenderPassDescriptor {
             label: None,
             color_attachments: &color_attachments,

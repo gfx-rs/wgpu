@@ -144,6 +144,24 @@ impl super::PrivateCapabilities {
     }
 }
 
+pub fn map_vk_surface_formats(sf: vk::SurfaceFormatKHR) -> Option<wgt::TextureFormat> {
+    use ash::vk::Format as F;
+    use wgt::TextureFormat as Tf;
+    // List we care about pulled from https://vulkan.gpuinfo.org/listsurfaceformats.php
+    Some(match sf.format {
+        F::B8G8R8A8_UNORM => Tf::Bgra8Unorm,
+        F::B8G8R8A8_SRGB => Tf::Bgra8UnormSrgb,
+        F::R8G8B8A8_SNORM => Tf::Rgba8Snorm,
+        F::R8G8B8A8_UNORM => Tf::Rgba8Unorm,
+        F::R8G8B8A8_SRGB => Tf::Rgba8UnormSrgb,
+        F::R16G16B16A16_SFLOAT => Tf::Rgba16Float,
+        F::R16G16B16A16_SNORM => Tf::Rgba16Snorm,
+        F::R16G16B16A16_UNORM => Tf::Rgba16Unorm,
+        F::A2B10G10R10_UNORM_PACK32 => Tf::Rgb10a2Unorm,
+        _ => return None,
+    })
+}
+
 impl crate::Attachment<'_, super::Api> {
     pub(super) fn make_attachment_key(
         &self,
@@ -405,7 +423,10 @@ pub fn map_present_mode(mode: wgt::PresentMode) -> vk::PresentModeKHR {
         wgt::PresentMode::Immediate => vk::PresentModeKHR::IMMEDIATE,
         wgt::PresentMode::Mailbox => vk::PresentModeKHR::MAILBOX,
         wgt::PresentMode::Fifo => vk::PresentModeKHR::FIFO,
-        //wgt::PresentMode::Relaxed => vk::PresentModeKHR::FIFO_RELAXED,
+        wgt::PresentMode::FifoRelaxed => vk::PresentModeKHR::FIFO_RELAXED,
+        wgt::PresentMode::AutoNoVsync | wgt::PresentMode::AutoVsync => {
+            unreachable!("Cannot create swapchain with Auto PresentationMode")
+        }
     }
 }
 

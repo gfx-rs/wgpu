@@ -449,7 +449,7 @@ impl framework::Example for Example {
             attributes: &vertex_attr,
         };
 
-        let shader = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
+        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
             source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
         });
@@ -642,7 +642,7 @@ impl framework::Example for Example {
                     } else {
                         "fs_main_without_storage"
                     },
-                    targets: &[sc_desc.format.into()],
+                    targets: &[Some(sc_desc.format.into())],
                 }),
                 primitive: wgpu::PrimitiveState {
                     front_face: wgpu::FrontFace::Ccw,
@@ -799,7 +799,7 @@ impl framework::Example for Example {
         {
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: None,
-                color_attachments: &[wgpu::RenderPassColorAttachment {
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view,
                     resolve_target: None,
                     ops: wgpu::Operations {
@@ -811,7 +811,7 @@ impl framework::Example for Example {
                         }),
                         store: true,
                     },
-                }],
+                })],
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                     view: &self.forward_depth,
                     depth_ops: Some(wgpu::Operations {

@@ -43,7 +43,7 @@ pub use wgt::{
     QUERY_SIZE, VERTEX_STRIDE_ALIGNMENT,
 };
 
-use backend::{BufferMappedRange, Context as C};
+use backend::{BufferMappedRange, Context as C, QueueWriteBuffer};
 
 /// Filter for error scopes.
 #[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
@@ -229,7 +229,12 @@ trait Context: Debug + Send + Sized + Sync {
         &self,
         surface: &Self::SurfaceId,
         adapter: &Self::AdapterId,
-    ) -> Option<Vec<TextureFormat>>;
+    ) -> Vec<TextureFormat>;
+    fn surface_get_supported_modes(
+        &self,
+        surface: &Self::SurfaceId,
+        adapter: &Self::AdapterId,
+    ) -> Vec<PresentMode>;
     fn surface_configure(
         &self,
         surface: &Self::SurfaceId,
@@ -257,7 +262,7 @@ trait Context: Debug + Send + Sized + Sync {
     fn device_create_shader_module(
         &self,
         device: &Self::DeviceId,
-        desc: &ShaderModuleDescriptor,
+        desc: ShaderModuleDescriptor,
         shader_bound_checks: wgt::ShaderBoundChecks,
     ) -> Self::ShaderModuleId;
     unsafe fn device_create_shader_module_spirv(
@@ -330,7 +335,7 @@ trait Context: Debug + Send + Sized + Sync {
     fn device_push_error_scope(&self, device: &Self::DeviceId, filter: ErrorFilter);
     fn device_pop_error_scope(&self, device: &Self::DeviceId) -> Self::PopErrorScopeFuture;
 
-    fn buffer_map_async(
+    fn buffer_map_async<F>(
         &self,
         buffer: &Self::BufferId,
         mode: MapMode,
@@ -338,8 +343,9 @@ trait Context: Debug + Send + Sized + Sync {
         // Note: we keep this as an `impl` through the context because the native backend
         // needs to wrap it with a wrapping closure. queue_on_submitted_work_done doesn't
         // need this wrapping closure, so can be made a Box immediately.
-        callback: impl FnOnce(Result<(), BufferAsyncError>) + Send + 'static,
-    );
+        callback: F,
+    ) where
+        F: FnOnce(Result<(), BufferAsyncError>) + Send + 'static;
     fn buffer_get_mapped_range(
         &self,
         buffer: &Self::BufferId,
@@ -480,6 +486,25 @@ trait Context: Debug + Send + Sized + Sync {
         buffer: &Self::BufferId,
         offset: BufferAddress,
         data: &[u8],
+    );
+    fn queue_validate_write_buffer(
+        &self,
+        queue: &Self::QueueId,
+        buffer: &Self::BufferId,
+        offset: wgt::BufferAddress,
+        size: wgt::BufferSize,
+    );
+    fn queue_create_staging_buffer(
+        &self,
+        queue: &Self::QueueId,
+        size: BufferSize,
+    ) -> QueueWriteBuffer;
+    fn queue_write_staging_buffer(
+        &self,
+        queue: &Self::QueueId,
+        buffer: &Self::BufferId,
+        offset: BufferAddress,
+        staging_buffer: &QueueWriteBuffer,
     );
     fn queue_write_texture(
         &self,
@@ -812,6 +837,10 @@ pub enum ShaderSource<'a> {
     },
     /// WGSL module as a string slice.
     Wgsl(Cow<'a, str>),
+    /// Naga module.
+    #[cfg(feature = "naga")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "naga")))]
+    Naga(naga::Module),
 }
 
 /// Descriptor for use with [`Device::create_shader_module`].
@@ -1408,7 +1437,7 @@ pub struct RenderPassDescriptor<'tex, 'desc> {
     /// Debug label of the render pass. This will show up in graphics debuggers for easy identification.
     pub label: Label<'desc>,
     /// The color attachments of the render pass.
-    pub color_attachments: &'desc [RenderPassColorAttachment<'tex>],
+    pub color_attachments: &'desc [Option<RenderPassColorAttachment<'tex>>],
     /// The depth and stencil attachment of the render pass, if any.
     pub depth_stencil_attachment: Option<RenderPassDepthStencilAttachment<'tex>>,
 }
@@ -1460,7 +1489,7 @@ pub struct FragmentState<'a> {
     /// void with this name in the shader.
     pub entry_point: &'a str,
     /// The color state of the render targets.
-    pub targets: &'a [ColorTargetState],
+    pub targets: &'a [Option<ColorTargetState>],
 }
 
 /// Describes a render (graphics) pipeline.
@@ -1562,7 +1591,7 @@ pub struct RenderBundleEncoderDescriptor<'a> {
     pub label: Label<'a>,
     /// The formats of the color attachments that this render bundle is capable to rendering to. This
     /// must match the formats of the color attachments in the renderpass this render bundle is executed in.
-    pub color_formats: &'a [TextureFormat],
+    pub color_formats: &'a [Option<TextureFormat>],
     /// Information about the depth attachment that this render bundle is capable to rendering to. This
     /// must match the format of the depth attachments in the renderpass this render bundle is executed in.
     pub depth_stencil: Option<RenderBundleDepthStencil>,
@@ -1647,13 +1676,29 @@ impl Instance {
     /// # Safety
     ///
     /// - The raw handle obtained from the hal Instance must not be manually destroyed
-    #[cfg(any(not(target_arch = "wasm32"), feature = "webgl2"))]
+    #[cfg(any(not(target_arch = "wasm32"), feature = "webgl"))]
     pub unsafe fn as_hal<A: wgc::hub::HalApi, F: FnOnce(Option<&A::Instance>) -> R, R>(
         &self,
         hal_instance_callback: F,
     ) -> R {
         self.context
             .instance_as_hal::<A, F, R>(hal_instance_callback)
+    }
+
+    /// Create an new instance of wgpu from a wgpu-core instance.
+    ///
+    /// # Arguments
+    ///
+    /// - `core_instance` - wgpu-core instance.
+    ///
+    /// # Safety
+    ///
+    /// Refer to the creation of wgpu-core Instance.
+    #[cfg(any(not(target_arch = "wasm32"), feature = "webgl"))]
+    pub unsafe fn from_core(core_instance: wgc::instance::Instance) -> Self {
+        Self {
+            context: Arc::new(C::from_core_instance(core_instance)),
+        }
     }
 
     /// Retrieves all available [`Adapter`]s that match the given [`Backends`].
@@ -1876,7 +1921,7 @@ impl Adapter {
     /// # Safety
     ///
     /// - The raw handle obtained from the hal Adapter must not be manually destroyed
-    #[cfg(any(not(target_arch = "wasm32"), feature = "webgl2"))]
+    #[cfg(any(not(target_arch = "wasm32"), feature = "webgl"))]
     pub unsafe fn as_hal<A: wgc::hub::HalApi, F: FnOnce(Option<&A::Adapter>) -> R, R>(
         &self,
         hal_adapter_callback: F,
@@ -1954,7 +1999,7 @@ impl Device {
     }
 
     /// Creates a shader module from either SPIR-V or WGSL source code.
-    pub fn create_shader_module(&self, desc: &ShaderModuleDescriptor) -> ShaderModule {
+    pub fn create_shader_module(&self, desc: ShaderModuleDescriptor) -> ShaderModule {
         ShaderModule {
             context: Arc::clone(&self.context),
             id: Context::device_create_shader_module(
@@ -1978,7 +2023,7 @@ impl Device {
     /// This has no effect on web.
     pub unsafe fn create_shader_module_unchecked(
         &self,
-        desc: &ShaderModuleDescriptor,
+        desc: ShaderModuleDescriptor,
     ) -> ShaderModule {
         ShaderModule {
             context: Arc::clone(&self.context),
@@ -3061,7 +3106,7 @@ impl<'a> RenderPass<'a> {
     }
 }
 
-/// [`Features::TIMESTAMP_QUERY`] must be enabled on the device in order to call these functions.
+/// [`Features::WRITE_TIMESTAMP_INSIDE_PASSES`] must be enabled on the device in order to call these functions.
 impl<'a> RenderPass<'a> {
     /// Issue a timestamp command at this point in the queue. The
     /// timestamp will be written to the specified query set, at the specified index.
@@ -3176,7 +3221,7 @@ impl<'a> ComputePass<'a> {
     }
 }
 
-/// [`Features::TIMESTAMP_QUERY`] must be enabled on the device in order to call these functions.
+/// [`Features::WRITE_TIMESTAMP_INSIDE_PASSES`] must be enabled on the device in order to call these functions.
 impl<'a> ComputePass<'a> {
     /// Issue a timestamp command at this point in the queue. The timestamp will be written to the specified query set, at the specified index.
     ///
@@ -3355,6 +3400,40 @@ impl<'a> RenderBundleEncoder<'a> {
     }
 }
 
+/// A write-only view into a staging buffer
+pub struct QueueWriteBufferView<'a> {
+    queue: &'a Queue,
+    buffer: &'a Buffer,
+    offset: BufferAddress,
+    inner: QueueWriteBuffer,
+}
+
+impl<'a> std::ops::Deref for QueueWriteBufferView<'a> {
+    type Target = [u8];
+
+    fn deref(&self) -> &Self::Target {
+        panic!("QueueWriteBufferView is write-only!");
+    }
+}
+
+impl<'a> std::ops::DerefMut for QueueWriteBufferView<'a> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
+    }
+}
+
+impl<'a> Drop for QueueWriteBufferView<'a> {
+    fn drop(&mut self) {
+        Context::queue_write_staging_buffer(
+            &*self.queue.context,
+            &self.queue.id,
+            &self.buffer.id,
+            self.offset,
+            &self.inner,
+        );
+    }
+}
+
 impl Queue {
     /// Schedule a data write into `buffer` starting at `offset`.
     ///
@@ -3365,6 +3444,32 @@ impl Queue {
     /// This method fails if `data` overruns the size of `buffer` starting at `offset`.
     pub fn write_buffer(&self, buffer: &Buffer, offset: BufferAddress, data: &[u8]) {
         Context::queue_write_buffer(&*self.context, &self.id, &buffer.id, offset, data)
+    }
+
+    /// Schedule a data write into `buffer` starting at `offset` via the returned [QueueWriteBufferView].
+    ///
+    /// The returned value can be dereferenced to a `&mut [u8]`; dereferencing it to a `&[u8]` panics!
+    ///
+    /// This method is intended to have low performance costs.
+    /// As such, the write is not immediately submitted, and instead enqueued
+    /// internally to happen at the start of the next `submit()` call.
+    ///
+    /// This method fails if `size` is greater than the size of `buffer` starting at `offset`.
+    #[must_use]
+    pub fn write_buffer_with<'a>(
+        &'a self,
+        buffer: &'a Buffer,
+        offset: BufferAddress,
+        size: BufferSize,
+    ) -> QueueWriteBufferView<'a> {
+        Context::queue_validate_write_buffer(&*self.context, &self.id, &buffer.id, offset, size);
+        let staging_buffer = Context::queue_create_staging_buffer(&*self.context, &self.id, size);
+        QueueWriteBufferView {
+            queue: self,
+            buffer,
+            offset,
+            inner: staging_buffer,
+        }
     }
 
     /// Schedule a data write into `texture`.
@@ -3461,9 +3566,16 @@ impl Surface {
     /// Returns a vec of supported texture formats to use for the [`Surface`] with this adapter.
     /// Note: The first format in the vector is preferred
     ///
-    /// Returns None if the surface is incompatible with the adapter.
-    pub fn get_supported_formats(&self, adapter: &Adapter) -> Option<Vec<TextureFormat>> {
+    /// Returns an empty vector if the surface is incompatible with the adapter.
+    pub fn get_supported_formats(&self, adapter: &Adapter) -> Vec<TextureFormat> {
         Context::surface_get_supported_formats(&*self.context, &self.id, &adapter.id)
+    }
+
+    /// Returns a vec of supported presentation modes to use for the [`Surface`] with this adapter.
+    ///
+    /// Returns an empty vector if the surface is incompatible with the adapter.
+    pub fn get_supported_modes(&self, adapter: &Adapter) -> Vec<PresentMode> {
+        Context::surface_get_supported_modes(&*self.context, &self.id, &adapter.id)
     }
 
     /// Initializes [`Surface`] for presentation.

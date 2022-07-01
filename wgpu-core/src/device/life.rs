@@ -417,7 +417,7 @@ impl<A: hal::Api> LifetimeTracker<A> {
     }
 
     pub fn cleanup(&mut self, device: &A::Device) {
-        profiling::scope!("cleanup", "LifetimeTracker");
+        profiling::scope!("LifetimeTracker::cleanup");
         unsafe {
             self.free_resources.clean(device);
         }

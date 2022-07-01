@@ -35,7 +35,7 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
         .expect("Failed to create device");
 
     // Load the shaders from disk
-    let shader = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
+    let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: None,
         source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
     });
@@ -46,11 +46,7 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
         push_constant_ranges: &[],
     });
 
-    let swapchain_format = *surface
-        .get_supported_formats(&adapter)
-        .unwrap()
-        .first()
-        .unwrap();
+    let swapchain_format = surface.get_supported_formats(&adapter)[0];
 
     let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: None,
@@ -63,7 +59,7 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
         fragment: Some(wgpu::FragmentState {
             module: &shader,
             entry_point: "fs_main",
-            targets: &[swapchain_format.into()],
+            targets: &[Some(swapchain_format.into())],
         }),
         primitive: wgpu::PrimitiveState::default(),
         depth_stencil: None,
@@ -76,7 +72,7 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
         format: swapchain_format,
         width: size.width,
         height: size.height,
-        present_mode: wgpu::PresentMode::Mailbox,
+        present_mode: wgpu::PresentMode::Fifo,
     };
 
     surface.configure(&device, &config);
@@ -112,14 +108,14 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                 {
                     let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                         label: None,
-                        color_attachments: &[wgpu::RenderPassColorAttachment {
+                        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                             view: &view,
                             resolve_target: None,
                             ops: wgpu::Operations {
                                 load: wgpu::LoadOp::Clear(wgpu::Color::GREEN),
                                 store: true,
                             },
-                        }],
+                        })],
                         depth_stencil_attachment: None,
                     });
                     rpass.set_pipeline(&render_pipeline);

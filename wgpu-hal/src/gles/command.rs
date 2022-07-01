@@ -429,7 +429,8 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         match desc
             .color_attachments
             .first()
-            .map(|at| &at.target.view.inner)
+            .filter(|at| at.is_some())
+            .and_then(|at| at.as_ref().map(|at| &at.target.view.inner))
         {
             // default framebuffer (provided externally)
             Some(&super::TextureInner::DefaultRenderbuffer) => {
@@ -444,18 +445,20 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                     .push(C::ResetFramebuffer { is_default: false });
 
                 for (i, cat) in desc.color_attachments.iter().enumerate() {
-                    let attachment = glow::COLOR_ATTACHMENT0 + i as u32;
-                    self.cmd_buffer.commands.push(C::BindAttachment {
-                        attachment,
-                        view: cat.target.view.clone(),
-                    });
-                    if let Some(ref rat) = cat.resolve_target {
-                        self.state
-                            .resolve_attachments
-                            .push((attachment, rat.view.clone()));
-                    }
-                    if !cat.ops.contains(crate::AttachmentOps::STORE) {
-                        self.state.invalidate_attachments.push(attachment);
+                    if let Some(cat) = cat.as_ref() {
+                        let attachment = glow::COLOR_ATTACHMENT0 + i as u32;
+                        self.cmd_buffer.commands.push(C::BindAttachment {
+                            attachment,
+                            view: cat.target.view.clone(),
+                        });
+                        if let Some(ref rat) = cat.resolve_target {
+                            self.state
+                                .resolve_attachments
+                                .push((attachment, rat.view.clone()));
+                        }
+                        if !cat.ops.contains(crate::AttachmentOps::STORE) {
+                            self.state.invalidate_attachments.push(attachment);
+                        }
                     }
                 }
                 if let Some(ref dsat) = desc.depth_stencil_attachment {
@@ -505,7 +508,12 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         });
 
         // issue the clears
-        for (i, cat) in desc.color_attachments.iter().enumerate() {
+        for (i, cat) in desc
+            .color_attachments
+            .iter()
+            .filter_map(|at| at.as_ref())
+            .enumerate()
+        {
             if !cat.ops.contains(crate::AttachmentOps::LOAD) {
                 let c = &cat.clear_value;
                 self.cmd_buffer

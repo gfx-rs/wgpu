@@ -249,7 +249,7 @@ pub struct FragmentState<'a> {
     /// The compiled fragment stage and its entry point.
     pub stage: ProgrammableStageDescriptor<'a>,
     /// The effect of draw calls on the color aspect of the output target.
-    pub targets: Cow<'a, [wgt::ColorTargetState]>,
+    pub targets: Cow<'a, [Option<wgt::ColorTargetState>]>,
 }
 
 /// Describes a render (graphics) pipeline.
@@ -280,8 +280,6 @@ pub struct RenderPipelineDescriptor<'a> {
 
 #[derive(Clone, Debug, Error)]
 pub enum ColorStateError {
-    #[error("output is missing")]
-    Missing,
     #[error("format {0:?} is not renderable")]
     FormatNotRenderable(wgt::TextureFormat),
     #[error("format {0:?} is not blendable")]

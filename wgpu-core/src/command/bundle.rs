@@ -114,7 +114,7 @@ pub struct RenderBundleEncoderDescriptor<'a> {
     pub label: Label<'a>,
     /// The formats of the color attachments that this render bundle is capable to rendering to. This
     /// must match the formats of the color attachments in the renderpass this render bundle is executed in.
-    pub color_formats: Cow<'a, [wgt::TextureFormat]>,
+    pub color_formats: Cow<'a, [Option<wgt::TextureFormat>]>,
     /// Information about the depth attachment that this render bundle is capable to rendering to. The format
     /// must match the format of the depth attachments in the renderpass this render bundle is executed in.
     pub depth_stencil: Option<wgt::RenderBundleDepthStencil>,
@@ -618,7 +618,7 @@ impl RenderBundleEncoder {
                 RenderCommand::PushDebugGroup { color: _, len: _ } => unimplemented!(),
                 RenderCommand::InsertDebugMarker { color: _, len: _ } => unimplemented!(),
                 RenderCommand::PopDebugGroup => unimplemented!(),
-                RenderCommand::WriteTimestamp { .. }
+                RenderCommand::WriteTimestamp { .. } // Must check the WRITE_TIMESTAMP_INSIDE_PASSES feature
                 | RenderCommand::BeginPipelineStatisticsQuery { .. }
                 | RenderCommand::EndPipelineStatisticsQuery => unimplemented!(),
                 RenderCommand::ExecuteBundle(_)

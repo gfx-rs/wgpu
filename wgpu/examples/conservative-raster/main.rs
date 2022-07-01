@@ -85,13 +85,12 @@ impl framework::Example for Example {
                 push_constant_ranges: &[],
             });
 
-        let shader_triangle_and_lines =
-            device.create_shader_module(&wgpu::ShaderModuleDescriptor {
-                label: None,
-                source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!(
-                    "triangle_and_lines.wgsl"
-                ))),
-            });
+        let shader_triangle_and_lines = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: None,
+            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!(
+                "triangle_and_lines.wgsl"
+            ))),
+        });
 
         let pipeline_triangle_conservative =
             device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -105,7 +104,7 @@ impl framework::Example for Example {
                 fragment: Some(wgpu::FragmentState {
                     module: &shader_triangle_and_lines,
                     entry_point: "fs_main_red",
-                    targets: &[RENDER_TARGET_FORMAT.into()],
+                    targets: &[Some(RENDER_TARGET_FORMAT.into())],
                 }),
                 primitive: wgpu::PrimitiveState {
                     conservative: true,
@@ -128,7 +127,7 @@ impl framework::Example for Example {
                 fragment: Some(wgpu::FragmentState {
                     module: &shader_triangle_and_lines,
                     entry_point: "fs_main_blue",
-                    targets: &[RENDER_TARGET_FORMAT.into()],
+                    targets: &[Some(RENDER_TARGET_FORMAT.into())],
                 }),
                 primitive: wgpu::PrimitiveState::default(),
                 depth_stencil: None,
@@ -152,7 +151,7 @@ impl framework::Example for Example {
                     fragment: Some(wgpu::FragmentState {
                         module: &shader_triangle_and_lines,
                         entry_point: "fs_main_white",
-                        targets: &[config.format.into()],
+                        targets: &[Some(config.format.into())],
                     }),
                     primitive: wgpu::PrimitiveState {
                         polygon_mode: wgpu::PolygonMode::Line,
@@ -197,7 +196,7 @@ impl framework::Example for Example {
                 bind_group_layouts: &[&bind_group_layout],
                 push_constant_ranges: &[],
             });
-            let shader = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
+            let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
                 label: None,
                 source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("upscale.wgsl"))),
             });
@@ -213,7 +212,7 @@ impl framework::Example for Example {
                     fragment: Some(wgpu::FragmentState {
                         module: &shader,
                         entry_point: "fs_main",
-                        targets: &[config.format.into()],
+                        targets: &[Some(config.format.into())],
                     }),
                     primitive: wgpu::PrimitiveState::default(),
                     depth_stencil: None,
@@ -267,14 +266,14 @@ impl framework::Example for Example {
         {
             let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("low resolution"),
-                color_attachments: &[wgpu::RenderPassColorAttachment {
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: &self.low_res_target,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
                         store: true,
                     },
-                }],
+                })],
                 depth_stencil_attachment: None,
             });
 
@@ -286,14 +285,14 @@ impl framework::Example for Example {
         {
             let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("full resolution"),
-                color_attachments: &[wgpu::RenderPassColorAttachment {
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
                         store: true,
                     },
-                }],
+                })],
                 depth_stencil_attachment: None,
             });
 

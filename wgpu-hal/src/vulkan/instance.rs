@@ -573,9 +573,9 @@ impl crate::Instance<super::Api> for super::Instance {
 
         #[cfg(target_os = "android")]
         let android_sdk_version = {
+            let properties = android_system_properties::AndroidSystemProperties::new();
             // See: https://developer.android.com/reference/android/os/Build.VERSION_CODES
-            let mut prop = android_properties::getprop("ro.build.version.sdk");
-            if let Some(val) = prop.value() {
+            if let Some(val) = properties.get("ro.build.version.sdk") {
                 match val.parse::<u32>() {
                     Ok(sdk_ver) => sdk_ver,
                     Err(err) => {
