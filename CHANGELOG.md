@@ -119,6 +119,52 @@ is an under-documented area that we hope to improve in the future.
 Calling `queue.submit` now returns an opaque submission index that can be used as an argument to
 `device.poll` to say which submission to wait to complete.
 
+### Other Breaking Changes
+
+`Device::create_shader_module` now takes the shader descriptor by value:
+
+```diff
+- device.create_shader_module(&shader_module_descriptor)
++ device.create_shader_module(shader_module_descriptor)
+```
+
+Color attachments can be sparse, so they are now optional:
+
+```diff
+FragmentState {
+-  targets: &[color_target_state]
++  targets: &[Some(color_target_state)]
+  // ..
+}
+```
+
+```diff
+RenderPassDescriptor {
+-  color_attachments: &[render_pass_color_attachment]
++  color_attachments: &[Some(render_pass_color_attachment)]
+  // ..
+}
+```
+
+```diff
+RenderBundleEncoderDescriptor {
+-  color_formats: &[texture_format]
++  color_formats: &[Some(texture_format)]
+  // ..
+}
+```
+
+`Extent3d::max_mips` now requires you to pass a TextureDimension to specify whether or not depth_or_array_layers should be ignored:
+
+```diff
+Extent3d {
+  width: 1920,
+  height: 1080,
+  depth_or_array_layers: 6,
+- }.max_mips()
++ }.max_mips(wgpu::TextureDimension::D3)
+```
+
 ### Added/New Features
 
 #### General
