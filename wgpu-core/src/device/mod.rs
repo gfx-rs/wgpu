@@ -4995,6 +4995,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             if caps.present_modes.contains(&wgt::PresentMode::Mailbox) {
                                 break wgt::PresentMode::Mailbox;
                             }
+                            if caps.present_modes.contains(&wgt::PresentMode::Fifo) {
+                                break wgt::PresentMode::Fifo;
+                            }
                         }
                         _ => {}
                     }
