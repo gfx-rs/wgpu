@@ -4975,36 +4975,35 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 );
             }
             if !caps.present_modes.contains(&config.present_mode) {
-                let new_mode = loop {
+                let new_mode = 'b: loop {
                     // Automatic present mode checks.
                     //
                     // The "Automatic" modes are never supported by the backends.
-                    match config.present_mode {
+                    let fallbacks = match config.present_mode {
                         wgt::PresentMode::AutoVsync => {
-                            if caps.present_modes.contains(&wgt::PresentMode::FifoRelaxed) {
-                                break wgt::PresentMode::FifoRelaxed;
-                            }
-                            if caps.present_modes.contains(&wgt::PresentMode::Fifo) {
-                                break wgt::PresentMode::Fifo;
-                            }
+                            &[wgt::PresentMode::FifoRelaxed, wgt::PresentMode::Fifo][..]
                         }
-                        wgt::PresentMode::AutoNoVsync => {
-                            if caps.present_modes.contains(&wgt::PresentMode::Immediate) {
-                                break wgt::PresentMode::Immediate;
-                            }
-                            if caps.present_modes.contains(&wgt::PresentMode::Mailbox) {
-                                break wgt::PresentMode::Mailbox;
-                            }
-                            if caps.present_modes.contains(&wgt::PresentMode::Fifo) {
-                                break wgt::PresentMode::Fifo;
-                            }
+                        // Always end in FIFO to make sure it's always supported
+                        wgt::PresentMode::AutoNoVsync => &[
+                            wgt::PresentMode::Immediate,
+                            wgt::PresentMode::Mailbox,
+                            wgt::PresentMode::Fifo,
+                        ][..],
+                        _ => {
+                            return Err(E::UnsupportedPresentMode {
+                                requested: config.present_mode,
+                                available: caps.present_modes.clone(),
+                            });
                         }
-                        _ => {}
+                    };
+
+                    for &fallback in fallbacks {
+                        if caps.present_modes.contains(&fallback) {
+                            break 'b fallback;
+                        }
                     }
-                    return Err(E::UnsupportedPresentMode {
-                        requested: config.present_mode,
-                        available: caps.present_modes.clone(),
-                    });
+
+                    unreachable!("Fallback system failed to choose present mode. This is a bug. Mode: {:?}, Options: {:?}", config.present_mode, &caps.present_modes);
                 };
 
                 log::info!(
