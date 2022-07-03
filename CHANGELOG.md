@@ -289,6 +289,7 @@ DeviceDescriptor {
 
 #### General
 
+- AutoNoVSync now correctly falls back to Fifo @simbleau in [#2842](https://github.com/gfx-rs/wgpu/pull/2842)
 - Fix trac(y/ing) compile issue by @cwfitzgerald in [#2333](https://github.com/gfx-rs/wgpu/pull/2333)
 - Improve detection and validation of cubemap views by @kvark in [#2331](https://github.com/gfx-rs/wgpu/pull/2331)
 - Don't create array layer trackers for 3D textures. by @ElectronicRU in [#2348](https://github.com/gfx-rs/wgpu/pull/2348)
