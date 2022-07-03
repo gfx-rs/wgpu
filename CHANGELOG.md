@@ -237,7 +237,7 @@ DeviceDescriptor {
 
 #### DX11
 
-- Dx11 Backend by @cwfitzgerald in [#2443](https://github.com/gfx-rs/wgpu/pull/2443)
+- Skeleton of a DX11 backend - not working yet by @cwfitzgerald in [#2443](https://github.com/gfx-rs/wgpu/pull/2443)
 
 #### Hal
 
