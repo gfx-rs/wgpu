@@ -138,6 +138,10 @@ bitflags::bitflags! {
         const CAN_DISABLE_DRAW_BUFFER = 1 << 6;
         /// Supports `glGetBufferSubData`
         const GET_BUFFER_SUB_DATA = 1 << 7;
+        /// Supports `f16` color buffers
+        const COLOR_BUFFER_HALF_FLOAT = 1 << 8;
+        /// Supports `f11/f10` and `f32` color buffers
+        const COLOR_BUFFER_FLOAT = 1 << 9;
     }
 }
 
@@ -184,7 +188,6 @@ struct AdapterShared {
     workarounds: Workarounds,
     shading_language_version: naga::back::glsl::Version,
     max_texture_size: u32,
-    is_ext_color_buffer_float_supported: bool,
 }
 
 pub struct Adapter {
