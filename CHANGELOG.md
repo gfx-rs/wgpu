@@ -40,6 +40,18 @@ Bottom level categories:
 
 ## Unreleased
 
+## wgpu-0.13.1 (2022-07-02)
+
+### Bug Fixes
+
+#### General
+- Fix out of bounds access when surface texture is written to by multiple command buffers by @cwfitzgerald in [#2843](https://github.com/gfx-rs/wgpu/pull/2843)
+
+#### GLES
+
+- AutoNoVSync now correctly falls back to Fifo by @simbleau in [#2842](https://github.com/gfx-rs/wgpu/pull/2842)
+- Fix GL_EXT_color_buffer_float detection on native by @cwfitzgerald in [#2843](https://github.com/gfx-rs/wgpu/pull/2843)
+
 ## wgpu-0.13 (2022-06-30)
 
 ### Major Changes
@@ -289,7 +301,6 @@ DeviceDescriptor {
 
 #### General
 
-- AutoNoVSync now correctly falls back to Fifo @simbleau in [#2842](https://github.com/gfx-rs/wgpu/pull/2842)
 - Fix trac(y/ing) compile issue by @cwfitzgerald in [#2333](https://github.com/gfx-rs/wgpu/pull/2333)
 - Improve detection and validation of cubemap views by @kvark in [#2331](https://github.com/gfx-rs/wgpu/pull/2331)
 - Don't create array layer trackers for 3D textures. by @ElectronicRU in [#2348](https://github.com/gfx-rs/wgpu/pull/2348)
