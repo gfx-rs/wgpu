@@ -300,8 +300,6 @@ impl super::Adapter {
             !(cfg!(target_arch = "wasm32") || is_angle),
         );
 
-        let is_ext_color_buffer_float_supported = extensions.contains("EXT_color_buffer_float");
-
         let mut features = wgt::Features::empty()
             | wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
             | wgt::Features::CLEAR_TEXTURE
@@ -379,6 +377,17 @@ impl super::Adapter {
         private_caps.set(
             super::PrivateCapabilities::GET_BUFFER_SUB_DATA,
             cfg!(target_arch = "wasm32"),
+        );
+        let color_buffer_float = extensions.contains("GL_EXT_color_buffer_float")
+            || extensions.contains("EXT_color_buffer_float");
+        let color_buffer_half_float = extensions.contains("GL_EXT_color_buffer_half_float");
+        private_caps.set(
+            super::PrivateCapabilities::COLOR_BUFFER_HALF_FLOAT,
+            color_buffer_half_float || color_buffer_float,
+        );
+        private_caps.set(
+            super::PrivateCapabilities::COLOR_BUFFER_FLOAT,
+            color_buffer_float,
         );
 
         let max_texture_size = gl.get_parameter_i32(glow::MAX_TEXTURE_SIZE) as u32;
@@ -513,7 +522,6 @@ impl super::Adapter {
                     workarounds,
                     shading_language_version,
                     max_texture_size,
-                    is_ext_color_buffer_float_supported,
                 }),
             },
             info: Self::make_info(vendor, renderer),
@@ -634,7 +642,21 @@ impl crate::Adapter<super::Api> for super::Adapter {
         let filterable_renderable = filterable | renderable | Tfc::COLOR_ATTACHMENT_BLEND;
         let storage = Tfc::STORAGE | Tfc::STORAGE_READ_WRITE;
 
-        let float_renderable = if self.shared.is_ext_color_buffer_float_supported {
+        let half_float_renderable = if self
+            .shared
+            .private_caps
+            .contains(super::PrivateCapabilities::COLOR_BUFFER_HALF_FLOAT)
+        {
+            Tfc::COLOR_ATTACHMENT | Tfc::COLOR_ATTACHMENT_BLEND
+        } else {
+            Tfc::empty()
+        };
+
+        let float_renderable = if self
+            .shared
+            .private_caps
+            .contains(super::PrivateCapabilities::COLOR_BUFFER_FLOAT)
+        {
             Tfc::COLOR_ATTACHMENT | Tfc::COLOR_ATTACHMENT_BLEND
         } else {
             Tfc::empty()
@@ -649,7 +671,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
             Tf::R16Sint => renderable,
             Tf::R16Unorm => empty,
             Tf::R16Snorm => empty,
-            Tf::R16Float => filterable | float_renderable,
+            Tf::R16Float => filterable | half_float_renderable,
             Tf::Rg8Unorm => filterable_renderable,
             Tf::Rg8Snorm => filterable,
             Tf::Rg8Uint => renderable,
@@ -661,7 +683,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
             Tf::Rg16Sint => renderable,
             Tf::Rg16Unorm => empty,
             Tf::Rg16Snorm => empty,
-            Tf::Rg16Float => filterable | float_renderable,
+            Tf::Rg16Float => filterable | half_float_renderable,
             Tf::Rgba8Unorm | Tf::Rgba8UnormSrgb => filterable_renderable | storage,
             Tf::Bgra8Unorm | Tf::Bgra8UnormSrgb => filterable_renderable,
             Tf::Rgba8Snorm => filterable,
@@ -676,7 +698,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
             Tf::Rgba16Sint => renderable | storage,
             Tf::Rgba16Unorm => empty,
             Tf::Rgba16Snorm => empty,
-            Tf::Rgba16Float => filterable | storage | float_renderable,
+            Tf::Rgba16Float => filterable | storage | half_float_renderable,
             Tf::Rgba32Uint => renderable | storage,
             Tf::Rgba32Sint => renderable | storage,
             Tf::Rgba32Float => unfilterable | storage | float_renderable,
