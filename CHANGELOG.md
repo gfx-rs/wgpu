@@ -201,6 +201,13 @@ DeviceDescriptor {
 }
 ```
 
+`ComputePass::dispatch` has been renamed to `ComputePass::dispatch_workgroups`
+
+```diff
+- cpass.dispatch(self.work_group_count, 1, 1)
++ cpass.dispatch_workgroups(self.work_group_count, 1, 1)
+```
+
 ### Added/New Features
 
 #### General
