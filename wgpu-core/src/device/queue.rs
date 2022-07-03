@@ -773,14 +773,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     //Note: locking the trackers has to be done after the storages
                     let mut trackers = device.trackers.lock();
 
-                    used_surface_textures.set_size(texture_guard.len());
-
                     //TODO: if multiple command buffers are submitted, we can re-use the last
                     // native command buffer of the previous chain instead of always creating
                     // a temporary one, since the chains are not finished.
 
                     // finish all the command buffers first
                     for &cmb_id in command_buffer_ids {
+                        // we reset the used surface textures every time we use it, so make sure to set_size on it.
+                        used_surface_textures.set_size(texture_guard.len());
+
                         #[allow(unused_mut)]
                         let mut cmdbuf = match hub
                             .command_buffers
