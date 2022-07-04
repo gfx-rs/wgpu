@@ -336,7 +336,10 @@ impl crate::Adapter<super::Api> for super::Adapter {
     ) -> crate::TextureFormatCapabilities {
         use crate::TextureFormatCapabilities as Tfc;
 
-        let raw_format = auxil::dxgi::conv::map_texture_format(format);
+        let raw_format = match auxil::dxgi::conv::map_texture_format_failable(format) {
+            Some(f) => f,
+            None => return Tfc::empty(),
+        };
         let mut data = d3d12::D3D12_FEATURE_DATA_FORMAT_SUPPORT {
             Format: raw_format,
             Support1: mem::zeroed(),
