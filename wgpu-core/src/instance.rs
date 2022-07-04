@@ -215,8 +215,10 @@ impl<A: HalApi> Adapter<A> {
         use hal::TextureFormatCapabilities as Tfc;
 
         let caps = unsafe { self.raw.adapter.texture_format_capabilities(format) };
-        let mut allowed_usages = format.describe().guaranteed_format_features.allowed_usages;
+        let mut allowed_usages = wgt::TextureUsages::empty();
 
+        allowed_usages.set(wgt::TextureUsages::COPY_SRC, caps.contains(Tfc::COPY_SRC));
+        allowed_usages.set(wgt::TextureUsages::COPY_DST, caps.contains(Tfc::COPY_DST));
         allowed_usages.set(
             wgt::TextureUsages::TEXTURE_BINDING,
             caps.contains(Tfc::SAMPLED),
