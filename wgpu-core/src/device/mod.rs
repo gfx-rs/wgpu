@@ -751,6 +751,10 @@ impl<A: HalApi> Device<A> {
             }
         }
 
+        let format_features = self
+            .describe_format_features(adapter, desc.format)
+            .map_err(|error| CreateTextureError::MissingFeatures(desc.format, error))?;
+
         if desc.sample_count > 1 {
             if desc.mip_level_count != 1 {
                 return Err(CreateTextureError::InvalidMipLevelCount {
@@ -775,8 +779,7 @@ impl<A: HalApi> Device<A> {
                 return Err(CreateTextureError::MultisampledNotRenderAttachment);
             }
 
-            if !format_desc
-                .guaranteed_format_features
+            if !format_features
                 .flags
                 .contains(wgt::TextureFormatFeatureFlags::MULTISAMPLE)
             {
@@ -792,10 +795,6 @@ impl<A: HalApi> Device<A> {
                 maximum: max_levels_allowed,
             });
         }
-
-        let format_features = self
-            .describe_format_features(adapter, desc.format)
-            .map_err(|error| CreateTextureError::MissingFeatures(desc.format, error))?;
 
         let missing_allowed_usages = desc.usage - format_features.allowed_usages;
         if !missing_allowed_usages.is_empty() {
