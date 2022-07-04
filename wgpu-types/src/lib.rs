@@ -990,7 +990,7 @@ pub struct DownlevelCapabilities {
 impl Default for DownlevelCapabilities {
     fn default() -> Self {
         Self {
-            flags: DownlevelFlags::compliant(),
+            flags: DownlevelFlags::all(),
             limits: DownlevelLimits::default(),
             shader_model: ShaderModel::Sm5,
         }
