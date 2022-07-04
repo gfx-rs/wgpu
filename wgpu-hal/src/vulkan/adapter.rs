@@ -1459,8 +1459,11 @@ impl crate::Adapter<super::Api> for super::Adapter {
         let properties = self
             .phd_capabilities
             .formats
-            .get(vk_format.as_raw() as usize)
-            .unwrap();
+            .get(vk_format.as_raw() as usize);
+        let properties = match properties {
+            Some(p) => p,
+            None => return Tfc::empty(),
+        };
         let features = properties.optimal_tiling_features;
 
         let mut flags = Tfc::empty();
