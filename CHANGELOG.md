@@ -41,6 +41,7 @@ Bottom level categories:
 ## Unreleased
 
 ### Bug Fixes
+- Prefer `DeviceType::DiscreteGpu` over `DeviceType::Other` for `PowerPreference::LowPower` so Vulkan is preferred over OpenGL again by @Craig-Macomber in [#2853](https://github.com/gfx-rs/wgpu/pull/2853)
 
 #### DX12
 - `DownlevelCapabilities::default()` now returns the `ANISOTROPIC_FILTERING` flag set to true so DX12 lists `ANISOTROPIC_FILTERING` as true again by @cwfitzgerald in [#2851](https://github.com/gfx-rs/wgpu/pull/2851)
@@ -127,7 +128,7 @@ is an under-documented area that we hope to improve in the future.
 ```diff
 - let future = buffer.slice(..).map_async(MapMode::Read);
 + buffer.slice(..).map_async(MapMode::Read, || {
-+     // Called when buffer is mapped.  
++     // Called when buffer is mapped.
 + })
 ```
 
