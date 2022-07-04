@@ -1109,7 +1109,7 @@ pub enum ShaderModel {
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub enum DeviceType {
-    /// Other.
+    /// Other or Unknown.
     Other,
     /// Integrated GPU with shared CPU/GPU memory.
     IntegratedGpu,

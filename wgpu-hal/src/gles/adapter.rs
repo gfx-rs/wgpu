@@ -135,6 +135,11 @@ impl super::Adapter {
         } else if strings_that_imply_cpu.iter().any(|&s| renderer.contains(s)) {
             wgt::DeviceType::Cpu
         } else {
+            // At this point the Device type is Unknown.
+            // It's most likely DiscreteGpu, but we do not know for sure.
+            // Use "Other" to avoid possibly making incorrect assumptions.
+            // Note that if this same device is available under some other API (ex: Vulkan),
+            // It will mostly likely get a different device type (probably DiscreteGpu).
             wgt::DeviceType::Other
         };
 
