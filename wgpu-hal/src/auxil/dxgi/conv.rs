@@ -1,10 +1,10 @@
 use winapi::shared::dxgiformat;
 
-pub fn map_texture_format(format: wgt::TextureFormat) -> dxgiformat::DXGI_FORMAT {
+pub fn map_texture_format_failable(format: wgt::TextureFormat) -> Option<dxgiformat::DXGI_FORMAT> {
     use wgt::TextureFormat as Tf;
     use winapi::shared::dxgiformat::*;
 
-    match format {
+    Some(match format {
         Tf::R8Unorm => DXGI_FORMAT_R8_UNORM,
         Tf::R8Snorm => DXGI_FORMAT_R8_SNORM,
         Tf::R8Uint => DXGI_FORMAT_R8_UINT,
@@ -78,7 +78,14 @@ pub fn map_texture_format(format: wgt::TextureFormat) -> dxgiformat::DXGI_FORMAT
         | Tf::Astc {
             block: _,
             channel: _,
-        } => unreachable!(),
+        } => return None,
+    })
+}
+
+pub fn map_texture_format(format: wgt::TextureFormat) -> dxgiformat::DXGI_FORMAT {
+    match map_texture_format_failable(format) {
+        Some(f) => f,
+        None => unreachable!(),
     }
 }
 
