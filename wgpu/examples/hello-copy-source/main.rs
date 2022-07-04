@@ -112,7 +112,6 @@ impl State {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             format: *surface
                 .get_supported_formats(&adapter)
-                .unwrap()
                 .first()
                 .unwrap(),
             width: size.width,
@@ -150,7 +149,7 @@ impl State {
             opts.method("GET");
             opts.mode(RequestMode::Cors);
 
-            let url = "https://raw.githubusercontent.com/gfx-rs/wgpu/f4c01052ef709e010f4e228d7d7d668f0166b3f5/logo.png";
+            let url = "https://raw.githubusercontent.com/gfx-rs/wgpu/master/logo.png";
             let request = Request::new_with_str_and_init(url, &opts).unwrap();
 
             let web_window = web_sys::window().unwrap();
@@ -252,7 +251,7 @@ impl State {
             label: Some("diffuse_bind_group"),
         });
 
-        let shader = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
+        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Shader"),
             source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
         });
@@ -275,14 +274,14 @@ impl State {
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
                 entry_point: "fs_main",
-                targets: &[wgpu::ColorTargetState {
+                targets: &[Some(wgpu::ColorTargetState {
                     format: config.format,
                     blend: Some(wgpu::BlendState {
                         color: wgpu::BlendComponent::REPLACE,
                         alpha: wgpu::BlendComponent::REPLACE,
                     }),
                     write_mask: wgpu::ColorWrites::ALL,
-                }],
+                })],
             }),
             primitive: wgpu::PrimitiveState {
                 topology: wgpu::PrimitiveTopology::TriangleList,
@@ -356,7 +355,7 @@ impl State {
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Render Pass"),
-                color_attachments: &[wgpu::RenderPassColorAttachment {
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: &view,
                     resolve_target: None,
                     ops: wgpu::Operations {
@@ -368,7 +367,7 @@ impl State {
                         }),
                         store: true,
                     },
-                }],
+                })],
                 depth_stencil_attachment: None,
             });
 
