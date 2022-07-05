@@ -3,9 +3,12 @@ async fn run() {
     #[cfg_attr(target_arch = "wasm32", allow(unused_variables))]
     let adapter = {
         let instance = wgpu::Instance::new(wgpu::Backends::all());
-        println!("Available adapters:");
-        for a in instance.enumerate_adapters(wgpu::Backends::all()) {
-            println!("    {:?}", a.get_info())
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            println!("Available adapters:");
+            for a in instance.enumerate_adapters(wgpu::Backends::all()) {
+                println!("    {:?}", a.get_info())
+            }
         }
         instance
             .request_adapter(&wgpu::RequestAdapterOptions::default())
