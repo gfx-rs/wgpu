@@ -3067,7 +3067,7 @@ pub struct SurfaceConfiguration {
     pub height: u32,
     /// Presentation mode of the swap chain. Fifo is the only mode guaranteed to be supported.
     /// FifoRelaxed, Immediate, and Mailbox will crash if unsupported, while AutoVsync and
-    /// AutoNoVsync will gracefully fall back to Fifo without crashing if their primary modes are
+    /// AutoNoVsync will gracefully do a designed sets of fallbacks if their primary modes are
     /// unsupported.
     pub present_mode: PresentMode,
 }
