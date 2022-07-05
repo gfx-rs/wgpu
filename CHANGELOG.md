@@ -45,6 +45,11 @@ Bottom level categories:
 #### DX12
 - `DownlevelCapabilities::default()` now returns the `ANISOTROPIC_FILTERING` flag set to true so DX12 lists `ANISOTROPIC_FILTERING` as true again by @cwfitzgerald in [#2851](https://github.com/gfx-rs/wgpu/pull/2851)
 
+### Changes
+
+#### Metal
+- Extract the generic code into `get_metal_layer` by @jinleili in [#2826](https://github.com/gfx-rs/wgpu/pull/2826)
+
 ## wgpu-0.13.1 (2022-07-02)
 
 ### Bug Fixes
