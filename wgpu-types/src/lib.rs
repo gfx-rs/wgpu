@@ -2994,7 +2994,7 @@ pub enum PresentMode {
     ///
     /// Tearing can be observed.
     ///
-    /// Supported on most platforms except older DX12.
+    /// Supported on most platforms except older DX12 and Wayland.
     ///
     /// This is traditionally called "Vsync Off".
     Immediate = 4,
@@ -3065,8 +3065,10 @@ pub struct SurfaceConfiguration {
     pub width: u32,
     /// Height of the swap chain. Must be the same size as the surface.
     pub height: u32,
-    /// Presentation mode of the swap chain. FIFO is the only guaranteed to be supported, though
-    /// other formats will automatically fall back to FIFO.
+    /// Presentation mode of the swap chain. Fifo is the only mode guaranteed to be supported.
+    /// FifoRelaxed, Immediate, and Mailbox will crash if unsupported, while AutoVsync and
+    /// AutoNoVsync will gracefully do a designed sets of fallbacks if their primary modes are
+    /// unsupported.
     pub present_mode: PresentMode,
 }
 
