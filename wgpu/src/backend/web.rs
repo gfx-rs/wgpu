@@ -972,6 +972,18 @@ impl Context {
     }
 }
 
+// took that from https://github.com/rustwasm/gloo/blob/2c9e776701ecb90c53e62dec1abd19c2b70e47c7/crates/timers/src/callback.rs#L8-L40
+#[wasm_bindgen]
+extern "C" {
+    type Global;
+
+    #[wasm_bindgen(method, getter, js_name = Window)]
+    fn window(this: &Global) -> JsValue;
+
+    #[wasm_bindgen(method, getter, js_name = WorkerGlobalScope)]
+    fn worker(this: &Global) -> JsValue;
+}
+
 impl crate::Context for Context {
     type AdapterId = Sendable<web_sys::GpuAdapter>;
     type DeviceId = Sendable<web_sys::GpuDevice>;
@@ -1010,24 +1022,13 @@ impl crate::Context for Context {
         MakeSendFuture<wasm_bindgen_futures::JsFuture, fn(JsFutureResult) -> Option<crate::Error>>;
 
     fn init(_backends: wgt::Backends) -> Self {
-        // took that from https://github.com/rustwasm/gloo/blob/2c9e776701ecb90c53e62dec1abd19c2b70e47c7/crates/timers/src/callback.rs#L8-L40
-        #[wasm_bindgen]
-        extern "C" {
-            type Global;
-
-            #[wasm_bindgen(method, getter, js_name = Window)]
-            fn window(this: &Global) -> JsValue;
-
-            #[wasm_bindgen(method, getter, js_name = WorkerGlobalScope)]
-            fn worker(this: &Global) -> JsValue;
-        }
         let global: Global = js_sys::global().unchecked_into();
         let gpu = if !global.window().is_undefined() {
             global.unchecked_into::<web_sys::Window>().navigator().gpu()
         } else if !global.worker().is_undefined() {
             global.unchecked_into::<web_sys::WorkerGlobalScope>().navigator().gpu()
         } else {
-            panic!("Only supported in a browser or web worker");
+            panic!("Accessing the GPU is only supported on the main thread or from a dedicated worker");
         };
         Context(gpu)
     }
