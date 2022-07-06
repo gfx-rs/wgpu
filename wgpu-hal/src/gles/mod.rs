@@ -185,6 +185,7 @@ struct TextureFormatDesc {
 struct AdapterShared {
     context: AdapterContext,
     private_caps: PrivateCapabilities,
+    features: wgt::Features,
     workarounds: Workarounds,
     shading_language_version: naga::back::glsl::Version,
     max_texture_size: u32,
