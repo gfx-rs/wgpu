@@ -42,18 +42,28 @@ Bottom level categories:
 
 ### Bug Fixes
 
+#### General
+- Prefer `DeviceType::DiscreteGpu` over `DeviceType::Other` for `PowerPreference::LowPower` so Vulkan is preferred over OpenGL again by @Craig-Macomber in [#2853](https://github.com/gfx-rs/wgpu/pull/2853)
+- Allow running `get_texture_format_features` on unsupported texture formats (returning no flags) by @cwfitzgerald in [#2856](https://github.com/gfx-rs/wgpu/pull/2856)
+- Allow multi-sampled textures that are supported by the device but not WebGPU if `TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES` is enabled by @cwfitzgerald in [#2856](https://github.com/gfx-rs/wgpu/pull/2856)
+- `get_texture_format_features` only lists the COPY_* usages if the adapter actually supports that usage by @cwfitzgerald in [#2856](https://github.com/gfx-rs/wgpu/pull/2856)
+
 #### WebGPU
-- `Context::init()` now uses `web_sys::WorkerGlobalContext` to create a `wgpu::Instance` instead of trying to access the unavailable `web_sys::Window` by @JolifantoBambla in [#2858](https://github.com/gfx-rs/wgpu/pull/2858)
+- `Context::init()` now uses `web_sys::WorkerGlobalContext` to create a `wgpu::Instance` instead of trying to access the unavailable `web_sys::Window` by @JolifantoBambla in [#2858](https://github.com/g>
 
 #### DX12
 - `DownlevelCapabilities::default()` now returns the `ANISOTROPIC_FILTERING` flag set to true so DX12 lists `ANISOTROPIC_FILTERING` as true again by @cwfitzgerald in [#2851](https://github.com/gfx-rs/wgpu/pull/2851)
+- Properly query format features for UAV/SRV usages of depth formats by @cwfitzgerald in [#2856](https://github.com/gfx-rs/wgpu/pull/2856)
+
+#### GLES
+- Fix depth stencil texture format capability by @jinleili in [#2854](https://github.com/gfx-rs/wgpu/pull/2854)
+- `get_texture_format_features` now only returns usages for formats it actually supports by @cwfitzgerald in [#2856](https://github.com/gfx-rs/wgpu/pull/2856)
 
 ### Documentation
-
 - Update present_mode docs as most of them don't automatically fall back to Fifo anymore. by @Elabajaba in [#2855](https://github.com/gfx-rs/wgpu/pull/2855)
 
 ### Examples
-Log adapter info in hello example on wasm taret by @JolifantoBambla in [#2858](https://github.com/gfx-rs/wgpu/pull/2858)
+- Log adapter info in hello example on wasm taret by @JolifantoBambla in [#2858](https://github.com/gfx-rs/wgpu/pull/2858)
 
 ## wgpu-0.13.1 (2022-07-02)
 
@@ -137,7 +147,7 @@ is an under-documented area that we hope to improve in the future.
 ```diff
 - let future = buffer.slice(..).map_async(MapMode::Read);
 + buffer.slice(..).map_async(MapMode::Read, || {
-+     // Called when buffer is mapped.  
++     // Called when buffer is mapped.
 + })
 ```
 

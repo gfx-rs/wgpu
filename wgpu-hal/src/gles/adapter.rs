@@ -135,6 +135,11 @@ impl super::Adapter {
         } else if strings_that_imply_cpu.iter().any(|&s| renderer.contains(s)) {
             wgt::DeviceType::Cpu
         } else {
+            // At this point the Device type is Unknown.
+            // It's most likely DiscreteGpu, but we do not know for sure.
+            // Use "Other" to avoid possibly making incorrect assumptions.
+            // Note that if this same device is available under some other API (ex: Vulkan),
+            // It will mostly likely get a different device type (probably DiscreteGpu).
             wgt::DeviceType::Other
         };
 
@@ -520,6 +525,7 @@ impl super::Adapter {
                     context,
                     private_caps,
                     workarounds,
+                    features,
                     shading_language_version,
                     max_texture_size,
                 }),
@@ -634,33 +640,44 @@ impl crate::Adapter<super::Api> for super::Adapter {
         // The storage types are based on table 8.26, in section
         // "TEXTURE IMAGE LOADS AND STORES" of OpenGLES-3.2 spec.
         let empty = Tfc::empty();
-        let unfilterable = Tfc::SAMPLED;
-        let depth = Tfc::SAMPLED | Tfc::DEPTH_STENCIL_ATTACHMENT;
+        let base = Tfc::COPY_SRC | Tfc::COPY_DST;
+        let unfilterable = base | Tfc::SAMPLED;
+        let depth = base | Tfc::SAMPLED | Tfc::MULTISAMPLE | Tfc::DEPTH_STENCIL_ATTACHMENT;
         let filterable = unfilterable | Tfc::SAMPLED_LINEAR;
         let renderable =
             unfilterable | Tfc::COLOR_ATTACHMENT | Tfc::MULTISAMPLE | Tfc::MULTISAMPLE_RESOLVE;
         let filterable_renderable = filterable | renderable | Tfc::COLOR_ATTACHMENT_BLEND;
-        let storage = Tfc::STORAGE | Tfc::STORAGE_READ_WRITE;
+        let storage = base | Tfc::STORAGE | Tfc::STORAGE_READ_WRITE;
 
-        let half_float_renderable = if self
-            .shared
-            .private_caps
-            .contains(super::PrivateCapabilities::COLOR_BUFFER_HALF_FLOAT)
-        {
-            Tfc::COLOR_ATTACHMENT | Tfc::COLOR_ATTACHMENT_BLEND
-        } else {
-            Tfc::empty()
+        let feature_fn = |f, caps| {
+            if self.shared.features.contains(f) {
+                caps
+            } else {
+                empty
+            }
         };
 
-        let float_renderable = if self
-            .shared
-            .private_caps
-            .contains(super::PrivateCapabilities::COLOR_BUFFER_FLOAT)
-        {
-            Tfc::COLOR_ATTACHMENT | Tfc::COLOR_ATTACHMENT_BLEND
-        } else {
-            Tfc::empty()
+        let bcn_features = feature_fn(wgt::Features::TEXTURE_COMPRESSION_BC, filterable);
+        let etc2_features = feature_fn(wgt::Features::TEXTURE_COMPRESSION_ETC2, filterable);
+        let astc_features = feature_fn(wgt::Features::TEXTURE_COMPRESSION_ASTC_LDR, filterable);
+
+        let private_caps_fn = |f, caps| {
+            if self.shared.private_caps.contains(f) {
+                caps
+            } else {
+                empty
+            }
         };
+
+        let half_float_renderable = private_caps_fn(
+            super::PrivateCapabilities::COLOR_BUFFER_HALF_FLOAT,
+            Tfc::COLOR_ATTACHMENT | Tfc::COLOR_ATTACHMENT_BLEND,
+        );
+
+        let float_renderable = private_caps_fn(
+            super::PrivateCapabilities::COLOR_BUFFER_FLOAT,
+            Tfc::COLOR_ATTACHMENT | Tfc::COLOR_ATTACHMENT_BLEND,
+        );
 
         match format {
             Tf::R8Unorm => filterable_renderable,
@@ -707,8 +724,8 @@ impl crate::Adapter<super::Api> for super::Adapter {
             | Tf::Depth24Plus
             | Tf::Depth24PlusStencil8
             | Tf::Depth24UnormStencil8 => depth,
-            Tf::Rgb9e5Ufloat
-            | Tf::Bc1RgbaUnorm
+            Tf::Rgb9e5Ufloat => filterable,
+            Tf::Bc1RgbaUnorm
             | Tf::Bc1RgbaUnormSrgb
             | Tf::Bc2RgbaUnorm
             | Tf::Bc2RgbaUnormSrgb
@@ -721,8 +738,8 @@ impl crate::Adapter<super::Api> for super::Adapter {
             | Tf::Bc6hRgbSfloat
             | Tf::Bc6hRgbUfloat
             | Tf::Bc7RgbaUnorm
-            | Tf::Bc7RgbaUnormSrgb
-            | Tf::Etc2Rgb8Unorm
+            | Tf::Bc7RgbaUnormSrgb => bcn_features,
+            Tf::Etc2Rgb8Unorm
             | Tf::Etc2Rgb8UnormSrgb
             | Tf::Etc2Rgb8A1Unorm
             | Tf::Etc2Rgb8A1UnormSrgb
@@ -731,15 +748,15 @@ impl crate::Adapter<super::Api> for super::Adapter {
             | Tf::EacR11Unorm
             | Tf::EacR11Snorm
             | Tf::EacRg11Unorm
-            | Tf::EacRg11Snorm
-            | Tf::Astc {
+            | Tf::EacRg11Snorm => etc2_features,
+            Tf::Astc {
                 block: _,
                 channel: AstcChannel::Unorm | AstcChannel::UnormSrgb,
-            } => filterable,
+            } => astc_features,
             Tf::Astc {
                 block: _,
                 channel: AstcChannel::Hdr,
-            } => empty,
+            } => Tfc::empty(),
         }
     }
 
