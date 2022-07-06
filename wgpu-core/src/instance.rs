@@ -786,7 +786,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         let preferred_gpu = match desc.power_preference {
-            PowerPreference::LowPower => integrated.or(other).or(discrete).or(virt).or(cpu),
+            // Since devices of type "Other" might really be "Unknown" and come from APIs like OpenGL that don't specify device type,
+            // Prefer more Specific types over Other.
+            // This means that backends which do provide accurate device types will be preferred
+            // if their device type indicates an actual hardware GPU (integrated or discrete).
+            PowerPreference::LowPower => integrated.or(discrete).or(other).or(virt).or(cpu),
             PowerPreference::HighPerformance => discrete.or(integrated).or(other).or(virt).or(cpu),
         };
 
