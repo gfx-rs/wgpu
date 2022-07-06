@@ -6,11 +6,11 @@ async fn run() {
         .await
         .unwrap();
 
-    #[cfg(not(target_arch = "wasm32"))]
-    println!("{:?}", adapter.get_info());
-
     #[cfg(target_arch = "wasm32")]
     log::info!("{:?}", adapter.get_info());
+
+    #[cfg(not(target_arch = "wasm32"))]
+    println!("{:?}", adapter.get_info())
 }
 
 fn main() {
