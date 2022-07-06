@@ -635,7 +635,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
         // "TEXTURE IMAGE LOADS AND STORES" of OpenGLES-3.2 spec.
         let empty = Tfc::empty();
         let unfilterable = Tfc::SAMPLED;
-        let depth = Tfc::SAMPLED | Tfc::DEPTH_STENCIL_ATTACHMENT;
+        let depth = Tfc::SAMPLED | Tfc::MULTISAMPLE | Tfc::DEPTH_STENCIL_ATTACHMENT;
         let filterable = unfilterable | Tfc::SAMPLED_LINEAR;
         let renderable =
             unfilterable | Tfc::COLOR_ATTACHMENT | Tfc::MULTISAMPLE | Tfc::MULTISAMPLE_RESOLVE;
