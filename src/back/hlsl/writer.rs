@@ -199,8 +199,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         }
 
         // Write all entry points wrapped structs
-        for ep in module.entry_points.iter() {
-            let ep_io = self.write_ep_interface(module, &ep.function, ep.stage, &ep.name)?;
+        for (index, ep) in module.entry_points.iter().enumerate() {
+            let ep_name = self.names[&NameKey::EntryPoint(index as u16)].clone();
+            let ep_io = self.write_ep_interface(module, &ep.function, ep.stage, &ep_name)?;
             self.entry_point_io.push(ep_io);
         }
 
