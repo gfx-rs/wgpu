@@ -1316,6 +1316,7 @@ impl super::Adapter {
 
         let shared = Arc::new(super::DeviceShared {
             raw: raw_device,
+            family_index,
             handle_is_owned,
             instance: Arc::clone(&self.instance),
             physical_device: self.raw,
