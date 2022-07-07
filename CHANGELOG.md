@@ -56,6 +56,10 @@ Bottom level categories:
 - Fix depth stencil texture format capability by @jinleili in [#2854](https://github.com/gfx-rs/wgpu/pull/2854)
 - `get_texture_format_features` now only returns usages for formats it actually supports by @cwfitzgerald in [#2856](https://github.com/gfx-rs/wgpu/pull/2856)
 
+#### Hal
+
+- Allow access to queue family index in Vulkan hal by @i509VCB in [#2859](https://github.com/gfx-rs/wgpu/pull/2859)
+
 ### Documentation
 - Update present_mode docs as most of them don't automatically fall back to Fifo anymore. by @Elabajaba in [#2855](https://github.com/gfx-rs/wgpu/pull/2855)
 
