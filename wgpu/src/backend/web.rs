@@ -1026,9 +1026,14 @@ impl crate::Context for Context {
         let gpu = if !global.window().is_undefined() {
             global.unchecked_into::<web_sys::Window>().navigator().gpu()
         } else if !global.worker().is_undefined() {
-            global.unchecked_into::<web_sys::WorkerGlobalScope>().navigator().gpu()
+            global
+                .unchecked_into::<web_sys::WorkerGlobalScope>()
+                .navigator()
+                .gpu()
         } else {
-            panic!("Accessing the GPU is only supported on the main thread or from a dedicated worker");
+            panic!(
+                "Accessing the GPU is only supported on the main thread or from a dedicated worker"
+            );
         };
         Context(gpu)
     }
