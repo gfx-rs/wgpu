@@ -59,6 +59,7 @@ Bottom level categories:
 #### Hal
 
 - Allow access to queue family index in Vulkan hal by @i509VCB in [#2859](https://github.com/gfx-rs/wgpu/pull/2859)
+- Allow access to the EGLDisplay and EGLContext pointer in Gles hal Adapter and Device by @i509VCB in [#2860](https://github.com/gfx-rs/wgpu/pull/2860)
 
 ### Documentation
 - Update present_mode docs as most of them don't automatically fall back to Fifo anymore. by @Elabajaba in [#2855](https://github.com/gfx-rs/wgpu/pull/2855)
