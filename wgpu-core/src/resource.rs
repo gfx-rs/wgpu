@@ -13,14 +13,37 @@ use thiserror::Error;
 
 use std::{borrow::Borrow, num::NonZeroU8, ops::Range, ptr::NonNull};
 
+/// The status code provided to the buffer mapping callback.
+///
+/// This is very similar to `Result<(), BufferAccessError>`, except that this is FFI-friendly.
 #[repr(C)]
 #[derive(Debug)]
 pub enum BufferMapAsyncStatus {
+    /// The Buffer is sucessfully mapped, `get_mapped_range` can be called.
+    ///
+    /// All other variants of this enum represent failures to map the buffer.
     Success,
+    /// The buffer is already mapped.
+    ///
+    /// While this is treated as an error, it does not prevent mapped range from being accessed.
+    AlreadyMapped,
+    /// Mapping was already requested.
+    MapAlreadyPending,
+    /// An unknown error.
     Error,
+    /// Mapping was aborted (by unmapping or destroying the buffer before mapping
+    /// happened).
     Aborted,
-    Unknown,
+    /// The context is Lost.
     ContextLost,
+    /// The buffer is in an invalid state.
+    Invalid,
+    /// The range isn't fully contained in the buffer.
+    InvalidRange,
+    /// The range isn't properly aligned.
+    InvalidAlignment,
+    /// Incompatible usage flags.
+    InvalidUsageFlags,
 }
 
 pub(crate) enum BufferMapState<A: hal::Api> {
@@ -56,7 +79,7 @@ unsafe impl Send for BufferMapCallbackC {}
 pub struct BufferMapCallback {
     // We wrap this so creating the enum in the C variant can be unsafe,
     // allowing our call function to be safe.
-    inner: BufferMapCallbackInner,
+    inner: Option<BufferMapCallbackInner>,
 }
 
 enum BufferMapCallbackInner {
@@ -71,33 +94,41 @@ enum BufferMapCallbackInner {
 impl BufferMapCallback {
     pub fn from_rust(callback: Box<dyn FnOnce(BufferMapAsyncStatus) + Send + 'static>) -> Self {
         Self {
-            inner: BufferMapCallbackInner::Rust { callback },
+            inner: Some(BufferMapCallbackInner::Rust { callback }),
         }
     }
 
     /// # Safety
     ///
     /// - The callback pointer must be valid to call with the provided user_data pointer.
-    /// - Both pointers must point to 'static data as the callback may happen at an unspecified time.
+    /// - Both pointers must point to valid memory until the callback is invoked, which may happen at an unspecified time.
     pub unsafe fn from_c(inner: BufferMapCallbackC) -> Self {
         Self {
-            inner: BufferMapCallbackInner::C { inner },
+            inner: Some(BufferMapCallbackInner::C { inner }),
         }
     }
 
-    pub(crate) fn call(self, status: BufferMapAsyncStatus) {
-        match self.inner {
-            BufferMapCallbackInner::Rust { callback } => callback(status),
+    pub(crate) fn call(mut self, status: BufferMapAsyncStatus) {
+        match self.inner.take() {
+            Some(BufferMapCallbackInner::Rust { callback }) => {
+                callback(status);
+            }
             // SAFETY: the contract of the call to from_c says that this unsafe is sound.
-            BufferMapCallbackInner::C { inner } => unsafe {
-                (inner.callback)(status, inner.user_data)
+            Some(BufferMapCallbackInner::C { inner }) => unsafe {
+                (inner.callback)(status, inner.user_data);
             },
+            None => {
+                panic!("Map callback invoked twice");
+            }
         }
     }
+}
 
-    pub(crate) fn call_error(self) {
-        log::error!("wgpu_buffer_map_async failed: buffer mapping is pending");
-        self.call(BufferMapAsyncStatus::Error);
+impl Drop for BufferMapCallback {
+    fn drop(&mut self) {
+        if self.inner.is_some() {
+            panic!("Map callback was leaked");
+        }
     }
 }
 
@@ -116,6 +147,8 @@ pub enum BufferAccessError {
     Destroyed,
     #[error("buffer is already mapped")]
     AlreadyMapped,
+    #[error("buffer map is pending")]
+    MapAlreadyPending,
     #[error(transparent)]
     MissingBufferUsage(#[from] MissingBufferUsageError),
     #[error("buffer is not mapped")]
