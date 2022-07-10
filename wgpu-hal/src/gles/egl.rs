@@ -873,6 +873,13 @@ impl crate::Instance<super::Api> for Instance {
 }
 
 impl super::Adapter {
+    /// Creates a new external adapter using the specified loader function.
+    ///
+    /// # Safety
+    ///
+    /// - The underlying OpenGL ES context must be current.
+    /// - The underlying OpenGL ES context must be current when interfacing with any objects returned by
+    ///   wgpu-hal from this adapter.
     pub unsafe fn new_external(
         fun: impl FnMut(&str) -> *const ffi::c_void,
     ) -> Option<crate::ExposedAdapter<super::Api>> {

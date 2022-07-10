@@ -65,6 +65,10 @@ Bottom level categories:
 ### Documentation
 - Update present_mode docs as most of them don't automatically fall back to Fifo anymore. by @Elabajaba in [#2855](https://github.com/gfx-rs/wgpu/pull/2855)
 
+#### Hal
+
+- Document safety requirements for `Adapter::from_external` in gles hal by @i509VCB in [#2863](https://github.com/gfx-rs/wgpu/pull/2863)
+
 ## wgpu-0.13.1 (2022-07-02)
 
 ### Bug Fixes
