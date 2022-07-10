@@ -2454,5 +2454,7 @@ pub mod render_ffi {
                 .commands
                 .push(RenderCommand::ExecuteBundle(bundle_id));
         }
+        pass.current_pipeline.reset();
+        pass.current_bind_groups.reset();
     }
 }
