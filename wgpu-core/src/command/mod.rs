@@ -529,6 +529,9 @@ impl BindGroupStateChange {
         }
         false
     }
+    fn reset(&mut self) {
+        self.last_states = [StateChange::new(); hal::MAX_BIND_GROUPS];
+    }
 }
 
 impl Default for BindGroupStateChange {
