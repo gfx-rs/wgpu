@@ -70,6 +70,11 @@ Bottom level categories:
 
 - Document safety requirements for `Adapter::from_external` in gles hal by @i509VCB in [#2863](https://github.com/gfx-rs/wgpu/pull/2863)
 
+### Changes
+
+#### Metal
+- Extract the generic code into `get_metal_layer` by @jinleili in [#2826](https://github.com/gfx-rs/wgpu/pull/2826)
+
 ## wgpu-0.13.1 (2022-07-02)
 
 ### Bug Fixes
