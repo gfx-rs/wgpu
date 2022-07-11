@@ -70,8 +70,8 @@ impl<A: hub::HalApi, T: hub::Resource, Id: TypedId> StatelessTracker<A, T, Id> {
         }
     }
 
-    fn debug_assert_in_bounds(&self, index: usize) {
-        self.metadata.debug_assert_in_bounds(index);
+    fn tracker_assert_in_bounds(&self, index: usize) {
+        self.metadata.tracker_assert_in_bounds(index);
     }
 
     /// Sets the size of all the vectors inside the tracker.
@@ -106,7 +106,7 @@ impl<A: hub::HalApi, T: hub::Resource, Id: TypedId> StatelessTracker<A, T, Id> {
 
         self.allow_index(index);
 
-        self.debug_assert_in_bounds(index);
+        self.tracker_assert_in_bounds(index);
 
         unsafe {
             *self.metadata.epochs.get_unchecked_mut(index) = epoch;
@@ -127,7 +127,7 @@ impl<A: hub::HalApi, T: hub::Resource, Id: TypedId> StatelessTracker<A, T, Id> {
 
         self.allow_index(index);
 
-        self.debug_assert_in_bounds(index);
+        self.tracker_assert_in_bounds(index);
 
         unsafe {
             *self.metadata.epochs.get_unchecked_mut(index) = epoch;
@@ -149,8 +149,8 @@ impl<A: hub::HalApi, T: hub::Resource, Id: TypedId> StatelessTracker<A, T, Id> {
         }
 
         for index in iterate_bitvec_indices(&other.metadata.owned) {
-            self.debug_assert_in_bounds(index);
-            other.debug_assert_in_bounds(index);
+            self.tracker_assert_in_bounds(index);
+            other.tracker_assert_in_bounds(index);
             unsafe {
                 let previously_owned = self.metadata.owned.get(index).unwrap_unchecked();
 
@@ -187,7 +187,7 @@ impl<A: hub::HalApi, T: hub::Resource, Id: TypedId> StatelessTracker<A, T, Id> {
             return false;
         }
 
-        self.debug_assert_in_bounds(index);
+        self.tracker_assert_in_bounds(index);
 
         unsafe {
             if self.metadata.owned.get(index).unwrap_unchecked() {

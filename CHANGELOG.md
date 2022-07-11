@@ -89,6 +89,12 @@ the same every time it is rendered, we now warn if it is missing.
 
 - Expanded `StagingBelt` documentation by @kpreid in [#2905](https://github.com/gfx-rs/wgpu/pull/2905)
 
+### Build Configuration
+
+- Add the `"strict_asserts"` feature, to enable additional internal
+  run-time validation in `wgpu-core`. By @jimblandy in
+  [#2872](https://github.com/gfx-rs/wgpu/pull/2872).
+
 ## wgpu-0.13.2 (2022-07-13)
 
 ### Bug Fixes

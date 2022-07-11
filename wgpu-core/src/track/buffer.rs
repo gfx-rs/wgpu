@@ -101,9 +101,9 @@ impl<A: hub::HalApi> BufferUsageScope<A> {
         }
     }
 
-    fn debug_assert_in_bounds(&self, index: usize) {
-        debug_assert!(index < self.state.len());
-        self.metadata.debug_assert_in_bounds(index);
+    fn tracker_assert_in_bounds(&self, index: usize) {
+        strict_assert!(index < self.state.len());
+        self.metadata.tracker_assert_in_bounds(index);
     }
 
     /// Sets the size of all the vectors inside the tracker.
@@ -179,8 +179,8 @@ impl<A: hub::HalApi> BufferUsageScope<A> {
         }
 
         for index in iterate_bitvec_indices(&scope.metadata.owned) {
-            self.debug_assert_in_bounds(index);
-            scope.debug_assert_in_bounds(index);
+            self.tracker_assert_in_bounds(index);
+            scope.tracker_assert_in_bounds(index);
 
             unsafe {
                 insert_or_merge(
@@ -225,7 +225,7 @@ impl<A: hub::HalApi> BufferUsageScope<A> {
 
         self.allow_index(index);
 
-        self.debug_assert_in_bounds(index);
+        self.tracker_assert_in_bounds(index);
 
         unsafe {
             insert_or_merge(
@@ -265,10 +265,10 @@ impl<A: hub::HalApi> BufferTracker<A> {
         }
     }
 
-    fn debug_assert_in_bounds(&self, index: usize) {
-        debug_assert!(index < self.start.len());
-        debug_assert!(index < self.end.len());
-        self.metadata.debug_assert_in_bounds(index);
+    fn tracker_assert_in_bounds(&self, index: usize) {
+        strict_assert!(index < self.start.len());
+        strict_assert!(index < self.end.len());
+        self.metadata.tracker_assert_in_bounds(index);
     }
 
     /// Sets the size of all the vectors inside the tracker.
@@ -311,7 +311,7 @@ impl<A: hub::HalApi> BufferTracker<A> {
 
         self.allow_index(index);
 
-        self.debug_assert_in_bounds(index);
+        self.tracker_assert_in_bounds(index);
 
         unsafe {
             let currently_owned = self.metadata.owned.get(index).unwrap_unchecked();
@@ -356,7 +356,7 @@ impl<A: hub::HalApi> BufferTracker<A> {
 
         self.allow_index(index);
 
-        self.debug_assert_in_bounds(index);
+        self.tracker_assert_in_bounds(index);
 
         unsafe {
             insert_or_barrier_update(
@@ -373,7 +373,7 @@ impl<A: hub::HalApi> BufferTracker<A> {
             )
         };
 
-        debug_assert!(self.temp.len() <= 1);
+        strict_assert!(self.temp.len() <= 1);
 
         Some((value, self.temp.pop()))
     }
@@ -393,8 +393,8 @@ impl<A: hub::HalApi> BufferTracker<A> {
         }
 
         for index in iterate_bitvec_indices(&tracker.metadata.owned) {
-            self.debug_assert_in_bounds(index);
-            tracker.debug_assert_in_bounds(index);
+            self.tracker_assert_in_bounds(index);
+            tracker.tracker_assert_in_bounds(index);
             unsafe {
                 insert_or_barrier_update(
                     None,
@@ -433,8 +433,8 @@ impl<A: hub::HalApi> BufferTracker<A> {
         }
 
         for index in iterate_bitvec_indices(&scope.metadata.owned) {
-            self.debug_assert_in_bounds(index);
-            scope.debug_assert_in_bounds(index);
+            self.tracker_assert_in_bounds(index);
+            scope.tracker_assert_in_bounds(index);
             unsafe {
                 insert_or_barrier_update(
                     None,
@@ -488,7 +488,7 @@ impl<A: hub::HalApi> BufferTracker<A> {
             let (index32, _, _) = id.0.unzip();
             let index = index32 as usize;
 
-            scope.debug_assert_in_bounds(index);
+            scope.tracker_assert_in_bounds(index);
 
             if !scope.metadata.owned.get(index).unwrap_unchecked() {
                 continue;
@@ -529,7 +529,7 @@ impl<A: hub::HalApi> BufferTracker<A> {
             return false;
         }
 
-        self.debug_assert_in_bounds(index);
+        self.tracker_assert_in_bounds(index);
 
         unsafe {
             if self.metadata.owned.get(index).unwrap_unchecked() {
@@ -569,7 +569,7 @@ impl BufferStateProvider<'_> {
         match *self {
             BufferStateProvider::Direct { state } => state,
             BufferStateProvider::Indirect { state } => {
-                debug_assert!(index < state.len());
+                strict_assert!(index < state.len());
                 *state.get_unchecked(index)
             }
         }
@@ -695,8 +695,8 @@ unsafe fn insert<A: hub::HalApi>(
 
     // This should only ever happen with a wgpu bug, but let's just double
     // check that resource states don't have any conflicts.
-    debug_assert_eq!(invalid_resource_state(new_start_state), false);
-    debug_assert_eq!(invalid_resource_state(new_end_state), false);
+    strict_assert_eq!(invalid_resource_state(new_start_state), false);
+    strict_assert_eq!(invalid_resource_state(new_end_state), false);
 
     log::trace!("\tbuf {index}: insert {new_start_state:?}..{new_end_state:?}");
 
