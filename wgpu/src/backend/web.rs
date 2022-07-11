@@ -972,7 +972,10 @@ impl Context {
     }
 }
 
-// took that from https://github.com/rustwasm/gloo/blob/2c9e776701ecb90c53e62dec1abd19c2b70e47c7/crates/timers/src/callback.rs#L8-L40
+// Represents the global object in the JavaScript context.
+// It can be cast to from `web_sys::global` and exposes two getters `window` and `worker` of which only one is defined depending on the caller's context.
+// When called from the UI thread only `window` is defined whereas `worker` is only defined within a web worker context.
+// See: https://github.com/rustwasm/gloo/blob/2c9e776701ecb90c53e62dec1abd19c2b70e47c7/crates/timers/src/callback.rs#L8-L40
 #[wasm_bindgen]
 extern "C" {
     type Global;
