@@ -81,30 +81,48 @@ impl super::Surface {
         delegate: Option<&HalManagedMetalLayerDelegate>,
     ) -> Self {
         let view = view as *mut Object;
+        let render_layer =
+            mem::transmute::<_, &mtl::MetalLayerRef>(Self::get_metal_layer(view, delegate))
+                .to_owned();
+        Self::new(NonNull::new(view), render_layer)
+    }
+
+    pub unsafe fn from_layer(layer: &mtl::MetalLayerRef) -> Self {
+        let class = class!(CAMetalLayer);
+        let proper_kind: BOOL = msg_send![layer, isKindOfClass: class];
+        assert_eq!(proper_kind, YES);
+        Self::new(None, layer.to_owned())
+    }
+
+    /// If not called on the main thread, this will panic.
+    pub unsafe fn get_metal_layer(
+        view: *mut Object,
+        delegate: Option<&HalManagedMetalLayerDelegate>,
+    ) -> *mut Object {
         if view.is_null() {
             panic!("window does not have a valid contentView");
         }
 
         let is_main_thread: BOOL = msg_send![class!(NSThread), isMainThread];
         if is_main_thread == NO {
-            panic!("create_surface cannot be called in non-ui thread.");
+            panic!("get_metal_layer cannot be called in non-ui thread.");
         }
 
         let main_layer: *mut Object = msg_send![view, layer];
         let class = class!(CAMetalLayer);
         let is_valid_layer: BOOL = msg_send![main_layer, isKindOfClass: class];
 
-        let render_layer = if is_valid_layer == YES {
-            mem::transmute::<_, &mtl::MetalLayerRef>(main_layer).to_owned()
+        if is_valid_layer == YES {
+            main_layer
         } else {
             // If the main layer is not a CAMetalLayer, we create a CAMetalLayer and use it.
-            let new_layer: mtl::MetalLayer = msg_send![class, new];
+            let new_layer: *mut Object = msg_send![class, new];
             let frame: CGRect = msg_send![main_layer, bounds];
-            let () = msg_send![new_layer.as_ref(), setFrame: frame];
+            let () = msg_send![new_layer, setFrame: frame];
             #[cfg(target_os = "ios")]
             {
                 // Unlike NSView, UIView does not allow to replace main layer.
-                let () = msg_send![main_layer, addSublayer: new_layer.as_ref()];
+                let () = msg_send![main_layer, addSublayer: new_layer];
                 // On iOS, "from_view" may be called before the application initialization is complete,
                 // `msg_send![view, window]` and `msg_send![window, screen]` will get null.
                 let screen: *mut Object = msg_send![class!(UIScreen), mainScreen];
@@ -113,9 +131,9 @@ impl super::Surface {
             };
             #[cfg(target_os = "macos")]
             {
-                let () = msg_send![view, setLayer: new_layer.as_ref()];
+                let () = msg_send![view, setLayer: new_layer];
                 let () = msg_send![view, setWantsLayer: YES];
-                let () = msg_send![new_layer.as_ref(), setContentsGravity: kCAGravityTopLeft];
+                let () = msg_send![new_layer, setContentsGravity: kCAGravityTopLeft];
                 let window: *mut Object = msg_send![view, window];
                 if !window.is_null() {
                     let scale_factor: CGFloat = msg_send![window, backingScaleFactor];
@@ -126,17 +144,7 @@ impl super::Surface {
                 let () = msg_send![new_layer, setDelegate: delegate.0];
             }
             new_layer
-        };
-
-        let _: *mut c_void = msg_send![view, retain];
-        Self::new(NonNull::new(view), render_layer)
-    }
-
-    pub unsafe fn from_layer(layer: &mtl::MetalLayerRef) -> Self {
-        let class = class!(CAMetalLayer);
-        let proper_kind: BOOL = msg_send![layer, isKindOfClass: class];
-        assert_eq!(proper_kind, YES);
-        Self::new(None, layer.to_owned())
+        }
     }
 
     pub(super) fn dimensions(&self) -> wgt::Extent3d {
