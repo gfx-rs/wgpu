@@ -326,7 +326,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let hub = A::hub(self);
         let mut token = Token::root();
         let (guard, _) = hub.textures.read(&mut token);
-        let texture = guard.get(id).ok();
+        let texture = guard.try_get(id).ok().flatten();
         let hal_texture = texture.map(|tex| tex.inner.as_raw().unwrap());
 
         hal_texture_callback(hal_texture);
@@ -346,7 +346,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut token = Token::root();
 
         let (guard, _) = hub.adapters.read(&mut token);
-        let adapter = guard.get(id).ok();
+        let adapter = guard.try_get(id).ok().flatten();
         let hal_adapter = adapter.map(|adapter| &adapter.raw.adapter);
 
         hal_adapter_callback(hal_adapter)
@@ -365,7 +365,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let hub = A::hub(self);
         let mut token = Token::root();
         let (guard, _) = hub.devices.read(&mut token);
-        let device = guard.get(id).ok();
+        let device = guard.try_get(id).ok().flatten();
         let hal_device = device.map(|device| &device.raw);
 
         hal_device_callback(hal_device)
