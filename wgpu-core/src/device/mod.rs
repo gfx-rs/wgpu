@@ -3249,14 +3249,19 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             } else if desc.usage.contains(wgt::BufferUsages::MAP_WRITE) {
                 // buffer is mappable, so we are just doing that at start
                 let map_size = buffer.size;
-                let ptr = match map_buffer(&device.raw, &mut buffer, 0, map_size, HostMap::Write) {
-                    Ok(ptr) => ptr,
-                    Err(e) => {
-                        let raw = buffer.raw.unwrap();
-                        device
-                            .lock_life(&mut token)
-                            .schedule_resource_destruction(queue::TempResource::Buffer(raw), !0);
-                        break e.into();
+                let ptr = if map_size == 0 {
+                    std::ptr::NonNull::dangling()
+                } else {
+                    match map_buffer(&device.raw, &mut buffer, 0, map_size, HostMap::Write) {
+                        Ok(ptr) => ptr,
+                        Err(e) => {
+                            let raw = buffer.raw.unwrap();
+                            device.lock_life(&mut token).schedule_resource_destruction(
+                                queue::TempResource::Buffer(raw),
+                                !0,
+                            );
+                            break e.into();
+                        }
                     }
                 };
                 buffer.map_state = resource::BufferMapState::Active {
