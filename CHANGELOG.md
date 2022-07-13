@@ -40,6 +40,12 @@ Bottom level categories:
 
 ## Unreleased
 
+### Added/New Features
+
+#### General
+
+- Add `WGPU_BACKEND_VALIDATION` env var to control validation by @cwfitzgerald in [#2881](https://github.com/gfx-rs/wgpu/pull/2881)
+
 ### Bug Fixes
 
 #### General
