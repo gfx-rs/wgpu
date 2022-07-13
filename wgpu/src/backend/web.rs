@@ -987,6 +987,12 @@ extern "C" {
     fn worker(this: &Global) -> JsValue;
 }
 
+// The web doesn't provide any way to identify specific queue
+// submissions. But Clippy gets concerned if we pass around `()` as if
+// it were meaningful.
+#[derive(Debug, Clone, Copy)]
+pub struct SubmissionIndex;
+
 impl crate::Context for Context {
     type AdapterId = Sendable<web_sys::GpuAdapter>;
     type DeviceId = Sendable<web_sys::GpuDevice>;
@@ -1011,7 +1017,7 @@ impl crate::Context for Context {
     type SurfaceId = Sendable<web_sys::GpuCanvasContext>;
 
     type SurfaceOutputDetail = SurfaceOutputDetail;
-    type SubmissionIndex = ();
+    type SubmissionIndex = SubmissionIndex;
 
     type RequestAdapterFuture = MakeSendFuture<
         wasm_bindgen_futures::JsFuture,
@@ -2308,7 +2314,7 @@ impl crate::Context for Context {
 
         queue.0.submit(&temp_command_buffers);
 
-        // SubmissionIndex is (), so just let this function end
+        SubmissionIndex
     }
 
     fn queue_get_timestamp_period(&self, _queue: &Self::QueueId) -> f32 {
