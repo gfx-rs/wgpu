@@ -5428,6 +5428,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 return Err((op, e.into()));
             }
 
+            if range.end > buffer.size {
+                return Err((
+                    op,
+                    BufferAccessError::OutOfBoundsOverrun {
+                        index: range.end,
+                        max: buffer.size,
+                    },
+                ));
+            }
+
             buffer.map_state = match buffer.map_state {
                 resource::BufferMapState::Init { .. } | resource::BufferMapState::Active { .. } => {
                     return Err((op, BufferAccessError::AlreadyMapped));
