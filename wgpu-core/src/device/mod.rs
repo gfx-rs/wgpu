@@ -5354,6 +5354,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .map_err(|_| resource::BufferAccessError::Invalid)?;
 
             check_buffer_usage(buffer.usage, pub_usage)?;
+
+            if range.end > buffer.size {
+                return Err(resource::BufferAccessError::OutOfBoundsOverrun {
+                    index: range.end,
+                    max: buffer.size,
+                });
+            }
+
             buffer.map_state = match buffer.map_state {
                 resource::BufferMapState::Init { .. } | resource::BufferMapState::Active { .. } => {
                     return Err(resource::BufferAccessError::AlreadyMapped);
