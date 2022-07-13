@@ -112,6 +112,11 @@ All testing and example infrastructure shares the same set of environment variab
 
 When running the CTS, use the variables `DENO_WEBGPU_ADAPTER_NAME`, `DENO_WEBGPU_BACKEND`, `DENO_WEBGPU_POWER_PREFERENCE`.
 
+When running in the wild, you can enable or disable backend validation layers at runtime using the following flag
+
+- `WGPU_BACKEND_VALIDATION` set to `ENABLED` or `1` to force on validation, `DISABLED` or `0` to force off. The variable being unset
+  or set to another value will result in validation being on in debug mode and off in release.
+
 ## Testing
 
 We have multiple methods of testing, each of which tests different qualities about wgpu. We automatically run our tests on CI if possible. The current state of CI testing:

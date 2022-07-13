@@ -68,10 +68,16 @@ pub struct Instance {
 
 impl Instance {
     pub fn new(name: &str, backends: Backends) -> Self {
-        fn init<A: HalApi>(_: A, mask: Backends) -> Option<A::Instance> {
+        let validation_env = std::env::var("WGPU_BACKEND_VALIDATION").map(|s| s.to_lowercase());
+        let enable_validation = match validation_env.as_deref() {
+            Ok("enabled") | Ok("1") => true,
+            Ok("disabled") | Ok("0") => false,
+            _ => cfg!(debug_assertions),
+        };
+        fn init<A: HalApi>(_: A, mask: Backends, enable_validation: bool) -> Option<A::Instance> {
             if mask.contains(A::VARIANT.into()) {
                 let mut flags = hal::InstanceFlags::empty();
-                if cfg!(debug_assertions) {
+                if enable_validation {
                     flags |= hal::InstanceFlags::VALIDATION;
                     flags |= hal::InstanceFlags::DEBUG;
                 }
@@ -88,15 +94,15 @@ impl Instance {
         Self {
             name: name.to_string(),
             #[cfg(vulkan)]
-            vulkan: init(hal::api::Vulkan, backends),
+            vulkan: init(hal::api::Vulkan, backends, enable_validation),
             #[cfg(metal)]
-            metal: init(hal::api::Metal, backends),
+            metal: init(hal::api::Metal, backends, enable_validation),
             #[cfg(dx12)]
-            dx12: init(hal::api::Dx12, backends),
+            dx12: init(hal::api::Dx12, backends, enable_validation),
             #[cfg(dx11)]
-            dx11: init(hal::api::Dx11, backends),
+            dx11: init(hal::api::Dx11, backends, enable_validation),
             #[cfg(gl)]
-            gl: init(hal::api::Gles, backends),
+            gl: init(hal::api::Gles, backends, enable_validation),
         }
     }
 
