@@ -43,14 +43,26 @@ Bottom level categories:
 ### Bug Fixes
 
 #### General
+- Improve the validation and error reporting of buffer mappings by @nical in [#2848](https://github.com/gfx-rs/wgpu/pull/2848)
+
+### Changes
+
+#### Metal
+- Extract the generic code into `get_metal_layer` by @jinleili in [#2826](https://github.com/gfx-rs/wgpu/pull/2826)
+
+## wgpu-0.13.2 (2022-07-13)
+
+### Bug Fixes
+
+#### General
 - Prefer `DeviceType::DiscreteGpu` over `DeviceType::Other` for `PowerPreference::LowPower` so Vulkan is preferred over OpenGL again by @Craig-Macomber in [#2853](https://github.com/gfx-rs/wgpu/pull/2853)
 - Allow running `get_texture_format_features` on unsupported texture formats (returning no flags) by @cwfitzgerald in [#2856](https://github.com/gfx-rs/wgpu/pull/2856)
 - Allow multi-sampled textures that are supported by the device but not WebGPU if `TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES` is enabled by @cwfitzgerald in [#2856](https://github.com/gfx-rs/wgpu/pull/2856)
 - `get_texture_format_features` only lists the COPY_* usages if the adapter actually supports that usage by @cwfitzgerald in [#2856](https://github.com/gfx-rs/wgpu/pull/2856)
-- Improve the validation and error reporting of buffer mappings by @nical in [#2848](https://github.com/gfx-rs/wgpu/pull/2848)
 - Fix bind group / pipeline deduplication not taking into account RenderBundle execution resetting these values by @shoebe [#2867](https://github.com/gfx-rs/wgpu/pull/2867)
 - Fix panics that occur when using `as_hal` functions when the hal generic type does not match the hub being looked up in by @i509VCB [#2871](https://github.com/gfx-rs/wgpu/pull/2871)
 - Add some validation in map_async by @nical in [#2876](https://github.com/gfx-rs/wgpu/pull/2876)
+- Fix bugs when mapping/unmapping zero-sized buffers and ranges by @nical in [#2877](https://github.com/gfx-rs/wgpu/pull/2877)
 
 #### WebGPU
 - When called in a web worker, `Context::init()` now uses `web_sys::WorkerGlobalContext` to create a `wgpu::Instance` instead of trying to access the unavailable `web_sys::Window` by @JolifantoBambla in [#2858](https://github.com/gfx-rs/wgpu/pull/2858)
