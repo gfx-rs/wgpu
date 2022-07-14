@@ -40,6 +40,8 @@ Bottom level categories:
 
 ## Unreleased
 
+## wgpu-0.13.2 (2022-07-13)
+
 ### Bug Fixes
 
 #### General

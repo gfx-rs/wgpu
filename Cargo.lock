@@ -2068,7 +2068,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-core"
-version = "0.13.1"
+version = "0.13.2"
 dependencies = [
  "arrayvec",
  "bit-vec",
@@ -2093,7 +2093,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-hal"
-version = "0.13.1"
+version = "0.13.2"
 dependencies = [
  "android_system_properties",
  "arrayvec",
@@ -2141,7 +2141,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-types"
-version = "0.13.0"
+version = "0.13.2"
 dependencies = [
  "bitflags",
  "bitflags_serde_shim",
