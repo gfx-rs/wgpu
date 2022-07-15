@@ -423,8 +423,11 @@ pub enum CreateTextureError {
         "Texture descriptor mip level count {requested} is invalid, maximum allowed is {maximum}"
     )]
     InvalidMipLevelCount { requested: u32, maximum: u32 },
-    #[error("Texture usages {0:?} are not allowed on a texture of type {1:?}")]
-    InvalidFormatUsages(wgt::TextureUsages, wgt::TextureFormat),
+    #[error(
+        "Texture usages {0:?} are not allowed on a texture of type {1:?}{}",
+        if *.2 { " due to downlevel restrictions" } else { "" }
+    )]
+    InvalidFormatUsages(wgt::TextureUsages, wgt::TextureFormat, bool),
     #[error("Texture usages {0:?} are not allowed on a texture of dimensions {1:?}")]
     InvalidDimensionUsages(wgt::TextureUsages, wgt::TextureDimension),
     #[error("Texture usage STORAGE_BINDING is not allowed for multisampled textures")]
