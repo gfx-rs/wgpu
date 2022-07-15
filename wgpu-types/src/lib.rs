@@ -1206,22 +1206,22 @@ bitflags_serde_shim::impl_serde_for_bitflags!(ShaderStages);
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub enum TextureViewDimension {
-    /// A one dimensional texture. `texture1D` in glsl shaders.
+    /// A one dimensional texture. `texture_1d` in WGSL and `texture1D` in GLSL.
     #[cfg_attr(feature = "serde", serde(rename = "1d"))]
     D1,
-    /// A two dimensional texture. `texture2D` in glsl shaders.
+    /// A two dimensional texture. `texture_2d` in WGSL and `texture2D` in GLSL.
     #[cfg_attr(feature = "serde", serde(rename = "2d"))]
     D2,
-    /// A two dimensional array texture. `texture2DArray` in glsl shaders.
+    /// A two dimensional array texture. `texture_2d_array` in WGSL and `texture2DArray` in GLSL.
     #[cfg_attr(feature = "serde", serde(rename = "2d-array"))]
     D2Array,
-    /// A cubemap texture. `textureCube` in glsl shaders.
+    /// A cubemap texture. `texture_cube` in WGSL and `textureCube` in GLSL.
     #[cfg_attr(feature = "serde", serde(rename = "cube"))]
     Cube,
-    /// A cubemap array texture. `textureCubeArray` in glsl shaders.
+    /// A cubemap array texture. `texture_cube_array` in WGSL and `textureCubeArray` in GLSL.
     #[cfg_attr(feature = "serde", serde(rename = "cube-array"))]
     CubeArray,
-    /// A three dimensional texture. `texture3D` in glsl shaders.
+    /// A three dimensional texture. `texture_3d` in WGSL and `texture3D` in GLSL.
     #[cfg_attr(feature = "serde", serde(rename = "3d"))]
     D3,
 }
