@@ -3741,7 +3741,9 @@ pub enum BufferBindingType {
     /// ```
     Storage {
         /// If `true`, the buffer can only be read in the shader,
-        /// and it must be annotated with `readonly`.
+        /// and it:
+        /// - may or may not be annotated with `read` (WGSL).
+        /// - must be annotated with `readonly` (GLSL).
         ///
         /// Example WGSL syntax:
         /// ```rust,ignore
@@ -3784,7 +3786,7 @@ pub enum TextureSampleType {
     /// Example GLSL syntax:
     /// ```cpp,ignore
     /// layout(binding = 0)
-    /// uniform texture2D t;
+    /// readonly uniform texture2D t;
     /// ```
     Float {
         /// If `filterable` is false, the texture can't be sampled with
@@ -3802,7 +3804,7 @@ pub enum TextureSampleType {
     /// Example GLSL syntax:
     /// ```cpp,ignore
     /// layout(binding = 0)
-    /// uniform texture2DShadow t;
+    /// readonly uniform texture2DShadow t;
     /// ```
     Depth,
     /// Sampling returns signed integers.
@@ -3816,7 +3818,7 @@ pub enum TextureSampleType {
     /// Example GLSL syntax:
     /// ```cpp,ignore
     /// layout(binding = 0)
-    /// uniform itexture2D t;
+    /// readonly uniform itexture2D t;
     /// ```
     Sint,
     /// Sampling returns unsigned integers.
@@ -3830,7 +3832,7 @@ pub enum TextureSampleType {
     /// Example GLSL syntax:
     /// ```cpp,ignore
     /// layout(binding = 0)
-    /// uniform utexture2D t;
+    /// readonly uniform utexture2D t;
     /// ```
     Uint,
 }
