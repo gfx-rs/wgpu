@@ -2371,6 +2371,7 @@ impl<A: HalApi> Device<A> {
                     &desc.stage.entry_point,
                     flag,
                     io,
+                    None,
                 )?;
             }
         }
@@ -2696,6 +2697,7 @@ impl<A: HalApi> Device<A> {
                         &stage.entry_point,
                         flag,
                         io,
+                        desc.depth_stencil.as_ref().map(|d| d.depth_compare),
                     )
                     .map_err(|error| pipeline::CreateRenderPipelineError::Stage {
                         stage: flag,
@@ -2742,6 +2744,7 @@ impl<A: HalApi> Device<A> {
                                 &fragment.stage.entry_point,
                                 flag,
                                 io,
+                                desc.depth_stencil.as_ref().map(|d| d.depth_compare),
                             )
                             .map_err(|error| pipeline::CreateRenderPipelineError::Stage {
                                 stage: flag,

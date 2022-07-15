@@ -2602,13 +2602,17 @@ pub enum CompareFunction {
     Never = 1,
     /// Function passes if new value less than existing value
     Less = 2,
-    /// Function passes if new value is equal to existing value
+    /// Function passes if new value is equal to existing value. When using
+    /// this compare function, make sure to mark your Vertex Shader's `@builtin(position)`
+    /// output as `@invariant` to prevent artifacting.
     Equal = 3,
     /// Function passes if new value is less than or equal to existing value
     LessEqual = 4,
     /// Function passes if new value is greater than existing value
     Greater = 5,
-    /// Function passes if new value is not equal to existing value
+    /// Function passes if new value is not equal to existing value. When using
+    /// this compare function, make sure to mark your Vertex Shader's `@builtin(position)`
+    /// output as `@invariant` to prevent artifacting.
     NotEqual = 6,
     /// Function passes if new value is greater than or equal to existing value
     GreaterEqual = 7,
