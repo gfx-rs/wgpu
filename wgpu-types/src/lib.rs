@@ -3861,7 +3861,7 @@ pub enum StorageTextureAccess {
     /// Example WGSL syntax:
     /// ```rust,ignore
     /// @group(0) @binding(0)
-    /// var<write> my_storage_image: texture_storage_2d<f32>;
+    /// var my_storage_image: texture_storage_2d<f32, write>;
     /// ```
     ///
     /// Example GLSL syntax:
@@ -3878,7 +3878,7 @@ pub enum StorageTextureAccess {
     /// Example WGSL syntax:
     /// ```rust,ignore
     /// @group(0) @binding(0)
-    /// var<read> my_storage_image: texture_storage_2d<f32>;
+    /// var my_storage_image: texture_storage_2d<f32, read>;
     /// ```
     ///
     /// Example GLSL syntax:
@@ -3895,7 +3895,7 @@ pub enum StorageTextureAccess {
     /// Example WGSL syntax:
     /// ```rust,ignore
     /// @group(0) @binding(0)
-    /// var<read_write> my_storage_image: texture_storage_2d<f32>;
+    /// var my_storage_image: texture_storage_2d<f32, read_write>;
     /// ```
     ///
     /// Example GLSL syntax:
@@ -4007,7 +4007,7 @@ pub enum BindingType {
     /// Example WGSL syntax:
     /// ```rust,ignore
     /// @group(0) @binding(0)
-    /// var my_storage_image: texture_storage_2d<f32>;
+    /// var my_storage_image: texture_storage_2d<f32, write>;
     /// ```
     ///
     /// Example GLSL syntax:
