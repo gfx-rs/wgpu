@@ -2195,7 +2195,7 @@ impl TextureFormat {
             Self::Rgb10a2Unorm =>        (   native,   float,    linear, msaa_resolve, (1, 1),  4, attachment, 4),
             Self::Rg11b10Float =>        (   native,   float,    linear,         msaa, (1, 1),  4,      basic, 3),
 
-            // Packed 32 bit textures  
+            // Packed 32 bit textures
             Self::Rg32Uint =>            (   native,    uint,    linear,         noaa, (1, 1),  8,  all_flags, 2),
             Self::Rg32Sint =>            (   native,    sint,    linear,         noaa, (1, 1),  8,  all_flags, 2),
             Self::Rg32Float =>           (   native, nearest,    linear,         noaa, (1, 1),  8,  all_flags, 2),
@@ -2203,7 +2203,7 @@ impl TextureFormat {
             Self::Rgba16Sint =>          (   native,    sint,    linear,         msaa, (1, 1),  8,  all_flags, 4),
             Self::Rgba16Float =>         (   native,   float,    linear, msaa_resolve, (1, 1),  8,  all_flags, 4),
 
-            // Packed 32 bit textures  
+            // Packed 32 bit textures
             Self::Rgba32Uint =>          (   native,    uint,    linear,         noaa, (1, 1), 16,  all_flags, 4),
             Self::Rgba32Sint =>          (   native,    sint,    linear,         noaa, (1, 1), 16,  all_flags, 4),
             Self::Rgba32Float =>         (   native, nearest,    linear,         noaa, (1, 1), 16,  all_flags, 4),
@@ -2215,7 +2215,7 @@ impl TextureFormat {
             Self::Depth24PlusStencil8 => (   native,   depth,    linear,         msaa, (1, 1),  4, attachment, 2),
             Self::Depth24UnormStencil8 => (  d24_s8,   depth,    linear,         msaa, (1, 1),  4, attachment, 2),
 
-            // Packed uncompressed  
+            // Packed uncompressed
             Self::Rgb9e5Ufloat =>        (   native,   float,    linear,         noaa, (1, 1),  4,      basic, 3),
 
             // Optional normalized 16-bit-per-channel formats
@@ -3706,6 +3706,16 @@ pub struct ImageDataLayout {
 pub enum BufferBindingType {
     /// A buffer for uniform values.
     ///
+    /// Example WGSL syntax:
+    /// ```rust,ignore
+    /// struct Globals {
+    ///     a_uniform: vec2<f32>,
+    ///     another_uniform: vec2<f32>
+    /// }
+    /// @group(0) @binding(0)
+    /// var<uniform> globals: Globals;
+    /// ```
+    ///
     /// Example GLSL syntax:
     /// ```cpp,ignore
     /// layout(std140, binding = 0)
@@ -3717,6 +3727,12 @@ pub enum BufferBindingType {
     Uniform,
     /// A storage buffer.
     ///
+    /// Example WGSL syntax:
+    /// ```rust,ignore
+    /// @group(0) @binding(0)
+    /// var<storage, read_write> my_element: array<vec4<f32>>;
+    /// ```
+    ///
     /// Example GLSL syntax:
     /// ```cpp,ignore
     /// layout (set=0, binding=0) buffer myStorageBuffer {
@@ -3726,6 +3742,12 @@ pub enum BufferBindingType {
     Storage {
         /// If `true`, the buffer can only be read in the shader,
         /// and it must be annotated with `readonly`.
+        ///
+        /// Example WGSL syntax:
+        /// ```rust,ignore
+        /// @group(0) @binding(0)
+        /// var<storage, read> my_element: array<vec4<f32>>;
+        /// ```
         ///
         /// Example GLSL syntax:
         /// ```cpp,ignore
@@ -3753,6 +3775,12 @@ impl Default for BufferBindingType {
 pub enum TextureSampleType {
     /// Sampling returns floats.
     ///
+    /// Example WGSL syntax:
+    /// ```rust,ignore
+    /// @group(0) @binding(0)
+    /// var t: texure_2d<f32>;
+    /// ```
+    ///
     /// Example GLSL syntax:
     /// ```cpp,ignore
     /// layout(binding = 0)
@@ -3765,6 +3793,12 @@ pub enum TextureSampleType {
     },
     /// Sampling does the depth reference comparison.
     ///
+    /// Example WGSL syntax:
+    /// ```rust,ignore
+    /// @group(0) @binding(0)
+    /// var t: texture_depth_2d;
+    /// ```
+    ///
     /// Example GLSL syntax:
     /// ```cpp,ignore
     /// layout(binding = 0)
@@ -3773,6 +3807,12 @@ pub enum TextureSampleType {
     Depth,
     /// Sampling returns signed integers.
     ///
+    /// Example WGSL syntax:
+    /// ```rust,ignore
+    /// @group(0) @binding(0)
+    /// var t: texture_2d<i32>;
+    /// ```
+    ///
     /// Example GLSL syntax:
     /// ```cpp,ignore
     /// layout(binding = 0)
@@ -3780,6 +3820,12 @@ pub enum TextureSampleType {
     /// ```
     Sint,
     /// Sampling returns unsigned integers.
+    ///
+    /// Example WGSL syntax:
+    /// ```rust,ignore
+    /// @group(0) @binding(0)
+    /// var t: texture_2d<u32>;
+    /// ```
     ///
     /// Example GLSL syntax:
     /// ```cpp,ignore
