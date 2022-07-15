@@ -490,6 +490,7 @@ DeviceDescriptor {
 - Update parking_lot to 0.12. by @emilio in [#2639](https://github.com/gfx-rs/wgpu/pull/2639)
 - Accept both parking-lot 0.11 and 0.12, to avoid windows-rs. by @jimblandy in [#2660](https://github.com/gfx-rs/wgpu/pull/2660)
 - Update web-sys to 0.3.58, sparse attachments support by @jinleili in [#2813](https://github.com/gfx-rs/wgpu/pull/2813)
+- Remove use of inplace_it by @mockersf in [#2889](https://github.com/gfx-rs/wgpu/pull/2889)
 
 ### deno-webgpu
 
