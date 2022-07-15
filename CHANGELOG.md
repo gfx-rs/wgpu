@@ -50,6 +50,9 @@ Bottom level categories:
 #### Metal
 - Extract the generic code into `get_metal_layer` by @jinleili in [#2826](https://github.com/gfx-rs/wgpu/pull/2826)
 
+#### General
+- Added downlevel restriction error message for `InvalidFormatUsages` error by @Seamooo in [#2886](https://github.com/gfx-rs/wgpu/pull/2886)
+
 ## wgpu-0.13.2 (2022-07-13)
 
 ### Bug Fixes
