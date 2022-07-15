@@ -3854,15 +3854,27 @@ impl Default for TextureSampleType {
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub enum StorageTextureAccess {
-    /// The texture can only be written in the shader and it must be annotated with `writeonly`.
+    /// The texture can only be written in the shader and it must be annotated with
+    /// `writeonly` (GLSL).
+    ///
+    /// This is not expressible in WGSL.
     ///
     /// Example GLSL syntax:
     /// ```cpp,ignore
     /// layout(set=0, binding=0, r32f) writeonly uniform image2D myStorageImage;
     /// ```
     WriteOnly,
-    /// The texture can only be read in the shader and it must be annotated with `readonly`.
-    /// [`Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES`] must be enabled to use this access mode,
+    /// The texture can only be read in the shader and it:
+    /// - may or may not be annotated with `read` (WGSL).
+    /// - must be annotated with `readonly` (GLSL).
+    ///
+    /// [`Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES`] must be enabled to use this access mode.
+    ///
+    /// Example WGSL syntax:
+    /// ```rust,ignore
+    /// @group(0) @binding(0)
+    /// var<read> my_storage_image: texture_storage_2d<f32>;
+    /// ```
     ///
     /// Example GLSL syntax:
     /// ```cpp,ignore
@@ -3871,6 +3883,8 @@ pub enum StorageTextureAccess {
     ReadOnly,
     /// The texture can be both read and written in the shader.
     /// [`Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES`] must be enabled to use this access mode.
+    ///
+    /// This is not expressible in WGSL.
     ///
     /// Example GLSL syntax:
     /// ```cpp,ignore
@@ -3935,10 +3949,16 @@ pub enum BindingType {
     },
     /// A sampler that can be used to sample a texture.
     ///
+    /// Example WGSL syntax:
+    /// ```rust,ignore
+    /// @group(0) @binding(0)
+    /// var s: sampler;
+    /// ```
+    ///
     /// Example GLSL syntax:
     /// ```cpp,ignore
     /// layout(binding = 0)
-    /// uniform sampler s;
+    /// readonly uniform sampler s;
     /// ```
     ///
     /// Corresponds to [WebGPU `GPUSamplerBindingLayout`](
@@ -3946,10 +3966,16 @@ pub enum BindingType {
     Sampler(SamplerBindingType),
     /// A texture binding.
     ///
+    /// Example WGSL syntax:
+    /// ```rust,ignore
+    /// @group(0) @binding(0)
+    /// var t: texture_2d<f32>;
+    /// ```
+    ///
     /// Example GLSL syntax:
     /// ```cpp,ignore
     /// layout(binding = 0)
-    /// uniform texture2D t;
+    /// readonly uniform texture2D t;
     /// ```
     ///
     /// Corresponds to [WebGPU `GPUTextureBindingLayout`](
@@ -3966,9 +3992,15 @@ pub enum BindingType {
     },
     /// A storage texture.
     ///
+    /// Example WGSL syntax:
+    /// ```rust,ignore
+    /// @group(0) @binding(0)
+    /// var my_storage_image: texture_storage_2d<f32>;
+    /// ```
+    ///
     /// Example GLSL syntax:
     /// ```cpp,ignore
-    /// layout(set=0, binding=0, r32f) uniform image2D myStorageImage;
+    /// layout(set=0, binding=0, r32f) readonly uniform image2D myStorageImage;
     /// ```
     /// Note that the texture format must be specified in the shader as well.
     /// A list of valid formats can be found in the specification here: <https://www.khronos.org/registry/OpenGL/specs/gl/GLSLangSpec.4.60.html#layout-qualifiers>
