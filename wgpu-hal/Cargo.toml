@@ -15,7 +15,7 @@ rust-version = "1.59"
 [features]
 default = []
 metal = ["naga/msl-out", "block", "foreign-types"]
-vulkan = ["naga/spv-out", "ash", "gpu-alloc", "gpu-descriptor", "libloading", "inplace_it"]
+vulkan = ["naga/spv-out", "ash", "gpu-alloc", "gpu-descriptor", "libloading", "smallvec"]
 gles = ["naga/glsl-out", "glow", "egl", "libloading"]
 dx11 = ["naga/hlsl-out", "native", "libloading", "winapi/d3d11", "winapi/d3d11_1", "winapi/d3d11_2", "winapi/d3d11sdklayers", "winapi/dxgi1_6"]
 dx12 = ["naga/hlsl-out", "native", "bit-set", "range-alloc", "winapi/d3d12", "winapi/d3d12shader", "winapi/d3d12sdklayers", "winapi/dxgi1_6"]
@@ -51,7 +51,7 @@ foreign-types = { version = "0.3", optional = true }
 ash = { version = "0.37", optional = true }
 gpu-alloc = { version = "0.5", optional = true }
 gpu-descriptor = { version = "0.2", optional = true }
-inplace_it = { version = "0.3.3", optional = true }
+smallvec = { version = "1", optional = true }
 
 # backend: Gles
 glow = { version = "0.11.1", optional = true }
