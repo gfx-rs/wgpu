@@ -394,7 +394,7 @@ bitflags::bitflags! {
         ///
         /// eg. `texture_array[nonuniformEXT(vertex_data)]`
         ///
-        /// HLSL does not need any extension.
+        /// WGSL and HLSL do not need any extension.
         ///
         /// Supported platforms:
         /// - DX12
@@ -419,7 +419,7 @@ bitflags::bitflags! {
         ///
         /// eg. `texture_array[nonuniformEXT(vertex_data)]`
         ///
-        /// HLSL does not need any extension.
+        /// WGSL and HLSL do not need any extension.
         ///
         /// Supported platforms:
         /// - DX12
