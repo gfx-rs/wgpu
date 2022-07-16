@@ -50,6 +50,11 @@ Bottom level categories:
 #### Metal
 - Extract the generic code into `get_metal_layer` by @jinleili in [#2826](https://github.com/gfx-rs/wgpu/pull/2826)
 
+### Documentation
+
+#### General
+- Add WGSL examples to complement existing examples written in GLSL by @norepimorphism in [#2888](https://github.com/gfx-rs/wgpu/pull/2888)
+
 ## wgpu-0.13.2 (2022-07-13)
 
 ### Bug Fixes
