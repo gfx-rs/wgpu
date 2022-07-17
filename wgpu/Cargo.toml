@@ -76,9 +76,10 @@ name = "water"
 test = true
 
 [features]
-default = []
+default = ["wgsl"]
 spirv = ["naga/spv-in"]
 glsl = ["naga/glsl-in"]
+wgsl = ["wgc?/wgsl"]
 trace = ["serde", "wgc/trace"]
 replay = ["serde", "wgc/replay"]
 angle = ["wgc/angle"]

@@ -8,7 +8,7 @@ homepage = "https://github.com/gfx-rs/wgpu"
 repository = "https://github.com/gfx-rs/wgpu"
 keywords = ["graphics"]
 license = "MIT OR Apache-2.0"
-rust-version = "1.59"
+rust-version = "1.60"
 
 [lib]
 

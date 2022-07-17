@@ -1335,13 +1335,22 @@ impl crate::Context for Context {
         wgt::DownlevelCapabilities::default()
     }
 
+    #[cfg_attr(
+        not(any(
+            feature = "spirv",
+            feature = "glsl",
+            feature = "wgsl",
+            feature = "naga"
+        )),
+        allow(unreachable_code, unused_variables)
+    )]
     fn device_create_shader_module(
         &self,
         device: &Self::DeviceId,
         desc: crate::ShaderModuleDescriptor,
         _shader_bound_checks: wgt::ShaderBoundChecks,
     ) -> Self::ShaderModuleId {
-        let mut descriptor = match desc.source {
+        let mut descriptor: web_sys::GpuShaderModuleDescriptor = match desc.source {
             #[cfg(feature = "spirv")]
             crate::ShaderSource::SpirV(ref spv) => {
                 use naga::{back, front, valid};
@@ -1393,6 +1402,7 @@ impl crate::Context for Context {
                         .unwrap();
                 web_sys::GpuShaderModuleDescriptor::new(wgsl_text.as_str())
             }
+            #[cfg(feature = "wgsl")]
             crate::ShaderSource::Wgsl(ref code) => web_sys::GpuShaderModuleDescriptor::new(code),
             #[cfg(feature = "naga")]
             crate::ShaderSource::Naga(module) => {
@@ -1408,6 +1418,9 @@ impl crate::Context for Context {
                 let wgsl_text =
                     back::wgsl::write_string(&module, &module_info, writer_flags).unwrap();
                 web_sys::GpuShaderModuleDescriptor::new(wgsl_text.as_str())
+            }
+            crate::ShaderSource::Dummy(_) => {
+                panic!("found `ShaderSource::Dummy`")
             }
         };
         if let Some(label) = desc.label {

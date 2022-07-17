@@ -1094,6 +1094,15 @@ impl crate::Context for Context {
         }
     }
 
+    #[cfg_attr(
+        not(any(
+            feature = "spirv",
+            feature = "glsl",
+            feature = "wgsl",
+            feature = "naga"
+        )),
+        allow(unreachable_code, unused_variables)
+    )]
     fn device_create_shader_module(
         &self,
         device: &Self::DeviceId,
@@ -1134,9 +1143,11 @@ impl crate::Context for Context {
 
                 wgc::pipeline::ShaderModuleSource::Naga(std::borrow::Cow::Owned(module))
             }
+            #[cfg(feature = "wgsl")]
             ShaderSource::Wgsl(ref code) => wgc::pipeline::ShaderModuleSource::Wgsl(Borrowed(code)),
             #[cfg(feature = "naga")]
             ShaderSource::Naga(module) => wgc::pipeline::ShaderModuleSource::Naga(module),
+            ShaderSource::Dummy(_) => panic!("found `ShaderSource::Dummy`"),
         };
         let (id, error) = wgc::gfx_select!(
             device.id => global.device_create_shader_module(device.id, &descriptor, source, ())

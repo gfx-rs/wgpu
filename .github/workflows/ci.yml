@@ -178,6 +178,9 @@ jobs:
       - name: check web
         if: matrix.kind == 'web'
         run: |
+          # build with no features
+          cargo ${{matrix.tool}} --target ${{ matrix.target }} -p wgpu --no-default-features
+
           # build examples
           cargo ${{matrix.tool}} --target ${{ matrix.target }} -p wgpu --examples
 
@@ -194,7 +197,7 @@ jobs:
         if: matrix.kind == 'em'
         run: |
           # build for Emscripten/WebGL
-          cargo ${{matrix.tool}} --target ${{ matrix.target }} -p wgpu -p wgpu-hal --features webgl,emscripten
+          cargo ${{matrix.tool}} --target ${{ matrix.target }} -p wgpu -p wgpu-hal --no-default-features --features webgl,emscripten
 
           # build raw-gles example
           cargo ${{matrix.tool}} --target ${{ matrix.target }} --example raw-gles --features webgl,emscripten
@@ -203,7 +206,7 @@ jobs:
         if: matrix.kind == 'local' || matrix.kind == 'other'
         run: |
           # check with no features
-          cargo ${{matrix.tool}} --target ${{ matrix.target }} -p wgpu -p wgpu-core -p wgpu-info -p player
+          cargo ${{matrix.tool}} --target ${{ matrix.target }} -p wgpu -p wgpu-core -p wgpu-info -p player --no-default-features
 
           # check with all features
           # explicitly don't mention wgpu-hal so that --all-features don't apply to it
