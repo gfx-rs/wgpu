@@ -3877,7 +3877,7 @@ pub enum StorageTextureAccess {
     /// `readonly` (GLSL).
     ///
     /// [`Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES`] must be enabled to use this access
-    /// mode. This is a nonstandard, native-only extension.
+    /// mode. This is a native-only extension.
     ///
     /// Example WGSL syntax:
     /// ```rust,ignore
