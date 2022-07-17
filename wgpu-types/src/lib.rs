@@ -3714,7 +3714,7 @@ pub enum BufferBindingType {
     /// ```rust,ignore
     /// struct Globals {
     ///     a_uniform: vec2<f32>,
-    ///     another_uniform: vec2<f32>
+    ///     another_uniform: vec2<f32>,
     /// }
     /// @group(0) @binding(0)
     /// var<uniform> globals: Globals;
