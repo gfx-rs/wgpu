@@ -2422,6 +2422,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 enum Function {
                     Asincosh { is_sin: bool },
                     Atanh,
+                    Unpack2x16float,
                     Regular(&'static str),
                     MissingIntOverload(&'static str),
                 }
@@ -2489,6 +2490,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     Mf::ReverseBits => Function::MissingIntOverload("reversebits"),
                     Mf::FindLsb => Function::Regular("firstbitlow"),
                     Mf::FindMsb => Function::Regular("firstbithigh"),
+                    Mf::Unpack2x16float => Function::Unpack2x16float,
                     _ => return Err(Error::Unimplemented(format!("write_expr_math {:?}", fun))),
                 };
 
@@ -2511,6 +2513,13 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         write!(self.out, ") / (1.0 - ")?;
                         self.write_expr(module, arg, func_ctx)?;
                         write!(self.out, "))")?;
+                    }
+                    Function::Unpack2x16float => {
+                        write!(self.out, "float2(f16tof32(")?;
+                        self.write_expr(module, arg, func_ctx)?;
+                        write!(self.out, "), f16tof32((")?;
+                        self.write_expr(module, arg, func_ctx)?;
+                        write!(self.out, ") >> 16))")?;
                     }
                     Function::Regular(fun_name) => {
                         write!(self.out, "{}(", fun_name)?;
