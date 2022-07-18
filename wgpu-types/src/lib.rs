@@ -326,15 +326,16 @@ bitflags::bitflags! {
         const MAPPABLE_PRIMARY_BUFFERS = 1 << 16;
         /// Allows the user to create uniform arrays of textures in shaders:
         ///
-        /// ex. 
+        /// ex.  
         /// `var textures: binding_array<texture_2d<f32>, 10>` (WGSL)  
         /// `uniform texture2D textures[10]` (GLSL)
         ///
         /// If [`Features::STORAGE_RESOURCE_BINDING_ARRAY`] is supported as well as this, the user
         /// may also create uniform arrays of storage textures.
         ///
-        /// eg. `var textures: array<texture_storage_2d<f32, write>, 10>` (WGSL),
-        /// `uniform image2D textures[10]` (GLSL).
+        /// ex.  
+        /// `var textures: array<texture_storage_2d<f32, write>, 10>` (WGSL)  
+        /// `uniform image2D textures[10]` (GLSL)
         ///
         /// This capability allows them to exist and to be indexed by dynamically uniform
         /// values.
@@ -348,8 +349,9 @@ bitflags::bitflags! {
         const TEXTURE_BINDING_ARRAY = 1 << 17;
         /// Allows the user to create arrays of buffers in shaders:
         ///
-        /// eg. `var<uniform> buffer_array: array<MyBuffer, 10>` (WGSL),
-        /// `uniform myBuffer { ... } buffer_array[10]` (GLSL).
+        /// ex.  
+        /// `var<uniform> buffer_array: array<MyBuffer, 10>` (WGSL)  
+        /// `uniform myBuffer { ... } buffer_array[10]` (GLSL)
         ///
         /// This capability allows them to exist and to be indexed by dynamically uniform
         /// values.
@@ -357,8 +359,9 @@ bitflags::bitflags! {
         /// If [`Features::STORAGE_RESOURCE_BINDING_ARRAY`] is supported as well as this, the user
         /// may also create arrays of storage buffers.
         ///
-        /// eg. `var<storage> buffer_array: array<MyBuffer, 10>` (WGSL),
-        /// `buffer myBuffer { ... } buffer_array[10]` (GLSL).
+        /// ex.  
+        /// `var<storage> buffer_array: array<MyBuffer, 10>` (WGSL)  
+        /// `buffer myBuffer { ... } buffer_array[10]` (GLSL)
         ///
         /// Supported platforms:
         /// - DX12
@@ -381,7 +384,7 @@ bitflags::bitflags! {
         const STORAGE_RESOURCE_BINDING_ARRAY = 1 << 19;
         /// Allows shaders to index sampled texture and storage buffer resource arrays with dynamically non-uniform values:
         ///
-        /// eg. `texture_array[vertex_data]`
+        /// ex. `texture_array[vertex_data]`
         ///
         /// In order to use this capability, the corresponding GLSL extension must be enabled like so:
         ///
@@ -389,11 +392,11 @@ bitflags::bitflags! {
         ///
         /// and then used either as `nonuniformEXT` qualifier in variable declaration:
         ///
-        /// eg. `layout(location = 0) nonuniformEXT flat in int vertex_data;`
+        /// ex. `layout(location = 0) nonuniformEXT flat in int vertex_data;`
         ///
         /// or as `nonuniformEXT` constructor:
         ///
-        /// eg. `texture_array[nonuniformEXT(vertex_data)]`
+        /// ex. `texture_array[nonuniformEXT(vertex_data)]`
         ///
         /// WGSL and HLSL do not need any extension.
         ///
@@ -406,7 +409,7 @@ bitflags::bitflags! {
         const SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING = 1 << 20;
         /// Allows shaders to index uniform buffer and storage texture resource arrays with dynamically non-uniform values:
         ///
-        /// eg. `texture_array[vertex_data]`
+        /// ex. `texture_array[vertex_data]`
         ///
         /// In order to use this capability, the corresponding GLSL extension must be enabled like so:
         ///
@@ -414,11 +417,11 @@ bitflags::bitflags! {
         ///
         /// and then used either as `nonuniformEXT` qualifier in variable declaration:
         ///
-        /// eg. `layout(location = 0) nonuniformEXT flat in int vertex_data;`
+        /// ex. `layout(location = 0) nonuniformEXT flat in int vertex_data;`
         ///
         /// or as `nonuniformEXT` constructor:
         ///
-        /// eg. `texture_array[nonuniformEXT(vertex_data)]`
+        /// ex. `texture_array[nonuniformEXT(vertex_data)]`
         ///
         /// WGSL and HLSL do not need any extension.
         ///
