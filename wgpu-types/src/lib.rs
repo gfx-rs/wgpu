@@ -326,8 +326,9 @@ bitflags::bitflags! {
         const MAPPABLE_PRIMARY_BUFFERS = 1 << 16;
         /// Allows the user to create uniform arrays of textures in shaders:
         ///
-        /// eg. `var textures: array<texture_2d<f32>, 10>` (WGPU), `uniform texture2D textures[10]`
-        /// (GLSL).
+        /// ex. 
+        /// `var textures: binding_array<texture_2d<f32>, 10>` (WGSL)  
+        /// `uniform texture2D textures[10]` (GLSL)
         ///
         /// If [`Features::STORAGE_RESOURCE_BINDING_ARRAY`] is supported as well as this, the user
         /// may also create uniform arrays of storage textures.
