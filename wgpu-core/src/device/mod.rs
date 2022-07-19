@@ -800,9 +800,17 @@ impl<A: HalApi> Device<A> {
 
         let missing_allowed_usages = desc.usage - format_features.allowed_usages;
         if !missing_allowed_usages.is_empty() {
+            // detect downlevel incompatibilities
+            let wgpu_allowed_usages = desc
+                .format
+                .describe()
+                .guaranteed_format_features
+                .allowed_usages;
+            let wgpu_missing_usages = desc.usage - wgpu_allowed_usages;
             return Err(CreateTextureError::InvalidFormatUsages(
                 missing_allowed_usages,
                 desc.format,
+                wgpu_missing_usages.is_empty(),
             ));
         }
 
