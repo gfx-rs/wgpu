@@ -288,7 +288,7 @@ impl From<GpuRequiredFeatures> for wgpu_types::Features {
             wgpu_types::Features::DEPTH_CLIP_CONTROL,
             required_features.0.contains("depth-clip-control"),
         );
-         features.set(
+        features.set(
             wgpu_types::Features::DEPTH24UNORM_STENCIL8,
             required_features.0.contains("depth24unorm-stencil8"),
         );
