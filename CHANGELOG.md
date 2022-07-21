@@ -40,12 +40,31 @@ Bottom level categories:
 
 ## Unreleased
 
+### Major Changes
+
+#### @invariant Warning
+
+When using CompareFunction::Equal or CompareFunction::NotEqual on a pipeline, there is now a warning logged if the vertex
+shader does not have a @invariant tag on it. On some machines, rendering the same triangles multiple times without an
+@invariant tag will result in slightly different depths for every pixel. Because the *Equal functions rely on depth being
+the same every time it is rendered, we now warn if it is missing.
+
+```diff
+-@vertex 
+-fn vert_main(v_in: VertexInput) -> @builtin(position) vec4<f32> {...}
++@vertex 
++fn vert_main(v_in: VertexInput) -> @builtin(position) @invariant vec4<f32> {...}
+```
+
 ### Bug Fixes
 
 #### General
 - Improve the validation and error reporting of buffer mappings by @nical in [#2848](https://github.com/gfx-rs/wgpu/pull/2848)
 
 ### Changes
+
+#### General
+- Add warning when using CompareFunction::*Equal with vertex shader that is missing @invariant tag by @cwfitzgerald in [#2887](https://github.com/gfx-rs/wgpu/pull/2887)
 
 #### Metal
 - Extract the generic code into `get_metal_layer` by @jinleili in [#2826](https://github.com/gfx-rs/wgpu/pull/2826)
