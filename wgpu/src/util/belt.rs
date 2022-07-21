@@ -11,37 +11,47 @@ struct Chunk {
     offset: BufferAddress,
 }
 
-/// Staging belt is a machine that uploads data.
+/// Efficiently performs many buffer writes by sharing and reusing temporary buffers.
 ///
 /// Internally it uses a ring-buffer of staging buffers that are sub-allocated.
-/// It has an advantage over [`Queue::write_buffer`] in a way that it returns a mutable slice,
+/// It has an advantage over [`Queue::write_buffer()`] in a way that it returns a mutable slice,
 /// which you can fill to avoid an extra data copy.
 ///
 /// Using a staging belt is slightly complicated, and generally goes as follows:
-/// - Write to buffers that need writing to using [`StagingBelt::write_buffer`].
-/// - Call `finish`.
-/// - Submit all command encoders used with `StagingBelt::write_buffer`.
-/// - Call `recall`
+/// 1. Write to buffers that need writing to using [`StagingBelt::write_buffer()`].
+/// 2. Call [`StagingBelt::finish()`].
+/// 3. Submit all command encoders that were used in step 1.
+/// 4. Call [`StagingBelt::recall()`].
 ///
-/// [`Queue::write_buffer`]: crate::Queue::write_buffer
+/// [`Queue::write_buffer()`]: crate::Queue::write_buffer
 pub struct StagingBelt {
     chunk_size: BufferAddress,
-    /// Chunks that we are actively using for pending transfers at this moment.
+    /// Chunks into which we are accumulating data to be transferred.
     active_chunks: Vec<Chunk>,
-    /// Chunks that have scheduled transfers already.
+    /// Chunks that have scheduled transfers already; they are unmapped and some
+    /// command encoder has one or more `copy_buffer_to_buffer` commands with them
+    /// as source.
     closed_chunks: Vec<Chunk>,
-    /// Chunks that are back from the GPU and ready to be used.
+    /// Chunks that are back from the GPU and ready to be mapped for write and put
+    /// into `active_chunks`.
     free_chunks: Vec<Chunk>,
+    /// When closed chunks are mapped again, the map callback sends them here.
     sender: mpsc::Sender<Chunk>,
+    /// Free chunks are received here to be put on `self.free_chunks`.
     receiver: mpsc::Receiver<Chunk>,
 }
 
 impl StagingBelt {
     /// Create a new staging belt.
     ///
-    /// The `chunk_size` is the unit of internal buffer allocation.
-    /// It's better when it's big, but ideally still 1-4 times less than
-    /// the total amount of data uploaded per submission.
+    /// The `chunk_size` is the unit of internal buffer allocation; writes will be
+    /// sub-allocated within each chunk. Therefore, for optimal use of memory, the
+    /// chunk size should be:
+    ///
+    /// * larger than the largest single [`StagingBelt::write_buffer()`] operation;
+    /// * 1-4 times less than the total amount of data uploaded per submission
+    ///   (per [`StagingBelt::finish()`]); and
+    /// * bigger is better, within these bounds.
     pub fn new(chunk_size: BufferAddress) -> Self {
         let (sender, receiver) = mpsc::channel();
         StagingBelt {
@@ -58,7 +68,12 @@ impl StagingBelt {
     /// at the specified offset.
     ///
     /// The upload will be placed into the provided command encoder. This encoder
-    /// must be submitted after `finish` is called and before `recall` is called.
+    /// must be submitted after [`StagingBelt::finish()`] is called and before
+    /// [`StagingBelt::recall()`] is called.
+    ///
+    /// If the `size` is greater than the size of any free internal buffer, a new buffer
+    /// will be allocated for it. Therefore, the `chunk_size` passed to [`StagingBelt::new()`]
+    /// should ideally be larger than every such size.
     pub fn write_buffer(
         &mut self,
         encoder: &mut CommandEncoder,
@@ -108,8 +123,12 @@ impl StagingBelt {
 
     /// Prepare currently mapped buffers for use in a submission.
     ///
-    /// At this point, all the partially used staging buffers are closed until
-    /// the GPU is done copying the data from them.
+    /// This must be called before the command encoder(s) provided to
+    /// [`StagingBelt::write_buffer()`] are submitted.
+    ///
+    /// At this point, all the partially used staging buffers are closed (cannot be used for
+    /// further writes) until after [`StagingBelt::recall()`] is called *and* the GPU is done
+    /// copying the data from them.
     pub fn finish(&mut self) {
         for chunk in self.active_chunks.drain(..) {
             chunk.buffer.unmap();
@@ -119,7 +138,9 @@ impl StagingBelt {
 
     /// Recall all of the closed buffers back to be reused.
     ///
-    /// This has to be called after the command encoders written to `write_buffer` are submitted!
+    /// This must only be called after the command encoder(s) provided to
+    /// [`StagingBelt::write_buffer()`] are submitted. Additional calls are harmless.
+    /// Not calling this as soon as possible may result in increased buffer memory usage.
     pub fn recall(&mut self) {
         while let Ok(mut chunk) = self.receiver.try_recv() {
             chunk.offset = 0;
