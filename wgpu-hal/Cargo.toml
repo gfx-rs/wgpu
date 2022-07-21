@@ -95,16 +95,16 @@ js-sys = { version = "0.3" }
 android_system_properties = "0.1.1"
 
 [dependencies.naga]
-#git = "https://github.com/gfx-rs/naga"
-#rev = "27d38aae"
-version = "0.9"
+git = "https://github.com/gfx-rs/naga"
+rev = "48e79388"
+#version = "0.9"
 
 # DEV dependencies
 
 [dev-dependencies.naga]
-#git = "https://github.com/gfx-rs/naga"
-#rev = "27d38aae"
-version = "0.9"
+git = "https://github.com/gfx-rs/naga"
+rev = "48e79388"
+#version = "0.9"
 features = ["wgsl-in"]
 
 [dev-dependencies]

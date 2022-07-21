@@ -41,9 +41,9 @@ smallvec = "1"
 thiserror = "1"
 
 [dependencies.naga]
-#git = "https://github.com/gfx-rs/naga"
-#rev = "27d38aae"
-version = "0.9"
+git = "https://github.com/gfx-rs/naga"
+rev = "48e79388"
+#version = "0.9"
 features = ["span", "validate", "wgsl-in"]
 
 [dependencies.wgt]

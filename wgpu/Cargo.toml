@@ -139,22 +139,23 @@ pollster = "0.2"
 env_logger = "0.9"
 
 [dependencies.naga]
-#git = "https://github.com/gfx-rs/naga"
-#rev = "27d38aae"
-version = "0.9"
+git = "https://github.com/gfx-rs/naga"
+rev = "48e79388"
+#version = "0.9"
+features = ["clone"]
 optional = true
 
 # used to test all the example shaders
 [dev-dependencies.naga]
-#git = "https://github.com/gfx-rs/naga"
-#rev = "27d38aae"
-version = "0.9"
+git = "https://github.com/gfx-rs/naga"
+rev = "48e79388"
+#version = "0.9"
 features = ["wgsl-in"]
 
 [target.'cfg(target_arch = "wasm32")'.dependencies.naga]
-#git = "https://github.com/gfx-rs/naga"
-#rev = "27d38aae"
-version = "0.9"
+git = "https://github.com/gfx-rs/naga"
+rev = "48e79388"
+#version = "0.9"
 features = ["wgsl-out"]
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
