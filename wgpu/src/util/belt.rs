@@ -73,23 +73,27 @@ impl StagingBelt {
             .position(|chunk| chunk.offset + size.get() <= chunk.size)
         {
             self.active_chunks.swap_remove(index)
-        } else if let Some(index) = self
-            .free_chunks
-            .iter()
-            .position(|chunk| size.get() <= chunk.size)
-        {
-            self.free_chunks.swap_remove(index)
         } else {
-            let size = self.chunk_size.max(size.get());
-            Chunk {
-                buffer: Arc::new(device.create_buffer(&BufferDescriptor {
-                    label: Some("(wgpu internal) StagingBelt staging buffer"),
+            self.receive_chunks(); // ensure self.free_chunks is up to date
+
+            if let Some(index) = self
+                .free_chunks
+                .iter()
+                .position(|chunk| size.get() <= chunk.size)
+            {
+                self.free_chunks.swap_remove(index)
+            } else {
+                let size = self.chunk_size.max(size.get());
+                Chunk {
+                    buffer: Arc::new(device.create_buffer(&BufferDescriptor {
+                        label: Some("(wgpu internal) StagingBelt staging buffer"),
+                        size,
+                        usage: BufferUsages::MAP_WRITE | BufferUsages::COPY_SRC,
+                        mapped_at_creation: true,
+                    })),
                     size,
-                    usage: BufferUsages::MAP_WRITE | BufferUsages::COPY_SRC,
-                    mapped_at_creation: true,
-                })),
-                size,
-                offset: 0,
+                    offset: 0,
+                }
             }
         };
 
@@ -121,10 +125,7 @@ impl StagingBelt {
     ///
     /// This has to be called after the command encoders written to `write_buffer` are submitted!
     pub fn recall(&mut self) {
-        while let Ok(mut chunk) = self.receiver.try_recv() {
-            chunk.offset = 0;
-            self.free_chunks.push(chunk);
-        }
+        self.receive_chunks();
 
         let sender = &self.sender;
         for chunk in self.closed_chunks.drain(..) {
@@ -136,6 +137,15 @@ impl StagingBelt {
                 .map_async(MapMode::Write, move |_| {
                     let _ = sender.send(chunk);
                 });
+        }
+    }
+
+    /// Move all chunks that the GPU is done with (and are now mapped again)
+    /// from `self.receiver` to `self.free_chunks`.
+    fn receive_chunks(&mut self) {
+        while let Ok(mut chunk) = self.receiver.try_recv() {
+            chunk.offset = 0;
+            self.free_chunks.push(chunk);
         }
     }
 }
