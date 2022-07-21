@@ -1097,7 +1097,7 @@ impl crate::Context for Context {
                 };
                 let parser = naga::front::spv::Parser::new(spv.iter().cloned(), &options);
                 let module = parser.parse().unwrap();
-                wgc::pipeline::ShaderModuleSource::Naga(module)
+                wgc::pipeline::ShaderModuleSource::Naga(std::borrow::Cow::Owned(module))
             }
             #[cfg(feature = "glsl")]
             ShaderSource::Glsl {
@@ -1113,7 +1113,7 @@ impl crate::Context for Context {
                 let mut parser = naga::front::glsl::Parser::default();
                 let module = parser.parse(&options, shader).unwrap();
 
-                wgc::pipeline::ShaderModuleSource::Naga(module)
+                wgc::pipeline::ShaderModuleSource::Naga(std::borrow::Cow::Owned(module))
             }
             ShaderSource::Wgsl(ref code) => wgc::pipeline::ShaderModuleSource::Wgsl(Borrowed(code)),
             #[cfg(feature = "naga")]

@@ -815,6 +815,7 @@ impl Drop for ShaderModule {
 ///
 /// Any necessary shader translation (e.g. from WGSL to SPIR-V or vice versa)
 /// will be done internally by wgpu.
+#[cfg_attr(feature = "naga", allow(clippy::large_enum_variant))]
 #[non_exhaustive]
 pub enum ShaderSource<'a> {
     /// SPIR-V module represented as a slice of words.
@@ -841,7 +842,7 @@ pub enum ShaderSource<'a> {
     /// Naga module.
     #[cfg(feature = "naga")]
     #[cfg_attr(docsrs, doc(cfg(feature = "naga")))]
-    Naga(naga::Module),
+    Naga(Cow<'static, naga::Module>),
 }
 
 /// Descriptor for use with [`Device::create_shader_module`].

@@ -83,7 +83,7 @@ pub mod api {
 pub use vulkan::UpdateAfterBindTypes;
 
 use std::{
-    borrow::Borrow,
+    borrow::{Borrow, Cow},
     fmt,
     num::{NonZeroU32, NonZeroU8},
     ops::{Range, RangeInclusive},
@@ -939,7 +939,7 @@ pub struct CommandEncoderDescriptor<'a, A: Api> {
 /// Naga shader module.
 pub struct NagaShader {
     /// Shader module IR.
-    pub module: naga::Module,
+    pub module: Cow<'static, naga::Module>,
     /// Analysis information of the module.
     pub info: naga::valid::ModuleInfo,
 }

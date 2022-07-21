@@ -6,7 +6,13 @@ use hal::{
     Adapter as _, CommandEncoder as _, Device as _, Instance as _, Queue as _, Surface as _,
 };
 
-use std::{borrow::Borrow, iter, mem, num::NonZeroU32, ptr, time::Instant};
+use std::{
+    borrow::{Borrow, Cow},
+    iter, mem,
+    num::NonZeroU32,
+    ptr,
+    time::Instant,
+};
 
 const MAX_BUNNIES: usize = 1 << 20;
 const BUNNY_SIZE: f32 = 0.15 * 256.0;
@@ -143,7 +149,10 @@ impl<A: hal::Api> Example<A> {
             )
             .validate(&module)
             .unwrap();
-            hal::NagaShader { module, info }
+            hal::NagaShader {
+                module: Cow::Owned(module),
+                info,
+            }
         };
         let shader_desc = hal::ShaderModuleDescriptor {
             label: None,

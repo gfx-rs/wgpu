@@ -1201,7 +1201,7 @@ impl<A: HalApi> Device<A> {
                         inner,
                     })
                 })?;
-                (module, code.into_owned())
+                (Cow::Owned(module), code.into_owned())
             }
             pipeline::ShaderModuleSource::Naga(module) => (module, String::new()),
         };

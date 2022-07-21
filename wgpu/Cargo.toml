@@ -142,6 +142,7 @@ env_logger = "0.9"
 git = "https://github.com/gfx-rs/naga"
 rev = "b209d911"
 version = "0.9"
+features = ["clone"]
 optional = true
 
 # used to test all the example shaders
