@@ -1752,175 +1752,127 @@ pub enum AstcChannel {
 /// https://gpuweb.github.io/gpuweb/#enumdef-gputextureformat).
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
-#[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
 pub enum TextureFormat {
     // Normal 8 bit formats
     /// Red channel only. 8 bit integer per channel. [0, 255] converted to/from float [0, 1] in shader.
-    #[cfg_attr(feature = "serde", serde(rename = "r8unorm"))]
     R8Unorm,
     /// Red channel only. 8 bit integer per channel. [-127, 127] converted to/from float [-1, 1] in shader.
-    #[cfg_attr(feature = "serde", serde(rename = "r8snorm"))]
     R8Snorm,
     /// Red channel only. 8 bit integer per channel. Unsigned in shader.
-    #[cfg_attr(feature = "serde", serde(rename = "r8uint"))]
     R8Uint,
     /// Red channel only. 8 bit integer per channel. Signed in shader.
-    #[cfg_attr(feature = "serde", serde(rename = "r8sint"))]
     R8Sint,
 
     // Normal 16 bit formats
     /// Red channel only. 16 bit integer per channel. Unsigned in shader.
-    #[cfg_attr(feature = "serde", serde(rename = "r16uint"))]
     R16Uint,
     /// Red channel only. 16 bit integer per channel. Signed in shader.
-    #[cfg_attr(feature = "serde", serde(rename = "r16sint"))]
     R16Sint,
     /// Red channel only. 16 bit integer per channel. [0, 65535] converted to/from float [0, 1] in shader.
     ///
     /// [`Features::TEXTURE_FORMAT_16BIT_NORM`] must be enabled to use this texture format.
-    #[cfg_attr(feature = "serde", serde(rename = "r16unorm"))]
     R16Unorm,
     /// Red channel only. 16 bit integer per channel. [0, 65535] converted to/from float [-1, 1] in shader.
     ///
     /// [`Features::TEXTURE_FORMAT_16BIT_NORM`] must be enabled to use this texture format.
-    #[cfg_attr(feature = "serde", serde(rename = "r16snorm"))]
     R16Snorm,
     /// Red channel only. 16 bit float per channel. Float in shader.
-    #[cfg_attr(feature = "serde", serde(rename = "r16float"))]
     R16Float,
     /// Red and green channels. 8 bit integer per channel. [0, 255] converted to/from float [0, 1] in shader.
-    #[cfg_attr(feature = "serde", serde(rename = "rg8unorm"))]
     Rg8Unorm,
     /// Red and green channels. 8 bit integer per channel. [-127, 127] converted to/from float [-1, 1] in shader.
-    #[cfg_attr(feature = "serde", serde(rename = "rg8snorm"))]
     Rg8Snorm,
     /// Red and green channels. 8 bit integer per channel. Unsigned in shader.
-    #[cfg_attr(feature = "serde", serde(rename = "rg8uint"))]
     Rg8Uint,
     /// Red and green channels. 8 bit integer per channel. Signed in shader.
-    #[cfg_attr(feature = "serde", serde(rename = "rg8sint"))]
     Rg8Sint,
 
     // Normal 32 bit formats
     /// Red channel only. 32 bit integer per channel. Unsigned in shader.
-    #[cfg_attr(feature = "serde", serde(rename = "r32uint"))]
     R32Uint,
     /// Red channel only. 32 bit integer per channel. Signed in shader.
-    #[cfg_attr(feature = "serde", serde(rename = "r32sint"))]
     R32Sint,
     /// Red channel only. 32 bit float per channel. Float in shader.
-    #[cfg_attr(feature = "serde", serde(rename = "r32float"))]
     R32Float,
     /// Red and green channels. 16 bit integer per channel. Unsigned in shader.
-    #[cfg_attr(feature = "serde", serde(rename = "rg16uint"))]
     Rg16Uint,
     /// Red and green channels. 16 bit integer per channel. Signed in shader.
-    #[cfg_attr(feature = "serde", serde(rename = "rg16sint"))]
     Rg16Sint,
     /// Red and green channels. 16 bit integer per channel. [0, 65535] converted to/from float [0, 1] in shader.
     ///
     /// [`Features::TEXTURE_FORMAT_16BIT_NORM`] must be enabled to use this texture format.
-    #[cfg_attr(feature = "serde", serde(rename = "rg16unorm"))]
     Rg16Unorm,
     /// Red and green channels. 16 bit integer per channel. [0, 65535] converted to/from float [-1, 1] in shader.
     ///
     /// [`Features::TEXTURE_FORMAT_16BIT_NORM`] must be enabled to use this texture format.
-    #[cfg_attr(feature = "serde", serde(rename = "rg16snorm"))]
     Rg16Snorm,
     /// Red and green channels. 16 bit float per channel. Float in shader.
-    #[cfg_attr(feature = "serde", serde(rename = "rg16float"))]
     Rg16Float,
     /// Red, green, blue, and alpha channels. 8 bit integer per channel. [0, 255] converted to/from float [0, 1] in shader.
-    #[cfg_attr(feature = "serde", serde(rename = "rgba8unorm"))]
     Rgba8Unorm,
     /// Red, green, blue, and alpha channels. 8 bit integer per channel. Srgb-color [0, 255] converted to/from linear-color float [0, 1] in shader.
-    #[cfg_attr(feature = "serde", serde(rename = "rgba8unorm-srgb"))]
     Rgba8UnormSrgb,
     /// Red, green, blue, and alpha channels. 8 bit integer per channel. [-127, 127] converted to/from float [-1, 1] in shader.
-    #[cfg_attr(feature = "serde", serde(rename = "rgba8snorm"))]
     Rgba8Snorm,
     /// Red, green, blue, and alpha channels. 8 bit integer per channel. Unsigned in shader.
-    #[cfg_attr(feature = "serde", serde(rename = "rgba8uint"))]
     Rgba8Uint,
     /// Red, green, blue, and alpha channels. 8 bit integer per channel. Signed in shader.
-    #[cfg_attr(feature = "serde", serde(rename = "rgba8sint"))]
     Rgba8Sint,
     /// Blue, green, red, and alpha channels. 8 bit integer per channel. [0, 255] converted to/from float [0, 1] in shader.
-    #[cfg_attr(feature = "serde", serde(rename = "bgra8unorm"))]
     Bgra8Unorm,
     /// Blue, green, red, and alpha channels. 8 bit integer per channel. Srgb-color [0, 255] converted to/from linear-color float [0, 1] in shader.
-    #[cfg_attr(feature = "serde", serde(rename = "bgra8unorm-srgb"))]
     Bgra8UnormSrgb,
 
     // Packed 32 bit formats
     /// Red, green, blue, and alpha channels. 10 bit integer for RGB channels, 2 bit integer for alpha channel. [0, 1023] ([0, 3] for alpha) converted to/from float [0, 1] in shader.
-    #[cfg_attr(feature = "serde", serde(rename = "rgb10a2unorm"))]
     Rgb10a2Unorm,
     /// Red, green, and blue channels. 11 bit float with no sign bit for RG channels. 10 bit float with no sign bit for blue channel. Float in shader.
-    #[cfg_attr(feature = "serde", serde(rename = "rg11b10ufloat"))]
     Rg11b10Float,
 
     // Normal 64 bit formats
     /// Red and green channels. 32 bit integer per channel. Unsigned in shader.
-    #[cfg_attr(feature = "serde", serde(rename = "rg32uint"))]
     Rg32Uint,
     /// Red and green channels. 32 bit integer per channel. Signed in shader.
-    #[cfg_attr(feature = "serde", serde(rename = "rg32sint"))]
     Rg32Sint,
     /// Red and green channels. 32 bit float per channel. Float in shader.
-    #[cfg_attr(feature = "serde", serde(rename = "rg32float"))]
     Rg32Float,
     /// Red, green, blue, and alpha channels. 16 bit integer per channel. Unsigned in shader.
-    #[cfg_attr(feature = "serde", serde(rename = "rgba16uint"))]
     Rgba16Uint,
     /// Red, green, blue, and alpha channels. 16 bit integer per channel. Signed in shader.
-    #[cfg_attr(feature = "serde", serde(rename = "rgba16sint"))]
     Rgba16Sint,
     /// Red, green, blue, and alpha channels. 16 bit integer per channel. [0, 65535] converted to/from float [0, 1] in shader.
     ///
     /// [`Features::TEXTURE_FORMAT_16BIT_NORM`] must be enabled to use this texture format.
-    #[cfg_attr(feature = "serde", serde(rename = "rgba16unorm"))]
     Rgba16Unorm,
     /// Red, green, blue, and alpha. 16 bit integer per channel. [0, 65535] converted to/from float [-1, 1] in shader.
     ///
     /// [`Features::TEXTURE_FORMAT_16BIT_NORM`] must be enabled to use this texture format.
-    #[cfg_attr(feature = "serde", serde(rename = "rgba16snorm"))]
     Rgba16Snorm,
     /// Red, green, blue, and alpha channels. 16 bit float per channel. Float in shader.
-    #[cfg_attr(feature = "serde", serde(rename = "rgba16float"))]
     Rgba16Float,
 
     // Normal 128 bit formats
     /// Red, green, blue, and alpha channels. 32 bit integer per channel. Unsigned in shader.
-    #[cfg_attr(feature = "serde", serde(rename = "rgba32uint"))]
     Rgba32Uint,
     /// Red, green, blue, and alpha channels. 32 bit integer per channel. Signed in shader.
-    #[cfg_attr(feature = "serde", serde(rename = "rgba32sint"))]
     Rgba32Sint,
     /// Red, green, blue, and alpha channels. 32 bit float per channel. Float in shader.
-    #[cfg_attr(feature = "serde", serde(rename = "rgba32float"))]
     Rgba32Float,
 
     // Depth and stencil formats
     /// Special depth format with 32 bit floating point depth.
-    #[cfg_attr(feature = "serde", serde(rename = "depth32float"))]
     Depth32Float,
     /// Special depth/stencil format with 32 bit floating point depth and 8 bits integer stencil.
-    #[cfg_attr(feature = "serde", serde(rename = "depth32float-stencil8"))]
     Depth32FloatStencil8,
     /// Special depth format with at least 24 bit integer depth.
-    #[cfg_attr(feature = "serde", serde(rename = "depth24plus"))]
     Depth24Plus,
     /// Special depth/stencil format with at least 24 bit integer depth and 8 bits integer stencil.
-    #[cfg_attr(feature = "serde", serde(rename = "depth24plus-stencil8"))]
     Depth24PlusStencil8,
     /// Special depth/stencil format with 24 bit integer depth and 8 bits integer stencil.
-    #[cfg_attr(feature = "serde", serde(rename = "depth24unorm-stencil8"))]
     Depth24UnormStencil8,
 
     // Packed uncompressed texture formats
     /// Packed unsigned float with 9 bits mantisa for each RGB component, then a common 5 bits exponent
-    #[cfg_attr(feature = "serde", serde(rename = "rgb9e5ufloat"))]
     Rgb9e5Ufloat,
 
     // Compressed textures usable with `TEXTURE_COMPRESSION_BC` feature.
@@ -1930,7 +1882,6 @@ pub enum TextureFormat {
     /// Also known as DXT1.
     ///
     /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
-    #[cfg_attr(feature = "serde", serde(rename = "bc1-rgba-unorm"))]
     Bc1RgbaUnorm,
     /// 4x4 block compressed texture. 8 bytes per block (4 bit/px). 4 color + alpha pallet. 5 bit R + 6 bit G + 5 bit B + 1 bit alpha.
     /// Srgb-color [0, 63] ([0, 1] for alpha) converted to/from linear-color float [0, 1] in shader.
@@ -1938,7 +1889,6 @@ pub enum TextureFormat {
     /// Also known as DXT1.
     ///
     /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
-    #[cfg_attr(feature = "serde", serde(rename = "bc1-rgba-unorm-srgb"))]
     Bc1RgbaUnormSrgb,
     /// 4x4 block compressed texture. 16 bytes per block (8 bit/px). 4 color pallet. 5 bit R + 6 bit G + 5 bit B + 4 bit alpha.
     /// [0, 63] ([0, 15] for alpha) converted to/from float [0, 1] in shader.
@@ -1946,7 +1896,6 @@ pub enum TextureFormat {
     /// Also known as DXT3.
     ///
     /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
-    #[cfg_attr(feature = "serde", serde(rename = "bc2-rgba-unorm"))]
     Bc2RgbaUnorm,
     /// 4x4 block compressed texture. 16 bytes per block (8 bit/px). 4 color pallet. 5 bit R + 6 bit G + 5 bit B + 4 bit alpha.
     /// Srgb-color [0, 63] ([0, 255] for alpha) converted to/from linear-color float [0, 1] in shader.
@@ -1954,7 +1903,6 @@ pub enum TextureFormat {
     /// Also known as DXT3.
     ///
     /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
-    #[cfg_attr(feature = "serde", serde(rename = "bc2-rgba-unorm-srgb"))]
     Bc2RgbaUnormSrgb,
     /// 4x4 block compressed texture. 16 bytes per block (8 bit/px). 4 color pallet + 8 alpha pallet. 5 bit R + 6 bit G + 5 bit B + 8 bit alpha.
     /// [0, 63] ([0, 255] for alpha) converted to/from float [0, 1] in shader.
@@ -1962,7 +1910,6 @@ pub enum TextureFormat {
     /// Also known as DXT5.
     ///
     /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
-    #[cfg_attr(feature = "serde", serde(rename = "bc3-rgba-unorm"))]
     Bc3RgbaUnorm,
     /// 4x4 block compressed texture. 16 bytes per block (8 bit/px). 4 color pallet + 8 alpha pallet. 5 bit R + 6 bit G + 5 bit B + 8 bit alpha.
     /// Srgb-color [0, 63] ([0, 255] for alpha) converted to/from linear-color float [0, 1] in shader.
@@ -1970,7 +1917,6 @@ pub enum TextureFormat {
     /// Also known as DXT5.
     ///
     /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
-    #[cfg_attr(feature = "serde", serde(rename = "bc3-rgba-unorm-srgb"))]
     Bc3RgbaUnormSrgb,
     /// 4x4 block compressed texture. 8 bytes per block (4 bit/px). 8 color pallet. 8 bit R.
     /// [0, 255] converted to/from float [0, 1] in shader.
@@ -1978,7 +1924,6 @@ pub enum TextureFormat {
     /// Also known as RGTC1.
     ///
     /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
-    #[cfg_attr(feature = "serde", serde(rename = "bc4-r-unorm"))]
     Bc4RUnorm,
     /// 4x4 block compressed texture. 8 bytes per block (4 bit/px). 8 color pallet. 8 bit R.
     /// [-127, 127] converted to/from float [-1, 1] in shader.
@@ -1986,7 +1931,6 @@ pub enum TextureFormat {
     /// Also known as RGTC1.
     ///
     /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
-    #[cfg_attr(feature = "serde", serde(rename = "bc4-r-snorm"))]
     Bc4RSnorm,
     /// 4x4 block compressed texture. 16 bytes per block (8 bit/px). 8 color red pallet + 8 color green pallet. 8 bit RG.
     /// [0, 255] converted to/from float [0, 1] in shader.
@@ -1994,7 +1938,6 @@ pub enum TextureFormat {
     /// Also known as RGTC2.
     ///
     /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
-    #[cfg_attr(feature = "serde", serde(rename = "bc5-rg-unorm"))]
     Bc5RgUnorm,
     /// 4x4 block compressed texture. 16 bytes per block (8 bit/px). 8 color red pallet + 8 color green pallet. 8 bit RG.
     /// [-127, 127] converted to/from float [-1, 1] in shader.
@@ -2002,21 +1945,18 @@ pub enum TextureFormat {
     /// Also known as RGTC2.
     ///
     /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
-    #[cfg_attr(feature = "serde", serde(rename = "bc5-rg-snorm"))]
     Bc5RgSnorm,
     /// 4x4 block compressed texture. 16 bytes per block (8 bit/px). Variable sized pallet. 16 bit unsigned float RGB. Float in shader.
     ///
     /// Also known as BPTC (float).
     ///
     /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
-    #[cfg_attr(feature = "serde", serde(rename = "bc6h-rgb-ufloat"))]
     Bc6hRgbUfloat,
     /// 4x4 block compressed texture. 16 bytes per block (8 bit/px). Variable sized pallet. 16 bit signed float RGB. Float in shader.
     ///
     /// Also known as BPTC (float).
     ///
     /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
-    #[cfg_attr(feature = "serde", serde(rename = "bc6h-rgb-float"))]
     Bc6hRgbSfloat,
     /// 4x4 block compressed texture. 16 bytes per block (8 bit/px). Variable sized pallet. 8 bit integer RGBA.
     /// [0, 255] converted to/from float [0, 1] in shader.
@@ -2024,7 +1964,6 @@ pub enum TextureFormat {
     /// Also known as BPTC (unorm).
     ///
     /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
-    #[cfg_attr(feature = "serde", serde(rename = "bc7-rgba-unorm"))]
     Bc7RgbaUnorm,
     /// 4x4 block compressed texture. 16 bytes per block (8 bit/px). Variable sized pallet. 8 bit integer RGBA.
     /// Srgb-color [0, 255] converted to/from linear-color float [0, 1] in shader.
@@ -2032,67 +1971,56 @@ pub enum TextureFormat {
     /// Also known as BPTC (unorm).
     ///
     /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
-    #[cfg_attr(feature = "serde", serde(rename = "bc7-rgba-unorm-srgb"))]
     Bc7RgbaUnormSrgb,
     /// 4x4 block compressed texture. 8 bytes per block (4 bit/px). Complex pallet. 8 bit integer RGB.
     /// [0, 255] converted to/from float [0, 1] in shader.
     ///
     /// [`Features::TEXTURE_COMPRESSION_ETC2`] must be enabled to use this texture format.
-    #[cfg_attr(feature = "serde", serde(rename = "etc2-rgb8unorm"))]
     Etc2Rgb8Unorm,
     /// 4x4 block compressed texture. 8 bytes per block (4 bit/px). Complex pallet. 8 bit integer RGB.
     /// Srgb-color [0, 255] converted to/from linear-color float [0, 1] in shader.
     ///
     /// [`Features::TEXTURE_COMPRESSION_ETC2`] must be enabled to use this texture format.
-    #[cfg_attr(feature = "serde", serde(rename = "etc2-rgb8unorm-srgb"))]
     Etc2Rgb8UnormSrgb,
     /// 4x4 block compressed texture. 8 bytes per block (4 bit/px). Complex pallet. 8 bit integer RGB + 1 bit alpha.
     /// [0, 255] ([0, 1] for alpha) converted to/from float [0, 1] in shader.
     ///
     /// [`Features::TEXTURE_COMPRESSION_ETC2`] must be enabled to use this texture format.
-    #[cfg_attr(feature = "serde", serde(rename = "etc2-rgb8a1unorm"))]
     Etc2Rgb8A1Unorm,
     /// 4x4 block compressed texture. 8 bytes per block (4 bit/px). Complex pallet. 8 bit integer RGB + 1 bit alpha.
     /// Srgb-color [0, 255] ([0, 1] for alpha) converted to/from linear-color float [0, 1] in shader.
     ///
     /// [`Features::TEXTURE_COMPRESSION_ETC2`] must be enabled to use this texture format.
-    #[cfg_attr(feature = "serde", serde(rename = "etc2-rgb8a1unorm-srgb"))]
     Etc2Rgb8A1UnormSrgb,
     /// 4x4 block compressed texture. 16 bytes per block (8 bit/px). Complex pallet. 8 bit integer RGB + 8 bit alpha.
     /// [0, 255] converted to/from float [0, 1] in shader.
     ///
     /// [`Features::TEXTURE_COMPRESSION_ETC2`] must be enabled to use this texture format.
-    #[cfg_attr(feature = "serde", serde(rename = "etc2-rgba8unorm"))]
     Etc2Rgba8Unorm,
     /// 4x4 block compressed texture. 16 bytes per block (8 bit/px). Complex pallet. 8 bit integer RGB + 8 bit alpha.
     /// Srgb-color [0, 255] converted to/from linear-color float [0, 1] in shader.
     ///
     /// [`Features::TEXTURE_COMPRESSION_ETC2`] must be enabled to use this texture format.
-    #[cfg_attr(feature = "serde", serde(rename = "etc2-rgba8unorm-srgb"))]
     Etc2Rgba8UnormSrgb,
     /// 4x4 block compressed texture. 8 bytes per block (4 bit/px). Complex pallet. 11 bit integer R.
     /// [0, 255] converted to/from float [0, 1] in shader.
     ///
     /// [`Features::TEXTURE_COMPRESSION_ETC2`] must be enabled to use this texture format.
-    #[cfg_attr(feature = "serde", serde(rename = "eac-r11unorm"))]
     EacR11Unorm,
     /// 4x4 block compressed texture. 8 bytes per block (4 bit/px). Complex pallet. 11 bit integer R.
     /// [-127, 127] converted to/from float [-1, 1] in shader.
     ///
     /// [`Features::TEXTURE_COMPRESSION_ETC2`] must be enabled to use this texture format.
-    #[cfg_attr(feature = "serde", serde(rename = "eac-r11snorm"))]
     EacR11Snorm,
     /// 4x4 block compressed texture. 16 bytes per block (8 bit/px). Complex pallet. 11 bit integer R + 11 bit integer G.
     /// [0, 255] converted to/from float [0, 1] in shader.
     ///
     /// [`Features::TEXTURE_COMPRESSION_ETC2`] must be enabled to use this texture format.
-    #[cfg_attr(feature = "serde", serde(rename = "eac-rg11unorm"))]
     EacRg11Unorm,
     /// 4x4 block compressed texture. 16 bytes per block (8 bit/px). Complex pallet. 11 bit integer R + 11 bit integer G.
     /// [-127, 127] converted to/from float [-1, 1] in shader.
     ///
     /// [`Features::TEXTURE_COMPRESSION_ETC2`] must be enabled to use this texture format.
-    #[cfg_attr(feature = "serde", serde(rename = "eac-rg11snorm"))]
     EacRg11Snorm,
     /// block compressed texture. 16 bytes per block.
     ///
@@ -2107,6 +2035,467 @@ pub enum TextureFormat {
         ///
         channel: AstcChannel,
     },
+}
+
+#[cfg(feature = "serde")]
+impl<'de> Deserialize<'de> for TextureFormat {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        use serde::de::{self, Error, Unexpected};
+
+        struct TextureFormatVisitor;
+
+        impl<'de> de::Visitor<'de> for TextureFormatVisitor {
+            type Value = TextureFormat;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("Invalid TextureFormat")
+            }
+
+            fn visit_str<E: Error>(self, s: &str) -> Result<Self::Value, E> {
+                let format = match s {
+                    "r8unorm" => TextureFormat::R8Unorm,
+                    "r8snorm" => TextureFormat::R8Snorm,
+                    "r8uint" => TextureFormat::R8Uint,
+                    "r8sint" => TextureFormat::R8Sint,
+                    "r16uint" => TextureFormat::R16Uint,
+                    "r16sint" => TextureFormat::R16Sint,
+                    "r16unorm" => TextureFormat::R16Unorm,
+                    "r16snorm" => TextureFormat::R16Snorm,
+                    "r16float" => TextureFormat::R16Float,
+                    "rg8unorm" => TextureFormat::Rg8Unorm,
+                    "rg8snorm" => TextureFormat::Rg8Snorm,
+                    "rg8uint" => TextureFormat::Rg8Uint,
+                    "rg8sint" => TextureFormat::Rg8Sint,
+                    "r32uint" => TextureFormat::R32Uint,
+                    "r32sint" => TextureFormat::R32Sint,
+                    "r32float" => TextureFormat::R32Float,
+                    "rg16uint" => TextureFormat::Rg16Uint,
+                    "rg16sint" => TextureFormat::Rg16Sint,
+                    "rg16unorm" => TextureFormat::Rg16Unorm,
+                    "rg16snorm" => TextureFormat::Rg16Snorm,
+                    "rg16float" => TextureFormat::Rg16Float,
+                    "rgba8unorm" => TextureFormat::Rgba8Unorm,
+                    "rgba8unorm-srgb" => TextureFormat::Rgba8UnormSrgb,
+                    "rgba8snorm" => TextureFormat::Rgba8Snorm,
+                    "rgba8uint" => TextureFormat::Rgba8Uint,
+                    "rgba8sint" => TextureFormat::Rgba8Sint,
+                    "bgra8unorm" => TextureFormat::Bgra8Unorm,
+                    "bgra8unorm-srgb" => TextureFormat::Bgra8UnormSrgb,
+                    "rgb10a2unorm" => TextureFormat::Rgb10a2Unorm,
+                    "rg11b10ufloat" => TextureFormat::Rg11b10Float,
+                    "rg32uint" => TextureFormat::Rg32Uint,
+                    "rg32sint" => TextureFormat::Rg32Sint,
+                    "rg32float" => TextureFormat::Rg32Float,
+                    "rgba16uint" => TextureFormat::Rgba16Uint,
+                    "rgba16sint" => TextureFormat::Rgba16Sint,
+                    "rgba16unorm" => TextureFormat::Rgba16Unorm,
+                    "rgba16snorm" => TextureFormat::Rgba16Snorm,
+                    "rgba16float" => TextureFormat::Rgba16Float,
+                    "rgba32uint" => TextureFormat::Rgba32Uint,
+                    "rgba32sint" => TextureFormat::Rgba32Sint,
+                    "rgba32float" => TextureFormat::Rgba32Float,
+                    "depth32float" => TextureFormat::Depth32Float,
+                    "depth32float-stencil8" => TextureFormat::Depth32FloatStencil8,
+                    "depth24plus" => TextureFormat::Depth24Plus,
+                    "depth24plus-stencil8" => TextureFormat::Depth24PlusStencil8,
+                    "depth24unorm-stencil8" => TextureFormat::Depth24UnormStencil8,
+                    "rgb9e5ufloat" => TextureFormat::Rgb9e5Ufloat,
+                    "bc1-rgba-unorm" => TextureFormat::Bc1RgbaUnorm,
+                    "bc1-rgba-unorm-srgb" => TextureFormat::Bc1RgbaUnormSrgb,
+                    "bc2-rgba-unorm" => TextureFormat::Bc2RgbaUnorm,
+                    "bc2-rgba-unorm-srgb" => TextureFormat::Bc2RgbaUnormSrgb,
+                    "bc3-rgba-unorm" => TextureFormat::Bc3RgbaUnorm,
+                    "bc3-rgba-unorm-srgb" => TextureFormat::Bc3RgbaUnormSrgb,
+                    "bc4-r-unorm" => TextureFormat::Bc4RUnorm,
+                    "bc4-r-snorm" => TextureFormat::Bc4RSnorm,
+                    "bc5-rg-unorm" => TextureFormat::Bc5RgUnorm,
+                    "bc5-rg-snorm" => TextureFormat::Bc5RgSnorm,
+                    "bc6h-rgb-ufloat" => TextureFormat::Bc6hRgbUfloat,
+                    "bc6h-rgb-float" => TextureFormat::Bc6hRgbSfloat,
+                    "bc7-rgba-unorm" => TextureFormat::Bc7RgbaUnorm,
+                    "bc7-rgba-unorm-srgb" => TextureFormat::Bc7RgbaUnormSrgb,
+                    "etc2-rgb8unorm" => TextureFormat::Etc2Rgb8Unorm,
+                    "etc2-rgb8unorm-srgb" => TextureFormat::Etc2Rgb8UnormSrgb,
+                    "etc2-rgb8a1unorm" => TextureFormat::Etc2Rgb8A1Unorm,
+                    "etc2-rgb8a1unorm-srgb" => TextureFormat::Etc2Rgb8A1UnormSrgb,
+                    "etc2-rgba8unorm" => TextureFormat::Etc2Rgba8Unorm,
+                    "etc2-rgba8unorm-srgb" => TextureFormat::Etc2Rgba8UnormSrgb,
+                    "eac-r11unorm" => TextureFormat::EacR11Unorm,
+                    "eac-r11snorm" => TextureFormat::EacR11Snorm,
+                    "eac-rg11unorm" => TextureFormat::EacRg11Unorm,
+                    "eac-rg11snorm" => TextureFormat::EacRg11Snorm,
+                    other => {
+                        if other.starts_with("astc") {
+                            let mut parts = other.split('-');
+                            parts.next(); // discard "astc"
+                            let block = parts
+                                .next()
+                                .ok_or(E::invalid_value(Unexpected::Str(s), &self))?;
+                            let channel = parts.collect::<Vec<&str>>().join("-");
+
+                            let block = match block {
+                                "4x4" => AstcBlock::B4x4,
+                                "5x4" => AstcBlock::B5x4,
+                                "5x5" => AstcBlock::B5x5,
+                                "6x5" => AstcBlock::B6x5,
+                                "6x6" => AstcBlock::B6x6,
+                                "8x5" => AstcBlock::B8x5,
+                                "8x6" => AstcBlock::B8x6,
+                                "8x8" => AstcBlock::B8x8,
+                                "10x5" => AstcBlock::B10x5,
+                                "10x6" => AstcBlock::B10x6,
+                                "10x8" => AstcBlock::B10x8,
+                                "10x10" => AstcBlock::B10x10,
+                                "12x10" => AstcBlock::B12x10,
+                                "12x12" => AstcBlock::B12x12,
+                                _ => return Err(E::invalid_value(Unexpected::Str(s), &self)),
+                            };
+
+                            let channel = match channel.as_ref() {
+                                "unorm" => AstcChannel::Unorm,
+                                "unorm-srgb" => AstcChannel::UnormSrgb,
+                                "hdr" => AstcChannel::Hdr,
+                                _ => return Err(E::invalid_value(Unexpected::Str(s), &self)),
+                            };
+
+                            TextureFormat::Astc { block, channel }
+                        } else {
+                            return Err(E::invalid_value(Unexpected::Str(s), &self));
+                        }
+                    }
+                };
+
+                Ok(format)
+            }
+        }
+
+        deserializer.deserialize_any(TextureFormatVisitor)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl Serialize for TextureFormat {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        match *self {
+            TextureFormat::R8Unorm => {
+                let name = "r8unorm";
+                serializer.serialize_unit_variant(name, 0, name)
+            }
+            TextureFormat::R8Snorm => {
+                let name = "r8snorm";
+                serializer.serialize_unit_variant(name, 1, name)
+            }
+            TextureFormat::R8Uint => {
+                let name = "r8uint";
+                serializer.serialize_unit_variant(name, 2, name)
+            }
+            TextureFormat::R8Sint => {
+                let name = "r8sint";
+                serializer.serialize_unit_variant(name, 3, name)
+            }
+            TextureFormat::R16Uint => {
+                let name = "r16uint";
+                serializer.serialize_unit_variant(name, 4, name)
+            }
+            TextureFormat::R16Sint => {
+                let name = "r16sint";
+                serializer.serialize_unit_variant(name, 5, name)
+            }
+            TextureFormat::R16Unorm => {
+                let name = "r16unorm";
+                serializer.serialize_unit_variant(name, 6, name)
+            }
+            TextureFormat::R16Snorm => {
+                let name = "r16snorm";
+                serializer.serialize_unit_variant(name, 7, name)
+            }
+            TextureFormat::R16Float => {
+                let name = "r16float";
+                serializer.serialize_unit_variant(name, 8, name)
+            }
+            TextureFormat::Rg8Unorm => {
+                let name = "rg8unorm";
+                serializer.serialize_unit_variant(name, 9, name)
+            }
+            TextureFormat::Rg8Snorm => {
+                let name = "rg8snorm";
+                serializer.serialize_unit_variant(name, 10, name)
+            }
+            TextureFormat::Rg8Uint => {
+                let name = "rg8uint";
+                serializer.serialize_unit_variant(name, 11, name)
+            }
+            TextureFormat::Rg8Sint => {
+                let name = "rg8sint";
+                serializer.serialize_unit_variant(name, 12, name)
+            }
+            TextureFormat::R32Uint => {
+                let name = "r32uint";
+                serializer.serialize_unit_variant(name, 13, name)
+            }
+            TextureFormat::R32Sint => {
+                let name = "r32sint";
+                serializer.serialize_unit_variant(name, 14, name)
+            }
+            TextureFormat::R32Float => {
+                let name = "r32float";
+                serializer.serialize_unit_variant(name, 15, name)
+            }
+            TextureFormat::Rg16Uint => {
+                let name = "rg16uint";
+                serializer.serialize_unit_variant(name, 16, name)
+            }
+            TextureFormat::Rg16Sint => {
+                let name = "rg16sint";
+                serializer.serialize_unit_variant(name, 17, name)
+            }
+            TextureFormat::Rg16Unorm => {
+                let name = "rg16unorm";
+                serializer.serialize_unit_variant(name, 18, name)
+            }
+            TextureFormat::Rg16Snorm => {
+                let name = "rg16snorm";
+                serializer.serialize_unit_variant(name, 19, name)
+            }
+            TextureFormat::Rg16Float => {
+                let name = "rg16float";
+                serializer.serialize_unit_variant(name, 20, name)
+            }
+            TextureFormat::Rgba8Unorm => {
+                let name = "rgba8unorm";
+                serializer.serialize_unit_variant(name, 21, name)
+            }
+            TextureFormat::Rgba8UnormSrgb => {
+                let name = "rgba8unorm-srgb";
+                serializer.serialize_unit_variant(name, 22, name)
+            }
+            TextureFormat::Rgba8Snorm => {
+                let name = "rgba8snorm";
+                serializer.serialize_unit_variant(name, 23, name)
+            }
+            TextureFormat::Rgba8Uint => {
+                let name = "rgba8uint";
+                serializer.serialize_unit_variant(name, 24, name)
+            }
+            TextureFormat::Rgba8Sint => {
+                let name = "rgba8sint";
+                serializer.serialize_unit_variant(name, 25, name)
+            }
+            TextureFormat::Bgra8Unorm => {
+                let name = "bgra8unorm";
+                serializer.serialize_unit_variant(name, 26, name)
+            }
+            TextureFormat::Bgra8UnormSrgb => {
+                let name = "bgra8unorm-srgb";
+                serializer.serialize_unit_variant(name, 27, name)
+            }
+            TextureFormat::Rgb10a2Unorm => {
+                let name = "rgb10a2unorm";
+                serializer.serialize_unit_variant(name, 28, name)
+            }
+            TextureFormat::Rg11b10Float => {
+                let name = "rg11b10ufloat";
+                serializer.serialize_unit_variant(name, 29, name)
+            }
+            TextureFormat::Rg32Uint => {
+                let name = "rg32uint";
+                serializer.serialize_unit_variant(name, 30, name)
+            }
+            TextureFormat::Rg32Sint => {
+                let name = "rg32sint";
+                serializer.serialize_unit_variant(name, 31, name)
+            }
+            TextureFormat::Rg32Float => {
+                let name = "rg32float";
+                serializer.serialize_unit_variant(name, 32, name)
+            }
+            TextureFormat::Rgba16Uint => {
+                let name = "rgba16uint";
+                serializer.serialize_unit_variant(name, 33, name)
+            }
+            TextureFormat::Rgba16Sint => {
+                let name = "rgba16sint";
+                serializer.serialize_unit_variant(name, 34, name)
+            }
+            TextureFormat::Rgba16Unorm => {
+                let name = "rgba16unorm";
+                serializer.serialize_unit_variant(name, 35, name)
+            }
+            TextureFormat::Rgba16Snorm => {
+                let name = "rgba16snorm";
+                serializer.serialize_unit_variant(name, 36, name)
+            }
+            TextureFormat::Rgba16Float => {
+                let name = "rgba16float";
+                serializer.serialize_unit_variant(name, 37, name)
+            }
+            TextureFormat::Rgba32Uint => {
+                let name = "rgba32uint";
+                serializer.serialize_unit_variant(name, 38, name)
+            }
+            TextureFormat::Rgba32Sint => {
+                let name = "rgba32sint";
+                serializer.serialize_unit_variant(name, 39, name)
+            }
+            TextureFormat::Rgba32Float => {
+                let name = "rgba32float";
+                serializer.serialize_unit_variant(name, 40, name)
+            }
+            TextureFormat::Depth32Float => {
+                let name = "depth32float";
+                serializer.serialize_unit_variant(name, 41, name)
+            }
+            TextureFormat::Depth32FloatStencil8 => {
+                let name = "depth32float-stencil8";
+                serializer.serialize_unit_variant(name, 42, name)
+            }
+            TextureFormat::Depth24Plus => {
+                let name = "depth24plus";
+                serializer.serialize_unit_variant(name, 43, name)
+            }
+            TextureFormat::Depth24PlusStencil8 => {
+                let name = "depth24plus-stencil8";
+                serializer.serialize_unit_variant(name, 44, name)
+            }
+            TextureFormat::Depth24UnormStencil8 => {
+                let name = "depth24unorm-stencil8";
+                serializer.serialize_unit_variant(name, 45, name)
+            }
+            TextureFormat::Rgb9e5Ufloat => {
+                let name = "rgb9e5ufloat";
+                serializer.serialize_unit_variant(name, 46, name)
+            }
+            TextureFormat::Bc1RgbaUnorm => {
+                let name = "bc1-rgba-unorm";
+                serializer.serialize_unit_variant(name, 47, name)
+            }
+            TextureFormat::Bc1RgbaUnormSrgb => {
+                let name = "bc1-rgba-unorm-srgb";
+                serializer.serialize_unit_variant(name, 48, name)
+            }
+            TextureFormat::Bc2RgbaUnorm => {
+                let name = "bc2-rgba-unorm";
+                serializer.serialize_unit_variant(name, 49, name)
+            }
+            TextureFormat::Bc2RgbaUnormSrgb => {
+                let name = "bc2-rgba-unorm-srgb";
+                serializer.serialize_unit_variant(name, 50, name)
+            }
+            TextureFormat::Bc3RgbaUnorm => {
+                let name = "bc3-rgba-unorm";
+                serializer.serialize_unit_variant(name, 51, name)
+            }
+            TextureFormat::Bc3RgbaUnormSrgb => {
+                let name = "bc3-rgba-unorm-srgb";
+                serializer.serialize_unit_variant(name, 52, name)
+            }
+            TextureFormat::Bc4RUnorm => {
+                let name = "bc4-r-unorm";
+                serializer.serialize_unit_variant(name, 53, name)
+            }
+            TextureFormat::Bc4RSnorm => {
+                let name = "bc4-r-snorm";
+                serializer.serialize_unit_variant(name, 54, name)
+            }
+            TextureFormat::Bc5RgUnorm => {
+                let name = "bc5-rg-unorm";
+                serializer.serialize_unit_variant(name, 55, name)
+            }
+            TextureFormat::Bc5RgSnorm => {
+                let name = "bc5-rg-snorm";
+                serializer.serialize_unit_variant(name, 56, name)
+            }
+            TextureFormat::Bc6hRgbUfloat => {
+                let name = "bc6h-rgb-ufloat";
+                serializer.serialize_unit_variant(name, 57, name)
+            }
+            TextureFormat::Bc6hRgbSfloat => {
+                let name = "bc6h-rgb-float";
+                serializer.serialize_unit_variant(name, 58, name)
+            }
+            TextureFormat::Bc7RgbaUnorm => {
+                let name = "bc7-rgba-unorm";
+                serializer.serialize_unit_variant(name, 59, name)
+            }
+            TextureFormat::Bc7RgbaUnormSrgb => {
+                let name = "bc7-rgba-unorm-srgb";
+                serializer.serialize_unit_variant(name, 60, name)
+            }
+            TextureFormat::Etc2Rgb8Unorm => {
+                let name = "etc2-rgb8unorm";
+                serializer.serialize_unit_variant(name, 61, name)
+            }
+            TextureFormat::Etc2Rgb8UnormSrgb => {
+                let name = "etc2-rgb8unorm-srgb";
+                serializer.serialize_unit_variant(name, 62, name)
+            }
+            TextureFormat::Etc2Rgb8A1Unorm => {
+                let name = "etc2-rgb8a1unorm";
+                serializer.serialize_unit_variant(name, 63, name)
+            }
+            TextureFormat::Etc2Rgb8A1UnormSrgb => {
+                let name = "etc2-rgb8a1unorm-srgb";
+                serializer.serialize_unit_variant(name, 64, name)
+            }
+            TextureFormat::Etc2Rgba8Unorm => {
+                let name = "etc2-rgba8unorm";
+                serializer.serialize_unit_variant(name, 65, name)
+            }
+            TextureFormat::Etc2Rgba8UnormSrgb => {
+                let name = "etc2-rgba8unorm-srgb";
+                serializer.serialize_unit_variant(name, 66, name)
+            }
+            TextureFormat::EacR11Unorm => {
+                let name = "eac-r11unorm";
+                serializer.serialize_unit_variant(name, 67, name)
+            }
+            TextureFormat::EacR11Snorm => {
+                let name = "eac-r11snorm";
+                serializer.serialize_unit_variant(name, 68, name)
+            }
+            TextureFormat::EacRg11Unorm => {
+                let name = "eac-rg11unorm";
+                serializer.serialize_unit_variant(name, 69, name)
+            }
+            TextureFormat::EacRg11Snorm => {
+                let name = "eac-rg11snorm";
+                serializer.serialize_unit_variant(name, 70, name)
+            }
+            TextureFormat::Astc { block, channel } => {
+                let block = match block {
+                    AstcBlock::B4x4 => "4x4",
+                    AstcBlock::B5x4 => "5x4",
+                    AstcBlock::B5x5 => "5x5",
+                    AstcBlock::B6x5 => "6x5",
+                    AstcBlock::B6x6 => "6x6",
+                    AstcBlock::B8x5 => "8x5",
+                    AstcBlock::B8x6 => "8x6",
+                    AstcBlock::B8x8 => "8x8",
+                    AstcBlock::B10x5 => "10x5",
+                    AstcBlock::B10x6 => "10x6",
+                    AstcBlock::B10x8 => "10x8",
+                    AstcBlock::B10x10 => "10x10",
+                    AstcBlock::B12x10 => "12x10",
+                    AstcBlock::B12x12 => "12x12",
+                };
+
+                let channel = match channel {
+                    AstcChannel::Unorm => "unorm",
+                    AstcChannel::UnormSrgb => "unorm-srgb",
+                    AstcChannel::Hdr => "hdr",
+                };
+
+                let name = format!("astc-{block}-{channel}");
+                serializer.serialize_str(&name)
+            }
+        }
+    }
 }
 
 impl TextureFormat {
@@ -2195,7 +2584,7 @@ impl TextureFormat {
             Self::Rgb10a2Unorm =>        (   native,   float,    linear, msaa_resolve, (1, 1),  4, attachment, 4),
             Self::Rg11b10Float =>        (   native,   float,    linear,         msaa, (1, 1),  4,      basic, 3),
 
-            // Packed 32 bit textures  
+            // Packed 32 bit textures
             Self::Rg32Uint =>            (   native,    uint,    linear,         noaa, (1, 1),  8,  all_flags, 2),
             Self::Rg32Sint =>            (   native,    sint,    linear,         noaa, (1, 1),  8,  all_flags, 2),
             Self::Rg32Float =>           (   native, nearest,    linear,         noaa, (1, 1),  8,  all_flags, 2),
@@ -2203,7 +2592,7 @@ impl TextureFormat {
             Self::Rgba16Sint =>          (   native,    sint,    linear,         msaa, (1, 1),  8,  all_flags, 4),
             Self::Rgba16Float =>         (   native,   float,    linear, msaa_resolve, (1, 1),  8,  all_flags, 4),
 
-            // Packed 32 bit textures  
+            // Packed 32 bit textures
             Self::Rgba32Uint =>          (   native,    uint,    linear,         noaa, (1, 1), 16,  all_flags, 4),
             Self::Rgba32Sint =>          (   native,    sint,    linear,         noaa, (1, 1), 16,  all_flags, 4),
             Self::Rgba32Float =>         (   native, nearest,    linear,         noaa, (1, 1), 16,  all_flags, 4),
@@ -2215,7 +2604,7 @@ impl TextureFormat {
             Self::Depth24PlusStencil8 => (   native,   depth,    linear,         msaa, (1, 1),  4, attachment, 2),
             Self::Depth24UnormStencil8 => (  d24_s8,   depth,    linear,         msaa, (1, 1),  4, attachment, 2),
 
-            // Packed uncompressed  
+            // Packed uncompressed
             Self::Rgb9e5Ufloat =>        (   native,   float,    linear,         noaa, (1, 1),  4,      basic, 3),
 
             // Optional normalized 16-bit-per-channel formats
