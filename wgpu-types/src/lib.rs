@@ -2133,7 +2133,7 @@ impl<'de> Deserialize<'de> for TextureFormat {
                             parts.next(); // discard "astc"
                             let block = parts
                                 .next()
-                                .ok_or(E::invalid_value(Unexpected::Str(s), &self))?;
+                                .ok_or_else(|| E::invalid_value(Unexpected::Str(s), &self))?;
                             let channel = parts.collect::<Vec<&str>>().join("-");
 
                             let block = match block {
