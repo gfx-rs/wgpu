@@ -32,10 +32,10 @@ serialize = ["serde", "indexmap/serde-1"]
 deserialize = ["serde", "indexmap/serde-1"]
 spv-in = ["petgraph", "spirv"]
 spv-out = ["spirv"]
-wgsl-in = ["codespan-reporting", "hexf-parse", "unicode-xid"]
+wgsl-in = ["codespan-reporting", "hexf-parse", "termcolor", "unicode-xid"]
 wgsl-out = []
 hlsl-out = []
-span = ["codespan-reporting"]
+span = ["codespan-reporting", "termcolor"]
 validate = []
 
 [[bench]]
@@ -46,7 +46,7 @@ harness = false
 arbitrary = { version = "1.0.2", features = ["derive"], optional = true }
 bitflags = "1.0.5"
 bit-set = "0.5"
-termcolor = "1.0.4"
+termcolor = { version = "1.0.4", optional = true }
 # remove termcolor dep when updating to the next version of codespan-reporting
 # termcolor minimum version was wrong and was fixed in
 # https://github.com/brendanzab/codespan/commit/e99c867339a877731437e7ee6a903a3d03b5439e
