@@ -1468,8 +1468,8 @@ pub struct VertexBufferLayout<'a> {
 pub struct VertexState<'a> {
     /// The compiled shader module for this stage.
     pub module: &'a ShaderModule,
-    /// The name of the entry point in the compiled shader. There must be a function that returns
-    /// void with this name in the shader.
+    /// The name of the entry point in the compiled shader. There must be a function with this name
+    /// in the shader.
     pub entry_point: &'a str,
     /// The format of any vertex buffers used with this pipeline.
     pub buffers: &'a [VertexBufferLayout<'a>],
@@ -1485,8 +1485,8 @@ pub struct VertexState<'a> {
 pub struct FragmentState<'a> {
     /// The compiled shader module for this stage.
     pub module: &'a ShaderModule,
-    /// The name of the entry point in the compiled shader. There must be a function that returns
-    /// void with this name in the shader.
+    /// The name of the entry point in the compiled shader. There must be a function with this name
+    /// in the shader.
     pub entry_point: &'a str,
     /// The color state of the render targets.
     pub targets: &'a [Option<ColorTargetState>],
@@ -1545,8 +1545,8 @@ pub struct ComputePipelineDescriptor<'a> {
     pub layout: Option<&'a PipelineLayout>,
     /// The compiled shader module for this stage.
     pub module: &'a ShaderModule,
-    /// The name of the entry point in the compiled shader. There must be a function that returns
-    /// void with this name in the shader.
+    /// The name of the entry point in the compiled shader. There must be a function with this name
+    /// and no return value in the shader.
     pub entry_point: &'a str,
 }
 
