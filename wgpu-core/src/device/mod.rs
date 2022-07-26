@@ -192,21 +192,14 @@ fn map_buffer<A: hal::Api>(
     let zero_init_needs_flush_now = mapping.is_coherent && buffer.sync_mapped_writes.is_none(); // No need to flush if it is flushed later anyways.
     for uninitialized_range in buffer.initialization_status.drain(offset..(size + offset)) {
         let num_bytes = uninitialized_range.end - uninitialized_range.start;
-        unsafe {
-            ptr::write_bytes(
-                mapping
-                    .ptr
-                    .as_ptr()
-                    .offset(uninitialized_range.start as isize),
-                0,
-                num_bytes as usize,
-            )
-        };
+        // The mapping's pointer is already offset, however we track the uninitialized range relative to the buffer's start.
+        let start = (uninitialized_range.start - offset) as isize;
+        unsafe { ptr::write_bytes(mapping.ptr.as_ptr().offset(start), 0, num_bytes as usize) };
         if zero_init_needs_flush_now {
             unsafe {
                 raw.flush_mapped_ranges(
                     buffer.raw.as_ref().unwrap(),
-                    iter::once(uninitialized_range.start..uninitialized_range.start + num_bytes),
+                    iter::once(uninitialized_range),
                 )
             };
         }
