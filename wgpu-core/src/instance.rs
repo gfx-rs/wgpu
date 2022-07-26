@@ -424,7 +424,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     #[cfg(feature = "raw-window-handle")]
     pub fn instance_create_surface(
         &self,
-        handle: &impl raw_window_handle::HasRawWindowHandle,
+        handle: &(impl raw_window_handle::HasRawWindowHandle + raw_window_handle::HasRawDisplayHandle),
         id_in: Input<G, SurfaceId>,
     ) -> SurfaceId {
         profiling::scope!("Instance::create_surface");
@@ -434,7 +434,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         fn init<A: hal::Api>(
             _: A,
             inst: &Option<A::Instance>,
-            handle: &impl raw_window_handle::HasRawWindowHandle,
+            handle: &(impl raw_window_handle::HasRawWindowHandle
+                  + raw_window_handle::HasRawDisplayHandle),
         ) -> Option<HalSurface<A>> {
             inst.as_ref().and_then(|inst| unsafe {
                 match inst.create_surface(handle) {

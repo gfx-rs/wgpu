@@ -591,8 +591,10 @@ impl crate::Instance<super::Api> for super::Instance {
 
     unsafe fn create_surface(
         &self,
-        has_handle: &impl raw_window_handle::HasRawWindowHandle,
+        has_handle: &(impl raw_window_handle::HasRawWindowHandle
+              + raw_window_handle::HasRawDisplayHandle),
     ) -> Result<super::Surface, crate::InstanceError> {
+        use raw_window_handle::RawDisplayHandle;
         use raw_window_handle::RawWindowHandle;
 
         match has_handle.raw_window_handle() {
@@ -602,17 +604,29 @@ impl crate::Instance<super::Api> for super::Instance {
                     .extensions
                     .contains(&khr::WaylandSurface::name()) =>
             {
-                Ok(self.create_surface_from_wayland(handle.display, handle.surface))
+                if let RawDisplayHandle::Wayland(v) = has_handle.raw_display_handle() {
+                    Ok(self.create_surface_from_wayland(v.display, handle.surface))
+                } else {
+                    Err(crate::InstanceError)
+                }
             }
             RawWindowHandle::Xlib(handle)
                 if self.shared.extensions.contains(&khr::XlibSurface::name()) =>
             {
-                Ok(self.create_surface_from_xlib(handle.display as *mut _, handle.window))
+                if let RawDisplayHandle::Xlib(v) = has_handle.raw_display_handle() {
+                    Ok(self.create_surface_from_xlib(v.display as *mut _, handle.window))
+                } else {
+                    Err(crate::InstanceError)
+                }
             }
             RawWindowHandle::Xcb(handle)
                 if self.shared.extensions.contains(&khr::XcbSurface::name()) =>
             {
-                Ok(self.create_surface_from_xcb(handle.connection, handle.window))
+                if let RawDisplayHandle::Xlib(v) = has_handle.raw_display_handle() {
+                    Ok(self.create_surface_from_xcb(v.display, handle.window))
+                } else {
+                    Err(crate::InstanceError)
+                }
             }
             RawWindowHandle::AndroidNdk(handle) => {
                 Ok(self.create_surface_android(handle.a_native_window))
