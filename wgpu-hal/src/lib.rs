@@ -969,8 +969,8 @@ pub struct ShaderModuleDescriptor<'a> {
 pub struct ProgrammableStage<'a, A: Api> {
     /// The compiled shader module for this stage.
     pub module: &'a A::ShaderModule,
-    /// The name of the entry point in the compiled shader. There must be a function that returns
-    /// void with this name in the shader.
+    /// The name of the entry point in the compiled shader. There must be a function with this name
+    ///  in the shader.
     pub entry_point: &'a str,
 }
 

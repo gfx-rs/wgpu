@@ -40,6 +40,22 @@ Bottom level categories:
 
 ## Unreleased
 
+### Major Changes
+
+#### @invariant Warning
+
+When using CompareFunction::Equal or CompareFunction::NotEqual on a pipeline, there is now a warning logged if the vertex
+shader does not have a @invariant tag on it. On some machines, rendering the same triangles multiple times without an
+@invariant tag will result in slightly different depths for every pixel. Because the *Equal functions rely on depth being
+the same every time it is rendered, we now warn if it is missing.
+
+```diff
+-@vertex 
+-fn vert_main(v_in: VertexInput) -> @builtin(position) vec4<f32> {...}
++@vertex 
++fn vert_main(v_in: VertexInput) -> @builtin(position) @invariant vec4<f32> {...}
+```
+
 ### Bug Fixes
 
 #### General
@@ -50,8 +66,17 @@ Bottom level categories:
 
 ### Changes
 
+#### General
+- Add warning when using CompareFunction::*Equal with vertex shader that is missing @invariant tag by @cwfitzgerald in [#2887](https://github.com/gfx-rs/wgpu/pull/2887)
+
 #### Metal
 - Extract the generic code into `get_metal_layer` by @jinleili in [#2826](https://github.com/gfx-rs/wgpu/pull/2826)
+
+#### General
+- Added downlevel restriction error message for `InvalidFormatUsages` error by @Seamooo in [#2886](https://github.com/gfx-rs/wgpu/pull/2886)
+
+### Documentation
+- Expanded `StagingBelt` documentation by @kpreid in [#2905](https://github.com/gfx-rs/wgpu/pull/2905)
 
 ### Examples
 - Log adapter info in hello example on wasm target by @JolifantoBambla in [#2858](https://github.com/gfx-rs/wgpu/pull/2858)
@@ -69,6 +94,7 @@ Bottom level categories:
 - Fix panics that occur when using `as_hal` functions when the hal generic type does not match the hub being looked up in by @i509VCB [#2871](https://github.com/gfx-rs/wgpu/pull/2871)
 - Add some validation in map_async by @nical in [#2876](https://github.com/gfx-rs/wgpu/pull/2876)
 - Fix bugs when mapping/unmapping zero-sized buffers and ranges by @nical in [#2877](https://github.com/gfx-rs/wgpu/pull/2877)
+- Validate the number of color attachments in `create_render_pipeline` by @nical in [#2913](https://github.com/gfx-rs/wgpu/pull/2913)
 
 #### DX12
 - `DownlevelCapabilities::default()` now returns the `ANISOTROPIC_FILTERING` flag set to true so DX12 lists `ANISOTROPIC_FILTERING` as true again by @cwfitzgerald in [#2851](https://github.com/gfx-rs/wgpu/pull/2851)
@@ -88,6 +114,7 @@ Bottom level categories:
 
 #### Hal
 - Document safety requirements for `Adapter::from_external` in gles hal by @i509VCB in [#2863](https://github.com/gfx-rs/wgpu/pull/2863)
+- Make `AdapterContext` a publicly accessible type in the gles hal by @i509VCB in [#2870](https://github.com/gfx-rs/wgpu/pull/2870)
 
 ### Changes
 
