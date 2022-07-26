@@ -323,6 +323,8 @@ pub enum CreateRenderPipelineError {
     DepthStencilState(#[from] DepthStencilStateError),
     #[error("invalid sample count {0}")]
     InvalidSampleCount(u32),
+    #[error("the number of color attachments {given} exceeds the limit {limit}")]
+    TooManyColorAttachments { given: u32, limit: u32 },
     #[error("the number of vertex buffers {given} exceeds the limit {limit}")]
     TooManyVertexBuffers { given: u32, limit: u32 },
     #[error("the total number of vertex attributes {given} exceeds the limit {limit}")]
