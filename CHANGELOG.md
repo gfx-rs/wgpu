@@ -72,6 +72,10 @@ the same every time it is rendered, we now warn if it is missing.
 #### General
 - Added downlevel restriction error message for `InvalidFormatUsages` error by @Seamooo in [#2886](https://github.com/gfx-rs/wgpu/pull/2886)
 
+### Documentation
+
+- Expanded `StagingBelt` documentation by @kpreid in [#2905](https://github.com/gfx-rs/wgpu/pull/2905)
+
 ## wgpu-0.13.2 (2022-07-13)
 
 ### Bug Fixes
