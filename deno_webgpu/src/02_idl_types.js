@@ -65,12 +65,6 @@
     GPUSupportedFeatures.prototype,
   );
 
-  // ENUM: GPUPredefinedColorSpace
-  webidl.converters.GPUPredefinedColorSpace = webidl.createEnumConverter(
-    "GPUPredefinedColorSpace",
-    ["srgb"],
-  );
-
   // INTERFACE: GPU
   webidl.converters.GPU = webidl.createInterfaceConverter("GPU", GPU.prototype);
 
@@ -112,7 +106,6 @@
     "GPUFeatureName",
     [
       "depth-clip-control",
-      "depth24unorm-stencil8",
       "depth32float-stencil8",
       "pipeline-statistics-query",
       "texture-compression-bc",
@@ -342,7 +335,6 @@
       "depth24plus",
       "depth24plus-stencil8",
       "depth32float",
-      "depth24unorm-stencil8",
       "depth32float-stencil8",
       "bc1-rgba-unorm",
       "bc1-rgba-unorm-srgb",
@@ -914,7 +906,6 @@
       converter: webidl.converters["DOMString"],
       required: true,
     },
-    { key: "sourceMap", converter: webidl.converters["object"] },
   ];
   webidl.converters["GPUShaderModuleDescriptor"] = webidl
     .createDictionaryConverter(
@@ -1845,7 +1836,6 @@
       key: "depthStencilAttachment",
       converter: webidl.converters["GPURenderPassDepthStencilAttachment"],
     },
-    { key: "occlusionQuerySet", converter: webidl.converters["GPUQuerySet"] },
   ];
   webidl.converters["GPURenderPassDescriptor"] = webidl
     .createDictionaryConverter(
