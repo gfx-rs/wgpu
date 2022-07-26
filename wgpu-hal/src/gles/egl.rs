@@ -1,6 +1,6 @@
 use glow::HasContext;
 use parking_lot::{Mutex, MutexGuard};
-use raw_window_handle::{HasRawWindowHandle, RawWindowHandle};
+use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle, RawWindowHandle};
 
 use std::{ffi, os::raw, ptr, sync::Arc, time::Duration};
 
@@ -770,9 +770,10 @@ impl crate::Instance<super::Api> for Instance {
     #[cfg_attr(target_os = "macos", allow(unused, unused_mut, unreachable_code))]
     unsafe fn create_surface(
         &self,
-        has_handle: &impl HasRawWindowHandle,
+        has_handle: &(impl HasRawWindowHandle + HasRawDisplayHandle),
     ) -> Result<Surface, crate::InstanceError> {
         use raw_window_handle::RawWindowHandle as Rwh;
+        use raw_window_handle::RawDisplayHandle as Rdh;
 
         let raw_window_handle = has_handle.raw_window_handle();
 
@@ -800,21 +801,27 @@ impl crate::Instance<super::Api> for Instance {
                 }
             }
             #[cfg(not(feature = "emscripten"))]
-            Rwh::Wayland(handle) => {
+            Rwh::Wayland(_) => {
                 /* Wayland displays are not sharable between surfaces so if the
                  * surface we receive from this handle is from a different
                  * display, we must re-initialize the context.
                  *
                  * See gfx-rs/gfx#3545
                  */
+                let wayland_raw= if let Rdh::Wayland(display) = has_handle.raw_display_handle() {
+                    display.display
+                }else{
+                    return Err(crate::InstanceError);
+                }   ;
                 log::warn!("Re-initializing Gles context due to Wayland window");
                 if inner
                     .wl_display
-                    .map(|ptr| ptr != handle.display)
+                    .map(|ptr| ptr != wayland_raw)
                     .unwrap_or(true)
                 {
                     use std::ops::DerefMut;
                     let display_attributes = [egl::ATTRIB_NONE];
+
                     let display = inner
                         .egl
                         .instance
@@ -822,7 +829,7 @@ impl crate::Instance<super::Api> for Instance {
                         .unwrap()
                         .get_platform_display(
                             EGL_PLATFORM_WAYLAND_KHR,
-                            handle.display,
+                            wayland_raw,
                             &display_attributes,
                         )
                         .unwrap();
@@ -832,7 +839,8 @@ impl crate::Instance<super::Api> for Instance {
                             .map_err(|_| crate::InstanceError)?;
 
                     let old_inner = std::mem::replace(inner.deref_mut(), new_inner);
-                    inner.wl_display = Some(handle.display);
+                    inner.wl_display = Some(wayland_raw);
+
                     drop(old_inner);
                 }
             }
