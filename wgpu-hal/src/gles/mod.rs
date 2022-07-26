@@ -69,10 +69,14 @@ mod device;
 mod queue;
 
 #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
-use self::egl::{AdapterContext, Instance, Surface};
+pub use self::egl::{AdapterContext, AdapterContextLock};
+#[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
+use self::egl::{Instance, Surface};
 
 #[cfg(all(target_arch = "wasm32", not(feature = "emscripten")))]
-use self::web::{AdapterContext, Instance, Surface};
+pub use self::web::AdapterContext;
+#[cfg(all(target_arch = "wasm32", not(feature = "emscripten")))]
+use self::web::{Instance, Surface};
 
 use arrayvec::ArrayVec;
 
