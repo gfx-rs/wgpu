@@ -146,7 +146,7 @@ cargo run --bin wgpu-info -- cargo nextest run --no-fail-fast
 Then to run an example's image comparison tests, run:
 
 ```
-cargo nextest run --example <example-name> --no-fail-fast
+cargo nextest run <example-test-name> --no-fail-fast
 ```
 
 Or run a part of the integration test suite:

@@ -69,10 +69,14 @@ mod device;
 mod queue;
 
 #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
-use self::egl::{AdapterContext, Instance, Surface};
+pub use self::egl::{AdapterContext, AdapterContextLock};
+#[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
+use self::egl::{Instance, Surface};
 
 #[cfg(all(target_arch = "wasm32", not(feature = "emscripten")))]
-use self::web::{AdapterContext, Instance, Surface};
+pub use self::web::AdapterContext;
+#[cfg(all(target_arch = "wasm32", not(feature = "emscripten")))]
+use self::web::{Instance, Surface};
 
 use arrayvec::ArrayVec;
 
@@ -138,6 +142,10 @@ bitflags::bitflags! {
         const CAN_DISABLE_DRAW_BUFFER = 1 << 6;
         /// Supports `glGetBufferSubData`
         const GET_BUFFER_SUB_DATA = 1 << 7;
+        /// Supports `f16` color buffers
+        const COLOR_BUFFER_HALF_FLOAT = 1 << 8;
+        /// Supports `f11/f10` and `f32` color buffers
+        const COLOR_BUFFER_FLOAT = 1 << 9;
     }
 }
 
@@ -181,10 +189,10 @@ struct TextureFormatDesc {
 struct AdapterShared {
     context: AdapterContext,
     private_caps: PrivateCapabilities,
+    features: wgt::Features,
     workarounds: Workarounds,
     shading_language_version: naga::back::glsl::Version,
     max_texture_size: u32,
-    is_ext_color_buffer_float_supported: bool,
 }
 
 pub struct Adapter {

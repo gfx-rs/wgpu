@@ -415,46 +415,8 @@ impl super::Instance {
 
     #[cfg(any(target_os = "macos", target_os = "ios"))]
     fn create_surface_from_view(&self, view: *mut c_void) -> super::Surface {
-        use core_graphics_types::{base::CGFloat, geometry::CGRect};
-        use objc::{
-            class, msg_send,
-            runtime::{Object, BOOL, YES},
-            sel, sel_impl,
-        };
-
         let layer = unsafe {
-            let view = view as *mut Object;
-            let existing: *mut Object = msg_send![view, layer];
-            let class = class!(CAMetalLayer);
-
-            let use_current: BOOL = msg_send![existing, isKindOfClass: class];
-            if use_current == YES {
-                existing
-            } else {
-                let new_layer: *mut Object = msg_send![class, new];
-                let frame: CGRect = msg_send![existing, bounds];
-                let () = msg_send![new_layer, setFrame: frame];
-
-                let scale_factor: CGFloat = if cfg!(target_os = "ios") {
-                    let () = msg_send![existing, addSublayer: new_layer];
-                    // On iOS, `create_surface_from_view` may be called before the application initialization is complete,
-                    // `msg_send![view, window]` and `msg_send![window, screen]` will get null.
-                    let screen: *mut Object = msg_send![class!(UIScreen), mainScreen];
-                    msg_send![screen, nativeScale]
-                } else {
-                    let () = msg_send![view, setLayer: new_layer];
-                    let () = msg_send![view, setWantsLayer: YES];
-                    let window: *mut Object = msg_send![view, window];
-                    if !window.is_null() {
-                        msg_send![window, backingScaleFactor]
-                    } else {
-                        1.0
-                    }
-                };
-                let () = msg_send![new_layer, setContentsScale: scale_factor];
-
-                new_layer
-            }
+            crate::metal::Surface::get_metal_layer(view as *mut objc::runtime::Object, None)
         };
 
         let surface = {

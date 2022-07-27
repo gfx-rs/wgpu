@@ -1316,6 +1316,7 @@ impl super::Adapter {
 
         let shared = Arc::new(super::DeviceShared {
             raw: raw_device,
+            family_index,
             handle_is_owned,
             instance: Arc::clone(&self.instance),
             physical_device: self.raw,
@@ -1459,8 +1460,11 @@ impl crate::Adapter<super::Api> for super::Adapter {
         let properties = self
             .phd_capabilities
             .formats
-            .get(vk_format.as_raw() as usize)
-            .unwrap();
+            .get(vk_format.as_raw() as usize);
+        let properties = match properties {
+            Some(p) => p,
+            None => return Tfc::empty(),
+        };
         let features = properties.optimal_tiling_features;
 
         let mut flags = Tfc::empty();

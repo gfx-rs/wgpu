@@ -282,6 +282,7 @@ fn gl_debug_message_callback(source: u32, gltype: u32, id: u32, severity: u32, m
 #[derive(Clone, Debug)]
 struct EglContext {
     instance: Arc<EglInstance>,
+    version: (i32, i32),
     display: egl::Display,
     raw: egl::Context,
     pbuffer: Option<egl::Surface>,
@@ -315,7 +316,27 @@ impl AdapterContext {
         self.egl.is_some()
     }
 
-    #[cfg(feature = "renderdoc")]
+    /// Returns the EGL instance.
+    ///
+    /// This provides access to EGL functions and the ability to load GL and EGL extension functions.
+    pub fn egl_instance(&self) -> Option<&EglInstance> {
+        self.egl.as_ref().map(|egl| &*egl.instance)
+    }
+
+    /// Returns the EGLDisplay corresponding to the adapter context.
+    ///
+    /// Returns [`None`] if the adapter was externally created.
+    pub fn raw_display(&self) -> Option<&egl::Display> {
+        self.egl.as_ref().map(|egl| &egl.display)
+    }
+
+    /// Returns the EGL version the adapter context was created with.
+    ///
+    /// Returns [`None`] if the adapter was externally created.
+    pub fn egl_version(&self) -> Option<(i32, i32)> {
+        self.egl.as_ref().map(|egl| egl.version)
+    }
+
     pub fn raw_context(&self) -> *mut raw::c_void {
         match self.egl {
             Some(ref egl) => egl.raw.as_ptr(),
@@ -535,6 +556,7 @@ impl Inner {
                 display,
                 raw: context,
                 pbuffer,
+                version,
             },
             version,
             supports_native_window,
@@ -873,6 +895,13 @@ impl crate::Instance<super::Api> for Instance {
 }
 
 impl super::Adapter {
+    /// Creates a new external adapter using the specified loader function.
+    ///
+    /// # Safety
+    ///
+    /// - The underlying OpenGL ES context must be current.
+    /// - The underlying OpenGL ES context must be current when interfacing with any objects returned by
+    ///   wgpu-hal from this adapter.
     pub unsafe fn new_external(
         fun: impl FnMut(&str) -> *const ffi::c_void,
     ) -> Option<crate::ExposedAdapter<super::Api>> {
@@ -880,6 +909,17 @@ impl super::Adapter {
             glow: Mutex::new(glow::Context::from_loader_function(fun)),
             egl: None,
         })
+    }
+
+    pub fn adapter_context(&self) -> &AdapterContext {
+        &self.shared.context
+    }
+}
+
+impl super::Device {
+    /// Returns the underlying EGL context.
+    pub fn context(&self) -> &AdapterContext {
+        &self.shared.context
     }
 }
 

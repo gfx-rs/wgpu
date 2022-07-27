@@ -41,7 +41,7 @@
   } = window.__bootstrap.webgpu;
   const { SymbolIterator, TypeError } = window.__bootstrap.primordials;
 
-  // This needs to be initalized after all of the base classes are implmented,
+  // This needs to be initialized after all of the base classes are implemented,
   // otherwise their converters might not be available yet.
   // DICTIONARY: GPUObjectDescriptorBase
   const dictMembersGPUObjectDescriptorBase = [
@@ -63,12 +63,6 @@
   webidl.converters.GPUSupportedFeatures = webidl.createInterfaceConverter(
     "GPUSupportedFeatures",
     GPUSupportedFeatures.prototype,
-  );
-
-  // ENUM: GPUPredefinedColorSpace
-  webidl.converters.GPUPredefinedColorSpace = webidl.createEnumConverter(
-    "GPUPredefinedColorSpace",
-    ["srgb"],
   );
 
   // INTERFACE: GPU
@@ -112,7 +106,6 @@
     "GPUFeatureName",
     [
       "depth-clip-control",
-      "depth24unorm-stencil8",
       "depth32float-stencil8",
       "pipeline-statistics-query",
       "texture-compression-bc",
@@ -342,7 +335,6 @@
       "depth24plus",
       "depth24plus-stencil8",
       "depth32float",
-      "depth24unorm-stencil8",
       "depth32float-stencil8",
       "bc1-rgba-unorm",
       "bc1-rgba-unorm-srgb",
@@ -914,7 +906,6 @@
       converter: webidl.converters["DOMString"],
       required: true,
     },
-    { key: "sourceMap", converter: webidl.converters["object"] },
   ];
   webidl.converters["GPUShaderModuleDescriptor"] = webidl
     .createDictionaryConverter(
@@ -945,11 +936,25 @@
   //   GPUCompilationInfo.prototype,
   // );
 
+  webidl.converters["GPUAutoLayoutMode"] = webidl.createEnumConverter(
+    "GPUAutoLayoutMode",
+    [
+      "auto",
+    ],
+  );
+
+  webidl.converters["GPUPipelineLayout or GPUAutoLayoutMode"] = (V, opts) => {
+    if (typeof V === "object") {
+      return webidl.converters["GPUPipelineLayout"](V, opts);
+    }
+    return webidl.converters["GPUAutoLayoutMode"](V, opts);
+  };
+
   // DICTIONARY: GPUPipelineDescriptorBase
   const dictMembersGPUPipelineDescriptorBase = [
     {
       key: "layout",
-      converter: webidl.converters["GPUPipelineLayout"],
+      converter: webidl.converters["GPUPipelineLayout or GPUAutoLayoutMode"],
     },
   ];
   webidl.converters["GPUPipelineDescriptorBase"] = webidl
@@ -1440,7 +1445,9 @@
     {
       key: "targets",
       converter: webidl.createSequenceConverter(
-        webidl.converters["GPUColorTargetState"],
+        webidl.createNullableConverter(
+          webidl.converters["GPUColorTargetState"],
+        ),
       ),
       required: true,
     },
@@ -1819,7 +1826,9 @@
     {
       key: "colorAttachments",
       converter: webidl.createSequenceConverter(
-        webidl.converters["GPURenderPassColorAttachment"],
+        webidl.createNullableConverter(
+          webidl.converters["GPURenderPassColorAttachment"],
+        ),
       ),
       required: true,
     },
@@ -1827,7 +1836,6 @@
       key: "depthStencilAttachment",
       converter: webidl.converters["GPURenderPassDepthStencilAttachment"],
     },
-    { key: "occlusionQuerySet", converter: webidl.converters["GPUQuerySet"] },
   ];
   webidl.converters["GPURenderPassDescriptor"] = webidl
     .createDictionaryConverter(
@@ -1864,7 +1872,7 @@
     {
       key: "colorFormats",
       converter: webidl.createSequenceConverter(
-        webidl.converters["GPUTextureFormat"],
+        webidl.createNullableConverter(webidl.converters["GPUTextureFormat"]),
       ),
       required: true,
     },

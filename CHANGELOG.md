@@ -40,6 +40,94 @@ Bottom level categories:
 
 ## Unreleased
 
+### Major Changes
+
+#### @invariant Warning
+
+When using CompareFunction::Equal or CompareFunction::NotEqual on a pipeline, there is now a warning logged if the vertex
+shader does not have a @invariant tag on it. On some machines, rendering the same triangles multiple times without an
+@invariant tag will result in slightly different depths for every pixel. Because the *Equal functions rely on depth being
+the same every time it is rendered, we now warn if it is missing.
+
+```diff
+-@vertex 
+-fn vert_main(v_in: VertexInput) -> @builtin(position) vec4<f32> {...}
++@vertex 
++fn vert_main(v_in: VertexInput) -> @builtin(position) @invariant vec4<f32> {...}
+```
+
+### Bug Fixes
+
+#### General
+- Improve the validation and error reporting of buffer mappings by @nical in [#2848](https://github.com/gfx-rs/wgpu/pull/2848)
+
+### Changes
+
+#### General
+- Add warning when using CompareFunction::*Equal with vertex shader that is missing @invariant tag by @cwfitzgerald in [#2887](https://github.com/gfx-rs/wgpu/pull/2887)
+
+#### Metal
+- Extract the generic code into `get_metal_layer` by @jinleili in [#2826](https://github.com/gfx-rs/wgpu/pull/2826)
+
+#### General
+- Added downlevel restriction error message for `InvalidFormatUsages` error by @Seamooo in [#2886](https://github.com/gfx-rs/wgpu/pull/2886)
+
+### Performance
+
+- Made `StagingBelt::write_buffer()` check more thoroughly for reusable memory; by @kpreid in [#2906](https://github.com/gfx-rs/wgpu/pull/2906)
+
+### Documentation
+
+- Expanded `StagingBelt` documentation by @kpreid in [#2905](https://github.com/gfx-rs/wgpu/pull/2905)
+
+## wgpu-0.13.2 (2022-07-13)
+
+### Bug Fixes
+
+#### General
+- Prefer `DeviceType::DiscreteGpu` over `DeviceType::Other` for `PowerPreference::LowPower` so Vulkan is preferred over OpenGL again by @Craig-Macomber in [#2853](https://github.com/gfx-rs/wgpu/pull/2853)
+- Allow running `get_texture_format_features` on unsupported texture formats (returning no flags) by @cwfitzgerald in [#2856](https://github.com/gfx-rs/wgpu/pull/2856)
+- Allow multi-sampled textures that are supported by the device but not WebGPU if `TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES` is enabled by @cwfitzgerald in [#2856](https://github.com/gfx-rs/wgpu/pull/2856)
+- `get_texture_format_features` only lists the COPY_* usages if the adapter actually supports that usage by @cwfitzgerald in [#2856](https://github.com/gfx-rs/wgpu/pull/2856)
+- Fix bind group / pipeline deduplication not taking into account RenderBundle execution resetting these values by @shoebe [#2867](https://github.com/gfx-rs/wgpu/pull/2867)
+- Fix panics that occur when using `as_hal` functions when the hal generic type does not match the hub being looked up in by @i509VCB [#2871](https://github.com/gfx-rs/wgpu/pull/2871)
+- Add some validation in map_async by @nical in [#2876](https://github.com/gfx-rs/wgpu/pull/2876)
+- Fix bugs when mapping/unmapping zero-sized buffers and ranges by @nical in [#2877](https://github.com/gfx-rs/wgpu/pull/2877)
+- Validate the number of color attachments in `create_render_pipeline` by @nical in [#2913](https://github.com/gfx-rs/wgpu/pull/2913)
+
+#### DX12
+- `DownlevelCapabilities::default()` now returns the `ANISOTROPIC_FILTERING` flag set to true so DX12 lists `ANISOTROPIC_FILTERING` as true again by @cwfitzgerald in [#2851](https://github.com/gfx-rs/wgpu/pull/2851)
+- Properly query format features for UAV/SRV usages of depth formats by @cwfitzgerald in [#2856](https://github.com/gfx-rs/wgpu/pull/2856)
+
+#### GLES
+- Fix depth stencil texture format capability by @jinleili in [#2854](https://github.com/gfx-rs/wgpu/pull/2854)
+- `get_texture_format_features` now only returns usages for formats it actually supports by @cwfitzgerald in [#2856](https://github.com/gfx-rs/wgpu/pull/2856)
+
+#### Hal
+
+- Allow access to queue family index in Vulkan hal by @i509VCB in [#2859](https://github.com/gfx-rs/wgpu/pull/2859)
+- Allow access to the EGLDisplay and EGLContext pointer in Gles hal Adapter and Device by @i509VCB in [#2860](https://github.com/gfx-rs/wgpu/pull/2860)
+
+### Documentation
+- Update present_mode docs as most of them don't automatically fall back to Fifo anymore. by @Elabajaba in [#2855](https://github.com/gfx-rs/wgpu/pull/2855)
+
+#### Hal
+
+- Document safety requirements for `Adapter::from_external` in gles hal by @i509VCB in [#2863](https://github.com/gfx-rs/wgpu/pull/2863)
+- Make `AdapterContext` a publicly accessible type in the gles hal by @i509VCB in [#2870](https://github.com/gfx-rs/wgpu/pull/2870)
+
+## wgpu-0.13.1 (2022-07-02)
+
+### Bug Fixes
+
+#### General
+- Fix out of bounds access when surface texture is written to by multiple command buffers by @cwfitzgerald in [#2843](https://github.com/gfx-rs/wgpu/pull/2843)
+
+#### GLES
+
+- AutoNoVSync now correctly falls back to Fifo by @simbleau in [#2842](https://github.com/gfx-rs/wgpu/pull/2842)
+- Fix GL_EXT_color_buffer_float detection on native by @cwfitzgerald in [#2843](https://github.com/gfx-rs/wgpu/pull/2843)
+
 ## wgpu-0.13 (2022-06-30)
 
 ### Major Changes
@@ -110,7 +198,7 @@ is an under-documented area that we hope to improve in the future.
 ```diff
 - let future = buffer.slice(..).map_async(MapMode::Read);
 + buffer.slice(..).map_async(MapMode::Read, || {
-+     // Called when buffer is mapped.  
++     // Called when buffer is mapped.
 + })
 ```
 
@@ -165,6 +253,37 @@ Extent3d {
 + }.max_mips(wgpu::TextureDimension::D3)
 ```
 
+`Limits` has a new field, [`max_buffer_size`](https://docs.rs/wgpu/0.13.0/wgpu/struct.Limits.html#structfield.max_buffer_size) (not an issue if you don't define limits manually):
+
+```diff
+Limits {
+  // ...
++ max_buffer_size: 256 * 1024 * 1024, // adjust as you see fit
+}
+```
+
+`Features::CLEAR_COMMANDS` is now unnecessary and no longer exists. The feature to clear buffers and textures is now part of upstream WebGPU.
+
+```diff
+DeviceDescriptor {
+  // ...
+  features: wgpu::Features::VERTEX_WRITABLE_STORAGE
+    | wgpu::Features::MAPPABLE_PRIMARY_BUFFERS
+    | wgpu::Features::TEXTURE_BINDING_ARRAY
+    | wgpu::Features::BUFFER_BINDING_ARRAY
+    | wgpu::Features::STORAGE_RESOURCE_BINDING_ARRAY
+-    | wgpu::Features::CLEAR_COMMANDS
+  ,
+}
+```
+
+`ComputePass::dispatch` has been renamed to `ComputePass::dispatch_workgroups`
+
+```diff
+- cpass.dispatch(self.work_group_count, 1, 1)
++ cpass.dispatch_workgroups(self.work_group_count, 1, 1)
+```
+
 ### Added/New Features
 
 #### General
@@ -213,7 +332,7 @@ Extent3d {
 
 #### DX11
 
-- Dx11 Backend by @cwfitzgerald in [#2443](https://github.com/gfx-rs/wgpu/pull/2443)
+- Skeleton of a DX11 backend - not working yet by @cwfitzgerald in [#2443](https://github.com/gfx-rs/wgpu/pull/2443)
 
 #### Hal
 

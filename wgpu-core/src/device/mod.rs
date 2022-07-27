@@ -7,7 +7,9 @@ use crate::{
         BufferInitTracker, BufferInitTrackerAction, MemoryInitKind, TextureInitRange,
         TextureInitTracker, TextureInitTrackerAction,
     },
-    instance, pipeline, present, resource,
+    instance, pipeline, present,
+    resource::{self, BufferMapState},
+    resource::{BufferAccessError, BufferMapAsyncStatus, BufferMapOperation},
     track::{BindGroupStates, TextureSelector, Tracker},
     validation::{self, check_buffer_usage, check_texture_usage},
     FastHashMap, Label, LabelHelpers as _, LifeGuard, MultiRefCount, RefCount, Stored,
@@ -127,7 +129,7 @@ impl RenderPassContext {
     }
 }
 
-pub type BufferMapPendingClosure = (resource::BufferMapOperation, resource::BufferMapAsyncStatus);
+pub type BufferMapPendingClosure = (BufferMapOperation, BufferMapAsyncStatus);
 
 #[derive(Default)]
 pub struct UserClosures {
@@ -159,7 +161,7 @@ fn map_buffer<A: hal::Api>(
     offset: BufferAddress,
     size: BufferAddress,
     kind: HostMap,
-) -> Result<ptr::NonNull<u8>, resource::BufferAccessError> {
+) -> Result<ptr::NonNull<u8>, BufferAccessError> {
     let mapping = unsafe {
         raw.map_buffer(buffer.raw.as_ref().unwrap(), offset..offset + size)
             .map_err(DeviceError::from)?
@@ -751,6 +753,10 @@ impl<A: HalApi> Device<A> {
             }
         }
 
+        let format_features = self
+            .describe_format_features(adapter, desc.format)
+            .map_err(|error| CreateTextureError::MissingFeatures(desc.format, error))?;
+
         if desc.sample_count > 1 {
             if desc.mip_level_count != 1 {
                 return Err(CreateTextureError::InvalidMipLevelCount {
@@ -775,8 +781,7 @@ impl<A: HalApi> Device<A> {
                 return Err(CreateTextureError::MultisampledNotRenderAttachment);
             }
 
-            if !format_desc
-                .guaranteed_format_features
+            if !format_features
                 .flags
                 .contains(wgt::TextureFormatFeatureFlags::MULTISAMPLE)
             {
@@ -793,15 +798,19 @@ impl<A: HalApi> Device<A> {
             });
         }
 
-        let format_features = self
-            .describe_format_features(adapter, desc.format)
-            .map_err(|error| CreateTextureError::MissingFeatures(desc.format, error))?;
-
         let missing_allowed_usages = desc.usage - format_features.allowed_usages;
         if !missing_allowed_usages.is_empty() {
+            // detect downlevel incompatibilities
+            let wgpu_allowed_usages = desc
+                .format
+                .describe()
+                .guaranteed_format_features
+                .allowed_usages;
+            let wgpu_missing_usages = desc.usage - wgpu_allowed_usages;
             return Err(CreateTextureError::InvalidFormatUsages(
                 missing_allowed_usages,
                 desc.format,
+                wgpu_missing_usages.is_empty(),
             ));
         }
 
@@ -2370,6 +2379,7 @@ impl<A: HalApi> Device<A> {
                     &desc.stage.entry_point,
                     flag,
                     io,
+                    None,
                 )?;
             }
         }
@@ -2458,6 +2468,16 @@ impl<A: HalApi> Device<A> {
         let mut derived_group_layouts =
             ArrayVec::<binding_model::BindEntryMap, { hal::MAX_BIND_GROUPS }>::new();
         let mut shader_binding_sizes = FastHashMap::default();
+
+        let num_attachments = desc.fragment.as_ref().map(|f| f.targets.len()).unwrap_or(0);
+        if num_attachments > hal::MAX_COLOR_ATTACHMENTS {
+            return Err(
+                pipeline::CreateRenderPipelineError::TooManyColorAttachments {
+                    given: num_attachments as u32,
+                    limit: hal::MAX_COLOR_ATTACHMENTS as u32,
+                },
+            );
+        }
 
         let color_targets = desc
             .fragment
@@ -2695,6 +2715,7 @@ impl<A: HalApi> Device<A> {
                         &stage.entry_point,
                         flag,
                         io,
+                        desc.depth_stencil.as_ref().map(|d| d.depth_compare),
                     )
                     .map_err(|error| pipeline::CreateRenderPipelineError::Stage {
                         stage: flag,
@@ -2741,6 +2762,7 @@ impl<A: HalApi> Device<A> {
                                 &fragment.stage.entry_point,
                                 flag,
                                 io,
+                                desc.depth_stencil.as_ref().map(|d| d.depth_compare),
                             )
                             .map_err(|error| pipeline::CreateRenderPipelineError::Stage {
                                 stage: flag,
@@ -3248,14 +3270,19 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             } else if desc.usage.contains(wgt::BufferUsages::MAP_WRITE) {
                 // buffer is mappable, so we are just doing that at start
                 let map_size = buffer.size;
-                let ptr = match map_buffer(&device.raw, &mut buffer, 0, map_size, HostMap::Write) {
-                    Ok(ptr) => ptr,
-                    Err(e) => {
-                        let raw = buffer.raw.unwrap();
-                        device
-                            .lock_life(&mut token)
-                            .schedule_resource_destruction(queue::TempResource::Buffer(raw), !0);
-                        break e.into();
+                let ptr = if map_size == 0 {
+                    std::ptr::NonNull::dangling()
+                } else {
+                    match map_buffer(&device.raw, &mut buffer, 0, map_size, HostMap::Write) {
+                        Ok(ptr) => ptr,
+                        Err(e) => {
+                            let raw = buffer.raw.unwrap();
+                            device.lock_life(&mut token).schedule_resource_destruction(
+                                queue::TempResource::Buffer(raw),
+                                !0,
+                            );
+                            break e.into();
+                        }
                     }
                 };
                 buffer.map_state = resource::BufferMapState::Active {
@@ -3410,7 +3437,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         buffer_id: id::BufferId,
         offset: BufferAddress,
         data: &[u8],
-    ) -> Result<(), resource::BufferAccessError> {
+    ) -> Result<(), BufferAccessError> {
         profiling::scope!("Device::set_buffer_sub_data");
 
         let hub = A::hub(self);
@@ -3423,7 +3450,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .map_err(|_| DeviceError::Invalid)?;
         let buffer = buffer_guard
             .get_mut(buffer_id)
-            .map_err(|_| resource::BufferAccessError::Invalid)?;
+            .map_err(|_| BufferAccessError::Invalid)?;
         check_buffer_usage(buffer.usage, wgt::BufferUsages::MAP_WRITE)?;
         //assert!(buffer isn't used by the GPU);
 
@@ -3467,7 +3494,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         buffer_id: id::BufferId,
         offset: BufferAddress,
         data: &mut [u8],
-    ) -> Result<(), resource::BufferAccessError> {
+    ) -> Result<(), BufferAccessError> {
         profiling::scope!("Device::get_buffer_sub_data");
 
         let hub = A::hub(self);
@@ -3480,7 +3507,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .map_err(|_| DeviceError::Invalid)?;
         let buffer = buffer_guard
             .get_mut(buffer_id)
-            .map_err(|_| resource::BufferAccessError::Invalid)?;
+            .map_err(|_| BufferAccessError::Invalid)?;
         check_buffer_usage(buffer.usage, wgt::BufferUsages::MAP_READ)?;
         //assert!(buffer isn't used by the GPU);
 
@@ -3516,39 +3543,59 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     ) -> Result<(), resource::DestroyError> {
         profiling::scope!("Buffer::destroy");
 
-        let hub = A::hub(self);
-        let mut token = Token::root();
+        let map_closure;
+        // Restrict the locks to this scope.
+        {
+            let hub = A::hub(self);
+            let mut token = Token::root();
 
-        //TODO: lock pending writes separately, keep the device read-only
-        let (mut device_guard, mut token) = hub.devices.write(&mut token);
+            //TODO: lock pending writes separately, keep the device read-only
+            let (mut device_guard, mut token) = hub.devices.write(&mut token);
 
-        log::info!("Buffer {:?} is destroyed", buffer_id);
-        let (mut buffer_guard, _) = hub.buffers.write(&mut token);
-        let buffer = buffer_guard
-            .get_mut(buffer_id)
-            .map_err(|_| resource::DestroyError::Invalid)?;
+            log::info!("Buffer {:?} is destroyed", buffer_id);
+            let (mut buffer_guard, _) = hub.buffers.write(&mut token);
+            let buffer = buffer_guard
+                .get_mut(buffer_id)
+                .map_err(|_| resource::DestroyError::Invalid)?;
 
-        let device = &mut device_guard[buffer.device_id.value];
+            let device = &mut device_guard[buffer.device_id.value];
 
-        #[cfg(feature = "trace")]
-        if let Some(ref trace) = device.trace {
-            trace.lock().add(trace::Action::FreeBuffer(buffer_id));
+            map_closure = match &buffer.map_state {
+                &BufferMapState::Waiting(..) // To get the proper callback behavior.
+                | &BufferMapState::Init { .. }
+                | &BufferMapState::Active { .. }
+                => {
+                    self.buffer_unmap_inner(buffer_id, buffer, device)
+                        .unwrap_or(None)
+                }
+                _ => None,
+            };
+
+            #[cfg(feature = "trace")]
+            if let Some(ref trace) = device.trace {
+                trace.lock().add(trace::Action::FreeBuffer(buffer_id));
+            }
+
+            let raw = buffer
+                .raw
+                .take()
+                .ok_or(resource::DestroyError::AlreadyDestroyed)?;
+            let temp = queue::TempResource::Buffer(raw);
+
+            if device.pending_writes.dst_buffers.contains(&buffer_id) {
+                device.pending_writes.temp_resources.push(temp);
+            } else {
+                let last_submit_index = buffer.life_guard.life_count();
+                drop(buffer_guard);
+                device
+                    .lock_life(&mut token)
+                    .schedule_resource_destruction(temp, last_submit_index);
+            }
         }
 
-        let raw = buffer
-            .raw
-            .take()
-            .ok_or(resource::DestroyError::AlreadyDestroyed)?;
-        let temp = queue::TempResource::Buffer(raw);
-
-        if device.pending_writes.dst_buffers.contains(&buffer_id) {
-            device.pending_writes.temp_resources.push(temp);
-        } else {
-            let last_submit_index = buffer.life_guard.life_count();
-            drop(buffer_guard);
-            device
-                .lock_life(&mut token)
-                .schedule_resource_destruction(temp, last_submit_index);
+        // Note: outside the scope where locks are held when calling the callback
+        if let Some((operation, status)) = map_closure {
+            operation.callback.call(status);
         }
 
         Ok(())
@@ -4975,33 +5022,35 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 );
             }
             if !caps.present_modes.contains(&config.present_mode) {
-                let new_mode = loop {
+                let new_mode = 'b: loop {
                     // Automatic present mode checks.
                     //
                     // The "Automatic" modes are never supported by the backends.
-                    match config.present_mode {
+                    let fallbacks = match config.present_mode {
                         wgt::PresentMode::AutoVsync => {
-                            if caps.present_modes.contains(&wgt::PresentMode::FifoRelaxed) {
-                                break wgt::PresentMode::FifoRelaxed;
-                            }
-                            if caps.present_modes.contains(&wgt::PresentMode::Fifo) {
-                                break wgt::PresentMode::Fifo;
-                            }
+                            &[wgt::PresentMode::FifoRelaxed, wgt::PresentMode::Fifo][..]
                         }
-                        wgt::PresentMode::AutoNoVsync => {
-                            if caps.present_modes.contains(&wgt::PresentMode::Immediate) {
-                                break wgt::PresentMode::Immediate;
-                            }
-                            if caps.present_modes.contains(&wgt::PresentMode::Mailbox) {
-                                break wgt::PresentMode::Mailbox;
-                            }
+                        // Always end in FIFO to make sure it's always supported
+                        wgt::PresentMode::AutoNoVsync => &[
+                            wgt::PresentMode::Immediate,
+                            wgt::PresentMode::Mailbox,
+                            wgt::PresentMode::Fifo,
+                        ][..],
+                        _ => {
+                            return Err(E::UnsupportedPresentMode {
+                                requested: config.present_mode,
+                                available: caps.present_modes.clone(),
+                            });
                         }
-                        _ => {}
+                    };
+
+                    for &fallback in fallbacks {
+                        if caps.present_modes.contains(&fallback) {
+                            break 'b fallback;
+                        }
                     }
-                    return Err(E::UnsupportedPresentMode {
-                        requested: config.present_mode,
-                        available: caps.present_modes.clone(),
-                    });
+
+                    unreachable!("Fallback system failed to choose present mode. This is a bug. Mode: {:?}, Options: {:?}", config.present_mode, &caps.present_modes);
                 };
 
                 log::info!(
@@ -5330,8 +5379,50 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         buffer_id: id::BufferId,
         range: Range<BufferAddress>,
-        op: resource::BufferMapOperation,
-    ) -> Result<(), resource::BufferAccessError> {
+        op: BufferMapOperation,
+    ) -> Result<(), BufferAccessError> {
+        // User callbacks must not be called while holding buffer_map_async_inner's locks, so we
+        // defer the error callback if it needs to be called immediately (typically when running
+        // into errors).
+        if let Err((op, err)) = self.buffer_map_async_inner::<A>(buffer_id, range, op) {
+            let status = match &err {
+                &BufferAccessError::Device(_) => BufferMapAsyncStatus::ContextLost,
+                &BufferAccessError::Invalid | &BufferAccessError::Destroyed => {
+                    BufferMapAsyncStatus::Invalid
+                }
+                &BufferAccessError::AlreadyMapped => BufferMapAsyncStatus::AlreadyMapped,
+                &BufferAccessError::MapAlreadyPending => BufferMapAsyncStatus::MapAlreadyPending,
+                &BufferAccessError::MissingBufferUsage(_) => {
+                    BufferMapAsyncStatus::InvalidUsageFlags
+                }
+                &BufferAccessError::UnalignedRange
+                | &BufferAccessError::UnalignedRangeSize { .. }
+                | &BufferAccessError::UnalignedOffset { .. } => {
+                    BufferMapAsyncStatus::InvalidAlignment
+                }
+                &BufferAccessError::OutOfBoundsUnderrun { .. }
+                | &BufferAccessError::OutOfBoundsOverrun { .. } => {
+                    BufferMapAsyncStatus::InvalidRange
+                }
+                _ => BufferMapAsyncStatus::Error,
+            };
+
+            op.callback.call(status);
+
+            return Err(err);
+        }
+
+        Ok(())
+    }
+
+    // Returns the mapping callback in case of error so that the callback can be fired outside
+    // of the locks that are held in this function.
+    fn buffer_map_async_inner<A: HalApi>(
+        &self,
+        buffer_id: id::BufferId,
+        range: Range<BufferAddress>,
+        op: BufferMapOperation,
+    ) -> Result<(), (BufferMapOperation, BufferAccessError)> {
         profiling::scope!("Buffer::map_async");
 
         let hub = A::hub(self);
@@ -5343,23 +5434,42 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
 
         if range.start % wgt::MAP_ALIGNMENT != 0 || range.end % wgt::COPY_BUFFER_ALIGNMENT != 0 {
-            return Err(resource::BufferAccessError::UnalignedRange);
+            return Err((op, BufferAccessError::UnalignedRange));
         }
 
         let (device_id, ref_count) = {
             let (mut buffer_guard, _) = hub.buffers.write(&mut token);
             let buffer = buffer_guard
                 .get_mut(buffer_id)
-                .map_err(|_| resource::BufferAccessError::Invalid)?;
+                .map_err(|_| BufferAccessError::Invalid);
 
-            check_buffer_usage(buffer.usage, pub_usage)?;
+            let buffer = match buffer {
+                Ok(b) => b,
+                Err(e) => {
+                    return Err((op, e));
+                }
+            };
+
+            if let Err(e) = check_buffer_usage(buffer.usage, pub_usage) {
+                return Err((op, e.into()));
+            }
+
+            if range.end > buffer.size {
+                return Err((
+                    op,
+                    BufferAccessError::OutOfBoundsOverrun {
+                        index: range.end,
+                        max: buffer.size,
+                    },
+                ));
+            }
+
             buffer.map_state = match buffer.map_state {
                 resource::BufferMapState::Init { .. } | resource::BufferMapState::Active { .. } => {
-                    return Err(resource::BufferAccessError::AlreadyMapped);
+                    return Err((op, BufferAccessError::AlreadyMapped));
                 }
                 resource::BufferMapState::Waiting(_) => {
-                    op.callback.call_error();
-                    return Ok(());
+                    return Err((op, BufferAccessError::MapAlreadyPending));
                 }
                 resource::BufferMapState::Idle => {
                     resource::BufferMapState::Waiting(resource::BufferPendingMapping {
@@ -5398,7 +5508,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         buffer_id: id::BufferId,
         offset: BufferAddress,
         size: Option<BufferAddress>,
-    ) -> Result<(*mut u8, u64), resource::BufferAccessError> {
+    ) -> Result<(*mut u8, u64), BufferAccessError> {
         profiling::scope!("Buffer::get_mapped_range");
 
         let hub = A::hub(self);
@@ -5406,7 +5516,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (buffer_guard, _) = hub.buffers.read(&mut token);
         let buffer = buffer_guard
             .get(buffer_id)
-            .map_err(|_| resource::BufferAccessError::Invalid)?;
+            .map_err(|_| BufferAccessError::Invalid)?;
 
         let range_size = if let Some(size) = size {
             size
@@ -5417,17 +5527,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
 
         if offset % wgt::MAP_ALIGNMENT != 0 {
-            return Err(resource::BufferAccessError::UnalignedOffset { offset });
+            return Err(BufferAccessError::UnalignedOffset { offset });
         }
         if range_size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
-            return Err(resource::BufferAccessError::UnalignedRangeSize { range_size });
+            return Err(BufferAccessError::UnalignedRangeSize { range_size });
         }
 
         match buffer.map_state {
             resource::BufferMapState::Init { ptr, .. } => {
                 // offset (u64) can not be < 0, so no need to validate the lower bound
                 if offset + range_size > buffer.size {
-                    return Err(resource::BufferAccessError::OutOfBoundsOverrun {
+                    return Err(BufferAccessError::OutOfBoundsOverrun {
                         index: offset + range_size - 1,
                         max: buffer.size,
                     });
@@ -5436,13 +5546,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
             resource::BufferMapState::Active { ptr, ref range, .. } => {
                 if offset < range.start {
-                    return Err(resource::BufferAccessError::OutOfBoundsUnderrun {
+                    return Err(BufferAccessError::OutOfBoundsUnderrun {
                         index: offset,
                         min: range.start,
                     });
                 }
                 if offset + range_size > range.end {
-                    return Err(resource::BufferAccessError::OutOfBoundsOverrun {
+                    return Err(BufferAccessError::OutOfBoundsOverrun {
                         index: offset + range_size - 1,
                         max: range.end,
                     });
@@ -5450,7 +5560,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 unsafe { Ok((ptr.as_ptr().offset(offset as isize), range_size)) }
             }
             resource::BufferMapState::Idle | resource::BufferMapState::Waiting(_) => {
-                Err(resource::BufferAccessError::NotMapped)
+                Err(BufferAccessError::NotMapped)
             }
         }
     }
@@ -5458,19 +5568,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     fn buffer_unmap_inner<A: HalApi>(
         &self,
         buffer_id: id::BufferId,
-    ) -> Result<Option<BufferMapPendingClosure>, resource::BufferAccessError> {
-        profiling::scope!("Buffer::unmap");
-
-        let hub = A::hub(self);
-        let mut token = Token::root();
-
-        let (mut device_guard, mut token) = hub.devices.write(&mut token);
-        let (mut buffer_guard, _) = hub.buffers.write(&mut token);
-        let buffer = buffer_guard
-            .get_mut(buffer_id)
-            .map_err(|_| resource::BufferAccessError::Invalid)?;
-        let device = &mut device_guard[buffer.device_id.value];
-
+        buffer: &mut resource::Buffer<A>,
+        device: &mut Device<A>,
+    ) -> Result<Option<BufferMapPendingClosure>, BufferAccessError> {
         log::debug!("Buffer {:?} map state -> Idle", buffer_id);
         match mem::replace(&mut buffer.map_state, resource::BufferMapState::Idle) {
             resource::BufferMapState::Init {
@@ -5500,10 +5600,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     }
                 }
 
-                let raw_buf = buffer
-                    .raw
-                    .as_ref()
-                    .ok_or(resource::BufferAccessError::Destroyed)?;
+                let raw_buf = buffer.raw.as_ref().ok_or(BufferAccessError::Destroyed)?;
 
                 buffer.life_guard.use_at(device.active_submission_index + 1);
                 let region = wgt::BufferSize::new(buffer.size).map(|size| hal::BufferCopy {
@@ -5534,7 +5631,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 device.pending_writes.dst_buffers.insert(buffer_id);
             }
             resource::BufferMapState::Idle => {
-                return Err(resource::BufferAccessError::NotMapped);
+                return Err(BufferAccessError::NotMapped);
             }
             resource::BufferMapState::Waiting(pending) => {
                 return Ok(Some((pending.op, resource::BufferMapAsyncStatus::Aborted)));
@@ -5571,10 +5668,27 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn buffer_unmap<A: HalApi>(
         &self,
         buffer_id: id::BufferId,
-    ) -> Result<(), resource::BufferAccessError> {
-        //Note: outside inner function so no locks are held when calling the callback
-        let closure = self.buffer_unmap_inner::<A>(buffer_id)?;
-        if let Some((operation, status)) = closure {
+    ) -> Result<(), BufferAccessError> {
+        profiling::scope!("unmap", "Buffer");
+
+        let closure;
+        {
+            // Restrict the locks to this scope.
+            let hub = A::hub(self);
+            let mut token = Token::root();
+
+            let (mut device_guard, mut token) = hub.devices.write(&mut token);
+            let (mut buffer_guard, _) = hub.buffers.write(&mut token);
+            let buffer = buffer_guard
+                .get_mut(buffer_id)
+                .map_err(|_| BufferAccessError::Invalid)?;
+            let device = &mut device_guard[buffer.device_id.value];
+
+            closure = self.buffer_unmap_inner(buffer_id, buffer, device)
+        }
+
+        // Note: outside the scope where locks are held when calling the callback
+        if let Some((operation, status)) = closure? {
             operation.callback.call(status);
         }
         Ok(())

@@ -215,8 +215,10 @@ impl<A: HalApi> Adapter<A> {
         use hal::TextureFormatCapabilities as Tfc;
 
         let caps = unsafe { self.raw.adapter.texture_format_capabilities(format) };
-        let mut allowed_usages = format.describe().guaranteed_format_features.allowed_usages;
+        let mut allowed_usages = wgt::TextureUsages::empty();
 
+        allowed_usages.set(wgt::TextureUsages::COPY_SRC, caps.contains(Tfc::COPY_SRC));
+        allowed_usages.set(wgt::TextureUsages::COPY_DST, caps.contains(Tfc::COPY_DST));
         allowed_usages.set(
             wgt::TextureUsages::TEXTURE_BINDING,
             caps.contains(Tfc::SAMPLED),
@@ -786,7 +788,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         let preferred_gpu = match desc.power_preference {
-            PowerPreference::LowPower => integrated.or(other).or(discrete).or(virt).or(cpu),
+            // Since devices of type "Other" might really be "Unknown" and come from APIs like OpenGL that don't specify device type,
+            // Prefer more Specific types over Other.
+            // This means that backends which do provide accurate device types will be preferred
+            // if their device type indicates an actual hardware GPU (integrated or discrete).
+            PowerPreference::LowPower => integrated.or(discrete).or(other).or(virt).or(cpu),
             PowerPreference::HighPerformance => discrete.or(integrated).or(other).or(virt).or(cpu),
         };
 

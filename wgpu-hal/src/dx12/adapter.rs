@@ -336,7 +336,12 @@ impl crate::Adapter<super::Api> for super::Adapter {
     ) -> crate::TextureFormatCapabilities {
         use crate::TextureFormatCapabilities as Tfc;
 
-        let raw_format = auxil::dxgi::conv::map_texture_format(format);
+        let raw_format = match auxil::dxgi::conv::map_texture_format_failable(format) {
+            Some(f) => f,
+            None => return Tfc::empty(),
+        };
+        let no_depth_format = auxil::dxgi::conv::map_texture_format_nodepth(format);
+
         let mut data = d3d12::D3D12_FEATURE_DATA_FORMAT_SUPPORT {
             Format: raw_format,
             Support1: mem::zeroed(),
@@ -351,6 +356,28 @@ impl crate::Adapter<super::Api> for super::Adapter {
             )
         );
 
+        // Because we use a different format for SRV and UAV views of depth textures, we need to check
+        // the features that use SRV/UAVs using the no-depth format.
+        let mut data_no_depth = d3d12::D3D12_FEATURE_DATA_FORMAT_SUPPORT {
+            Format: no_depth_format,
+            Support1: mem::zeroed(),
+            Support2: mem::zeroed(),
+        };
+        if raw_format != no_depth_format {
+            // Only-recheck if we're using a different format
+            assert_eq!(
+                winerror::S_OK,
+                self.device.CheckFeatureSupport(
+                    d3d12::D3D12_FEATURE_FORMAT_SUPPORT,
+                    &mut data_no_depth as *mut _ as *mut _,
+                    mem::size_of::<d3d12::D3D12_FEATURE_DATA_FORMAT_SUPPORT>() as _,
+                )
+            );
+        } else {
+            // Same format, just copy over.
+            data_no_depth = data;
+        }
+
         let mut caps = Tfc::COPY_SRC | Tfc::COPY_DST;
         let is_texture = data.Support1
             & (d3d12::D3D12_FORMAT_SUPPORT1_TEXTURE1D
@@ -358,13 +385,14 @@ impl crate::Adapter<super::Api> for super::Adapter {
                 | d3d12::D3D12_FORMAT_SUPPORT1_TEXTURE3D
                 | d3d12::D3D12_FORMAT_SUPPORT1_TEXTURECUBE)
             != 0;
+        // SRVs use no-depth format
         caps.set(
             Tfc::SAMPLED,
-            is_texture && data.Support1 & d3d12::D3D12_FORMAT_SUPPORT1_SHADER_LOAD != 0,
+            is_texture && data_no_depth.Support1 & d3d12::D3D12_FORMAT_SUPPORT1_SHADER_LOAD != 0,
         );
         caps.set(
             Tfc::SAMPLED_LINEAR,
-            data.Support1 & d3d12::D3D12_FORMAT_SUPPORT1_SHADER_SAMPLE != 0,
+            data_no_depth.Support1 & d3d12::D3D12_FORMAT_SUPPORT1_SHADER_SAMPLE != 0,
         );
         caps.set(
             Tfc::COLOR_ATTACHMENT,
@@ -378,17 +406,20 @@ impl crate::Adapter<super::Api> for super::Adapter {
             Tfc::DEPTH_STENCIL_ATTACHMENT,
             data.Support1 & d3d12::D3D12_FORMAT_SUPPORT1_DEPTH_STENCIL != 0,
         );
+        // UAVs use no-depth format
         caps.set(
             Tfc::STORAGE,
-            data.Support1 & d3d12::D3D12_FORMAT_SUPPORT1_TYPED_UNORDERED_ACCESS_VIEW != 0,
+            data_no_depth.Support1 & d3d12::D3D12_FORMAT_SUPPORT1_TYPED_UNORDERED_ACCESS_VIEW != 0,
         );
         caps.set(
             Tfc::STORAGE_READ_WRITE,
-            data.Support2 & d3d12::D3D12_FORMAT_SUPPORT2_UAV_TYPED_LOAD != 0,
+            data_no_depth.Support2 & d3d12::D3D12_FORMAT_SUPPORT2_UAV_TYPED_LOAD != 0,
         );
 
+        // We load via UAV/SRV so use no-depth
         let no_msaa_load = caps.contains(Tfc::SAMPLED)
-            && data.Support1 & d3d12::D3D12_FORMAT_SUPPORT1_MULTISAMPLE_LOAD == 0;
+            && data_no_depth.Support1 & d3d12::D3D12_FORMAT_SUPPORT1_MULTISAMPLE_LOAD == 0;
+
         let no_msaa_target = data.Support1
             & (d3d12::D3D12_FORMAT_SUPPORT1_RENDER_TARGET
                 | d3d12::D3D12_FORMAT_SUPPORT1_DEPTH_STENCIL)
