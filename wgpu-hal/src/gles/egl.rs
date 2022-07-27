@@ -773,7 +773,6 @@ impl crate::Instance<super::Api> for Instance {
         has_handle: &(impl HasRawWindowHandle + HasRawDisplayHandle),
     ) -> Result<Surface, crate::InstanceError> {
         use raw_window_handle::RawWindowHandle as Rwh;
-        use raw_window_handle::RawDisplayHandle as Rdh;
 
         let raw_window_handle = has_handle.raw_window_handle();
 
@@ -808,11 +807,13 @@ impl crate::Instance<super::Api> for Instance {
                  *
                  * See gfx-rs/gfx#3545
                  */
-                let wayland_raw= if let Rdh::Wayland(display) = has_handle.raw_display_handle() {
+                let wayland_raw = if let raw_window_handle::RawDisplayHandle::Wayland(display) =
+                    has_handle.raw_display_handle()
+                {
                     display.display
-                }else{
+                } else {
                     return Err(crate::InstanceError);
-                }   ;
+                };
                 log::warn!("Re-initializing Gles context due to Wayland window");
                 if inner
                     .wl_display
