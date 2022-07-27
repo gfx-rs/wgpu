@@ -1,3 +1,8 @@
+extern crate core;
+
+#[path = "../framework.rs"]
+mod framework;
+
 use bytemuck::{Pod, Zeroable};
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::JsCast;
@@ -6,11 +11,7 @@ use wasm_bindgen_futures::JsFuture;
 #[cfg(target_arch = "wasm32")]
 use web_sys::{Blob, ImageBitmap, Request, RequestInit, RequestMode, Response};
 use wgpu::util::DeviceExt;
-use winit::{
-    event::{Event, WindowEvent},
-    event_loop::{ControlFlow, EventLoop},
-    window::Window,
-};
+use winit::event::WindowEvent;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
@@ -66,12 +67,10 @@ const VERTICES: &[Vertex] = &[
 
 const INDICES: &[u16] = &[0, 1, 4, 1, 2, 4, 2, 3, 4, /* padding */ 0];
 
-struct State {
-    surface: wgpu::Surface,
-    device: wgpu::Device,
-    queue: wgpu::Queue,
-    config: wgpu::SurfaceConfiguration,
-    size: winit::dpi::PhysicalSize<u32>,
+#[cfg(target_arch = "wasm32")]
+static mut imageData: Option<ImageBitmap> = None;
+
+struct Example {
     render_pipeline: wgpu::RenderPipeline,
     vertex_buffer: wgpu::Buffer,
     index_buffer: wgpu::Buffer,
@@ -79,47 +78,13 @@ struct State {
     diffuse_bind_group: wgpu::BindGroup,
 }
 
-impl State {
-    async fn new(window: &Window) -> Self {
-        let size = window.inner_size();
-        let instance = wgpu::Instance::new(wgpu::Backends::all());
-        let surface = unsafe { instance.create_surface(window) };
-        let adapter = instance
-            .request_adapter(&wgpu::RequestAdapterOptions {
-                power_preference: wgpu::PowerPreference::default(),
-                compatible_surface: Some(&surface),
-                force_fallback_adapter: false,
-            })
-            .await
-            .unwrap();
-        let (device, queue) = adapter
-            .request_device(
-                &wgpu::DeviceDescriptor {
-                    label: None,
-                    features: wgpu::Features::empty(),
-                    limits: if cfg!(target_arch = "wasm32") {
-                        wgpu::Limits::downlevel_webgl2_defaults()
-                    } else {
-                        wgpu::Limits::default()
-                    },
-                },
-                None,
-            )
-            .await
-            .unwrap();
-
-        let config = wgpu::SurfaceConfiguration {
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-            format: *surface
-                .get_supported_formats(&adapter)
-                .first()
-                .unwrap(),
-            width: size.width,
-            height: size.height,
-            present_mode: wgpu::PresentMode::Fifo,
-        };
-        surface.configure(&device, &config);
-
+impl framework::Example for Example {
+    fn init(
+        config: &wgpu::SurfaceConfiguration,
+        _adapter: &wgpu::Adapter,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+    ) -> Self {
         let texture_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 entries: &[
@@ -144,29 +109,8 @@ impl State {
             });
 
         #[cfg(target_arch = "wasm32")]
-        let texture = {
-            let mut opts = RequestInit::new();
-            opts.method("GET");
-            opts.mode(RequestMode::Cors);
-
-            let url = "https://raw.githubusercontent.com/gfx-rs/wgpu/master/logo.png";
-            let request = Request::new_with_str_and_init(url, &opts).unwrap();
-
-            let web_window = web_sys::window().unwrap();
-            let resp_value = JsFuture::from(web_window.fetch_with_request(&request))
-                .await
-                .unwrap();
-            let resp: Response = resp_value.dyn_into().unwrap();
-
-            let blob_value = JsFuture::from(resp.blob().unwrap()).await.unwrap();
-            let blob: Blob = blob_value.dyn_into().unwrap();
-
-            let img_value =
-                JsFuture::from(web_window.create_image_bitmap_with_blob(&blob).unwrap())
-                    .await
-                    .unwrap();
-            let image: ImageBitmap = img_value.dyn_into().unwrap();
-
+        let texture = unsafe {
+            let image: &ImageBitmap = imageData.as_ref().unwrap();
             let texture_size = wgpu::Extent3d {
                 width: image.width(),
                 height: image.height(),
@@ -185,7 +129,7 @@ impl State {
                     | wgpu::TextureUsages::TEXTURE_BINDING,
             });
 
-            queue.copy_external_image_to_texture(&image, texture.as_image_copy(), texture_size);
+            queue.copy_external_image_to_texture(image, texture.as_image_copy(), texture_size);
 
             texture
         };
@@ -316,42 +260,36 @@ impl State {
         let num_indices = INDICES.len() as u32;
 
         Self {
-            surface,
-            device,
-            queue,
-            config,
             render_pipeline,
             vertex_buffer,
             index_buffer,
             num_indices,
             diffuse_bind_group,
-            size,
         }
     }
 
-    pub fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
-        if new_size.width > 0 && new_size.height > 0 {
-            self.size = new_size;
-            self.config.width = new_size.width;
-            self.config.height = new_size.height;
-            self.surface.configure(&self.device, &self.config);
-        }
+    fn update(&mut self, _event: WindowEvent) {
+        // empty
     }
 
-    fn update(&mut self) {}
+    fn resize(
+        &mut self,
+        _config: &wgpu::SurfaceConfiguration,
+        _device: &wgpu::Device,
+        _queue: &wgpu::Queue,
+    ) {
+        // empty
+    }
 
-    fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
-        let output = self.surface.get_current_texture()?;
-        let view = output
-            .texture
-            .create_view(&wgpu::TextureViewDescriptor::default());
-
-        let mut encoder = self
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("Render Encoder"),
-            });
-
+    fn render(
+        &mut self,
+        view: &wgpu::TextureView,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        _spawner: &framework::Spawner,
+    ) {
+        let mut encoder =
+            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Render Pass"),
@@ -378,70 +316,54 @@ impl State {
             render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
         }
 
-        self.queue.submit(std::iter::once(encoder.finish()));
-        output.present();
-
-        Ok(())
+        queue.submit(Some(encoder.finish()));
     }
 }
 
-async fn run(event_loop: EventLoop<()>, window: Window) {
-    // State::new uses async code, so we're going to wait for it to finish
-    let mut state = State::new(&window).await;
+#[cfg(target_arch = "wasm32")]
+async fn setup() {
+    let mut opts = RequestInit::new();
+    opts.method("GET");
+    opts.mode(RequestMode::Cors);
 
-    event_loop.run(move |event, _, control_flow| {
-        match event {
-            Event::WindowEvent {
-                event: WindowEvent::CloseRequested,
-                ..
-            } => *control_flow = ControlFlow::Exit,
-            Event::RedrawRequested(window_id) if window_id == window.id() => {
-                state.update();
-                match state.render() {
-                    Ok(_) => {}
-                    // Reconfigure the surface if it's lost or outdated
-                    Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
-                        state.resize(state.size)
-                    }
-                    // The system is out of memory, we should probably quit
-                    Err(wgpu::SurfaceError::OutOfMemory) => *control_flow = ControlFlow::Exit,
-                    // We're ignoring timeouts
-                    Err(wgpu::SurfaceError::Timeout) => log::warn!("Surface timeout"),
-                }
-            }
-            Event::MainEventsCleared => {
-                // RedrawRequested will only trigger once, unless we manually
-                // request it.
-                window.request_redraw();
-            }
-            _ => {}
-        }
-    });
+    let url = "https://raw.githubusercontent.com/gfx-rs/wgpu/master/logo.png";
+    let request = Request::new_with_str_and_init(url, &opts).unwrap();
+
+    let web_window = web_sys::window().unwrap();
+    let resp_value = JsFuture::from(web_window.fetch_with_request(&request))
+        .await
+        .unwrap();
+    let resp: Response = resp_value.dyn_into().unwrap();
+
+    let blob_value = JsFuture::from(resp.blob().unwrap()).await.unwrap();
+    let blob: Blob = blob_value.dyn_into().unwrap();
+
+    let img_value = JsFuture::from(web_window.create_image_bitmap_with_blob(&blob).unwrap())
+        .await
+        .unwrap();
+    let image: ImageBitmap = img_value.dyn_into().unwrap();
+
+    unsafe {
+        imageData = Some(image);
+    }
 }
 
 fn main() {
-    let event_loop = EventLoop::new();
-    let window = Window::new(&event_loop).unwrap();
     #[cfg(not(target_arch = "wasm32"))]
-    {
-        env_logger::init();
-        // Temporarily avoid srgb formats for the swapchain on the web
-        pollster::block_on(run(event_loop, window));
-    }
+    framework::run::<Example>("hello-copy-source");
     #[cfg(target_arch = "wasm32")]
-    {
-        std::panic::set_hook(Box::new(console_error_panic_hook::hook));
-        console_log::init().expect("could not initialize logger");
-        use winit::platform::web::WindowExtWebSys;
-        // On wasm, append the canvas to the document body
-        web_sys::window()
-            .and_then(|win| win.document())
-            .and_then(|doc| doc.body())
-            .and_then(|body| {
-                body.append_child(&web_sys::Element::from(window.canvas()))
-                    .ok()
-            })
-            .expect("couldn't append canvas to document body");
-        wasm_bindgen_futures::spawn_local(run(event_loop, window));
-    }
+    framework::run_with_setup::<Example, _>("hello-copy-source", setup());
+}
+
+#[test]
+fn hello_copy_source() {
+    framework::test::<Example>(framework::FrameworkRefTest {
+        image_path: "/examples/hello-copy-source/screenshot.png",
+        width: 1024,
+        height: 768,
+        optional_features: wgpu::Features::default(),
+        base_test_parameters: framework::test_common::TestParameters::default(),
+        tolerance: 1,
+        max_outliers: 500, // Bounded by rpi4
+    });
 }
