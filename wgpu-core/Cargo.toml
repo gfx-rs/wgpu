@@ -56,9 +56,11 @@ path = "../wgpu-hal"
 package = "wgpu-hal"
 version = "0.13"
 
+[target.'cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))'.dependencies]
+web-sys = { version = "0.3", features = ["HtmlCanvasElement", "OffscreenCanvas"] }
+
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 hal = { path = "../wgpu-hal", package = "wgpu-hal", version = "0.13", features = ["gles"] }
-web-sys = { version = "0.3", features = ["HtmlCanvasElement"] }
 
 [target.'cfg(all(not(target_arch = "wasm32"), any(target_os = "ios", target_os = "macos")))'.dependencies]
 hal = { path = "../wgpu-hal", package = "wgpu-hal", version = "0.13", features = ["metal"] }
