@@ -659,6 +659,7 @@ pub struct Buffer {
     context: Arc<C>,
     id: <C as Context>::BufferId,
     map_context: Mutex<MapContext>,
+    size: wgt::BufferAddress,
     usage: BufferUsages,
 }
 
@@ -2129,6 +2130,7 @@ impl Device {
             context: Arc::clone(&self.context),
             id: Context::device_create_buffer(&*self.context, &self.id, desc),
             map_context: Mutex::new(map_context),
+            size: desc.size,
             usage: desc.usage,
         }
     }
@@ -2425,6 +2427,20 @@ impl Buffer {
     /// Destroy the associated native resources as soon as possible.
     pub fn destroy(&self) {
         Context::buffer_destroy(&*self.context, &self.id);
+    }
+
+    /// Returns the length of the buffer allocation in bytes.
+    ///
+    /// This is always equal to the `size` that was specified when creating the buffer.
+    pub fn size(&self) -> wgt::BufferAddress {
+        self.size
+    }
+
+    /// Returns the allowed usages for this `Buffer`.
+    ///
+    /// This is always equal to the `usage` that was specified when creating the buffer.
+    pub fn usage(&self) -> BufferUsages {
+        self.usage
     }
 }
 

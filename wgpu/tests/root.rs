@@ -1,6 +1,7 @@
 // All files containing tests
 mod common;
 
+mod buffer;
 mod clear_texture;
 mod device;
 mod example_wgsl;
