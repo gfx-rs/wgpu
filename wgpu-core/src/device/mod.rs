@@ -2462,6 +2462,16 @@ impl<A: HalApi> Device<A> {
             ArrayVec::<binding_model::BindEntryMap, { hal::MAX_BIND_GROUPS }>::new();
         let mut shader_binding_sizes = FastHashMap::default();
 
+        let num_attachments = desc.fragment.as_ref().map(|f| f.targets.len()).unwrap_or(0);
+        if num_attachments > hal::MAX_COLOR_ATTACHMENTS {
+            return Err(
+                pipeline::CreateRenderPipelineError::TooManyColorAttachments {
+                    given: num_attachments as u32,
+                    limit: hal::MAX_COLOR_ATTACHMENTS as u32,
+                },
+            );
+        }
+
         let color_targets = desc
             .fragment
             .as_ref()

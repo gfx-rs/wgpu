@@ -72,6 +72,14 @@ the same every time it is rendered, we now warn if it is missing.
 #### General
 - Added downlevel restriction error message for `InvalidFormatUsages` error by @Seamooo in [#2886](https://github.com/gfx-rs/wgpu/pull/2886)
 
+### Performance
+
+- Made `StagingBelt::write_buffer()` check more thoroughly for reusable memory; by @kpreid in [#2906](https://github.com/gfx-rs/wgpu/pull/2906)
+
+### Documentation
+
+- Expanded `StagingBelt` documentation by @kpreid in [#2905](https://github.com/gfx-rs/wgpu/pull/2905)
+
 ## wgpu-0.13.2 (2022-07-13)
 
 ### Bug Fixes
@@ -86,6 +94,7 @@ the same every time it is rendered, we now warn if it is missing.
 - Add some validation in map_async by @nical in [#2876](https://github.com/gfx-rs/wgpu/pull/2876)
 - Fix bugs when mapping/unmapping zero-sized buffers and ranges by @nical in [#2877](https://github.com/gfx-rs/wgpu/pull/2877)
 - Fix out-of-bound write in `map_buffer` with non-zero offset by @nical in [#2916](https://github.com/gfx-rs/wgpu/pull/2916)
+- Validate the number of color attachments in `create_render_pipeline` by @nical in [#2913](https://github.com/gfx-rs/wgpu/pull/2913)
 
 #### DX12
 - `DownlevelCapabilities::default()` now returns the `ANISOTROPIC_FILTERING` flag set to true so DX12 lists `ANISOTROPIC_FILTERING` as true again by @cwfitzgerald in [#2851](https://github.com/gfx-rs/wgpu/pull/2851)
@@ -106,6 +115,7 @@ the same every time it is rendered, we now warn if it is missing.
 #### Hal
 
 - Document safety requirements for `Adapter::from_external` in gles hal by @i509VCB in [#2863](https://github.com/gfx-rs/wgpu/pull/2863)
+- Make `AdapterContext` a publicly accessible type in the gles hal by @i509VCB in [#2870](https://github.com/gfx-rs/wgpu/pull/2870)
 
 ## wgpu-0.13.1 (2022-07-02)
 
