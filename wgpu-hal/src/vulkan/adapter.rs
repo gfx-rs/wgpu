@@ -15,7 +15,6 @@ fn indexing_features() -> wgt::Features {
 #[derive(Debug, Default)]
 pub struct PhysicalDeviceFeatures {
     core: vk::PhysicalDeviceFeatures,
-    vulkan_1_1: Option<vk::PhysicalDeviceVulkan11Features>,
     pub(super) vulkan_1_2: Option<vk::PhysicalDeviceVulkan12Features>,
     pub(super) descriptor_indexing: Option<vk::PhysicalDeviceDescriptorIndexingFeaturesEXT>,
     imageless_framebuffer: Option<vk::PhysicalDeviceImagelessFramebufferFeaturesKHR>,
@@ -177,15 +176,6 @@ impl PhysicalDeviceFeatures {
                 //.shader_resource_residency(requested_features.contains(wgt::Features::SHADER_RESOURCE_RESIDENCY))
                 .geometry_shader(requested_features.contains(wgt::Features::SHADER_PRIMITIVE_INDEX))
                 .build(),
-            vulkan_1_1: if api_version >= vk::API_VERSION_1_1 {
-                Some(
-                    vk::PhysicalDeviceVulkan11Features::builder()
-                        .multiview(requested_features.contains(wgt::Features::MULTIVIEW))
-                        .build(),
-                )
-            } else {
-                None
-            },
             vulkan_1_2: if api_version >= vk::API_VERSION_1_2 {
                 Some(
                     vk::PhysicalDeviceVulkan12Features::builder()
@@ -316,7 +306,9 @@ impl PhysicalDeviceFeatures {
             } else {
                 None
             },
-            multiview: if enabled_extensions.contains(&vk::KhrMultiviewFn::name()) {
+            multiview: if api_version >= vk::API_VERSION_1_1
+                || enabled_extensions.contains(&vk::KhrMultiviewFn::name())
+            {
                 Some(
                     vk::PhysicalDeviceMultiviewFeatures::builder()
                         .multiview(requested_features.contains(wgt::Features::MULTIVIEW))
@@ -450,10 +442,6 @@ impl PhysicalDeviceFeatures {
         );
 
         let intel_windows = caps.properties.vendor_id == db::intel::VENDOR && cfg!(windows);
-
-        if let Some(ref vulkan_1_1) = self.vulkan_1_1 {
-            features.set(F::MULTIVIEW, vulkan_1_1.multiview != 0);
-        }
 
         if let Some(ref vulkan_1_2) = self.vulkan_1_2 {
             const STORAGE: F = F::STORAGE_RESOURCE_BINDING_ARRAY;
@@ -891,10 +879,13 @@ impl super::InstanceShared {
             let core = vk::PhysicalDeviceFeatures::default();
             let mut builder = vk::PhysicalDeviceFeatures2KHR::builder().features(core);
 
-            if capabilities.properties.api_version >= vk::API_VERSION_1_1 {
+            // `VK_KHR_multiview` is promoted to 1.1
+            if capabilities.properties.api_version >= vk::API_VERSION_1_1
+                || capabilities.supports_extension(vk::KhrMultiviewFn::name())
+            {
                 let next = features
-                    .vulkan_1_1
-                    .insert(vk::PhysicalDeviceVulkan11Features::default());
+                    .multiview
+                    .insert(vk::PhysicalDeviceMultiviewFeatures::default());
                 builder = builder.push_next(next);
             }
 

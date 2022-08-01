@@ -102,6 +102,10 @@ the same every time it is rendered, we now warn if it is missing.
 - `DownlevelCapabilities::default()` now returns the `ANISOTROPIC_FILTERING` flag set to true so DX12 lists `ANISOTROPIC_FILTERING` as true again by @cwfitzgerald in [#2851](https://github.com/gfx-rs/wgpu/pull/2851)
 - Properly query format features for UAV/SRV usages of depth formats by @cwfitzgerald in [#2856](https://github.com/gfx-rs/wgpu/pull/2856)
 
+#### Vulkan
+- Vulkan 1.0 drivers that support `VK_KHR_multiview` now properly report the `MULTIVIEW` feature as supported by @i509VCB in [#2934](https://github.com/gfx-rs/wgpu/pull/2934).
+- Stop using `VkPhysicalDevice11Features` in Vulkan 1.1 which is confusingly provided in Vulkan 1.2 by @i509VCB in [#2934](https://github.com/gfx-rs/wgpu/pull/2934).
+
 #### GLES
 - Fix depth stencil texture format capability by @jinleili in [#2854](https://github.com/gfx-rs/wgpu/pull/2854)
 - `get_texture_format_features` now only returns usages for formats it actually supports by @cwfitzgerald in [#2856](https://github.com/gfx-rs/wgpu/pull/2856)
