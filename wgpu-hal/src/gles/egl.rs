@@ -772,7 +772,7 @@ impl crate::Instance<super::Api> for Instance {
         &self,
         has_handle: &(impl HasRawWindowHandle + HasRawDisplayHandle),
     ) -> Result<Surface, crate::InstanceError> {
-        use raw_window_handle::RawWindowHandle as Rwh;
+        use raw_window_handle::{RawDisplayHandle as Rdh, RawWindowHandle as Rwh};
 
         let raw_window_handle = has_handle.raw_window_handle();
 
@@ -800,7 +800,7 @@ impl crate::Instance<super::Api> for Instance {
                 }
             }
             #[cfg(not(feature = "emscripten"))]
-            (Rwh::Wayland(_), raw_window_handle::RawDisplayHandle::Wayland(display_handle)) => {
+            (Rwh::Wayland(_), Rdh::Wayland(display_handle)) => {
                 /* Wayland displays are not sharable between surfaces so if the
                  * surface we receive from this handle is from a different
                  * display, we must re-initialize the context.
