@@ -622,8 +622,8 @@ impl crate::Instance<super::Api> for super::Instance {
             RawWindowHandle::Xcb(handle)
                 if self.shared.extensions.contains(&khr::XcbSurface::name()) =>
             {
-                if let RawDisplayHandle::Xlib(v) = has_handle.raw_display_handle() {
-                    Ok(self.create_surface_from_xcb(v.display, handle.window))
+                if let RawDisplayHandle::Xcb(v) = has_handle.raw_display_handle() {
+                    Ok(self.create_surface_from_xcb(v.connection, handle.window))
                 } else {
                     Err(crate::InstanceError)
                 }
