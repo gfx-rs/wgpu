@@ -594,44 +594,41 @@ impl crate::Instance<super::Api> for super::Instance {
         has_handle: &(impl raw_window_handle::HasRawWindowHandle
               + raw_window_handle::HasRawDisplayHandle),
     ) -> Result<super::Surface, crate::InstanceError> {
-        use raw_window_handle::RawDisplayHandle;
-        use raw_window_handle::RawWindowHandle;
+        use raw_window_handle::{RawDisplayHandle as Rdh, RawWindowHandle as Rwh};
 
         match (
             has_handle.raw_window_handle(),
             has_handle.raw_display_handle(),
         ) {
-            (RawWindowHandle::Wayland(handle), RawDisplayHandle::Wayland(display)) => {
+            (Rwh::Wayland(handle), Rdh::Wayland(display)) => {
                 Ok(self.create_surface_from_wayland(display.display, handle.surface))
             }
-            (RawWindowHandle::Xlib(handle), RawDisplayHandle::Xlib(display))
+            (Rwh::Xlib(handle), Rdh::Xlib(display))
                 if self.shared.extensions.contains(&khr::XlibSurface::name()) =>
             {
                 Ok(self.create_surface_from_xlib(display.display as *mut _, handle.window))
             }
-            (RawWindowHandle::Xcb(handle), RawDisplayHandle::Xcb(display))
+            (Rwh::Xcb(handle), Rdh::Xcb(display))
                 if self.shared.extensions.contains(&khr::XcbSurface::name()) =>
             {
                 Ok(self.create_surface_from_xcb(display.connection, handle.window))
             }
-            (RawWindowHandle::AndroidNdk(handle), _) => {
-                Ok(self.create_surface_android(handle.a_native_window))
-            }
+            (Rwh::AndroidNdk(handle), _) => Ok(self.create_surface_android(handle.a_native_window)),
             #[cfg(windows)]
-            (RawWindowHandle::Win32(handle), _) => {
+            (Rwh::Win32(handle), _) => {
                 use winapi::um::libloaderapi::GetModuleHandleW;
 
                 let hinstance = GetModuleHandleW(std::ptr::null());
                 Ok(self.create_surface_from_hwnd(hinstance as *mut _, handle.hwnd))
             }
             #[cfg(target_os = "macos")]
-            (RawWindowHandle::AppKit(handle), _)
+            (Rwh::AppKit(handle), _)
                 if self.shared.extensions.contains(&ext::MetalSurface::name()) =>
             {
                 Ok(self.create_surface_from_view(handle.ns_view))
             }
             #[cfg(target_os = "ios")]
-            (RawWindowHandle::UiKit(handle), _)
+            (Rwh::UiKit(handle), _)
                 if self.shared.extensions.contains(&ext::MetalSurface::name()) =>
             {
                 Ok(self.create_surface_from_view(handle.ui_view))
