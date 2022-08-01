@@ -60,6 +60,7 @@ the same every time it is rendered, we now warn if it is missing.
 
 #### General
 - Improve the validation and error reporting of buffer mappings by @nical in [#2848](https://github.com/gfx-rs/wgpu/pull/2848)
+- Fixed opening of RenderDoc library by @abuffseagull in [#2930](https://github.com/gfx-rs/wgpu/pull/2930)
 
 ### Changes
 
