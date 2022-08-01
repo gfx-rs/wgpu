@@ -1535,7 +1535,7 @@ dependencies = [
  "serde",
  "wgpu-core",
  "wgpu-types",
- "winit 0.27.0",
+ "winit 0.27.1",
 ]
 
 [[package]]
@@ -2378,7 +2378,7 @@ dependencies = [
  "wgpu-core",
  "wgpu-hal",
  "wgpu-types",
- "winit 0.27.0",
+ "winit 0.27.1",
 ]
 
 [[package]]
@@ -2443,7 +2443,7 @@ dependencies = [
  "web-sys",
  "wgpu-types",
  "winapi",
- "winit 0.27.0",
+ "winit 0.27.1",
 ]
 
 [[package]]
@@ -2572,9 +2572,9 @@ dependencies = [
 
 [[package]]
 name = "winit"
-version = "0.27.0"
+version = "0.27.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3464a81db85deec66bc170b5a4ca6413d4a5f43df460ff80b550c9207031ea7e"
+checksum = "b9b91360f15eb89d0bfee05d3c5981408320fe709f84953d3d90b276fc5962c7"
 dependencies = [
  "bitflags",
  "cocoa",
