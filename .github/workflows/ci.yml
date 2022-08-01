@@ -8,7 +8,7 @@ on:
 
 env:
   RUST_BACKTRACE: 1
-  RUST_VERSION: 1.63
+  RUST_VERSION: 1.59
 
 # We distinguish the following kinds of builds:
 # - local: build for the same target as we compile on, and do local tests
