@@ -597,60 +597,46 @@ impl crate::Instance<super::Api> for super::Instance {
         use raw_window_handle::RawDisplayHandle;
         use raw_window_handle::RawWindowHandle;
 
-        match has_handle.raw_window_handle() {
-            RawWindowHandle::Wayland(handle)
-                if self
-                    .shared
-                    .extensions
-                    .contains(&khr::WaylandSurface::name()) =>
-            {
-                if let RawDisplayHandle::Wayland(v) = has_handle.raw_display_handle() {
-                    Ok(self.create_surface_from_wayland(v.display, handle.surface))
-                } else {
-                    Err(crate::InstanceError)
-                }
+        match (
+            has_handle.raw_window_handle(),
+            has_handle.raw_display_handle(),
+        ) {
+            (RawWindowHandle::Wayland(handle), RawDisplayHandle::Wayland(display)) => {
+                Ok(self.create_surface_from_wayland(display.display, handle.surface))
             }
-            RawWindowHandle::Xlib(handle)
+            (RawWindowHandle::Xlib(handle), RawDisplayHandle::Xlib(display))
                 if self.shared.extensions.contains(&khr::XlibSurface::name()) =>
             {
-                if let RawDisplayHandle::Xlib(v) = has_handle.raw_display_handle() {
-                    Ok(self.create_surface_from_xlib(v.display as *mut _, handle.window))
-                } else {
-                    Err(crate::InstanceError)
-                }
+                Ok(self.create_surface_from_xlib(display.display as *mut _, handle.window))
             }
-            RawWindowHandle::Xcb(handle)
+            (RawWindowHandle::Xcb(handle), RawDisplayHandle::Xcb(display))
                 if self.shared.extensions.contains(&khr::XcbSurface::name()) =>
             {
-                if let RawDisplayHandle::Xcb(v) = has_handle.raw_display_handle() {
-                    Ok(self.create_surface_from_xcb(v.connection, handle.window))
-                } else {
-                    Err(crate::InstanceError)
-                }
+                Ok(self.create_surface_from_xcb(display.connection, handle.window))
             }
-            RawWindowHandle::AndroidNdk(handle) => {
+            (RawWindowHandle::AndroidNdk(handle), _) => {
                 Ok(self.create_surface_android(handle.a_native_window))
             }
             #[cfg(windows)]
-            RawWindowHandle::Win32(handle) => {
+            (RawWindowHandle::Win32(handle), _) => {
                 use winapi::um::libloaderapi::GetModuleHandleW;
 
                 let hinstance = GetModuleHandleW(std::ptr::null());
                 Ok(self.create_surface_from_hwnd(hinstance as *mut _, handle.hwnd))
             }
             #[cfg(target_os = "macos")]
-            RawWindowHandle::AppKit(handle)
+            (RawWindowHandle::AppKit(handle), _)
                 if self.shared.extensions.contains(&ext::MetalSurface::name()) =>
             {
                 Ok(self.create_surface_from_view(handle.ns_view))
             }
             #[cfg(target_os = "ios")]
-            RawWindowHandle::UiKit(handle)
+            (RawWindowHandle::UiKit(handle), _)
                 if self.shared.extensions.contains(&ext::MetalSurface::name()) =>
             {
                 Ok(self.create_surface_from_view(handle.ui_view))
             }
-            _ => Err(crate::InstanceError),
+            (_, _) => Err(crate::InstanceError),
         }
     }
 

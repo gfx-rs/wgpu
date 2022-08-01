@@ -779,13 +779,13 @@ impl crate::Instance<super::Api> for Instance {
         #[cfg_attr(any(target_os = "android", feature = "emscripten"), allow(unused_mut))]
         let mut inner = self.inner.lock();
 
-        match raw_window_handle {
-            Rwh::Xlib(_) => {}
-            Rwh::Xcb(_) => {}
-            Rwh::Win32(_) => {}
-            Rwh::AppKit(_) => {}
+        match (raw_window_handle, has_handle.raw_display_handle()) {
+            (Rwh::Xlib(_), _) => {}
+            (Rwh::Xcb(_), _) => {}
+            (Rwh::Win32(_), _) => {}
+            (Rwh::AppKit(_), _) => {}
             #[cfg(target_os = "android")]
-            Rwh::AndroidNdk(handle) => {
+            (Rwh::AndroidNdk(handle), _) => {
                 let format = inner
                     .egl
                     .instance
@@ -800,24 +800,17 @@ impl crate::Instance<super::Api> for Instance {
                 }
             }
             #[cfg(not(feature = "emscripten"))]
-            Rwh::Wayland(_) => {
+            (Rwh::Wayland(_), raw_window_handle::RawDisplayHandle::Wayland(display_handle)) => {
                 /* Wayland displays are not sharable between surfaces so if the
                  * surface we receive from this handle is from a different
                  * display, we must re-initialize the context.
                  *
                  * See gfx-rs/gfx#3545
                  */
-                let wayland_raw = if let raw_window_handle::RawDisplayHandle::Wayland(display) =
-                    has_handle.raw_display_handle()
-                {
-                    display.display
-                } else {
-                    return Err(crate::InstanceError);
-                };
                 log::warn!("Re-initializing Gles context due to Wayland window");
                 if inner
                     .wl_display
-                    .map(|ptr| ptr != wayland_raw)
+                    .map(|ptr| ptr != display_handle.display)
                     .unwrap_or(true)
                 {
                     use std::ops::DerefMut;
@@ -830,7 +823,7 @@ impl crate::Instance<super::Api> for Instance {
                         .unwrap()
                         .get_platform_display(
                             EGL_PLATFORM_WAYLAND_KHR,
-                            wayland_raw,
+                            display_handle.display,
                             &display_attributes,
                         )
                         .unwrap();
@@ -840,13 +833,13 @@ impl crate::Instance<super::Api> for Instance {
                             .map_err(|_| crate::InstanceError)?;
 
                     let old_inner = std::mem::replace(inner.deref_mut(), new_inner);
-                    inner.wl_display = Some(wayland_raw);
+                    inner.wl_display = Some(display_handle.display);
 
                     drop(old_inner);
                 }
             }
             #[cfg(feature = "emscripten")]
-            Rwh::Web(_) => {}
+            (Rwh::Web(_), _) => {}
             other => {
                 log::error!("Unsupported window: {:?}", other);
                 return Err(crate::InstanceError);
