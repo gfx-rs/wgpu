@@ -1,7 +1,8 @@
 use crate::common::{initialize_test, TestParameters};
 
+/// Buffer's size and usage can be read back.
 #[test]
-fn buffer_size_and_usage_get() {
+fn buffer_size_and_usage() {
     initialize_test(TestParameters::default(), |ctx| {
         let buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
             label: None,
