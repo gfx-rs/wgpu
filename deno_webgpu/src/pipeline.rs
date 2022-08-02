@@ -37,6 +37,19 @@ impl Resource for WebGpuRenderPipeline {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub enum GPUAutoLayoutMode {
+    Auto,
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+pub enum GPUPipelineLayoutOrGPUAutoLayoutMode {
+    Layout(ResourceId),
+    Auto(GPUAutoLayoutMode),
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct GpuProgrammableStage {
     module: ResourceId,
     entry_point: String,
@@ -48,7 +61,7 @@ pub fn op_webgpu_create_compute_pipeline(
     state: &mut OpState,
     device_rid: ResourceId,
     label: Option<String>,
-    layout: Option<ResourceId>,
+    layout: GPUPipelineLayoutOrGPUAutoLayoutMode,
     compute: GpuProgrammableStage,
 ) -> Result<WebGpuResult, AnyError> {
     let instance = state.borrow::<super::Instance>();
@@ -57,11 +70,12 @@ pub fn op_webgpu_create_compute_pipeline(
         .get::<super::WebGpuDevice>(device_rid)?;
     let device = device_resource.0;
 
-    let pipeline_layout = if let Some(rid) = layout {
-        let id = state.resource_table.get::<WebGpuPipelineLayout>(rid)?;
-        Some(id.0)
-    } else {
-        None
+    let pipeline_layout = match layout {
+        GPUPipelineLayoutOrGPUAutoLayoutMode::Layout(rid) => {
+            let id = state.resource_table.get::<WebGpuPipelineLayout>(rid)?;
+            Some(id.0)
+        }
+        GPUPipelineLayoutOrGPUAutoLayoutMode::Auto(GPUAutoLayoutMode::Auto) => None,
     };
 
     let compute_shader_module_resource = state
@@ -78,11 +92,13 @@ pub fn op_webgpu_create_compute_pipeline(
         },
     };
     let implicit_pipelines = match layout {
-        Some(_) => None,
-        None => Some(wgpu_core::device::ImplicitPipelineIds {
-            root_id: std::marker::PhantomData,
-            group_ids: &[std::marker::PhantomData; MAX_BIND_GROUPS],
-        }),
+        GPUPipelineLayoutOrGPUAutoLayoutMode::Layout(_) => None,
+        GPUPipelineLayoutOrGPUAutoLayoutMode::Auto(GPUAutoLayoutMode::Auto) => {
+            Some(wgpu_core::device::ImplicitPipelineIds {
+                root_id: std::marker::PhantomData,
+                group_ids: &[std::marker::PhantomData; MAX_BIND_GROUPS],
+            })
+        }
     };
 
     let (compute_pipeline, maybe_err) = gfx_select!(device => instance.device_create_compute_pipeline(
@@ -271,7 +287,7 @@ struct GpuFragmentState {
 pub struct CreateRenderPipelineArgs {
     device_rid: ResourceId,
     label: Option<String>,
-    layout: Option<ResourceId>,
+    layout: GPUPipelineLayoutOrGPUAutoLayoutMode,
     vertex: GpuVertexState,
     primitive: GpuPrimitiveState,
     depth_stencil: Option<GpuDepthStencilState>,
@@ -290,11 +306,12 @@ pub fn op_webgpu_create_render_pipeline(
         .get::<super::WebGpuDevice>(args.device_rid)?;
     let device = device_resource.0;
 
-    let layout = if let Some(rid) = args.layout {
-        let pipeline_layout_resource = state.resource_table.get::<WebGpuPipelineLayout>(rid)?;
-        Some(pipeline_layout_resource.0)
-    } else {
-        None
+    let layout = match args.layout {
+        GPUPipelineLayoutOrGPUAutoLayoutMode::Layout(rid) => {
+            let pipeline_layout_resource = state.resource_table.get::<WebGpuPipelineLayout>(rid)?;
+            Some(pipeline_layout_resource.0)
+        }
+        GPUPipelineLayoutOrGPUAutoLayoutMode::Auto(GPUAutoLayoutMode::Auto) => None,
     };
 
     let vertex_shader_module_resource = state
@@ -344,11 +361,13 @@ pub fn op_webgpu_create_render_pipeline(
     };
 
     let implicit_pipelines = match args.layout {
-        Some(_) => None,
-        None => Some(wgpu_core::device::ImplicitPipelineIds {
-            root_id: std::marker::PhantomData,
-            group_ids: &[std::marker::PhantomData; MAX_BIND_GROUPS],
-        }),
+        GPUPipelineLayoutOrGPUAutoLayoutMode::Layout(_) => None,
+        GPUPipelineLayoutOrGPUAutoLayoutMode::Auto(GPUAutoLayoutMode::Auto) => {
+            Some(wgpu_core::device::ImplicitPipelineIds {
+                root_id: std::marker::PhantomData,
+                group_ids: &[std::marker::PhantomData; MAX_BIND_GROUPS],
+            })
+        }
     };
 
     let (render_pipeline, maybe_err) = gfx_select!(device => instance.device_create_render_pipeline(

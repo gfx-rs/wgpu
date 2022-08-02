@@ -31,6 +31,9 @@ pub mod queue;
 #[cfg(any(feature = "trace", feature = "replay"))]
 pub mod trace;
 
+// Per WebGPU specification.
+pub const MAX_BINDING_INDEX: u32 = 65535;
+
 pub const SHADER_STAGE_COUNT: usize = 3;
 // Should be large enough for the largest possible texture row. This value is enough for a 16k texture with float4 format.
 pub(crate) const ZERO_BUFFER_SIZE: BufferAddress = 512 << 10;
@@ -190,24 +193,17 @@ fn map_buffer<A: hal::Api>(
     //
     // If this is a write mapping zeroing out the memory here is the only reasonable way as all data is pushed to GPU anyways.
     let zero_init_needs_flush_now = mapping.is_coherent && buffer.sync_mapped_writes.is_none(); // No need to flush if it is flushed later anyways.
-    for uninitialized_range in buffer.initialization_status.drain(offset..(size + offset)) {
-        let num_bytes = uninitialized_range.end - uninitialized_range.start;
-        unsafe {
-            ptr::write_bytes(
-                mapping
-                    .ptr
-                    .as_ptr()
-                    .offset(uninitialized_range.start as isize),
-                0,
-                num_bytes as usize,
-            )
-        };
+    let mapped = unsafe { std::slice::from_raw_parts_mut(mapping.ptr.as_ptr(), size as usize) };
+
+    for uninitialized in buffer.initialization_status.drain(offset..(size + offset)) {
+        // The mapping's pointer is already offset, however we track the uninitialized range relative to the buffer's start.
+        let fill_range =
+            (uninitialized.start - offset) as usize..(uninitialized.end - offset) as usize;
+        mapped[fill_range].fill(0);
+
         if zero_init_needs_flush_now {
             unsafe {
-                raw.flush_mapped_ranges(
-                    buffer.raw.as_ref().unwrap(),
-                    iter::once(uninitialized_range.start..uninitialized_range.start + num_bytes),
-                )
+                raw.flush_mapped_ranges(buffer.raw.as_ref().unwrap(), iter::once(uninitialized))
             };
         }
     }
@@ -2379,6 +2375,7 @@ impl<A: HalApi> Device<A> {
                     &desc.stage.entry_point,
                     flag,
                     io,
+                    None,
                 )?;
             }
         }
@@ -2467,6 +2464,16 @@ impl<A: HalApi> Device<A> {
         let mut derived_group_layouts =
             ArrayVec::<binding_model::BindEntryMap, { hal::MAX_BIND_GROUPS }>::new();
         let mut shader_binding_sizes = FastHashMap::default();
+
+        let num_attachments = desc.fragment.as_ref().map(|f| f.targets.len()).unwrap_or(0);
+        if num_attachments > hal::MAX_COLOR_ATTACHMENTS {
+            return Err(
+                pipeline::CreateRenderPipelineError::TooManyColorAttachments {
+                    given: num_attachments as u32,
+                    limit: hal::MAX_COLOR_ATTACHMENTS as u32,
+                },
+            );
+        }
 
         let color_targets = desc
             .fragment
@@ -2704,6 +2711,7 @@ impl<A: HalApi> Device<A> {
                         &stage.entry_point,
                         flag,
                         io,
+                        desc.depth_stencil.as_ref().map(|d| d.depth_compare),
                     )
                     .map_err(|error| pipeline::CreateRenderPipelineError::Stage {
                         stage: flag,
@@ -2750,6 +2758,7 @@ impl<A: HalApi> Device<A> {
                                 &fragment.stage.entry_point,
                                 flag,
                                 io,
+                                desc.depth_stencil.as_ref().map(|d| d.depth_compare),
                             )
                             .map_err(|error| pipeline::CreateRenderPipelineError::Stage {
                                 stage: flag,
@@ -4077,6 +4086,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             let mut entry_map = FastHashMap::default();
             for entry in desc.entries.iter() {
+                if entry.binding > MAX_BINDING_INDEX {
+                    break 'outer binding_model::CreateBindGroupLayoutError::InvalidBindingIndex {
+                        binding: entry.binding,
+                        maximum: MAX_BINDING_INDEX,
+                    };
+                }
                 if entry_map.insert(entry.binding, *entry).is_some() {
                     break 'outer binding_model::CreateBindGroupLayoutError::ConflictBinding(
                         entry.binding,
