@@ -772,7 +772,7 @@ impl crate::Instance<super::Api> for Instance {
         &self,
         has_handle: &(impl HasRawWindowHandle + HasRawDisplayHandle),
     ) -> Result<Surface, crate::InstanceError> {
-        use raw_window_handle::{RawWindowHandle as Rwh};
+        use raw_window_handle::RawWindowHandle as Rwh;
 
         let raw_window_handle = has_handle.raw_window_handle();
 
