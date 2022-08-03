@@ -5403,9 +5403,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     BufferMapAsyncStatus::InvalidAlignment
                 }
                 &BufferAccessError::OutOfBoundsUnderrun { .. }
-                | &BufferAccessError::OutOfBoundsOverrun { .. } => {
-                    BufferMapAsyncStatus::InvalidRange
-                }
+                | &BufferAccessError::OutOfBoundsOverrun { .. }
+                | &BufferAccessError::NegativeRange { .. } => BufferMapAsyncStatus::InvalidRange,
                 _ => BufferMapAsyncStatus::Error,
             };
 
@@ -5456,6 +5455,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 return Err((op, e.into()));
             }
 
+            if range.start > range.end {
+                return Err((
+                    op,
+                    BufferAccessError::NegativeRange {
+                        start: range.start,
+                        end: range.end,
+                    },
+                ));
+            }
             if range.end > buffer.size {
                 return Err((
                     op,
