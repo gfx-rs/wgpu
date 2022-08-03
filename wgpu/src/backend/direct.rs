@@ -1701,10 +1701,7 @@ impl crate::Context for Context {
                 MapMode::Write => wgc::device::HostMap::Write,
             },
             callback: wgc::resource::BufferMapCallback::from_rust(Box::new(|status| {
-                let res = match status {
-                    wgc::resource::BufferMapAsyncStatus::Success => Ok(()),
-                    _ => Err(crate::BufferAsyncError),
-                };
+                let res = status.map_err(|_| crate::BufferAsyncError);
                 callback(res);
             })),
         };
