@@ -173,6 +173,11 @@ pub enum BufferAccessError {
         index: wgt::BufferAddress,
         max: wgt::BufferAddress,
     },
+    #[error("buffer map range start {start} is greater than end {end}")]
+    NegativeRange {
+        start: wgt::BufferAddress,
+        end: wgt::BufferAddress,
+    },
 }
 
 pub(crate) struct BufferPendingMapping {

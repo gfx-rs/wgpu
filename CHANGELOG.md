@@ -104,7 +104,8 @@ the same every time it is rendered, we now warn if it is missing.
 - Fix bugs when mapping/unmapping zero-sized buffers and ranges by @nical in [#2877](https://github.com/gfx-rs/wgpu/pull/2877)
 - Fix out-of-bound write in `map_buffer` with non-zero offset by @nical in [#2916](https://github.com/gfx-rs/wgpu/pull/2916)
 - Validate the number of color attachments in `create_render_pipeline` by @nical in [#2913](https://github.com/gfx-rs/wgpu/pull/2913)
-- Validate against the maximum binding index in `create_bind_group_layout` by @nical in [#2892]
+- Validate against the maximum binding index in `create_bind_group_layout` by @nical in [#2892](https://github.com/gfx-rs/wgpu/pull/2892)
+- Validate that map_async's range is not negative by @nical in [#2938](https://github.com/gfx-rs/wgpu/pull/2938)
 
 #### DX12
 - `DownlevelCapabilities::default()` now returns the `ANISOTROPIC_FILTERING` flag set to true so DX12 lists `ANISOTROPIC_FILTERING` as true again by @cwfitzgerald in [#2851](https://github.com/gfx-rs/wgpu/pull/2851)
