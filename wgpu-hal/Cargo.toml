@@ -34,7 +34,7 @@ bitflags = "1.0"
 # parking_lot 0.12 switches from `winapi` to `windows`; permit either
 parking_lot = ">=0.11,<0.13"
 profiling = { version = "1", default-features = false }
-raw-window-handle = "0.4"
+raw-window-handle = "0.5"
 thiserror = "1"
 
 # backends common
@@ -109,7 +109,7 @@ features = ["wgsl-in"]
 
 [dev-dependencies]
 env_logger = "0.9"
-winit = "0.26"     # for "halmark" example
+winit = "0.27.1"     # for "halmark" example
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
-glutin = "0.28" # for "gles" example
+glutin = "0.28.0" # for "gles" example

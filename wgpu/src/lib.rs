@@ -197,7 +197,7 @@ trait Context: Debug + Send + Sized + Sync {
     fn init(backends: Backends) -> Self;
     fn instance_create_surface(
         &self,
-        handle: &impl raw_window_handle::HasRawWindowHandle,
+        handle: &(impl raw_window_handle::HasRawWindowHandle + raw_window_handle::HasRawDisplayHandle),
     ) -> Self::SurfaceId;
     fn instance_request_adapter(
         &self,
@@ -1755,7 +1755,9 @@ impl Instance {
     /// - Raw Window Handle must be a valid object to create a surface upon and
     ///   must remain valid for the lifetime of the returned surface.
     /// - If not called on the main thread, metal backend will panic.
-    pub unsafe fn create_surface<W: raw_window_handle::HasRawWindowHandle>(
+    pub unsafe fn create_surface<
+        W: raw_window_handle::HasRawWindowHandle + raw_window_handle::HasRawDisplayHandle,
+    >(
         &self,
         window: &W,
     ) -> Surface {
