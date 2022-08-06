@@ -145,7 +145,7 @@ type Scope<Name, Var> = FastHashMap<Name, Var>;
 /// Structure responsible for managing variable lookups and keeping track of
 /// lexical scopes
 ///
-/// The symbol table is generic over the variable representation and it's name
+/// The symbol table is generic over the variable representation and its name
 /// to allow larger flexibility on the frontends on how they might represent them.
 ///
 /// ```
@@ -161,13 +161,13 @@ type Scope<Name, Var> = FastHashMap<Name, Var>;
 /// // Check that `var1` exists and is `0`
 /// assert_eq!(symbol_table.lookup("var1"), Some(&0));
 ///
-/// // Push a new scope and add a variable to it with name `var1` shadowing the
+/// // Push a new scope and add a variable to it named `var1` shadowing the
 /// // variable of our previous scope
 /// symbol_table.push_scope();
 /// symbol_table.add("var1", 1);
 ///
 /// // Check that `var1` now points to the new value of `1` and `var2` still
-/// // exists with it's value of `2`
+/// // exists with its value of `2`
 /// assert_eq!(symbol_table.lookup("var1"), Some(&1));
 /// assert_eq!(symbol_table.lookup("var2"), Some(&2));
 ///
@@ -178,15 +178,15 @@ type Scope<Name, Var> = FastHashMap<Name, Var>;
 /// assert_eq!(symbol_table.lookup("var1"), Some(&0));
 /// ```
 ///
-/// Scopes are ordered as LIFO stack so a variable defined in a later scope
+/// Scopes are ordered as a LIFO stack so a variable defined in a later scope
 /// with the same name as another variable defined in a earlier scope will take
 /// precedence in the lookup. Scopes can be added with [`push_scope`] and
 /// removed with [`pop_scope`].
 ///
 /// A root scope is added when the symbol table is created and must always be
-/// present, trying to pop it will result in a panic.
+/// present. Trying to pop it will result in a panic.
 ///
-/// Variables can be added with [`add`] and looked up with [`lookup`], adding a
+/// Variables can be added with [`add`] and looked up with [`lookup`]. Adding a
 /// variable will do so in the currently active scope and as mentioned
 /// previously a lookup will search from the current scope to the root scope.
 ///
@@ -195,29 +195,29 @@ type Scope<Name, Var> = FastHashMap<Name, Var>;
 /// [`add`]: Self::add
 /// [`lookup`]: Self::lookup
 pub struct SymbolTable<Name, Var> {
-    /// Stack of lexical scopes, not all scopes are active see [`cursor`]
+    /// Stack of lexical scopes. Not all scopes are active; see [`cursor`].
     ///
     /// [`cursor`]: Self::cursor
     scopes: Vec<Scope<Name, Var>>,
-    /// Limit of the [`scopes`] stack (exclusive), by using a separate value for
-    /// the stack length instead of `Vec`'s own internal length the scopes can
-    /// be reused to cache memory allocations
+    /// Limit of the [`scopes`] stack (exclusive). By using a separate value for
+    /// the stack length instead of `Vec`'s own internal length, the scopes can
+    /// be reused to cache memory allocations.
     ///
     /// [`scopes`]: Self::scopes
     cursor: usize,
 }
 
 impl<Name, Var> SymbolTable<Name, Var> {
-    /// Adds a new lexical scope
+    /// Adds a new lexical scope.
     ///
-    /// All variables declared after this points will be added to this scope
-    /// until another scope is pushed or [`pop_scope`] is called causing this
+    /// All variables declared after this point will be added to this scope
+    /// until another scope is pushed or [`pop_scope`] is called, causing this
     /// scope to be removed along with all variables added to it.
     ///
     /// [`pop_scope`]: Self::pop_scope
     pub fn push_scope(&mut self) {
-        // If the cursor is equal to the scopes stack length then we need to
-        // push another empty scope, otherwise we can reuse the already existing
+        // If the cursor is equal to the scope's stack length then we need to
+        // push another empty scope. Otherwise we can reuse the already existing
         // scope.
         if self.scopes.len() == self.cursor {
             self.scopes.push(FastHashMap::default())
@@ -228,13 +228,13 @@ impl<Name, Var> SymbolTable<Name, Var> {
         self.cursor += 1;
     }
 
-    /// Removes the current lexical scope and all it's variables
+    /// Removes the current lexical scope and all its variables
     ///
     /// # PANICS
     /// - If the current lexical scope is the root scope
     pub fn pop_scope(&mut self) {
         // Despite the method title, the variables are only deleted when the
-        // scope is reused, this is because while a clear is inevitable if the
+        // scope is reused. This is because while a clear is inevitable if the
         // scope needs to be reused, there are cases where the scope might be
         // popped and not reused, i.e. if another scope with the same nesting
         // level is never pushed again.
@@ -248,7 +248,7 @@ impl<Name, Var> SymbolTable<Name, Var>
 where
     Name: std::hash::Hash + Eq,
 {
-    /// Perform a lookup for a variable named `name`
+    /// Perform a lookup for a variable named `name`.
     ///
     /// As stated in the struct level documentation the lookup will proceed from
     /// the current scope to the root scope, returning `Some` when a variable is
@@ -269,11 +269,11 @@ where
         None
     }
 
-    /// Adds a new variable to the current scope
+    /// Adds a new variable to the current scope.
     ///
     /// Returns the previous variable with the same name in this scope if it
-    /// exists so that the frontend might handle it in case variable shadowing
-    /// is disallowed
+    /// exists, so that the frontend might handle it in case variable shadowing
+    /// is disallowed.
     pub fn add(&mut self, name: Name, var: Var) -> Option<Var> {
         self.scopes[self.cursor - 1].insert(name, var)
     }

@@ -543,6 +543,7 @@ fn convert_wgsl() {
             "break-if",
             Targets::WGSL | Targets::GLSL | Targets::SPIRV | Targets::HLSL | Targets::METAL,
         ),
+        ("lexical-scopes", Targets::WGSL),
     ];
 
     for &(name, targets) in inputs.iter() {

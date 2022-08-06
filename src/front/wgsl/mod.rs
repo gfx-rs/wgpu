@@ -749,7 +749,7 @@ impl<'a> StringValueLookup<'a> for FastHashMap<&'a str, TypedExpression> {
 }
 
 struct StatementContext<'input, 'temp, 'out> {
-    lookup_ident: &'temp mut FastHashMap<&'input str, TypedExpression>,
+    symbol_table: &'temp mut super::SymbolTable<&'input str, TypedExpression>,
     typifier: &'temp mut super::Typifier,
     variables: &'out mut Arena<crate::LocalVariable>,
     expressions: &'out mut Arena<crate::Expression>,
@@ -764,7 +764,7 @@ struct StatementContext<'input, 'temp, 'out> {
 impl<'a, 'temp> StatementContext<'a, 'temp, '_> {
     fn reborrow(&mut self) -> StatementContext<'a, '_, '_> {
         StatementContext {
-            lookup_ident: self.lookup_ident,
+            symbol_table: self.symbol_table,
             typifier: self.typifier,
             variables: self.variables,
             expressions: self.expressions,
@@ -786,7 +786,7 @@ impl<'a, 'temp> StatementContext<'a, 'temp, '_> {
         'temp: 't,
     {
         ExpressionContext {
-            lookup_ident: self.lookup_ident,
+            symbol_table: self.symbol_table,
             typifier: self.typifier,
             expressions: self.expressions,
             types: self.types,
@@ -807,7 +807,7 @@ struct SamplingContext {
 }
 
 struct ExpressionContext<'input, 'temp, 'out> {
-    lookup_ident: &'temp FastHashMap<&'input str, TypedExpression>,
+    symbol_table: &'temp mut super::SymbolTable<&'input str, TypedExpression>,
     typifier: &'temp mut super::Typifier,
     expressions: &'out mut Arena<crate::Expression>,
     types: &'out mut UniqueArena<crate::Type>,
@@ -823,7 +823,7 @@ struct ExpressionContext<'input, 'temp, 'out> {
 impl<'a> ExpressionContext<'a, '_, '_> {
     fn reborrow(&mut self) -> ExpressionContext<'a, '_, '_> {
         ExpressionContext {
-            lookup_ident: self.lookup_ident,
+            symbol_table: self.symbol_table,
             typifier: self.typifier,
             expressions: self.expressions,
             types: self.types,
@@ -2286,7 +2286,7 @@ impl Parser {
                 )
             }
             (Token::Word(word), span) => {
-                if let Some(definition) = ctx.lookup_ident.get(word) {
+                if let Some(definition) = ctx.symbol_table.lookup(word) {
                     let _ = lexer.next();
                     self.pop_scope(lexer);
 
@@ -3432,6 +3432,9 @@ impl Parser {
         mut context: StatementContext<'a, '_, 'out>,
     ) -> Result<(bool, crate::Block), Error<'a>> {
         let mut body = crate::Block::new();
+        // Push a new lexical scope for the switch case body
+        context.symbol_table.push_scope();
+
         lexer.expect(Token::Paren('{'))?;
         let fall_through = loop {
             // default statements
@@ -3445,6 +3448,8 @@ impl Parser {
             }
             self.parse_statement(lexer, context.reborrow(), &mut body, false)?;
         };
+        // Pop the switch case body lexical scope
+        context.symbol_table.pop_scope();
 
         Ok((fall_through, body))
     }
@@ -3465,6 +3470,9 @@ impl Parser {
             }
             (Token::Paren('{'), _) => {
                 self.push_scope(Scope::Block, lexer);
+                // Push a new lexical scope for the block statement
+                context.symbol_table.push_scope();
+
                 let _ = lexer.next();
                 let mut statements = crate::Block::new();
                 while !lexer.skip(Token::Paren('}')) {
@@ -3475,6 +3483,9 @@ impl Parser {
                         is_uniform_control_flow,
                     )?;
                 }
+                // Pop the block statement lexical scope
+                context.symbol_table.pop_scope();
+
                 self.pop_scope(lexer);
                 let span = NagaSpan::from(self.pop_scope(lexer));
                 block.push(crate::Statement::Block(statements), span);
@@ -3539,7 +3550,7 @@ impl Parser {
                             }
                         }
                         block.extend(emitter.finish(context.expressions));
-                        context.lookup_ident.insert(
+                        context.symbol_table.add(
                             name,
                             TypedExpression {
                                 handle: expr_id,
@@ -3655,7 +3666,7 @@ impl Parser {
                         let expr_id = context
                             .expressions
                             .append(crate::Expression::LocalVariable(var_id), Default::default());
-                        context.lookup_ident.insert(
+                        context.symbol_table.add(
                             name,
                             TypedExpression {
                                 handle: expr_id,
@@ -3843,10 +3854,14 @@ impl Parser {
                             },
                             NagaSpan::from(span),
                         );
+                        // Push a lexical scope for the while loop body
+                        context.symbol_table.push_scope();
 
                         while !lexer.skip(Token::Paren('}')) {
                             self.parse_statement(lexer, context.reborrow(), &mut body, false)?;
                         }
+                        // Pop the while loop body lexical scope
+                        context.symbol_table.pop_scope();
 
                         Some(crate::Statement::Loop {
                             body,
@@ -3857,6 +3872,9 @@ impl Parser {
                     "for" => {
                         let _ = lexer.next();
                         lexer.expect(Token::Paren('('))?;
+                        // Push a lexical scope for the for loop
+                        context.symbol_table.push_scope();
+
                         if !lexer.skip(Token::Separator(';')) {
                             let num_statements = block.len();
                             let (_, span) = lexer.capture_span(|lexer| {
@@ -3904,7 +3922,9 @@ impl Parser {
                         let mut continuing = crate::Block::new();
                         if !lexer.skip(Token::Paren(')')) {
                             match lexer.peek().0 {
-                                Token::Word(ident) if context.lookup_ident.get(ident).is_none() => {
+                                Token::Word(ident)
+                                    if context.symbol_table.lookup(ident).is_none() =>
+                                {
                                     self.parse_function_statement(
                                         lexer,
                                         ident,
@@ -3923,6 +3943,8 @@ impl Parser {
                         while !lexer.skip(Token::Paren('}')) {
                             self.parse_statement(lexer, context.reborrow(), &mut body, false)?;
                         }
+                        // Pop the for loop lexical scope
+                        context.symbol_table.pop_scope();
 
                         Some(crate::Statement::Loop {
                             body,
@@ -4013,7 +4035,7 @@ impl Parser {
                     }
                     // assignment or a function call
                     ident => {
-                        match context.lookup_ident.get(ident) {
+                        match context.symbol_table.lookup(ident) {
                             Some(_) => self.parse_assignment_statement(
                                 lexer,
                                 context.as_expression(block, &mut emitter),
@@ -4052,6 +4074,10 @@ impl Parser {
         let mut body = crate::Block::new();
         let mut continuing = crate::Block::new();
         let mut break_if = None;
+
+        // Push a lexical scope for the loop body
+        context.symbol_table.push_scope();
+
         lexer.expect(Token::Paren('{'))?;
 
         loop {
@@ -4113,6 +4139,9 @@ impl Parser {
             self.parse_statement(lexer, context.reborrow(), &mut body, false)?;
         }
 
+        // Pop the loop body lexical scope
+        context.symbol_table.pop_scope();
+
         Ok(crate::Statement::Loop {
             body,
             continuing,
@@ -4127,6 +4156,9 @@ impl Parser {
         is_uniform_control_flow: bool,
     ) -> Result<crate::Block, Error<'a>> {
         self.push_scope(Scope::Block, lexer);
+        // Push a lexical scope for the block
+        context.symbol_table.push_scope();
+
         lexer.expect(Token::Paren('{'))?;
         let mut block = crate::Block::new();
         while !lexer.skip(Token::Paren('}')) {
@@ -4137,6 +4169,9 @@ impl Parser {
                 is_uniform_control_flow,
             )?;
         }
+        //Pop the block lexical scope
+        context.symbol_table.pop_scope();
+
         self.pop_scope(lexer);
         Ok(block)
     }
@@ -4165,7 +4200,7 @@ impl Parser {
     ) -> Result<(crate::Function, &'a str), Error<'a>> {
         self.push_scope(Scope::FunctionDecl, lexer);
         // read function name
-        let mut lookup_ident = FastHashMap::default();
+        let mut symbol_table = super::SymbolTable::default();
         let (fun_name, span) = lexer.next_ident_with_span()?;
         if crate::keywords::wgsl::RESERVED.contains(&fun_name) {
             return Err(Error::ReservedKeyword(span));
@@ -4191,7 +4226,7 @@ impl Parser {
                 _ => unreachable!(),
             };
             let expression = expressions.append(expression.clone(), span);
-            lookup_ident.insert(
+            symbol_table.add(
                 name,
                 TypedExpression {
                     handle: expression,
@@ -4221,7 +4256,7 @@ impl Parser {
                 crate::Expression::FunctionArgument(param_index),
                 NagaSpan::from(param_name_span),
             );
-            lookup_ident.insert(
+            symbol_table.add(
                 param_name,
                 TypedExpression {
                     handle: expression,
@@ -4266,7 +4301,7 @@ impl Parser {
         fun.body = self.parse_block(
             lexer,
             StatementContext {
-                lookup_ident: &mut lookup_ident,
+                symbol_table: &mut symbol_table,
                 typifier: &mut typifier,
                 variables: &mut fun.local_variables,
                 expressions: &mut fun.expressions,
