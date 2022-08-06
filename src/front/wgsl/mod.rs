@@ -27,15 +27,10 @@ use codespan_reporting::{
     files::SimpleFile,
     term::{
         self,
-        termcolor::{ColorChoice, ColorSpec, StandardStream, WriteColor},
+        termcolor::{ColorChoice, NoColor, StandardStream},
     },
 };
-use std::{
-    borrow::Cow,
-    convert::TryFrom,
-    io::{self, Write},
-    ops,
-};
+use std::{borrow::Cow, convert::TryFrom, ops};
 use thiserror::Error;
 
 type Span = ops::Range<usize>;
@@ -1320,11 +1315,16 @@ impl ParseError {
 
     /// Emits a summary of the error to a string.
     pub fn emit_to_string(&self, source: &str) -> String {
-        let files = SimpleFile::new("wgsl", source);
+        self.emit_to_string_with_path(source, "wgsl")
+    }
+
+    /// Emits a summary of the error to a string.
+    pub fn emit_to_string_with_path(&self, source: &str, path: &str) -> String {
+        let files = SimpleFile::new(path, source);
         let config = codespan_reporting::term::Config::default();
-        let mut writer = StringErrorBuffer::new();
+        let mut writer = NoColor::new(Vec::new());
         term::emit(&mut writer, &config, &files, &self.diagnostic()).expect("cannot write error");
-        writer.into_string()
+        String::from_utf8(writer.into_inner()).unwrap()
     }
 
     /// Returns a [`SourceLocation`] for the first label in the error message.
@@ -4555,43 +4555,4 @@ impl Parser {
 
 pub fn parse_str(source: &str) -> Result<crate::Module, ParseError> {
     Parser::new().parse(source)
-}
-
-pub struct StringErrorBuffer {
-    buf: Vec<u8>,
-}
-
-impl StringErrorBuffer {
-    pub const fn new() -> Self {
-        Self { buf: Vec::new() }
-    }
-
-    pub fn into_string(self) -> String {
-        String::from_utf8(self.buf).unwrap()
-    }
-}
-
-impl Write for StringErrorBuffer {
-    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        self.buf.extend(buf);
-        Ok(buf.len())
-    }
-
-    fn flush(&mut self) -> io::Result<()> {
-        Ok(())
-    }
-}
-
-impl WriteColor for StringErrorBuffer {
-    fn supports_color(&self) -> bool {
-        false
-    }
-
-    fn set_color(&mut self, _spec: &ColorSpec) -> io::Result<()> {
-        Ok(())
-    }
-
-    fn reset(&mut self) -> io::Result<()> {
-        Ok(())
-    }
 }
