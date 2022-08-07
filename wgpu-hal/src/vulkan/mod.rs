@@ -296,6 +296,8 @@ impl UpdateAfterBindTypes {
 struct DeviceShared {
     raw: ash::Device,
     family_index: u32,
+    queue_index: u32,
+    raw_queue: ash::vk::Queue,
     handle_is_owned: bool,
     instance: Arc<InstanceShared>,
     physical_device: ash::vk::PhysicalDevice,

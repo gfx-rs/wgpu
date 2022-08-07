@@ -93,6 +93,7 @@ the same every time it is rendered, we now warn if it is missing.
 
 #### Vulkan
 - Remove use of Vulkan12Features/Properties types. By @i509VCB in [#2936](https://github.com/gfx-rs/wgpu/pull/2936)
+- Provide a means for `wgpu` users to access `vk::Queue` and the queue index. By @anlumo in [#2950](https://github.com/gfx-rs/wgpu/pull/2950)
 
 ### Documentation
 
