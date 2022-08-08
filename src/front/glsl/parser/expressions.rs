@@ -231,6 +231,24 @@ impl<'source> ParsingContext<'source> {
                 TokenValue::Dot => {
                     let (field, end_meta) = self.expect_ident(parser)?;
 
+                    if self.bump_if(parser, TokenValue::LeftParen).is_some() {
+                        let args =
+                            self.parse_function_call_args(parser, ctx, stmt, body, &mut meta)?;
+
+                        base = stmt.hir_exprs.append(
+                            HirExpr {
+                                kind: HirExprKind::Method {
+                                    expr: base,
+                                    name: field,
+                                    args,
+                                },
+                                meta,
+                            },
+                            Default::default(),
+                        );
+                        continue;
+                    }
+
                     meta.subsume(end_meta);
                     base = stmt.hir_exprs.append(
                         HirExpr {

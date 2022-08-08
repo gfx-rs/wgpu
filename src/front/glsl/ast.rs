@@ -159,6 +159,15 @@ pub enum HirExprKind {
         /// The target expression
         expr: Handle<HirExpr>,
     },
+    /// A method call like `what.something(a, b, c)`
+    Method {
+        /// expression the method call applies to (`what` in the example)
+        expr: Handle<HirExpr>,
+        /// the method name (`something` in the example)
+        name: String,
+        /// the arguments to the method (`a`, `b`, and `c` in the example)
+        args: Vec<Handle<HirExpr>>,
+    },
 }
 
 #[derive(Debug, Hash, PartialEq, Eq)]

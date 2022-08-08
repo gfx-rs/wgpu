@@ -132,6 +132,18 @@ void testMatrixMultiplication(mat4x3 a, mat4x4 b) {
     mat4x3 c = a * b;
 }
 
+layout(std430, binding = 0) buffer a_buf {
+    float a[];
+};
+
+void testLength() {
+    int len = a.length();
+}
+
+void testConstantLength(float a[4u]) {
+    int len = a.length();
+}
+
 out vec4 o_color;
 void main() {
     privatePointer(global);

@@ -2,11 +2,17 @@ struct BST {
     data: i32,
 }
 
+struct a_buf {
+    a: array<f32>,
+}
+
 struct FragmentOutput {
     @location(0) o_color: vec4<f32>,
 }
 
 var<private> global: f32;
+@group(0) @binding(0) 
+var<storage, read_write> global_1: a_buf;
 var<private> o_color: vec4<f32>;
 
 fn testBinOpVecFloat(a: vec4<f32>, b: f32) {
@@ -369,28 +375,47 @@ fn testMatrixMultiplication(a_22: mat4x3<f32>, b_18: mat4x4<f32>) {
     return;
 }
 
+fn testLength() {
+    var len: i32;
+
+    len = i32(arrayLength((&global_1.a)));
+    return;
+}
+
+fn testConstantLength(a_24: array<f32,4u>) {
+    var a_25: array<f32,4u>;
+    var len_1: i32 = 4;
+
+    _ = (&global_1.a);
+    a_25 = a_24;
+    _ = a_25;
+    _ = i32(4u);
+}
+
 fn main_1() {
     var local_5: f32;
 
+    _ = (&global_1.a);
     _ = global;
-    let _e3 = global;
-    local_5 = _e3;
+    let _e5 = global;
+    local_5 = _e5;
     privatePointer((&local_5));
-    let _e5 = local_5;
-    global = _e5;
-    let _e6 = o_color;
-    _ = _e6.xyzw;
-    let _e9 = vec4<f32>(1.0);
-    o_color.x = _e9.x;
-    o_color.y = _e9.y;
-    o_color.z = _e9.z;
-    o_color.w = _e9.w;
+    let _e7 = local_5;
+    global = _e7;
+    let _e8 = o_color;
+    _ = _e8.xyzw;
+    let _e11 = vec4<f32>(1.0);
+    o_color.x = _e11.x;
+    o_color.y = _e11.y;
+    o_color.z = _e11.z;
+    o_color.w = _e11.w;
     return;
 }
 
 @fragment 
 fn main() -> FragmentOutput {
+    _ = (&global_1.a);
     main_1();
-    let _e5 = o_color;
-    return FragmentOutput(_e5);
+    let _e7 = o_color;
+    return FragmentOutput(_e7);
 }

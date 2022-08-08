@@ -1366,6 +1366,67 @@ impl Context {
                     value
                 }
             }
+            HirExprKind::Method {
+                expr: object,
+                ref name,
+                ref args,
+            } if ExprPos::Lhs != pos => {
+                let args = args
+                    .iter()
+                    .map(|e| self.lower_expect_inner(stmt, parser, *e, ExprPos::Rhs, body))
+                    .collect::<Result<Vec<_>>>()?;
+                match name.as_ref() {
+                    "length" => {
+                        if !args.is_empty() {
+                            parser.errors.push(Error {
+                                kind: ErrorKind::SemanticError(
+                                    ".length() doesn't take any arguments".into(),
+                                ),
+                                meta,
+                            });
+                        }
+                        let lowered_array =
+                            self.lower_expect_inner(stmt, parser, object, pos, body)?.0;
+                        let array_type = parser.resolve_type(self, lowered_array, meta)?;
+
+                        match *array_type {
+                            TypeInner::Array {
+                                size: crate::ArraySize::Constant(size),
+                                ..
+                            } => {
+                                let mut array_length =
+                                    self.add_expression(Expression::Constant(size), meta, body);
+                                self.forced_conversion(
+                                    parser,
+                                    &mut array_length,
+                                    meta,
+                                    ScalarKind::Sint,
+                                    4,
+                                )?;
+                                array_length
+                            }
+                            // let the error be handled in type checking if it's not a dynamic array
+                            _ => {
+                                let mut array_length = self.add_expression(
+                                    Expression::ArrayLength(lowered_array),
+                                    meta,
+                                    body,
+                                );
+                                self.conversion(&mut array_length, meta, ScalarKind::Sint, 4)?;
+                                array_length
+                            }
+                        }
+                    }
+                    _ => {
+                        return Err(Error {
+                            kind: ErrorKind::SemanticError(
+                                format!("unknown method '{}'", name).into(),
+                            ),
+                            meta,
+                        });
+                    }
+                }
+            }
             _ => {
                 return Err(Error {
                     kind: ErrorKind::SemanticError(
