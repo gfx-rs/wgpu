@@ -550,7 +550,6 @@ fn map_texture_format(texture_format: wgt::TextureFormat) -> web_sys::GpuTexture
         TextureFormat::Depth32FloatStencil8 => tf::Depth32floatStencil8,
         TextureFormat::Depth24Plus => tf::Depth24plus,
         TextureFormat::Depth24PlusStencil8 => tf::Depth24plusStencil8,
-        TextureFormat::Depth24UnormStencil8 => tf::Depth24unormStencil8,
         _ => unimplemented!(),
     }
 }
