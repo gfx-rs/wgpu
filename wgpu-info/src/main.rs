@@ -159,6 +159,7 @@ mod inner {
             max_texture_dimension_3d,
             max_texture_array_layers,
             max_bind_groups,
+            max_bindings_per_bind_group,
             max_dynamic_uniform_buffers_per_pipeline_layout,
             max_dynamic_storage_buffers_per_pipeline_layout,
             max_sampled_textures_per_shader_stage,
@@ -188,6 +189,7 @@ mod inner {
         println!("\t\t                        Max Texture Dimension 3d: {}", max_texture_dimension_3d);
         println!("\t\t                        Max Texture Array Layers: {}", max_texture_array_layers);
         println!("\t\t                                 Max Bind Groups: {}", max_bind_groups);
+        println!("\t\t                     Max Bindings Per Bind Group: {}", max_bindings_per_bind_group);
         println!("\t\t Max Dynamic Uniform Buffers Per Pipeline Layout: {}", max_dynamic_uniform_buffers_per_pipeline_layout);
         println!("\t\t Max Dynamic Storage Buffers Per Pipeline Layout: {}", max_dynamic_storage_buffers_per_pipeline_layout);
         println!("\t\t           Max Sampled Textures Per Shader Stage: {}", max_sampled_textures_per_shader_stage);
