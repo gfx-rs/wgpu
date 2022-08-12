@@ -217,30 +217,28 @@ impl<A: hal::Api> PendingWrites<A> {
     }
 }
 
-impl<A: HalApi> super::Device<A> {
-    fn prepare_staging_buffer(
-        &mut self,
-        size: wgt::BufferAddress,
-    ) -> Result<(StagingBuffer<A>, *mut u8), DeviceError> {
-        profiling::scope!("prepare_staging_buffer");
-        let stage_desc = hal::BufferDescriptor {
-            label: Some("(wgpu internal) Staging"),
-            size,
-            usage: hal::BufferUses::MAP_WRITE | hal::BufferUses::COPY_SRC,
-            memory_flags: hal::MemoryFlags::TRANSIENT,
-        };
+fn prepare_staging_buffer<A: HalApi>(
+    device: &mut A::Device,
+    size: wgt::BufferAddress,
+) -> Result<(StagingBuffer<A>, *mut u8), DeviceError> {
+    profiling::scope!("prepare_staging_buffer");
+    let stage_desc = hal::BufferDescriptor {
+        label: Some("(wgpu internal) Staging"),
+        size,
+        usage: hal::BufferUses::MAP_WRITE | hal::BufferUses::COPY_SRC,
+        memory_flags: hal::MemoryFlags::TRANSIENT,
+    };
 
-        let buffer = unsafe { self.raw.create_buffer(&stage_desc)? };
-        let mapping = unsafe { self.raw.map_buffer(&buffer, 0..size) }?;
+    let buffer = unsafe { device.create_buffer(&stage_desc)? };
+    let mapping = unsafe { device.map_buffer(&buffer, 0..size) }?;
 
-        let staging_buffer = StagingBuffer {
-            raw: buffer,
-            size,
-            is_coherent: mapping.is_coherent,
-        };
+    let staging_buffer = StagingBuffer {
+        raw: buffer,
+        size,
+        is_coherent: mapping.is_coherent,
+    };
 
-        Ok((staging_buffer, mapping.ptr.as_ptr()))
-    }
+    Ok((staging_buffer, mapping.ptr.as_ptr()))
 }
 
 impl<A: hal::Api> StagingBuffer<A> {
@@ -324,7 +322,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             return Ok(());
         }
 
-        let (staging_buffer, staging_buffer_ptr) = device.prepare_staging_buffer(data_size)?;
+        let (staging_buffer, staging_buffer_ptr) =
+            prepare_staging_buffer(&mut device.raw, data_size)?;
 
         unsafe {
             profiling::scope!("copy");
@@ -356,7 +355,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .map_err(|_| DeviceError::Invalid)?;
 
         let (staging_buffer, staging_buffer_ptr) =
-            device.prepare_staging_buffer(buffer_size.get())?;
+            prepare_staging_buffer(&mut device.raw, buffer_size.get())?;
 
         let fid = hub.staging_buffers.prepare(id_in);
         let id = fid.assign(staging_buffer, device_token);
@@ -587,7 +586,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let block_rows_in_copy =
             (size.depth_or_array_layers - 1) * block_rows_per_image + height_blocks;
         let stage_size = stage_bytes_per_row as u64 * block_rows_in_copy as u64;
-        let (staging_buffer, staging_buffer_ptr) = device.prepare_staging_buffer(stage_size)?;
+        let (staging_buffer, staging_buffer_ptr) =
+            prepare_staging_buffer(&mut device.raw, stage_size)?;
 
         let dst = texture_guard.get_mut(destination.texture).unwrap();
         if !dst.desc.usage.contains(wgt::TextureUsages::COPY_DST) {
