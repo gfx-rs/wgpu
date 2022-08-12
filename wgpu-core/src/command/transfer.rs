@@ -109,6 +109,10 @@ pub enum TransferError {
     MemoryInitFailure(#[from] super::ClearError),
     #[error("Cannot encode this copy because of a missing downelevel flag")]
     MissingDownlevelFlags(#[from] MissingDownlevelFlags),
+    #[error("Source texture sample count must be 1, got {sample_count}")]
+    InvalidSampleCount { sample_count: u32 },
+    #[error("Requested mip level {requested} does no exist (count: {count})")]
+    InvalidMipLevel { requested: u32, count: u32 },
 }
 
 impl PrettyError for TransferError {
@@ -793,6 +797,19 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .ok_or(TransferError::InvalidTexture(source.texture))?;
         if !src_texture.desc.usage.contains(TextureUsages::COPY_SRC) {
             return Err(TransferError::MissingCopySrcUsageFlag.into());
+        }
+        if src_texture.desc.sample_count != 1 {
+            return Err(TransferError::InvalidSampleCount {
+                sample_count: src_texture.desc.sample_count,
+            }
+            .into());
+        }
+        if source.mip_level >= src_texture.desc.mip_level_count {
+            return Err(TransferError::InvalidMipLevel {
+                requested: source.mip_level,
+                count: src_texture.desc.mip_level_count,
+            }
+            .into());
         }
         let src_barrier = src_pending.map(|pending| pending.into_hal(src_texture));
 
