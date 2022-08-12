@@ -31,9 +31,6 @@ pub mod queue;
 #[cfg(any(feature = "trace", feature = "replay"))]
 pub mod trace;
 
-// Per WebGPU specification.
-pub const MAX_BINDING_INDEX: u32 = 65535;
-
 pub const SHADER_STAGE_COUNT: usize = 3;
 // Should be large enough for the largest possible texture row. This value is enough for a 16k texture with float4 format.
 pub(crate) const ZERO_BUFFER_SIZE: BufferAddress = 512 << 10;
@@ -4134,10 +4131,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             let mut entry_map = FastHashMap::default();
             for entry in desc.entries.iter() {
-                if entry.binding > MAX_BINDING_INDEX {
+                if entry.binding > device.limits.max_bindings_per_bind_group {
                     break 'outer binding_model::CreateBindGroupLayoutError::InvalidBindingIndex {
                         binding: entry.binding,
-                        maximum: MAX_BINDING_INDEX,
+                        maximum: device.limits.max_bindings_per_bind_group,
                     };
                 }
                 if entry_map.insert(entry.binding, *entry).is_some() {
