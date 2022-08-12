@@ -86,6 +86,19 @@ pub struct WrappedSubmissionIndex {
     pub index: SubmissionIndex,
 }
 
+/// A texture or buffer to be freed soon.
+///
+/// This is just a tagged raw texture or buffer, generally about to be added to
+/// some other more specific container like:
+///
+/// - `PendingWrites::temp_resources`: resources used by queue writes and
+///   unmaps, waiting to be folded in with the next queue submission
+///
+/// - `ActiveSubmission::last_resources`: temporary resources used by a queue
+///   submission, to be freed when it completes
+///
+/// - `LifetimeTracker::free_resources`: resources to be freed in the next
+///   `maintain` call, no longer used anywhere
 #[derive(Debug)]
 pub enum TempResource<A: hal::Api> {
     Buffer(A::Buffer),
@@ -105,6 +118,19 @@ impl<A: hal::Api> EncoderInFlight<A> {
     }
 }
 
+/// Writes made directly on the device or queue, not as part of a wgpu command buffer.
+///
+/// Operations like `buffer_unmap`, `queue_write_buffer`, and
+/// `queue_write_texture` need to copy data to the GPU. This must be
+/// done by encoding and submitting commands at the hal level, but these
+/// operations are not associated with any specific wgpu command buffer.
+///
+/// Instead, `Device::pending_writes` owns one of these values, which has its
+/// own hal command encoder and resource lists. The commands accumulated here
+/// are automatically submitted to the queue the next time the user submits a
+/// wgpu command buffer, ahead of the user's commands.
+///
+/// All uses of [`StagingBuffer`]s end up here.
 #[derive(Debug)]
 pub(crate) struct PendingWrites<A: hal::Api> {
     pub command_encoder: A::CommandEncoder,
@@ -1082,6 +1108,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Err(WaitIdleError::WrongSubmissionIndex(..)) => unreachable!(),
             };
 
+            // pending_write_resources has been drained, so it's empty, but we
+            // want to retain its heap allocation.
             device.pending_writes.temp_resources = pending_write_resources;
             device.temp_suspected.clear();
             device.lock_life(&mut token).post_submit();
