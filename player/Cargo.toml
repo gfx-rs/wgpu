@@ -17,9 +17,9 @@ publish = false
 [dependencies]
 env_logger = "0.9"
 log = "0.4"
-raw-window-handle = "0.4"
+raw-window-handle = "0.5"
 ron = "0.7"
-winit = { version = "0.26", optional = true }
+winit = { version = "0.27", optional = true }
 
 [dependencies.wgt]
 path = "../wgpu-types"
@@ -29,7 +29,7 @@ features = ["replay"]
 [dependencies.wgc]
 path = "../wgpu-core"
 package = "wgpu-core"
-features = ["replay", "raw-window-handle"]
+features = ["replay", "raw-window-handle", "strict_asserts"]
 
 [dev-dependencies]
 serde = "1"

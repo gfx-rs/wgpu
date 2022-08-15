@@ -1,6 +1,6 @@
 use glow::HasContext;
 use parking_lot::{Mutex, MutexGuard};
-use raw_window_handle::{HasRawWindowHandle, RawWindowHandle};
+use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle, RawWindowHandle};
 
 use std::{ffi, os::raw, ptr, sync::Arc, time::Duration};
 
@@ -770,7 +770,7 @@ impl crate::Instance<super::Api> for Instance {
     #[cfg_attr(target_os = "macos", allow(unused, unused_mut, unreachable_code))]
     unsafe fn create_surface(
         &self,
-        has_handle: &impl HasRawWindowHandle,
+        has_handle: &(impl HasRawWindowHandle + HasRawDisplayHandle),
     ) -> Result<Surface, crate::InstanceError> {
         use raw_window_handle::RawWindowHandle as Rwh;
 
@@ -779,13 +779,13 @@ impl crate::Instance<super::Api> for Instance {
         #[cfg_attr(any(target_os = "android", feature = "emscripten"), allow(unused_mut))]
         let mut inner = self.inner.lock();
 
-        match raw_window_handle {
-            Rwh::Xlib(_) => {}
-            Rwh::Xcb(_) => {}
-            Rwh::Win32(_) => {}
-            Rwh::AppKit(_) => {}
+        match (raw_window_handle, has_handle.raw_display_handle()) {
+            (Rwh::Xlib(_), _) => {}
+            (Rwh::Xcb(_), _) => {}
+            (Rwh::Win32(_), _) => {}
+            (Rwh::AppKit(_), _) => {}
             #[cfg(target_os = "android")]
-            Rwh::AndroidNdk(handle) => {
+            (Rwh::AndroidNdk(handle), _) => {
                 let format = inner
                     .egl
                     .instance
@@ -800,7 +800,7 @@ impl crate::Instance<super::Api> for Instance {
                 }
             }
             #[cfg(not(feature = "emscripten"))]
-            Rwh::Wayland(handle) => {
+            (Rwh::Wayland(_), raw_window_handle::RawDisplayHandle::Wayland(display_handle)) => {
                 /* Wayland displays are not sharable between surfaces so if the
                  * surface we receive from this handle is from a different
                  * display, we must re-initialize the context.
@@ -810,11 +810,12 @@ impl crate::Instance<super::Api> for Instance {
                 log::warn!("Re-initializing Gles context due to Wayland window");
                 if inner
                     .wl_display
-                    .map(|ptr| ptr != handle.display)
+                    .map(|ptr| ptr != display_handle.display)
                     .unwrap_or(true)
                 {
                     use std::ops::DerefMut;
                     let display_attributes = [egl::ATTRIB_NONE];
+
                     let display = inner
                         .egl
                         .instance
@@ -822,7 +823,7 @@ impl crate::Instance<super::Api> for Instance {
                         .unwrap()
                         .get_platform_display(
                             EGL_PLATFORM_WAYLAND_KHR,
-                            handle.display,
+                            display_handle.display,
                             &display_attributes,
                         )
                         .unwrap();
@@ -832,12 +833,13 @@ impl crate::Instance<super::Api> for Instance {
                             .map_err(|_| crate::InstanceError)?;
 
                     let old_inner = std::mem::replace(inner.deref_mut(), new_inner);
-                    inner.wl_display = Some(handle.display);
+                    inner.wl_display = Some(display_handle.display);
+
                     drop(old_inner);
                 }
             }
             #[cfg(feature = "emscripten")]
-            Rwh::Web(_) => {}
+            (Rwh::Web(_), _) => {}
             other => {
                 log::error!("Unsupported window: {:?}", other);
                 return Err(crate::InstanceError);

@@ -197,7 +197,7 @@ trait Context: Debug + Send + Sized + Sync {
     fn init(backends: Backends) -> Self;
     fn instance_create_surface(
         &self,
-        handle: &impl raw_window_handle::HasRawWindowHandle,
+        handle: &(impl raw_window_handle::HasRawWindowHandle + raw_window_handle::HasRawDisplayHandle),
     ) -> Self::SurfaceId;
     fn instance_request_adapter(
         &self,
@@ -659,6 +659,7 @@ pub struct Buffer {
     context: Arc<C>,
     id: <C as Context>::BufferId,
     map_context: Mutex<MapContext>,
+    size: wgt::BufferAddress,
     usage: BufferUsages,
 }
 
@@ -1754,7 +1755,9 @@ impl Instance {
     /// - Raw Window Handle must be a valid object to create a surface upon and
     ///   must remain valid for the lifetime of the returned surface.
     /// - If not called on the main thread, metal backend will panic.
-    pub unsafe fn create_surface<W: raw_window_handle::HasRawWindowHandle>(
+    pub unsafe fn create_surface<
+        W: raw_window_handle::HasRawWindowHandle + raw_window_handle::HasRawDisplayHandle,
+    >(
         &self,
         window: &W,
     ) -> Surface {
@@ -2129,6 +2132,7 @@ impl Device {
             context: Arc::clone(&self.context),
             id: Context::device_create_buffer(&*self.context, &self.id, desc),
             map_context: Mutex::new(map_context),
+            size: desc.size,
             usage: desc.usage,
         }
     }
@@ -2425,6 +2429,20 @@ impl Buffer {
     /// Destroy the associated native resources as soon as possible.
     pub fn destroy(&self) {
         Context::buffer_destroy(&*self.context, &self.id);
+    }
+
+    /// Returns the length of the buffer allocation in bytes.
+    ///
+    /// This is always equal to the `size` that was specified when creating the buffer.
+    pub fn size(&self) -> wgt::BufferAddress {
+        self.size
+    }
+
+    /// Returns the allowed usages for this `Buffer`.
+    ///
+    /// This is always equal to the `usage` that was specified when creating the buffer.
+    pub fn usage(&self) -> BufferUsages {
+        self.usage
     }
 }
 

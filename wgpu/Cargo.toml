@@ -114,7 +114,7 @@ arrayvec = "0.7"
 log = "0.4"
 # parking_lot 0.12 switches from `winapi` to `windows`; permit either
 parking_lot = ">=0.11,<0.13"
-raw-window-handle = "0.4"
+raw-window-handle = "0.5"
 serde = { version = "1", features = ["derive"], optional = true }
 smallvec = "1"
 
@@ -131,7 +131,7 @@ noise = { version = "0.7", default-features = false }
 obj = "0.10"
 png = "0.17"
 nanorand = { version = "0.7", default-features = false, features = ["wyrand"] }
-winit = "0.26"
+winit = "0.27.1"     # for "halmark" example
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 async-executor = "1.0"

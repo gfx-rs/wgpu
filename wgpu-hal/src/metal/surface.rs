@@ -1,3 +1,5 @@
+#![allow(clippy::let_unit_value)] // `let () =` being used to constrain result type
+
 use std::{mem, os::raw::c_void, ptr::NonNull, sync::Once, thread};
 
 use core_graphics_types::{

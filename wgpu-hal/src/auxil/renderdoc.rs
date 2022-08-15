@@ -28,6 +28,10 @@ pub enum RenderDoc {
     },
 }
 
+// TODO: replace with libloading API once supported
+#[cfg(unix)]
+const RTLD_NOLOAD: i32 = 0x4;
+
 impl RenderDoc {
     pub unsafe fn new() -> Self {
         type GetApiFn = unsafe extern "C" fn(version: u32, out: *mut *mut ffi::c_void) -> i32;
@@ -39,7 +43,20 @@ impl RenderDoc {
         #[cfg(target_os = "android")]
         let renderdoc_filename = "libVkLayer_GLES_RenderDoc.so";
 
-        let renderdoc_lib = match libloading::Library::new(renderdoc_filename) {
+        #[cfg(unix)]
+        let renderdoc_result: Result<libloading::Library, libloading::Error> =
+            libloading::os::unix::Library::open(
+                Some(renderdoc_filename),
+                libloading::os::unix::RTLD_NOW | RTLD_NOLOAD,
+            )
+            .map(|lib| lib.into());
+
+        #[cfg(windows)]
+        let renderdoc_result: Result<libloading::Library, libloading::Error> =
+            libloading::os::windows::Library::open_already_loaded(renderdoc_filename)
+                .map(|lib| lib.into());
+
+        let renderdoc_lib = match renderdoc_result {
             Ok(lib) => lib,
             Err(e) => {
                 return RenderDoc::NotAvailable {

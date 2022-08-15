@@ -48,6 +48,8 @@ pub enum CreateBindGroupLayoutError {
     },
     #[error(transparent)]
     TooManyBindings(BindingTypeMaxCountError),
+    #[error("Binding index {binding} is greater than the maximum index {maximum}")]
+    InvalidBindingIndex { binding: u32, maximum: u32 },
 }
 
 //TODO: refactor this to move out `enum BindingError`.

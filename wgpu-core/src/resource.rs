@@ -173,6 +173,11 @@ pub enum BufferAccessError {
         index: wgt::BufferAddress,
         max: wgt::BufferAddress,
     },
+    #[error("buffer map range start {start} is greater than end {end}")]
+    NegativeRange {
+        start: wgt::BufferAddress,
+        end: wgt::BufferAddress,
+    },
 }
 
 pub(crate) struct BufferPendingMapping {
@@ -219,6 +224,25 @@ impl<A: hal::Api> Resource for Buffer<A> {
     }
 }
 
+/// A temporary buffer, consumed by the command that uses it.
+///
+/// A [`StagingBuffer`] is designed for one-shot uploads of data to the GPU. It
+/// is always created mapped, and the command that uses it destroys the buffer
+/// when it is done.
+///
+/// [`StagingBuffer`]s can be created with [`queue_create_staging_buffer`] and
+/// used with [`queue_write_staging_buffer`]. They are also used internally by
+/// operations like [`queue_write_texture`] that need to upload data to the GPU,
+/// but that don't belong to any particular wgpu command buffer.
+///
+/// Used `StagingBuffer`s are accumulated in [`Device::pending_writes`], to be
+/// freed once their associated operation's queue submission has finished
+/// execution.
+///
+/// [`queue_create_staging_buffer`]: Global::queue_create_staging_buffer
+/// [`queue_write_staging_buffer`]: Global::queue_write_staging_buffer
+/// [`queue_write_texture`]: Global::queue_write_texture
+/// [`Device::pending_writes`]: crate::device::Device
 pub struct StagingBuffer<A: hal::Api> {
     pub(crate) raw: A::Buffer,
     pub(crate) size: wgt::BufferAddress,

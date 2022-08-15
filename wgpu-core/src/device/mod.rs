@@ -31,6 +31,9 @@ pub mod queue;
 #[cfg(any(feature = "trace", feature = "replay"))]
 pub mod trace;
 
+// Per WebGPU specification.
+pub const MAX_BINDING_INDEX: u32 = 65535;
+
 pub const SHADER_STAGE_COUNT: usize = 3;
 // Should be large enough for the largest possible texture row. This value is enough for a 16k texture with float4 format.
 pub(crate) const ZERO_BUFFER_SIZE: BufferAddress = 512 << 10;
@@ -190,24 +193,17 @@ fn map_buffer<A: hal::Api>(
     //
     // If this is a write mapping zeroing out the memory here is the only reasonable way as all data is pushed to GPU anyways.
     let zero_init_needs_flush_now = mapping.is_coherent && buffer.sync_mapped_writes.is_none(); // No need to flush if it is flushed later anyways.
-    for uninitialized_range in buffer.initialization_status.drain(offset..(size + offset)) {
-        let num_bytes = uninitialized_range.end - uninitialized_range.start;
-        unsafe {
-            ptr::write_bytes(
-                mapping
-                    .ptr
-                    .as_ptr()
-                    .offset(uninitialized_range.start as isize),
-                0,
-                num_bytes as usize,
-            )
-        };
+    let mapped = unsafe { std::slice::from_raw_parts_mut(mapping.ptr.as_ptr(), size as usize) };
+
+    for uninitialized in buffer.initialization_status.drain(offset..(size + offset)) {
+        // The mapping's pointer is already offset, however we track the uninitialized range relative to the buffer's start.
+        let fill_range =
+            (uninitialized.start - offset) as usize..(uninitialized.end - offset) as usize;
+        mapped[fill_range].fill(0);
+
         if zero_init_needs_flush_now {
             unsafe {
-                raw.flush_mapped_ranges(
-                    buffer.raw.as_ref().unwrap(),
-                    iter::once(uninitialized_range.start..uninitialized_range.start + num_bytes),
-                )
+                raw.flush_mapped_ranges(buffer.raw.as_ref().unwrap(), iter::once(uninitialized))
             };
         }
     }
@@ -952,18 +948,21 @@ impl<A: HalApi> Device<A> {
             },
         };
 
-        let required_level_count =
-            desc.range.base_mip_level + desc.range.mip_level_count.map_or(1, |count| count.get());
+        let mip_count = desc.range.mip_level_count.map_or(1, |count| count.get());
+        let required_level_count = desc.range.base_mip_level.saturating_add(mip_count);
+
         let required_layer_count = match desc.range.array_layer_count {
-            Some(count) => desc.range.base_array_layer + count.get(),
+            Some(count) => desc.range.base_array_layer.saturating_add(count.get()),
             None => match view_dim {
                 wgt::TextureViewDimension::D1
                 | wgt::TextureViewDimension::D2
                 | wgt::TextureViewDimension::D3 => 1,
                 wgt::TextureViewDimension::Cube => 6,
                 _ => texture.desc.array_layer_count(),
-            },
+            }
+            .max(desc.range.base_array_layer.saturating_add(1)),
         };
+
         let level_end = texture.full_range.mips.end;
         let layer_end = texture.full_range.layers.end;
         if required_level_count > level_end {
@@ -4090,6 +4089,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             let mut entry_map = FastHashMap::default();
             for entry in desc.entries.iter() {
+                if entry.binding > MAX_BINDING_INDEX {
+                    break 'outer binding_model::CreateBindGroupLayoutError::InvalidBindingIndex {
+                        binding: entry.binding,
+                        maximum: MAX_BINDING_INDEX,
+                    };
+                }
                 if entry_map.insert(entry.binding, *entry).is_some() {
                     break 'outer binding_model::CreateBindGroupLayoutError::ConflictBinding(
                         entry.binding,
@@ -5401,9 +5406,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     BufferMapAsyncStatus::InvalidAlignment
                 }
                 &BufferAccessError::OutOfBoundsUnderrun { .. }
-                | &BufferAccessError::OutOfBoundsOverrun { .. } => {
-                    BufferMapAsyncStatus::InvalidRange
-                }
+                | &BufferAccessError::OutOfBoundsOverrun { .. }
+                | &BufferAccessError::NegativeRange { .. } => BufferMapAsyncStatus::InvalidRange,
                 _ => BufferMapAsyncStatus::Error,
             };
 
@@ -5454,6 +5458,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 return Err((op, e.into()));
             }
 
+            if range.start > range.end {
+                return Err((
+                    op,
+                    BufferAccessError::NegativeRange {
+                        start: range.start,
+                        end: range.end,
+                    },
+                ));
+            }
             if range.end > buffer.size {
                 return Err((
                     op,
