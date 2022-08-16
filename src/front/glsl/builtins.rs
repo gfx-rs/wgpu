@@ -537,7 +537,7 @@ fn inject_standard_builtins(
         | "dFdyFine" | "dFdyCoarse" | "fwidth" | "fwidthFine" | "fwidthCoarse" => {
             // bits layout
             // bit 0 trough 1 - dims
-            for bits in 0..(0b100) {
+            for bits in 0..0b100 {
                 let size = match bits {
                     0b00 => None,
                     0b01 => Some(VectorSize::Bi),
@@ -588,7 +588,7 @@ fn inject_standard_builtins(
         "intBitsToFloat" | "uintBitsToFloat" => {
             // bits layout
             // bit 0 trough 1 - dims
-            for bits in 0..(0b100) {
+            for bits in 0..0b100 {
                 let size = match bits {
                     0b00 => None,
                     0b01 => Some(VectorSize::Bi),
@@ -612,7 +612,7 @@ fn inject_standard_builtins(
         "pow" => {
             // bits layout
             // bit 0 trough 1 - dims
-            for bits in 0..(0b100) {
+            for bits in 0..0b100 {
                 let size = match bits {
                     0b00 => None,
                     0b01 => Some(VectorSize::Bi),
@@ -635,7 +635,7 @@ fn inject_standard_builtins(
             // bits layout
             // bit 0 trough 1 - dims
             // bit 2 - float/sint
-            for bits in 0..(0b1000) {
+            for bits in 0..0b1000 {
                 let size = match bits & 0b11 {
                     0b00 => None,
                     0b01 => Some(VectorSize::Bi),
@@ -683,7 +683,7 @@ fn inject_standard_builtins(
             // bits layout
             // bit 0 - int/uint
             // bit 1 trough 2 - dims
-            for bits in 0..(0b1000) {
+            for bits in 0..0b1000 {
                 let kind = match bits & 0b1 {
                     0b0 => Sk::Sint,
                     _ => Sk::Uint,
@@ -797,7 +797,7 @@ fn inject_standard_builtins(
             // bits layout
             // bit 0 - atan/atan2
             // bit 1 trough 2 - dims
-            for bits in 0..(0b1000) {
+            for bits in 0..0b1000 {
                 let fun = match bits & 0b1 {
                     0b0 => MathFunction::Atan,
                     _ => MathFunction::Atan2,
@@ -828,7 +828,7 @@ fn inject_standard_builtins(
         "all" | "any" => {
             // bits layout
             // bit 0 trough 1 - dims
-            for bits in 0..(0b11) {
+            for bits in 0..0b11 {
                 let size = match bits {
                     0b00 => VectorSize::Bi,
                     0b01 => VectorSize::Tri,
@@ -852,7 +852,7 @@ fn inject_standard_builtins(
         }
         "lessThan" | "greaterThan" | "lessThanEqual" | "greaterThanEqual" | "equal"
         | "notEqual" => {
-            for bits in 0..(0b1001) {
+            for bits in 0..0b1001 {
                 let (size, kind) = match bits {
                     0b0000 => (VectorSize::Bi, Sk::Float),
                     0b0001 => (VectorSize::Tri, Sk::Float),
@@ -885,7 +885,7 @@ fn inject_standard_builtins(
             // bits layout
             // bit 0 trough 1 - scalar kind
             // bit 2 trough 4 - dims
-            for bits in 0..(0b11100) {
+            for bits in 0..0b11100 {
                 let kind = match bits & 0b11 {
                     0b00 => Sk::Float,
                     0b01 => Sk::Sint,
@@ -929,7 +929,7 @@ fn inject_standard_builtins(
             //
             // 0b10011 is the last element since splatted single elements
             // were already added
-            for bits in 0..(0b10011) {
+            for bits in 0..0b10011 {
                 let size = match bits & 0b11 {
                     0b00 => Some(VectorSize::Bi),
                     0b01 => Some(VectorSize::Tri),
@@ -975,7 +975,7 @@ fn inject_standard_builtins(
             //
             // 0b11010 is the last element since splatted single elements
             // were already added
-            for bits in 0..(0b11011) {
+            for bits in 0..0b11011 {
                 let kind = match bits & 0b11 {
                     0b00 => Sk::Float,
                     0b01 => Sk::Sint,
@@ -1021,7 +1021,7 @@ fn inject_double_builtin(declaration: &mut FunctionDeclaration, module: &mut Mod
         "abs" | "sign" => {
             // bits layout
             // bit 0 trough 1 - dims
-            for bits in 0..(0b100) {
+            for bits in 0..0b100 {
                 let size = match bits {
                     0b00 => None,
                     0b01 => Some(VectorSize::Bi),
@@ -1048,7 +1048,7 @@ fn inject_double_builtin(declaration: &mut FunctionDeclaration, module: &mut Mod
         "min" | "max" => {
             // bits layout
             // bit 0 trough 2 - dims
-            for bits in 0..(0b111) {
+            for bits in 0..0b111 {
                 let (size, second_size) = match bits {
                     0b000 => (None, None),
                     0b001 => (Some(VectorSize::Bi), None),
@@ -1087,7 +1087,7 @@ fn inject_double_builtin(declaration: &mut FunctionDeclaration, module: &mut Mod
             //
             // 0b1010 is the last element since splatted with single elements
             // is equal to normal single elements
-            for bits in 0..(0b1011) {
+            for bits in 0..0b1011 {
                 let size = match bits & 0b11 {
                     0b00 => Some(VectorSize::Quad),
                     0b01 => Some(VectorSize::Bi),
@@ -1131,7 +1131,7 @@ fn inject_double_builtin(declaration: &mut FunctionDeclaration, module: &mut Mod
             //
             // 0b110 is the last element since splatted with single elements
             // is equal to normal single elements
-            for bits in 0..(0b111) {
+            for bits in 0..0b111 {
                 let kind = Sk::Float;
                 let size = match bits & 0b11 {
                     0b00 => Some(VectorSize::Bi),
@@ -1174,7 +1174,7 @@ fn inject_common_builtin(
         | "normalize" | "length" | "isinf" | "isnan" => {
             // bits layout
             // bit 0 trough 1 - dims
-            for bits in 0..(0b100) {
+            for bits in 0..0b100 {
                 let size = match bits {
                     0b00 => None,
                     0b01 => Some(VectorSize::Bi),
@@ -1215,7 +1215,7 @@ fn inject_common_builtin(
         "dot" | "reflect" | "distance" | "ldexp" => {
             // bits layout
             // bit 0 trough 1 - dims
-            for bits in 0..(0b100) {
+            for bits in 0..0b100 {
                 let size = match bits {
                     0b00 => None,
                     0b01 => Some(VectorSize::Bi),
@@ -1250,7 +1250,7 @@ fn inject_common_builtin(
         "transpose" => {
             // bits layout
             // bit 0 trough 3 - dims
-            for bits in 0..(0b1001) {
+            for bits in 0..0b1001 {
                 let (rows, columns) = match bits {
                     0b0000 => (VectorSize::Bi, VectorSize::Bi),
                     0b0001 => (VectorSize::Bi, VectorSize::Tri),
@@ -1276,7 +1276,7 @@ fn inject_common_builtin(
         "inverse" | "determinant" => {
             // bits layout
             // bit 0 trough 1 - dims
-            for bits in 0..(0b11) {
+            for bits in 0..0b11 {
                 let (rows, columns) = match bits {
                     0b00 => (VectorSize::Bi, VectorSize::Bi),
                     0b01 => (VectorSize::Tri, VectorSize::Tri),
@@ -1302,7 +1302,7 @@ fn inject_common_builtin(
         "mod" | "step" => {
             // bits layout
             // bit 0 trough 2 - dims
-            for bits in 0..(0b111) {
+            for bits in 0..0b111 {
                 let (size, second_size) = match bits {
                     0b000 => (None, None),
                     0b001 => (Some(VectorSize::Bi), None),
@@ -1347,7 +1347,7 @@ fn inject_common_builtin(
         "modf" | "frexp" => {
             // bits layout
             // bit 0 trough 1 - dims
-            for bits in 0..(0b100) {
+            for bits in 0..0b100 {
                 let size = match bits {
                     0b00 => None,
                     0b01 => Some(VectorSize::Bi),
@@ -1421,7 +1421,7 @@ fn inject_common_builtin(
         "outerProduct" => {
             // bits layout
             // bit 0 trough 3 - dims
-            for bits in 0..(0b1001) {
+            for bits in 0..0b1001 {
                 let (size1, size2) = match bits {
                     0b0000 => (VectorSize::Bi, VectorSize::Bi),
                     0b0001 => (VectorSize::Bi, VectorSize::Tri),
@@ -1455,7 +1455,7 @@ fn inject_common_builtin(
         "faceforward" | "fma" => {
             // bits layout
             // bit 0 trough 1 - dims
-            for bits in 0..(0b100) {
+            for bits in 0..0b100 {
                 let size = match bits {
                     0b00 => None,
                     0b01 => Some(VectorSize::Bi),
@@ -1488,7 +1488,7 @@ fn inject_common_builtin(
         "refract" => {
             // bits layout
             // bit 0 trough 1 - dims
-            for bits in 0..(0b100) {
+            for bits in 0..0b100 {
                 let size = match bits {
                     0b00 => None,
                     0b01 => Some(VectorSize::Bi),
@@ -1523,7 +1523,7 @@ fn inject_common_builtin(
         "smoothstep" => {
             // bit 0 - splatted
             // bit 1 trough 2 - dims
-            for bits in 0..(0b1000) {
+            for bits in 0..0b1000 {
                 let splatted = bits & 0b1 == 0b1;
                 let size = match bits >> 1 {
                     0b00 => None,
