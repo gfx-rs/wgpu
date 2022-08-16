@@ -1511,6 +1511,7 @@ impl<W: Write> Writer<W> {
                     Mf::Min => Function::Regular("min"),
                     Mf::Max => Function::Regular("max"),
                     Mf::Clamp => Function::Regular("clamp"),
+                    Mf::Saturate => Function::Regular("saturate"),
                     // trigonometry
                     Mf::Cos => Function::Regular("cos"),
                     Mf::Cosh => Function::Regular("cosh"),

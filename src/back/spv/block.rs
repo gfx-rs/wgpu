@@ -696,6 +696,61 @@ impl<'w> BlockContext<'w> {
                         Some(crate::ScalarKind::Uint) => spirv::GLOp::UClamp,
                         other => unimplemented!("Unexpected max({:?})", other),
                     }),
+                    Mf::Saturate => {
+                        let (maybe_size, width) = match *arg_ty {
+                            crate::TypeInner::Vector { size, width, .. } => (Some(size), width),
+                            crate::TypeInner::Scalar { width, .. } => (None, width),
+                            ref other => unimplemented!("Unexpected saturate({:?})", other),
+                        };
+
+                        let mut arg1_id = self
+                            .writer
+                            .get_constant_scalar(crate::ScalarValue::Float(0.0), width);
+                        let mut arg2_id = self
+                            .writer
+                            .get_constant_scalar(crate::ScalarValue::Float(1.0), width);
+
+                        if let Some(size) = maybe_size {
+                            let value = LocalType::Value {
+                                vector_size: Some(size),
+                                kind: crate::ScalarKind::Float,
+                                width,
+                                pointer_space: None,
+                            };
+
+                            let result_type_id = self.get_type_id(LookupType::Local(value));
+
+                            self.temp_list.clear();
+                            self.temp_list.resize(size as _, arg1_id);
+
+                            let id = self.gen_id();
+                            block.body.push(Instruction::composite_construct(
+                                result_type_id,
+                                id,
+                                &self.temp_list,
+                            ));
+                            arg1_id = id;
+
+                            self.temp_list.clear();
+                            self.temp_list.resize(size as _, arg2_id);
+
+                            let id = self.gen_id();
+                            block.body.push(Instruction::composite_construct(
+                                result_type_id,
+                                id,
+                                &self.temp_list,
+                            ));
+                            arg2_id = id;
+                        }
+
+                        MathOp::Custom(Instruction::ext_inst(
+                            self.writer.gl450_ext_inst_id,
+                            spirv::GLOp::FClamp,
+                            result_type_id,
+                            id,
+                            &[arg0_id, arg1_id, arg2_id],
+                        ))
+                    }
                     // trigonometry
                     Mf::Sin => MathOp::Ext(spirv::GLOp::Sin),
                     Mf::Sinh => MathOp::Ext(spirv::GLOp::Sinh),

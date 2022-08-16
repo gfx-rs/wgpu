@@ -704,6 +704,7 @@ impl<'a> ResolveContext<'a> {
                     Mf::Min |
                     Mf::Max |
                     Mf::Clamp |
+                    Mf::Saturate |
                     // trigonometry
                     Mf::Cos |
                     Mf::Cosh |

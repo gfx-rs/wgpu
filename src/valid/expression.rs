@@ -1040,7 +1040,8 @@ impl super::Validator {
                             ));
                         }
                     }
-                    Mf::Cos
+                    Mf::Saturate
+                    | Mf::Cos
                     | Mf::Cosh
                     | Mf::Sin
                     | Mf::Sinh

@@ -140,6 +140,7 @@ pub fn map_standard_fun(word: &str) -> Option<crate::MathFunction> {
         "min" => Mf::Min,
         "max" => Mf::Max,
         "clamp" => Mf::Clamp,
+        "saturate" => Mf::Saturate,
         // trigonometry
         "cos" => Mf::Cos,
         "cosh" => Mf::Cosh,

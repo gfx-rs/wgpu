@@ -1628,6 +1628,7 @@ impl<W: Write> Writer<W> {
                     Mf::Min => "min",
                     Mf::Max => "max",
                     Mf::Clamp => "clamp",
+                    Mf::Saturate => "saturate",
                     // trigonometry
                     Mf::Cos => "cos",
                     Mf::Cosh => "cosh",

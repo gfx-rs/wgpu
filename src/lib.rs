@@ -952,6 +952,7 @@ pub enum MathFunction {
     Min,
     Max,
     Clamp,
+    Saturate,
     // trigonometry
     Cos,
     Cosh,

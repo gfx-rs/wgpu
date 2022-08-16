@@ -228,6 +228,7 @@ impl super::MathFunction {
             Self::Min => 2,
             Self::Max => 2,
             Self::Clamp => 3,
+            Self::Saturate => 1,
             // trigonometry
             Self::Cos => 1,
             Self::Cosh => 1,
