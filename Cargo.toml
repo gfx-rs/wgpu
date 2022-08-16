@@ -23,6 +23,7 @@ panic = "abort"
 
 [features]
 default = []
+clone = []
 dot-out = []
 glsl-in = ["pp-rs"]
 glsl-validate = []
