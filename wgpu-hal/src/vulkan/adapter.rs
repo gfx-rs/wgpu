@@ -342,7 +342,12 @@ impl PhysicalDeviceFeatures {
         }
     }
 
-    fn to_wgpu(&self, caps: &PhysicalDeviceCapabilities) -> (wgt::Features, wgt::DownlevelFlags) {
+    fn to_wgpu(
+        &self,
+        instance: &ash::Instance,
+        phd: vk::PhysicalDevice,
+        caps: &PhysicalDeviceCapabilities,
+    ) -> (wgt::Features, wgt::DownlevelFlags) {
         use crate::auxil::db;
         use wgt::{DownlevelFlags as Df, Features as F};
         let mut features = F::empty()
@@ -532,7 +537,7 @@ impl PhysicalDeviceFeatures {
 
         features.set(
             F::TEXTURE_FORMAT_16BIT_NORM,
-            is_format_16bit_norm_supported(caps),
+            is_format_16bit_norm_supported(instance, phd),
         );
 
         if let Some(ref astc_hdr) = self.astc_hdr {
@@ -553,7 +558,9 @@ impl PhysicalDeviceFeatures {
 
         features.set(
             F::DEPTH32FLOAT_STENCIL8,
-            caps.supports_format(
+            supports_format(
+                instance,
+                phd,
                 vk::Format::D32_SFLOAT_S8_UINT,
                 vk::ImageTiling::OPTIMAL,
                 vk::FormatFeatureFlags::DEPTH_STENCIL_ATTACHMENT,
@@ -562,7 +569,9 @@ impl PhysicalDeviceFeatures {
 
         features.set(
             F::DEPTH24UNORM_STENCIL8,
-            caps.supports_format(
+            supports_format(
+                instance,
+                phd,
                 vk::Format::D24_UNORM_S8_UINT,
                 vk::ImageTiling::OPTIMAL,
                 vk::FormatFeatureFlags::DEPTH_STENCIL_ATTACHMENT,
@@ -589,7 +598,6 @@ pub struct PhysicalDeviceCapabilities {
     properties: vk::PhysicalDeviceProperties,
     vulkan_1_2: Option<vk::PhysicalDeviceVulkan12Properties>,
     descriptor_indexing: Option<vk::PhysicalDeviceDescriptorIndexingPropertiesEXT>,
-    formats: Vec<vk::FormatProperties>,
 }
 
 // This is safe because the structs have `p_next: *mut c_void`, which we null out/never read.
@@ -605,22 +613,6 @@ impl PhysicalDeviceCapabilities {
         self.supported_extensions
             .iter()
             .any(|ep| unsafe { CStr::from_ptr(ep.extension_name.as_ptr()) } == extension)
-    }
-
-    fn supports_format(
-        &self,
-        format: vk::Format,
-        tiling: vk::ImageTiling,
-        features: vk::FormatFeatureFlags,
-    ) -> bool {
-        self.formats
-            .get(format.as_raw() as usize)
-            .map(|properties| match tiling {
-                vk::ImageTiling::LINEAR => properties.linear_tiling_features.contains(features),
-                vk::ImageTiling::OPTIMAL => properties.optimal_tiling_features.contains(features),
-                _ => false,
-            })
-            .unwrap()
     }
 
     /// Map `requested_features` to the list of Vulkan extension strings required to create the logical device.
@@ -868,7 +860,6 @@ impl super::InstanceShared {
             } else {
                 unsafe { self.raw.get_physical_device_properties(phd) }
             };
-            capabilities.formats = query_format_properties(&self.raw, phd);
 
             capabilities
         };
@@ -996,7 +987,8 @@ impl super::Instance {
             backend: wgt::Backend::Vulkan,
         };
 
-        let (available_features, downlevel_flags) = phd_features.to_wgpu(&phd_capabilities);
+        let (available_features, downlevel_flags) =
+            phd_features.to_wgpu(&self.shared.raw, phd, &phd_capabilities);
         let mut workarounds = super::Workarounds::empty();
         {
             // see https://github.com/gfx-rs/gfx/issues/1930
@@ -1299,7 +1291,6 @@ impl super::Adapter {
             }
         };
 
-        log::info!("Private capabilities: {:?}", self.private_caps);
         let raw_queue = {
             profiling::scope!("vkGetDeviceQueue");
             raw_device.get_device_queue(family_index, queue_index)
@@ -1449,13 +1440,9 @@ impl crate::Adapter<super::Api> for super::Adapter {
 
         let vk_format = self.private_caps.map_texture_format(format);
         let properties = self
-            .phd_capabilities
-            .formats
-            .get(vk_format.as_raw() as usize);
-        let properties = match properties {
-            Some(p) => p,
-            None => return Tfc::empty(),
-        };
+            .instance
+            .raw
+            .get_physical_device_format_properties(self.raw, vk_format);
         let features = properties.optimal_tiling_features;
 
         let mut flags = Tfc::empty();
@@ -1627,40 +1614,45 @@ impl crate::Adapter<super::Api> for super::Adapter {
     }
 }
 
-/// Querys properties of all known image formats. The raw value of `vk::Format` corresponds
-/// to the index of the returned Vec.
-fn query_format_properties(
-    instance: &ash::Instance,
-    physical_device: vk::PhysicalDevice,
-) -> Vec<vk::FormatProperties> {
-    // vk::Format::UNDEFINED
-    const FORMAT_MIN: i32 = 0;
-
-    // vk::Format::ASTC_12X12_SRGB_BLOCK
-    const FORMAT_MAX: i32 = 184;
-
-    debug_assert_eq!(FORMAT_MAX, vk::Format::ASTC_12X12_SRGB_BLOCK.as_raw());
-
-    (FORMAT_MIN..(FORMAT_MAX + 1))
-        .map(|raw| {
-            let image_format = vk::Format::from_raw(raw);
-            unsafe { instance.get_physical_device_format_properties(physical_device, image_format) }
-        })
-        .collect::<Vec<_>>()
-}
-
-fn is_format_16bit_norm_supported(caps: &PhysicalDeviceCapabilities) -> bool {
+fn is_format_16bit_norm_supported(instance: &ash::Instance, phd: vk::PhysicalDevice) -> bool {
     let tiling = vk::ImageTiling::OPTIMAL;
     let features = vk::FormatFeatureFlags::SAMPLED_IMAGE
         | vk::FormatFeatureFlags::STORAGE_IMAGE
         | vk::FormatFeatureFlags::TRANSFER_SRC
         | vk::FormatFeatureFlags::TRANSFER_DST;
-    let r16unorm = caps.supports_format(vk::Format::R16_UNORM, tiling, features);
-    let r16snorm = caps.supports_format(vk::Format::R16_SNORM, tiling, features);
-    let rg16unorm = caps.supports_format(vk::Format::R16G16_UNORM, tiling, features);
-    let rg16snorm = caps.supports_format(vk::Format::R16G16_SNORM, tiling, features);
-    let rgba16unorm = caps.supports_format(vk::Format::R16G16B16A16_UNORM, tiling, features);
-    let rgba16snorm = caps.supports_format(vk::Format::R16G16B16A16_SNORM, tiling, features);
+    let r16unorm = supports_format(instance, phd, vk::Format::R16_UNORM, tiling, features);
+    let r16snorm = supports_format(instance, phd, vk::Format::R16_SNORM, tiling, features);
+    let rg16unorm = supports_format(instance, phd, vk::Format::R16G16_UNORM, tiling, features);
+    let rg16snorm = supports_format(instance, phd, vk::Format::R16G16_SNORM, tiling, features);
+    let rgba16unorm = supports_format(
+        instance,
+        phd,
+        vk::Format::R16G16B16A16_UNORM,
+        tiling,
+        features,
+    );
+    let rgba16snorm = supports_format(
+        instance,
+        phd,
+        vk::Format::R16G16B16A16_SNORM,
+        tiling,
+        features,
+    );
 
     r16unorm && r16snorm && rg16unorm && rg16snorm && rgba16unorm && rgba16snorm
+}
+
+fn supports_format(
+    instance: &ash::Instance,
+    phd: vk::PhysicalDevice,
+    format: vk::Format,
+    tiling: vk::ImageTiling,
+    features: vk::FormatFeatureFlags,
+) -> bool {
+    let properties = unsafe { instance.get_physical_device_format_properties(phd, format) };
+    match tiling {
+        vk::ImageTiling::LINEAR => properties.linear_tiling_features.contains(features),
+        vk::ImageTiling::OPTIMAL => properties.optimal_tiling_features.contains(features),
+        _ => false,
+    }
 }
