@@ -19,7 +19,9 @@ use std::{
     marker::PhantomData,
     num::{NonZeroU32, NonZeroU8},
     ops::{Bound, Range, RangeBounds},
+    pin::Pin,
     sync::Arc,
+    task::{self, Poll},
     thread,
 };
 
@@ -1724,13 +1726,13 @@ impl Instance {
     /// Some options are "soft", so treated as non-mandatory. Others are "hard".
     ///
     /// If no adapters are found that suffice all the "hard" options, `None` is returned.
-    pub fn request_adapter(
-        &self,
-        options: &RequestAdapterOptions,
-    ) -> impl Future<Output = Option<Adapter>> + Send {
+    pub fn request_adapter(&self, options: &RequestAdapterOptions) -> RequestAdapterFuture {
         let context = Arc::clone(&self.context);
         let adapter = self.context.instance_request_adapter(options);
-        async move { adapter.await.map(|id| Adapter { context, id }) }
+        RequestAdapterFuture {
+            context: Some(context),
+            adapter,
+        }
     }
 
     /// Converts a wgpu-hal `ExposedAdapter` to a wgpu [`Adapter`].
@@ -1848,6 +1850,26 @@ impl Instance {
     }
 }
 
+/// [`Future`] returned by [`Instance::request_adapter()`].
+pub struct RequestAdapterFuture {
+    context: Option<Arc<C>>,
+    adapter: <C as Context>::RequestAdapterFuture,
+}
+
+impl Future for RequestAdapterFuture {
+    type Output = Option<Adapter>;
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut task::Context<'_>) -> Poll<Self::Output> {
+        match Pin::new(&mut self.adapter).poll(cx) {
+            Poll::Ready(id) => Poll::Ready(id.map(|id| Adapter {
+                context: self.context.take().unwrap(),
+                id,
+            })),
+            Poll::Pending => Poll::Pending,
+        }
+    }
+}
+
 impl Adapter {
     /// Requests a connection to a physical device, creating a logical device.
     ///
@@ -1869,22 +1891,12 @@ impl Adapter {
         &self,
         desc: &DeviceDescriptor,
         trace_path: Option<&std::path::Path>,
-    ) -> impl Future<Output = Result<(Device, Queue), RequestDeviceError>> + Send {
+    ) -> RequestDeviceFuture {
         let context = Arc::clone(&self.context);
         let device = Context::adapter_request_device(&*self.context, &self.id, desc, trace_path);
-        async move {
-            device.await.map(|(device_id, queue_id)| {
-                (
-                    Device {
-                        context: Arc::clone(&context),
-                        id: device_id,
-                    },
-                    Queue {
-                        context,
-                        id: queue_id,
-                    },
-                )
-            })
+        RequestDeviceFuture {
+            context: Some(context),
+            device,
         }
     }
 
@@ -1970,6 +1982,35 @@ impl Adapter {
     /// To disable these restrictions on a device, request the [`Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES`] feature.
     pub fn get_texture_format_features(&self, format: TextureFormat) -> TextureFormatFeatures {
         Context::adapter_get_texture_format_features(&*self.context, &self.id, format)
+    }
+}
+
+/// [`Future`] returned by [`Adapter::request_device()`].
+pub struct RequestDeviceFuture {
+    context: Option<Arc<C>>,
+    device: <C as Context>::RequestDeviceFuture,
+}
+
+impl Future for RequestDeviceFuture {
+    type Output = Result<(Device, Queue), RequestDeviceError>;
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut task::Context<'_>) -> Poll<Self::Output> {
+        match Pin::new(&mut self.device).poll(cx) {
+            Poll::Ready(device) => Poll::Ready(device.map(|(device_id, queue_id)| {
+                let context = self.context.take().unwrap();
+                (
+                    Device {
+                        context: Arc::clone(&context),
+                        id: device_id,
+                    },
+                    Queue {
+                        context,
+                        id: queue_id,
+                    },
+                )
+            })),
+            Poll::Pending => Poll::Pending,
+        }
     }
 }
 
