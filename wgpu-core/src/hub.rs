@@ -1,3 +1,154 @@
+/*! Allocating resource ids, and tracking the resources they refer to.
+
+The `wgpu_core` API uses identifiers of type [`Id<R>`] to refer to
+resources of type `R`. For example, [`id::DeviceId`] is an alias for
+`Id<Device<Empty>>`, and [`id::BufferId`] is an alias for
+`Id<Buffer<Empty>>`. `Id` implements `Copy`, `Hash`, `Eq`, `Ord`, and
+of course `Debug`.
+
+Each `Id` contains not only an index for the resource it denotes but
+also a [`Backend`] indicating which `wgpu` backend it belongs to. You
+can use the [`gfx_select`] macro to dynamically dispatch on an id's
+backend to a function specialized at compile time for a specific
+backend. See that macro's documentation for details.
+
+`Id`s also incorporate a generation number, for additional validation.
+
+The resources to which identifiers refer are freed explicitly.
+Attempting to use an identifier for a resource that has been freed
+elicits an error result.
+
+## Assigning ids to resources
+
+The users of `wgpu_core` generally want resource ids to be assigned
+in one of two ways:
+
+- Users like `wgpu` want `wgpu_core` to assign ids to resources itself.
+  For example, `wgpu` expects to call `Global::device_create_buffer`
+  and have the return value indicate the newly created buffer's id.
+
+- Users like `player` and Firefox want to allocate ids themselves, and
+  pass `Global::device_create_buffer` and friends the id to assign the
+  new resource.
+
+To accommodate either pattern, `wgpu_core` methods that create
+resources all expect an `id_in` argument that the caller can use to
+specify the id, and they all return the id used. For example, the
+declaration of `Global::device_create_buffer` looks like this:
+
+```ignore
+impl<G: GlobalIdentityHandlerFactory> Global<G> {
+    /* ... */
+    pub fn device_create_buffer<A: HalApi>(
+        &self,
+        device_id: id::DeviceId,
+        desc: &resource::BufferDescriptor,
+        id_in: Input<G, id::BufferId>,
+    ) -> (id::BufferId, Option<resource::CreateBufferError>) {
+        /* ... */
+    }
+    /* ... */
+}
+```
+
+Users that want to assign resource ids themselves pass in the id they
+want as the `id_in` argument, whereas users that want `wgpu_core`
+itself to choose ids always pass `()`. In either case, the id
+ultimately assigned is returned as the first element of the tuple.
+
+Producing true identifiers from `id_in` values is the job of an
+[`IdentityHandler`] implementation, which has an associated type
+[`Input`] saying what type of `id_in` values it accepts, and a
+[`process`] method that turns such values into true identifiers of
+type `I`. There are two kinds of `IdentityHandler`s:
+
+- Users that want `wgpu_core` to assign ids generally use
+  [`IdentityManager`] ([wrapped in a mutex]). Its `Input` type is
+  `()`, and it tracks assigned ids and generation numbers as
+  necessary. (This is what `wgpu` does.)
+
+- Users that want to assign ids themselves use an `IdentityHandler`
+  whose `Input` type is `I` itself, and whose `process` method simply
+  passes the `id_in` argument through unchanged. For example, the
+  `player` crate uses an `IdentityPassThrough` type whose `process`
+  method simply adjusts the id's backend (since recordings can be
+  replayed on a different backend than the one they were created on)
+  but passes the rest of the id's content through unchanged.
+
+Because an `IdentityHandler<I>` can only create ids for a single
+resource type `I`, constructing a [`Global`] entails constructing a
+separate `IdentityHandler<I>` for each resource type `I` that the
+`Global` will manage: an `IdentityHandler<DeviceId>`, an
+`IdentityHandler<TextureId>`, and so on.
+
+The [`Global::new`] function could simply take a large collection of
+`IdentityHandler<I>` implementations as arguments, but that would be
+ungainly. Instead, `Global::new` expects a `factory` argument that
+implements the [`GlobalIdentityHandlerFactory`] trait, which extends
+[`IdentityHandlerFactory<I>`] for each resource id type `I`. This
+trait, in turn, has a `spawn` method that constructs an
+`IdentityHandler<I>` for the `Global` to use.
+
+What this means is that the types of resource creation functions'
+`id_in` arguments depend on the `Global`'s `G` type parameter. A
+`Global<G>`'s `IdentityHandler<I>` implementation is:
+
+```ignore
+<G as IdentityHandlerFactory<I>>::Filter
+```
+
+where `Filter` is an associated type of the `IdentityHandlerFactory` trait.
+Thus, its `id_in` type is:
+
+```ignore
+<<G as IdentityHandlerFactory<I>>::Filter as IdentityHandler<I>>::Input
+```
+
+The [`Input<G, I>`] type is an alias for this construction.
+
+## Id allocation and streaming
+
+Perhaps surprisingly, allowing users to assign resource ids themselves
+enables major performance improvements in some applications.
+
+The `wgpu_core` API is designed for use by Firefox's [WebGPU]
+implementation. For security, web content and GPU use must be kept
+segregated in separate processes, with all interaction between them
+mediated by an inter-process communication protocol. As web content uses
+the WebGPU API, the content process sends messages to the GPU process,
+which interacts with the platform's GPU APIs on content's behalf,
+occasionally sending results back.
+
+In a classic Rust API, a resource allocation function takes parameters
+describing the resource to create, and if creation succeeds, it returns
+the resource id in a `Result::Ok` value. However, this design is a poor
+fit for the split-process design described above: content must wait for
+the reply to its buffer-creation message (say) before it can know which
+id it can use in the next message that uses that buffer. On a common
+usage pattern, the classic Rust design imposes the latency of a full
+cross-process round trip.
+
+We can avoid incurring these round-trip latencies simply by letting the
+content process assign resource ids itself. With this approach, content
+can choose an id for the new buffer, send a message to create the
+buffer, and then immediately send the next message operating on that
+buffer, since it already knows its id. Allowing content and GPU process
+activity to be pipelined greatly improves throughput.
+
+To help propagate errors correctly in this style of usage, when resource
+creation fails, the id supplied for that resource is marked to indicate
+as much, allowing subsequent operations using that id to be properly
+flagged as errors as well.
+
+[`gfx_select`]: crate::gfx_select
+[`Input`]: IdentityHandler::Input
+[`process`]: IdentityHandler::process
+[`Id<R>`]: crate::id::Id
+[wrapped in a mutex]: trait.IdentityHandler.html#impl-IdentityHandler%3CI%3E-for-Mutex%3CIdentityManager%3E
+[WebGPU]: https://www.w3.org/TR/webgpu/
+
+*/
+
 use crate::{
     binding_model::{BindGroup, BindGroupLayout, PipelineLayout},
     command::{CommandBuffer, RenderBundle},
@@ -35,6 +186,9 @@ use std::{fmt::Debug, marker::PhantomData, mem, ops};
 ///
 /// - `IdentityManager` reuses the index values of freed ids before returning
 ///   ids with new index values. Freed vector entries get reused.
+///
+/// See the module-level documentation for an overview of how this
+/// fits together.
 ///
 /// [`Id`]: crate::id::Id
 /// [`Backend`]: wgt::Backend;
@@ -431,9 +585,24 @@ impl<'a, T> Drop for Token<'a, T> {
     }
 }
 
+/// A type that can build true ids from proto-ids, and free true ids.
+///
+/// For some implementations, the true id is based on the proto-id.
+/// The caller is responsible for providing well-allocated proto-ids.
+///
+/// For other implementations, the proto-id carries no information
+/// (it's `()`, say), and this `IdentityHandler` type takes care of
+/// allocating a fresh true id.
+///
+/// See the module-level documentation for details.
 pub trait IdentityHandler<I>: Debug {
+    /// The type of proto-id consumed by this filter, to produce a true id.
     type Input: Clone + Debug;
+
+    /// Given a proto-id value `id`, return a true id for `backend`.
     fn process(&self, id: Self::Input, backend: Backend) -> I;
+
+    /// Free the true id `id`.
     fn free(&self, id: I);
 }
 
@@ -447,11 +616,28 @@ impl<I: id::TypedId + Debug> IdentityHandler<I> for Mutex<IdentityManager> {
     }
 }
 
+/// A type that can produce [`IdentityHandler`] filters for ids of type `I`.
+///
+/// See the module-level documentation for details.
 pub trait IdentityHandlerFactory<I> {
+    /// The type of filter this factory constructs.
+    ///
+    /// "Filter" and "handler" seem to both mean the same thing here:
+    /// something that can produce true ids from proto-ids.
     type Filter: IdentityHandler<I>;
+
+    /// Create an [`IdentityHandler<I>`] implementation that can
+    /// transform proto-ids into ids of type `I`.
+    ///
+    /// [`IdentityHandler<I>`]: IdentityHandler
     fn spawn(&self) -> Self::Filter;
 }
 
+/// A global identity handler factory based on [`IdentityManager`].
+///
+/// Each of this type's `IdentityHandlerFactory<I>::spawn` methods
+/// returns a `Mutex<IdentityManager<I>>`, which allocates fresh `I`
+/// ids itself, and takes `()` as its proto-id type.
 #[derive(Debug)]
 pub struct IdentityManagerFactory;
 
@@ -462,6 +648,8 @@ impl<I: id::TypedId + Debug> IdentityHandlerFactory<I> for IdentityManagerFactor
     }
 }
 
+/// A factory that can build [`IdentityHandler`]s for all resource
+/// types.
 pub trait GlobalIdentityHandlerFactory:
     IdentityHandlerFactory<id::AdapterId>
     + IdentityHandlerFactory<id::DeviceId>
