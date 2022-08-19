@@ -60,7 +60,7 @@ pub fn op_webgpu_create_texture(
     gfx_put!(device => instance.device_create_texture(
     device,
     &descriptor,
-    std::marker::PhantomData
+    ()
   ) => state, WebGpuTexture)
 }
 
@@ -105,6 +105,6 @@ pub fn op_webgpu_create_texture_view(
     gfx_put!(texture => instance.texture_create_view(
     texture,
     &descriptor,
-    std::marker::PhantomData
+    ()
   ) => state, WebGpuTextureView)
 }
