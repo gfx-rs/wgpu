@@ -797,7 +797,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     .after_submit_internal(comb_raw, submit_index);
             }
 
-            let callbacks = match device.maintain(&hub, false, &mut token) {
+            let callbacks = match device.maintain(hub, false, &mut token) {
                 Ok(callbacks) => callbacks,
                 Err(WaitIdleError::Device(err)) => return Err(QueueSubmitError::Queue(err)),
                 Err(WaitIdleError::StuckGpu) => return Err(QueueSubmitError::StuckGpu),

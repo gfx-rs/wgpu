@@ -1082,7 +1082,7 @@ pub type RenderBundleDescriptor<'a> = wgt::RenderBundleDescriptor<Label<'a>>;
 pub type TextureDescriptor<'a> = wgt::TextureDescriptor<Label<'a>>;
 
 /// Describes a [`TextureView`].
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct TextureViewDescriptor<'a> {
     /// Debug label of the texture view. This will show up in graphics debuggers for easy identification.
     pub label: Label<'a>,
@@ -1722,7 +1722,7 @@ impl Display for BufferAsyncError {
 impl error::Error for BufferAsyncError {}
 
 /// Type of buffer mapping.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum MapMode {
     /// Map only for reading
     Read,

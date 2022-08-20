@@ -395,6 +395,7 @@ pub struct BindGroupLayout<B: hal::Backend> {
     pub(crate) multi_ref_count: MultiRefCount,
     pub(crate) entries: BindEntryMap,
     pub(crate) desc_count: DescriptorTotalCount,
+    #[allow(dead_code)]
     pub(crate) dynamic_count: usize,
     pub(crate) count_validator: BindingTypeMaxCountValidator,
     #[cfg(debug_assertions)]
@@ -595,7 +596,7 @@ impl<B: hal::Backend> Resource for PipelineLayout<B> {
 }
 
 #[repr(C)]
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub struct BufferBinding {

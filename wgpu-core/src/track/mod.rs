@@ -20,7 +20,7 @@ pub(crate) use texture::{TextureSelector, TextureState};
 
 /// A single unit of state tracking. It keeps an initial
 /// usage as well as the last/current one, similar to `Range`.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct Unit<U> {
     first: Option<U>,
     last: U,

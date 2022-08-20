@@ -80,7 +80,7 @@ pub fn all_image_stages() -> hal::pso::PipelineStage {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub enum HostMap {
@@ -454,13 +454,13 @@ impl<B: GfxBackend> Device<B> {
         &'this mut self,
         hub: &Hub<B, G>,
         trackers: &TrackerSet,
-        mut token: &mut Token<'token, Self>,
+        token: &mut Token<'token, Self>,
     ) {
         self.temp_suspected.clear();
         // As the tracker is cleared/dropped, we need to consider all the resources
         // that it references for destruction in the next GC pass.
         {
-            let (bind_group_guard, mut token) = hub.bind_groups.read(&mut token);
+            let (bind_group_guard, mut token) = hub.bind_groups.read(token);
             let (compute_pipe_guard, mut token) = hub.compute_pipelines.read(&mut token);
             let (render_pipe_guard, mut token) = hub.render_pipelines.read(&mut token);
             let (query_set_guard, mut token) = hub.query_sets.read(&mut token);
@@ -511,7 +511,7 @@ impl<B: GfxBackend> Device<B> {
             }
         }
 
-        self.lock_life(&mut token)
+        self.lock_life(token)
             .suspected_resources
             .extend(&self.temp_suspected);
 
@@ -1178,7 +1178,7 @@ impl<B: GfxBackend> Device<B> {
     ) -> Option<id::BindGroupLayoutId> {
         guard
             .iter(self_id.backend())
-            .find(|&(_, ref bgl)| bgl.device_id.value.0 == self_id && bgl.entries == *entry_map)
+            .find(|&(_, bgl)| bgl.device_id.value.0 == self_id && bgl.entries == *entry_map)
             .map(|(id, value)| {
                 value.multi_ref_count.inc();
                 id
@@ -1496,9 +1496,9 @@ impl<B: GfxBackend> Device<B> {
             let descriptors: SmallVec<[_; 1]> = match entry.resource {
                 Br::Buffer(ref bb) => {
                     let buffer_desc = Self::create_buffer_descriptor(
-                        &bb,
+                        bb,
                         binding,
-                        &decl,
+                        decl,
                         &mut used_buffer_ranges,
                         &mut dynamic_binding_info,
                         &mut used,
@@ -1525,9 +1525,9 @@ impl<B: GfxBackend> Device<B> {
                         .iter()
                         .map(|bb| {
                             Self::create_buffer_descriptor(
-                                &bb,
+                                bb,
                                 binding,
-                                &decl,
+                                decl,
                                 &mut used_buffer_ranges,
                                 &mut dynamic_binding_info,
                                 &mut used,
@@ -1782,7 +1782,7 @@ impl<B: GfxBackend> Device<B> {
         // Set the descriptor set's label for easier debugging.
         if let Some(label) = desc.label.as_ref() {
             unsafe {
-                self.raw.set_descriptor_set_name(desc_set.raw_mut(), &label);
+                self.raw.set_descriptor_set_name(desc_set.raw_mut(), label);
             }
         }
 
@@ -2029,7 +2029,7 @@ impl<B: GfxBackend> Device<B> {
             let _ = interface.check_stage(
                 provided_layouts.as_ref().map(|p| p.as_slice()),
                 &mut derived_group_layouts,
-                &entry_point_name,
+                entry_point_name,
                 flag,
                 io,
             )?;
@@ -2038,7 +2038,7 @@ impl<B: GfxBackend> Device<B> {
         }
 
         let shader = hal::pso::EntryPoint::<B> {
-            entry: &entry_point_name, // TODO
+            entry: entry_point_name, // TODO
             module: &shader_module.raw,
             specialization: hal::pso::Specialization::EMPTY,
         };
@@ -2457,7 +2457,7 @@ impl<B: GfxBackend> Device<B> {
                             .check_stage(
                                 provided_layouts.as_ref().map(|p| p.as_slice()),
                                 &mut derived_group_layouts,
-                                &entry_point_name,
+                                entry_point_name,
                                 flag,
                                 io,
                             )
@@ -2470,7 +2470,7 @@ impl<B: GfxBackend> Device<B> {
                 }
 
                 Some(hal::pso::EntryPoint::<B> {
-                    entry: &entry_point_name,
+                    entry: entry_point_name,
                     module: &shader_module.raw,
                     specialization: hal::pso::Specialization::EMPTY,
                 })
@@ -2481,7 +2481,7 @@ impl<B: GfxBackend> Device<B> {
         if validated_stages.contains(wgt::ShaderStage::FRAGMENT) {
             for (i, state) in color_states.iter().enumerate() {
                 match io.get(&(i as wgt::ShaderLocation)) {
-                    Some(ref output) => {
+                    Some(output) => {
                         validation::check_texture_format(state.format, &output.ty).map_err(
                             |pipeline| {
                                 pipeline::CreateRenderPipelineError::ColorState(
@@ -3776,16 +3776,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(layout) => layout,
                 Err(_) => break binding_model::CreateBindGroupError::InvalidLayout,
             };
-            let bind_group = match device.create_bind_group(
-                device_id,
-                bind_group_layout,
-                desc,
-                &hub,
-                &mut token,
-            ) {
-                Ok(bind_group) => bind_group,
-                Err(e) => break e,
-            };
+            let bind_group =
+                match device.create_bind_group(device_id, bind_group_layout, desc, hub, &mut token)
+                {
+                    Ok(bind_group) => bind_group,
+                    Err(e) => break e,
+                };
             let ref_count = bind_group.life_guard.add_ref();
 
             let id = fid.assign(bind_group, &mut token);
@@ -3963,10 +3959,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Err(e) => break e,
             };
 
-            let mut raw = command_buffer.raw.first_mut().unwrap();
+            let raw = command_buffer.raw.first_mut().unwrap();
             unsafe {
                 if let Some(ref label) = desc.label {
-                    device.raw.set_command_buffer_name(&mut raw, label);
+                    device.raw.set_command_buffer_name(raw, label);
                 }
                 raw.begin_primary(hal::command::CommandBufferFlags::ONE_TIME_SUBMIT);
             }
@@ -3995,7 +3991,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .unregister(command_encoder_id, &mut token);
         if let Some(cmdbuf) = cmdbuf {
             let device = &mut device_guard[cmdbuf.device_id.value];
-            device.untrack::<G>(&hub, &cmdbuf.trackers, &mut token);
+            device.untrack::<G>(hub, &cmdbuf.trackers, &mut token);
             device.cmd_allocator.discard(cmdbuf);
         }
     }
@@ -4051,7 +4047,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 });
             }
 
-            let render_bundle = match bundle_encoder.finish(desc, device, &hub, &mut token) {
+            let render_bundle = match bundle_encoder.finish(desc, device, hub, &mut token) {
                 Ok(bundle) => bundle,
                 Err(e) => break e,
             };
@@ -4199,7 +4195,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut token = Token::root();
 
         let fid = hub.render_pipelines.prepare(id_in);
-        let implicit_context = implicit_pipeline_ids.map(|ipi| ipi.prepare(&hub));
+        let implicit_context = implicit_pipeline_ids.map(|ipi| ipi.prepare(hub));
 
         let (adapter_guard, mut token) = hub.adapters.read(&mut token);
         let (device_guard, mut token) = hub.devices.read(&mut token);
@@ -4223,7 +4219,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 adapter,
                 desc,
                 implicit_context,
-                &hub,
+                hub,
                 &mut token,
             ) {
                 Ok(pair) => pair,
@@ -4333,7 +4329,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut token = Token::root();
 
         let fid = hub.compute_pipelines.prepare(id_in);
-        let implicit_context = implicit_pipeline_ids.map(|ipi| ipi.prepare(&hub));
+        let implicit_context = implicit_pipeline_ids.map(|ipi| ipi.prepare(hub));
 
         let (device_guard, mut token) = hub.devices.read(&mut token);
         let error = loop {
@@ -4354,7 +4350,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 device_id,
                 desc,
                 implicit_context,
-                &hub,
+                hub,
                 &mut token,
             ) {
                 Ok(pair) => pair,
@@ -4530,11 +4526,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let num_frames = swap_chain::DESIRED_NUM_FRAMES
                 .max(*caps.image_count.start())
                 .min(*caps.image_count.end());
-            let mut config = swap_chain::swap_chain_descriptor_to_hal(
-                &desc,
-                num_frames,
-                device.private_features,
-            );
+            let mut config =
+                swap_chain::swap_chain_descriptor_to_hal(desc, num_frames, device.private_features);
             if let Some(formats) = formats {
                 if !formats.contains(&config.format) {
                     break swap_chain::CreateSwapChainError::UnsupportedFormat {
@@ -4603,7 +4596,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (device_guard, mut token) = hub.devices.read(&mut token);
         let device = device_guard.get(device_id).map_err(|_| InvalidDevice)?;
         device.lock_life(&mut token).triage_suspected(
-            &hub,
+            hub,
             &device.trackers,
             #[cfg(feature = "trace")]
             None,
@@ -4624,7 +4617,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             device_guard
                 .get(device_id)
                 .map_err(|_| DeviceError::Invalid)?
-                .maintain(&hub, force_wait, &mut token)?
+                .maintain(hub, force_wait, &mut token)?
         };
         fire_map_callbacks(callbacks);
         Ok(())
@@ -4641,7 +4634,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut token = Token::root();
         let (device_guard, mut token) = hub.devices.read(&mut token);
         for (_, device) in device_guard.iter(B::VARIANT) {
-            let cbs = device.maintain(&hub, force_wait, &mut token)?;
+            let cbs = device.maintain(hub, force_wait, &mut token)?;
             callbacks.extend(cbs);
         }
         Ok(())
