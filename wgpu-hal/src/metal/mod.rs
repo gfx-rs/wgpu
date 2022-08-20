@@ -286,7 +286,6 @@ pub struct Device {
 }
 
 pub struct Surface {
-    view: Option<NonNull<objc::runtime::Object>>,
     render_layer: Mutex<mtl::MetalLayer>,
     raw_swapchain_format: mtl::MTLPixelFormat,
     extent: wgt::Extent3d,

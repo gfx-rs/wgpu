@@ -1,6 +1,6 @@
 #![allow(clippy::let_unit_value)] // `let () =` being used to constrain result type
 
-use std::{mem, os::raw::c_void, ptr::NonNull, sync::Once, thread};
+use std::{mem, os::raw::c_void, sync::Once, thread};
 
 use core_graphics_types::{
     base::CGFloat,
@@ -59,9 +59,8 @@ impl HalManagedMetalLayerDelegate {
 }
 
 impl super::Surface {
-    fn new(view: Option<NonNull<Object>>, layer: mtl::MetalLayer) -> Self {
+    fn new(layer: mtl::MetalLayer) -> Self {
         Self {
-            view,
             render_layer: Mutex::new(layer),
             raw_swapchain_format: mtl::MTLPixelFormat::Invalid,
             extent: wgt::Extent3d::default(),
@@ -70,11 +69,7 @@ impl super::Surface {
         }
     }
 
-    pub unsafe fn dispose(self) {
-        if let Some(view) = self.view {
-            let () = msg_send![view.as_ptr(), release];
-        }
-    }
+    pub unsafe fn dispose(self) {}
 
     /// If not called on the main thread, this will panic.
     #[allow(clippy::transmute_ptr_to_ref)]
@@ -86,14 +81,14 @@ impl super::Surface {
         let render_layer =
             mem::transmute::<_, &mtl::MetalLayerRef>(Self::get_metal_layer(view, delegate))
                 .to_owned();
-        Self::new(NonNull::new(view), render_layer)
+        Self::new(render_layer)
     }
 
     pub unsafe fn from_layer(layer: &mtl::MetalLayerRef) -> Self {
         let class = class!(CAMetalLayer);
         let proper_kind: BOOL = msg_send![layer, isKindOfClass: class];
         assert_eq!(proper_kind, YES);
-        Self::new(None, layer.to_owned())
+        Self::new(layer.to_owned())
     }
 
     /// If not called on the main thread, this will panic.
