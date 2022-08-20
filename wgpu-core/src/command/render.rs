@@ -77,7 +77,7 @@ pub enum StoreOp {
 
 /// Describes an individual channel within a render pass, such as color, depth, or stencil.
 #[repr(C)]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 #[cfg_attr(any(feature = "serial-pass", feature = "trace"), derive(Serialize))]
 #[cfg_attr(any(feature = "serial-pass", feature = "replay"), derive(Deserialize))]
 pub struct PassChannel<V> {
@@ -567,7 +567,7 @@ impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
                     let view = cmd_buf
                         .trackers
                         .views
-                        .use_extend(&*view_guard, at.view, (), ())
+                        .use_extend(view_guard, at.view, (), ())
                         .map_err(|_| RenderPassErrorInner::InvalidAttachment(at.view))?;
                     add_view(view, "depth")?;
 
@@ -631,7 +631,7 @@ impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
                 let view = cmd_buf
                     .trackers
                     .views
-                    .use_extend(&*view_guard, at.view, (), ())
+                    .use_extend(view_guard, at.view, (), ())
                     .map_err(|_| RenderPassErrorInner::InvalidAttachment(at.view))?;
                 add_view(view, "color")?;
 
@@ -695,7 +695,7 @@ impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
                 let view = cmd_buf
                     .trackers
                     .views
-                    .use_extend(&*view_guard, resolve_target, (), ())
+                    .use_extend(view_guard, resolve_target, (), ())
                     .map_err(|_| RenderPassErrorInner::InvalidAttachment(resolve_target))?;
                 if extent != Some(view.extent) {
                     return Err(RenderPassErrorInner::AttachmentsDimensionMismatch {
@@ -864,7 +864,7 @@ impl<'a, B: GfxBackend> RenderPassInfo<'a, B> {
                     device
                         .raw
                         .create_framebuffer(
-                            &render_pass,
+                            render_pass,
                             e.key().attachments.all().cloned(),
                             conv::map_extent(&extent, wgt::TextureDimension::D3),
                         )
@@ -1067,7 +1067,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let device = &device_guard[cmd_buf.device_id.value];
             let mut raw = device.cmd_allocator.extend(cmd_buf);
             unsafe {
-                if let Some(ref label) = base.label {
+                if let Some(label) = base.label {
                     device.raw.set_command_buffer_name(&mut raw, label);
                 }
                 raw.begin_primary(hal::command::CommandBufferFlags::ONE_TIME_SUBMIT);
@@ -1438,10 +1438,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         use std::{convert::TryFrom, i16};
                         if rect.w <= 0.0
                             || rect.h <= 0.0
-                            || depth_min < 0.0
-                            || depth_min > 1.0
-                            || depth_max < 0.0
-                            || depth_max > 1.0
+                            || !(0.0..=1.0).contains(&depth_min)
+                            || !(0.0..=1.0).contains(&depth_max)
                         {
                             return Err(RenderCommandError::InvalidViewport).map_pass_err(scope);
                         }

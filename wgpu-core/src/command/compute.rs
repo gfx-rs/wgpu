@@ -113,7 +113,7 @@ pub struct ComputePassDescriptor<'a> {
     pub label: Label<'a>,
 }
 
-#[derive(Clone, Debug, Error, PartialEq)]
+#[derive(Clone, Debug, Error, Eq, PartialEq)]
 pub enum DispatchError {
     #[error("compute pipeline must be set")]
     MissingPipeline,
@@ -291,7 +291,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             });
         }
 
-        if let Some(ref label) = base.label {
+        if let Some(label) = base.label {
             unsafe {
                 raw.begin_debug_marker(label, 0);
             }

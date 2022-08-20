@@ -25,6 +25,7 @@ enum ResourceType {
 
 #[derive(Debug)]
 struct Resource {
+    #[allow(dead_code)]
     name: Option<String>,
     bind: naga::ResourceBinding,
     ty: ResourceType,
@@ -94,6 +95,7 @@ enum Varying {
     BuiltIn(naga::BuiltIn),
 }
 
+#[allow(dead_code)]
 #[derive(Debug)]
 struct SpecializationConstant {
     id: u32,
@@ -105,6 +107,7 @@ struct EntryPoint {
     inputs: Vec<Varying>,
     outputs: Vec<Varying>,
     resources: Vec<(naga::Handle<Resource>, GlobalUse)>,
+    #[allow(dead_code)]
     spec_constants: Vec<SpecializationConstant>,
     sampling_pairs: FastHashSet<(naga::Handle<Resource>, naga::Handle<Resource>)>,
 }

@@ -20,7 +20,7 @@ use thiserror::Error;
 pub type BufferError = UseExtendError<BufferUse>;
 
 /// Error validating a draw call.
-#[derive(Clone, Debug, Error, PartialEq)]
+#[derive(Clone, Debug, Error, Eq, PartialEq)]
 pub enum DrawError {
     #[error("blend constant needs to be set")]
     MissingBlendConstant,

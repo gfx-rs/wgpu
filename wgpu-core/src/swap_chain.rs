@@ -56,6 +56,7 @@ pub struct SwapChain<B: hal::Backend> {
     pub(crate) life_guard: LifeGuard,
     pub(crate) device_id: Stored<DeviceId>,
     pub(crate) desc: SwapChainDescriptor,
+    #[allow(dead_code)]
     pub(crate) num_frames: hal::window::SwapImageIndex,
     pub(crate) semaphore: B::Semaphore,
     pub(crate) acquired_view_id: Option<Stored<TextureViewId>>,

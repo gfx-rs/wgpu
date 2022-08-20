@@ -663,7 +663,7 @@ impl RenderBundle {
                             &pipeline_layout.raw,
                             conv::map_shader_stage_flags(stages),
                             offset,
-                            &data_slice,
+                            data_slice,
                         )
                     } else {
                         super::push_constant_clear(

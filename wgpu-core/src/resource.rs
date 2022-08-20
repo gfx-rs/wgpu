@@ -163,6 +163,7 @@ pub enum BufferAccessError {
 pub(crate) struct BufferPendingMapping {
     pub range: Range<wgt::BufferAddress>,
     pub op: BufferMapOperation,
+    #[allow(dead_code)]
     // hold the parent alive while the mapping is active
     pub parent_ref_count: RefCount,
 }
@@ -280,7 +281,7 @@ impl<B: hal::Backend> Borrow<TextureSelector> for Texture<B> {
 }
 
 /// Describes a [`TextureView`].
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize), serde(default))]
 pub struct TextureViewDescriptor<'a> {
@@ -479,6 +480,7 @@ pub struct QuerySet<B: hal::Backend> {
     /// Amount of queries in the query set.
     pub(crate) desc: wgt::QuerySetDescriptor,
     /// Amount of numbers in each query (i.e. a pipeline statistics query for two attributes will have this number be two)
+    #[allow(dead_code)]
     pub(crate) elements: u32,
 }
 
