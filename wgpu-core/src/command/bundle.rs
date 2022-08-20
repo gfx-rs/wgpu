@@ -4,36 +4,37 @@
 
 /*! Render Bundles
 
-    ## Software implementation
+## Software implementation
 
-    The path from nothing to using a render bundle consists of 3 phases.
+The path from nothing to using a render bundle consists of 3 phases.
 
-    ### Initial command encoding
+### Initial command encoding
 
-    User creates a `RenderBundleEncoder` and populates it by issuing commands
-    from `bundle_ffi` module, just like with `RenderPass`, except that the
-    set of available commands is reduced. Everything is written into a `RawPass`.
+User creates a `RenderBundleEncoder` and populates it by issuing commands
+from `bundle_ffi` module, just like with `RenderPass`, except that the
+set of available commands is reduced. Everything is written into a `RawPass`.
 
-    ### Bundle baking
+### Bundle baking
 
-    Once the commands are encoded, user calls `render_bundle_encoder_finish`.
-    This is perhaps the most complex part of the logic. It consumes the
-    commands stored in `RawPass`, while validating everything, tracking the state,
-    and re-recording the commands into a separate `Vec<RenderCommand>`. It
-    doesn't actually execute any commands.
+Once the commands are encoded, user calls `render_bundle_encoder_finish`.
+This is perhaps the most complex part of the logic. It consumes the
+commands stored in `RawPass`, while validating everything, tracking the state,
+and re-recording the commands into a separate `Vec<RenderCommand>`. It
+doesn't actually execute any commands.
 
-    What's more important, is that the produced vector of commands is "normalized",
-    which means it can be executed verbatim without any state tracking. More
-    formally, "normalized" command stream guarantees that any state required by
-    a draw call is set explicitly by one of the commands between the draw call
-    and the last changing of the pipeline.
+What's more important, is that the produced vector of commands is "normalized",
+which means it can be executed verbatim without any state tracking. More
+formally, "normalized" command stream guarantees that any state required by
+a draw call is set explicitly by one of the commands between the draw call
+and the last changing of the pipeline.
 
-    ### Execution
+### Execution
 
-    When the bundle is used in an actual render pass, `RenderBundle::execute` is
-    called. It goes through the commands and issues them into the native command
-    buffer. Thanks to the "normalized" property, it doesn't track any bind group
-    invalidations or index format changes.
+When the bundle is used in an actual render pass, `RenderBundle::execute` is
+called. It goes through the commands and issues them into the native command
+buffer. Thanks to the "normalized" property, it doesn't track any bind group
+invalidations or index format changes.
+
 !*/
 #![allow(clippy::reversed_empty_ranges)]
 

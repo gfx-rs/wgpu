@@ -4,32 +4,32 @@
 
 /*! Swap chain management.
 
-    ## Lifecycle
+## Lifecycle
 
-    At the low level, the swap chain is using the new simplified model of gfx-rs.
+At the low level, the swap chain is using the new simplified model of gfx-rs.
 
-    A swap chain is a separate object that is backend-dependent but shares the index with
-    the parent surface, which is backend-independent. This ensures a 1:1 correspondence
-    between them.
+A swap chain is a separate object that is backend-dependent but shares the index with
+the parent surface, which is backend-independent. This ensures a 1:1 correspondence
+between them.
 
-    `get_next_image()` requests a new image from the surface. It becomes a part of
-    `TextureViewInner::SwapChain` of the resulted view. The view is registered in the HUB
-    but not in the device tracker.
+`get_next_image()` requests a new image from the surface. It becomes a part of
+`TextureViewInner::SwapChain` of the resulted view. The view is registered in the HUB
+but not in the device tracker.
 
-    The only operation allowed on the view is to be either a color or a resolve attachment.
-    It can only be used in one command buffer, which needs to be submitted before presenting.
-    Command buffer tracker knows about the view, but only for the duration of recording.
-    The view ID is erased from it at the end, so that it's not merged into the device tracker.
+The only operation allowed on the view is to be either a color or a resolve attachment.
+It can only be used in one command buffer, which needs to be submitted before presenting.
+Command buffer tracker knows about the view, but only for the duration of recording.
+The view ID is erased from it at the end, so that it's not merged into the device tracker.
 
-    When a swapchain view is used in `begin_render_pass()`, we assume the start and end image
-    layouts purely based on whether or not this view was used in this command buffer before.
-    It always starts with `Uninitialized` and ends with `Present`, so that no barriers are
-    needed when we need to actually present it.
+When a swapchain view is used in `begin_render_pass()`, we assume the start and end image
+layouts purely based on whether or not this view was used in this command buffer before.
+It always starts with `Uninitialized` and ends with `Present`, so that no barriers are
+needed when we need to actually present it.
 
-    In `queue_submit()` we make sure to signal the semaphore whenever we render to a swap
-    chain view.
+In `queue_submit()` we make sure to signal the semaphore whenever we render to a swap
+chain view.
 
-    In `present()` we return the swap chain image back and wait on the semaphore.
+In `present()` we return the swap chain image back and wait on the semaphore.
 !*/
 
 #[cfg(feature = "trace")]
