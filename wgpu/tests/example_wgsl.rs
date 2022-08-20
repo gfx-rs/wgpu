@@ -28,7 +28,7 @@ fn parse_example_wgsl() {
         for file_entry in read_files {
             let shader = match file_entry {
                 Ok(entry) => match entry.path().extension() {
-                    Some(ostr) if &*ostr == "wgsl" => {
+                    Some(ostr) if ostr == "wgsl" => {
                         println!("Validating {:?}", entry.path());
                         fs::read_to_string(entry.path()).unwrap_or_default()
                     }

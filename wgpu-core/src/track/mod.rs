@@ -238,7 +238,7 @@ fn iterate_bitvec_indices(ownership: &BitVec<usize>) -> impl Iterator<Item = usi
         })
 }
 
-#[derive(Clone, Debug, Error, PartialEq)]
+#[derive(Clone, Debug, Error, Eq, PartialEq)]
 pub enum UsageConflict {
     #[error("Attempted to use buffer {id:?} which is invalid.")]
     BufferInvalid { id: id::BufferId },
@@ -291,7 +291,7 @@ impl UsageConflict {
 }
 
 /// Pretty print helper that shows helpful descriptions of a conflicting usage.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InvalidUse<T> {
     current_state: T,
     new_state: T,

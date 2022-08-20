@@ -1113,7 +1113,7 @@ pub enum ShaderModel {
 
 /// Supported physical device types.
 #[repr(u8)]
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub enum DeviceType {
@@ -1132,7 +1132,7 @@ pub enum DeviceType {
 //TODO: convert `vendor` and `device` to `u32`
 
 /// Information about an adapter.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub struct AdapterInfo {
@@ -4115,7 +4115,7 @@ pub struct ImageCopyTexture<T> {
 
 /// Subresource range within an image
 #[repr(C)]
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub struct ImageSubresourceRange {

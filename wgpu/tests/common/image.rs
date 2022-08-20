@@ -62,7 +62,7 @@ fn write_png(
 }
 
 fn calc_difference(lhs: u8, rhs: u8) -> u8 {
-    (lhs as i16 - rhs as i16).abs() as u8
+    (lhs as i16 - rhs as i16).unsigned_abs() as u8
 }
 
 pub fn compare_image_output(
