@@ -624,6 +624,7 @@ bitflags::bitflags! {
         ///
         /// Supported Platforms:
         /// - Metal
+        /// - Vulkan
         ///
         /// This is a native-only feature.
         const TEXTURE_COMPRESSION_ASTC_HDR = 1 << 40;
