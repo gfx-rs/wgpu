@@ -528,10 +528,34 @@ impl super::Device {
             None => vk::SwapchainKHR::null(),
         };
 
-        let color_space = if config.format == wgt::TextureFormat::Rgba16Float {
-            // Enable wide color gamut mode
-            // Vulkan swapchain for Android only supports DISPLAY_P3_NONLINEAR_EXT and EXTENDED_SRGB_LINEAR_EXT
-            vk::ColorSpaceKHR::EXTENDED_SRGB_LINEAR_EXT
+        let color_format = self.shared.private_caps.map_texture_format(config.format);
+        let color_space = if config.format == wgt::TextureFormat::Rgba16Float
+            || config.format == wgt::TextureFormat::Rgb10a2Unorm
+        {
+            match surface
+                .functor
+                .get_physical_device_surface_formats(self.raw_physical_device(), surface.raw)
+            {
+                Ok(formats) => {
+                    // wide color gamut color spaces
+                    // Vulkan swapchain for Android only supports DISPLAY_P3_NONLINEAR_EXT and/or EXTENDED_SRGB_LINEAR_EXT
+                    let wcg_color_spaces = [
+                        vk::ColorSpaceKHR::BT2020_LINEAR_EXT,
+                        vk::ColorSpaceKHR::EXTENDED_SRGB_LINEAR_EXT,
+                        vk::ColorSpaceKHR::DISPLAY_P3_LINEAR_EXT,
+                        vk::ColorSpaceKHR::ADOBERGB_LINEAR_EXT,
+                    ];
+                    wcg_color_spaces
+                        .into_iter()
+                        .find(|cs| {
+                            formats
+                                .iter()
+                                .any(|sf| sf.format.eq(&color_format) && sf.color_space.eq(cs))
+                        })
+                        .unwrap_or(vk::ColorSpaceKHR::EXTENDED_SRGB_LINEAR_EXT)
+                }
+                Err(_) => vk::ColorSpaceKHR::EXTENDED_SRGB_LINEAR_EXT,
+            }
         } else {
             vk::ColorSpaceKHR::SRGB_NONLINEAR
         };
@@ -539,7 +563,7 @@ impl super::Device {
             .flags(vk::SwapchainCreateFlagsKHR::empty())
             .surface(surface.raw)
             .min_image_count(config.swap_chain_size)
-            .image_format(self.shared.private_caps.map_texture_format(config.format))
+            .image_format(color_format)
             .image_color_space(color_space)
             .image_extent(vk::Extent2D {
                 width: config.extent.width,

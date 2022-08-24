@@ -85,6 +85,9 @@ the same every time it is rendered, we now warn if it is missing.
 #### Metal
 - Extract the generic code into `get_metal_layer` by @jinleili in [#2826](https://github.com/gfx-rs/wgpu/pull/2826)
 
+#### Vulkan
+- Find the supported wide color gamut color space by @jinleili in [#2980](https://github.com/gfx-rs/wgpu/pull/2980)
+
 ### Documentation
 
 #### General
