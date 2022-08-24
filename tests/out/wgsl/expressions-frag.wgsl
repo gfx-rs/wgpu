@@ -274,21 +274,24 @@ fn testUnaryOpMat(a_16: mat3x3<f32>) {
 }
 
 fn testStructConstructor() {
-    var tree: BST = BST(1);
+    var tree: BST;
 
-    _ = BST(1);
+    tree = BST(1);
+    return;
 }
 
 fn testNonScalarToScalarConstructor() {
-    var f: f32 = 1.0;
+    var f: f32;
 
-    _ = f32(mat2x2<f32>(vec2<f32>(1.0, 0.0), vec2<f32>(0.0, 1.0))[0].x);
+    f = f32(mat2x2<f32>(vec2<f32>(1.0, 0.0), vec2<f32>(0.0, 1.0))[0].x);
+    return;
 }
 
 fn testArrayConstructor() {
-    var tree_1: array<f32,1u> = array<f32,1u>(0.0);
+    var tree_1: array<f32,1u>;
 
-    _ = array<f32,1u>(0.0);
+    tree_1 = array<f32,1u>(0.0);
+    return;
 }
 
 fn testFreestandingConstructor() {
@@ -296,10 +299,10 @@ fn testFreestandingConstructor() {
 }
 
 fn testNonImplicitCastVectorCast() {
-    var a_18: u32 = 1u;
+    var a_18: u32;
     var b_16: vec4<i32>;
 
-    _ = u32(1);
+    a_18 = u32(1);
     let _e3 = a_18;
     b_16 = vec4<i32>(i32(_e3));
     return;
@@ -384,12 +387,13 @@ fn testLength() {
 
 fn testConstantLength(a_24: array<f32,4u>) {
     var a_25: array<f32,4u>;
-    var len_1: i32 = 4;
+    var len_1: i32;
 
     _ = (&global_1.a);
     a_25 = a_24;
     _ = a_25;
-    _ = i32(4u);
+    len_1 = i32(4u);
+    return;
 }
 
 fn main_1() {

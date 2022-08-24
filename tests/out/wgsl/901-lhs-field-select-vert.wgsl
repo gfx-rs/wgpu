@@ -1,7 +1,7 @@
 fn main_1() {
-    var a: vec4<f32> = vec4<f32>(1.0, 1.0, 1.0, 1.0);
+    var a: vec4<f32>;
 
-    _ = vec4<f32>(1.0);
+    a = vec4<f32>(1.0);
     a.x = 2.0;
     return;
 }

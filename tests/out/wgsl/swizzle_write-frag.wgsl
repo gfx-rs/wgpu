@@ -3,10 +3,10 @@ fn foo(p: ptr<function, vec2<f32>>) {
 }
 
 fn main_1() {
-    var x: vec3<f32> = vec3<f32>(2.0, 2.0, 2.0);
+    var x: vec3<f32>;
     var local: vec2<f32>;
 
-    _ = vec3<f32>(2.0);
+    x = vec3<f32>(2.0);
     let _e3 = x;
     _ = _e3.zxy;
     _ = _e3.zx;

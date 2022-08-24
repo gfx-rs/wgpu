@@ -643,7 +643,7 @@ impl Parser {
             LocalVariable {
                 name: decl.name.clone(),
                 ty: decl.ty,
-                init: decl.init,
+                init: None,
             },
             decl.meta,
         );

@@ -8,11 +8,11 @@ var<private> gl_GlobalInvocationID: vec3<u32>;
 
 fn collatz_iterations(n: u32) -> u32 {
     var n_1: u32;
-    var i: u32 = 0u;
+    var i: u32;
 
     _ = (&global.indices);
     n_1 = n;
-    _ = u32(0);
+    i = u32(0);
     loop {
         let _e7 = n_1;
         if !((_e7 != u32(1))) {

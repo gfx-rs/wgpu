@@ -1,6 +1,7 @@
 fn main_1() {
-    var i: i32 = 0;
+    var i: i32;
 
+    i = 0;
     loop {
         let _e2 = i;
         if !((_e2 < 1)) {

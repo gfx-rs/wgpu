@@ -448,8 +448,8 @@ fn EnvBRDFApprox(f0_7: vec3<f32>, perceptual_roughness: f32, NoV_6: f32) -> vec3
     var f0_8: vec3<f32>;
     var perceptual_roughness_1: f32;
     var NoV_7: f32;
-    var c0_: vec4<f32> = vec4<f32>(-1.0, -0.027499999850988388, -0.5720000267028809, 0.02199999988079071);
-    var c1_: vec4<f32> = vec4<f32>(1.0, 0.042500000447034836, 1.0399999618530273, -0.03999999910593033);
+    var c0_: vec4<f32>;
+    var c1_: vec4<f32>;
     var r: vec4<f32>;
     var a004_: f32;
     var AB: vec2<f32>;
@@ -468,8 +468,8 @@ fn EnvBRDFApprox(f0_7: vec3<f32>, perceptual_roughness: f32, NoV_6: f32) -> vec3
     f0_8 = f0_7;
     perceptual_roughness_1 = perceptual_roughness;
     NoV_7 = NoV_6;
-    _ = vec4<f32>(-(1.0), -(0.027499999850988388), -(0.5720000267028809), 0.02199999988079071);
-    _ = vec4<f32>(1.0, 0.042500000447034836, 1.0399999618530273, -(0.03999999910593033));
+    c0_ = vec4<f32>(-(1.0), -(0.027499999850988388), -(0.5720000267028809), 0.02199999988079071);
+    c1_ = vec4<f32>(1.0, 0.042500000447034836, 1.0399999618530273, -(0.03999999910593033));
     let _e62 = perceptual_roughness_1;
     let _e64 = c0_;
     let _e66 = c1_;
@@ -939,7 +939,7 @@ fn dir_light(light_2: DirectionalLight, roughness_10: f32, NdotV_2: f32, normal:
     var NoH_5: f32;
     var LoH_7: f32;
     var diffuse_1: vec3<f32>;
-    var specularIntensity_3: f32 = 1.0;
+    var specularIntensity_3: f32;
     var specular_2: vec3<f32>;
 
     _ = (&global.ViewProj);
@@ -1010,6 +1010,7 @@ fn dir_light(light_2: DirectionalLight, roughness_10: f32, NdotV_2: f32, normal:
     let _e124 = LoH_7;
     let _e125 = Fd_Burley(_e121, _e122, _e123, _e124);
     diffuse_1 = (_e116 * _e125);
+    specularIntensity_3 = 1.0;
     _ = F0_3;
     _ = roughness_11;
     _ = half_vector;
@@ -1055,9 +1056,9 @@ fn main_1() {
     var F0_4: vec3<f32>;
     var diffuseColor_4: vec3<f32>;
     var R_4: vec3<f32>;
-    var light_accum: vec3<f32> = vec3<f32>(0.0, 0.0, 0.0);
-    var i: i32 = 0;
-    var i_1: i32 = 0;
+    var light_accum: vec3<f32>;
+    var i: i32;
+    var i_1: i32;
     var diffuse_ambient: vec3<f32>;
     var specular_ambient: vec3<f32>;
 
@@ -1186,7 +1187,8 @@ fn main_1() {
     let _e217 = V_3;
     let _e219 = N_2;
     R_4 = reflect(-(_e217), _e219);
-    _ = vec3<f32>(0.0);
+    light_accum = vec3<f32>(0.0);
+    i = 0;
     loop {
         let _e227 = i;
         let _e228 = global_2.NumLights;
@@ -1222,6 +1224,7 @@ fn main_1() {
             i = (_e236 + 1);
         }
     }
+    i_1 = 0;
     loop {
         let _e264 = i_1;
         let _e265 = global_2.NumLights;
