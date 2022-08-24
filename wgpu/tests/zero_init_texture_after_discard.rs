@@ -67,6 +67,7 @@ fn discarding_color_target_resets_texture_init_state_check_visible_on_copy_in_sa
 }
 
 #[test]
+#[allow(clippy::single_element_loop)]
 fn discarding_depth_target_resets_texture_init_state_check_visible_on_copy_in_same_encoder() {
     initialize_test(
         TestParameters::default()

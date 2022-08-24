@@ -479,7 +479,7 @@ impl<A: hal::Api> Borrow<TextureSelector> for Texture<A> {
 }
 
 /// Describes a [`TextureView`].
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize), serde(default))]
 pub struct TextureViewDescriptor<'a> {

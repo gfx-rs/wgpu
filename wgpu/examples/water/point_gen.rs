@@ -40,7 +40,7 @@ pub struct TerrainVertexAttributes {
 }
 
 #[repr(C)]
-#[derive(Copy, Clone, Debug, PartialEq, Pod, Zeroable)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Pod, Zeroable)]
 pub struct WaterVertexAttributes {
     position: [i16; 2],
     offsets: [i8; 4],
