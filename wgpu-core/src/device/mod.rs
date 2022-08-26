@@ -46,7 +46,7 @@ const EP_FAILURE: &str = "EP is invalid";
 pub type DeviceDescriptor<'a> = wgt::DeviceDescriptor<Label<'a>>;
 
 #[repr(C)]
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub enum HostMap {
@@ -948,18 +948,21 @@ impl<A: HalApi> Device<A> {
             },
         };
 
-        let required_level_count =
-            desc.range.base_mip_level + desc.range.mip_level_count.map_or(1, |count| count.get());
+        let mip_count = desc.range.mip_level_count.map_or(1, |count| count.get());
+        let required_level_count = desc.range.base_mip_level.saturating_add(mip_count);
+
         let required_layer_count = match desc.range.array_layer_count {
-            Some(count) => desc.range.base_array_layer + count.get(),
+            Some(count) => desc.range.base_array_layer.saturating_add(count.get()),
             None => match view_dim {
                 wgt::TextureViewDimension::D1
                 | wgt::TextureViewDimension::D2
                 | wgt::TextureViewDimension::D3 => 1,
                 wgt::TextureViewDimension::Cube => 6,
                 _ => texture.desc.array_layer_count(),
-            },
+            }
+            .max(desc.range.base_array_layer.saturating_add(1)),
         };
+
         let level_end = texture.full_range.mips.end;
         let layer_end = texture.full_range.layers.end;
         if required_level_count > level_end {

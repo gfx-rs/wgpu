@@ -86,6 +86,7 @@ impl super::Surface {
         let render_layer =
             mem::transmute::<_, &mtl::MetalLayerRef>(Self::get_metal_layer(view, delegate))
                 .to_owned();
+        let _: *mut c_void = msg_send![view, retain];
         Self::new(NonNull::new(view), render_layer)
     }
 
