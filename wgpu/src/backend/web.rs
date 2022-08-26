@@ -2066,7 +2066,7 @@ impl crate::Context for Context {
         }
 
         if let Some(dsa) = &desc.depth_stencil_attachment {
-            let mut clear_value = 1.0;
+            let mut clear_value = 0.;
             let (depth_load_op, depth_store_op) = match dsa.depth_ops {
                 Some(ref ops) => {
                     let load_op = match ops.load {
