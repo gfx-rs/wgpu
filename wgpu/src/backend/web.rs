@@ -11,6 +11,7 @@ use std::{
     task::{self, Poll},
 };
 use wasm_bindgen::{prelude::*, JsCast};
+use web_sys::GpuFeatureName as Gfn;
 
 // We need to make a wrapper for some of the handle types returned by the web backend to make them
 // implement `Send` and `Sync` to match native.
@@ -551,7 +552,10 @@ fn map_texture_format(texture_format: wgt::TextureFormat) -> web_sys::GpuTexture
         TextureFormat::Depth24Plus => tf::Depth24plus,
         TextureFormat::Depth24PlusStencil8 => tf::Depth24plusStencil8,
         TextureFormat::Depth24UnormStencil8 => tf::Depth24unormStencil8,
-        _ => unimplemented!(),
+        TextureFormat::Bc6hRgbUfloat => tf::Bc6hRgbUfloat,
+        TextureFormat::Bc7RgbaUnormSrgb => tf::Bc7RgbaUnormSrgb,
+        TextureFormat::Bc7RgbaUnorm => tf::Bc7RgbaUnorm,
+        _ => unimplemented!("{:?}", texture_format),
     }
 }
 
@@ -874,6 +878,33 @@ fn map_map_mode(mode: crate::MapMode) -> u32 {
     }
 }
 
+const FEATURES_MAPPING: [(wgt::Features, Gfn); 8] = [
+    //TODO: update the name
+    (wgt::Features::DEPTH_CLIP_CONTROL, Gfn::DepthClipControl),
+    (
+        wgt::Features::DEPTH32FLOAT_STENCIL8,
+        Gfn::Depth32floatStencil8,
+    ),
+    (
+        wgt::Features::TEXTURE_COMPRESSION_BC,
+        Gfn::TextureCompressionBc,
+    ),
+    (
+        wgt::Features::TEXTURE_COMPRESSION_ETC2,
+        Gfn::TextureCompressionEtc2,
+    ),
+    (
+        wgt::Features::TEXTURE_COMPRESSION_ASTC_LDR,
+        Gfn::TextureCompressionAstc,
+    ),
+    (wgt::Features::TIMESTAMP_QUERY, Gfn::TimestampQuery),
+    (
+        wgt::Features::INDIRECT_FIRST_INSTANCE,
+        Gfn::IndirectFirstInstance,
+    ),
+    (wgt::Features::SHADER_FLOAT16, Gfn::ShaderF16),
+];
+
 type JsFutureResult = Result<wasm_bindgen::JsValue, wasm_bindgen::JsValue>;
 
 fn future_request_adapter(result: JsFutureResult) -> Option<Sendable<web_sys::GpuAdapter>> {
@@ -1081,8 +1112,6 @@ impl crate::Context for Context {
         desc: &crate::DeviceDescriptor,
         trace_dir: Option<&std::path::Path>,
     ) -> Self::RequestDeviceFuture {
-        use web_sys::GpuFeatureName as Gfn;
-
         if trace_dir.is_some() {
             //Error: Tracing isn't supported on the Web target
         }
@@ -1090,33 +1119,7 @@ impl crate::Context for Context {
         // TODO: non-guaranteed limits
         let mut mapped_desc = web_sys::GpuDeviceDescriptor::new();
 
-        let possible_features = [
-            //TODO: update the name
-            (wgt::Features::DEPTH_CLIP_CONTROL, Gfn::DepthClipControl),
-            (
-                wgt::Features::DEPTH32FLOAT_STENCIL8,
-                Gfn::Depth32floatStencil8,
-            ),
-            (
-                wgt::Features::TEXTURE_COMPRESSION_BC,
-                Gfn::TextureCompressionBc,
-            ),
-            (
-                wgt::Features::TEXTURE_COMPRESSION_ETC2,
-                Gfn::TextureCompressionEtc2,
-            ),
-            (
-                wgt::Features::TEXTURE_COMPRESSION_ASTC_LDR,
-                Gfn::TextureCompressionAstc,
-            ),
-            (wgt::Features::TIMESTAMP_QUERY, Gfn::TimestampQuery),
-            (
-                wgt::Features::INDIRECT_FIRST_INSTANCE,
-                Gfn::IndirectFirstInstance,
-            ),
-            (wgt::Features::SHADER_FLOAT16, Gfn::ShaderF16),
-        ];
-        let required_features = possible_features
+        let required_features = FEATURES_MAPPING
             .iter()
             .copied()
             .flat_map(|(flag, value)| {
@@ -1142,9 +1145,21 @@ impl crate::Context for Context {
     }
 
     fn adapter_features(&self, adapter: &Self::AdapterId) -> wgt::Features {
-        // TODO
-        let _features = adapter.0.features();
-        wgt::Features::empty()
+        let features = adapter.0.features();
+
+        let features_set: js_sys::Set = features.unchecked_into();
+
+        let mut features = wgt::Features::empty();
+
+        for (wgpu_feat, web_feat) in FEATURES_MAPPING {
+            let value = wasm_bindgen::JsValue::from(web_feat);
+
+            if features_set.has(&value) {
+                features |= wgpu_feat;
+            }
+        }
+
+        features
     }
 
     fn adapter_limits(&self, adapter: &Self::AdapterId) -> wgt::Limits {
@@ -1263,9 +1278,22 @@ impl crate::Context for Context {
         // Can't really discard this on the Web
     }
 
-    fn device_features(&self, _device: &Self::DeviceId) -> wgt::Features {
-        // TODO
-        wgt::Features::empty()
+    fn device_features(&self, device: &Self::DeviceId) -> wgt::Features {
+        let features = device.0.features();
+
+        let features_set: js_sys::Set = features.unchecked_into();
+
+        let mut features = wgt::Features::empty();
+
+        for (wgpu_feat, web_feat) in FEATURES_MAPPING {
+            let value = wasm_bindgen::JsValue::from(web_feat);
+
+            if features_set.has(&value) {
+                features |= wgpu_feat;
+            }
+        }
+
+        features
     }
 
     fn device_limits(&self, _device: &Self::DeviceId) -> wgt::Limits {
