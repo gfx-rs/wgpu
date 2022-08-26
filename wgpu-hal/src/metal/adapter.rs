@@ -180,6 +180,21 @@ impl crate::Adapter<super::Api> for super::Adapter {
                 };
                 flags
             }
+            Tf::Stencil8 => {
+                let mut flags = all_caps
+                    | Tfc::DEPTH_STENCIL_ATTACHMENT
+                    | Tfc::MULTISAMPLE
+                    | msaa_resolve_apple3x_if;
+                flags
+            }
+            Tf::Depth16Unorm => {
+                let mut flags =
+                    Tfc::DEPTH_STENCIL_ATTACHMENT | Tfc::MULTISAMPLE | msaa_resolve_apple3x_if;
+                if pc.format_depth16unorm {
+                    flags |= Tfc::SAMPLED_LINEAR
+                }
+                flags
+            }
             Tf::Depth32Float | Tf::Depth32FloatStencil8 => {
                 let mut flags =
                     Tfc::DEPTH_STENCIL_ATTACHMENT | Tfc::MULTISAMPLE | msaa_resolve_apple3x_if;
@@ -199,12 +214,6 @@ impl crate::Adapter<super::Api> for super::Adapter {
                     }
                 }
                 flags
-            }
-            Tf::Depth24UnormStencil8 => {
-                Tfc::DEPTH_STENCIL_ATTACHMENT
-                    | Tfc::SAMPLED_LINEAR
-                    | Tfc::MULTISAMPLE
-                    | Tfc::MULTISAMPLE_RESOLVE
             }
             Tf::Rgb9e5Ufloat => {
                 if pc.msaa_apple3 {
@@ -775,7 +784,7 @@ impl super::PrivateCapabilities {
         features.set(F::TEXTURE_COMPRESSION_ETC2, self.format_eac_etc);
 
         features.set(F::DEPTH_CLIP_CONTROL, self.supports_depth_clip_control);
-        features.set(F::DEPTH24UNORM_STENCIL8, self.format_depth24_stencil8);
+        features.set(F::DEPTH24PLUS_STENCIL8, self.format_depth24_stencil8);
 
         features.set(
             F::TEXTURE_BINDING_ARRAY
@@ -908,6 +917,8 @@ impl super::PrivateCapabilities {
             Tf::Rgba32Uint => RGBA32Uint,
             Tf::Rgba32Sint => RGBA32Sint,
             Tf::Rgba32Float => RGBA32Float,
+            Tf::Stencil8 => R8Unorm,
+            Tf::Depth16Unorm => Depth16Unorm,
             Tf::Depth32Float => Depth32Float,
             Tf::Depth32FloatStencil8 => Depth32Float_Stencil8,
             Tf::Depth24Plus => {
@@ -924,7 +935,6 @@ impl super::PrivateCapabilities {
                     Depth32Float_Stencil8
                 }
             }
-            Tf::Depth24UnormStencil8 => Depth24Unorm_Stencil8,
             Tf::Rgb9e5Ufloat => RGB9E5Float,
             Tf::Bc1RgbaUnorm => BC1_RGBA,
             Tf::Bc1RgbaUnormSrgb => BC1_RGBA_sRGB,

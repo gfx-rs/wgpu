@@ -191,7 +191,7 @@ bitflags::bitflags! {
         ///
         /// This is a web and native feature.
         const DEPTH_CLIP_CONTROL = 1 << 0;
-        /// Allows for explicit creation of textures of format [`TextureFormat::Depth24UnormStencil8`]
+        /// Allows for explicit creation of textures of format [`TextureFormat::Depth24PlusStencil8`]
         ///
         /// Supported platforms:
         /// - Vulkan (some)
@@ -199,7 +199,7 @@ bitflags::bitflags! {
         /// - Metal (Macs with amd GPUs)
         ///
         /// This is a web and native feature.
-        const DEPTH24UNORM_STENCIL8 = 1 << 1;
+        const DEPTH24PLUS_STENCIL8 = 1 << 1;
         /// Allows for explicit creation of textures of format [`TextureFormat::Depth32FloatStencil8`]
         ///
         /// Supported platforms:
@@ -1862,6 +1862,9 @@ pub enum TextureFormat {
     Bgra8UnormSrgb,
 
     // Packed 32 bit formats
+    /// Packed unsigned float with 9 bits mantisa for each RGB component, then a common 5 bits exponent
+    #[cfg_attr(feature = "serde", serde(rename = "rgb9e5ufloat"))]
+    Rgb9e5Ufloat,
     /// Red, green, blue, and alpha channels. 10 bit integer for RGB channels, 2 bit integer for alpha channel. [0, 1023] ([0, 3] for alpha) converted to/from float [0, 1] in shader.
     #[cfg_attr(feature = "serde", serde(rename = "rgb10a2unorm"))]
     Rgb10a2Unorm,
@@ -1911,26 +1914,24 @@ pub enum TextureFormat {
     Rgba32Float,
 
     // Depth and stencil formats
-    /// Special depth format with 32 bit floating point depth.
-    #[cfg_attr(feature = "serde", serde(rename = "depth32float"))]
-    Depth32Float,
-    /// Special depth/stencil format with 32 bit floating point depth and 8 bits integer stencil.
-    #[cfg_attr(feature = "serde", serde(rename = "depth32float-stencil8"))]
-    Depth32FloatStencil8,
+    /// Stencil format with 8 bit integer stencil.
+    #[cfg_attr(feature = "serde", serde(rename = "stencil8"))]
+    Stencil8,
+    /// Special depth format with 16 bit integer depth.
+    #[cfg_attr(feature = "serde", serde(rename = "depth16unorm"))]
+    Depth16Unorm,
     /// Special depth format with at least 24 bit integer depth.
     #[cfg_attr(feature = "serde", serde(rename = "depth24plus"))]
     Depth24Plus,
     /// Special depth/stencil format with at least 24 bit integer depth and 8 bits integer stencil.
     #[cfg_attr(feature = "serde", serde(rename = "depth24plus-stencil8"))]
     Depth24PlusStencil8,
-    /// Special depth/stencil format with 24 bit integer depth and 8 bits integer stencil.
-    #[cfg_attr(feature = "serde", serde(rename = "depth24unorm-stencil8"))]
-    Depth24UnormStencil8,
-
-    // Packed uncompressed texture formats
-    /// Packed unsigned float with 9 bits mantisa for each RGB component, then a common 5 bits exponent
-    #[cfg_attr(feature = "serde", serde(rename = "rgb9e5ufloat"))]
-    Rgb9e5Ufloat,
+    /// Special depth format with 32 bit floating point depth.
+    #[cfg_attr(feature = "serde", serde(rename = "depth32float"))]
+    Depth32Float,
+    /// Special depth/stencil format with 32 bit floating point depth and 8 bits integer stencil.
+    #[cfg_attr(feature = "serde", serde(rename = "depth32float-stencil8"))]
+    Depth32FloatStencil8,
 
     // Compressed textures usable with `TEXTURE_COMPRESSION_BC` feature.
     /// 4x4 block compressed texture. 8 bytes per block (4 bit/px). 4 color + alpha pallet. 5 bit R + 6 bit G + 5 bit B + 1 bit alpha.
@@ -2129,7 +2130,7 @@ impl TextureFormat {
         let astc_hdr = Features::TEXTURE_COMPRESSION_ASTC_HDR;
         let norm16bit = Features::TEXTURE_FORMAT_16BIT_NORM;
         let d32_s8 = Features::DEPTH32FLOAT_STENCIL8;
-        let d24_s8 = Features::DEPTH24UNORM_STENCIL8;
+        let d24_s8 = Features::DEPTH24PLUS_STENCIL8;
 
         // Sample Types
         let uint = TextureSampleType::Uint;
@@ -2201,6 +2202,7 @@ impl TextureFormat {
             Self::Bgra8UnormSrgb =>      (   native,   float, corrected, msaa_resolve, (1, 1),  4, attachment, 4),
 
             // Packed 32 bit textures
+            Self::Rgb9e5Ufloat =>        (   native,   float,    linear,         noaa, (1, 1),  4,      basic, 3),
             Self::Rgb10a2Unorm =>        (   native,   float,    linear, msaa_resolve, (1, 1),  4, attachment, 4),
             Self::Rg11b10Float =>        (   native,   float,    linear,         msaa, (1, 1),  4,      basic, 3),
 
@@ -2218,15 +2220,15 @@ impl TextureFormat {
             Self::Rgba32Float =>         (   native, nearest,    linear,         noaa, (1, 1), 16,  all_flags, 4),
 
             // Depth-stencil textures
-            Self::Depth32Float =>        (   native,   depth,    linear,         msaa, (1, 1),  4, attachment, 1),
-            Self::Depth32FloatStencil8 =>(   d32_s8,   depth,    linear,         msaa, (1, 1),  4, attachment, 2),
+            Self::Stencil8 =>            (   native,   depth,    linear,         msaa, (1, 1),  1, attachment, 1),
+            Self::Depth16Unorm =>        (   native,   depth,    linear,         msaa, (1, 1),  2, attachment, 1),
             Self::Depth24Plus =>         (   native,   depth,    linear,         msaa, (1, 1),  4, attachment, 1),
             Self::Depth24PlusStencil8 => (   native,   depth,    linear,         msaa, (1, 1),  4, attachment, 2),
-            Self::Depth24UnormStencil8 => (  d24_s8,   depth,    linear,         msaa, (1, 1),  4, attachment, 2),
+            Self::Depth32Float =>        (   native,   depth,    linear,         msaa, (1, 1),  4, attachment, 1),
+            Self::Depth32FloatStencil8 =>(   d32_s8,   depth,    linear,         msaa, (1, 1),  4, attachment, 2),
 
             // Packed uncompressed
-            Self::Rgb9e5Ufloat =>        (   native,   float,    linear,         noaa, (1, 1),  4,      basic, 3),
-
+            
             // Optional normalized 16-bit-per-channel formats
             Self::R16Unorm =>            (norm16bit,   float,    linear,         msaa, (1, 1),  2,    storage, 1),
             Self::R16Snorm =>            (norm16bit,   float,    linear,         msaa, (1, 1),  2,    storage, 1),
