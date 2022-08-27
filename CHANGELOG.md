@@ -83,6 +83,7 @@ the same every time it is rendered, we now warn if it is missing.
 ### Changes
 
 #### General
+- Changed `Instance::as_hal<A>` to just return an `Option<&A::Instance>` rather than taking a callback. By @jimb in [#2991](https://github.com/gfx-rs/wgpu/pull/2991)
 - Added downlevel restriction error message for `InvalidFormatUsages` error by @Seamooo in [#2886](https://github.com/gfx-rs/wgpu/pull/2886)
 - Add warning when using CompareFunction::*Equal with vertex shader that is missing @invariant tag by @cwfitzgerald in [#2887](https://github.com/gfx-rs/wgpu/pull/2887)
 - Update Winit to version 0.27 and raw-window-handle to 0.5 by @wyatt-herkamp in  [#2918](https://github.com/gfx-rs/wgpu/pull/2918)

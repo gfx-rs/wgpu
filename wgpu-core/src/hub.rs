@@ -1135,13 +1135,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     /// # Safety
     ///
-    /// - The raw handle obtained from the hal Instance must not be manually destroyed
-    pub unsafe fn instance_as_hal<A: HalApi, F: FnOnce(Option<&A::Instance>) -> R, R>(
-        &self,
-        hal_instance_callback: F,
-    ) -> R {
-        let hal_instance = A::instance_as_hal(&self.instance);
-        hal_instance_callback(hal_instance)
+    /// - The raw instance handle returned must not be manually destroyed.
+    pub unsafe fn instance_as_hal<A: HalApi>(&self) -> Option<&A::Instance> {
+        A::instance_as_hal(&self.instance)
     }
 
     /// # Safety
