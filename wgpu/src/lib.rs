@@ -1916,12 +1916,25 @@ impl Adapter {
             })
     }
 
-    /// Returns the inner hal Adapter using a callback. The hal adapter will be `None` if the
-    /// backend type argument does not match with this wgpu Adapter
+    /// Apply a callback to this `Adapter`'s underlying backend adapter.
+    ///
+    /// If this `Adapter` is implemented by the backend API given by `A` (Vulkan,
+    /// Dx12, etc.), then apply `hal_adapter_callback` to `Some(&adapter)`, where
+    /// `adapter` is the underlying backend adapter type, [`A::Adapter`].
+    ///
+    /// If this `Adapter` uses a different backend, apply `hal_adapter_callback`
+    /// to `None`.
+    ///
+    /// The adapter is locked for reading while `hal_adapter_callback` runs. If
+    /// the callback attempts to perform any `wgpu` operations that require
+    /// write access to the adapter, deadlock will occur. The locks are
+    /// automatically released when the callback returns.
     ///
     /// # Safety
     ///
-    /// - The raw handle obtained from the hal Adapter must not be manually destroyed
+    /// - The raw handle passed to the callback must not be manually destroyed.
+    ///
+    /// [`A::Adapter`]: hal::Api::Adapter
     #[cfg(any(not(target_arch = "wasm32"), feature = "webgl"))]
     pub unsafe fn as_hal<A: wgc::hub::HalApi, F: FnOnce(Option<&A::Adapter>) -> R, R>(
         &self,
@@ -2211,12 +2224,25 @@ impl Device {
         Context::device_stop_capture(&*self.context, &self.id)
     }
 
-    /// Returns the inner hal Device using a callback. The hal device will be `None` if the
-    /// backend type argument does not match with this wgpu Device
+    /// Apply a callback to this `Device`'s underlying backend device.
+    ///
+    /// If this `Device` is implemented by the backend API given by `A` (Vulkan,
+    /// Dx12, etc.), then apply `hal_device_callback` to `Some(&device)`, where
+    /// `device` is the underlying backend device type, [`A::Device`].
+    ///
+    /// If this `Device` uses a different backend, apply `hal_device_callback`
+    /// to `None`.
+    ///
+    /// The device is locked for reading while `hal_device_callback` runs. If
+    /// the callback attempts to perform any `wgpu` operations that require
+    /// write access to the device (destroying a buffer, say), deadlock will
+    /// occur. The locks are automatically released when the callback returns.
     ///
     /// # Safety
     ///
-    /// - The raw handle obtained from the hal Device must not be manually destroyed
+    /// - The raw handle passed to the callback must not be manually destroyed.
+    ///
+    /// [`A::Device`]: hal::Api::Device
     #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
     pub unsafe fn as_hal<A: wgc::hub::HalApi, F: FnOnce(Option<&A::Device>) -> R, R>(
         &self,
