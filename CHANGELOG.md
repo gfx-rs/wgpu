@@ -89,6 +89,7 @@ the same every time it is rendered, we now warn if it is missing.
 
 #### General
 - Add WGSL examples to complement existing examples written in GLSL by @norepimorphism in [#2888](https://github.com/gfx-rs/wgpu/pull/2888)
+- Document `wgpu_core` resource allocation. @jimb in [#2973](https://github.com/gfx-rs/wgpu/pull/2973)
 
 ### Performance
 
