@@ -189,6 +189,8 @@ pub struct Options {
     /// Add special constants to `SV_VertexIndex` and `SV_InstanceIndex`,
     /// to make them work like in Vulkan/Metal, with help of the host.
     pub special_constants_binding: Option<BindTarget>,
+    /// Bind target of the push constant buffer
+    pub push_constants_target: Option<BindTarget>,
 }
 
 impl Default for Options {
@@ -198,6 +200,7 @@ impl Default for Options {
             binding_map: BindingMap::default(),
             fake_missing_bindings: true,
             special_constants_binding: None,
+            push_constants_target: None,
         }
     }
 }

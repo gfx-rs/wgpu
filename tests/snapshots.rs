@@ -471,7 +471,7 @@ fn convert_wgsl() {
             Targets::SPIRV | Targets::METAL | Targets::HLSL | Targets::WGSL | Targets::GLSL,
         ),
         ("extra", Targets::SPIRV | Targets::METAL | Targets::WGSL),
-        ("push-constants", Targets::GLSL),
+        ("push-constants", Targets::GLSL | Targets::HLSL),
         (
             "operators",
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,

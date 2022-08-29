@@ -69,7 +69,7 @@ validate-wgsl: $(SNAPSHOTS_BASE_OUT)/wgsl/*.wgsl
 		cargo run $${file}; \
 	done
 
-validate-hlsl-dxc: SHELL:=/bin/bash # required because config files uses arrays
+validate-hlsl-dxc: SHELL:=/usr/bin/env bash # required because config files uses arrays
 validate-hlsl-dxc: $(SNAPSHOTS_BASE_OUT)/hlsl/*.hlsl
 	@set -e && for file in $^ ; do \
 		DXC_PARAMS="-Wno-parentheses-equality -Zi -Qembed_debug -Od"; \
@@ -94,7 +94,7 @@ validate-hlsl-dxc: $(SNAPSHOTS_BASE_OUT)/hlsl/*.hlsl
 		echo "======================"; \
 	done
 
-validate-hlsl-fxc: SHELL:=/bin/bash # required because config files uses arrays
+validate-hlsl-fxc: SHELL:=/usr/bin/env bash # required because config files uses arrays
 validate-hlsl-fxc: $(SNAPSHOTS_BASE_OUT)/hlsl/*.hlsl
 	@set -e && for file in $^ ; do \
 		FXC_PARAMS="-Zi -Od"; \

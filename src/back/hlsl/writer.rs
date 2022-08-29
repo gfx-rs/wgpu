@@ -623,11 +623,44 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 self.write_type(module, global.ty)?;
                 register
             }
-            crate::AddressSpace::PushConstant => unimplemented!("Push constants"),
+            crate::AddressSpace::PushConstant => {
+                // The type of the push constants will be wrapped in `ConstantBuffer`
+                write!(self.out, "ConstantBuffer<")?;
+                "b"
+            }
         };
+
+        // If the global is a push constant write the type now because it will be a
+        // generic argument to `ConstantBuffer`
+        if global.space == crate::AddressSpace::PushConstant {
+            self.write_global_type(module, global.ty)?;
+
+            // need to write the array size if the type was emitted with `write_type`
+            if let TypeInner::Array { base, size, .. } = module.types[global.ty].inner {
+                self.write_array_size(module, base, size)?;
+            }
+
+            // Close the angled brackets for the generic argument
+            write!(self.out, ">")?;
+        }
 
         let name = &self.names[&NameKey::GlobalVariable(handle)];
         write!(self.out, " {}", name)?;
+
+        // Push constants need to be assigned a binding explicitly by the consumer
+        // since naga has no way to know the binding from the shader alone
+        if global.space == crate::AddressSpace::PushConstant {
+            let target = self
+                .options
+                .push_constants_target
+                .as_ref()
+                .expect("No bind target was defined for the push constants block");
+            write!(self.out, ": register(b{}", target.register)?;
+            if target.space != 0 {
+                write!(self.out, ", space{}", target.space)?;
+            }
+            write!(self.out, ")")?;
+        }
 
         if let Some(ref binding) = global.binding {
             // this was already resolved earlier when we started evaluating an entry point.
@@ -665,34 +698,13 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         if global.space == crate::AddressSpace::Uniform {
             write!(self.out, " {{ ")?;
 
-            let matrix_data = get_inner_matrix_data(module, global.ty);
+            self.write_global_type(module, global.ty)?;
 
-            // We treat matrices of the form `matCx2` as a sequence of C `vec2`s.
-            // See the module-level block comment in mod.rs for details.
-            if let Some(MatrixType {
-                columns,
-                rows: crate::VectorSize::Bi,
-                width: 4,
-            }) = matrix_data
-            {
-                write!(
-                    self.out,
-                    "__mat{}x2 {}",
-                    columns as u8,
-                    &self.names[&NameKey::GlobalVariable(handle)]
-                )?;
-            } else {
-                // Even though Naga IR matrices are column-major, we must describe
-                // matrices passed from the CPU as being in row-major order.
-                // See the module-level block comment in mod.rs for details.
-                if matrix_data.is_some() {
-                    write!(self.out, "row_major ")?;
-                }
-
-                self.write_type(module, global.ty)?;
-                let sub_name = &self.names[&NameKey::GlobalVariable(handle)];
-                write!(self.out, " {}", sub_name)?;
-            }
+            write!(
+                self.out,
+                " {}",
+                &self.names[&NameKey::GlobalVariable(handle)]
+            )?;
 
             // need to write the array size if the type was emitted with `write_type`
             if let TypeInner::Array { base, size, .. } = module.types[global.ty].inner {
@@ -829,27 +841,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 TypeInner::Array { base, size, .. } => {
                     // HLSL arrays are written as `type name[size]`
 
-                    let matrix_data = get_inner_matrix_data(module, member.ty);
-
-                    // We treat matrices of the form `matCx2` as a sequence of C `vec2`s.
-                    // See the module-level block comment in mod.rs for details.
-                    if let Some(MatrixType {
-                        columns,
-                        rows: crate::VectorSize::Bi,
-                        width: 4,
-                    }) = matrix_data
-                    {
-                        write!(self.out, "__mat{}x2", columns as u8)?;
-                    } else {
-                        // Even though Naga IR matrices are column-major, we must describe
-                        // matrices passed from the CPU as being in row-major order.
-                        // See the module-level block comment in mod.rs for details.
-                        if matrix_data.is_some() {
-                            write!(self.out, "row_major ")?;
-                        }
-
-                        self.write_type(module, base)?;
-                    }
+                    self.write_global_type(module, member.ty)?;
 
                     // Write `name`
                     write!(
@@ -920,6 +912,40 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         }
 
         writeln!(self.out, "}};")?;
+        Ok(())
+    }
+
+    /// Helper method used to write global/structs non image/sampler types
+    ///
+    /// # Notes
+    /// Adds no trailing or leading whitespace
+    pub(super) fn write_global_type(
+        &mut self,
+        module: &Module,
+        ty: Handle<crate::Type>,
+    ) -> BackendResult {
+        let matrix_data = get_inner_matrix_data(module, ty);
+
+        // We treat matrices of the form `matCx2` as a sequence of C `vec2`s.
+        // See the module-level block comment in mod.rs for details.
+        if let Some(MatrixType {
+            columns,
+            rows: crate::VectorSize::Bi,
+            width: 4,
+        }) = matrix_data
+        {
+            write!(self.out, "__mat{}x2", columns as u8)?;
+        } else {
+            // Even though Naga IR matrices are column-major, we must describe
+            // matrices passed from the CPU as being in row-major order.
+            // See the module-level block comment in mod.rs for details.
+            if matrix_data.is_some() {
+                write!(self.out, "row_major ")?;
+            }
+
+            self.write_type(module, ty)?;
+        }
+
         Ok(())
     }
 
