@@ -47,7 +47,7 @@ pub fn map_texture_format_failable(format: wgt::TextureFormat) -> Option<dxgifor
         Tf::Rgba32Uint => DXGI_FORMAT_R32G32B32A32_UINT,
         Tf::Rgba32Sint => DXGI_FORMAT_R32G32B32A32_SINT,
         Tf::Rgba32Float => DXGI_FORMAT_R32G32B32A32_FLOAT,
-        Tf::Stencil8 => DXGI_FORMAT_R8_UNORM,
+        //Tf::Stencil8 => DXGI_FORMAT_R8_UNORM,
         Tf::Depth16Unorm => DXGI_FORMAT_D16_UNORM,
         Tf::Depth24Plus => DXGI_FORMAT_D24_UNORM_S8_UINT,
         Tf::Depth24PlusStencil8 => DXGI_FORMAT_D24_UNORM_S8_UINT,
@@ -105,7 +105,7 @@ pub fn map_texture_format_nosrgb(format: wgt::TextureFormat) -> dxgiformat::DXGI
 //TODO: stencil views?
 pub fn map_texture_format_nodepth(format: wgt::TextureFormat) -> dxgiformat::DXGI_FORMAT {
     match format {
-        wgt::TextureFormat::Stencil8 => dxgiformat::DXGI_FORMAT_R8_UNORM,
+        //wgt::TextureFormat::Stencil8 => dxgiformat::DXGI_FORMAT_R8_UNORM,
         wgt::TextureFormat::Depth16Unorm => dxgiformat::DXGI_FORMAT_D16_UNORM,
         wgt::TextureFormat::Depth32Float => dxgiformat::DXGI_FORMAT_R32_FLOAT,
         wgt::TextureFormat::Depth32FloatStencil8 => {
@@ -126,7 +126,7 @@ pub fn map_texture_format_nodepth(format: wgt::TextureFormat) -> dxgiformat::DXG
 
 pub fn map_texture_format_depth_typeless(format: wgt::TextureFormat) -> dxgiformat::DXGI_FORMAT {
     match format {
-        wgt::TextureFormat::Stencil8 => dxgiformat::DXGI_FORMAT_R8_UNORM,
+        //wgt::TextureFormat::Stencil8 => dxgiformat::DXGI_FORMAT_R8_UNORM,
         wgt::TextureFormat::Depth16Unorm => dxgiformat::DXGI_FORMAT_D16_UNORM,
         wgt::TextureFormat::Depth32Float => dxgiformat::DXGI_FORMAT_R32_TYPELESS,
         wgt::TextureFormat::Depth32FloatStencil8 => dxgiformat::DXGI_FORMAT_R32G8X24_TYPELESS,

@@ -1915,8 +1915,8 @@ pub enum TextureFormat {
 
     // Depth and stencil formats
     /// Stencil format with 8 bit integer stencil.
-    #[cfg_attr(feature = "serde", serde(rename = "stencil8"))]
-    Stencil8,
+    //#[cfg_attr(feature = "serde", serde(rename = "stencil8"))]
+    //Stencil8,
     /// Special depth format with 16 bit integer depth.
     #[cfg_attr(feature = "serde", serde(rename = "depth16unorm"))]
     Depth16Unorm,
@@ -2220,7 +2220,7 @@ impl TextureFormat {
             Self::Rgba32Float =>         (   native, nearest,    linear,         noaa, (1, 1), 16,  all_flags, 4),
 
             // Depth-stencil textures
-            Self::Stencil8 =>            (   native,   depth,    linear,         msaa, (1, 1),  1, attachment, 1),
+            //Self::Stencil8 =>            (   native,   depth,    linear,         msaa, (1, 1),  1, attachment, 1),
             Self::Depth16Unorm =>        (   native,   depth,    linear,         msaa, (1, 1),  2, attachment, 1),
             Self::Depth24Plus =>         (   native,   depth,    linear,         msaa, (1, 1),  4, attachment, 1),
             Self::Depth24PlusStencil8 => (   d24_s8,   depth,    linear,         msaa, (1, 1),  4, attachment, 2),

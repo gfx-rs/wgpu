@@ -330,7 +330,7 @@ DeviceDescriptor {
 - Return `queue_empty` for Device::poll by @xiaopengli89 in [#2643](https://github.com/gfx-rs/wgpu/pull/2643)
 - Add `SHADER_FLOAT16` feature by @jinleili in [#2646](https://github.com/gfx-rs/wgpu/pull/2646)
 - Add DEPTH32FLOAT_STENCIL8 featue by @jinleili in [#2664](https://github.com/gfx-rs/wgpu/pull/2664)
-- Add DEPTH24PLUS_STENCIL8 feature by @jinleili in [#2689](https://github.com/gfx-rs/wgpu/pull/2689)
+- Add DEPTH24UNORM_STENCIL8 feature by @jinleili in [#2689](https://github.com/gfx-rs/wgpu/pull/2689)
 - Implement submission indexes by @cwfitzgerald in [#2700](https://github.com/gfx-rs/wgpu/pull/2700)
 - [WebGL] Add a downlevel capability for rendering to floating point textures by @expenses in [#2729](https://github.com/gfx-rs/wgpu/pull/2729)
 - allow creating wgpu::Instance from wgpu_core::Instance by @i509VCB in [#2763](https://github.com/gfx-rs/wgpu/pull/2763)

@@ -314,8 +314,8 @@ pub(crate) fn validate_texture_copy_range(
     let extent = extent_virtual.physical_size(desc.format);
 
     match desc.format {
-        wgt::TextureFormat::Stencil8
-        | wgt::TextureFormat::Depth16Unorm
+        //wgt::TextureFormat::Stencil8 |
+        wgt::TextureFormat::Depth16Unorm
         | wgt::TextureFormat::Depth32Float
         | wgt::TextureFormat::Depth32FloatStencil8
         | wgt::TextureFormat::Depth24Plus

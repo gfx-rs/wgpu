@@ -50,7 +50,7 @@ mod inner {
         wgpu::TextureFormat::Rgba32Uint,
         wgpu::TextureFormat::Rgba32Sint,
         wgpu::TextureFormat::Rgba32Float,
-        wgpu::TextureFormat::Stencil8,
+        //wgpu::TextureFormat::Stencil8,
         wgpu::TextureFormat::Depth16Unorm,
         wgpu::TextureFormat::Depth32Float,
         wgpu::TextureFormat::Depth32FloatStencil8,

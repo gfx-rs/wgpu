@@ -554,7 +554,7 @@ fn map_texture_format(texture_format: wgt::TextureFormat) -> web_sys::GpuTexture
         TextureFormat::Rgba32Sint => tf::Rgba32sint,
         TextureFormat::Rgba32Float => tf::Rgba32float,
         // Depth/stencil formats
-        TextureFormat::Stencil8 => tf::Stencil8,
+        //TextureFormat::Stencil8 => tf::Stencil8,
         TextureFormat::Depth16Unorm => tf::Depth16unorm,
         TextureFormat::Depth24Plus => tf::Depth24plus,
         TextureFormat::Depth24PlusStencil8 => tf::Depth24plusStencil8,

@@ -719,8 +719,8 @@ impl crate::Adapter<super::Api> for super::Adapter {
             Tf::Rgba32Uint => renderable | storage,
             Tf::Rgba32Sint => renderable | storage,
             Tf::Rgba32Float => unfilterable | storage | float_renderable,
-            Tf::Stencil8
-            | Tf::Depth16Unorm
+            //Tf::Stencil8 |
+            Tf::Depth16Unorm
             | Tf::Depth32Float
             | Tf::Depth32FloatStencil8
             | Tf::Depth24Plus
