@@ -309,7 +309,6 @@ impl crate::Adapter<super::Api> for super::Adapter {
             composite_alpha_modes: vec![
                 wgt::CompositeAlphaMode::Opaque,
                 wgt::CompositeAlphaMode::PreMultiplied,
-                wgt::CompositeAlphaMode::PostMultiplied,
             ],
 
             current_extent,

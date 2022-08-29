@@ -449,7 +449,6 @@ pub fn map_vk_present_mode(mode: vk::PresentModeKHR) -> Option<wgt::PresentMode>
 pub fn map_composite_alpha_mode(mode: wgt::CompositeAlphaMode) -> vk::CompositeAlphaFlagsKHR {
     match mode {
         wgt::CompositeAlphaMode::Opaque => vk::CompositeAlphaFlagsKHR::OPAQUE,
-        wgt::CompositeAlphaMode::PostMultiplied => vk::CompositeAlphaFlagsKHR::POST_MULTIPLIED,
         wgt::CompositeAlphaMode::PreMultiplied => vk::CompositeAlphaFlagsKHR::PRE_MULTIPLIED,
     }
 }
@@ -458,9 +457,6 @@ pub fn map_vk_composite_alpha(flags: vk::CompositeAlphaFlagsKHR) -> Vec<wgt::Com
     let mut modes = Vec::new();
     if flags.contains(vk::CompositeAlphaFlagsKHR::OPAQUE) {
         modes.push(wgt::CompositeAlphaMode::Opaque);
-    }
-    if flags.contains(vk::CompositeAlphaFlagsKHR::POST_MULTIPLIED) {
-        modes.push(wgt::CompositeAlphaMode::PostMultiplied);
     }
     if flags.contains(vk::CompositeAlphaFlagsKHR::PRE_MULTIPLIED) {
         modes.push(wgt::CompositeAlphaMode::PreMultiplied);

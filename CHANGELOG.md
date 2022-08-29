@@ -58,18 +58,19 @@ the same every time it is rendered, we now warn if it is missing.
 
 #### Alpha Mode
 
-Surface now supports transparent background color, more detail in [#2836](https://github.com/gfx-rs/wgpu/pull/2836)
+Surface supports `alpha_mode` now. When alpha_mode is set to `PreMultiplied`, the value of the actual `LoadOp::Clear` color's alpha channel is supported.
 
 ```diff
 SurfaceConfiguration {
 // ...
-+ alpha_mode: wgpu::CompositeAlphaMode::Opaque,
++ alpha_mode: wgpu::CompositeAlphaMode::PreMultiplied,
 }
 ```
 
 ### Added/New Features
 
 - Add `Buffer::size()` and `Buffer::usage()`; by @kpreid in [#2923](https://github.com/gfx-rs/wgpu/pull/2923)
+- Expose alpha_mode, support `PreMultiplied` mode on metal and vk backends by @jinleili in [#2836](https://github.com/gfx-rs/wgpu/pull/2836)
 
 ### Bug Fixes
 
