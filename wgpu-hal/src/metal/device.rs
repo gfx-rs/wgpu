@@ -890,7 +890,7 @@ impl crate::Device<super::Api> for super::Device {
         };
 
         if desc.layout.total_counters.vs.buffers + (desc.vertex_buffers.len() as u32)
-            > self.shared.private_caps.max_buffers_per_stage
+            > self.shared.private_caps.max_vertex_buffers
         {
             let msg = format!(
                 "pipeline needs too many buffers in the vertex stage: {} vertex and {} layout",
@@ -907,7 +907,7 @@ impl crate::Device<super::Api> for super::Device {
             let vertex_descriptor = mtl::VertexDescriptor::new();
             for (i, vb) in desc.vertex_buffers.iter().enumerate() {
                 let buffer_index =
-                    self.shared.private_caps.max_buffers_per_stage as u64 - 1 - i as u64;
+                    self.shared.private_caps.max_vertex_buffers as u64 - 1 - i as u64;
                 let buffer_desc = vertex_descriptor.layouts().object_at(buffer_index).unwrap();
 
                 buffer_desc.set_stride(vb.array_stride);

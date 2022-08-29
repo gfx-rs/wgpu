@@ -204,6 +204,7 @@ struct PrivateCapabilities {
     format_bgr10a2_all: bool,
     format_bgr10a2_no_write: bool,
     max_buffers_per_stage: ResourceIndex,
+    max_vertex_buffers: ResourceIndex,
     max_textures_per_stage: ResourceIndex,
     max_samplers_per_stage: ResourceIndex,
     buffer_alignment: u64,
