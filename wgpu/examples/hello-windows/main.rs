@@ -37,6 +37,7 @@ impl ViewportDesc {
             width: size.width,
             height: size.height,
             present_mode: wgpu::PresentMode::Fifo,
+            alpha_mode: wgpu::CompositeAlphaMode::Opaque,
         };
 
         self.surface.configure(device, &config);
