@@ -225,6 +225,8 @@ jobs:
           for backend in ${{ matrix.backends }}; do
             echo "======= NATIVE TESTS $backend ======";
             WGPU_BACKEND=$backend cargo nextest run -p wgpu --no-fail-fast
+            # Test that we catch overflows in `--release` builds too.
+            WGPU_BACKEND=$backend cargo nextest run --release -p wgpu --no-fail-fast
           done
 
   fmt:

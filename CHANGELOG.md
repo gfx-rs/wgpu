@@ -64,6 +64,7 @@ the same every time it is rendered, we now warn if it is missing.
 
 #### General
 - Free `StagingBuffers` even when an error occurs in the operation that consumes them. By @jimblandy in [#2961](https://github.com/gfx-rs/wgpu/pull/2961)
+- Avoid overflow when checking that texture copies fall within bounds. By @jimblandy in [#2963](https://github.com/gfx-rs/wgpu/pull/2963)
 - Improve the validation and error reporting of buffer mappings by @nical in [#2848](https://github.com/gfx-rs/wgpu/pull/2848)
 - Fix compilation errors when using wgpu-core in isolation while targetting `wasm32-unknown-unknown` by @Seamooo in [#2922](https://github.com/gfx-rs/wgpu/pull/2922)
 - Fixed opening of RenderDoc library by @abuffseagull in [#2930](https://github.com/gfx-rs/wgpu/pull/2930)
