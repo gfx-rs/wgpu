@@ -71,7 +71,7 @@ pub enum StoreOp {
 
 /// Describes an individual channel within a render pass, such as color, depth, or stencil.
 #[repr(C)]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 #[cfg_attr(any(feature = "serial-pass", feature = "trace"), derive(Serialize))]
 #[cfg_attr(any(feature = "serial-pass", feature = "replay"), derive(Deserialize))]
 pub struct PassChannel<V> {
@@ -737,7 +737,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
             let view: &TextureView<A> = cmd_buf
                 .trackers
                 .views
-                .add_single(&*view_guard, at.view)
+                .add_single(view_guard, at.view)
                 .ok_or(RenderPassErrorInner::InvalidAttachment(at.view))?;
             check_multiview(view)?;
             add_view(view, "depth")?;
@@ -853,7 +853,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
             let color_view: &TextureView<A> = cmd_buf
                 .trackers
                 .views
-                .add_single(&*view_guard, at.view)
+                .add_single(view_guard, at.view)
                 .ok_or(RenderPassErrorInner::InvalidAttachment(at.view))?;
             check_multiview(color_view)?;
             add_view(color_view, "color")?;
@@ -883,7 +883,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                 let resolve_view: &TextureView<A> = cmd_buf
                     .trackers
                     .views
-                    .add_single(&*view_guard, resolve_target)
+                    .add_single(view_guard, resolve_target)
                     .ok_or(RenderPassErrorInner::InvalidAttachment(resolve_target))?;
 
                 check_multiview(resolve_view)?;
@@ -1015,7 +1015,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                 self.usage_scope
                     .textures
                     .merge_single(
-                        &*texture_guard,
+                        texture_guard,
                         ra.texture_id.value,
                         Some(ra.selector.clone()),
                         &ra.texture_id.ref_count,

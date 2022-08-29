@@ -648,7 +648,7 @@ impl<A: hal::Api> Resource for PipelineLayout<A> {
 }
 
 #[repr(C)]
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub struct BufferBinding {
@@ -784,7 +784,7 @@ pub enum GetBindGroupLayoutError {
     InvalidGroupIndex(u32),
 }
 
-#[derive(Clone, Debug, Error, PartialEq)]
+#[derive(Clone, Debug, Error, Eq, PartialEq)]
 #[error("Buffer is bound with size {bound_size} where the shader expects {shader_size} in group[{group_index}] compact index {compact_index}")]
 pub struct LateMinBufferBindingSizeMismatch {
     pub group_index: u32,

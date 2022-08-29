@@ -68,6 +68,13 @@ the same every time it is rendered, we now warn if it is missing.
 - Fix compilation errors when using wgpu-core in isolation while targetting `wasm32-unknown-unknown` by @Seamooo in [#2922](https://github.com/gfx-rs/wgpu/pull/2922)
 - Fixed opening of RenderDoc library by @abuffseagull in [#2930](https://github.com/gfx-rs/wgpu/pull/2930)
 
+#### Metal
+- Add the missing `msg_send![view, retain]` call within `from_view` by @jinleili in [#2976](https://github.com/gfx-rs/wgpu/pull/2976)
+
+#### Vulkan
+
+- Fix `astc_hdr` formats support by @jinleili in [#2971]](https://github.com/gfx-rs/wgpu/pull/2971)
+
 ### Changes
 
 #### General
@@ -75,6 +82,7 @@ the same every time it is rendered, we now warn if it is missing.
 - Add warning when using CompareFunction::*Equal with vertex shader that is missing @invariant tag by @cwfitzgerald in [#2887](https://github.com/gfx-rs/wgpu/pull/2887)
 - Update Winit to version 0.27 and raw-window-handle to 0.5 by @wyatt-herkamp in  [#2918](https://github.com/gfx-rs/wgpu/pull/2918)
 - Don't use `PhantomData` for `IdentityManager`'s `Input` type. By @jimblandy in [#2972](https://github.com/gfx-rs/wgpu/pull/2972)
+- Address Clippy 0.1.63 complaints. By @jimb in [#2977](https://github.com/gfx-rs/wgpu/pull/2977)
 #### Metal
 - Extract the generic code into `get_metal_layer` by @jinleili in [#2826](https://github.com/gfx-rs/wgpu/pull/2826)
 
@@ -82,6 +90,7 @@ the same every time it is rendered, we now warn if it is missing.
 
 #### General
 - Add WGSL examples to complement existing examples written in GLSL by @norepimorphism in [#2888](https://github.com/gfx-rs/wgpu/pull/2888)
+- Document `wgpu_core` resource allocation. @jimb in [#2973](https://github.com/gfx-rs/wgpu/pull/2973)
 
 ### Performance
 

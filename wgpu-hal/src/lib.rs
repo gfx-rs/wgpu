@@ -106,7 +106,7 @@ pub type Label<'a> = Option<&'a str>;
 pub type MemoryRange = Range<wgt::BufferAddress>;
 pub type FenceValue = u64;
 
-#[derive(Clone, Debug, PartialEq, Error)]
+#[derive(Clone, Debug, Eq, PartialEq, Error)]
 pub enum DeviceError {
     #[error("out of memory")]
     OutOfMemory,
@@ -114,7 +114,7 @@ pub enum DeviceError {
     Lost,
 }
 
-#[derive(Clone, Debug, PartialEq, Error)]
+#[derive(Clone, Debug, Eq, PartialEq, Error)]
 pub enum ShaderError {
     #[error("compilation failed: {0:?}")]
     Compilation(String),
@@ -122,7 +122,7 @@ pub enum ShaderError {
     Device(#[from] DeviceError),
 }
 
-#[derive(Clone, Debug, PartialEq, Error)]
+#[derive(Clone, Debug, Eq, PartialEq, Error)]
 pub enum PipelineError {
     #[error("linkage failed for stage {0:?}: {1}")]
     Linkage(wgt::ShaderStages, String),
@@ -132,7 +132,7 @@ pub enum PipelineError {
     Device(#[from] DeviceError),
 }
 
-#[derive(Clone, Debug, PartialEq, Error)]
+#[derive(Clone, Debug, Eq, PartialEq, Error)]
 pub enum SurfaceError {
     #[error("surface is lost")]
     Lost,
@@ -144,7 +144,7 @@ pub enum SurfaceError {
     Other(&'static str),
 }
 
-#[derive(Clone, Debug, PartialEq, Error)]
+#[derive(Clone, Debug, Eq, PartialEq, Error)]
 #[error("Not supported")]
 pub struct InstanceError;
 
@@ -1032,7 +1032,7 @@ pub struct RenderPipelineDescriptor<'a, A: Api> {
 
 /// Specifies how the alpha channel of the textures should be handled during (martin mouv i step)
 /// compositing.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum CompositeAlphaMode {
     /// The alpha channel, if it exists, of the textures is ignored in the
     /// compositing process. Instead, the textures is treated as if it has a
