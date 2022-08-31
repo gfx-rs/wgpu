@@ -84,6 +84,9 @@ Both [HLSL](https://github.com/Microsoft/DirectXShaderCompiler) and [GLSL](https
 have compilers to target SPIR-V. All of these shader languages can be used with any backend, we
 will handle all of the conversion. Additionally, support for these shader inputs is not going away.
 
+The WGSL Spec is still in developement and full conformity with the current spec is unlikely. 
+[Below](#tracking-the-evolving-wgsl-spec) we elaborate a bit more.
+
 While WebGPU does not support any shading language other than WGSL, we will automatically convert your
 non-WGSL shaders if you're running on WebGPU.
 
@@ -180,6 +183,12 @@ cargo run --manifest-path ../cts_runner/Cargo.toml -- ./tools/run_deno --verbose
 To find the full list of tests, go to the [online cts viewer](https://gpuweb.github.io/cts/standalone/?runnow=0&worker=0&debug=0&q=webgpu:*).
 
 The list of currently enabled CTS tests can be found [here](./cts_runner/test.lst).
+
+## Tracking the evolving WGSL Spec
+
+Take note that the WGSL standard is currently still in developement, and thus WGPU is unlikely to support all features.
+When targeting the Browser via wasm of course the Browser dictates support. 
+If targeting native then Naga translates the WGSL shader. Naga has [a milestone](https://github.com/gfx-rs/naga/milestone/4) tracking issues related to Spec conformance.
 
 ## Coordinate Systems
 
