@@ -2610,7 +2610,15 @@ impl<A: HalApi> Device<A> {
                     {
                         break Some(pipeline::ColorStateError::FormatNotRenderable(cs.format));
                     }
-                    if cs.blend.is_some() && !format_features.flags.contains(Tfff::FILTERABLE) {
+                    if cs.blend.is_some()
+                        && (!format_features.flags.contains(Tfff::BLENDABLE)
+                            ||
+                            // according to WebGPU specifications the texture needs to be [`TextureFormatFeatureFlags::FILTERABLE`] 
+                            // if blending is set - use [`Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES`] to elude this limitation
+                            (!self.features.contains(wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES)
+                             && !format_features.flags.contains(Tfff::FILTERABLE)
+                            ))
+                    {
                         break Some(pipeline::ColorStateError::FormatNotBlendable(cs.format));
                     }
                     if !hal::FormatAspects::from(cs.format).contains(hal::FormatAspects::COLOR) {

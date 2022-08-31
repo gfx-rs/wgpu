@@ -1655,6 +1655,8 @@ bitflags::bitflags! {
         /// When used as a STORAGE texture, then a texture with this format can be written to with atomics.
         // TODO: No access flag exposed as of writing
         const STORAGE_ATOMICS = 1 << 4;
+        /// If not present, the texture can't be blended into the render target.
+        const BLENDABLE = 1 << 5;
     }
 }
 

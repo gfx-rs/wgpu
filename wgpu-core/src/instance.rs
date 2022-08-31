@@ -242,14 +242,14 @@ impl<A: HalApi> Adapter<A> {
             caps.contains(Tfc::STORAGE_READ_WRITE),
         );
 
-        // We are currently taking the filtering and blending together,
-        // but we may reconsider this in the future if there are formats
-        // in the wild for which these two capabilities do not match.
         flags.set(
             wgt::TextureFormatFeatureFlags::FILTERABLE,
-            caps.contains(Tfc::SAMPLED_LINEAR)
-                && (!caps.contains(Tfc::COLOR_ATTACHMENT)
-                    || caps.contains(Tfc::COLOR_ATTACHMENT_BLEND)),
+            caps.contains(Tfc::SAMPLED_LINEAR),
+        );
+
+        flags.set(
+            wgt::TextureFormatFeatureFlags::BLENDABLE,
+            caps.contains(Tfc::COLOR_ATTACHMENT_BLEND),
         );
 
         flags.set(
