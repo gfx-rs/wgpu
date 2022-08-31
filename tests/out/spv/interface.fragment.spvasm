@@ -21,10 +21,14 @@ OpDecorate %22 Invariant
 OpDecorate %22 BuiltIn FragCoord
 OpDecorate %25 Location 1
 OpDecorate %28 BuiltIn FrontFacing
+OpDecorate %28 Flat
 OpDecorate %31 BuiltIn SampleId
+OpDecorate %31 Flat
 OpDecorate %34 BuiltIn SampleMask
+OpDecorate %34 Flat
 OpDecorate %36 BuiltIn FragDepth
 OpDecorate %38 BuiltIn SampleMask
+OpDecorate %38 Flat
 OpDecorate %40 Location 0
 %2 = OpTypeVoid
 %4 = OpTypeFloat 32

@@ -16,10 +16,15 @@ OpDecorate %16 ArrayStride 4
 OpMemberDecorate %18 0 Offset 0
 OpMemberDecorate %19 0 Offset 0
 OpDecorate %23 BuiltIn GlobalInvocationId
+OpDecorate %23 Flat
 OpDecorate %26 BuiltIn LocalInvocationId
+OpDecorate %26 Flat
 OpDecorate %28 BuiltIn LocalInvocationIndex
+OpDecorate %28 Flat
 OpDecorate %31 BuiltIn WorkgroupId
+OpDecorate %31 Flat
 OpDecorate %33 BuiltIn NumWorkgroups
+OpDecorate %33 Flat
 %2 = OpTypeVoid
 %4 = OpTypeFloat 32
 %3 = OpConstant  %4  1.0

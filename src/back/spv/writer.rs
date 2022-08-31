@@ -1263,6 +1263,26 @@ impl Writer {
                 };
 
                 self.decorate(id, Decoration::BuiltIn, &[built_in as u32]);
+
+                use crate::ScalarKind as Sk;
+
+                // Per the Vulkan spec, `VUID-StandaloneSpirv-Flat-04744`:
+                //
+                // > Any variable with integer or double-precision floating-
+                // > point type and with Input storage class in a fragment
+                // > shader, must be decorated Flat
+                let is_flat = match ir_module.types[ty].inner {
+                    crate::TypeInner::Scalar { kind, .. }
+                    | crate::TypeInner::Vector { kind, .. } => match kind {
+                        Sk::Uint | Sk::Sint | Sk::Bool => true,
+                        Sk::Float => false,
+                    },
+                    _ => false,
+                };
+
+                if is_flat {
+                    self.decorate(id, Decoration::Flat, &[]);
+                }
             }
         }
 

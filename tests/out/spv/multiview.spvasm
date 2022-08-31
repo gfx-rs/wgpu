@@ -9,6 +9,7 @@ OpExtension "SPV_KHR_multiview"
 OpMemoryModel Logical GLSL450
 OpEntryPoint Vertex %8 "main" %5
 OpDecorate %5 BuiltIn ViewIndex
+OpDecorate %5 Flat
 %2 = OpTypeVoid
 %3 = OpTypeInt 32 1
 %6 = OpTypePointer Input %3

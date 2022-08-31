@@ -17,6 +17,7 @@ OpDecorate %12 Block
 OpMemberDecorate %12 0 Offset 0
 OpDecorate %16 Location 0
 OpDecorate %19 BuiltIn PrimitiveId
+OpDecorate %19 Flat
 OpDecorate %22 Location 0
 %2 = OpTypeVoid
 %4 = OpTypeFloat 32

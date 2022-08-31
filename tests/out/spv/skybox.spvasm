@@ -25,6 +25,7 @@ OpDecorate %22 Binding 1
 OpDecorate %24 DescriptorSet 0
 OpDecorate %24 Binding 2
 OpDecorate %32 BuiltIn VertexIndex
+OpDecorate %32 Flat
 OpDecorate %35 BuiltIn Position
 OpDecorate %37 Location 0
 OpDecorate %83 BuiltIn FragCoord
