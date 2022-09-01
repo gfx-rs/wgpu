@@ -3468,7 +3468,7 @@ impl Queue {
     /// The returned value can be dereferenced to a `&mut [u8]`; dereferencing it to a
     /// `&[u8]` panics!
     /// (It is not unsound to read through the `&mut [u8]` anyway, but doing so will not
-    /// yield the existing contents of `buffer`, and it is likely to be slow.)
+    /// yield the existing contents of `buffer` from the GPU, and it is likely to be slow.)
     ///
     /// This method is intended to have low performance costs.
     /// As such, the write is not immediately submitted, and instead enqueued
