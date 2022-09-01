@@ -346,7 +346,7 @@ impl Writer {
                     ShaderStage::Fragment => true,
                 };
                 let id = if let Some(ref binding) = argument.binding {
-                    let name = argument.name.as_ref().map(AsRef::as_ref);
+                    let name = argument.name.as_deref();
 
                     let varying_id = self.write_varying(
                         ir_module,
@@ -369,7 +369,7 @@ impl Writer {
                     let mut constituent_ids = Vec::with_capacity(members.len());
                     for member in members {
                         let type_id = self.get_type_id(LookupType::Handle(member.ty));
-                        let name = member.name.as_ref().map(AsRef::as_ref);
+                        let name = member.name.as_deref();
                         let binding = member.binding.as_ref().unwrap();
                         let varying_id = self.write_varying(
                             ir_module,
@@ -456,7 +456,7 @@ impl Writer {
                     {
                         for member in members {
                             let type_id = self.get_type_id(LookupType::Handle(member.ty));
-                            let name = member.name.as_ref().map(AsRef::as_ref);
+                            let name = member.name.as_deref();
                             let binding = member.binding.as_ref().unwrap();
                             has_point_size |=
                                 *binding == crate::Binding::BuiltIn(crate::BuiltIn::PointSize);
