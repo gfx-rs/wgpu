@@ -1061,6 +1061,7 @@ impl crate::Device<super::Api> for super::Device {
                 binding_map,
                 fake_missing_bindings: false,
                 special_constants_binding,
+                push_constants_target: None,
             },
         })
     }
