@@ -340,10 +340,22 @@ impl Writer {
             };
 
             if let Some(ref mut iface) = interface {
+                use crate::ShaderStage;
+                let interpolation_decoration = match iface.stage {
+                    ShaderStage::Vertex | ShaderStage::Compute => false,
+                    ShaderStage::Fragment => true,
+                };
                 let id = if let Some(ref binding) = argument.binding {
                     let name = argument.name.as_ref().map(AsRef::as_ref);
-                    let varying_id =
-                        self.write_varying(ir_module, class, name, argument.ty, binding)?;
+
+                    let varying_id = self.write_varying(
+                        ir_module,
+                        class,
+                        name,
+                        argument.ty,
+                        binding,
+                        interpolation_decoration,
+                    )?;
                     iface.varying_ids.push(varying_id);
                     let id = self.id_gen.next();
                     prelude
@@ -359,8 +371,14 @@ impl Writer {
                         let type_id = self.get_type_id(LookupType::Handle(member.ty));
                         let name = member.name.as_ref().map(AsRef::as_ref);
                         let binding = member.binding.as_ref().unwrap();
-                        let varying_id =
-                            self.write_varying(ir_module, class, name, member.ty, binding)?;
+                        let varying_id = self.write_varying(
+                            ir_module,
+                            class,
+                            name,
+                            member.ty,
+                            binding,
+                            interpolation_decoration,
+                        )?;
                         iface.varying_ids.push(varying_id);
                         let id = self.id_gen.next();
                         prelude
@@ -408,14 +426,25 @@ impl Writer {
         let return_type_id = match ir_function.result {
             Some(ref result) => {
                 if let Some(ref mut iface) = interface {
+                    use crate::ShaderStage;
+                    let interpolation_decoration = match iface.stage {
+                        ShaderStage::Fragment | ShaderStage::Compute => false,
+                        ShaderStage::Vertex => true,
+                    };
                     let mut has_point_size = false;
                     let class = spirv::StorageClass::Output;
                     if let Some(ref binding) = result.binding {
                         has_point_size |=
                             *binding == crate::Binding::BuiltIn(crate::BuiltIn::PointSize);
                         let type_id = self.get_type_id(LookupType::Handle(result.ty));
-                        let varying_id =
-                            self.write_varying(ir_module, class, None, result.ty, binding)?;
+                        let varying_id = self.write_varying(
+                            ir_module,
+                            class,
+                            None,
+                            result.ty,
+                            binding,
+                            interpolation_decoration,
+                        )?;
                         iface.varying_ids.push(varying_id);
                         ep_context.results.push(ResultMember {
                             id: varying_id,
@@ -431,8 +460,14 @@ impl Writer {
                             let binding = member.binding.as_ref().unwrap();
                             has_point_size |=
                                 *binding == crate::Binding::BuiltIn(crate::BuiltIn::PointSize);
-                            let varying_id =
-                                self.write_varying(ir_module, class, name, member.ty, binding)?;
+                            let varying_id = self.write_varying(
+                                ir_module,
+                                class,
+                                name,
+                                member.ty,
+                                binding,
+                                interpolation_decoration,
+                            )?;
                             iface.varying_ids.push(varying_id);
                             ep_context.results.push(ResultMember {
                                 id: varying_id,
@@ -1119,6 +1154,7 @@ impl Writer {
         debug_name: Option<&str>,
         ty: Handle<crate::Type>,
         binding: &crate::Binding,
+        interpolation_decoration: bool,
     ) -> Result<Word, Error> {
         let id = self.id_gen.next();
         let pointer_type_id = self.get_pointer_id(&ir_module.types, ty, class)?;
@@ -1144,14 +1180,16 @@ impl Writer {
             } => {
                 self.decorate(id, Decoration::Location, &[location]);
 
-                match interpolation {
-                    // Perspective-correct interpolation is the default in SPIR-V.
-                    None | Some(crate::Interpolation::Perspective) => (),
-                    Some(crate::Interpolation::Flat) => {
-                        self.decorate(id, Decoration::Flat, &[]);
-                    }
-                    Some(crate::Interpolation::Linear) => {
-                        self.decorate(id, Decoration::NoPerspective, &[]);
+                if interpolation_decoration {
+                    match interpolation {
+                        // Perspective-correct interpolation is the default in SPIR-V.
+                        None | Some(crate::Interpolation::Perspective) => (),
+                        Some(crate::Interpolation::Flat) => {
+                            self.decorate(id, Decoration::Flat, &[]);
+                        }
+                        Some(crate::Interpolation::Linear) => {
+                            self.decorate(id, Decoration::NoPerspective, &[]);
+                        }
                     }
                 }
 

@@ -96,9 +96,7 @@ OpDecorate %43 Binding 2
 OpDecorate %45 DescriptorSet 0
 OpDecorate %45 Binding 3
 OpDecorate %84 Location 0
-OpDecorate %84 Flat
 OpDecorate %87 Location 1
-OpDecorate %87 Flat
 OpDecorate %89 BuiltIn Position
 OpDecorate %91 Location 0
 OpDecorate %93 Location 1
