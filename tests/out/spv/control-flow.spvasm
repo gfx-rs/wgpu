@@ -8,7 +8,6 @@ OpMemoryModel Logical GLSL450
 OpEntryPoint GLCompute %44 "main" %41
 OpExecutionMode %44 LocalSize 1 1 1
 OpDecorate %41 BuiltIn GlobalInvocationId
-OpDecorate %41 Flat
 %2 = OpTypeVoid
 %4 = OpTypeInt 32 1
 %3 = OpConstant  %4  1

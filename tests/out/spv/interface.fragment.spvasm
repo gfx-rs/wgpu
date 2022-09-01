@@ -28,7 +28,6 @@ OpDecorate %34 BuiltIn SampleMask
 OpDecorate %34 Flat
 OpDecorate %36 BuiltIn FragDepth
 OpDecorate %38 BuiltIn SampleMask
-OpDecorate %38 Flat
 OpDecorate %40 Location 0
 %2 = OpTypeVoid
 %4 = OpTypeFloat 32

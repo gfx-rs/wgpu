@@ -340,21 +340,16 @@ impl Writer {
             };
 
             if let Some(ref mut iface) = interface {
-                use crate::ShaderStage;
-                let interpolation_decoration = match iface.stage {
-                    ShaderStage::Vertex | ShaderStage::Compute => false,
-                    ShaderStage::Fragment => true,
-                };
                 let id = if let Some(ref binding) = argument.binding {
                     let name = argument.name.as_deref();
 
                     let varying_id = self.write_varying(
                         ir_module,
+                        iface.stage,
                         class,
                         name,
                         argument.ty,
                         binding,
-                        interpolation_decoration,
                     )?;
                     iface.varying_ids.push(varying_id);
                     let id = self.id_gen.next();
@@ -373,11 +368,11 @@ impl Writer {
                         let binding = member.binding.as_ref().unwrap();
                         let varying_id = self.write_varying(
                             ir_module,
+                            iface.stage,
                             class,
                             name,
                             member.ty,
                             binding,
-                            interpolation_decoration,
                         )?;
                         iface.varying_ids.push(varying_id);
                         let id = self.id_gen.next();
@@ -426,11 +421,6 @@ impl Writer {
         let return_type_id = match ir_function.result {
             Some(ref result) => {
                 if let Some(ref mut iface) = interface {
-                    use crate::ShaderStage;
-                    let interpolation_decoration = match iface.stage {
-                        ShaderStage::Fragment | ShaderStage::Compute => false,
-                        ShaderStage::Vertex => true,
-                    };
                     let mut has_point_size = false;
                     let class = spirv::StorageClass::Output;
                     if let Some(ref binding) = result.binding {
@@ -439,11 +429,11 @@ impl Writer {
                         let type_id = self.get_type_id(LookupType::Handle(result.ty));
                         let varying_id = self.write_varying(
                             ir_module,
+                            iface.stage,
                             class,
                             None,
                             result.ty,
                             binding,
-                            interpolation_decoration,
                         )?;
                         iface.varying_ids.push(varying_id);
                         ep_context.results.push(ResultMember {
@@ -462,11 +452,11 @@ impl Writer {
                                 *binding == crate::Binding::BuiltIn(crate::BuiltIn::PointSize);
                             let varying_id = self.write_varying(
                                 ir_module,
+                                iface.stage,
                                 class,
                                 name,
                                 member.ty,
                                 binding,
-                                interpolation_decoration,
                             )?;
                             iface.varying_ids.push(varying_id);
                             ep_context.results.push(ResultMember {
@@ -1150,11 +1140,11 @@ impl Writer {
     fn write_varying(
         &mut self,
         ir_module: &crate::Module,
+        stage: crate::ShaderStage,
         class: spirv::StorageClass,
         debug_name: Option<&str>,
         ty: Handle<crate::Type>,
         binding: &crate::Binding,
-        interpolation_decoration: bool,
     ) -> Result<Word, Error> {
         let id = self.id_gen.next();
         let pointer_type_id = self.get_pointer_id(&ir_module.types, ty, class)?;
@@ -1180,7 +1170,12 @@ impl Writer {
             } => {
                 self.decorate(id, Decoration::Location, &[location]);
 
-                if interpolation_decoration {
+                // The Vulkan spec says: VUID-StandaloneSpirv-Flat-06202
+                //
+                // > The Flat, NoPerspective, Sample, and Centroid decorations
+                // > must not be used on variables with the Input storage class in
+                // > a vertex shader
+                if class != spirv::StorageClass::Input || stage != crate::ShaderStage::Vertex {
                     match interpolation {
                         // Perspective-correct interpolation is the default in SPIR-V.
                         None | Some(crate::Interpolation::Perspective) => (),
@@ -1271,17 +1266,19 @@ impl Writer {
                 // > Any variable with integer or double-precision floating-
                 // > point type and with Input storage class in a fragment
                 // > shader, must be decorated Flat
-                let is_flat = match ir_module.types[ty].inner {
-                    crate::TypeInner::Scalar { kind, .. }
-                    | crate::TypeInner::Vector { kind, .. } => match kind {
-                        Sk::Uint | Sk::Sint | Sk::Bool => true,
-                        Sk::Float => false,
-                    },
-                    _ => false,
-                };
+                if class == spirv::StorageClass::Input && stage == crate::ShaderStage::Fragment {
+                    let is_flat = match ir_module.types[ty].inner {
+                        crate::TypeInner::Scalar { kind, .. }
+                        | crate::TypeInner::Vector { kind, .. } => match kind {
+                            Sk::Uint | Sk::Sint | Sk::Bool => true,
+                            Sk::Float => false,
+                        },
+                        _ => false,
+                    };
 
-                if is_flat {
-                    self.decorate(id, Decoration::Flat, &[]);
+                    if is_flat {
+                        self.decorate(id, Decoration::Flat, &[]);
+                    }
                 }
             }
         }

@@ -98,7 +98,6 @@ OpDecorate %78 Binding 3
 OpDecorate %79 Block
 OpMemberDecorate %79 0 Offset 0
 OpDecorate %228 BuiltIn VertexIndex
-OpDecorate %228 Flat
 OpDecorate %231 BuiltIn Position
 OpDecorate %273 Location 0
 %2 = OpTypeVoid

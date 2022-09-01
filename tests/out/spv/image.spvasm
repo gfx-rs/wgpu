@@ -95,9 +95,7 @@ OpDecorate %68 Binding 2
 OpDecorate %70 DescriptorSet 1
 OpDecorate %70 Binding 3
 OpDecorate %73 BuiltIn LocalInvocationId
-OpDecorate %73 Flat
 OpDecorate %119 BuiltIn LocalInvocationId
-OpDecorate %119 Flat
 OpDecorate %140 BuiltIn Position
 OpDecorate %193 BuiltIn Position
 OpDecorate %222 Location 0

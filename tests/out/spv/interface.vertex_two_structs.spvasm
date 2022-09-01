@@ -15,9 +15,7 @@ OpDecorate %16 ArrayStride 4
 OpMemberDecorate %18 0 Offset 0
 OpMemberDecorate %19 0 Offset 0
 OpDecorate %24 BuiltIn VertexIndex
-OpDecorate %24 Flat
 OpDecorate %28 BuiltIn InstanceIndex
-OpDecorate %28 Flat
 OpDecorate %30 Invariant
 OpDecorate %30 BuiltIn Position
 OpDecorate %32 BuiltIn PointSize
