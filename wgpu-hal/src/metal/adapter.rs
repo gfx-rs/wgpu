@@ -616,21 +616,17 @@ impl super::PrivateCapabilities {
             format_bgr10a2_all: Self::supports_any(device, BGR10A2_ALL),
             format_bgr10a2_no_write: !Self::supports_any(device, BGR10A2_ALL),
             max_buffers_per_stage: 31,
-            max_textures_per_stage: if os_is_mac {
-                128 // On macOS, minimun value is 128
-            } else if device.supports_feature_set(MTLFeatureSet::iOS_GPUFamily4_v1) {
+            max_vertex_buffers: 31,
+            max_textures_per_stage: if os_is_mac
+                || (family_check && device.supports_family(MTLGPUFamily::Apple6))
+            {
+                128
+            } else if family_check && device.supports_family(MTLGPUFamily::Apple4) {
                 96
             } else {
                 31
             },
-            max_samplers_per_stage: if (family_check
-                && device.supports_family(MTLGPUFamily::Apple6))
-                || (os_is_mac && rw_texture_tier == MTLReadWriteTextureTier::Tier2)
-            {
-                1024
-            } else {
-                16
-            },
+            max_samplers_per_stage: 16,
             buffer_alignment: if os_is_mac { 256 } else { 64 },
             max_buffer_size: if version.at_least((10, 14), (12, 0)) {
                 // maxBufferLength available on macOS 10.14+ and iOS 12.0+
@@ -833,15 +829,15 @@ impl super::PrivateCapabilities {
                     .max_dynamic_uniform_buffers_per_pipeline_layout,
                 max_dynamic_storage_buffers_per_pipeline_layout: base
                     .max_dynamic_storage_buffers_per_pipeline_layout,
-                max_sampled_textures_per_shader_stage: base.max_sampled_textures_per_shader_stage,
+                max_sampled_textures_per_shader_stage: self.max_textures_per_stage,
                 max_samplers_per_shader_stage: self.max_samplers_per_stage,
-                max_storage_buffers_per_shader_stage: base.max_storage_buffers_per_shader_stage,
-                max_storage_textures_per_shader_stage: base.max_storage_textures_per_shader_stage,
-                max_uniform_buffers_per_shader_stage: 12,
+                max_storage_buffers_per_shader_stage: self.max_buffers_per_stage,
+                max_storage_textures_per_shader_stage: self.max_textures_per_stage,
+                max_uniform_buffers_per_shader_stage: self.max_buffers_per_stage,
                 max_uniform_buffer_binding_size: self.max_buffer_size.min(!0u32 as u64) as u32,
                 max_storage_buffer_binding_size: self.max_buffer_size.min(!0u32 as u64) as u32,
-                max_vertex_buffers: base.max_vertex_buffers,
-                max_vertex_attributes: base.max_vertex_attributes,
+                max_vertex_buffers: self.max_vertex_buffers,
+                max_vertex_attributes: 31,
                 max_vertex_buffer_array_stride: base.max_vertex_buffer_array_stride,
                 max_push_constant_size: 0x1000,
                 min_uniform_buffer_offset_alignment: self.buffer_alignment as u32,
