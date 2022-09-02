@@ -250,7 +250,7 @@ pub async fn op_webgpu_request_adapter(
     };
     let res = instance.request_adapter(
         &descriptor,
-        wgpu_core::instance::AdapterInputs::Mask(backends, |_| std::marker::PhantomData),
+        wgpu_core::instance::AdapterInputs::Mask(backends, |_| ()),
     );
 
     let adapter = match res {
@@ -413,7 +413,7 @@ pub async fn op_webgpu_request_device(
       adapter,
       &descriptor,
       std::env::var("DENO_WEBGPU_TRACE").ok().as_ref().map(std::path::Path::new),
-      std::marker::PhantomData
+      ()
     ));
     if let Some(err) = maybe_err {
         return Err(DomExceptionOperationError::new(&err.to_string()).into());
@@ -536,7 +536,7 @@ pub fn op_webgpu_create_query_set(
     gfx_put!(device => instance.device_create_query_set(
     device,
     &descriptor,
-    std::marker::PhantomData
+    ()
   ) => state, WebGpuQuerySet)
 }
 

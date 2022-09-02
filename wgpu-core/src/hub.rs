@@ -607,7 +607,7 @@ pub trait IdentityHandler<I>: Debug {
 }
 
 impl<I: id::TypedId + Debug> IdentityHandler<I> for Mutex<IdentityManager> {
-    type Input = PhantomData<I>;
+    type Input = ();
     fn process(&self, _id: Self::Input, backend: Backend) -> I {
         self.lock().alloc(backend)
     }
