@@ -1792,9 +1792,8 @@ impl Instance {
 
     /// Creates a surface from a `web_sys::HtmlCanvasElement`.
     ///
-    /// # Safety
-    ///
-    /// - canvas must be a valid <canvas> element to create a surface upon.
+    /// The `canvas` argument must be a valid `<canvas>` element to
+    /// create a surface upon.
     #[cfg(all(target_arch = "wasm32", not(feature = "emscripten")))]
     pub fn create_surface_from_canvas(&self, canvas: &web_sys::HtmlCanvasElement) -> Surface {
         Surface {
@@ -1805,9 +1804,8 @@ impl Instance {
 
     /// Creates a surface from a `web_sys::OffscreenCanvas`.
     ///
-    /// # Safety
-    ///
-    /// - canvas must be a valid OffscreenCanvas to create a surface upon.
+    /// The `canvas` argument must be a valid `OffscreenCanvas` object
+    /// to create a surface upon.
     #[cfg(all(target_arch = "wasm32", not(feature = "emscripten")))]
     pub fn create_surface_from_offscreen_canvas(
         &self,

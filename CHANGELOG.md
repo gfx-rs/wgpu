@@ -101,13 +101,15 @@ the same every time it is rendered, we now warn if it is missing.
 - Add WGSL examples to complement existing examples written in GLSL by @norepimorphism in [#2888](https://github.com/gfx-rs/wgpu/pull/2888)
 - Document `wgpu_core` resource allocation. @jimb in [#2973](https://github.com/gfx-rs/wgpu/pull/2973)
 
+- Expanded `StagingBelt` documentation by @kpreid in [#2905](https://github.com/gfx-rs/wgpu/pull/2905)
+
+- Fixed documentation for `Instance::create_surface_from_canvas` and
+  `Instance::create_surface_from_offscreen_canvas` regarding their
+  safety contract. These functions are not unsafe. [#2990](https://github.com/gfx-rs/wgpu/pull/2990)
+
 ### Performance
 
 - Made `StagingBelt::write_buffer()` check more thoroughly for reusable memory; by @kpreid in [#2906](https://github.com/gfx-rs/wgpu/pull/2906)
-
-### Documentation
-
-- Expanded `StagingBelt` documentation by @kpreid in [#2905](https://github.com/gfx-rs/wgpu/pull/2905)
 
 ### Build Configuration
 
