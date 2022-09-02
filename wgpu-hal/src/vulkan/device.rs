@@ -714,12 +714,20 @@ impl super::Device {
         self.shared.family_index
     }
 
+    pub fn queue_index(&self) -> u32 {
+        self.shared.queue_index
+    }
+
     pub fn raw_device(&self) -> &ash::Device {
         &self.shared.raw
     }
 
     pub fn raw_physical_device(&self) -> ash::vk::PhysicalDevice {
         self.shared.physical_device
+    }
+
+    pub fn raw_queue(&self) -> ash::vk::Queue {
+        self.shared.raw_queue
     }
 
     pub fn enabled_device_extensions(&self) -> &[&'static CStr] {
