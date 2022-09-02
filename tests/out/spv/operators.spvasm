@@ -161,13 +161,7 @@ OpStore %110 %118
 %129 = OpCompositeConstruct  %31  %5 %5
 %130 = OpCompositeConstruct  %32  %128 %129
 %131 = OpCompositeConstruct  %36  %11 %7 %18 %21
-%132 = OpCopyObject  %10  %12
-%133 = OpBitcast  %8  %11
-%134 = OpBitcast  %20  %19
-%135 = OpBitcast  %4  %5
-%136 = OpBitcast  %34  %46
 %137 = OpCopyObject  %37  %53
-%138 = OpBitcast  %34  %46
 %139 = OpCopyObject  %37  %53
 %142 = OpAccessChain  %141  %110 %19 %19
 %143 = OpLoad  %4  %142

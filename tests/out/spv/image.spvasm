@@ -277,8 +277,7 @@ OpFunctionEnd
 OpBranch %150
 %150 = OpLabel
 %152 = OpImageQuerySizeLod  %4  %143 %151
-%153 = OpBitcast  %4  %152
-%154 = OpImageQuerySizeLod  %4  %143 %153
+%154 = OpImageQuerySizeLod  %4  %143 %152
 %155 = OpImageQuerySizeLod  %21  %144 %151
 %156 = OpImageQuerySizeLod  %21  %144 %6
 %157 = OpImageQuerySizeLod  %105  %145 %151
