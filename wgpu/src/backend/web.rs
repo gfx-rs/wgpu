@@ -2066,10 +2066,15 @@ impl crate::Context for Context {
         }
 
         if let Some(dsa) = &desc.depth_stencil_attachment {
+            let mut depth_clear_value = 0.0;
+            let mut stencil_clear_value = 0;
             let (depth_load_op, depth_store_op) = match dsa.depth_ops {
                 Some(ref ops) => {
                     let load_op = match ops.load {
-                        crate::LoadOp::Clear(_) => web_sys::GpuLoadOp::Clear,
+                        crate::LoadOp::Clear(v) => {
+                            depth_clear_value = v;
+                            web_sys::GpuLoadOp::Clear
+                        }
                         crate::LoadOp::Load => web_sys::GpuLoadOp::Load,
                     };
                     (load_op, map_store_op(ops.store))
@@ -2079,7 +2084,10 @@ impl crate::Context for Context {
             let (stencil_load_op, stencil_store_op) = match dsa.stencil_ops {
                 Some(ref ops) => {
                     let load_op = match ops.load {
-                        crate::LoadOp::Clear(_) => web_sys::GpuLoadOp::Clear,
+                        crate::LoadOp::Clear(v) => {
+                            stencil_clear_value = v;
+                            web_sys::GpuLoadOp::Clear
+                        }
                         crate::LoadOp::Load => web_sys::GpuLoadOp::Load,
                     };
                     (load_op, map_store_op(ops.store))
@@ -2088,8 +2096,10 @@ impl crate::Context for Context {
             };
             let mut mapped_depth_stencil_attachment =
                 web_sys::GpuRenderPassDepthStencilAttachment::new(&dsa.view.id.0);
+            mapped_depth_stencil_attachment.depth_clear_value(depth_clear_value);
             mapped_depth_stencil_attachment.depth_load_op(depth_load_op);
             mapped_depth_stencil_attachment.depth_store_op(depth_store_op);
+            mapped_depth_stencil_attachment.stencil_clear_value(stencil_clear_value);
             mapped_depth_stencil_attachment.stencil_load_op(stencil_load_op);
             mapped_depth_stencil_attachment.stencil_store_op(stencil_store_op);
             mapped_desc.depth_stencil_attachment(&mapped_depth_stencil_attachment);
