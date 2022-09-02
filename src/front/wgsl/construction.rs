@@ -3,7 +3,7 @@ use crate::{
     ScalarKind, ScalarValue, Span as NagaSpan, Type, TypeInner, UniqueArena, VectorSize,
 };
 
-use super::{Error, ExpressionContext, Lexer, Parser, Scope, Span, Token};
+use super::{Error, ExpressionContext, Lexer, Parser, Rule, Span, Token};
 
 /// Represents the type of the constructor
 ///
@@ -216,7 +216,7 @@ fn parse_constructor_type<'a>(
     }
 }
 
-/// Expects [`Scope::PrimaryExpr`] scope on top; if returning Some(_), pops it.
+/// Expects [`Rule::PrimaryExpr`] on top of rule stack; if returning Some(_), pops it.
 pub(super) fn parse_construction<'a>(
     parser: &mut Parser,
     lexer: &mut Lexer<'a>,
@@ -225,8 +225,8 @@ pub(super) fn parse_construction<'a>(
     mut ctx: ExpressionContext<'a, '_, '_>,
 ) -> Result<Option<Handle<Expression>>, Error<'a>> {
     assert_eq!(
-        parser.scopes.last().map(|&(ref scope, _)| scope.clone()),
-        Some(Scope::PrimaryExpr)
+        parser.rules.last().map(|&(ref rule, _)| rule.clone()),
+        Some(Rule::PrimaryExpr)
     );
     let dst_ty = match parser.lookup_type.get(type_name) {
         Some(&handle) => ConstructorType::Struct(handle),
@@ -322,7 +322,7 @@ pub(super) fn parse_construction<'a>(
 
             return match ctx.create_zero_value_constant(ty) {
                 Some(constant) => {
-                    let span = parser.pop_scope(lexer);
+                    let span = parser.pop_rule_span(lexer);
                     Ok(Some(ctx.interrupt_emitter(
                         Expression::Constant(constant),
                         span.into(),
@@ -674,6 +674,6 @@ pub(super) fn parse_construction<'a>(
         }
     };
 
-    let span = NagaSpan::from(parser.pop_scope(lexer));
+    let span = NagaSpan::from(parser.pop_rule_span(lexer));
     Ok(Some(ctx.expressions.append(expr, span)))
 }
