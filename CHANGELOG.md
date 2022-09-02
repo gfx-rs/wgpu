@@ -95,21 +95,19 @@ the same every time it is rendered, we now warn if it is missing.
 - Remove use of Vulkan12Features/Properties types. By @i509VCB in [#2936](https://github.com/gfx-rs/wgpu/pull/2936)
 - Provide a means for `wgpu` users to access `vk::Queue` and the queue index. By @anlumo in [#2950](https://github.com/gfx-rs/wgpu/pull/2950)
 
-### Documentation
-
-#### General
-- Add WGSL examples to complement existing examples written in GLSL by @norepimorphism in [#2888](https://github.com/gfx-rs/wgpu/pull/2888)
-- Document `wgpu_core` resource allocation. @jimb in [#2973](https://github.com/gfx-rs/wgpu/pull/2973)
-
-- Expanded `StagingBelt` documentation by @kpreid in [#2905](https://github.com/gfx-rs/wgpu/pull/2905)
-
-- Fixed documentation for `Instance::create_surface_from_canvas` and
-  `Instance::create_surface_from_offscreen_canvas` regarding their
-  safety contract. These functions are not unsafe. [#2990](https://github.com/gfx-rs/wgpu/pull/2990)
-
 ### Performance
 
 - Made `StagingBelt::write_buffer()` check more thoroughly for reusable memory; by @kpreid in [#2906](https://github.com/gfx-rs/wgpu/pull/2906)
+
+### Documentation
+
+- Add WGSL examples to complement existing examples written in GLSL by @norepimorphism in [#2888](https://github.com/gfx-rs/wgpu/pull/2888)
+- Document `wgpu_core` resource allocation. @jimblandy in [#2973](https://github.com/gfx-rs/wgpu/pull/2973)
+- Expanded `StagingBelt` documentation by @kpreid in [#2905](https://github.com/gfx-rs/wgpu/pull/2905)
+- Fixed documentation for `Instance::create_surface_from_canvas` and
+  `Instance::create_surface_from_offscreen_canvas` regarding their
+  safety contract. These functions are not unsafe. By @jimblandy [#2990](https://github.com/gfx-rs/wgpu/pull/2990)
+- Document that `write_buffer_with()` is sound but unwise to read from by @kpreid in [#3006](https://github.com/gfx-rs/wgpu/pull/3006)
 
 ### Build Configuration
 

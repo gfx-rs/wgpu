@@ -3462,9 +3462,13 @@ impl Queue {
         Context::queue_write_buffer(&*self.context, &self.id, &buffer.id, offset, data)
     }
 
-    /// Schedule a data write into `buffer` starting at `offset` via the returned [QueueWriteBufferView].
+    /// Schedule a data write into `buffer` starting at `offset` via the returned
+    /// [QueueWriteBufferView].
     ///
-    /// The returned value can be dereferenced to a `&mut [u8]`; dereferencing it to a `&[u8]` panics!
+    /// The returned value can be dereferenced to a `&mut [u8]`; dereferencing it to a
+    /// `&[u8]` panics!
+    /// (It is not unsound to read through the `&mut [u8]` anyway, but doing so will not
+    /// yield the existing contents of `buffer` from the GPU, and it is likely to be slow.)
     ///
     /// This method is intended to have low performance costs.
     /// As such, the write is not immediately submitted, and instead enqueued
