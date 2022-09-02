@@ -677,19 +677,8 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     ) {
         let stride = mem::size_of::<wgt::DrawIndirectArgs>() as u32;
         match self.device.extension_fns.draw_indirect_count {
-            Some(super::ExtensionFn::Extension(ref t)) => {
+            Some(ref t) => {
                 t.cmd_draw_indirect_count(
-                    self.active,
-                    buffer.raw,
-                    offset,
-                    count_buffer.raw,
-                    count_offset,
-                    max_count,
-                    stride,
-                );
-            }
-            Some(super::ExtensionFn::Promoted) => {
-                self.device.raw.cmd_draw_indirect_count(
                     self.active,
                     buffer.raw,
                     offset,
@@ -712,19 +701,8 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     ) {
         let stride = mem::size_of::<wgt::DrawIndexedIndirectArgs>() as u32;
         match self.device.extension_fns.draw_indirect_count {
-            Some(super::ExtensionFn::Extension(ref t)) => {
+            Some(ref t) => {
                 t.cmd_draw_indexed_indirect_count(
-                    self.active,
-                    buffer.raw,
-                    offset,
-                    count_buffer.raw,
-                    count_offset,
-                    max_count,
-                    stride,
-                );
-            }
-            Some(super::ExtensionFn::Promoted) => {
-                self.device.raw.cmd_draw_indexed_indirect_count(
                     self.active,
                     buffer.raw,
                     offset,

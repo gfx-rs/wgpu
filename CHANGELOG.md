@@ -89,6 +89,9 @@ the same every time it is rendered, we now warn if it is missing.
 #### Metal
 - Extract the generic code into `get_metal_layer` by @jinleili in [#2826](https://github.com/gfx-rs/wgpu/pull/2826)
 
+#### Vulkan
+- Remove use of Vulkan12Features/Properties types. By @i509VCB in [#2936](https://github.com/gfx-rs/wgpu/pull/2936)
+
 ### Documentation
 
 #### General
