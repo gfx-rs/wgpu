@@ -1800,6 +1800,19 @@ pub struct BufferDescriptor<'a> {
 }
 
 #[derive(Clone, Debug)]
+pub struct AccelerationStructureDescriptor<'a> {
+    pub label: Label<'a>,
+    pub size: wgt::BufferAddress,
+    pub format: AccelerationStructureFormat,
+}
+
+#[derive(Clone, Debug)]
+pub enum AccelerationStructureFormat {
+    TopLevel,
+    BottomLevel,
+}
+
+#[derive(Clone, Debug)]
 pub struct TextureDescriptor<'a> {
     pub label: Label<'a>,
     pub size: wgt::Extent3d,
