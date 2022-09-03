@@ -91,7 +91,7 @@ WGSL is always supported by default, but GLSL and SPIR-V need features enabled t
 
 Note that the WGSL specification is still under development,
 so the [draft specification][wgsl spec] does not exactly describe what `wgpu` supports.
-See [below](https://github.com/jimblandy/wgpu/tree/doc-wgsl-version#tracking-the-webgpu-and-wgsl-draft-specifications) for details.
+See [below](#tracking-the-webgpu-and-wgsl-draft-specifications) for details.
 
 To enable SPIR-V shaders, enable the `spirv` feature of wgpu.  
 To enable GLSL shaders, enable the `glsl` feature of wgpu.
