@@ -3159,10 +3159,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         adapter_id: id::AdapterId,
     ) -> Result<Vec<TextureFormat>, instance::GetSurfaceSupportError> {
         profiling::scope!("Surface::get_supported_formats");
-        self.fetch_adapter_and_surface(
+        self.fetch_adapter_and_surface::<A, _, Vec<TextureFormat>>(
             surface_id,
             adapter_id,
-            |adapter: &Adapter<A>, surface: &Surface| surface.get_supported_formats(adapter),
+            |adapter, surface| surface.get_supported_formats(adapter),
         )
     }
 
@@ -3172,10 +3172,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         adapter_id: id::AdapterId,
     ) -> Result<Vec<wgt::PresentMode>, instance::GetSurfaceSupportError> {
         profiling::scope!("Surface::get_supported_present_modes");
-        self.fetch_adapter_and_surface(
+        self.fetch_adapter_and_surface::<A, _, Vec<wgt::PresentMode>>(
             surface_id,
             adapter_id,
-            |adapter: &Adapter<A>, surface: &Surface| surface.get_supported_present_modes(adapter),
+            |adapter, surface| surface.get_supported_present_modes(adapter),
         )
     }
 
@@ -3185,10 +3185,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         adapter_id: id::AdapterId,
     ) -> Result<Vec<wgt::CompositeAlphaMode>, instance::GetSurfaceSupportError> {
         profiling::scope!("Surface::get_supported_alpha_modes");
-        self.fetch_adapter_and_surface(
+        self.fetch_adapter_and_surface::<A, _, Vec<wgt::CompositeAlphaMode>>(
             surface_id,
             adapter_id,
-            |adapter: &Adapter<A>, surface: &Surface| surface.get_supported_alpha_modes(adapter),
+            |adapter, surface| surface.get_supported_alpha_modes(adapter),
         )
     }
 
