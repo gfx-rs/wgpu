@@ -80,6 +80,11 @@ pub enum ConfigureSurfaceError {
         requested: wgt::PresentMode,
         available: Vec<wgt::PresentMode>,
     },
+    #[error("requested alpha mode {requested:?} is not in the list of supported alpha modes: {available:?}")]
+    UnsupportedAlphaMode {
+        requested: wgt::CompositeAlphaMode,
+        available: Vec<wgt::CompositeAlphaMode>,
+    },
     #[error("requested usage is not supported")]
     UnsupportedUsage,
 }

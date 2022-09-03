@@ -7,7 +7,8 @@ use crate::{
         BufferInitTracker, BufferInitTrackerAction, MemoryInitKind, TextureInitRange,
         TextureInitTracker, TextureInitTrackerAction,
     },
-    instance, pipeline, present,
+    instance::{self, Adapter, Surface},
+    pipeline, present,
     resource::{self, BufferMapState},
     resource::{BufferAccessError, BufferMapAsyncStatus, BufferMapOperation},
     track::{BindGroupStates, TextureSelector, Tracker},
@@ -681,7 +682,7 @@ impl<A: HalApi> Device<A> {
     fn create_texture(
         &self,
         self_id: id::DeviceId,
-        adapter: &crate::instance::Adapter<A>,
+        adapter: &Adapter<A>,
         desc: &resource::TextureDescriptor,
     ) -> Result<resource::Texture<A>, resource::CreateTextureError> {
         use resource::{CreateTextureError, TextureDimensionError};
@@ -2443,7 +2444,7 @@ impl<A: HalApi> Device<A> {
     fn create_render_pipeline<G: GlobalIdentityHandlerFactory>(
         &self,
         self_id: id::DeviceId,
-        adapter: &crate::instance::Adapter<A>,
+        adapter: &Adapter<A>,
         desc: &pipeline::RenderPipelineDescriptor,
         implicit_context: Option<ImplicitPipelineContext>,
         hub: &Hub<A, G>,
@@ -2930,7 +2931,7 @@ impl<A: HalApi> Device<A> {
 
     fn describe_format_features(
         &self,
-        adapter: &crate::instance::Adapter<A>,
+        adapter: &Adapter<A>,
         format: TextureFormat,
     ) -> Result<wgt::TextureFormatFeatures, MissingFeatures> {
         let format_desc = format.describe();
@@ -3151,32 +3152,56 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .map_err(|_| instance::IsSurfaceSupportedError::InvalidSurface)?;
         Ok(adapter.is_surface_supported(surface))
     }
+
     pub fn surface_get_supported_formats<A: HalApi>(
         &self,
         surface_id: id::SurfaceId,
         adapter_id: id::AdapterId,
     ) -> Result<Vec<TextureFormat>, instance::GetSurfaceSupportError> {
         profiling::scope!("Surface::get_supported_formats");
-        let hub = A::hub(self);
-        let mut token = Token::root();
-
-        let (surface_guard, mut token) = self.surfaces.read(&mut token);
-        let (adapter_guard, mut _token) = hub.adapters.read(&mut token);
-        let adapter = adapter_guard
-            .get(adapter_id)
-            .map_err(|_| instance::GetSurfaceSupportError::InvalidAdapter)?;
-        let surface = surface_guard
-            .get(surface_id)
-            .map_err(|_| instance::GetSurfaceSupportError::InvalidSurface)?;
-
-        surface.get_supported_formats(adapter)
+        self.fetch_adapter_and_surface(
+            surface_id,
+            adapter_id,
+            |adapter: &Adapter<A>, surface: &Surface| surface.get_supported_formats(adapter),
+        )
     }
-    pub fn surface_get_supported_modes<A: HalApi>(
+
+    pub fn surface_get_supported_present_modes<A: HalApi>(
         &self,
         surface_id: id::SurfaceId,
         adapter_id: id::AdapterId,
     ) -> Result<Vec<wgt::PresentMode>, instance::GetSurfaceSupportError> {
-        profiling::scope!("Surface::get_supported_modes");
+        profiling::scope!("Surface::get_supported_present_modes");
+        self.fetch_adapter_and_surface(
+            surface_id,
+            adapter_id,
+            |adapter: &Adapter<A>, surface: &Surface| surface.get_supported_present_modes(adapter),
+        )
+    }
+
+    pub fn surface_get_supported_alpha_modes<A: HalApi>(
+        &self,
+        surface_id: id::SurfaceId,
+        adapter_id: id::AdapterId,
+    ) -> Result<Vec<wgt::CompositeAlphaMode>, instance::GetSurfaceSupportError> {
+        profiling::scope!("Surface::get_supported_alpha_modes");
+        self.fetch_adapter_and_surface(
+            surface_id,
+            adapter_id,
+            |adapter: &Adapter<A>, surface: &Surface| surface.get_supported_alpha_modes(adapter),
+        )
+    }
+
+    fn fetch_adapter_and_surface<
+        A: HalApi,
+        F: FnOnce(&Adapter<A>, &Surface) -> Result<B, instance::GetSurfaceSupportError>,
+        B,
+    >(
+        &self,
+        surface_id: id::SurfaceId,
+        adapter_id: id::AdapterId,
+        get_supported_callback: F,
+    ) -> Result<B, instance::GetSurfaceSupportError> {
         let hub = A::hub(self);
         let mut token = Token::root();
 
@@ -3189,7 +3214,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .get(surface_id)
             .map_err(|_| instance::GetSurfaceSupportError::InvalidSurface)?;
 
-        surface.get_supported_modes(adapter)
+        get_supported_callback(adapter, surface)
     }
 
     pub fn device_features<A: HalApi>(
@@ -5068,6 +5093,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 return Err(E::UnsupportedFormat {
                     requested: config.format,
                     available: caps.formats.clone(),
+                });
+            }
+            if !caps
+                .composite_alpha_modes
+                .contains(&config.composite_alpha_mode)
+            {
+                return Err(E::UnsupportedAlphaMode {
+                    requested: config.composite_alpha_mode,
+                    available: caps.composite_alpha_modes.clone(),
                 });
             }
             if !caps.usage.contains(config.usage) {

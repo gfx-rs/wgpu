@@ -230,11 +230,16 @@ trait Context: Debug + Send + Sized + Sync {
         surface: &Self::SurfaceId,
         adapter: &Self::AdapterId,
     ) -> Vec<TextureFormat>;
-    fn surface_get_supported_modes(
+    fn surface_get_supported_present_modes(
         &self,
         surface: &Self::SurfaceId,
         adapter: &Self::AdapterId,
     ) -> Vec<PresentMode>;
+    fn surface_get_supported_alpha_modes(
+        &self,
+        surface: &Self::SurfaceId,
+        adapter: &Self::AdapterId,
+    ) -> Vec<CompositeAlphaMode>;
     fn surface_configure(
         &self,
         surface: &Self::SurfaceId,
@@ -3608,8 +3613,15 @@ impl Surface {
     /// Returns a vec of supported presentation modes to use for the [`Surface`] with this adapter.
     ///
     /// Returns an empty vector if the surface is incompatible with the adapter.
-    pub fn get_supported_modes(&self, adapter: &Adapter) -> Vec<PresentMode> {
-        Context::surface_get_supported_modes(&*self.context, &self.id, &adapter.id)
+    pub fn get_supported_present_modes(&self, adapter: &Adapter) -> Vec<PresentMode> {
+        Context::surface_get_supported_present_modes(&*self.context, &self.id, &adapter.id)
+    }
+
+    /// Returns a vec of supported alpha modes to use for the [`Surface`] with this adapter.
+    ///
+    /// Will return at least one element, CompositeAlphaMode::Opaque or CompositeAlphaMode::Inherit.
+    pub fn get_supported_alpha_modes(&self, adapter: &Adapter) -> Vec<CompositeAlphaMode> {
+        Context::surface_get_supported_alpha_modes(&*self.context, &self.id, &adapter.id)
     }
 
     /// Initializes [`Surface`] for presentation.

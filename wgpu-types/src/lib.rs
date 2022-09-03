@@ -3049,6 +3049,17 @@ pub enum CompositeAlphaMode {
     /// expected to already be multiplied by the alpha channel by the
     /// application.
     PreMultiplied = 1,
+    /// The alpha channel, if it exists, of the textures is respected in the
+    /// compositing process. The non-alpha channels of the textures are not
+    /// expected to already be multiplied by the alpha channel by the
+    /// application; instead, the compositor will multiply the non-alpha
+    /// channels of the texture by the alpha channel during compositing.
+    PostMultiplied = 2,
+    /// The alpha channel, if it exists, of the textures is unknown for processing
+    /// during compositing. Instead, the application is responsible for setting
+    /// the composite alpha blending mode using native WSI command. If not set,
+    /// then a platform-specific default will be used.
+    Inherit = 3,
 }
 
 bitflags::bitflags! {

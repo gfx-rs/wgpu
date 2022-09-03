@@ -450,6 +450,8 @@ pub fn map_composite_alpha_mode(mode: wgt::CompositeAlphaMode) -> vk::CompositeA
     match mode {
         wgt::CompositeAlphaMode::Opaque => vk::CompositeAlphaFlagsKHR::OPAQUE,
         wgt::CompositeAlphaMode::PreMultiplied => vk::CompositeAlphaFlagsKHR::PRE_MULTIPLIED,
+        wgt::CompositeAlphaMode::PostMultiplied => vk::CompositeAlphaFlagsKHR::POST_MULTIPLIED,
+        wgt::CompositeAlphaMode::Inherit => vk::CompositeAlphaFlagsKHR::INHERIT,
     }
 }
 
@@ -460,6 +462,12 @@ pub fn map_vk_composite_alpha(flags: vk::CompositeAlphaFlagsKHR) -> Vec<wgt::Com
     }
     if flags.contains(vk::CompositeAlphaFlagsKHR::PRE_MULTIPLIED) {
         modes.push(wgt::CompositeAlphaMode::PreMultiplied);
+    }
+    if flags.contains(vk::CompositeAlphaFlagsKHR::POST_MULTIPLIED) {
+        modes.push(wgt::CompositeAlphaMode::PostMultiplied);
+    }
+    if flags.contains(vk::CompositeAlphaFlagsKHR::INHERIT) {
+        modes.push(wgt::CompositeAlphaMode::Inherit);
     }
     modes
 }

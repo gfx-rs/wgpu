@@ -190,7 +190,8 @@ impl crate::Surface<super::Api> for super::Surface {
 
         match config.composite_alpha_mode {
             wgt::CompositeAlphaMode::Opaque => render_layer.set_opaque(true),
-            wgt::CompositeAlphaMode::PreMultiplied => render_layer.set_opaque(false),
+            wgt::CompositeAlphaMode::PostMultiplied => render_layer.set_opaque(false),
+            _ => (),
         }
 
         let device_raw = device.shared.device.lock();

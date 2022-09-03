@@ -58,19 +58,19 @@ the same every time it is rendered, we now warn if it is missing.
 
 #### Alpha Mode
 
-Surface supports `alpha_mode` now. When alpha_mode is set to `PreMultiplied`, the value of the actual `LoadOp::Clear` color's alpha channel is supported.
+Surface supports `alpha_mode` now. When alpha_mode is equal to `PreMultiplied` or `PostMultiplied`, the alpha channel of framebuffer is respected in the compositing process.
 
 ```diff
 SurfaceConfiguration {
 // ...
-+ alpha_mode: wgpu::CompositeAlphaMode::PreMultiplied,
++ alpha_mode: surface.get_supported_alpha_modes(&adapter)[0],
 }
 ```
 
 ### Added/New Features
 
 - Add `Buffer::size()` and `Buffer::usage()`; by @kpreid in [#2923](https://github.com/gfx-rs/wgpu/pull/2923)
-- Expose alpha_mode, support `PreMultiplied` mode on metal and vk backends by @jinleili in [#2836](https://github.com/gfx-rs/wgpu/pull/2836)
+- Expose `alpha_mode` on SurfaceConfiguration, by @jinleili in [#2836](https://github.com/gfx-rs/wgpu/pull/2836)
 
 ### Bug Fixes
 
