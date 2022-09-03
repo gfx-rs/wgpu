@@ -47,11 +47,11 @@ impl Context {
         ))
     }
 
-    pub unsafe fn instance_as_hal<A: wgc::hub::HalApi, F: FnOnce(Option<&A::Instance>) -> R, R>(
-        &self,
-        hal_instance_callback: F,
-    ) -> R {
-        self.0.instance_as_hal::<A, F, R>(hal_instance_callback)
+    /// # Safety
+    ///
+    /// - The raw instance handle returned must not be manually destroyed.
+    pub unsafe fn instance_as_hal<A: wgc::hub::HalApi>(&self) -> Option<&A::Instance> {
+        self.0.instance_as_hal::<A>()
     }
 
     pub unsafe fn from_core_instance(core_instance: wgc::instance::Instance) -> Self {

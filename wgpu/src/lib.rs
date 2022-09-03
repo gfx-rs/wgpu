@@ -1671,19 +1671,19 @@ impl Instance {
         }
     }
 
-    /// Returns the inner hal Instance using a callback. The hal instance will be `None` if the
-    /// backend type argument does not match with this wgpu Instance
+    /// Return a reference to a specific backend instance, if available.
+    ///
+    /// If this `Instance` has a wgpu-hal [`Instance`] for backend
+    /// `A`, return a reference to it. Otherwise, return `None`.
     ///
     /// # Safety
     ///
-    /// - The raw handle obtained from the hal Instance must not be manually destroyed
+    /// - The raw instance handle returned must not be manually destroyed.
+    ///
+    /// [`Instance`]: hal::Api::Instance
     #[cfg(any(not(target_arch = "wasm32"), feature = "webgl"))]
-    pub unsafe fn as_hal<A: wgc::hub::HalApi, F: FnOnce(Option<&A::Instance>) -> R, R>(
-        &self,
-        hal_instance_callback: F,
-    ) -> R {
-        self.context
-            .instance_as_hal::<A, F, R>(hal_instance_callback)
+    pub unsafe fn as_hal<A: wgc::hub::HalApi>(&self) -> Option<&A::Instance> {
+        self.context.instance_as_hal::<A>()
     }
 
     /// Create an new instance of wgpu from a wgpu-core instance.
