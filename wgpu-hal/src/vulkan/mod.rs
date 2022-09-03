@@ -145,7 +145,7 @@ enum ExtensionFn<T> {
 }
 
 struct DeviceExtensionFunctions {
-    draw_indirect_count: Option<ExtensionFn<khr::DrawIndirectCount>>,
+    draw_indirect_count: Option<khr::DrawIndirectCount>,
     timeline_semaphore: Option<ExtensionFn<khr::TimelineSemaphore>>,
 }
 
@@ -271,24 +271,7 @@ impl UpdateAfterBindTypes {
 
     fn from_features(features: &adapter::PhysicalDeviceFeatures) -> Self {
         let mut uab_types = UpdateAfterBindTypes::empty();
-        if let Some(vk_12) = features.vulkan_1_2 {
-            uab_types.set(
-                UpdateAfterBindTypes::UNIFORM_BUFFER,
-                vk_12.descriptor_binding_uniform_buffer_update_after_bind != 0,
-            );
-            uab_types.set(
-                UpdateAfterBindTypes::STORAGE_BUFFER,
-                vk_12.descriptor_binding_storage_buffer_update_after_bind != 0,
-            );
-            uab_types.set(
-                UpdateAfterBindTypes::SAMPLED_TEXTURE,
-                vk_12.descriptor_binding_sampled_image_update_after_bind != 0,
-            );
-            uab_types.set(
-                UpdateAfterBindTypes::STORAGE_TEXTURE,
-                vk_12.descriptor_binding_storage_image_update_after_bind != 0,
-            );
-        } else if let Some(di) = features.descriptor_indexing {
+        if let Some(di) = features.descriptor_indexing {
             uab_types.set(
                 UpdateAfterBindTypes::UNIFORM_BUFFER,
                 di.descriptor_binding_uniform_buffer_update_after_bind != 0,
@@ -313,6 +296,8 @@ impl UpdateAfterBindTypes {
 struct DeviceShared {
     raw: ash::Device,
     family_index: u32,
+    queue_index: u32,
+    raw_queue: ash::vk::Queue,
     handle_is_owned: bool,
     instance: Arc<InstanceShared>,
     physical_device: ash::vk::PhysicalDevice,

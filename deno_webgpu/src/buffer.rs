@@ -57,7 +57,7 @@ pub fn op_webgpu_create_buffer(
     gfx_put!(device => instance.device_create_buffer(
     device,
     &descriptor,
-    std::marker::PhantomData
+    ()
   ) => state, WebGpuBuffer)
 }
 

@@ -5,7 +5,7 @@ use std::num::NonZeroU32;
 
 #[test]
 fn bad_copy_origin() {
-    fn try_origin(origin: wgpu::Origin3d, should_panic: bool) {
+    fn try_origin(origin: wgpu::Origin3d, size: wgpu::Extent3d, should_panic: bool) {
         let mut parameters = TestParameters::default();
         if should_panic {
             parameters = parameters.failure();
@@ -23,15 +23,68 @@ fn bad_copy_origin() {
                 },
                 &data,
                 BUFFER_COPY_LAYOUT,
-                TEXTURE_SIZE,
+                size,
             );
         });
     }
 
-    try_origin(wgpu::Origin3d { x: 0, y: 0, z: 0 }, false);
-    try_origin(wgpu::Origin3d { x: 1, y: 0, z: 0 }, true);
-    try_origin(wgpu::Origin3d { x: 0, y: 1, z: 0 }, true);
-    try_origin(wgpu::Origin3d { x: 0, y: 0, z: 1 }, true);
+    try_origin(wgpu::Origin3d { x: 0, y: 0, z: 0 }, TEXTURE_SIZE, false);
+    try_origin(wgpu::Origin3d { x: 1, y: 0, z: 0 }, TEXTURE_SIZE, true);
+    try_origin(wgpu::Origin3d { x: 0, y: 1, z: 0 }, TEXTURE_SIZE, true);
+    try_origin(wgpu::Origin3d { x: 0, y: 0, z: 1 }, TEXTURE_SIZE, true);
+
+    try_origin(
+        wgpu::Origin3d {
+            x: TEXTURE_SIZE.width - 1,
+            y: TEXTURE_SIZE.height - 1,
+            z: TEXTURE_SIZE.depth_or_array_layers - 1,
+        },
+        wgpu::Extent3d {
+            width: 1,
+            height: 1,
+            depth_or_array_layers: 1,
+        },
+        false,
+    );
+    try_origin(
+        wgpu::Origin3d {
+            x: u32::MAX,
+            y: 0,
+            z: 0,
+        },
+        wgpu::Extent3d {
+            width: 1,
+            height: 1,
+            depth_or_array_layers: 1,
+        },
+        true,
+    );
+    try_origin(
+        wgpu::Origin3d {
+            x: u32::MAX,
+            y: 0,
+            z: 0,
+        },
+        wgpu::Extent3d {
+            width: 1,
+            height: 1,
+            depth_or_array_layers: 1,
+        },
+        true,
+    );
+    try_origin(
+        wgpu::Origin3d {
+            x: u32::MAX,
+            y: 0,
+            z: 0,
+        },
+        wgpu::Extent3d {
+            width: 1,
+            height: 1,
+            depth_or_array_layers: 1,
+        },
+        true,
+    );
 }
 
 const TEXTURE_SIZE: wgpu::Extent3d = wgpu::Extent3d {

@@ -1006,12 +1006,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "inplace_it"
-version = "0.3.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "90953f308a79fe6d62a4643e51f848fbfddcd05975a38e69fdf4ab86a7baf7ca"
-
-[[package]]
 name = "instant"
 version = "0.1.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1194,8 +1188,7 @@ dependencies = [
 [[package]]
 name = "naga"
 version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5f50357e1167a3ab92d6b3c7f4bf5f7fd13fde3f4b28bf0d5ea07b5100fdb6c0"
+source = "git+https://github.com/gfx-rs/naga?rev=b209d911#b209d911681c4ef563f7d9048623667743e6248f"
 dependencies = [
  "bit-set",
  "bitflags",
@@ -2425,7 +2418,6 @@ dependencies = [
  "glutin",
  "gpu-alloc",
  "gpu-descriptor",
- "inplace_it",
  "js-sys",
  "khronos-egl",
  "libloading",
@@ -2438,6 +2430,7 @@ dependencies = [
  "range-alloc",
  "raw-window-handle 0.5.0",
  "renderdoc-sys",
+ "smallvec",
  "thiserror",
  "wasm-bindgen",
  "web-sys",
