@@ -90,6 +90,7 @@ the same every time it is rendered, we now warn if it is missing.
 - Update Winit to version 0.27 and raw-window-handle to 0.5 by @wyatt-herkamp in  [#2918](https://github.com/gfx-rs/wgpu/pull/2918)
 - Address Clippy 0.1.63 complaints. By @jimblandy in [#2977](https://github.com/gfx-rs/wgpu/pull/2977)
 - Don't use `PhantomData` for `IdentityManager`'s `Input` type. By @jimblandy in [#2972](https://github.com/gfx-rs/wgpu/pull/2972)
+
 #### Metal
 - Extract the generic code into `get_metal_layer` by @jinleili in [#2826](https://github.com/gfx-rs/wgpu/pull/2826)
 
@@ -110,6 +111,7 @@ the same every time it is rendered, we now warn if it is missing.
   `Instance::create_surface_from_offscreen_canvas` regarding their
   safety contract. These functions are not unsafe. By @jimblandy [#2990](https://github.com/gfx-rs/wgpu/pull/2990)
 - Document that `write_buffer_with()` is sound but unwise to read from by @kpreid in [#3006](https://github.com/gfx-rs/wgpu/pull/3006)
+- Explain why `Adapter::as_hal` and `Device::as_hal` have to take callback functions. By @jimblandy in [#2992](https://github.com/gfx-rs/wgpu/pull/2992)
 
 ### Build Configuration
 
