@@ -28,6 +28,7 @@ impl crate::Api for Api {
     type Sampler = Resource;
     type QuerySet = Resource;
     type Fence = Resource;
+    type AccelerationStructure = Resource;
 
     type BindGroupLayout = Resource;
     type BindGroup = Resource;
@@ -116,6 +117,9 @@ impl crate::Queue<Api> for Context {
 impl crate::Device<Api> for Context {
     unsafe fn exit(self, queue: Context) {}
     unsafe fn create_buffer(&self, desc: &crate::BufferDescriptor) -> DeviceResult<Resource> {
+        Ok(Resource)
+    }
+    unsafe fn create_acceleration_structure(&self, desc: &crate::AccelerationStructureDescriptor) -> DeviceResult<Resource> {
         Ok(Resource)
     }
     unsafe fn destroy_buffer(&self, buffer: Resource) {}

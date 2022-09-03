@@ -345,6 +345,14 @@ impl<A: hal::Api> Example<A> {
         };
         let sampler = unsafe { device.create_sampler(&sampler_desc).unwrap() };
 
+        let accel = unsafe {
+            device.create_acceleration_structure(&hal::AccelerationStructureDescriptor {
+                label: Some("my as"),
+                size: 1024,
+                format: hal::AccelerationStructureFormat::BottomLevel,
+            })
+        };
+
         let globals = Globals {
             // cgmath::ortho() projection
             mvp: [

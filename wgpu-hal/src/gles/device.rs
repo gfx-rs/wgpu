@@ -455,6 +455,12 @@ impl crate::Device<super::Api> for super::Device {
             data,
         })
     }
+    unsafe fn create_acceleration_structure(
+        &self,
+        _desc: &crate::AccelerationStructureDescriptor,
+    ) -> Result<(), crate::DeviceError> {
+        unimplemented!()
+    }
     unsafe fn destroy_buffer(&self, buffer: super::Buffer) {
         if let Some(raw) = buffer.raw {
             let gl = &self.shared.context.lock();

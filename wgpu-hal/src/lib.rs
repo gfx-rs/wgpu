@@ -172,6 +172,8 @@ pub trait Api: Clone + Sized {
     type ShaderModule: fmt::Debug + Send + Sync;
     type RenderPipeline: Send + Sync;
     type ComputePipeline: Send + Sync;
+
+    type AccelerationStructure: fmt::Debug + Send + Sync + 'static;
 }
 
 pub trait Instance<A: Api>: Sized + Send + Sync {
@@ -236,6 +238,9 @@ pub trait Device<A: Api>: Send + Sync {
     ///
     /// The initial usage is `BufferUses::empty()`.
     unsafe fn create_buffer(&self, desc: &BufferDescriptor) -> Result<A::Buffer, DeviceError>;
+
+    unsafe fn create_acceleration_structure(&self, desc: &AccelerationStructureDescriptor) -> Result<A::AccelerationStructure, DeviceError>;
+
     unsafe fn destroy_buffer(&self, buffer: A::Buffer);
     //TODO: clarify if zero-sized mapping is allowed
     unsafe fn map_buffer(
@@ -808,6 +813,19 @@ pub struct BufferDescriptor<'a> {
     pub size: wgt::BufferAddress,
     pub usage: BufferUses,
     pub memory_flags: MemoryFlags,
+}
+
+#[derive(Clone, Debug)]
+pub struct AccelerationStructureDescriptor<'a> {
+    pub label: Label<'a>,
+    pub size: wgt::BufferAddress,
+    pub format: AccelerationStructureFormat,
+}
+
+#[derive(Clone, Debug)]
+pub enum AccelerationStructureFormat {
+    TopLevel,
+    BottomLevel,
 }
 
 #[derive(Clone, Debug)]

@@ -808,6 +808,77 @@ impl crate::Device<super::Api> for super::Device {
             block: Mutex::new(block),
         })
     }
+
+    unsafe fn create_acceleration_structure(&self, desc: &crate::AccelerationStructureDescriptor) -> Result<super::AccelerationStructure, crate::DeviceError> {
+        let functor = match self.shared.extension_fns.acceleration_structure {
+            Some(ref functor) => {
+                functor
+            }
+            None => panic!("Feature `RAY_TRACING` not enabled"),
+        };
+
+        let vk_buffer_info = vk::BufferCreateInfo::builder()
+            .size(desc.size)
+            .usage(
+                vk::BufferUsageFlags::ACCELERATION_STRUCTURE_STORAGE_KHR
+                | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS
+            )
+            .sharing_mode(vk::SharingMode::EXCLUSIVE);
+
+        let raw_buffer = self.shared.raw.create_buffer(&vk_buffer_info, None)?;
+        let req = self.shared.raw.get_buffer_memory_requirements(raw_buffer);
+        
+        dbg!(&req);
+
+        let block = self.mem_allocator.lock().alloc(
+            &*self.shared,
+            gpu_alloc::Request {
+                size: req.size,
+                align_mask: req.alignment - 1,
+                usage: gpu_alloc::UsageFlags::FAST_DEVICE_ACCESS,
+                memory_types: req.memory_type_bits & self.valid_ash_memory_types,
+            },
+        )?;
+
+        self.shared
+            .raw
+            .bind_buffer_memory(raw_buffer, *block.memory(), block.offset())?;
+
+        if let Some(label) = desc.label {
+            self.shared
+                .set_object_name(vk::ObjectType::BUFFER, raw_buffer, label);
+        }
+
+        let ty = match desc.format {
+            crate::AccelerationStructureFormat::TopLevel => vk::AccelerationStructureTypeKHR::TOP_LEVEL,
+            crate::AccelerationStructureFormat::BottomLevel => vk::AccelerationStructureTypeKHR::BOTTOM_LEVEL,
+        };
+
+        let vk_info = vk::AccelerationStructureCreateInfoKHR::builder()
+        .buffer(raw_buffer)
+        .offset(256)
+        .size(desc.size / 2)
+        .ty(ty).build();
+
+        dbg!(&vk_info);
+
+        let raw_acceleration_structure = functor.create_acceleration_structure(
+            &vk_info,
+            None,
+        )?;
+
+        if let Some(label) = desc.label {
+            self.shared
+                .set_object_name(vk::ObjectType::ACCELERATION_STRUCTURE_KHR, raw_acceleration_structure, label);
+        }
+
+        Ok(super::AccelerationStructure {
+            raw: raw_acceleration_structure,
+            buffer: raw_buffer,
+            block: Mutex::new(block),
+        })
+    }
+
     unsafe fn destroy_buffer(&self, buffer: super::Buffer) {
         self.shared.raw.destroy_buffer(buffer.raw, None);
         self.mem_allocator

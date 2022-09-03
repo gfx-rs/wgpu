@@ -27,6 +27,7 @@ pub struct PhysicalDeviceFeatures {
         vk::PhysicalDeviceShaderFloat16Int8Features,
         vk::PhysicalDevice16BitStorageFeatures,
     )>,
+    acceleration_structure: Option<vk::PhysicalDeviceAccelerationStructureFeaturesKHR>,
 }
 
 // This is safe because the structs have `p_next: *mut c_void`, which we null out/never read.
@@ -64,6 +65,9 @@ impl PhysicalDeviceFeatures {
         if let Some((ref mut f16_i8_feature, ref mut _16bit_feature)) = self.shader_float16 {
             info = info.push_next(f16_i8_feature);
             info = info.push_next(_16bit_feature);
+        }
+        if let Some(ref mut feature) = self.acceleration_structure {
+            info = info.push_next(feature);
         }
         info
     }
@@ -295,6 +299,12 @@ impl PhysicalDeviceFeatures {
             } else {
                 None
             },
+            acceleration_structure: if true {
+                Some(vk::PhysicalDeviceAccelerationStructureFeaturesKHR::builder()
+                .acceleration_structure(true).build())
+            } else {
+                None
+            }
         }
     }
 
@@ -577,6 +587,11 @@ impl PhysicalDeviceCapabilities {
         // large amounts of spaghetti involved with using PhysicalDeviceVulkan12Features.
         if requested_features.contains(wgt::Features::MULTI_DRAW_INDIRECT_COUNT) {
             extensions.push(vk::KhrDrawIndirectCountFn::name());
+        }
+
+        if true {
+            extensions.push(vk::KhrDeferredHostOperationsFn::name());
+            extensions.push(vk::KhrAccelerationStructureFn::name());
         }
 
         if requested_features.contains(wgt::Features::CONSERVATIVE_RASTERIZATION) {
@@ -1098,6 +1113,11 @@ impl super::Adapter {
         } else {
             None
         };
+        let acceleration_structure_fn = if enabled_extensions.contains(&khr::AccelerationStructure::name()) {
+            Some(khr::AccelerationStructure::new(&self.instance.raw, &raw_device))
+        } else {
+            None
+        };
 
         let naga_options = {
             use naga::back::spv;
@@ -1190,6 +1210,7 @@ impl super::Adapter {
             extension_fns: super::DeviceExtensionFunctions {
                 draw_indirect_count: indirect_count_fn,
                 timeline_semaphore: timeline_semaphore_fn,
+                acceleration_structure: acceleration_structure_fn,
             },
             vendor_id: self.phd_capabilities.properties.vendor_id,
             timestamp_period: self.phd_capabilities.properties.limits.timestamp_period,
