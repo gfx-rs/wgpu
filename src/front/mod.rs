@@ -254,7 +254,7 @@ where
     /// the current scope to the root scope, returning `Some` when a variable is
     /// found or `None` if there doesn't exist a variable with `name` in any
     /// scope.
-    pub fn lookup<Q: ?Sized>(&mut self, name: &Q) -> Option<&Var>
+    pub fn lookup<Q: ?Sized>(&self, name: &Q) -> Option<&Var>
     where
         Name: std::borrow::Borrow<Q>,
         Q: std::hash::Hash + Eq,
@@ -277,6 +277,19 @@ where
     pub fn add(&mut self, name: Name, var: Var) -> Option<Var> {
         self.scopes[self.cursor - 1].insert(name, var)
     }
+
+    /// Adds a new variable to the root scope.
+    ///
+    /// This is used in GLSL for builtins which aren't known in advance and only
+    /// when used for the first time, so there must be a way to add those
+    /// declarations to the root unconditionally from the current scope.
+    ///
+    /// Returns the previous variable with the same name in the root scope if it
+    /// exists, so that the frontend might handle it in case variable shadowing
+    /// is disallowed.
+    pub fn add_root(&mut self, name: Name, var: Var) -> Option<Var> {
+        self.scopes[0].insert(name, var)
+    }
 }
 
 impl<Name, Var> Default for SymbolTable<Name, Var> {
@@ -286,5 +299,16 @@ impl<Name, Var> Default for SymbolTable<Name, Var> {
             scopes: vec![FastHashMap::default()],
             cursor: 1,
         }
+    }
+}
+
+use std::fmt;
+
+impl<Name: fmt::Debug, Var: fmt::Debug> fmt::Debug for SymbolTable<Name, Var> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("SymbolTable ")?;
+        f.debug_list()
+            .entries(self.scopes[..self.cursor].iter())
+            .finish()
     }
 }
