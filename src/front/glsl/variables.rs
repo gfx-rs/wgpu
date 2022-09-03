@@ -82,18 +82,18 @@ impl Parser {
         ));
 
         let expr = ctx.add_expression(Expression::GlobalVariable(handle), meta, body);
-        ctx.lookup_global_var_exps.insert(
-            name.into(),
-            VariableReference {
-                expr,
-                load: true,
-                mutable: data.mutable,
-                constant: None,
-                entry_arg: Some(idx),
-            },
-        );
 
-        ctx.lookup_global_var(name)
+        let var = VariableReference {
+            expr,
+            load: true,
+            mutable: data.mutable,
+            constant: None,
+            entry_arg: Some(idx),
+        };
+
+        ctx.symbol_table.add_root(name.into(), var.clone());
+
+        Some(var)
     }
 
     pub(crate) fn lookup_variable(
@@ -103,11 +103,8 @@ impl Parser {
         name: &str,
         meta: Span,
     ) -> Option<VariableReference> {
-        if let Some(local_var) = ctx.lookup_local_var(name) {
-            return Some(local_var);
-        }
-        if let Some(global_var) = ctx.lookup_global_var(name) {
-            return Some(global_var);
+        if let Some(var) = ctx.symbol_table.lookup(name).cloned() {
+            return Some(var);
         }
 
         let data = match name {
@@ -616,16 +613,6 @@ impl Parser {
         body: &mut Block,
         decl: VarDeclaration,
     ) -> Result<Handle<Expression>> {
-        #[cfg(feature = "glsl-validate")]
-        if let Some(ref name) = decl.name {
-            if ctx.lookup_local_var_current_scope(name).is_some() {
-                self.errors.push(Error {
-                    kind: ErrorKind::VariableAlreadyDeclared(name.clone()),
-                    meta: decl.meta,
-                })
-            }
-        }
-
         let storage = decl.qualifiers.storage;
         let mutable = match storage.0 {
             StorageQualifier::AddressSpace(AddressSpace::Function) => true,
@@ -650,7 +637,16 @@ impl Parser {
         let expr = ctx.add_expression(Expression::LocalVariable(handle), decl.meta, body);
 
         if let Some(name) = decl.name {
-            ctx.add_local_var(name, expr, mutable);
+            #[allow(unused_variables)]
+            let maybe_var = ctx.add_local_var(name.clone(), expr, mutable);
+
+            #[cfg(feature = "glsl-validate")]
+            if maybe_var.is_some() {
+                self.errors.push(Error {
+                    kind: ErrorKind::VariableAlreadyDeclared(name),
+                    meta: decl.meta,
+                })
+            }
         }
 
         decl.qualifiers.unused_errors(&mut self.errors);
