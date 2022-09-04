@@ -44,8 +44,6 @@ static TEXTURE_FORMATS_DEPTH: &[wgpu::TextureFormat] = &[
     //wgpu::TextureFormat::Stencil8,
     wgpu::TextureFormat::Depth16Unorm,
     wgpu::TextureFormat::Depth24Plus,
-    wgpu::TextureFormat::Depth24PlusStencil8,
-    wgpu::TextureFormat::Depth32FloatStencil8,
 ];
 
 // needs TEXTURE_COMPRESSION_BC
