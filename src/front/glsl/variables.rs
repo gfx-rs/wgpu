@@ -637,10 +637,8 @@ impl Parser {
         let expr = ctx.add_expression(Expression::LocalVariable(handle), decl.meta, body);
 
         if let Some(name) = decl.name {
-            #[allow(unused_variables)]
             let maybe_var = ctx.add_local_var(name.clone(), expr, mutable);
 
-            #[cfg(feature = "glsl-validate")]
             if maybe_var.is_some() {
                 self.errors.push(Error {
                     kind: ErrorKind::VariableAlreadyDeclared(name),

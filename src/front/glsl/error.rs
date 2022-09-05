@@ -101,7 +101,6 @@ pub enum ErrorKind {
     #[error("unsupported matrix of the form matCx2 in std140 block layout")]
     UnsupportedMatrixTypeInStd140,
     /// A variable with the same name already exists in the current scope.
-    #[cfg(feature = "glsl-validate")]
     #[error("Variable already declared: {0}")]
     VariableAlreadyDeclared(String),
     /// A semantic error was detected in the shader.
