@@ -5099,10 +5099,35 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .composite_alpha_modes
                 .contains(&config.composite_alpha_mode)
             {
-                return Err(E::UnsupportedAlphaMode {
-                    requested: config.composite_alpha_mode,
-                    available: caps.composite_alpha_modes.clone(),
-                });
+                let new_alpha_mode = 'b: loop {
+                    // Automatic alpha mode checks.
+                    let fallbacks = match config.composite_alpha_mode {
+                        wgt::CompositeAlphaMode::Auto => &[
+                            wgt::CompositeAlphaMode::Opaque,
+                            wgt::CompositeAlphaMode::Inherit,
+                        ][..],
+                        _ => {
+                            return Err(E::UnsupportedAlphaMode {
+                                requested: config.composite_alpha_mode,
+                                available: caps.composite_alpha_modes.clone(),
+                            });
+                        }
+                    };
+
+                    for &fallback in fallbacks {
+                        if caps.composite_alpha_modes.contains(&fallback) {
+                            break 'b fallback;
+                        }
+                    }
+
+                    unreachable!("Fallback system failed to choose alpha mode. This is a bug. AlphaMode: {:?}, Options: {:?}", config.composite_alpha_mode, &caps.composite_alpha_modes);
+                };
+
+                log::info!(
+                    "Automatically choosing alpha mode by rule {:?}. Chose {new_alpha_mode:?}",
+                    config.composite_alpha_mode
+                );
+                config.composite_alpha_mode = new_alpha_mode;
             }
             if !caps.usage.contains(config.usage) {
                 return Err(E::UnsupportedUsage);

@@ -452,6 +452,7 @@ pub fn map_composite_alpha_mode(mode: wgt::CompositeAlphaMode) -> vk::CompositeA
         wgt::CompositeAlphaMode::PreMultiplied => vk::CompositeAlphaFlagsKHR::PRE_MULTIPLIED,
         wgt::CompositeAlphaMode::PostMultiplied => vk::CompositeAlphaFlagsKHR::POST_MULTIPLIED,
         wgt::CompositeAlphaMode::Inherit => vk::CompositeAlphaFlagsKHR::INHERIT,
+        wgt::CompositeAlphaMode::Auto => unreachable!(),
     }
 }
 

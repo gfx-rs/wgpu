@@ -1238,8 +1238,11 @@ impl crate::Context for Context {
         if let wgt::PresentMode::Mailbox | wgt::PresentMode::Immediate = config.present_mode {
             panic!("Only FIFO/Auto* is supported on web");
         }
-        if config.alpha_mode != wgt::CompositeAlphaMode::Opaque {
-            panic!("Only Opaque alpha mode is supported on web");
+        if let wgt::CompositeAlphaMode::PreMultiplied
+        | wgt::CompositeAlphaMode::PostMultiplied
+        | wgt::CompositeAlphaMode::Inherit = config.alpha_mode
+        {
+            panic!("Only Opaque/Auto alpha mode is supported on web");
         }
         let mut mapped =
             web_sys::GpuCanvasConfiguration::new(&device.0, map_texture_format(config.format));

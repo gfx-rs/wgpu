@@ -58,7 +58,9 @@ the same every time it is rendered, we now warn if it is missing.
 
 #### Alpha Mode
 
-Surface supports `alpha_mode` now. When alpha_mode is equal to `PreMultiplied` or `PostMultiplied`, the alpha channel of framebuffer is respected in the compositing process.
+Surface supports `alpha_mode` now. When alpha_mode is equal to `PreMultiplied` or `PostMultiplied`, 
+the alpha channel of framebuffer is respected in the compositing process, but which mode is available depends on 
+the different API and `Device`. If don't care about alpha_mode, you can set it to `Auto`.
 
 ```diff
 SurfaceConfiguration {

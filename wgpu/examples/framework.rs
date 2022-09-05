@@ -545,7 +545,7 @@ pub fn test<E: Example>(mut params: FrameworkRefTest) {
                     width: params.width,
                     height: params.height,
                     present_mode: wgpu::PresentMode::Fifo,
-                    alpha_mode: wgpu::CompositeAlphaMode::Opaque,
+                    alpha_mode: wgpu::CompositeAlphaMode::Auto,
                 },
                 &ctx.adapter,
                 &ctx.device,
