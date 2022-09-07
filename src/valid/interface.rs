@@ -472,7 +472,7 @@ impl super::Validator {
         }
 
         let info = self
-            .validate_function(&ep.function, module, mod_info)
+            .validate_function(&ep.function, module, mod_info, true)
             .map_err(WithSpan::into_other)?;
 
         #[cfg(feature = "validate")]

@@ -143,6 +143,10 @@ pub enum FunctionError {
         Handle<crate::Expression>,
         UniformityDisruptor,
     ),
+    #[error("Functions that are not entry points cannot have `@location` or `@builtin` attributes on their arguments: \"{name}\" has attributes")]
+    PipelineInputRegularFunction { name: String },
+    #[error("Functions that are not entry points cannot have `@location` or `@builtin` attributes on their return value types")]
+    PipelineOutputRegularFunction,
 }
 
 bitflags::bitflags! {
@@ -859,6 +863,7 @@ impl super::Validator {
         fun: &crate::Function,
         module: &crate::Module,
         mod_info: &ModuleInfo,
+        entry_point: bool,
     ) -> Result<FunctionInfo, WithSpan<FunctionError>> {
         #[cfg_attr(not(feature = "validate"), allow(unused_mut))]
         let mut info = mod_info.process_function(fun, module, self.flags, self.capabilities)?;
@@ -909,6 +914,13 @@ impl super::Validator {
                 }
                 .with_span_handle(argument.ty, &module.types));
             }
+
+            if !entry_point && argument.binding.is_some() {
+                return Err(FunctionError::PipelineInputRegularFunction {
+                    name: argument.name.clone().unwrap_or_default(),
+                }
+                .with_span_handle(argument.ty, &module.types));
+            }
         }
 
         #[cfg(feature = "validate")]
@@ -918,6 +930,11 @@ impl super::Validator {
                 .contains(super::TypeFlags::CONSTRUCTIBLE)
             {
                 return Err(FunctionError::NonConstructibleReturnType
+                    .with_span_handle(result.ty, &module.types));
+            }
+
+            if !entry_point && result.binding.is_some() {
+                return Err(FunctionError::PipelineOutputRegularFunction
                     .with_span_handle(result.ty, &module.types));
             }
         }

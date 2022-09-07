@@ -373,7 +373,7 @@ impl Validator {
         };
 
         for (handle, fun) in module.functions.iter() {
-            match self.validate_function(fun, module, &mod_info) {
+            match self.validate_function(fun, module, &mod_info, false) {
                 Ok(info) => mod_info.functions.push(info),
                 Err(error) => {
                     return Err(error.and_then(|error| {
