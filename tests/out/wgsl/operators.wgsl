@@ -20,9 +20,23 @@ fn builtins() -> vec4<f32> {
 }
 
 fn splat() -> vec4<f32> {
-    let a_1 = (((vec2<f32>(1.0) + vec2<f32>(2.0)) - vec2<f32>(3.0)) / vec2<f32>(4.0));
+    let a_2 = (((vec2<f32>(1.0) + vec2<f32>(2.0)) - vec2<f32>(3.0)) / vec2<f32>(4.0));
     let b = (vec4<i32>(5) % vec4<i32>(2));
-    return (a_1.xyxy + vec4<f32>(b));
+    return (a_2.xyxy + vec4<f32>(b));
+}
+
+fn splat_assignment() -> vec2<f32> {
+    var a: vec2<f32>;
+
+    a = vec2<f32>(2.0);
+    let _e7 = a;
+    a = (_e7 + vec2<f32>(1.0));
+    let _e11 = a;
+    a = (_e11 - vec2<f32>(3.0));
+    let _e15 = a;
+    a = (_e15 / vec2<f32>(4.0));
+    let _e19 = a;
+    return _e19;
 }
 
 fn bool_cast(x: vec3<f32>) -> vec3<f32> {
@@ -201,35 +215,35 @@ fn comparison() {
 }
 
 fn assignment() {
-    var a: i32 = 1;
+    var a_1: i32 = 1;
     var vec0_: vec3<i32> = vec3<i32>(0, 0, 0);
 
-    let _e6 = a;
-    a = (_e6 + 1);
-    let _e9 = a;
-    a = (_e9 - 1);
-    let _e12 = a;
-    let _e13 = a;
-    a = (_e12 * _e13);
-    let _e15 = a;
-    let _e16 = a;
-    a = (_e15 / _e16);
-    let _e18 = a;
-    a = (_e18 % 1);
-    let _e21 = a;
-    a = (_e21 & 0);
-    let _e24 = a;
-    a = (_e24 | 0);
-    let _e27 = a;
-    a = (_e27 ^ 0);
-    let _e30 = a;
-    a = (_e30 << 2u);
-    let _e33 = a;
-    a = (_e33 >> 1u);
-    let _e36 = a;
-    a = (_e36 + 1);
-    let _e39 = a;
-    a = (_e39 - 1);
+    let _e6 = a_1;
+    a_1 = (_e6 + 1);
+    let _e9 = a_1;
+    a_1 = (_e9 - 1);
+    let _e12 = a_1;
+    let _e13 = a_1;
+    a_1 = (_e12 * _e13);
+    let _e15 = a_1;
+    let _e16 = a_1;
+    a_1 = (_e15 / _e16);
+    let _e18 = a_1;
+    a_1 = (_e18 % 1);
+    let _e21 = a_1;
+    a_1 = (_e21 & 0);
+    let _e24 = a_1;
+    a_1 = (_e24 | 0);
+    let _e27 = a_1;
+    a_1 = (_e27 ^ 0);
+    let _e30 = a_1;
+    a_1 = (_e30 << 2u);
+    let _e33 = a_1;
+    a_1 = (_e33 >> 1u);
+    let _e36 = a_1;
+    a_1 = (_e36 + 1);
+    let _e39 = a_1;
+    a_1 = (_e39 - 1);
     let _e46 = vec0_.y;
     vec0_.y = (_e46 + 1);
     let _e51 = vec0_.y;

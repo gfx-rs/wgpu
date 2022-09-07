@@ -23,9 +23,22 @@ vec4 builtins() {
 }
 
 vec4 splat() {
-    vec2 a_1 = (((vec2(1.0) + vec2(2.0)) - vec2(3.0)) / vec2(4.0));
+    vec2 a_2 = (((vec2(1.0) + vec2(2.0)) - vec2(3.0)) / vec2(4.0));
     ivec4 b = (ivec4(5) % ivec4(2));
-    return (a_1.xyxy + vec4(b));
+    return (a_2.xyxy + vec4(b));
+}
+
+vec2 splat_assignment() {
+    vec2 a = vec2(0.0);
+    a = vec2(2.0);
+    vec2 _e7 = a;
+    a = (_e7 + vec2(1.0));
+    vec2 _e11 = a;
+    a = (_e11 - vec2(3.0));
+    vec2 _e15 = a;
+    a = (_e15 / vec2(4.0));
+    vec2 _e19 = a;
+    return _e19;
 }
 
 vec3 bool_cast(vec3 x) {
@@ -203,34 +216,34 @@ void comparison() {
 }
 
 void assignment() {
-    int a = 1;
+    int a_1 = 1;
     ivec3 vec0_ = ivec3(0, 0, 0);
-    int _e6 = a;
-    a = (_e6 + 1);
-    int _e9 = a;
-    a = (_e9 - 1);
-    int _e12 = a;
-    int _e13 = a;
-    a = (_e12 * _e13);
-    int _e15 = a;
-    int _e16 = a;
-    a = (_e15 / _e16);
-    int _e18 = a;
-    a = (_e18 % 1);
-    int _e21 = a;
-    a = (_e21 & 0);
-    int _e24 = a;
-    a = (_e24 | 0);
-    int _e27 = a;
-    a = (_e27 ^ 0);
-    int _e30 = a;
-    a = (_e30 << 2u);
-    int _e33 = a;
-    a = (_e33 >> 1u);
-    int _e36 = a;
-    a = (_e36 + 1);
-    int _e39 = a;
-    a = (_e39 - 1);
+    int _e6 = a_1;
+    a_1 = (_e6 + 1);
+    int _e9 = a_1;
+    a_1 = (_e9 - 1);
+    int _e12 = a_1;
+    int _e13 = a_1;
+    a_1 = (_e12 * _e13);
+    int _e15 = a_1;
+    int _e16 = a_1;
+    a_1 = (_e15 / _e16);
+    int _e18 = a_1;
+    a_1 = (_e18 % 1);
+    int _e21 = a_1;
+    a_1 = (_e21 & 0);
+    int _e24 = a_1;
+    a_1 = (_e24 | 0);
+    int _e27 = a_1;
+    a_1 = (_e27 ^ 0);
+    int _e30 = a_1;
+    a_1 = (_e30 << 2u);
+    int _e33 = a_1;
+    a_1 = (_e33 >> 1u);
+    int _e36 = a_1;
+    a_1 = (_e36 + 1);
+    int _e39 = a_1;
+    a_1 = (_e39 - 1);
     int _e46 = vec0_.y;
     vec0_.y = (_e46 + 1);
     int _e51 = vec0_.y;

@@ -916,35 +916,49 @@ impl<'a> ExpressionContext<'a, '_, '_> {
             let mut right = self.apply_load_rule(unloaded_right);
             let end = lexer.current_byte_offset() as u32;
 
-            // Insert splats, if needed by the non-'*' operations.
-            // (`BinaryOperator::Multiply` handles splats itself.)
-            if op != crate::BinaryOperator::Multiply {
-                let left_size = match *self.resolve_type(left)? {
-                    crate::TypeInner::Vector { size, .. } => Some(size),
-                    _ => None,
-                };
-                match (left_size, self.resolve_type(right)?) {
-                    (Some(size), &crate::TypeInner::Scalar { .. }) => {
-                        right = self.expressions.append(
-                            crate::Expression::Splat { size, value: right },
-                            self.expressions.get_span(right),
-                        );
-                    }
-                    (None, &crate::TypeInner::Vector { size, .. }) => {
-                        left = self.expressions.append(
-                            crate::Expression::Splat { size, value: left },
-                            self.expressions.get_span(left),
-                        );
-                    }
-                    _ => {}
-                }
-            }
+            self.binary_op_splat(op, &mut left, &mut right)?;
+
             accumulator = TypedExpression::non_reference(self.expressions.append(
                 crate::Expression::Binary { op, left, right },
                 NagaSpan::new(start, end),
             ));
         }
         Ok(accumulator)
+    }
+
+    /// Insert splats, if needed by the non-'*' operations.
+    fn binary_op_splat(
+        &mut self,
+        op: crate::BinaryOperator,
+        left: &mut Handle<crate::Expression>,
+        right: &mut Handle<crate::Expression>,
+    ) -> Result<(), Error<'a>> {
+        if op != crate::BinaryOperator::Multiply {
+            let left_size = match *self.resolve_type(*left)? {
+                crate::TypeInner::Vector { size, .. } => Some(size),
+                _ => None,
+            };
+            match (left_size, self.resolve_type(*right)?) {
+                (Some(size), &crate::TypeInner::Scalar { .. }) => {
+                    *right = self.expressions.append(
+                        crate::Expression::Splat {
+                            size,
+                            value: *right,
+                        },
+                        self.expressions.get_span(*right),
+                    );
+                }
+                (None, &crate::TypeInner::Vector { size, .. }) => {
+                    *left = self.expressions.append(
+                        crate::Expression::Splat { size, value: *left },
+                        self.expressions.get_span(*left),
+                    );
+                }
+                _ => {}
+            }
+        }
+
+        Ok(())
     }
 
     /// Add a single expression to the expression table that is not covered by `self.emitter`.
@@ -3321,13 +3335,16 @@ impl Parser {
                     //Note: `consume_token` shouldn't produce any other assignment ops
                     _ => unreachable!(),
                 };
-                let left = context.expressions.append(
+                let mut left = context.expressions.append(
                     crate::Expression::Load {
                         pointer: reference.handle,
                     },
                     lhs_span.into(),
                 );
-                let right = self.parse_general_expression(lexer, context.reborrow())?;
+                let mut right = self.parse_general_expression(lexer, context.reborrow())?;
+
+                context.binary_op_splat(op, &mut left, &mut right)?;
+
                 context
                     .expressions
                     .append(crate::Expression::Binary { op, left, right }, span.into())

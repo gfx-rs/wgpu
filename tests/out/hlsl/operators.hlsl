@@ -39,9 +39,24 @@ float4 builtins()
 
 float4 splat()
 {
-    float2 a_1 = ((((1.0).xx + (2.0).xx) - (3.0).xx) / (4.0).xx);
+    float2 a_2 = ((((1.0).xx + (2.0).xx) - (3.0).xx) / (4.0).xx);
     int4 b = ((5).xxxx % (2).xxxx);
-    return (a_1.xyxy + float4(b));
+    return (a_2.xyxy + float4(b));
+}
+
+float2 splat_assignment()
+{
+    float2 a = (float2)0;
+
+    a = (2.0).xx;
+    float2 _expr7 = a;
+    a = (_expr7 + (1.0).xx);
+    float2 _expr11 = a;
+    a = (_expr11 - (3.0).xx);
+    float2 _expr15 = a;
+    a = (_expr15 / (4.0).xx);
+    float2 _expr19 = a;
+    return _expr19;
 }
 
 float3 bool_cast(float3 x)
@@ -233,35 +248,35 @@ void comparison()
 
 void assignment()
 {
-    int a = 1;
+    int a_1 = 1;
     int3 vec0_ = int3(0, 0, 0);
 
-    int _expr6 = a;
-    a = (_expr6 + 1);
-    int _expr9 = a;
-    a = (_expr9 - 1);
-    int _expr12 = a;
-    int _expr13 = a;
-    a = (_expr12 * _expr13);
-    int _expr15 = a;
-    int _expr16 = a;
-    a = (_expr15 / _expr16);
-    int _expr18 = a;
-    a = (_expr18 % 1);
-    int _expr21 = a;
-    a = (_expr21 & 0);
-    int _expr24 = a;
-    a = (_expr24 | 0);
-    int _expr27 = a;
-    a = (_expr27 ^ 0);
-    int _expr30 = a;
-    a = (_expr30 << 2u);
-    int _expr33 = a;
-    a = (_expr33 >> 1u);
-    int _expr36 = a;
-    a = (_expr36 + 1);
-    int _expr39 = a;
-    a = (_expr39 - 1);
+    int _expr6 = a_1;
+    a_1 = (_expr6 + 1);
+    int _expr9 = a_1;
+    a_1 = (_expr9 - 1);
+    int _expr12 = a_1;
+    int _expr13 = a_1;
+    a_1 = (_expr12 * _expr13);
+    int _expr15 = a_1;
+    int _expr16 = a_1;
+    a_1 = (_expr15 / _expr16);
+    int _expr18 = a_1;
+    a_1 = (_expr18 % 1);
+    int _expr21 = a_1;
+    a_1 = (_expr21 & 0);
+    int _expr24 = a_1;
+    a_1 = (_expr24 | 0);
+    int _expr27 = a_1;
+    a_1 = (_expr27 ^ 0);
+    int _expr30 = a_1;
+    a_1 = (_expr30 << 2u);
+    int _expr33 = a_1;
+    a_1 = (_expr33 >> 1u);
+    int _expr36 = a_1;
+    a_1 = (_expr36 + 1);
+    int _expr39 = a_1;
+    a_1 = (_expr39 - 1);
     int _expr46 = vec0_.y;
     vec0_.y = (_expr46 + 1);
     int _expr51 = vec0_.y;

@@ -19,15 +19,15 @@ constant metal::float4 v_f32_zero = {0.0, 0.0, 0.0, 0.0};
 constant metal::float4 v_f32_half = {0.5, 0.5, 0.5, 0.5};
 constant metal::int4 v_i32_one = {1, 1, 1, 1};
 constant metal::uint2 const_type_11_ = {0u, 0u};
-constant metal::float2 const_type_6_ = {0.0, 0.0};
-constant metal::float2x2 const_type_7_ = {const_type_6_, const_type_6_};
+constant metal::float2 const_type_4_ = {0.0, 0.0};
+constant metal::float2x2 const_type_7_ = {const_type_4_, const_type_4_};
 constant metal::float4 const_type = {0.0, 0.0, 0.0, 0.0};
 constant Foo const_Foo = {const_type, 0};
 constant type_12 const_type_12_ = {const_Foo, const_Foo, const_Foo};
-constant metal::float3 const_type_4_ = {0.0, 0.0, 0.0};
-constant metal::float2x3 const_type_14_ = {const_type_4_, const_type_4_};
-constant metal::float3x3 const_type_15_ = {const_type_4_, const_type_4_, const_type_4_};
-constant metal::float4x3 const_type_16_ = {const_type_4_, const_type_4_, const_type_4_, const_type_4_};
+constant metal::float3 const_type_5_ = {0.0, 0.0, 0.0};
+constant metal::float2x3 const_type_14_ = {const_type_5_, const_type_5_};
+constant metal::float3x3 const_type_15_ = {const_type_5_, const_type_5_, const_type_5_};
+constant metal::float4x3 const_type_16_ = {const_type_5_, const_type_5_, const_type_5_, const_type_5_};
 constant metal::float3x4 const_type_17_ = {const_type, const_type, const_type};
 constant metal::int3 const_type_18_ = {0, 0, 0};
 
@@ -46,9 +46,23 @@ metal::float4 builtins(
 
 metal::float4 splat(
 ) {
-    metal::float2 a_1 = ((metal::float2(1.0) + metal::float2(2.0)) - metal::float2(3.0)) / metal::float2(4.0);
+    metal::float2 a_2 = ((metal::float2(1.0) + metal::float2(2.0)) - metal::float2(3.0)) / metal::float2(4.0);
     metal::int4 b = metal::int4(5) % metal::int4(2);
-    return a_1.xyxy + static_cast<metal::float4>(b);
+    return a_2.xyxy + static_cast<metal::float4>(b);
+}
+
+metal::float2 splat_assignment(
+) {
+    metal::float2 a = {};
+    a = metal::float2(2.0);
+    metal::float2 _e7 = a;
+    a = _e7 + metal::float2(1.0);
+    metal::float2 _e11 = a;
+    a = _e11 - metal::float2(3.0);
+    metal::float2 _e15 = a;
+    a = _e15 / metal::float2(4.0);
+    metal::float2 _e19 = a;
+    return _e19;
 }
 
 metal::float3 bool_cast(
@@ -234,34 +248,34 @@ void comparison(
 
 void assignment(
 ) {
-    int a = 1;
+    int a_1 = 1;
     metal::int3 vec0_ = const_type_18_;
-    int _e6 = a;
-    a = _e6 + 1;
-    int _e9 = a;
-    a = _e9 - 1;
-    int _e12 = a;
-    int _e13 = a;
-    a = _e12 * _e13;
-    int _e15 = a;
-    int _e16 = a;
-    a = _e15 / _e16;
-    int _e18 = a;
-    a = _e18 % 1;
-    int _e21 = a;
-    a = _e21 & 0;
-    int _e24 = a;
-    a = _e24 | 0;
-    int _e27 = a;
-    a = _e27 ^ 0;
-    int _e30 = a;
-    a = _e30 << 2u;
-    int _e33 = a;
-    a = _e33 >> 1u;
-    int _e36 = a;
-    a = _e36 + 1;
-    int _e39 = a;
-    a = _e39 - 1;
+    int _e6 = a_1;
+    a_1 = _e6 + 1;
+    int _e9 = a_1;
+    a_1 = _e9 - 1;
+    int _e12 = a_1;
+    int _e13 = a_1;
+    a_1 = _e12 * _e13;
+    int _e15 = a_1;
+    int _e16 = a_1;
+    a_1 = _e15 / _e16;
+    int _e18 = a_1;
+    a_1 = _e18 % 1;
+    int _e21 = a_1;
+    a_1 = _e21 & 0;
+    int _e24 = a_1;
+    a_1 = _e24 | 0;
+    int _e27 = a_1;
+    a_1 = _e27 ^ 0;
+    int _e30 = a_1;
+    a_1 = _e30 << 2u;
+    int _e33 = a_1;
+    a_1 = _e33 >> 1u;
+    int _e36 = a_1;
+    a_1 = _e36 + 1;
+    int _e39 = a_1;
+    a_1 = _e39 - 1;
     int _e46 = vec0_.y;
     vec0_.y = _e46 + 1;
     int _e51 = vec0_.y;

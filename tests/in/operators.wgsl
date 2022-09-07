@@ -28,6 +28,14 @@ fn splat() -> vec4<f32> {
     return a.xyxy + vec4<f32>(b);
 }
 
+fn splat_assignment() -> vec2<f32> {
+    var a = vec2<f32>(2.0);
+    a += 1.0;
+    a -= 3.0;
+    a /= 4.0;
+    return a;
+}
+
 fn bool_cast(x: vec3<f32>) -> vec3<f32> {
     let y = vec3<bool>(x);
     return vec3<f32>(y);
