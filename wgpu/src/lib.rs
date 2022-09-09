@@ -1671,19 +1671,19 @@ impl Instance {
         }
     }
 
-    /// Returns the inner hal Instance using a callback. The hal instance will be `None` if the
-    /// backend type argument does not match with this wgpu Instance
+    /// Return a reference to a specific backend instance, if available.
+    ///
+    /// If this `Instance` has a wgpu-hal [`Instance`] for backend
+    /// `A`, return a reference to it. Otherwise, return `None`.
     ///
     /// # Safety
     ///
-    /// - The raw handle obtained from the hal Instance must not be manually destroyed
+    /// - The raw instance handle returned must not be manually destroyed.
+    ///
+    /// [`Instance`]: hal::Api::Instance
     #[cfg(any(not(target_arch = "wasm32"), feature = "webgl"))]
-    pub unsafe fn as_hal<A: wgc::hub::HalApi, F: FnOnce(Option<&A::Instance>) -> R, R>(
-        &self,
-        hal_instance_callback: F,
-    ) -> R {
-        self.context
-            .instance_as_hal::<A, F, R>(hal_instance_callback)
+    pub unsafe fn as_hal<A: wgc::hub::HalApi>(&self) -> Option<&A::Instance> {
+        self.context.instance_as_hal::<A>()
     }
 
     /// Create an new instance of wgpu from a wgpu-core instance.
@@ -1792,9 +1792,8 @@ impl Instance {
 
     /// Creates a surface from a `web_sys::HtmlCanvasElement`.
     ///
-    /// # Safety
-    ///
-    /// - canvas must be a valid <canvas> element to create a surface upon.
+    /// The `canvas` argument must be a valid `<canvas>` element to
+    /// create a surface upon.
     #[cfg(all(target_arch = "wasm32", not(feature = "emscripten")))]
     pub fn create_surface_from_canvas(&self, canvas: &web_sys::HtmlCanvasElement) -> Surface {
         Surface {
@@ -1805,9 +1804,8 @@ impl Instance {
 
     /// Creates a surface from a `web_sys::OffscreenCanvas`.
     ///
-    /// # Safety
-    ///
-    /// - canvas must be a valid OffscreenCanvas to create a surface upon.
+    /// The `canvas` argument must be a valid `OffscreenCanvas` object
+    /// to create a surface upon.
     #[cfg(all(target_arch = "wasm32", not(feature = "emscripten")))]
     pub fn create_surface_from_offscreen_canvas(
         &self,
@@ -1918,12 +1916,25 @@ impl Adapter {
             })
     }
 
-    /// Returns the inner hal Adapter using a callback. The hal adapter will be `None` if the
-    /// backend type argument does not match with this wgpu Adapter
+    /// Apply a callback to this `Adapter`'s underlying backend adapter.
+    ///
+    /// If this `Adapter` is implemented by the backend API given by `A` (Vulkan,
+    /// Dx12, etc.), then apply `hal_adapter_callback` to `Some(&adapter)`, where
+    /// `adapter` is the underlying backend adapter type, [`A::Adapter`].
+    ///
+    /// If this `Adapter` uses a different backend, apply `hal_adapter_callback`
+    /// to `None`.
+    ///
+    /// The adapter is locked for reading while `hal_adapter_callback` runs. If
+    /// the callback attempts to perform any `wgpu` operations that require
+    /// write access to the adapter, deadlock will occur. The locks are
+    /// automatically released when the callback returns.
     ///
     /// # Safety
     ///
-    /// - The raw handle obtained from the hal Adapter must not be manually destroyed
+    /// - The raw handle passed to the callback must not be manually destroyed.
+    ///
+    /// [`A::Adapter`]: hal::Api::Adapter
     #[cfg(any(not(target_arch = "wasm32"), feature = "webgl"))]
     pub unsafe fn as_hal<A: wgc::hub::HalApi, F: FnOnce(Option<&A::Adapter>) -> R, R>(
         &self,
@@ -2213,12 +2224,25 @@ impl Device {
         Context::device_stop_capture(&*self.context, &self.id)
     }
 
-    /// Returns the inner hal Device using a callback. The hal device will be `None` if the
-    /// backend type argument does not match with this wgpu Device
+    /// Apply a callback to this `Device`'s underlying backend device.
+    ///
+    /// If this `Device` is implemented by the backend API given by `A` (Vulkan,
+    /// Dx12, etc.), then apply `hal_device_callback` to `Some(&device)`, where
+    /// `device` is the underlying backend device type, [`A::Device`].
+    ///
+    /// If this `Device` uses a different backend, apply `hal_device_callback`
+    /// to `None`.
+    ///
+    /// The device is locked for reading while `hal_device_callback` runs. If
+    /// the callback attempts to perform any `wgpu` operations that require
+    /// write access to the device (destroying a buffer, say), deadlock will
+    /// occur. The locks are automatically released when the callback returns.
     ///
     /// # Safety
     ///
-    /// - The raw handle obtained from the hal Device must not be manually destroyed
+    /// - The raw handle passed to the callback must not be manually destroyed.
+    ///
+    /// [`A::Device`]: hal::Api::Device
     #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
     pub unsafe fn as_hal<A: wgc::hub::HalApi, F: FnOnce(Option<&A::Device>) -> R, R>(
         &self,
@@ -3464,9 +3488,13 @@ impl Queue {
         Context::queue_write_buffer(&*self.context, &self.id, &buffer.id, offset, data)
     }
 
-    /// Schedule a data write into `buffer` starting at `offset` via the returned [QueueWriteBufferView].
+    /// Schedule a data write into `buffer` starting at `offset` via the returned
+    /// [QueueWriteBufferView].
     ///
-    /// The returned value can be dereferenced to a `&mut [u8]`; dereferencing it to a `&[u8]` panics!
+    /// The returned value can be dereferenced to a `&mut [u8]`; dereferencing it to a
+    /// `&[u8]` panics!
+    /// (It is not unsound to read through the `&mut [u8]` anyway, but doing so will not
+    /// yield the existing contents of `buffer` from the GPU, and it is likely to be slow.)
     ///
     /// This method is intended to have low performance costs.
     /// As such, the write is not immediately submitted, and instead enqueued

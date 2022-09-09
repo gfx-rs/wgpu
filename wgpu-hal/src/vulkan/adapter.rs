@@ -15,7 +15,6 @@ fn indexing_features() -> wgt::Features {
 #[derive(Debug, Default)]
 pub struct PhysicalDeviceFeatures {
     core: vk::PhysicalDeviceFeatures,
-    pub(super) vulkan_1_2: Option<vk::PhysicalDeviceVulkan12Features>,
     pub(super) descriptor_indexing: Option<vk::PhysicalDeviceDescriptorIndexingFeaturesEXT>,
     imageless_framebuffer: Option<vk::PhysicalDeviceImagelessFramebufferFeaturesKHR>,
     timeline_semaphore: Option<vk::PhysicalDeviceTimelineSemaphoreFeaturesKHR>,
@@ -41,9 +40,6 @@ impl PhysicalDeviceFeatures {
         mut info: vk::DeviceCreateInfoBuilder<'a>,
     ) -> vk::DeviceCreateInfoBuilder<'a> {
         info = info.enabled_features(&self.core);
-        if let Some(ref mut feature) = self.vulkan_1_2 {
-            info = info.push_next(feature);
-        }
         if let Some(ref mut feature) = self.descriptor_indexing {
             info = info.push_next(feature);
         }
@@ -176,47 +172,6 @@ impl PhysicalDeviceFeatures {
                 //.shader_resource_residency(requested_features.contains(wgt::Features::SHADER_RESOURCE_RESIDENCY))
                 .geometry_shader(requested_features.contains(wgt::Features::SHADER_PRIMITIVE_INDEX))
                 .build(),
-            vulkan_1_2: if api_version >= vk::API_VERSION_1_2 {
-                Some(
-                    vk::PhysicalDeviceVulkan12Features::builder()
-                        //.sampler_mirror_clamp_to_edge(requested_features.contains(wgt::Features::SAMPLER_MIRROR_CLAMP_EDGE))
-                        .draw_indirect_count(
-                            requested_features.contains(wgt::Features::MULTI_DRAW_INDIRECT_COUNT),
-                        )
-                        .descriptor_indexing(requested_features.intersects(indexing_features()))
-                        .shader_sampled_image_array_non_uniform_indexing(
-                            needs_sampled_image_non_uniform,
-                        )
-                        .shader_storage_image_array_non_uniform_indexing(
-                            needs_storage_image_non_uniform,
-                        )
-                        .shader_uniform_buffer_array_non_uniform_indexing(
-                            needs_uniform_buffer_non_uniform,
-                        )
-                        .shader_storage_buffer_array_non_uniform_indexing(
-                            needs_storage_buffer_non_uniform,
-                        )
-                        .descriptor_binding_sampled_image_update_after_bind(
-                            uab_types.contains(super::UpdateAfterBindTypes::SAMPLED_TEXTURE),
-                        )
-                        .descriptor_binding_storage_image_update_after_bind(
-                            uab_types.contains(super::UpdateAfterBindTypes::STORAGE_TEXTURE),
-                        )
-                        .descriptor_binding_uniform_buffer_update_after_bind(
-                            uab_types.contains(super::UpdateAfterBindTypes::UNIFORM_BUFFER),
-                        )
-                        .descriptor_binding_storage_buffer_update_after_bind(
-                            uab_types.contains(super::UpdateAfterBindTypes::STORAGE_BUFFER),
-                        )
-                        .descriptor_binding_partially_bound(needs_partially_bound)
-                        //.sampler_filter_minmax(requested_features.contains(wgt::Features::SAMPLER_REDUCTION))
-                        .imageless_framebuffer(private_caps.imageless_framebuffers)
-                        .timeline_semaphore(private_caps.timeline_semaphores)
-                        .build(),
-                )
-            } else {
-                None
-            },
             descriptor_indexing: if enabled_extensions
                 .contains(&vk::ExtDescriptorIndexingFn::name())
             {
@@ -252,22 +207,23 @@ impl PhysicalDeviceFeatures {
             } else {
                 None
             },
-            imageless_framebuffer: if enabled_extensions
-                .contains(&vk::KhrImagelessFramebufferFn::name())
+            imageless_framebuffer: if api_version >= vk::API_VERSION_1_2
+                || enabled_extensions.contains(&vk::KhrImagelessFramebufferFn::name())
             {
                 Some(
                     vk::PhysicalDeviceImagelessFramebufferFeaturesKHR::builder()
-                        .imageless_framebuffer(true)
+                        .imageless_framebuffer(private_caps.imageless_framebuffers)
                         .build(),
                 )
             } else {
                 None
             },
-            timeline_semaphore: if enabled_extensions.contains(&vk::KhrTimelineSemaphoreFn::name())
+            timeline_semaphore: if api_version >= vk::API_VERSION_1_2
+                || enabled_extensions.contains(&vk::KhrTimelineSemaphoreFn::name())
             {
                 Some(
                     vk::PhysicalDeviceTimelineSemaphoreFeaturesKHR::builder()
-                        .timeline_semaphore(true)
+                        .timeline_semaphore(private_caps.timeline_semaphores)
                         .build(),
                 )
             } else {
@@ -448,48 +404,6 @@ impl PhysicalDeviceFeatures {
 
         let intel_windows = caps.properties.vendor_id == db::intel::VENDOR && cfg!(windows);
 
-        if let Some(ref vulkan_1_2) = self.vulkan_1_2 {
-            const STORAGE: F = F::STORAGE_RESOURCE_BINDING_ARRAY;
-            if Self::all_features_supported(
-                &features,
-                &[
-                    (
-                        F::TEXTURE_BINDING_ARRAY,
-                        vulkan_1_2.shader_sampled_image_array_non_uniform_indexing,
-                    ),
-                    (
-                        F::BUFFER_BINDING_ARRAY | STORAGE,
-                        vulkan_1_2.shader_storage_buffer_array_non_uniform_indexing,
-                    ),
-                ],
-            ) {
-                features.insert(F::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING);
-            }
-            if Self::all_features_supported(
-                &features,
-                &[
-                    (
-                        F::BUFFER_BINDING_ARRAY,
-                        vulkan_1_2.shader_uniform_buffer_array_non_uniform_indexing,
-                    ),
-                    (
-                        F::BUFFER_BINDING_ARRAY | STORAGE,
-                        vulkan_1_2.shader_storage_buffer_array_non_uniform_indexing,
-                    ),
-                ],
-            ) {
-                features.insert(F::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING);
-            }
-            if vulkan_1_2.descriptor_binding_partially_bound != 0 && !intel_windows {
-                features |= F::PARTIALLY_BOUND_BINDING_ARRAY;
-            }
-            //if vulkan_1_2.sampler_mirror_clamp_to_edge != 0 {
-            //if vulkan_1_2.sampler_filter_minmax != 0 {
-            if vulkan_1_2.draw_indirect_count != 0 {
-                features |= F::MULTI_DRAW_INDIRECT_COUNT;
-            }
-        }
-
         if let Some(ref descriptor_indexing) = self.descriptor_indexing {
             const STORAGE: F = F::STORAGE_RESOURCE_BINDING_ARRAY;
             if Self::all_features_supported(
@@ -596,7 +510,6 @@ impl PhysicalDeviceFeatures {
 pub struct PhysicalDeviceCapabilities {
     supported_extensions: Vec<vk::ExtensionProperties>,
     properties: vk::PhysicalDeviceProperties,
-    vulkan_1_2: Option<vk::PhysicalDeviceVulkan12Properties>,
     descriptor_indexing: Option<vk::PhysicalDeviceDescriptorIndexingPropertiesEXT>,
 }
 
@@ -658,10 +571,12 @@ impl PhysicalDeviceCapabilities {
 
             //extensions.push(vk::KhrSamplerMirrorClampToEdgeFn::name());
             //extensions.push(vk::ExtSamplerFilterMinmaxFn::name());
+        }
 
-            if requested_features.contains(wgt::Features::MULTI_DRAW_INDIRECT_COUNT) {
-                extensions.push(khr::DrawIndirectCount::name());
-            }
+        // Even though Vulkan 1.2 has promoted the extension to core, we must require the extension to avoid
+        // large amounts of spaghetti involved with using PhysicalDeviceVulkan12Features.
+        if requested_features.contains(wgt::Features::MULTI_DRAW_INDIRECT_COUNT) {
+            extensions.push(vk::KhrDrawIndirectCountFn::name());
         }
 
         if requested_features.contains(wgt::Features::CONSERVATIVE_RASTERIZATION) {
@@ -696,8 +611,6 @@ impl PhysicalDeviceCapabilities {
             if uab_types.contains(super::UpdateAfterBindTypes::SAMPLED_TEXTURE) {
                 if let Some(di) = self.descriptor_indexing {
                     di.max_per_stage_descriptor_update_after_bind_sampled_images
-                } else if let Some(vk_1_2) = self.vulkan_1_2 {
-                    vk_1_2.max_per_stage_descriptor_update_after_bind_sampled_images
                 } else {
                     limits.max_per_stage_descriptor_sampled_images
                 }
@@ -709,8 +622,6 @@ impl PhysicalDeviceCapabilities {
             if uab_types.contains(super::UpdateAfterBindTypes::STORAGE_TEXTURE) {
                 if let Some(di) = self.descriptor_indexing {
                     di.max_per_stage_descriptor_update_after_bind_storage_images
-                } else if let Some(vk_1_2) = self.vulkan_1_2 {
-                    vk_1_2.max_per_stage_descriptor_update_after_bind_storage_images
                 } else {
                     limits.max_per_stage_descriptor_storage_images
                 }
@@ -722,8 +633,6 @@ impl PhysicalDeviceCapabilities {
         {
             if let Some(di) = self.descriptor_indexing {
                 di.max_per_stage_descriptor_update_after_bind_uniform_buffers
-            } else if let Some(vk_1_2) = self.vulkan_1_2 {
-                vk_1_2.max_per_stage_descriptor_update_after_bind_uniform_buffers
             } else {
                 limits.max_per_stage_descriptor_uniform_buffers
             }
@@ -735,8 +644,6 @@ impl PhysicalDeviceCapabilities {
         {
             if let Some(di) = self.descriptor_indexing {
                 di.max_per_stage_descriptor_update_after_bind_storage_buffers
-            } else if let Some(vk_1_2) = self.vulkan_1_2 {
-                vk_1_2.max_per_stage_descriptor_update_after_bind_storage_buffers
             } else {
                 limits.max_per_stage_descriptor_storage_buffers
             }
@@ -829,17 +736,8 @@ impl super::InstanceShared {
                 // Get this now to avoid borrowing conflicts later
                 let supports_descriptor_indexing =
                     capabilities.supports_extension(vk::ExtDescriptorIndexingFn::name());
-                // Always add Vk1.2 structure. Will be skipped if unknown.
-                //Note: we can't check if conditional on Vulkan version here, because
-                // we only have the `VkInstance` version but not `VkPhysicalDevice` one.
-                let vk12_next = capabilities
-                    .vulkan_1_2
-                    .insert(vk::PhysicalDeviceVulkan12Properties::default());
 
-                let core = vk::PhysicalDeviceProperties::default();
-                let mut builder = vk::PhysicalDeviceProperties2::builder()
-                    .properties(core)
-                    .push_next(vk12_next);
+                let mut builder = vk::PhysicalDeviceProperties2::builder();
 
                 if supports_descriptor_indexing {
                     let next = capabilities
@@ -848,15 +746,11 @@ impl super::InstanceShared {
                     builder = builder.push_next(next);
                 }
 
-                let mut properites2 = builder.build();
+                let mut properties2 = builder.build();
                 unsafe {
-                    get_device_properties.get_physical_device_properties2(phd, &mut properites2);
+                    get_device_properties.get_physical_device_properties2(phd, &mut properties2);
                 }
-                // clean up Vk1.2 stuff if not supported
-                if properites2.properties.api_version < vk::API_VERSION_1_2 {
-                    capabilities.vulkan_1_2 = None;
-                }
-                properites2.properties
+                properties2.properties
             } else {
                 unsafe { self.raw.get_physical_device_properties(phd) }
             };
@@ -877,13 +771,6 @@ impl super::InstanceShared {
                 let next = features
                     .multiview
                     .insert(vk::PhysicalDeviceMultiviewFeatures::default());
-                builder = builder.push_next(next);
-            }
-
-            if capabilities.properties.api_version >= vk::API_VERSION_1_2 {
-                let next = features
-                    .vulkan_1_2
-                    .insert(vk::PhysicalDeviceVulkan12Features::default());
                 builder = builder.push_next(next);
             }
 
@@ -1040,7 +927,7 @@ impl super::Instance {
         let private_caps = super::PrivateCapabilities {
             flip_y_requires_shift: phd_capabilities.properties.api_version >= vk::API_VERSION_1_1
                 || phd_capabilities.supports_extension(vk::KhrMaintenance1Fn::name()),
-            imageless_framebuffers: match phd_features.vulkan_1_2 {
+            imageless_framebuffers: match phd_features.imageless_framebuffer {
                 Some(features) => features.imageless_framebuffer == vk::TRUE,
                 None => phd_features
                     .imageless_framebuffer
@@ -1048,7 +935,7 @@ impl super::Instance {
             },
             image_view_usage: phd_capabilities.properties.api_version >= vk::API_VERSION_1_1
                 || phd_capabilities.supports_extension(vk::KhrMaintenance2Fn::name()),
-            timeline_semaphores: match phd_features.vulkan_1_2 {
+            timeline_semaphores: match phd_features.timeline_semaphore {
                 Some(features) => features.timeline_semaphore == vk::TRUE,
                 None => phd_features
                     .timeline_semaphore
@@ -1196,12 +1083,7 @@ impl super::Adapter {
         let swapchain_fn = khr::Swapchain::new(&self.instance.raw, &raw_device);
 
         let indirect_count_fn = if enabled_extensions.contains(&khr::DrawIndirectCount::name()) {
-            Some(super::ExtensionFn::Extension(khr::DrawIndirectCount::new(
-                &self.instance.raw,
-                &raw_device,
-            )))
-        } else if self.phd_capabilities.properties.api_version >= vk::API_VERSION_1_2 {
-            Some(super::ExtensionFn::Promoted)
+            Some(khr::DrawIndirectCount::new(&self.instance.raw, &raw_device))
         } else {
             None
         };
@@ -1299,6 +1181,8 @@ impl super::Adapter {
         let shared = Arc::new(super::DeviceShared {
             raw: raw_device,
             family_index,
+            queue_index,
+            raw_queue,
             handle_is_owned,
             instance: Arc::clone(&self.instance),
             physical_device: self.raw,
@@ -1359,9 +1243,7 @@ impl super::Adapter {
             gpu_alloc::GpuAllocator::new(config, properties)
         };
         let desc_allocator = gpu_descriptor::DescriptorAllocator::new(
-            if let Some(vk_12) = self.phd_capabilities.vulkan_1_2 {
-                vk_12.max_update_after_bind_descriptors_in_all_pools
-            } else if let Some(di) = self.phd_capabilities.descriptor_indexing {
+            if let Some(di) = self.phd_capabilities.descriptor_indexing {
                 di.max_update_after_bind_descriptors_in_all_pools
             } else {
                 0

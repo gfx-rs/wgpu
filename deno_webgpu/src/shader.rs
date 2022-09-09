@@ -40,6 +40,6 @@ pub fn op_webgpu_create_shader_module(
     device,
     &descriptor,
     source,
-    std::marker::PhantomData
+    ()
   ) => state, WebGpuShaderModule)
 }
