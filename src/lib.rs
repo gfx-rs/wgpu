@@ -876,6 +876,45 @@ pub enum UnaryOperator {
 }
 
 /// Operation that can be applied on two values.
+///
+/// ## Arithmetic type rules
+///
+/// The arithmetic operations `Add`, `Subtract`, `Multiply`, `Divide`, and
+/// `Modulo` can all be applied to [`Scalar`] types other than [`Bool`], or
+/// [`Vector`]s thereof. Both operands must have the same type.
+///
+/// `Add` and `Subtract` can also be applied to [`Matrix`] values. Both operands
+/// must have the same type.
+///
+/// `Multiply` supports additional cases:
+///
+/// -   A [`Matrix`] or [`Vector`] can be multiplied by a scalar [`Float`],
+///     either on the left or the right.
+///
+/// -   A [`Matrix`] on the left can be multiplied by a [`Vector`] on the right
+///     if the matrix has as many columns as the vector has components (`matCxR
+///     * VecC`).
+///
+/// -   A [`Vector`] on the left can be multiplied by a [`Matrix`] on the right
+///     if the matrix has as many rows as the vector has components (`VecR *
+///     matCxR`).
+///
+/// -   Two matrices can be multiplied if the left operand has as many columns
+///     as the right operand has rows (`matNxR * matCxN`).
+///
+/// In all the above `Multiply` cases, the byte widths of the underlying scalar
+/// types of both operands must be the same.
+///
+/// Note that `Multiply` supports mixed vector and scalar operations directly,
+/// whereas the other arithmetic operations require an explicit [`Splat`] for
+/// mixed-type use.
+///
+/// [`Scalar`]: TypeInner::Scalar
+/// [`Vector`]: TypeInner::Vector
+/// [`Matrix`]: TypeInner::Matrix
+/// [`Float`]: ScalarKind::Float
+/// [`Bool`]: ScalarKind::Bool
+/// [`Splat`]: Expression::Splat
 #[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]

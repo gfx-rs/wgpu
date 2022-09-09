@@ -740,16 +740,18 @@ impl super::Validator {
                         _ => false,
                     },
                     Bo::Multiply => {
-                        let kind_match = match left_inner.scalar_kind() {
+                        let kind_allowed = match left_inner.scalar_kind() {
                             Some(Sk::Uint | Sk::Sint | Sk::Float) => true,
                             Some(Sk::Bool) | None => false,
                         };
                         let types_match = match (left_inner, right_inner) {
+                            // Straight scalar and mixed scalar/vector.
                             (&Ti::Scalar { kind: kind1, .. }, &Ti::Scalar { kind: kind2, .. })
                             | (&Ti::Vector { kind: kind1, .. }, &Ti::Scalar { kind: kind2, .. })
                             | (&Ti::Scalar { kind: kind1, .. }, &Ti::Vector { kind: kind2, .. }) => {
                                 kind1 == kind2
                             }
+                            // Scalar/matrix.
                             (
                                 &Ti::Scalar {
                                     kind: Sk::Float, ..
@@ -762,6 +764,7 @@ impl super::Validator {
                                     kind: Sk::Float, ..
                                 },
                             ) => true,
+                            // Vector/vector.
                             (
                                 &Ti::Vector {
                                     kind: kind1,
@@ -774,6 +777,7 @@ impl super::Validator {
                                     ..
                                 },
                             ) => kind1 == kind2 && size1 == size2,
+                            // Matrix * vector.
                             (
                                 &Ti::Matrix { columns, .. },
                                 &Ti::Vector {
@@ -782,6 +786,7 @@ impl super::Validator {
                                     ..
                                 },
                             ) => columns == size,
+                            // Vector * matrix.
                             (
                                 &Ti::Vector {
                                     kind: Sk::Float,
@@ -807,7 +812,7 @@ impl super::Validator {
                             | Ti::Matrix { width, .. } => width,
                             _ => 0,
                         };
-                        kind_match && types_match && left_width == right_width
+                        kind_allowed && types_match && left_width == right_width
                     }
                     Bo::Equal | Bo::NotEqual => left_inner.is_sized() && left_inner == right_inner,
                     Bo::Less | Bo::LessEqual | Bo::Greater | Bo::GreaterEqual => {
