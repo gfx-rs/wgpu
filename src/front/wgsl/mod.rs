@@ -3304,7 +3304,7 @@ impl Parser {
     ) -> Result<(), Error<'a>> {
         use crate::BinaryOperator as Bo;
 
-        let span_start = lexer.current_byte_offset();
+        let span_start = lexer.consume_blankspace();
         context.emitter.start(context.expressions);
         let reference = self.parse_unary_expression(lexer, context.reborrow())?;
         // The left hand side of an assignment must be a reference.

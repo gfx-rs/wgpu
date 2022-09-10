@@ -237,6 +237,22 @@ impl<'a> Lexer<'a> {
         }
     }
 
+    /// Consumes [`Trivia`] tokens until another token is encountered, returns
+    /// the byte offset after consuming the tokens.
+    ///
+    /// [`Trivia`]: Token::Trivia
+    #[must_use]
+    pub(super) fn consume_blankspace(&mut self) -> usize {
+        loop {
+            let (token, rest) = consume_token(self.input, false);
+            if let Token::Trivia = token {
+                self.input = rest;
+            } else {
+                return self.current_byte_offset();
+            }
+        }
+    }
+
     #[must_use]
     pub(super) fn peek(&mut self) -> TokenSpan<'a> {
         let (token, _) = self.peek_token_and_rest();
