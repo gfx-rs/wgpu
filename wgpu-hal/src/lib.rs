@@ -1806,10 +1806,23 @@ pub struct AccelerationStructureDescriptor<'a> {
     pub format: AccelerationStructureFormat,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub enum AccelerationStructureFormat {
     TopLevel,
     BottomLevel,
+}
+
+#[derive(Clone, Debug)]
+pub enum AccelerationStructureBuildMode {
+    Build,
+    Update,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct AccelerationStructureBuildSizes {
+    pub acceleration_structure_size: wgt::BufferAddress,
+    pub update_scratch_size: wgt::BufferAddress,
+    pub build_scratch_size: wgt::BufferAddress,
 }
 
 #[derive(Clone, Debug)]
@@ -2212,6 +2225,24 @@ pub struct BufferCopy {
     pub src_offset: wgt::BufferAddress,
     pub dst_offset: wgt::BufferAddress,
     pub size: wgt::BufferSize,
+}
+
+pub enum AccelerationStructureGeometry<'a, A: Api> {
+    Triangles {
+        vertex_buffer: &'a A::Buffer,
+        vertex_format: wgt::VertexFormat,
+        max_vertex: u32,
+        vertex_stride: wgt::BufferAddress,
+        indices: Option<AccelerationStructureGeometryIndices<'a, A>>,
+    },
+    Instances {
+        buffer: &'a A::Buffer,
+    },
+}
+
+pub struct AccelerationStructureGeometryIndices<'a, A: Api> {
+    pub format: wgt::IndexFormat,
+    pub buffer: &'a A::Buffer,
 }
 
 #[derive(Clone, Debug)]

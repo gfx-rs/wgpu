@@ -384,6 +384,17 @@ impl PhysicalDeviceFeatures {
                 None
             },
             acceleration_structure: if enabled_extensions
+                .contains(&vk::KhrAccelerationStructureFn::name())
+            {
+                Some(
+                    vk::PhysicalDeviceAccelerationStructureFeaturesKHR::builder()
+                        .acceleration_structure(true)
+                        .build(),
+                )
+            } else {
+                None
+            },
+            acceleration_structure: if enabled_extensions
                 .contains(&khr::acceleration_structure::NAME)
             {
                 Some(
@@ -1252,6 +1263,13 @@ impl super::InstanceShared {
                     properties2 = properties2.push_next(next);
                 }
 
+                if supports_acceleration_structure {
+                    let next = capabilities
+                        .acceleration_structure
+                        .insert(vk::PhysicalDeviceAccelerationStructurePropertiesKHR::default());
+                    builder = builder.push_next(next);
+                }
+
                 if supports_subgroup_size_control {
                     let next = capabilities
                         .subgroup_size_control
@@ -1400,6 +1418,12 @@ impl super::InstanceShared {
                     .zero_initialize_workgroup_memory
                     .insert(vk::PhysicalDeviceZeroInitializeWorkgroupMemoryFeatures::default());
                 features2 = features2.push_next(next);
+            }
+            if capabilities.supports_extension(vk::KhrAccelerationStructureFn::name()) {
+                let next = features
+                    .acceleration_structure
+                    .insert(vk::PhysicalDeviceAccelerationStructureFeaturesKHR::default());
+                builder = builder.push_next(next);
             }
 
             // `VK_EXT_subgroup_size_control` is promoted to 1.3
