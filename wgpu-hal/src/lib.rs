@@ -253,6 +253,13 @@ pub trait Device<A: Api>: Send + Sync {
         primitive_count: u32,
     ) -> AccelerationStructureBuildSizes;
 
+    unsafe fn get_acceleration_structure_device_address(
+        &self,
+        acceleration_structure: &A::AccelerationStructure,
+    ) -> wgt::BufferAddress;
+
+    unsafe fn destroy_acceleration_structure(&self, buffer: A::AccelerationStructure);
+
     unsafe fn destroy_buffer(&self, buffer: A::Buffer);
     //TODO: clarify if zero-sized mapping is allowed
     unsafe fn map_buffer(
@@ -689,7 +696,8 @@ bitflags::bitflags! {
         /// The indirect or count buffer in a indirect draw or dispatch.
         const INDIRECT = 1 << 9;
         const BUFFER_DEVICE_ADDRESS = 1 << 10;
-        const ACCELERATION_STRUCTURE_BUILD_INPUT = 1 << 11;
+        const BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT = 1 << 11;
+        const TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT = 1 << 12;
         /// The combination of states that a buffer may be in _at the same time_.
         const INCLUSIVE = Self::MAP_READ.bits | Self::COPY_SRC.bits |
             Self::INDEX.bits | Self::VERTEX.bits | Self::UNIFORM.bits |

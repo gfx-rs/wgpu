@@ -494,7 +494,10 @@ pub fn map_buffer_usage(usage: crate::BufferUses) -> vk::BufferUsageFlags {
     if usage.contains(crate::BufferUses::BUFFER_DEVICE_ADDRESS) {
         flags |= vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS;
     }
-    if usage.contains(crate::BufferUses::ACCELERATION_STRUCTURE_BUILD_INPUT) {
+    if usage.intersects(
+        crate::BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT
+            | crate::BufferUses::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT,
+    ) {
         flags |= vk::BufferUsageFlags::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_KHR;
     }
     flags
@@ -548,6 +551,14 @@ pub fn map_buffer_usage_to_barrier(
     if usage.contains(crate::BufferUses::INDIRECT) {
         stages |= vk::PipelineStageFlags::DRAW_INDIRECT;
         access |= vk::AccessFlags::INDIRECT_COMMAND_READ;
+    }
+    if usage.intersects(
+        crate::BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT
+            | crate::BufferUses::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT,
+    ) {
+        stages |= vk::PipelineStageFlags::ACCELERATION_STRUCTURE_BUILD_KHR;
+        access |= vk::AccessFlags::ACCELERATION_STRUCTURE_READ_KHR
+            | vk::AccessFlags::ACCELERATION_STRUCTURE_WRITE_KHR;
     }
 
     (stages, access)

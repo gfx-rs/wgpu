@@ -135,6 +135,13 @@ impl crate::Device<Api> for Context {
     ) -> crate::AccelerationStructureBuildSizes {
         Default::default()
     }
+    unsafe fn get_acceleration_structure_device_address(
+        &self,
+        _acceleration_structure: &Resource,
+    ) -> wgt::BufferAddress {
+        Default::default()
+    }
+    unsafe fn destroy_acceleration_structure(&self, buffer: Resource) {}
     unsafe fn destroy_buffer(&self, buffer: Resource) {}
     unsafe fn map_buffer(
         &self,
