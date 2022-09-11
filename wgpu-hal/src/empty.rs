@@ -119,8 +119,21 @@ impl crate::Device<Api> for Context {
     unsafe fn create_buffer(&self, desc: &crate::BufferDescriptor) -> DeviceResult<Resource> {
         Ok(Resource)
     }
-    unsafe fn create_acceleration_structure(&self, desc: &crate::AccelerationStructureDescriptor) -> DeviceResult<Resource> {
+    unsafe fn create_acceleration_structure(
+        &self,
+        desc: &crate::AccelerationStructureDescriptor,
+    ) -> DeviceResult<Resource> {
         Ok(Resource)
+    }
+    unsafe fn get_acceleration_structure_build_size(
+        &self,
+        geometry: &crate::AccelerationStructureGeometry<Api>,
+        format: crate::AccelerationStructureFormat,
+        mode: crate::AccelerationStructureBuildMode,
+        flags: (),
+        primitive_count: u32,
+    ) -> crate::AccelerationStructureBuildSizes {
+        Default::default()
     }
     unsafe fn destroy_buffer(&self, buffer: Resource) {}
     unsafe fn map_buffer(
@@ -395,4 +408,17 @@ impl crate::CommandEncoder<Api> for Encoder {
 
     unsafe fn dispatch(&mut self, count: [u32; 3]) {}
     unsafe fn dispatch_indirect(&mut self, buffer: &Resource, offset: wgt::BufferAddress) {}
+
+    unsafe fn build_acceleration_structures(
+        &mut self,
+        geometry: &crate::AccelerationStructureGeometry<Api>,
+        format: crate::AccelerationStructureFormat,
+        mode: crate::AccelerationStructureBuildMode,
+        flags: (),
+        primitive_count: u32,
+        primitive_offset: u32,
+        destination_acceleration_structure: &Resource,
+        scratch_buffer: &Resource,
+    ) {
+    }
 }

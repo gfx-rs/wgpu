@@ -149,6 +149,7 @@ struct DeviceExtensionFunctions {
     draw_indirect_count: Option<khr::DrawIndirectCount>,
     timeline_semaphore: Option<ExtensionFn<khr::TimelineSemaphore>>,
     acceleration_structure: Option<khr::AccelerationStructure>,
+    buffer_device_address: Option<khr::BufferDeviceAddress>,
 }
 
 /// Set of internal capabilities, which don't show up in the exposed

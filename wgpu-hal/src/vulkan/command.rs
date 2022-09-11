@@ -341,6 +341,57 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         );
     }
 
+    unsafe fn build_acceleration_structures(
+        &mut self,
+        geometry: &crate::AccelerationStructureGeometry<super::Api>,
+        format: crate::AccelerationStructureFormat,
+        mode: crate::AccelerationStructureBuildMode,
+        flags: (),
+        primitive_count: u32,
+        primitive_offset: u32,
+        destination_acceleration_structure: &super::AccelerationStructure,
+        scratch_buffer: &super::Buffer,
+    ) {
+        let extension = match self.device.extension_fns.acceleration_structure {
+            Some(ref extension) => extension,
+            None => panic!("Feature `RAY_TRACING` not enabled"),
+        };
+
+        let bda_extension = match self.device.extension_fns.buffer_device_address {
+            Some(ref extension) => extension,
+            None => panic!("Feature `BDA` not enabled"),
+        };
+
+        let geometry =
+            super::device::map_acceleration_structure_geometry(geometry, &bda_extension).build();
+
+        let geometries = &[geometry];
+
+        let range = vk::AccelerationStructureBuildRangeInfoKHR::builder()
+            .primitive_count(primitive_count)
+            .primitive_offset(primitive_offset)
+            .build();
+
+        let mut geometry_info = vk::AccelerationStructureBuildGeometryInfoKHR::builder()
+            .ty(conv::map_acceleration_structure_format(format))
+            .mode(conv::map_acceleration_structure_build_mode(mode))
+            .flags(vk::BuildAccelerationStructureFlagsKHR::PREFER_FAST_TRACE)
+            .geometries(geometries)
+            .dst_acceleration_structure(destination_acceleration_structure.raw)
+            .scratch_data(vk::DeviceOrHostAddressKHR {
+                device_address: bda_extension.get_buffer_device_address(
+                    &vk::BufferDeviceAddressInfo::builder().buffer(scratch_buffer.raw),
+                ),
+            })
+            .build();
+
+        let range = &[range][..];
+        let range = &[range][..];
+        let geometry_info = &[geometry_info];
+
+        extension.cmd_build_acceleration_structures(self.active, geometry_info, range);
+    }
+
     // render
 
     unsafe fn begin_render_pass(&mut self, desc: &crate::RenderPassDescriptor<super::Api>) {

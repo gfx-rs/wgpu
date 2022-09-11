@@ -239,7 +239,19 @@ pub trait Device<A: Api>: Send + Sync {
     /// The initial usage is `BufferUses::empty()`.
     unsafe fn create_buffer(&self, desc: &BufferDescriptor) -> Result<A::Buffer, DeviceError>;
 
-    unsafe fn create_acceleration_structure(&self, desc: &AccelerationStructureDescriptor) -> Result<A::AccelerationStructure, DeviceError>;
+    unsafe fn create_acceleration_structure(
+        &self,
+        desc: &AccelerationStructureDescriptor,
+    ) -> Result<A::AccelerationStructure, DeviceError>;
+
+    unsafe fn get_acceleration_structure_build_size(
+        &self,
+        geometry: &AccelerationStructureGeometry<A>,
+        format: AccelerationStructureFormat,
+        mode: AccelerationStructureBuildMode,
+        flags: (),
+        primitive_count: u32,
+    ) -> AccelerationStructureBuildSizes;
 
     unsafe fn destroy_buffer(&self, buffer: A::Buffer);
     //TODO: clarify if zero-sized mapping is allowed
@@ -528,6 +540,18 @@ pub trait CommandEncoder<A: Api>: Send + Sync {
 
     unsafe fn dispatch(&mut self, count: [u32; 3]);
     unsafe fn dispatch_indirect(&mut self, buffer: &A::Buffer, offset: wgt::BufferAddress);
+
+    unsafe fn build_acceleration_structures(
+        &mut self,
+        geometry: &crate::AccelerationStructureGeometry<A>,
+        format: crate::AccelerationStructureFormat,
+        mode: crate::AccelerationStructureBuildMode,
+        flags: (),
+        primitive_count: u32,
+        primitive_offset: u32,
+        destination_acceleration_structure: &A::AccelerationStructure,
+        scratch_buffer: &A::Buffer,
+    );
 }
 
 bitflags!(
@@ -664,6 +688,8 @@ bitflags::bitflags! {
         const STORAGE_READ_WRITE = 1 << 8;
         /// The indirect or count buffer in a indirect draw or dispatch.
         const INDIRECT = 1 << 9;
+        const BUFFER_DEVICE_ADDRESS = 1 << 10;
+        const ACCELERATION_STRUCTURE_BUILD_INPUT = 1 << 11;
         /// The combination of states that a buffer may be in _at the same time_.
         const INCLUSIVE = Self::MAP_READ.bits | Self::COPY_SRC.bits |
             Self::INDEX.bits | Self::VERTEX.bits | Self::UNIFORM.bits |
@@ -822,10 +848,23 @@ pub struct AccelerationStructureDescriptor<'a> {
     pub format: AccelerationStructureFormat,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub enum AccelerationStructureFormat {
     TopLevel,
     BottomLevel,
+}
+
+#[derive(Clone, Debug)]
+pub enum AccelerationStructureBuildMode {
+    Build,
+    Update,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct AccelerationStructureBuildSizes {
+    pub acceleration_structure_size: wgt::BufferAddress,
+    pub update_scratch_size: wgt::BufferAddress,
+    pub build_scratch_size: wgt::BufferAddress,
 }
 
 #[derive(Clone, Debug)]
@@ -1113,6 +1152,24 @@ pub struct BufferCopy {
     pub src_offset: wgt::BufferAddress,
     pub dst_offset: wgt::BufferAddress,
     pub size: wgt::BufferSize,
+}
+
+pub enum AccelerationStructureGeometry<'a, A: Api> {
+    Triangles {
+        vertex_buffer: &'a A::Buffer,
+        vertex_format: wgt::VertexFormat,
+        max_vertex: u32,
+        vertex_stride: wgt::BufferAddress,
+        indices: Option<AccelerationStructureGeometryIndices<'a, A>>,
+    },
+    Instances {
+        buffer: &'a A::Buffer,
+    },
+}
+
+pub struct AccelerationStructureGeometryIndices<'a, A: Api> {
+    pub format: wgt::IndexFormat,
+    pub buffer: &'a A::Buffer,
 }
 
 #[derive(Clone, Debug)]

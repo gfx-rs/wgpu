@@ -809,11 +809,53 @@ impl crate::Device<super::Api> for super::Device {
         })
     }
 
-    unsafe fn create_acceleration_structure(&self, desc: &crate::AccelerationStructureDescriptor) -> Result<super::AccelerationStructure, crate::DeviceError> {
-        let functor = match self.shared.extension_fns.acceleration_structure {
-            Some(ref functor) => {
-                functor
-            }
+    unsafe fn get_acceleration_structure_build_size(
+        &self,
+        geometry: &crate::AccelerationStructureGeometry<super::Api>,
+        format: crate::AccelerationStructureFormat,
+        mode: crate::AccelerationStructureBuildMode,
+        flags: (),
+        primitive_count: u32,
+    ) -> crate::AccelerationStructureBuildSizes {
+        let extension = match self.shared.extension_fns.acceleration_structure {
+            Some(ref extension) => extension,
+            None => panic!("Feature `RAY_TRACING` not enabled"),
+        };
+
+        let bda_extension = match self.shared.extension_fns.buffer_device_address {
+            Some(ref extension) => extension,
+            None => panic!("Feature `BDA` not enabled"),
+        };
+
+        let geometry = map_acceleration_structure_geometry(geometry, &bda_extension);
+
+        let geometries = &[*geometry];
+
+        let geometry_info = vk::AccelerationStructureBuildGeometryInfoKHR::builder()
+            .ty(conv::map_acceleration_structure_format(format))
+            .mode(conv::map_acceleration_structure_build_mode(mode))
+            .flags(vk::BuildAccelerationStructureFlagsKHR::PREFER_FAST_TRACE)
+            .geometries(geometries);
+
+        let raw = extension.get_acceleration_structure_build_sizes(
+            vk::AccelerationStructureBuildTypeKHR::DEVICE,
+            &geometry_info,
+            &[primitive_count],
+        );
+
+        crate::AccelerationStructureBuildSizes {
+            acceleration_structure_size: raw.acceleration_structure_size,
+            update_scratch_size: raw.update_scratch_size,
+            build_scratch_size: raw.build_scratch_size,
+        }
+    }
+
+    unsafe fn create_acceleration_structure(
+        &self,
+        desc: &crate::AccelerationStructureDescriptor,
+    ) -> Result<super::AccelerationStructure, crate::DeviceError> {
+        let extension = match self.shared.extension_fns.acceleration_structure {
+            Some(ref extension) => extension,
             None => panic!("Feature `RAY_TRACING` not enabled"),
         };
 
@@ -821,14 +863,12 @@ impl crate::Device<super::Api> for super::Device {
             .size(desc.size)
             .usage(
                 vk::BufferUsageFlags::ACCELERATION_STRUCTURE_STORAGE_KHR
-                | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS
+                    | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS,
             )
             .sharing_mode(vk::SharingMode::EXCLUSIVE);
 
         let raw_buffer = self.shared.raw.create_buffer(&vk_buffer_info, None)?;
         let req = self.shared.raw.get_buffer_memory_requirements(raw_buffer);
-        
-        dbg!(&req);
 
         let block = self.mem_allocator.lock().alloc(
             &*self.shared,
@@ -849,27 +889,20 @@ impl crate::Device<super::Api> for super::Device {
                 .set_object_name(vk::ObjectType::BUFFER, raw_buffer, label);
         }
 
-        let ty = match desc.format {
-            crate::AccelerationStructureFormat::TopLevel => vk::AccelerationStructureTypeKHR::TOP_LEVEL,
-            crate::AccelerationStructureFormat::BottomLevel => vk::AccelerationStructureTypeKHR::BOTTOM_LEVEL,
-        };
-
         let vk_info = vk::AccelerationStructureCreateInfoKHR::builder()
-        .buffer(raw_buffer)
-        .offset(256)
-        .size(desc.size / 2)
-        .ty(ty).build();
+            .buffer(raw_buffer)
+            .offset(0)
+            .size(desc.size)
+            .ty(conv::map_acceleration_structure_format(desc.format));
 
-        dbg!(&vk_info);
-
-        let raw_acceleration_structure = functor.create_acceleration_structure(
-            &vk_info,
-            None,
-        )?;
+        let raw_acceleration_structure = extension.create_acceleration_structure(&vk_info, None)?;
 
         if let Some(label) = desc.label {
-            self.shared
-                .set_object_name(vk::ObjectType::ACCELERATION_STRUCTURE_KHR, raw_acceleration_structure, label);
+            self.shared.set_object_name(
+                vk::ObjectType::ACCELERATION_STRUCTURE_KHR,
+                raw_acceleration_structure,
+                label,
+            );
         }
 
         Ok(super::AccelerationStructure {
@@ -2004,5 +2037,65 @@ impl From<gpu_descriptor::AllocationError> for crate::DeviceError {
     fn from(error: gpu_descriptor::AllocationError) -> Self {
         log::error!("descriptor allocation: {:?}", error);
         Self::OutOfMemory
+    }
+}
+
+pub unsafe fn map_acceleration_structure_geometry<'a>(
+    geometry: &crate::AccelerationStructureGeometry<super::Api>,
+    buffer_device_address: &ash::extensions::khr::BufferDeviceAddress,
+) -> vk::AccelerationStructureGeometryKHRBuilder<'a> {
+    match geometry {
+        crate::AccelerationStructureGeometry::Instances { buffer } => {
+            let instances = vk::AccelerationStructureGeometryInstancesDataKHR::builder().data(
+                vk::DeviceOrHostAddressConstKHR {
+                    device_address: buffer_device_address.get_buffer_device_address(
+                        &vk::BufferDeviceAddressInfo::builder().buffer(buffer.raw),
+                    ),
+                },
+            );
+
+            vk::AccelerationStructureGeometryKHR::builder()
+                .geometry_type(vk::GeometryTypeKHR::INSTANCES)
+                .geometry(vk::AccelerationStructureGeometryDataKHR {
+                    instances: *instances,
+                })
+                .flags(vk::GeometryFlagsKHR::empty())
+        }
+        &crate::AccelerationStructureGeometry::Triangles {
+            vertex_buffer,
+            vertex_format,
+            max_vertex,
+            vertex_stride,
+            ref indices,
+        } => {
+            let mut triangles_data = vk::AccelerationStructureGeometryTrianglesDataKHR::builder()
+                .vertex_data(vk::DeviceOrHostAddressConstKHR {
+                    device_address: buffer_device_address.get_buffer_device_address(
+                        &vk::BufferDeviceAddressInfo::builder().buffer(vertex_buffer.raw),
+                    ),
+                })
+                .vertex_format(conv::map_vertex_format(vertex_format))
+                .vertex_stride(vertex_stride)
+                .max_vertex(max_vertex);
+
+            if let Some(indices) = indices {
+                triangles_data = triangles_data
+                    .index_type(conv::map_index_format(indices.format))
+                    .index_data(vk::DeviceOrHostAddressConstKHR {
+                        device_address: buffer_device_address.get_buffer_device_address(
+                            &vk::BufferDeviceAddressInfo::builder().buffer(indices.buffer.raw),
+                        ),
+                    })
+            }
+
+            let triangles_data = triangles_data.build();
+
+            vk::AccelerationStructureGeometryKHR::builder()
+                .geometry_type(vk::GeometryTypeKHR::TRIANGLES)
+                .geometry(vk::AccelerationStructureGeometryDataKHR {
+                    triangles: triangles_data,
+                })
+                .flags(vk::GeometryFlagsKHR::empty())
+        }
     }
 }

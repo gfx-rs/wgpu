@@ -28,6 +28,8 @@ pub struct PhysicalDeviceFeatures {
         vk::PhysicalDevice16BitStorageFeatures,
     )>,
     acceleration_structure: Option<vk::PhysicalDeviceAccelerationStructureFeaturesKHR>,
+    buffer_device_address: Option<vk::PhysicalDeviceBufferDeviceAddressFeaturesKHR>,
+    ray_query: Option<vk::PhysicalDeviceRayQueryFeaturesKHR>,
 }
 
 // This is safe because the structs have `p_next: *mut c_void`, which we null out/never read.
@@ -67,6 +69,12 @@ impl PhysicalDeviceFeatures {
             info = info.push_next(_16bit_feature);
         }
         if let Some(ref mut feature) = self.acceleration_structure {
+            info = info.push_next(feature);
+        }
+        if let Some(ref mut feature) = self.buffer_device_address {
+            info = info.push_next(feature);
+        }
+        if let Some(ref mut feature) = self.ray_query {
             info = info.push_next(feature);
         }
         info
@@ -299,12 +307,37 @@ impl PhysicalDeviceFeatures {
             } else {
                 None
             },
-            acceleration_structure: if true {
-                Some(vk::PhysicalDeviceAccelerationStructureFeaturesKHR::builder()
-                .acceleration_structure(true).build())
+            acceleration_structure: if enabled_extensions
+                .contains(&vk::KhrAccelerationStructureFn::name())
+            {
+                Some(
+                    vk::PhysicalDeviceAccelerationStructureFeaturesKHR::builder()
+                        .acceleration_structure(true)
+                        .build(),
+                )
             } else {
                 None
-            }
+            },
+            buffer_device_address: if enabled_extensions
+                .contains(&vk::KhrBufferDeviceAddressFn::name())
+            {
+                Some(
+                    vk::PhysicalDeviceBufferDeviceAddressFeaturesKHR::builder()
+                        .buffer_device_address(true)
+                        .build(),
+                )
+            } else {
+                None
+            },
+            ray_query: if enabled_extensions.contains(&vk::KhrRayQueryFn::name()) {
+                Some(
+                    vk::PhysicalDeviceRayQueryFeaturesKHR::builder()
+                        .ray_query(true)
+                        .build(),
+                )
+            } else {
+                None
+            },
         }
     }
 
@@ -516,11 +549,12 @@ impl PhysicalDeviceFeatures {
 }
 
 /// Information gathered about a physical device capabilities.
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct PhysicalDeviceCapabilities {
     supported_extensions: Vec<vk::ExtensionProperties>,
     properties: vk::PhysicalDeviceProperties,
     descriptor_indexing: Option<vk::PhysicalDeviceDescriptorIndexingPropertiesEXT>,
+    acceleration_structure: Option<vk::PhysicalDeviceAccelerationStructurePropertiesKHR>,
 }
 
 // This is safe because the structs have `p_next: *mut c_void`, which we null out/never read.
@@ -592,6 +626,8 @@ impl PhysicalDeviceCapabilities {
         if true {
             extensions.push(vk::KhrDeferredHostOperationsFn::name());
             extensions.push(vk::KhrAccelerationStructureFn::name());
+            extensions.push(vk::KhrBufferDeviceAddressFn::name());
+            extensions.push(vk::KhrRayQueryFn::name());
         }
 
         if requested_features.contains(wgt::Features::CONSERVATIVE_RASTERIZATION) {
@@ -752,12 +788,22 @@ impl super::InstanceShared {
                 let supports_descriptor_indexing =
                     capabilities.supports_extension(vk::ExtDescriptorIndexingFn::name());
 
+                let supports_acceleration_structure =
+                    capabilities.supports_extension(vk::KhrAccelerationStructureFn::name());
+
                 let mut builder = vk::PhysicalDeviceProperties2::builder();
 
                 if supports_descriptor_indexing {
                     let next = capabilities
                         .descriptor_indexing
                         .insert(vk::PhysicalDeviceDescriptorIndexingPropertiesEXT::default());
+                    builder = builder.push_next(next);
+                }
+
+                if supports_acceleration_structure {
+                    let next = capabilities
+                        .acceleration_structure
+                        .insert(vk::PhysicalDeviceAccelerationStructurePropertiesKHR::default());
                     builder = builder.push_next(next);
                 }
 
@@ -845,6 +891,12 @@ impl super::InstanceShared {
                 ));
                 builder = builder.push_next(&mut next.0);
                 builder = builder.push_next(&mut next.1);
+            }
+            if capabilities.supports_extension(vk::KhrAccelerationStructureFn::name()) {
+                let next = features
+                    .acceleration_structure
+                    .insert(vk::PhysicalDeviceAccelerationStructureFeaturesKHR::default());
+                builder = builder.push_next(next);
             }
 
             let mut features2 = builder.build();
@@ -1113,11 +1165,24 @@ impl super::Adapter {
         } else {
             None
         };
-        let acceleration_structure_fn = if enabled_extensions.contains(&khr::AccelerationStructure::name()) {
-            Some(khr::AccelerationStructure::new(&self.instance.raw, &raw_device))
-        } else {
-            None
-        };
+        let acceleration_structure_fn =
+            if enabled_extensions.contains(&khr::AccelerationStructure::name()) {
+                Some(khr::AccelerationStructure::new(
+                    &self.instance.raw,
+                    &raw_device,
+                ))
+            } else {
+                None
+            };
+        let buffer_device_address_fn =
+            if enabled_extensions.contains(&khr::BufferDeviceAddress::name()) {
+                Some(khr::BufferDeviceAddress::new(
+                    &self.instance.raw,
+                    &raw_device,
+                ))
+            } else {
+                None
+            };
 
         let naga_options = {
             use naga::back::spv;
@@ -1211,6 +1276,7 @@ impl super::Adapter {
                 draw_indirect_count: indirect_count_fn,
                 timeline_semaphore: timeline_semaphore_fn,
                 acceleration_structure: acceleration_structure_fn,
+                buffer_device_address: buffer_device_address_fn,
             },
             vendor_id: self.phd_capabilities.properties.vendor_id,
             timestamp_period: self.phd_capabilities.properties.limits.timestamp_period,
@@ -1259,7 +1325,8 @@ impl super::Adapter {
                         size: memory_heap.size,
                     })
                     .collect(),
-                buffer_device_address: false,
+                buffer_device_address: enabled_extensions
+                    .contains(&khr::BufferDeviceAddress::name()),
             };
             gpu_alloc::GpuAllocator::new(config, properties)
         };

@@ -252,7 +252,9 @@ impl<A: hal::Api> Example<A> {
         let staging_buffer_desc = hal::BufferDescriptor {
             label: Some("stage"),
             size: texture_data.len() as wgt::BufferAddress,
-            usage: hal::BufferUses::MAP_WRITE | hal::BufferUses::COPY_SRC,
+            usage: hal::BufferUses::MAP_WRITE
+                | hal::BufferUses::COPY_SRC
+                | hal::BufferUses::BUFFER_DEVICE_ADDRESS,
             memory_flags: hal::MemoryFlags::TRANSIENT | hal::MemoryFlags::PREFER_COHERENT,
         };
         let staging_buffer = unsafe { device.create_buffer(&staging_buffer_desc).unwrap() };
@@ -268,6 +270,110 @@ impl<A: hal::Api> Example<A> {
             device.unmap_buffer(&staging_buffer).unwrap();
             assert!(mapping.is_coherent);
         }
+
+        let triangle: [f32; 9] = [0.0, 1.0, 0.0, -1.0, 0.0, 0.0, 1.0, 0.0, 0.0];
+
+        let triangle_size = std::mem::size_of::<[f32; 9]>();
+
+        dbg!(&triangle_size);
+
+        let indices: [u32; 3] = [0, 1, 2];
+
+        let indices_size = std::mem::size_of::<[u32; 3]>();
+
+        let triangle_buffer = unsafe {
+            device
+                .create_buffer(&hal::BufferDescriptor {
+                    label: Some("t buf"),
+                    size: triangle_size as u64,
+                    usage: hal::BufferUses::MAP_WRITE
+                        | hal::BufferUses::BUFFER_DEVICE_ADDRESS
+                        | hal::BufferUses::ACCELERATION_STRUCTURE_BUILD_INPUT,
+                    memory_flags: hal::MemoryFlags::TRANSIENT | hal::MemoryFlags::PREFER_COHERENT,
+                })
+                .unwrap()
+        };
+
+        let i_buf = unsafe {
+            device
+                .create_buffer(&hal::BufferDescriptor {
+                    label: Some("i buf"),
+                    size: indices_size as u64,
+                    usage: hal::BufferUses::MAP_WRITE
+                        | hal::BufferUses::BUFFER_DEVICE_ADDRESS
+                        | hal::BufferUses::ACCELERATION_STRUCTURE_BUILD_INPUT,
+                    memory_flags: hal::MemoryFlags::TRANSIENT | hal::MemoryFlags::PREFER_COHERENT,
+                })
+                .unwrap()
+        };
+
+        unsafe {
+            let mapping = device
+                .map_buffer(&triangle_buffer, 0..triangle_size as u64)
+                .unwrap();
+            ptr::copy_nonoverlapping(
+                triangle.as_ptr() as *const u8,
+                mapping.ptr.as_ptr(),
+                triangle_size,
+            );
+            device.unmap_buffer(&staging_buffer).unwrap();
+            assert!(mapping.is_coherent);
+        }
+
+        unsafe {
+            let mapping = device.map_buffer(&i_buf, 0..indices_size as u64).unwrap();
+            ptr::copy_nonoverlapping(
+                indices.as_ptr() as *const u8,
+                mapping.ptr.as_ptr(),
+                indices_size,
+            );
+            device.unmap_buffer(&staging_buffer).unwrap();
+            assert!(mapping.is_coherent);
+        }
+
+        let geometry = hal::AccelerationStructureGeometry::Triangles {
+            vertex_buffer: &triangle_buffer,
+            vertex_format: wgt::VertexFormat::Float32x3,
+            max_vertex: 3,
+            vertex_stride: 3 * 4,
+            indices: Some(hal::AccelerationStructureGeometryIndices {
+                buffer: &i_buf,
+                format: wgt::IndexFormat::Uint32,
+            }),
+        };
+
+        let sizes = unsafe {
+            device.get_acceleration_structure_build_size(
+                &geometry,
+                hal::AccelerationStructureFormat::BottomLevel,
+                hal::AccelerationStructureBuildMode::Build,
+                (),
+                1,
+            )
+        };
+
+        dbg!(&sizes);
+
+        let blas = unsafe {
+            device.create_acceleration_structure(&hal::AccelerationStructureDescriptor {
+                label: Some("my as"),
+                size: sizes.acceleration_structure_size,
+                format: hal::AccelerationStructureFormat::BottomLevel,
+            })
+        }
+        .unwrap();
+
+        let scratch_buffer = unsafe {
+            device
+                .create_buffer(&hal::BufferDescriptor {
+                    label: Some("scratch buffer"),
+                    size: sizes.build_scratch_size,
+                    usage: hal::BufferUses::BUFFER_DEVICE_ADDRESS
+                        | hal::BufferUses::STORAGE_READ_WRITE,
+                    memory_flags: hal::MemoryFlags::empty(),
+                })
+                .unwrap()
+        };
 
         let texture_desc = hal::TextureDescriptor {
             label: None,
@@ -291,6 +397,21 @@ impl<A: hal::Api> Example<A> {
         };
         let mut cmd_encoder = unsafe { device.create_command_encoder(&cmd_encoder_desc).unwrap() };
         unsafe { cmd_encoder.begin_encoding(Some("init")).unwrap() };
+
+        unsafe {
+            // todo: extract out bytes from transmission renderer example and try those.
+            cmd_encoder.build_acceleration_structures(
+                &geometry,
+                hal::AccelerationStructureFormat::BottomLevel,
+                hal::AccelerationStructureBuildMode::Build,
+                (),
+                1,
+                0,
+                &blas,
+                &scratch_buffer,
+            );
+        }
+
         {
             let buffer_barrier = hal::BufferBarrier {
                 buffer: &staging_buffer,
@@ -344,14 +465,6 @@ impl<A: hal::Api> Example<A> {
             border_color: None,
         };
         let sampler = unsafe { device.create_sampler(&sampler_desc).unwrap() };
-
-        let accel = unsafe {
-            device.create_acceleration_structure(&hal::AccelerationStructureDescriptor {
-                label: Some("my as"),
-                size: 1024,
-                format: hal::AccelerationStructureFormat::BottomLevel,
-            })
-        };
 
         let globals = Globals {
             // cgmath::ortho() projection

@@ -491,6 +491,12 @@ pub fn map_buffer_usage(usage: crate::BufferUses) -> vk::BufferUsageFlags {
     if usage.contains(crate::BufferUses::INDIRECT) {
         flags |= vk::BufferUsageFlags::INDIRECT_BUFFER;
     }
+    if usage.contains(crate::BufferUses::BUFFER_DEVICE_ADDRESS) {
+        flags |= vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS;
+    }
+    if usage.contains(crate::BufferUses::ACCELERATION_STRUCTURE_BUILD_INPUT) {
+        flags |= vk::BufferUsageFlags::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_KHR;
+    }
     flags
 }
 
@@ -822,4 +828,28 @@ pub fn map_pipeline_statistics(
         flags |= vk::QueryPipelineStatisticFlags::COMPUTE_SHADER_INVOCATIONS;
     }
     flags
+}
+
+pub fn map_acceleration_structure_format(
+    format: crate::AccelerationStructureFormat,
+) -> vk::AccelerationStructureTypeKHR {
+    match format {
+        crate::AccelerationStructureFormat::TopLevel => vk::AccelerationStructureTypeKHR::TOP_LEVEL,
+        crate::AccelerationStructureFormat::BottomLevel => {
+            vk::AccelerationStructureTypeKHR::BOTTOM_LEVEL
+        }
+    }
+}
+
+pub fn map_acceleration_structure_build_mode(
+    format: crate::AccelerationStructureBuildMode,
+) -> vk::BuildAccelerationStructureModeKHR {
+    match format {
+        crate::AccelerationStructureBuildMode::Build => {
+            vk::BuildAccelerationStructureModeKHR::BUILD
+        }
+        crate::AccelerationStructureBuildMode::Update => {
+            vk::BuildAccelerationStructureModeKHR::UPDATE
+        }
+    }
 }
