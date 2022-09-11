@@ -1136,6 +1136,21 @@ impl crate::Device for super::Device {
         }
     }
 
+    unsafe fn get_acceleration_structure_device_address(
+        &self,
+        acceleration_structure: &super::AccelerationStructure,
+    ) -> wgt::BufferAddress {
+        let extension = match self.shared.extension_fns.acceleration_structure {
+            Some(ref extension) => extension,
+            None => panic!("Feature `RAY_TRACING` not enabled"),
+        };
+
+        extension.get_acceleration_structure_device_address(
+            &vk::AccelerationStructureDeviceAddressInfoKHR::builder()
+                .acceleration_structure(acceleration_structure.raw),
+        )
+    }
+
     unsafe fn create_acceleration_structure(
         &self,
         desc: &crate::AccelerationStructureDescriptor,
@@ -1147,10 +1162,7 @@ impl crate::Device for super::Device {
 
         let vk_buffer_info = vk::BufferCreateInfo::builder()
             .size(desc.size)
-            .usage(
-                vk::BufferUsageFlags::ACCELERATION_STRUCTURE_STORAGE_KHR
-                    | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS,
-            )
+            .usage(vk::BufferUsageFlags::ACCELERATION_STRUCTURE_STORAGE_KHR)
             .sharing_mode(vk::SharingMode::EXCLUSIVE);
 
         let raw_buffer = self.shared.raw.create_buffer(&vk_buffer_info, None)?;
@@ -1211,6 +1223,24 @@ impl crate::Device for super::Device {
 
     unsafe fn add_raw_buffer(&self, _buffer: &super::Buffer) {
         self.counters.buffers.add(1);
+    }
+
+    unsafe fn destroy_acceleration_structure(
+        &self,
+        acceleration_structure: super::AccelerationStructure,
+    ) {
+        let extension = match self.shared.extension_fns.acceleration_structure {
+            Some(ref extension) => extension,
+            None => panic!("Feature `RAY_TRACING` not enabled"),
+        };
+
+        extension.destroy_acceleration_structure(acceleration_structure.raw, None);
+        self.shared
+            .raw
+            .destroy_buffer(acceleration_structure.buffer, None);
+        self.mem_allocator
+            .lock()
+            .dealloc(&*self.shared, acceleration_structure.block.into_inner());
     }
 
     unsafe fn map_buffer(
