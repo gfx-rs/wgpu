@@ -2227,6 +2227,15 @@ pub struct BufferCopy {
     pub size: wgt::BufferSize,
 }
 
+pub enum AccelerationStructureGeometryInfo {
+    Triangles {
+        vertex_format: wgt::VertexFormat,
+        max_vertex: u32,
+        index_format: Option<wgt::IndexFormat>,
+    },
+    Instances,
+}
+
 pub enum AccelerationStructureGeometry<'a, A: Api> {
     Triangles {
         vertex_buffer: &'a A::Buffer,

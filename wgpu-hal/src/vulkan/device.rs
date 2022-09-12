@@ -1095,9 +1095,9 @@ impl crate::Device for super::Device {
         })
     }
 
-    unsafe fn get_acceleration_structure_build_size(
+    unsafe fn get_acceleration_structure_build_sizes(
         &self,
-        geometry: &crate::AccelerationStructureGeometry<super::Api>,
+        geometry_info: &crate::AccelerationStructureGeometryInfo,
         format: crate::AccelerationStructureFormat,
         mode: crate::AccelerationStructureBuildMode,
         flags: (),
@@ -1108,12 +1108,40 @@ impl crate::Device for super::Device {
             None => panic!("Feature `RAY_TRACING` not enabled"),
         };
 
-        let bda_extension = match self.shared.extension_fns.buffer_device_address {
-            Some(ref extension) => extension,
-            None => panic!("Feature `BDA` not enabled"),
-        };
+        let geometry = match geometry_info {
+            crate::AccelerationStructureGeometryInfo::Instances => {
+                let instances_data = vk::AccelerationStructureGeometryInstancesDataKHR::builder();
 
-        let geometry = map_acceleration_structure_geometry(geometry, &bda_extension);
+                vk::AccelerationStructureGeometryKHR::builder()
+                    .geometry_type(vk::GeometryTypeKHR::INSTANCES)
+                    .geometry(vk::AccelerationStructureGeometryDataKHR {
+                        instances: *instances_data,
+                    })
+                    .flags(vk::GeometryFlagsKHR::empty())
+            }
+            &crate::AccelerationStructureGeometryInfo::Triangles {
+                vertex_format,
+                max_vertex,
+                index_format,
+            } => {
+                let mut triangles_data =
+                    vk::AccelerationStructureGeometryTrianglesDataKHR::builder()
+                        .vertex_format(conv::map_vertex_format(vertex_format))
+                        .max_vertex(max_vertex);
+
+                if let Some(index_format) = index_format {
+                    triangles_data =
+                        triangles_data.index_type(conv::map_index_format(index_format));
+                }
+
+                vk::AccelerationStructureGeometryKHR::builder()
+                    .geometry_type(vk::GeometryTypeKHR::TRIANGLES)
+                    .geometry(vk::AccelerationStructureGeometryDataKHR {
+                        triangles: *triangles_data,
+                    })
+                    .flags(vk::GeometryFlagsKHR::empty())
+            }
+        };
 
         let geometries = &[*geometry];
 
@@ -1921,6 +1949,29 @@ impl crate::Device for super::Device {
                     write
                         .descriptor_count(entry.count)
                         .push_next(local_acceleration_structure_infos)
+                }
+                vk::DescriptorType::ACCELERATION_STRUCTURE_KHR => {
+                    let index = acceleration_structure_infos.len();
+                    let start = entry.resource_index;
+                    let end = start + entry.count;
+
+                    let raw_start = raw_acceleration_structures.len();
+
+                    raw_acceleration_structures.extend(
+                        desc.acceleration_structures[start as usize..end as usize]
+                            .iter()
+                            .map(|acceleration_structure| acceleration_structure.raw),
+                    );
+
+                    acceleration_structure_infos.push(
+                        // todo: this dereference to build the struct is a hack to get around lifetime issues.
+                        *vk::WriteDescriptorSetAccelerationStructureKHR::builder()
+                            .acceleration_structures(&raw_acceleration_structures[raw_start..]),
+                    );
+
+                    extra_descriptor_count += 1;
+
+                    write.push_next(&mut acceleration_structure_infos[index])
                 }
                 _ => unreachable!(),
             };
