@@ -12,13 +12,14 @@ use crate::{
     id,
     init_tracker::{has_copy_partial_init_tracker_coverage, TextureInitRange},
     resource::{BufferAccessError, BufferMapState, StagingBuffer, TextureInner},
-    track, FastHashSet, SubmissionIndex,
+    track::{self, TextureUsageScope},
+    FastHashSet, SubmissionIndex,
 };
 
-use hal::{CommandEncoder as _, Device as _, Queue as _};
+use hal::{CommandEncoder as _, Device as _, Queue as _, Texture as _};
 use parking_lot::Mutex;
 use smallvec::SmallVec;
-use std::{iter, mem, ptr};
+use std::{collections::HashSet, iter, mem, ptr};
 use thiserror::Error;
 
 /// Number of command buffers that we generate from the same pool
@@ -1218,6 +1219,62 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         baked
                             .initialize_texture_memory(&mut *trackers, &mut *texture_guard, device)
                             .map_err(|err| QueueSubmitError::DestroyedTexture(err.0))?;
+
+                        // Insert synthetic barriers to insert EXTERNAL barriers for any used external textures.
+                        {
+                            let mut used_external_textures = TextureUsageScope::new();
+                            let mut visited_ids = HashSet::new();
+
+                            let external_textures = baked
+                                .trackers
+                                .textures
+                                .pending()
+                                // Iterate in reverse to find the last transition state.
+                                .rev()
+                                // We only care about external textures
+                                .filter(|transition| {
+                                    // SAFETY: The texture must be known by the tracker if it was used during
+                                    // command submission or is pending.
+                                    let texture =
+                                        unsafe { texture_guard.get_unchecked(transition.id) };
+
+                                    texture
+                                        .inner
+                                        .as_raw()
+                                        .map(<A::Texture>::is_external)
+                                        .unwrap_or(false)
+                                })
+                                .filter(|transition| {
+                                    // Insert returns false if the element was already added.
+                                    visited_ids.insert(&transition.id)
+                                });
+
+                            external_textures.for_each(|transition| {
+                                // Create and record a synthetic transition state to EXTERNAL based on the last usage.
+                                unsafe {
+                                    let id = texture_guard
+                                        .get_valid_unchecked(transition.id, A::VARIANT);
+                                    let ref_count = baked.trackers.textures.get_ref_count(id);
+                                    used_external_textures
+                                        .merge_single(
+                                            &*texture_guard,
+                                            id,
+                                            Some(transition.selector.clone()),
+                                            ref_count,
+                                            transition.usage.end | hal::TextureUses::EXTERNAL,
+                                        )
+                                        .unwrap();
+                                }
+                            });
+
+                            if !used_external_textures.is_empty() {
+                                baked
+                                    .trackers
+                                    .textures
+                                    .set_from_usage_scope(&*texture_guard, &used_external_textures);
+                            }
+                        }
+
                         //Note: stateless trackers are not merged:
                         // device already knows these resources exist.
                         CommandBuffer::insert_barriers_from_tracker(

@@ -411,3 +411,9 @@ impl crate::CommandEncoder<Api> for Encoder {
     unsafe fn dispatch(&mut self, count: [u32; 3]) {}
     unsafe fn dispatch_indirect(&mut self, buffer: &Resource, offset: wgt::BufferAddress) {}
 }
+
+impl crate::Texture<Api> for Resource {
+    fn is_external(&self) -> bool {
+        false
+    }
+}

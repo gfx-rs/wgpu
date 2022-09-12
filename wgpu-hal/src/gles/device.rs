@@ -1321,6 +1321,12 @@ impl crate::Device<super::Api> for super::Device {
     }
 }
 
+impl crate::Texture<super::Api> for super::Texture {
+    fn is_external(&self) -> bool {
+        false
+    }
+}
+
 // SAFE: WASM doesn't have threads
 #[cfg(target_arch = "wasm32")]
 unsafe impl Sync for super::Device {}

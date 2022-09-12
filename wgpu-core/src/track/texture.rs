@@ -451,6 +451,11 @@ impl<A: hub::HalApi> TextureTracker<A> {
         self.metadata.owned_ids()
     }
 
+    /// Returns all currently pending transitions.
+    pub fn pending(&self) -> impl DoubleEndedIterator<Item = &PendingTransition<TextureUses>> + '_ {
+        self.temp.iter()
+    }
+
     /// Drains all currently pending transitions.
     pub fn drain(&mut self) -> Drain<PendingTransition<TextureUses>> {
         self.temp.drain(..)

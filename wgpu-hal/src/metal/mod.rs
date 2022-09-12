@@ -406,6 +406,12 @@ impl crate::Queue<Api> for Queue {
     }
 }
 
+impl crate::Texture<Api> for Texture {
+    fn is_external(&self) -> bool {
+        false
+    }
+}
+
 #[derive(Debug)]
 pub struct Buffer {
     raw: metal::Buffer,

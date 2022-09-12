@@ -900,3 +900,9 @@ impl crate::Queue<Api> for Queue {
         (1_000_000_000.0 / frequency as f64) as f32
     }
 }
+
+impl crate::Texture<Api> for Texture {
+    fn is_external(&self) -> bool {
+        false
+    }
+}

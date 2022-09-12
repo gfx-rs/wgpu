@@ -224,6 +224,12 @@ impl crate::Queue<super::Api> for super::Queue {
     }
 }
 
+impl crate::Texture<super::Api> for super::Texture {
+    fn is_external(&self) -> bool {
+        false
+    }
+}
+
 impl super::D3D11Device {
     #[allow(trivial_casts)] // come on
     pub unsafe fn check_feature_support<T>(&self, feature: d3d11::D3D11_FEATURE) -> T {

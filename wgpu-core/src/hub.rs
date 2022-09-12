@@ -378,6 +378,16 @@ impl<T, I: id::TypedId> Storage<T, I> {
         }
     }
 
+    pub(crate) unsafe fn get_valid_unchecked(&self, id: u32, backend: Backend) -> id::Valid<I> {
+        let epoch = match self.map[id as usize] {
+            Element::Occupied(_, epoch) => epoch,
+            Element::Vacant => panic!("{}[{}] does not exist", self.kind, id),
+            Element::Error(_, _) => panic!(""),
+        };
+
+        id::Valid(I::zip(id, epoch, backend))
+    }
+
     pub(crate) fn label_for_invalid_id(&self, id: I) -> &str {
         let (index, _, _) = id.unzip();
         match self.map.get(index as usize) {

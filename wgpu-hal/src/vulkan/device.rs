@@ -646,12 +646,15 @@ impl super::Device {
     /// # Safety
     ///
     /// - `vk_image` must be created respecting `desc`
+    /// - If [`TextureUses::EXTERNAL`](crate::TextureUses::EXTERNAL) is set, then `external_queue_family_index` must be set.
+    /// - If `external_queue_family_index` is set, then [`TextureUses::EXTERNAL`](crate::TextureUses::EXTERNAL) must be set.
     /// - If `drop_guard` is `Some`, the application must manually destroy the image handle. This
     ///   can be done inside the `Drop` impl of `drop_guard`.
     /// - If the `ImageCreateFlags` does not contain `MUTABLE_FORMAT`, the `view_formats` of `desc` must be empty.
     pub unsafe fn texture_from_raw(
         vk_image: vk::Image,
         desc: &crate::TextureDescriptor,
+        external_queue_family_index: Option<u32>,
         drop_guard: Option<crate::DropGuard>,
     ) -> super::Texture {
         let mut raw_flags = vk::ImageCreateFlags::empty();
@@ -668,6 +671,20 @@ impl super::Device {
             view_formats.push(desc.format)
         }
 
+        if desc.usage.contains(crate::TextureUses::EXTERNAL) {
+            wgt::strict_assert!(
+                external_queue_family_index.is_none(),
+                "Texture has TextureUse::EXTERNAL, but does not specify the owning queue family"
+            );
+        }
+
+        if external_queue_family_index.is_none() {
+            wgt::strict_assert!(
+                desc.usage.contains(crate::TextureUses::EXTERNAL),
+                "Texture specifies external queue family ownership but does not have TextureUse::EXTERNAL"
+            );
+        }
+
         super::Texture {
             raw: vk_image,
             drop_guard,
@@ -677,6 +694,7 @@ impl super::Device {
             raw_flags: vk::ImageCreateFlags::empty(),
             copy_size: desc.copy_extent(),
             view_formats,
+            external_queue_family_index,
         }
     }
 
@@ -1018,6 +1036,8 @@ impl crate::Device<super::Api> for super::Device {
             raw_flags,
             copy_size,
             view_formats: wgt_view_formats,
+            // wgpu's own textures use the exclusive sharing mode.
+            external_queue_family_index: None,
         })
     }
     unsafe fn destroy_texture(&self, texture: super::Texture) {

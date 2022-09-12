@@ -165,16 +165,30 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             let dst_layout = conv::derive_image_layout(bar.usage.end, bar.texture.format);
             dst_stages |= dst_stage;
 
-            vk_barriers.push(
-                vk::ImageMemoryBarrier::builder()
-                    .image(bar.texture.raw)
-                    .subresource_range(range)
-                    .src_access_mask(src_access)
-                    .dst_access_mask(dst_access)
-                    .old_layout(src_layout)
-                    .new_layout(dst_layout)
-                    .build(),
-            );
+            let mut barrier = vk::ImageMemoryBarrier::builder()
+                .image(bar.texture.raw)
+                .subresource_range(range)
+                .src_access_mask(src_access)
+                .dst_access_mask(dst_access)
+                .old_layout(src_layout)
+                .new_layout(dst_layout);
+
+            // If the texture is external, we need to specify a queue family ownership transfer.
+            if bar.usage.start.contains(crate::TextureUses::EXTERNAL) {
+                barrier = barrier
+                    .src_queue_family_index(bar.texture.external_queue_family_index.unwrap())
+                    .dst_queue_family_index(self.device.queue_index);
+            }
+
+            // If this is the last usage of the texture during this command submission, return the queue to
+            // it's sentinel queue family.
+            if bar.usage.end.contains(crate::TextureUses::EXTERNAL) {
+                barrier = barrier
+                    .src_queue_family_index(self.device.queue_index)
+                    .dst_queue_family_index(bar.texture.external_queue_family_index.unwrap());
+            }
+
+            vk_barriers.push(barrier.build());
         }
 
         if !vk_barriers.is_empty() {

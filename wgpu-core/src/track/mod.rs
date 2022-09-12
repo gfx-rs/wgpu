@@ -119,7 +119,7 @@ use wgt::strict_assert_ne;
 /// A structure containing all the information about a particular resource
 /// transition. User code should be able to generate a pipeline barrier
 /// based on the contents.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub(crate) struct PendingTransition<S: ResourceUses> {
     pub id: u32,
     pub selector: S::Selector,

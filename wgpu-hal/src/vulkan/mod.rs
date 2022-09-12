@@ -297,6 +297,19 @@ pub struct Texture {
     raw_flags: vk::ImageCreateFlags,
     copy_size: crate::CopyExtent,
     view_formats: Vec<wgt::TextureFormat>,
+    /// The index of the external queue family which owns the image contents.
+    ///
+    /// When using images imported from external memory in Vulkan, the images belong to a sentinel "external"
+    /// queue family. In order to use these textures, the texture must be transferred to the graphics queue
+    /// family using a memory barrier before the texture used, and then returned to the sentinel queue at the
+    /// end of command execution.
+    ///
+    /// If this is [`Some`], the value is typically [`QUEUE_FAMILY_EXTERNAL`](ash::vk::QUEUE_FAMILY_EXTERNAL)
+    /// or [`QUEUE_FAMILY_FOREIGN_EXT`](ash::vk::QUEUE_FAMILY_FOREIGN_EXT) depending on imported memory object
+    /// and or the type of memory object.
+    ///
+    /// The value will be [`None`] if the texture was not imported using external memory.
+    external_queue_family_index: Option<u32>,
 }
 
 impl Texture {
@@ -607,6 +620,13 @@ impl crate::Queue<Api> for Queue {
 
     unsafe fn get_timestamp_period(&self) -> f32 {
         self.device.timestamp_period
+    }
+}
+
+impl crate::Texture<Api> for Texture {
+    fn is_external(&self) -> bool {
+        self.usage.contains(crate::TextureUses::EXTERNAL)
+            && self.external_queue_family_index.is_some()
     }
 }
 

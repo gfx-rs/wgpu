@@ -820,6 +820,7 @@ impl crate::Surface<super::Api> for super::Surface {
                     depth: 1,
                 },
                 view_formats: sc.view_formats.clone(),
+                external_queue_family_index: None,
             },
         };
         Ok(Some(crate::AcquiredSurfaceTexture {
