@@ -170,11 +170,6 @@ the same every time it is rendered, we now warn if it is missing.
 - Document safety requirements for `Adapter::from_external` in gles hal by @i509VCB in [#2863](https://github.com/gfx-rs/wgpu/pull/2863)
 - Make `AdapterContext` a publicly accessible type in the gles hal by @i509VCB in [#2870](https://github.com/gfx-rs/wgpu/pull/2870)
 
-### Changes
-
-#### Metal
-- Extract the generic code into `get_metal_layer` by @jinleili in [#2826](https://github.com/gfx-rs/wgpu/pull/2826)
-
 ## wgpu-0.13.1 (2022-07-02)
 
 ### Bug Fixes
