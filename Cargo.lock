@@ -815,6 +815,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f43e957e744be03f5801a55472f593d43fabdebf25a4585db250f04d86b1675f"
 
 [[package]]
+name = "glam"
+version = "0.21.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "518faa5064866338b013ff9b2350dc318e14cc4fcd6cb8206d7e7c9886c98815"
+
+[[package]]
 name = "glow"
 version = "0.11.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2352,7 +2358,7 @@ dependencies = [
  "ddsfile",
  "env_logger",
  "futures-intrusive",
- "glam",
+ "glam 0.20.5",
  "js-sys",
  "log",
  "naga",
@@ -2414,6 +2420,7 @@ dependencies = [
  "env_logger",
  "foreign-types 0.3.2",
  "fxhash",
+ "glam 0.21.3",
  "glow",
  "glutin",
  "gpu-alloc",

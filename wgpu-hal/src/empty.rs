@@ -125,9 +125,9 @@ impl crate::Device<Api> for Context {
     ) -> DeviceResult<Resource> {
         Ok(Resource)
     }
-    unsafe fn get_acceleration_structure_build_size(
+    unsafe fn get_acceleration_structure_build_sizes(
         &self,
-        geometry: &crate::AccelerationStructureGeometry<Api>,
+        geometry_info: &crate::AccelerationStructureGeometryInfo,
         format: crate::AccelerationStructureFormat,
         mode: crate::AccelerationStructureBuildMode,
         flags: (),

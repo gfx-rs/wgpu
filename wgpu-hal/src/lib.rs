@@ -244,9 +244,9 @@ pub trait Device<A: Api>: Send + Sync {
         desc: &AccelerationStructureDescriptor,
     ) -> Result<A::AccelerationStructure, DeviceError>;
 
-    unsafe fn get_acceleration_structure_build_size(
+    unsafe fn get_acceleration_structure_build_sizes(
         &self,
-        geometry: &AccelerationStructureGeometry<A>,
+        geometry_info: &AccelerationStructureGeometryInfo,
         format: AccelerationStructureFormat,
         mode: AccelerationStructureBuildMode,
         flags: (),
@@ -550,9 +550,9 @@ pub trait CommandEncoder<A: Api>: Send + Sync {
 
     unsafe fn build_acceleration_structures(
         &mut self,
-        geometry: &crate::AccelerationStructureGeometry<A>,
-        format: crate::AccelerationStructureFormat,
-        mode: crate::AccelerationStructureBuildMode,
+        geometry: &AccelerationStructureGeometry<A>,
+        format: AccelerationStructureFormat,
+        mode: AccelerationStructureBuildMode,
         flags: (),
         primitive_count: u32,
         primitive_offset: u32,
@@ -993,6 +993,7 @@ pub struct BindGroupDescriptor<'a, A: Api> {
     pub samplers: &'a [&'a A::Sampler],
     pub textures: &'a [TextureBinding<'a, A>],
     pub entries: &'a [BindGroupEntry],
+    pub acceleration_structures: &'a [&'a A::AccelerationStructure],
 }
 
 #[derive(Clone, Debug)]
@@ -1160,6 +1161,15 @@ pub struct BufferCopy {
     pub src_offset: wgt::BufferAddress,
     pub dst_offset: wgt::BufferAddress,
     pub size: wgt::BufferSize,
+}
+
+pub enum AccelerationStructureGeometryInfo {
+    Triangles {
+        vertex_format: wgt::VertexFormat,
+        max_vertex: u32,
+        index_format: Option<wgt::IndexFormat>,
+    },
+    Instances,
 }
 
 pub enum AccelerationStructureGeometry<'a, A: Api> {

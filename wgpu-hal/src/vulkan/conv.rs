@@ -713,6 +713,7 @@ pub fn map_binding_type(ty: wgt::BindingType) -> vk::DescriptorType {
         wgt::BindingType::Sampler { .. } => vk::DescriptorType::SAMPLER,
         wgt::BindingType::Texture { .. } => vk::DescriptorType::SAMPLED_IMAGE,
         wgt::BindingType::StorageTexture { .. } => vk::DescriptorType::STORAGE_IMAGE,
+        wgt::BindingType::AccelerationStructure => vk::DescriptorType::ACCELERATION_STRUCTURE_KHR,
     }
 }
 

@@ -362,17 +362,70 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             None => panic!("Feature `BDA` not enabled"),
         };
 
-        let geometry =
-            super::device::map_acceleration_structure_geometry(geometry, &bda_extension).build();
+        let geometry = match geometry {
+            crate::AccelerationStructureGeometry::Instances { buffer } => {
+                let instances = vk::AccelerationStructureGeometryInstancesDataKHR::builder().data(
+                    vk::DeviceOrHostAddressConstKHR {
+                        device_address: bda_extension.get_buffer_device_address(
+                            &vk::BufferDeviceAddressInfo::builder().buffer(buffer.raw),
+                        ),
+                    },
+                );
 
-        let geometries = &[geometry];
+                vk::AccelerationStructureGeometryKHR::builder()
+                    .geometry_type(vk::GeometryTypeKHR::INSTANCES)
+                    .geometry(vk::AccelerationStructureGeometryDataKHR {
+                        instances: *instances,
+                    })
+                    .flags(vk::GeometryFlagsKHR::empty())
+            }
+            &crate::AccelerationStructureGeometry::Triangles {
+                vertex_buffer,
+                vertex_format,
+                max_vertex,
+                vertex_stride,
+                ref indices,
+            } => {
+                let mut triangles_data =
+                    vk::AccelerationStructureGeometryTrianglesDataKHR::builder()
+                        .vertex_data(vk::DeviceOrHostAddressConstKHR {
+                            device_address: bda_extension.get_buffer_device_address(
+                                &vk::BufferDeviceAddressInfo::builder().buffer(vertex_buffer.raw),
+                            ),
+                        })
+                        .vertex_format(conv::map_vertex_format(vertex_format))
+                        .vertex_stride(vertex_stride)
+                        .max_vertex(max_vertex);
+
+                if let Some(indices) = indices {
+                    triangles_data = triangles_data
+                        .index_type(conv::map_index_format(indices.format))
+                        .index_data(vk::DeviceOrHostAddressConstKHR {
+                            device_address: bda_extension.get_buffer_device_address(
+                                &vk::BufferDeviceAddressInfo::builder().buffer(indices.buffer.raw),
+                            ),
+                        })
+                }
+
+                let triangles_data = triangles_data.build();
+
+                vk::AccelerationStructureGeometryKHR::builder()
+                    .geometry_type(vk::GeometryTypeKHR::TRIANGLES)
+                    .geometry(vk::AccelerationStructureGeometryDataKHR {
+                        triangles: triangles_data,
+                    })
+                    .flags(vk::GeometryFlagsKHR::empty())
+            }
+        };
+
+        let geometries = &[*geometry];
 
         let range = vk::AccelerationStructureBuildRangeInfoKHR::builder()
             .primitive_count(primitive_count)
             .primitive_offset(primitive_offset)
             .build();
 
-        let mut geometry_info = vk::AccelerationStructureBuildGeometryInfoKHR::builder()
+        let geometry_info = vk::AccelerationStructureBuildGeometryInfoKHR::builder()
             .ty(conv::map_acceleration_structure_format(format))
             .mode(conv::map_acceleration_structure_build_mode(mode))
             .flags(vk::BuildAccelerationStructureFlagsKHR::PREFER_FAST_TRACE)
