@@ -89,6 +89,10 @@ non-WGSL shaders if you're running on WebGPU.
 
 WGSL is always supported by default, but GLSL and SPIR-V need features enabled to compile in support.
 
+Note that the WGSL specification is still under development,
+so the [draft specification][wgsl spec] does not exactly describe what `wgpu` supports.
+See [below](#tracking-the-webgpu-and-wgsl-draft-specifications) for details.
+
 To enable SPIR-V shaders, enable the `spirv` feature of wgpu.  
 To enable GLSL shaders, enable the `glsl` feature of wgpu.
 
@@ -180,6 +184,41 @@ cargo run --manifest-path ../cts_runner/Cargo.toml -- ./tools/run_deno --verbose
 To find the full list of tests, go to the [online cts viewer](https://gpuweb.github.io/cts/standalone/?runnow=0&worker=0&debug=0&q=webgpu:*).
 
 The list of currently enabled CTS tests can be found [here](./cts_runner/test.lst).
+
+## Tracking the WebGPU and WGSL draft specifications
+
+The `wgpu` crate is meant to be an idiomatic Rust translation of the [WebGPU API][webgpu spec].
+That specification, along with its shading language, [WGSL][wgsl spec],
+are both still in the "Working Draft" phase,
+and while the general outlines are stable,
+details change frequently.
+Until the specification is stabilized, the `wgpu` crate and the version of WGSL it implements
+will likely differ from what is specified,
+as the implementation catches up.
+
+Exactly which WGSL features `wgpu` supports depends on how you are using it:
+
+- When running as native code, `wgpu` uses the [Naga][naga] crate
+  to translate WGSL code into the shading language of your platform's native GPU API.
+  Naga has [a milestone][naga wgsl milestone]
+  for catching up to the WGSL specification,
+  but in general there is no up-to-date summary
+  of the differences between Naga and the WGSL spec.
+  
+- When running in a web browser (by compilation to WebAssembly)
+  without the `"webgl"` feature enabled,
+  `wgpu` relies on the browser's own WebGPU implementation.
+  WGSL shaders are simply passed through to the browser,
+  so that determines which WGSL features you can use.
+
+- When running in a web browser with `wgpu`'s `"webgl"` feature enabled,
+  `wgpu` uses Naga to translate WGSL programs into GLSL.
+  This uses the same version of Naga as if you were running `wgpu` as native code.
+
+[webgpu spec]: https://www.w3.org/TR/webgpu/
+[wgsl spec]: https://gpuweb.github.io/gpuweb/wgsl/
+[naga]: https://github.com/gfx-rs/naga/
+[naga wgsl milestone]: https://github.com/gfx-rs/naga/milestone/4
 
 ## Coordinate Systems
 

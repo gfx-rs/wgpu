@@ -14,7 +14,7 @@ use std::num::NonZeroU32;
 use thiserror::Error;
 
 /// Error validating a draw call.
-#[derive(Clone, Debug, Error, PartialEq)]
+#[derive(Clone, Debug, Error, Eq, PartialEq)]
 pub enum DrawError {
     #[error("blend constant needs to be set")]
     MissingBlendConstant,

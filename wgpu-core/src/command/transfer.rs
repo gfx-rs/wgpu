@@ -25,7 +25,7 @@ use std::iter;
 pub type ImageCopyBuffer = wgt::ImageCopyBuffer<BufferId>;
 pub type ImageCopyTexture = wgt::ImageCopyTexture<TextureId>;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub enum CopySide {
     Source,
     Destination,
@@ -326,36 +326,51 @@ pub(crate) fn validate_texture_copy_range(
         _ => {}
     }
 
-    let x_copy_max = texture_copy_view.origin.x + copy_size.width;
-    if x_copy_max > extent.width {
-        return Err(TransferError::TextureOverrun {
-            start_offset: texture_copy_view.origin.x,
-            end_offset: x_copy_max,
-            texture_size: extent.width,
-            dimension: TextureErrorDimension::X,
-            side: texture_side,
-        });
+    /// Return `Ok` if a run `size` texels long starting at `start_offset` falls
+    /// entirely within `texture_size`. Otherwise, return an appropriate a`Err`.
+    fn check_dimension(
+        dimension: TextureErrorDimension,
+        side: CopySide,
+        start_offset: u32,
+        size: u32,
+        texture_size: u32,
+    ) -> Result<(), TransferError> {
+        // Avoid underflow in the subtraction by checking start_offset against
+        // texture_size first.
+        if start_offset <= texture_size && size <= texture_size - start_offset {
+            Ok(())
+        } else {
+            Err(TransferError::TextureOverrun {
+                start_offset,
+                end_offset: start_offset.wrapping_add(size),
+                texture_size,
+                dimension,
+                side,
+            })
+        }
     }
-    let y_copy_max = texture_copy_view.origin.y + copy_size.height;
-    if y_copy_max > extent.height {
-        return Err(TransferError::TextureOverrun {
-            start_offset: texture_copy_view.origin.y,
-            end_offset: y_copy_max,
-            texture_size: extent.height,
-            dimension: TextureErrorDimension::Y,
-            side: texture_side,
-        });
-    }
-    let z_copy_max = texture_copy_view.origin.z + copy_size.depth_or_array_layers;
-    if z_copy_max > extent.depth_or_array_layers {
-        return Err(TransferError::TextureOverrun {
-            start_offset: texture_copy_view.origin.z,
-            end_offset: z_copy_max,
-            texture_size: extent.depth_or_array_layers,
-            dimension: TextureErrorDimension::Z,
-            side: texture_side,
-        });
-    }
+
+    check_dimension(
+        TextureErrorDimension::X,
+        texture_side,
+        texture_copy_view.origin.x,
+        copy_size.width,
+        extent.width,
+    )?;
+    check_dimension(
+        TextureErrorDimension::Y,
+        texture_side,
+        texture_copy_view.origin.y,
+        copy_size.height,
+        extent.height,
+    )?;
+    check_dimension(
+        TextureErrorDimension::Z,
+        texture_side,
+        texture_copy_view.origin.z,
+        copy_size.depth_or_array_layers,
+        extent.depth_or_array_layers,
+    )?;
 
     if texture_copy_view.origin.x % block_width != 0 {
         return Err(TransferError::UnalignedCopyOriginX);
