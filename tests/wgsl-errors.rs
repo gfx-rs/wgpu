@@ -640,11 +640,11 @@ fn reserved_keyword() {
         r#"
             var bool: bool = true;
         "#,
-        r###"error: name ` bool: bool = true;` is a reserved keyword
-  ┌─ wgsl:2:16
+        r###"error: name `bool: bool = true;` is a reserved keyword
+  ┌─ wgsl:2:17
   │
 2 │             var bool: bool = true;
-  │                ^^^^^^^^^^^^^^^^^^^ definition of ` bool: bool = true;`
+  │                 ^^^^^^^^^^^^^^^^^^ definition of `bool: bool = true;`
 
 "###,
     );
@@ -765,13 +765,13 @@ fn module_scope_identifier_redefinition() {
             var foo: bool = true;
             var foo: bool = true;
         "#,
-        r###"error: redefinition of ` foo: bool = true;`
-  ┌─ wgsl:2:16
+        r###"error: redefinition of `foo: bool = true;`
+  ┌─ wgsl:2:17
   │
 2 │             var foo: bool = true;
-  │                ^^^^^^^^^^^^^^^^^^ previous definition of ` foo: bool = true;`
+  │                 ^^^^^^^^^^^^^^^^^ previous definition of `foo: bool = true;`
 3 │             var foo: bool = true;
-  │                ^^^^^^^^^^^^^^^^^^ redefinition of ` foo: bool = true;`
+  │                 ^^^^^^^^^^^^^^^^^ redefinition of `foo: bool = true;`
 
 "###,
     );
@@ -783,10 +783,10 @@ fn module_scope_identifier_redefinition() {
             let foo: bool = true;
         "#,
         r###"error: redefinition of `foo`
-  ┌─ wgsl:2:16
+  ┌─ wgsl:2:17
   │
 2 │             var foo: bool = true;
-  │                ^^^^^^^^^^^^^^^^^^ previous definition of ` foo: bool = true;`
+  │                 ^^^^^^^^^^^^^^^^^ previous definition of `foo: bool = true;`
 3 │             let foo: bool = true;
   │                 ^^^ redefinition of `foo`
 

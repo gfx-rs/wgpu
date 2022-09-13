@@ -223,7 +223,7 @@ impl<'a> Error<'a> {
             Error::BadNumber(ref bad_span, ref err) => ParseError {
                 message: format!(
                     "{}: `{}`",
-                    err,&source[bad_span.clone()],
+                    err, &source[bad_span.clone()],
                 ),
                 labels: vec![(bad_span.clone(), err.to_string().into())],
                 notes: vec![],
@@ -878,7 +878,7 @@ impl<'a> ExpressionContext<'a, '_, '_> {
             ExpressionContext<'a, '_, '_>,
         ) -> Result<TypedExpression, Error<'a>>,
     ) -> Result<TypedExpression, Error<'a>> {
-        let start = lexer.current_byte_offset() as u32;
+        let start = lexer.start_byte_offset() as u32;
         let mut accumulator = parser(lexer, self.reborrow())?;
         while let Some(op) = classifier(lexer.peek().0) {
             let _ = lexer.next();
@@ -886,7 +886,7 @@ impl<'a> ExpressionContext<'a, '_, '_> {
             let mut left = self.apply_load_rule(accumulator);
             let unloaded_right = parser(lexer, self.reborrow())?;
             let right = self.apply_load_rule(unloaded_right);
-            let end = lexer.current_byte_offset() as u32;
+            let end = lexer.end_byte_offset() as u32;
             left = self.expressions.append(
                 crate::Expression::Binary { op, left, right },
                 NagaSpan::new(start, end),
@@ -906,7 +906,7 @@ impl<'a> ExpressionContext<'a, '_, '_> {
             ExpressionContext<'a, '_, '_>,
         ) -> Result<TypedExpression, Error<'a>>,
     ) -> Result<TypedExpression, Error<'a>> {
-        let start = lexer.current_byte_offset() as u32;
+        let start = lexer.start_byte_offset() as u32;
         let mut accumulator = parser(lexer, self.reborrow())?;
         while let Some(op) = classifier(lexer.peek().0) {
             let _ = lexer.next();
@@ -914,7 +914,7 @@ impl<'a> ExpressionContext<'a, '_, '_> {
             let mut left = self.apply_load_rule(accumulator);
             let unloaded_right = parser(lexer, self.reborrow())?;
             let mut right = self.apply_load_rule(unloaded_right);
-            let end = lexer.current_byte_offset() as u32;
+            let end = lexer.end_byte_offset() as u32;
 
             self.binary_op_splat(op, &mut left, &mut right)?;
 
@@ -1389,8 +1389,8 @@ impl Parser {
         self.layouter.clear();
     }
 
-    fn push_rule_span(&mut self, rule: Rule, lexer: &Lexer<'_>) {
-        self.rules.push((rule, lexer.current_byte_offset()));
+    fn push_rule_span(&mut self, rule: Rule, lexer: &mut Lexer<'_>) {
+        self.rules.push((rule, lexer.start_byte_offset()));
     }
 
     fn pop_rule_span(&mut self, lexer: &Lexer<'_>) -> Span {
@@ -2589,7 +2589,7 @@ impl Parser {
         lexer: &mut Lexer<'a>,
         mut ctx: ExpressionContext<'a, '_, '_>,
     ) -> Result<TypedExpression, Error<'a>> {
-        let start = lexer.current_byte_offset();
+        let start = lexer.start_byte_offset();
         self.push_rule_span(Rule::SingularExpr, lexer);
         let primary_expr = self.parse_primary_expression(lexer, ctx.reborrow())?;
         let singular_expr = self.parse_postfix(start, lexer, ctx.reborrow(), primary_expr)?;
@@ -3249,7 +3249,7 @@ impl Parser {
             None => {
                 match self.parse_type_decl_impl(lexer, attribute, name, type_arena, const_arena)? {
                     Some(inner) => {
-                        let span = name_span.start..lexer.current_byte_offset();
+                        let span = name_span.start..lexer.end_byte_offset();
                         type_arena.insert(
                             crate::Type {
                                 name: debug_name.map(|s| s.to_string()),
@@ -3304,11 +3304,11 @@ impl Parser {
     ) -> Result<(), Error<'a>> {
         use crate::BinaryOperator as Bo;
 
-        let span_start = lexer.consume_blankspace();
+        let span_start = lexer.start_byte_offset();
         context.emitter.start(context.expressions);
         let reference = self.parse_unary_expression(lexer, context.reborrow())?;
         // The left hand side of an assignment must be a reference.
-        let lhs_span = span_start..lexer.current_byte_offset();
+        let lhs_span = span_start..lexer.end_byte_offset();
         if !reference.is_reference {
             return Err(Error::NotReference(
                 "the left-hand side of an assignment",
@@ -3409,7 +3409,7 @@ impl Parser {
             other => return Err(Error::Unexpected(other, ExpectedToken::SwitchItem)),
         };
 
-        let span_end = lexer.current_byte_offset();
+        let span_end = lexer.end_byte_offset();
         context
             .block
             .extend(context.emitter.finish(context.expressions));
@@ -3732,7 +3732,7 @@ impl Parser {
                         let accept = self.parse_block(lexer, context.reborrow(), false)?;
 
                         let mut elsif_stack = Vec::new();
-                        let mut elseif_span_start = lexer.current_byte_offset();
+                        let mut elseif_span_start = lexer.start_byte_offset();
                         let mut reject = loop {
                             if !lexer.skip(Token::Word("else")) {
                                 break crate::Block::new();
@@ -3759,10 +3759,10 @@ impl Parser {
                                 other_emit,
                                 other_block,
                             ));
-                            elseif_span_start = lexer.current_byte_offset();
+                            elseif_span_start = lexer.start_byte_offset();
                         };
 
-                        let span_end = lexer.current_byte_offset();
+                        let span_end = lexer.end_byte_offset();
                         // reverse-fold the else-if blocks
                         //Note: we may consider uplifting this to the IR
                         for (other_span_start, other_cond, other_emit, other_block) in
@@ -4427,7 +4427,7 @@ impl Parser {
         }
 
         // read items
-        let start = lexer.current_byte_offset();
+        let start = lexer.start_byte_offset();
         match lexer.next() {
             (Token::Separator(';'), _) => {}
             (Token::Word("struct"), _) => {

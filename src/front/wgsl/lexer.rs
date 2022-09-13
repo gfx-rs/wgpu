@@ -196,6 +196,22 @@ impl<'a> Lexer<'a> {
         Ok((res, start..end))
     }
 
+    pub(super) fn start_byte_offset(&mut self) -> usize {
+        loop {
+            // Eat all trivia becuase `next` doesn't eat trailing trivia.
+            let (token, rest) = consume_token(self.input, false);
+            if let Token::Trivia = token {
+                self.input = rest;
+            } else {
+                return self.current_byte_offset();
+            }
+        }
+    }
+
+    pub(super) const fn end_byte_offset(&self) -> usize {
+        self.current_byte_offset()
+    }
+
     fn peek_token_and_rest(&mut self) -> (TokenSpan<'a>, &'a str) {
         let mut cloned = self.clone();
         let token = cloned.next();
@@ -203,7 +219,7 @@ impl<'a> Lexer<'a> {
         (token, rest)
     }
 
-    pub(super) const fn current_byte_offset(&self) -> usize {
+    const fn current_byte_offset(&self) -> usize {
         self.source.len() - self.input.len()
     }
 
@@ -233,22 +249,6 @@ impl<'a> Lexer<'a> {
             match token {
                 Token::Trivia => start_byte_offset = self.current_byte_offset(),
                 _ => return (token, start_byte_offset..self.current_byte_offset()),
-            }
-        }
-    }
-
-    /// Consumes [`Trivia`] tokens until another token is encountered, returns
-    /// the byte offset after consuming the tokens.
-    ///
-    /// [`Trivia`]: Token::Trivia
-    #[must_use]
-    pub(super) fn consume_blankspace(&mut self) -> usize {
-        loop {
-            let (token, rest) = consume_token(self.input, false);
-            if let Token::Trivia = token {
-                self.input = rest;
-            } else {
-                return self.current_byte_offset();
             }
         }
     }
