@@ -67,9 +67,10 @@ impl crate::Instance<super::Api> for super::Instance {
 
     unsafe fn create_surface(
         &self,
-        has_handle: &impl raw_window_handle::HasRawWindowHandle,
+        _display_handle: raw_window_handle::RawDisplayHandle,
+        window_handle: raw_window_handle::RawWindowHandle,
     ) -> Result<super::Surface, crate::InstanceError> {
-        match has_handle.raw_window_handle() {
+        match window_handle {
             raw_window_handle::RawWindowHandle::Win32(handle) => Ok(super::Surface {
                 factory: self.factory,
                 target: SurfaceTarget::WndHandle(handle.hwnd as *mut _),

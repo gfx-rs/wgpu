@@ -5,6 +5,7 @@ extern crate wgpu_hal as hal;
 use hal::{
     Adapter as _, CommandEncoder as _, Device as _, Instance as _, Queue as _, Surface as _,
 };
+use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 
 use std::{borrow::Borrow, iter, mem, num::NonZeroU32, ptr, time::Instant};
 
@@ -91,7 +92,11 @@ impl<A: hal::Api> Example<A> {
             },
         };
         let instance = unsafe { A::Instance::init(&instance_desc)? };
-        let mut surface = unsafe { instance.create_surface(window).unwrap() };
+        let mut surface = unsafe {
+            instance
+                .create_surface(window.raw_display_handle(), window.raw_window_handle())
+                .unwrap()
+        };
 
         let (adapter, capabilities) = unsafe {
             let mut adapters = instance.enumerate_adapters();
