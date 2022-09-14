@@ -163,6 +163,8 @@ fn is_word_part(c: char) -> bool {
 pub(super) struct Lexer<'a> {
     input: &'a str,
     pub(super) source: &'a str,
+    // The byte offset of the end of the last non-trivia token.
+    last_end_offset: usize,
 }
 
 impl<'a> Lexer<'a> {
@@ -170,6 +172,7 @@ impl<'a> Lexer<'a> {
         Lexer {
             input,
             source: input,
+            last_end_offset: 0,
         }
     }
 
@@ -198,7 +201,7 @@ impl<'a> Lexer<'a> {
 
     pub(super) fn start_byte_offset(&mut self) -> usize {
         loop {
-            // Eat all trivia becuase `next` doesn't eat trailing trivia.
+            // Eat all trivia because `next` doesn't eat trailing trivia.
             let (token, rest) = consume_token(self.input, false);
             if let Token::Trivia = token {
                 self.input = rest;
@@ -209,7 +212,7 @@ impl<'a> Lexer<'a> {
     }
 
     pub(super) const fn end_byte_offset(&self) -> usize {
-        self.current_byte_offset()
+        self.last_end_offset
     }
 
     fn peek_token_and_rest(&mut self) -> (TokenSpan<'a>, &'a str) {
@@ -224,7 +227,7 @@ impl<'a> Lexer<'a> {
     }
 
     pub(super) const fn span_from(&self, offset: usize) -> Span {
-        offset..self.current_byte_offset()
+        offset..self.end_byte_offset()
     }
 
     #[must_use]
@@ -235,7 +238,10 @@ impl<'a> Lexer<'a> {
             self.input = rest;
             match token {
                 Token::Trivia => start_byte_offset = self.current_byte_offset(),
-                _ => return (token, start_byte_offset..self.current_byte_offset()),
+                _ => {
+                    self.last_end_offset = self.current_byte_offset();
+                    return (token, start_byte_offset..self.last_end_offset);
+                }
             }
         }
     }
