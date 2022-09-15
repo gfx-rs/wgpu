@@ -246,11 +246,7 @@ pub trait Device<A: Api>: Send + Sync {
 
     unsafe fn get_acceleration_structure_build_sizes(
         &self,
-        geometry_info: &AccelerationStructureGeometryInfo,
-        format: AccelerationStructureFormat,
-        mode: AccelerationStructureBuildMode,
-        flags: AccelerationStructureBuildFlags,
-        primitive_count: u32,
+        desc: &GetAccelerationStructureBuildSizesDescriptor,
     ) -> AccelerationStructureBuildSizes;
 
     unsafe fn get_acceleration_structure_device_address(
@@ -550,14 +546,7 @@ pub trait CommandEncoder<A: Api>: Send + Sync {
 
     unsafe fn build_acceleration_structures(
         &mut self,
-        geometry: &AccelerationStructureGeometry<A>,
-        format: AccelerationStructureFormat,
-        mode: AccelerationStructureBuildMode,
-        flags: AccelerationStructureBuildFlags,
-        primitive_count: u32,
-        primitive_offset: u32,
-        destination_acceleration_structure: &A::AccelerationStructure,
-        scratch_buffer: &A::Buffer,
+        desc: &BuildAccelerationStructureDescriptor<A>,
     );
 }
 
@@ -850,32 +839,6 @@ pub struct BufferDescriptor<'a> {
 }
 
 #[derive(Clone, Debug)]
-pub struct AccelerationStructureDescriptor<'a> {
-    pub label: Label<'a>,
-    pub size: wgt::BufferAddress,
-    pub format: AccelerationStructureFormat,
-}
-
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub enum AccelerationStructureFormat {
-    TopLevel,
-    BottomLevel,
-}
-
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub enum AccelerationStructureBuildMode {
-    Build,
-    Update,
-}
-
-#[derive(Clone, Debug, Default)]
-pub struct AccelerationStructureBuildSizes {
-    pub acceleration_structure_size: wgt::BufferAddress,
-    pub update_scratch_size: wgt::BufferAddress,
-    pub build_scratch_size: wgt::BufferAddress,
-}
-
-#[derive(Clone, Debug)]
 pub struct TextureDescriptor<'a> {
     pub label: Label<'a>,
     pub size: wgt::Extent3d,
@@ -1163,42 +1126,6 @@ pub struct BufferCopy {
     pub size: wgt::BufferSize,
 }
 
-pub enum AccelerationStructureGeometryInfo {
-    Triangles {
-        vertex_format: wgt::VertexFormat,
-        max_vertex: u32,
-        index_format: Option<wgt::IndexFormat>,
-    },
-    Instances,
-}
-
-pub enum AccelerationStructureGeometry<'a, A: Api> {
-    Triangles {
-        vertex_buffer: &'a A::Buffer,
-        vertex_format: wgt::VertexFormat,
-        max_vertex: u32,
-        vertex_stride: wgt::BufferAddress,
-        indices: Option<AccelerationStructureGeometryIndices<'a, A>>,
-    },
-    Instances {
-        buffer: &'a A::Buffer,
-    },
-}
-
-pub struct AccelerationStructureGeometryIndices<'a, A: Api> {
-    pub format: wgt::IndexFormat,
-    pub buffer: &'a A::Buffer,
-}
-
-bitflags!(
-    pub struct AccelerationStructureBuildFlags: u32 {
-        const PREFER_FAST_TRACE = 1 << 0;
-        const PREFER_FAST_BUILD = 1 << 1;
-        const ALLOW_UPDATE = 1 << 2;
-        const LOW_MEMORY = 1 << 3;
-    }
-);
-
 #[derive(Clone, Debug)]
 pub struct TextureCopyBase {
     pub mip_level: u32,
@@ -1329,3 +1256,85 @@ fn test_default_limits() {
     let limits = wgt::Limits::default();
     assert!(limits.max_bind_groups <= MAX_BIND_GROUPS as u32);
 }
+
+#[derive(Clone, Debug)]
+pub struct AccelerationStructureDescriptor<'a> {
+    pub label: Label<'a>,
+    pub size: wgt::BufferAddress,
+    pub format: AccelerationStructureFormat,
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum AccelerationStructureFormat {
+    TopLevel,
+    BottomLevel,
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum AccelerationStructureBuildMode {
+    Build,
+    Update,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct AccelerationStructureBuildSizes {
+    pub acceleration_structure_size: wgt::BufferAddress,
+    pub update_scratch_size: wgt::BufferAddress,
+    pub build_scratch_size: wgt::BufferAddress,
+}
+
+pub struct GetAccelerationStructureBuildSizesDescriptor {
+    pub geometry_info: AccelerationStructureGeometryInfo,
+    pub format: AccelerationStructureFormat,
+    pub mode: AccelerationStructureBuildMode,
+    pub flags: AccelerationStructureBuildFlags,
+    pub primitive_count: u32,
+}
+
+#[derive(Clone, Copy)]
+pub enum AccelerationStructureGeometryInfo {
+    Triangles {
+        vertex_format: wgt::VertexFormat,
+        max_vertex: u32,
+        index_format: Option<wgt::IndexFormat>,
+    },
+    Instances,
+}
+
+pub struct BuildAccelerationStructureDescriptor<'a, A: Api> {
+    pub geometry: &'a AccelerationStructureGeometry<'a, A>,
+    pub format: AccelerationStructureFormat,
+    pub mode: AccelerationStructureBuildMode,
+    pub flags: AccelerationStructureBuildFlags,
+    pub primitive_count: u32,
+    pub primitive_offset: u32,
+    pub destination_acceleration_structure: &'a A::AccelerationStructure,
+    pub scratch_buffer: &'a A::Buffer,
+}
+
+pub enum AccelerationStructureGeometry<'a, A: Api> {
+    Triangles {
+        vertex_buffer: &'a A::Buffer,
+        vertex_format: wgt::VertexFormat,
+        max_vertex: u32,
+        vertex_stride: wgt::BufferAddress,
+        indices: Option<AccelerationStructureGeometryIndices<'a, A>>,
+    },
+    Instances {
+        buffer: &'a A::Buffer,
+    },
+}
+
+pub struct AccelerationStructureGeometryIndices<'a, A: Api> {
+    pub format: wgt::IndexFormat,
+    pub buffer: &'a A::Buffer,
+}
+
+bitflags!(
+    pub struct AccelerationStructureBuildFlags: u32 {
+        const PREFER_FAST_TRACE = 1 << 0;
+        const PREFER_FAST_BUILD = 1 << 1;
+        const ALLOW_UPDATE = 1 << 2;
+        const LOW_MEMORY = 1 << 3;
+    }
+);

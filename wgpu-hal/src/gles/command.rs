@@ -1003,14 +1003,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
 
     unsafe fn build_acceleration_structures(
         &mut self,
-        _geometry: &crate::AccelerationStructureGeometry<super::Api>,
-        _format: crate::AccelerationStructureFormat,
-        _mode: crate::AccelerationStructureBuildMode,
-        _flags: crate::AccelerationStructureBuildFlags,
-        _primitive_count: u32,
-        _primitive_offset: u32,
-        _destination_acceleration_structure: &(),
-        _scratch_buffer: &super::Buffer,
+        _desc: &crate::BuildAccelerationStructureDescriptor<super::Api>,
     ) {
         unimplemented!()
     }

@@ -309,15 +309,17 @@ impl<A: hal::Api> Example<A> {
 
         let blas_sizes = unsafe {
             device.get_acceleration_structure_build_sizes(
-                &hal::AccelerationStructureGeometryInfo::Triangles {
-                    vertex_format: wgt::VertexFormat::Float32x3,
-                    max_vertex: 3,
-                    index_format: Some(wgt::IndexFormat::Uint32),
+                &hal::GetAccelerationStructureBuildSizesDescriptor {
+                    geometry_info: hal::AccelerationStructureGeometryInfo::Triangles {
+                        vertex_format: wgt::VertexFormat::Float32x3,
+                        max_vertex: 3,
+                        index_format: Some(wgt::IndexFormat::Uint32),
+                    },
+                    format: hal::AccelerationStructureFormat::BottomLevel,
+                    mode: hal::AccelerationStructureBuildMode::Build,
+                    flags: hal::AccelerationStructureBuildFlags::PREFER_FAST_TRACE,
+                    primitive_count: 1,
                 },
-                hal::AccelerationStructureFormat::BottomLevel,
-                hal::AccelerationStructureBuildMode::Build,
-                hal::AccelerationStructureBuildFlags::PREFER_FAST_TRACE,
-                1,
             )
         };
 
@@ -326,11 +328,13 @@ impl<A: hal::Api> Example<A> {
 
         let tlas_sizes = unsafe {
             device.get_acceleration_structure_build_sizes(
-                &hal::AccelerationStructureGeometryInfo::Instances,
-                hal::AccelerationStructureFormat::TopLevel,
-                hal::AccelerationStructureBuildMode::Build,
-                tlas_flags,
-                1,
+                &hal::GetAccelerationStructureBuildSizesDescriptor {
+                    geometry_info: hal::AccelerationStructureGeometryInfo::Instances,
+                    format: hal::AccelerationStructureFormat::TopLevel,
+                    mode: hal::AccelerationStructureBuildMode::Build,
+                    flags: tlas_flags,
+                    primitive_count: 1,
+                },
             )
         };
 
@@ -530,8 +534,8 @@ impl<A: hal::Api> Example<A> {
         unsafe { cmd_encoder.begin_encoding(Some("init")).unwrap() };
 
         unsafe {
-            cmd_encoder.build_acceleration_structures(
-                &hal::AccelerationStructureGeometry::Triangles {
+            cmd_encoder.build_acceleration_structures(&hal::BuildAccelerationStructureDescriptor {
+                geometry: &hal::AccelerationStructureGeometry::Triangles {
                     vertex_buffer: &vertices_buffer,
                     vertex_format: wgt::VertexFormat::Float32x3,
                     max_vertex: vertices.len() as u32,
@@ -541,14 +545,14 @@ impl<A: hal::Api> Example<A> {
                         format: wgt::IndexFormat::Uint32,
                     }),
                 },
-                hal::AccelerationStructureFormat::BottomLevel,
-                hal::AccelerationStructureBuildMode::Build,
-                hal::AccelerationStructureBuildFlags::PREFER_FAST_TRACE,
-                indices.len() as u32 / 3,
-                0,
-                &blas,
-                &scratch_buffer,
-            );
+                format: hal::AccelerationStructureFormat::BottomLevel,
+                mode: hal::AccelerationStructureBuildMode::Build,
+                flags: hal::AccelerationStructureBuildFlags::PREFER_FAST_TRACE,
+                primitive_count: indices.len() as u32 / 3,
+                primitive_offset: 0,
+                destination_acceleration_structure: &blas,
+                scratch_buffer: &scratch_buffer,
+            });
 
             let as_barrier = hal::BufferBarrier {
                 buffer: &scratch_buffer,
@@ -557,18 +561,18 @@ impl<A: hal::Api> Example<A> {
             };
             cmd_encoder.transition_buffers(iter::once(as_barrier));
 
-            cmd_encoder.build_acceleration_structures(
-                &hal::AccelerationStructureGeometry::Instances {
+            cmd_encoder.build_acceleration_structures(&hal::BuildAccelerationStructureDescriptor {
+                geometry: &hal::AccelerationStructureGeometry::Instances {
                     buffer: &instances_buffer,
                 },
-                hal::AccelerationStructureFormat::TopLevel,
-                hal::AccelerationStructureBuildMode::Build,
-                tlas_flags,
-                instances.len() as u32,
-                0,
-                &tlas,
-                &scratch_buffer,
-            );
+                format: hal::AccelerationStructureFormat::TopLevel,
+                mode: hal::AccelerationStructureBuildMode::Build,
+                flags: tlas_flags,
+                primitive_count: instances.len() as u32,
+                primitive_offset: 0,
+                destination_acceleration_structure: &tlas,
+                scratch_buffer: &scratch_buffer,
+            });
 
             let texture_barrier = hal::TextureBarrier {
                 texture: &texture,
@@ -677,18 +681,19 @@ impl<A: hal::Api> Example<A> {
         unsafe {
             ctx.encoder.begin_encoding(Some("frame")).unwrap();
 
-            ctx.encoder.build_acceleration_structures(
-                &hal::AccelerationStructureGeometry::Instances {
-                    buffer: &self.instances_buffer,
-                },
-                hal::AccelerationStructureFormat::TopLevel,
-                hal::AccelerationStructureBuildMode::Build,
-                tlas_flags,
-                self.instances.len() as u32,
-                0,
-                &self.tlas,
-                &self.scratch_buffer,
-            );
+            ctx.encoder
+                .build_acceleration_structures(&hal::BuildAccelerationStructureDescriptor {
+                    geometry: &hal::AccelerationStructureGeometry::Instances {
+                        buffer: &self.instances_buffer,
+                    },
+                    format: hal::AccelerationStructureFormat::TopLevel,
+                    mode: hal::AccelerationStructureBuildMode::Update,
+                    flags: tlas_flags,
+                    primitive_count: self.instances.len() as u32,
+                    primitive_offset: 0,
+                    destination_acceleration_structure: &self.tlas,
+                    scratch_buffer: &self.scratch_buffer,
+                });
 
             let as_barrier = hal::BufferBarrier {
                 buffer: &self.scratch_buffer,

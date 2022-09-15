@@ -343,21 +343,14 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
 
     unsafe fn build_acceleration_structures(
         &mut self,
-        geometry: &crate::AccelerationStructureGeometry<super::Api>,
-        format: crate::AccelerationStructureFormat,
-        mode: crate::AccelerationStructureBuildMode,
-        flags: crate::AccelerationStructureBuildFlags,
-        primitive_count: u32,
-        primitive_offset: u32,
-        destination_acceleration_structure: &super::AccelerationStructure,
-        scratch_buffer: &super::Buffer,
+        desc: &crate::BuildAccelerationStructureDescriptor<super::Api>,
     ) {
         let ray_tracing_functions = match self.device.extension_fns.ray_tracing {
             Some(ref functions) => functions,
             None => panic!("Feature `RAY_TRACING` not enabled"),
         };
 
-        let geometry = match geometry {
+        let geometry = match *desc.geometry {
             crate::AccelerationStructureGeometry::Instances { buffer } => {
                 let instances = vk::AccelerationStructureGeometryInstancesDataKHR::builder().data(
                     vk::DeviceOrHostAddressConstKHR {
@@ -376,7 +369,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                     })
                     .flags(vk::GeometryFlagsKHR::empty())
             }
-            &crate::AccelerationStructureGeometry::Triangles {
+            crate::AccelerationStructureGeometry::Triangles {
                 vertex_buffer,
                 vertex_format,
                 max_vertex,
@@ -397,7 +390,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                         .vertex_stride(vertex_stride)
                         .max_vertex(max_vertex);
 
-                if let Some(indices) = indices {
+                if let Some(ref indices) = *indices {
                     triangles_data = triangles_data
                         .index_type(conv::map_index_format(indices.format))
                         .index_data(vk::DeviceOrHostAddressConstKHR {
@@ -424,26 +417,26 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         let geometries = &[*geometry];
 
         let range = vk::AccelerationStructureBuildRangeInfoKHR::builder()
-            .primitive_count(primitive_count)
-            .primitive_offset(primitive_offset)
+            .primitive_count(desc.primitive_count)
+            .primitive_offset(desc.primitive_offset)
             .build();
 
         let mut geometry_info = vk::AccelerationStructureBuildGeometryInfoKHR::builder()
-            .ty(conv::map_acceleration_structure_format(format))
-            .mode(conv::map_acceleration_structure_build_mode(mode))
-            .flags(conv::map_acceleration_structure_flags(flags))
+            .ty(conv::map_acceleration_structure_format(desc.format))
+            .mode(conv::map_acceleration_structure_build_mode(desc.mode))
+            .flags(conv::map_acceleration_structure_flags(desc.flags))
             .geometries(geometries)
-            .dst_acceleration_structure(destination_acceleration_structure.raw)
+            .dst_acceleration_structure(desc.destination_acceleration_structure.raw)
             .scratch_data(vk::DeviceOrHostAddressKHR {
                 device_address: ray_tracing_functions
                     .buffer_device_address
                     .get_buffer_device_address(
-                        &vk::BufferDeviceAddressInfo::builder().buffer(scratch_buffer.raw),
+                        &vk::BufferDeviceAddressInfo::builder().buffer(desc.scratch_buffer.raw),
                     ),
             });
 
-        if mode == crate::AccelerationStructureBuildMode::Update {
-            geometry_info.src_acceleration_structure = destination_acceleration_structure.raw;
+        if desc.mode == crate::AccelerationStructureBuildMode::Update {
+            geometry_info.src_acceleration_structure = desc.destination_acceleration_structure.raw;
         }
 
         let geometry_info = geometry_info.build();

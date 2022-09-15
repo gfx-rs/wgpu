@@ -238,11 +238,7 @@ impl crate::Device<Api> for Context {
     }
     unsafe fn get_acceleration_structure_build_sizes(
         &self,
-        geometry_info: &crate::AccelerationStructureGeometryInfo,
-        format: crate::AccelerationStructureFormat,
-        mode: crate::AccelerationStructureBuildMode,
-        flags: crate::AccelerationStructureBuildFlags,
-        primitive_count: u32,
+        _desc: &crate::GetAccelerationStructureBuildSizesDescriptor,
     ) -> crate::AccelerationStructureBuildSizes {
         Default::default()
     }
@@ -418,14 +414,7 @@ impl crate::CommandEncoder<Api> for Encoder {
 
     unsafe fn build_acceleration_structures(
         &mut self,
-        geometry: &crate::AccelerationStructureGeometry<Api>,
-        format: crate::AccelerationStructureFormat,
-        mode: crate::AccelerationStructureBuildMode,
-        flags: crate::AccelerationStructureBuildFlags,
-        primitive_count: u32,
-        primitive_offset: u32,
-        destination_acceleration_structure: &Resource,
-        scratch_buffer: &Resource,
+        _desc: &crate::BuildAccelerationStructureDescriptor<Api>,
     ) {
     }
 }
