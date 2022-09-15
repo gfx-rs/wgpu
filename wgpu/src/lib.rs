@@ -197,7 +197,8 @@ trait Context: Debug + Send + Sized + Sync {
     fn init(backends: Backends) -> Self;
     fn instance_create_surface(
         &self,
-        handle: &(impl raw_window_handle::HasRawWindowHandle + raw_window_handle::HasRawDisplayHandle),
+        display_handle: raw_window_handle::RawDisplayHandle,
+        window_handle: raw_window_handle::RawWindowHandle,
     ) -> Self::SurfaceId;
     fn instance_request_adapter(
         &self,
@@ -1763,7 +1764,11 @@ impl Instance {
     ) -> Surface {
         Surface {
             context: Arc::clone(&self.context),
-            id: Context::instance_create_surface(&*self.context, window),
+            id: Context::instance_create_surface(
+                &*self.context,
+                raw_window_handle::HasRawDisplayHandle::raw_display_handle(window),
+                raw_window_handle::HasRawWindowHandle::raw_window_handle(window),
+            ),
         }
     }
 

@@ -591,15 +591,12 @@ impl crate::Instance<super::Api> for super::Instance {
 
     unsafe fn create_surface(
         &self,
-        has_handle: &(impl raw_window_handle::HasRawWindowHandle
-              + raw_window_handle::HasRawDisplayHandle),
+        display_handle: raw_window_handle::RawDisplayHandle,
+        window_handle: raw_window_handle::RawWindowHandle,
     ) -> Result<super::Surface, crate::InstanceError> {
         use raw_window_handle::{RawDisplayHandle as Rdh, RawWindowHandle as Rwh};
 
-        match (
-            has_handle.raw_window_handle(),
-            has_handle.raw_display_handle(),
-        ) {
+        match (window_handle, display_handle) {
             (Rwh::Wayland(handle), Rdh::Wayland(display)) => {
                 Ok(self.create_surface_from_wayland(display.display, handle.surface))
             }
