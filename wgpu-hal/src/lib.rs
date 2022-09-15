@@ -249,7 +249,7 @@ pub trait Device<A: Api>: Send + Sync {
         geometry_info: &AccelerationStructureGeometryInfo,
         format: AccelerationStructureFormat,
         mode: AccelerationStructureBuildMode,
-        flags: crate::AccelerationStructureBuildFlags,
+        flags: AccelerationStructureBuildFlags,
         primitive_count: u32,
     ) -> AccelerationStructureBuildSizes;
 
@@ -553,7 +553,7 @@ pub trait CommandEncoder<A: Api>: Send + Sync {
         geometry: &AccelerationStructureGeometry<A>,
         format: AccelerationStructureFormat,
         mode: AccelerationStructureBuildMode,
-        flags: crate::AccelerationStructureBuildFlags,
+        flags: AccelerationStructureBuildFlags,
         primitive_count: u32,
         primitive_offset: u32,
         destination_acceleration_structure: &A::AccelerationStructure,

@@ -455,12 +455,6 @@ impl crate::Device<super::Api> for super::Device {
             data,
         })
     }
-    unsafe fn create_acceleration_structure(
-        &self,
-        _desc: &crate::AccelerationStructureDescriptor,
-    ) -> Result<(), crate::DeviceError> {
-        unimplemented!()
-    }
     unsafe fn destroy_buffer(&self, buffer: super::Buffer) {
         if let Some(raw) = buffer.raw {
             let gl = &self.shared.context.lock();
@@ -867,6 +861,7 @@ impl crate::Device<super::Api> for super::Device {
                         ty: wgt::BufferBindingType::Storage { .. },
                         ..
                     } => &mut num_storage_buffers,
+                    wgt::BindingType::AccelerationStructure => unimplemented!(),
                 };
 
                 binding_to_slot[entry.binding as usize] = *counter;
@@ -947,6 +942,7 @@ impl crate::Device<super::Api> for super::Device {
                         format: format_desc.internal,
                     })
                 }
+                wgt::BindingType::AccelerationStructure => unimplemented!(),
             };
             contents.push(binding);
         }
@@ -1167,6 +1163,29 @@ impl crate::Device<super::Api> for super::Device {
         self.render_doc
             .end_frame_capture(ptr::null_mut(), ptr::null_mut())
     }
+    unsafe fn create_acceleration_structure(
+        &self,
+        _desc: &crate::AccelerationStructureDescriptor,
+    ) -> Result<(), crate::DeviceError> {
+        unimplemented!()
+    }
+    unsafe fn get_acceleration_structure_build_sizes(
+        &self,
+        _geometry_info: &crate::AccelerationStructureGeometryInfo,
+        _format: crate::AccelerationStructureFormat,
+        _mode: crate::AccelerationStructureBuildMode,
+        _flags: crate::AccelerationStructureBuildFlags,
+        _primitive_count: u32,
+    ) -> crate::AccelerationStructureBuildSizes {
+        unimplemented!()
+    }
+    unsafe fn get_acceleration_structure_device_address(
+        &self,
+        _acceleration_structure: &(),
+    ) -> wgt::BufferAddress {
+        unimplemented!()
+    }
+    unsafe fn destroy_acceleration_structure(&self, _acceleration_structure: ()) {}
 }
 
 // SAFE: WASM doesn't have threads

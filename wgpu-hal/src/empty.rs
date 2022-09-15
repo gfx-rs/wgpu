@@ -119,29 +119,6 @@ impl crate::Device<Api> for Context {
     unsafe fn create_buffer(&self, desc: &crate::BufferDescriptor) -> DeviceResult<Resource> {
         Ok(Resource)
     }
-    unsafe fn create_acceleration_structure(
-        &self,
-        desc: &crate::AccelerationStructureDescriptor,
-    ) -> DeviceResult<Resource> {
-        Ok(Resource)
-    }
-    unsafe fn get_acceleration_structure_build_sizes(
-        &self,
-        geometry_info: &crate::AccelerationStructureGeometryInfo,
-        format: crate::AccelerationStructureFormat,
-        mode: crate::AccelerationStructureBuildMode,
-        flags: crate::AccelerationStructureBuildFlags,
-        primitive_count: u32,
-    ) -> crate::AccelerationStructureBuildSizes {
-        Default::default()
-    }
-    unsafe fn get_acceleration_structure_device_address(
-        &self,
-        _acceleration_structure: &Resource,
-    ) -> wgt::BufferAddress {
-        Default::default()
-    }
-    unsafe fn destroy_acceleration_structure(&self, buffer: Resource) {}
     unsafe fn destroy_buffer(&self, buffer: Resource) {}
     unsafe fn map_buffer(
         &self,
@@ -253,6 +230,29 @@ impl crate::Device<Api> for Context {
         false
     }
     unsafe fn stop_capture(&self) {}
+    unsafe fn create_acceleration_structure(
+        &self,
+        desc: &crate::AccelerationStructureDescriptor,
+    ) -> DeviceResult<Resource> {
+        Ok(Resource)
+    }
+    unsafe fn get_acceleration_structure_build_sizes(
+        &self,
+        geometry_info: &crate::AccelerationStructureGeometryInfo,
+        format: crate::AccelerationStructureFormat,
+        mode: crate::AccelerationStructureBuildMode,
+        flags: crate::AccelerationStructureBuildFlags,
+        primitive_count: u32,
+    ) -> crate::AccelerationStructureBuildSizes {
+        Default::default()
+    }
+    unsafe fn get_acceleration_structure_device_address(
+        &self,
+        _acceleration_structure: &Resource,
+    ) -> wgt::BufferAddress {
+        Default::default()
+    }
+    unsafe fn destroy_acceleration_structure(&self, _acceleration_structure: Resource) {}
 }
 
 impl crate::CommandEncoder<Api> for Encoder {
