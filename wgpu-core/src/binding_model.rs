@@ -383,6 +383,7 @@ impl BindingTypeMaxCountValidator {
                     self.acceleration_structures.add(binding.visibility, count);
                 }
             }
+            wgt::BindingType::AccelerationStructure => todo!(),
         }
     }
 

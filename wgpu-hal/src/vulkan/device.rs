@@ -1097,18 +1097,14 @@ impl crate::Device for super::Device {
 
     unsafe fn get_acceleration_structure_build_sizes(
         &self,
-        geometry_info: &crate::AccelerationStructureGeometryInfo,
-        format: crate::AccelerationStructureFormat,
-        mode: crate::AccelerationStructureBuildMode,
-        flags: crate::AccelerationStructureBuildFlags,
-        primitive_count: u32,
+        desc: &crate::GetAccelerationStructureBuildSizesDescriptor,
     ) -> crate::AccelerationStructureBuildSizes {
         let ray_tracing_functions = match self.shared.extension_fns.ray_tracing {
             Some(ref functions) => functions,
             None => panic!("Feature `RAY_TRACING` not enabled"),
         };
 
-        let geometry = match geometry_info {
+        let geometry = match desc.geometry_info {
             crate::AccelerationStructureGeometryInfo::Instances => {
                 let instances_data = vk::AccelerationStructureGeometryInstancesDataKHR::builder();
 
@@ -1119,7 +1115,7 @@ impl crate::Device for super::Device {
                     })
                     .flags(vk::GeometryFlagsKHR::empty())
             }
-            &crate::AccelerationStructureGeometryInfo::Triangles {
+            crate::AccelerationStructureGeometryInfo::Triangles {
                 vertex_format,
                 max_vertex,
                 index_format,
@@ -1146,9 +1142,9 @@ impl crate::Device for super::Device {
         let geometries = &[*geometry];
 
         let geometry_info = vk::AccelerationStructureBuildGeometryInfoKHR::builder()
-            .ty(conv::map_acceleration_structure_format(format))
-            .mode(conv::map_acceleration_structure_build_mode(mode))
-            .flags(conv::map_acceleration_structure_flags(flags))
+            .ty(conv::map_acceleration_structure_format(desc.format))
+            .mode(conv::map_acceleration_structure_build_mode(desc.mode))
+            .flags(conv::map_acceleration_structure_flags(desc.flags))
             .geometries(geometries);
 
         let raw = ray_tracing_functions
@@ -1156,7 +1152,7 @@ impl crate::Device for super::Device {
             .get_acceleration_structure_build_sizes(
                 vk::AccelerationStructureBuildTypeKHR::DEVICE,
                 &geometry_info,
-                &[primitive_count],
+                &[desc.primitive_count],
             );
 
         crate::AccelerationStructureBuildSizes {
