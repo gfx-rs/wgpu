@@ -216,7 +216,7 @@ impl<'a> Error<'a> {
                         ExpectedToken::WorkgroupSizeSeparator => "workgroup size separator (',') or a closing parenthesis".to_string(),
                         ExpectedToken::GlobalItem => "global item ('struct', 'let', 'var', 'type', ';', 'fn') or the end of the file".to_string(),
                     };
-                    ParseError {
+                ParseError {
                     message: format!(
                         "expected {}, found '{}'",
                         expected_str,
@@ -228,17 +228,14 @@ impl<'a> Error<'a> {
                     )],
                     notes: vec![],
                 }
-            },
+            }
             Error::UnexpectedComponents(ref bad_span) => ParseError {
                 message: "unexpected components".to_string(),
                 labels: vec![(bad_span.clone(), "unexpected components".into())],
                 notes: vec![],
             },
             Error::BadNumber(ref bad_span, ref err) => ParseError {
-                message: format!(
-                    "{}: `{}`",
-                    err, &source[bad_span.clone()],
-                ),
+                message: format!("{}: `{}`", err, &source[bad_span.clone()],),
                 labels: vec![(bad_span.clone(), err.to_string().into())],
                 notes: vec![],
             },
@@ -258,12 +255,11 @@ impl<'a> Error<'a> {
                 labels: vec![(bad_span.clone(), "expected unsigned integer".into())],
                 notes: vec![],
             },
-            Error::BadMatrixScalarKind(
-                ref span,
-                kind,
-                width,
-             ) => ParseError {
-                message: format!("matrix scalar type must be floating-point, but found `{}`", kind.to_wgsl(width)),
+            Error::BadMatrixScalarKind(ref span, kind, width) => ParseError {
+                message: format!(
+                    "matrix scalar type must be floating-point, but found `{}`",
+                    kind.to_wgsl(width)
+                ),
                 labels: vec![(span.clone(), "must be floating-point (e.g. `f32`)".into())],
                 notes: vec![],
             },
@@ -283,39 +279,67 @@ impl<'a> Error<'a> {
             Error::UnknownScalarType(ref bad_span) => ParseError {
                 message: format!("unknown scalar type: '{}'", &source[bad_span.clone()]),
                 labels: vec![(bad_span.clone(), "unknown scalar type".into())],
-                notes: vec!["Valid scalar types are f16, f32, f64, i8, i16, i32, i64, u8, u16, u32, u64, bool".into()],
+                notes: vec!["Valid scalar types are f16, f32, f64, \
+                             i8, i16, i32, i64, \
+                             u8, u16, u32, u64, bool"
+                    .into()],
             },
-            Error::BadTextureSampleType { ref span, kind, width } => ParseError {
-                message: format!("texture sample type must be one of f32, i32 or u32, but found {}", kind.to_wgsl(width)),
+            Error::BadTextureSampleType {
+                ref span,
+                kind,
+                width,
+            } => ParseError {
+                message: format!(
+                    "texture sample type must be one of f32, i32 or u32, but found {}",
+                    kind.to_wgsl(width)
+                ),
                 labels: vec![(span.clone(), "must be one of f32, i32 or u32".into())],
                 notes: vec![],
             },
             Error::BadIncrDecrReferenceType(ref span) => ParseError {
-                message: "increment/decrement operation requires reference type to be one of i32 or u32".to_string(),
-                labels: vec![(span.clone(), "must be a reference type of i32 or u32".into())],
+                message:
+                    "increment/decrement operation requires reference type to be one of i32 or u32"
+                        .to_string(),
+                labels: vec![(
+                    span.clone(),
+                    "must be a reference type of i32 or u32".into(),
+                )],
                 notes: vec![],
             },
             Error::BadTexture(ref bad_span) => ParseError {
-                message: format!("expected an image, but found '{}' which is not an image", &source[bad_span.clone()]),
+                message: format!(
+                    "expected an image, but found '{}' which is not an image",
+                    &source[bad_span.clone()]
+                ),
                 labels: vec![(bad_span.clone(), "not an image".into())],
                 notes: vec![],
             },
-            Error::BadTypeCast { ref span, ref from_type, ref to_type } => {
+            Error::BadTypeCast {
+                ref span,
+                ref from_type,
+                ref to_type,
+            } => {
                 let msg = format!("cannot cast a {} to a {}", from_type, to_type);
                 ParseError {
                     message: msg.clone(),
                     labels: vec![(span.clone(), msg.into())],
                     notes: vec![],
                 }
-            },
+            }
             Error::InvalidResolve(ref resolve_error) => ParseError {
                 message: resolve_error.to_string(),
                 labels: vec![],
                 notes: vec![],
             },
             Error::InvalidForInitializer(ref bad_span) => ParseError {
-                message: format!("for(;;) initializer is not an assignment or a function call: '{}'", &source[bad_span.clone()]),
-                labels: vec![(bad_span.clone(), "not an assignment or function call".into())],
+                message: format!(
+                    "for(;;) initializer is not an assignment or a function call: '{}'",
+                    &source[bad_span.clone()]
+                ),
+                labels: vec![(
+                    bad_span.clone(),
+                    "not an assignment or function call".into(),
+                )],
                 notes: vec![],
             },
             Error::InvalidBreakIf(ref bad_span) => ParseError {
@@ -324,22 +348,34 @@ impl<'a> Error<'a> {
                 notes: vec![],
             },
             Error::InvalidGatherComponent(ref bad_span, component) => ParseError {
-                message: format!("textureGather component {} doesn't exist, must be 0, 1, 2, or 3", component),
+                message: format!(
+                    "textureGather component {} doesn't exist, must be 0, 1, 2, or 3",
+                    component
+                ),
                 labels: vec![(bad_span.clone(), "invalid component".into())],
                 notes: vec![],
             },
             Error::InvalidConstructorComponentType(ref bad_span, component) => ParseError {
-                message: format!("invalid type for constructor component at index [{}]", component),
+                message: format!(
+                    "invalid type for constructor component at index [{}]",
+                    component
+                ),
                 labels: vec![(bad_span.clone(), "invalid component type".into())],
                 notes: vec![],
             },
             Error::InvalidIdentifierUnderscore(ref bad_span) => ParseError {
                 message: "Identifier can't be '_'".to_string(),
                 labels: vec![(bad_span.clone(), "invalid identifier".into())],
-                notes: vec!["Use phony assignment instead ('_ =' notice the absence of 'let' or 'var')".to_string()],
+                notes: vec![
+                    "Use phony assignment instead ('_ =' notice the absence of 'let' or 'var')"
+                        .to_string(),
+                ],
             },
             Error::ReservedIdentifierPrefix(ref bad_span) => ParseError {
-                message: format!("Identifier starts with a reserved prefix: '{}'", &source[bad_span.clone()]),
+                message: format!(
+                    "Identifier starts with a reserved prefix: '{}'",
+                    &source[bad_span.clone()]
+                ),
                 labels: vec![(bad_span.clone(), "invalid identifier".into())],
                 notes: vec![],
             },
@@ -374,7 +410,10 @@ impl<'a> Error<'a> {
                 notes: vec![],
             },
             Error::UnknownConservativeDepth(ref bad_span) => ParseError {
-                message: format!("unknown conservative depth: '{}'", &source[bad_span.clone()]),
+                message: format!(
+                    "unknown conservative depth: '{}'",
+                    &source[bad_span.clone()]
+                ),
                 labels: vec![(bad_span.clone(), "unknown conservative depth".into())],
                 notes: vec![],
             },
@@ -385,12 +424,18 @@ impl<'a> Error<'a> {
             },
             Error::SizeAttributeTooLow(ref bad_span, min_size) => ParseError {
                 message: format!("struct member size must be at least {}", min_size),
-                labels: vec![(bad_span.clone(), format!("must be at least {}", min_size).into())],
+                labels: vec![(
+                    bad_span.clone(),
+                    format!("must be at least {}", min_size).into(),
+                )],
                 notes: vec![],
             },
             Error::AlignAttributeTooLow(ref bad_span, min_align) => ParseError {
                 message: format!("struct member alignment must be at least {}", min_align),
-                labels: vec![(bad_span.clone(), format!("must be at least {}", min_align).into())],
+                labels: vec![(
+                    bad_span.clone(),
+                    format!("must be at least {}", min_align).into(),
+                )],
                 notes: vec![],
             },
             Error::NonPowerOfTwoAlignAttribute(ref bad_span) => ParseError {
@@ -400,7 +445,10 @@ impl<'a> Error<'a> {
             },
             Error::InconsistentBinding(ref span) => ParseError {
                 message: "input/output binding is not consistent".to_string(),
-                labels: vec![(span.clone(), "input/output binding is not consistent".into())],
+                labels: vec![(
+                    span.clone(),
+                    "input/output binding is not consistent".into(),
+                )],
                 notes: vec![],
             },
             Error::UnknownLocalFunction(ref span) => ParseError {
@@ -419,18 +467,35 @@ impl<'a> Error<'a> {
                 notes: vec![],
             },
             Error::InitializationTypeMismatch(ref name_span, ref expected_ty) => ParseError {
-                message: format!("the type of `{}` is expected to be `{}`", &source[name_span.clone()], expected_ty),
-                labels: vec![(name_span.clone(), format!("definition of `{}`", &source[name_span.clone()]).into())],
+                message: format!(
+                    "the type of `{}` is expected to be `{}`",
+                    &source[name_span.clone()],
+                    expected_ty
+                ),
+                labels: vec![(
+                    name_span.clone(),
+                    format!("definition of `{}`", &source[name_span.clone()]).into(),
+                )],
                 notes: vec![],
             },
             Error::MissingType(ref name_span) => ParseError {
                 message: format!("variable `{}` needs a type", &source[name_span.clone()]),
-                labels: vec![(name_span.clone(), format!("definition of `{}`", &source[name_span.clone()]).into())],
+                labels: vec![(
+                    name_span.clone(),
+                    format!("definition of `{}`", &source[name_span.clone()]).into(),
+                )],
                 notes: vec![],
             },
             Error::MissingAttribute(name, ref name_span) => ParseError {
-                message: format!("variable `{}` needs a '{}' attribute", &source[name_span.clone()], name),
-                labels: vec![(name_span.clone(), format!("definition of `{}`", &source[name_span.clone()]).into())],
+                message: format!(
+                    "variable `{}` needs a '{}' attribute",
+                    &source[name_span.clone()],
+                    name
+                ),
+                labels: vec![(
+                    name_span.clone(),
+                    format!("definition of `{}`", &source[name_span.clone()]).into(),
+                )],
                 notes: vec![],
             },
             Error::InvalidAtomicPointer(ref span) => ParseError {
@@ -453,16 +518,17 @@ impl<'a> Error<'a> {
                 labels: vec![(span.clone(), "expression is not a reference".into())],
                 notes: vec![],
             },
-            Error::InvalidAssignment{ ref span, ty} => ParseError {
+            Error::InvalidAssignment { ref span, ty } => ParseError {
                 message: "invalid left-hand side of assignment".into(),
                 labels: vec![(span.clone(), "cannot assign to this expression".into())],
                 notes: match ty {
                     InvalidAssignmentType::Swizzle => vec![
                         "WGSL does not support assignments to swizzles".into(),
-                        "consider assigning each component individually".into()
+                        "consider assigning each component individually".into(),
                     ],
                     InvalidAssignmentType::ImmutableBinding => vec![
-                        format!("'{}' is an immutable binding", &source[span.clone()]), "consider declaring it with `var` instead of `let`".into()
+                        format!("'{}' is an immutable binding", &source[span.clone()]),
+                        "consider declaring it with `var` instead of `let`".into(),
                     ],
                     InvalidAssignmentType::Other => vec![],
                 },
@@ -473,14 +539,30 @@ impl<'a> Error<'a> {
                 notes: vec![],
             },
             Error::ReservedKeyword(ref name_span) => ParseError {
-                message: format!("name `{}` is a reserved keyword", &source[name_span.clone()]),
-                labels: vec![(name_span.clone(), format!("definition of `{}`", &source[name_span.clone()]).into())],
+                message: format!(
+                    "name `{}` is a reserved keyword",
+                    &source[name_span.clone()]
+                ),
+                labels: vec![(
+                    name_span.clone(),
+                    format!("definition of `{}`", &source[name_span.clone()]).into(),
+                )],
                 notes: vec![],
             },
-            Error::Redefinition { ref previous, ref current } => ParseError {
+            Error::Redefinition {
+                ref previous,
+                ref current,
+            } => ParseError {
                 message: format!("redefinition of `{}`", &source[current.clone()]),
-                labels: vec![(current.clone(), format!("redefinition of `{}`", &source[current.clone()]).into()),
-                             (previous.clone(), format!("previous definition of `{}`", &source[previous.clone()]).into())
+                labels: vec![
+                    (
+                        current.clone(),
+                        format!("redefinition of `{}`", &source[current.clone()]).into(),
+                    ),
+                    (
+                        previous.clone(),
+                        format!("previous definition of `{}`", &source[previous.clone()]).into(),
+                    ),
                 ],
                 notes: vec![],
             },
