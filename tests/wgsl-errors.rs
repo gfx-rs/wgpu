@@ -1597,3 +1597,83 @@ fn break_if_bad_condition() {
         )
     }
 }
+
+#[test]
+fn swizzle_assignment() {
+    check(
+        "
+        fn f() {
+            var v = vec2(0);
+            v.xy = vec2(1);
+        }
+    ",
+        r###"error: invalid left-hand side of assignment
+  ┌─ wgsl:4:13
+  │
+4 │             v.xy = vec2(1);
+  │             ^^^^ cannot assign to this expression
+  │
+  = note: WGSL does not support assignments to swizzles
+  = note: consider assigning each component individually
+
+"###,
+    );
+}
+
+#[test]
+fn binary_statement() {
+    check(
+        "
+        fn f() {
+            3 + 5;
+        }
+    ",
+        r###"error: expected assignment or increment/decrement, found '3 + 5'
+  ┌─ wgsl:3:13
+  │
+3 │             3 + 5;
+  │             ^^^^^ expected assignment or increment/decrement
+
+"###,
+    );
+}
+
+#[test]
+fn assign_to_expr() {
+    check(
+        "
+        fn f() {
+            3 + 5 = 10;
+        }
+        ",
+        r###"error: invalid left-hand side of assignment
+  ┌─ wgsl:3:13
+  │
+3 │             3 + 5 = 10;
+  │             ^^^^^ cannot assign to this expression
+
+"###,
+    );
+}
+
+#[test]
+fn assign_to_let() {
+    check(
+        "
+        fn f() {
+            let a = 10;
+	        a = 20;
+        }
+        ",
+        r###"error: invalid left-hand side of assignment
+  ┌─ wgsl:4:10
+  │
+4 │             a = 20;
+  │             ^ cannot assign to this expression
+  │
+  = note: 'a' is an immutable binding
+  = note: consider declaring it with `var` instead of `let`
+
+"###,
+    );
+}

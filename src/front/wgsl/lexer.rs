@@ -273,7 +273,7 @@ impl<'a> Lexer<'a> {
         if next.0 == expected {
             Ok(next.1)
         } else {
-            Err(Error::Unexpected(next, ExpectedToken::Token(expected)))
+            Err(Error::Unexpected(next.1, ExpectedToken::Token(expected)))
         }
     }
 
@@ -288,7 +288,7 @@ impl<'a> Lexer<'a> {
             Ok(())
         } else {
             Err(Error::Unexpected(
-                next,
+                next.1,
                 ExpectedToken::Token(Token::Paren(expected)),
             ))
         }
@@ -314,7 +314,7 @@ impl<'a> Lexer<'a> {
                 Err(Error::ReservedIdentifierPrefix(span))
             }
             (Token::Word(word), span) => Ok((word, span)),
-            other => Err(Error::Unexpected(other, ExpectedToken::Identifier)),
+            other => Err(Error::Unexpected(other.1, ExpectedToken::Identifier)),
         }
     }
 
