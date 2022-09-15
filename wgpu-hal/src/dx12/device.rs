@@ -706,6 +706,7 @@ impl crate::Device<super::Api> for super::Device {
                     num_texture_views += count
                 }
                 wgt::BindingType::Sampler { .. } => num_samplers += count,
+                wgt::BindingType::AccelerationStructure => todo!(),
             }
         }
 
@@ -1189,6 +1190,7 @@ impl crate::Device<super::Api> for super::Device {
                         cpu_samplers.as_mut().unwrap().stage.push(data.handle.raw);
                     }
                 }
+                wgt::BindingType::AccelerationStructure => todo!(),
             }
         }
 
@@ -1566,5 +1568,39 @@ impl crate::Device<super::Api> for super::Device {
         #[cfg(feature = "renderdoc")]
         self.render_doc
             .end_frame_capture(self.raw.as_mut_ptr() as *mut _, ptr::null_mut())
+    }
+
+    unsafe fn get_acceleration_structure_build_sizes(
+        &self,
+        _desc: &crate::GetAccelerationStructureBuildSizesDescriptor,
+    ) -> crate::AccelerationStructureBuildSizes {
+        // Implement using `GetRaytracingAccelerationStructurePrebuildInfo`:
+        // https://microsoft.github.io/DirectX-Specs/d3d/Raytracing.html#getraytracingaccelerationstructureprebuildinfo
+        todo!()
+    }
+
+    unsafe fn get_acceleration_structure_device_address(
+        &self,
+        _acceleration_structure: &super::AccelerationStructure,
+    ) -> wgt::BufferAddress {
+        // Implement using `GetGPUVirtualAddress`:
+        // https://docs.microsoft.com/en-us/windows/win32/api/d3d12/nf-d3d12-id3d12resource-getgpuvirtualaddress
+        todo!()
+    }
+
+    unsafe fn create_acceleration_structure(
+        &self,
+        _desc: &crate::AccelerationStructureDescriptor,
+    ) -> Result<super::AccelerationStructure, crate::DeviceError> {
+        // Create a D3D12 resource as per-usual.
+        todo!()
+    }
+
+    unsafe fn destroy_acceleration_structure(
+        &self,
+        _acceleration_structure: super::AccelerationStructure,
+    ) {
+        // Destroy a D3D12 resource as per-usual.
+        todo!()
     }
 }
