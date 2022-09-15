@@ -148,8 +148,12 @@ enum ExtensionFn<T> {
 struct DeviceExtensionFunctions {
     draw_indirect_count: Option<khr::DrawIndirectCount>,
     timeline_semaphore: Option<ExtensionFn<khr::TimelineSemaphore>>,
-    acceleration_structure: Option<khr::AccelerationStructure>,
-    buffer_device_address: Option<khr::BufferDeviceAddress>,
+    ray_tracing: Option<RayTracingDeviceExtensionFunctions>,
+}
+
+struct RayTracingDeviceExtensionFunctions {
+    acceleration_structure: khr::AccelerationStructure,
+    buffer_device_address: khr::BufferDeviceAddress,
 }
 
 /// Set of internal capabilities, which don't show up in the exposed

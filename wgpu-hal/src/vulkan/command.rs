@@ -346,29 +346,26 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         geometry: &crate::AccelerationStructureGeometry<super::Api>,
         format: crate::AccelerationStructureFormat,
         mode: crate::AccelerationStructureBuildMode,
-        flags: (),
+        flags: crate::AccelerationStructureBuildFlags,
         primitive_count: u32,
         primitive_offset: u32,
         destination_acceleration_structure: &super::AccelerationStructure,
         scratch_buffer: &super::Buffer,
     ) {
-        let extension = match self.device.extension_fns.acceleration_structure {
-            Some(ref extension) => extension,
+        let ray_tracing_functions = match self.device.extension_fns.ray_tracing {
+            Some(ref functions) => functions,
             None => panic!("Feature `RAY_TRACING` not enabled"),
-        };
-
-        let bda_extension = match self.device.extension_fns.buffer_device_address {
-            Some(ref extension) => extension,
-            None => panic!("Feature `BDA` not enabled"),
         };
 
         let geometry = match geometry {
             crate::AccelerationStructureGeometry::Instances { buffer } => {
                 let instances = vk::AccelerationStructureGeometryInstancesDataKHR::builder().data(
                     vk::DeviceOrHostAddressConstKHR {
-                        device_address: bda_extension.get_buffer_device_address(
-                            &vk::BufferDeviceAddressInfo::builder().buffer(buffer.raw),
-                        ),
+                        device_address: ray_tracing_functions
+                            .buffer_device_address
+                            .get_buffer_device_address(
+                                &vk::BufferDeviceAddressInfo::builder().buffer(buffer.raw),
+                            ),
                     },
                 );
 
@@ -389,9 +386,12 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 let mut triangles_data =
                     vk::AccelerationStructureGeometryTrianglesDataKHR::builder()
                         .vertex_data(vk::DeviceOrHostAddressConstKHR {
-                            device_address: bda_extension.get_buffer_device_address(
-                                &vk::BufferDeviceAddressInfo::builder().buffer(vertex_buffer.raw),
-                            ),
+                            device_address: ray_tracing_functions
+                                .buffer_device_address
+                                .get_buffer_device_address(
+                                    &vk::BufferDeviceAddressInfo::builder()
+                                        .buffer(vertex_buffer.raw),
+                                ),
                         })
                         .vertex_format(conv::map_vertex_format(vertex_format))
                         .vertex_stride(vertex_stride)
@@ -401,9 +401,12 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                     triangles_data = triangles_data
                         .index_type(conv::map_index_format(indices.format))
                         .index_data(vk::DeviceOrHostAddressConstKHR {
-                            device_address: bda_extension.get_buffer_device_address(
-                                &vk::BufferDeviceAddressInfo::builder().buffer(indices.buffer.raw),
-                            ),
+                            device_address: ray_tracing_functions
+                                .buffer_device_address
+                                .get_buffer_device_address(
+                                    &vk::BufferDeviceAddressInfo::builder()
+                                        .buffer(indices.buffer.raw),
+                                ),
                         })
                 }
 
@@ -425,24 +428,33 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             .primitive_offset(primitive_offset)
             .build();
 
-        let geometry_info = vk::AccelerationStructureBuildGeometryInfoKHR::builder()
+        let mut geometry_info = vk::AccelerationStructureBuildGeometryInfoKHR::builder()
             .ty(conv::map_acceleration_structure_format(format))
             .mode(conv::map_acceleration_structure_build_mode(mode))
-            .flags(vk::BuildAccelerationStructureFlagsKHR::PREFER_FAST_TRACE)
+            .flags(conv::map_acceleration_structure_flags(flags))
             .geometries(geometries)
             .dst_acceleration_structure(destination_acceleration_structure.raw)
             .scratch_data(vk::DeviceOrHostAddressKHR {
-                device_address: bda_extension.get_buffer_device_address(
-                    &vk::BufferDeviceAddressInfo::builder().buffer(scratch_buffer.raw),
-                ),
-            })
-            .build();
+                device_address: ray_tracing_functions
+                    .buffer_device_address
+                    .get_buffer_device_address(
+                        &vk::BufferDeviceAddressInfo::builder().buffer(scratch_buffer.raw),
+                    ),
+            });
+
+        if mode == crate::AccelerationStructureBuildMode::Update {
+            geometry_info.src_acceleration_structure = destination_acceleration_structure.raw;
+        }
+
+        let geometry_info = geometry_info.build();
 
         let range = &[range][..];
         let range = &[range][..];
         let geometry_info = &[geometry_info];
 
-        extension.cmd_build_acceleration_structures(self.active, geometry_info, range);
+        ray_tracing_functions
+            .acceleration_structure
+            .cmd_build_acceleration_structures(self.active, geometry_info, range);
     }
 
     // render

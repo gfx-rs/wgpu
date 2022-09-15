@@ -16,6 +16,29 @@ use std::{
 const COMMAND_BUFFER_PER_CONTEXT: usize = 100;
 const DESIRED_FRAMES: u32 = 3;
 
+fn pack_24_8(low_24: u32, high_8: u8) -> u32 {
+    (low_24 & 0x00ff_ffff) | (u32::from(high_8) << 24)
+}
+
+#[derive(Debug)]
+#[repr(C)]
+struct Instance {
+    transform: [f32; 12],
+    instance_custom_index_and_mask: u32,
+    instance_shader_binding_table_record_offset_and_flags: u32,
+    acceleration_structure_reference: u64,
+}
+
+fn transpose_matrix_for_acceleration_structure_instance(matrix: Mat4) -> [f32; 12] {
+    let row_0 = matrix.row(0);
+    let row_1 = matrix.row(1);
+    let row_2 = matrix.row(2);
+    [
+        row_0.x, row_0.y, row_0.z, row_0.w, row_1.x, row_1.y, row_1.z, row_1.w, row_2.x, row_2.y,
+        row_2.z, row_2.w,
+    ]
+}
+
 struct ExecutionContext<A: hal::Api> {
     encoder: A::CommandEncoder,
     fence: A::Fence,
@@ -51,26 +74,20 @@ struct Example<A: hal::Api> {
     start: Instant,
     pipeline: A::ComputePipeline,
     bind_group: A::BindGroup,
-    //local_group: A::BindGroup,
-    //global_group_layout: A::BindGroupLayout,
-    //local_group_layout: A::BindGroupLayout,
+    bgl: A::BindGroupLayout,
+    shader_module: A::ShaderModule,
+    texture_view: A::TextureView,
+    uniform_buffer: A::Buffer,
     pipeline_layout: A::PipelineLayout,
-    /*shader: A::ShaderModule,
-    pipeline: A::RenderPipeline,
-    bunnies: Vec<Locals>,
-    local_buffer: A::Buffer,
-    local_alignment: u32,
-    global_buffer: A::Buffer,
-    sampler: A::Sampler,
-    */
+    vertices_buffer: A::Buffer,
+    indices_buffer: A::Buffer,
     texture: A::Texture,
-    /*texture_view: A::TextureView,
-    contexts: Vec<ExecutionContext<A>>,
-    context_index: usize,
-    extent: [u32; 2],
-    start: Instant,
-    buffers: Vec<A::Buffer>,
-    acceleration_structures: Vec<A::AccelerationStructure>,*/
+    instances: [Instance; 1],
+    instances_buffer: A::Buffer,
+    blas: A::AccelerationStructure,
+    tlas: A::AccelerationStructure,
+    scratch_buffer: A::Buffer,
+    time: f32,
 }
 
 impl<A: hal::Api> Example<A> {
@@ -86,23 +103,21 @@ impl<A: hal::Api> Example<A> {
         let instance = unsafe { A::Instance::init(&instance_desc)? };
         let mut surface = unsafe { instance.create_surface(window).unwrap() };
 
-        let (adapter, _capabilities) = unsafe {
+        let (adapter, features) = unsafe {
             let mut adapters = instance.enumerate_adapters();
             if adapters.is_empty() {
                 return Err(hal::InstanceError);
             }
             let exposed = adapters.swap_remove(0);
-            (exposed.adapter, exposed.capabilities)
+            dbg!(exposed.features);
+            (exposed.adapter, exposed.features)
         };
         let surface_caps =
             unsafe { adapter.surface_capabilities(&surface) }.ok_or(hal::InstanceError)?;
         log::info!("Surface caps: {:#?}", surface_caps);
 
-        let hal::OpenDevice { device, mut queue } = unsafe {
-            adapter
-                .open(wgt::Features::empty(), &wgt::Limits::default())
-                .unwrap()
-        };
+        let hal::OpenDevice { device, mut queue } =
+            unsafe { adapter.open(features, &wgt::Limits::default()).unwrap() };
 
         let window_size: (u32, u32) = window.inner_size().into();
         let surface_config = hal::SurfaceConfiguration {
@@ -196,7 +211,7 @@ impl<A: hal::Api> Example<A> {
             words
         }
 
-        let shader = unsafe {
+        let shader_module = unsafe {
             device
                 .create_shader_module(
                     &hal::ShaderModuleDescriptor {
@@ -225,7 +240,7 @@ impl<A: hal::Api> Example<A> {
                 label: Some("pipeline"),
                 layout: &pipeline_layout,
                 stage: hal::ProgrammableStage {
-                    module: &shader,
+                    module: &shader_module,
                     entry_point: "main",
                 },
             })
@@ -248,7 +263,6 @@ impl<A: hal::Api> Example<A> {
                     label: Some("vertices buffer"),
                     size: vertices_size_in_bytes as u64,
                     usage: hal::BufferUses::MAP_WRITE
-                        | hal::BufferUses::BUFFER_DEVICE_ADDRESS
                         | hal::BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT,
                     memory_flags: hal::MemoryFlags::TRANSIENT | hal::MemoryFlags::PREFER_COHERENT,
                 })
@@ -274,7 +288,6 @@ impl<A: hal::Api> Example<A> {
                     label: Some("indices buffer"),
                     size: indices_size_in_bytes as u64,
                     usage: hal::BufferUses::MAP_WRITE
-                        | hal::BufferUses::BUFFER_DEVICE_ADDRESS
                         | hal::BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT,
                     memory_flags: hal::MemoryFlags::TRANSIENT | hal::MemoryFlags::PREFER_COHERENT,
                 })
@@ -303,17 +316,20 @@ impl<A: hal::Api> Example<A> {
                 },
                 hal::AccelerationStructureFormat::BottomLevel,
                 hal::AccelerationStructureBuildMode::Build,
-                (),
+                hal::AccelerationStructureBuildFlags::PREFER_FAST_TRACE,
                 1,
             )
         };
+
+        let tlas_flags = hal::AccelerationStructureBuildFlags::PREFER_FAST_TRACE
+            | hal::AccelerationStructureBuildFlags::ALLOW_UPDATE;
 
         let tlas_sizes = unsafe {
             device.get_acceleration_structure_build_sizes(
                 &hal::AccelerationStructureGeometryInfo::Instances,
                 hal::AccelerationStructureFormat::TopLevel,
                 hal::AccelerationStructureBuildMode::Build,
-                (),
+                tlas_flags,
                 1,
             )
         };
@@ -441,35 +457,11 @@ impl<A: hal::Api> Example<A> {
                     size: blas_sizes
                         .build_scratch_size
                         .max(tlas_sizes.build_scratch_size),
-                    usage: hal::BufferUses::BUFFER_DEVICE_ADDRESS
-                        | hal::BufferUses::STORAGE_READ_WRITE,
+                    usage: hal::BufferUses::ACCELERATION_STRUCTURE_SCRATCH,
                     memory_flags: hal::MemoryFlags::empty(),
                 })
                 .unwrap()
         };
-
-        fn pack_24_8(low_24: u32, high_8: u8) -> u32 {
-            (low_24 & 0x00ff_ffff) | (u32::from(high_8) << 24)
-        }
-
-        #[derive(Debug)]
-        #[repr(C)]
-        struct Instance {
-            transform: [f32; 12],
-            instance_custom_index_and_mask: u32,
-            instance_shader_binding_table_record_offset_and_flags: u32,
-            acceleration_structure_reference: u64,
-        }
-
-        fn transpose_matrix_for_acceleration_structure_instance(matrix: Mat4) -> [f32; 12] {
-            let row_0 = matrix.row(0);
-            let row_1 = matrix.row(1);
-            let row_2 = matrix.row(2);
-            [
-                row_0.x, row_0.y, row_0.z, row_0.w, row_1.x, row_1.y, row_1.z, row_1.w, row_2.x,
-                row_2.y, row_2.z, row_2.w,
-            ]
-        }
 
         let instances = [
             Instance {
@@ -480,7 +472,7 @@ impl<A: hal::Api> Example<A> {
                     device.get_acceleration_structure_device_address(&blas)
                 },
             },
-            Instance {
+            /*Instance {
                 transform: transpose_matrix_for_acceleration_structure_instance(
                     Mat4::from_rotation_y(1.0),
                 ),
@@ -499,7 +491,7 @@ impl<A: hal::Api> Example<A> {
                 acceleration_structure_reference: unsafe {
                     device.get_acceleration_structure_device_address(&blas)
                 },
-            },
+            },*/
         ];
 
         let instances_buffer_size = instances.len() * std::mem::size_of::<Instance>();
@@ -510,7 +502,6 @@ impl<A: hal::Api> Example<A> {
                     label: Some("instances_buffer"),
                     size: instances_buffer_size as u64,
                     usage: hal::BufferUses::MAP_WRITE
-                        | hal::BufferUses::BUFFER_DEVICE_ADDRESS
                         | hal::BufferUses::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT,
                     memory_flags: hal::MemoryFlags::TRANSIENT | hal::MemoryFlags::PREFER_COHERENT,
                 })
@@ -552,7 +543,7 @@ impl<A: hal::Api> Example<A> {
                 },
                 hal::AccelerationStructureFormat::BottomLevel,
                 hal::AccelerationStructureBuildMode::Build,
-                (),
+                hal::AccelerationStructureBuildFlags::PREFER_FAST_TRACE,
                 indices.len() as u32 / 3,
                 0,
                 &blas,
@@ -572,7 +563,7 @@ impl<A: hal::Api> Example<A> {
                 },
                 hal::AccelerationStructureFormat::TopLevel,
                 hal::AccelerationStructureBuildMode::Build,
-                (),
+                tlas_flags,
                 instances.len() as u32,
                 0,
                 &tlas,
@@ -622,6 +613,18 @@ impl<A: hal::Api> Example<A> {
             pipeline_layout,
             bind_group,
             texture,
+            instances,
+            instances_buffer,
+            blas,
+            tlas,
+            scratch_buffer,
+            time: 0.0,
+            indices_buffer,
+            vertices_buffer,
+            uniform_buffer,
+            texture_view,
+            bgl,
+            shader_module,
         })
     }
 
@@ -637,8 +640,63 @@ impl<A: hal::Api> Example<A> {
             range: wgt::ImageSubresourceRange::default(),
             usage: hal::TextureUses::UNINITIALIZED..hal::TextureUses::COPY_DST,
         };
+
+        let instances_buffer_size = self.instances.len() * std::mem::size_of::<Instance>();
+
+        let tlas_flags = hal::AccelerationStructureBuildFlags::PREFER_FAST_TRACE
+            | hal::AccelerationStructureBuildFlags::ALLOW_UPDATE;
+
+        self.time += 1.0 / 60.0;
+
+        self.instances[0] = Instance {
+            transform: transpose_matrix_for_acceleration_structure_instance(Mat4::from_rotation_y(
+                self.time,
+            )),
+            instance_custom_index_and_mask: pack_24_8(0, 0xff),
+            instance_shader_binding_table_record_offset_and_flags: pack_24_8(0, 0),
+            acceleration_structure_reference: unsafe {
+                self.device
+                    .get_acceleration_structure_device_address(&self.blas)
+            },
+        };
+
+        unsafe {
+            let mapping = self
+                .device
+                .map_buffer(&self.instances_buffer, 0..instances_buffer_size as u64)
+                .unwrap();
+            ptr::copy_nonoverlapping(
+                self.instances.as_ptr() as *const u8,
+                mapping.ptr.as_ptr(),
+                instances_buffer_size,
+            );
+            self.device.unmap_buffer(&self.instances_buffer).unwrap();
+            assert!(mapping.is_coherent);
+        }
+
         unsafe {
             ctx.encoder.begin_encoding(Some("frame")).unwrap();
+
+            ctx.encoder.build_acceleration_structures(
+                &hal::AccelerationStructureGeometry::Instances {
+                    buffer: &self.instances_buffer,
+                },
+                hal::AccelerationStructureFormat::TopLevel,
+                hal::AccelerationStructureBuildMode::Build,
+                tlas_flags,
+                self.instances.len() as u32,
+                0,
+                &self.tlas,
+                &self.scratch_buffer,
+            );
+
+            let as_barrier = hal::BufferBarrier {
+                buffer: &self.scratch_buffer,
+                usage: hal::BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT
+                    ..hal::BufferUses::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT,
+            };
+            ctx.encoder.transition_buffers(iter::once(as_barrier));
+
             ctx.encoder.transition_textures(iter::once(target_barrier0));
         }
 
@@ -752,6 +810,43 @@ impl<A: hal::Api> Example<A> {
             next.fence_value = old_fence_value + 1;
         }
     }
+
+    fn exit(mut self) {
+        unsafe {
+            {
+                let ctx = &mut self.contexts[self.context_index];
+                self.queue
+                    .submit(&[], Some((&mut ctx.fence, ctx.fence_value)))
+                    .unwrap();
+            }
+
+            for mut ctx in self.contexts {
+                ctx.wait_and_clear(&self.device);
+                self.device.destroy_command_encoder(ctx.encoder);
+                self.device.destroy_fence(ctx.fence);
+            }
+
+            self.device.destroy_bind_group(self.bind_group);
+            self.device.destroy_buffer(self.scratch_buffer);
+            self.device.destroy_buffer(self.instances_buffer);
+            self.device.destroy_buffer(self.indices_buffer);
+            self.device.destroy_buffer(self.vertices_buffer);
+            self.device.destroy_buffer(self.uniform_buffer);
+            self.device.destroy_acceleration_structure(self.tlas);
+            self.device.destroy_acceleration_structure(self.blas);
+            self.device.destroy_texture_view(self.texture_view);
+            self.device.destroy_texture(self.texture);
+            self.device.destroy_compute_pipeline(self.pipeline);
+            self.device.destroy_pipeline_layout(self.pipeline_layout);
+            self.device.destroy_bind_group_layout(self.bgl);
+            self.device.destroy_shader_module(self.shader_module);
+
+            self.surface.unconfigure(&self.device);
+            self.device.exit(self.queue);
+            self.instance.destroy_surface(self.surface);
+            drop(self.adapter);
+        }
+    }
 }
 
 #[cfg(all(feature = "metal"))]
@@ -821,7 +916,7 @@ fn main() {
                 ex.render();
             }
             winit::event::Event::LoopDestroyed => {
-                //example.take().unwrap().exit();
+                example.take().unwrap().exit();
             }
             _ => {}
         }

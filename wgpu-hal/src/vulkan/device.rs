@@ -821,11 +821,11 @@ impl crate::Device<super::Api> for super::Device {
         geometry_info: &crate::AccelerationStructureGeometryInfo,
         format: crate::AccelerationStructureFormat,
         mode: crate::AccelerationStructureBuildMode,
-        flags: (),
+        flags: crate::AccelerationStructureBuildFlags,
         primitive_count: u32,
     ) -> crate::AccelerationStructureBuildSizes {
-        let extension = match self.shared.extension_fns.acceleration_structure {
-            Some(ref extension) => extension,
+        let ray_tracing_functions = match self.shared.extension_fns.ray_tracing {
+            Some(ref functions) => functions,
             None => panic!("Feature `RAY_TRACING` not enabled"),
         };
 
@@ -869,14 +869,16 @@ impl crate::Device<super::Api> for super::Device {
         let geometry_info = vk::AccelerationStructureBuildGeometryInfoKHR::builder()
             .ty(conv::map_acceleration_structure_format(format))
             .mode(conv::map_acceleration_structure_build_mode(mode))
-            .flags(vk::BuildAccelerationStructureFlagsKHR::PREFER_FAST_TRACE)
+            .flags(conv::map_acceleration_structure_flags(flags))
             .geometries(geometries);
 
-        let raw = extension.get_acceleration_structure_build_sizes(
-            vk::AccelerationStructureBuildTypeKHR::DEVICE,
-            &geometry_info,
-            &[primitive_count],
-        );
+        let raw = ray_tracing_functions
+            .acceleration_structure
+            .get_acceleration_structure_build_sizes(
+                vk::AccelerationStructureBuildTypeKHR::DEVICE,
+                &geometry_info,
+                &[primitive_count],
+            );
 
         crate::AccelerationStructureBuildSizes {
             acceleration_structure_size: raw.acceleration_structure_size,
@@ -889,23 +891,25 @@ impl crate::Device<super::Api> for super::Device {
         &self,
         acceleration_structure: &super::AccelerationStructure,
     ) -> wgt::BufferAddress {
-        let extension = match self.shared.extension_fns.acceleration_structure {
-            Some(ref extension) => extension,
+        let ray_tracing_functions = match self.shared.extension_fns.ray_tracing {
+            Some(ref functions) => functions,
             None => panic!("Feature `RAY_TRACING` not enabled"),
         };
 
-        extension.get_acceleration_structure_device_address(
-            &vk::AccelerationStructureDeviceAddressInfoKHR::builder()
-                .acceleration_structure(acceleration_structure.raw),
-        )
+        ray_tracing_functions
+            .acceleration_structure
+            .get_acceleration_structure_device_address(
+                &vk::AccelerationStructureDeviceAddressInfoKHR::builder()
+                    .acceleration_structure(acceleration_structure.raw),
+            )
     }
 
     unsafe fn create_acceleration_structure(
         &self,
         desc: &crate::AccelerationStructureDescriptor,
     ) -> Result<super::AccelerationStructure, crate::DeviceError> {
-        let extension = match self.shared.extension_fns.acceleration_structure {
-            Some(ref extension) => extension,
+        let ray_tracing_functions = match self.shared.extension_fns.ray_tracing {
+            Some(ref functions) => functions,
             None => panic!("Feature `RAY_TRACING` not enabled"),
         };
 
@@ -942,7 +946,9 @@ impl crate::Device<super::Api> for super::Device {
             .size(desc.size)
             .ty(conv::map_acceleration_structure_format(desc.format));
 
-        let raw_acceleration_structure = extension.create_acceleration_structure(&vk_info, None)?;
+        let raw_acceleration_structure = ray_tracing_functions
+            .acceleration_structure
+            .create_acceleration_structure(&vk_info, None)?;
 
         if let Some(label) = desc.label {
             self.shared.set_object_name(
@@ -970,12 +976,14 @@ impl crate::Device<super::Api> for super::Device {
         &self,
         acceleration_structure: super::AccelerationStructure,
     ) {
-        let extension = match self.shared.extension_fns.acceleration_structure {
-            Some(ref extension) => extension,
+        let ray_tracing_functions = match self.shared.extension_fns.ray_tracing {
+            Some(ref functions) => functions,
             None => panic!("Feature `RAY_TRACING` not enabled"),
         };
 
-        extension.destroy_acceleration_structure(acceleration_structure.raw, None);
+        ray_tracing_functions
+            .acceleration_structure
+            .destroy_acceleration_structure(acceleration_structure.raw, None);
         self.shared
             .raw
             .destroy_buffer(acceleration_structure.buffer, None);
@@ -1583,11 +1591,15 @@ impl crate::Device<super::Api> for super::Device {
                             .map(|acceleration_structure| acceleration_structure.raw),
                     );
 
-                    acceleration_structure_infos.push(
-                        // todo: this dereference to build the struct is a hack to get around lifetime issues.
-                        *vk::WriteDescriptorSetAccelerationStructureKHR::builder()
-                            .acceleration_structures(&raw_acceleration_structures[raw_start..]),
-                    );
+                    let acceleration_structure_info =
+                        vk::WriteDescriptorSetAccelerationStructureKHR::builder()
+                            .acceleration_structures(&raw_acceleration_structures[raw_start..]);
+
+                    // todo: Dereference the struct to get around lifetime issues. Safe as long as we never resize
+                    // `raw_acceleration_structures`.
+                    let acceleration_structure_info: vk::WriteDescriptorSetAccelerationStructureKHR = *acceleration_structure_info;
+
+                    acceleration_structure_infos.push(acceleration_structure_info);
 
                     extra_descriptor_count += 1;
 

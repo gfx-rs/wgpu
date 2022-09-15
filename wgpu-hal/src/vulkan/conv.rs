@@ -491,14 +491,15 @@ pub fn map_buffer_usage(usage: crate::BufferUses) -> vk::BufferUsageFlags {
     if usage.contains(crate::BufferUses::INDIRECT) {
         flags |= vk::BufferUsageFlags::INDIRECT_BUFFER;
     }
-    if usage.contains(crate::BufferUses::BUFFER_DEVICE_ADDRESS) {
-        flags |= vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS;
+    if usage.contains(crate::BufferUses::ACCELERATION_STRUCTURE_SCRATCH) {
+        flags |= vk::BufferUsageFlags::STORAGE_BUFFER | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS;
     }
     if usage.intersects(
         crate::BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT
             | crate::BufferUses::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT,
     ) {
-        flags |= vk::BufferUsageFlags::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_KHR;
+        flags |= vk::BufferUsageFlags::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_KHR
+            | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS;
     }
     flags
 }
@@ -554,7 +555,8 @@ pub fn map_buffer_usage_to_barrier(
     }
     if usage.intersects(
         crate::BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT
-            | crate::BufferUses::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT,
+            | crate::BufferUses::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT
+            | crate::BufferUses::ACCELERATION_STRUCTURE_SCRATCH,
     ) {
         stages |= vk::PipelineStageFlags::ACCELERATION_STRUCTURE_BUILD_KHR;
         access |= vk::AccessFlags::ACCELERATION_STRUCTURE_READ_KHR
@@ -864,4 +866,28 @@ pub fn map_acceleration_structure_build_mode(
             vk::BuildAccelerationStructureModeKHR::UPDATE
         }
     }
+}
+
+pub fn map_acceleration_structure_flags(
+    flags: crate::AccelerationStructureBuildFlags,
+) -> vk::BuildAccelerationStructureFlagsKHR {
+    let mut vk_flags = vk::BuildAccelerationStructureFlagsKHR::empty();
+
+    if flags.contains(crate::AccelerationStructureBuildFlags::PREFER_FAST_TRACE) {
+        vk_flags |= vk::BuildAccelerationStructureFlagsKHR::PREFER_FAST_TRACE;
+    }
+
+    if flags.contains(crate::AccelerationStructureBuildFlags::PREFER_FAST_BUILD) {
+        vk_flags |= vk::BuildAccelerationStructureFlagsKHR::PREFER_FAST_BUILD;
+    }
+
+    if flags.contains(crate::AccelerationStructureBuildFlags::ALLOW_UPDATE) {
+        vk_flags |= vk::BuildAccelerationStructureFlagsKHR::ALLOW_UPDATE;
+    }
+
+    if flags.contains(crate::AccelerationStructureBuildFlags::LOW_MEMORY) {
+        vk_flags |= vk::BuildAccelerationStructureFlagsKHR::LOW_MEMORY;
+    }
+
+    vk_flags
 }

@@ -249,7 +249,7 @@ pub trait Device<A: Api>: Send + Sync {
         geometry_info: &AccelerationStructureGeometryInfo,
         format: AccelerationStructureFormat,
         mode: AccelerationStructureBuildMode,
-        flags: (),
+        flags: crate::AccelerationStructureBuildFlags,
         primitive_count: u32,
     ) -> AccelerationStructureBuildSizes;
 
@@ -553,7 +553,7 @@ pub trait CommandEncoder<A: Api>: Send + Sync {
         geometry: &AccelerationStructureGeometry<A>,
         format: AccelerationStructureFormat,
         mode: AccelerationStructureBuildMode,
-        flags: (),
+        flags: crate::AccelerationStructureBuildFlags,
         primitive_count: u32,
         primitive_offset: u32,
         destination_acceleration_structure: &A::AccelerationStructure,
@@ -695,7 +695,7 @@ bitflags::bitflags! {
         const STORAGE_READ_WRITE = 1 << 8;
         /// The indirect or count buffer in a indirect draw or dispatch.
         const INDIRECT = 1 << 9;
-        const BUFFER_DEVICE_ADDRESS = 1 << 10;
+        const ACCELERATION_STRUCTURE_SCRATCH = 1 << 10;
         const BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT = 1 << 11;
         const TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT = 1 << 12;
         /// The combination of states that a buffer may be in _at the same time_.
@@ -856,13 +856,13 @@ pub struct AccelerationStructureDescriptor<'a> {
     pub format: AccelerationStructureFormat,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum AccelerationStructureFormat {
     TopLevel,
     BottomLevel,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum AccelerationStructureBuildMode {
     Build,
     Update,
@@ -1189,6 +1189,15 @@ pub struct AccelerationStructureGeometryIndices<'a, A: Api> {
     pub format: wgt::IndexFormat,
     pub buffer: &'a A::Buffer,
 }
+
+bitflags!(
+    pub struct AccelerationStructureBuildFlags: u32 {
+        const PREFER_FAST_TRACE = 1 << 0;
+        const PREFER_FAST_BUILD = 1 << 1;
+        const ALLOW_UPDATE = 1 << 2;
+        const LOW_MEMORY = 1 << 3;
+    }
+);
 
 #[derive(Clone, Debug)]
 pub struct TextureCopyBase {

@@ -130,7 +130,7 @@ impl crate::Device<Api> for Context {
         geometry_info: &crate::AccelerationStructureGeometryInfo,
         format: crate::AccelerationStructureFormat,
         mode: crate::AccelerationStructureBuildMode,
-        flags: (),
+        flags: crate::AccelerationStructureBuildFlags,
         primitive_count: u32,
     ) -> crate::AccelerationStructureBuildSizes {
         Default::default()
@@ -421,7 +421,7 @@ impl crate::CommandEncoder<Api> for Encoder {
         geometry: &crate::AccelerationStructureGeometry<Api>,
         format: crate::AccelerationStructureFormat,
         mode: crate::AccelerationStructureBuildMode,
-        flags: (),
+        flags: crate::AccelerationStructureBuildFlags,
         primitive_count: u32,
         primitive_offset: u32,
         destination_acceleration_structure: &Resource,

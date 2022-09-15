@@ -638,6 +638,14 @@ bitflags::bitflags! {
         /// - DX12
         /// - Metal (Intel and AMD GPUs)
         const WRITE_TIMESTAMP_INSIDE_PASSES = 1 << 41;
+
+        /// Allows for the creation of ray-tracing acceleration structures and ray queries within shaders.
+        ///
+        /// Supported platforms:
+        /// - Vulkan
+        ///
+        /// This is a native-only feature.
+        const RAY_TRACING = 1 << 42;
     }
 }
 
@@ -4041,6 +4049,13 @@ pub enum BindingType {
         view_dimension: TextureViewDimension,
     },
 
+    /// A ray-tracing acceleration structure binding.
+    ///
+    /// Example GLSL syntax:
+    /// ```cpp,ignore
+    /// layout(binding = 0)
+    /// uniform accelerationStructureEXT as;
+    /// ```
     AccelerationStructure,
 }
 

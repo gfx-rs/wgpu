@@ -535,6 +535,14 @@ impl PhysicalDeviceFeatures {
             ),
         );
 
+        features.set(
+            F::RAY_TRACING,
+            caps.supports_extension(vk::KhrDeferredHostOperationsFn::name())
+                && caps.supports_extension(vk::KhrAccelerationStructureFn::name())
+                && caps.supports_extension(vk::KhrBufferDeviceAddressFn::name())
+                && caps.supports_extension(vk::KhrRayQueryFn::name()),
+        );
+
         (features, dl_flags)
     }
 
@@ -623,7 +631,7 @@ impl PhysicalDeviceCapabilities {
             extensions.push(vk::KhrDrawIndirectCountFn::name());
         }
 
-        if true {
+        if requested_features.contains(wgt::Features::RAY_TRACING) {
             extensions.push(vk::KhrDeferredHostOperationsFn::name());
             extensions.push(vk::KhrAccelerationStructureFn::name());
             extensions.push(vk::KhrBufferDeviceAddressFn::name());
@@ -1165,24 +1173,22 @@ impl super::Adapter {
         } else {
             None
         };
-        let acceleration_structure_fn =
-            if enabled_extensions.contains(&khr::AccelerationStructure::name()) {
-                Some(khr::AccelerationStructure::new(
+        let ray_tracing_fns = if enabled_extensions.contains(&khr::AccelerationStructure::name())
+            && enabled_extensions.contains(&khr::BufferDeviceAddress::name())
+        {
+            Some(super::RayTracingDeviceExtensionFunctions {
+                acceleration_structure: khr::AccelerationStructure::new(
                     &self.instance.raw,
                     &raw_device,
-                ))
-            } else {
-                None
-            };
-        let buffer_device_address_fn =
-            if enabled_extensions.contains(&khr::BufferDeviceAddress::name()) {
-                Some(khr::BufferDeviceAddress::new(
+                ),
+                buffer_device_address: khr::BufferDeviceAddress::new(
                     &self.instance.raw,
                     &raw_device,
-                ))
-            } else {
-                None
-            };
+                ),
+            })
+        } else {
+            None
+        };
 
         let naga_options = {
             use naga::back::spv;
@@ -1275,8 +1281,7 @@ impl super::Adapter {
             extension_fns: super::DeviceExtensionFunctions {
                 draw_indirect_count: indirect_count_fn,
                 timeline_semaphore: timeline_semaphore_fn,
-                acceleration_structure: acceleration_structure_fn,
-                buffer_device_address: buffer_device_address_fn,
+                ray_tracing: ray_tracing_fns,
             },
             vendor_id: self.phd_capabilities.properties.vendor_id,
             timestamp_period: self.phd_capabilities.properties.limits.timestamp_period,
