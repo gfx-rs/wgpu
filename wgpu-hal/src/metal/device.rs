@@ -1123,4 +1123,32 @@ impl crate::Device<super::Api> for super::Device {
         }
         shared_capture_manager.stop_capture();
     }
+
+    unsafe fn get_acceleration_structure_build_sizes(
+        &self,
+        _desc: &crate::GetAccelerationStructureBuildSizesDescriptor,
+    ) -> crate::AccelerationStructureBuildSizes {
+        unimplemented!()
+    }
+
+    unsafe fn get_acceleration_structure_device_address(
+        &self,
+        _acceleration_structure: &super::AccelerationStructure,
+    ) -> wgt::BufferAddress {
+        unimplemented!()
+    }
+
+    unsafe fn create_acceleration_structure(
+        &self,
+        _desc: &crate::AccelerationStructureDescriptor,
+    ) -> Result<super::AccelerationStructure, crate::DeviceError> {
+        unimplemented!()
+    }
+
+    unsafe fn destroy_acceleration_structure(
+        &self,
+        _acceleration_structure: super::AccelerationStructure,
+    ) {
+        unimplemented!()
+    }
 }

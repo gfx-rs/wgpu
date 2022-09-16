@@ -962,4 +962,11 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         let encoder = self.state.compute.as_ref().unwrap();
         encoder.dispatch_thread_groups_indirect(&buffer.raw, offset, self.state.raw_wg_size);
     }
+
+    unsafe fn build_acceleration_structures(
+        &mut self,
+        _desc: &crate::BuildAccelerationStructureDescriptor<super::Api>,
+    ) {
+        unimplemented!()
+    }
 }
