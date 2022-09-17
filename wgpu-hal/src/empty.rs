@@ -43,7 +43,8 @@ impl crate::Instance<Api> for Context {
     }
     unsafe fn create_surface(
         &self,
-        rwh: &impl raw_window_handle::HasRawWindowHandle,
+        _display_handle: raw_window_handle::RawDisplayHandle,
+        _window_handle: raw_window_handle::RawWindowHandle,
     ) -> Result<Context, crate::InstanceError> {
         Ok(Context)
     }

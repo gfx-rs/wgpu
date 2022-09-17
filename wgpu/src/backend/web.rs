@@ -1003,7 +1003,7 @@ impl crate::Context for Context {
     type PipelineLayoutId = Sendable<web_sys::GpuPipelineLayout>;
     type RenderPipelineId = Sendable<web_sys::GpuRenderPipeline>;
     type ComputePipelineId = Sendable<web_sys::GpuComputePipeline>;
-    type CommandEncoderId = web_sys::GpuCommandEncoder;
+    type CommandEncoderId = Sendable<web_sys::GpuCommandEncoder>;
     type ComputePassId = ComputePass;
     type RenderPassId = RenderPass;
     type CommandBufferId = Sendable<web_sys::GpuCommandBuffer>;
@@ -1031,9 +1031,10 @@ impl crate::Context for Context {
 
     fn instance_create_surface(
         &self,
-        handle: &impl raw_window_handle::HasRawWindowHandle,
+        _display_handle: raw_window_handle::RawDisplayHandle,
+        window_handle: raw_window_handle::RawWindowHandle,
     ) -> Self::SurfaceId {
-        let canvas_attribute = match handle.raw_window_handle() {
+        let canvas_attribute = match window_handle {
             raw_window_handle::RawWindowHandle::Web(web_handle) => web_handle.id,
             _ => panic!("expected valid handle for canvas"),
         };
@@ -1728,9 +1729,11 @@ impl crate::Context for Context {
         if let Some(label) = desc.label {
             mapped_desc.label(label);
         }
-        device
-            .0
-            .create_command_encoder_with_descriptor(&mapped_desc)
+        Sendable(
+            device
+                .0
+                .create_command_encoder_with_descriptor(&mapped_desc),
+        )
     }
 
     fn device_create_render_bundle_encoder(
@@ -1960,7 +1963,7 @@ impl crate::Context for Context {
         destination_offset: wgt::BufferAddress,
         copy_size: wgt::BufferAddress,
     ) {
-        encoder.copy_buffer_to_buffer_with_f64_and_f64_and_f64(
+        encoder.0.copy_buffer_to_buffer_with_f64_and_f64_and_f64(
             &source.0,
             source_offset as f64,
             &destination.0,
@@ -1976,7 +1979,7 @@ impl crate::Context for Context {
         destination: crate::ImageCopyTexture,
         copy_size: wgt::Extent3d,
     ) {
-        encoder.copy_buffer_to_texture_with_gpu_extent_3d_dict(
+        encoder.0.copy_buffer_to_texture_with_gpu_extent_3d_dict(
             &map_buffer_copy_view(source),
             &map_texture_copy_view(destination),
             &map_extent_3d(copy_size),
@@ -1990,7 +1993,7 @@ impl crate::Context for Context {
         destination: crate::ImageCopyBuffer,
         copy_size: wgt::Extent3d,
     ) {
-        encoder.copy_texture_to_buffer_with_gpu_extent_3d_dict(
+        encoder.0.copy_texture_to_buffer_with_gpu_extent_3d_dict(
             &map_texture_copy_view(source),
             &map_buffer_copy_view(destination),
             &map_extent_3d(copy_size),
@@ -2004,7 +2007,7 @@ impl crate::Context for Context {
         destination: crate::ImageCopyTexture,
         copy_size: wgt::Extent3d,
     ) {
-        encoder.copy_texture_to_texture_with_gpu_extent_3d_dict(
+        encoder.0.copy_texture_to_texture_with_gpu_extent_3d_dict(
             &map_texture_copy_view(source),
             &map_texture_copy_view(destination),
             &map_extent_3d(copy_size),
@@ -2020,7 +2023,7 @@ impl crate::Context for Context {
         if let Some(label) = desc.label {
             mapped_desc.label(label);
         }
-        ComputePass(encoder.begin_compute_pass_with_descriptor(&mapped_desc))
+        ComputePass(encoder.0.begin_compute_pass_with_descriptor(&mapped_desc))
     }
 
     fn command_encoder_end_compute_pass(
@@ -2115,7 +2118,7 @@ impl crate::Context for Context {
             mapped_desc.depth_stencil_attachment(&mapped_depth_stencil_attachment);
         }
 
-        RenderPass(encoder.begin_render_pass(&mapped_desc))
+        RenderPass(encoder.0.begin_render_pass(&mapped_desc))
     }
 
     fn command_encoder_end_render_pass(
@@ -2127,13 +2130,13 @@ impl crate::Context for Context {
     }
 
     fn command_encoder_finish(&self, encoder: Self::CommandEncoderId) -> Self::CommandBufferId {
-        let label = encoder.label();
+        let label = encoder.0.label();
         Sendable(if label.is_empty() {
-            encoder.finish()
+            encoder.0.finish()
         } else {
             let mut mapped_desc = web_sys::GpuCommandBufferDescriptor::new();
             mapped_desc.label(&label);
-            encoder.finish_with_descriptor(&mapped_desc)
+            encoder.0.finish_with_descriptor(&mapped_desc)
         })
     }
 

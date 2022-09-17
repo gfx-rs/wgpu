@@ -117,6 +117,7 @@ parking_lot = ">=0.11,<0.13"
 raw-window-handle = "0.5"
 serde = { version = "1", features = ["derive"], optional = true }
 smallvec = "1"
+static_assertions = "1.1.0"
 
 [dev-dependencies]
 bitflags = "1"
