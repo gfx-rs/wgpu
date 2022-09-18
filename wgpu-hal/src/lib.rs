@@ -180,7 +180,8 @@ pub trait Instance<A: Api>: Sized + Send + Sync {
     unsafe fn init(desc: &InstanceDescriptor) -> Result<Self, InstanceError>;
     unsafe fn create_surface(
         &self,
-        rwh: &(impl raw_window_handle::HasRawWindowHandle + raw_window_handle::HasRawDisplayHandle),
+        display_handle: raw_window_handle::RawDisplayHandle,
+        window_handle: raw_window_handle::RawWindowHandle,
     ) -> Result<A::Surface, InstanceError>;
     unsafe fn destroy_surface(&self, surface: A::Surface);
     unsafe fn enumerate_adapters(&self) -> Vec<ExposedAdapter<A>>;

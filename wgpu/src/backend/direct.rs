@@ -843,10 +843,13 @@ impl crate::Context for Context {
 
     fn instance_create_surface(
         &self,
-        handle: &(impl raw_window_handle::HasRawWindowHandle + raw_window_handle::HasRawDisplayHandle),
+        display_handle: raw_window_handle::RawDisplayHandle,
+        window_handle: raw_window_handle::RawWindowHandle,
     ) -> Self::SurfaceId {
         Surface {
-            id: self.0.instance_create_surface(handle, ()),
+            id: self
+                .0
+                .instance_create_surface(display_handle, window_handle, ()),
             configured_device: Mutex::new(None),
         }
     }
