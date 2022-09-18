@@ -265,4 +265,11 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     unsafe fn dispatch_indirect(&mut self, buffer: &super::Buffer, offset: wgt::BufferAddress) {
         todo!()
     }
+
+    unsafe fn build_acceleration_structures(
+        &mut self,
+        desc: &crate::BuildAccelerationStructureDescriptor<super::Api>,
+    ) {
+        todo!()
+    }
 }

@@ -200,6 +200,31 @@ impl crate::Device<super::Api> for super::Device {
     unsafe fn stop_capture(&self) {
         todo!()
     }
+
+    unsafe fn create_acceleration_structure(
+        &self,
+        desc: &crate::AccelerationStructureDescriptor,
+    ) -> Result<super::AccelerationStructure, crate::DeviceError> {
+        todo!()
+    }
+    unsafe fn get_acceleration_structure_build_sizes(
+        &self,
+        desc: &crate::GetAccelerationStructureBuildSizesDescriptor,
+    ) -> crate::AccelerationStructureBuildSizes {
+        todo!()
+    }
+    unsafe fn get_acceleration_structure_device_address(
+        &self,
+        acceleration_structure: &super::AccelerationStructure,
+    ) -> wgt::BufferAddress {
+        todo!()
+    }
+    unsafe fn destroy_acceleration_structure(
+        &self,
+        acceleration_structure: super::AccelerationStructure,
+    ) {
+        todo!()
+    }
 }
 
 impl crate::Queue<super::Api> for super::Queue {

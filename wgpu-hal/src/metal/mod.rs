@@ -59,6 +59,8 @@ impl crate::Api for Api {
     type ShaderModule = ShaderModule;
     type RenderPipeline = RenderPipeline;
     type ComputePipeline = ComputePipeline;
+
+    type AccelerationStructure = AccelerationStructure;
 }
 
 pub struct Instance {
@@ -734,3 +736,6 @@ pub struct CommandBuffer {
 
 unsafe impl Send for CommandBuffer {}
 unsafe impl Sync for CommandBuffer {}
+
+#[derive(Debug)]
+pub struct AccelerationStructure;

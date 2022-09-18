@@ -239,24 +239,6 @@ pub trait Device<A: Api>: Send + Sync {
     ///
     /// The initial usage is `BufferUses::empty()`.
     unsafe fn create_buffer(&self, desc: &BufferDescriptor) -> Result<A::Buffer, DeviceError>;
-
-    unsafe fn create_acceleration_structure(
-        &self,
-        desc: &AccelerationStructureDescriptor,
-    ) -> Result<A::AccelerationStructure, DeviceError>;
-
-    unsafe fn get_acceleration_structure_build_sizes(
-        &self,
-        desc: &GetAccelerationStructureBuildSizesDescriptor,
-    ) -> AccelerationStructureBuildSizes;
-
-    unsafe fn get_acceleration_structure_device_address(
-        &self,
-        acceleration_structure: &A::AccelerationStructure,
-    ) -> wgt::BufferAddress;
-
-    unsafe fn destroy_acceleration_structure(&self, buffer: A::AccelerationStructure);
-
     unsafe fn destroy_buffer(&self, buffer: A::Buffer);
     //TODO: clarify if zero-sized mapping is allowed
     unsafe fn map_buffer(
@@ -344,6 +326,23 @@ pub trait Device<A: Api>: Send + Sync {
 
     unsafe fn start_capture(&self) -> bool;
     unsafe fn stop_capture(&self);
+
+    unsafe fn create_acceleration_structure(
+        &self,
+        desc: &AccelerationStructureDescriptor,
+    ) -> Result<A::AccelerationStructure, DeviceError>;
+    unsafe fn get_acceleration_structure_build_sizes(
+        &self,
+        desc: &GetAccelerationStructureBuildSizesDescriptor,
+    ) -> AccelerationStructureBuildSizes;
+    unsafe fn get_acceleration_structure_device_address(
+        &self,
+        acceleration_structure: &A::AccelerationStructure,
+    ) -> wgt::BufferAddress;
+    unsafe fn destroy_acceleration_structure(
+        &self,
+        acceleration_structure: A::AccelerationStructure,
+    );
 }
 
 pub trait Queue<A: Api>: Send + Sync {

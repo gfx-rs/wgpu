@@ -107,6 +107,7 @@ pub fn map_binding_type(ty: &wgt::BindingType) -> native::DescriptorRangeType {
             ..
         }
         | Bt::StorageTexture { .. } => native::DescriptorRangeType::UAV,
+        Bt::AccelerationStructure => todo!(),
     }
 }
 
