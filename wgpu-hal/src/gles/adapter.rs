@@ -2,6 +2,8 @@ use glow::HasContext;
 use std::sync::Arc;
 use wgt::AstcChannel;
 
+use crate::auxil::db;
+
 // https://webgl2fundamentals.org/webgl/lessons/webgl-data-textures.html
 
 const GL_UNMASKED_VENDOR_WEBGL: u32 = 0x9245;
@@ -145,26 +147,26 @@ impl super::Adapter {
 
         // source: Sascha Willems at Vulkan
         let vendor_id = if vendor.contains("amd") {
-            0x1002
+            db::amd::VENDOR
         } else if vendor.contains("imgtec") {
-            0x1010
+            db::imgtec::VENDOR
         } else if vendor.contains("nvidia") {
-            0x10DE
+            db::nvidia::VENDOR
         } else if vendor.contains("arm") {
-            0x13B5
+            db::arm::VENDOR
         } else if vendor.contains("qualcomm") {
-            0x5143
+            db::qualcomm::VENDOR
         } else if vendor.contains("intel") {
-            0x8086
+            db::intel::VENDOR
         } else if vendor.contains("broadcom") {
-            0x14e4
+            db::broadcom::VENDOR
         } else {
             0
         };
 
         wgt::AdapterInfo {
             name: renderer_orig,
-            vendor: vendor_id,
+            vendor: vendor_id as usize,
             device: 0,
             device_type: inferred_device_type,
             backend: wgt::Backend::Gl,
