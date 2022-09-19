@@ -671,7 +671,7 @@ impl crate::Device<super::Api> for super::Device {
             allocator,
             device: self.raw,
             shared: Arc::clone(&self.shared),
-            null_rtv_handle: self.null_rtv_handle.clone(),
+            null_rtv_handle: self.null_rtv_handle,
             list: None,
             free_lists: Vec::new(),
             pass: super::PassState::new(),

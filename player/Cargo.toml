@@ -18,7 +18,7 @@ publish = false
 env_logger = "0.9"
 log = "0.4"
 raw-window-handle = "0.5"
-ron = "0.7"
+ron = "0.8"
 winit = { version = "0.27", optional = true }
 
 [dependencies.wgt]

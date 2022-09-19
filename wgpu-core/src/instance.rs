@@ -8,7 +8,7 @@ use crate::{
 
 use wgt::{Backend, Backends, PowerPreference};
 
-use hal::{Adapter as _, Instance as _};
+use hal::{Adapter as _, Instance as _, SurfaceCapabilities};
 use thiserror::Error;
 
 pub type RequestAdapterOptions = wgt::RequestAdapterOptions<SurfaceId>;
@@ -156,29 +156,36 @@ impl Surface {
         &self,
         adapter: &Adapter<A>,
     ) -> Result<Vec<wgt::TextureFormat>, GetSurfaceSupportError> {
-        let suf = A::get_surface(self);
-        let mut caps = unsafe {
-            profiling::scope!("surface_capabilities");
-            adapter
-                .raw
-                .adapter
-                .surface_capabilities(&suf.raw)
-                .ok_or(GetSurfaceSupportError::UnsupportedQueueFamily)?
-        };
-
-        // TODO: maybe remove once we support texture view changing srgb-ness
-        caps.formats.sort_by_key(|f| !f.describe().srgb);
-
-        Ok(caps.formats)
+        self.get_capabilities(adapter).map(|mut caps| {
+            // TODO: maybe remove once we support texture view changing srgb-ness
+            caps.formats.sort_by_key(|f| !f.describe().srgb);
+            caps.formats
+        })
     }
 
-    pub fn get_supported_modes<A: HalApi>(
+    pub fn get_supported_present_modes<A: HalApi>(
         &self,
         adapter: &Adapter<A>,
     ) -> Result<Vec<wgt::PresentMode>, GetSurfaceSupportError> {
+        self.get_capabilities(adapter)
+            .map(|caps| caps.present_modes)
+    }
+
+    pub fn get_supported_alpha_modes<A: HalApi>(
+        &self,
+        adapter: &Adapter<A>,
+    ) -> Result<Vec<wgt::CompositeAlphaMode>, GetSurfaceSupportError> {
+        self.get_capabilities(adapter)
+            .map(|caps| caps.composite_alpha_modes)
+    }
+
+    fn get_capabilities<A: HalApi>(
+        &self,
+        adapter: &Adapter<A>,
+    ) -> Result<SurfaceCapabilities, GetSurfaceSupportError> {
         let suf = A::get_surface(self);
+        profiling::scope!("surface_capabilities");
         let caps = unsafe {
-            profiling::scope!("surface_capabilities");
             adapter
                 .raw
                 .adapter
@@ -186,7 +193,7 @@ impl Surface {
                 .ok_or(GetSurfaceSupportError::UnsupportedQueueFamily)?
         };
 
-        Ok(caps.present_modes)
+        Ok(caps)
     }
 }
 
@@ -424,7 +431,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     #[cfg(feature = "raw-window-handle")]
     pub fn instance_create_surface(
         &self,
-        handle: &(impl raw_window_handle::HasRawWindowHandle + raw_window_handle::HasRawDisplayHandle),
+        display_handle: raw_window_handle::RawDisplayHandle,
+        window_handle: raw_window_handle::RawWindowHandle,
         id_in: Input<G, SurfaceId>,
     ) -> SurfaceId {
         profiling::scope!("Instance::create_surface");
@@ -434,11 +442,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         fn init<A: hal::Api>(
             _: A,
             inst: &Option<A::Instance>,
-            handle: &(impl raw_window_handle::HasRawWindowHandle
-                  + raw_window_handle::HasRawDisplayHandle),
+            display_handle: raw_window_handle::RawDisplayHandle,
+            window_handle: raw_window_handle::RawWindowHandle,
         ) -> Option<HalSurface<A>> {
             inst.as_ref().and_then(|inst| unsafe {
-                match inst.create_surface(handle) {
+                match inst.create_surface(display_handle, window_handle) {
                     Ok(raw) => Some(HalSurface {
                         raw,
                         //acquired_texture: None,
@@ -454,15 +462,40 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let surface = Surface {
             presentation: None,
             #[cfg(vulkan)]
-            vulkan: init(hal::api::Vulkan, &self.instance.vulkan, handle),
+            vulkan: init(
+                hal::api::Vulkan,
+                &self.instance.vulkan,
+                display_handle,
+                window_handle,
+            ),
             #[cfg(metal)]
-            metal: init(hal::api::Metal, &self.instance.metal, handle),
+            metal: init(
+                hal::api::Metal,
+                &self.instance.metal,
+                display_handle,
+                window_handle,
+            ),
             #[cfg(dx12)]
-            dx12: init(hal::api::Dx12, &self.instance.dx12, handle),
+            dx12: init(
+                hal::api::Dx12,
+                &self.instance.dx12,
+                display_handle,
+                window_handle,
+            ),
             #[cfg(dx11)]
-            dx11: init(hal::api::Dx11, &self.instance.dx11, handle),
+            dx11: init(
+                hal::api::Dx11,
+                &self.instance.dx11,
+                display_handle,
+                window_handle,
+            ),
             #[cfg(gl)]
-            gl: init(hal::api::Gles, &self.instance.gl, handle),
+            gl: init(
+                hal::api::Gles,
+                &self.instance.gl,
+                display_handle,
+                window_handle,
+            ),
         };
 
         let mut token = Token::root();

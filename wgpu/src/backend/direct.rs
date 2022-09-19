@@ -19,7 +19,7 @@ use std::{
     slice,
     sync::Arc,
 };
-use wgt::PresentMode;
+use wgt::{CompositeAlphaMode, PresentMode};
 
 const LABEL: &str = "label";
 
@@ -843,10 +843,13 @@ impl crate::Context for Context {
 
     fn instance_create_surface(
         &self,
-        handle: &(impl raw_window_handle::HasRawWindowHandle + raw_window_handle::HasRawDisplayHandle),
+        display_handle: raw_window_handle::RawDisplayHandle,
+        window_handle: raw_window_handle::RawWindowHandle,
     ) -> Self::SurfaceId {
         Surface {
-            id: self.0.instance_create_surface(handle, ()),
+            id: self
+                .0
+                .instance_create_surface(display_handle, window_handle, ()),
             configured_device: Mutex::new(None),
         }
     }
@@ -971,17 +974,33 @@ impl crate::Context for Context {
         }
     }
 
-    fn surface_get_supported_modes(
+    fn surface_get_supported_present_modes(
         &self,
         surface: &Self::SurfaceId,
         adapter: &Self::AdapterId,
     ) -> Vec<PresentMode> {
         let global = &self.0;
-        match wgc::gfx_select!(adapter => global.surface_get_supported_modes(surface.id, *adapter))
+        match wgc::gfx_select!(adapter => global.surface_get_supported_present_modes(surface.id, *adapter))
         {
             Ok(modes) => modes,
             Err(wgc::instance::GetSurfaceSupportError::UnsupportedQueueFamily) => vec![],
-            Err(err) => self.handle_error_fatal(err, "Surface::get_supported_formats"),
+            Err(err) => self.handle_error_fatal(err, "Surface::get_supported_present_modes"),
+        }
+    }
+
+    fn surface_get_supported_alpha_modes(
+        &self,
+        surface: &Self::SurfaceId,
+        adapter: &Self::AdapterId,
+    ) -> Vec<CompositeAlphaMode> {
+        let global = &self.0;
+        match wgc::gfx_select!(adapter => global.surface_get_supported_alpha_modes(surface.id, *adapter))
+        {
+            Ok(modes) => modes,
+            Err(wgc::instance::GetSurfaceSupportError::UnsupportedQueueFamily) => {
+                vec![CompositeAlphaMode::Opaque]
+            }
+            Err(err) => self.handle_error_fatal(err, "Surface::get_supported_alpha_modes"),
         }
     }
 
