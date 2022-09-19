@@ -2913,6 +2913,9 @@ pub struct BufferDescriptor<L> {
     pub usage: BufferUsages,
     /// Allows a buffer to be mapped immediately after they are made. It does not have to be [`BufferUsages::MAP_READ`] or
     /// [`BufferUsages::MAP_WRITE`], all buffers are allowed to be mapped at creation.
+    ///
+    /// If this is `true`, [`size`](#structfield.size) must be a multiple of
+    /// [`COPY_BUFFER_ALIGNMENT`].
     pub mapped_at_creation: bool,
 }
 

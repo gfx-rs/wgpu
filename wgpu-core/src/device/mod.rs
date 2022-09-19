@@ -589,6 +589,20 @@ impl<A: HalApi> Device<A> {
             return Err(resource::CreateBufferError::EmptyUsage);
         }
 
+        if !self
+            .features
+            .contains(wgt::Features::MAPPABLE_PRIMARY_BUFFERS)
+        {
+            use wgt::BufferUsages as Bu;
+            let write_mismatch = desc.usage.contains(Bu::MAP_WRITE)
+                && !(Bu::MAP_WRITE | Bu::COPY_SRC).contains(desc.usage);
+            let read_mismatch = desc.usage.contains(Bu::MAP_READ)
+                && !(Bu::MAP_READ | Bu::COPY_DST).contains(desc.usage);
+            if write_mismatch || read_mismatch {
+                return Err(resource::CreateBufferError::UsageMismatch(desc.usage));
+            }
+        }
+
         if desc.mapped_at_creation {
             if desc.size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
                 return Err(resource::CreateBufferError::UnalignedSize);
