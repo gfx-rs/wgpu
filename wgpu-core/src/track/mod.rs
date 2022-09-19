@@ -445,12 +445,9 @@ impl<A: hub::HalApi> ResourceMetadataProvider<'_, A> {
             }
             ResourceMetadataProvider::Indirect { metadata } => {
                 metadata.tracker_assert_in_bounds(index);
-                (unsafe { *metadata.epochs.get_unchecked(index) }, unsafe {
-                    metadata
-                        .ref_counts
-                        .get_unchecked(index)
-                        .clone()
-                        .unwrap_unchecked()
+                (unsafe { *metadata.epochs.get_unchecked(index) }, {
+                    let ref_count = unsafe { metadata.ref_counts.get_unchecked(index) };
+                    unsafe { ref_count.clone().unwrap_unchecked() }
                 })
             }
             ResourceMetadataProvider::Resource { epoch } => {

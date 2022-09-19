@@ -48,13 +48,16 @@ impl super::DeviceShared {
                 .collect();
             &buffer_vec
         };
+
+        let name = unsafe { CStr::from_bytes_with_nul_unchecked(name_bytes) };
+
         let _result = unsafe {
             extension.debug_utils_set_object_name(
                 self.raw.handle(),
                 &vk::DebugUtilsObjectNameInfoEXT::builder()
                     .object_type(object_type)
                     .object_handle(object.as_raw())
-                    .object_name(CStr::from_bytes_with_nul_unchecked(name_bytes)),
+                    .object_name(name),
             )
         };
     }

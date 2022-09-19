@@ -291,9 +291,10 @@ impl<A: hub::HalApi> TextureUsageScope<A> {
             self.tracker_assert_in_bounds(index);
             scope.tracker_assert_in_bounds(index);
 
+            let texture_data = unsafe { texture_data_from_texture(storage, index32) };
             unsafe {
                 insert_or_merge(
-                    texture_data_from_texture(storage, index32),
+                    texture_data,
                     &mut self.set,
                     &mut self.metadata,
                     index32,
@@ -359,9 +360,10 @@ impl<A: hub::HalApi> TextureUsageScope<A> {
 
         self.tracker_assert_in_bounds(index);
 
+        let texture_data = unsafe { texture_data_from_texture(storage, index32) };
         unsafe {
             insert_or_merge(
-                texture_data_from_texture(storage, index32),
+                texture_data,
                 &mut self.set,
                 &mut self.metadata,
                 index32,
@@ -467,13 +469,8 @@ impl<A: hub::HalApi> TextureTracker<A> {
 
         self.tracker_assert_in_bounds(index);
 
-        unsafe {
-            self.metadata
-                .ref_counts
-                .get_unchecked(index)
-                .as_ref()
-                .unwrap_unchecked()
-        }
+        let ref_count = unsafe { self.metadata.ref_counts.get_unchecked(index) };
+        unsafe { ref_count.as_ref().unwrap_unchecked() }
     }
 
     /// Inserts a single texture and a state into the resource tracker.
@@ -683,9 +680,10 @@ impl<A: hub::HalApi> TextureTracker<A> {
             if unsafe { !scope.metadata.owned.get(index).unwrap_unchecked() } {
                 continue;
             }
+            let texture_data = unsafe { texture_data_from_texture(storage, index32) };
             unsafe {
                 insert_or_barrier_update(
-                    texture_data_from_texture(storage, index32),
+                    texture_data,
                     Some(&mut self.start_set),
                     &mut self.end_set,
                     &mut self.metadata,

@@ -173,7 +173,8 @@ impl super::Device {
         if gl.supports_debug() {
             //TODO: remove all transmutes from `object_label`
             // https://github.com/grovesNL/glow/issues/186
-            unsafe { gl.object_label(glow::SHADER, mem::transmute(raw), label) };
+            let name = unsafe { mem::transmute(raw) };
+            unsafe { gl.object_label(glow::SHADER, name, label) };
         }
 
         unsafe { gl.shader_source(raw, shader) };
@@ -276,7 +277,8 @@ impl super::Device {
         #[cfg(not(target_arch = "wasm32"))]
         if let Some(label) = label {
             if gl.supports_debug() {
-                unsafe { gl.object_label(glow::PROGRAM, mem::transmute(program), Some(label)) };
+                let name = unsafe { mem::transmute(program) };
+                unsafe { gl.object_label(glow::PROGRAM, name, Some(label)) };
             }
         }
 
@@ -363,12 +365,8 @@ impl super::Device {
                         return Err(crate::DeviceError::Lost.into());
                     }
                     super::BindingRegister::Textures | super::BindingRegister::Images => {
-                        unsafe {
-                            gl.uniform_1_i32(
-                                gl.get_uniform_location(program, name).as_ref(),
-                                slot as _,
-                            )
-                        };
+                        let location = unsafe { gl.get_uniform_location(program, name) };
+                        unsafe { gl.uniform_1_i32(location.as_ref(), slot as _) };
                     }
                 }
             }
@@ -516,7 +514,8 @@ impl crate::Device<super::Api> for super::Device {
         #[cfg(not(target_arch = "wasm32"))]
         if let Some(label) = desc.label {
             if gl.supports_debug() {
-                unsafe { gl.object_label(glow::BUFFER, mem::transmute(raw), Some(label)) };
+                let name = unsafe { mem::transmute(raw) };
+                unsafe { gl.object_label(glow::BUFFER, name, Some(label)) };
             }
         }
 
@@ -660,9 +659,8 @@ impl crate::Device<super::Api> for super::Device {
             #[cfg(not(target_arch = "wasm32"))]
             if let Some(label) = desc.label {
                 if gl.supports_debug() {
-                    unsafe {
-                        gl.object_label(glow::RENDERBUFFER, mem::transmute(raw), Some(label))
-                    };
+                    let name = unsafe { mem::transmute(raw) };
+                    unsafe { gl.object_label(glow::RENDERBUFFER, name, Some(label)) };
                 }
             }
 
@@ -728,7 +726,8 @@ impl crate::Device<super::Api> for super::Device {
             #[cfg(not(target_arch = "wasm32"))]
             if let Some(label) = desc.label {
                 if gl.supports_debug() {
-                    unsafe { gl.object_label(glow::TEXTURE, mem::transmute(raw), Some(label)) };
+                    let name = unsafe { mem::transmute(raw) };
+                    unsafe { gl.object_label(glow::TEXTURE, name, Some(label)) };
                 }
             }
 
@@ -876,7 +875,8 @@ impl crate::Device<super::Api> for super::Device {
         #[cfg(not(target_arch = "wasm32"))]
         if let Some(label) = desc.label {
             if gl.supports_debug() {
-                unsafe { gl.object_label(glow::SAMPLER, mem::transmute(raw), Some(label)) };
+                let name = unsafe { mem::transmute(raw) };
+                unsafe { gl.object_label(glow::SAMPLER, name, Some(label)) };
             }
         }
 
@@ -1170,9 +1170,8 @@ impl crate::Device<super::Api> for super::Device {
                 if let Some(label) = desc.label {
                     temp_string.clear();
                     let _ = write!(temp_string, "{}[{}]", label, i);
-                    unsafe {
-                        gl.object_label(glow::QUERY, mem::transmute(query), Some(&temp_string))
-                    };
+                    let name = unsafe { mem::transmute(query) };
+                    unsafe { gl.object_label(glow::QUERY, name, Some(&temp_string)) };
                 }
             }
             queries.push(query);

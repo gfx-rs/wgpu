@@ -738,8 +738,9 @@ impl crate::Instance<super::Api> for Instance {
             && client_ext_str.contains("EGL_KHR_debug")
         {
             log::info!("Enabling EGL debug output");
-            let function: EglDebugMessageControlFun = unsafe {
-                std::mem::transmute(egl.get_proc_address("eglDebugMessageControlKHR").unwrap())
+            let function: EglDebugMessageControlFun = {
+                let addr = egl.get_proc_address("eglDebugMessageControlKHR").unwrap();
+                unsafe { std::mem::transmute(addr) }
             };
             let attributes = [
                 EGL_DEBUG_MSG_CRITICAL_KHR as egl::Attrib,
@@ -911,9 +912,10 @@ impl super::Adapter {
     pub unsafe fn new_external(
         fun: impl FnMut(&str) -> *const ffi::c_void,
     ) -> Option<crate::ExposedAdapter<super::Api>> {
+        let context = unsafe { glow::Context::from_loader_function(fun) };
         unsafe {
             Self::expose(AdapterContext {
-                glow: Mutex::new(glow::Context::from_loader_function(fun)),
+                glow: Mutex::new(context),
                 egl: None,
             })
         }
@@ -1238,14 +1240,9 @@ impl crate::Surface<super::Api> for Surface {
                 .destroy_surface(self.egl.display, surface)
                 .unwrap();
             if let Some(window) = wl_window {
-                let wl_egl_window_destroy: libloading::Symbol<WlEglWindowDestroyFun> = unsafe {
-                    self.wsi
-                        .library
-                        .as_ref()
-                        .expect("unsupported window")
-                        .get(b"wl_egl_window_destroy")
-                }
-                .unwrap();
+                let library = self.wsi.library.as_ref().expect("unsupported window");
+                let wl_egl_window_destroy: libloading::Symbol<WlEglWindowDestroyFun> =
+                    unsafe { library.get(b"wl_egl_window_destroy") }.unwrap();
                 unsafe { wl_egl_window_destroy(window) };
             }
         }
