@@ -8,7 +8,7 @@ use crate::{
 
 use wgt::{Backend, Backends, PowerPreference};
 
-use hal::{Adapter as _, Instance as _};
+use hal::{Adapter as _, Instance as _, SurfaceCapabilities};
 use thiserror::Error;
 
 pub type RequestAdapterOptions = wgt::RequestAdapterOptions<SurfaceId>;
@@ -156,29 +156,36 @@ impl Surface {
         &self,
         adapter: &Adapter<A>,
     ) -> Result<Vec<wgt::TextureFormat>, GetSurfaceSupportError> {
-        let suf = A::get_surface(self);
-        let mut caps = unsafe {
-            profiling::scope!("surface_capabilities");
-            adapter
-                .raw
-                .adapter
-                .surface_capabilities(&suf.raw)
-                .ok_or(GetSurfaceSupportError::UnsupportedQueueFamily)?
-        };
-
-        // TODO: maybe remove once we support texture view changing srgb-ness
-        caps.formats.sort_by_key(|f| !f.describe().srgb);
-
-        Ok(caps.formats)
+        self.get_capabilities(adapter).map(|mut caps| {
+            // TODO: maybe remove once we support texture view changing srgb-ness
+            caps.formats.sort_by_key(|f| !f.describe().srgb);
+            caps.formats
+        })
     }
 
-    pub fn get_supported_modes<A: HalApi>(
+    pub fn get_supported_present_modes<A: HalApi>(
         &self,
         adapter: &Adapter<A>,
     ) -> Result<Vec<wgt::PresentMode>, GetSurfaceSupportError> {
+        self.get_capabilities(adapter)
+            .map(|caps| caps.present_modes)
+    }
+
+    pub fn get_supported_alpha_modes<A: HalApi>(
+        &self,
+        adapter: &Adapter<A>,
+    ) -> Result<Vec<wgt::CompositeAlphaMode>, GetSurfaceSupportError> {
+        self.get_capabilities(adapter)
+            .map(|caps| caps.composite_alpha_modes)
+    }
+
+    fn get_capabilities<A: HalApi>(
+        &self,
+        adapter: &Adapter<A>,
+    ) -> Result<SurfaceCapabilities, GetSurfaceSupportError> {
         let suf = A::get_surface(self);
+        profiling::scope!("surface_capabilities");
         let caps = unsafe {
-            profiling::scope!("surface_capabilities");
             adapter
                 .raw
                 .adapter
@@ -186,7 +193,7 @@ impl Surface {
                 .ok_or(GetSurfaceSupportError::UnsupportedQueueFamily)?
         };
 
-        Ok(caps.present_modes)
+        Ok(caps)
     }
 }
 

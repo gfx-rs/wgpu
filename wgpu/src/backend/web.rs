@@ -1214,12 +1214,20 @@ impl crate::Context for Context {
         ]
     }
 
-    fn surface_get_supported_modes(
+    fn surface_get_supported_present_modes(
         &self,
         _surface: &Self::SurfaceId,
         _adapter: &Self::AdapterId,
     ) -> Vec<wgt::PresentMode> {
         vec![wgt::PresentMode::Fifo]
+    }
+
+    fn surface_get_supported_alpha_modes(
+        &self,
+        _surface: &Self::SurfaceId,
+        _adapter: &Self::AdapterId,
+    ) -> Vec<wgt::CompositeAlphaMode> {
+        vec![wgt::CompositeAlphaMode::Opaque]
     }
 
     fn surface_configure(
@@ -1230,6 +1238,12 @@ impl crate::Context for Context {
     ) {
         if let wgt::PresentMode::Mailbox | wgt::PresentMode::Immediate = config.present_mode {
             panic!("Only FIFO/Auto* is supported on web");
+        }
+        if let wgt::CompositeAlphaMode::PreMultiplied
+        | wgt::CompositeAlphaMode::PostMultiplied
+        | wgt::CompositeAlphaMode::Inherit = config.alpha_mode
+        {
+            panic!("Only Opaque/Auto alpha mode is supported on web");
         }
         let mut mapped =
             web_sys::GpuCanvasConfiguration::new(&device.0, map_texture_format(config.format));
