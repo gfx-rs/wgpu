@@ -780,7 +780,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
                     ]
                 },
                 present_modes: vec![wgt::PresentMode::Fifo], //TODO
-                composite_alpha_modes: vec![crate::CompositeAlphaMode::Opaque], //TODO
+                composite_alpha_modes: vec![wgt::CompositeAlphaMode::Opaque], //TODO
                 swap_chain_sizes: 2..=2,
                 current_extent: None,
                 extents: wgt::Extent3d {

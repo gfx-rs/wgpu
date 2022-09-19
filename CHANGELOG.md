@@ -56,10 +56,24 @@ the same every time it is rendered, we now warn if it is missing.
 +fn vert_main(v_in: VertexInput) -> @builtin(position) @invariant vec4<f32> {...}
 ```
 
+#### Alpha Mode
+
+Surface supports `alpha_mode` now. When alpha_mode is equal to `PreMultiplied` or `PostMultiplied`, 
+the alpha channel of framebuffer is respected in the compositing process, but which mode is available depends on 
+the different API and `Device`. If don't care about alpha_mode, you can set it to `Auto`.
+
+```diff
+SurfaceConfiguration {
+// ...
++ alpha_mode: surface.get_supported_alpha_modes(&adapter)[0],
+}
+```
+
 ### Added/New Features
 
 - Add `Buffer::size()` and `Buffer::usage()`; by @kpreid in [#2923](https://github.com/gfx-rs/wgpu/pull/2923)
 - Split Blendability and Filterability into Two Different TextureFormatFeatureFlags; by @stakka in [#3012](https://github.com/gfx-rs/wgpu/pull/3012)
+- Expose `alpha_mode` on SurfaceConfiguration, by @jinleili in [#2836](https://github.com/gfx-rs/wgpu/pull/2836)
 
 ### Bug Fixes
 
@@ -69,6 +83,7 @@ the same every time it is rendered, we now warn if it is missing.
 - Improve the validation and error reporting of buffer mappings by @nical in [#2848](https://github.com/gfx-rs/wgpu/pull/2848)
 - Fix compilation errors when using wgpu-core in isolation while targetting `wasm32-unknown-unknown` by @Seamooo in [#2922](https://github.com/gfx-rs/wgpu/pull/2922)
 - Fixed opening of RenderDoc library by @abuffseagull in [#2930](https://github.com/gfx-rs/wgpu/pull/2930)
+- Fixed `CommandEncoder` not being `Send` and `Sync` on web by @i509VCB in [#3025](https://github.com/gfx-rs/wgpu/pull/3025)
 
 #### Metal
 - Add the missing `msg_send![view, retain]` call within `from_view` by @jinleili in [#2976](https://github.com/gfx-rs/wgpu/pull/2976)
@@ -85,6 +100,8 @@ the same every time it is rendered, we now warn if it is missing.
 ### Changes
 
 #### General
+- Changed wgpu-hal and wgpu-core implementation to pass RawDisplayHandle and RawWindowHandle as separate
+  parameters instead of passing an impl trait over both HasRawDisplayHandle and HasRawWindowHandle. By @i509VCB in [#3022](https://github.com/gfx-rs/wgpu/pull/3022)
 - Changed `Instance::as_hal<A>` to just return an `Option<&A::Instance>` rather than taking a callback. By @jimb in [#2991](https://github.com/gfx-rs/wgpu/pull/2991)
 - Added downlevel restriction error message for `InvalidFormatUsages` error by @Seamooo in [#2886](https://github.com/gfx-rs/wgpu/pull/2886)
 - Add warning when using CompareFunction::*Equal with vertex shader that is missing @invariant tag by @cwfitzgerald in [#2887](https://github.com/gfx-rs/wgpu/pull/2887)

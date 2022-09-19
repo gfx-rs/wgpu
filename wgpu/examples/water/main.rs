@@ -23,7 +23,7 @@ const SIZE: f32 = 29.0;
 /// Location of the camera.
 /// Location of light is in terrain/water shaders.
 ///
-const CAMERA: Vec3 = glam::const_vec3!([-200.0, 70.0, 200.0,]);
+const CAMERA: Vec3 = glam::Vec3::new(-200.0, 70.0, 200.0);
 
 struct Matrices {
     view: glam::Mat4,

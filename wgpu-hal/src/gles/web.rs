@@ -108,9 +108,10 @@ impl crate::Instance<super::Api> for Instance {
 
     unsafe fn create_surface(
         &self,
-        has_handle: &impl raw_window_handle::HasRawWindowHandle,
+        _display_handle: raw_window_handle::RawDisplayHandle,
+        window_handle: raw_window_handle::RawWindowHandle,
     ) -> Result<Surface, crate::InstanceError> {
-        if let raw_window_handle::RawWindowHandle::Web(handle) = has_handle.raw_window_handle() {
+        if let raw_window_handle::RawWindowHandle::Web(handle) = window_handle {
             let canvas: web_sys::HtmlCanvasElement = web_sys::window()
                 .and_then(|win| win.document())
                 .expect("Cannot get document")
