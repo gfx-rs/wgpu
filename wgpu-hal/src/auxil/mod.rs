@@ -5,6 +5,18 @@ pub(super) mod dxgi;
 pub(super) mod renderdoc;
 
 pub mod db {
+    pub mod amd {
+        pub const VENDOR: u32 = 0x1002;
+    }
+    pub mod arm {
+        pub const VENDOR: u32 = 0x13B5;
+    }
+    pub mod broadcom {
+        pub const VENDOR: u32 = 0x14E4;
+    }
+    pub mod imgtec {
+        pub const VENDOR: u32 = 0x1010;
+    }
     pub mod intel {
         pub const VENDOR: u32 = 0x8086;
         pub const DEVICE_KABY_LAKE_MASK: u32 = 0x5900;
