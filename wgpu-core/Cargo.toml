@@ -47,7 +47,7 @@ thiserror = "1"
 git = "https://github.com/gfx-rs/naga"
 rev = "b209d911"
 version = "0.9"
-features = ["span", "validate", "wgsl-in"]
+features = ["clone", "span", "validate", "wgsl-in"]
 
 [dependencies.wgt]
 path = "../wgpu-types"
