@@ -2293,9 +2293,14 @@ impl TextureFormat {
         };
 
         let mut flags = msaa_flags;
+        let filterable_sample_type = sample_type == TextureSampleType::Float { filterable: true };
         flags.set(
             TextureFormatFeatureFlags::FILTERABLE,
-            sample_type == TextureSampleType::Float { filterable: true },
+            filterable_sample_type,
+        );
+        flags.set(
+            TextureFormatFeatureFlags::BLENDABLE,
+            filterable_sample_type,
         );
 
         TextureFormatInfo {
