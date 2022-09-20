@@ -2298,10 +2298,7 @@ impl TextureFormat {
             TextureFormatFeatureFlags::FILTERABLE,
             filterable_sample_type,
         );
-        flags.set(
-            TextureFormatFeatureFlags::BLENDABLE,
-            filterable_sample_type,
-        );
+        flags.set(TextureFormatFeatureFlags::BLENDABLE, filterable_sample_type);
 
         TextureFormatInfo {
             required_features,
