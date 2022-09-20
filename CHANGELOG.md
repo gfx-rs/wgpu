@@ -133,6 +133,11 @@ SurfaceConfiguration {
 - Document that `write_buffer_with()` is sound but unwise to read from by @kpreid in [#3006](https://github.com/gfx-rs/wgpu/pull/3006)
 - Explain why `Adapter::as_hal` and `Device::as_hal` have to take callback functions. By @jimblandy in [#2992](https://github.com/gfx-rs/wgpu/pull/2992)
 
+### Dependency Updates
+
+#### WebGPU
+- Update wasm32 dependencies, set `alpha_mode` on web target by @jinleili in [#3040](https://github.com/gfx-rs/wgpu/pull/3040)
+
 ### Build Configuration
 
 - Add the `"strict_asserts"` feature, to enable additional internal
