@@ -6,6 +6,8 @@
  *   so that we don't accidentally try to use the same ID.
 !*/
 
+#![warn(unsafe_op_in_unsafe_fn)]
+
 use wgc::device::trace;
 
 use std::{borrow::Cow, fmt::Debug, fs, marker::PhantomData, path::Path};
