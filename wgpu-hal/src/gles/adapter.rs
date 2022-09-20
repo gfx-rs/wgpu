@@ -160,6 +160,10 @@ impl super::Adapter {
             db::intel::VENDOR
         } else if vendor.contains("broadcom") {
             db::broadcom::VENDOR
+        } else if vendor.contains("mesa") {
+            db::mesa::VENDOR
+        } else if vendor.contains("apple") {
+            db::apple::VENDOR
         } else {
             0
         };

@@ -98,6 +98,9 @@ SurfaceConfiguration {
   and `VUID-StandaloneSpirv-Flat-04744`. By @jimblandy in
   [#3008](https://github.com/gfx-rs/wgpu/pull/3008)
 
+#### Gles
+- Report vendor id for Mesa and Apple GPUs. By @i509VCB [#3036](https://github.com/gfx-rs/wgpu/pull/3036).
+
 ### Changes
 
 #### General
