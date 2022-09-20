@@ -243,6 +243,8 @@ impl super::Adapter {
                 1 => wgt::DeviceType::IntegratedGpu,
                 _ => unreachable!(),
             },
+            driver: String::new(),
+            driver_info: String::new(),
             backend: wgt::Backend::Dx11,
         };
 

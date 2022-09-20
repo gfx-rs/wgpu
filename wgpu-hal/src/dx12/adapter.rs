@@ -122,6 +122,8 @@ impl super::Adapter {
             } else {
                 wgt::DeviceType::DiscreteGpu
             },
+            driver: String::new(),
+            driver_info: String::new(),
         };
 
         let mut options: d3d12::D3D12_FEATURE_DATA_D3D12_OPTIONS = unsafe { mem::zeroed() };

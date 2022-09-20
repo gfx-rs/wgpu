@@ -1145,6 +1145,10 @@ pub struct AdapterInfo {
     pub device: usize,
     /// Type of device
     pub device_type: DeviceType,
+    /// Driver name
+    pub driver: String,
+    /// Driver info
+    pub driver_info: String,
     /// Backend used for device
     pub backend: Backend,
 }

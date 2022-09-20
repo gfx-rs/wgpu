@@ -169,6 +169,8 @@ impl super::Adapter {
             vendor: vendor_id as usize,
             device: 0,
             device_type: inferred_device_type,
+            driver: String::new(),
+            driver_info: String::new(),
             backend: wgt::Backend::Gl,
         }
     }

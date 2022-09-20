@@ -116,6 +116,8 @@ impl crate::Instance<Api> for Instance {
                         vendor: 0,
                         device: 0,
                         device_type: shared.private_caps.device_type(),
+                        driver: String::new(),
+                        driver_info: String::new(),
                         backend: wgt::Backend::Metal,
                     },
                     features: shared.private_caps.features(),
