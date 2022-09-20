@@ -205,7 +205,8 @@ impl super::Adapter {
             | wgt::Features::WRITE_TIMESTAMP_INSIDE_PASSES
             | wgt::Features::TEXTURE_COMPRESSION_BC
             | wgt::Features::CLEAR_TEXTURE
-            | wgt::Features::TEXTURE_FORMAT_16BIT_NORM;
+            | wgt::Features::TEXTURE_FORMAT_16BIT_NORM
+            | wgt::Features::PUSH_CONSTANTS;
         //TODO: in order to expose this, we need to run a compute shader
         // that extract the necessary statistics out of the D3D12 result.
         // Alternatively, we could allocate a buffer for the query set,
@@ -270,7 +271,25 @@ impl super::Adapter {
                         .min(crate::MAX_VERTEX_BUFFERS as u32),
                     max_vertex_attributes: d3d12::D3D12_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT,
                     max_vertex_buffer_array_stride: d3d12::D3D12_SO_BUFFER_MAX_STRIDE_IN_BYTES,
-                    max_push_constant_size: 0,
+                    // The push constants are part of the root signature which
+                    // has a limit of 64 DWORDS (256 bytes), but other resources
+                    // also share the root signature:
+                    //
+                    // - push constants consume a `DWORD` for each `4 bytes` of data
+                    // - If a bind group has buffers it will consume a `DWORD`
+                    //   for the descriptor table
+                    // - If a bind group has samplers it will consume a `DWORD`
+                    //   for the descriptor table
+                    // - Each dynamic buffer will consume `2 DWORDs` for the
+                    //   root descriptor
+                    // - The special constants buffer count as constants
+                    //
+                    // Since we can't know beforehand all root signatures that
+                    // will be created, the max size to be used for push
+                    // constants needs to be set to a reasonable number instead.
+                    //
+                    // Source: https://learn.microsoft.com/en-us/windows/win32/direct3d12/root-signature-limits#memory-limits-and-costs
+                    max_push_constant_size: 128,
                     min_uniform_buffer_offset_alignment:
                         d3d12::D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT,
                     min_storage_buffer_offset_alignment: 4,
