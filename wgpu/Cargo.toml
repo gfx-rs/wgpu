@@ -132,7 +132,7 @@ noise = { version = "0.7", default-features = false }
 obj = "0.10"
 png = "0.17"
 nanorand = { version = "0.7", default-features = false, features = ["wyrand"] }
-winit = "0.27.1"     # for "halmark" example
+winit = "0.27.1"                                                                # for "halmark" example
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 async-executor = "1.0"
@@ -160,7 +160,7 @@ version = "0.9"
 features = ["wgsl-out"]
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-web-sys = { version = "0.3.58", features = [
+web-sys = { version = "0.3.60", features = [
     "Document",
     "Navigator",
     "Node",
@@ -184,6 +184,7 @@ web-sys = { version = "0.3.58", features = [
     "GpuBufferBindingLayout",
     "GpuBufferBindingType",
     "GpuBufferDescriptor",
+    "GpuCanvasAlphaMode",
     "GpuCanvasContext",
     "GpuCanvasConfiguration",
     "GpuColorDict",
@@ -284,14 +285,14 @@ web-sys = { version = "0.3.58", features = [
     "ImageBitmapRenderingContext",
     "Window"
 ] }
-wasm-bindgen = "0.2.81"
-js-sys = "0.3.58"
-wasm-bindgen-futures = "0.4.31"
+wasm-bindgen = "0.2.83"
+js-sys = "0.3.60"
+wasm-bindgen-futures = "0.4.33"
 # parking_lot 0.12 switches from `winapi` to `windows`; permit either
 parking_lot = ">=0.11,<0.13"
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
-console_error_panic_hook = "0.1.6"
+console_error_panic_hook = "0.1.7"
 console_log = "0.2"
 # We need the Location feature in the framework examples
-web-sys = { version = "0.3.58", features = ["Location"] }
+web-sys = { version = "0.3.60", features = ["Location"] }
