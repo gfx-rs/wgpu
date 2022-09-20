@@ -85,6 +85,7 @@ SurfaceConfiguration {
 - Added missing validation for `BufferUsages` mismatches when `Features::MAPPABLE_PRIMARY_BUFFERS` is not
   enabled. By @imberflur in [#3023](https://github.com/gfx-rs/wgpu/pull/3023)
 - Fixed `CommandEncoder` not being `Send` and `Sync` on web by @i509VCB in [#3025](https://github.com/gfx-rs/wgpu/pull/3025)
+- Document meaning of `vendor` in `AdapterInfo` if the vendor has no PCI id.
 
 #### Metal
 - Add the missing `msg_send![view, retain]` call within `from_view` by @jinleili in [#2976](https://github.com/gfx-rs/wgpu/pull/2976)
@@ -97,6 +98,10 @@ SurfaceConfiguration {
   violates Vulkan valid usage rules `VUID-StandaloneSpirv-Flat-06202`
   and `VUID-StandaloneSpirv-Flat-04744`. By @jimblandy in
   [#3008](https://github.com/gfx-rs/wgpu/pull/3008)
+
+#### Gles
+- Report vendor id for Mesa and Apple GPUs. By @i509VCB [#3036](https://github.com/gfx-rs/wgpu/pull/3036)
+- Report Apple M2 gpu as integrated. By @i509VCB [#3036](https://github.com/gfx-rs/wgpu/pull/3036)
 
 ### Changes
 

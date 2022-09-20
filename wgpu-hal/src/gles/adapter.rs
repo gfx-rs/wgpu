@@ -122,7 +122,7 @@ impl super::Adapter {
             "mali",
             "intel",
             "v3d",
-            "apple m1",
+            "apple m", // all apple m are integrated
         ];
         let strings_that_imply_cpu = ["mesa offscreen", "swiftshader", "llvmpipe"];
 
@@ -160,6 +160,10 @@ impl super::Adapter {
             db::intel::VENDOR
         } else if vendor.contains("broadcom") {
             db::broadcom::VENDOR
+        } else if vendor.contains("mesa") {
+            db::mesa::VENDOR
+        } else if vendor.contains("apple") {
+            db::apple::VENDOR
         } else {
             0
         };
