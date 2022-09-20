@@ -201,20 +201,6 @@
   }
   const GPUErrorPrototype = GPUError.prototype;
 
-  class GPUOutOfMemoryError extends GPUError {
-    name = "GPUOutOfMemoryError";
-    constructor(message) {
-      const prefix = "Failed to construct 'GPUOutOfMemoryError'";
-      webidl.requiredArguments(arguments.length, 1, { prefix });
-      message = webidl.converters.DOMString(message, {
-        prefix,
-        context: "Argument 1",
-      });
-      super(message);
-    }
-  }
-  const GPUOutOfMemoryErrorPrototype = GPUOutOfMemoryError.prototype;
-
   class GPUValidationError extends GPUError {
     name = "GPUValidationError";
     /** @param {string} message */
@@ -229,6 +215,20 @@
     }
   }
   const GPUValidationErrorPrototype = GPUValidationError.prototype;
+
+  class GPUOutOfMemoryError extends GPUError {
+    name = "GPUOutOfMemoryError";
+    constructor(message) {
+      const prefix = "Failed to construct 'GPUOutOfMemoryError'";
+      webidl.requiredArguments(arguments.length, 1, { prefix });
+      message = webidl.converters.DOMString(message, {
+        prefix,
+        context: "Argument 1",
+      });
+      super(message);
+    }
+  }
+  const GPUOutOfMemoryErrorPrototype = GPUOutOfMemoryError.prototype;
 
   class GPU {
     [webidl.brand] = webidl.brand;
@@ -509,6 +509,10 @@
     get maxBindGroups() {
       webidl.assertBranded(this, GPUSupportedLimitsPrototype);
       return this[_limits].maxBindGroups;
+    }
+    get maxBufferSize() {
+      webidl.assertBranded(this, GPUSupportedLimitsPrototype);
+      return this[_limits].maxBufferSize;
     }
     get maxDynamicUniformBuffersPerPipelineLayout() {
       webidl.assertBranded(this, GPUSupportedLimitsPrototype);
@@ -1776,7 +1780,7 @@
     [_size];
     /** @type {number} */
     [_usage];
-    /** @type {"mapped" | "mapped at creation" | "mapped pending" | "unmapped" | "destroy"} */
+    /** @type {"mapped" | "mapped at creation" | "pending" | "unmapped" | "destroy"} */
     [_state];
     /** @type {[number, number] | null} */
     [_mappingRange];
@@ -1806,6 +1810,26 @@
 
     constructor() {
       webidl.illegalConstructor();
+    }
+
+    get size() {
+      webidl.assertBranded(this, GPUBufferPrototype);
+      return this[_size];
+    }
+
+    get usage() {
+      webidl.assertBranded(this, GPUBufferPrototype);
+      return this[_usage];
+    }
+
+    get mapState() {
+      webidl.assertBranded(this, GPUBufferPrototype);
+      const state = this[_state];
+      if (state === "mapped at creation") {
+        return "mapped";
+      } else {
+        return state;
+      }
     }
 
     /**
@@ -1886,7 +1910,7 @@
       }
 
       this[_mapMode] = mode;
-      this[_state] = "mapping pending";
+      this[_state] = "pending";
       const promise = PromisePrototypeThen(
         core.opAsync(
           "op_webgpu_buffer_get_map_async",
@@ -1979,7 +2003,7 @@
           "OperationError",
         );
       }
-      if (this[_state] === "mapping pending") {
+      if (this[_state] === "pending") {
         // TODO(lucacasonato): this is not spec compliant.
         throw new DOMException(
           `${prefix}: can not unmap while mapping. This is a Deno limitation.`,
@@ -2029,16 +2053,6 @@
     destroy() {
       webidl.assertBranded(this, GPUBufferPrototype);
       this[_cleanup]();
-    }
-
-    get size() {
-      webidl.assertBranded(this, GPUBufferPrototype);
-      return this[_size];
-    }
-
-    get usage() {
-      webidl.assertBranded(this, GPUBufferPrototype);
-      return this[_usage];
     }
 
     [SymbolFor("Deno.privateCustomInspect")](inspect) {
@@ -5358,7 +5372,7 @@
     GPURenderBundle,
     GPUQuerySet,
     GPUError,
-    GPUOutOfMemoryError,
     GPUValidationError,
+    GPUOutOfMemoryError,
   };
 })(this);
