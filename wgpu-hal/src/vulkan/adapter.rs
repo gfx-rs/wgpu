@@ -482,7 +482,7 @@ impl PhysicalDeviceFeatures {
         );
 
         features.set(
-            F::DEPTH24UNORM_STENCIL8,
+            F::DEPTH24PLUS_STENCIL8,
             supports_format(
                 instance,
                 phd,
