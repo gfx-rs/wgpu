@@ -586,7 +586,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             #[cfg(vulkan)]
             vulkan: None,
             dx12: self.instance.dx12.as_ref().map(|inst| HalSurface {
-                raw: { inst.create_surface_from_visual(visual as _) },
+                raw: unsafe { inst.create_surface_from_visual(visual as _) },
             }),
             dx11: None,
             #[cfg(gl)]

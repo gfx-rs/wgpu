@@ -4519,10 +4519,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 });
             };
 
-            let shader = match device.create_shader_module_spirv(device_id, desc, &source) {
-                Ok(shader) => shader,
-                Err(e) => break e,
-            };
+            let shader =
+                match unsafe { device.create_shader_module_spirv(device_id, desc, &source) } {
+                    Ok(shader) => shader,
+                    Err(e) => break e,
+                };
             let id = fid.assign(shader, &mut token);
             return (id.0, None);
         };
