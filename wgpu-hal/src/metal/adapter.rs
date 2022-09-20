@@ -316,9 +316,8 @@ impl crate::Adapter<super::Api> for super::Adapter {
                 vec![wgt::PresentMode::Fifo]
             },
             composite_alpha_modes: vec![
-                crate::CompositeAlphaMode::Opaque,
-                crate::CompositeAlphaMode::PreMultiplied,
-                crate::CompositeAlphaMode::PostMultiplied,
+                wgt::CompositeAlphaMode::Opaque,
+                wgt::CompositeAlphaMode::PostMultiplied,
             ],
 
             current_extent,

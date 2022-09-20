@@ -2,6 +2,7 @@
 mod common;
 
 mod buffer_copy;
+mod buffer_usages;
 mod clear_texture;
 mod device;
 mod example_wgsl;

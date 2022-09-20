@@ -73,6 +73,7 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
         width: size.width,
         height: size.height,
         present_mode: wgpu::PresentMode::Fifo,
+        alpha_mode: surface.get_supported_alpha_modes(&adapter)[0],
     };
 
     surface.configure(&device, &config);

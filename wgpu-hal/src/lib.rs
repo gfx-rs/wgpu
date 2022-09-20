@@ -83,7 +83,7 @@ pub mod api {
 pub use vulkan::UpdateAfterBindTypes;
 
 use std::{
-    borrow::Borrow,
+    borrow::{Borrow, Cow},
     fmt,
     num::{NonZeroU32, NonZeroU8},
     ops::{Range, RangeInclusive},
@@ -106,7 +106,7 @@ pub type Label<'a> = Option<&'a str>;
 pub type MemoryRange = Range<wgt::BufferAddress>;
 pub type FenceValue = u64;
 
-#[derive(Clone, Debug, Eq, PartialEq, Error)]
+#[derive(Clone, Debug, PartialEq, Error)]
 pub enum DeviceError {
     #[error("out of memory")]
     OutOfMemory,
@@ -114,7 +114,7 @@ pub enum DeviceError {
     Lost,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Error)]
+#[derive(Clone, Debug, PartialEq, Error)]
 pub enum ShaderError {
     #[error("compilation failed: {0:?}")]
     Compilation(String),
@@ -122,7 +122,7 @@ pub enum ShaderError {
     Device(#[from] DeviceError),
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Error)]
+#[derive(Clone, Debug, PartialEq, Error)]
 pub enum PipelineError {
     #[error("linkage failed for stage {0:?}: {1}")]
     Linkage(wgt::ShaderStages, String),
@@ -132,7 +132,7 @@ pub enum PipelineError {
     Device(#[from] DeviceError),
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Error)]
+#[derive(Clone, Debug, PartialEq, Error)]
 pub enum SurfaceError {
     #[error("surface is lost")]
     Lost,
@@ -144,7 +144,7 @@ pub enum SurfaceError {
     Other(&'static str),
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Error)]
+#[derive(Clone, Debug, PartialEq, Error)]
 #[error("Not supported")]
 pub struct InstanceError;
 
@@ -781,7 +781,7 @@ pub struct SurfaceCapabilities {
     /// List of supported alpha composition modes.
     ///
     /// Must be at least one.
-    pub composite_alpha_modes: Vec<CompositeAlphaMode>,
+    pub composite_alpha_modes: Vec<wgt::CompositeAlphaMode>,
 }
 
 #[derive(Debug)]
@@ -942,7 +942,7 @@ pub struct CommandEncoderDescriptor<'a, A: Api> {
 /// Naga shader module.
 pub struct NagaShader {
     /// Shader module IR.
-    pub module: naga::Module,
+    pub module: Cow<'static, naga::Module>,
     /// Analysis information of the module.
     pub info: naga::valid::ModuleInfo,
 }
@@ -1033,27 +1033,6 @@ pub struct RenderPipelineDescriptor<'a, A: Api> {
     pub multiview: Option<NonZeroU32>,
 }
 
-/// Specifies how the alpha channel of the textures should be handled during (martin mouv i step)
-/// compositing.
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub enum CompositeAlphaMode {
-    /// The alpha channel, if it exists, of the textures is ignored in the
-    /// compositing process. Instead, the textures is treated as if it has a
-    /// constant alpha of 1.0.
-    Opaque,
-    /// The alpha channel, if it exists, of the textures is respected in the
-    /// compositing process. The non-alpha channels of the textures are
-    /// expected to already be multiplied by the alpha channel by the
-    /// application.
-    PreMultiplied,
-    /// The alpha channel, if it exists, of the textures is respected in the
-    /// compositing process. The non-alpha channels of the textures are not
-    /// expected to already be multiplied by the alpha channel by the
-    /// application; instead, the compositor will multiply the non-alpha
-    /// channels of the texture by the alpha channel during compositing.
-    PostMultiplied,
-}
-
 #[derive(Debug, Clone)]
 pub struct SurfaceConfiguration {
     /// Number of textures in the swap chain. Must be in
@@ -1062,7 +1041,7 @@ pub struct SurfaceConfiguration {
     /// Vertical synchronization mode.
     pub present_mode: wgt::PresentMode,
     /// Alpha composition mode.
-    pub composite_alpha_mode: CompositeAlphaMode,
+    pub composite_alpha_mode: wgt::CompositeAlphaMode,
     /// Format of the surface textures.
     pub format: wgt::TextureFormat,
     /// Requested texture extent. Must be in

@@ -183,11 +183,6 @@ pub fn map_vertex_format(format: wgt::VertexFormat) -> dxgiformat::DXGI_FORMAT {
     }
 }
 
-pub fn map_acomposite_alpha_mode(mode: crate::CompositeAlphaMode) -> native::AlphaMode {
-    use crate::CompositeAlphaMode as Cam;
-    match mode {
-        Cam::Opaque => native::AlphaMode::Ignore,
-        Cam::PreMultiplied => native::AlphaMode::Premultiplied,
-        Cam::PostMultiplied => native::AlphaMode::Straight,
-    }
+pub fn map_acomposite_alpha_mode(_mode: wgt::CompositeAlphaMode) -> native::AlphaMode {
+    native::AlphaMode::Ignore
 }

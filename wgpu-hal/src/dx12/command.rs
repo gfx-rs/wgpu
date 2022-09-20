@@ -149,6 +149,18 @@ impl super::CommandEncoder {
 
             match self.pass.root_elements[index as usize] {
                 super::RootElement::Empty => log::error!("Root index {} is not bound", index),
+                super::RootElement::Constant => {
+                    let info = self.pass.layout.root_constant_info.as_ref().unwrap();
+
+                    for offset in info.range.clone() {
+                        let val = self.pass.constant_data[offset as usize];
+                        match self.pass.kind {
+                            Pk::Render => list.set_graphics_root_constant(index, val, offset),
+                            Pk::Compute => list.set_compute_root_constant(index, val, offset),
+                            Pk::Transfer => (),
+                        }
+                    }
+                }
                 super::RootElement::SpecialConstantBuffer {
                     base_vertex,
                     base_instance,
@@ -784,11 +796,24 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     }
     unsafe fn set_push_constants(
         &mut self,
-        _layout: &super::PipelineLayout,
+        layout: &super::PipelineLayout,
         _stages: wgt::ShaderStages,
-        _offset: u32,
-        _data: &[u32],
+        offset: u32,
+        data: &[u32],
     ) {
+        let info = layout.shared.root_constant_info.as_ref().unwrap();
+
+        self.pass.root_elements[info.root_index as usize] = super::RootElement::Constant;
+
+        self.pass.constant_data[(offset as usize)..(offset as usize + data.len())]
+            .copy_from_slice(data);
+
+        if self.pass.layout.signature == layout.shared.signature {
+            self.pass.dirty_root_elements |= 1 << info.root_index;
+        } else {
+            // D3D12 requires full reset on signature change
+            self.reset_signature(&layout.shared);
+        };
     }
 
     unsafe fn insert_debug_marker(&mut self, label: &str) {

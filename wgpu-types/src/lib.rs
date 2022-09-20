@@ -1140,6 +1140,9 @@ pub struct AdapterInfo {
     /// Adapter name
     pub name: String,
     /// Vendor PCI id of the adapter
+    ///
+    /// If the vendor has no PCI id, then this value will be the backend's vendor id equivalent. On Vulkan,
+    /// Mesa would have a vendor id equivalent to it's `VkVendorId` value.
     pub vendor: usize,
     /// PCI id of the adapter
     pub device: usize,
@@ -2984,6 +2987,9 @@ pub struct BufferDescriptor<L> {
     pub usage: BufferUsages,
     /// Allows a buffer to be mapped immediately after they are made. It does not have to be [`BufferUsages::MAP_READ`] or
     /// [`BufferUsages::MAP_WRITE`], all buffers are allowed to be mapped at creation.
+    ///
+    /// If this is `true`, [`size`](#structfield.size) must be a multiple of
+    /// [`COPY_BUFFER_ALIGNMENT`].
     pub mapped_at_creation: bool,
 }
 
@@ -3104,6 +3110,38 @@ impl Default for PresentMode {
     }
 }
 
+/// Specifies how the alpha channel of the textures should be handled during (martin mouv i step)
+/// compositing.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "trace", derive(Serialize))]
+#[cfg_attr(feature = "replay", derive(Deserialize))]
+pub enum CompositeAlphaMode {
+    /// Chooses either `Opaque` or `Inherit` automatically，depending on the
+    /// `alpha_mode` that the current surface can support.
+    Auto = 0,
+    /// The alpha channel, if it exists, of the textures is ignored in the
+    /// compositing process. Instead, the textures is treated as if it has a
+    /// constant alpha of 1.0.
+    Opaque = 1,
+    /// The alpha channel, if it exists, of the textures is respected in the
+    /// compositing process. The non-alpha channels of the textures are
+    /// expected to already be multiplied by the alpha channel by the
+    /// application.
+    PreMultiplied = 2,
+    /// The alpha channel, if it exists, of the textures is respected in the
+    /// compositing process. The non-alpha channels of the textures are not
+    /// expected to already be multiplied by the alpha channel by the
+    /// application; instead, the compositor will multiply the non-alpha
+    /// channels of the texture by the alpha channel during compositing.
+    PostMultiplied = 3,
+    /// The alpha channel, if it exists, of the textures is unknown for processing
+    /// during compositing. Instead, the application is responsible for setting
+    /// the composite alpha blending mode using native WSI command. If not set,
+    /// then a platform-specific default will be used.
+    Inherit = 4,
+}
+
 bitflags::bitflags! {
     /// Different ways that you can use a texture.
     ///
@@ -3154,6 +3192,8 @@ pub struct SurfaceConfiguration {
     /// AutoNoVsync will gracefully do a designed sets of fallbacks if their primary modes are
     /// unsupported.
     pub present_mode: PresentMode,
+    /// Specifies how the alpha channel of the textures should be handled during compositing.
+    pub alpha_mode: CompositeAlphaMode,
 }
 
 /// Status of the recieved surface image.

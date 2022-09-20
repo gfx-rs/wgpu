@@ -7,7 +7,13 @@ use hal::{
 };
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 
-use std::{borrow::Borrow, iter, mem, num::NonZeroU32, ptr, time::Instant};
+use std::{
+    borrow::{Borrow, Cow},
+    iter, mem,
+    num::NonZeroU32,
+    ptr,
+    time::Instant,
+};
 
 const MAX_BUNNIES: usize = 1 << 20;
 const BUNNY_SIZE: f32 = 0.15 * 256.0;
@@ -122,7 +128,7 @@ impl<A: hal::Api> Example<A> {
                 .max(*surface_caps.swap_chain_sizes.start())
                 .min(*surface_caps.swap_chain_sizes.end()),
             present_mode: wgt::PresentMode::Fifo,
-            composite_alpha_mode: hal::CompositeAlphaMode::Opaque,
+            composite_alpha_mode: wgt::CompositeAlphaMode::Opaque,
             format: wgt::TextureFormat::Bgra8UnormSrgb,
             extent: wgt::Extent3d {
                 width: window_size.0,
@@ -148,7 +154,10 @@ impl<A: hal::Api> Example<A> {
             )
             .validate(&module)
             .unwrap();
-            hal::NagaShader { module, info }
+            hal::NagaShader {
+                module: Cow::Owned(module),
+                info,
+            }
         };
         let shader_desc = hal::ShaderModuleDescriptor {
             label: None,

@@ -671,7 +671,7 @@ impl crate::Device<super::Api> for super::Device {
             allocator,
             device: self.raw,
             shared: Arc::clone(&self.shared),
-            null_rtv_handle: self.null_rtv_handle.clone(),
+            null_rtv_handle: self.null_rtv_handle,
             list: None,
             free_lists: Vec::new(),
             pass: super::PassState::new(),
@@ -799,6 +799,40 @@ impl crate::Device<super::Api> for super::Device {
             hlsl::BindTarget::default(),
         );
         let mut parameters = Vec::new();
+        let mut push_constants_target = None;
+        let mut root_constant_info = None;
+
+        let mut pc_start = u32::MAX;
+        let mut pc_end = u32::MIN;
+
+        for pc in desc.push_constant_ranges.iter() {
+            pc_start = pc_start.min(pc.range.start);
+            pc_end = pc_end.max(pc.range.end);
+        }
+
+        if pc_start != u32::MAX && pc_end != u32::MIN {
+            let parameter_index = parameters.len();
+            let size = (pc_end - pc_start) / 4;
+            log::debug!(
+                "\tParam[{}] = push constant (count = {})",
+                parameter_index,
+                size,
+            );
+            parameters.push(native::RootParameter::constants(
+                native::ShaderVisibility::All,
+                native_binding(&bind_cbv),
+                size,
+            ));
+            let binding = bind_cbv.clone();
+            bind_cbv.register += 1;
+            root_constant_info = Some(super::RootConstantInfo {
+                root_index: parameter_index as u32,
+                range: (pc_start / 4)..(pc_end / 4),
+            });
+            push_constants_target = Some(binding);
+
+            bind_cbv.space += 1;
+        }
 
         // Collect the whole number of bindings we will create upfront.
         // It allows us to preallocate enough storage to avoid reallocation,
@@ -1054,6 +1088,7 @@ impl crate::Device<super::Api> for super::Device {
                 signature: raw,
                 total_root_elements: parameters.len() as super::RootIndex,
                 special_constants_root_index,
+                root_constant_info,
             },
             bind_group_infos,
             naga_options: hlsl::Options {
@@ -1061,7 +1096,7 @@ impl crate::Device<super::Api> for super::Device {
                 binding_map,
                 fake_missing_bindings: false,
                 special_constants_binding,
-                push_constants_target: None,
+                push_constants_target,
             },
         })
     }

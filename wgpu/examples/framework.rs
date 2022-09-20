@@ -273,6 +273,7 @@ fn start<E: Example>(
         width: size.width,
         height: size.height,
         present_mode: wgpu::PresentMode::Fifo,
+        alpha_mode: surface.get_supported_alpha_modes(&adapter)[0],
     };
     surface.configure(&device, &config);
 
@@ -544,6 +545,7 @@ pub fn test<E: Example>(mut params: FrameworkRefTest) {
                     width: params.width,
                     height: params.height,
                     present_mode: wgpu::PresentMode::Fifo,
+                    alpha_mode: wgpu::CompositeAlphaMode::Auto,
                 },
                 &ctx.adapter,
                 &ctx.device,

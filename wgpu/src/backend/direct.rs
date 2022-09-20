@@ -19,7 +19,7 @@ use std::{
     slice,
     sync::Arc,
 };
-use wgt::PresentMode;
+use wgt::{CompositeAlphaMode, PresentMode};
 
 const LABEL: &str = "label";
 
@@ -974,17 +974,33 @@ impl crate::Context for Context {
         }
     }
 
-    fn surface_get_supported_modes(
+    fn surface_get_supported_present_modes(
         &self,
         surface: &Self::SurfaceId,
         adapter: &Self::AdapterId,
     ) -> Vec<PresentMode> {
         let global = &self.0;
-        match wgc::gfx_select!(adapter => global.surface_get_supported_modes(surface.id, *adapter))
+        match wgc::gfx_select!(adapter => global.surface_get_supported_present_modes(surface.id, *adapter))
         {
             Ok(modes) => modes,
             Err(wgc::instance::GetSurfaceSupportError::UnsupportedQueueFamily) => vec![],
-            Err(err) => self.handle_error_fatal(err, "Surface::get_supported_formats"),
+            Err(err) => self.handle_error_fatal(err, "Surface::get_supported_present_modes"),
+        }
+    }
+
+    fn surface_get_supported_alpha_modes(
+        &self,
+        surface: &Self::SurfaceId,
+        adapter: &Self::AdapterId,
+    ) -> Vec<CompositeAlphaMode> {
+        let global = &self.0;
+        match wgc::gfx_select!(adapter => global.surface_get_supported_alpha_modes(surface.id, *adapter))
+        {
+            Ok(modes) => modes,
+            Err(wgc::instance::GetSurfaceSupportError::UnsupportedQueueFamily) => {
+                vec![CompositeAlphaMode::Opaque]
+            }
+            Err(err) => self.handle_error_fatal(err, "Surface::get_supported_alpha_modes"),
         }
     }
 
@@ -1100,7 +1116,7 @@ impl crate::Context for Context {
                 };
                 let parser = naga::front::spv::Parser::new(spv.iter().cloned(), &options);
                 let module = parser.parse().unwrap();
-                wgc::pipeline::ShaderModuleSource::Naga(module)
+                wgc::pipeline::ShaderModuleSource::Naga(std::borrow::Cow::Owned(module))
             }
             #[cfg(feature = "glsl")]
             ShaderSource::Glsl {
@@ -1116,7 +1132,7 @@ impl crate::Context for Context {
                 let mut parser = naga::front::glsl::Parser::default();
                 let module = parser.parse(&options, shader).unwrap();
 
-                wgc::pipeline::ShaderModuleSource::Naga(module)
+                wgc::pipeline::ShaderModuleSource::Naga(std::borrow::Cow::Owned(module))
             }
             ShaderSource::Wgsl(ref code) => wgc::pipeline::ShaderModuleSource::Wgsl(Borrowed(code)),
             #[cfg(feature = "naga")]
