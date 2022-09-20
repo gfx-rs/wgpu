@@ -85,6 +85,7 @@ SurfaceConfiguration {
 - Added missing validation for `BufferUsages` mismatches when `Features::MAPPABLE_PRIMARY_BUFFERS` is not
   enabled. By @imberflur in [#3023](https://github.com/gfx-rs/wgpu/pull/3023)
 - Fixed `CommandEncoder` not being `Send` and `Sync` on web by @i509VCB in [#3025](https://github.com/gfx-rs/wgpu/pull/3025)
+- Document meaning of `vendor` in `AdapterInfo` if the vendor has no PCI id.
 
 #### Metal
 - Add the missing `msg_send![view, retain]` call within `from_view` by @jinleili in [#2976](https://github.com/gfx-rs/wgpu/pull/2976)
