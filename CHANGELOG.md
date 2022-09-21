@@ -229,6 +229,7 @@ both `raw_window_handle::HasRawWindowHandle` and `raw_window_handle::HasRawDispl
 - Don't use `PhantomData` for `IdentityManager`'s `Input` type. By @jimblandy in [#2972](https://github.com/gfx-rs/wgpu/pull/2972)
 - Changed Naga variant in ShaderSource to `Cow<'static, Module>`, to allow loading global variables by @daxpedda in [#2903](https://github.com/gfx-rs/wgpu/pull/2903)
 - Updated the maximum binding index to match the WebGPU specification by @nical in [#2957](https://github.com/gfx-rs/wgpu/pull/2957)
+- Add `unsafe_op_in_unsafe_fn` to Clippy lints in the entire workspace. By @ErichDonGubler in [#3044](https://github.com/gfx-rs/wgpu/pull/3044).
 
 #### Metal
 
