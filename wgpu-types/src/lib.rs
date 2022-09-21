@@ -1662,6 +1662,8 @@ bitflags::bitflags! {
         /// When used as a STORAGE texture, then a texture with this format can be written to with atomics.
         // TODO: No access flag exposed as of writing
         const STORAGE_ATOMICS = 1 << 4;
+        /// If not present, the texture can't be blended into the render target.
+        const BLENDABLE = 1 << 5;
     }
 }
 
@@ -2288,10 +2290,12 @@ impl TextureFormat {
         };
 
         let mut flags = msaa_flags;
+        let filterable_sample_type = sample_type == TextureSampleType::Float { filterable: true };
         flags.set(
             TextureFormatFeatureFlags::FILTERABLE,
-            sample_type == TextureSampleType::Float { filterable: true },
+            filterable_sample_type,
         );
+        flags.set(TextureFormatFeatureFlags::BLENDABLE, filterable_sample_type);
 
         TextureFormatInfo {
             required_features,
