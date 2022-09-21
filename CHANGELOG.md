@@ -86,6 +86,7 @@ SurfaceConfiguration {
 - Added missing validation for `BufferUsages` mismatches when `Features::MAPPABLE_PRIMARY_BUFFERS` is not
   enabled. By @imberflur in [#3023](https://github.com/gfx-rs/wgpu/pull/3023)
 - Fixed `CommandEncoder` not being `Send` and `Sync` on web by @i509VCB in [#3025](https://github.com/gfx-rs/wgpu/pull/3025)
+- Document meaning of `vendor` in `AdapterInfo` if the vendor has no PCI id.
 
 #### Metal
 - Add the missing `msg_send![view, retain]` call within `from_view` by @jinleili in [#2976](https://github.com/gfx-rs/wgpu/pull/2976)
@@ -98,6 +99,10 @@ SurfaceConfiguration {
   violates Vulkan valid usage rules `VUID-StandaloneSpirv-Flat-06202`
   and `VUID-StandaloneSpirv-Flat-04744`. By @jimblandy in
   [#3008](https://github.com/gfx-rs/wgpu/pull/3008)
+
+#### Gles
+- Report vendor id for Mesa and Apple GPUs. By @i509VCB [#3036](https://github.com/gfx-rs/wgpu/pull/3036)
+- Report Apple M2 gpu as integrated. By @i509VCB [#3036](https://github.com/gfx-rs/wgpu/pull/3036)
 
 ### Changes
 
@@ -118,6 +123,8 @@ SurfaceConfiguration {
 #### Vulkan
 - Remove use of Vulkan12Features/Properties types. By @i509VCB in [#2936](https://github.com/gfx-rs/wgpu/pull/2936)
 - Provide a means for `wgpu` users to access `vk::Queue` and the queue index. By @anlumo in [#2950](https://github.com/gfx-rs/wgpu/pull/2950)
+- Use the use effective api version for determining device features instead of wrongly assuming `VkPhysicalDeviceProperties.apiVersion`
+  is the actual version of the device. By @i509VCB in [#3011](https://github.com/gfx-rs/wgpu/pull/3011)
 
 ### Performance
 
@@ -133,6 +140,11 @@ SurfaceConfiguration {
   safety contract. These functions are not unsafe. By @jimblandy [#2990](https://github.com/gfx-rs/wgpu/pull/2990)
 - Document that `write_buffer_with()` is sound but unwise to read from by @kpreid in [#3006](https://github.com/gfx-rs/wgpu/pull/3006)
 - Explain why `Adapter::as_hal` and `Device::as_hal` have to take callback functions. By @jimblandy in [#2992](https://github.com/gfx-rs/wgpu/pull/2992)
+
+### Dependency Updates
+
+#### WebGPU
+- Update wasm32 dependencies, set `alpha_mode` on web target by @jinleili in [#3040](https://github.com/gfx-rs/wgpu/pull/3040)
 
 ### Build Configuration
 

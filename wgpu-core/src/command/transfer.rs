@@ -314,11 +314,12 @@ pub(crate) fn validate_texture_copy_range(
     let extent = extent_virtual.physical_size(desc.format);
 
     match desc.format {
-        wgt::TextureFormat::Depth32Float
+        //wgt::TextureFormat::Stencil8 |
+        wgt::TextureFormat::Depth16Unorm
+        | wgt::TextureFormat::Depth32Float
         | wgt::TextureFormat::Depth32FloatStencil8
         | wgt::TextureFormat::Depth24Plus
-        | wgt::TextureFormat::Depth24PlusStencil8
-        | wgt::TextureFormat::Depth24UnormStencil8 => {
+        | wgt::TextureFormat::Depth24PlusStencil8 => {
             if *copy_size != extent {
                 return Err(TransferError::InvalidDepthTextureExtent);
             }

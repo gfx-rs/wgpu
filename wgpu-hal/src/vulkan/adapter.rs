@@ -72,7 +72,7 @@ impl PhysicalDeviceFeatures {
     ///
     /// `requested_features` should be the same as what was used to generate `enabled_extensions`.
     fn from_extensions_and_requested_features(
-        api_version: u32,
+        effective_api_version: u32,
         enabled_extensions: &[&'static CStr],
         requested_features: wgt::Features,
         downlevel_flags: wgt::DownlevelFlags,
@@ -207,7 +207,7 @@ impl PhysicalDeviceFeatures {
             } else {
                 None
             },
-            imageless_framebuffer: if api_version >= vk::API_VERSION_1_2
+            imageless_framebuffer: if effective_api_version >= vk::API_VERSION_1_2
                 || enabled_extensions.contains(&vk::KhrImagelessFramebufferFn::name())
             {
                 Some(
@@ -218,7 +218,7 @@ impl PhysicalDeviceFeatures {
             } else {
                 None
             },
-            timeline_semaphore: if api_version >= vk::API_VERSION_1_2
+            timeline_semaphore: if effective_api_version >= vk::API_VERSION_1_2
                 || enabled_extensions.contains(&vk::KhrTimelineSemaphoreFn::name())
             {
                 Some(
@@ -262,7 +262,7 @@ impl PhysicalDeviceFeatures {
             } else {
                 None
             },
-            multiview: if api_version >= vk::API_VERSION_1_1
+            multiview: if effective_api_version >= vk::API_VERSION_1_1
                 || enabled_extensions.contains(&vk::KhrMultiviewFn::name())
             {
                 Some(
@@ -482,7 +482,7 @@ impl PhysicalDeviceFeatures {
         );
 
         features.set(
-            F::DEPTH24UNORM_STENCIL8,
+            F::DEPTH24PLUS_STENCIL8,
             supports_format(
                 instance,
                 phd,
@@ -512,6 +512,20 @@ pub struct PhysicalDeviceCapabilities {
     properties: vk::PhysicalDeviceProperties,
     descriptor_indexing: Option<vk::PhysicalDeviceDescriptorIndexingPropertiesEXT>,
     driver: Option<vk::PhysicalDeviceDriverPropertiesKHR>,
+    /// The effective driver api version supported by the physical device.
+    ///
+    /// The Vulkan specification states the following in the documentation for VkPhysicalDeviceProperties:
+    /// > The value of apiVersion may be different than the version returned by vkEnumerateInstanceVersion;
+    /// > either higher or lower. In such cases, the application must not use functionality that exceeds
+    /// > the version of Vulkan associated with a given object.
+    ///
+    /// For example, a Vulkan 1.1 instance cannot use functionality added in Vulkan 1.2 even if the physical
+    /// device supports Vulkan 1.2.
+    ///
+    /// This means that assuming that the apiVersion provided by VkPhysicalDeviceProperties is the actual
+    /// version we can use is incorrect. Instead the effective version is the lower of the instance version
+    /// and physical device version.
+    effective_api_version: u32,
 }
 
 // This is safe because the structs have `p_next: *mut c_void`, which we null out/never read.
@@ -535,7 +549,7 @@ impl PhysicalDeviceCapabilities {
 
         extensions.push(khr::Swapchain::name());
 
-        if self.properties.api_version < vk::API_VERSION_1_1 {
+        if self.effective_api_version < vk::API_VERSION_1_1 {
             extensions.push(vk::KhrMaintenance1Fn::name());
             extensions.push(vk::KhrMaintenance2Fn::name());
 
@@ -553,7 +567,7 @@ impl PhysicalDeviceCapabilities {
             }
         }
 
-        if self.properties.api_version < vk::API_VERSION_1_2 {
+        if self.effective_api_version < vk::API_VERSION_1_2 {
             if self.supports_extension(vk::KhrImagelessFramebufferFn::name()) {
                 extensions.push(vk::KhrImagelessFramebufferFn::name());
                 extensions.push(vk::KhrImageFormatListFn::name()); // Required for `KhrImagelessFramebufferFn`
@@ -570,7 +584,7 @@ impl PhysicalDeviceCapabilities {
             if requested_features.intersects(indexing_features()) {
                 extensions.push(vk::ExtDescriptorIndexingFn::name());
 
-                if self.properties.api_version < vk::API_VERSION_1_1 {
+                if self.effective_api_version < vk::API_VERSION_1_1 {
                     extensions.push(vk::KhrMaintenance3Fn::name());
                 }
             }
@@ -771,6 +785,10 @@ impl super::InstanceShared {
                 unsafe { self.raw.get_physical_device_properties(phd) }
             };
 
+            // Set the effective api version
+            capabilities.effective_api_version = self
+                .driver_api_version
+                .min(capabilities.properties.api_version);
             capabilities
         };
 
@@ -781,7 +799,7 @@ impl super::InstanceShared {
             let mut builder = vk::PhysicalDeviceFeatures2KHR::builder().features(core);
 
             // `VK_KHR_multiview` is promoted to 1.1
-            if capabilities.properties.api_version >= vk::API_VERSION_1_1
+            if capabilities.effective_api_version >= vk::API_VERSION_1_1
                 || capabilities.supports_extension(vk::KhrMultiviewFn::name())
             {
                 let next = features
@@ -927,7 +945,7 @@ impl super::Instance {
             );
         };
 
-        if phd_capabilities.properties.api_version == vk::API_VERSION_1_0
+        if phd_capabilities.effective_api_version == vk::API_VERSION_1_0
             && !phd_capabilities.supports_extension(vk::KhrStorageBufferStorageClassFn::name())
         {
             log::warn!(
@@ -938,7 +956,7 @@ impl super::Instance {
         }
         if !phd_capabilities.supports_extension(vk::AmdNegativeViewportHeightFn::name())
             && !phd_capabilities.supports_extension(vk::KhrMaintenance1Fn::name())
-            && phd_capabilities.properties.api_version < vk::API_VERSION_1_1
+            && phd_capabilities.effective_api_version < vk::API_VERSION_1_1
         {
             log::warn!(
                 "viewport Y-flip is not supported, hiding adapter: {}",
@@ -959,7 +977,7 @@ impl super::Instance {
         }
 
         let private_caps = super::PrivateCapabilities {
-            flip_y_requires_shift: phd_capabilities.properties.api_version >= vk::API_VERSION_1_1
+            flip_y_requires_shift: phd_capabilities.effective_api_version >= vk::API_VERSION_1_1
                 || phd_capabilities.supports_extension(vk::KhrMaintenance1Fn::name()),
             imageless_framebuffers: match phd_features.imageless_framebuffer {
                 Some(features) => features.imageless_framebuffer == vk::TRUE,
@@ -967,7 +985,7 @@ impl super::Instance {
                     .imageless_framebuffer
                     .map_or(false, |ext| ext.imageless_framebuffer != 0),
             },
-            image_view_usage: phd_capabilities.properties.api_version >= vk::API_VERSION_1_1
+            image_view_usage: phd_capabilities.effective_api_version >= vk::API_VERSION_1_1
                 || phd_capabilities.supports_extension(vk::KhrMaintenance2Fn::name()),
             timeline_semaphores: match phd_features.timeline_semaphore {
                 Some(features) => features.timeline_semaphore == vk::TRUE,
@@ -1073,7 +1091,7 @@ impl super::Adapter {
         uab_types: super::UpdateAfterBindTypes,
     ) -> PhysicalDeviceFeatures {
         PhysicalDeviceFeatures::from_extensions_and_requested_features(
-            self.phd_capabilities.properties.api_version,
+            self.phd_capabilities.effective_api_version,
             enabled_extensions,
             features,
             self.downlevel_flags,
@@ -1127,7 +1145,7 @@ impl super::Adapter {
                 &self.instance.raw,
                 &raw_device,
             )))
-        } else if self.phd_capabilities.properties.api_version >= vk::API_VERSION_1_2 {
+        } else if self.phd_capabilities.effective_api_version >= vk::API_VERSION_1_2 {
             Some(super::ExtensionFn::Promoted)
         } else {
             None

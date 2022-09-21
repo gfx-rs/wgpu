@@ -41,9 +41,9 @@ static TEXTURE_FORMATS_UNCOMPRESSED: &[wgpu::TextureFormat] = &[
 ];
 
 static TEXTURE_FORMATS_DEPTH: &[wgpu::TextureFormat] = &[
-    wgpu::TextureFormat::Depth32Float,
+    //wgpu::TextureFormat::Stencil8,
+    wgpu::TextureFormat::Depth16Unorm,
     wgpu::TextureFormat::Depth24Plus,
-    wgpu::TextureFormat::Depth24PlusStencil8,
 ];
 
 // needs TEXTURE_COMPRESSION_BC
@@ -333,11 +333,11 @@ fn clear_texture_d32_s8() {
 fn clear_texture_d24_s8() {
     initialize_test(
         TestParameters::default()
-            .features(wgpu::Features::CLEAR_TEXTURE | wgpu::Features::DEPTH24UNORM_STENCIL8),
+            .features(wgpu::Features::CLEAR_TEXTURE | wgpu::Features::DEPTH24PLUS_STENCIL8),
         |ctx| {
             clear_texture_tests(
                 &ctx,
-                &[wgpu::TextureFormat::Depth24UnormStencil8],
+                &[wgpu::TextureFormat::Depth24PlusStencil8],
                 false,
                 false,
             );

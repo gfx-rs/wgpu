@@ -511,10 +511,12 @@ fn map_texture_format(texture_format: wgt::TextureFormat) -> web_sys::GpuTexture
     use web_sys::GpuTextureFormat as tf;
     use wgt::TextureFormat;
     match texture_format {
+        // 8-bit formats
         TextureFormat::R8Unorm => tf::R8unorm,
         TextureFormat::R8Snorm => tf::R8snorm,
         TextureFormat::R8Uint => tf::R8uint,
         TextureFormat::R8Sint => tf::R8sint,
+        // 16-bit formats
         TextureFormat::R16Uint => tf::R16uint,
         TextureFormat::R16Sint => tf::R16sint,
         TextureFormat::R16Float => tf::R16float,
@@ -522,6 +524,7 @@ fn map_texture_format(texture_format: wgt::TextureFormat) -> web_sys::GpuTexture
         TextureFormat::Rg8Snorm => tf::Rg8snorm,
         TextureFormat::Rg8Uint => tf::Rg8uint,
         TextureFormat::Rg8Sint => tf::Rg8sint,
+        // 32-bit formats
         TextureFormat::R32Uint => tf::R32uint,
         TextureFormat::R32Sint => tf::R32sint,
         TextureFormat::R32Float => tf::R32float,
@@ -535,22 +538,29 @@ fn map_texture_format(texture_format: wgt::TextureFormat) -> web_sys::GpuTexture
         TextureFormat::Rgba8Sint => tf::Rgba8sint,
         TextureFormat::Bgra8Unorm => tf::Bgra8unorm,
         TextureFormat::Bgra8UnormSrgb => tf::Bgra8unormSrgb,
+        // Packed 32-bit formats
+        TextureFormat::Rgb9e5Ufloat => tf::Rgb9e5ufloat,
         TextureFormat::Rgb10a2Unorm => tf::Rgb10a2unorm,
         TextureFormat::Rg11b10Float => tf::Rg11b10ufloat,
+        // 64-bit formats
         TextureFormat::Rg32Uint => tf::Rg32uint,
         TextureFormat::Rg32Sint => tf::Rg32sint,
         TextureFormat::Rg32Float => tf::Rg32float,
         TextureFormat::Rgba16Uint => tf::Rgba16uint,
         TextureFormat::Rgba16Sint => tf::Rgba16sint,
         TextureFormat::Rgba16Float => tf::Rgba16float,
+        // 128-bit formats
         TextureFormat::Rgba32Uint => tf::Rgba32uint,
         TextureFormat::Rgba32Sint => tf::Rgba32sint,
         TextureFormat::Rgba32Float => tf::Rgba32float,
-        TextureFormat::Depth32Float => tf::Depth32float,
-        TextureFormat::Depth32FloatStencil8 => tf::Depth32floatStencil8,
+        // Depth/stencil formats
+        //TextureFormat::Stencil8 => tf::Stencil8,
+        TextureFormat::Depth16Unorm => tf::Depth16unorm,
         TextureFormat::Depth24Plus => tf::Depth24plus,
         TextureFormat::Depth24PlusStencil8 => tf::Depth24plusStencil8,
-        TextureFormat::Depth24UnormStencil8 => tf::Depth24unormStencil8,
+        TextureFormat::Depth32Float => tf::Depth32float,
+        // "depth32float-stencil8" feature
+        TextureFormat::Depth32FloatStencil8 => tf::Depth32floatStencil8,
         _ => unimplemented!(),
     }
 }
@@ -1241,15 +1251,19 @@ impl crate::Context for Context {
         if let wgt::PresentMode::Mailbox | wgt::PresentMode::Immediate = config.present_mode {
             panic!("Only FIFO/Auto* is supported on web");
         }
-        if let wgt::CompositeAlphaMode::PreMultiplied
-        | wgt::CompositeAlphaMode::PostMultiplied
-        | wgt::CompositeAlphaMode::Inherit = config.alpha_mode
+        if let wgt::CompositeAlphaMode::PostMultiplied | wgt::CompositeAlphaMode::Inherit =
+            config.alpha_mode
         {
-            panic!("Only Opaque/Auto alpha mode is supported on web");
+            panic!("Only Opaque/Auto or PreMultiplied alpha mode are supported on web");
         }
+        let alpha_mode = match config.alpha_mode {
+            wgt::CompositeAlphaMode::PreMultiplied => web_sys::GpuCanvasAlphaMode::Premultiplied,
+            _ => web_sys::GpuCanvasAlphaMode::Opaque,
+        };
         let mut mapped =
             web_sys::GpuCanvasConfiguration::new(&device.0, map_texture_format(config.format));
         mapped.usage(config.usage.bits());
+        mapped.alpha_mode(alpha_mode);
         surface.0.configure(&mapped);
     }
 
