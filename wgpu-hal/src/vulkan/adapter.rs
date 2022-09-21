@@ -511,6 +511,7 @@ pub struct PhysicalDeviceCapabilities {
     supported_extensions: Vec<vk::ExtensionProperties>,
     properties: vk::PhysicalDeviceProperties,
     descriptor_indexing: Option<vk::PhysicalDeviceDescriptorIndexingPropertiesEXT>,
+    driver: Option<vk::PhysicalDeviceDriverPropertiesKHR>,
     /// The effective driver api version supported by the physical device.
     ///
     /// The Vulkan specification states the following in the documentation for VkPhysicalDeviceProperties:
@@ -570,6 +571,11 @@ impl PhysicalDeviceCapabilities {
             if self.supports_extension(vk::KhrImagelessFramebufferFn::name()) {
                 extensions.push(vk::KhrImagelessFramebufferFn::name());
                 extensions.push(vk::KhrImageFormatListFn::name()); // Required for `KhrImagelessFramebufferFn`
+            }
+
+            // This extension is core in Vulkan 1.2
+            if self.supports_extension(vk::KhrDriverPropertiesFn::name()) {
+                extensions.push(vk::KhrDriverPropertiesFn::name());
             }
 
             extensions.push(vk::ExtSamplerFilterMinmaxFn::name());
@@ -747,9 +753,12 @@ impl super::InstanceShared {
             capabilities.properties = if let Some(ref get_device_properties) =
                 self.get_physical_device_properties
             {
-                // Get this now to avoid borrowing conflicts later
+                // Get these now to avoid borrowing conflicts later
                 let supports_descriptor_indexing =
                     capabilities.supports_extension(vk::ExtDescriptorIndexingFn::name());
+                let supports_driver_properties = capabilities.properties.api_version
+                    >= vk::API_VERSION_1_2
+                    || capabilities.supports_extension(vk::KhrDriverPropertiesFn::name());
 
                 let mut builder = vk::PhysicalDeviceProperties2::builder();
 
@@ -757,6 +766,13 @@ impl super::InstanceShared {
                     let next = capabilities
                         .descriptor_indexing
                         .insert(vk::PhysicalDeviceDescriptorIndexingPropertiesEXT::default());
+                    builder = builder.push_next(next);
+                }
+
+                if supports_driver_properties {
+                    let next = capabilities
+                        .driver
+                        .insert(vk::PhysicalDeviceDriverPropertiesKHR::default());
                     builder = builder.push_next(next);
                 }
 
@@ -888,6 +904,24 @@ impl super::Instance {
                 ash::vk::PhysicalDeviceType::VIRTUAL_GPU => wgt::DeviceType::VirtualGpu,
                 ash::vk::PhysicalDeviceType::CPU => wgt::DeviceType::Cpu,
                 _ => wgt::DeviceType::Other,
+            },
+            driver: unsafe {
+                let driver_name = if let Some(driver) = phd_capabilities.driver {
+                    CStr::from_ptr(driver.driver_name.as_ptr()).to_str().ok()
+                } else {
+                    None
+                };
+
+                driver_name.unwrap_or("?").to_owned()
+            },
+            driver_info: unsafe {
+                let driver_info = if let Some(driver) = phd_capabilities.driver {
+                    CStr::from_ptr(driver.driver_info.as_ptr()).to_str().ok()
+                } else {
+                    None
+                };
+
+                driver_info.unwrap_or("?").to_owned()
             },
             backend: wgt::Backend::Vulkan,
         };

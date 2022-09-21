@@ -1199,6 +1199,8 @@ impl crate::Context for Context {
             vendor: 0,
             device: 0,
             device_type: wgt::DeviceType::Other,
+            driver: String::new(),
+            driver_info: String::new(),
             backend: wgt::Backend::BrowserWebGpu,
         }
     }
