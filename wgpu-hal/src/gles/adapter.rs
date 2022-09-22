@@ -358,7 +358,6 @@ impl super::Adapter {
         // `OES_texture_compression_astc` provides 2D + 3D, LDR + HDR support
         if extensions.contains("WEBGL_compressed_texture_astc")
             || extensions.contains("GL_OES_texture_compression_astc")
-            || extensions.contains("OES_texture_compression_astc")
         {
             features.insert(wgt::Features::TEXTURE_COMPRESSION_ASTC_LDR);
             features.insert(wgt::Features::TEXTURE_COMPRESSION_ASTC_HDR);
