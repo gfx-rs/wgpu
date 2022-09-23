@@ -2,7 +2,6 @@ use super::conv;
 
 use arrayvec::ArrayVec;
 use ash::{extensions::ext, vk};
-use inplace_it::inplace_or_alloc_from_iter;
 
 use std::{mem, ops::Range, slice};
 
@@ -208,11 +207,12 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             size: r.size.get(),
         });
 
-        inplace_or_alloc_from_iter(vk_regions_iter, |vk_regions| {
-            self.device
-                .raw
-                .cmd_copy_buffer(self.active, src.raw, dst.raw, vk_regions)
-        })
+        self.device.raw.cmd_copy_buffer(
+            self.active,
+            src.raw,
+            dst.raw,
+            &smallvec::SmallVec::<[vk::BufferCopy; 32]>::from_iter(vk_regions_iter),
+        );
     }
 
     unsafe fn copy_texture_to_texture<T>(
@@ -244,16 +244,14 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             }
         });
 
-        inplace_or_alloc_from_iter(vk_regions_iter, |vk_regions| {
-            self.device.raw.cmd_copy_image(
-                self.active,
-                src.raw,
-                src_layout,
-                dst.raw,
-                DST_IMAGE_LAYOUT,
-                vk_regions,
-            );
-        });
+        self.device.raw.cmd_copy_image(
+            self.active,
+            src.raw,
+            src_layout,
+            dst.raw,
+            DST_IMAGE_LAYOUT,
+            &smallvec::SmallVec::<[vk::ImageCopy; 32]>::from_iter(vk_regions_iter),
+        );
     }
 
     unsafe fn copy_buffer_to_texture<T>(
@@ -266,15 +264,13 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     {
         let vk_regions_iter = dst.map_buffer_copies(regions);
 
-        inplace_or_alloc_from_iter(vk_regions_iter, |vk_regions| {
-            self.device.raw.cmd_copy_buffer_to_image(
-                self.active,
-                src.raw,
-                dst.raw,
-                DST_IMAGE_LAYOUT,
-                vk_regions,
-            );
-        });
+        self.device.raw.cmd_copy_buffer_to_image(
+            self.active,
+            src.raw,
+            dst.raw,
+            DST_IMAGE_LAYOUT,
+            &smallvec::SmallVec::<[vk::BufferImageCopy; 32]>::from_iter(vk_regions_iter),
+        );
     }
 
     unsafe fn copy_texture_to_buffer<T>(
@@ -289,15 +285,13 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         let src_layout = conv::derive_image_layout(src_usage, src.aspects);
         let vk_regions_iter = src.map_buffer_copies(regions);
 
-        inplace_or_alloc_from_iter(vk_regions_iter, |vk_regions| {
-            self.device.raw.cmd_copy_image_to_buffer(
-                self.active,
-                src.raw,
-                src_layout,
-                dst.raw,
-                vk_regions,
-            );
-        });
+        self.device.raw.cmd_copy_image_to_buffer(
+            self.active,
+            src.raw,
+            src_layout,
+            dst.raw,
+            &smallvec::SmallVec::<[vk::BufferImageCopy; 32]>::from_iter(vk_regions_iter),
+        );
     }
 
     unsafe fn begin_query(&mut self, set: &super::QuerySet, index: u32) {
@@ -683,19 +677,8 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     ) {
         let stride = mem::size_of::<wgt::DrawIndirectArgs>() as u32;
         match self.device.extension_fns.draw_indirect_count {
-            Some(super::ExtensionFn::Extension(ref t)) => {
+            Some(ref t) => {
                 t.cmd_draw_indirect_count(
-                    self.active,
-                    buffer.raw,
-                    offset,
-                    count_buffer.raw,
-                    count_offset,
-                    max_count,
-                    stride,
-                );
-            }
-            Some(super::ExtensionFn::Promoted) => {
-                self.device.raw.cmd_draw_indirect_count(
                     self.active,
                     buffer.raw,
                     offset,
@@ -718,19 +701,8 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     ) {
         let stride = mem::size_of::<wgt::DrawIndexedIndirectArgs>() as u32;
         match self.device.extension_fns.draw_indirect_count {
-            Some(super::ExtensionFn::Extension(ref t)) => {
+            Some(ref t) => {
                 t.cmd_draw_indexed_indirect_count(
-                    self.active,
-                    buffer.raw,
-                    offset,
-                    count_buffer.raw,
-                    count_offset,
-                    max_count,
-                    stride,
-                );
-            }
-            Some(super::ExtensionFn::Promoted) => {
-                self.device.raw.cmd_draw_indexed_indirect_count(
                     self.active,
                     buffer.raw,
                     offset,

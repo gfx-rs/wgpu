@@ -511,10 +511,12 @@ fn map_texture_format(texture_format: wgt::TextureFormat) -> web_sys::GpuTexture
     use web_sys::GpuTextureFormat as tf;
     use wgt::TextureFormat;
     match texture_format {
+        // 8-bit formats
         TextureFormat::R8Unorm => tf::R8unorm,
         TextureFormat::R8Snorm => tf::R8snorm,
         TextureFormat::R8Uint => tf::R8uint,
         TextureFormat::R8Sint => tf::R8sint,
+        // 16-bit formats
         TextureFormat::R16Uint => tf::R16uint,
         TextureFormat::R16Sint => tf::R16sint,
         TextureFormat::R16Float => tf::R16float,
@@ -522,6 +524,7 @@ fn map_texture_format(texture_format: wgt::TextureFormat) -> web_sys::GpuTexture
         TextureFormat::Rg8Snorm => tf::Rg8snorm,
         TextureFormat::Rg8Uint => tf::Rg8uint,
         TextureFormat::Rg8Sint => tf::Rg8sint,
+        // 32-bit formats
         TextureFormat::R32Uint => tf::R32uint,
         TextureFormat::R32Sint => tf::R32sint,
         TextureFormat::R32Float => tf::R32float,
@@ -535,22 +538,29 @@ fn map_texture_format(texture_format: wgt::TextureFormat) -> web_sys::GpuTexture
         TextureFormat::Rgba8Sint => tf::Rgba8sint,
         TextureFormat::Bgra8Unorm => tf::Bgra8unorm,
         TextureFormat::Bgra8UnormSrgb => tf::Bgra8unormSrgb,
+        // Packed 32-bit formats
+        TextureFormat::Rgb9e5Ufloat => tf::Rgb9e5ufloat,
         TextureFormat::Rgb10a2Unorm => tf::Rgb10a2unorm,
         TextureFormat::Rg11b10Float => tf::Rg11b10ufloat,
+        // 64-bit formats
         TextureFormat::Rg32Uint => tf::Rg32uint,
         TextureFormat::Rg32Sint => tf::Rg32sint,
         TextureFormat::Rg32Float => tf::Rg32float,
         TextureFormat::Rgba16Uint => tf::Rgba16uint,
         TextureFormat::Rgba16Sint => tf::Rgba16sint,
         TextureFormat::Rgba16Float => tf::Rgba16float,
+        // 128-bit formats
         TextureFormat::Rgba32Uint => tf::Rgba32uint,
         TextureFormat::Rgba32Sint => tf::Rgba32sint,
         TextureFormat::Rgba32Float => tf::Rgba32float,
-        TextureFormat::Depth32Float => tf::Depth32float,
-        TextureFormat::Depth32FloatStencil8 => tf::Depth32floatStencil8,
+        // Depth/stencil formats
+        //TextureFormat::Stencil8 => tf::Stencil8,
+        TextureFormat::Depth16Unorm => tf::Depth16unorm,
         TextureFormat::Depth24Plus => tf::Depth24plus,
         TextureFormat::Depth24PlusStencil8 => tf::Depth24plusStencil8,
-        TextureFormat::Depth24UnormStencil8 => tf::Depth24unormStencil8,
+        TextureFormat::Depth32Float => tf::Depth32float,
+        // "depth32float-stencil8" feature
+        TextureFormat::Depth32FloatStencil8 => tf::Depth32floatStencil8,
         _ => unimplemented!(),
     }
 }
@@ -1018,7 +1028,7 @@ impl crate::Context for Context {
     type PipelineLayoutId = Sendable<web_sys::GpuPipelineLayout>;
     type RenderPipelineId = Sendable<web_sys::GpuRenderPipeline>;
     type ComputePipelineId = Sendable<web_sys::GpuComputePipeline>;
-    type CommandEncoderId = web_sys::GpuCommandEncoder;
+    type CommandEncoderId = Sendable<web_sys::GpuCommandEncoder>;
     type ComputePassId = ComputePass;
     type RenderPassId = RenderPass;
     type CommandBufferId = Sendable<web_sys::GpuCommandBuffer>;
@@ -1046,9 +1056,10 @@ impl crate::Context for Context {
 
     fn instance_create_surface(
         &self,
-        handle: &impl raw_window_handle::HasRawWindowHandle,
+        _display_handle: raw_window_handle::RawDisplayHandle,
+        window_handle: raw_window_handle::RawWindowHandle,
     ) -> Self::SurfaceId {
-        let canvas_attribute = match handle.raw_window_handle() {
+        let canvas_attribute = match window_handle {
             raw_window_handle::RawWindowHandle::Web(web_handle) => web_handle.id,
             _ => panic!("expected valid handle for canvas"),
         };
@@ -1213,6 +1224,8 @@ impl crate::Context for Context {
             vendor: 0,
             device: 0,
             device_type: wgt::DeviceType::Other,
+            driver: String::new(),
+            driver_info: String::new(),
             backend: wgt::Backend::BrowserWebGpu,
         }
     }
@@ -1238,12 +1251,20 @@ impl crate::Context for Context {
         ]
     }
 
-    fn surface_get_supported_modes(
+    fn surface_get_supported_present_modes(
         &self,
         _surface: &Self::SurfaceId,
         _adapter: &Self::AdapterId,
     ) -> Vec<wgt::PresentMode> {
         vec![wgt::PresentMode::Fifo]
+    }
+
+    fn surface_get_supported_alpha_modes(
+        &self,
+        _surface: &Self::SurfaceId,
+        _adapter: &Self::AdapterId,
+    ) -> Vec<wgt::CompositeAlphaMode> {
+        vec![wgt::CompositeAlphaMode::Opaque]
     }
 
     fn surface_configure(
@@ -1255,9 +1276,19 @@ impl crate::Context for Context {
         if let wgt::PresentMode::Mailbox | wgt::PresentMode::Immediate = config.present_mode {
             panic!("Only FIFO/Auto* is supported on web");
         }
+        if let wgt::CompositeAlphaMode::PostMultiplied | wgt::CompositeAlphaMode::Inherit =
+            config.alpha_mode
+        {
+            panic!("Only Opaque/Auto or PreMultiplied alpha mode are supported on web");
+        }
+        let alpha_mode = match config.alpha_mode {
+            wgt::CompositeAlphaMode::PreMultiplied => web_sys::GpuCanvasAlphaMode::Premultiplied,
+            _ => web_sys::GpuCanvasAlphaMode::Opaque,
+        };
         let mut mapped =
             web_sys::GpuCanvasConfiguration::new(&device.0, map_texture_format(config.format));
         mapped.usage(config.usage.bits());
+        mapped.alpha_mode(alpha_mode);
         surface.0.configure(&mapped);
     }
 
@@ -1743,9 +1774,11 @@ impl crate::Context for Context {
         if let Some(label) = desc.label {
             mapped_desc.label(label);
         }
-        device
-            .0
-            .create_command_encoder_with_descriptor(&mapped_desc)
+        Sendable(
+            device
+                .0
+                .create_command_encoder_with_descriptor(&mapped_desc),
+        )
     }
 
     fn device_create_render_bundle_encoder(
@@ -1975,7 +2008,7 @@ impl crate::Context for Context {
         destination_offset: wgt::BufferAddress,
         copy_size: wgt::BufferAddress,
     ) {
-        encoder.copy_buffer_to_buffer_with_f64_and_f64_and_f64(
+        encoder.0.copy_buffer_to_buffer_with_f64_and_f64_and_f64(
             &source.0,
             source_offset as f64,
             &destination.0,
@@ -1991,7 +2024,7 @@ impl crate::Context for Context {
         destination: crate::ImageCopyTexture,
         copy_size: wgt::Extent3d,
     ) {
-        encoder.copy_buffer_to_texture_with_gpu_extent_3d_dict(
+        encoder.0.copy_buffer_to_texture_with_gpu_extent_3d_dict(
             &map_buffer_copy_view(source),
             &map_texture_copy_view(destination),
             &map_extent_3d(copy_size),
@@ -2005,7 +2038,7 @@ impl crate::Context for Context {
         destination: crate::ImageCopyBuffer,
         copy_size: wgt::Extent3d,
     ) {
-        encoder.copy_texture_to_buffer_with_gpu_extent_3d_dict(
+        encoder.0.copy_texture_to_buffer_with_gpu_extent_3d_dict(
             &map_texture_copy_view(source),
             &map_buffer_copy_view(destination),
             &map_extent_3d(copy_size),
@@ -2019,7 +2052,7 @@ impl crate::Context for Context {
         destination: crate::ImageCopyTexture,
         copy_size: wgt::Extent3d,
     ) {
-        encoder.copy_texture_to_texture_with_gpu_extent_3d_dict(
+        encoder.0.copy_texture_to_texture_with_gpu_extent_3d_dict(
             &map_texture_copy_view(source),
             &map_texture_copy_view(destination),
             &map_extent_3d(copy_size),
@@ -2035,7 +2068,7 @@ impl crate::Context for Context {
         if let Some(label) = desc.label {
             mapped_desc.label(label);
         }
-        ComputePass(encoder.begin_compute_pass_with_descriptor(&mapped_desc))
+        ComputePass(encoder.0.begin_compute_pass_with_descriptor(&mapped_desc))
     }
 
     fn command_encoder_end_compute_pass(
@@ -2091,10 +2124,15 @@ impl crate::Context for Context {
         }
 
         if let Some(dsa) = &desc.depth_stencil_attachment {
+            let mut depth_clear_value = 0.0;
+            let mut stencil_clear_value = 0;
             let (depth_load_op, depth_store_op) = match dsa.depth_ops {
                 Some(ref ops) => {
                     let load_op = match ops.load {
-                        crate::LoadOp::Clear(_) => web_sys::GpuLoadOp::Clear,
+                        crate::LoadOp::Clear(v) => {
+                            depth_clear_value = v;
+                            web_sys::GpuLoadOp::Clear
+                        }
                         crate::LoadOp::Load => web_sys::GpuLoadOp::Load,
                     };
                     (load_op, map_store_op(ops.store))
@@ -2104,7 +2142,10 @@ impl crate::Context for Context {
             let (stencil_load_op, stencil_store_op) = match dsa.stencil_ops {
                 Some(ref ops) => {
                     let load_op = match ops.load {
-                        crate::LoadOp::Clear(_) => web_sys::GpuLoadOp::Clear,
+                        crate::LoadOp::Clear(v) => {
+                            stencil_clear_value = v;
+                            web_sys::GpuLoadOp::Clear
+                        }
                         crate::LoadOp::Load => web_sys::GpuLoadOp::Load,
                     };
                     (load_op, map_store_op(ops.store))
@@ -2113,14 +2154,16 @@ impl crate::Context for Context {
             };
             let mut mapped_depth_stencil_attachment =
                 web_sys::GpuRenderPassDepthStencilAttachment::new(&dsa.view.id.0);
+            mapped_depth_stencil_attachment.depth_clear_value(depth_clear_value);
             mapped_depth_stencil_attachment.depth_load_op(depth_load_op);
             mapped_depth_stencil_attachment.depth_store_op(depth_store_op);
+            mapped_depth_stencil_attachment.stencil_clear_value(stencil_clear_value);
             mapped_depth_stencil_attachment.stencil_load_op(stencil_load_op);
             mapped_depth_stencil_attachment.stencil_store_op(stencil_store_op);
             mapped_desc.depth_stencil_attachment(&mapped_depth_stencil_attachment);
         }
 
-        RenderPass(encoder.begin_render_pass(&mapped_desc))
+        RenderPass(encoder.0.begin_render_pass(&mapped_desc))
     }
 
     fn command_encoder_end_render_pass(
@@ -2132,13 +2175,13 @@ impl crate::Context for Context {
     }
 
     fn command_encoder_finish(&self, encoder: Self::CommandEncoderId) -> Self::CommandBufferId {
-        let label = encoder.label();
+        let label = encoder.0.label();
         Sendable(if label.is_empty() {
-            encoder.finish()
+            encoder.0.finish()
         } else {
             let mut mapped_desc = web_sys::GpuCommandBufferDescriptor::new();
             mapped_desc.label(&label);
-            encoder.finish_with_descriptor(&mapped_desc)
+            encoder.0.finish_with_descriptor(&mapped_desc)
         })
     }
 

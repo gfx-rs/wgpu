@@ -21,7 +21,7 @@ pub(crate) struct LateSizedBufferGroup {
 #[allow(clippy::large_enum_variant)]
 pub enum ShaderModuleSource<'a> {
     Wgsl(Cow<'a, str>),
-    Naga(naga::Module),
+    Naga(Cow<'static, naga::Module>),
 }
 
 #[derive(Clone, Debug)]
