@@ -295,6 +295,7 @@ impl crate::Surface<super::Api> for Surface {
                 raw: self.texture.unwrap(),
                 target: glow::TEXTURE_2D,
             },
+            drop_guard: None,
             array_layer_count: 1,
             mip_level_count: 1,
             format: sc.format,

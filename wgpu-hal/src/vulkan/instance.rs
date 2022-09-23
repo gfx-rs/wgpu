@@ -230,7 +230,7 @@ impl super::Instance {
         extensions: Vec<&'static CStr>,
         flags: crate::InstanceFlags,
         has_nv_optimus: bool,
-        drop_guard: Option<super::DropGuard>,
+        drop_guard: Option<crate::DropGuard>,
     ) -> Result<Self, crate::InstanceError> {
         log::info!("Instance version: 0x{:x}", driver_api_version);
 

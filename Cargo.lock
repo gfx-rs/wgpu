@@ -338,12 +338,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "copyless"
-version = "0.1.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a2df960f5d869b2dd8532793fde43eb5427cceb126c929747a26823ab0eeb536"
-
-[[package]]
 name = "core-foundation"
 version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -754,8 +748,7 @@ checksum = "518faa5064866338b013ff9b2350dc318e14cc4fcd6cb8206d7e7c9886c98815"
 [[package]]
 name = "glow"
 version = "0.11.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d8bd5877156a19b8ac83a29b2306fe20537429d318f3ff0a1a2119f8d9c61919"
+source = "git+https://github.com/grovesNL/glow/?rev=c8a011fcd57a5c68cc917ed394baa484bdefc909#c8a011fcd57a5c68cc917ed394baa484bdefc909"
 dependencies = [
  "js-sys",
  "slotmap",
@@ -2249,7 +2242,6 @@ dependencies = [
  "bitflags",
  "cfg_aliases",
  "codespan-reporting",
- "copyless",
  "fxhash",
  "log",
  "naga",

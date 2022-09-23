@@ -10,6 +10,9 @@ use std::{
 #[cfg(not(target_arch = "wasm32"))]
 use std::mem;
 
+#[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
+use std::num::NonZeroU32;
+
 type ShaderStage<'a> = (
     naga::ShaderStage,
     &'a crate::ProgrammableStage<'a, super::Api>,
@@ -84,6 +87,77 @@ impl CompilationContext<'_> {
 }
 
 impl super::Device {
+    /// # Safety
+    ///
+    /// - `name` must be created respecting `desc`
+    /// - `name` must be a texture
+    /// - If `drop_guard` is [`None`], wgpu-hal will take ownership of the texture. If `drop_guard` is
+    ///   [`Some`], the texture must be valid until the drop implementation
+    ///   of the drop guard is called.
+    #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
+    pub unsafe fn texture_from_raw(
+        &self,
+        name: NonZeroU32,
+        desc: &crate::TextureDescriptor,
+        drop_guard: Option<crate::DropGuard>,
+    ) -> super::Texture {
+        let mut copy_size = crate::CopyExtent::map_extent_to_copy_size(&desc.size, desc.dimension);
+
+        let (target, _, is_cubemap) = super::Texture::get_info_from_desc(&mut copy_size, desc);
+
+        super::Texture {
+            inner: super::TextureInner::Texture {
+                raw: glow::NativeTexture(name),
+                target,
+            },
+            drop_guard,
+            mip_level_count: desc.mip_level_count,
+            array_layer_count: if desc.dimension == wgt::TextureDimension::D2 {
+                desc.size.depth_or_array_layers
+            } else {
+                1
+            },
+            format: desc.format,
+            format_desc: self.shared.describe_texture_format(desc.format),
+            copy_size,
+            is_cubemap,
+        }
+    }
+
+    /// # Safety
+    ///
+    /// - `name` must be created respecting `desc`
+    /// - `name` must be a renderbuffer
+    /// - If `drop_guard` is [`None`], wgpu-hal will take ownership of the renderbuffer. If `drop_guard` is
+    ///   [`Some`], the renderbuffer must be valid until the drop implementation
+    ///   of the drop guard is called.
+    #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
+    pub unsafe fn texture_from_raw_renderbuffer(
+        &self,
+        name: NonZeroU32,
+        desc: &crate::TextureDescriptor,
+        drop_guard: Option<crate::DropGuard>,
+    ) -> super::Texture {
+        let copy_size = crate::CopyExtent::map_extent_to_copy_size(&desc.size, desc.dimension);
+
+        super::Texture {
+            inner: super::TextureInner::Renderbuffer {
+                raw: glow::NativeRenderbuffer(name),
+            },
+            drop_guard,
+            mip_level_count: desc.mip_level_count,
+            array_layer_count: if desc.dimension == wgt::TextureDimension::D2 {
+                desc.size.depth_or_array_layers
+            } else {
+                1
+            },
+            format: desc.format,
+            format_desc: self.shared.describe_texture_format(desc.format),
+            copy_size,
+            is_cubemap: false,
+        }
+    }
+
     unsafe fn compile_shader(
         gl: &glow::Context,
         shader: &str,
@@ -581,32 +655,8 @@ impl crate::Device<super::Api> for super::Device {
             (super::TextureInner::Renderbuffer { raw }, false)
         } else {
             let raw = gl.create_texture().unwrap();
-            let (target, is_3d, is_cubemap) = match desc.dimension {
-                wgt::TextureDimension::D1 | wgt::TextureDimension::D2 => {
-                    if desc.size.depth_or_array_layers > 1 {
-                        //HACK: detect a cube map
-                        let cube_count = if desc.size.width == desc.size.height
-                            && desc.size.depth_or_array_layers % 6 == 0
-                            && desc.sample_count == 1
-                        {
-                            Some(desc.size.depth_or_array_layers / 6)
-                        } else {
-                            None
-                        };
-                        match cube_count {
-                            None => (glow::TEXTURE_2D_ARRAY, true, false),
-                            Some(1) => (glow::TEXTURE_CUBE_MAP, false, true),
-                            Some(_) => (glow::TEXTURE_CUBE_MAP_ARRAY, true, true),
-                        }
-                    } else {
-                        (glow::TEXTURE_2D, false, false)
-                    }
-                }
-                wgt::TextureDimension::D3 => {
-                    copy_size.depth = desc.size.depth_or_array_layers;
-                    (glow::TEXTURE_3D, true, false)
-                }
-            };
+            let (target, is_3d, is_cubemap) =
+                super::Texture::get_info_from_desc(&mut copy_size, desc);
 
             gl.bind_texture(target, Some(raw));
             //Note: this has to be done before defining the storage!
@@ -663,6 +713,7 @@ impl crate::Device<super::Api> for super::Device {
 
         Ok(super::Texture {
             inner,
+            drop_guard: None,
             mip_level_count: desc.mip_level_count,
             array_layer_count: if desc.dimension == wgt::TextureDimension::D2 {
                 desc.size.depth_or_array_layers
@@ -676,16 +727,22 @@ impl crate::Device<super::Api> for super::Device {
         })
     }
     unsafe fn destroy_texture(&self, texture: super::Texture) {
-        let gl = &self.shared.context.lock();
-        match texture.inner {
-            super::TextureInner::Renderbuffer { raw, .. } => {
-                gl.delete_renderbuffer(raw);
-            }
-            super::TextureInner::DefaultRenderbuffer => {}
-            super::TextureInner::Texture { raw, .. } => {
-                gl.delete_texture(raw);
+        if texture.drop_guard.is_none() {
+            let gl = &self.shared.context.lock();
+            match texture.inner {
+                super::TextureInner::Renderbuffer { raw, .. } => {
+                    gl.delete_renderbuffer(raw);
+                }
+                super::TextureInner::DefaultRenderbuffer => {}
+                super::TextureInner::Texture { raw, .. } => {
+                    gl.delete_texture(raw);
+                }
             }
         }
+
+        // For clarity, we explicitly drop the drop guard. Although this has no real semantic effect as the
+        // end of the scope will drop the drop guard since this function takes ownership of the texture.
+        drop(texture.drop_guard);
     }
 
     unsafe fn create_texture_view(

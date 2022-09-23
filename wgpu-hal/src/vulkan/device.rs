@@ -609,7 +609,7 @@ impl super::Device {
     pub unsafe fn texture_from_raw(
         vk_image: vk::Image,
         desc: &crate::TextureDescriptor,
-        drop_guard: Option<super::DropGuard>,
+        drop_guard: Option<crate::DropGuard>,
     ) -> super::Texture {
         super::Texture {
             raw: vk_image,
@@ -619,7 +619,7 @@ impl super::Device {
             aspects: crate::FormatAspects::from(desc.format),
             format_info: desc.format.describe(),
             raw_flags: vk::ImageCreateFlags::empty(),
-            copy_size: conv::map_extent_to_copy_size(&desc.size, desc.dimension),
+            copy_size: crate::CopyExtent::map_extent_to_copy_size(&desc.size, desc.dimension),
         }
     }
 
