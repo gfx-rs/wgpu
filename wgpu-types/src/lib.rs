@@ -2070,7 +2070,7 @@ impl<'de> Deserialize<'de> for TextureFormat {
             type Value = TextureFormat;
 
             fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-                formatter.write_str("Invalid TextureFormat")
+                formatter.write_str("a valid texture format")
             }
 
             fn visit_str<E: Error>(self, s: &str) -> Result<Self::Value, E> {
