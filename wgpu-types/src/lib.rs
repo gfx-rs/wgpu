@@ -2296,7 +2296,7 @@ impl Serialize for TextureFormat {
                 format!("astc-{block}-{channel}")
             }
         };
-        serializer.serialize_str(*name)
+        serializer.serialize_str(&name)
     }
 }
 
