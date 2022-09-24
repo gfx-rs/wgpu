@@ -704,11 +704,12 @@ impl NumericType {
                 (NumericDimension::Vector(Vs::Quad), Sk::Sint)
             }
             Tf::Rg11b10Float => (NumericDimension::Vector(Vs::Tri), Sk::Float),
-            Tf::Depth32Float
+            //Tf::Stencil8 |
+            Tf::Depth16Unorm
+            | Tf::Depth32Float
             | Tf::Depth32FloatStencil8
             | Tf::Depth24Plus
-            | Tf::Depth24PlusStencil8
-            | Tf::Depth24UnormStencil8 => {
+            | Tf::Depth24PlusStencil8 => {
                 panic!("Unexpected depth format")
             }
             Tf::Rgb9e5Ufloat => (NumericDimension::Vector(Vs::Tri), Sk::Float),
@@ -963,6 +964,7 @@ impl Interface {
         entry_point_name: &str,
         stage_bit: wgt::ShaderStages,
         inputs: StageIo,
+        compare_function: Option<wgt::CompareFunction>,
     ) -> Result<StageIo, StageError> {
         // Since a shader module can have multiple entry points with the same name,
         // we need to look for one with the right execution model.
@@ -1183,6 +1185,21 @@ impl Interface {
                     Varying::Local { ref iv, .. } => iv.ty.dim.num_components(),
                     Varying::BuiltIn(_) => 0,
                 };
+
+                if let Some(
+                    cmp @ wgt::CompareFunction::Equal | cmp @ wgt::CompareFunction::NotEqual,
+                ) = compare_function
+                {
+                    if let Varying::BuiltIn(naga::BuiltIn::Position { invariant: false }) = *output
+                    {
+                        log::warn!(
+                            "Vertex shader with entry point {entry_point_name} outputs a @builtin(position) without the @invariant \
+                            attribute and is used in a pipeline with {cmp:?}. On some machines, this can cause bad artifacting as {cmp:?} assumes \
+                            the values output from the vertex shader exactly match the value in the depth buffer. The @invariant attribute on the \
+                            @builtin(position) vertex output ensures that the exact same pixel depths are used every render."
+                        );
+                    }
+                }
             }
         }
 

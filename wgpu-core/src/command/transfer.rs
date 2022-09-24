@@ -25,7 +25,7 @@ use std::iter;
 pub type ImageCopyBuffer = wgt::ImageCopyBuffer<BufferId>;
 pub type ImageCopyTexture = wgt::ImageCopyTexture<TextureId>;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub enum CopySide {
     Source,
     Destination,
@@ -109,6 +109,10 @@ pub enum TransferError {
     MemoryInitFailure(#[from] super::ClearError),
     #[error("Cannot encode this copy because of a missing downelevel flag")]
     MissingDownlevelFlags(#[from] MissingDownlevelFlags),
+    #[error("Source texture sample count must be 1, got {sample_count}")]
+    InvalidSampleCount { sample_count: u32 },
+    #[error("Requested mip level {requested} does no exist (count: {count})")]
+    InvalidMipLevel { requested: u32, count: u32 },
 }
 
 impl PrettyError for TransferError {
@@ -310,11 +314,12 @@ pub(crate) fn validate_texture_copy_range(
     let extent = extent_virtual.physical_size(desc.format);
 
     match desc.format {
-        wgt::TextureFormat::Depth32Float
+        //wgt::TextureFormat::Stencil8 |
+        wgt::TextureFormat::Depth16Unorm
+        | wgt::TextureFormat::Depth32Float
         | wgt::TextureFormat::Depth32FloatStencil8
         | wgt::TextureFormat::Depth24Plus
-        | wgt::TextureFormat::Depth24PlusStencil8
-        | wgt::TextureFormat::Depth24UnormStencil8 => {
+        | wgt::TextureFormat::Depth24PlusStencil8 => {
             if *copy_size != extent {
                 return Err(TransferError::InvalidDepthTextureExtent);
             }
@@ -322,36 +327,51 @@ pub(crate) fn validate_texture_copy_range(
         _ => {}
     }
 
-    let x_copy_max = texture_copy_view.origin.x + copy_size.width;
-    if x_copy_max > extent.width {
-        return Err(TransferError::TextureOverrun {
-            start_offset: texture_copy_view.origin.x,
-            end_offset: x_copy_max,
-            texture_size: extent.width,
-            dimension: TextureErrorDimension::X,
-            side: texture_side,
-        });
+    /// Return `Ok` if a run `size` texels long starting at `start_offset` falls
+    /// entirely within `texture_size`. Otherwise, return an appropriate a`Err`.
+    fn check_dimension(
+        dimension: TextureErrorDimension,
+        side: CopySide,
+        start_offset: u32,
+        size: u32,
+        texture_size: u32,
+    ) -> Result<(), TransferError> {
+        // Avoid underflow in the subtraction by checking start_offset against
+        // texture_size first.
+        if start_offset <= texture_size && size <= texture_size - start_offset {
+            Ok(())
+        } else {
+            Err(TransferError::TextureOverrun {
+                start_offset,
+                end_offset: start_offset.wrapping_add(size),
+                texture_size,
+                dimension,
+                side,
+            })
+        }
     }
-    let y_copy_max = texture_copy_view.origin.y + copy_size.height;
-    if y_copy_max > extent.height {
-        return Err(TransferError::TextureOverrun {
-            start_offset: texture_copy_view.origin.y,
-            end_offset: y_copy_max,
-            texture_size: extent.height,
-            dimension: TextureErrorDimension::Y,
-            side: texture_side,
-        });
-    }
-    let z_copy_max = texture_copy_view.origin.z + copy_size.depth_or_array_layers;
-    if z_copy_max > extent.depth_or_array_layers {
-        return Err(TransferError::TextureOverrun {
-            start_offset: texture_copy_view.origin.z,
-            end_offset: z_copy_max,
-            texture_size: extent.depth_or_array_layers,
-            dimension: TextureErrorDimension::Z,
-            side: texture_side,
-        });
-    }
+
+    check_dimension(
+        TextureErrorDimension::X,
+        texture_side,
+        texture_copy_view.origin.x,
+        copy_size.width,
+        extent.width,
+    )?;
+    check_dimension(
+        TextureErrorDimension::Y,
+        texture_side,
+        texture_copy_view.origin.y,
+        copy_size.height,
+        extent.height,
+    )?;
+    check_dimension(
+        TextureErrorDimension::Z,
+        texture_side,
+        texture_copy_view.origin.z,
+        copy_size.depth_or_array_layers,
+        extent.depth_or_array_layers,
+    )?;
 
     if texture_copy_view.origin.x % block_width != 0 {
         return Err(TransferError::UnalignedCopyOriginX);
@@ -793,6 +813,19 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .ok_or(TransferError::InvalidTexture(source.texture))?;
         if !src_texture.desc.usage.contains(TextureUsages::COPY_SRC) {
             return Err(TransferError::MissingCopySrcUsageFlag.into());
+        }
+        if src_texture.desc.sample_count != 1 {
+            return Err(TransferError::InvalidSampleCount {
+                sample_count: src_texture.desc.sample_count,
+            }
+            .into());
+        }
+        if source.mip_level >= src_texture.desc.mip_level_count {
+            return Err(TransferError::InvalidMipLevel {
+                requested: source.mip_level,
+                count: src_texture.desc.mip_level_count,
+            }
+            .into());
         }
         let src_barrier = src_pending.map(|pending| pending.into_hal(src_texture));
 

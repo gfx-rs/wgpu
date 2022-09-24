@@ -104,7 +104,7 @@ pub fn op_webgpu_render_bundle_encoder_finish(
     &wgpu_core::command::RenderBundleDescriptor {
       label: label.map(Cow::from),
     },
-    std::marker::PhantomData
+    ()
   ) => state, WebGpuRenderBundle)
 }
 

@@ -81,9 +81,10 @@ impl crate::Instance<Api> for Instance {
 
     unsafe fn create_surface(
         &self,
-        has_handle: &impl raw_window_handle::HasRawWindowHandle,
+        _display_handle: raw_window_handle::RawDisplayHandle,
+        window_handle: raw_window_handle::RawWindowHandle,
     ) -> Result<Surface, crate::InstanceError> {
-        match has_handle.raw_window_handle() {
+        match window_handle {
             #[cfg(target_os = "ios")]
             raw_window_handle::RawWindowHandle::UiKit(handle) => {
                 let _ = &self.managed_metal_layer_delegate;
@@ -115,6 +116,8 @@ impl crate::Instance<Api> for Instance {
                         vendor: 0,
                         device: 0,
                         device_type: shared.private_caps.device_type(),
+                        driver: String::new(),
+                        driver_info: String::new(),
                         backend: wgt::Backend::Metal,
                     },
                     features: shared.private_caps.features(),
@@ -180,7 +183,6 @@ struct PrivateCapabilities {
     format_rgba8_srgb_no_write: bool,
     format_rgb10a2_unorm_all: bool,
     format_rgb10a2_unorm_no_write: bool,
-    format_rgb10a2_unorm_surface: bool,
     format_rgb10a2_uint_color: bool,
     format_rgb10a2_uint_color_write: bool,
     format_rg11b10_all: bool,
@@ -204,6 +206,7 @@ struct PrivateCapabilities {
     format_bgr10a2_all: bool,
     format_bgr10a2_no_write: bool,
     max_buffers_per_stage: ResourceIndex,
+    max_vertex_buffers: ResourceIndex,
     max_textures_per_stage: ResourceIndex,
     max_samplers_per_stage: ResourceIndex,
     buffer_alignment: u64,

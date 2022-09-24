@@ -136,7 +136,7 @@ pub struct ComputePassDescriptor<'a> {
     pub label: Label<'a>,
 }
 
-#[derive(Clone, Debug, Error, PartialEq)]
+#[derive(Clone, Debug, Error, Eq, PartialEq)]
 pub enum DispatchError {
     #[error("compute pipeline must be set")]
     MissingPipeline,

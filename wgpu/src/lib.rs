@@ -29,30 +29,31 @@ pub use wgt::{
     AdapterInfo, AddressMode, AstcBlock, AstcChannel, Backend, Backends, BindGroupLayoutEntry,
     BindingType, BlendComponent, BlendFactor, BlendOperation, BlendState, BufferAddress,
     BufferBindingType, BufferSize, BufferUsages, Color, ColorTargetState, ColorWrites,
-    CommandBufferDescriptor, CompareFunction, DepthBiasState, DepthStencilState, DeviceType,
-    DownlevelCapabilities, DownlevelFlags, DynamicOffset, Extent3d, Face, Features, FilterMode,
-    FrontFace, ImageDataLayout, ImageSubresourceRange, IndexFormat, Limits, MultisampleState,
-    Origin3d, PipelineStatisticsTypes, PolygonMode, PowerPreference, PresentMode, PrimitiveState,
-    PrimitiveTopology, PushConstantRange, QueryType, RenderBundleDepthStencil, SamplerBindingType,
-    SamplerBorderColor, ShaderLocation, ShaderModel, ShaderStages, StencilFaceState,
-    StencilOperation, StencilState, StorageTextureAccess, SurfaceConfiguration, SurfaceStatus,
-    TextureAspect, TextureDimension, TextureFormat, TextureFormatFeatureFlags,
-    TextureFormatFeatures, TextureSampleType, TextureUsages, TextureViewDimension, VertexAttribute,
-    VertexFormat, VertexStepMode, COPY_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT,
-    MAP_ALIGNMENT, PUSH_CONSTANT_ALIGNMENT, QUERY_RESOLVE_BUFFER_ALIGNMENT, QUERY_SET_MAX_QUERIES,
-    QUERY_SIZE, VERTEX_STRIDE_ALIGNMENT,
+    CommandBufferDescriptor, CompareFunction, CompositeAlphaMode, DepthBiasState,
+    DepthStencilState, DeviceType, DownlevelCapabilities, DownlevelFlags, DynamicOffset, Extent3d,
+    Face, Features, FilterMode, FrontFace, ImageDataLayout, ImageSubresourceRange, IndexFormat,
+    Limits, MultisampleState, Origin3d, PipelineStatisticsTypes, PolygonMode, PowerPreference,
+    PresentMode, PrimitiveState, PrimitiveTopology, PushConstantRange, QueryType,
+    RenderBundleDepthStencil, SamplerBindingType, SamplerBorderColor, ShaderLocation, ShaderModel,
+    ShaderStages, StencilFaceState, StencilOperation, StencilState, StorageTextureAccess,
+    SurfaceConfiguration, SurfaceStatus, TextureAspect, TextureDimension, TextureFormat,
+    TextureFormatFeatureFlags, TextureFormatFeatures, TextureSampleType, TextureUsages,
+    TextureViewDimension, VertexAttribute, VertexFormat, VertexStepMode, COPY_BUFFER_ALIGNMENT,
+    COPY_BYTES_PER_ROW_ALIGNMENT, MAP_ALIGNMENT, PUSH_CONSTANT_ALIGNMENT,
+    QUERY_RESOLVE_BUFFER_ALIGNMENT, QUERY_SET_MAX_QUERIES, QUERY_SIZE, VERTEX_STRIDE_ALIGNMENT,
 };
 
 use backend::{BufferMappedRange, Context as C, QueueWriteBuffer};
 
 /// Filter for error scopes.
-#[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd)]
 pub enum ErrorFilter {
     /// Catch only out-of-memory errors.
     OutOfMemory,
     /// Catch only validation errors.
     Validation,
 }
+static_assertions::assert_impl_all!(ErrorFilter: Send, Sync);
 
 trait ComputePassInner<Ctx: Context> {
     fn set_pipeline(&mut self, pipeline: &Ctx::ComputePipelineId);
@@ -197,7 +198,8 @@ trait Context: Debug + Send + Sized + Sync {
     fn init(backends: Backends) -> Self;
     fn instance_create_surface(
         &self,
-        handle: &impl raw_window_handle::HasRawWindowHandle,
+        display_handle: raw_window_handle::RawDisplayHandle,
+        window_handle: raw_window_handle::RawWindowHandle,
     ) -> Self::SurfaceId;
     fn instance_request_adapter(
         &self,
@@ -230,11 +232,16 @@ trait Context: Debug + Send + Sized + Sync {
         surface: &Self::SurfaceId,
         adapter: &Self::AdapterId,
     ) -> Vec<TextureFormat>;
-    fn surface_get_supported_modes(
+    fn surface_get_supported_present_modes(
         &self,
         surface: &Self::SurfaceId,
         adapter: &Self::AdapterId,
     ) -> Vec<PresentMode>;
+    fn surface_get_supported_alpha_modes(
+        &self,
+        surface: &Self::SurfaceId,
+        adapter: &Self::AdapterId,
+    ) -> Vec<CompositeAlphaMode>;
     fn surface_configure(
         &self,
         surface: &Self::SurfaceId,
@@ -546,6 +553,7 @@ trait Context: Debug + Send + Sized + Sync {
 pub struct Instance {
     context: Arc<C>,
 }
+static_assertions::assert_impl_all!(Instance: Send, Sync);
 
 /// Handle to a physical graphics and/or compute device.
 ///
@@ -560,6 +568,7 @@ pub struct Adapter {
     context: Arc<C>,
     id: <C as Context>::AdapterId,
 }
+static_assertions::assert_impl_all!(Adapter: Send, Sync);
 
 impl Drop for Adapter {
     fn drop(&mut self) {
@@ -582,12 +591,14 @@ pub struct Device {
     context: Arc<C>,
     id: <C as Context>::DeviceId,
 }
+static_assertions::assert_impl_all!(Device: Send, Sync);
 
 /// Identifier for a particular call to [`Queue::submit`]. Can be used
 /// as part of an argument to [`Device::poll`] to block for a particular
 /// submission to finish.
 #[derive(Debug, Copy, Clone)]
 pub struct SubmissionIndex(<C as Context>::SubmissionIndex);
+static_assertions::assert_impl_all!(SubmissionIndex: Send, Sync);
 
 /// The main purpose of this struct is to resolve mapped ranges (convert sizes
 /// to end points), and to ensure that the sub-ranges don't intersect.
@@ -659,8 +670,10 @@ pub struct Buffer {
     context: Arc<C>,
     id: <C as Context>::BufferId,
     map_context: Mutex<MapContext>,
+    size: wgt::BufferAddress,
     usage: BufferUsages,
 }
+static_assertions::assert_impl_all!(Buffer: Send, Sync);
 
 /// Slice into a [`Buffer`].
 ///
@@ -673,6 +686,7 @@ pub struct BufferSlice<'a> {
     offset: BufferAddress,
     size: Option<BufferSize>,
 }
+static_assertions::assert_impl_all!(BufferSlice: Send, Sync);
 
 /// Handle to a texture on the GPU.
 ///
@@ -685,6 +699,7 @@ pub struct Texture {
     id: <C as Context>::TextureId,
     owned: bool,
 }
+static_assertions::assert_impl_all!(Texture: Send, Sync);
 
 /// Handle to a texture view.
 ///
@@ -697,6 +712,7 @@ pub struct TextureView {
     context: Arc<C>,
     id: <C as Context>::TextureViewId,
 }
+static_assertions::assert_impl_all!(TextureView: Send, Sync);
 
 /// Handle to a sampler.
 ///
@@ -712,6 +728,7 @@ pub struct Sampler {
     context: Arc<C>,
     id: <C as Context>::SamplerId,
 }
+static_assertions::assert_impl_all!(Sampler: Send, Sync);
 
 impl Drop for Sampler {
     fn drop(&mut self) {
@@ -730,6 +747,7 @@ pub struct Surface {
     context: Arc<C>,
     id: <C as Context>::SurfaceId,
 }
+static_assertions::assert_impl_all!(Surface: Send, Sync);
 
 impl Drop for Surface {
     fn drop(&mut self) {
@@ -755,6 +773,7 @@ pub struct BindGroupLayout {
     context: Arc<C>,
     id: <C as Context>::BindGroupLayoutId,
 }
+static_assertions::assert_impl_all!(BindGroupLayout: Send, Sync);
 
 impl Drop for BindGroupLayout {
     fn drop(&mut self) {
@@ -777,6 +796,7 @@ pub struct BindGroup {
     context: Arc<C>,
     id: <C as Context>::BindGroupId,
 }
+static_assertions::assert_impl_all!(BindGroup: Send, Sync);
 
 impl Drop for BindGroup {
     fn drop(&mut self) {
@@ -799,6 +819,7 @@ pub struct ShaderModule {
     context: Arc<C>,
     id: <C as Context>::ShaderModuleId,
 }
+static_assertions::assert_impl_all!(ShaderModule: Send, Sync);
 
 impl Drop for ShaderModule {
     fn drop(&mut self) {
@@ -814,6 +835,7 @@ impl Drop for ShaderModule {
 ///
 /// Any necessary shader translation (e.g. from WGSL to SPIR-V or vice versa)
 /// will be done internally by wgpu.
+#[cfg_attr(feature = "naga", allow(clippy::large_enum_variant))]
 #[non_exhaustive]
 pub enum ShaderSource<'a> {
     /// SPIR-V module represented as a slice of words.
@@ -840,8 +862,9 @@ pub enum ShaderSource<'a> {
     /// Naga module.
     #[cfg(feature = "naga")]
     #[cfg_attr(docsrs, doc(cfg(feature = "naga")))]
-    Naga(naga::Module),
+    Naga(Cow<'static, naga::Module>),
 }
+static_assertions::assert_impl_all!(ShaderSource: Send, Sync);
 
 /// Descriptor for use with [`Device::create_shader_module`].
 ///
@@ -853,6 +876,7 @@ pub struct ShaderModuleDescriptor<'a> {
     /// Source code for the shader.
     pub source: ShaderSource<'a>,
 }
+static_assertions::assert_impl_all!(ShaderModuleDescriptor: Send, Sync);
 
 /// Descriptor for a shader module given by SPIR-V binary.
 pub struct ShaderModuleDescriptorSpirV<'a> {
@@ -861,6 +885,7 @@ pub struct ShaderModuleDescriptorSpirV<'a> {
     /// Binary SPIR-V data, in 4-byte words.
     pub source: Cow<'a, [u32]>,
 }
+static_assertions::assert_impl_all!(ShaderModuleDescriptorSpirV: Send, Sync);
 
 /// Handle to a pipeline layout.
 ///
@@ -873,6 +898,7 @@ pub struct PipelineLayout {
     context: Arc<C>,
     id: <C as Context>::PipelineLayoutId,
 }
+static_assertions::assert_impl_all!(PipelineLayout: Send, Sync);
 
 impl Drop for PipelineLayout {
     fn drop(&mut self) {
@@ -893,6 +919,7 @@ pub struct RenderPipeline {
     context: Arc<C>,
     id: <C as Context>::RenderPipelineId,
 }
+static_assertions::assert_impl_all!(RenderPipeline: Send, Sync);
 
 impl Drop for RenderPipeline {
     fn drop(&mut self) {
@@ -926,6 +953,7 @@ pub struct ComputePipeline {
     context: Arc<C>,
     id: <C as Context>::ComputePipelineId,
 }
+static_assertions::assert_impl_all!(ComputePipeline: Send, Sync);
 
 impl Drop for ComputePipeline {
     fn drop(&mut self) {
@@ -960,6 +988,7 @@ pub struct CommandBuffer {
     context: Arc<C>,
     id: Option<<C as Context>::CommandBufferId>,
 }
+static_assertions::assert_impl_all!(CommandBuffer: Send, Sync);
 
 impl Drop for CommandBuffer {
     fn drop(&mut self) {
@@ -985,6 +1014,7 @@ pub struct CommandEncoder {
     context: Arc<C>,
     id: Option<<C as Context>::CommandEncoderId>,
 }
+static_assertions::assert_impl_all!(CommandEncoder: Send, Sync);
 
 impl Drop for CommandEncoder {
     fn drop(&mut self) {
@@ -1040,6 +1070,7 @@ pub struct RenderBundleEncoder<'a> {
     /// command buffer.
     _p: PhantomData<*const u8>,
 }
+static_assertions::assert_not_impl_any!(RenderBundleEncoder<'_>: Send, Sync);
 
 /// Pre-prepared reusable bundle of GPU operations.
 ///
@@ -1055,6 +1086,7 @@ pub struct RenderBundle {
     context: Arc<C>,
     id: <C as Context>::RenderBundleId,
 }
+static_assertions::assert_impl_all!(RenderBundle: Send, Sync);
 
 impl Drop for RenderBundle {
     fn drop(&mut self) {
@@ -1073,6 +1105,7 @@ pub struct QuerySet {
     context: Arc<C>,
     id: <C as Context>::QuerySetId,
 }
+static_assertions::assert_impl_all!(QuerySet: Send, Sync);
 
 impl Drop for QuerySet {
     fn drop(&mut self) {
@@ -1094,6 +1127,7 @@ pub struct Queue {
     context: Arc<C>,
     id: <C as Context>::QueueId,
 }
+static_assertions::assert_impl_all!(Queue: Send, Sync);
 
 /// Resource that can be bound to a pipeline.
 ///
@@ -1138,6 +1172,7 @@ pub enum BindingResource<'a> {
     /// [`BindGroupLayoutEntry::count`] set to Some.
     TextureViewArray(&'a [&'a TextureView]),
 }
+static_assertions::assert_impl_all!(BindingResource: Send, Sync);
 
 /// Describes the segment of a buffer to bind.
 ///
@@ -1156,6 +1191,7 @@ pub struct BufferBinding<'a> {
     /// Size of the binding, or `None` for using the rest of the buffer.
     pub size: Option<BufferSize>,
 }
+static_assertions::assert_impl_all!(BufferBinding: Send, Sync);
 
 /// Operation to perform to the output attachment at the start of a renderpass.
 ///
@@ -1213,6 +1249,7 @@ pub struct RenderPassColorAttachment<'tex> {
     /// What operations will be performed on this color attachment.
     pub ops: Operations<Color>,
 }
+static_assertions::assert_impl_all!(RenderPassColorAttachment: Send, Sync);
 
 /// Describes a depth/stencil attachment to a [`RenderPass`].
 ///
@@ -1229,6 +1266,7 @@ pub struct RenderPassDepthStencilAttachment<'tex> {
     /// What operations will be performed on the stencil part of the attachment.
     pub stencil_ops: Option<Operations<u32>>,
 }
+static_assertions::assert_impl_all!(RenderPassDepthStencilAttachment: Send, Sync);
 
 // The underlying types are also exported so that documentation shows up for them
 
@@ -1242,6 +1280,7 @@ pub use wgt::RequestAdapterOptions as RequestAdapterOptionsBase;
 /// Corresponds to [WebGPU `GPURequestAdapterOptions`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpurequestadapteroptions).
 pub type RequestAdapterOptions<'a> = RequestAdapterOptionsBase<&'a Surface>;
+static_assertions::assert_impl_all!(RequestAdapterOptions: Send, Sync);
 /// Describes a [`Device`].
 ///
 /// For use with [`Adapter::request_device`].
@@ -1249,6 +1288,7 @@ pub type RequestAdapterOptions<'a> = RequestAdapterOptionsBase<&'a Surface>;
 /// Corresponds to [WebGPU `GPUDeviceDescriptor`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpudevicedescriptor).
 pub type DeviceDescriptor<'a> = wgt::DeviceDescriptor<Label<'a>>;
+static_assertions::assert_impl_all!(DeviceDescriptor: Send, Sync);
 /// Describes a [`Buffer`].
 ///
 /// For use with [`Device::create_buffer`].
@@ -1256,6 +1296,7 @@ pub type DeviceDescriptor<'a> = wgt::DeviceDescriptor<Label<'a>>;
 /// Corresponds to [WebGPU `GPUBufferDescriptor`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpubufferdescriptor).
 pub type BufferDescriptor<'a> = wgt::BufferDescriptor<Label<'a>>;
+static_assertions::assert_impl_all!(BufferDescriptor: Send, Sync);
 /// Describes a [`CommandEncoder`].
 ///
 /// For use with [`Device::create_command_encoder`].
@@ -1263,6 +1304,7 @@ pub type BufferDescriptor<'a> = wgt::BufferDescriptor<Label<'a>>;
 /// Corresponds to [WebGPU `GPUCommandEncoderDescriptor`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpucommandencoderdescriptor).
 pub type CommandEncoderDescriptor<'a> = wgt::CommandEncoderDescriptor<Label<'a>>;
+static_assertions::assert_impl_all!(CommandEncoderDescriptor: Send, Sync);
 /// Describes a [`RenderBundle`].
 ///
 /// For use with [`RenderBundleEncoder::finish`].
@@ -1270,6 +1312,7 @@ pub type CommandEncoderDescriptor<'a> = wgt::CommandEncoderDescriptor<Label<'a>>
 /// Corresponds to [WebGPU `GPURenderBundleDescriptor`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpurenderbundledescriptor).
 pub type RenderBundleDescriptor<'a> = wgt::RenderBundleDescriptor<Label<'a>>;
+static_assertions::assert_impl_all!(RenderBundleDescriptor: Send, Sync);
 /// Describes a [`Texture`].
 ///
 /// For use with [`Device::create_texture`].
@@ -1277,6 +1320,7 @@ pub type RenderBundleDescriptor<'a> = wgt::RenderBundleDescriptor<Label<'a>>;
 /// Corresponds to [WebGPU `GPUTextureDescriptor`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gputexturedescriptor).
 pub type TextureDescriptor<'a> = wgt::TextureDescriptor<Label<'a>>;
+static_assertions::assert_impl_all!(TextureDescriptor: Send, Sync);
 /// Describes a [`QuerySet`].
 ///
 /// For use with [`Device::create_query_set`].
@@ -1284,9 +1328,11 @@ pub type TextureDescriptor<'a> = wgt::TextureDescriptor<Label<'a>>;
 /// Corresponds to [WebGPU `GPUQuerySetDescriptor`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpuquerysetdescriptor).
 pub type QuerySetDescriptor<'a> = wgt::QuerySetDescriptor<Label<'a>>;
+static_assertions::assert_impl_all!(QuerySetDescriptor: Send, Sync);
 pub use wgt::Maintain as MaintainBase;
 /// Passed to [`Device::poll`] to control how and if it should block.
 pub type Maintain = wgt::Maintain<SubmissionIndex>;
+static_assertions::assert_impl_all!(Maintain: Send, Sync);
 
 /// Describes a [`TextureView`].
 ///
@@ -1294,7 +1340,7 @@ pub type Maintain = wgt::Maintain<SubmissionIndex>;
 ///
 /// Corresponds to [WebGPU `GPUTextureViewDescriptor`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gputextureviewdescriptor).
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct TextureViewDescriptor<'a> {
     /// Debug label of the texture view. This will show up in graphics debuggers for easy identification.
     pub label: Label<'a>,
@@ -1318,6 +1364,7 @@ pub struct TextureViewDescriptor<'a> {
     /// If `None`, considered to include the rest of the array layers, but at least 1 in total.
     pub array_layer_count: Option<NonZeroU32>,
 }
+static_assertions::assert_impl_all!(TextureViewDescriptor: Send, Sync);
 
 /// Describes a [`PipelineLayout`].
 ///
@@ -1339,6 +1386,7 @@ pub struct PipelineLayoutDescriptor<'a> {
     /// If this array is non-empty, the [`Features::PUSH_CONSTANTS`] must be enabled.
     pub push_constant_ranges: &'a [PushConstantRange],
 }
+static_assertions::assert_impl_all!(PipelineLayoutDescriptor: Send, Sync);
 
 /// Describes a [`Sampler`].
 ///
@@ -1373,6 +1421,7 @@ pub struct SamplerDescriptor<'a> {
     /// Border color to use when address_mode is [`AddressMode::ClampToBorder`]
     pub border_color: Option<SamplerBorderColor>,
 }
+static_assertions::assert_impl_all!(SamplerDescriptor: Send, Sync);
 
 impl Default for SamplerDescriptor<'_> {
     fn default() -> Self {
@@ -1406,6 +1455,7 @@ pub struct BindGroupEntry<'a> {
     /// Resource to attach to the binding
     pub resource: BindingResource<'a>,
 }
+static_assertions::assert_impl_all!(BindGroupEntry: Send, Sync);
 
 /// Describes a group of bindings and the resources to be bound.
 ///
@@ -1422,6 +1472,7 @@ pub struct BindGroupDescriptor<'a> {
     /// The resources to bind to this bind group.
     pub entries: &'a [BindGroupEntry<'a>],
 }
+static_assertions::assert_impl_all!(BindGroupDescriptor: Send, Sync);
 
 /// Describes the attachments of a render pass.
 ///
@@ -1441,6 +1492,7 @@ pub struct RenderPassDescriptor<'tex, 'desc> {
     /// The depth and stencil attachment of the render pass, if any.
     pub depth_stencil_attachment: Option<RenderPassDepthStencilAttachment<'tex>>,
 }
+static_assertions::assert_impl_all!(RenderPassDescriptor: Send, Sync);
 
 /// Describes how the vertex buffer is interpreted.
 ///
@@ -1457,6 +1509,7 @@ pub struct VertexBufferLayout<'a> {
     /// The list of attributes which comprise a single vertex.
     pub attributes: &'a [VertexAttribute],
 }
+static_assertions::assert_impl_all!(VertexBufferLayout: Send, Sync);
 
 /// Describes the vertex processing in a render pipeline.
 ///
@@ -1468,12 +1521,13 @@ pub struct VertexBufferLayout<'a> {
 pub struct VertexState<'a> {
     /// The compiled shader module for this stage.
     pub module: &'a ShaderModule,
-    /// The name of the entry point in the compiled shader. There must be a function that returns
-    /// void with this name in the shader.
+    /// The name of the entry point in the compiled shader. There must be a function with this name
+    /// in the shader.
     pub entry_point: &'a str,
     /// The format of any vertex buffers used with this pipeline.
     pub buffers: &'a [VertexBufferLayout<'a>],
 }
+static_assertions::assert_impl_all!(VertexState: Send, Sync);
 
 /// Describes the fragment processing in a render pipeline.
 ///
@@ -1485,12 +1539,13 @@ pub struct VertexState<'a> {
 pub struct FragmentState<'a> {
     /// The compiled shader module for this stage.
     pub module: &'a ShaderModule,
-    /// The name of the entry point in the compiled shader. There must be a function that returns
-    /// void with this name in the shader.
+    /// The name of the entry point in the compiled shader. There must be a function with this name
+    /// in the shader.
     pub entry_point: &'a str,
     /// The color state of the render targets.
     pub targets: &'a [Option<ColorTargetState>],
 }
+static_assertions::assert_impl_all!(FragmentState: Send, Sync);
 
 /// Describes a render (graphics) pipeline.
 ///
@@ -1518,6 +1573,7 @@ pub struct RenderPipelineDescriptor<'a> {
     /// layers the attachments will have.
     pub multiview: Option<NonZeroU32>,
 }
+static_assertions::assert_impl_all!(RenderPipelineDescriptor: Send, Sync);
 
 /// Describes the attachments of a compute pass.
 ///
@@ -1530,6 +1586,7 @@ pub struct ComputePassDescriptor<'a> {
     /// Debug label of the compute pass. This will show up in graphics debuggers for easy identification.
     pub label: Label<'a>,
 }
+static_assertions::assert_impl_all!(ComputePassDescriptor: Send, Sync);
 
 /// Describes a compute pipeline.
 ///
@@ -1545,10 +1602,11 @@ pub struct ComputePipelineDescriptor<'a> {
     pub layout: Option<&'a PipelineLayout>,
     /// The compiled shader module for this stage.
     pub module: &'a ShaderModule,
-    /// The name of the entry point in the compiled shader. There must be a function that returns
-    /// void with this name in the shader.
+    /// The name of the entry point in the compiled shader. There must be a function with this name
+    /// and no return value in the shader.
     pub entry_point: &'a str,
 }
+static_assertions::assert_impl_all!(ComputePipelineDescriptor: Send, Sync);
 
 pub use wgt::ImageCopyBuffer as ImageCopyBufferBase;
 /// View of a buffer which can be used to copy to/from a texture.
@@ -1556,6 +1614,7 @@ pub use wgt::ImageCopyBuffer as ImageCopyBufferBase;
 /// Corresponds to [WebGPU `GPUImageCopyBuffer`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpuimagecopybuffer).
 pub type ImageCopyBuffer<'a> = ImageCopyBufferBase<&'a Buffer>;
+static_assertions::assert_impl_all!(ImageCopyBuffer: Send, Sync);
 
 pub use wgt::ImageCopyTexture as ImageCopyTextureBase;
 /// View of a texture which can be used to copy to/from a buffer/texture.
@@ -1563,6 +1622,7 @@ pub use wgt::ImageCopyTexture as ImageCopyTextureBase;
 /// Corresponds to [WebGPU `GPUImageCopyTexture`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpuimagecopytexture).
 pub type ImageCopyTexture<'a> = ImageCopyTextureBase<&'a Texture>;
+static_assertions::assert_impl_all!(ImageCopyTexture: Send, Sync);
 
 /// Describes a [`BindGroupLayout`].
 ///
@@ -1578,6 +1638,7 @@ pub struct BindGroupLayoutDescriptor<'a> {
     /// Array of entries in this BindGroupLayout
     pub entries: &'a [BindGroupLayoutEntry],
 }
+static_assertions::assert_impl_all!(BindGroupLayoutDescriptor: Send, Sync);
 
 /// Describes a [`RenderBundleEncoder`].
 ///
@@ -1601,6 +1662,7 @@ pub struct RenderBundleEncoderDescriptor<'a> {
     /// If this render bundle will rendering to multiple array layers in the attachments at the same time.
     pub multiview: Option<NonZeroU32>,
 }
+static_assertions::assert_impl_all!(RenderBundleEncoderDescriptor: Send, Sync);
 
 /// Surface texture that can be rendered to.
 /// Result of a successful call to [`Surface::get_current_texture`].
@@ -1614,6 +1676,7 @@ pub struct SurfaceTexture {
     presented: bool,
     detail: <C as Context>::SurfaceOutputDetail,
 }
+static_assertions::assert_impl_all!(SurfaceTexture: Send, Sync);
 
 /// Result of an unsuccessful call to [`Surface::get_current_texture`].
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -1627,6 +1690,7 @@ pub enum SurfaceError {
     /// There is no more memory left to allocate a new frame.
     OutOfMemory,
 }
+static_assertions::assert_impl_all!(SurfaceError: Send, Sync);
 
 impl Display for SurfaceError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -1670,19 +1734,19 @@ impl Instance {
         }
     }
 
-    /// Returns the inner hal Instance using a callback. The hal instance will be `None` if the
-    /// backend type argument does not match with this wgpu Instance
+    /// Return a reference to a specific backend instance, if available.
+    ///
+    /// If this `Instance` has a wgpu-hal [`Instance`] for backend
+    /// `A`, return a reference to it. Otherwise, return `None`.
     ///
     /// # Safety
     ///
-    /// - The raw handle obtained from the hal Instance must not be manually destroyed
+    /// - The raw instance handle returned must not be manually destroyed.
+    ///
+    /// [`Instance`]: hal::Api::Instance
     #[cfg(any(not(target_arch = "wasm32"), feature = "webgl"))]
-    pub unsafe fn as_hal<A: wgc::hub::HalApi, F: FnOnce(Option<&A::Instance>) -> R, R>(
-        &self,
-        hal_instance_callback: F,
-    ) -> R {
-        self.context
-            .instance_as_hal::<A, F, R>(hal_instance_callback)
+    pub unsafe fn as_hal<A: wgc::hub::HalApi>(&self) -> Option<&A::Instance> {
+        self.context.instance_as_hal::<A>()
     }
 
     /// Create an new instance of wgpu from a wgpu-core instance.
@@ -1754,13 +1818,19 @@ impl Instance {
     /// - Raw Window Handle must be a valid object to create a surface upon and
     ///   must remain valid for the lifetime of the returned surface.
     /// - If not called on the main thread, metal backend will panic.
-    pub unsafe fn create_surface<W: raw_window_handle::HasRawWindowHandle>(
+    pub unsafe fn create_surface<
+        W: raw_window_handle::HasRawWindowHandle + raw_window_handle::HasRawDisplayHandle,
+    >(
         &self,
         window: &W,
     ) -> Surface {
         Surface {
             context: Arc::clone(&self.context),
-            id: Context::instance_create_surface(&*self.context, window),
+            id: Context::instance_create_surface(
+                &*self.context,
+                raw_window_handle::HasRawDisplayHandle::raw_display_handle(window),
+                raw_window_handle::HasRawWindowHandle::raw_window_handle(window),
+            ),
         }
     }
 
@@ -1789,9 +1859,8 @@ impl Instance {
 
     /// Creates a surface from a `web_sys::HtmlCanvasElement`.
     ///
-    /// # Safety
-    ///
-    /// - canvas must be a valid <canvas> element to create a surface upon.
+    /// The `canvas` argument must be a valid `<canvas>` element to
+    /// create a surface upon.
     #[cfg(all(target_arch = "wasm32", not(feature = "emscripten")))]
     pub fn create_surface_from_canvas(&self, canvas: &web_sys::HtmlCanvasElement) -> Surface {
         Surface {
@@ -1802,9 +1871,8 @@ impl Instance {
 
     /// Creates a surface from a `web_sys::OffscreenCanvas`.
     ///
-    /// # Safety
-    ///
-    /// - canvas must be a valid OffscreenCanvas to create a surface upon.
+    /// The `canvas` argument must be a valid `OffscreenCanvas` object
+    /// to create a surface upon.
     #[cfg(all(target_arch = "wasm32", not(feature = "emscripten")))]
     pub fn create_surface_from_offscreen_canvas(
         &self,
@@ -1915,12 +1983,25 @@ impl Adapter {
             })
     }
 
-    /// Returns the inner hal Adapter using a callback. The hal adapter will be `None` if the
-    /// backend type argument does not match with this wgpu Adapter
+    /// Apply a callback to this `Adapter`'s underlying backend adapter.
+    ///
+    /// If this `Adapter` is implemented by the backend API given by `A` (Vulkan,
+    /// Dx12, etc.), then apply `hal_adapter_callback` to `Some(&adapter)`, where
+    /// `adapter` is the underlying backend adapter type, [`A::Adapter`].
+    ///
+    /// If this `Adapter` uses a different backend, apply `hal_adapter_callback`
+    /// to `None`.
+    ///
+    /// The adapter is locked for reading while `hal_adapter_callback` runs. If
+    /// the callback attempts to perform any `wgpu` operations that require
+    /// write access to the adapter, deadlock will occur. The locks are
+    /// automatically released when the callback returns.
     ///
     /// # Safety
     ///
-    /// - The raw handle obtained from the hal Adapter must not be manually destroyed
+    /// - The raw handle passed to the callback must not be manually destroyed.
+    ///
+    /// [`A::Adapter`]: hal::Api::Adapter
     #[cfg(any(not(target_arch = "wasm32"), feature = "webgl"))]
     pub unsafe fn as_hal<A: wgc::hub::HalApi, F: FnOnce(Option<&A::Adapter>) -> R, R>(
         &self,
@@ -2129,6 +2210,7 @@ impl Device {
             context: Arc::clone(&self.context),
             id: Context::device_create_buffer(&*self.context, &self.id, desc),
             map_context: Mutex::new(map_context),
+            size: desc.size,
             usage: desc.usage,
         }
     }
@@ -2209,12 +2291,25 @@ impl Device {
         Context::device_stop_capture(&*self.context, &self.id)
     }
 
-    /// Returns the inner hal Device using a callback. The hal device will be `None` if the
-    /// backend type argument does not match with this wgpu Device
+    /// Apply a callback to this `Device`'s underlying backend device.
+    ///
+    /// If this `Device` is implemented by the backend API given by `A` (Vulkan,
+    /// Dx12, etc.), then apply `hal_device_callback` to `Some(&device)`, where
+    /// `device` is the underlying backend device type, [`A::Device`].
+    ///
+    /// If this `Device` uses a different backend, apply `hal_device_callback`
+    /// to `None`.
+    ///
+    /// The device is locked for reading while `hal_device_callback` runs. If
+    /// the callback attempts to perform any `wgpu` operations that require
+    /// write access to the device (destroying a buffer, say), deadlock will
+    /// occur. The locks are automatically released when the callback returns.
     ///
     /// # Safety
     ///
-    /// - The raw handle obtained from the hal Device must not be manually destroyed
+    /// - The raw handle passed to the callback must not be manually destroyed.
+    ///
+    /// [`A::Device`]: hal::Api::Device
     #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
     pub unsafe fn as_hal<A: wgc::hub::HalApi, F: FnOnce(Option<&A::Device>) -> R, R>(
         &self,
@@ -2236,6 +2331,7 @@ impl Drop for Device {
 /// Requesting a device failed.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct RequestDeviceError;
+static_assertions::assert_impl_all!(RequestDeviceError: Send, Sync);
 
 impl Display for RequestDeviceError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -2248,6 +2344,7 @@ impl error::Error for RequestDeviceError {}
 /// Error occurred when trying to async map a buffer.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct BufferAsyncError;
+static_assertions::assert_impl_all!(BufferAsyncError: Send, Sync);
 
 impl Display for BufferAsyncError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -2258,13 +2355,14 @@ impl Display for BufferAsyncError {
 impl error::Error for BufferAsyncError {}
 
 /// Type of buffer mapping.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum MapMode {
     /// Map only for reading
     Read,
     /// Map only for writing
     Write,
 }
+static_assertions::assert_impl_all!(MapMode: Send, Sync);
 
 fn range_to_offset_size<S: RangeBounds<BufferAddress>>(
     bounds: S,
@@ -2425,6 +2523,20 @@ impl Buffer {
     /// Destroy the associated native resources as soon as possible.
     pub fn destroy(&self) {
         Context::buffer_destroy(&*self.context, &self.id);
+    }
+
+    /// Returns the length of the buffer allocation in bytes.
+    ///
+    /// This is always equal to the `size` that was specified when creating the buffer.
+    pub fn size(&self) -> wgt::BufferAddress {
+        self.size
+    }
+
+    /// Returns the allowed usages for this `Buffer`.
+    ///
+    /// This is always equal to the `usage` that was specified when creating the buffer.
+    pub fn usage(&self) -> BufferUsages {
+        self.usage
     }
 }
 
@@ -3407,6 +3519,7 @@ pub struct QueueWriteBufferView<'a> {
     offset: BufferAddress,
     inner: QueueWriteBuffer,
 }
+static_assertions::assert_impl_all!(QueueWriteBufferView: Send, Sync);
 
 impl<'a> std::ops::Deref for QueueWriteBufferView<'a> {
     type Target = [u8];
@@ -3446,9 +3559,13 @@ impl Queue {
         Context::queue_write_buffer(&*self.context, &self.id, &buffer.id, offset, data)
     }
 
-    /// Schedule a data write into `buffer` starting at `offset` via the returned [QueueWriteBufferView].
+    /// Schedule a data write into `buffer` starting at `offset` via the returned
+    /// [QueueWriteBufferView].
     ///
-    /// The returned value can be dereferenced to a `&mut [u8]`; dereferencing it to a `&[u8]` panics!
+    /// The returned value can be dereferenced to a `&mut [u8]`; dereferencing it to a
+    /// `&[u8]` panics!
+    /// (It is not unsound to read through the `&mut [u8]` anyway, but doing so will not
+    /// yield the existing contents of `buffer` from the GPU, and it is likely to be slow.)
     ///
     /// This method is intended to have low performance costs.
     /// As such, the write is not immediately submitted, and instead enqueued
@@ -3562,8 +3679,15 @@ impl Surface {
     /// Returns a vec of supported presentation modes to use for the [`Surface`] with this adapter.
     ///
     /// Returns an empty vector if the surface is incompatible with the adapter.
-    pub fn get_supported_modes(&self, adapter: &Adapter) -> Vec<PresentMode> {
-        Context::surface_get_supported_modes(&*self.context, &self.id, &adapter.id)
+    pub fn get_supported_present_modes(&self, adapter: &Adapter) -> Vec<PresentMode> {
+        Context::surface_get_supported_present_modes(&*self.context, &self.id, &adapter.id)
+    }
+
+    /// Returns a vec of supported alpha modes to use for the [`Surface`] with this adapter.
+    ///
+    /// Will return at least one element, CompositeAlphaMode::Opaque or CompositeAlphaMode::Inherit.
+    pub fn get_supported_alpha_modes(&self, adapter: &Adapter) -> Vec<CompositeAlphaMode> {
+        Context::surface_get_supported_alpha_modes(&*self.context, &self.id, &adapter.id)
     }
 
     /// Initializes [`Surface`] for presentation.
@@ -3631,6 +3755,7 @@ pub enum Error {
         description: String,
     },
 }
+static_assertions::assert_impl_all!(Error: Send);
 
 impl error::Error for Error {
     fn source(&self) -> Option<&(dyn error::Error + 'static)> {

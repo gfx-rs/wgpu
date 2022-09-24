@@ -191,7 +191,7 @@ bitflags::bitflags! {
         ///
         /// This is a web and native feature.
         const DEPTH_CLIP_CONTROL = 1 << 0;
-        /// Allows for explicit creation of textures of format [`TextureFormat::Depth24UnormStencil8`]
+        /// Allows for explicit creation of textures of format [`TextureFormat::Depth24PlusStencil8`]
         ///
         /// Supported platforms:
         /// - Vulkan (some)
@@ -199,7 +199,7 @@ bitflags::bitflags! {
         /// - Metal (Macs with amd GPUs)
         ///
         /// This is a web and native feature.
-        const DEPTH24UNORM_STENCIL8 = 1 << 1;
+        const DEPTH24PLUS_STENCIL8 = 1 << 1;
         /// Allows for explicit creation of textures of format [`TextureFormat::Depth32FloatStencil8`]
         ///
         /// Supported platforms:
@@ -326,12 +326,16 @@ bitflags::bitflags! {
         const MAPPABLE_PRIMARY_BUFFERS = 1 << 16;
         /// Allows the user to create uniform arrays of textures in shaders:
         ///
-        /// eg. `uniform texture2D textures[10]`.
+        /// ex.
+        /// `var textures: binding_array<texture_2d<f32>, 10>` (WGSL)\
+        /// `uniform texture2D textures[10]` (GLSL)
         ///
         /// If [`Features::STORAGE_RESOURCE_BINDING_ARRAY`] is supported as well as this, the user
         /// may also create uniform arrays of storage textures.
         ///
-        /// eg. `uniform image2D textures[10]`.
+        /// ex.
+        /// `var textures: array<texture_storage_2d<f32, write>, 10>` (WGSL)\
+        /// `uniform image2D textures[10]` (GLSL)
         ///
         /// This capability allows them to exist and to be indexed by dynamically uniform
         /// values.
@@ -345,7 +349,9 @@ bitflags::bitflags! {
         const TEXTURE_BINDING_ARRAY = 1 << 17;
         /// Allows the user to create arrays of buffers in shaders:
         ///
-        /// eg. `uniform myBuffer { .... } buffer_array[10]`.
+        /// ex.
+        /// `var<uniform> buffer_array: array<MyBuffer, 10>` (WGSL)\
+        /// `uniform myBuffer { ... } buffer_array[10]` (GLSL)
         ///
         /// This capability allows them to exist and to be indexed by dynamically uniform
         /// values.
@@ -353,7 +359,9 @@ bitflags::bitflags! {
         /// If [`Features::STORAGE_RESOURCE_BINDING_ARRAY`] is supported as well as this, the user
         /// may also create arrays of storage buffers.
         ///
-        /// eg. `buffer myBuffer { ... } buffer_array[10]`
+        /// ex.
+        /// `var<storage> buffer_array: array<MyBuffer, 10>` (WGSL)\
+        /// `buffer myBuffer { ... } buffer_array[10]` (GLSL)
         ///
         /// Supported platforms:
         /// - DX12
@@ -376,7 +384,7 @@ bitflags::bitflags! {
         const STORAGE_RESOURCE_BINDING_ARRAY = 1 << 19;
         /// Allows shaders to index sampled texture and storage buffer resource arrays with dynamically non-uniform values:
         ///
-        /// eg. `texture_array[vertex_data]`
+        /// ex. `texture_array[vertex_data]`
         ///
         /// In order to use this capability, the corresponding GLSL extension must be enabled like so:
         ///
@@ -384,13 +392,13 @@ bitflags::bitflags! {
         ///
         /// and then used either as `nonuniformEXT` qualifier in variable declaration:
         ///
-        /// eg. `layout(location = 0) nonuniformEXT flat in int vertex_data;`
+        /// ex. `layout(location = 0) nonuniformEXT flat in int vertex_data;`
         ///
         /// or as `nonuniformEXT` constructor:
         ///
-        /// eg. `texture_array[nonuniformEXT(vertex_data)]`
+        /// ex. `texture_array[nonuniformEXT(vertex_data)]`
         ///
-        /// HLSL does not need any extension.
+        /// WGSL and HLSL do not need any extension.
         ///
         /// Supported platforms:
         /// - DX12
@@ -401,7 +409,7 @@ bitflags::bitflags! {
         const SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING = 1 << 20;
         /// Allows shaders to index uniform buffer and storage texture resource arrays with dynamically non-uniform values:
         ///
-        /// eg. `texture_array[vertex_data]`
+        /// ex. `texture_array[vertex_data]`
         ///
         /// In order to use this capability, the corresponding GLSL extension must be enabled like so:
         ///
@@ -409,13 +417,13 @@ bitflags::bitflags! {
         ///
         /// and then used either as `nonuniformEXT` qualifier in variable declaration:
         ///
-        /// eg. `layout(location = 0) nonuniformEXT flat in int vertex_data;`
+        /// ex. `layout(location = 0) nonuniformEXT flat in int vertex_data;`
         ///
         /// or as `nonuniformEXT` constructor:
         ///
-        /// eg. `texture_array[nonuniformEXT(vertex_data)]`
+        /// ex. `texture_array[nonuniformEXT(vertex_data)]`
         ///
-        /// HLSL does not need any extension.
+        /// WGSL and HLSL do not need any extension.
         ///
         /// Supported platforms:
         /// - DX12
@@ -616,6 +624,7 @@ bitflags::bitflags! {
         ///
         /// Supported Platforms:
         /// - Metal
+        /// - Vulkan
         ///
         /// This is a native-only feature.
         const TEXTURE_COMPRESSION_ASTC_HDR = 1 << 40;
@@ -1105,7 +1114,7 @@ pub enum ShaderModel {
 
 /// Supported physical device types.
 #[repr(u8)]
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub enum DeviceType {
@@ -1124,18 +1133,25 @@ pub enum DeviceType {
 //TODO: convert `vendor` and `device` to `u32`
 
 /// Information about an adapter.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub struct AdapterInfo {
     /// Adapter name
     pub name: String,
     /// Vendor PCI id of the adapter
+    ///
+    /// If the vendor has no PCI id, then this value will be the backend's vendor id equivalent. On Vulkan,
+    /// Mesa would have a vendor id equivalent to it's `VkVendorId` value.
     pub vendor: usize,
     /// PCI id of the adapter
     pub device: usize,
     /// Type of device
     pub device_type: DeviceType,
+    /// Driver name
+    pub driver: String,
+    /// Driver info
+    pub driver_info: String,
     /// Backend used for device
     pub backend: Backend,
 }
@@ -1206,22 +1222,22 @@ bitflags_serde_shim::impl_serde_for_bitflags!(ShaderStages);
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub enum TextureViewDimension {
-    /// A one dimensional texture. `texture1D` in glsl shaders.
+    /// A one dimensional texture. `texture_1d` in WGSL and `texture1D` in GLSL.
     #[cfg_attr(feature = "serde", serde(rename = "1d"))]
     D1,
-    /// A two dimensional texture. `texture2D` in glsl shaders.
+    /// A two dimensional texture. `texture_2d` in WGSL and `texture2D` in GLSL.
     #[cfg_attr(feature = "serde", serde(rename = "2d"))]
     D2,
-    /// A two dimensional array texture. `texture2DArray` in glsl shaders.
+    /// A two dimensional array texture. `texture_2d_array` in WGSL and `texture2DArray` in GLSL.
     #[cfg_attr(feature = "serde", serde(rename = "2d-array"))]
     D2Array,
-    /// A cubemap texture. `textureCube` in glsl shaders.
+    /// A cubemap texture. `texture_cube` in WGSL and `textureCube` in GLSL.
     #[cfg_attr(feature = "serde", serde(rename = "cube"))]
     Cube,
-    /// A cubemap array texture. `textureCubeArray` in glsl shaders.
+    /// A cubemap array texture. `texture_cube_array` in WGSL and `textureCubeArray` in GLSL.
     #[cfg_attr(feature = "serde", serde(rename = "cube-array"))]
     CubeArray,
-    /// A three dimensional texture. `texture3D` in glsl shaders.
+    /// A three dimensional texture. `texture_3d` in WGSL and `texture3D` in GLSL.
     #[cfg_attr(feature = "serde", serde(rename = "3d"))]
     D3,
 }
@@ -1646,6 +1662,8 @@ bitflags::bitflags! {
         /// When used as a STORAGE texture, then a texture with this format can be written to with atomics.
         // TODO: No access flag exposed as of writing
         const STORAGE_ATOMICS = 1 << 4;
+        /// If not present, the texture can't be blended into the render target.
+        const BLENDABLE = 1 << 5;
     }
 }
 
@@ -1824,6 +1842,9 @@ pub enum TextureFormat {
     Bgra8UnormSrgb,
 
     // Packed 32 bit formats
+    /// Packed unsigned float with 9 bits mantisa for each RGB component, then a common 5 bits exponent
+    #[cfg_attr(feature = "serde", serde(rename = "rgb9e5ufloat"))]
+    Rgb9e5Ufloat,
     /// Red, green, blue, and alpha channels. 10 bit integer for RGB channels, 2 bit integer for alpha channel. [0, 1023] ([0, 3] for alpha) converted to/from float [0, 1] in shader.
     Rgb10a2Unorm,
     /// Red, green, and blue channels. 11 bit float with no sign bit for RG channels. 10 bit float with no sign bit for blue channel. Float in shader.
@@ -1860,20 +1881,18 @@ pub enum TextureFormat {
     Rgba32Float,
 
     // Depth and stencil formats
-    /// Special depth format with 32 bit floating point depth.
-    Depth32Float,
-    /// Special depth/stencil format with 32 bit floating point depth and 8 bits integer stencil.
-    Depth32FloatStencil8,
+    /// Stencil format with 8 bit integer stencil.
+    //Stencil8,
+    /// Special depth format with 16 bit integer depth.
+    Depth16Unorm,
     /// Special depth format with at least 24 bit integer depth.
     Depth24Plus,
     /// Special depth/stencil format with at least 24 bit integer depth and 8 bits integer stencil.
     Depth24PlusStencil8,
-    /// Special depth/stencil format with 24 bit integer depth and 8 bits integer stencil.
-    Depth24UnormStencil8,
-
-    // Packed uncompressed texture formats
-    /// Packed unsigned float with 9 bits mantisa for each RGB component, then a common 5 bits exponent
-    Rgb9e5Ufloat,
+    /// Special depth format with 32 bit floating point depth.
+    Depth32Float,
+    /// Special depth/stencil format with 32 bit floating point depth and 8 bits integer stencil.
+    Depth32FloatStencil8,
 
     // Compressed textures usable with `TEXTURE_COMPRESSION_BC` feature.
     /// 4x4 block compressed texture. 8 bytes per block (4 bit/px). 4 color + alpha pallet. 5 bit R + 6 bit G + 5 bit B + 1 bit alpha.
@@ -2509,7 +2528,7 @@ impl TextureFormat {
         let astc_hdr = Features::TEXTURE_COMPRESSION_ASTC_HDR;
         let norm16bit = Features::TEXTURE_FORMAT_16BIT_NORM;
         let d32_s8 = Features::DEPTH32FLOAT_STENCIL8;
-        let d24_s8 = Features::DEPTH24UNORM_STENCIL8;
+        let d24_s8 = Features::DEPTH24PLUS_STENCIL8;
 
         // Sample Types
         let uint = TextureSampleType::Uint;
@@ -2555,7 +2574,6 @@ impl TextureFormat {
             Self::R8Snorm =>             (   native,   float,    linear,         msaa, (1, 1),  1,      basic, 1),
             Self::R8Uint =>              (   native,    uint,    linear,         msaa, (1, 1),  1, attachment, 1),
             Self::R8Sint =>              (   native,    sint,    linear,         msaa, (1, 1),  1, attachment, 1),
-
             // Normal 16 bit textures
             Self::R16Uint =>             (   native,    uint,    linear,         msaa, (1, 1),  2, attachment, 1),
             Self::R16Sint =>             (   native,    sint,    linear,         msaa, (1, 1),  2, attachment, 1),
@@ -2564,7 +2582,6 @@ impl TextureFormat {
             Self::Rg8Snorm =>            (   native,   float,    linear,         msaa, (1, 1),  2, attachment, 2),
             Self::Rg8Uint =>             (   native,    uint,    linear,         msaa, (1, 1),  2, attachment, 2),
             Self::Rg8Sint =>             (   native,    sint,    linear,         msaa, (1, 1),  2,      basic, 2),
-
             // Normal 32 bit textures
             Self::R32Uint =>             (   native,    uint,    linear,         noaa, (1, 1),  4,  all_flags, 1),
             Self::R32Sint =>             (   native,    sint,    linear,         noaa, (1, 1),  4,  all_flags, 1),
@@ -2579,11 +2596,9 @@ impl TextureFormat {
             Self::Rgba8Sint =>           (   native,    sint,    linear,         msaa, (1, 1),  4,  all_flags, 4),
             Self::Bgra8Unorm =>          (   native,   float,    linear, msaa_resolve, (1, 1),  4, attachment, 4),
             Self::Bgra8UnormSrgb =>      (   native,   float, corrected, msaa_resolve, (1, 1),  4, attachment, 4),
-
             // Packed 32 bit textures
             Self::Rgb10a2Unorm =>        (   native,   float,    linear, msaa_resolve, (1, 1),  4, attachment, 4),
             Self::Rg11b10Float =>        (   native,   float,    linear,         msaa, (1, 1),  4,      basic, 3),
-
             // Packed 32 bit textures
             Self::Rg32Uint =>            (   native,    uint,    linear,         noaa, (1, 1),  8,  all_flags, 2),
             Self::Rg32Sint =>            (   native,    sint,    linear,         noaa, (1, 1),  8,  all_flags, 2),
@@ -2591,22 +2606,18 @@ impl TextureFormat {
             Self::Rgba16Uint =>          (   native,    uint,    linear,         msaa, (1, 1),  8,  all_flags, 4),
             Self::Rgba16Sint =>          (   native,    sint,    linear,         msaa, (1, 1),  8,  all_flags, 4),
             Self::Rgba16Float =>         (   native,   float,    linear, msaa_resolve, (1, 1),  8,  all_flags, 4),
-
             // Packed 32 bit textures
             Self::Rgba32Uint =>          (   native,    uint,    linear,         noaa, (1, 1), 16,  all_flags, 4),
             Self::Rgba32Sint =>          (   native,    sint,    linear,         noaa, (1, 1), 16,  all_flags, 4),
             Self::Rgba32Float =>         (   native, nearest,    linear,         noaa, (1, 1), 16,  all_flags, 4),
-
             // Depth-stencil textures
+            Self::Depth16Unorm =>        (   native,   depth,    linear,         msaa, (1, 1),  2, attachment, 1),
+            Self::Depth24Plus =>         (   native,   depth,    linear,         msaa, (1, 1),  4, attachment, 1),
+            Self::Depth24PlusStencil8 => (   d24_s8,   depth,    linear,         msaa, (1, 1),  4, attachment, 2),
             Self::Depth32Float =>        (   native,   depth,    linear,         msaa, (1, 1),  4, attachment, 1),
             Self::Depth32FloatStencil8 =>(   d32_s8,   depth,    linear,         msaa, (1, 1),  4, attachment, 2),
-            Self::Depth24Plus =>         (   native,   depth,    linear,         msaa, (1, 1),  4, attachment, 1),
-            Self::Depth24PlusStencil8 => (   native,   depth,    linear,         msaa, (1, 1),  4, attachment, 2),
-            Self::Depth24UnormStencil8 => (  d24_s8,   depth,    linear,         msaa, (1, 1),  4, attachment, 2),
-
             // Packed uncompressed
             Self::Rgb9e5Ufloat =>        (   native,   float,    linear,         noaa, (1, 1),  4,      basic, 3),
-
             // Optional normalized 16-bit-per-channel formats
             Self::R16Unorm =>            (norm16bit,   float,    linear,         msaa, (1, 1),  2,    storage, 1),
             Self::R16Snorm =>            (norm16bit,   float,    linear,         msaa, (1, 1),  2,    storage, 1),
@@ -2614,7 +2625,6 @@ impl TextureFormat {
             Self::Rg16Snorm =>           (norm16bit,   float,    linear,         msaa, (1, 1),  4,    storage, 2),
             Self::Rgba16Unorm =>         (norm16bit,   float,    linear,         msaa, (1, 1),  8,    storage, 4),
             Self::Rgba16Snorm =>         (norm16bit,   float,    linear,         msaa, (1, 1),  8,    storage, 4),
-
             // BCn compressed textures
             Self::Bc1RgbaUnorm =>        (       bc,   float,    linear,         noaa, (4, 4),  8,      basic, 4),
             Self::Bc1RgbaUnormSrgb =>    (       bc,   float, corrected,         noaa, (4, 4),  8,      basic, 4),
@@ -2630,7 +2640,6 @@ impl TextureFormat {
             Self::Bc6hRgbSfloat =>       (       bc,   float,    linear,         noaa, (4, 4), 16,      basic, 3),
             Self::Bc7RgbaUnorm =>        (       bc,   float,    linear,         noaa, (4, 4), 16,      basic, 4),
             Self::Bc7RgbaUnormSrgb =>    (       bc,   float, corrected,         noaa, (4, 4), 16,      basic, 4),
-
             // ETC compressed textures
             Self::Etc2Rgb8Unorm =>       (     etc2,   float,    linear,         noaa, (4, 4),  8,      basic, 3),
             Self::Etc2Rgb8UnormSrgb =>   (     etc2,   float, corrected,         noaa, (4, 4),  8,      basic, 3),
@@ -2642,7 +2651,6 @@ impl TextureFormat {
             Self::EacR11Snorm =>         (     etc2,   float,    linear,         noaa, (4, 4),  8,      basic, 1),
             Self::EacRg11Unorm =>        (     etc2,   float,    linear,         noaa, (4, 4), 16,      basic, 2),
             Self::EacRg11Snorm =>        (     etc2,   float,    linear,         noaa, (4, 4), 16,      basic, 2),
-
             // ASTC compressed textures
             Self::Astc { block, channel } => {
                 let (feature, color_space) = match channel {
@@ -2671,10 +2679,12 @@ impl TextureFormat {
         };
 
         let mut flags = msaa_flags;
+        let filterable_sample_type = sample_type == TextureSampleType::Float { filterable: true };
         flags.set(
             TextureFormatFeatureFlags::FILTERABLE,
-            sample_type == TextureSampleType::Float { filterable: true },
+            filterable_sample_type,
         );
+        flags.set(TextureFormatFeatureFlags::BLENDABLE, filterable_sample_type);
 
         TextureFormatInfo {
             required_features,
@@ -2991,13 +3001,17 @@ pub enum CompareFunction {
     Never = 1,
     /// Function passes if new value less than existing value
     Less = 2,
-    /// Function passes if new value is equal to existing value
+    /// Function passes if new value is equal to existing value. When using
+    /// this compare function, make sure to mark your Vertex Shader's `@builtin(position)`
+    /// output as `@invariant` to prevent artifacting.
     Equal = 3,
     /// Function passes if new value is less than or equal to existing value
     LessEqual = 4,
     /// Function passes if new value is greater than existing value
     Greater = 5,
-    /// Function passes if new value is not equal to existing value
+    /// Function passes if new value is not equal to existing value. When using
+    /// this compare function, make sure to mark your Vertex Shader's `@builtin(position)`
+    /// output as `@invariant` to prevent artifacting.
     NotEqual = 6,
     /// Function passes if new value is greater than or equal to existing value
     GreaterEqual = 7,
@@ -3289,6 +3303,9 @@ pub struct BufferDescriptor<L> {
     pub usage: BufferUsages,
     /// Allows a buffer to be mapped immediately after they are made. It does not have to be [`BufferUsages::MAP_READ`] or
     /// [`BufferUsages::MAP_WRITE`], all buffers are allowed to be mapped at creation.
+    ///
+    /// If this is `true`, [`size`](#structfield.size) must be a multiple of
+    /// [`COPY_BUFFER_ALIGNMENT`].
     pub mapped_at_creation: bool,
 }
 
@@ -3397,7 +3414,7 @@ pub enum PresentMode {
     ///
     /// No tearing will be observed.
     ///
-    /// Supported on DX11/12 on Windows 10, and NVidia on Vulkan.
+    /// Supported on DX11/12 on Windows 10, NVidia on Vulkan and Wayland on Vulkan.
     ///
     /// This is traditionally called "Fast Vsync"
     Mailbox = 5,
@@ -3407,6 +3424,38 @@ impl Default for PresentMode {
     fn default() -> Self {
         Self::Fifo
     }
+}
+
+/// Specifies how the alpha channel of the textures should be handled during (martin mouv i step)
+/// compositing.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "trace", derive(Serialize))]
+#[cfg_attr(feature = "replay", derive(Deserialize))]
+pub enum CompositeAlphaMode {
+    /// Chooses either `Opaque` or `Inherit` automatically，depending on the
+    /// `alpha_mode` that the current surface can support.
+    Auto = 0,
+    /// The alpha channel, if it exists, of the textures is ignored in the
+    /// compositing process. Instead, the textures is treated as if it has a
+    /// constant alpha of 1.0.
+    Opaque = 1,
+    /// The alpha channel, if it exists, of the textures is respected in the
+    /// compositing process. The non-alpha channels of the textures are
+    /// expected to already be multiplied by the alpha channel by the
+    /// application.
+    PreMultiplied = 2,
+    /// The alpha channel, if it exists, of the textures is respected in the
+    /// compositing process. The non-alpha channels of the textures are not
+    /// expected to already be multiplied by the alpha channel by the
+    /// application; instead, the compositor will multiply the non-alpha
+    /// channels of the texture by the alpha channel during compositing.
+    PostMultiplied = 3,
+    /// The alpha channel, if it exists, of the textures is unknown for processing
+    /// during compositing. Instead, the application is responsible for setting
+    /// the composite alpha blending mode using native WSI command. If not set,
+    /// then a platform-specific default will be used.
+    Inherit = 4,
 }
 
 bitflags::bitflags! {
@@ -3459,6 +3508,8 @@ pub struct SurfaceConfiguration {
     /// AutoNoVsync will gracefully do a designed sets of fallbacks if their primary modes are
     /// unsupported.
     pub present_mode: PresentMode,
+    /// Specifies how the alpha channel of the textures should be handled during compositing.
+    pub alpha_mode: CompositeAlphaMode,
 }
 
 /// Status of the recieved surface image.
@@ -4095,6 +4146,16 @@ pub struct ImageDataLayout {
 pub enum BufferBindingType {
     /// A buffer for uniform values.
     ///
+    /// Example WGSL syntax:
+    /// ```rust,ignore
+    /// struct Globals {
+    ///     a_uniform: vec2<f32>,
+    ///     another_uniform: vec2<f32>,
+    /// }
+    /// @group(0) @binding(0)
+    /// var<uniform> globals: Globals;
+    /// ```
+    ///
     /// Example GLSL syntax:
     /// ```cpp,ignore
     /// layout(std140, binding = 0)
@@ -4106,6 +4167,12 @@ pub enum BufferBindingType {
     Uniform,
     /// A storage buffer.
     ///
+    /// Example WGSL syntax:
+    /// ```rust,ignore
+    /// @group(0) @binding(0)
+    /// var<storage, read_write> my_element: array<vec4<f32>>;
+    /// ```
+    ///
     /// Example GLSL syntax:
     /// ```cpp,ignore
     /// layout (set=0, binding=0) buffer myStorageBuffer {
@@ -4114,7 +4181,15 @@ pub enum BufferBindingType {
     /// ```
     Storage {
         /// If `true`, the buffer can only be read in the shader,
-        /// and it must be annotated with `readonly`.
+        /// and it:
+        /// - may or may not be annotated with `read` (WGSL).
+        /// - must be annotated with `readonly` (GLSL).
+        ///
+        /// Example WGSL syntax:
+        /// ```rust,ignore
+        /// @group(0) @binding(0)
+        /// var<storage, read> my_element: array<vec4<f32>>;
+        /// ```
         ///
         /// Example GLSL syntax:
         /// ```cpp,ignore
@@ -4142,6 +4217,12 @@ impl Default for BufferBindingType {
 pub enum TextureSampleType {
     /// Sampling returns floats.
     ///
+    /// Example WGSL syntax:
+    /// ```rust,ignore
+    /// @group(0) @binding(0)
+    /// var t: texure_2d<f32>;
+    /// ```
+    ///
     /// Example GLSL syntax:
     /// ```cpp,ignore
     /// layout(binding = 0)
@@ -4154,6 +4235,12 @@ pub enum TextureSampleType {
     },
     /// Sampling does the depth reference comparison.
     ///
+    /// Example WGSL syntax:
+    /// ```rust,ignore
+    /// @group(0) @binding(0)
+    /// var t: texture_depth_2d;
+    /// ```
+    ///
     /// Example GLSL syntax:
     /// ```cpp,ignore
     /// layout(binding = 0)
@@ -4162,6 +4249,12 @@ pub enum TextureSampleType {
     Depth,
     /// Sampling returns signed integers.
     ///
+    /// Example WGSL syntax:
+    /// ```rust,ignore
+    /// @group(0) @binding(0)
+    /// var t: texture_2d<i32>;
+    /// ```
+    ///
     /// Example GLSL syntax:
     /// ```cpp,ignore
     /// layout(binding = 0)
@@ -4169,6 +4262,12 @@ pub enum TextureSampleType {
     /// ```
     Sint,
     /// Sampling returns unsigned integers.
+    ///
+    /// Example WGSL syntax:
+    /// ```rust,ignore
+    /// @group(0) @binding(0)
+    /// var t: texture_2d<u32>;
+    /// ```
     ///
     /// Example GLSL syntax:
     /// ```cpp,ignore
@@ -4195,23 +4294,49 @@ impl Default for TextureSampleType {
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub enum StorageTextureAccess {
-    /// The texture can only be written in the shader and it must be annotated with `writeonly`.
+    /// The texture can only be written in the shader and it:
+    /// - may or may not be annotated with `write` (WGSL).
+    /// - must be annotated with `writeonly` (GLSL).
+    ///
+    /// Example WGSL syntax:
+    /// ```rust,ignore
+    /// @group(0) @binding(0)
+    /// var my_storage_image: texture_storage_2d<f32, write>;
+    /// ```
     ///
     /// Example GLSL syntax:
     /// ```cpp,ignore
     /// layout(set=0, binding=0, r32f) writeonly uniform image2D myStorageImage;
     /// ```
     WriteOnly,
-    /// The texture can only be read in the shader and it must be annotated with `readonly`.
-    /// [`Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES`] must be enabled to use this access mode,
+    /// The texture can only be read in the shader and it must be annotated with `read` (WGSL) or
+    /// `readonly` (GLSL).
+    ///
+    /// [`Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES`] must be enabled to use this access
+    /// mode. This is a native-only extension.
+    ///
+    /// Example WGSL syntax:
+    /// ```rust,ignore
+    /// @group(0) @binding(0)
+    /// var my_storage_image: texture_storage_2d<f32, read>;
+    /// ```
     ///
     /// Example GLSL syntax:
     /// ```cpp,ignore
     /// layout(set=0, binding=0, r32f) readonly uniform image2D myStorageImage;
     /// ```
     ReadOnly,
-    /// The texture can be both read and written in the shader.
-    /// [`Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES`] must be enabled to use this access mode.
+    /// The texture can be both read and written in the shader and must be annotated with
+    /// `read_write` in WGSL.
+    ///
+    /// [`Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES`] must be enabled to use this access
+    /// mode.  This is a nonstandard, native-only extension.
+    ///
+    /// Example WGSL syntax:
+    /// ```rust,ignore
+    /// @group(0) @binding(0)
+    /// var my_storage_image: texture_storage_2d<f32, read_write>;
+    /// ```
     ///
     /// Example GLSL syntax:
     /// ```cpp,ignore
@@ -4276,6 +4401,12 @@ pub enum BindingType {
     },
     /// A sampler that can be used to sample a texture.
     ///
+    /// Example WGSL syntax:
+    /// ```rust,ignore
+    /// @group(0) @binding(0)
+    /// var s: sampler;
+    /// ```
+    ///
     /// Example GLSL syntax:
     /// ```cpp,ignore
     /// layout(binding = 0)
@@ -4286,6 +4417,12 @@ pub enum BindingType {
     /// https://gpuweb.github.io/gpuweb/#dictdef-gpusamplerbindinglayout).
     Sampler(SamplerBindingType),
     /// A texture binding.
+    ///
+    /// Example WGSL syntax:
+    /// ```rust,ignore
+    /// @group(0) @binding(0)
+    /// var t: texture_2d<f32>;
+    /// ```
     ///
     /// Example GLSL syntax:
     /// ```cpp,ignore
@@ -4307,9 +4444,15 @@ pub enum BindingType {
     },
     /// A storage texture.
     ///
+    /// Example WGSL syntax:
+    /// ```rust,ignore
+    /// @group(0) @binding(0)
+    /// var my_storage_image: texture_storage_2d<f32, write>;
+    /// ```
+    ///
     /// Example GLSL syntax:
     /// ```cpp,ignore
-    /// layout(set=0, binding=0, r32f) uniform image2D myStorageImage;
+    /// layout(set=0, binding=0, r32f) writeonly uniform image2D myStorageImage;
     /// ```
     /// Note that the texture format must be specified in the shader as well.
     /// A list of valid formats can be found in the specification here: <https://www.khronos.org/registry/OpenGL/specs/gl/GLSLangSpec.4.60.html#layout-qualifiers>
@@ -4400,7 +4543,7 @@ pub struct ImageCopyTexture<T> {
 
 /// Subresource range within an image
 #[repr(C)]
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub struct ImageSubresourceRange {

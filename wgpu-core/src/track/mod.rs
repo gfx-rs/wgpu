@@ -143,13 +143,13 @@ impl PendingTransition<hal::TextureUses> {
         let texture = tex.inner.as_raw().expect("Texture is destroyed");
 
         // These showing up in a barrier is always a bug
-        debug_assert_ne!(self.usage.start, hal::TextureUses::UNKNOWN);
-        debug_assert_ne!(self.usage.end, hal::TextureUses::UNKNOWN);
+        strict_assert_ne!(self.usage.start, hal::TextureUses::UNKNOWN);
+        strict_assert_ne!(self.usage.end, hal::TextureUses::UNKNOWN);
 
         let mip_count = self.selector.mips.end - self.selector.mips.start;
-        debug_assert_ne!(mip_count, 0);
+        strict_assert_ne!(mip_count, 0);
         let layer_count = self.selector.layers.end - self.selector.layers.start;
-        debug_assert_ne!(layer_count, 0);
+        strict_assert_ne!(layer_count, 0);
 
         hal::TextureBarrier {
             texture,
@@ -238,7 +238,7 @@ fn iterate_bitvec_indices(ownership: &BitVec<usize>) -> impl Iterator<Item = usi
         })
 }
 
-#[derive(Clone, Debug, Error, PartialEq)]
+#[derive(Clone, Debug, Error, Eq, PartialEq)]
 pub enum UsageConflict {
     #[error("Attempted to use buffer {id:?} which is invalid.")]
     BufferInvalid { id: id::BufferId },
@@ -291,7 +291,7 @@ impl UsageConflict {
 }
 
 /// Pretty print helper that shows helpful descriptions of a conflicting usage.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InvalidUse<T> {
     current_state: T,
     new_state: T,
@@ -351,12 +351,13 @@ impl<A: hub::HalApi> ResourceMetadata<A> {
     /// sanity checks of the presence of a refcount.
     ///
     /// In release mode this function is completely empty and is removed.
-    fn debug_assert_in_bounds(&self, index: usize) {
-        debug_assert!(index < self.owned.len());
-        debug_assert!(index < self.ref_counts.len());
-        debug_assert!(index < self.epochs.len());
+    #[cfg_attr(not(feature = "strict_asserts"), allow(unused_variables))]
+    fn tracker_assert_in_bounds(&self, index: usize) {
+        strict_assert!(index < self.owned.len());
+        strict_assert!(index < self.ref_counts.len());
+        strict_assert!(index < self.epochs.len());
 
-        debug_assert!(if self.owned.get(index).unwrap() {
+        strict_assert!(if self.owned.get(index).unwrap() {
             self.ref_counts[index].is_some()
         } else {
             true
@@ -373,7 +374,7 @@ impl<A: hub::HalApi> ResourceMetadata<A> {
     /// Returns ids for all resources we own.
     fn used<Id: TypedId>(&self) -> impl Iterator<Item = id::Valid<Id>> + '_ {
         if !self.owned.is_empty() {
-            self.debug_assert_in_bounds(self.owned.len() - 1)
+            self.tracker_assert_in_bounds(self.owned.len() - 1)
         };
         iterate_bitvec_indices(&self.owned).map(move |index| {
             let epoch = unsafe { *self.epochs.get_unchecked(index) };
@@ -418,7 +419,7 @@ impl<A: hub::HalApi> ResourceMetadataProvider<'_, A> {
                 (epoch, ref_count.into_owned())
             }
             ResourceMetadataProvider::Indirect { metadata } => {
-                metadata.debug_assert_in_bounds(index);
+                metadata.tracker_assert_in_bounds(index);
                 (
                     *metadata.epochs.get_unchecked(index),
                     metadata
@@ -429,7 +430,7 @@ impl<A: hub::HalApi> ResourceMetadataProvider<'_, A> {
                 )
             }
             ResourceMetadataProvider::Resource { epoch } => {
-                debug_assert!(life_guard.is_some());
+                strict_assert!(life_guard.is_some());
                 (epoch, life_guard.unwrap_unchecked().add_ref())
             }
         }
@@ -445,7 +446,7 @@ impl<A: hub::HalApi> ResourceMetadataProvider<'_, A> {
             ResourceMetadataProvider::Direct { epoch, .. }
             | ResourceMetadataProvider::Resource { epoch, .. } => epoch,
             ResourceMetadataProvider::Indirect { metadata } => {
-                metadata.debug_assert_in_bounds(index);
+                metadata.tracker_assert_in_bounds(index);
                 *metadata.epochs.get_unchecked(index)
             }
         }

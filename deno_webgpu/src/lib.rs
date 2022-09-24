@@ -128,9 +128,6 @@ fn deserialize_features(features: &wgpu_types::Features) -> Vec<&'static str> {
     if features.contains(wgpu_types::Features::DEPTH_CLIP_CONTROL) {
         return_features.push("depth-clip-control");
     }
-    if features.contains(wgpu_types::Features::DEPTH24UNORM_STENCIL8) {
-        return_features.push("depth24unorm-stencil8");
-    }
     if features.contains(wgpu_types::Features::DEPTH32FLOAT_STENCIL8) {
         return_features.push("depth32float-stencil8");
     }
@@ -253,7 +250,7 @@ pub async fn op_webgpu_request_adapter(
     };
     let res = instance.request_adapter(
         &descriptor,
-        wgpu_core::instance::AdapterInputs::Mask(backends, |_| std::marker::PhantomData),
+        wgpu_core::instance::AdapterInputs::Mask(backends, |_| ()),
     );
 
     let adapter = match res {
@@ -287,10 +284,6 @@ impl From<GpuRequiredFeatures> for wgpu_types::Features {
         features.set(
             wgpu_types::Features::DEPTH_CLIP_CONTROL,
             required_features.0.contains("depth-clip-control"),
-        );
-        features.set(
-            wgpu_types::Features::DEPTH24UNORM_STENCIL8,
-            required_features.0.contains("depth24unorm-stencil8"),
         );
         features.set(
             wgpu_types::Features::DEPTH32FLOAT_STENCIL8,
@@ -420,7 +413,7 @@ pub async fn op_webgpu_request_device(
       adapter,
       &descriptor,
       std::env::var("DENO_WEBGPU_TRACE").ok().as_ref().map(std::path::Path::new),
-      std::marker::PhantomData
+      ()
     ));
     if let Some(err) = maybe_err {
         return Err(DomExceptionOperationError::new(&err.to_string()).into());
@@ -543,7 +536,7 @@ pub fn op_webgpu_create_query_set(
     gfx_put!(device => instance.device_create_query_set(
     device,
     &descriptor,
-    std::marker::PhantomData
+    ()
   ) => state, WebGpuQuerySet)
 }
 

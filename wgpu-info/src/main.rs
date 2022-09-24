@@ -50,11 +50,12 @@ mod inner {
         wgpu::TextureFormat::Rgba32Uint,
         wgpu::TextureFormat::Rgba32Sint,
         wgpu::TextureFormat::Rgba32Float,
+        //wgpu::TextureFormat::Stencil8,
+        wgpu::TextureFormat::Depth16Unorm,
         wgpu::TextureFormat::Depth32Float,
         wgpu::TextureFormat::Depth32FloatStencil8,
         wgpu::TextureFormat::Depth24Plus,
         wgpu::TextureFormat::Depth24PlusStencil8,
-        wgpu::TextureFormat::Depth24UnormStencil8,
         wgpu::TextureFormat::Rgb9e5Ufloat,
         wgpu::TextureFormat::Bc1RgbaUnorm,
         wgpu::TextureFormat::Bc1RgbaUnormSrgb,
@@ -138,6 +139,8 @@ mod inner {
         println!("\t  VendorID: {:?}", info.vendor);
         println!("\t  DeviceID: {:?}", info.device);
         println!("\t      Type: {:?}", info.device_type);
+        println!("\t    Driver: {:?}", info.driver);
+        println!("\tDriverInfo: {:?}", info.driver);
         println!("\t Compliant: {:?}", downlevel.is_webgpu_compliant());
         println!("\tFeatures:");
         for i in 0..(size_of::<wgpu::Features>() * 8) {

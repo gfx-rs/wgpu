@@ -13,6 +13,9 @@ license = "MIT OR Apache-2.0"
 
 [features]
 default = []
+# Apply run-time checks, even in release builds. These are in addition
+# to the validation carried out at public APIs in all builds.
+strict_asserts = []
 angle = ["hal/gles"]
 # Enable API tracing
 trace = ["ron", "serde", "wgt/trace", "arrayvec/serde", "naga/serialize"]
@@ -34,17 +37,17 @@ log = "0.4"
 # parking_lot 0.12 switches from `winapi` to `windows`; permit either
 parking_lot = ">=0.11,<0.13"
 profiling = { version = "1", default-features = false }
-raw-window-handle = { version = "0.4", optional = true }
-ron = { version = "0.7", optional = true }
+raw-window-handle = { version = "0.5", optional = true }
+ron = { version = "0.8", optional = true }
 serde = { version = "1.0", features = ["serde_derive"], optional = true }
 smallvec = "1"
 thiserror = "1"
 
 [dependencies.naga]
-#git = "https://github.com/gfx-rs/naga"
-#rev = "27d38aae"
+git = "https://github.com/gfx-rs/naga"
+rev = "b209d911"
 version = "0.9"
-features = ["span", "validate", "wgsl-in"]
+features = ["clone", "span", "validate", "wgsl-in"]
 
 [dependencies.wgt]
 path = "../wgpu-types"
@@ -56,9 +59,11 @@ path = "../wgpu-hal"
 package = "wgpu-hal"
 version = "0.13"
 
+[target.'cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))'.dependencies]
+web-sys = { version = "0.3", features = ["HtmlCanvasElement", "OffscreenCanvas"] }
+
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 hal = { path = "../wgpu-hal", package = "wgpu-hal", version = "0.13", features = ["gles"] }
-web-sys = { version = "0.3", features = ["HtmlCanvasElement"] }
 
 [target.'cfg(all(not(target_arch = "wasm32"), any(target_os = "ios", target_os = "macos")))'.dependencies]
 hal = { path = "../wgpu-hal", package = "wgpu-hal", version = "0.13", features = ["metal"] }

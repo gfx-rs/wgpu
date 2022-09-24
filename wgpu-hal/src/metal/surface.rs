@@ -1,3 +1,5 @@
+#![allow(clippy::let_unit_value)] // `let () =` being used to constrain result type
+
 use std::{mem, os::raw::c_void, ptr::NonNull, sync::Once, thread};
 
 use core_graphics_types::{
@@ -84,6 +86,7 @@ impl super::Surface {
         let render_layer =
             mem::transmute::<_, &mtl::MetalLayerRef>(Self::get_metal_layer(view, delegate))
                 .to_owned();
+        let _: *mut c_void = msg_send![view, retain];
         Self::new(NonNull::new(view), render_layer)
     }
 
@@ -186,9 +189,9 @@ impl crate::Surface<super::Api> for super::Surface {
         let drawable_size = CGSize::new(config.extent.width as f64, config.extent.height as f64);
 
         match config.composite_alpha_mode {
-            crate::CompositeAlphaMode::Opaque => render_layer.set_opaque(true),
-            crate::CompositeAlphaMode::PostMultiplied => render_layer.set_opaque(false),
-            crate::CompositeAlphaMode::PreMultiplied => (),
+            wgt::CompositeAlphaMode::Opaque => render_layer.set_opaque(true),
+            wgt::CompositeAlphaMode::PostMultiplied => render_layer.set_opaque(false),
+            _ => (),
         }
 
         let device_raw = device.shared.device.lock();

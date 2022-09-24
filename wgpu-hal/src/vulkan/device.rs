@@ -2,7 +2,6 @@ use super::conv;
 
 use arrayvec::ArrayVec;
 use ash::{extensions::khr, vk};
-use inplace_it::inplace_or_alloc_from_iter;
 use parking_lot::Mutex;
 
 use std::{
@@ -462,13 +461,16 @@ impl
         layouts: impl ExactSizeIterator<Item = &'a vk::DescriptorSetLayout>,
         sets: &mut impl Extend<vk::DescriptorSet>,
     ) -> Result<(), gpu_descriptor::DeviceAllocationError> {
-        let result = inplace_or_alloc_from_iter(layouts.cloned(), |layouts_slice| {
-            let vk_info = vk::DescriptorSetAllocateInfo::builder()
+        let result = self.raw.allocate_descriptor_sets(
+            &vk::DescriptorSetAllocateInfo::builder()
                 .descriptor_pool(*pool)
-                .set_layouts(layouts_slice)
-                .build();
-            self.raw.allocate_descriptor_sets(&vk_info)
-        });
+                .set_layouts(
+                    &smallvec::SmallVec::<[vk::DescriptorSetLayout; 32]>::from_iter(
+                        layouts.cloned(),
+                    ),
+                )
+                .build(),
+        );
 
         match result {
             Ok(vk_sets) => {
@@ -497,9 +499,10 @@ impl
         pool: &mut vk::DescriptorPool,
         sets: impl Iterator<Item = vk::DescriptorSet>,
     ) {
-        let result = inplace_or_alloc_from_iter(sets, |sets_slice| {
-            self.raw.free_descriptor_sets(*pool, sets_slice)
-        });
+        let result = self.raw.free_descriptor_sets(
+            *pool,
+            &smallvec::SmallVec::<[vk::DescriptorSet; 32]>::from_iter(sets),
+        );
         match result {
             Ok(()) => {}
             Err(err) => log::error!("free_descriptor_sets: {:?}", err),
@@ -711,12 +714,20 @@ impl super::Device {
         self.shared.family_index
     }
 
+    pub fn queue_index(&self) -> u32 {
+        self.shared.queue_index
+    }
+
     pub fn raw_device(&self) -> &ash::Device {
         &self.shared.raw
     }
 
     pub fn raw_physical_device(&self) -> ash::vk::PhysicalDevice {
         self.shared.physical_device
+    }
+
+    pub fn raw_queue(&self) -> ash::vk::Queue {
+        self.shared.raw_queue
     }
 
     pub fn enabled_device_extensions(&self) -> &[&'static CStr] {
@@ -827,21 +838,26 @@ impl crate::Device<super::Api> for super::Device {
         I: Iterator<Item = crate::MemoryRange>,
     {
         let vk_ranges = self.shared.make_memory_ranges(buffer, ranges);
-        inplace_or_alloc_from_iter(vk_ranges, |array| {
-            self.shared.raw.flush_mapped_memory_ranges(array).unwrap()
-        });
+
+        self.shared
+            .raw
+            .flush_mapped_memory_ranges(
+                &smallvec::SmallVec::<[vk::MappedMemoryRange; 32]>::from_iter(vk_ranges),
+            )
+            .unwrap();
     }
     unsafe fn invalidate_mapped_ranges<I>(&self, buffer: &super::Buffer, ranges: I)
     where
         I: Iterator<Item = crate::MemoryRange>,
     {
         let vk_ranges = self.shared.make_memory_ranges(buffer, ranges);
-        inplace_or_alloc_from_iter(vk_ranges, |array| {
-            self.shared
-                .raw
-                .invalidate_mapped_memory_ranges(array)
-                .unwrap()
-        });
+
+        self.shared
+            .raw
+            .invalidate_mapped_memory_ranges(
+                &smallvec::SmallVec::<[vk::MappedMemoryRange; 32]>::from_iter(vk_ranges),
+            )
+            .unwrap();
     }
 
     unsafe fn create_texture(
@@ -1123,7 +1139,7 @@ impl crate::Device<super::Api> for super::Device {
             }
         }
 
-        //Note: not bothering with inplace_or_alloc_from_iter her as it's low frequency
+        //Note: not bothering with on stack array here as it's low frequency
         let vk_bindings = desc
             .entries
             .iter()
@@ -1235,7 +1251,7 @@ impl crate::Device<super::Api> for super::Device {
         &self,
         desc: &crate::PipelineLayoutDescriptor<super::Api>,
     ) -> Result<super::PipelineLayout, crate::DeviceError> {
-        //Note: not bothering with inplace_or_alloc_from_iter her as it's low frequency
+        //Note: not bothering with on stack array here as it's low frequency
         let vk_set_layouts = desc
             .bind_group_layouts
             .iter()

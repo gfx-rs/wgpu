@@ -64,7 +64,8 @@ impl super::PrivateCapabilities {
                     F::D32_SFLOAT_S8_UINT
                 }
             }
-            Tf::Depth24UnormStencil8 => F::D24_UNORM_S8_UINT,
+            //Tf::Stencil8 => F::R8_UNORM,
+            Tf::Depth16Unorm => F::D16_UNORM,
             Tf::Rgb9e5Ufloat => F::E5B9G9R9_UFLOAT_PACK32,
             Tf::Bc1RgbaUnorm => F::BC1_RGBA_UNORM_BLOCK,
             Tf::Bc1RgbaUnormSrgb => F::BC1_RGBA_SRGB_BLOCK,
@@ -446,24 +447,29 @@ pub fn map_vk_present_mode(mode: vk::PresentModeKHR) -> Option<wgt::PresentMode>
     }
 }
 
-pub fn map_composite_alpha_mode(mode: crate::CompositeAlphaMode) -> vk::CompositeAlphaFlagsKHR {
+pub fn map_composite_alpha_mode(mode: wgt::CompositeAlphaMode) -> vk::CompositeAlphaFlagsKHR {
     match mode {
-        crate::CompositeAlphaMode::Opaque => vk::CompositeAlphaFlagsKHR::OPAQUE,
-        crate::CompositeAlphaMode::PostMultiplied => vk::CompositeAlphaFlagsKHR::POST_MULTIPLIED,
-        crate::CompositeAlphaMode::PreMultiplied => vk::CompositeAlphaFlagsKHR::PRE_MULTIPLIED,
+        wgt::CompositeAlphaMode::Opaque => vk::CompositeAlphaFlagsKHR::OPAQUE,
+        wgt::CompositeAlphaMode::PreMultiplied => vk::CompositeAlphaFlagsKHR::PRE_MULTIPLIED,
+        wgt::CompositeAlphaMode::PostMultiplied => vk::CompositeAlphaFlagsKHR::POST_MULTIPLIED,
+        wgt::CompositeAlphaMode::Inherit => vk::CompositeAlphaFlagsKHR::INHERIT,
+        wgt::CompositeAlphaMode::Auto => unreachable!(),
     }
 }
 
-pub fn map_vk_composite_alpha(flags: vk::CompositeAlphaFlagsKHR) -> Vec<crate::CompositeAlphaMode> {
+pub fn map_vk_composite_alpha(flags: vk::CompositeAlphaFlagsKHR) -> Vec<wgt::CompositeAlphaMode> {
     let mut modes = Vec::new();
     if flags.contains(vk::CompositeAlphaFlagsKHR::OPAQUE) {
-        modes.push(crate::CompositeAlphaMode::Opaque);
-    }
-    if flags.contains(vk::CompositeAlphaFlagsKHR::POST_MULTIPLIED) {
-        modes.push(crate::CompositeAlphaMode::PostMultiplied);
+        modes.push(wgt::CompositeAlphaMode::Opaque);
     }
     if flags.contains(vk::CompositeAlphaFlagsKHR::PRE_MULTIPLIED) {
-        modes.push(crate::CompositeAlphaMode::PreMultiplied);
+        modes.push(wgt::CompositeAlphaMode::PreMultiplied);
+    }
+    if flags.contains(vk::CompositeAlphaFlagsKHR::POST_MULTIPLIED) {
+        modes.push(wgt::CompositeAlphaMode::PostMultiplied);
+    }
+    if flags.contains(vk::CompositeAlphaFlagsKHR::INHERIT) {
+        modes.push(wgt::CompositeAlphaMode::Inherit);
     }
     modes
 }

@@ -45,7 +45,7 @@ pub fn op_webgpu_create_command_encoder(
     gfx_put!(device => instance.device_create_command_encoder(
     device,
     &descriptor,
-    std::marker::PhantomData
+    ()
   ) => state, WebGpuCommandEncoder)
 }
 
@@ -80,7 +80,6 @@ pub fn op_webgpu_command_encoder_begin_render_pass(
     label: Option<String>,
     color_attachments: Vec<Option<GpuRenderPassColorAttachment>>,
     depth_stencil_attachment: Option<GpuRenderPassDepthStencilAttachment>,
-    _occlusion_query_set: Option<u32>, // not yet implemented
 ) -> Result<WebGpuResult, AnyError> {
     let command_encoder_resource = state
         .resource_table

@@ -7,7 +7,8 @@ use crate::{
         BufferInitTracker, BufferInitTrackerAction, MemoryInitKind, TextureInitRange,
         TextureInitTracker, TextureInitTrackerAction,
     },
-    instance, pipeline, present,
+    instance::{self, Adapter, Surface},
+    pipeline, present,
     resource::{self, BufferMapState},
     resource::{BufferAccessError, BufferMapAsyncStatus, BufferMapOperation},
     track::{BindGroupStates, TextureSelector, Tracker},
@@ -31,6 +32,9 @@ pub mod queue;
 #[cfg(any(feature = "trace", feature = "replay"))]
 pub mod trace;
 
+// Per WebGPU specification.
+pub const MAX_BINDING_INDEX: u32 = 65535;
+
 pub const SHADER_STAGE_COUNT: usize = 3;
 // Should be large enough for the largest possible texture row. This value is enough for a 16k texture with float4 format.
 pub(crate) const ZERO_BUFFER_SIZE: BufferAddress = 512 << 10;
@@ -43,7 +47,7 @@ const EP_FAILURE: &str = "EP is invalid";
 pub type DeviceDescriptor<'a> = wgt::DeviceDescriptor<Label<'a>>;
 
 #[repr(C)]
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub enum HostMap {
@@ -190,24 +194,17 @@ fn map_buffer<A: hal::Api>(
     //
     // If this is a write mapping zeroing out the memory here is the only reasonable way as all data is pushed to GPU anyways.
     let zero_init_needs_flush_now = mapping.is_coherent && buffer.sync_mapped_writes.is_none(); // No need to flush if it is flushed later anyways.
-    for uninitialized_range in buffer.initialization_status.drain(offset..(size + offset)) {
-        let num_bytes = uninitialized_range.end - uninitialized_range.start;
-        unsafe {
-            ptr::write_bytes(
-                mapping
-                    .ptr
-                    .as_ptr()
-                    .offset(uninitialized_range.start as isize),
-                0,
-                num_bytes as usize,
-            )
-        };
+    let mapped = unsafe { std::slice::from_raw_parts_mut(mapping.ptr.as_ptr(), size as usize) };
+
+    for uninitialized in buffer.initialization_status.drain(offset..(size + offset)) {
+        // The mapping's pointer is already offset, however we track the uninitialized range relative to the buffer's start.
+        let fill_range =
+            (uninitialized.start - offset) as usize..(uninitialized.end - offset) as usize;
+        mapped[fill_range].fill(0);
+
         if zero_init_needs_flush_now {
             unsafe {
-                raw.flush_mapped_ranges(
-                    buffer.raw.as_ref().unwrap(),
-                    iter::once(uninitialized_range.start..uninitialized_range.start + num_bytes),
-                )
+                raw.flush_mapped_ranges(buffer.raw.as_ref().unwrap(), iter::once(uninitialized))
             };
         }
     }
@@ -592,6 +589,20 @@ impl<A: HalApi> Device<A> {
             return Err(resource::CreateBufferError::EmptyUsage);
         }
 
+        if !self
+            .features
+            .contains(wgt::Features::MAPPABLE_PRIMARY_BUFFERS)
+        {
+            use wgt::BufferUsages as Bu;
+            let write_mismatch = desc.usage.contains(Bu::MAP_WRITE)
+                && !(Bu::MAP_WRITE | Bu::COPY_SRC).contains(desc.usage);
+            let read_mismatch = desc.usage.contains(Bu::MAP_READ)
+                && !(Bu::MAP_READ | Bu::COPY_DST).contains(desc.usage);
+            if write_mismatch || read_mismatch {
+                return Err(resource::CreateBufferError::UsageMismatch(desc.usage));
+            }
+        }
+
         if desc.mapped_at_creation {
             if desc.size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
                 return Err(resource::CreateBufferError::UnalignedSize);
@@ -685,7 +696,7 @@ impl<A: HalApi> Device<A> {
     fn create_texture(
         &self,
         self_id: id::DeviceId,
-        adapter: &crate::instance::Adapter<A>,
+        adapter: &Adapter<A>,
         desc: &resource::TextureDescriptor,
     ) -> Result<resource::Texture<A>, resource::CreateTextureError> {
         use resource::{CreateTextureError, TextureDimensionError};
@@ -952,18 +963,21 @@ impl<A: HalApi> Device<A> {
             },
         };
 
-        let required_level_count =
-            desc.range.base_mip_level + desc.range.mip_level_count.map_or(1, |count| count.get());
+        let mip_count = desc.range.mip_level_count.map_or(1, |count| count.get());
+        let required_level_count = desc.range.base_mip_level.saturating_add(mip_count);
+
         let required_layer_count = match desc.range.array_layer_count {
-            Some(count) => desc.range.base_array_layer + count.get(),
+            Some(count) => desc.range.base_array_layer.saturating_add(count.get()),
             None => match view_dim {
                 wgt::TextureViewDimension::D1
                 | wgt::TextureViewDimension::D2
                 | wgt::TextureViewDimension::D3 => 1,
                 wgt::TextureViewDimension::Cube => 6,
                 _ => texture.desc.array_layer_count(),
-            },
+            }
+            .max(desc.range.base_array_layer.saturating_add(1)),
         };
+
         let level_end = texture.full_range.mips.end;
         let layer_end = texture.full_range.layers.end;
         if required_level_count > level_end {
@@ -1202,7 +1216,7 @@ impl<A: HalApi> Device<A> {
                         inner,
                     })
                 })?;
-                (module, code.into_owned())
+                (Cow::Owned(module), code.into_owned())
             }
             pipeline::ShaderModuleSource::Naga(module) => (module, String::new()),
         };
@@ -2379,6 +2393,7 @@ impl<A: HalApi> Device<A> {
                     &desc.stage.entry_point,
                     flag,
                     io,
+                    None,
                 )?;
             }
         }
@@ -2443,7 +2458,7 @@ impl<A: HalApi> Device<A> {
     fn create_render_pipeline<G: GlobalIdentityHandlerFactory>(
         &self,
         self_id: id::DeviceId,
-        adapter: &crate::instance::Adapter<A>,
+        adapter: &Adapter<A>,
         desc: &pipeline::RenderPipelineDescriptor,
         implicit_context: Option<ImplicitPipelineContext>,
         hub: &Hub<A, G>,
@@ -2467,6 +2482,16 @@ impl<A: HalApi> Device<A> {
         let mut derived_group_layouts =
             ArrayVec::<binding_model::BindEntryMap, { hal::MAX_BIND_GROUPS }>::new();
         let mut shader_binding_sizes = FastHashMap::default();
+
+        let num_attachments = desc.fragment.as_ref().map(|f| f.targets.len()).unwrap_or(0);
+        if num_attachments > hal::MAX_COLOR_ATTACHMENTS {
+            return Err(
+                pipeline::CreateRenderPipelineError::TooManyColorAttachments {
+                    given: num_attachments as u32,
+                    limit: hal::MAX_COLOR_ATTACHMENTS as u32,
+                },
+            );
+        }
 
         let color_targets = desc
             .fragment
@@ -2600,7 +2625,14 @@ impl<A: HalApi> Device<A> {
                     {
                         break Some(pipeline::ColorStateError::FormatNotRenderable(cs.format));
                     }
-                    if cs.blend.is_some() && !format_features.flags.contains(Tfff::FILTERABLE) {
+                    let blendable = format_features.flags.contains(Tfff::BLENDABLE);
+                    let filterable = format_features.flags.contains(Tfff::FILTERABLE);
+                    let adapter_specific = self
+                        .features
+                        .contains(wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES);
+                    // according to WebGPU specifications the texture needs to be [`TextureFormatFeatureFlags::FILTERABLE`]
+                    // if blending is set - use [`Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES`] to elude this limitation
+                    if cs.blend.is_some() && (!blendable || (!filterable && !adapter_specific)) {
                         break Some(pipeline::ColorStateError::FormatNotBlendable(cs.format));
                     }
                     if !hal::FormatAspects::from(cs.format).contains(hal::FormatAspects::COLOR) {
@@ -2704,6 +2736,7 @@ impl<A: HalApi> Device<A> {
                         &stage.entry_point,
                         flag,
                         io,
+                        desc.depth_stencil.as_ref().map(|d| d.depth_compare),
                     )
                     .map_err(|error| pipeline::CreateRenderPipelineError::Stage {
                         stage: flag,
@@ -2750,6 +2783,7 @@ impl<A: HalApi> Device<A> {
                                 &fragment.stage.entry_point,
                                 flag,
                                 io,
+                                desc.depth_stencil.as_ref().map(|d| d.depth_compare),
                             )
                             .map_err(|error| pipeline::CreateRenderPipelineError::Stage {
                                 stage: flag,
@@ -2918,7 +2952,7 @@ impl<A: HalApi> Device<A> {
 
     fn describe_format_features(
         &self,
-        adapter: &crate::instance::Adapter<A>,
+        adapter: &Adapter<A>,
         format: TextureFormat,
     ) -> Result<wgt::TextureFormatFeatures, MissingFeatures> {
         let format_desc = format.describe();
@@ -3139,32 +3173,56 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .map_err(|_| instance::IsSurfaceSupportedError::InvalidSurface)?;
         Ok(adapter.is_surface_supported(surface))
     }
+
     pub fn surface_get_supported_formats<A: HalApi>(
         &self,
         surface_id: id::SurfaceId,
         adapter_id: id::AdapterId,
     ) -> Result<Vec<TextureFormat>, instance::GetSurfaceSupportError> {
         profiling::scope!("Surface::get_supported_formats");
-        let hub = A::hub(self);
-        let mut token = Token::root();
-
-        let (surface_guard, mut token) = self.surfaces.read(&mut token);
-        let (adapter_guard, mut _token) = hub.adapters.read(&mut token);
-        let adapter = adapter_guard
-            .get(adapter_id)
-            .map_err(|_| instance::GetSurfaceSupportError::InvalidAdapter)?;
-        let surface = surface_guard
-            .get(surface_id)
-            .map_err(|_| instance::GetSurfaceSupportError::InvalidSurface)?;
-
-        surface.get_supported_formats(adapter)
+        self.fetch_adapter_and_surface::<A, _, Vec<TextureFormat>>(
+            surface_id,
+            adapter_id,
+            |adapter, surface| surface.get_supported_formats(adapter),
+        )
     }
-    pub fn surface_get_supported_modes<A: HalApi>(
+
+    pub fn surface_get_supported_present_modes<A: HalApi>(
         &self,
         surface_id: id::SurfaceId,
         adapter_id: id::AdapterId,
     ) -> Result<Vec<wgt::PresentMode>, instance::GetSurfaceSupportError> {
-        profiling::scope!("Surface::get_supported_modes");
+        profiling::scope!("Surface::get_supported_present_modes");
+        self.fetch_adapter_and_surface::<A, _, Vec<wgt::PresentMode>>(
+            surface_id,
+            adapter_id,
+            |adapter, surface| surface.get_supported_present_modes(adapter),
+        )
+    }
+
+    pub fn surface_get_supported_alpha_modes<A: HalApi>(
+        &self,
+        surface_id: id::SurfaceId,
+        adapter_id: id::AdapterId,
+    ) -> Result<Vec<wgt::CompositeAlphaMode>, instance::GetSurfaceSupportError> {
+        profiling::scope!("Surface::get_supported_alpha_modes");
+        self.fetch_adapter_and_surface::<A, _, Vec<wgt::CompositeAlphaMode>>(
+            surface_id,
+            adapter_id,
+            |adapter, surface| surface.get_supported_alpha_modes(adapter),
+        )
+    }
+
+    fn fetch_adapter_and_surface<
+        A: HalApi,
+        F: FnOnce(&Adapter<A>, &Surface) -> Result<B, instance::GetSurfaceSupportError>,
+        B,
+    >(
+        &self,
+        surface_id: id::SurfaceId,
+        adapter_id: id::AdapterId,
+        get_supported_callback: F,
+    ) -> Result<B, instance::GetSurfaceSupportError> {
         let hub = A::hub(self);
         let mut token = Token::root();
 
@@ -3177,7 +3235,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .get(surface_id)
             .map_err(|_| instance::GetSurfaceSupportError::InvalidSurface)?;
 
-        surface.get_supported_modes(adapter)
+        get_supported_callback(adapter, surface)
     }
 
     pub fn device_features<A: HalApi>(
@@ -4077,6 +4135,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             let mut entry_map = FastHashMap::default();
             for entry in desc.entries.iter() {
+                if entry.binding > MAX_BINDING_INDEX {
+                    break 'outer binding_model::CreateBindGroupLayoutError::InvalidBindingIndex {
+                        binding: entry.binding,
+                        maximum: MAX_BINDING_INDEX,
+                    };
+                }
                 if entry_map.insert(entry.binding, *entry).is_some() {
                     break 'outer binding_model::CreateBindGroupLayoutError::ConflictBinding(
                         entry.binding,
@@ -5052,6 +5116,40 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     available: caps.formats.clone(),
                 });
             }
+            if !caps
+                .composite_alpha_modes
+                .contains(&config.composite_alpha_mode)
+            {
+                let new_alpha_mode = 'b: loop {
+                    // Automatic alpha mode checks.
+                    let fallbacks = match config.composite_alpha_mode {
+                        wgt::CompositeAlphaMode::Auto => &[
+                            wgt::CompositeAlphaMode::Opaque,
+                            wgt::CompositeAlphaMode::Inherit,
+                        ][..],
+                        _ => {
+                            return Err(E::UnsupportedAlphaMode {
+                                requested: config.composite_alpha_mode,
+                                available: caps.composite_alpha_modes.clone(),
+                            });
+                        }
+                    };
+
+                    for &fallback in fallbacks {
+                        if caps.composite_alpha_modes.contains(&fallback) {
+                            break 'b fallback;
+                        }
+                    }
+
+                    unreachable!("Fallback system failed to choose alpha mode. This is a bug. AlphaMode: {:?}, Options: {:?}", config.composite_alpha_mode, &caps.composite_alpha_modes);
+                };
+
+                log::info!(
+                    "Automatically choosing alpha mode by rule {:?}. Chose {new_alpha_mode:?}",
+                    config.composite_alpha_mode
+                );
+                config.composite_alpha_mode = new_alpha_mode;
+            }
             if !caps.usage.contains(config.usage) {
                 return Err(E::UnsupportedUsage);
             }
@@ -5101,7 +5199,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let mut hal_config = hal::SurfaceConfiguration {
                 swap_chain_size: num_frames,
                 present_mode: config.present_mode,
-                composite_alpha_mode: hal::CompositeAlphaMode::Opaque,
+                composite_alpha_mode: config.alpha_mode,
                 format: config.format,
                 extent: wgt::Extent3d {
                     width: config.width,
@@ -5388,9 +5486,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     BufferMapAsyncStatus::InvalidAlignment
                 }
                 &BufferAccessError::OutOfBoundsUnderrun { .. }
-                | &BufferAccessError::OutOfBoundsOverrun { .. } => {
-                    BufferMapAsyncStatus::InvalidRange
-                }
+                | &BufferAccessError::OutOfBoundsOverrun { .. }
+                | &BufferAccessError::NegativeRange { .. } => BufferMapAsyncStatus::InvalidRange,
                 _ => BufferMapAsyncStatus::Error,
             };
 
@@ -5441,6 +5538,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 return Err((op, e.into()));
             }
 
+            if range.start > range.end {
+                return Err((
+                    op,
+                    BufferAccessError::NegativeRange {
+                        start: range.start,
+                        end: range.end,
+                    },
+                ));
+            }
             if range.end > buffer.size {
                 return Err((
                     op,
