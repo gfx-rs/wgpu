@@ -2147,13 +2147,10 @@ impl<'de> Deserialize<'de> for TextureFormat {
                     "eac-rg11unorm" => TextureFormat::EacRg11Unorm,
                     "eac-rg11snorm" => TextureFormat::EacRg11Snorm,
                     other => {
-                        if other.starts_with("astc") {
-                            let mut parts = other.split('-');
-                            parts.next(); // discard "astc"
-                            let block = parts
-                                .next()
+                        if let Some(parts) = other.strip_prefix("astc-") {
+                            let (block, channel) = parts
+                                .split_once('-')
                                 .ok_or_else(|| E::invalid_value(Unexpected::Str(s), &self))?;
-                            let channel = parts.collect::<Vec<&str>>().join("-");
 
                             let block = match block {
                                 "4x4" => AstcBlock::B4x4,
