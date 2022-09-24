@@ -2191,7 +2191,7 @@ impl<'de> Deserialize<'de> for TextureFormat {
             }
         }
 
-        deserializer.deserialize_any(TextureFormatVisitor)
+        deserializer.deserialize_str(TextureFormatVisitor)
     }
 }
 
