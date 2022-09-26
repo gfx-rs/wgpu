@@ -33,32 +33,53 @@ impl Instance {
         &self,
         canvas: &web_sys::HtmlCanvasElement,
     ) -> Result<Surface, crate::InstanceError> {
-        let webgl2_context = canvas
-            .get_context_with_context_options("webgl2", &Self::create_context_options())
-            .expect("Cannot create WebGL2 context")
-            .and_then(|context| context.dyn_into::<web_sys::WebGl2RenderingContext>().ok())
-            .expect("Cannot convert into WebGL2 context");
-
-        *self.webgl2_context.lock() = Some(webgl2_context.clone());
-
-        Ok(Surface {
-            webgl2_context,
-            srgb_present_program: None,
-            swapchain: None,
-            texture: None,
-            presentable: true,
-        })
+        self.create_surface_from_context(
+            canvas.get_context_with_context_options("webgl2", &Self::create_context_options()),
+        )
     }
 
     pub fn create_surface_from_offscreen_canvas(
         &self,
         canvas: &web_sys::OffscreenCanvas,
     ) -> Result<Surface, crate::InstanceError> {
-        let webgl2_context = canvas
-            .get_context_with_context_options("webgl2", &Self::create_context_options())
-            .expect("Cannot create WebGL2 context")
-            .and_then(|context| context.dyn_into::<web_sys::WebGl2RenderingContext>().ok())
-            .expect("Cannot convert into WebGL2 context");
+        self.create_surface_from_context(
+            canvas.get_context_with_context_options("webgl2", &Self::create_context_options()),
+        )
+    }
+
+    /// Common portion of public `create_surface_from_*` functions.
+    ///
+    /// Note: Analogous code also exists in the WebGPU backend at
+    /// `wgpu::backend::web::Context`.
+    fn create_surface_from_context(
+        &self,
+        context_result: Result<Option<js_sys::Object>, wasm_bindgen::JsValue>,
+    ) -> Result<Surface, crate::InstanceError> {
+        let context_object: js_sys::Object = match context_result {
+            Ok(Some(context)) => context,
+            Ok(None) => {
+                // <https://html.spec.whatwg.org/multipage/canvas.html#dom-canvas-getcontext-dev>
+                // A getContext() call “returns null if contextId is not supported, or if the
+                // canvas has already been initialized with another context type”. Additionally,
+                // “not supported” could include “insufficient GPU resources” or “the GPU process
+                // previously crashed”. So, we must return it as an `Err` since it could occur
+                // for circumstances outside the application author's control.
+                return Err(crate::InstanceError);
+            }
+            Err(js_error) => {
+                // <https://html.spec.whatwg.org/multipage/canvas.html#dom-canvas-getcontext>
+                // A thrown exception indicates misuse of the canvas state. Ideally we wouldn't
+                // panic in this case, but for now, `InstanceError` conveys no detail, so it
+                // is more informative to panic with a specific message.
+                panic!("canvas.getContext() threw {js_error:?}")
+            }
+        };
+
+        // Not returning this error because it is a type error that shouldn't happen unless
+        // the browser, JS builtin objects, or wasm bindings are misbehaving somehow.
+        let webgl2_context: web_sys::WebGl2RenderingContext = context_object
+            .dyn_into()
+            .expect("canvas context is not a WebGl2RenderingContext");
 
         *self.webgl2_context.lock() = Some(webgl2_context.clone());
 

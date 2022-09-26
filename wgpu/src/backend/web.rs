@@ -1027,22 +1027,52 @@ impl Context {
         &self,
         canvas: &web_sys::HtmlCanvasElement,
     ) -> <Self as crate::Context>::SurfaceId {
-        let context: wasm_bindgen::JsValue = match canvas.get_context("webgpu") {
-            Ok(Some(ctx)) => ctx.into(),
-            _ => panic!("expected to get context from canvas"),
-        };
-        create_identified(context.into())
+        self.create_surface_from_context(canvas.get_context("webgpu"))
+            .unwrap()
     }
 
     pub fn instance_create_surface_from_offscreen_canvas(
         &self,
         canvas: &web_sys::OffscreenCanvas,
     ) -> <Self as crate::Context>::SurfaceId {
-        let context: wasm_bindgen::JsValue = match canvas.get_context("webgpu") {
-            Ok(Some(ctx)) => ctx.into(),
-            _ => panic!("expected to get context from canvas"),
+        self.create_surface_from_context(canvas.get_context("webgpu"))
+            .unwrap()
+    }
+
+    /// Common portion of public `instance_create_surface_from_*` functions.
+    ///
+    /// Note: Analogous code also exists in the WebGL 2 backend at
+    /// `wgpu_hal::gles::web::Instance`.
+    fn create_surface_from_context(
+        &self,
+        context_result: Result<Option<js_sys::Object>, wasm_bindgen::JsValue>,
+    ) -> Result<<Self as crate::Context>::SurfaceId, ()> {
+        let context: js_sys::Object = match context_result {
+            Ok(Some(context)) => context,
+            Ok(None) => {
+                // <https://html.spec.whatwg.org/multipage/canvas.html#dom-canvas-getcontext-dev>
+                // A getContext() call “returns null if contextId is not supported, or if the
+                // canvas has already been initialized with another context type”. Additionally,
+                // “not supported” could include “insufficient GPU resources” or “the GPU process
+                // previously crashed”. So, we must return it as an `Err` since it could occur
+                // for circumstances outside the application author's control.
+                return Err(());
+            }
+            Err(js_error) => {
+                // <https://html.spec.whatwg.org/multipage/canvas.html#dom-canvas-getcontext>
+                // A thrown exception indicates misuse of the canvas state. Ideally we wouldn't
+                // panic in this case ... TODO
+                panic!("canvas.getContext() threw {js_error:?}")
+            }
         };
-        create_identified(context.into())
+
+        // Not returning this error because it is a type error that shouldn't happen unless
+        // the browser, JS builtin objects, or wasm bindings are misbehaving somehow.
+        let context: web_sys::GpuCanvasContext = context
+            .dyn_into()
+            .expect("canvas context is not a GPUCanvasContext");
+
+        Ok(create_identified(context))
     }
 
     pub fn queue_copy_external_image_to_texture(
