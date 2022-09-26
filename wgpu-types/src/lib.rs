@@ -2169,7 +2169,7 @@ impl<'de> Deserialize<'de> for TextureFormat {
                                 _ => return Err(E::invalid_value(Unexpected::Str(s), &self)),
                             };
 
-                            let channel = match channel.as_ref() {
+                            let channel = match channel {
                                 "unorm" => AstcChannel::Unorm,
                                 "unorm-srgb" => AstcChannel::UnormSrgb,
                                 "hdr" => AstcChannel::Hdr,
