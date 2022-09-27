@@ -63,6 +63,10 @@ Additionally `Surface::get_default_config` now returns an Option and returns Non
 + let config = surface.get_default_config(&adapter).expect("Surface unsupported by adapter");
 ```
 
+#### Fallible surface creation
+
+`Instance::create_surface()` now returns `Result<Surface, CreateSurfaceError>` instead of `Surface`. This allows an error to be returned instead of panicking if the given window is a HTML canvas and obtaining a WebGPU or WebGL 2 context fails. (No other platforms currently report any errors through this path.) By @kpreid in [#3052](https://github.com/gfx-rs/wgpu/pull/3052/)
+
 ### Changes
 
 #### General

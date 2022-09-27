@@ -1026,27 +1026,25 @@ impl Context {
     pub fn instance_create_surface_from_canvas(
         &self,
         canvas: &web_sys::HtmlCanvasElement,
-    ) -> <Self as crate::Context>::SurfaceId {
+    ) -> Result<<Self as crate::Context>::SurfaceId, crate::CreateSurfaceError> {
         self.create_surface_from_context(canvas.get_context("webgpu"))
-            .unwrap()
     }
 
     pub fn instance_create_surface_from_offscreen_canvas(
         &self,
         canvas: &web_sys::OffscreenCanvas,
-    ) -> <Self as crate::Context>::SurfaceId {
+    ) -> Result<<Self as crate::Context>::SurfaceId, crate::CreateSurfaceError> {
         self.create_surface_from_context(canvas.get_context("webgpu"))
-            .unwrap()
     }
 
     /// Common portion of public `instance_create_surface_from_*` functions.
     ///
-    /// Note: Analogous code also exists in the WebGL 2 backend at
+    /// Note: Analogous code also exists in the WebGL2 backend at
     /// `wgpu_hal::gles::web::Instance`.
     fn create_surface_from_context(
         &self,
         context_result: Result<Option<js_sys::Object>, wasm_bindgen::JsValue>,
-    ) -> Result<<Self as crate::Context>::SurfaceId, ()> {
+    ) -> Result<<Self as crate::Context>::SurfaceId, crate::CreateSurfaceError> {
         let context: js_sys::Object = match context_result {
             Ok(Some(context)) => context,
             Ok(None) => {
@@ -1056,7 +1054,7 @@ impl Context {
                 // “not supported” could include “insufficient GPU resources” or “the GPU process
                 // previously crashed”. So, we must return it as an `Err` since it could occur
                 // for circumstances outside the application author's control.
-                return Err(());
+                return Err(crate::CreateSurfaceError {});
             }
             Err(js_error) => {
                 // <https://html.spec.whatwg.org/multipage/canvas.html#dom-canvas-getcontext>
@@ -1171,7 +1169,7 @@ impl crate::Context for Context {
         &self,
         _display_handle: raw_window_handle::RawDisplayHandle,
         window_handle: raw_window_handle::RawWindowHandle,
-    ) -> Self::SurfaceId {
+    ) -> Result<Self::SurfaceId, crate::CreateSurfaceError> {
         let canvas_attribute = match window_handle {
             raw_window_handle::RawWindowHandle::Web(web_handle) => web_handle.id,
             _ => panic!("expected valid handle for canvas"),

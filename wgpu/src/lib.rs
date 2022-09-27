@@ -204,7 +204,7 @@ trait Context: Debug + Send + Sized + Sync {
         &self,
         display_handle: raw_window_handle::RawDisplayHandle,
         window_handle: raw_window_handle::RawWindowHandle,
-    ) -> Self::SurfaceId;
+    ) -> Result<Self::SurfaceId, crate::CreateSurfaceError>;
     fn instance_request_adapter(
         &self,
         options: &RequestAdapterOptions<'_>,
@@ -1816,23 +1816,34 @@ impl Instance {
     ///
     /// # Safety
     ///
-    /// - Raw Window Handle must be a valid object to create a surface upon and
-    ///   must remain valid for the lifetime of the returned surface.
-    /// - If not called on the main thread, metal backend will panic.
+    /// - `raw_window_handle` must be a valid object to create a surface upon.
+    /// - `raw_window_handle` must remain valid until after the returned [`Surface`] is
+    ///   dropped.
+    ///
+    /// # Errors
+    ///
+    /// - On WebGL2: Will return an error if the browser does not support WebGL2,
+    ///   or declines to provide GPU access (such as due to a resource shortage).
+    ///
+    /// # Panics
+    ///
+    /// - On macOS/Metal: will panic if not called on the main thread.
+    /// - On web: will panic if the `raw_window_handle` does not properly refer to a
+    ///   canvas element.
     pub unsafe fn create_surface<
         W: raw_window_handle::HasRawWindowHandle + raw_window_handle::HasRawDisplayHandle,
     >(
         &self,
         window: &W,
-    ) -> Surface {
-        Surface {
+    ) -> Result<Surface, CreateSurfaceError> {
+        Ok(Surface {
             context: Arc::clone(&self.context),
             id: Context::instance_create_surface(
                 &*self.context,
                 raw_window_handle::HasRawDisplayHandle::raw_display_handle(window),
                 raw_window_handle::HasRawWindowHandle::raw_window_handle(window),
-            ),
-        }
+            )?,
+        })
     }
 
     /// Creates a surface from `CoreAnimationLayer`.
@@ -1862,29 +1873,42 @@ impl Instance {
     ///
     /// The `canvas` argument must be a valid `<canvas>` element to
     /// create a surface upon.
+    ///
+    /// # Errors
+    ///
+    /// - On WebGL2: Will return an error if the browser does not support WebGL2,
+    ///   or declines to provide GPU access (such as due to a resource shortage).
     #[cfg(all(target_arch = "wasm32", not(feature = "emscripten")))]
-    pub fn create_surface_from_canvas(&self, canvas: &web_sys::HtmlCanvasElement) -> Surface {
-        Surface {
+    pub fn create_surface_from_canvas(
+        &self,
+        canvas: &web_sys::HtmlCanvasElement,
+    ) -> Result<Surface, CreateSurfaceError> {
+        Ok(Surface {
             context: Arc::clone(&self.context),
-            id: self.context.instance_create_surface_from_canvas(canvas),
-        }
+            id: self.context.instance_create_surface_from_canvas(canvas)?,
+        })
     }
 
     /// Creates a surface from a `web_sys::OffscreenCanvas`.
     ///
     /// The `canvas` argument must be a valid `OffscreenCanvas` object
     /// to create a surface upon.
+    ///
+    /// # Errors
+    ///
+    /// - On WebGL2: Will return an error if the browser does not support WebGL2,
+    ///   or declines to provide GPU access (such as due to a resource shortage).
     #[cfg(all(target_arch = "wasm32", not(feature = "emscripten")))]
     pub fn create_surface_from_offscreen_canvas(
         &self,
         canvas: &web_sys::OffscreenCanvas,
-    ) -> Surface {
-        Surface {
+    ) -> Result<Surface, CreateSurfaceError> {
+        Ok(Surface {
             context: Arc::clone(&self.context),
             id: self
                 .context
-                .instance_create_surface_from_offscreen_canvas(canvas),
-        }
+                .instance_create_surface_from_offscreen_canvas(canvas)?,
+        })
     }
 
     /// Polls all devices.
@@ -2352,6 +2376,22 @@ impl Display for RequestDeviceError {
 }
 
 impl error::Error for RequestDeviceError {}
+
+/// [`Instance::create_surface()`] or a related function failed.
+#[derive(Clone, PartialEq, Eq, Debug)]
+#[non_exhaustive]
+pub struct CreateSurfaceError {
+    // TODO: Report diagnostic clues
+}
+static_assertions::assert_impl_all!(CreateSurfaceError: Send, Sync);
+
+impl Display for CreateSurfaceError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Creating a surface failed")
+    }
+}
+
+impl error::Error for CreateSurfaceError {}
 
 /// Error occurred when trying to async map a buffer.
 #[derive(Clone, PartialEq, Eq, Debug)]

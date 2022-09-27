@@ -502,22 +502,26 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         canvas: &web_sys::HtmlCanvasElement,
         id_in: Input<G, SurfaceId>,
-    ) -> SurfaceId {
+    ) -> Result<SurfaceId, hal::InstanceError> {
         profiling::scope!("Instance::create_surface_webgl_canvas");
 
         let surface = Surface {
             presentation: None,
-            gl: self.instance.gl.as_ref().map(|inst| HalSurface {
-                raw: {
-                    inst.create_surface_from_canvas(canvas)
-                        .expect("Create surface from canvas")
-                },
-            }),
+            gl: self
+                .instance
+                .gl
+                .as_ref()
+                .map(|inst| {
+                    Ok(HalSurface {
+                        raw: inst.create_surface_from_canvas(canvas)?,
+                    })
+                })
+                .transpose()?,
         };
 
         let mut token = Token::root();
         let id = self.surfaces.prepare(id_in).assign(surface, &mut token);
-        id.0
+        Ok(id.0)
     }
 
     #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
@@ -525,22 +529,26 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         canvas: &web_sys::OffscreenCanvas,
         id_in: Input<G, SurfaceId>,
-    ) -> SurfaceId {
+    ) -> Result<SurfaceId, hal::InstanceError> {
         profiling::scope!("Instance::create_surface_webgl_offscreen_canvas");
 
         let surface = Surface {
             presentation: None,
-            gl: self.instance.gl.as_ref().map(|inst| HalSurface {
-                raw: {
-                    inst.create_surface_from_offscreen_canvas(canvas)
-                        .expect("Create surface from offscreen canvas")
-                },
-            }),
+            gl: self
+                .instance
+                .gl
+                .as_ref()
+                .map(|inst| {
+                    Ok(HalSurface {
+                        raw: inst.create_surface_from_offscreen_canvas(canvas)?,
+                    })
+                })
+                .transpose()?,
         };
 
         let mut token = Token::root();
         let id = self.surfaces.prepare(id_in).assign(surface, &mut token);
-        id.0
+        Ok(id.0)
     }
 
     #[cfg(dx12)]
