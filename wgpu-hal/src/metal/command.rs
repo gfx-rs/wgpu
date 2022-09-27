@@ -102,12 +102,12 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             } else {
                 queue.new_command_buffer_with_unretained_references()
             };
+            if let Some(label) = label {
+                cmd_buf_ref.set_label(label);
+            }
             cmd_buf_ref.to_owned()
         });
 
-        if let Some(label) = label {
-            raw.set_label(label);
-        }
         self.raw_cmd_buf = Some(raw);
 
         Ok(())
