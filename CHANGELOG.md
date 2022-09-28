@@ -100,6 +100,8 @@ SurfaceConfiguration {
   violates Vulkan valid usage rules `VUID-StandaloneSpirv-Flat-06202`
   and `VUID-StandaloneSpirv-Flat-04744`. By @jimblandy in
   [#3008](https://github.com/gfx-rs/wgpu/pull/3008)
+- Fix bug where the Vulkan backend would panic when using a supported window and display handle but the
+  dependent extensions are not available by @i509VCB in [#3054](https://github.com/gfx-rs/wgpu/pull/3054).
 
 #### Gles
 - Report vendor id for Mesa and Apple GPUs. By @i509VCB [#3036](https://github.com/gfx-rs/wgpu/pull/3036)

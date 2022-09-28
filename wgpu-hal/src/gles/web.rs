@@ -123,7 +123,7 @@ impl crate::Instance<super::Api> for Instance {
 
             self.create_surface_from_canvas(&canvas)
         } else {
-            unreachable!()
+            Err(crate::InstanceError)
         }
     }
 
