@@ -26,7 +26,7 @@
             mip_level_count: 1,
             sample_count: 1,
             dimension: r#2d,
-            format: rgba8unorm,
+            format: "rgba8unorm",
             usage: 27,
         )),
         CreateTextureView(
@@ -67,7 +67,7 @@
                     ),
                     targets: [
                         Some((
-                            format: rgba8unorm,
+                            format: "rgba8unorm",
                         )),
                     ],
                 )),
