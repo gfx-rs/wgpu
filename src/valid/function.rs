@@ -863,7 +863,7 @@ impl super::Validator {
         fun: &crate::Function,
         module: &crate::Module,
         mod_info: &ModuleInfo,
-        entry_point: bool,
+        #[cfg_attr(not(feature = "validate"), allow(unused))] entry_point: bool,
     ) -> Result<FunctionInfo, WithSpan<FunctionError>> {
         #[cfg_attr(not(feature = "validate"), allow(unused_mut))]
         let mut info = mod_info.process_function(fun, module, self.flags, self.capabilities)?;
