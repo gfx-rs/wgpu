@@ -20,7 +20,7 @@ mod device;
 mod surface;
 
 use std::{
-    iter, ops,
+    fmt, iter, ops,
     ptr::NonNull,
     sync::{atomic, Arc},
     thread,
@@ -727,9 +727,19 @@ pub struct CommandEncoder {
     temp: Temp,
 }
 
+impl fmt::Debug for CommandEncoder {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("CommandEncoder")
+            .field("raw_queue", &self.raw_queue)
+            .field("raw_cmd_buf", &self.raw_cmd_buf)
+            .finish()
+    }
+}
+
 unsafe impl Send for CommandEncoder {}
 unsafe impl Sync for CommandEncoder {}
 
+#[derive(Debug)]
 pub struct CommandBuffer {
     raw: mtl::CommandBuffer,
 }

@@ -94,6 +94,7 @@ SurfaceConfiguration {
 - Fix `max_buffer` `max_texture` and `max_vertex_buffers` limits by @jinleili in [#2978](https://github.com/gfx-rs/wgpu/pull/2978)
 - Remove PrivateCapabilities's `format_rgb10a2_unorm_surface` field by @jinleili in [#2981](https://github.com/gfx-rs/wgpu/pull/2981)
 - Fix validation error when copying into a subset of a single-layer texture by @nical in [#3063](https://github.com/gfx-rs/wgpu/pull/3063)
+- Fix `_buffer_sizes` encoding by @dtiselice in [#3047](https://github.com/gfx-rs/wgpu/pull/3047)
 
 #### Vulkan
 - Fix `astc_hdr` formats support by @jinleili in [#2971]](https://github.com/gfx-rs/wgpu/pull/2971)
@@ -101,6 +102,8 @@ SurfaceConfiguration {
   violates Vulkan valid usage rules `VUID-StandaloneSpirv-Flat-06202`
   and `VUID-StandaloneSpirv-Flat-04744`. By @jimblandy in
   [#3008](https://github.com/gfx-rs/wgpu/pull/3008)
+- Fix bug where the Vulkan backend would panic when using a supported window and display handle but the
+  dependent extensions are not available by @i509VCB in [#3054](https://github.com/gfx-rs/wgpu/pull/3054).
 
 #### Gles
 - Report vendor id for Mesa and Apple GPUs. By @i509VCB [#3036](https://github.com/gfx-rs/wgpu/pull/3036)

@@ -5186,7 +5186,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let caps = unsafe {
                 let suf = A::get_surface(surface);
                 let adapter = &adapter_guard[device.adapter_id.value];
-                match adapter.raw.adapter.surface_capabilities(&suf.raw) {
+                match adapter.raw.adapter.surface_capabilities(&suf.unwrap().raw) {
                     Some(caps) => caps,
                     None => break E::UnsupportedQueueFamily,
                 }
@@ -5214,6 +5214,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             match unsafe {
                 A::get_surface_mut(surface)
+                    .unwrap()
                     .raw
                     .configure(&device.raw, &hal_config)
             } {
