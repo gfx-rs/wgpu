@@ -82,7 +82,7 @@ use arrayvec::ArrayVec;
 
 use glow::HasContext;
 
-use std::{ops::Range, sync::Arc};
+use std::{fmt, ops::Range, sync::Arc};
 
 #[derive(Clone)]
 pub struct Api;
@@ -758,6 +758,16 @@ pub struct CommandBuffer {
     queries: Vec<glow::Query>,
 }
 
+impl fmt::Debug for CommandBuffer {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut builder = f.debug_struct("CommandBuffer");
+        if let Some(ref label) = self.label {
+            builder.field("label", label);
+        }
+        builder.finish()
+    }
+}
+
 //TODO: we would have something like `Arc<typed_arena::Arena>`
 // here and in the command buffers. So that everything grows
 // inside the encoder and stays there until `reset_all`.
@@ -766,4 +776,12 @@ pub struct CommandEncoder {
     cmd_buffer: CommandBuffer,
     state: command::State,
     private_caps: PrivateCapabilities,
+}
+
+impl fmt::Debug for CommandEncoder {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("CommandEncoder")
+            .field("cmd_buffer", &self.cmd_buffer)
+            .finish()
+    }
 }
