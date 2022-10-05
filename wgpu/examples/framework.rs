@@ -436,32 +436,18 @@ impl Spawner {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-#[allow(unused)]
 pub fn run<E: Example>(title: &str) {
-    run_with_setup::<E, _>(title, async {});
-}
-
-#[cfg(target_arch = "wasm32")]
-#[allow(unused)]
-pub fn run<E: Example>(title: &str) {
-    run_with_setup::<E, _>(title, async {});
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-pub fn run_with_setup<E: Example, F: Future + 'static>(title: &str, setup_block: F) {
     let setup = pollster::block_on(setup::<E>(title));
-    let _example_setup = pollster::block_on(setup_block);
     start::<E>(setup);
 }
 
 #[cfg(target_arch = "wasm32")]
-pub fn run_with_setup<E: Example, F: Future + 'static>(title: &str, setup_block: F) {
+pub fn run<E: Example>(title: &str) {
     use wasm_bindgen::{prelude::*, JsCast};
 
     let title = title.to_owned();
     wasm_bindgen_futures::spawn_local(async move {
         let setup = setup::<E>(&title).await;
-        let _example_setup = setup_block.await;
         let start_closure = Closure::once_into_js(move || start::<E>(setup));
 
         // make sure to handle JS exceptions thrown inside start.
