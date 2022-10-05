@@ -19,6 +19,55 @@ use crate::{
 
 use super::{DeclarationContext, ParsingContext, Result};
 
+/// Helper method used to retrieve the child type of `ty` at
+/// index `i`.
+///
+/// # Note
+///
+/// Does not check if the index is valid and returns the same type
+/// when indexing out-of-bounds a struct or indexing a non indexable
+/// type.
+fn element_or_member_type(
+    ty: Handle<Type>,
+    i: usize,
+    types: &mut crate::UniqueArena<Type>,
+) -> Handle<Type> {
+    match types[ty].inner {
+        // The child type of a vector is a scalar of the same kind and width
+        TypeInner::Vector { kind, width, .. } => types.insert(
+            Type {
+                name: None,
+                inner: TypeInner::Scalar { kind, width },
+            },
+            Default::default(),
+        ),
+        // The child type of a matrix is a vector of floats with the same
+        // width and the size of the matrix rows.
+        TypeInner::Matrix { rows, width, .. } => types.insert(
+            Type {
+                name: None,
+                inner: TypeInner::Vector {
+                    size: rows,
+                    kind: ScalarKind::Float,
+                    width,
+                },
+            },
+            Default::default(),
+        ),
+        // The child type of an array is the base type of the array
+        TypeInner::Array { base, .. } => base,
+        // The child type of a struct at index `i` is the type of it's
+        // member at that same index.
+        //
+        // In case the index is out of bounds the same type is returned
+        TypeInner::Struct { ref members, .. } => {
+            members.get(i).map(|member| member.ty).unwrap_or(ty)
+        }
+        // The type isn't indexable, the same type is returned
+        _ => ty,
+    }
+}
+
 impl<'source> ParsingContext<'source> {
     pub fn parse_external_declaration(
         &mut self,
@@ -68,8 +117,10 @@ impl<'source> ParsingContext<'source> {
             // initializer_list
             let mut components = Vec::new();
             loop {
-                // TODO: Change type
-                components.push(self.parse_initializer(parser, ty, ctx, body)?.0);
+                // The type expected to be parsed inside the initializer list
+                let new_ty = element_or_member_type(ty, components.len(), &mut parser.module.types);
+
+                components.push(self.parse_initializer(parser, new_ty, ctx, body)?.0);
 
                 let token = self.bump(parser)?;
                 match token.value {
