@@ -969,7 +969,7 @@ impl crate::Context for Context {
         match wgc::gfx_select!(adapter => global.surface_get_supported_formats(surface.id, *adapter))
         {
             Ok(formats) => formats,
-            Err(wgc::instance::GetSurfaceSupportError::UnsupportedQueueFamily) => vec![],
+            Err(wgc::instance::GetSurfaceSupportError::Unsupported) => vec![],
             Err(err) => self.handle_error_fatal(err, "Surface::get_supported_formats"),
         }
     }
@@ -983,7 +983,7 @@ impl crate::Context for Context {
         match wgc::gfx_select!(adapter => global.surface_get_supported_present_modes(surface.id, *adapter))
         {
             Ok(modes) => modes,
-            Err(wgc::instance::GetSurfaceSupportError::UnsupportedQueueFamily) => vec![],
+            Err(wgc::instance::GetSurfaceSupportError::Unsupported) => vec![],
             Err(err) => self.handle_error_fatal(err, "Surface::get_supported_present_modes"),
         }
     }
@@ -997,7 +997,7 @@ impl crate::Context for Context {
         match wgc::gfx_select!(adapter => global.surface_get_supported_alpha_modes(surface.id, *adapter))
         {
             Ok(modes) => modes,
-            Err(wgc::instance::GetSurfaceSupportError::UnsupportedQueueFamily) => {
+            Err(wgc::instance::GetSurfaceSupportError::Unsupported) => {
                 vec![CompositeAlphaMode::Opaque]
             }
             Err(err) => self.handle_error_fatal(err, "Surface::get_supported_alpha_modes"),

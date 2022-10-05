@@ -18,7 +18,6 @@ use crate::{
 };
 
 use arrayvec::ArrayVec;
-use copyless::VecHelper as _;
 use hal::{CommandEncoder as _, Device as _};
 use parking_lot::{Mutex, MutexGuard};
 use smallvec::SmallVec;
@@ -2518,7 +2517,7 @@ impl<A: HalApi> Device<A> {
         let mut vertex_buffers = Vec::with_capacity(desc.vertex.buffers.len());
         let mut total_attributes = 0;
         for (i, vb_state) in desc.vertex.buffers.iter().enumerate() {
-            vertex_steps.alloc().init(pipeline::VertexStep {
+            vertex_steps.push(pipeline::VertexStep {
                 stride: vb_state.array_stride,
                 mode: vb_state.step_mode,
             });
@@ -2538,7 +2537,7 @@ impl<A: HalApi> Device<A> {
                     stride: vb_state.array_stride,
                 });
             }
-            vertex_buffers.alloc().init(hal::VertexBufferLayout {
+            vertex_buffers.push(hal::VertexBufferLayout {
                 array_stride: vb_state.array_stride,
                 step_mode: vb_state.step_mode,
                 attributes: vb_state.attributes.as_ref(),
@@ -5187,7 +5186,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let caps = unsafe {
                 let suf = A::get_surface(surface);
                 let adapter = &adapter_guard[device.adapter_id.value];
-                match adapter.raw.adapter.surface_capabilities(&suf.raw) {
+                match adapter.raw.adapter.surface_capabilities(&suf.unwrap().raw) {
                     Some(caps) => caps,
                     None => break E::UnsupportedQueueFamily,
                 }
@@ -5215,6 +5214,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             match unsafe {
                 A::get_surface_mut(surface)
+                    .unwrap()
                     .raw
                     .configure(&device.raw, &hal_config)
             } {

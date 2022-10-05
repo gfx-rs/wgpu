@@ -1813,6 +1813,9 @@ impl Instance {
 
     /// Creates a surface from a raw window handle.
     ///
+    /// If the specified display and window handle are not supported by any of the backends, then the surface
+    /// will not be supported by any adapters.
+    ///
     /// # Safety
     ///
     /// - Raw Window Handle must be a valid object to create a surface upon and

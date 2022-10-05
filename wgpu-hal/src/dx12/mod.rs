@@ -45,7 +45,7 @@ use crate::auxil::{self, dxgi::result::HResult as _};
 
 use arrayvec::ArrayVec;
 use parking_lot::Mutex;
-use std::{ffi, mem, num::NonZeroU32, sync::Arc};
+use std::{ffi, fmt, mem, num::NonZeroU32, sync::Arc};
 use winapi::{
     shared::{dxgi, dxgi1_4, dxgitype, windef, winerror},
     um::{d3d12, dcomp, synchapi, winbase, winnt},
@@ -347,6 +347,16 @@ pub struct CommandEncoder {
 unsafe impl Send for CommandEncoder {}
 unsafe impl Sync for CommandEncoder {}
 
+impl fmt::Debug for CommandEncoder {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("CommandEncoder")
+            .field("allocator", &self.allocator)
+            .field("device", &self.allocator)
+            .finish()
+    }
+}
+
+#[derive(Debug)]
 pub struct CommandBuffer {
     raw: native::GraphicsCommandList,
 }
