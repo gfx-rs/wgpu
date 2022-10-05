@@ -1,5 +1,56 @@
 # Change Log
 
+## v0.10 (2022-10-05)
+
+- Make termcolor dependency optional by @AldaronLau in https://github.com/gfx-rs/naga/pull/2014
+- Fix clippy lints for 1.63 by @JCapucho in https://github.com/gfx-rs/naga/pull/2026
+- Saturate by @evahop in https://github.com/gfx-rs/naga/pull/2025
+- Use `Option::as_deref` as appropriate. by @jimblandy in https://github.com/gfx-rs/naga/pull/2040
+- Explicitely enable std for indexmap by @maxammann in https://github.com/gfx-rs/naga/pull/2062
+- Fix compiler warning by @Gordon-F in https://github.com/gfx-rs/naga/pull/2074
+
+API
+- Implement `Clone` for `Module` by @daxpedda in https://github.com/gfx-rs/naga/pull/2013
+- Remove the glsl-validate feature by @JCapucho in https://github.com/gfx-rs/naga/pull/2045
+
+DOCS
+- Document arithmetic binary operation type rules. by @jimblandy in https://github.com/gfx-rs/naga/pull/2051
+
+VALIDATOR
+- Add `emit_to_{stderr,string}` helpers to validation error by @nolanderc in https://github.com/gfx-rs/naga/pull/2012
+- Check regular functions don't have bindings by @JCapucho in https://github.com/gfx-rs/naga/pull/2050
+
+WGSL-IN
+- Update reserved WGSL keywords by @norepimorphism in https://github.com/gfx-rs/naga/pull/2009
+- Implement lexical scopes by @JCapucho in https://github.com/gfx-rs/naga/pull/2024
+- Rename `Scope` to `Rule`, since we now have lexical scope. by @jimblandy in https://github.com/gfx-rs/naga/pull/2042
+- Splat on compound assignments by @JCapucho in https://github.com/gfx-rs/naga/pull/2049
+- Fix bad span in assignment lhs error by @JCapucho in https://github.com/gfx-rs/naga/pull/2054
+- Fix inclusion of trivia in spans by @SparkyPotato in https://github.com/gfx-rs/naga/pull/2055
+- Improve assignment diagnostics by @SparkyPotato in https://github.com/gfx-rs/naga/pull/2056
+- Break up long string, reformat rest of file. by @jimblandy in https://github.com/gfx-rs/naga/pull/2057
+- Fix line endings on wgsl reserved words list. by @jimblandy in https://github.com/gfx-rs/naga/pull/2059
+
+GLSL-IN
+- Add support for .length() by @SpaceCat-Chan in https://github.com/gfx-rs/naga/pull/2017
+- Fix missing stores for local declarations by @adeline-sparks in https://github.com/gfx-rs/naga/pull/2029
+- Migrate to `SymbolTable` by @JCapucho in https://github.com/gfx-rs/naga/pull/2044
+- Update initializer list type when parsing by @JCapucho in https://github.com/gfx-rs/naga/pull/2066
+
+SPV-OUT
+- Don't decorate varyings with interpolation modes at pipeline start/end by @nical in https://github.com/gfx-rs/naga/pull/2038
+- Decorate integer builtins as Flat in the spirv writer by @nical in https://github.com/gfx-rs/naga/pull/2035
+- Properly combine the fixes for #2035 and #2038. by @jimblandy in https://github.com/gfx-rs/naga/pull/2041
+- Don't emit no-op `OpBitCast` instructions. by @jimblandy in https://github.com/gfx-rs/naga/pull/2043
+
+HLSL-OUT
+- Use the namer to sanitise entrypoint input/output struct names by @expenses in https://github.com/gfx-rs/naga/pull/2001
+- Handle Unpack2x16float in hlsl by @expenses in https://github.com/gfx-rs/naga/pull/2002
+- Add support for push constants by @JCapucho in https://github.com/gfx-rs/naga/pull/2005
+
+DOT-OUT
+- Improvements by @JCapucho in https://github.com/gfx-rs/naga/pull/1987
+
 ## v0.9 (2022-06-30)
 
 - Fix minimal-versions of dependencies ([#1840](https://github.com/gfx-rs/naga/pull/1840)) **@teoxoy**
