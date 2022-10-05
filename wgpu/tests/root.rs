@@ -12,4 +12,5 @@ mod resource_descriptor_accessor;
 mod shader_primitive_index;
 mod texture_bounds;
 mod vertex_indices;
+mod write_texture;
 mod zero_init_texture_after_discard;
