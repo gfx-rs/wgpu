@@ -436,11 +436,13 @@ impl Spawner {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
+#[allow(unused)]
 pub fn run<E: Example>(title: &str) {
     run_with_setup::<E, _>(title, async {});
 }
 
 #[cfg(target_arch = "wasm32")]
+#[allow(unused)]
 pub fn run<E: Example>(title: &str) {
     run_with_setup::<E, _>(title, async {});
 }
