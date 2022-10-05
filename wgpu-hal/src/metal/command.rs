@@ -227,15 +227,21 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 .buffer_layout
                 .bytes_per_row
                 .map_or(0, |v| v.get() as u64);
-            let bytes_per_image = copy
-                .buffer_layout
-                .rows_per_image
-                .map_or(0, |v| v.get() as u64 * bytes_per_row);
+            let image_byte_stride = if extent.depth > 1 {
+                copy.buffer_layout
+                    .rows_per_image
+                    .map_or(0, |v| v.get() as u64 * bytes_per_row)
+            } else {
+                // Don't pass a stride when updating a single layer, otherwise metal validation
+                // fails when updating a subset of the image due to the stride being larger than
+                // the amount of data to copy.
+                0
+            };
             encoder.copy_from_buffer_to_texture(
                 &src.raw,
                 copy.buffer_layout.offset,
                 bytes_per_row,
-                bytes_per_image,
+                image_byte_stride,
                 conv::map_copy_extent(&extent),
                 &dst.raw,
                 copy.texture_base.array_layer as u64,
