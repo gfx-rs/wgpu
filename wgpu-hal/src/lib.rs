@@ -106,7 +106,7 @@ pub type Label<'a> = Option<&'a str>;
 pub type MemoryRange = Range<wgt::BufferAddress>;
 pub type FenceValue = u64;
 
-#[derive(Clone, Debug, PartialEq, Error)]
+#[derive(Clone, Debug, Eq, PartialEq, Error)]
 pub enum DeviceError {
     #[error("out of memory")]
     OutOfMemory,
@@ -114,7 +114,7 @@ pub enum DeviceError {
     Lost,
 }
 
-#[derive(Clone, Debug, PartialEq, Error)]
+#[derive(Clone, Debug, Eq, PartialEq, Error)]
 pub enum ShaderError {
     #[error("compilation failed: {0:?}")]
     Compilation(String),
@@ -122,7 +122,7 @@ pub enum ShaderError {
     Device(#[from] DeviceError),
 }
 
-#[derive(Clone, Debug, PartialEq, Error)]
+#[derive(Clone, Debug, Eq, PartialEq, Error)]
 pub enum PipelineError {
     #[error("linkage failed for stage {0:?}: {1}")]
     Linkage(wgt::ShaderStages, String),
@@ -132,7 +132,7 @@ pub enum PipelineError {
     Device(#[from] DeviceError),
 }
 
-#[derive(Clone, Debug, PartialEq, Error)]
+#[derive(Clone, Debug, Eq, PartialEq, Error)]
 pub enum SurfaceError {
     #[error("surface is lost")]
     Lost,
@@ -144,7 +144,7 @@ pub enum SurfaceError {
     Other(&'static str),
 }
 
-#[derive(Clone, Debug, PartialEq, Error)]
+#[derive(Clone, Debug, Eq, PartialEq, Error)]
 #[error("Not supported")]
 pub struct InstanceError;
 
@@ -156,7 +156,7 @@ pub trait Api: Clone + Sized {
 
     type Queue: Queue<Self>;
     type CommandEncoder: CommandEncoder<Self>;
-    type CommandBuffer: Send + Sync;
+    type CommandBuffer: Send + Sync + fmt::Debug;
 
     type Buffer: fmt::Debug + Send + Sync + 'static;
     type Texture: fmt::Debug + Send + Sync + 'static;
@@ -350,7 +350,7 @@ pub trait Queue<A: Api>: Send + Sync {
 /// Serves as a parent for all the encoded command buffers.
 /// Works in bursts of action: one or more command buffers are recorded,
 /// then submitted to a queue, and then it needs to be `reset_all()`.
-pub trait CommandEncoder<A: Api>: Send + Sync {
+pub trait CommandEncoder<A: Api>: Send + Sync + fmt::Debug {
     /// Begin encoding a new command buffer.
     unsafe fn begin_encoding(&mut self, label: Label) -> Result<(), DeviceError>;
     /// Discard currently recorded list, if any.

@@ -72,8 +72,10 @@ unsafe impl Sync for Device {}
 
 pub struct Queue {}
 
+#[derive(Debug)]
 pub struct CommandEncoder {}
 
+#[derive(Debug)]
 pub struct CommandBuffer {}
 
 #[derive(Debug)]

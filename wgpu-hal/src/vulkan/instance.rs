@@ -303,9 +303,10 @@ impl super::Instance {
         &self,
         dpy: *mut vk::Display,
         window: vk::Window,
-    ) -> super::Surface {
+    ) -> Result<super::Surface, crate::InstanceError> {
         if !self.shared.extensions.contains(&khr::XlibSurface::name()) {
-            panic!("Vulkan driver does not support VK_KHR_XLIB_SURFACE");
+            log::warn!("Vulkan driver does not support VK_KHR_xlib_surface");
+            return Err(crate::InstanceError);
         }
 
         let surface = {
@@ -319,7 +320,7 @@ impl super::Instance {
                 .expect("XlibSurface::create_xlib_surface() failed")
         };
 
-        self.create_surface_from_vk_surface_khr(surface)
+        Ok(self.create_surface_from_vk_surface_khr(surface))
     }
 
     #[allow(dead_code)]
@@ -327,9 +328,10 @@ impl super::Instance {
         &self,
         connection: *mut vk::xcb_connection_t,
         window: vk::xcb_window_t,
-    ) -> super::Surface {
+    ) -> Result<super::Surface, crate::InstanceError> {
         if !self.shared.extensions.contains(&khr::XcbSurface::name()) {
-            panic!("Vulkan driver does not support VK_KHR_XCB_SURFACE");
+            log::warn!("Vulkan driver does not support VK_KHR_xcb_surface");
+            return Err(crate::InstanceError);
         }
 
         let surface = {
@@ -343,7 +345,7 @@ impl super::Instance {
                 .expect("XcbSurface::create_xcb_surface() failed")
         };
 
-        self.create_surface_from_vk_surface_khr(surface)
+        Ok(self.create_surface_from_vk_surface_khr(surface))
     }
 
     #[allow(dead_code)]
@@ -351,13 +353,14 @@ impl super::Instance {
         &self,
         display: *mut c_void,
         surface: *mut c_void,
-    ) -> super::Surface {
+    ) -> Result<super::Surface, crate::InstanceError> {
         if !self
             .shared
             .extensions
             .contains(&khr::WaylandSurface::name())
         {
-            panic!("Vulkan driver does not support VK_KHR_WAYLAND_SURFACE");
+            log::debug!("Vulkan driver does not support VK_KHR_wayland_surface");
+            return Err(crate::InstanceError);
         }
 
         let surface = {
@@ -370,11 +373,23 @@ impl super::Instance {
             unsafe { w_loader.create_wayland_surface(&info, None) }.expect("WaylandSurface failed")
         };
 
-        self.create_surface_from_vk_surface_khr(surface)
+        Ok(self.create_surface_from_vk_surface_khr(surface))
     }
 
     #[allow(dead_code)]
-    fn create_surface_android(&self, window: *const c_void) -> super::Surface {
+    fn create_surface_android(
+        &self,
+        window: *const c_void,
+    ) -> Result<super::Surface, crate::InstanceError> {
+        if !self
+            .shared
+            .extensions
+            .contains(&khr::AndroidSurface::name())
+        {
+            log::warn!("Vulkan driver does not support VK_KHR_android_surface");
+            return Err(crate::InstanceError);
+        }
+
         let surface = {
             let a_loader = khr::AndroidSurface::new(&self.shared.entry, &self.shared.raw);
             let info = vk::AndroidSurfaceCreateInfoKHR::builder()
@@ -384,7 +399,7 @@ impl super::Instance {
             unsafe { a_loader.create_android_surface(&info, None) }.expect("AndroidSurface failed")
         };
 
-        self.create_surface_from_vk_surface_khr(surface)
+        Ok(self.create_surface_from_vk_surface_khr(surface))
     }
 
     #[allow(dead_code)]
@@ -392,9 +407,10 @@ impl super::Instance {
         &self,
         hinstance: *mut c_void,
         hwnd: *mut c_void,
-    ) -> super::Surface {
+    ) -> Result<super::Surface, crate::InstanceError> {
         if !self.shared.extensions.contains(&khr::Win32Surface::name()) {
-            panic!("Vulkan driver does not support VK_KHR_WIN32_SURFACE");
+            log::debug!("Vulkan driver does not support VK_KHR_win32_surface");
+            return Err(crate::InstanceError);
         }
 
         let surface = {
@@ -410,11 +426,19 @@ impl super::Instance {
             }
         };
 
-        self.create_surface_from_vk_surface_khr(surface)
+        Ok(self.create_surface_from_vk_surface_khr(surface))
     }
 
     #[cfg(any(target_os = "macos", target_os = "ios"))]
-    fn create_surface_from_view(&self, view: *mut c_void) -> super::Surface {
+    fn create_surface_from_view(
+        &self,
+        view: *mut c_void,
+    ) -> Result<super::Surface, crate::InstanceError> {
+        if !self.shared.extensions.contains(&ext::MetalSurface::name()) {
+            log::warn!("Vulkan driver does not support VK_EXT_metal_surface");
+            return Err(crate::InstanceError);
+        }
+
         let layer = unsafe {
             crate::metal::Surface::get_metal_layer(view as *mut objc::runtime::Object, None)
         };
@@ -429,7 +453,7 @@ impl super::Instance {
             unsafe { metal_loader.create_metal_surface(&vk_info, None).unwrap() }
         };
 
-        self.create_surface_from_vk_surface_khr(surface)
+        Ok(self.create_surface_from_vk_surface_khr(surface))
     }
 
     fn create_surface_from_vk_surface_khr(&self, surface: vk::SurfaceKHR) -> super::Surface {
@@ -598,37 +622,33 @@ impl crate::Instance<super::Api> for super::Instance {
 
         match (window_handle, display_handle) {
             (Rwh::Wayland(handle), Rdh::Wayland(display)) => {
-                Ok(self.create_surface_from_wayland(display.display, handle.surface))
+                self.create_surface_from_wayland(display.display, handle.surface)
             }
-            (Rwh::Xlib(handle), Rdh::Xlib(display))
-                if self.shared.extensions.contains(&khr::XlibSurface::name()) =>
-            {
-                Ok(self.create_surface_from_xlib(display.display as *mut _, handle.window))
+            (Rwh::Xlib(handle), Rdh::Xlib(display)) => {
+                self.create_surface_from_xlib(display.display as *mut _, handle.window)
             }
-            (Rwh::Xcb(handle), Rdh::Xcb(display))
-                if self.shared.extensions.contains(&khr::XcbSurface::name()) =>
-            {
-                Ok(self.create_surface_from_xcb(display.connection, handle.window))
+            (Rwh::Xcb(handle), Rdh::Xcb(display)) => {
+                self.create_surface_from_xcb(display.connection, handle.window)
             }
-            (Rwh::AndroidNdk(handle), _) => Ok(self.create_surface_android(handle.a_native_window)),
+            (Rwh::AndroidNdk(handle), _) => self.create_surface_android(handle.a_native_window),
             #[cfg(windows)]
             (Rwh::Win32(handle), _) => {
                 use winapi::um::libloaderapi::GetModuleHandleW;
 
                 let hinstance = GetModuleHandleW(std::ptr::null());
-                Ok(self.create_surface_from_hwnd(hinstance as *mut _, handle.hwnd))
+                self.create_surface_from_hwnd(hinstance as *mut _, handle.hwnd)
             }
             #[cfg(target_os = "macos")]
             (Rwh::AppKit(handle), _)
                 if self.shared.extensions.contains(&ext::MetalSurface::name()) =>
             {
-                Ok(self.create_surface_from_view(handle.ns_view))
+                self.create_surface_from_view(handle.ns_view)
             }
             #[cfg(target_os = "ios")]
             (Rwh::UiKit(handle), _)
                 if self.shared.extensions.contains(&ext::MetalSurface::name()) =>
             {
-                Ok(self.create_surface_from_view(handle.ui_view))
+                self.create_surface_from_view(handle.ui_view)
             }
             (_, _) => Err(crate::InstanceError),
         }
