@@ -785,21 +785,29 @@ impl crate::Adapter<super::Api> for super::Adapter {
         &self,
         surface: &super::Surface,
     ) -> Option<crate::SurfaceCapabilities> {
+        let mut formats = if surface.supports_srgb() {
+            vec![
+                wgt::TextureFormat::Rgba8UnormSrgb,
+                #[cfg(not(target_arch = "wasm32"))]
+                wgt::TextureFormat::Bgra8UnormSrgb,
+            ]
+        } else {
+            vec![
+                wgt::TextureFormat::Rgba8Unorm,
+                #[cfg(not(target_arch = "wasm32"))]
+                wgt::TextureFormat::Bgra8Unorm,
+            ]
+        };
+        if self
+            .shared
+            .private_caps
+            .contains(super::PrivateCapabilities::COLOR_BUFFER_HALF_FLOAT)
+        {
+            formats.push(wgt::TextureFormat::Rgba16Float)
+        }
         if surface.presentable {
             Some(crate::SurfaceCapabilities {
-                formats: if surface.supports_srgb() {
-                    vec![
-                        wgt::TextureFormat::Rgba8UnormSrgb,
-                        #[cfg(not(target_arch = "wasm32"))]
-                        wgt::TextureFormat::Bgra8UnormSrgb,
-                    ]
-                } else {
-                    vec![
-                        wgt::TextureFormat::Rgba8Unorm,
-                        #[cfg(not(target_arch = "wasm32"))]
-                        wgt::TextureFormat::Bgra8Unorm,
-                    ]
-                },
+                formats,
                 present_modes: vec![wgt::PresentMode::Fifo], //TODO
                 composite_alpha_modes: vec![wgt::CompositeAlphaMode::Opaque], //TODO
                 swap_chain_sizes: 2..=2,

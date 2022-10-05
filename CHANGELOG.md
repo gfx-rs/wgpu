@@ -104,7 +104,7 @@ SurfaceConfiguration {
 - Fix bug where the Vulkan backend would panic when using a supported window and display handle but the
   dependent extensions are not available by @i509VCB in [#3054](https://github.com/gfx-rs/wgpu/pull/3054).
 
-#### Gles
+#### GLES
 - Report vendor id for Mesa and Apple GPUs. By @i509VCB [#3036](https://github.com/gfx-rs/wgpu/pull/3036)
 - Report Apple M2 gpu as integrated. By @i509VCB [#3036](https://github.com/gfx-rs/wgpu/pull/3036)
 
@@ -131,6 +131,7 @@ SurfaceConfiguration {
   is the actual version of the device. By @i509VCB in [#3011](https://github.com/gfx-rs/wgpu/pull/3011)
 
 #### GLES
+- Add `Rgba16Float` format support for color attachments. By @jinleili in [#3045](https://github.com/gfx-rs/wgpu/pull/3045)
 - `TEXTURE_COMPRESSION_ASTC_HDR` feature detection  by @jinleili in [#3042](https://github.com/gfx-rs/wgpu/pull/3042)
 
 ### Performance
