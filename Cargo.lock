@@ -2200,7 +2200,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "arrayvec 0.7.2",
  "async-executor",
@@ -2236,7 +2236,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-core"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "arrayvec 0.7.2",
  "bit-vec",
@@ -2260,7 +2260,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-hal"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "android_system_properties",
  "arrayvec 0.7.2",
@@ -2300,7 +2300,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-info"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "env_logger",
  "wgpu",
@@ -2308,7 +2308,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-types"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "bitflags",
  "bitflags_serde_shim",
