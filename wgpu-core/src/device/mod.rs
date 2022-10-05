@@ -4759,6 +4759,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .push(id::Valid(query_set_id));
     }
 
+    pub fn query_set_label<A: HalApi>(&self, id: id::QuerySetId) -> String {
+        A::hub(self).query_sets.label_for_resource(id)
+    }
+
     pub fn device_create_render_pipeline<A: HalApi>(
         &self,
         device_id: id::DeviceId,

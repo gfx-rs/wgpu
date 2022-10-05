@@ -112,6 +112,18 @@ pub enum QueryError {
     InvalidQuerySet(id::QuerySetId),
 }
 
+impl crate::error::PrettyError for QueryError {
+    fn fmt_pretty(&self, fmt: &mut crate::error::ErrorFormatter) {
+        fmt.error(self);
+        match *self {
+            Self::InvalidBuffer(id) => fmt.buffer_label(&id),
+            Self::InvalidQuerySet(id) => fmt.query_set_label(&id),
+
+            _ => {}
+        }
+    }
+}
+
 /// Error encountered while trying to use queries
 #[derive(Clone, Debug, Error)]
 pub enum QueryUseError {
