@@ -1,8 +1,5 @@
 //! Tests for texture copy
 
-use wgpu::{Extent3d, ImageDataLayout};
-use wgt::BufferAddress;
-
 use crate::common::{initialize_test, TestParameters};
 
 use std::num::NonZeroU32;
@@ -10,7 +7,7 @@ use std::num::NonZeroU32;
 #[test]
 fn write_texture_subset() {
     let size = 256;
-    let mut parameters = TestParameters::default();
+    let parameters = TestParameters::default();
     initialize_test(parameters, |ctx| {
         let tex = ctx.device.create_texture(&wgpu::TextureDescriptor {
             label: None,
