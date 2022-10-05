@@ -834,6 +834,15 @@ fn map_texture_copy_view(view: crate::ImageCopyTexture) -> web_sys::GpuImageCopy
     mapped
 }
 
+fn map_tagged_texture_copy_view(
+    view: crate::ImageCopyTexture,
+) -> web_sys::GpuImageCopyTextureTagged {
+    let mut mapped = web_sys::GpuImageCopyTextureTagged::new(&view.texture.id.0);
+    mapped.mip_level(view.mip_level);
+    mapped.origin(&map_origin_3d(view.origin));
+    mapped
+}
+
 fn map_texture_aspect(aspect: wgt::TextureAspect) -> web_sys::GpuTextureAspect {
     match aspect {
         wgt::TextureAspect::All => web_sys::GpuTextureAspect::All,
@@ -979,6 +988,22 @@ impl Context {
             _ => panic!("expected to get context from canvas"),
         };
         Sendable(context.into())
+    }
+
+    pub fn queue_copy_external_image_to_texture(
+        &self,
+        queue: &Sendable<web_sys::GpuQueue>,
+        image: &web_sys::ImageBitmap,
+        texture: crate::ImageCopyTexture,
+        size: wgt::Extent3d,
+    ) {
+        queue
+            .0
+            .copy_external_image_to_texture_with_gpu_extent_3d_dict(
+                &web_sys::GpuImageCopyExternalImage::new(image),
+                &map_tagged_texture_copy_view(texture),
+                &map_extent_3d(size),
+            );
     }
 }
 

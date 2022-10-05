@@ -215,7 +215,9 @@ web-sys = { version = "0.3.60", features = [
     "GpuFragmentState",
     "GpuFrontFace",
     "GpuImageCopyBuffer",
+    "GpuImageCopyExternalImage",
     "GpuImageCopyTexture",
+    "GpuImageCopyTextureTagged",
     "GpuImageDataLayout",
     "GpuIndexFormat",
     "GpuLoadOp",
@@ -294,5 +296,12 @@ parking_lot = ">=0.11,<0.13"
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 console_error_panic_hook = "0.1.7"
 console_log = "0.2"
-# We need the Location feature in the framework examples
-web-sys = { version = "0.3.60", features = ["Location"] }
+# We need these features in the framework examples
+web-sys = { version = "0.3.60", features = [
+    "Location",
+    "Blob",
+    "RequestInit",
+    "RequestMode",
+    "Request",
+    "Response"
+] }
