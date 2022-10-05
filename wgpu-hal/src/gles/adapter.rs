@@ -807,6 +807,19 @@ impl crate::Adapter<super::Api> for super::Adapter {
             formats.push(wgt::TextureFormat::Rgba16Float)
         }
         if surface.presentable {
+            let mut formats = vec![
+                wgt::TextureFormat::Rgba8Unorm,
+                #[cfg(not(target_arch = "wasm32"))]
+                wgt::TextureFormat::Bgra8Unorm,
+            ];
+            if surface.supports_srgb() {
+                formats.extend(&[
+                    wgt::TextureFormat::Rgba8UnormSrgb,
+                    #[cfg(not(target_arch = "wasm32"))]
+                    wgt::TextureFormat::Bgra8UnormSrgb,
+                ])
+            }
+
             Some(crate::SurfaceCapabilities {
                 formats,
                 present_modes: vec![wgt::PresentMode::Fifo], //TODO
