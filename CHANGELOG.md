@@ -130,6 +130,9 @@ SurfaceConfiguration {
 - Use the use effective api version for determining device features instead of wrongly assuming `VkPhysicalDeviceProperties.apiVersion`
   is the actual version of the device. By @i509VCB in [#3011](https://github.com/gfx-rs/wgpu/pull/3011)
 
+#### GLES
+- `TEXTURE_COMPRESSION_ASTC_HDR` feature detection  by @jinleili in [#3042](https://github.com/gfx-rs/wgpu/pull/3042)
+
 ### Performance
 
 - Made `StagingBelt::write_buffer()` check more thoroughly for reusable memory; by @kpreid in [#2906](https://github.com/gfx-rs/wgpu/pull/2906)

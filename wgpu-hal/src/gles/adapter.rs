@@ -355,11 +355,22 @@ impl super::Adapter {
             // This is a part of GLES-3 but not WebGL2 core
             !cfg!(target_arch = "wasm32") || extensions.contains("WEBGL_compressed_texture_etc"),
         );
-        features.set(
-            wgt::Features::TEXTURE_COMPRESSION_ASTC_LDR,
-            extensions.contains("GL_KHR_texture_compression_astc_ldr")
-                || extensions.contains("WEBGL_compressed_texture_astc"),
-        );
+        // `OES_texture_compression_astc` provides 2D + 3D, LDR + HDR support
+        if extensions.contains("WEBGL_compressed_texture_astc")
+            || extensions.contains("GL_OES_texture_compression_astc")
+        {
+            features.insert(wgt::Features::TEXTURE_COMPRESSION_ASTC_LDR);
+            features.insert(wgt::Features::TEXTURE_COMPRESSION_ASTC_HDR);
+        } else {
+            features.set(
+                wgt::Features::TEXTURE_COMPRESSION_ASTC_LDR,
+                extensions.contains("GL_KHR_texture_compression_astc_ldr"),
+            );
+            features.set(
+                wgt::Features::TEXTURE_COMPRESSION_ASTC_HDR,
+                extensions.contains("GL_KHR_texture_compression_astc_hdr"),
+            );
+        }
 
         let mut private_caps = super::PrivateCapabilities::empty();
         private_caps.set(
@@ -668,6 +679,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
         let bcn_features = feature_fn(wgt::Features::TEXTURE_COMPRESSION_BC, filterable);
         let etc2_features = feature_fn(wgt::Features::TEXTURE_COMPRESSION_ETC2, filterable);
         let astc_features = feature_fn(wgt::Features::TEXTURE_COMPRESSION_ASTC_LDR, filterable);
+        let astc_hdr_features = feature_fn(wgt::Features::TEXTURE_COMPRESSION_ASTC_HDR, filterable);
 
         let private_caps_fn = |f, caps| {
             if self.shared.private_caps.contains(f) {
@@ -765,7 +777,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
             Tf::Astc {
                 block: _,
                 channel: AstcChannel::Hdr,
-            } => Tfc::empty(),
+            } => astc_hdr_features,
         }
     }
 
