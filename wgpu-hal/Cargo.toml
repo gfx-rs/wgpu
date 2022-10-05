@@ -96,15 +96,15 @@ android_system_properties = "0.1.1"
 
 [dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-rev = "b209d911"
-version = "0.9"
+rev = "c52d9102"
+version = "0.10"
 features = ["clone"]
 
 # DEV dependencies
 
 [dev-dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-rev = "b209d911"
+rev = "c52d9102"
 features = ["wgsl-in"]
 
 [dev-dependencies]
