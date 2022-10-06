@@ -40,6 +40,12 @@ Bottom level categories:
 
 ## Unreleased
 
+### Changes
+
+#### General
+
+* Implement `Default` for `CompositeAlphaMode`
+
 ### Bug Fixes
 
 #### General

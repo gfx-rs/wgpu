@@ -3824,6 +3824,12 @@ pub enum CompositeAlphaMode {
     Inherit = 4,
 }
 
+impl Default for CompositeAlphaMode {
+    fn default() -> Self {
+        Self::Auto
+    }
+}
+
 bitflags::bitflags! {
     /// Different ways that you can use a texture.
     ///
