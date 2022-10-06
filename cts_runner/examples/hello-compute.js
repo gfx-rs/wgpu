@@ -49,13 +49,14 @@ const size = new Uint32Array(numbers).byteLength;
 
 const stagingBuffer = device.createBuffer({
   size: size,
-  usage: 1 | 8,
+  usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
 });
 
 const storageBuffer = device.createBuffer({
   label: "Storage Buffer",
   size: size,
-  usage: 0x80 | 8 | 4,
+  usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST |
+    GPUBufferUsage.COPY_SRC,
   mappedAtCreation: true,
 });
 
@@ -66,6 +67,7 @@ buf.set(numbers);
 storageBuffer.unmap();
 
 const computePipeline = device.createComputePipeline({
+  layout: "auto",
   compute: {
     module: shaderModule,
     entryPoint: "main",
@@ -91,7 +93,7 @@ const computePass = encoder.beginComputePass();
 computePass.setPipeline(computePipeline);
 computePass.setBindGroup(0, bindGroup);
 computePass.insertDebugMarker("compute collatz iterations");
-computePass.dispatch(numbers.length);
+computePass.dispatchWorkgroups(numbers.length);
 computePass.end();
 
 encoder.copyBufferToBuffer(storageBuffer, 0, stagingBuffer, 0, size);

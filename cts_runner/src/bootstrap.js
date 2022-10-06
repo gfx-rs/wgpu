@@ -66,15 +66,16 @@ delete Object.prototype.__proto__;
       return `${this.constructor.name} ${inspect({})}`;
     }
   }
+  const NavigatorPrototype = Navigator.prototype;
 
   const navigator = webidl.createBranded(Navigator);
 
-  ObjectDefineProperties(Navigator.prototype, {
+  ObjectDefineProperties(NavigatorPrototype, {
     gpu: {
       configurable: true,
       enumerable: true,
       get() {
-        webidl.assertBranded(this, Navigator);
+        webidl.assertBranded(this, NavigatorPrototype);
         return webgpu.gpu;
       },
     },

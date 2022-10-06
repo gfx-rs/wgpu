@@ -346,7 +346,7 @@
         rid,
         adapter: this,
         features: createGPUSupportedFeatures(features),
-        limits: createGPUSupportedFeatures(limits),
+        limits: createGPUSupportedLimits(limits),
       });
       return createGPUDevice(
         descriptor.label,
