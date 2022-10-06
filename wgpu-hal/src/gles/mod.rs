@@ -57,7 +57,7 @@ To address this, we invalidate the vertex buffers based on:
 */
 
 ///cbindgen:ignore
-#[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
+#[cfg(any(not(target_arch = "wasm32")))]
 mod egl;
 #[cfg(all(target_arch = "wasm32", not(feature = "emscripten")))]
 mod web;
