@@ -907,7 +907,7 @@ impl super::Instance {
                 _ => wgt::DeviceType::Other,
             },
             driver: unsafe {
-                let driver_name = if let Some(driver) = phd_capabilities.driver {
+                let driver_name = if let Some(ref driver) = phd_capabilities.driver {
                     CStr::from_ptr(driver.driver_name.as_ptr()).to_str().ok()
                 } else {
                     None
@@ -916,7 +916,7 @@ impl super::Instance {
                 driver_name.unwrap_or("?").to_owned()
             },
             driver_info: unsafe {
-                let driver_info = if let Some(driver) = phd_capabilities.driver {
+                let driver_info = if let Some(ref driver) = phd_capabilities.driver {
                     CStr::from_ptr(driver.driver_info.as_ptr()).to_str().ok()
                 } else {
                     None
