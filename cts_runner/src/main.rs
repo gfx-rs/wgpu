@@ -106,9 +106,43 @@ fn op_write_file_sync(path: String, buf: ZeroCopyBuf) -> Result<(), AnyError> {
     Ok(())
 }
 
+fn get_io_error_class(error: &std::io::Error) -> &'static str {
+    use std::io::ErrorKind::*;
+    match error.kind() {
+        NotFound => "NotFound",
+        PermissionDenied => "PermissionDenied",
+        ConnectionRefused => "ConnectionRefused",
+        ConnectionReset => "ConnectionReset",
+        ConnectionAborted => "ConnectionAborted",
+        NotConnected => "NotConnected",
+        AddrInUse => "AddrInUse",
+        AddrNotAvailable => "AddrNotAvailable",
+        BrokenPipe => "BrokenPipe",
+        AlreadyExists => "AlreadyExists",
+        InvalidInput => "TypeError",
+        InvalidData => "InvalidData",
+        TimedOut => "TimedOut",
+        Interrupted => "Interrupted",
+        WriteZero => "WriteZero",
+        UnexpectedEof => "UnexpectedEof",
+        Other => "Error",
+        WouldBlock => unreachable!(),
+        // Non-exhaustive enum - might add new variants
+        // in the future
+        _ => "Error",
+    }
+}
+
 fn get_error_class_name(e: &AnyError) -> &'static str {
     deno_core::error::get_custom_error_class(e)
         .or_else(|| deno_webgpu::error::get_error_class_name(e))
+        .or_else(|| deno_web::get_error_class_name(e))
+        .or_else(|| {
+            e.downcast_ref::<deno_core::Canceled>().map(|e| {
+                let io_err: std::io::Error = e.to_owned().into();
+                get_io_error_class(&io_err)
+            })
+        })
         .unwrap_or_else(|| {
             panic!(
                 "Error '{}' contains boxed error of unsupported type:{}",

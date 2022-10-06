@@ -26,6 +26,64 @@ delete Object.prototype.__proto__;
   const performance = window.__bootstrap.performance;
   const webgpu = window.__bootstrap.webgpu;
 
+  const { BadResource, Interrupted } = core;
+
+  class NotFound extends Error {
+    constructor(msg) {
+      super(msg);
+      this.name = "NotFound";
+    }
+  }
+
+  class BrokenPipe extends Error {
+    constructor(msg) {
+      super(msg);
+      this.name = "BrokenPipe";
+    }
+  }
+
+  class AlreadyExists extends Error {
+    constructor(msg) {
+      super(msg);
+      this.name = "AlreadyExists";
+    }
+  }
+
+  class InvalidData extends Error {
+    constructor(msg) {
+      super(msg);
+      this.name = "InvalidData";
+    }
+  }
+
+  class TimedOut extends Error {
+    constructor(msg) {
+      super(msg);
+      this.name = "TimedOut";
+    }
+  }
+
+  class WriteZero extends Error {
+    constructor(msg) {
+      super(msg);
+      this.name = "WriteZero";
+    }
+  }
+
+  class UnexpectedEof extends Error {
+    constructor(msg) {
+      super(msg);
+      this.name = "UnexpectedEof";
+    }
+  }
+
+  class NotSupported extends Error {
+    constructor(msg) {
+      super(msg);
+      this.name = "NotSupported";
+    }
+  }
+
   const util = {
     immutableDefine(o, p, value) {
       ObjectDefineProperty(o, p, {
@@ -192,10 +250,38 @@ delete Object.prototype.__proto__;
   };
 
   function registerErrors() {
+    core.registerErrorClass("NotFound", NotFound);
+    core.registerErrorClass("AlreadyExists", AlreadyExists);
+    core.registerErrorClass("InvalidData", InvalidData);
+    core.registerErrorClass("TimedOut", TimedOut);
+    core.registerErrorClass("Interrupted", Interrupted);
+    core.registerErrorClass("WriteZero", WriteZero);
+    core.registerErrorClass("UnexpectedEof", UnexpectedEof);
+    core.registerErrorClass("BadResource", BadResource);
+    core.registerErrorClass("NotSupported", NotSupported);
+
     core.registerErrorBuilder(
       "DOMExceptionOperationError",
       function DOMExceptionOperationError(msg) {
         return new DOMException(msg, "OperationError");
+      },
+    );
+    core.registerErrorBuilder(
+      "DOMExceptionAbortError",
+      function DOMExceptionAbortError(msg) {
+        return new domException.DOMException(msg, "AbortError");
+      },
+    );
+    core.registerErrorBuilder(
+      "DOMExceptionInvalidCharacterError",
+      function DOMExceptionInvalidCharacterError(msg) {
+        return new domException.DOMException(msg, "InvalidCharacterError");
+      },
+    );
+    core.registerErrorBuilder(
+      "DOMExceptionDataError",
+      function DOMExceptionDataError(msg) {
+        return new domException.DOMException(msg, "DataError");
       },
     );
   }
