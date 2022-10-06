@@ -44,7 +44,7 @@ Bottom level categories:
 
 #### General
 
-* Implement `Default` for `CompositeAlphaMode`
+- Implement `Default` for `CompositeAlphaMode`
 
 ### Bug Fixes
 
@@ -201,12 +201,14 @@ both `raw_window_handle::HasRawWindowHandle` and `raw_window_handle::HasRawDispl
 
 ### Full API Diff
 
-`cargo public-api --diff-git-checkouts v0.13.2 v0.14.0 -p wgpu`
+Manual concatination of `cargo public-api --diff-git-checkouts v0.13.2 v0.14.0 -p wgpu` and `cargo public-api --diff-git-checkouts v0.13.2 v0.14.0 -p wgpu-types`
 
 ```diff
 Removed items from the public API
 =================================
 -pub fn wgpu::Surface::get_supported_modes(&self, adapter: &wgpu::Adapter) -> Vec<PresentMode>
+-pub const wgpu::Features::DEPTH24UNORM_STENCIL8: Self
+-pub enum variant wgpu::TextureFormat::Depth24UnormStencil8
 
 Changed items in the public API
 ===============================
@@ -221,7 +223,27 @@ Added items to the public API
 +pub fn wgpu::Buffer::usage(&self) -> BufferUsages
 +pub fn wgpu::Surface::get_supported_alpha_modes(&self, adapter: &wgpu::Adapter) -> Vec<CompositeAlphaMode>
 +pub fn wgpu::Surface::get_supported_present_modes(&self, adapter: &wgpu::Adapter) -> Vec<PresentMode>
-+pub use wgpu::CompositeAlphaMode
++#[repr(C)] pub enum wgpu::CompositeAlphaMode
++impl RefUnwindSafe for wgpu::CompositeAlphaMode
++impl Send for wgpu::CompositeAlphaMode
++impl Sync for wgpu::CompositeAlphaMode
++impl Unpin for wgpu::CompositeAlphaMode
++impl UnwindSafe for wgpu::CompositeAlphaMode
++pub const wgpu::Features::DEPTH24PLUS_STENCIL8: Self
++pub const wgpu::TextureFormatFeatureFlags::BLENDABLE: Self
++pub enum variant wgpu::CompositeAlphaMode::Auto = 0
++pub enum variant wgpu::CompositeAlphaMode::Inherit = 4
++pub enum variant wgpu::CompositeAlphaMode::Opaque = 1
++pub enum variant wgpu::CompositeAlphaMode::PostMultiplied = 3
++pub enum variant wgpu::CompositeAlphaMode::PreMultiplied = 2
++pub enum variant wgpu::TextureFormat::Depth16Unorm
++pub fn wgpu::CompositeAlphaMode::clone(&self) -> wgpu::CompositeAlphaMode
++pub fn wgpu::CompositeAlphaMode::eq(&self, other: &wgpu::CompositeAlphaMode) -> bool
++pub fn wgpu::CompositeAlphaMode::fmt(&self, f: &mut $crate::fmt::Formatter<'_>) -> $crate::fmt::Result
++pub fn wgpu::CompositeAlphaMode::hash<__H: $crate::hash::Hasher>(&self, state: &mut __H) -> ()
++pub struct field wgpu::AdapterInfo::driver: String
++pub struct field wgpu::AdapterInfo::driver_info: String
++pub struct field wgpu::SurfaceConfiguration::alpha_mode: wgpu_types::CompositeAlphaMode
 ```
 
 ## wgpu-0.13.2 (2022-07-13)
