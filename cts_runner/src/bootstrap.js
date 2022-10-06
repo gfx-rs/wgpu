@@ -112,15 +112,17 @@ delete Object.prototype.__proto__;
 
     GPU: util.nonEnumerable(webgpu.GPU),
     GPUAdapter: util.nonEnumerable(webgpu.GPUAdapter),
-    GPUAdapterLimits: util.nonEnumerable(webgpu.GPUAdapterLimits),
+    GPUAdapterInfo: util.nonEnumerable(webgpu.GPUAdapterInfo),
+    GPUSupportedLimits: util.nonEnumerable(webgpu.GPUSupportedLimits),
     GPUSupportedFeatures: util.nonEnumerable(webgpu.GPUSupportedFeatures),
+    GPUDeviceLostInfo: util.nonEnumerable(webgpu.GPUDeviceLostInfo),
     GPUDevice: util.nonEnumerable(webgpu.GPUDevice),
     GPUQueue: util.nonEnumerable(webgpu.GPUQueue),
     GPUBuffer: util.nonEnumerable(webgpu.GPUBuffer),
     GPUBufferUsage: util.nonEnumerable(webgpu.GPUBufferUsage),
     GPUMapMode: util.nonEnumerable(webgpu.GPUMapMode),
-    GPUTexture: util.nonEnumerable(webgpu.GPUTexture),
     GPUTextureUsage: util.nonEnumerable(webgpu.GPUTextureUsage),
+    GPUTexture: util.nonEnumerable(webgpu.GPUTexture),
     GPUTextureView: util.nonEnumerable(webgpu.GPUTextureView),
     GPUSampler: util.nonEnumerable(webgpu.GPUSampler),
     GPUBindGroupLayout: util.nonEnumerable(webgpu.GPUBindGroupLayout),
@@ -138,8 +140,9 @@ delete Object.prototype.__proto__;
     GPURenderBundleEncoder: util.nonEnumerable(webgpu.GPURenderBundleEncoder),
     GPURenderBundle: util.nonEnumerable(webgpu.GPURenderBundle),
     GPUQuerySet: util.nonEnumerable(webgpu.GPUQuerySet),
-    GPUOutOfMemoryError: util.nonEnumerable(webgpu.GPUOutOfMemoryError),
+    GPUError: util.nonEnumerable(webgpu.GPUError),
     GPUValidationError: util.nonEnumerable(webgpu.GPUValidationError),
+    GPUOutOfMemoryError: util.nonEnumerable(webgpu.GPUOutOfMemoryError),
   };
 
   windowOrWorkerGlobalScope.console.enumerable = false;
@@ -216,11 +219,8 @@ delete Object.prototype.__proto__;
 
     denoNs.args = args;
     denoNs.cwd = () => cwd;
-    util.immutableDefine(globalThis, "Deno", denoNs);
+    Object.defineProperty(globalThis, "Deno", util.readOnly(denoNs));
     Object.freeze(globalThis.Deno);
-
-    core.ops();
-    Error.prepareStackTrace = core.createPrepareStackTrace();
   }
 
   ObjectDefineProperties(globalThis, {
