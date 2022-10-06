@@ -40,6 +40,13 @@ Bottom level categories:
 
 ## Unreleased
 
+### Changes
+
+#### General
+
+* Implement `Default` for `CompositeAlphaMode`
+
+
 ## wgpu-0.14.0 (2022-10-05)
 
 ### Major Changes
