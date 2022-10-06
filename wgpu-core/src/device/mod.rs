@@ -4574,6 +4574,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         if let Some(cmdbuf) = cmdbuf {
             let device = &mut device_guard[cmdbuf.device_id.value];
             device.untrack::<G>(hub, &cmdbuf.trackers, &mut token);
+            device.destroy_command_buffer(cmdbuf);
         }
     }
 
