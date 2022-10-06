@@ -5,6 +5,7 @@ mod buffer_copy;
 mod buffer_usages;
 mod clear_texture;
 mod device;
+mod encoder;
 mod example_wgsl;
 mod instance;
 mod poll;
