@@ -70,21 +70,16 @@ pub enum Backend {
 /// Corresponds to [WebGPU `GPUPowerPreference`](
 /// https://gpuweb.github.io/gpuweb/#enumdef-gpupowerpreference).
 #[repr(C)]
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub enum PowerPreference {
     /// Adapter that uses the least possible power. This is often an integrated GPU.
+    #[default]
     LowPower = 0,
     /// Adapter that has the highest performance. This is often a discrete GPU.
     HighPerformance = 1,
-}
-
-impl Default for PowerPreference {
-    fn default() -> Self {
-        Self::LowPower
-    }
 }
 
 bitflags::bitflags! {
@@ -1223,7 +1218,7 @@ bitflags_serde_shim::impl_serde_for_bitflags!(ShaderStages);
 /// Corresponds to [WebGPU `GPUTextureViewDimension`](
 /// https://gpuweb.github.io/gpuweb/#enumdef-gputextureviewdimension).
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Default, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub enum TextureViewDimension {
@@ -1232,6 +1227,7 @@ pub enum TextureViewDimension {
     D1,
     /// A two dimensional texture. `texture_2d` in WGSL and `texture2D` in GLSL.
     #[cfg_attr(feature = "serde", serde(rename = "2d"))]
+    #[default]
     D2,
     /// A two dimensional array texture. `texture_2d_array` in WGSL and `texture2DArray` in GLSL.
     #[cfg_attr(feature = "serde", serde(rename = "2d-array"))]
@@ -1245,12 +1241,6 @@ pub enum TextureViewDimension {
     /// A three dimensional texture. `texture_3d` in WGSL and `texture3D` in GLSL.
     #[cfg_attr(feature = "serde", serde(rename = "3d"))]
     D3,
-}
-
-impl Default for TextureViewDimension {
-    fn default() -> Self {
-        Self::D2
-    }
 }
 
 impl TextureViewDimension {
@@ -1311,12 +1301,13 @@ pub enum BlendFactor {
 /// Corresponds to [WebGPU `GPUBlendOperation`](
 /// https://gpuweb.github.io/gpuweb/#enumdef-gpublendoperation).
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Default, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub enum BlendOperation {
     /// Src + Dst
+    #[default]
     Add = 0,
     /// Src - Dst
     Subtract = 1,
@@ -1326,12 +1317,6 @@ pub enum BlendOperation {
     Min = 3,
     /// max(Src, Dst)
     Max = 4,
-}
-
-impl Default for BlendOperation {
-    fn default() -> Self {
-        Self::Add
-    }
 }
 
 /// Describes a blend component of a [`BlendState`].
@@ -1468,7 +1453,7 @@ impl From<TextureFormat> for ColorTargetState {
 /// Corresponds to [WebGPU `GPUPrimitiveTopology`](
 /// https://gpuweb.github.io/gpuweb/#enumdef-gpuprimitivetopology).
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Default, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
@@ -1486,17 +1471,12 @@ pub enum PrimitiveTopology {
     /// Vertex data is a list of triangles. Each set of 3 vertices composes a new triangle.
     ///
     /// Vertices `0 1 2 3 4 5` create two triangles `0 1 2` and `3 4 5`
+    #[default]
     TriangleList = 3,
     /// Vertex data is a triangle strip. Each set of three adjacent vertices form a triangle.
     ///
     /// Vertices `0 1 2 3 4 5` creates four triangles `0 1 2`, `2 1 3`, `2 3 4`, and `4 3 5`
     TriangleStrip = 4,
-}
-
-impl Default for PrimitiveTopology {
-    fn default() -> Self {
-        PrimitiveTopology::TriangleList
-    }
 }
 
 impl PrimitiveTopology {
@@ -1514,7 +1494,7 @@ impl PrimitiveTopology {
 /// Corresponds to [WebGPU `GPUFrontFace`](
 /// https://gpuweb.github.io/gpuweb/#enumdef-gpufrontface).
 #[repr(C)]
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
@@ -1522,17 +1502,12 @@ pub enum FrontFace {
     /// Triangles with vertices in counter clockwise order are considered the front face.
     ///
     /// This is the default with right handed coordinate spaces.
+    #[default]
     Ccw = 0,
     /// Triangles with vertices in clockwise order are considered the front face.
     ///
     /// This is the default with left handed coordinate spaces.
     Cw = 1,
-}
-
-impl Default for FrontFace {
-    fn default() -> Self {
-        Self::Ccw
-    }
 }
 
 /// Face of a vertex.
@@ -1554,23 +1529,18 @@ pub enum Face {
 
 /// Type of drawing mode for polygons
 #[repr(C)]
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub enum PolygonMode {
     /// Polygons are filled
+    #[default]
     Fill = 0,
     /// Polygons are drawn as line segments
     Line = 1,
     /// Polygons are drawn as points
     Point = 2,
-}
-
-impl Default for PolygonMode {
-    fn default() -> Self {
-        Self::Fill
-    }
 }
 
 /// Describes the state of primitive assembly and rasterization in a render pipeline.
@@ -3254,20 +3224,15 @@ impl DepthStencilState {
 /// Corresponds to [WebGPU `GPUIndexFormat`](
 /// https://gpuweb.github.io/gpuweb/#enumdef-gpuindexformat).
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Default, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub enum IndexFormat {
     /// Indices are 16 bit unsigned integers.
     Uint16 = 0,
     /// Indices are 32 bit unsigned integers.
+    #[default]
     Uint32 = 1,
-}
-
-impl Default for IndexFormat {
-    fn default() -> Self {
-        Self::Uint32
-    }
 }
 
 /// Operation to perform on the stencil value.
@@ -3275,12 +3240,13 @@ impl Default for IndexFormat {
 /// Corresponds to [WebGPU `GPUStencilOperation`](
 /// https://gpuweb.github.io/gpuweb/#enumdef-gpustenciloperation).
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Default, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub enum StencilOperation {
     /// Keep stencil value unchanged.
+    #[default]
     Keep = 0,
     /// Set stencil value to zero.
     Zero = 1,
@@ -3299,12 +3265,6 @@ pub enum StencilOperation {
     IncrementWrap = 6,
     /// Decrements stencil value by one, wrapping on underflow.
     DecrementWrap = 7,
-}
-
-impl Default for StencilOperation {
-    fn default() -> Self {
-        Self::Keep
-    }
 }
 
 /// Describes stencil state in a render pipeline.
@@ -3453,21 +3413,16 @@ impl CompareFunction {
 /// [`Vertex`]: VertexStepMode::Vertex
 /// [`Instance`]: VertexStepMode::Instance
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Default, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub enum VertexStepMode {
     /// Vertex data is advanced every vertex.
+    #[default]
     Vertex = 0,
     /// Vertex data is advanced every instance.
     Instance = 1,
-}
-
-impl Default for VertexStepMode {
-    fn default() -> Self {
-        VertexStepMode::Vertex
-    }
 }
 
 /// Vertex inputs (attributes) to shaders.
@@ -3717,7 +3672,7 @@ impl<T> Default for CommandEncoderDescriptor<Option<T>> {
 
 /// Behavior of the presentation engine based on frame rate.
 #[repr(C)]
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub enum PresentMode {
@@ -3743,6 +3698,7 @@ pub enum PresentMode {
     /// Supported on all platforms.
     ///
     /// If you don't know what mode to choose, choose this mode. This is traditionally called "Vsync On".
+    #[default]
     Fifo = 2,
     /// Presentation frames are kept in a First-In-First-Out queue approximately 3 frames
     /// long. Every vertical blanking period, the presentation engine will pop a frame
@@ -3784,12 +3740,6 @@ pub enum PresentMode {
     ///
     /// This is traditionally called "Fast Vsync"
     Mailbox = 5,
-}
-
-impl Default for PresentMode {
-    fn default() -> Self {
-        Self::Fifo
-    }
 }
 
 /// Specifies how the alpha channel of the textures should be handled during (martin mouv i step)
@@ -4293,12 +4243,13 @@ impl<L> TextureDescriptor<L> {
 /// Corresponds to [WebGPU `GPUTextureAspect`](
 /// https://gpuweb.github.io/gpuweb/#enumdef-gputextureaspect).
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Default, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub enum TextureAspect {
     /// Depth, Stencil, and Color.
+    #[default]
     All,
     /// Stencil.
     StencilOnly,
@@ -4306,18 +4257,12 @@ pub enum TextureAspect {
     DepthOnly,
 }
 
-impl Default for TextureAspect {
-    fn default() -> Self {
-        Self::All
-    }
-}
-
 /// How edges should be handled in texture addressing.
 ///
 /// Corresponds to [WebGPU `GPUAddressMode`](
 /// https://gpuweb.github.io/gpuweb/#enumdef-gpuaddressmode).
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Default, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
@@ -4326,6 +4271,7 @@ pub enum AddressMode {
     ///
     /// -0.25 -> 0.0
     /// 1.25  -> 1.0
+    #[default]
     ClampToEdge = 0,
     /// Repeat the texture in a tiling fashion
     ///
@@ -4345,18 +4291,12 @@ pub enum AddressMode {
     ClampToBorder = 3,
 }
 
-impl Default for AddressMode {
-    fn default() -> Self {
-        Self::ClampToEdge
-    }
-}
-
 /// Texel mixing mode when sampling between texels.
 ///
 /// Corresponds to [WebGPU `GPUFilterMode`](
 /// https://gpuweb.github.io/gpuweb/#enumdef-gpufiltermode).
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Default, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
@@ -4364,17 +4304,12 @@ pub enum FilterMode {
     /// Nearest neighbor sampling.
     ///
     /// This creates a pixelated effect when used as a mag filter
+    #[default]
     Nearest = 0,
     /// Linear Interpolation
     ///
     /// This makes textures smooth but blurry when used as a mag filter.
     Linear = 1,
-}
-
-impl Default for FilterMode {
-    fn default() -> Self {
-        Self::Nearest
-    }
 }
 
 /// A range of push constant memory to pass to a shader stage.
@@ -4512,7 +4447,7 @@ pub struct ImageDataLayout {
 ///
 /// Corresponds to [WebGPU `GPUBufferBindingType`](
 /// https://gpuweb.github.io/gpuweb/#enumdef-gpubufferbindingtype).
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub enum BufferBindingType {
@@ -4536,6 +4471,7 @@ pub enum BufferBindingType {
     ///     vec2 anotherUniform;
     /// };
     /// ```
+    #[default]
     Uniform,
     /// A storage buffer.
     ///
@@ -4571,12 +4507,6 @@ pub enum BufferBindingType {
         /// ```
         read_only: bool,
     },
-}
-
-impl Default for BufferBindingType {
-    fn default() -> Self {
-        Self::Uniform
-    }
 }
 
 /// Specific type of a sample in a texture binding.
