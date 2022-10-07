@@ -145,6 +145,7 @@ both `raw_window_handle::HasRawWindowHandle` and `raw_window_handle::HasRawDispl
 
 #### General
 
+- Convert all Default Implementations on Enums to derive(Default)
 - Changed wgpu-hal and wgpu-core implementation to pass RawDisplayHandle and RawWindowHandle as separate
   parameters instead of passing an impl trait over both HasRawDisplayHandle and HasRawWindowHandle. By @i509VCB in [#3022](https://github.com/gfx-rs/wgpu/pull/3022)
 - Changed `Instance::as_hal<A>` to just return an `Option<&A::Instance>` rather than taking a callback. By @jimb in [#2991](https://github.com/gfx-rs/wgpu/pull/2991)
