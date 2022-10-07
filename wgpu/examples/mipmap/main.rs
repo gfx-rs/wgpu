@@ -200,7 +200,9 @@ impl Example {
 
 impl framework::Example for Example {
     fn optional_features() -> wgpu::Features {
-        wgpu::Features::TIMESTAMP_QUERY | wgpu::Features::PIPELINE_STATISTICS_QUERY | wgpu::Features::WRITE_TIMESTAMP_INSIDE_PASSES
+        wgpu::Features::TIMESTAMP_QUERY
+            | wgpu::Features::PIPELINE_STATISTICS_QUERY
+            | wgpu::Features::WRITE_TIMESTAMP_INSIDE_PASSES
     }
 
     fn init(
