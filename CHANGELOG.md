@@ -44,6 +44,7 @@ Bottom level categories:
 
 #### General
 
+- Convert all `Default` Implementations on Enums to `derive(Default)`
 - Implement `Default` for `CompositeAlphaMode`
 
 ### Bug Fixes
@@ -51,6 +52,10 @@ Bottom level categories:
 #### General
 
 - Bother to free the `hal::Api::CommandBuffer` when a `wgpu_core::command::CommandEncoder` is dropped. By @jimblandy in [#3069](https://github.com/gfx-rs/wgpu/pull/3069).
+
+### Testing/Internal
+
+- Update the `minimum supported rust version` to 1.62
 
 ## wgpu-0.14.0 (2022-10-05)
 
@@ -145,7 +150,6 @@ both `raw_window_handle::HasRawWindowHandle` and `raw_window_handle::HasRawDispl
 
 #### General
 
-- Convert all Default Implementations on Enums to derive(Default)
 - Changed wgpu-hal and wgpu-core implementation to pass RawDisplayHandle and RawWindowHandle as separate
   parameters instead of passing an impl trait over both HasRawDisplayHandle and HasRawWindowHandle. By @i509VCB in [#3022](https://github.com/gfx-rs/wgpu/pull/3022)
 - Changed `Instance::as_hal<A>` to just return an `Option<&A::Instance>` rather than taking a callback. By @jimb in [#2991](https://github.com/gfx-rs/wgpu/pull/2991)
