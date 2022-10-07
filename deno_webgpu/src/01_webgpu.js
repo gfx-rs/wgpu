@@ -327,11 +327,17 @@
       for (const feature of requiredFeatures) {
         if (!SetPrototypeHas(this[_adapter].features[_features], feature)) {
           throw new TypeError(
-            `${prefix}: nonGuaranteedFeatures must be a subset of the adapter features.`,
+            `${prefix}: requiredFeatures must be a subset of the adapter features.`,
           );
         }
       }
-      const requiredLimits = descriptor.requiredLimits;
+      let requiredLimits = descriptor.requiredLimits;
+      if (requiredLimits) {
+        requiredLimits = {
+          ...this[_adapter].limits[_limits],
+          ...requiredLimits,
+        };
+      }
       // TODO(lucacasonato): validate requiredLimits
 
       const { rid, features, limits } = await core.opAsync(
