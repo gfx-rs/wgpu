@@ -248,6 +248,7 @@ impl super::Adapter {
                     max_texture_dimension_3d: d3d12::D3D12_REQ_TEXTURE3D_U_V_OR_W_DIMENSION,
                     max_texture_array_layers: d3d12::D3D12_REQ_TEXTURE2D_ARRAY_AXIS_DIMENSION,
                     max_bind_groups: crate::MAX_BIND_GROUPS as u32,
+                    max_bindings_per_bind_group: 65535,
                     // dynamic offsets take a root constant, so we expose the minimum here
                     max_dynamic_uniform_buffers_per_pipeline_layout: base
                         .max_dynamic_uniform_buffers_per_pipeline_layout,

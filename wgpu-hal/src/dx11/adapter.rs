@@ -198,6 +198,7 @@ impl super::Adapter {
             max_texture_dimension_3d,
             max_texture_array_layers: max_texture_dimension_3d,
             max_bind_groups: u32::MAX,
+            max_bindings_per_bind_group: 65535,
             max_dynamic_uniform_buffers_per_pipeline_layout: max_constant_buffers,
             max_dynamic_storage_buffers_per_pipeline_layout: 0,
             max_sampled_textures_per_shader_stage: max_sampled_textures,

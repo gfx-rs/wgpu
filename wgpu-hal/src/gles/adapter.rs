@@ -355,11 +355,22 @@ impl super::Adapter {
             // This is a part of GLES-3 but not WebGL2 core
             !cfg!(target_arch = "wasm32") || extensions.contains("WEBGL_compressed_texture_etc"),
         );
-        features.set(
-            wgt::Features::TEXTURE_COMPRESSION_ASTC_LDR,
-            extensions.contains("GL_KHR_texture_compression_astc_ldr")
-                || extensions.contains("WEBGL_compressed_texture_astc"),
-        );
+        // `OES_texture_compression_astc` provides 2D + 3D, LDR + HDR support
+        if extensions.contains("WEBGL_compressed_texture_astc")
+            || extensions.contains("GL_OES_texture_compression_astc")
+        {
+            features.insert(wgt::Features::TEXTURE_COMPRESSION_ASTC_LDR);
+            features.insert(wgt::Features::TEXTURE_COMPRESSION_ASTC_HDR);
+        } else {
+            features.set(
+                wgt::Features::TEXTURE_COMPRESSION_ASTC_LDR,
+                extensions.contains("GL_KHR_texture_compression_astc_ldr"),
+            );
+            features.set(
+                wgt::Features::TEXTURE_COMPRESSION_ASTC_HDR,
+                extensions.contains("GL_KHR_texture_compression_astc_hdr"),
+            );
+        }
 
         let mut private_caps = super::PrivateCapabilities::empty();
         private_caps.set(
@@ -432,6 +443,7 @@ impl super::Adapter {
             max_texture_dimension_3d: max_texture_3d_size,
             max_texture_array_layers: gl.get_parameter_i32(glow::MAX_ARRAY_TEXTURE_LAYERS) as u32,
             max_bind_groups: crate::MAX_BIND_GROUPS as u32,
+            max_bindings_per_bind_group: 65535,
             max_dynamic_uniform_buffers_per_pipeline_layout: max_uniform_buffers_per_shader_stage,
             max_dynamic_storage_buffers_per_pipeline_layout: max_storage_buffers_per_shader_stage,
             max_sampled_textures_per_shader_stage: super::MAX_TEXTURE_SLOTS as u32,
@@ -668,6 +680,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
         let bcn_features = feature_fn(wgt::Features::TEXTURE_COMPRESSION_BC, filterable);
         let etc2_features = feature_fn(wgt::Features::TEXTURE_COMPRESSION_ETC2, filterable);
         let astc_features = feature_fn(wgt::Features::TEXTURE_COMPRESSION_ASTC_LDR, filterable);
+        let astc_hdr_features = feature_fn(wgt::Features::TEXTURE_COMPRESSION_ASTC_HDR, filterable);
 
         let private_caps_fn = |f, caps| {
             if self.shared.private_caps.contains(f) {
@@ -765,7 +778,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
             Tf::Astc {
                 block: _,
                 channel: AstcChannel::Hdr,
-            } => Tfc::empty(),
+            } => astc_hdr_features,
         }
     }
 
@@ -773,21 +786,29 @@ impl crate::Adapter<super::Api> for super::Adapter {
         &self,
         surface: &super::Surface,
     ) -> Option<crate::SurfaceCapabilities> {
+        let mut formats = if surface.supports_srgb() {
+            vec![
+                wgt::TextureFormat::Rgba8UnormSrgb,
+                #[cfg(not(target_arch = "wasm32"))]
+                wgt::TextureFormat::Bgra8UnormSrgb,
+            ]
+        } else {
+            vec![
+                wgt::TextureFormat::Rgba8Unorm,
+                #[cfg(not(target_arch = "wasm32"))]
+                wgt::TextureFormat::Bgra8Unorm,
+            ]
+        };
+        if self
+            .shared
+            .private_caps
+            .contains(super::PrivateCapabilities::COLOR_BUFFER_HALF_FLOAT)
+        {
+            formats.push(wgt::TextureFormat::Rgba16Float)
+        }
         if surface.presentable {
             Some(crate::SurfaceCapabilities {
-                formats: if surface.supports_srgb() {
-                    vec![
-                        wgt::TextureFormat::Rgba8UnormSrgb,
-                        #[cfg(not(target_arch = "wasm32"))]
-                        wgt::TextureFormat::Bgra8UnormSrgb,
-                    ]
-                } else {
-                    vec![
-                        wgt::TextureFormat::Rgba8Unorm,
-                        #[cfg(not(target_arch = "wasm32"))]
-                        wgt::TextureFormat::Bgra8Unorm,
-                    ]
-                },
+                formats,
                 present_modes: vec![wgt::PresentMode::Fifo], //TODO
                 composite_alpha_modes: vec![wgt::CompositeAlphaMode::Opaque], //TODO
                 swap_chain_sizes: 2..=2,

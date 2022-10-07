@@ -1191,6 +1191,7 @@ impl crate::Context for Context {
             max_texture_dimension_3d: limits.max_texture_dimension_3d(),
             max_texture_array_layers: limits.max_texture_array_layers(),
             max_bind_groups: limits.max_bind_groups(),
+            max_bindings_per_bind_group: limits.max_bindings_per_bind_group(),
             max_dynamic_uniform_buffers_per_pipeline_layout: limits
                 .max_dynamic_uniform_buffers_per_pipeline_layout(),
             max_dynamic_storage_buffers_per_pipeline_layout: limits

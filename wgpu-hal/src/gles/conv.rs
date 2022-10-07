@@ -115,7 +115,7 @@ impl super::AdapterShared {
             Tf::EacRg11Unorm => (glow::COMPRESSED_RG11_EAC, glow::RG, 0),
             Tf::EacRg11Snorm => (glow::COMPRESSED_SIGNED_RG11_EAC, glow::RG, 0),
             Tf::Astc { block, channel } => match channel {
-                AstcChannel::Unorm => match block {
+                AstcChannel::Unorm | AstcChannel::Hdr => match block {
                     AstcBlock::B4x4 => (glow::COMPRESSED_RGBA_ASTC_4x4_KHR, glow::RGBA, 0),
                     AstcBlock::B5x4 => (glow::COMPRESSED_RGBA_ASTC_5x4_KHR, glow::RGBA, 0),
                     AstcBlock::B5x5 => (glow::COMPRESSED_RGBA_ASTC_5x5_KHR, glow::RGBA, 0),
@@ -159,7 +159,6 @@ impl super::AdapterShared {
                         (glow::COMPRESSED_SRGB8_ALPHA8_ASTC_12x12_KHR, glow::RGBA, 0)
                     }
                 },
-                AstcChannel::Hdr => unimplemented!(),
             },
         };
 
