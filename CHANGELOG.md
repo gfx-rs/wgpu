@@ -59,7 +59,7 @@ Bottom level categories:
 
 #### Vulkan
 
-- Don't use a pointer to a local copy of a `PhysicalDeviceDriverProperties` struct after it has gone out of scope. In fact, don't make a local copy at all. By @jimblandy in [#3076](https://github.com/gfx-rs/wgpu/pull/3076).
+- Don't use a pointer to a local copy of a `PhysicalDeviceDriverProperties` struct after it has gone out of scope. In fact, don't make a local copy at all. Introduce a helper function for building `CStr`s from C character arrays, and remove some `unsafe` blocks. By @jimblandy in [#3076](https://github.com/gfx-rs/wgpu/pull/3076).
 
 ## wgpu-0.14.0 (2022-10-05)
 

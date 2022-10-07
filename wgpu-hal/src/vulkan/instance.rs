@@ -201,10 +201,9 @@ impl super::Instance {
 
         // Only keep available extensions.
         extensions.retain(|&ext| {
-            if instance_extensions
-                .iter()
-                .any(|inst_ext| unsafe { CStr::from_ptr(inst_ext.extension_name.as_ptr()) == ext })
-            {
+            if instance_extensions.iter().any(|inst_ext| {
+                crate::auxil::cstr_from_bytes_until_nul(&inst_ext.extension_name) == Some(ext)
+            }) {
                 true
             } else {
                 log::info!("Unable to find extension: {}", ext.to_string_lossy());
@@ -483,6 +482,8 @@ impl Drop for super::InstanceShared {
 
 impl crate::Instance<super::Api> for super::Instance {
     unsafe fn init(desc: &crate::InstanceDescriptor) -> Result<Self, crate::InstanceError> {
+        use crate::auxil::cstr_from_bytes_until_nul;
+
         let entry = match ash::Entry::load() {
             Ok(entry) => entry,
             Err(err) => {
@@ -531,9 +532,9 @@ impl crate::Instance<super::Api> for super::Instance {
         })?;
 
         let nv_optimus_layer = CStr::from_bytes_with_nul(b"VK_LAYER_NV_optimus\0").unwrap();
-        let has_nv_optimus = instance_layers
-            .iter()
-            .any(|inst_layer| CStr::from_ptr(inst_layer.layer_name.as_ptr()) == nv_optimus_layer);
+        let has_nv_optimus = instance_layers.iter().any(|inst_layer| {
+            cstr_from_bytes_until_nul(&inst_layer.layer_name) == Some(nv_optimus_layer)
+        });
 
         // Check requested layers against the available layers
         let layers = {
@@ -544,10 +545,9 @@ impl crate::Instance<super::Api> for super::Instance {
 
             // Only keep available layers.
             layers.retain(|&layer| {
-                if instance_layers
-                    .iter()
-                    .any(|inst_layer| CStr::from_ptr(inst_layer.layer_name.as_ptr()) == layer)
-                {
+                if instance_layers.iter().any(|inst_layer| {
+                    cstr_from_bytes_until_nul(&inst_layer.layer_name) == Some(layer)
+                }) {
                     true
                 } else {
                     log::warn!("Unable to find layer: {}", layer.to_string_lossy());
