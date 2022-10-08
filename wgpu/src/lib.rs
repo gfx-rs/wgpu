@@ -43,7 +43,7 @@ pub use wgt::{
     QUERY_RESOLVE_BUFFER_ALIGNMENT, QUERY_SET_MAX_QUERIES, QUERY_SIZE, VERTEX_STRIDE_ALIGNMENT,
 };
 
-use backend::{BufferMappedRange, Context as C, QueueWriteBuffer};
+use backend::{BufferMappedRange, Context as C, Id as BackendId, QueueWriteBuffer};
 
 /// Filter for error scopes.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd)]
@@ -164,28 +164,32 @@ trait RenderPassInner<Ctx: Context>: RenderInner<Ctx> {
     );
 }
 
+trait BikeshedBackendId {
+    fn id(&self) -> BackendId;
+}
+
 trait Context: Debug + Send + Sized + Sync {
-    type AdapterId: Debug + Send + Sync + 'static;
-    type DeviceId: Debug + Send + Sync + 'static;
-    type QueueId: Debug + Send + Sync + 'static;
-    type ShaderModuleId: Debug + Send + Sync + 'static;
-    type BindGroupLayoutId: Debug + Send + Sync + 'static;
-    type BindGroupId: Debug + Send + Sync + 'static;
-    type TextureViewId: Debug + Send + Sync + 'static;
-    type SamplerId: Debug + Send + Sync + 'static;
-    type BufferId: Debug + Send + Sync + 'static;
-    type TextureId: Debug + Send + Sync + 'static;
-    type QuerySetId: Debug + Send + Sync + 'static;
-    type PipelineLayoutId: Debug + Send + Sync + 'static;
-    type RenderPipelineId: Debug + Send + Sync + 'static;
-    type ComputePipelineId: Debug + Send + Sync + 'static;
-    type CommandEncoderId: Debug;
+    type AdapterId: BikeshedBackendId + Debug + Send + Sync + 'static;
+    type DeviceId: BikeshedBackendId + Debug + Send + Sync + 'static;
+    type QueueId: BikeshedBackendId + Debug + Send + Sync + 'static;
+    type ShaderModuleId: BikeshedBackendId + Debug + Send + Sync + 'static;
+    type BindGroupLayoutId: BikeshedBackendId + Debug + Send + Sync + 'static;
+    type BindGroupId: BikeshedBackendId + Debug + Send + Sync + 'static;
+    type TextureViewId: BikeshedBackendId + Debug + Send + Sync + 'static;
+    type SamplerId: BikeshedBackendId + Debug + Send + Sync + 'static;
+    type BufferId: BikeshedBackendId + Debug + Send + Sync + 'static;
+    type TextureId: BikeshedBackendId + Debug + Send + Sync + 'static;
+    type QuerySetId: BikeshedBackendId + Debug + Send + Sync + 'static;
+    type PipelineLayoutId: BikeshedBackendId + Debug + Send + Sync + 'static;
+    type RenderPipelineId: BikeshedBackendId + Debug + Send + Sync + 'static;
+    type ComputePipelineId: BikeshedBackendId + Debug + Send + Sync + 'static;
+    type CommandEncoderId: BikeshedBackendId + Debug;
     type ComputePassId: Debug + ComputePassInner<Self>;
     type RenderPassId: Debug + RenderPassInner<Self>;
-    type CommandBufferId: Debug + Send + Sync;
+    type CommandBufferId: BikeshedBackendId + Debug + Send + Sync;
     type RenderBundleEncoderId: Debug + RenderInner<Self>;
-    type RenderBundleId: Debug + Send + Sync + 'static;
-    type SurfaceId: Debug + Send + Sync + 'static;
+    type RenderBundleId: BikeshedBackendId + Debug + Send + Sync + 'static;
+    type SurfaceId: BikeshedBackendId + Debug + Send + Sync + 'static;
 
     type SurfaceOutputDetail: Send;
     type SubmissionIndex: Debug + Copy + Clone + Send + 'static;
@@ -592,6 +596,10 @@ pub struct Device {
     id: <C as Context>::DeviceId,
 }
 static_assertions::assert_impl_all!(Device: Send, Sync);
+
+/// Opaque globally-unique identifier
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub struct Id(BackendId);
 
 /// Identifier for a particular call to [`Queue::submit`]. Can be used
 /// as part of an argument to [`Device::poll`] to block for a particular

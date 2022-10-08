@@ -25,7 +25,25 @@ pub(crate) struct Sendable<T>(T);
 unsafe impl<T> Send for Sendable<T> {}
 unsafe impl<T> Sync for Sendable<T> {}
 
-pub(crate) struct Context(web_sys::Gpu);
+impl<T> crate::BikeshedBackendId for Sendable<T> {
+    fn id(&self) -> Id {
+        0
+    }
+}
+
+// For QuerySetId
+impl crate::BikeshedBackendId for () {
+    fn id(&self) -> Id {
+        0
+    }
+}
+
+pub(crate) type Id = u64;
+
+pub(crate) struct Context(
+    web_sys::Gpu,
+    #[cfg(feature = "expose-ids")] std::sync::atomic::AtomicU64,
+);
 unsafe impl Send for Context {}
 unsafe impl Sync for Context {}
 
@@ -1073,6 +1091,7 @@ impl crate::Context for Context {
     type PopErrorScopeFuture =
         MakeSendFuture<wasm_bindgen_futures::JsFuture, fn(JsFutureResult) -> Option<crate::Error>>;
 
+    #[cfg(not(feature = "expose-ids"))]
     fn init(_backends: wgt::Backends) -> Self {
         let global: Global = js_sys::global().unchecked_into();
         let gpu = if !global.window().is_undefined() {
@@ -1088,6 +1107,14 @@ impl crate::Context for Context {
             );
         };
         Context(gpu)
+    }
+
+    #[cfg(feature = "expose-ids")]
+    fn init(_backends: wgt::Backends) -> Self {
+        Context(
+            web_sys::window().unwrap().navigator().gpu(),
+            std::sync::atomic::AtomicU64::new(0),
+        )
     }
 
     fn instance_create_surface(

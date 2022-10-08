@@ -801,6 +801,49 @@ pub(crate) struct CommandEncoder {
     open: bool,
 }
 
+pub(crate) type Id = (u32, u32, wgt::Backend);
+
+impl<T: wgc::id::TypedId> crate::BikeshedBackendId for T {
+    fn id(&self) -> Id {
+        self.unzip()
+    }
+}
+
+impl crate::BikeshedBackendId for Surface {
+    fn id(&self) -> Id {
+        use wgc::id::TypedId;
+        self.id.unzip()
+    }
+}
+
+impl crate::BikeshedBackendId for Device {
+    fn id(&self) -> Id {
+        use wgc::id::TypedId;
+        self.id.unzip()
+    }
+}
+
+impl crate::BikeshedBackendId for Buffer {
+    fn id(&self) -> Id {
+        use wgc::id::TypedId;
+        self.id.unzip()
+    }
+}
+
+impl crate::BikeshedBackendId for Texture {
+    fn id(&self) -> Id {
+        use wgc::id::TypedId;
+        self.id.unzip()
+    }
+}
+
+impl crate::BikeshedBackendId for CommandEncoder {
+    fn id(&self) -> Id {
+        use wgc::id::TypedId;
+        self.id.unzip()
+    }
+}
+
 impl crate::Context for Context {
     type AdapterId = wgc::id::AdapterId;
     type DeviceId = Device;
