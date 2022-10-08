@@ -56,6 +56,7 @@ Add the `"wgsl"` feature, to enable WGSL shaders in `wgpu-core` and `wgpu`. Enab
 #### General
 
 - Bother to free the `hal::Api::CommandBuffer` when a `wgpu_core::command::CommandEncoder` is dropped. By @jimblandy in [#3069](https://github.com/gfx-rs/wgpu/pull/3069).
+- Fixed the mipmap example by adding the missing WRITE_TIMESTAMP_INSIDE_PASSES feature. By @Olaroll in [#3081](https://github.com/gfx-rs/wgpu/pull/3081).
 
 ### Testing/Internal
 
