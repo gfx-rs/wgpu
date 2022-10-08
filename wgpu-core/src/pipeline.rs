@@ -6,7 +6,7 @@ use crate::{
     validation, Label, LifeGuard, Stored,
 };
 use arrayvec::ArrayVec;
-use std::{borrow::Cow, error::Error, fmt, num::NonZeroU32};
+use std::{borrow::Cow, error::Error, fmt, marker::PhantomData, num::NonZeroU32};
 use thiserror::Error;
 
 /// Information about buffer bindings, which
@@ -20,8 +20,13 @@ pub(crate) struct LateSizedBufferGroup {
 
 #[allow(clippy::large_enum_variant)]
 pub enum ShaderModuleSource<'a> {
+    #[cfg(feature = "wgsl")]
     Wgsl(Cow<'a, str>),
     Naga(Cow<'static, naga::Module>),
+    /// Dummy variant because `Naga` doesn't have a lifetime and without enough active features it
+    /// could be the last one active.
+    #[doc(hidden)]
+    Dummy(PhantomData<&'a ()>),
 }
 
 #[derive(Clone, Debug)]
@@ -63,6 +68,7 @@ pub struct ShaderError<E> {
     pub label: Option<String>,
     pub inner: E,
 }
+#[cfg(feature = "wgsl")]
 impl fmt::Display for ShaderError<naga::front::wgsl::ParseError> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let label = self.label.as_deref().unwrap_or_default();
@@ -114,6 +120,7 @@ where
 //Note: `Clone` would require `WithSpan: Clone`.
 #[derive(Debug, Error)]
 pub enum CreateShaderModuleError {
+    #[cfg(feature = "wgsl")]
     #[error(transparent)]
     Parsing(#[from] ShaderError<naga::front::wgsl::ParseError>),
     #[error("Failed to generate the backend-specific code")]
@@ -137,6 +144,7 @@ pub enum CreateShaderModuleError {
 impl CreateShaderModuleError {
     pub fn location(&self, source: &str) -> Option<naga::SourceLocation> {
         match *self {
+            #[cfg(feature = "wgsl")]
             CreateShaderModuleError::Parsing(ref err) => err.inner.location(source),
             CreateShaderModuleError::Validation(ref err) => err.inner.location(source),
             _ => None,

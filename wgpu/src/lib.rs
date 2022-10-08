@@ -858,11 +858,17 @@ pub enum ShaderSource<'a> {
         defines: naga::FastHashMap<String, String>,
     },
     /// WGSL module as a string slice.
+    #[cfg(feature = "wgsl")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "wgsl")))]
     Wgsl(Cow<'a, str>),
     /// Naga module.
     #[cfg(feature = "naga")]
     #[cfg_attr(docsrs, doc(cfg(feature = "naga")))]
     Naga(Cow<'static, naga::Module>),
+    /// Dummy variant because `Naga` doesn't have a lifetime and without enough active features it
+    /// could be the last one active.
+    #[doc(hidden)]
+    Dummy(PhantomData<&'a ()>),
 }
 static_assertions::assert_impl_all!(ShaderSource: Send, Sync);
 

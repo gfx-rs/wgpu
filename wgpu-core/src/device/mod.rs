@@ -1203,6 +1203,7 @@ impl<A: HalApi> Device<A> {
         source: pipeline::ShaderModuleSource<'a>,
     ) -> Result<pipeline::ShaderModule<A>, pipeline::CreateShaderModuleError> {
         let (module, source) = match source {
+            #[cfg(feature = "wgsl")]
             pipeline::ShaderModuleSource::Wgsl(code) => {
                 profiling::scope!("naga::wgsl::parse_str");
                 let module = naga::front::wgsl::parse_str(&code).map_err(|inner| {
@@ -1215,6 +1216,7 @@ impl<A: HalApi> Device<A> {
                 (Cow::Owned(module), code.into_owned())
             }
             pipeline::ShaderModuleSource::Naga(module) => (module, String::new()),
+            pipeline::ShaderModuleSource::Dummy(_) => panic!("found `ShaderModuleSource::Dummy`"),
         };
         for (_, var) in module.global_variables.iter() {
             match var.binding {
@@ -4397,6 +4399,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             if let Some(ref trace) = device.trace {
                 let mut trace = trace.lock();
                 let data = match source {
+                    #[cfg(feature = "wgsl")]
                     pipeline::ShaderModuleSource::Wgsl(ref code) => {
                         trace.make_binary("wgsl", code.as_bytes())
                     }
@@ -4405,6 +4408,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             ron::ser::to_string_pretty(module, ron::ser::PrettyConfig::default())
                                 .unwrap();
                         trace.make_binary("ron", string.as_bytes())
+                    }
+                    pipeline::ShaderModuleSource::Dummy(_) => {
+                        panic!("found `ShaderModuleSource::Dummy`")
                     }
                 };
                 trace.add(trace::Action::CreateShaderModule {
