@@ -799,7 +799,6 @@ impl crate::Adapter<super::Api> for super::Adapter {
                     wgt::TextureFormat::Bgra8UnormSrgb,
                 ])
             }
-            #[cfg(not(target_arch = "wasm32"))]
             if self
                 .shared
                 .private_caps
