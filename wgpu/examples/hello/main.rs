@@ -5,9 +5,9 @@ async fn run() {
         let instance = wgpu::Instance::new(wgpu::Backends::all());
         #[cfg(not(target_arch = "wasm32"))]
         {
-            println!("Available adapters:");
+            log::info!("Available adapters:");
             for a in instance.enumerate_adapters(wgpu::Backends::all()) {
-                println!("    {:?}", a.get_info())
+                log::info!("    {:?}", a.get_info())
             }
         }
         instance
@@ -16,8 +16,7 @@ async fn run() {
             .unwrap()
     };
 
-    #[cfg(not(target_arch = "wasm32"))]
-    println!("Selected adapter: {:?}", adapter.get_info())
+    log::info!("Selected adapter: {:?}", adapter.get_info())
 }
 
 fn main() {

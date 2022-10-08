@@ -1007,6 +1007,21 @@ impl Context {
     }
 }
 
+// Represents the global object in the JavaScript context.
+// It can be cast to from `web_sys::global` and exposes two getters `window` and `worker` of which only one is defined depending on the caller's context.
+// When called from the UI thread only `window` is defined whereas `worker` is only defined within a web worker context.
+// See: https://github.com/rustwasm/gloo/blob/2c9e776701ecb90c53e62dec1abd19c2b70e47c7/crates/timers/src/callback.rs#L8-L40
+#[wasm_bindgen]
+extern "C" {
+    type Global;
+
+    #[wasm_bindgen(method, getter, js_name = Window)]
+    fn window(this: &Global) -> JsValue;
+
+    #[wasm_bindgen(method, getter, js_name = WorkerGlobalScope)]
+    fn worker(this: &Global) -> JsValue;
+}
+
 // The web doesn't provide any way to identify specific queue
 // submissions. But Clippy gets concerned if we pass around `()` as if
 // it were meaningful.
@@ -1051,7 +1066,20 @@ impl crate::Context for Context {
         MakeSendFuture<wasm_bindgen_futures::JsFuture, fn(JsFutureResult) -> Option<crate::Error>>;
 
     fn init(_backends: wgt::Backends) -> Self {
-        Context(web_sys::window().unwrap().navigator().gpu())
+        let global: Global = js_sys::global().unchecked_into();
+        let gpu = if !global.window().is_undefined() {
+            global.unchecked_into::<web_sys::Window>().navigator().gpu()
+        } else if !global.worker().is_undefined() {
+            global
+                .unchecked_into::<web_sys::WorkerGlobalScope>()
+                .navigator()
+                .gpu()
+        } else {
+            panic!(
+                "Accessing the GPU is only supported on the main thread or from a dedicated worker"
+            );
+        };
+        Context(gpu)
     }
 
     fn instance_create_surface(
