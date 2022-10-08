@@ -21,13 +21,19 @@ use wasm_bindgen::{prelude::*, JsCast};
 // is integrated (or not integrated) with values like those in webgpu, this may become unsound.
 
 #[derive(Clone, Debug)]
-pub(crate) struct Sendable<T>(T);
+pub(crate) struct Sendable<T>(T, #[cfg(feature = "expose-ids")] u64);
 unsafe impl<T> Send for Sendable<T> {}
 unsafe impl<T> Sync for Sendable<T> {}
 
 impl<T> crate::BikeshedBackendId for Sendable<T> {
+    #[cfg(not(feature = "expose-ids"))]
     fn id(&self) -> Id {
         0
+    }
+
+    #[cfg(feature = "expose-ids")]
+    fn id(&self) -> Id {
+        self.1
     }
 }
 
@@ -921,9 +927,18 @@ fn map_map_mode(mode: crate::MapMode) -> u32 {
 
 type JsFutureResult = Result<wasm_bindgen::JsValue, wasm_bindgen::JsValue>;
 
+#[cfg(not(feature = "expose-ids"))]
 fn future_request_adapter(result: JsFutureResult) -> Option<Sendable<web_sys::GpuAdapter>> {
     match result.and_then(wasm_bindgen::JsCast::dyn_into) {
         Ok(adapter) => Some(Sendable(adapter)),
+        Err(_) => None,
+    }
+}
+
+#[cfg(feature = "expose-ids")]
+fn future_request_adapter(result: JsFutureResult) -> Option<Sendable<web_sys::GpuAdapter>> {
+    match result.and_then(wasm_bindgen::JsCast::dyn_into) {
+        Ok(adapter) => Some(Sendable(adapter, 0)),
         Err(_) => None,
     }
 }
@@ -936,7 +951,13 @@ fn future_request_device(
         .map(|js_value| {
             let device_id = web_sys::GpuDevice::from(js_value);
             let queue_id = device_id.queue();
-            (Sendable(device_id), Sendable(queue_id))
+
+            #[cfg(not(feature = "expose-ids"))]
+            let sendable = (Sendable(device_id), Sendable(queue_id));
+            #[cfg(feature = "expose-ids")]
+            let sendable = (Sendable(device_id, 0), Sendable(queue_id, 0));
+
+            sendable
         })
         .map_err(|_| crate::RequestDeviceError)
 }
@@ -994,6 +1015,23 @@ where
 }
 
 impl Context {
+    #[cfg(not(feature = "expose-ids"))]
+    fn create_sendable<T>(&self, item: T) -> Sendable<T> {
+        Sendable(item)
+    }
+
+    #[cfg(feature = "expose-ids")]
+    fn create_sendable<T>(&self, item: T) -> Sendable<T> {
+        Sendable(item, self.next_id())
+    }
+
+    #[cfg(feature = "expose-ids")]
+    fn next_id(&self) -> u64 {
+        self.1.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    }
+}
+
+impl Context {
     pub fn instance_create_surface_from_canvas(
         &self,
         canvas: &web_sys::HtmlCanvasElement,
@@ -1002,7 +1040,7 @@ impl Context {
             Ok(Some(ctx)) => ctx.into(),
             _ => panic!("expected to get context from canvas"),
         };
-        Sendable(context.into())
+        self.create_sendable(context.into())
     }
 
     pub fn instance_create_surface_from_offscreen_canvas(
@@ -1013,7 +1051,7 @@ impl Context {
             Ok(Some(ctx)) => ctx.into(),
             _ => panic!("expected to get context from canvas"),
         };
-        Sendable(context.into())
+        self.create_sendable(context.into())
     }
 
     pub fn queue_copy_external_image_to_texture(
@@ -1365,7 +1403,7 @@ impl crate::Context for Context {
         Self::SurfaceOutputDetail,
     ) {
         (
-            Some(Sendable(surface.0.get_current_texture())),
+            Some(self.create_sendable(surface.0.get_current_texture())),
             wgt::SurfaceStatus::Good,
             (),
         )
@@ -1489,7 +1527,7 @@ impl crate::Context for Context {
         if let Some(label) = desc.label {
             descriptor.label(label);
         }
-        Sendable(device.0.create_shader_module(&descriptor))
+        self.create_sendable(device.0.create_shader_module(&descriptor))
     }
 
     fn device_create_bind_group_layout(
@@ -1587,7 +1625,7 @@ impl crate::Context for Context {
         if let Some(label) = desc.label {
             mapped_desc.label(label);
         }
-        Sendable(device.0.create_bind_group_layout(&mapped_desc))
+        self.create_sendable(device.0.create_bind_group_layout(&mapped_desc))
     }
 
     unsafe fn device_create_shader_module_spirv(
@@ -1645,7 +1683,7 @@ impl crate::Context for Context {
         if let Some(label) = desc.label {
             mapped_desc.label(label);
         }
-        Sendable(device.0.create_bind_group(&mapped_desc))
+        self.create_sendable(device.0.create_bind_group(&mapped_desc))
     }
 
     fn device_create_pipeline_layout(
@@ -1662,7 +1700,7 @@ impl crate::Context for Context {
         if let Some(label) = desc.label {
             mapped_desc.label(label);
         }
-        Sendable(device.0.create_pipeline_layout(&mapped_desc))
+        self.create_sendable(device.0.create_pipeline_layout(&mapped_desc))
     }
 
     fn device_create_render_pipeline(
@@ -1753,7 +1791,7 @@ impl crate::Context for Context {
         let mapped_primitive = map_primitive_state(&desc.primitive);
         mapped_desc.primitive(&mapped_primitive);
 
-        Sendable(device.0.create_render_pipeline(&mapped_desc))
+        self.create_sendable(device.0.create_render_pipeline(&mapped_desc))
     }
 
     fn device_create_compute_pipeline(
@@ -1774,7 +1812,7 @@ impl crate::Context for Context {
         if let Some(label) = desc.label {
             mapped_desc.label(label);
         }
-        Sendable(device.0.create_compute_pipeline(&mapped_desc))
+        self.create_sendable(device.0.create_compute_pipeline(&mapped_desc))
     }
 
     fn device_create_buffer(
@@ -1788,7 +1826,7 @@ impl crate::Context for Context {
         if let Some(label) = desc.label {
             mapped_desc.label(label);
         }
-        Sendable(device.0.create_buffer(&mapped_desc))
+        self.create_sendable(device.0.create_buffer(&mapped_desc))
     }
 
     fn device_create_texture(
@@ -1807,7 +1845,7 @@ impl crate::Context for Context {
         mapped_desc.dimension(map_texture_dimension(desc.dimension));
         mapped_desc.mip_level_count(desc.mip_level_count);
         mapped_desc.sample_count(desc.sample_count);
-        Sendable(device.0.create_texture(&mapped_desc))
+        self.create_sendable(device.0.create_texture(&mapped_desc))
     }
 
     fn device_create_sampler(
@@ -1832,7 +1870,7 @@ impl crate::Context for Context {
         if let Some(label) = desc.label {
             mapped_desc.label(label);
         }
-        Sendable(device.0.create_sampler_with_descriptor(&mapped_desc))
+        self.create_sendable(device.0.create_sampler_with_descriptor(&mapped_desc))
     }
 
     fn device_create_query_set(
@@ -1861,7 +1899,7 @@ impl crate::Context for Context {
         if let Some(label) = desc.label {
             mapped_desc.label(label);
         }
-        Sendable(
+        self.create_sendable(
             device
                 .0
                 .create_command_encoder_with_descriptor(&mapped_desc),
@@ -1995,7 +2033,7 @@ impl crate::Context for Context {
         if let Some(label) = desc.label {
             mapped.label(label);
         }
-        Sendable(texture.0.create_view_with_descriptor(&mapped))
+        self.create_sendable(texture.0.create_view_with_descriptor(&mapped))
     }
 
     fn surface_drop(&self, _surface: &Self::SurfaceId) {
@@ -2075,7 +2113,7 @@ impl crate::Context for Context {
         pipeline: &Self::ComputePipelineId,
         index: u32,
     ) -> Self::BindGroupLayoutId {
-        Sendable(pipeline.0.get_bind_group_layout(index))
+        self.create_sendable(pipeline.0.get_bind_group_layout(index))
     }
 
     fn render_pipeline_get_bind_group_layout(
@@ -2083,7 +2121,7 @@ impl crate::Context for Context {
         pipeline: &Self::RenderPipelineId,
         index: u32,
     ) -> Self::BindGroupLayoutId {
-        Sendable(pipeline.0.get_bind_group_layout(index))
+        self.create_sendable(pipeline.0.get_bind_group_layout(index))
     }
 
     fn command_encoder_copy_buffer_to_buffer(
@@ -2263,7 +2301,7 @@ impl crate::Context for Context {
 
     fn command_encoder_finish(&self, encoder: Self::CommandEncoderId) -> Self::CommandBufferId {
         let label = encoder.0.label();
-        Sendable(if label.is_empty() {
+        self.create_sendable(if label.is_empty() {
             encoder.0.finish()
         } else {
             let mut mapped_desc = web_sys::GpuCommandBufferDescriptor::new();
@@ -2332,7 +2370,7 @@ impl crate::Context for Context {
         encoder: Self::RenderBundleEncoderId,
         desc: &crate::RenderBundleDescriptor,
     ) -> Self::RenderBundleId {
-        Sendable(match desc.label {
+        self.create_sendable(match desc.label {
             Some(label) => {
                 let mut mapped_desc = web_sys::GpuRenderBundleDescriptor::new();
                 mapped_desc.label(label);
