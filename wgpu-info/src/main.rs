@@ -50,11 +50,12 @@ mod inner {
         wgpu::TextureFormat::Rgba32Uint,
         wgpu::TextureFormat::Rgba32Sint,
         wgpu::TextureFormat::Rgba32Float,
+        //wgpu::TextureFormat::Stencil8,
+        wgpu::TextureFormat::Depth16Unorm,
         wgpu::TextureFormat::Depth32Float,
         wgpu::TextureFormat::Depth32FloatStencil8,
         wgpu::TextureFormat::Depth24Plus,
         wgpu::TextureFormat::Depth24PlusStencil8,
-        wgpu::TextureFormat::Depth24UnormStencil8,
         wgpu::TextureFormat::Rgb9e5Ufloat,
         wgpu::TextureFormat::Bc1RgbaUnorm,
         wgpu::TextureFormat::Bc1RgbaUnormSrgb,
@@ -138,6 +139,8 @@ mod inner {
         println!("\t  VendorID: {:?}", info.vendor);
         println!("\t  DeviceID: {:?}", info.device);
         println!("\t      Type: {:?}", info.device_type);
+        println!("\t    Driver: {:?}", info.driver);
+        println!("\tDriverInfo: {:?}", info.driver);
         println!("\t Compliant: {:?}", downlevel.is_webgpu_compliant());
         println!("\tFeatures:");
         for i in 0..(size_of::<wgpu::Features>() * 8) {
@@ -156,6 +159,7 @@ mod inner {
             max_texture_dimension_3d,
             max_texture_array_layers,
             max_bind_groups,
+            max_bindings_per_bind_group,
             max_dynamic_uniform_buffers_per_pipeline_layout,
             max_dynamic_storage_buffers_per_pipeline_layout,
             max_sampled_textures_per_shader_stage,
@@ -185,6 +189,7 @@ mod inner {
         println!("\t\t                        Max Texture Dimension 3d: {}", max_texture_dimension_3d);
         println!("\t\t                        Max Texture Array Layers: {}", max_texture_array_layers);
         println!("\t\t                                 Max Bind Groups: {}", max_bind_groups);
+        println!("\t\t                     Max Bindings Per Bind Group: {}", max_bindings_per_bind_group);
         println!("\t\t Max Dynamic Uniform Buffers Per Pipeline Layout: {}", max_dynamic_uniform_buffers_per_pipeline_layout);
         println!("\t\t Max Dynamic Storage Buffers Per Pipeline Layout: {}", max_dynamic_storage_buffers_per_pipeline_layout);
         println!("\t\t           Max Sampled Textures Per Shader Stage: {}", max_sampled_textures_per_shader_stage);

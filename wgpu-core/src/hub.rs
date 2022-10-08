@@ -1007,7 +1007,7 @@ impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<A, F> {
                     let device = &devices[present.device_id.value];
                     let suf = A::get_surface_mut(surface);
                     unsafe {
-                        suf.raw.unconfigure(&device.raw);
+                        suf.unwrap().raw.unconfigure(&device.raw);
                         //TODO: we could destroy the surface here
                     }
                 }
@@ -1238,8 +1238,8 @@ pub trait HalApi: hal::Api {
     fn create_instance_from_hal(name: &str, hal_instance: Self::Instance) -> Instance;
     fn instance_as_hal(instance: &Instance) -> Option<&Self::Instance>;
     fn hub<G: GlobalIdentityHandlerFactory>(global: &Global<G>) -> &Hub<Self, G>;
-    fn get_surface(surface: &Surface) -> &HalSurface<Self>;
-    fn get_surface_mut(surface: &mut Surface) -> &mut HalSurface<Self>;
+    fn get_surface(surface: &Surface) -> Option<&HalSurface<Self>>;
+    fn get_surface_mut(surface: &mut Surface) -> Option<&mut HalSurface<Self>>;
 }
 
 impl HalApi for hal::api::Empty {
@@ -1253,10 +1253,10 @@ impl HalApi for hal::api::Empty {
     fn hub<G: GlobalIdentityHandlerFactory>(_: &Global<G>) -> &Hub<Self, G> {
         unimplemented!("called empty api")
     }
-    fn get_surface(_: &Surface) -> &HalSurface<Self> {
+    fn get_surface(_: &Surface) -> Option<&HalSurface<Self>> {
         unimplemented!("called empty api")
     }
-    fn get_surface_mut(_: &mut Surface) -> &mut HalSurface<Self> {
+    fn get_surface_mut(_: &mut Surface) -> Option<&mut HalSurface<Self>> {
         unimplemented!("called empty api")
     }
 }
@@ -1277,11 +1277,11 @@ impl HalApi for hal::api::Vulkan {
     fn hub<G: GlobalIdentityHandlerFactory>(global: &Global<G>) -> &Hub<Self, G> {
         &global.hubs.vulkan
     }
-    fn get_surface(surface: &Surface) -> &HalSurface<Self> {
-        surface.vulkan.as_ref().unwrap()
+    fn get_surface(surface: &Surface) -> Option<&HalSurface<Self>> {
+        surface.vulkan.as_ref()
     }
-    fn get_surface_mut(surface: &mut Surface) -> &mut HalSurface<Self> {
-        surface.vulkan.as_mut().unwrap()
+    fn get_surface_mut(surface: &mut Surface) -> Option<&mut HalSurface<Self>> {
+        surface.vulkan.as_mut()
     }
 }
 
@@ -1301,11 +1301,11 @@ impl HalApi for hal::api::Metal {
     fn hub<G: GlobalIdentityHandlerFactory>(global: &Global<G>) -> &Hub<Self, G> {
         &global.hubs.metal
     }
-    fn get_surface(surface: &Surface) -> &HalSurface<Self> {
-        surface.metal.as_ref().unwrap()
+    fn get_surface(surface: &Surface) -> Option<&HalSurface<Self>> {
+        surface.metal.as_ref()
     }
-    fn get_surface_mut(surface: &mut Surface) -> &mut HalSurface<Self> {
-        surface.metal.as_mut().unwrap()
+    fn get_surface_mut(surface: &mut Surface) -> Option<&mut HalSurface<Self>> {
+        surface.metal.as_mut()
     }
 }
 
@@ -1325,11 +1325,11 @@ impl HalApi for hal::api::Dx12 {
     fn hub<G: GlobalIdentityHandlerFactory>(global: &Global<G>) -> &Hub<Self, G> {
         &global.hubs.dx12
     }
-    fn get_surface(surface: &Surface) -> &HalSurface<Self> {
-        surface.dx12.as_ref().unwrap()
+    fn get_surface(surface: &Surface) -> Option<&HalSurface<Self>> {
+        surface.dx12.as_ref()
     }
-    fn get_surface_mut(surface: &mut Surface) -> &mut HalSurface<Self> {
-        surface.dx12.as_mut().unwrap()
+    fn get_surface_mut(surface: &mut Surface) -> Option<&mut HalSurface<Self>> {
+        surface.dx12.as_mut()
     }
 }
 
@@ -1349,11 +1349,11 @@ impl HalApi for hal::api::Dx11 {
     fn hub<G: GlobalIdentityHandlerFactory>(global: &Global<G>) -> &Hub<Self, G> {
         &global.hubs.dx11
     }
-    fn get_surface(surface: &Surface) -> &HalSurface<Self> {
-        surface.dx11.as_ref().unwrap()
+    fn get_surface(surface: &Surface) -> Option<&HalSurface<Self>> {
+        surface.dx11.as_ref()
     }
-    fn get_surface_mut(surface: &mut Surface) -> &mut HalSurface<Self> {
-        surface.dx11.as_mut().unwrap()
+    fn get_surface_mut(surface: &mut Surface) -> Option<&mut HalSurface<Self>> {
+        surface.dx11.as_mut()
     }
 }
 
@@ -1374,11 +1374,11 @@ impl HalApi for hal::api::Gles {
     fn hub<G: GlobalIdentityHandlerFactory>(global: &Global<G>) -> &Hub<Self, G> {
         &global.hubs.gl
     }
-    fn get_surface(surface: &Surface) -> &HalSurface<Self> {
-        surface.gl.as_ref().unwrap()
+    fn get_surface(surface: &Surface) -> Option<&HalSurface<Self>> {
+        surface.gl.as_ref()
     }
-    fn get_surface_mut(surface: &mut Surface) -> &mut HalSurface<Self> {
-        surface.gl.as_mut().unwrap()
+    fn get_surface_mut(surface: &mut Surface) -> Option<&mut HalSurface<Self>> {
+        surface.gl.as_mut()
     }
 }
 

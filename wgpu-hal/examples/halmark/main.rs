@@ -5,8 +5,15 @@ extern crate wgpu_hal as hal;
 use hal::{
     Adapter as _, CommandEncoder as _, Device as _, Instance as _, Queue as _, Surface as _,
 };
+use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 
-use std::{borrow::Borrow, iter, mem, num::NonZeroU32, ptr, time::Instant};
+use std::{
+    borrow::{Borrow, Cow},
+    iter, mem,
+    num::NonZeroU32,
+    ptr,
+    time::Instant,
+};
 
 const MAX_BUNNIES: usize = 1 << 20;
 const BUNNY_SIZE: f32 = 0.15 * 256.0;
@@ -91,7 +98,11 @@ impl<A: hal::Api> Example<A> {
             },
         };
         let instance = unsafe { A::Instance::init(&instance_desc)? };
-        let mut surface = unsafe { instance.create_surface(window).unwrap() };
+        let mut surface = unsafe {
+            instance
+                .create_surface(window.raw_display_handle(), window.raw_window_handle())
+                .unwrap()
+        };
 
         let (adapter, capabilities) = unsafe {
             let mut adapters = instance.enumerate_adapters();
@@ -117,7 +128,7 @@ impl<A: hal::Api> Example<A> {
                 .max(*surface_caps.swap_chain_sizes.start())
                 .min(*surface_caps.swap_chain_sizes.end()),
             present_mode: wgt::PresentMode::Fifo,
-            composite_alpha_mode: hal::CompositeAlphaMode::Opaque,
+            composite_alpha_mode: wgt::CompositeAlphaMode::Opaque,
             format: wgt::TextureFormat::Bgra8UnormSrgb,
             extent: wgt::Extent3d {
                 width: window_size.0,
@@ -143,7 +154,10 @@ impl<A: hal::Api> Example<A> {
             )
             .validate(&module)
             .unwrap();
-            hal::NagaShader { module, info }
+            hal::NagaShader {
+                module: Cow::Owned(module),
+                info,
+            }
         };
         let shader_desc = hal::ShaderModuleDescriptor {
             label: None,

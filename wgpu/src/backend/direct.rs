@@ -19,7 +19,7 @@ use std::{
     slice,
     sync::Arc,
 };
-use wgt::PresentMode;
+use wgt::{CompositeAlphaMode, PresentMode};
 
 const LABEL: &str = "label";
 
@@ -843,10 +843,13 @@ impl crate::Context for Context {
 
     fn instance_create_surface(
         &self,
-        handle: &(impl raw_window_handle::HasRawWindowHandle + raw_window_handle::HasRawDisplayHandle),
+        display_handle: raw_window_handle::RawDisplayHandle,
+        window_handle: raw_window_handle::RawWindowHandle,
     ) -> Self::SurfaceId {
         Surface {
-            id: self.0.instance_create_surface(handle, ()),
+            id: self
+                .0
+                .instance_create_surface(display_handle, window_handle, ()),
             configured_device: Mutex::new(None),
         }
     }
@@ -966,22 +969,38 @@ impl crate::Context for Context {
         match wgc::gfx_select!(adapter => global.surface_get_supported_formats(surface.id, *adapter))
         {
             Ok(formats) => formats,
-            Err(wgc::instance::GetSurfaceSupportError::UnsupportedQueueFamily) => vec![],
+            Err(wgc::instance::GetSurfaceSupportError::Unsupported) => vec![],
             Err(err) => self.handle_error_fatal(err, "Surface::get_supported_formats"),
         }
     }
 
-    fn surface_get_supported_modes(
+    fn surface_get_supported_present_modes(
         &self,
         surface: &Self::SurfaceId,
         adapter: &Self::AdapterId,
     ) -> Vec<PresentMode> {
         let global = &self.0;
-        match wgc::gfx_select!(adapter => global.surface_get_supported_modes(surface.id, *adapter))
+        match wgc::gfx_select!(adapter => global.surface_get_supported_present_modes(surface.id, *adapter))
         {
             Ok(modes) => modes,
-            Err(wgc::instance::GetSurfaceSupportError::UnsupportedQueueFamily) => vec![],
-            Err(err) => self.handle_error_fatal(err, "Surface::get_supported_formats"),
+            Err(wgc::instance::GetSurfaceSupportError::Unsupported) => vec![],
+            Err(err) => self.handle_error_fatal(err, "Surface::get_supported_present_modes"),
+        }
+    }
+
+    fn surface_get_supported_alpha_modes(
+        &self,
+        surface: &Self::SurfaceId,
+        adapter: &Self::AdapterId,
+    ) -> Vec<CompositeAlphaMode> {
+        let global = &self.0;
+        match wgc::gfx_select!(adapter => global.surface_get_supported_alpha_modes(surface.id, *adapter))
+        {
+            Ok(modes) => modes,
+            Err(wgc::instance::GetSurfaceSupportError::Unsupported) => {
+                vec![CompositeAlphaMode::Opaque]
+            }
+            Err(err) => self.handle_error_fatal(err, "Surface::get_supported_alpha_modes"),
         }
     }
 
@@ -1075,6 +1094,15 @@ impl crate::Context for Context {
         }
     }
 
+    #[cfg_attr(
+        not(any(
+            feature = "spirv",
+            feature = "glsl",
+            feature = "wgsl",
+            feature = "naga"
+        )),
+        allow(unreachable_code, unused_variables)
+    )]
     fn device_create_shader_module(
         &self,
         device: &Self::DeviceId,
@@ -1097,7 +1125,7 @@ impl crate::Context for Context {
                 };
                 let parser = naga::front::spv::Parser::new(spv.iter().cloned(), &options);
                 let module = parser.parse().unwrap();
-                wgc::pipeline::ShaderModuleSource::Naga(module)
+                wgc::pipeline::ShaderModuleSource::Naga(std::borrow::Cow::Owned(module))
             }
             #[cfg(feature = "glsl")]
             ShaderSource::Glsl {
@@ -1113,11 +1141,13 @@ impl crate::Context for Context {
                 let mut parser = naga::front::glsl::Parser::default();
                 let module = parser.parse(&options, shader).unwrap();
 
-                wgc::pipeline::ShaderModuleSource::Naga(module)
+                wgc::pipeline::ShaderModuleSource::Naga(std::borrow::Cow::Owned(module))
             }
+            #[cfg(feature = "wgsl")]
             ShaderSource::Wgsl(ref code) => wgc::pipeline::ShaderModuleSource::Wgsl(Borrowed(code)),
             #[cfg(feature = "naga")]
             ShaderSource::Naga(module) => wgc::pipeline::ShaderModuleSource::Naga(module),
+            ShaderSource::Dummy(_) => panic!("found `ShaderSource::Dummy`"),
         };
         let (id, error) = wgc::gfx_select!(
             device.id => global.device_create_shader_module(device.id, &descriptor, source, ())

@@ -1,6 +1,5 @@
 use glow::HasContext;
 use parking_lot::{Mutex, MutexGuard};
-use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle, RawWindowHandle};
 
 use std::{ffi, os::raw, ptr, sync::Arc, time::Duration};
 
@@ -770,16 +769,15 @@ impl crate::Instance<super::Api> for Instance {
     #[cfg_attr(target_os = "macos", allow(unused, unused_mut, unreachable_code))]
     unsafe fn create_surface(
         &self,
-        has_handle: &(impl HasRawWindowHandle + HasRawDisplayHandle),
+        display_handle: raw_window_handle::RawDisplayHandle,
+        window_handle: raw_window_handle::RawWindowHandle,
     ) -> Result<Surface, crate::InstanceError> {
         use raw_window_handle::RawWindowHandle as Rwh;
-
-        let raw_window_handle = has_handle.raw_window_handle();
 
         #[cfg_attr(any(target_os = "android", feature = "emscripten"), allow(unused_mut))]
         let mut inner = self.inner.lock();
 
-        match (raw_window_handle, has_handle.raw_display_handle()) {
+        match (window_handle, display_handle) {
             (Rwh::Xlib(_), _) => {}
             (Rwh::Xcb(_), _) => {}
             (Rwh::Win32(_), _) => {}
@@ -853,7 +851,7 @@ impl crate::Instance<super::Api> for Instance {
             wsi: self.wsi.clone(),
             config: inner.config,
             presentable: inner.supports_native_window,
-            raw_window_handle,
+            raw_window_handle: window_handle,
             swapchain: None,
             srgb_kind: inner.srgb_kind,
         })
@@ -945,7 +943,7 @@ pub struct Surface {
     wsi: WindowSystemInterface,
     config: egl::Config,
     pub(super) presentable: bool,
-    raw_window_handle: RawWindowHandle,
+    raw_window_handle: raw_window_handle::RawWindowHandle,
     swapchain: Option<Swapchain>,
     srgb_kind: SrgbFrameBufferKind,
 }

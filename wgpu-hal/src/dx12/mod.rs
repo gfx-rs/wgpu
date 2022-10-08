@@ -45,7 +45,7 @@ use crate::auxil::{self, dxgi::result::HResult as _};
 
 use arrayvec::ArrayVec;
 use parking_lot::Mutex;
-use std::{ffi, mem, num::NonZeroU32, sync::Arc};
+use std::{ffi, fmt, mem, num::NonZeroU32, sync::Arc};
 use winapi::{
     shared::{dxgi, dxgi1_4, dxgitype, windef, winerror},
     um::{d3d12, dcomp, synchapi, winbase, winnt},
@@ -268,6 +268,7 @@ struct PassResolve {
 #[derive(Clone, Copy)]
 enum RootElement {
     Empty,
+    Constant,
     SpecialConstantBuffer {
         base_vertex: i32,
         base_instance: u32,
@@ -294,6 +295,7 @@ struct PassState {
     resolves: ArrayVec<PassResolve, { crate::MAX_COLOR_ATTACHMENTS }>,
     layout: PipelineLayoutShared,
     root_elements: [RootElement; MAX_ROOT_ELEMENTS],
+    constant_data: [u32; MAX_ROOT_ELEMENTS],
     dirty_root_elements: u64,
     vertex_buffers: [d3d12::D3D12_VERTEX_BUFFER_VIEW; crate::MAX_VERTEX_BUFFERS],
     dirty_vertex_buffers: usize,
@@ -314,8 +316,10 @@ impl PassState {
                 signature: native::RootSignature::null(),
                 total_root_elements: 0,
                 special_constants_root_index: None,
+                root_constant_info: None,
             },
             root_elements: [RootElement::Empty; MAX_ROOT_ELEMENTS],
+            constant_data: [0; MAX_ROOT_ELEMENTS],
             dirty_root_elements: 0,
             vertex_buffers: [unsafe { mem::zeroed() }; crate::MAX_VERTEX_BUFFERS],
             dirty_vertex_buffers: 0,
@@ -343,6 +347,16 @@ pub struct CommandEncoder {
 unsafe impl Send for CommandEncoder {}
 unsafe impl Sync for CommandEncoder {}
 
+impl fmt::Debug for CommandEncoder {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("CommandEncoder")
+            .field("allocator", &self.allocator)
+            .field("device", &self.allocator)
+            .finish()
+    }
+}
+
+#[derive(Debug)]
 pub struct CommandBuffer {
     raw: native::GraphicsCommandList,
 }
@@ -483,10 +497,17 @@ struct BindGroupInfo {
 }
 
 #[derive(Clone)]
+struct RootConstantInfo {
+    root_index: RootIndex,
+    range: std::ops::Range<u32>,
+}
+
+#[derive(Clone)]
 struct PipelineLayoutShared {
     signature: native::RootSignature,
     total_root_elements: RootIndex,
     special_constants_root_index: Option<RootIndex>,
+    root_constant_info: Option<RootConstantInfo>,
 }
 
 unsafe impl Send for PipelineLayoutShared {}

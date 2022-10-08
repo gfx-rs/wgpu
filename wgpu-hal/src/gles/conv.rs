@@ -56,6 +56,12 @@ impl super::AdapterShared {
             Tf::Rgba32Uint => (glow::RGBA32UI, glow::RGBA_INTEGER, glow::UNSIGNED_INT),
             Tf::Rgba32Sint => (glow::RGBA32I, glow::RGBA_INTEGER, glow::INT),
             Tf::Rgba32Float => (glow::RGBA32F, glow::RGBA, glow::FLOAT),
+            //Tf::Stencil8 => (glow::R8UI, glow::STENCIL_COMPONENTS, glow::UNSIGNED_BYTE),
+            Tf::Depth16Unorm => (
+                glow::DEPTH_COMPONENT16,
+                glow::DEPTH_COMPONENT,
+                glow::UNSIGNED_SHORT,
+            ),
             Tf::Depth32Float => (glow::DEPTH_COMPONENT32F, glow::DEPTH_COMPONENT, glow::FLOAT),
             Tf::Depth32FloatStencil8 => {
                 (glow::DEPTH32F_STENCIL8, glow::DEPTH_COMPONENT, glow::FLOAT)
@@ -65,7 +71,7 @@ impl super::AdapterShared {
                 glow::DEPTH_COMPONENT,
                 glow::UNSIGNED_NORMALIZED,
             ),
-            Tf::Depth24PlusStencil8 | Tf::Depth24UnormStencil8 => (
+            Tf::Depth24PlusStencil8 => (
                 glow::DEPTH24_STENCIL8,
                 glow::DEPTH_COMPONENT,
                 glow::UNSIGNED_INT,
@@ -109,7 +115,7 @@ impl super::AdapterShared {
             Tf::EacRg11Unorm => (glow::COMPRESSED_RG11_EAC, glow::RG, 0),
             Tf::EacRg11Snorm => (glow::COMPRESSED_SIGNED_RG11_EAC, glow::RG, 0),
             Tf::Astc { block, channel } => match channel {
-                AstcChannel::Unorm => match block {
+                AstcChannel::Unorm | AstcChannel::Hdr => match block {
                     AstcBlock::B4x4 => (glow::COMPRESSED_RGBA_ASTC_4x4_KHR, glow::RGBA, 0),
                     AstcBlock::B5x4 => (glow::COMPRESSED_RGBA_ASTC_5x4_KHR, glow::RGBA, 0),
                     AstcBlock::B5x5 => (glow::COMPRESSED_RGBA_ASTC_5x5_KHR, glow::RGBA, 0),
@@ -153,7 +159,6 @@ impl super::AdapterShared {
                         (glow::COMPRESSED_SRGB8_ALPHA8_ASTC_12x12_KHR, glow::RGBA, 0)
                     }
                 },
-                AstcChannel::Hdr => unimplemented!(),
             },
         };
 
