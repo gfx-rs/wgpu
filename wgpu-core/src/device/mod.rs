@@ -5147,7 +5147,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .composite_alpha_modes
                 .contains(&config.composite_alpha_mode)
             {
-                let new_alpha_mode = 'b: loop {
+                let new_alpha_mode = 'alpha: loop {
                     // Automatic alpha mode checks.
                     let fallbacks = match config.composite_alpha_mode {
                         wgt::CompositeAlphaMode::Auto => &[
@@ -5164,7 +5164,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                     for &fallback in fallbacks {
                         if caps.composite_alpha_modes.contains(&fallback) {
-                            break 'b fallback;
+                            break 'alpha fallback;
                         }
                     }
 
