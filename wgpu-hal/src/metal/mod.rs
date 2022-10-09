@@ -88,19 +88,18 @@ impl crate::Instance<Api> for Instance {
             #[cfg(target_os = "ios")]
             raw_window_handle::RawWindowHandle::UiKit(handle) => {
                 let _ = &self.managed_metal_layer_delegate;
-                Ok(Surface::from_view(handle.ui_view, None))
+                Ok(unsafe { Surface::from_view(handle.ui_view, None) })
             }
             #[cfg(target_os = "macos")]
-            raw_window_handle::RawWindowHandle::AppKit(handle) => Ok(Surface::from_view(
-                handle.ns_view,
-                Some(&self.managed_metal_layer_delegate),
-            )),
+            raw_window_handle::RawWindowHandle::AppKit(handle) => Ok(unsafe {
+                Surface::from_view(handle.ns_view, Some(&self.managed_metal_layer_delegate))
+            }),
             _ => Err(crate::InstanceError),
         }
     }
 
     unsafe fn destroy_surface(&self, surface: Surface) {
-        surface.dispose();
+        unsafe { surface.dispose() };
     }
 
     unsafe fn enumerate_adapters(&self) -> Vec<crate::ExposedAdapter<Api>> {

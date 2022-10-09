@@ -100,7 +100,7 @@ impl Instance {
     ) -> Surface {
         Surface {
             factory: self.factory,
-            target: SurfaceTarget::Visual(native::WeakPtr::from_raw(visual)),
+            target: SurfaceTarget::Visual(unsafe { native::WeakPtr::from_raw(visual) }),
             supports_allow_tearing: self.supports_allow_tearing,
             swap_chain: None,
         }
@@ -183,7 +183,7 @@ struct Idler {
 
 impl Idler {
     unsafe fn destroy(self) {
-        self.fence.destroy();
+        unsafe { self.fence.destroy() };
     }
 }
 
@@ -195,9 +195,11 @@ struct CommandSignatures {
 
 impl CommandSignatures {
     unsafe fn destroy(&self) {
-        self.draw.destroy();
-        self.draw_indexed.destroy();
-        self.dispatch.destroy();
+        unsafe {
+            self.draw.destroy();
+            self.draw_indexed.destroy();
+            self.dispatch.destroy();
+        }
     }
 }
 
@@ -210,10 +212,12 @@ struct DeviceShared {
 
 impl DeviceShared {
     unsafe fn destroy(&self) {
-        self.zero_buffer.destroy();
-        self.cmd_signatures.destroy();
-        self.heap_views.raw.destroy();
-        self.heap_samplers.raw.destroy();
+        unsafe {
+            self.zero_buffer.destroy();
+            self.cmd_signatures.destroy();
+            self.heap_views.raw.destroy();
+            self.heap_samplers.raw.destroy();
+        }
     }
 }
 
@@ -548,7 +552,7 @@ unsafe impl Sync for ComputePipeline {}
 impl SwapChain {
     unsafe fn release_resources(self) -> native::WeakPtr<dxgi1_4::IDXGISwapChain3> {
         for resource in self.resources {
-            resource.destroy();
+            unsafe { resource.destroy() };
         }
         self.raw
     }
@@ -561,7 +565,7 @@ impl SwapChain {
             Some(duration) => duration.as_millis() as u32,
             None => winbase::INFINITE,
         };
-        match synchapi::WaitForSingleObject(self.waitable, timeout_ms) {
+        match unsafe { synchapi::WaitForSingleObject(self.waitable, timeout_ms) } {
             winbase::WAIT_ABANDONED | winbase::WAIT_FAILED => Err(crate::SurfaceError::Lost),
             winbase::WAIT_OBJECT_0 => Ok(true),
             winerror::WAIT_TIMEOUT => Ok(false),
@@ -593,16 +597,18 @@ impl crate::Surface<Api> for Surface {
             //Note: this path doesn't properly re-initialize all of the things
             Some(sc) => {
                 // can't have image resources in flight used by GPU
-                let _ = device.wait_idle();
+                let _ = unsafe { device.wait_idle() };
 
-                let raw = sc.release_resources();
-                let result = raw.ResizeBuffers(
-                    config.swap_chain_size,
-                    config.extent.width,
-                    config.extent.height,
-                    non_srgb_format,
-                    flags,
-                );
+                let raw = unsafe { sc.release_resources() };
+                let result = unsafe {
+                    raw.ResizeBuffers(
+                        config.swap_chain_size,
+                        config.extent.width,
+                        config.extent.height,
+                        non_srgb_format,
+                        flags,
+                    )
+                };
                 if let Err(err) = result.into_result() {
                     log::error!("ResizeBuffers failed: {}", err);
                     return Err(crate::SurfaceError::Other("window is in use"));
@@ -664,7 +670,8 @@ impl crate::Surface<Api> for Surface {
                 match self.target {
                     SurfaceTarget::WndHandle(_) => {}
                     SurfaceTarget::Visual(visual) => {
-                        if let Err(err) = visual.SetContent(swap_chain1.as_unknown()).into_result()
+                        if let Err(err) =
+                            unsafe { visual.SetContent(swap_chain1.as_unknown()) }.into_result()
                         {
                             log::error!("Unable to SetContent: {}", err);
                             return Err(crate::SurfaceError::Other(
@@ -674,9 +681,9 @@ impl crate::Surface<Api> for Surface {
                     }
                 }
 
-                match swap_chain1.cast::<dxgi1_4::IDXGISwapChain3>().into_result() {
+                match unsafe { swap_chain1.cast::<dxgi1_4::IDXGISwapChain3>() }.into_result() {
                     Ok(swap_chain3) => {
-                        swap_chain1.destroy();
+                        unsafe { swap_chain1.destroy() };
                         swap_chain3
                     }
                     Err(err) => {
@@ -692,20 +699,24 @@ impl crate::Surface<Api> for Surface {
                 // Disable automatic Alt+Enter handling by DXGI.
                 const DXGI_MWA_NO_WINDOW_CHANGES: u32 = 1;
                 const DXGI_MWA_NO_ALT_ENTER: u32 = 2;
-                self.factory.MakeWindowAssociation(
-                    wnd_handle,
-                    DXGI_MWA_NO_WINDOW_CHANGES | DXGI_MWA_NO_ALT_ENTER,
-                );
+                unsafe {
+                    self.factory.MakeWindowAssociation(
+                        wnd_handle,
+                        DXGI_MWA_NO_WINDOW_CHANGES | DXGI_MWA_NO_ALT_ENTER,
+                    )
+                };
             }
             SurfaceTarget::Visual(_) => {}
         }
 
-        swap_chain.SetMaximumFrameLatency(config.swap_chain_size);
-        let waitable = swap_chain.GetFrameLatencyWaitableObject();
+        unsafe { swap_chain.SetMaximumFrameLatency(config.swap_chain_size) };
+        let waitable = unsafe { swap_chain.GetFrameLatencyWaitableObject() };
 
         let mut resources = vec![native::Resource::null(); config.swap_chain_size as usize];
         for (i, res) in resources.iter_mut().enumerate() {
-            swap_chain.GetBuffer(i as _, &d3d12::ID3D12Resource::uuidof(), res.mut_void());
+            unsafe {
+                swap_chain.GetBuffer(i as _, &d3d12::ID3D12Resource::uuidof(), res.mut_void())
+            };
         }
 
         self.swap_chain = Some(SwapChain {
@@ -723,12 +734,14 @@ impl crate::Surface<Api> for Surface {
 
     unsafe fn unconfigure(&mut self, device: &Device) {
         if let Some(mut sc) = self.swap_chain.take() {
-            let _ = sc.wait(None);
-            //TODO: this shouldn't be needed,
-            // but it complains that the queue is still used otherwise
-            let _ = device.wait_idle();
-            let raw = sc.release_resources();
-            raw.destroy();
+            unsafe {
+                let _ = sc.wait(None);
+                //TODO: this shouldn't be needed,
+                // but it complains that the queue is still used otherwise
+                let _ = device.wait_idle();
+                let raw = sc.release_resources();
+                raw.destroy();
+            }
         }
     }
 
@@ -738,9 +751,9 @@ impl crate::Surface<Api> for Surface {
     ) -> Result<Option<crate::AcquiredSurfaceTexture<Api>>, crate::SurfaceError> {
         let sc = self.swap_chain.as_mut().unwrap();
 
-        sc.wait(timeout)?;
+        unsafe { sc.wait(timeout) }?;
 
-        let base_index = sc.raw.GetCurrentBackBufferIndex() as usize;
+        let base_index = unsafe { sc.raw.GetCurrentBackBufferIndex() } as usize;
         let index = (base_index + sc.acquired_count) % sc.resources.len();
         sc.acquired_count += 1;
 
@@ -803,14 +816,14 @@ impl crate::Queue<Api> for Queue {
         };
 
         profiling::scope!("IDXGISwapchain3::Present");
-        sc.raw.Present(interval, flags);
+        unsafe { sc.raw.Present(interval, flags) };
 
         Ok(())
     }
 
     unsafe fn get_timestamp_period(&self) -> f32 {
         let mut frequency = 0u64;
-        self.raw.GetTimestampFrequency(&mut frequency);
+        unsafe { self.raw.GetTimestampFrequency(&mut frequency) };
         (1_000_000_000.0 / frequency as f64) as f32
     }
 }

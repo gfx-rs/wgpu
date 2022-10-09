@@ -227,14 +227,16 @@ impl crate::Queue<super::Api> for super::Queue {
 impl super::D3D11Device {
     #[allow(trivial_casts)] // come on
     pub unsafe fn check_feature_support<T>(&self, feature: d3d11::D3D11_FEATURE) -> T {
-        let mut value = mem::zeroed::<T>();
-        let ret = self.CheckFeatureSupport(
-            feature,
-            &mut value as *mut T as *mut c_void,
-            mem::size_of::<T>() as u32,
-        );
-        assert_eq!(ret.into_result(), Ok(()));
+        unsafe {
+            let mut value = mem::zeroed::<T>();
+            let ret = self.CheckFeatureSupport(
+                feature,
+                &mut value as *mut T as *mut c_void,
+                mem::size_of::<T>() as u32,
+            );
+            assert_eq!(ret.into_result(), Ok(()));
 
-        value
+            value
+        }
     }
 }

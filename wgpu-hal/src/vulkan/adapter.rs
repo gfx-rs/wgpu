@@ -1110,9 +1110,11 @@ impl super::Adapter {
     ) -> Result<crate::OpenDevice<super::Api>, crate::DeviceError> {
         let mem_properties = {
             profiling::scope!("vkGetPhysicalDeviceMemoryProperties");
-            self.instance
-                .raw
-                .get_physical_device_memory_properties(self.raw)
+            unsafe {
+                self.instance
+                    .raw
+                    .get_physical_device_memory_properties(self.raw)
+            }
         };
         let memory_types =
             &mem_properties.memory_types[..mem_properties.memory_type_count as usize];
@@ -1219,7 +1221,7 @@ impl super::Adapter {
 
         let raw_queue = {
             profiling::scope!("vkGetDeviceQueue");
-            raw_device.get_device_queue(family_index, queue_index)
+            unsafe { raw_device.get_device_queue(family_index, queue_index) }
         };
 
         let shared = Arc::new(super::DeviceShared {
@@ -1246,9 +1248,11 @@ impl super::Adapter {
         });
         let mut relay_semaphores = [vk::Semaphore::null(); 2];
         for sem in relay_semaphores.iter_mut() {
-            *sem = shared
-                .raw
-                .create_semaphore(&vk::SemaphoreCreateInfo::builder(), None)?;
+            unsafe {
+                *sem = shared
+                    .raw
+                    .create_semaphore(&vk::SemaphoreCreateInfo::builder(), None)?
+            };
         }
         let queue = super::Queue {
             raw: raw_queue,
@@ -1344,18 +1348,20 @@ impl crate::Adapter<super::Api> for super::Adapter {
             .build();
         let raw_device = {
             profiling::scope!("vkCreateDevice");
-            self.instance.raw.create_device(self.raw, &info, None)?
+            unsafe { self.instance.raw.create_device(self.raw, &info, None)? }
         };
 
-        self.device_from_raw(
-            raw_device,
-            true,
-            &enabled_extensions,
-            features,
-            uab_types,
-            family_info.queue_family_index,
-            0,
-        )
+        unsafe {
+            self.device_from_raw(
+                raw_device,
+                true,
+                &enabled_extensions,
+                features,
+                uab_types,
+                family_info.queue_family_index,
+                0,
+            )
+        }
     }
 
     unsafe fn texture_format_capabilities(
@@ -1365,10 +1371,11 @@ impl crate::Adapter<super::Api> for super::Adapter {
         use crate::TextureFormatCapabilities as Tfc;
 
         let vk_format = self.private_caps.map_texture_format(format);
-        let properties = self
-            .instance
-            .raw
-            .get_physical_device_format_properties(self.raw, vk_format);
+        let properties = unsafe {
+            self.instance
+                .raw
+                .get_physical_device_format_properties(self.raw, vk_format)
+        };
         let features = properties.optimal_tiling_features;
 
         let mut flags = Tfc::empty();
@@ -1466,11 +1473,13 @@ impl crate::Adapter<super::Api> for super::Adapter {
         let queue_family_index = 0; //TODO
         {
             profiling::scope!("vkGetPhysicalDeviceSurfaceSupportKHR");
-            match surface.functor.get_physical_device_surface_support(
-                self.raw,
-                queue_family_index,
-                surface.raw,
-            ) {
+            match unsafe {
+                surface.functor.get_physical_device_surface_support(
+                    self.raw,
+                    queue_family_index,
+                    surface.raw,
+                )
+            } {
                 Ok(true) => (),
                 Ok(false) => return None,
                 Err(e) => {
@@ -1482,10 +1491,11 @@ impl crate::Adapter<super::Api> for super::Adapter {
 
         let caps = {
             profiling::scope!("vkGetPhysicalDeviceSurfaceCapabilitiesKHR");
-            match surface
-                .functor
-                .get_physical_device_surface_capabilities(self.raw, surface.raw)
-            {
+            match unsafe {
+                surface
+                    .functor
+                    .get_physical_device_surface_capabilities(self.raw, surface.raw)
+            } {
                 Ok(caps) => caps,
                 Err(e) => {
                     log::error!("get_physical_device_surface_capabilities: {}", e);
@@ -1527,10 +1537,11 @@ impl crate::Adapter<super::Api> for super::Adapter {
 
         let raw_present_modes = {
             profiling::scope!("vkGetPhysicalDeviceSurfacePresentModesKHR");
-            match surface
-                .functor
-                .get_physical_device_surface_present_modes(self.raw, surface.raw)
-            {
+            match unsafe {
+                surface
+                    .functor
+                    .get_physical_device_surface_present_modes(self.raw, surface.raw)
+            } {
                 Ok(present_modes) => present_modes,
                 Err(e) => {
                     log::error!("get_physical_device_surface_present_modes: {}", e);
@@ -1541,10 +1552,11 @@ impl crate::Adapter<super::Api> for super::Adapter {
 
         let raw_surface_formats = {
             profiling::scope!("vkGetPhysicalDeviceSurfaceFormatsKHR");
-            match surface
-                .functor
-                .get_physical_device_surface_formats(self.raw, surface.raw)
-            {
+            match unsafe {
+                surface
+                    .functor
+                    .get_physical_device_surface_formats(self.raw, surface.raw)
+            } {
                 Ok(formats) => formats,
                 Err(e) => {
                     log::error!("get_physical_device_surface_formats: {}", e);

@@ -157,7 +157,7 @@ impl FixedSizeHeap {
     }
 
     unsafe fn destroy(&self) {
-        self.raw.destroy();
+        unsafe { self.raw.destroy() };
     }
 }
 
@@ -225,7 +225,7 @@ impl CpuPool {
 
     pub(super) unsafe fn destroy(&self) {
         for heap in &self.heaps {
-            heap.destroy();
+            unsafe { heap.destroy() };
         }
     }
 }
@@ -274,7 +274,7 @@ impl CpuHeap {
     }
 
     pub(super) unsafe fn destroy(self) {
-        self.inner.into_inner().raw.destroy();
+        unsafe { self.inner.into_inner().raw.destroy() };
     }
 }
 
@@ -296,14 +296,16 @@ pub(super) unsafe fn upload(
 ) -> Result<DualHandle, crate::DeviceError> {
     let count = src.stage.len() as u32;
     let index = dst.allocate_slice(count as u64)?;
-    device.CopyDescriptors(
-        1,
-        &dst.cpu_descriptor_at(index),
-        &count,
-        count,
-        src.stage.as_ptr(),
-        dummy_copy_counts.as_ptr(),
-        dst.ty as u32,
-    );
+    unsafe {
+        device.CopyDescriptors(
+            1,
+            &dst.cpu_descriptor_at(index),
+            &count,
+            count,
+            src.stage.as_ptr(),
+            dummy_copy_counts.as_ptr(),
+            dst.ty as u32,
+        )
+    };
     Ok(dst.at(index, count as u64))
 }

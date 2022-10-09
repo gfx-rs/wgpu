@@ -266,7 +266,7 @@ impl crate::Device<super::Api> for super::Device {
         let ptr = buffer.raw.contents() as *mut u8;
         assert!(!ptr.is_null());
         Ok(crate::BufferMapping {
-            ptr: ptr::NonNull::new(ptr.offset(range.start as isize)).unwrap(),
+            ptr: ptr::NonNull::new(unsafe { ptr.offset(range.start as isize) }).unwrap(),
             is_coherent: true,
         })
     }

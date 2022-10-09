@@ -101,7 +101,7 @@ impl crate::Instance<super::Api> for Instance {
             None => return Vec::new(),
         };
 
-        super::Adapter::expose(AdapterContext { glow_context: gl })
+        unsafe { super::Adapter::expose(AdapterContext { glow_context: gl }) }
             .into_iter()
             .collect()
     }
@@ -172,67 +172,67 @@ impl Surface {
 
         if swapchain.format.describe().srgb {
             // Important to set the viewport since we don't know in what state the user left it.
-            gl.viewport(
-                0,
-                0,
-                swapchain.extent.width as _,
-                swapchain.extent.height as _,
-            );
-            gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, None);
-            gl.bind_sampler(0, None);
-            gl.active_texture(glow::TEXTURE0);
-            gl.bind_texture(glow::TEXTURE_2D, self.texture);
-            gl.use_program(self.srgb_present_program);
-            gl.disable(glow::DEPTH_TEST);
-            gl.disable(glow::STENCIL_TEST);
-            gl.disable(glow::SCISSOR_TEST);
-            gl.disable(glow::BLEND);
-            gl.disable(glow::CULL_FACE);
-            gl.draw_buffers(&[glow::BACK]);
-            gl.draw_arrays(glow::TRIANGLES, 0, 3);
+            unsafe {
+                gl.viewport(
+                    0,
+                    0,
+                    swapchain.extent.width as _,
+                    swapchain.extent.height as _,
+                )
+            };
+            unsafe { gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, None) };
+            unsafe { gl.bind_sampler(0, None) };
+            unsafe { gl.active_texture(glow::TEXTURE0) };
+            unsafe { gl.bind_texture(glow::TEXTURE_2D, self.texture) };
+            unsafe { gl.use_program(self.srgb_present_program) };
+            unsafe { gl.disable(glow::DEPTH_TEST) };
+            unsafe { gl.disable(glow::STENCIL_TEST) };
+            unsafe { gl.disable(glow::SCISSOR_TEST) };
+            unsafe { gl.disable(glow::BLEND) };
+            unsafe { gl.disable(glow::CULL_FACE) };
+            unsafe { gl.draw_buffers(&[glow::BACK]) };
+            unsafe { gl.draw_arrays(glow::TRIANGLES, 0, 3) };
         } else {
-            gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(swapchain.framebuffer));
-            gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, None);
+            unsafe { gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(swapchain.framebuffer)) };
+            unsafe { gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, None) };
             // Note the Y-flipping here. GL's presentation is not flipped,
             // but main rendering is. Therefore, we Y-flip the output positions
             // in the shader, and also this blit.
-            gl.blit_framebuffer(
-                0,
-                swapchain.extent.height as i32,
-                swapchain.extent.width as i32,
-                0,
-                0,
-                0,
-                swapchain.extent.width as i32,
-                swapchain.extent.height as i32,
-                glow::COLOR_BUFFER_BIT,
-                glow::NEAREST,
-            );
+            unsafe {
+                gl.blit_framebuffer(
+                    0,
+                    swapchain.extent.height as i32,
+                    swapchain.extent.width as i32,
+                    0,
+                    0,
+                    0,
+                    swapchain.extent.width as i32,
+                    swapchain.extent.height as i32,
+                    glow::COLOR_BUFFER_BIT,
+                    glow::NEAREST,
+                )
+            };
         }
 
         Ok(())
     }
 
     unsafe fn create_srgb_present_program(gl: &glow::Context) -> glow::Program {
-        let program = gl
-            .create_program()
-            .expect("Could not create shader program");
-        let vertex = gl
-            .create_shader(glow::VERTEX_SHADER)
-            .expect("Could not create shader");
-        gl.shader_source(vertex, include_str!("./shaders/srgb_present.vert"));
-        gl.compile_shader(vertex);
-        let fragment = gl
-            .create_shader(glow::FRAGMENT_SHADER)
-            .expect("Could not create shader");
-        gl.shader_source(fragment, include_str!("./shaders/srgb_present.frag"));
-        gl.compile_shader(fragment);
-        gl.attach_shader(program, vertex);
-        gl.attach_shader(program, fragment);
-        gl.link_program(program);
-        gl.delete_shader(vertex);
-        gl.delete_shader(fragment);
-        gl.bind_texture(glow::TEXTURE_2D, None);
+        let program = unsafe { gl.create_program() }.expect("Could not create shader program");
+        let vertex =
+            unsafe { gl.create_shader(glow::VERTEX_SHADER) }.expect("Could not create shader");
+        unsafe { gl.shader_source(vertex, include_str!("./shaders/srgb_present.vert")) };
+        unsafe { gl.compile_shader(vertex) };
+        let fragment =
+            unsafe { gl.create_shader(glow::FRAGMENT_SHADER) }.expect("Could not create shader");
+        unsafe { gl.shader_source(fragment, include_str!("./shaders/srgb_present.frag")) };
+        unsafe { gl.compile_shader(fragment) };
+        unsafe { gl.attach_shader(program, vertex) };
+        unsafe { gl.attach_shader(program, fragment) };
+        unsafe { gl.link_program(program) };
+        unsafe { gl.delete_shader(vertex) };
+        unsafe { gl.delete_shader(fragment) };
+        unsafe { gl.bind_texture(glow::TEXTURE_2D, None) };
 
         program
     }
@@ -253,49 +253,57 @@ impl crate::Surface<super::Api> for Surface {
 
         if let Some(swapchain) = self.swapchain.take() {
             // delete all frame buffers already allocated
-            gl.delete_framebuffer(swapchain.framebuffer);
+            unsafe { gl.delete_framebuffer(swapchain.framebuffer) };
         }
 
         if self.srgb_present_program.is_none() && config.format.describe().srgb {
-            self.srgb_present_program = Some(Self::create_srgb_present_program(gl));
+            self.srgb_present_program = Some(unsafe { Self::create_srgb_present_program(gl) });
         }
 
         if let Some(texture) = self.texture.take() {
-            gl.delete_texture(texture);
+            unsafe { gl.delete_texture(texture) };
         }
 
-        self.texture = Some(gl.create_texture().unwrap());
+        self.texture = Some(unsafe { gl.create_texture() }.unwrap());
 
         let desc = device.shared.describe_texture_format(config.format);
-        gl.bind_texture(glow::TEXTURE_2D, self.texture);
-        gl.tex_parameter_i32(
-            glow::TEXTURE_2D,
-            glow::TEXTURE_MIN_FILTER,
-            glow::NEAREST as _,
-        );
-        gl.tex_parameter_i32(
-            glow::TEXTURE_2D,
-            glow::TEXTURE_MAG_FILTER,
-            glow::NEAREST as _,
-        );
-        gl.tex_storage_2d(
-            glow::TEXTURE_2D,
-            1,
-            desc.internal,
-            config.extent.width as i32,
-            config.extent.height as i32,
-        );
+        unsafe { gl.bind_texture(glow::TEXTURE_2D, self.texture) };
+        unsafe {
+            gl.tex_parameter_i32(
+                glow::TEXTURE_2D,
+                glow::TEXTURE_MIN_FILTER,
+                glow::NEAREST as _,
+            )
+        };
+        unsafe {
+            gl.tex_parameter_i32(
+                glow::TEXTURE_2D,
+                glow::TEXTURE_MAG_FILTER,
+                glow::NEAREST as _,
+            )
+        };
+        unsafe {
+            gl.tex_storage_2d(
+                glow::TEXTURE_2D,
+                1,
+                desc.internal,
+                config.extent.width as i32,
+                config.extent.height as i32,
+            )
+        };
 
-        let framebuffer = gl.create_framebuffer().unwrap();
-        gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(framebuffer));
-        gl.framebuffer_texture_2d(
-            glow::READ_FRAMEBUFFER,
-            glow::COLOR_ATTACHMENT0,
-            glow::TEXTURE_2D,
-            self.texture,
-            0,
-        );
-        gl.bind_texture(glow::TEXTURE_2D, None);
+        let framebuffer = unsafe { gl.create_framebuffer() }.unwrap();
+        unsafe { gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(framebuffer)) };
+        unsafe {
+            gl.framebuffer_texture_2d(
+                glow::READ_FRAMEBUFFER,
+                glow::COLOR_ATTACHMENT0,
+                glow::TEXTURE_2D,
+                self.texture,
+                0,
+            )
+        };
+        unsafe { gl.bind_texture(glow::TEXTURE_2D, None) };
 
         self.swapchain = Some(Swapchain {
             extent: config.extent,
@@ -310,10 +318,10 @@ impl crate::Surface<super::Api> for Surface {
     unsafe fn unconfigure(&mut self, device: &super::Device) {
         let gl = device.shared.context.lock();
         if let Some(swapchain) = self.swapchain.take() {
-            gl.delete_framebuffer(swapchain.framebuffer);
+            unsafe { gl.delete_framebuffer(swapchain.framebuffer) };
         }
         if let Some(renderbuffer) = self.texture.take() {
-            gl.delete_texture(renderbuffer);
+            unsafe { gl.delete_texture(renderbuffer) };
         }
     }
 
