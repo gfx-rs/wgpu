@@ -588,8 +588,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         let (mut texture_guard, _) = hub.textures.write(&mut token); // For clear we need write access to the texture. TODO: Can we acquire write lock later?
+        let dst = texture_guard.get_mut(destination.texture).unwrap();
+
         let (selector, dst_base, texture_format) =
-            extract_texture_selector(destination, size, &*texture_guard)?;
+            extract_texture_selector(destination, size, dst)?;
         let format_desc = texture_format.describe();
         //Note: `_source_bytes_per_array_layer` is ignored since we have a staging copy,
         // and it can have a different value.
@@ -631,7 +633,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             (size.depth_or_array_layers - 1) * block_rows_per_image + height_blocks;
         let stage_size = stage_bytes_per_row as u64 * block_rows_in_copy as u64;
 
-        let dst = texture_guard.get_mut(destination.texture).unwrap();
         if !dst.desc.usage.contains(wgt::TextureUsages::COPY_DST) {
             return Err(
                 TransferError::MissingCopyDstUsageFlag(None, Some(destination.texture)).into(),
@@ -678,10 +679,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
         }
 
-        let (dst, transition) = trackers
+        let dst = texture_guard.get(destination.texture).unwrap();
+        let transition = trackers
             .textures
             .set_single(
-                &*texture_guard,
+                dst,
                 destination.texture,
                 selector,
                 hal::TextureUses::COPY_DST,
