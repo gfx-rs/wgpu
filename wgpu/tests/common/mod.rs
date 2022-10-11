@@ -307,3 +307,21 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
         panic!("UNEXPECTED TEST FAILURE DUE TO {}", failure_cause)
     }
 }
+
+// Run some code in an error scope and assert that validation fails.
+pub fn fail<T>(device: &wgpu::Device, callback: impl FnOnce() -> T) -> T {
+    device.push_error_scope(wgpu::ErrorFilter::Validation);
+    let result = callback();
+    assert!(pollster::block_on(device.pop_error_scope()).is_some());
+
+    result
+}
+
+// Run some code in an error scope and assert that validation succeeds.
+pub fn valid<T>(device: &wgpu::Device, callback: impl FnOnce() -> T) -> T {
+    device.push_error_scope(wgpu::ErrorFilter::Validation);
+    let result = callback();
+    assert!(pollster::block_on(device.pop_error_scope()).is_none());
+
+    result
+}
