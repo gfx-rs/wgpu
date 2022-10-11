@@ -3182,7 +3182,9 @@ impl Hash for DepthBiasState {
 
 impl PartialEq for DepthBiasState {
     fn eq(&self, other: &Self) -> bool {
-        (self.constant == other.constant) & (self.slope_scale == other.slope_scale) & (self.clamp == other.clamp)
+        (self.constant == other.constant)
+            & (self.slope_scale == other.slope_scale)
+            & (self.clamp == other.clamp)
     }
 }
 
