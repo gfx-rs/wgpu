@@ -10,6 +10,7 @@
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
+use std::hash::{Hash, Hasher};
 use std::{num::NonZeroU32, ops::Range};
 
 /// Integral type used for buffer offsets.
@@ -3152,7 +3153,7 @@ impl StencilState {
 /// Corresponds to a portion of [WebGPU `GPUDepthStencilState`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpudepthstencilstate).
 #[repr(C)]
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, Default)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub struct DepthBiasState {
@@ -3171,12 +3172,28 @@ impl DepthBiasState {
     }
 }
 
+impl Hash for DepthBiasState {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.constant.hash(state);
+        self.slope_scale.to_bits().hash(state);
+        self.clamp.to_bits().hash(state);
+    }
+}
+
+impl PartialEq for DepthBiasState {
+    fn eq(&self, other: &Self) -> bool {
+        (self.constant == other.constant)
+            && (self.slope_scale.to_bits() == other.slope_scale.to_bits())
+            && (self.clamp.to_bits() == other.clamp.to_bits())
+    }
+}
+
 /// Describes the depth/stencil state in a render pipeline.
 ///
 /// Corresponds to [WebGPU `GPUDepthStencilState`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpudepthstencilstate).
 #[repr(C)]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub struct DepthStencilState {
