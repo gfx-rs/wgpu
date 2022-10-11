@@ -358,9 +358,8 @@ impl<T, I: id::TypedId> Storage<T, I> {
         let (index, epoch, _) = id.unzip();
         let (result, storage_epoch) = match self.map.get_mut(index as usize) {
             Some(&mut Element::Occupied(ref mut v, epoch)) => (Ok(v), epoch),
-            Some(&mut Element::Vacant) => panic!("{}[{}] does not exist", self.kind, index),
+            Some(&mut Element::Vacant) | None => panic!("{}[{}] does not exist", self.kind, index),
             Some(&mut Element::Error(epoch, ..)) => (Err(InvalidId), epoch),
-            None => return Err(InvalidId),
         };
         assert_eq!(
             epoch, storage_epoch,
