@@ -51,7 +51,7 @@ Bottom level categories:
 
 #### General
 
-- Implement `Hash` for `DepthStencilState` and `DepthBiasState` in `wgpu-types`.
+- Implement `Hash` for `DepthStencilState` and `DepthBiasState`
 - Add the `"wgsl"` feature, to enable WGSL shaders in `wgpu-core` and `wgpu`. Enabled by default in `wgpu`. By @daxpedda in [#2890](https://github.com/gfx-rs/wgpu/pull/2890).
 - Implement `Clone` for `ShaderSource` and `ShaderModuleDescriptor` in `wgpu`. By @daxpedda in [#3086](https://github.com/gfx-rs/wgpu/pull/3086).
 
