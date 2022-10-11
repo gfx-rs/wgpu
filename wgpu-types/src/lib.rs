@@ -3153,7 +3153,7 @@ impl StencilState {
 /// Corresponds to a portion of [WebGPU `GPUDepthStencilState`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpudepthstencilstate).
 #[repr(C)]
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, Default)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub struct DepthBiasState {
@@ -3177,6 +3177,12 @@ impl Hash for DepthBiasState {
         self.constant.hash(state);
         self.slope_scale.to_bits().hash(state);
         self.clamp.to_bits().hash(state);
+    }
+}
+
+impl PartialEq for DepthBiasState {
+    fn eq(&self, other: &Self) -> bool {
+        (self.constant == other.constant) & (self.slope_scale == other.slope_scale) & (self.clamp == other.clamp)
     }
 }
 
