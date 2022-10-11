@@ -171,6 +171,13 @@ impl Surface {
         ))?;
 
         if swapchain.format.describe().srgb {
+            // Important to set the viewport since we don't know in what state the user left it.
+            gl.viewport(
+                0,
+                0,
+                swapchain.extent.width as _,
+                swapchain.extent.height as _,
+            );
             gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, None);
             gl.bind_sampler(0, None);
             gl.active_texture(glow::TEXTURE0);
