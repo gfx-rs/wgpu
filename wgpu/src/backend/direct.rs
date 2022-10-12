@@ -803,42 +803,42 @@ pub(crate) struct CommandEncoder {
 
 pub(crate) type Id = (u32, u32, wgt::Backend);
 
-impl<T: wgc::id::TypedId> crate::BikeshedBackendId for T {
-    fn id(&self) -> Id {
+impl<T: wgc::id::TypedId> crate::GlobalId for T {
+    fn global_id(&self) -> Id {
         self.unzip()
     }
 }
 
-impl crate::BikeshedBackendId for Surface {
-    fn id(&self) -> Id {
+impl crate::GlobalId for Surface {
+    fn global_id(&self) -> Id {
         use wgc::id::TypedId;
         self.id.unzip()
     }
 }
 
-impl crate::BikeshedBackendId for Device {
-    fn id(&self) -> Id {
+impl crate::GlobalId for Device {
+    fn global_id(&self) -> Id {
         use wgc::id::TypedId;
         self.id.unzip()
     }
 }
 
-impl crate::BikeshedBackendId for Buffer {
-    fn id(&self) -> Id {
+impl crate::GlobalId for Buffer {
+    fn global_id(&self) -> Id {
         use wgc::id::TypedId;
         self.id.unzip()
     }
 }
 
-impl crate::BikeshedBackendId for Texture {
-    fn id(&self) -> Id {
+impl crate::GlobalId for Texture {
+    fn global_id(&self) -> Id {
         use wgc::id::TypedId;
         self.id.unzip()
     }
 }
 
-impl crate::BikeshedBackendId for CommandEncoder {
-    fn id(&self) -> Id {
+impl crate::GlobalId for CommandEncoder {
+    fn global_id(&self) -> Id {
         use wgc::id::TypedId;
         self.id.unzip()
     }

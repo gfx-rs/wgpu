@@ -25,21 +25,21 @@ pub(crate) struct Sendable<T>(T, #[cfg(feature = "expose-ids")] u64);
 unsafe impl<T> Send for Sendable<T> {}
 unsafe impl<T> Sync for Sendable<T> {}
 
-impl<T> crate::BikeshedBackendId for Sendable<T> {
+impl<T> crate::GlobalId for Sendable<T> {
     #[cfg(not(feature = "expose-ids"))]
-    fn id(&self) -> Id {
+    fn global_id(&self) -> Id {
         0
     }
 
     #[cfg(feature = "expose-ids")]
-    fn id(&self) -> Id {
+    fn global_id(&self) -> Id {
         self.1
     }
 }
 
 // For QuerySetId
-impl crate::BikeshedBackendId for () {
-    fn id(&self) -> Id {
+impl crate::GlobalId for () {
+    fn global_id(&self) -> Id {
         0
     }
 }
