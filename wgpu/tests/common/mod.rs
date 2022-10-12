@@ -278,7 +278,10 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
     }
 
     let panicked = catch_unwind(AssertUnwindSafe(|| test_function(context))).is_err();
+    #[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))]
     let canary_set = hal::VALIDATION_CANARY.get_and_reset();
+    #[cfg(not(any(not(target_arch = "wasm32"), target_os = "emscripten")))]
+    let canary_set = false;
 
     let failed = panicked || canary_set;
 
