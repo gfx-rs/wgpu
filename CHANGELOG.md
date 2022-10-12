@@ -81,6 +81,10 @@ Bottom level categories:
 
 - Update the `minimum supported rust version` to 1.62
 
+#### Vulkan
+
+- Don't use a pointer to a local copy of a `PhysicalDeviceDriverProperties` struct after it has gone out of scope. In fact, don't make a local copy at all. Introduce a helper function for building `CStr`s from C character arrays, and remove some `unsafe` blocks. By @jimblandy in [#3076](https://github.com/gfx-rs/wgpu/pull/3076).
+
 ## wgpu-0.14.0 (2022-10-05)
 
 ### Major Changes
