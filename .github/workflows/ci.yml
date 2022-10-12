@@ -74,7 +74,7 @@ jobs:
           - name: Emscripten
             os: ubuntu-22.04
             target: wasm32-unknown-emscripten
-            kind: native
+            kind: em
 
     name: Clippy ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
@@ -100,7 +100,10 @@ jobs:
 
       - name: check web
         if: matrix.kind == 'web'
+        shell: bash
         run: |
+          set -e
+
           # build for WebGPU
           cargo clippy --target ${{ matrix.target }} -p wgpu --tests --features glsl,spirv
 
@@ -112,7 +115,10 @@ jobs:
 
       - name: check em
         if: matrix.kind == 'em'
+        shell: bash
         run: |
+          set -e
+
           # build for Emscripten/WebGL
           cargo clippy --target ${{ matrix.target }} -p wgpu -p wgpu-hal --no-default-features --features webgl,emscripten
 
@@ -121,7 +127,10 @@ jobs:
 
       - name: check native
         if: matrix.kind == 'native'
+        shell: bash
         run: |
+          set -e
+
           # check with no features
           cargo clippy --target ${{ matrix.target }} -p wgpu -p wgpu-core -p wgpu-info -p player --no-default-features
 
@@ -162,7 +171,7 @@ jobs:
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: stable
+          toolchain: ${{ env.RUST_VERSION }}
 
       - name: build Deno
         run: |
