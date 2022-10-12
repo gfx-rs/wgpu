@@ -125,7 +125,7 @@ impl crate::TextureCopy {
 /// This can be removed when `CStr::from_bytes_until_nul` is stabilized.
 /// ([#95027](https://github.com/rust-lang/rust/issues/95027))
 #[allow(dead_code)]
-pub(crate) fn cstr_from_bytes_until_nul(bytes: &[std::ffi::c_char]) -> Option<&std::ffi::CStr> {
+pub(crate) fn cstr_from_bytes_until_nul(bytes: &[std::os::raw::c_char]) -> Option<&std::ffi::CStr> {
     if bytes.contains(&0) {
         // Safety for `CStr::from_ptr`:
         // - We've ensured that the slice does contain a null terminator.
