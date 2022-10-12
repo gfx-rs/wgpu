@@ -396,7 +396,7 @@ pub async fn op_webgpu_request_device(
     adapter_rid: ResourceId,
     label: Option<String>,
     required_features: GpuRequiredFeatures,
-    required_limits: Option<wgpu_types::Limits>,
+    required_limits: wgpu_types::Limits,
 ) -> Result<GpuAdapterDevice, AnyError> {
     let mut state = state.borrow_mut();
     let adapter_resource = state.resource_table.get::<WebGpuAdapter>(adapter_rid)?;
@@ -406,7 +406,7 @@ pub async fn op_webgpu_request_device(
     let descriptor = wgpu_types::DeviceDescriptor {
         label: label.map(Cow::from),
         features: required_features.into(),
-        limits: required_limits.unwrap_or_default(),
+        limits: required_limits,
     };
 
     let (device, maybe_err) = gfx_select!(adapter => instance.adapter_request_device(
