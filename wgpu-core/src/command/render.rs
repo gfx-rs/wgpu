@@ -236,16 +236,17 @@ impl RenderPass {
 
 impl fmt::Debug for RenderPass {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "RenderPass {{ encoder_id: {:?}, color_targets: {:?}, depth_stencil_target: {:?}, data: {:?} commands, {:?} dynamic offsets, and {:?} push constant u32s }}",
-            self.parent_id,
-            self.color_targets,
-            self.depth_stencil_target,
-            self.base.commands.len(),
-            self.base.dynamic_offsets.len(),
-            self.base.push_constant_data.len(),
-        )
+        f.debug_struct("RenderPass")
+            .field("encoder_id", &self.parent_id)
+            .field("color_targets", &self.color_targets)
+            .field("depth_stencil_target", &self.depth_stencil_target)
+            .field("command count", &self.base.commands.len())
+            .field("dynamic offset count", &self.base.dynamic_offsets.len())
+            .field(
+                "push constant u32 count",
+                &self.base.push_constant_data.len(),
+            )
+            .finish()
     }
 }
 
