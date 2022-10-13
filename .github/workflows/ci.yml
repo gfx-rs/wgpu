@@ -92,6 +92,11 @@ jobs:
           override: true
           components: clippy
 
+      - name: caching
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: clippy-${{ matrix.target }}-${{ matrix.kind }}-a # suffix for cache busting
+
       - name: add android apk to path
         if: matrix.target == 'aarch64-linux-android'
         run: |
@@ -139,7 +144,7 @@ jobs:
           # build docs
           cargo doc --target ${{ matrix.target }} -p wgpu -p wgpu-core -p wgpu-info -p player --all-features --no-deps
 
-  build-test:
+  test:
     needs: ["check-msrv"]
     strategy:
       fail-fast: false
@@ -153,7 +158,7 @@ jobs:
           - name: Linux x86_64
             os: ubuntu-22.04
     
-    name: Build Test ${{ matrix.name }}
+    name: Test ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -166,26 +171,33 @@ jobs:
           toolchain: stable
           profile: minimal
           override: true
+          components: llvm-tools-preview
 
       - name: install latest nextest release
         uses: taiki-e/install-action@nextest
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
 
-      - name: build tests
+      - name: caching
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: test-${{ matrix.target }}-a # suffix for cache busting
+
+
+      - name: run tests
         shell: bash
         run: |
           set -e
 
-          cargo build --bin wgpu-info
+          cargo llvm-cov build --bin wgpu-info --no-report
+          cargo llvm-cov nextest -p wgpu -p wgpu-types -p wgpu-hal -p wgpu-core -p player --no-report
 
-          cargo nextest archive -p wgpu -p wgpu-types -p wgpu-hal -p wgpu-core -p player --archive-file tests.tar.zst
+          cargo llvm-cov report --lcov --output-path lcov.info
 
-      - name: upload tests
-        uses: actions/upload-artifact@v3
+      - name: Upload coverage data to codecov
+        uses: codecov/codecov-action@v3
         with:
-          name: tests-${{ matrix.os }}
-          path: |
-            tests.tar.zst
-            target/debug/wgpu-info*
+          files: lcov.info
 
   fmt:
     name: Format
@@ -209,7 +221,6 @@ jobs:
   check-msrv-cts_runner:
     name: Clippy cts_runner
     runs-on: ubuntu-latest
-    needs: ["check-msrv"]
     steps:
       - name: checkout repo
         uses: actions/checkout@v2
