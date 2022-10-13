@@ -905,11 +905,13 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         self.begin_pass();
 
         let raw = self.raw_cmd_buf.as_ref().unwrap();
-        let encoder = raw.new_compute_command_encoder();
-        if let Some(label) = desc.label {
-            encoder.set_label(label);
-        }
-        self.state.compute = Some(encoder.to_owned());
+        objc::rc::autoreleasepool(|| {
+            let encoder = raw.new_compute_command_encoder();
+            if let Some(label) = desc.label {
+                encoder.set_label(label);
+            }
+            self.state.compute = Some(encoder.to_owned());
+        });
     }
     unsafe fn end_compute_pass(&mut self) {
         self.state.compute.take().unwrap().end_encoding();
