@@ -887,11 +887,11 @@ impl<A: HalApi> LifetimeTracker<A> {
                                 range: mapping.range.start..mapping.range.start + size,
                                 host,
                             };
-                            resource::BufferMapAsyncStatus::Success
+                            Ok(())
                         }
                         Err(e) => {
                             log::error!("Mapping failed {:?}", e);
-                            resource::BufferMapAsyncStatus::Error
+                            Err(e)
                         }
                     }
                 } else {
@@ -900,7 +900,7 @@ impl<A: HalApi> LifetimeTracker<A> {
                         range: mapping.range,
                         host: mapping.op.host,
                     };
-                    resource::BufferMapAsyncStatus::Success
+                    Ok(())
                 };
                 pending_callbacks.push((mapping.op, status));
             }

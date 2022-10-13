@@ -15,7 +15,7 @@ use std::{borrow::Borrow, num::NonZeroU8, ops::Range, ptr::NonNull};
 
 /// The status code provided to the buffer mapping callback.
 ///
-/// This is very similar to `Result<(), BufferAccessError>`, except that this is FFI-friendly.
+/// This is very similar to `BufferAccessResult`, except that this is FFI-friendly.
 #[repr(C)]
 #[derive(Debug)]
 pub enum BufferMapAsyncStatus {
@@ -84,7 +84,7 @@ pub struct BufferMapCallback {
 
 enum BufferMapCallbackInner {
     Rust {
-        callback: Box<dyn FnOnce(BufferMapAsyncStatus) + Send + 'static>,
+        callback: Box<dyn FnOnce(BufferAccessResult) + Send + 'static>,
     },
     C {
         inner: BufferMapCallbackC,
@@ -92,7 +92,7 @@ enum BufferMapCallbackInner {
 }
 
 impl BufferMapCallback {
-    pub fn from_rust(callback: Box<dyn FnOnce(BufferMapAsyncStatus) + Send + 'static>) -> Self {
+    pub fn from_rust(callback: Box<dyn FnOnce(BufferAccessResult) + Send + 'static>) -> Self {
         Self {
             inner: Some(BufferMapCallbackInner::Rust { callback }),
         }
@@ -111,13 +111,39 @@ impl BufferMapCallback {
         }
     }
 
-    pub(crate) fn call(mut self, status: BufferMapAsyncStatus) {
+    pub(crate) fn call(mut self, result: BufferAccessResult) {
         match self.inner.take() {
             Some(BufferMapCallbackInner::Rust { callback }) => {
-                callback(status);
+                callback(result);
             }
             // SAFETY: the contract of the call to from_c says that this unsafe is sound.
             Some(BufferMapCallbackInner::C { inner }) => unsafe {
+                let status = match result {
+                    Ok(()) => BufferMapAsyncStatus::Success,
+                    Err(BufferAccessError::Device(_)) => BufferMapAsyncStatus::ContextLost,
+                    Err(BufferAccessError::Invalid) | Err(BufferAccessError::Destroyed) => {
+                        BufferMapAsyncStatus::Invalid
+                    }
+                    Err(BufferAccessError::AlreadyMapped) => BufferMapAsyncStatus::AlreadyMapped,
+                    Err(BufferAccessError::MapAlreadyPending) => {
+                        BufferMapAsyncStatus::MapAlreadyPending
+                    }
+                    Err(BufferAccessError::MissingBufferUsage(_)) => {
+                        BufferMapAsyncStatus::InvalidUsageFlags
+                    }
+                    Err(BufferAccessError::UnalignedRange)
+                    | Err(BufferAccessError::UnalignedRangeSize { .. })
+                    | Err(BufferAccessError::UnalignedOffset { .. }) => {
+                        BufferMapAsyncStatus::InvalidAlignment
+                    }
+                    Err(BufferAccessError::OutOfBoundsUnderrun { .. })
+                    | Err(BufferAccessError::OutOfBoundsOverrun { .. })
+                    | Err(BufferAccessError::NegativeRange { .. }) => {
+                        BufferMapAsyncStatus::InvalidRange
+                    }
+                    Err(_) => BufferMapAsyncStatus::Error,
+                };
+
                 (inner.callback)(status, inner.user_data);
             },
             None => {
@@ -144,6 +170,8 @@ pub struct BufferMapOperation {
 pub enum BufferAccessError {
     #[error(transparent)]
     Device(#[from] DeviceError),
+    #[error("buffer map failed")]
+    Failed,
     #[error("buffer is invalid")]
     Invalid,
     #[error("buffer is destroyed")]
@@ -181,8 +209,11 @@ pub enum BufferAccessError {
         start: wgt::BufferAddress,
         end: wgt::BufferAddress,
     },
+    #[error("buffer map aborted")]
+    MapAborted,
 }
 
+pub type BufferAccessResult = Result<(), BufferAccessError>;
 pub(crate) struct BufferPendingMapping {
     pub range: Range<wgt::BufferAddress>,
     pub op: BufferMapOperation,

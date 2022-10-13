@@ -55,10 +55,9 @@ struct Test<'a> {
     actions: Vec<wgc::device::trace::Action<'a>>,
 }
 
-fn map_callback(status: wgc::resource::BufferMapAsyncStatus) {
-    match status {
-        wgc::resource::BufferMapAsyncStatus::Success => (),
-        _ => panic!("Unable to map"),
+fn map_callback(status: Result<(), wgc::resource::BufferAccessError>) {
+    if let Err(e) = status {
+        panic!("Buffer map error: {}", e);
     }
 }
 

@@ -9,8 +9,8 @@ use crate::{
     },
     instance::{self, Adapter, Surface},
     pipeline, present,
-    resource::{self, BufferMapState},
-    resource::{BufferAccessError, BufferMapAsyncStatus, BufferMapOperation},
+    resource::{self, BufferAccessResult, BufferMapState},
+    resource::{BufferAccessError, BufferMapOperation},
     track::{BindGroupStates, TextureSelector, Tracker},
     validation::{self, check_buffer_usage, check_texture_usage},
     FastHashMap, Label, LabelHelpers as _, LifeGuard, MultiRefCount, RefCount, Stored,
@@ -130,7 +130,7 @@ impl RenderPassContext {
     }
 }
 
-pub type BufferMapPendingClosure = (BufferMapOperation, BufferMapAsyncStatus);
+pub type BufferMapPendingClosure = (BufferMapOperation, BufferAccessResult);
 
 #[derive(Default)]
 pub struct UserClosures {
@@ -3498,7 +3498,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         buffer_id: id::BufferId,
         offset: BufferAddress,
         data: &[u8],
-    ) -> Result<(), BufferAccessError> {
+    ) -> BufferAccessResult {
         profiling::scope!("Device::set_buffer_sub_data");
 
         let hub = A::hub(self);
@@ -3555,7 +3555,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         buffer_id: id::BufferId,
         offset: BufferAddress,
         data: &mut [u8],
-    ) -> Result<(), BufferAccessError> {
+    ) -> BufferAccessResult {
         profiling::scope!("Device::get_buffer_sub_data");
 
         let hub = A::hub(self);
@@ -5499,33 +5499,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         buffer_id: id::BufferId,
         range: Range<BufferAddress>,
         op: BufferMapOperation,
-    ) -> Result<(), BufferAccessError> {
+    ) -> BufferAccessResult {
         // User callbacks must not be called while holding buffer_map_async_inner's locks, so we
         // defer the error callback if it needs to be called immediately (typically when running
         // into errors).
         if let Err((op, err)) = self.buffer_map_async_inner::<A>(buffer_id, range, op) {
-            let status = match &err {
-                &BufferAccessError::Device(_) => BufferMapAsyncStatus::ContextLost,
-                &BufferAccessError::Invalid | &BufferAccessError::Destroyed => {
-                    BufferMapAsyncStatus::Invalid
-                }
-                &BufferAccessError::AlreadyMapped => BufferMapAsyncStatus::AlreadyMapped,
-                &BufferAccessError::MapAlreadyPending => BufferMapAsyncStatus::MapAlreadyPending,
-                &BufferAccessError::MissingBufferUsage(_) => {
-                    BufferMapAsyncStatus::InvalidUsageFlags
-                }
-                &BufferAccessError::UnalignedRange
-                | &BufferAccessError::UnalignedRangeSize { .. }
-                | &BufferAccessError::UnalignedOffset { .. } => {
-                    BufferMapAsyncStatus::InvalidAlignment
-                }
-                &BufferAccessError::OutOfBoundsUnderrun { .. }
-                | &BufferAccessError::OutOfBoundsOverrun { .. }
-                | &BufferAccessError::NegativeRange { .. } => BufferMapAsyncStatus::InvalidRange,
-                _ => BufferMapAsyncStatus::Error,
-            };
-
-            op.callback.call(status);
+            op.callback.call(Err(err.clone()));
 
             return Err(err);
         }
@@ -5761,7 +5740,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 return Err(BufferAccessError::NotMapped);
             }
             resource::BufferMapState::Waiting(pending) => {
-                return Ok(Some((pending.op, resource::BufferMapAsyncStatus::Aborted)));
+                return Ok(Some((pending.op, Err(BufferAccessError::MapAborted))));
             }
             resource::BufferMapState::Active { ptr, range, host } => {
                 if host == HostMap::Write {
@@ -5792,10 +5771,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         Ok(None)
     }
 
-    pub fn buffer_unmap<A: HalApi>(
-        &self,
-        buffer_id: id::BufferId,
-    ) -> Result<(), BufferAccessError> {
+    pub fn buffer_unmap<A: HalApi>(&self, buffer_id: id::BufferId) -> BufferAccessResult {
         profiling::scope!("unmap", "Buffer");
 
         let closure;
