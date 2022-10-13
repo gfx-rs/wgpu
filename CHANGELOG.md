@@ -138,6 +138,7 @@ both `raw_window_handle::HasRawWindowHandle` and `raw_window_handle::HasRawDispl
 - Split Blendability and Filterability into Two Different TextureFormatFeatureFlags; by @stakka in [#3012](https://github.com/gfx-rs/wgpu/pull/3012)
 - Expose `alpha_mode` on SurfaceConfiguration, by @jinleili in [#2836](https://github.com/gfx-rs/wgpu/pull/2836)
 - Introduce fields for driver name and info in `AdapterInfo`, by @i509VCB in [#3037](https://github.com/gfx-rs/wgpu/pull/3037)
+- Add way to create gles hal textures from raw gl names to allow externally managed textures. By @i509VCB [#3046](https://github.com/gfx-rs/wgpu/pull/3046)
 - Implemented `copy_external_image_to_texture` on WebGPU, by @ybiletskyi in [#2781](https://github.com/gfx-rs/wgpu/pull/2781)
 
 ### Bug Fixes
@@ -206,6 +207,7 @@ both `raw_window_handle::HasRawWindowHandle` and `raw_window_handle::HasRawDispl
 - Provide a means for `wgpu` users to access `vk::Queue` and the queue index. By @anlumo in [#2950](https://github.com/gfx-rs/wgpu/pull/2950)
 - Use the use effective api version for determining device features instead of wrongly assuming `VkPhysicalDeviceProperties.apiVersion`
   is the actual version of the device. By @i509VCB in [#3011](https://github.com/gfx-rs/wgpu/pull/3011)
+- `DropGuard` has been moved to the root of the wgpu-hal crate. By @i509VCB [#3046](https://github.com/gfx-rs/wgpu/pull/3046)
 
 #### GLES
 

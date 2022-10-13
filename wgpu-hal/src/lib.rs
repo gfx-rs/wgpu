@@ -106,7 +106,10 @@ pub type Label<'a> = Option<&'a str>;
 pub type MemoryRange = Range<wgt::BufferAddress>;
 pub type FenceValue = u64;
 
-#[derive(Clone, Debug, Eq, PartialEq, Error)]
+/// Drop guard to signal wgpu-hal is no longer using an externally created object.
+pub type DropGuard = Box<dyn std::any::Any + Send + Sync>;
+
+#[derive(Clone, Debug, PartialEq, Eq, Error)]
 pub enum DeviceError {
     #[error("out of memory")]
     OutOfMemory,

@@ -43,8 +43,6 @@ use parking_lot::Mutex;
 const MILLIS_TO_NANOS: u64 = 1_000_000;
 const MAX_TOTAL_ATTACHMENTS: usize = crate::MAX_COLOR_ATTACHMENTS * 2 + 1;
 
-pub type DropGuard = Box<dyn std::any::Any + Send + Sync>;
-
 #[derive(Clone)]
 pub struct Api;
 
@@ -82,7 +80,7 @@ struct DebugUtils {
 pub struct InstanceShared {
     raw: ash::Instance,
     extensions: Vec<&'static CStr>,
-    drop_guard: Option<DropGuard>,
+    drop_guard: Option<crate::DropGuard>,
     flags: crate::InstanceFlags,
     debug_utils: Option<DebugUtils>,
     get_physical_device_properties: Option<khr::GetPhysicalDeviceProperties2>,
@@ -347,7 +345,7 @@ pub struct Buffer {
 #[derive(Debug)]
 pub struct Texture {
     raw: vk::Image,
-    drop_guard: Option<DropGuard>,
+    drop_guard: Option<crate::DropGuard>,
     block: Option<gpu_alloc::MemoryBlock<vk::DeviceMemory>>,
     usage: crate::TextureUses,
     aspects: crate::FormatAspects,
