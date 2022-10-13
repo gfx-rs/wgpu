@@ -100,7 +100,7 @@ jobs:
           echo """
           [profile.dev]
           incremental = false
-          debug = 1" >> .cargo/config.toml
+          debug = false" >> .cargo/config.toml
 
       - name: caching
         uses: Swatinem/rust-cache@v2
