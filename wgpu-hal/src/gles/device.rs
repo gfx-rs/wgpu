@@ -10,9 +10,6 @@ use std::{
 #[cfg(not(target_arch = "wasm32"))]
 use std::mem;
 
-#[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
-use std::num::NonZeroU32;
-
 type ShaderStage<'a> = (
     naga::ShaderStage,
     &'a crate::ProgrammableStage<'a, super::Api>,
@@ -97,7 +94,7 @@ impl super::Device {
     #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
     pub unsafe fn texture_from_raw(
         &self,
-        name: NonZeroU32,
+        name: std::num::NonZeroU32,
         desc: &crate::TextureDescriptor,
         drop_guard: Option<crate::DropGuard>,
     ) -> super::Texture {
@@ -134,7 +131,7 @@ impl super::Device {
     #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
     pub unsafe fn texture_from_raw_renderbuffer(
         &self,
-        name: NonZeroU32,
+        name: std::num::NonZeroU32,
         desc: &crate::TextureDescriptor,
         drop_guard: Option<crate::DropGuard>,
     ) -> super::Texture {
