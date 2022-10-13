@@ -47,6 +47,9 @@ Bottom level categories:
 - Convert all `Default` Implementations on Enums to `derive(Default)`
 - Implement `Default` for `CompositeAlphaMode`
 
+#### WebGPU
+- Implement `queue_validate_write_buffer` by @jinleili in [#3098](https://github.com/gfx-rs/wgpu/pull/3098)
+
 ### Added/New Features
 
 #### General
