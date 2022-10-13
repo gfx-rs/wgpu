@@ -3713,6 +3713,23 @@ impl Surface {
         Context::surface_get_supported_alpha_modes(&*self.context, &self.id, &adapter.id)
     }
 
+    /// Return a default `SurfaceConfiguration` from width and height to use for the [`Surface`] with this adapter.
+    pub fn get_default_config(
+        &self,
+        adapter: &Adapter,
+        width: u32,
+        height: u32,
+    ) -> wgt::SurfaceConfiguration {
+        wgt::SurfaceConfiguration {
+            usage: wgt::TextureUsages::RENDER_ATTACHMENT,
+            format: self.get_supported_formats(adapter)[0],
+            width,
+            height,
+            present_mode: self.get_supported_present_modes(adapter)[0],
+            alpha_mode: wgt::CompositeAlphaMode::Auto,
+        }
+    }
+
     /// Initializes [`Surface`] for presentation.
     ///
     /// # Panics

@@ -267,14 +267,7 @@ fn start<E: Example>(
     }: Setup,
 ) {
     let spawner = Spawner::new();
-    let mut config = wgpu::SurfaceConfiguration {
-        usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-        format: surface.get_supported_formats(&adapter)[0],
-        width: size.width,
-        height: size.height,
-        present_mode: wgpu::PresentMode::Fifo,
-        alpha_mode: surface.get_supported_alpha_modes(&adapter)[0],
-    };
+    let mut config = surface.get_default_config(&adapter, size.width, size.height);
     surface.configure(&device, &config);
 
     log::info!("Initializing the example...");
