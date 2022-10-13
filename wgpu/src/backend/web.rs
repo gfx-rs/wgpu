@@ -2327,11 +2327,30 @@ impl crate::Context for Context {
     fn queue_validate_write_buffer(
         &self,
         _queue: &Self::QueueId,
-        _buffer: &Self::BufferId,
-        _offset: wgt::BufferAddress,
-        _size: wgt::BufferSize,
+        buffer: &Self::BufferId,
+        offset: wgt::BufferAddress,
+        size: wgt::BufferSize,
     ) {
-        // TODO
+        let usage = wgt::BufferUsages::from_bits_truncate(buffer.0.usage());
+        if !usage.contains(wgt::BufferUsages::COPY_DST) {
+            panic!("Destination buffer is missing the `COPY_DST` usage flag");
+        }
+        let write_size = u64::from(size);
+        if write_size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
+            panic!(
+                "Copy size {} does not respect `COPY_BUFFER_ALIGNMENT`",
+                size
+            );
+        }
+        if offset % wgt::COPY_BUFFER_ALIGNMENT != 0 {
+            panic!(
+                "Buffer offset {} is not aligned to block size or `COPY_BUFFER_ALIGNMENT`",
+                offset
+            );
+        }
+        if write_size + offset > buffer.0.size() as u64 {
+            panic!("copy of {}..{} would end up overrunning the bounds of the destination buffer of size {}", offset, offset + write_size, buffer.0.size());
+        }
     }
 
     fn queue_create_staging_buffer(
