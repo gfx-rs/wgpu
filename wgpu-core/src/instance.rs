@@ -336,7 +336,10 @@ impl<A: HalApi> Adapter<A> {
             .contains(wgt::Features::MAPPABLE_PRIMARY_BUFFERS)
             && self.raw.info.device_type == wgt::DeviceType::DiscreteGpu
         {
-            log::warn!("Feature MAPPABLE_PRIMARY_BUFFERS enabled on a discrete gpu. This is a massive performance footgun and likely not what you wanted");
+            log::warn!(
+                "Feature MAPPABLE_PRIMARY_BUFFERS enabled on a discrete gpu. \
+                        This is a massive performance footgun and likely not what you wanted"
+            );
         }
 
         if let Some(_) = desc.label {
@@ -445,8 +448,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     ) -> SurfaceId {
         profiling::scope!("Instance::create_surface");
 
-        //Note: using a dummy argument to work around the following error:
-        //> cannot provide explicit generic arguments when `impl Trait` is used in argument position
+        // Note: using a dummy argument to work around the following
+        // error:
+
+        // > cannot provide explicit generic arguments when `impl Trait` is used in argument position
         fn init<A: hal::Api>(
             _: A,
             inst: &Option<A::Instance>,
@@ -731,7 +736,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     if let Some(surface) = compatible_surface {
                         let surface = &A::get_surface(surface);
                         adapters.retain(|exposed| unsafe {
-                            // If the surface does not exist for this backend, then the surface is not supported.
+                            // If the surface does not exist for this backend,
+                            // then the surface is not supported.
                             surface.is_some()
                                 && exposed
                                     .adapter
@@ -835,10 +841,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         let preferred_gpu = match desc.power_preference {
-            // Since devices of type "Other" might really be "Unknown" and come from APIs like OpenGL that don't specify device type,
-            // Prefer more Specific types over Other.
-            // This means that backends which do provide accurate device types will be preferred
-            // if their device type indicates an actual hardware GPU (integrated or discrete).
+            // Since devices of type "Other" might really be "Unknown" and come
+            // from APIs like OpenGL that don't specify device type, Prefer more
+            // Specific types over Other.
+            //
+            // This means that backends which do provide accurate device types
+            // will be preferred if their device type indicates an actual
+            // hardware GPU (integrated or discrete).
             PowerPreference::LowPower => integrated.or(discrete).or(other).or(virt).or(cpu),
             PowerPreference::HighPerformance => discrete.or(integrated).or(other).or(virt).or(cpu),
         };

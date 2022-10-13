@@ -180,7 +180,8 @@ impl<A: HalApi> QuerySet<A> {
         query_index: u32,
         reset_state: Option<&mut QueryResetMap<A>>,
     ) -> Result<&A::QuerySet, QueryUseError> {
-        // We need to defer our resets because we are in a renderpass, add the usage to the reset map.
+        // We need to defer our resets because we are in a renderpass,
+        // add the usage to the reset map.
         if let Some(reset) = reset_state {
             let used = reset.use_query_set(query_set_id, self, query_index);
             if used {

@@ -201,8 +201,15 @@ pub(crate) fn extract_texture_selector<A: hal::Api>(
     Ok((selector, base, format))
 }
 
-/// Function copied with some modifications from webgpu standard <https://gpuweb.github.io/gpuweb/#copy-between-buffer-texture>
-/// If successful, returns (number of buffer bytes required for this copy, number of bytes between array layers).
+/// WebGPU's [validating linear texture data][vltd] algorithm.
+///
+/// Copied with some modifications from WebGPU standard.
+///
+/// If successful, returns a pair `(bytes, stride)`, where:
+/// - `bytes` is the number of buffer bytes required for this copy, and
+/// - `stride` number of bytes between array layers.
+///
+/// [vltd]: https://gpuweb.github.io/gpuweb/#abstract-opdef-validating-linear-texture-data
 pub(crate) fn validate_linear_texture_data(
     layout: &wgt::ImageDataLayout,
     format: wgt::TextureFormat,
@@ -292,8 +299,13 @@ pub(crate) fn validate_linear_texture_data(
     Ok((required_bytes_in_copy, bytes_per_image))
 }
 
-/// Function copied with minor modifications from webgpu standard <https://gpuweb.github.io/gpuweb/#valid-texture-copy-range>
+/// WebGPU's [validating texture copy range][vtcr] algorithm.
+///
+/// Copied with minor modifications from WebGPU standard.
+///
 /// Returns the HAL copy extent and the layer count.
+///
+/// [vtcr]: https://gpuweb.github.io/gpuweb/#valid-texture-copy-range
 pub(crate) fn validate_texture_copy_range(
     texture_copy_view: &ImageCopyTexture,
     desc: &wgt::TextureDescriptor<()>,
@@ -445,7 +457,10 @@ fn handle_texture_init<A: HalApi>(
     }
 }
 
-// Ensures the source texture of a transfer is in the right initialization state and records the state for after the transfer operation.
+/// Prepare a transfer's source texture.
+///
+/// Ensure the source texture of a transfer is in the right initialization
+/// state, and record the state for after the transfer operation.
 fn handle_src_texture_init<A: HalApi>(
     cmd_buf: &mut CommandBuffer<A>,
     device: &Device<A>,
@@ -468,7 +483,10 @@ fn handle_src_texture_init<A: HalApi>(
     Ok(())
 }
 
-// Ensures the destination texture of a transfer is in the right initialization state and records the state for after the transfer operation.
+/// Prepare a transfer's destination texture.
+///
+/// Ensure the destination texture of a transfer is in the right initialization
+/// state, and record the state for after the transfer operation.
 fn handle_dst_texture_init<A: HalApi>(
     cmd_buf: &mut CommandBuffer<A>,
     device: &Device<A>,
@@ -480,8 +498,10 @@ fn handle_dst_texture_init<A: HalApi>(
         .get(destination.texture)
         .map_err(|_| TransferError::InvalidTexture(destination.texture))?;
 
-    // Attention: If we don't write full texture subresources, we need to a full clear first since we don't track subrects.
-    // This means that in rare cases even a *destination* texture of a transfer may need an immediate texture init.
+    // Attention: If we don't write full texture subresources, we need to a full
+    // clear first since we don't track subrects. This means that in rare cases
+    // even a *destination* texture of a transfer may need an immediate texture
+    // init.
     let dst_init_kind = if has_copy_partial_init_tracker_coverage(
         copy_size,
         destination.mip_level,
@@ -667,7 +687,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (dst_range, dst_base, _) =
             extract_texture_selector(destination, copy_size, &*texture_guard)?;
 
-        // Handle texture init *before* dealing with barrier transitions so we have an easier time inserting "immediate-inits" that may be required by prior discards in rare cases.
+        // Handle texture init *before* dealing with barrier transitions so we
+        // have an easier time inserting "immediate-inits" that may be required
+        // by prior discards in rare cases.
         handle_dst_texture_init(cmd_buf, device, destination, copy_size, &texture_guard)?;
 
         let (src_buffer, src_pending) = cmd_buf
@@ -794,7 +816,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (src_range, src_base, _) =
             extract_texture_selector(source, copy_size, &*texture_guard)?;
 
-        // Handle texture init *before* dealing with barrier transitions so we have an easier time inserting "immediate-inits" that may be required by prior discards in rare cases.
+        // Handle texture init *before* dealing with barrier transitions so we
+        // have an easier time inserting "immediate-inits" that may be required
+        // by prior discards in rare cases.
         handle_src_texture_init(cmd_buf, device, source, copy_size, &texture_guard)?;
 
         let (src_texture, src_pending) = cmd_buf
@@ -956,7 +980,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             return Err(TransferError::MismatchedAspects.into());
         }
 
-        // Handle texture init *before* dealing with barrier transitions so we have an easier time inserting "immediate-inits" that may be required by prior discards in rare cases.
+        // Handle texture init *before* dealing with barrier transitions so we
+        // have an easier time inserting "immediate-inits" that may be required
+        // by prior discards in rare cases.
         handle_src_texture_init(cmd_buf, device, source, copy_size, &texture_guard)?;
         handle_dst_texture_init(cmd_buf, device, destination, copy_size, &texture_guard)?;
 

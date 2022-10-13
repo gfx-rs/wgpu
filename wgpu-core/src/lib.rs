@@ -289,8 +289,9 @@ platform supports.";
 #[macro_export]
 macro_rules! gfx_select {
     ($id:expr => $global:ident.$method:ident( $($param:expr),* )) => {
-        // Note: For some reason the cfg aliases defined in build.rs don't succesfully apply in this
-        // macro so we must specify their equivalents manually
+        // Note: For some reason the cfg aliases defined in build.rs
+        // don't succesfully apply in this macro so we must specify
+        // their equivalents manually.
         match $id.backend() {
             #[cfg(any(
                 all(not(target_arch = "wasm32"), not(target_os = "ios"), not(target_os = "macos")),

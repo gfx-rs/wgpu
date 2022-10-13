@@ -1124,8 +1124,9 @@ unsafe fn merge<A: hub::HalApi>(
             *current_simple = merged_state;
         }
         (SingleOrManyStates::Single(current_simple), SingleOrManyStates::Many(new_many)) => {
-            // Because we are now demoting this simple state to a complex state, we actually need to make a whole
-            // new complex state for us to use as there wasn't one before.
+            // Because we are now demoting this simple state to a complex state,
+            // we actually need to make a whole new complex state for us to use
+            // as there wasn't one before.
             let mut new_complex = ComplexTextureState::from_selector_state_iter(
                 texture_data.1.clone(),
                 iter::once((texture_data.1.clone(), *current_simple)),
@@ -1170,7 +1171,8 @@ unsafe fn merge<A: hub::HalApi>(
                 for &mut (ref layers, ref mut current_layer_state) in mip.iter_mut() {
                     let merged_state = *current_layer_state | new_simple;
 
-                    // Once we remove unknown, this will never be empty, as simple states are never unknown.
+                    // Once we remove unknown, this will never be empty, as
+                    // simple states are never unknown.
                     let merged_state = merged_state - TextureUses::UNKNOWN;
 
                     log::trace!(
@@ -1404,8 +1406,9 @@ unsafe fn update(
             *current_simple = new_simple;
         }
         (SingleOrManyStates::Single(current_simple), SingleOrManyStates::Many(new_many)) => {
-            // Because we are now demoting this simple state to a complex state, we actually need to make a whole
-            // new complex state for us to use as there wasn't one before.
+            // Because we are now demoting this simple state to a complex state,
+            // we actually need to make a whole new complex state for us to use
+            // as there wasn't one before.
             let mut new_complex = ComplexTextureState::from_selector_state_iter(
                 texture_data.1.clone(),
                 iter::once((texture_data.1.clone(), *current_simple)),
@@ -1479,11 +1482,12 @@ unsafe fn update(
                         if *current_layer_state == TextureUses::UNKNOWN
                             && new_state != TextureUses::UNKNOWN
                         {
-                            // We now know something about this subresource that we didn't before
-                            // so we should go back and update the start state.
-
-                            // We know we must have starter state be complex, otherwise we would know
-                            // about this state.
+                            // We now know something about this subresource that
+                            // we didn't before so we should go back and update
+                            // the start state.
+                            //
+                            // We know we must have starter state be complex,
+                            // otherwise we would know about this state.
                             strict_assert!(start_complex.is_some());
 
                             let start_complex = start_complex.as_deref_mut().unwrap_unchecked();

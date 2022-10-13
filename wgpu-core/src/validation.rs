@@ -1166,7 +1166,8 @@ impl Interface {
         // Check all vertex outputs and make sure the fragment shader consumes them.
         if shader_stage == naga::ShaderStage::Fragment {
             for &index in inputs.keys() {
-                // This is a linear scan, but the count should be low enough that this should be fine.
+                // This is a linear scan, but the count should be low enough
+                // that this should be fine.
                 let found = entry_point.inputs.iter().any(|v| match *v {
                     Varying::Local { location, .. } => location == index,
                     Varying::BuiltIn(_) => false,

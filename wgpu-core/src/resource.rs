@@ -100,8 +100,11 @@ impl BufferMapCallback {
 
     /// # Safety
     ///
-    /// - The callback pointer must be valid to call with the provided user_data pointer.
-    /// - Both pointers must point to valid memory until the callback is invoked, which may happen at an unspecified time.
+    /// - The callback pointer must be valid to call with the provided user_data
+    ///   pointer.
+    ///
+    /// - Both pointers must point to valid memory until the callback is
+    ///   invoked, which may happen at an unspecified time.
     pub unsafe fn from_c(inner: BufferMapCallbackC) -> Self {
         Self {
             inner: Some(BufferMapCallbackInner::C { inner }),
@@ -483,13 +486,20 @@ impl<A: hal::Api> Borrow<TextureSelector> for Texture<A> {
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize), serde(default))]
 pub struct TextureViewDescriptor<'a> {
-    /// Debug label of the texture view. This will show up in graphics debuggers for easy identification.
+    /// Debug label of the texture view.
+    ///
+    /// This will show up in graphics debuggers for easy identification.
     pub label: Label<'a>,
-    /// Format of the texture view, or `None` for the same format as the texture itself.
+    /// Format of the texture view, or `None` for the same format as the texture
+    /// itself.
+    ///
     /// At this time, it must be the same the underlying format of the texture.
     pub format: Option<wgt::TextureFormat>,
-    /// The dimension of the texture view. For 1D textures, this must be `1D`. For 2D textures it must be one of
-    /// `D2`, `D2Array`, `Cube`, and `CubeArray`. For 3D textures it must be `3D`
+    /// The dimension of the texture view.
+    ///
+    /// - For 1D textures, this must be `1D`.
+    /// - For 2D textures it must be one of `D2`, `D2Array`, `Cube`, or `CubeArray`.
+    /// - For 3D textures it must be `3D`.
     pub dimension: Option<wgt::TextureViewDimension>,
     /// Range within the texture that is accessible via this view.
     pub range: wgt::ImageSubresourceRange,
@@ -580,7 +590,9 @@ impl<A: hal::Api> Resource for TextureView<A> {
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub struct SamplerDescriptor<'a> {
-    /// Debug label of the sampler. This will show up in graphics debuggers for easy identification.
+    /// Debug label of the sampler.
+    ///
+    /// This will show up in graphics debuggers for easy identification.
     pub label: Label<'a>,
     /// How to deal with out of bounds accesses in the u (i.e. x) direction
     pub address_modes: [wgt::AddressMode; 3],
@@ -598,7 +610,8 @@ pub struct SamplerDescriptor<'a> {
     pub compare: Option<wgt::CompareFunction>,
     /// Valid values: 1, 2, 4, 8, and 16.
     pub anisotropy_clamp: Option<NonZeroU8>,
-    /// Border color to use when address_mode is [`AddressMode::ClampToBorder`](wgt::AddressMode::ClampToBorder)
+    /// Border color to use when address_mode is
+    /// [`AddressMode::ClampToBorder`](wgt::AddressMode::ClampToBorder)
     pub border_color: Option<wgt::SamplerBorderColor>,
 }
 
