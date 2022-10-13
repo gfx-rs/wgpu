@@ -39,6 +39,7 @@ Bottom level categories:
 -->
 
 ## Unreleased
+- Better error message for non-aligned shaders in WebGL [#3099](https://github.com/gfx-rs/wgpu/pull/3099)
 
 ### Changes
 
