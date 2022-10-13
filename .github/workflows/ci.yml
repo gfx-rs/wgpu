@@ -168,7 +168,7 @@ jobs:
       - name: install rust stable
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: stable
+          toolchain: nightly
           profile: minimal
           override: true
           components: llvm-tools-preview
