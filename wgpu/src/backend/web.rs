@@ -144,11 +144,15 @@ impl crate::ComputePassInner<Context> for ComputePass {
             .dispatch_workgroups_indirect_with_f64(&indirect_buffer.0, indirect_offset as f64);
     }
 
-    fn write_timestamp(&mut self, _query_set: &(), _query_index: u32) {
+    fn write_timestamp(&mut self, _query_set: &Sendable<web_sys::GpuQuerySet>, _query_index: u32) {
         panic!("WRITE_TIMESTAMP_INSIDE_PASSES feature must be enabled to call write_timestamp in a compute pass")
     }
 
-    fn begin_pipeline_statistics_query(&mut self, _query_set: &(), _query_index: u32) {
+    fn begin_pipeline_statistics_query(
+        &mut self,
+        _query_set: &Sendable<web_sys::GpuQuerySet>,
+        _query_index: u32,
+    ) {
         // Not available in gecko yet
     }
 
@@ -494,11 +498,15 @@ impl crate::RenderPassInner<Context> for RenderPass {
         self.0.execute_bundles(&mapped);
     }
 
-    fn write_timestamp(&mut self, _query_set: &(), _query_index: u32) {
+    fn write_timestamp(&mut self, _query_set: &Sendable<web_sys::GpuQuerySet>, _query_index: u32) {
         panic!("WRITE_TIMESTAMP_INSIDE_PASSES feature must be enabled to call write_timestamp in a compute pass")
     }
 
-    fn begin_pipeline_statistics_query(&mut self, _query_set: &(), _query_index: u32) {
+    fn begin_pipeline_statistics_query(
+        &mut self,
+        _query_set: &Sendable<web_sys::GpuQuerySet>,
+        _query_index: u32,
+    ) {
         // Not available in gecko yet
     }
 
@@ -1039,7 +1047,7 @@ impl crate::Context for Context {
     type SamplerId = Sendable<web_sys::GpuSampler>;
     type BufferId = Sendable<web_sys::GpuBuffer>;
     type TextureId = Sendable<web_sys::GpuTexture>;
-    type QuerySetId = (); //TODO!
+    type QuerySetId = Sendable<web_sys::GpuQuerySet>;
     type PipelineLayoutId = Sendable<web_sys::GpuPipelineLayout>;
     type RenderPipelineId = Sendable<web_sys::GpuRenderPipeline>;
     type ComputePipelineId = Sendable<web_sys::GpuComputePipeline>;
@@ -1802,9 +1810,19 @@ impl crate::Context for Context {
 
     fn device_create_query_set(
         &self,
-        _device: &Self::DeviceId,
-        _desc: &wgt::QuerySetDescriptor<crate::Label>,
+        device: &Self::DeviceId,
+        desc: &wgt::QuerySetDescriptor<crate::Label>,
     ) -> Self::QuerySetId {
+        let ty = match desc.ty {
+            wgt::QueryType::Occlusion => web_sys::GpuQueryType::Occlusion,
+            wgt::QueryType::Timestamp => web_sys::GpuQueryType::Timestamp,
+            wgt::QueryType::PipelineStatistics(_) => unreachable!(),
+        };
+        let mut mapped_desc = web_sys::GpuQuerySetDescriptor::new(desc.count, ty);
+        if let Some(label) = desc.label {
+            mapped_desc.label(label);
+        }
+        Sendable(device.0.create_query_set(&mapped_desc))
     }
 
     fn device_create_command_encoder(
@@ -2263,11 +2281,11 @@ impl crate::Context for Context {
 
     fn command_encoder_write_timestamp(
         &self,
-        _encoder: &Self::CommandEncoderId,
-        _query_set: &Self::QuerySetId,
-        _query_index: u32,
+        encoder: &Self::CommandEncoderId,
+        query_set: &Self::QuerySetId,
+        query_index: u32,
     ) {
-        unimplemented!();
+        encoder.0.write_timestamp(&query_set.0, query_index);
     }
 
     fn command_encoder_resolve_query_set(
