@@ -183,13 +183,12 @@ jobs:
         with:
           key: test-${{ matrix.target }}-a # suffix for cache busting
 
-
       - name: run tests
         shell: bash
         run: |
           set -e
 
-          cargo llvm-cov build --bin wgpu-info --no-report
+          cargo llvm-cov run --bin wgpu-info --no-report
           cargo llvm-cov nextest -p wgpu -p wgpu-types -p wgpu-hal -p wgpu-core -p player --no-report
 
           cargo llvm-cov report --lcov --output-path lcov.info
