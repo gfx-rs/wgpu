@@ -97,7 +97,8 @@ jobs:
         shell: bash
         run: |
           mkdir -p .cargo
-          echo """\n[profile.dev]
+          echo """
+          [profile.dev]
           incremental = false
           debug = 1" >> .cargo/config.toml
 
@@ -222,7 +223,8 @@ jobs:
         shell: bash
         run: |
           mkdir -p .cargo
-          echo """\n[profile.dev]
+          echo """
+          [profile.dev]
           incremental = false
           debug = 1" >> .cargo/config.toml
 
@@ -307,7 +309,8 @@ jobs:
         shell: bash
         run: |
           mkdir -p .cargo
-          echo """\n[profile.dev]
+          echo """
+          [profile.dev]
           incremental = false
           debug = 1" >> .cargo/config.toml
 
