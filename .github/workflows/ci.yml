@@ -281,6 +281,20 @@ jobs:
           profile: minimal
           override: true
 
+      - name: disable debug
+        shell: bash
+        run: |
+          mkdir -p .cargo
+          echo """
+          [profile.dev]
+          incremental = false
+          debug = 1" >> .cargo/config.toml
+
+      - name: caching
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: clippy-${{ matrix.target }}-${{ matrix.kind }}-${{ env.CACHE_SUFFIX }}
+
       - name: run doctests
         shell: bash
         run: |
