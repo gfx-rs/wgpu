@@ -254,7 +254,6 @@ jobs:
 
       - name: run doctests
         shell: bash
-        if: matrix.target == 'x86_64-unknown-linux-gnu'
         run: |
           set -e
 
@@ -262,7 +261,6 @@ jobs:
 
       - name: generate coverage report
         shell: bash
-        if: matrix.target == 'x86_64-unknown-linux-gnu'
         run: |
           set -e
 
