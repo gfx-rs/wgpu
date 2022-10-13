@@ -1059,6 +1059,7 @@ impl crate::Device<super::Api> for super::Device {
     ) -> Result<super::CommandEncoder, crate::DeviceError> {
         let vk_info = vk::CommandPoolCreateInfo::builder()
             .queue_family_index(desc.queue.family_index)
+            .flags(vk::CommandPoolCreateFlags::TRANSIENT)
             .build();
         let raw = self.shared.raw.create_command_pool(&vk_info, None)?;
 

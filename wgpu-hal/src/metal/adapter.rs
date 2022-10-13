@@ -832,6 +832,7 @@ impl super::PrivateCapabilities {
                 max_texture_dimension_3d: self.max_texture_3d_size as u32,
                 max_texture_array_layers: self.max_texture_layers as u32,
                 max_bind_groups: 8,
+                max_bindings_per_bind_group: 65535,
                 max_dynamic_uniform_buffers_per_pipeline_layout: base
                     .max_dynamic_uniform_buffers_per_pipeline_layout,
                 max_dynamic_storage_buffers_per_pipeline_layout: base

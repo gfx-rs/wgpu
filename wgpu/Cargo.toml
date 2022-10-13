@@ -1,6 +1,6 @@
 [package]
 name = "wgpu"
-version = "0.13.0"
+version = "0.14.0"
 authors = ["wgpu developers"]
 edition = "2021"
 description = "Rusty WebGPU API wrapper"
@@ -76,9 +76,10 @@ name = "water"
 test = true
 
 [features]
-default = []
+default = ["wgsl"]
 spirv = ["naga/spv-in"]
 glsl = ["naga/glsl-in"]
+wgsl = ["wgc?/wgsl"]
 trace = ["serde", "wgc/trace"]
 replay = ["serde", "wgc/replay"]
 angle = ["wgc/angle"]
@@ -89,25 +90,25 @@ vulkan-portability = ["wgc/vulkan-portability"]
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies.wgc]
 package = "wgpu-core"
 path = "../wgpu-core"
-version = "0.13"
+version = "0.14"
 features = ["raw-window-handle"]
 
 [target.'cfg(target_arch = "wasm32")'.dependencies.wgc]
 package = "wgpu-core"
 path = "../wgpu-core"
-version = "0.13"
+version = "0.14"
 features = ["raw-window-handle"]
 optional = true
 
 [dependencies.wgt]
 package = "wgpu-types"
 path = "../wgpu-types"
-version = "0.13"
+version = "0.14"
 
 [target.'cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))'.dependencies.hal]
 package = "wgpu-hal"
 path = "../wgpu-hal"
-version = "0.13"
+version = "0.14"
 
 [dependencies]
 arrayvec = "0.7"
@@ -141,22 +142,22 @@ env_logger = "0.9"
 
 [dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-rev = "b209d911"
-version = "0.9"
+rev = "c52d9102"
+version = "0.10"
 features = ["clone"]
 optional = true
 
 # used to test all the example shaders
 [dev-dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-rev = "b209d911"
-version = "0.9"
+rev = "c52d9102"
+version = "0.10"
 features = ["wgsl-in"]
 
 [target.'cfg(target_arch = "wasm32")'.dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-rev = "b209d911"
-version = "0.9"
+rev = "c52d9102"
+version = "0.10"
 features = ["wgsl-out"]
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
@@ -215,7 +216,9 @@ web-sys = { version = "0.3.60", features = [
     "GpuFragmentState",
     "GpuFrontFace",
     "GpuImageCopyBuffer",
+    "GpuImageCopyExternalImage",
     "GpuImageCopyTexture",
+    "GpuImageCopyTextureTagged",
     "GpuImageDataLayout",
     "GpuIndexFormat",
     "GpuLoadOp",
@@ -283,7 +286,9 @@ web-sys = { version = "0.3.60", features = [
     "OffscreenCanvas",
     "ImageBitmap",
     "ImageBitmapRenderingContext",
-    "Window"
+    "Window",
+    "WorkerGlobalScope",
+    "WorkerNavigator"
 ] }
 wasm-bindgen = "0.2.83"
 js-sys = "0.3.60"
@@ -294,5 +299,12 @@ parking_lot = ">=0.11,<0.13"
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 console_error_panic_hook = "0.1.7"
 console_log = "0.2"
-# We need the Location feature in the framework examples
-web-sys = { version = "0.3.60", features = ["Location"] }
+# We need these features in the framework examples
+web-sys = { version = "0.3.60", features = [
+    "Location",
+    "Blob",
+    "RequestInit",
+    "RequestMode",
+    "Request",
+    "Response"
+] }

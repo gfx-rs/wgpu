@@ -836,6 +836,7 @@ impl Drop for ShaderModule {
 /// Any necessary shader translation (e.g. from WGSL to SPIR-V or vice versa)
 /// will be done internally by wgpu.
 #[cfg_attr(feature = "naga", allow(clippy::large_enum_variant))]
+#[derive(Clone)]
 #[non_exhaustive]
 pub enum ShaderSource<'a> {
     /// SPIR-V module represented as a slice of words.
@@ -858,11 +859,17 @@ pub enum ShaderSource<'a> {
         defines: naga::FastHashMap<String, String>,
     },
     /// WGSL module as a string slice.
+    #[cfg(feature = "wgsl")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "wgsl")))]
     Wgsl(Cow<'a, str>),
     /// Naga module.
     #[cfg(feature = "naga")]
     #[cfg_attr(docsrs, doc(cfg(feature = "naga")))]
     Naga(Cow<'static, naga::Module>),
+    /// Dummy variant because `Naga` doesn't have a lifetime and without enough active features it
+    /// could be the last one active.
+    #[doc(hidden)]
+    Dummy(PhantomData<&'a ()>),
 }
 static_assertions::assert_impl_all!(ShaderSource: Send, Sync);
 
@@ -870,6 +877,7 @@ static_assertions::assert_impl_all!(ShaderSource: Send, Sync);
 ///
 /// Corresponds to [WebGPU `GPUShaderModuleDescriptor`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpushadermoduledescriptor).
+#[derive(Clone)]
 pub struct ShaderModuleDescriptor<'a> {
     /// Debug label of the shader module. This will show up in graphics debuggers for easy identification.
     pub label: Label<'a>,
@@ -1812,6 +1820,9 @@ impl Instance {
     }
 
     /// Creates a surface from a raw window handle.
+    ///
+    /// If the specified display and window handle are not supported by any of the backends, then the surface
+    /// will not be supported by any adapters.
     ///
     /// # Safety
     ///
@@ -3604,6 +3615,18 @@ impl Queue {
         size: Extent3d,
     ) {
         Context::queue_write_texture(&*self.context, &self.id, texture, data, data_layout, size)
+    }
+
+    /// Schedule a copy of data from `image` into `texture`
+    #[cfg(all(target_arch = "wasm32", not(feature = "webgl")))]
+    pub fn copy_external_image_to_texture(
+        &self,
+        image: &web_sys::ImageBitmap,
+        texture: ImageCopyTexture,
+        size: Extent3d,
+    ) {
+        self.context
+            .queue_copy_external_image_to_texture(&self.id, image, texture, size)
     }
 
     /// Submits a series of finished command buffers for execution.

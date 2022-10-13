@@ -5,6 +5,7 @@ use std::ops::Range;
 #[derive(Clone)]
 pub struct Api;
 pub struct Context;
+#[derive(Debug)]
 pub struct Encoder;
 #[derive(Debug)]
 pub struct Resource;

@@ -834,6 +834,15 @@ fn map_texture_copy_view(view: crate::ImageCopyTexture) -> web_sys::GpuImageCopy
     mapped
 }
 
+fn map_tagged_texture_copy_view(
+    view: crate::ImageCopyTexture,
+) -> web_sys::GpuImageCopyTextureTagged {
+    let mut mapped = web_sys::GpuImageCopyTextureTagged::new(&view.texture.id.0);
+    mapped.mip_level(view.mip_level);
+    mapped.origin(&map_origin_3d(view.origin));
+    mapped
+}
+
 fn map_texture_aspect(aspect: wgt::TextureAspect) -> web_sys::GpuTextureAspect {
     match aspect {
         wgt::TextureAspect::All => web_sys::GpuTextureAspect::All,
@@ -980,6 +989,37 @@ impl Context {
         };
         Sendable(context.into())
     }
+
+    pub fn queue_copy_external_image_to_texture(
+        &self,
+        queue: &Sendable<web_sys::GpuQueue>,
+        image: &web_sys::ImageBitmap,
+        texture: crate::ImageCopyTexture,
+        size: wgt::Extent3d,
+    ) {
+        queue
+            .0
+            .copy_external_image_to_texture_with_gpu_extent_3d_dict(
+                &web_sys::GpuImageCopyExternalImage::new(image),
+                &map_tagged_texture_copy_view(texture),
+                &map_extent_3d(size),
+            );
+    }
+}
+
+// Represents the global object in the JavaScript context.
+// It can be cast to from `web_sys::global` and exposes two getters `window` and `worker` of which only one is defined depending on the caller's context.
+// When called from the UI thread only `window` is defined whereas `worker` is only defined within a web worker context.
+// See: https://github.com/rustwasm/gloo/blob/2c9e776701ecb90c53e62dec1abd19c2b70e47c7/crates/timers/src/callback.rs#L8-L40
+#[wasm_bindgen]
+extern "C" {
+    type Global;
+
+    #[wasm_bindgen(method, getter, js_name = Window)]
+    fn window(this: &Global) -> JsValue;
+
+    #[wasm_bindgen(method, getter, js_name = WorkerGlobalScope)]
+    fn worker(this: &Global) -> JsValue;
 }
 
 // The web doesn't provide any way to identify specific queue
@@ -1026,7 +1066,20 @@ impl crate::Context for Context {
         MakeSendFuture<wasm_bindgen_futures::JsFuture, fn(JsFutureResult) -> Option<crate::Error>>;
 
     fn init(_backends: wgt::Backends) -> Self {
-        Context(web_sys::window().unwrap().navigator().gpu())
+        let global: Global = js_sys::global().unchecked_into();
+        let gpu = if !global.window().is_undefined() {
+            global.unchecked_into::<web_sys::Window>().navigator().gpu()
+        } else if !global.worker().is_undefined() {
+            global
+                .unchecked_into::<web_sys::WorkerGlobalScope>()
+                .navigator()
+                .gpu()
+        } else {
+            panic!(
+                "Accessing the GPU is only supported on the main thread or from a dedicated worker"
+            );
+        };
+        Context(gpu)
     }
 
     fn instance_create_surface(
@@ -1166,6 +1219,7 @@ impl crate::Context for Context {
             max_texture_dimension_3d: limits.max_texture_dimension_3d(),
             max_texture_array_layers: limits.max_texture_array_layers(),
             max_bind_groups: limits.max_bind_groups(),
+            max_bindings_per_bind_group: limits.max_bindings_per_bind_group(),
             max_dynamic_uniform_buffers_per_pipeline_layout: limits
                 .max_dynamic_uniform_buffers_per_pipeline_layout(),
             max_dynamic_storage_buffers_per_pipeline_layout: limits
@@ -1309,13 +1363,22 @@ impl crate::Context for Context {
         wgt::DownlevelCapabilities::default()
     }
 
+    #[cfg_attr(
+        not(any(
+            feature = "spirv",
+            feature = "glsl",
+            feature = "wgsl",
+            feature = "naga"
+        )),
+        allow(unreachable_code, unused_variables)
+    )]
     fn device_create_shader_module(
         &self,
         device: &Self::DeviceId,
         desc: crate::ShaderModuleDescriptor,
         _shader_bound_checks: wgt::ShaderBoundChecks,
     ) -> Self::ShaderModuleId {
-        let mut descriptor = match desc.source {
+        let mut descriptor: web_sys::GpuShaderModuleDescriptor = match desc.source {
             #[cfg(feature = "spirv")]
             crate::ShaderSource::SpirV(ref spv) => {
                 use naga::{back, front, valid};
@@ -1367,6 +1430,7 @@ impl crate::Context for Context {
                         .unwrap();
                 web_sys::GpuShaderModuleDescriptor::new(wgsl_text.as_str())
             }
+            #[cfg(feature = "wgsl")]
             crate::ShaderSource::Wgsl(ref code) => web_sys::GpuShaderModuleDescriptor::new(code),
             #[cfg(feature = "naga")]
             crate::ShaderSource::Naga(module) => {
@@ -1382,6 +1446,9 @@ impl crate::Context for Context {
                 let wgsl_text =
                     back::wgsl::write_string(&module, &module_info, writer_flags).unwrap();
                 web_sys::GpuShaderModuleDescriptor::new(wgsl_text.as_str())
+            }
+            crate::ShaderSource::Dummy(_) => {
+                panic!("found `ShaderSource::Dummy`")
             }
         };
         if let Some(label) = desc.label {

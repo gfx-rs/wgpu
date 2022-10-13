@@ -969,7 +969,7 @@ impl crate::Context for Context {
         match wgc::gfx_select!(adapter => global.surface_get_supported_formats(surface.id, *adapter))
         {
             Ok(formats) => formats,
-            Err(wgc::instance::GetSurfaceSupportError::UnsupportedQueueFamily) => vec![],
+            Err(wgc::instance::GetSurfaceSupportError::Unsupported) => vec![],
             Err(err) => self.handle_error_fatal(err, "Surface::get_supported_formats"),
         }
     }
@@ -983,7 +983,7 @@ impl crate::Context for Context {
         match wgc::gfx_select!(adapter => global.surface_get_supported_present_modes(surface.id, *adapter))
         {
             Ok(modes) => modes,
-            Err(wgc::instance::GetSurfaceSupportError::UnsupportedQueueFamily) => vec![],
+            Err(wgc::instance::GetSurfaceSupportError::Unsupported) => vec![],
             Err(err) => self.handle_error_fatal(err, "Surface::get_supported_present_modes"),
         }
     }
@@ -997,7 +997,7 @@ impl crate::Context for Context {
         match wgc::gfx_select!(adapter => global.surface_get_supported_alpha_modes(surface.id, *adapter))
         {
             Ok(modes) => modes,
-            Err(wgc::instance::GetSurfaceSupportError::UnsupportedQueueFamily) => {
+            Err(wgc::instance::GetSurfaceSupportError::Unsupported) => {
                 vec![CompositeAlphaMode::Opaque]
             }
             Err(err) => self.handle_error_fatal(err, "Surface::get_supported_alpha_modes"),
@@ -1094,6 +1094,15 @@ impl crate::Context for Context {
         }
     }
 
+    #[cfg_attr(
+        not(any(
+            feature = "spirv",
+            feature = "glsl",
+            feature = "wgsl",
+            feature = "naga"
+        )),
+        allow(unreachable_code, unused_variables)
+    )]
     fn device_create_shader_module(
         &self,
         device: &Self::DeviceId,
@@ -1134,9 +1143,11 @@ impl crate::Context for Context {
 
                 wgc::pipeline::ShaderModuleSource::Naga(std::borrow::Cow::Owned(module))
             }
+            #[cfg(feature = "wgsl")]
             ShaderSource::Wgsl(ref code) => wgc::pipeline::ShaderModuleSource::Wgsl(Borrowed(code)),
             #[cfg(feature = "naga")]
             ShaderSource::Naga(module) => wgc::pipeline::ShaderModuleSource::Naga(module),
+            ShaderSource::Dummy(_) => panic!("found `ShaderSource::Dummy`"),
         };
         let (id, error) = wgc::gfx_select!(
             device.id => global.device_create_shader_module(device.id, &descriptor, source, ())
@@ -1779,22 +1790,18 @@ impl crate::Context for Context {
     }
 
     fn buffer_destroy(&self, buffer: &Self::BufferId) {
+        // Per spec, no error to report. Even calling destroy multiple times is valid.
         let global = &self.0;
-        match wgc::gfx_select!(buffer.id => global.buffer_destroy(buffer.id)) {
-            Ok(()) => (),
-            Err(err) => self.handle_error_fatal(err, "Buffer::destroy"),
-        }
+        let _ = wgc::gfx_select!(buffer.id => global.buffer_destroy(buffer.id));
     }
     fn buffer_drop(&self, buffer: &Self::BufferId) {
         let global = &self.0;
         wgc::gfx_select!(buffer.id => global.buffer_drop(buffer.id, false))
     }
     fn texture_destroy(&self, texture: &Self::TextureId) {
+        // Per spec, no error to report. Even calling destroy multiple times is valid.
         let global = &self.0;
-        match wgc::gfx_select!(texture.id => global.texture_destroy(texture.id)) {
-            Ok(()) => (),
-            Err(err) => self.handle_error_fatal(err, "Texture::destroy"),
-        }
+        let _ = wgc::gfx_select!(texture.id => global.texture_destroy(texture.id));
     }
     fn texture_drop(&self, texture: &Self::TextureId) {
         let global = &self.0;
@@ -1802,10 +1809,7 @@ impl crate::Context for Context {
     }
     fn texture_view_drop(&self, texture_view: &Self::TextureViewId) {
         let global = &self.0;
-        match wgc::gfx_select!(*texture_view => global.texture_view_drop(*texture_view, false)) {
-            Ok(()) => (),
-            Err(err) => self.handle_error_fatal(err, "TextureView::drop"),
-        }
+        let _ = wgc::gfx_select!(*texture_view => global.texture_view_drop(*texture_view, false));
     }
     fn sampler_drop(&self, sampler: &Self::SamplerId) {
         let global = &self.0;

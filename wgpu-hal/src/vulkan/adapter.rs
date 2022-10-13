@@ -538,9 +538,10 @@ impl PhysicalDeviceCapabilities {
     }
 
     pub fn supports_extension(&self, extension: &CStr) -> bool {
+        use crate::auxil::cstr_from_bytes_until_nul;
         self.supported_extensions
             .iter()
-            .any(|ep| unsafe { CStr::from_ptr(ep.extension_name.as_ptr()) } == extension)
+            .any(|ep| cstr_from_bytes_until_nul(&ep.extension_name) == Some(extension))
     }
 
     /// Map `requested_features` to the list of Vulkan extension strings required to create the logical device.
@@ -693,6 +694,7 @@ impl PhysicalDeviceCapabilities {
             max_bind_groups: limits
                 .max_bound_descriptor_sets
                 .min(crate::MAX_BIND_GROUPS as u32),
+            max_bindings_per_bind_group: 640,
             max_dynamic_uniform_buffers_per_pipeline_layout: limits
                 .max_descriptor_set_uniform_buffers_dynamic,
             max_dynamic_storage_buffers_per_pipeline_layout: limits
@@ -884,14 +886,15 @@ impl super::Instance {
         &self,
         phd: vk::PhysicalDevice,
     ) -> Option<crate::ExposedAdapter<super::Api>> {
+        use crate::auxil::cstr_from_bytes_until_nul;
         use crate::auxil::db;
 
         let (phd_capabilities, phd_features) = self.shared.inspect(phd);
 
         let info = wgt::AdapterInfo {
-            name: unsafe {
-                CStr::from_ptr(phd_capabilities.properties.device_name.as_ptr())
-                    .to_str()
+            name: {
+                cstr_from_bytes_until_nul(&phd_capabilities.properties.device_name)
+                    .and_then(|info| info.to_str().ok())
                     .unwrap_or("?")
                     .to_owned()
             },
@@ -905,23 +908,23 @@ impl super::Instance {
                 ash::vk::PhysicalDeviceType::CPU => wgt::DeviceType::Cpu,
                 _ => wgt::DeviceType::Other,
             },
-            driver: unsafe {
-                let driver_name = if let Some(driver) = phd_capabilities.driver {
-                    CStr::from_ptr(driver.driver_name.as_ptr()).to_str().ok()
-                } else {
-                    None
-                };
-
-                driver_name.unwrap_or("?").to_owned()
+            driver: {
+                phd_capabilities
+                    .driver
+                    .as_ref()
+                    .and_then(|driver| cstr_from_bytes_until_nul(&driver.driver_name))
+                    .and_then(|name| name.to_str().ok())
+                    .unwrap_or("?")
+                    .to_owned()
             },
-            driver_info: unsafe {
-                let driver_info = if let Some(driver) = phd_capabilities.driver {
-                    CStr::from_ptr(driver.driver_info.as_ptr()).to_str().ok()
-                } else {
-                    None
-                };
-
-                driver_info.unwrap_or("?").to_owned()
+            driver_info: {
+                phd_capabilities
+                    .driver
+                    .as_ref()
+                    .and_then(|driver| cstr_from_bytes_until_nul(&driver.driver_info))
+                    .and_then(|name| name.to_str().ok())
+                    .unwrap_or("?")
+                    .to_owned()
             },
             backend: wgt::Backend::Vulkan,
         };

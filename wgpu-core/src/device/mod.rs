@@ -31,9 +31,6 @@ pub mod queue;
 #[cfg(any(feature = "trace", feature = "replay"))]
 pub mod trace;
 
-// Per WebGPU specification.
-pub const MAX_BINDING_INDEX: u32 = 65535;
-
 pub const SHADER_STAGE_COUNT: usize = 3;
 // Should be large enough for the largest possible texture row. This value is enough for a 16k texture with float4 format.
 pub(crate) const ZERO_BUFFER_SIZE: BufferAddress = 512 << 10;
@@ -1206,6 +1203,7 @@ impl<A: HalApi> Device<A> {
         source: pipeline::ShaderModuleSource<'a>,
     ) -> Result<pipeline::ShaderModule<A>, pipeline::CreateShaderModuleError> {
         let (module, source) = match source {
+            #[cfg(feature = "wgsl")]
             pipeline::ShaderModuleSource::Wgsl(code) => {
                 profiling::scope!("naga::wgsl::parse_str");
                 let module = naga::front::wgsl::parse_str(&code).map_err(|inner| {
@@ -1218,6 +1216,7 @@ impl<A: HalApi> Device<A> {
                 (Cow::Owned(module), code.into_owned())
             }
             pipeline::ShaderModuleSource::Naga(module) => (module, String::new()),
+            pipeline::ShaderModuleSource::Dummy(_) => panic!("found `ShaderModuleSource::Dummy`"),
         };
         for (_, var) in module.global_variables.iter() {
             match var.binding {
@@ -4134,10 +4133,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             let mut entry_map = FastHashMap::default();
             for entry in desc.entries.iter() {
-                if entry.binding > MAX_BINDING_INDEX {
+                if entry.binding > device.limits.max_bindings_per_bind_group {
                     break 'outer binding_model::CreateBindGroupLayoutError::InvalidBindingIndex {
                         binding: entry.binding,
-                        maximum: MAX_BINDING_INDEX,
+                        maximum: device.limits.max_bindings_per_bind_group,
                     };
                 }
                 if entry_map.insert(entry.binding, *entry).is_some() {
@@ -4400,6 +4399,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             if let Some(ref trace) = device.trace {
                 let mut trace = trace.lock();
                 let data = match source {
+                    #[cfg(feature = "wgsl")]
                     pipeline::ShaderModuleSource::Wgsl(ref code) => {
                         trace.make_binary("wgsl", code.as_bytes())
                     }
@@ -4408,6 +4408,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             ron::ser::to_string_pretty(module, ron::ser::PrettyConfig::default())
                                 .unwrap();
                         trace.make_binary("ron", string.as_bytes())
+                    }
+                    pipeline::ShaderModuleSource::Dummy(_) => {
+                        panic!("found `ShaderModuleSource::Dummy`")
                     }
                 };
                 trace.add(trace::Action::CreateShaderModule {
@@ -4574,6 +4577,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         if let Some(cmdbuf) = cmdbuf {
             let device = &mut device_guard[cmdbuf.device_id.value];
             device.untrack::<G>(hub, &cmdbuf.trackers, &mut token);
+            device.destroy_command_buffer(cmdbuf);
         }
     }
 
@@ -4757,6 +4761,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .suspected_resources
             .query_sets
             .push(id::Valid(query_set_id));
+    }
+
+    pub fn query_set_label<A: HalApi>(&self, id: id::QuerySetId) -> String {
+        A::hub(self).query_sets.label_for_resource(id)
     }
 
     pub fn device_create_render_pipeline<A: HalApi>(
@@ -5186,7 +5194,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let caps = unsafe {
                 let suf = A::get_surface(surface);
                 let adapter = &adapter_guard[device.adapter_id.value];
-                match adapter.raw.adapter.surface_capabilities(&suf.raw) {
+                match adapter.raw.adapter.surface_capabilities(&suf.unwrap().raw) {
                     Some(caps) => caps,
                     None => break E::UnsupportedQueueFamily,
                 }
@@ -5214,6 +5222,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             match unsafe {
                 A::get_surface_mut(surface)
+                    .unwrap()
                     .raw
                     .configure(&device.raw, &hal_config)
             } {

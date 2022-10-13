@@ -1,6 +1,6 @@
 [package]
 name = "wgpu-core"
-version = "0.13.0"
+version = "0.14.0"
 authors = ["wgpu developers"]
 edition = "2021"
 description = "WebGPU core logic on wgpu-hal"
@@ -24,6 +24,8 @@ replay = ["serde", "wgt/replay", "arrayvec/serde", "naga/deserialize"]
 # Enable serializable compute/render passes, and bundle encoders.
 serial-pass = ["serde", "wgt/serde", "arrayvec/serde"]
 id32 = []
+# Enable `ShaderModuleSource::Wgsl`
+wgsl = ["naga/wgsl-in"]
 vulkan-portability = ["hal/vulkan"]
 
 [dependencies]
@@ -44,38 +46,38 @@ thiserror = "1"
 
 [dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-rev = "b209d911"
-version = "0.9"
-features = ["clone", "span", "validate", "wgsl-in"]
+rev = "c52d9102"
+version = "0.10"
+features = ["clone", "span", "validate"]
 
 [dependencies.wgt]
 path = "../wgpu-types"
 package = "wgpu-types"
-version = "0.13"
+version = "0.14"
 
 [dependencies.hal]
 path = "../wgpu-hal"
 package = "wgpu-hal"
-version = "0.13"
+version = "0.14"
 
 [target.'cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))'.dependencies]
 web-sys = { version = "0.3", features = ["HtmlCanvasElement", "OffscreenCanvas"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-hal = { path = "../wgpu-hal", package = "wgpu-hal", version = "0.13", features = ["gles"] }
+hal = { path = "../wgpu-hal", package = "wgpu-hal", version = "0.14", features = ["gles"] }
 
 [target.'cfg(all(not(target_arch = "wasm32"), any(target_os = "ios", target_os = "macos")))'.dependencies]
-hal = { path = "../wgpu-hal", package = "wgpu-hal", version = "0.13", features = ["metal"] }
+hal = { path = "../wgpu-hal", package = "wgpu-hal", version = "0.14", features = ["metal"] }
 #Note: could also enable "vulkan" for Vulkan Portability
 
 [target.'cfg(all(not(target_arch = "wasm32"), unix, not(target_os = "ios"), not(target_os = "macos")))'.dependencies]
-hal = { path = "../wgpu-hal", package = "wgpu-hal", version = "0.13", features = ["vulkan", "gles", "renderdoc"] }
+hal = { path = "../wgpu-hal", package = "wgpu-hal", version = "0.14", features = ["vulkan", "gles", "renderdoc"] }
 
 [target.'cfg(all(not(target_arch = "wasm32"), windows))'.dependencies]
-hal = { path = "../wgpu-hal", package = "wgpu-hal", version = "0.13", features = ["vulkan", "dx12", "dx11", "renderdoc"] }
+hal = { path = "../wgpu-hal", package = "wgpu-hal", version = "0.14", features = ["vulkan", "dx12", "dx11", "renderdoc"] }
 
 [target.'cfg(target_os = "emscripten")'.dependencies]
-hal = { path = "../wgpu-hal", package = "wgpu-hal", version = "0.13", features = ["emscripten"] }
+hal = { path = "../wgpu-hal", package = "wgpu-hal", version = "0.14", features = ["emscripten"] }
 
 [build-dependencies]
 cfg_aliases = "0.1"

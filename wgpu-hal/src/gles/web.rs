@@ -43,7 +43,7 @@ impl Instance {
 
         Ok(Surface {
             webgl2_context,
-            present_program: None,
+            srgb_present_program: None,
             swapchain: None,
             texture: None,
             presentable: true,
@@ -64,7 +64,7 @@ impl Instance {
 
         Ok(Surface {
             webgl2_context,
-            present_program: None,
+            srgb_present_program: None,
             swapchain: None,
             texture: None,
             presentable: true,
@@ -123,7 +123,7 @@ impl crate::Instance<super::Api> for Instance {
 
             self.create_surface_from_canvas(&canvas)
         } else {
-            unreachable!()
+            Err(crate::InstanceError)
         }
     }
 
@@ -144,7 +144,7 @@ pub struct Surface {
     pub(super) swapchain: Option<Swapchain>,
     texture: Option<glow::Texture>,
     pub(super) presentable: bool,
-    present_program: Option<glow::Program>,
+    srgb_present_program: Option<glow::Program>,
 }
 
 // SAFE: Because web doesn't have threads ( yet )
@@ -166,35 +166,66 @@ impl Surface {
         _suf_texture: super::Texture,
         gl: &glow::Context,
     ) -> Result<(), crate::SurfaceError> {
-        gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, None);
-        gl.bind_sampler(0, None);
-        gl.active_texture(glow::TEXTURE0);
-        gl.bind_texture(glow::TEXTURE_2D, self.texture);
-        gl.use_program(self.present_program);
-        gl.disable(glow::DEPTH_TEST);
-        gl.disable(glow::STENCIL_TEST);
-        gl.disable(glow::SCISSOR_TEST);
-        gl.disable(glow::BLEND);
-        gl.disable(glow::CULL_FACE);
-        gl.draw_buffers(&[glow::BACK]);
-        gl.draw_arrays(glow::TRIANGLES, 0, 3);
+        let swapchain = self.swapchain.as_ref().ok_or(crate::SurfaceError::Other(
+            "need to configure surface before presenting",
+        ))?;
+
+        if swapchain.format.describe().srgb {
+            // Important to set the viewport since we don't know in what state the user left it.
+            gl.viewport(
+                0,
+                0,
+                swapchain.extent.width as _,
+                swapchain.extent.height as _,
+            );
+            gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, None);
+            gl.bind_sampler(0, None);
+            gl.active_texture(glow::TEXTURE0);
+            gl.bind_texture(glow::TEXTURE_2D, self.texture);
+            gl.use_program(self.srgb_present_program);
+            gl.disable(glow::DEPTH_TEST);
+            gl.disable(glow::STENCIL_TEST);
+            gl.disable(glow::SCISSOR_TEST);
+            gl.disable(glow::BLEND);
+            gl.disable(glow::CULL_FACE);
+            gl.draw_buffers(&[glow::BACK]);
+            gl.draw_arrays(glow::TRIANGLES, 0, 3);
+        } else {
+            gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(swapchain.framebuffer));
+            gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, None);
+            // Note the Y-flipping here. GL's presentation is not flipped,
+            // but main rendering is. Therefore, we Y-flip the output positions
+            // in the shader, and also this blit.
+            gl.blit_framebuffer(
+                0,
+                swapchain.extent.height as i32,
+                swapchain.extent.width as i32,
+                0,
+                0,
+                0,
+                swapchain.extent.width as i32,
+                swapchain.extent.height as i32,
+                glow::COLOR_BUFFER_BIT,
+                glow::NEAREST,
+            );
+        }
 
         Ok(())
     }
 
-    unsafe fn create_present_program(gl: &glow::Context) -> glow::Program {
+    unsafe fn create_srgb_present_program(gl: &glow::Context) -> glow::Program {
         let program = gl
             .create_program()
             .expect("Could not create shader program");
         let vertex = gl
             .create_shader(glow::VERTEX_SHADER)
             .expect("Could not create shader");
-        gl.shader_source(vertex, include_str!("./shaders/present.vert"));
+        gl.shader_source(vertex, include_str!("./shaders/srgb_present.vert"));
         gl.compile_shader(vertex);
         let fragment = gl
             .create_shader(glow::FRAGMENT_SHADER)
             .expect("Could not create shader");
-        gl.shader_source(fragment, include_str!("./shaders/present.frag"));
+        gl.shader_source(fragment, include_str!("./shaders/srgb_present.frag"));
         gl.compile_shader(fragment);
         gl.attach_shader(program, vertex);
         gl.attach_shader(program, fragment);
@@ -207,7 +238,8 @@ impl Surface {
     }
 
     pub fn supports_srgb(&self) -> bool {
-        true // WebGL only supports sRGB
+        // present.frag takes care of handling srgb conversion
+        true
     }
 }
 
@@ -224,8 +256,8 @@ impl crate::Surface<super::Api> for Surface {
             gl.delete_framebuffer(swapchain.framebuffer);
         }
 
-        if self.present_program.is_none() {
-            self.present_program = Some(Self::create_present_program(gl));
+        if self.srgb_present_program.is_none() && config.format.describe().srgb {
+            self.srgb_present_program = Some(Self::create_srgb_present_program(gl));
         }
 
         if let Some(texture) = self.texture.take() {

@@ -376,7 +376,9 @@ impl crate::Device<super::Api> for super::Device {
                 },
             );
             if let Some(label) = desc.label {
-                raw.set_label(label);
+                objc::rc::autoreleasepool(|| {
+                    raw.set_label(label);
+                });
             }
             raw
         };

@@ -159,7 +159,7 @@ pub trait Api: Clone + Sized {
 
     type Queue: Queue<Self>;
     type CommandEncoder: CommandEncoder<Self>;
-    type CommandBuffer: Send + Sync;
+    type CommandBuffer: Send + Sync + fmt::Debug;
 
     type Buffer: fmt::Debug + Send + Sync + 'static;
     type Texture: fmt::Debug + Send + Sync + 'static;
@@ -353,7 +353,7 @@ pub trait Queue<A: Api>: Send + Sync {
 /// Serves as a parent for all the encoded command buffers.
 /// Works in bursts of action: one or more command buffers are recorded,
 /// then submitted to a queue, and then it needs to be `reset_all()`.
-pub trait CommandEncoder<A: Api>: Send + Sync {
+pub trait CommandEncoder<A: Api>: Send + Sync + fmt::Debug {
     /// Begin encoding a new command buffer.
     unsafe fn begin_encoding(&mut self, label: Label) -> Result<(), DeviceError>;
     /// Discard currently recorded list, if any.

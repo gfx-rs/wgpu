@@ -1,6 +1,6 @@
 [package]
 name = "wgpu-hal"
-version = "0.13.0"
+version = "0.14.0"
 authors = ["wgpu developers"]
 edition = "2021"
 description = "WebGPU hardware abstraction layer"
@@ -8,7 +8,7 @@ homepage = "https://github.com/gfx-rs/wgpu"
 repository = "https://github.com/gfx-rs/wgpu"
 keywords = ["graphics"]
 license = "MIT OR Apache-2.0"
-rust-version = "1.59"
+rust-version = "1.60"
 
 [lib]
 
@@ -65,7 +65,7 @@ range-alloc = { version = "0.1", optional = true }
 [dependencies.wgt]
 package = "wgpu-types"
 path = "../wgpu-types"
-version = "0.13"
+version = "0.14"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 egl = { package = "khronos-egl", version = "4.1", features = ["dynamic"], optional = true }
@@ -90,7 +90,7 @@ core-graphics-types = "0.1"
 
 [target.'cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))'.dependencies]
 wasm-bindgen = { version = "0.2" }
-web-sys = { version = "0.3", features = ["Window", "HtmlCanvasElement", "WebGl2RenderingContext", "OffscreenCanvas"] }
+web-sys = { version = "=0.3.60", features = ["Window", "HtmlCanvasElement", "WebGl2RenderingContext", "OffscreenCanvas"] }
 js-sys = { version = "0.3" }
 
 [target.'cfg(target_os = "android")'.dependencies]
@@ -98,15 +98,15 @@ android_system_properties = "0.1.1"
 
 [dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-rev = "b209d911"
-version = "0.9"
+rev = "c52d9102"
+version = "0.10"
 features = ["clone"]
 
 # DEV dependencies
 
 [dev-dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-rev = "b209d911"
+rev = "c52d9102"
 features = ["wgsl-in"]
 
 [dev-dependencies]
