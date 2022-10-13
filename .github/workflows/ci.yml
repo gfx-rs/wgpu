@@ -12,7 +12,7 @@ env:
   PKG_CONFIG_ALLOW_CROSS: 1 # allow android to work
   RUSTFLAGS: --cfg=web_sys_unstable_apis -D warnings
   RUSTDOCFLAGS: -Dwarnings
-  CACHE_SUFFIX: b # cache busting
+  CACHE_SUFFIX: c # cache busting
 
 # We distinguish the following kinds of builds:
 # - local: build for the same target as we compile on, and do local tests
@@ -154,7 +154,7 @@ jobs:
           # build docs
           cargo doc --target ${{ matrix.target }} -p wgpu -p wgpu-core -p wgpu-info -p player --all-features --no-deps
 
-  test:
+  gpu-test:
     needs: ["check-msrv"]
     strategy:
       fail-fast: false
@@ -252,13 +252,6 @@ jobs:
 
           cargo llvm-cov report --lcov --output-path lcov.info
 
-      - name: run doctests
-        shell: bash
-        run: |
-          set -e
-
-          cargo test --doc
-
       - name: generate coverage report
         shell: bash
         run: |
@@ -270,6 +263,30 @@ jobs:
         uses: codecov/codecov-action@v3
         with:
           files: lcov.info
+  
+  doctest:
+    needs: ["check-msrv"]
+
+    name: Doctest
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: checkout repo
+        uses: actions/checkout@v3
+
+      - name: install rust stable
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          override: true
+
+      - name: run doctests
+        shell: bash
+        run: |
+          set -e
+
+          cargo test --doc
 
   fmt:
     name: Format
