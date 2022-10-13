@@ -92,10 +92,18 @@ jobs:
           override: true
           components: clippy
 
+      - name: disable debug
+        shell: bash
+        run: |
+          mkdir -p .cargo
+          echo """\n[profile.dev]
+          incremental = false
+          debug = 1" >> .cargo/config.toml
+
       - name: caching
         uses: Swatinem/rust-cache@v2
         with:
-          key: clippy-${{ matrix.target }}-${{ matrix.kind }}-a # suffix for cache busting
+          key: clippy-${{ matrix.target }}-${{ matrix.kind }}-b # suffix for cache busting
 
       - name: add android apk to path
         if: matrix.target == 'aarch64-linux-android'
@@ -181,7 +189,7 @@ jobs:
         uses: taiki-e/install-action@cargo-llvm-cov
         
       - name: install swiftshader
-        if: matrix.target == 'x86_64-unknown-linux-gnu'
+        if: matrix.os == 'ubuntu-22.04'
         shell: bash
         run: |
           set -e
@@ -192,7 +200,7 @@ jobs:
           echo "LD_LIBRARY_PATH=$PWD/swiftshader" >> $GITHUB_ENV
         
       - name: install llvmpipe, vulkan sdk
-        if: matrix.target == 'x86_64-unknown-linux-gnu'
+        if: matrix.os == 'ubuntu-22.04'
         shell: bash
         run: |
           set -e
@@ -220,14 +228,19 @@ jobs:
       - name: caching
         uses: Swatinem/rust-cache@v2
         with:
-          key: test-${{ matrix.target }}-a # suffix for cache busting
+          key: test-${{ matrix.os }}-b # suffix for cache busting
 
-      - name: run tests
+      - name: run wgpu-info
         shell: bash
         run: |
           set -e
 
           cargo llvm-cov run --bin wgpu-info --no-report
+
+      - name: run tests
+        shell: bash
+        run: |
+          set -e
 
           for backend in ${{ matrix.backends }}; do
             echo "======= NATIVE TESTS $backend ======";
@@ -236,7 +249,23 @@ jobs:
 
           cargo llvm-cov report --lcov --output-path lcov.info
 
-      - name: Upload coverage data to codecov
+      - name: run doctests
+        shell: bash
+        if: matrix.target == 'x86_64-unknown-linux-gnu'
+        run: |
+          set -e
+
+          cargo test --doc
+
+      - name: generate coverage report
+        shell: bash
+        if: matrix.target == 'x86_64-unknown-linux-gnu'
+        run: |
+          set -e
+
+          cargo llvm-cov report --lcov --output-path lcov.info
+
+      - name: upload coverage report to codecov
         uses: codecov/codecov-action@v3
         with:
           files: lcov.info
@@ -272,6 +301,19 @@ jobs:
         with:
           profile: minimal
           toolchain: ${{ env.RUST_VERSION }}
+
+      - name: disable debug
+        shell: bash
+        run: |
+          mkdir -p .cargo
+          echo """\n[profile.dev]
+          incremental = false
+          debug = 1" >> .cargo/config.toml
+
+      - name: caching
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: cts_runner-b # suffix for cache busting
 
       - name: build Deno
         run: |
