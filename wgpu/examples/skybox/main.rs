@@ -472,8 +472,7 @@ fn skybox() {
         width: 1024,
         height: 768,
         optional_features: wgpu::Features::default(),
-        base_test_parameters: framework::test_common::TestParameters::default()
-            .backend_failure(wgpu::Backends::GL),
+        base_test_parameters: framework::test_common::TestParameters::default(),
         tolerance: 3,
         max_outliers: 207, // bounded by swiftshader
     });
