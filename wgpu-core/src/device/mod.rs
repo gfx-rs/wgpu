@@ -4583,12 +4583,29 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         A::hub(self).command_buffers.label_for_resource(id)
     }
 
-    pub fn command_encoder_drop<A: HalApi>(&self, command_encoder_id: id::CommandEncoderId) {
+    pub fn command_encoder_drop<A: HalApi>(
+        &self,
+        command_encoder_id: id::CommandEncoderId,
+    ) -> Result<(), resource::DestroyError> {
         profiling::scope!("CommandEncoder::drop");
-        log::debug!("command encoder {:?} is dropped", command_encoder_id);
 
         let hub = A::hub(self);
         let mut token = Token::root();
+
+        {
+            let (cmd_buf_guard, _) = hub.command_buffers.read(&mut token);
+
+            let cmd_buf = cmd_buf_guard
+                .get(command_encoder_id)
+                .map_err(|_| resource::DestroyError::Invalid)?;
+
+            // Defer destruction to command completion if the command buffer is finished.
+            if cmd_buf.is_finished() {
+                return Ok(());
+            }
+        }
+
+        log::debug!("command encoder {:?} is dropped", command_encoder_id);
 
         let (mut device_guard, mut token) = hub.devices.write(&mut token);
         let (cmdbuf, _) = hub
@@ -4599,9 +4616,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             device.untrack::<G>(hub, &cmdbuf.trackers, &mut token);
             device.destroy_command_buffer(cmdbuf);
         }
+
+        Ok(())
     }
 
-    pub fn command_buffer_drop<A: HalApi>(&self, command_buffer_id: id::CommandBufferId) {
+    pub fn command_buffer_drop<A: HalApi>(
+        &self,
+        command_buffer_id: id::CommandBufferId,
+    ) -> Result<(), resource::DestroyError> {
         profiling::scope!("CommandBuffer::drop");
         log::debug!("command buffer {:?} is dropped", command_buffer_id);
         self.command_encoder_drop::<A>(command_buffer_id)
