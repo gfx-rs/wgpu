@@ -828,6 +828,6 @@ fn water() {
         base_test_parameters: framework::test_common::TestParameters::default()
             .downlevel_flags(wgpu::DownlevelFlags::READ_ONLY_DEPTH_STENCIL),
         tolerance: 5,
-        max_outliers: 470, // bounded by DX12, then AMD Radeon Polaris12 on vk linux
+        max_outliers: 1693, // bounded by swiftshader
     });
 }
