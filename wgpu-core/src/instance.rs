@@ -448,12 +448,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     ) -> SurfaceId {
         profiling::scope!("Instance::create_surface");
 
-        // Note: using a dummy argument to work around the following
-        // error:
-
-        // > cannot provide explicit generic arguments when `impl Trait` is used in argument position
         fn init<A: hal::Api>(
-            _: A,
             inst: &Option<A::Instance>,
             display_handle: raw_window_handle::RawDisplayHandle,
             window_handle: raw_window_handle::RawWindowHandle,
@@ -475,40 +470,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let surface = Surface {
             presentation: None,
             #[cfg(vulkan)]
-            vulkan: init(
-                hal::api::Vulkan,
-                &self.instance.vulkan,
-                display_handle,
-                window_handle,
-            ),
+            vulkan: init::<hal::api::Vulkan>(&self.instance.vulkan, display_handle, window_handle),
             #[cfg(metal)]
-            metal: init(
-                hal::api::Metal,
-                &self.instance.metal,
-                display_handle,
-                window_handle,
-            ),
+            metal: init::<hal::api::Metal>(&self.instance.metal, display_handle, window_handle),
             #[cfg(dx12)]
-            dx12: init(
-                hal::api::Dx12,
-                &self.instance.dx12,
-                display_handle,
-                window_handle,
-            ),
+            dx12: init::<hal::api::Dx12>(&self.instance.dx12, display_handle, window_handle),
             #[cfg(dx11)]
-            dx11: init(
-                hal::api::Dx11,
-                &self.instance.dx11,
-                display_handle,
-                window_handle,
-            ),
+            dx11: init::<hal::api::Dx11>(&self.instance.dx11, display_handle, window_handle),
             #[cfg(gl)]
-            gl: init(
-                hal::api::Gles,
-                &self.instance.gl,
-                display_handle,
-                window_handle,
-            ),
+            gl: init::<hal::api::Gles>(&self.instance.gl, display_handle, window_handle),
         };
 
         let mut token = Token::root();
