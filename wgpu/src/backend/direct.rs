@@ -110,7 +110,6 @@ impl Context {
         let device = Device {
             id: device_id,
             error_sink: Arc::new(Mutex::new(ErrorSinkRaw::new())),
-            features: desc.features,
         };
         Ok((device, device_id))
     }
@@ -779,7 +778,6 @@ pub struct Surface {
 pub struct Device {
     id: wgc::id::DeviceId,
     error_sink: ErrorSink,
-    features: Features,
 }
 
 #[derive(Debug)]
@@ -897,7 +895,6 @@ impl crate::Context for Context {
         let device = Device {
             id: device_id,
             error_sink: Arc::new(Mutex::new(ErrorSinkRaw::new())),
-            features: desc.features,
         };
         ready(Ok((device, device_id)))
     }
@@ -1223,9 +1220,18 @@ impl crate::Context for Context {
     ) -> Self::BindGroupId {
         use wgc::binding_model as bm;
 
+        let global = &self.0;
+        let features = wgc::gfx_select!(device.id => global.device_features(device.id));
+        if let Err(err) = features {
+            self.handle_error_fatal(err, "Device::create_bind_group")
+        }
+
+        let features = features.unwrap();
+
         let mut arrayed_texture_views = Vec::new();
         let mut arrayed_samplers = Vec::new();
-        if device.features.contains(Features::TEXTURE_BINDING_ARRAY) {
+
+        if features.contains(Features::TEXTURE_BINDING_ARRAY) {
             // gather all the array view IDs first
             for entry in desc.entries.iter() {
                 if let BindingResource::TextureViewArray(array) = entry.resource {
@@ -1240,7 +1246,8 @@ impl crate::Context for Context {
         let mut remaining_arrayed_samplers = &arrayed_samplers[..];
 
         let mut arrayed_buffer_bindings = Vec::new();
-        if device.features.contains(Features::BUFFER_BINDING_ARRAY) {
+
+        if features.contains(Features::BUFFER_BINDING_ARRAY) {
             // gather all the buffers first
             for entry in desc.entries.iter() {
                 if let BindingResource::BufferArray(array) = entry.resource {
