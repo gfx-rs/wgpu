@@ -32,7 +32,8 @@ pub mod queue;
 pub mod trace;
 
 pub const SHADER_STAGE_COUNT: usize = 3;
-// Should be large enough for the largest possible texture row. This value is enough for a 16k texture with float4 format.
+// Should be large enough for the largest possible texture row. This
+// value is enough for a 16k texture with float4 format.
 pub(crate) const ZERO_BUFFER_SIZE: BufferAddress = 512 << 10;
 
 const CLEANUP_WAIT_MS: u32 = 5000;
@@ -181,19 +182,27 @@ fn map_buffer<A: hal::Api>(
 
     assert_eq!(offset % wgt::COPY_BUFFER_ALIGNMENT, 0);
     assert_eq!(size % wgt::COPY_BUFFER_ALIGNMENT, 0);
-    // Zero out uninitialized parts of the mapping. (Spec dictates all resources behave as if they were initialized with zero)
+    // Zero out uninitialized parts of the mapping. (Spec dictates all resources
+    // behave as if they were initialized with zero)
     //
-    // If this is a read mapping, ideally we would use a `clear_buffer` command before reading the data from GPU (i.e. `invalidate_range`).
-    // However, this would require us to kick off and wait for a command buffer or piggy back on an existing one (the later is likely the only worthwhile option).
-    // As reading uninitialized memory isn't a particular important path to support,
-    // we instead just initialize the memory here and make sure it is GPU visible, so this happens at max only once for every buffer region.
+    // If this is a read mapping, ideally we would use a `clear_buffer` command
+    // before reading the data from GPU (i.e. `invalidate_range`). However, this
+    // would require us to kick off and wait for a command buffer or piggy back
+    // on an existing one (the later is likely the only worthwhile option). As
+    // reading uninitialized memory isn't a particular important path to
+    // support, we instead just initialize the memory here and make sure it is
+    // GPU visible, so this happens at max only once for every buffer region.
     //
-    // If this is a write mapping zeroing out the memory here is the only reasonable way as all data is pushed to GPU anyways.
-    let zero_init_needs_flush_now = mapping.is_coherent && buffer.sync_mapped_writes.is_none(); // No need to flush if it is flushed later anyways.
+    // If this is a write mapping zeroing out the memory here is the only
+    // reasonable way as all data is pushed to GPU anyways.
+
+    // No need to flush if it is flushed later anyways.
+    let zero_init_needs_flush_now = mapping.is_coherent && buffer.sync_mapped_writes.is_none();
     let mapped = unsafe { std::slice::from_raw_parts_mut(mapping.ptr.as_ptr(), size as usize) };
 
     for uninitialized in buffer.initialization_status.drain(offset..(size + offset)) {
-        // The mapping's pointer is already offset, however we track the uninitialized range relative to the buffer's start.
+        // The mapping's pointer is already offset, however we track the
+        // uninitialized range relative to the buffer's start.
         let fill_range =
             (uninitialized.start - offset) as usize..(uninitialized.end - offset) as usize;
         mapped[fill_range].fill(0);
@@ -243,6 +252,7 @@ impl<A: hal::Api> CommandAllocator<A> {
 
 /// Structure describing a logical device. Some members are internally mutable,
 /// stored behind mutexes.
+///
 /// TODO: establish clear order of locking for these:
 /// `mem_allocator`, `desc_allocator`, `life_tracker`, `trackers`,
 /// `render_passes`, `pending_writes`, `trace`.
@@ -286,8 +296,9 @@ pub struct Device<A: HalApi> {
     pub(crate) limits: wgt::Limits,
     pub(crate) features: wgt::Features,
     pub(crate) downlevel: wgt::DownlevelCapabilities,
-    //TODO: move this behind another mutex. This would allow several methods to switch
-    // to borrow Device immutably, such as `write_buffer`, `write_texture`, and `buffer_unmap`.
+    // TODO: move this behind another mutex. This would allow several methods to
+    // switch to borrow Device immutably, such as `write_buffer`, `write_texture`,
+    // and `buffer_unmap`.
     pending_writes: queue::PendingWrites<A>,
     #[cfg(feature = "trace")]
     pub(crate) trace: Option<Mutex<trace::Trace>>,
@@ -608,15 +619,16 @@ impl<A: HalApi> Device<A> {
                 usage |= hal::BufferUses::COPY_DST;
             }
         } else {
-            // We are required to zero out (initialize) all memory.
-            // This is done on demand using clear_buffer which requires write transfer usage!
+            // We are required to zero out (initialize) all memory. This is done
+            // on demand using clear_buffer which requires write transfer usage!
             usage |= hal::BufferUses::COPY_DST;
         }
 
         let actual_size = if desc.size == 0 {
             wgt::COPY_BUFFER_ALIGNMENT
         } else if desc.usage.contains(wgt::BufferUsages::VERTEX) {
-            // Bumping the size by 1 so that we can bind an empty range at the end of the buffer.
+            // Bumping the size by 1 so that we can bind an empty range at the
+            // end of the buffer.
             desc.size + 1
         } else {
             desc.size
@@ -823,7 +835,8 @@ impl<A: HalApi> Device<A> {
 
         // TODO: validate missing TextureDescriptor::view_formats.
 
-        // Enforce having COPY_DST/DEPTH_STENCIL_WRIT/COLOR_TARGET otherwise we wouldn't be able to initialize the texture.
+        // Enforce having COPY_DST/DEPTH_STENCIL_WRIT/COLOR_TARGET otherwise we
+        // wouldn't be able to initialize the texture.
         let hal_usage = conv::map_texture_usage(desc.usage, desc.format.into())
             | if format_desc.sample_type == wgt::TextureSampleType::Depth {
                 hal::TextureUses::DEPTH_STENCIL_WRITE
@@ -1579,8 +1592,8 @@ impl<A: HalApi> Device<A> {
         for entry in entry_map.values() {
             count_validator.add_binding(entry);
         }
-        // If a single bind group layout violates limits, the pipeline layout is definitely
-        // going to violate limits too, lets catch it now.
+        // If a single bind group layout violates limits, the pipeline layout is
+        // definitely going to violate limits too, lets catch it now.
         count_validator
             .validate(&self.limits)
             .map_err(binding_model::CreateBindGroupLayoutError::TooManyBindings)?;
@@ -2093,8 +2106,10 @@ impl<A: HalApi> Device<A> {
                     (Tst::Float { filterable: true }, Tst::Float { filterable: true }) |
                     // if we expect float, also accept depth
                     (Tst::Float { .. }, Tst::Depth, ..) => {}
-                    // if we expect filterable, also accept Float that is defined as unfilterable if filterable feature is explicitly enabled
-                    // (only hit if wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES is enabled)
+                    // if we expect filterable, also accept Float that is defined as
+                    // unfilterable if filterable feature is explicitly enabled (only hit
+                    // if wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES is
+                    // enabled)
                     (Tst::Float { filterable: true }, Tst::Float { .. }) if view.format_features.flags.contains(wgt::TextureFormatFeatureFlags::FILTERABLE) => {}
                     _ => {
                         return Err(Error::InvalidTextureSampleType {
@@ -2628,8 +2643,10 @@ impl<A: HalApi> Device<A> {
                     let adapter_specific = self
                         .features
                         .contains(wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES);
-                    // according to WebGPU specifications the texture needs to be [`TextureFormatFeatureFlags::FILTERABLE`]
-                    // if blending is set - use [`Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES`] to elude this limitation
+                    // according to WebGPU specifications the texture needs to be
+                    // [`TextureFormatFeatureFlags::FILTERABLE`] if blending is set - use
+                    // [`Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES`] to elude
+                    // this limitation
                     if cs.blend.is_some() && (!blendable || (!filterable && !adapter_specific)) {
                         break Some(pipeline::ColorStateError::FormatNotBlendable(cs.format));
                     }
@@ -2959,7 +2976,8 @@ impl<A: HalApi> Device<A> {
         let using_device_features = self
             .features
             .contains(wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES);
-        // If we're running downlevel, we need to manually ask the backend what we can use as we can't trust WebGPU.
+        // If we're running downlevel, we need to manually ask the backend what
+        // we can use as we can't trust WebGPU.
         let downlevel = !self.downlevel.is_webgpu_compliant();
 
         if using_device_features || downlevel {
@@ -3767,7 +3785,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Err(_) => break DeviceError::Invalid.into(),
             };
 
-            // NB: Any change done through the raw texture handle will not be recorded in the replay
+            // NB: Any change done through the raw texture handle will not be
+            // recorded in the replay
             #[cfg(feature = "trace")]
             if let Some(ref trace) = device.trace {
                 trace
@@ -4432,7 +4451,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         (id, Some(error))
     }
 
-    #[allow(unused_unsafe)] // Unsafe-ness of internal calls has little to do with unsafe-ness of this.
+    // Unsafe-ness of internal calls has little to do with unsafe-ness of this.
+    #[allow(unused_unsafe)]
     /// # Safety
     ///
     /// This function passes SPIR-V binary to the backend as-is and can potentially result in a
@@ -5148,7 +5168,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         }
                     }
 
-                    unreachable!("Fallback system failed to choose alpha mode. This is a bug. AlphaMode: {:?}, Options: {:?}", config.composite_alpha_mode, &caps.composite_alpha_modes);
+                    unreachable!(
+                        "Fallback system failed to choose alpha mode. This is a bug. \
+                                  AlphaMode: {:?}, Options: {:?}",
+                        config.composite_alpha_mode, &caps.composite_alpha_modes
+                    );
                 };
 
                 log::info!(
@@ -5318,7 +5342,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     ///
     /// If `force_wait` is true, block until all buffer mappings are done.
     ///
-    /// Return `all_queue_empty` indicating whether there are more queue submissions still in flight.
+    /// Return `all_queue_empty` indicating whether there are more queue
+    /// submissions still in flight.
     fn poll_devices<A: HalApi>(
         &self,
         force_wait: bool,
@@ -5362,7 +5387,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     ///
     /// This is the implementation of `wgpu::Instance::poll_all`.
     ///
-    /// Return `all_queue_empty` indicating whether there are more queue submissions still in flight.
+    /// Return `all_queue_empty` indicating whether there are more queue
+    /// submissions still in flight.
     pub fn poll_all_devices(&self, force_wait: bool) -> Result<bool, WaitIdleError> {
         let mut closures = UserClosures::default();
         let mut all_queue_empty = true;

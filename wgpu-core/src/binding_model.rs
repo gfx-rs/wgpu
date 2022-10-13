@@ -403,7 +403,9 @@ pub struct BindGroupEntry<'a> {
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub struct BindGroupDescriptor<'a> {
-    /// Debug label of the bind group. This will show up in graphics debuggers for easy identification.
+    /// Debug label of the bind group.
+    ///
+    /// This will show up in graphics debuggers for easy identification.
     pub label: Label<'a>,
     /// The [`BindGroupLayout`] that corresponds to this bind group.
     pub layout: BindGroupLayoutId,
@@ -416,7 +418,9 @@ pub struct BindGroupDescriptor<'a> {
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub struct BindGroupLayoutDescriptor<'a> {
-    /// Debug label of the bind group layout. This will show up in graphics debuggers for easy identification.
+    /// Debug label of the bind group layout.
+    ///
+    /// This will show up in graphics debuggers for easy identification.
     pub label: Label<'a>,
     /// Array of entries in this BindGroupLayout
     pub entries: Cow<'a, [wgt::BindGroupLayoutEntry]>,
@@ -537,16 +541,20 @@ pub enum PushConstantUploadError {
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub struct PipelineLayoutDescriptor<'a> {
-    /// Debug label of the pipeine layout. This will show up in graphics debuggers for easy identification.
+    /// Debug label of the pipeine layout.
+    ///
+    /// This will show up in graphics debuggers for easy identification.
     pub label: Label<'a>,
     /// Bind groups that this pipeline uses. The first entry will provide all the bindings for
     /// "set = 0", second entry will provide all the bindings for "set = 1" etc.
     pub bind_group_layouts: Cow<'a, [BindGroupLayoutId]>,
-    /// Set of push constant ranges this pipeline uses. Each shader stage that uses push constants
-    /// must define the range in push constant memory that corresponds to its single `layout(push_constant)`
-    /// uniform block.
+    /// Set of push constant ranges this pipeline uses. Each shader stage that
+    /// uses push constants must define the range in push constant memory that
+    /// corresponds to its single `layout(push_constant)` uniform block.
     ///
-    /// If this array is non-empty, the [`Features::PUSH_CONSTANTS`](wgt::Features::PUSH_CONSTANTS) must be enabled.
+    /// If this array is non-empty, the
+    /// [`Features::PUSH_CONSTANTS`](wgt::Features::PUSH_CONSTANTS) feature must
+    /// be enabled.
     pub push_constant_ranges: Cow<'a, [wgt::PushConstantRange]>,
 }
 

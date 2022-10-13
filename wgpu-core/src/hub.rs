@@ -316,8 +316,9 @@ impl<T, I: id::TypedId> Storage<T, I> {
     ///
     /// Returns [`None`] if there is an epoch mismatch, or the entry is empty.
     ///
-    /// This function is primarily intended for the `as_hal` family of functions where you may need to
-    /// fallibly get a object backed by an id that could be in a different hub.
+    /// This function is primarily intended for the `as_hal` family of functions
+    /// where you may need to fallibly get a object backed by an id that could
+    /// be in a different hub.
     pub(crate) fn try_get(&self, id: I) -> Result<Option<&T>, InvalidId> {
         let (index, epoch, _) = id.unzip();
         let (result, storage_epoch) = match self.map.get(index as usize) {

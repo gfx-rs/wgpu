@@ -268,7 +268,8 @@ impl<A: HalApi> State<A> {
         Ok(())
     }
 
-    // `extra_buffer` is there to represent the indirect buffer that is also part of the usage scope.
+    // `extra_buffer` is there to represent the indirect buffer that is also
+    // part of the usage scope.
     fn flush_states(
         &mut self,
         raw_encoder: &mut A::CommandEncoder,
@@ -391,7 +392,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             raw.begin_compute_pass(&hal_desc);
         }
 
-        // Immediate texture inits required because of prior discards. Need to be inserted before texture reads.
+        // Immediate texture inits required because of prior discards. Need to
+        // be inserted before texture reads.
         let mut pending_discard_init_fixups = SurfacesInDiscardState::new();
 
         for command in base.commands {
@@ -763,8 +765,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
         cmd_buf.status = CommandEncoderStatus::Recording;
 
-        // There can be entries left in pending_discard_init_fixups if a bind group was set, but not used (i.e. no Dispatch occurred)
-        // However, we already altered the discard/init_action state on this cmd_buf, so we need to apply the promised changes.
+        // There can be entries left in pending_discard_init_fixups if a bind
+        // group was set, but not used (i.e. no Dispatch occurred)
+        //
+        // However, we already altered the discard/init_action state on this
+        // cmd_buf, so we need to apply the promised changes.
         fixup_discarded_surfaces(
             pending_discard_init_fixups.into_iter(),
             raw,

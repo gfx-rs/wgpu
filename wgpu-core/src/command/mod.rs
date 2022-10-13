@@ -511,7 +511,8 @@ impl BindGroupStateChange {
     ) -> bool {
         // For now never deduplicate bind groups with dynamic offsets.
         if offset_length == 0 {
-            // If this get returns None, that means we're well over the limit, so let the call through to get a proper error
+            // If this get returns None, that means we're well over the limit,
+            // so let the call through to get a proper error
             if let Some(current_bind_group) = self.last_states.get_mut(index as usize) {
                 // Bail out if we're binding the same bind group.
                 if current_bind_group.set_and_check_redundant(bind_group_id) {

@@ -110,18 +110,28 @@ use hal::CommandEncoder as _;
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub struct RenderBundleEncoderDescriptor<'a> {
-    /// Debug label of the render bundle encoder. This will show up in graphics debuggers for easy identification.
+    /// Debug label of the render bundle encoder.
+    ///
+    /// This will show up in graphics debuggers for easy identification.
     pub label: Label<'a>,
-    /// The formats of the color attachments that this render bundle is capable to rendering to. This
-    /// must match the formats of the color attachments in the renderpass this render bundle is executed in.
+    /// The formats of the color attachments that this render bundle is capable
+    /// to rendering to.
+    ///
+    /// This must match the formats of the color attachments in the
+    /// renderpass this render bundle is executed in.
     pub color_formats: Cow<'a, [Option<wgt::TextureFormat>]>,
-    /// Information about the depth attachment that this render bundle is capable to rendering to. The format
-    /// must match the format of the depth attachments in the renderpass this render bundle is executed in.
+    /// Information about the depth attachment that this render bundle is
+    /// capable to rendering to.
+    ///
+    /// The format must match the format of the depth attachments in the
+    /// renderpass this render bundle is executed in.
     pub depth_stencil: Option<wgt::RenderBundleDepthStencil>,
-    /// Sample count this render bundle is capable of rendering to. This must match the pipelines and
-    /// the renderpasses it is used in.
+    /// Sample count this render bundle is capable of rendering to.
+    ///
+    /// This must match the pipelines and the renderpasses it is used in.
     pub sample_count: u32,
-    /// If this render bundle will rendering to multiple array layers in the attachments at the same time.
+    /// If this render bundle will rendering to multiple array layers in the
+    /// attachments at the same time.
     pub multiview: Option<NonZeroU32>,
 }
 

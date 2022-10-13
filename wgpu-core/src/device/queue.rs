@@ -60,8 +60,11 @@ impl SubmittedWorkDoneClosure {
 
     /// # Safety
     ///
-    /// - The callback pointer must be valid to call with the provided user_data pointer.
-    /// - Both pointers must point to 'static data as the callback may happen at an unspecified time.
+    /// - The callback pointer must be valid to call with the provided `user_data`
+    ///   pointer.
+    ///
+    /// - Both pointers must point to `'static` data, as the callback may happen at
+    ///   an unspecified time.
     pub unsafe fn from_c(inner: SubmittedWorkDoneClosureC) -> Self {
         Self {
             inner: SubmittedWorkDoneClosureInner::C { inner },
@@ -118,17 +121,20 @@ impl<A: hal::Api> EncoderInFlight<A> {
     }
 }
 
-/// Writes made directly on the device or queue, not as part of a wgpu command buffer.
+/// A private command encoder for writes made directly on the device
+/// or queue.
 ///
 /// Operations like `buffer_unmap`, `queue_write_buffer`, and
-/// `queue_write_texture` need to copy data to the GPU. This must be
-/// done by encoding and submitting commands at the hal level, but these
-/// operations are not associated with any specific wgpu command buffer.
+/// `queue_write_texture` need to copy data to the GPU. At the hal
+/// level, this must be done by encoding and submitting commands, but
+/// these operations are not associated with any specific wgpu command
+/// buffer.
 ///
-/// Instead, `Device::pending_writes` owns one of these values, which has its
-/// own hal command encoder and resource lists. The commands accumulated here
-/// are automatically submitted to the queue the next time the user submits a
-/// wgpu command buffer, ahead of the user's commands.
+/// Instead, `Device::pending_writes` owns one of these values, which
+/// has its own hal command encoder and resource lists. The commands
+/// accumulated here are automatically submitted to the queue the next
+/// time the user submits a wgpu command buffer, ahead of the user's
+/// commands.
 ///
 /// All uses of [`StagingBuffer`]s end up here.
 #[derive(Debug)]
@@ -540,7 +546,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         device.pending_writes.dst_buffers.insert(buffer_id);
 
-        // Ensure the overwritten bytes are marked as initialized so they don't need to be nulled prior to mapping or binding.
+        // Ensure the overwritten bytes are marked as initialized so
+        // they don't need to be nulled prior to mapping or binding.
         {
             drop(buffer_guard);
             let mut buffer_guard = hub.buffers.write(device_token).0;
@@ -587,12 +594,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             return Ok(());
         }
 
-        let (mut texture_guard, _) = hub.textures.write(&mut token); // For clear we need write access to the texture. TODO: Can we acquire write lock later?
+        // For clear we need write access to the texture.
+        // TODO: Can we acquire write lock later?
+        let (mut texture_guard, _) = hub.textures.write(&mut token);
         let (selector, dst_base, texture_format) =
             extract_texture_selector(destination, size, &*texture_guard)?;
         let format_desc = texture_format.describe();
-        //Note: `_source_bytes_per_array_layer` is ignored since we have a staging copy,
-        // and it can have a different value.
+        // Note: `_source_bytes_per_array_layer` is ignored since we
+        // have a staging copy, and it can have a different value.
         let (_, _source_bytes_per_array_layer) = validate_linear_texture_data(
             data_layout,
             texture_format,
@@ -613,7 +622,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let block_rows_per_image = match data_layout.rows_per_image {
             Some(rows_per_image) => rows_per_image.get(),
             None => {
-                // doesn't really matter because we need this only if we copy more than one layer, and then we validate for this being not None
+                // doesn't really matter because we need this only if we copy
+                // more than one layer, and then we validate for this being not
+                // None
                 size.height
             }
         };
@@ -641,11 +652,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut trackers = device.trackers.lock();
         let encoder = device.pending_writes.activate();
 
-        // If the copy does not fully cover the layers, we need to initialize to zero *first* as we don't keep track of partial texture layer inits.
-        // Strictly speaking we only need to clear the areas of a layer untouched, but this would get increasingly messy.
-
+        // If the copy does not fully cover the layers, we need to initialize to
+        // zero *first* as we don't keep track of partial texture layer inits.
+        //
+        // Strictly speaking we only need to clear the areas of a layer
+        // untouched, but this would get increasingly messy.
         let init_layer_range = if dst.desc.dimension == wgt::TextureDimension::D3 {
-            0..1 // volume textures don't have a layer range as array volumes aren't supported
+            // volume textures don't have a layer range as array volumes aren't supported
+            0..1
         } else {
             destination.origin.z..destination.origin.z + size.depth_or_array_layers
         };
@@ -830,7 +844,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                     // finish all the command buffers first
                     for &cmb_id in command_buffer_ids {
-                        // we reset the used surface textures every time we use it, so make sure to set_size on it.
+                        // we reset the used surface textures every time we use
+                        // it, so make sure to set_size on it.
                         used_surface_textures.set_size(texture_guard.len());
 
                         #[allow(unused_mut)]
@@ -1034,12 +1049,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 } = *device;
 
                 {
-                    //TODO: these blocks have a few organizational issues and should be refactored
-                    // (1) it's similar to the code we have per-command-buffer (at the begin and end)
-                    // Maybe we an merge some?
-                    // (2) it's doing the extra locking unconditionally
-                    // Maybe we can only do so if any surfaces are being written to?
-
+                    // TODO: These blocks have a few organizational issues, and
+                    // should be refactored.
+                    //
+                    // 1) It's similar to the code we have per-command-buffer
+                    //    (at the begin and end) Maybe we can merge some?
+                    //
+                    // 2) It's doing the extra locking unconditionally. Maybe we
+                    //    can only do so if any surfaces are being written to?
                     let (_, mut token) = hub.buffers.read(&mut token); // skip token
                     let (mut texture_guard, _) = hub.textures.write(&mut token);
 
