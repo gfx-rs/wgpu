@@ -153,10 +153,12 @@ jobs:
           # Windows
           - name: Windows x86_64
             os: windows-2022
+            backends: dx12
 
           # Linux
           - name: Linux x86_64
             os: ubuntu-22.04
+            backends: vulkan gl
     
     name: Test ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
@@ -175,8 +177,45 @@ jobs:
 
       - name: install latest nextest release
         uses: taiki-e/install-action@nextest
-      - name: Install cargo-llvm-cov
+      - name: install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
+        
+      - name: install swiftshader
+        if: matrix.target == 'x86_64-unknown-linux-gnu'
+        shell: bash
+        run: |
+          set -e
+          
+          mkdir -p swiftshader
+          curl -LsSf https://github.com/gfx-rs/ci-build/releases/latest/download/swiftshader-linux-x86_64.tar.xz | tar -xf - -C swiftshader
+
+          echo "LD_LIBRARY_PATH=$PWD/swiftshader" >> $GITHUB_ENV
+        
+      - name: install llvmpipe, vulkan sdk
+        if: matrix.target == 'x86_64-unknown-linux-gnu'
+        shell: bash
+        run: |
+          set -e
+          
+          sudo apt-get update -y -qq
+
+          # llvmpipe
+          sudo add-apt-repository ppa:oibaf/graphics-drivers -y
+
+          # vulkan sdk
+          wget -qO - https://packages.lunarg.com/lunarg-signing-key-pub.asc | sudo apt-key add -
+          sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-focal.list https://packages.lunarg.com/vulkan/lunarg-vulkan-focal.list
+
+          sudo apt-get update
+          sudo apt install -y libegl1-mesa libgl1-mesa-dri libxcb-xfixes0-dev vulkan-sdk
+
+      - name: disable debug
+        shell: bash
+        run: |
+          mkdir -p .cargo
+          echo """\n[profile.dev]
+          incremental = false
+          debug = 1" >> .cargo/config.toml
 
       - name: caching
         uses: Swatinem/rust-cache@v2
@@ -189,7 +228,11 @@ jobs:
           set -e
 
           cargo llvm-cov run --bin wgpu-info --no-report
-          cargo llvm-cov nextest -p wgpu -p wgpu-types -p wgpu-hal -p wgpu-core -p player --no-report
+
+          for backend in ${{ matrix.backends }}; do
+            echo "======= NATIVE TESTS $backend ======";
+            WGPU_BACKEND=$backend cargo llvm-cov nextest -p wgpu -p wgpu-types -p wgpu-hal -p wgpu-core -p player --no-report
+          done
 
           cargo llvm-cov report --lcov --output-path lcov.info
 
