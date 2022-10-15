@@ -1260,10 +1260,10 @@ impl crate::Device<super::Api> for super::Device {
     }
     unsafe fn destroy_bind_group(&self, group: super::BindGroup) {
         if let Some(dual) = group.handle_views {
-            let _ = self.shared.heap_views.free_slice(dual);
+            self.shared.heap_views.free_slice(dual);
         }
         if let Some(dual) = group.handle_samplers {
-            let _ = self.shared.heap_samplers.free_slice(dual);
+            self.shared.heap_samplers.free_slice(dual);
         }
     }
 

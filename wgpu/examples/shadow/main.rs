@@ -855,6 +855,6 @@ fn shadow() {
             // llvmpipe versions in CI are flaky: https://github.com/gfx-rs/wgpu/issues/2594
             .specific_failure(Some(wgpu::Backends::VULKAN), None, Some("llvmpipe"), true),
         tolerance: 2,
-        max_outliers: 500, // bounded by rpi4
+        max_outliers: 1075, // bounded by swiftshader
     });
 }

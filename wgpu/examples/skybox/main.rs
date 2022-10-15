@@ -472,10 +472,9 @@ fn skybox() {
         width: 1024,
         height: 768,
         optional_features: wgpu::Features::default(),
-        base_test_parameters: framework::test_common::TestParameters::default()
-            .backend_failure(wgpu::Backends::GL),
+        base_test_parameters: framework::test_common::TestParameters::default(),
         tolerance: 3,
-        max_outliers: 3,
+        max_outliers: 207, // bounded by swiftshader
     });
 }
 
@@ -488,7 +487,7 @@ fn skybox_bc1() {
         optional_features: wgpu::Features::TEXTURE_COMPRESSION_BC,
         base_test_parameters: framework::test_common::TestParameters::default(), // https://bugs.chromium.org/p/angleproject/issues/detail?id=7056
         tolerance: 5,
-        max_outliers: 105, // Bounded by llvmpipe
+        max_outliers: 191, // Bounded by swiftshader
     });
 }
 
@@ -501,7 +500,7 @@ fn skybox_etc2() {
         optional_features: wgpu::Features::TEXTURE_COMPRESSION_ETC2,
         base_test_parameters: framework::test_common::TestParameters::default(), // https://bugs.chromium.org/p/angleproject/issues/detail?id=7056
         tolerance: 5,
-        max_outliers: 105, // Bounded by llvmpipe
+        max_outliers: 248, // Bounded by swiftshader
     });
 }
 
