@@ -257,8 +257,6 @@ jobs:
             WGPU_BACKEND=$backend cargo llvm-cov nextest -p wgpu -p wgpu-types -p wgpu-hal -p wgpu-core -p player --no-fail-fast --no-report
           done
 
-          cargo llvm-cov report --lcov --output-path lcov.info
-
       - name: generate coverage report
         shell: bash
         run: |
