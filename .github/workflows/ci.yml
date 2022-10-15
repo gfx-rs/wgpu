@@ -15,10 +15,17 @@ env:
   CACHE_SUFFIX: c # cache busting
 
 # We distinguish the following kinds of builds:
-# - local: build for the same target as we compile on, and do local tests
-# - other: build without testing, e.g. cross-build
+# - native: build for the same target as we compile on
 # - web: build for the Web
 # - em: build for the Emscripten
+
+# For build time and size optimization we disable debug
+# entirely on clippy jobs and reduce it to line-numbers
+# only for ones where we run tests.
+#
+# Additionally, we disable incremental builds entirely 
+# as our caching system doesn't actually cache our crates.
+# It adds overhead to the build and another point of failure.
 
 jobs:
   check-msrv:
