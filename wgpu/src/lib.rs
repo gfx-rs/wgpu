@@ -3781,6 +3781,7 @@ impl Surface {
 
 /// Opaque globally-unique identifier
 #[cfg(feature = "expose-ids")]
+#[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
 #[repr(transparent)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct Id(BackendId);
@@ -3791,6 +3792,7 @@ impl Adapter {
     ///
     /// Calling this method multiple times on the same object will always return the same value.
     /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
+    #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
     pub fn global_id(&self) -> Id {
         Id(self.id.global_id())
     }
@@ -3802,6 +3804,7 @@ impl Device {
     ///
     /// Calling this method multiple times on the same object will always return the same value.
     /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
+    #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
     pub fn global_id(&self) -> Id {
         Id(self.id.global_id())
     }
@@ -3813,6 +3816,7 @@ impl Queue {
     ///
     /// Calling this method multiple times on the same object will always return the same value.
     /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
+    #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
     pub fn global_id(&self) -> Id {
         Id(self.id.global_id())
     }
@@ -3824,6 +3828,7 @@ impl ShaderModule {
     ///
     /// Calling this method multiple times on the same object will always return the same value.
     /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
+    #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
     pub fn global_id(&self) -> Id {
         Id(self.id.global_id())
     }
@@ -3835,6 +3840,7 @@ impl BindGroupLayout {
     ///
     /// Calling this method multiple times on the same object will always return the same value.
     /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
+    #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
     pub fn global_id(&self) -> Id {
         Id(self.id.global_id())
     }
@@ -3846,6 +3852,7 @@ impl BindGroup {
     ///
     /// Calling this method multiple times on the same object will always return the same value.
     /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
+    #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
     pub fn global_id(&self) -> Id {
         Id(self.id.global_id())
     }
@@ -3857,6 +3864,7 @@ impl TextureView {
     ///
     /// Calling this method multiple times on the same object will always return the same value.
     /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
+    #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
     pub fn global_id(&self) -> Id {
         Id(self.id.global_id())
     }
@@ -3868,6 +3876,7 @@ impl Sampler {
     ///
     /// Calling this method multiple times on the same object will always return the same value.
     /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
+    #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
     pub fn global_id(&self) -> Id {
         Id(self.id.global_id())
     }
@@ -3879,6 +3888,7 @@ impl Buffer {
     ///
     /// Calling this method multiple times on the same object will always return the same value.
     /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
+    #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
     pub fn global_id(&self) -> Id {
         Id(self.id.global_id())
     }
@@ -3890,6 +3900,7 @@ impl Texture {
     ///
     /// Calling this method multiple times on the same object will always return the same value.
     /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
+    #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
     pub fn global_id(&self) -> Id {
         Id(self.id.global_id())
     }
@@ -3901,6 +3912,7 @@ impl QuerySet {
     ///
     /// Calling this method multiple times on the same object will always return the same value.
     /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
+    #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
     pub fn global_id(&self) -> Id {
         Id(self.id.global_id())
     }
@@ -3912,6 +3924,7 @@ impl PipelineLayout {
     ///
     /// Calling this method multiple times on the same object will always return the same value.
     /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
+    #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
     pub fn global_id(&self) -> Id {
         Id(self.id.global_id())
     }
@@ -3923,6 +3936,7 @@ impl RenderPipeline {
     ///
     /// Calling this method multiple times on the same object will always return the same value.
     /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
+    #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
     pub fn global_id(&self) -> Id {
         Id(self.id.global_id())
     }
@@ -3934,6 +3948,7 @@ impl ComputePipeline {
     ///
     /// Calling this method multiple times on the same object will always return the same value.
     /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
+    #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
     pub fn global_id(&self) -> Id {
         Id(self.id.global_id())
     }
@@ -3945,6 +3960,7 @@ impl RenderBundle {
     ///
     /// Calling this method multiple times on the same object will always return the same value.
     /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
+    #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
     pub fn global_id(&self) -> Id {
         Id(self.id.global_id())
     }
@@ -3956,6 +3972,7 @@ impl Surface {
     ///
     /// Calling this method multiple times on the same object will always return the same value.
     /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
+    #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
     pub fn global_id(&self) -> Id {
         Id(self.id.global_id())
     }
