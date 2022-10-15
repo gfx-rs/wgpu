@@ -162,7 +162,6 @@ jobs:
           cargo doc --target ${{ matrix.target }} -p wgpu -p wgpu-core -p wgpu-info -p player --all-features --no-deps
 
   gpu-test:
-    needs: ["check-msrv"]
     strategy:
       fail-fast: false
       matrix:
@@ -270,8 +269,6 @@ jobs:
           files: lcov.info
   
   doctest:
-    needs: ["check-msrv"]
-
     name: Doctest
     runs-on: ubuntu-22.04
 
