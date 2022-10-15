@@ -236,10 +236,11 @@ pub enum StageError {
     #[error("shader module is invalid")]
     InvalidModule,
     #[error(
-        "shader entry point current workgroup size {current:?} must be less or equal to {limit:?} of total {total}"
+        "shader entry point current workgroup size {current:?} of total {current_total} must be less or equal to {limit:?} and of total {total}"
     )]
     InvalidWorkgroupSize {
         current: [u32; 3],
+        current_total: u32,
         limit: [u32; 3],
         total: u32,
     },
@@ -1098,6 +1099,7 @@ impl Interface {
             {
                 return Err(StageError::InvalidWorkgroupSize {
                     current: entry_point.workgroup_size,
+                    current_total: total_invocations,
                     limit: max_workgroup_size_limits,
                     total: self.limits.max_compute_invocations_per_workgroup,
                 });
