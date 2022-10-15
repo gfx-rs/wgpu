@@ -123,6 +123,7 @@ static_assertions = "1.1.0"
 [dev-dependencies]
 bitflags = "1"
 bytemuck = { version = "1.4", features = ["derive"] }
+cfg-if = "1"
 glam = "0.21.3"
 ddsfile = "0.5"
 futures-intrusive = "0.4"
