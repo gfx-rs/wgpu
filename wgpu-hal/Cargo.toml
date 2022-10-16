@@ -10,6 +10,15 @@ keywords = ["graphics"]
 license = "MIT OR Apache-2.0"
 rust-version = "1.60"
 
+[package.metadata.docs.rs]
+# Ideally we would enable all the features.
+#
+# However the metal features fails to be documented because the docs.rs runner cross compiling under
+# x86_64-unknown-linux-gnu and metal-rs cannot compile in that environment at the moment. The same applies
+# with the dx11 and dx12 features.
+features = ["vulkan", "gles", "renderdoc"]
+rustdoc-args = ["--cfg", "docsrs"]
+
 [lib]
 
 [features]
@@ -61,6 +70,8 @@ glow = { git = "https://github.com/grovesNL/glow/", rev = "c8a011fcd57a5c68cc917
 # backend: Dx12
 bit-set = { version = "0.5", optional = true }
 range-alloc = { version = "0.1", optional = true }
+winapi = { version = "0.3", features = ["libloaderapi", "windef", "winuser", "dcomp"] }
+native = { package = "d3d12", version = "0.5.0", features = ["libloading"], optional = true }
 
 [dependencies.wgt]
 package = "wgpu-types"
