@@ -8,7 +8,6 @@ edition.workspace = true
 description = "CTS runner for wgpu"
 license.workspace = true
 publish = false
-resolver = "2"
 
 [dependencies]
 deno_console.workspace = true
