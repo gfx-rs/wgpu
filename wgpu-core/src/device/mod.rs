@@ -1134,6 +1134,200 @@ impl<A: HalApi> Device<A> {
         })
     }
 
+    fn create_texture_view_from_hal(
+        &self,
+        texture: &resource::Texture<A>,
+        texture_id: id::TextureId,
+        hal_texture_view: A::TextureView,
+        desc: &resource::TextureViewDescriptor,
+    ) -> Result<resource::TextureView<A>, resource::CreateTextureViewError> {
+        let view_dim = match desc.dimension {
+            Some(dim) => {
+                // check if the dimension is compatible with the texture
+                if texture.desc.dimension != dim.compatible_texture_dimension() {
+                    return Err(
+                        resource::CreateTextureViewError::InvalidTextureViewDimension {
+                            view: dim,
+                            texture: texture.desc.dimension,
+                        },
+                    );
+                }
+                // check if multisampled texture is seen as anything but 2D
+                match dim {
+                    wgt::TextureViewDimension::D2 | wgt::TextureViewDimension::D2Array => {}
+                    _ if texture.desc.sample_count > 1 => {
+                        return Err(resource::CreateTextureViewError::InvalidMultisampledTextureViewDimension(dim));
+                    }
+                    _ => {}
+                }
+                dim
+            }
+            None => match texture.desc.dimension {
+                wgt::TextureDimension::D1 => wgt::TextureViewDimension::D1,
+                wgt::TextureDimension::D2 if texture.desc.size.depth_or_array_layers > 1 => {
+                    wgt::TextureViewDimension::D2Array
+                }
+                wgt::TextureDimension::D2 => wgt::TextureViewDimension::D2,
+                wgt::TextureDimension::D3 => wgt::TextureViewDimension::D3,
+            },
+        };
+
+        let mip_count = desc.range.mip_level_count.map_or(1, |count| count.get());
+        let required_level_count = desc.range.base_mip_level.saturating_add(mip_count);
+
+        let required_layer_count = match desc.range.array_layer_count {
+            Some(count) => desc.range.base_array_layer.saturating_add(count.get()),
+            None => match view_dim {
+                wgt::TextureViewDimension::D1
+                | wgt::TextureViewDimension::D2
+                | wgt::TextureViewDimension::D3 => 1,
+                wgt::TextureViewDimension::Cube => 6,
+                _ => texture.desc.array_layer_count(),
+            }
+            .max(desc.range.base_array_layer.saturating_add(1)),
+        };
+
+        let level_end = texture.full_range.mips.end;
+        let layer_end = texture.full_range.layers.end;
+        if required_level_count > level_end {
+            return Err(resource::CreateTextureViewError::TooManyMipLevels {
+                requested: required_level_count,
+                total: level_end,
+            });
+        }
+        if required_layer_count > layer_end {
+            return Err(resource::CreateTextureViewError::TooManyArrayLayers {
+                requested: required_layer_count,
+                total: layer_end,
+            });
+        };
+
+        match view_dim {
+            TextureViewDimension::Cube if required_layer_count != 6 => {
+                return Err(
+                    resource::CreateTextureViewError::InvalidCubemapTextureDepth {
+                        depth: required_layer_count,
+                    },
+                )
+            }
+            TextureViewDimension::CubeArray if required_layer_count % 6 != 0 => {
+                return Err(
+                    resource::CreateTextureViewError::InvalidCubemapArrayTextureDepth {
+                        depth: required_layer_count,
+                    },
+                )
+            }
+            _ => {}
+        }
+
+        let full_aspect = hal::FormatAspects::from(texture.desc.format);
+        let select_aspect = hal::FormatAspects::from(desc.range.aspect);
+        if (full_aspect & select_aspect).is_empty() {
+            return Err(resource::CreateTextureViewError::InvalidAspect {
+                texture_format: texture.desc.format,
+                requested_aspect: desc.range.aspect,
+            });
+        }
+
+        let end_level = desc
+            .range
+            .mip_level_count
+            .map_or(level_end, |_| required_level_count);
+        let end_layer = desc
+            .range
+            .array_layer_count
+            .map_or(layer_end, |_| required_layer_count);
+        let selector = TextureSelector {
+            mips: desc.range.base_mip_level..end_level,
+            layers: desc.range.base_array_layer..end_layer,
+        };
+
+        let view_layer_count = selector.layers.end - selector.layers.start;
+        let layer_check_ok = match view_dim {
+            wgt::TextureViewDimension::D1
+            | wgt::TextureViewDimension::D2
+            | wgt::TextureViewDimension::D3 => view_layer_count == 1,
+            wgt::TextureViewDimension::D2Array => true,
+            wgt::TextureViewDimension::Cube => view_layer_count == 6,
+            wgt::TextureViewDimension::CubeArray => view_layer_count % 6 == 0,
+        };
+        if !layer_check_ok {
+            return Err(resource::CreateTextureViewError::InvalidArrayLayerCount {
+                requested: view_layer_count,
+                dim: view_dim,
+            });
+        }
+
+        let mut extent = texture
+            .desc
+            .mip_level_size(desc.range.base_mip_level)
+            .unwrap();
+        if view_dim != wgt::TextureViewDimension::D3 {
+            extent.depth_or_array_layers = view_layer_count;
+        }
+        let format = desc.format.unwrap_or(texture.desc.format);
+        if format != texture.desc.format {
+            return Err(resource::CreateTextureViewError::FormatReinterpretation {
+                texture: texture.desc.format,
+                view: format,
+            });
+        }
+
+        // filter the usages based on the other criteria
+        let usage = {
+            let mask_copy = !(hal::TextureUses::COPY_SRC | hal::TextureUses::COPY_DST);
+            let mask_dimension = match view_dim {
+                wgt::TextureViewDimension::Cube | wgt::TextureViewDimension::CubeArray => {
+                    hal::TextureUses::RESOURCE
+                }
+                wgt::TextureViewDimension::D3 => {
+                    hal::TextureUses::RESOURCE
+                        | hal::TextureUses::STORAGE_READ
+                        | hal::TextureUses::STORAGE_READ_WRITE
+                }
+                _ => hal::TextureUses::all(),
+            };
+            let mask_mip_level = if selector.mips.end - selector.mips.start != 1 {
+                hal::TextureUses::RESOURCE
+            } else {
+                hal::TextureUses::all()
+            };
+            texture.hal_usage & mask_copy & mask_dimension & mask_mip_level
+        };
+
+        log::debug!(
+            "Create view for texture {:?} filters usages to {:?}",
+            texture_id,
+            usage
+        );
+        let hal_desc = hal::TextureViewDescriptor {
+            label: desc.label.borrow_option(),
+            format,
+            dimension: view_dim,
+            usage,
+            range: desc.range.clone(),
+        };
+
+        Ok(resource::TextureView {
+            raw: hal_texture_view,
+            parent_id: Stored {
+                value: id::Valid(texture_id),
+                ref_count: texture.life_guard.add_ref(),
+            },
+            device_id: texture.device_id.clone(),
+            desc: resource::HalTextureViewDescriptor {
+                format: hal_desc.format,
+                dimension: hal_desc.dimension,
+                range: hal_desc.range,
+            },
+            format_features: texture.format_features,
+            extent,
+            samples: texture.desc.sample_count,
+            selector,
+            life_guard: LifeGuard::new(desc.label.borrow_or_default()),
+        })
+    }
+
     fn create_sampler(
         &self,
         self_id: id::DeviceId,
@@ -1207,6 +1401,27 @@ impl<A: HalApi> Device<A> {
             filtering: desc.min_filter == wgt::FilterMode::Linear
                 || desc.mag_filter == wgt::FilterMode::Linear,
         })
+    }
+
+    fn create_sampler_from_hal(
+        &self,
+        hal_sampler: A::Sampler,
+        self_id: id::DeviceId,
+        desc: &resource::SamplerDescriptor,
+    ) -> resource::Sampler<A> {
+        debug_assert_eq!(self_id.backend(), A::VARIANT);
+
+        resource::Sampler {
+            raw: hal_sampler,
+            device_id: Stored {
+                value: id::Valid(self_id),
+                ref_count: self.life_guard.add_ref(),
+            },
+            life_guard: LifeGuard::new(desc.label.borrow_or_default()),
+            comparison: desc.compare.is_some(),
+            filtering: desc.min_filter == wgt::FilterMode::Linear
+                || desc.mag_filter == wgt::FilterMode::Linear,
+        }
     }
 
     fn create_shader_module<'a>(
@@ -3994,6 +4209,66 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         (id, Some(error))
     }
 
+    /// # Safety
+    ///
+    /// - `hal_texture_view` must be created from `texture_id` corresponding raw handle.
+    /// - `hal_texture_view` must be created respecting `desc`
+    /// - `hal_texture_view` must be initialized
+    pub unsafe fn create_texture_view_from_hal<A: HalApi>(
+        &self,
+        hal_texture_view: A::TextureView,
+        texture_id: id::TextureId,
+        desc: &resource::TextureViewDescriptor,
+        id_in: Input<G, id::TextureViewId>,
+    ) -> (id::TextureViewId, Option<resource::CreateTextureViewError>) {
+        profiling::scope!("Device::create_texture_view_from_hal");
+
+        let hub = A::hub(self);
+        let mut token = Token::root();
+        let fid = hub.texture_views.prepare(id_in);
+
+        let (device_guard, mut token) = hub.devices.read(&mut token);
+        let (texture_guard, mut token) = hub.textures.read(&mut token);
+
+        let error = loop {
+            let texture = match texture_guard.get(texture_id) {
+                Ok(texture) => texture,
+                Err(_) => break resource::CreateTextureViewError::InvalidTexture,
+            };
+            let device = &device_guard[texture.device_id.value];
+
+            // NB: Any change done through the raw texture view handle will not be
+            // recorded in the replay
+            #[cfg(feature = "trace")]
+            if let Some(ref trace) = device.trace {
+                trace.lock().add(trace::Action::CreateTextureView {
+                    id: fid.id(),
+                    parent_id: texture_id,
+                    desc: desc.clone(),
+                });
+            }
+
+            let view = match device.create_texture_view_from_hal(
+                texture,
+                texture_id,
+                hal_texture_view,
+                desc,
+            ) {
+                Ok(view) => view,
+                Err(e) => break e,
+            };
+
+            let ref_count = view.life_guard.add_ref();
+            let id = fid.assign(view, &mut token);
+
+            device.trackers.lock().views.insert_single(id, ref_count);
+            return (id.0, None);
+        };
+
+        let id = fid.assign_error(desc.label.borrow_or_default(), &mut token);
+        (id, Some(error))
+    }
+
     pub fn texture_view_label<A: HalApi>(&self, id: id::TextureViewId) -> String {
         A::hub(self).texture_views.label_for_resource(id)
     }
@@ -4076,6 +4351,53 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(sampler) => sampler,
                 Err(e) => break e,
             };
+            let ref_count = sampler.life_guard.add_ref();
+            let id = fid.assign(sampler, &mut token);
+
+            device.trackers.lock().samplers.insert_single(id, ref_count);
+
+            return (id.0, None);
+        };
+
+        let id = fid.assign_error(desc.label.borrow_or_default(), &mut token);
+        (id, Some(error))
+    }
+
+    /// # Safety
+    ///
+    /// - `hal_texture` must be created from `device_id` corresponding raw handle.
+    /// - `hal_texture` must be created respecting `desc`
+    /// - `hal_texture` must be initialized
+    pub unsafe fn create_sampler_from_hal<A: HalApi>(
+        &self,
+        hal_sampler: A::Sampler,
+        device_id: id::DeviceId,
+        desc: &resource::SamplerDescriptor,
+        id_in: Input<G, id::SamplerId>,
+    ) -> (id::SamplerId, Option<resource::CreateSamplerError>) {
+        profiling::scope!("Device::create_sampler");
+
+        let hub = A::hub(self);
+        let mut token = Token::root();
+        let fid = hub.samplers.prepare(id_in);
+
+        let (device_guard, mut token) = hub.devices.read(&mut token);
+        let error = loop {
+            let device = match device_guard.get(device_id) {
+                Ok(device) => device,
+                Err(_) => break DeviceError::Invalid.into(),
+            };
+
+            // NB: Any change done through the raw sampler handle will not be
+            // recorded in the replay
+            #[cfg(feature = "trace")]
+            if let Some(ref trace) = device.trace {
+                trace
+                    .lock()
+                    .add(trace::Action::CreateSampler(fid.id(), desc.clone()));
+            }
+
+            let sampler = device.create_sampler_from_hal(hal_sampler, device_id, desc);
             let ref_count = sampler.life_guard.add_ref();
             let id = fid.assign(sampler, &mut token);
 

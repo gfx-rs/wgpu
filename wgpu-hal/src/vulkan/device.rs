@@ -623,6 +623,62 @@ impl super::Device {
         }
     }
 
+    /// # Safety
+    ///
+    /// - The `vk_image_view` must be created from the specified `texture`
+    /// - If `drop_guard` is [`None`], ownership of the `vk_image_view` is transferred to wgpu-hal.
+    /// - If `drop_guard` is [`Some`], the image view must be valid until the Drop implementation of the
+    ///   `drop_guard` is called.
+    pub unsafe fn texture_view_from_raw(
+        &self,
+        texture: &super::Texture,
+        vk_image_view: vk::ImageView,
+        desc: &crate::TextureViewDescriptor,
+        drop_guard: Option<crate::DropGuard>,
+    ) -> super::TextureView {
+        let subresource_range = conv::map_subresource_range(&desc.range, texture.aspects);
+        let layers =
+            NonZeroU32::new(subresource_range.layer_count).expect("Unexpected zero layer count");
+
+        let view_usage = if self.shared.private_caps.image_view_usage && !desc.usage.is_empty() {
+            desc.usage
+        } else {
+            texture.usage
+        };
+        let attachment = super::FramebufferAttachment {
+            raw: if self.shared.private_caps.imageless_framebuffers {
+                vk::ImageView::null()
+            } else {
+                vk_image_view
+            },
+            raw_image_flags: texture.raw_flags,
+            view_usage,
+            view_format: desc.format,
+        };
+
+        super::TextureView {
+            raw: vk_image_view,
+            layers,
+            attachment,
+            drop_guard,
+        }
+    }
+
+    /// # Safety
+    ///
+    /// - If `drop_guard` is [`None`], ownership of the `vk_sampler` is transferred to wgpu-hal.
+    /// - If `drop_guard` is [`Some`], the sampler must be valid until the Drop implementation of the
+    ///   `drop_guard` is called.
+    pub unsafe fn sampler_from_raw(
+        vk_sampler: vk::Sampler,
+        drop_guard: Option<crate::DropGuard>,
+    ) -> super::Sampler {
+        super::Sampler {
+            raw: vk_sampler,
+            drop_guard,
+        }
+    }
+
     fn create_shader_module_impl(
         &self,
         spv: &[u32],
@@ -986,9 +1042,12 @@ impl crate::Device<super::Api> for super::Device {
             raw,
             layers,
             attachment,
+            drop_guard: None,
         })
     }
     unsafe fn destroy_texture_view(&self, view: super::TextureView) {
+        // Even though the texture view may have been externally created, make sure we stop using the texture
+        // view.
         if !self.shared.private_caps.imageless_framebuffers {
             let mut fbuf_lock = self.shared.framebuffers.lock();
             for (key, &raw_fbuf) in fbuf_lock.iter() {
@@ -998,7 +1057,14 @@ impl crate::Device<super::Api> for super::Device {
             }
             fbuf_lock.retain(|key, _| !key.attachments.iter().any(|at| at.raw == view.raw));
         }
-        self.shared.raw.destroy_image_view(view.raw, None);
+
+        // If the guard is None, the ownership of the texture view was transferred to wgpu-hal.
+        if view.drop_guard.is_none() {
+            self.shared.raw.destroy_image_view(view.raw, None);
+        }
+
+        // Signal that wgpu-hal is no longer using the texture view.
+        drop(view.drop_guard);
     }
 
     unsafe fn create_sampler(
@@ -1047,10 +1113,19 @@ impl crate::Device<super::Api> for super::Device {
                 .set_object_name(vk::ObjectType::SAMPLER, raw, label);
         }
 
-        Ok(super::Sampler { raw })
+        Ok(super::Sampler {
+            raw,
+            drop_guard: None,
+        })
     }
     unsafe fn destroy_sampler(&self, sampler: super::Sampler) {
-        self.shared.raw.destroy_sampler(sampler.raw, None);
+        // If the guard is None, the ownership of the sampler was transferred to wgpu-hal.
+        if sampler.drop_guard.is_none() {
+            self.shared.raw.destroy_sampler(sampler.raw, None);
+        }
+
+        // Signal that wgpu-hal is no longer using the sampler.
+        drop(sampler.drop_guard);
     }
 
     unsafe fn create_command_encoder(

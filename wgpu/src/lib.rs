@@ -2269,6 +2269,27 @@ impl Device {
         }
     }
 
+    /// Creates a [`Sampler`] from a wgpu-hal Sampler.
+    ///
+    /// # Safety
+    ///
+    /// - `hal_sampler` must be created from this device internal handle
+    /// - `hal_sampler` must be created respecting `desc`
+    /// - `hal_sampler` must be initialized
+    #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
+    pub unsafe fn create_sampler_from_hal<A: wgc::hub::HalApi>(
+        &self,
+        hal_sampler: A::Sampler,
+        desc: &SamplerDescriptor,
+    ) -> Sampler {
+        Sampler {
+            context: Arc::clone(&self.context),
+            id: self
+                .context
+                .create_sampler_from_hal::<A>(hal_sampler, &self.id, desc),
+        }
+    }
+
     /// Creates a new [`QuerySet`].
     pub fn create_query_set(&self, desc: &QuerySetDescriptor) -> QuerySet {
         QuerySet {
@@ -2646,6 +2667,28 @@ impl Texture {
         TextureView {
             context: Arc::clone(&self.context),
             id: Context::texture_create_view(&*self.context, &self.id, desc),
+        }
+    }
+
+    /// Creates a [`TextureView`] from a wgpu-hal TextureView.
+    ///
+    /// # Safety
+    ///
+    /// - `hal_texture_view` must be created from this device internal handle
+    /// - `hal_texture_view` must be created from this texture
+    /// - `hal_texture_view` must be created respecting `desc`
+    /// - `hal_texture_view` must be initialized
+    #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
+    pub unsafe fn create_view_from_hal<A: wgc::hub::HalApi>(
+        &self,
+        hal_texture_view: A::TextureView,
+        desc: &TextureViewDescriptor,
+    ) -> TextureView {
+        TextureView {
+            context: Arc::clone(&self.context),
+            id: self
+                .context
+                .create_texture_view_from_hal::<A>(&self.id, hal_texture_view, desc),
         }
     }
 

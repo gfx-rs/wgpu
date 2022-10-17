@@ -145,6 +145,79 @@ impl Context {
     }
 
     #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
+    pub unsafe fn create_texture_view_from_hal<A: wgc::hub::HalApi>(
+        &self,
+        texture: &Texture,
+        hal_texture_view: A::TextureView,
+        desc: &TextureViewDescriptor,
+    ) -> wgc::id::TextureViewId {
+        let descriptor = wgc::resource::TextureViewDescriptor {
+            label: desc.label.map(Borrowed),
+            format: desc.format,
+            dimension: desc.dimension,
+            range: wgt::ImageSubresourceRange {
+                aspect: desc.aspect,
+                base_mip_level: desc.base_mip_level,
+                mip_level_count: desc.mip_level_count,
+                base_array_layer: desc.base_array_layer,
+                array_layer_count: desc.array_layer_count,
+            },
+        };
+        let global = &self.0;
+        let (id, error) =
+            global.create_texture_view_from_hal::<A>(hal_texture_view, texture.id, &descriptor, ());
+        if let Some(cause) = error {
+            self.handle_error(
+                &texture.error_sink,
+                cause,
+                LABEL,
+                desc.label,
+                "Texture::create_view_from_hal",
+            );
+        }
+        id
+    }
+
+    #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
+    pub unsafe fn create_sampler_from_hal<A: wgc::hub::HalApi>(
+        &self,
+        hal_sampler: A::Sampler,
+        device: &Device,
+        desc: &SamplerDescriptor,
+    ) -> wgc::id::SamplerId {
+        let descriptor = wgc::resource::SamplerDescriptor {
+            label: desc.label.map(Borrowed),
+            address_modes: [
+                desc.address_mode_u,
+                desc.address_mode_v,
+                desc.address_mode_w,
+            ],
+            mag_filter: desc.mag_filter,
+            min_filter: desc.min_filter,
+            mipmap_filter: desc.mipmap_filter,
+            lod_min_clamp: desc.lod_min_clamp,
+            lod_max_clamp: desc.lod_max_clamp,
+            compare: desc.compare,
+            anisotropy_clamp: desc.anisotropy_clamp,
+            border_color: desc.border_color,
+        };
+
+        let global = &self.0;
+        let (id, error) =
+            global.create_sampler_from_hal::<A>(hal_sampler, device.id, &descriptor, ());
+        if let Some(cause) = error {
+            self.handle_error(
+                &device.error_sink,
+                cause,
+                LABEL,
+                desc.label,
+                "Device::create_sampler_from_hal",
+            );
+        }
+        id
+    }
+
+    #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
     pub unsafe fn device_as_hal<A: wgc::hub::HalApi, F: FnOnce(Option<&A::Device>) -> R, R>(
         &self,
         device: &Device,

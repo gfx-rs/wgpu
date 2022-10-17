@@ -368,9 +368,17 @@ pub struct TextureView {
     raw: vk::ImageView,
     layers: NonZeroU32,
     attachment: FramebufferAttachment,
+    drop_guard: Option<crate::DropGuard>,
 }
 
 impl TextureView {
+    /// # Safety
+    ///
+    /// - The image view handle must not be manually destroyed
+    pub unsafe fn raw_handle(&self) -> vk::ImageView {
+        self.raw
+    }
+
     fn aspects(&self) -> crate::FormatAspects {
         self.attachment.view_format.into()
     }
@@ -379,6 +387,7 @@ impl TextureView {
 #[derive(Debug)]
 pub struct Sampler {
     raw: vk::Sampler,
+    drop_guard: Option<crate::DropGuard>,
 }
 
 #[derive(Debug)]
