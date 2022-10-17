@@ -50,6 +50,10 @@ Bottom level categories:
 #### WebGPU
 - Implement `queue_validate_write_buffer` by @jinleili in [#3098](https://github.com/gfx-rs/wgpu/pull/3098)
 
+#### GLES
+
+- Browsers that support `OVR_multiview2` now report the `MULTIVIEW` feature by @expenses in [#3121](https://github.com/gfx-rs/wgpu/pull/3121).
+
 ### Added/New Features
 
 #### General
