@@ -91,7 +91,7 @@ impl super::Queue {
             super::TextureInner::Texture { raw, target } => {
                 let num_layers = view.array_layers.end - view.array_layers.start;
                 if num_layers > 1 {
-                    #[cfg(target_arch = "wasm32")]
+                    #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
                     gl.framebuffer_texture_multiview_ovr(
                         fbo_target,
                         attachment,
