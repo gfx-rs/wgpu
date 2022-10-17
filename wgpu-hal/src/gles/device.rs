@@ -20,6 +20,7 @@ struct CompilationContext<'a> {
     layout: &'a super::PipelineLayout,
     sampler_map: &'a mut super::SamplerBindMap,
     name_binding_map: &'a mut NameBindingMap,
+    multiview: Option<std::num::NonZeroU32>,
 }
 
 impl CompilationContext<'_> {
@@ -205,7 +206,7 @@ impl super::Device {
         let pipeline_options = glsl::PipelineOptions {
             shader_stage: naga_stage,
             entry_point: stage.entry_point.to_string(),
-            multiview: None,
+            multiview: context.multiview,
         };
 
         let shader = &stage.module.naga;
@@ -269,6 +270,7 @@ impl super::Device {
         shaders: I,
         layout: &super::PipelineLayout,
         #[cfg_attr(target_arch = "wasm32", allow(unused))] label: Option<&str>,
+        multiview: Option<std::num::NonZeroU32>,
     ) -> Result<super::PipelineInner, crate::PipelineError> {
         let program = gl.create_program().unwrap();
         #[cfg(not(target_arch = "wasm32"))]
@@ -289,6 +291,7 @@ impl super::Device {
                 layout,
                 sampler_map: &mut sampler_map,
                 name_binding_map: &mut name_binding_map,
+                multiview,
             };
 
             let shader = Self::create_shader(gl, naga_stage, stage, context)?;
@@ -1032,7 +1035,7 @@ impl crate::Device<super::Api> for super::Device {
                 .as_ref()
                 .map(|fs| (naga::ShaderStage::Fragment, fs)),
         );
-        let inner = self.create_pipeline(gl, shaders, desc.layout, desc.label)?;
+        let inner = self.create_pipeline(gl, shaders, desc.layout, desc.label, desc.multiview)?;
 
         let (vertex_buffers, vertex_attributes) = {
             let mut buffers = Vec::new();
@@ -1100,7 +1103,7 @@ impl crate::Device<super::Api> for super::Device {
     ) -> Result<super::ComputePipeline, crate::PipelineError> {
         let gl = &self.shared.context.lock();
         let shaders = iter::once((naga::ShaderStage::Compute, &desc.stage));
-        let inner = self.create_pipeline(gl, shaders, desc.layout, desc.label)?;
+        let inner = self.create_pipeline(gl, shaders, desc.layout, desc.label, None)?;
 
         Ok(super::ComputePipeline { inner })
     }
