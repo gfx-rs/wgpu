@@ -586,6 +586,7 @@ bitflags::bitflags! {
         ///
         /// Supported platforms:
         /// - Vulkan
+        /// - OpenGL (web only)
         ///
         /// This is a native only feature.
         const MULTIVIEW = 1 << 37;

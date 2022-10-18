@@ -330,6 +330,10 @@ impl super::Adapter {
             downlevel_flags.contains(wgt::DownlevelFlags::VERTEX_STORAGE)
                 && vertex_shader_storage_textures != 0,
         );
+        features.set(
+            wgt::Features::MULTIVIEW,
+            extensions.contains("OVR_multiview2"),
+        );
         let gles_bcn_exts = [
             "GL_EXT_texture_compression_s3tc_srgb",
             "GL_EXT_texture_compression_rgtc",
