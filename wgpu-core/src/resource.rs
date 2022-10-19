@@ -428,6 +428,25 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         hal_device_callback(hal_device)
     }
+
+    /// # Safety
+    /// - The raw surface handle must not be manually destroyed
+    pub unsafe fn surface_as_hal_mut<A: HalApi, F: FnOnce(Option<&mut A::Surface>) -> R, R>(
+        &self,
+        id: SurfaceId,
+        hal_surface_callback: F,
+    ) -> R {
+        profiling::scope!("Surface::as_hal_mut");
+
+        let mut token = Token::root();
+        let (mut guard, _) = self.surfaces.write(&mut token);
+        let surface = guard.get_mut(id).ok();
+        let hal_surface = surface
+            .and_then(|surface| A::get_surface_mut(surface))
+            .map(|surface| &mut surface.raw);
+
+        hal_surface_callback(hal_surface)
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
