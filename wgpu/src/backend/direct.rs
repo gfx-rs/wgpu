@@ -155,6 +155,20 @@ impl Context {
     }
 
     #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
+    pub unsafe fn surface_as_hal_mut<
+        A: wgc::hub::HalApi,
+        F: FnOnce(Option<&mut A::Surface>) -> R,
+        R,
+    >(
+        &self,
+        surface: &Surface,
+        hal_surface_callback: F,
+    ) -> R {
+        self.0
+            .surface_as_hal_mut::<A, F, R>(surface.id, hal_surface_callback)
+    }
+
+    #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
     pub unsafe fn texture_as_hal<A: wgc::hub::HalApi, F: FnOnce(Option<&A::Texture>)>(
         &self,
         texture: &Texture,

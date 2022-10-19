@@ -3773,6 +3773,21 @@ impl Surface {
             })
             .ok_or(SurfaceError::Lost)
     }
+
+    /// Returns the inner hal Surface using a callback. The hal surface will be `None` if the
+    /// backend type argument does not match with this wgpu Surface
+    ///
+    /// # Safety
+    ///
+    /// - The raw handle obtained from the hal Surface must not be manually destroyed
+    #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
+    pub unsafe fn as_hal_mut<A: wgc::hub::HalApi, F: FnOnce(Option<&mut A::Surface>) -> R, R>(
+        &mut self,
+        hal_surface_callback: F,
+    ) -> R {
+        self.context
+            .surface_as_hal_mut::<A, F, R>(&self.id, hal_surface_callback)
+    }
 }
 
 /// Type for the callback of uncaptured error handler
