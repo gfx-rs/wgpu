@@ -1609,15 +1609,7 @@ impl<W: Write> Writer<W> {
                     Function::Regular(fun_name) => {
                         write!(self.out, "{}(", fun_name)?;
                         self.write_expr(module, arg, func_ctx)?;
-                        if let Some(arg) = arg1 {
-                            write!(self.out, ", ")?;
-                            self.write_expr(module, arg, func_ctx)?;
-                        }
-                        if let Some(arg) = arg2 {
-                            write!(self.out, ", ")?;
-                            self.write_expr(module, arg, func_ctx)?;
-                        }
-                        if let Some(arg) = arg3 {
+                        for arg in IntoIterator::into_iter([arg1, arg2, arg3]).flatten() {
                             write!(self.out, ", ")?;
                             self.write_expr(module, arg, func_ctx)?;
                         }
