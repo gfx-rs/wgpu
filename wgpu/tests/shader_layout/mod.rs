@@ -3,16 +3,32 @@ use std::{borrow::Cow, fmt::Write};
 use wgpu::{
     Backends, BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor, BindGroupLayoutEntry,
     BindingType, BufferDescriptor, BufferUsages, CommandEncoderDescriptor, ComputePassDescriptor,
-    ComputePipelineDescriptor, DownlevelFlags, Limits, Maintain, MapMode, PipelineLayoutDescriptor,
-    ShaderModuleDescriptor, ShaderSource, ShaderStages,
+    ComputePipelineDescriptor, DownlevelFlags, Features, Limits, Maintain, MapMode,
+    PipelineLayoutDescriptor, PushConstantRange, ShaderModuleDescriptor, ShaderSource,
+    ShaderStages,
 };
 
 use crate::common::{initialize_test, TestParameters, TestingContext};
 
 #[derive(Clone, Copy)]
+enum LoadType {
+    Direct,
+    Variable,
+}
+impl LoadType {
+    fn as_str(&self) -> &'static str {
+        match self {
+            Self::Direct => "input",
+            Self::Variable => "loaded",
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
 enum StorageType {
     Uniform,
     Storage,
+    PushConstant,
 }
 
 impl StorageType {
@@ -20,6 +36,7 @@ impl StorageType {
         match self {
             StorageType::Uniform => "uniform",
             StorageType::Storage => "storage",
+            StorageType::PushConstant => "push_constant",
         }
     }
 }
@@ -62,34 +79,34 @@ const TESTS: &[ShaderLayoutTest] = &[
         uniform_failures: Backends::empty(),
         storage_failures: Backends::empty(),
     },
-    ShaderLayoutTest {
-        member_types: &["u32"],
-        accessors: &[&[""]],
-        output_values: &[1],
-        uniform_failures: Backends::empty(),
-        storage_failures: Backends::empty(),
-    },
-    ShaderLayoutTest {
-        member_types: &["vec2<u32>"],
-        accessors: &[&[".x", ".y"]],
-        output_values: &[1, 2],
-        uniform_failures: Backends::empty(),
-        storage_failures: Backends::empty(),
-    },
-    ShaderLayoutTest {
-        member_types: &["vec3<u32>"],
-        accessors: &[&[".x", ".y", ".z"]],
-        output_values: &[1, 2, 3],
-        uniform_failures: Backends::empty(),
-        storage_failures: Backends::empty(),
-    },
-    ShaderLayoutTest {
-        member_types: &["vec4<u32>"],
-        accessors: &[&[".x", ".y", ".z", ".w"]],
-        output_values: &[1, 2, 3, 4],
-        uniform_failures: Backends::empty(),
-        storage_failures: Backends::empty(),
-    },
+    // ShaderLayoutTest {
+    //     member_types: &["u32"],
+    //     accessors: &[&[""]],
+    //     output_values: &[1],
+    //     uniform_failures: Backends::empty(),
+    //     storage_failures: Backends::empty(),
+    // },
+    // ShaderLayoutTest {
+    //     member_types: &["vec2<u32>"],
+    //     accessors: &[&[".x", ".y"]],
+    //     output_values: &[1, 2],
+    //     uniform_failures: Backends::empty(),
+    //     storage_failures: Backends::empty(),
+    // },
+    // ShaderLayoutTest {
+    //     member_types: &["vec3<u32>"],
+    //     accessors: &[&[".x", ".y", ".z"]],
+    //     output_values: &[1, 2, 3],
+    //     uniform_failures: Backends::empty(),
+    //     storage_failures: Backends::empty(),
+    // },
+    // ShaderLayoutTest {
+    //     member_types: &["vec4<u32>"],
+    //     accessors: &[&[".x", ".y", ".z", ".w"]],
+    //     output_values: &[1, 2, 3, 4],
+    //     uniform_failures: Backends::empty(),
+    //     storage_failures: Backends::empty(),
+    // },
     ShaderLayoutTest {
         member_types: &["mat2x2<f32>"],
         accessors: &[&[
@@ -209,7 +226,7 @@ fn input_layout_test(ctx: TestingContext, storage_type: StorageType) {
                     ty: BindingType::Buffer {
                         ty: match storage_type {
                             StorageType::Uniform => wgpu::BufferBindingType::Uniform,
-                            StorageType::Storage => {
+                            StorageType::Storage | StorageType::PushConstant => {
                                 wgpu::BufferBindingType::Storage { read_only: true }
                             }
                         },
@@ -272,98 +289,122 @@ fn input_layout_test(ctx: TestingContext, storage_type: StorageType) {
         .create_pipeline_layout(&PipelineLayoutDescriptor {
             label: None,
             bind_group_layouts: &[&bgl],
-            push_constant_ranges: &[],
+            push_constant_ranges: match storage_type {
+                StorageType::PushConstant => &[PushConstantRange {
+                    stages: ShaderStages::COMPUTE,
+                    range: 0..MAX_BUFFER_SIZE as u32,
+                }],
+                _ => &[],
+            },
         });
 
     let mut fail = false;
     for test in TESTS {
-        let test_name = format!("{:?}", test.member_types);
+        for load_type in [LoadType::Direct, LoadType::Variable] {
+            let test_name = format!("{:?} - {}", test.member_types, load_type.as_str());
 
-        let mut input_members = String::new();
-        for (idx, &ty) in test.member_types.iter().enumerate() {
-            writeln!(&mut input_members, "member_{idx}: {ty},").unwrap();
-        }
-
-        let mut body = String::new();
-        for (member_idx, &member_accessors) in test.accessors.iter().enumerate() {
-            for &member_accessor in member_accessors {
-                // We bitcast as the values are really u32/i32 values.
-                writeln!(
-                    &mut body,
-                    "output[i] = bitcast<u32>(input.member_{member_idx}{member_accessor});"
-                )
-                .unwrap();
-                writeln!(&mut body, "i += 1u;").unwrap();
+            let mut input_members = String::new();
+            for (idx, &ty) in test.member_types.iter().enumerate() {
+                writeln!(&mut input_members, "member_{idx}: {ty},").unwrap();
             }
-        }
 
-        let processed = source
-            .replace("{{storage_type}}", storage_type.as_str())
-            .replace("{{input_members}}", &input_members)
-            .replace("{{body}}", &body);
+            let mut body = String::new();
+            for (member_idx, &member_accessors) in test.accessors.iter().enumerate() {
+                for &member_accessor in member_accessors {
+                    // We bitcast as the values are really u32/i32 values.
+                    writeln!(
+                        &mut body,
+                        "output[i] = {}.member_{member_idx}{member_accessor};",
+                        load_type.as_str()
+                    )
+                    .unwrap();
+                    writeln!(&mut body, "i += 1u;").unwrap();
+                }
+            }
 
-        let sm = ctx.device.create_shader_module(ShaderModuleDescriptor {
-            label: Some(&format!("shader {test_name}")),
-            source: ShaderSource::Wgsl(Cow::Owned(processed)),
-        });
+            let mut processed = source
+                .replace("{{storage_type}}", storage_type.as_str())
+                .replace("{{input_members}}", &input_members)
+                .replace("{{body}}", &body);
 
-        let pipeline = ctx
-            .device
-            .create_compute_pipeline(&ComputePipelineDescriptor {
-                label: Some(&format!("pipeline {test_name}")),
-                layout: Some(&pll),
-                module: &sm,
-                entry_point: "cs_main",
+            if let StorageType::PushConstant = storage_type {
+                processed = processed.replace("@group(0) @binding(0)", "");
+            }
+
+            let sm = ctx.device.create_shader_module(ShaderModuleDescriptor {
+                label: Some(&format!("shader {test_name}")),
+                source: ShaderSource::Wgsl(Cow::Owned(processed)),
             });
 
-        ctx.queue
-            .write_buffer(&input_buffer, 0, bytemuck::cast_slice(&values));
+            let pipeline = ctx
+                .device
+                .create_compute_pipeline(&ComputePipelineDescriptor {
+                    label: Some(&format!("pipeline {test_name}")),
+                    layout: Some(&pll),
+                    module: &sm,
+                    entry_point: "cs_main",
+                });
 
-        let mut encoder = ctx
-            .device
-            .create_command_encoder(&CommandEncoderDescriptor { label: None });
+            let mut encoder = ctx
+                .device
+                .create_command_encoder(&CommandEncoderDescriptor { label: None });
 
-        encoder.clear_buffer(&output_buffer, 0, None);
-        encoder.clear_buffer(&mapping_buffer, 0, None);
+            encoder.clear_buffer(&output_buffer, 0, None);
+            encoder.clear_buffer(&mapping_buffer, 0, None);
 
-        let mut cpass = encoder.begin_compute_pass(&ComputePassDescriptor {
-            label: Some(&format!("cpass {test_name}")),
-        });
-        cpass.set_pipeline(&pipeline);
-        cpass.set_bind_group(0, &bg, &[]);
-        cpass.dispatch_workgroups(1, 1, 1);
-        drop(cpass);
+            let mut cpass = encoder.begin_compute_pass(&ComputePassDescriptor {
+                label: Some(&format!("cpass {test_name}")),
+            });
+            cpass.set_pipeline(&pipeline);
+            cpass.set_bind_group(0, &bg, &[]);
 
-        encoder.copy_buffer_to_buffer(&output_buffer, 0, &mapping_buffer, 0, MAX_BUFFER_SIZE);
-
-        ctx.queue.submit(Some(encoder.finish()));
-
-        let _ = mapping_buffer.slice(..).map_async(MapMode::Read, |_| ());
-        ctx.device.poll(Maintain::Wait);
-
-        let mapped = mapping_buffer.slice(..).get_mapped_range();
-
-        let typed: &[u32] = bytemuck::cast_slice(&*mapped);
-
-        let left = &typed[..test.output_values.len()];
-        let right = &*test.output_values;
-        let failure = left != right;
-        if failure {
-            eprintln!("Inner test failure. Actual {left:?}. Expected {right:?}. Test {test_name}");
-        }
-        let backend_failures = match storage_type {
-            StorageType::Uniform => test.uniform_failures,
-            StorageType::Storage => test.storage_failures,
-        };
-        if failure != backend_failures.contains(ctx.adapter.get_info().backend.into()) {
-            fail |= true;
-            if !failure {
-                eprintln!("Unexpected test success. Test {test_name}");
+            match storage_type {
+                StorageType::Uniform | StorageType::Storage => {
+                    ctx.queue
+                        .write_buffer(&input_buffer, 0, bytemuck::cast_slice(&values));
+                }
+                StorageType::PushConstant => {
+                    cpass.set_push_constants(0, bytemuck::cast_slice(&values))
+                }
             }
-        }
-        drop(mapped);
 
-        mapping_buffer.unmap();
+            cpass.dispatch_workgroups(1, 1, 1);
+            drop(cpass);
+
+            encoder.copy_buffer_to_buffer(&output_buffer, 0, &mapping_buffer, 0, MAX_BUFFER_SIZE);
+
+            ctx.queue.submit(Some(encoder.finish()));
+
+            mapping_buffer.slice(..).map_async(MapMode::Read, |_| ());
+            ctx.device.poll(Maintain::Wait);
+
+            let mapped = mapping_buffer.slice(..).get_mapped_range();
+
+            let typed: &[u32] = bytemuck::cast_slice(&*mapped);
+
+            let left = &typed[..test.output_values.len()];
+            let right = &*test.output_values;
+            let failure = left != right;
+            if failure {
+                eprintln!(
+                    "Inner test failure. Actual {left:?}. Expected {right:?}. Test {test_name}"
+                );
+            }
+            let backend_failures = match storage_type {
+                StorageType::Uniform => test.uniform_failures,
+                StorageType::Storage => test.storage_failures,
+                StorageType::PushConstant => test.storage_failures,
+            };
+            if failure != backend_failures.contains(ctx.adapter.get_info().backend.into()) {
+                fail |= true;
+                if !failure {
+                    eprintln!("Unexpected test success. Test {test_name}");
+                }
+            }
+            drop(mapped);
+
+            mapping_buffer.unmap();
+        }
     }
     assert!(!fail);
 }
@@ -388,6 +429,22 @@ fn input_layout_storage() {
             .limits(Limits::downlevel_defaults()),
         |ctx| {
             input_layout_test(ctx, StorageType::Storage);
+        },
+    );
+}
+
+#[test]
+fn input_layout_push_constant() {
+    initialize_test(
+        TestParameters::default()
+            .features(Features::PUSH_CONSTANTS)
+            .downlevel_flags(DownlevelFlags::COMPUTE_SHADERS)
+            .limits(Limits {
+                max_push_constant_size: 128,
+                ..Limits::downlevel_defaults()
+            }),
+        |ctx| {
+            input_layout_test(ctx, StorageType::PushConstant);
         },
     );
 }
