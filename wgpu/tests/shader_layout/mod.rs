@@ -299,7 +299,7 @@ fn input_layout_test(ctx: TestingContext, storage_type: StorageType) {
         });
 
     let mut fail = false;
-    for test in TESTS {
+    'a: for test in TESTS {
         for load_type in [LoadType::Direct, LoadType::Variable] {
             let test_name = format!("{:?} - {}", test.member_types, load_type.as_str());
 
@@ -333,7 +333,7 @@ fn input_layout_test(ctx: TestingContext, storage_type: StorageType) {
 
             let sm = ctx.device.create_shader_module(ShaderModuleDescriptor {
                 label: Some(&format!("shader {test_name}")),
-                source: ShaderSource::Wgsl(Cow::Owned(processed)),
+                source: ShaderSource::Wgsl(Cow::Borrowed(&processed)),
             });
 
             let pipeline = ctx
@@ -395,7 +395,7 @@ fn input_layout_test(ctx: TestingContext, storage_type: StorageType) {
             let backend_failures = match storage_type {
                 StorageType::Uniform => test.uniform_failures,
                 StorageType::Storage => test.storage_failures,
-                StorageType::PushConstant => test.storage_failures,
+                StorageType::PushConstant => test.uniform_failures,
             };
             if failure != backend_failures.contains(ctx.adapter.get_info().backend.into()) {
                 fail |= true;
