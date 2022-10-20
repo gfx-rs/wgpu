@@ -31,8 +31,8 @@ float4 builtins()
     float4 s3_ = (bool4(false, false, false, false) ? float4(0.0, 0.0, 0.0, 0.0) : float4(1.0, 1.0, 1.0, 1.0));
     float4 m1_ = lerp(float4(0.0, 0.0, 0.0, 0.0), float4(1.0, 1.0, 1.0, 1.0), float4(0.5, 0.5, 0.5, 0.5));
     float4 m2_ = lerp(float4(0.0, 0.0, 0.0, 0.0), float4(1.0, 1.0, 1.0, 1.0), 0.10000000149011612);
-    float b1_ = float(int4(1, 1, 1, 1).x);
-    float4 b2_ = float4(int4(1, 1, 1, 1));
+    float b1_ = asfloat(int4(1, 1, 1, 1).x);
+    float4 b2_ = asfloat(int4(1, 1, 1, 1));
     int4 v_i32_zero = int4(float4(0.0, 0.0, 0.0, 0.0));
     return (((((float4(((s1_).xxxx + v_i32_zero)) + s2_) + m1_) + m2_) + (b1_).xxxx) + b2_);
 }
@@ -87,8 +87,8 @@ float constructors()
     float unnamed_6 = float(0.0);
     uint2 unnamed_7 = uint2(uint2(0u, 0u));
     float2x3 unnamed_8 = float2x3(float2x3(float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0)));
-    uint2 unnamed_9 = uint2(uint2(0u, 0u));
-    float2x3 unnamed_10 = float2x3(float2x3(float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0)));
+    uint2 unnamed_9 = asuint(uint2(0u, 0u));
+    float2x3 unnamed_10 = asfloat(float2x3(float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0)));
     float _expr75 = foo.a.x;
     return _expr75;
 }

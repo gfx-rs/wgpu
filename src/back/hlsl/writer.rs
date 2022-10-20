@@ -2404,39 +2404,41 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 convert,
             } => {
                 let inner = func_ctx.info[expr].ty.inner_with(&module.types);
-                let get_width = |src_width| kind.to_hlsl_str(convert.unwrap_or(src_width));
-                match *inner {
-                    TypeInner::Vector { size, width, .. } => {
-                        write!(
-                            self.out,
-                            "{}{}(",
-                            get_width(width)?,
-                            back::vector_size_str(size)
-                        )?;
+                match convert {
+                    Some(dst_width) => {
+                        match *inner {
+                            TypeInner::Vector { size, .. } => {
+                                write!(
+                                    self.out,
+                                    "{}{}(",
+                                    kind.to_hlsl_str(dst_width)?,
+                                    back::vector_size_str(size)
+                                )?;
+                            }
+                            TypeInner::Scalar { .. } => {
+                                write!(self.out, "{}(", kind.to_hlsl_str(dst_width)?,)?;
+                            }
+                            TypeInner::Matrix { columns, rows, .. } => {
+                                write!(
+                                    self.out,
+                                    "{}{}x{}(",
+                                    kind.to_hlsl_str(dst_width)?,
+                                    back::vector_size_str(columns),
+                                    back::vector_size_str(rows)
+                                )?;
+                            }
+                            _ => {
+                                return Err(Error::Unimplemented(format!(
+                                    "write_expr expression::as {:?}",
+                                    inner
+                                )));
+                            }
+                        };
                     }
-                    TypeInner::Scalar { width, .. } => {
-                        write!(self.out, "{}(", get_width(width)?,)?;
+                    None => {
+                        write!(self.out, "{}(", kind.to_hlsl_cast(),)?;
                     }
-                    TypeInner::Matrix {
-                        columns,
-                        rows,
-                        width,
-                    } => {
-                        write!(
-                            self.out,
-                            "{}{}x{}(",
-                            get_width(width)?,
-                            back::vector_size_str(columns),
-                            back::vector_size_str(rows)
-                        )?;
-                    }
-                    _ => {
-                        return Err(Error::Unimplemented(format!(
-                            "write_expr expression::as {:?}",
-                            inner
-                        )));
-                    }
-                };
+                }
                 self.write_expr(module, expr, func_ctx)?;
                 write!(self.out, ")")?;
             }
