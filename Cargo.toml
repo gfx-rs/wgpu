@@ -38,8 +38,8 @@ package = "wgpu-hal"
 path = "./wgpu-hal"
 
 [workspace.dependencies.naga]
-git = "https://github.com/gfx-rs/naga"
-rev = "c52d9102"
+git = "https://github.com/cwfitzgerald/naga"
+rev = "2e499e26"
 version = "0.10"
 
 [workspace.dependencies]

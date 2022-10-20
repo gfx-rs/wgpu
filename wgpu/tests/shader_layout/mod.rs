@@ -60,58 +60,58 @@ const TESTS: &[ShaderLayoutTest] = &[
     },
     ShaderLayoutTest {
         member_types: &["vec2<f32>"],
-        accessors: &[&[".x", ".y"]],
+        accessors: &[&["[0]", ".y"]],
         output_values: &[1, 2],
         uniform_failures: Backends::empty(),
         storage_failures: Backends::empty(),
     },
     ShaderLayoutTest {
         member_types: &["vec3<f32>"],
-        accessors: &[&[".x", ".y", ".z"]],
+        accessors: &[&["[0]", ".y", ".z"]],
         output_values: &[1, 2, 3],
         uniform_failures: Backends::empty(),
         storage_failures: Backends::empty(),
     },
     ShaderLayoutTest {
         member_types: &["vec4<f32>"],
-        accessors: &[&[".x", ".y", ".z", ".w"]],
+        accessors: &[&["[0]", ".y", ".z", ".w"]],
         output_values: &[1, 2, 3, 4],
         uniform_failures: Backends::empty(),
         storage_failures: Backends::empty(),
     },
-    // ShaderLayoutTest {
-    //     member_types: &["u32"],
-    //     accessors: &[&[""]],
-    //     output_values: &[1],
-    //     uniform_failures: Backends::empty(),
-    //     storage_failures: Backends::empty(),
-    // },
-    // ShaderLayoutTest {
-    //     member_types: &["vec2<u32>"],
-    //     accessors: &[&[".x", ".y"]],
-    //     output_values: &[1, 2],
-    //     uniform_failures: Backends::empty(),
-    //     storage_failures: Backends::empty(),
-    // },
-    // ShaderLayoutTest {
-    //     member_types: &["vec3<u32>"],
-    //     accessors: &[&[".x", ".y", ".z"]],
-    //     output_values: &[1, 2, 3],
-    //     uniform_failures: Backends::empty(),
-    //     storage_failures: Backends::empty(),
-    // },
-    // ShaderLayoutTest {
-    //     member_types: &["vec4<u32>"],
-    //     accessors: &[&[".x", ".y", ".z", ".w"]],
-    //     output_values: &[1, 2, 3, 4],
-    //     uniform_failures: Backends::empty(),
-    //     storage_failures: Backends::empty(),
-    // },
+    ShaderLayoutTest {
+        member_types: &["u32"],
+        accessors: &[&[""]],
+        output_values: &[1],
+        uniform_failures: Backends::empty(),
+        storage_failures: Backends::empty(),
+    },
+    ShaderLayoutTest {
+        member_types: &["vec2<u32>"],
+        accessors: &[&["[0]", ".y"]],
+        output_values: &[1, 2],
+        uniform_failures: Backends::empty(),
+        storage_failures: Backends::empty(),
+    },
+    ShaderLayoutTest {
+        member_types: &["vec3<u32>"],
+        accessors: &[&["[0]", ".y", ".z"]],
+        output_values: &[1, 2, 3],
+        uniform_failures: Backends::empty(),
+        storage_failures: Backends::empty(),
+    },
+    ShaderLayoutTest {
+        member_types: &["vec4<u32>"],
+        accessors: &[&["[0]", ".y", ".z", ".w"]],
+        output_values: &[1, 2, 3, 4],
+        uniform_failures: Backends::empty(),
+        storage_failures: Backends::empty(),
+    },
     ShaderLayoutTest {
         member_types: &["mat2x2<f32>"],
         accessors: &[&[
-            "[0].x", "[0].y", //
-            "[1].x", "[1].y", //
+            "[0][0]", "[0].y", //
+            "[1][0]", "[1].y", //
         ]],
         output_values: &[1, 2, 3, 4],
         uniform_failures: Backends::empty(),
@@ -120,8 +120,8 @@ const TESTS: &[ShaderLayoutTest] = &[
     ShaderLayoutTest {
         member_types: &["mat2x3<f32>"],
         accessors: &[&[
-            "[0].x", "[0].y", "[0].z", //
-            "[1].x", "[1].y", "[1].z", //
+            "[0][0]", "[0].y", "[0].z", //
+            "[1][0]", "[1].y", "[1].z", //
         ]],
         output_values: &[1, 2, 3, 5, 6, 7],
         uniform_failures: Backends::empty(),
@@ -130,30 +130,30 @@ const TESTS: &[ShaderLayoutTest] = &[
     ShaderLayoutTest {
         member_types: &["mat2x4<f32>"],
         accessors: &[&[
-            "[0].x", "[0].y", "[0].z", "[0].w", //
-            "[1].x", "[1].y", "[1].z", "[1].w", //
+            "[0][0]", "[0].y", "[0].z", "[0].w", //
+            "[1][0]", "[1].y", "[1].z", "[1].w", //
         ]],
         output_values: &[1, 2, 3, 4, 5, 6, 7, 8],
         uniform_failures: Backends::empty(),
-        storage_failures: Backends::DX12,
+        storage_failures: Backends::empty(),
     },
     ShaderLayoutTest {
         member_types: &["mat3x2<f32>"],
         accessors: &[&[
-            "[0].x", "[0].y", //
-            "[1].x", "[1].y", //
-            "[2].x", "[2].y", //
+            "[0][0]", "[0].y", //
+            "[1][0]", "[1].y", //
+            "[2][0]", "[2].y", //
         ]],
         output_values: &[1, 2, 3, 4, 5, 6],
         uniform_failures: Backends::empty(),
-        storage_failures: Backends::DX12,
+        storage_failures: Backends::empty(),
     },
     ShaderLayoutTest {
         member_types: &["mat3x3<f32>"],
         accessors: &[&[
-            "[0].x", "[0].y", "[0].z", //
-            "[1].x", "[1].y", "[1].z", //
-            "[2].x", "[2].y", "[2].z", //
+            "[0][0]", "[0].y", "[0].z", //
+            "[1][0]", "[1].y", "[1].z", //
+            "[2][0]", "[2].y", "[2].z", //
         ]],
         output_values: &[1, 2, 3, 5, 6, 7, 9, 10, 11],
         uniform_failures: Backends::empty(),
@@ -162,9 +162,9 @@ const TESTS: &[ShaderLayoutTest] = &[
     ShaderLayoutTest {
         member_types: &["mat3x4<f32>"],
         accessors: &[&[
-            "[0].x", "[0].y", "[0].z", "[0].w", //
-            "[1].x", "[1].y", "[1].z", "[1].w", //
-            "[2].x", "[2].y", "[2].z", "[2].w", //
+            "[0][0]", "[0].y", "[0].z", "[0].w", //
+            "[1][0]", "[1].y", "[1].z", "[1].w", //
+            "[2][0]", "[2].y", "[2].z", "[2].w", //
         ]],
         output_values: &[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
         uniform_failures: Backends::empty(),
@@ -173,22 +173,22 @@ const TESTS: &[ShaderLayoutTest] = &[
     ShaderLayoutTest {
         member_types: &["mat4x2<f32>"],
         accessors: &[&[
-            "[0].x", "[0].y", //
-            "[1].x", "[1].y", //
-            "[2].x", "[2].y", //
-            "[3].x", "[3].y", //
+            "[0][0]", "[0].y", //
+            "[1][0]", "[1].y", //
+            "[2][0]", "[2].y", //
+            "[3][0]", "[3].y", //
         ]],
         output_values: &[1, 2, 3, 4, 5, 6, 7, 8],
         uniform_failures: Backends::empty(),
-        storage_failures: Backends::DX12,
+        storage_failures: Backends::empty(),
     },
     ShaderLayoutTest {
         member_types: &["mat4x3<f32>"],
         accessors: &[&[
-            "[0].x", "[0].y", "[0].z", //
-            "[1].x", "[1].y", "[1].z", //
-            "[2].x", "[2].y", "[2].z", //
-            "[3].x", "[3].y", "[3].z", //
+            "[0][0]", "[0].y", "[0].z", //
+            "[1][0]", "[1].y", "[1].z", //
+            "[2][0]", "[2].y", "[2].z", //
+            "[3][0]", "[3].y", "[3].z", //
         ]],
         output_values: &[1, 2, 3, 5, 6, 7, 9, 10, 11, 13, 14, 15],
         uniform_failures: Backends::empty(),
@@ -197,10 +197,10 @@ const TESTS: &[ShaderLayoutTest] = &[
     ShaderLayoutTest {
         member_types: &["mat4x4<f32>"],
         accessors: &[&[
-            "[0].x", "[0].y", "[0].z", "[0].w", //
-            "[1].x", "[1].y", "[1].z", "[1].w", //
-            "[2].x", "[2].y", "[2].z", "[2].w", //
-            "[3].x", "[3].y", "[3].z", "[3].w", //
+            "[0][0]", "[0].y", "[0].z", "[0].w", //
+            "[1][0]", "[1].y", "[1].z", "[1].w", //
+            "[2][0]", "[2].y", "[2].z", "[2].w", //
+            "[3][0]", "[3].y", "[3].z", "[3].w", //
         ]],
         output_values: &[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
         uniform_failures: Backends::empty(),
@@ -299,7 +299,7 @@ fn input_layout_test(ctx: TestingContext, storage_type: StorageType) {
         });
 
     let mut fail = false;
-    'a: for test in TESTS {
+    for test in TESTS {
         for load_type in [LoadType::Direct, LoadType::Variable] {
             let test_name = format!("{:?} - {}", test.member_types, load_type.as_str());
 
@@ -314,7 +314,7 @@ fn input_layout_test(ctx: TestingContext, storage_type: StorageType) {
                     // We bitcast as the values are really u32/i32 values.
                     writeln!(
                         &mut body,
-                        "output[i] = {}.member_{member_idx}{member_accessor};",
+                        "output[i] = bitcast<u32>({}.member_{member_idx}{member_accessor});",
                         load_type.as_str()
                     )
                     .unwrap();
@@ -383,13 +383,13 @@ fn input_layout_test(ctx: TestingContext, storage_type: StorageType) {
             let typed: &[u32] = bytemuck::cast_slice(&*mapped);
 
             let left = &typed[..test.output_values.len()];
-            let right = &*test.output_values;
+            let right = test.output_values;
             let failure = left != right;
             if failure {
                 eprintln!(
                     "Inner test failure. Actual {:?}. Expected {:?}. Test {test_name}",
-                    left.iter().map(|&v| v - 1).collect::<Vec<_>>(),
-                    right.iter().map(|&v| v - 1).collect::<Vec<_>>(),
+                    left.iter().map(|&v| v).collect::<Vec<_>>(),
+                    right.iter().map(|&v| v).collect::<Vec<_>>(),
                 );
             }
             let backend_failures = match storage_type {
