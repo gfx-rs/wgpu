@@ -2085,14 +2085,18 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         index: u32,
                     ) -> BackendResult {
                         match *resolved {
-                            TypeInner::Vector { .. } => {
+                            // We specifcally lift the ValuePointer to this case. While `[0]` is valid
+                            // HLSL for any vector behind a value pointer, FXC completely miscompiles
+                            // it and generates completely nonsensical DXBC.
+                            //
+                            // See https://github.com/gfx-rs/naga/issues/2095 for more details.
+                            TypeInner::Vector { .. } | TypeInner::ValuePointer { .. } => {
                                 // Write vector access as a swizzle
                                 write!(writer.out, ".{}", back::COMPONENTS[index as usize])?
                             }
                             TypeInner::Matrix { .. }
                             | TypeInner::Array { .. }
-                            | TypeInner::BindingArray { .. }
-                            | TypeInner::ValuePointer { .. } => write!(writer.out, "[{}]", index)?,
+                            | TypeInner::BindingArray { .. } => write!(writer.out, "[{}]", index)?,
                             TypeInner::Struct { .. } => {
                                 // This will never panic in case the type is a `Struct`, this is not true
                                 // for other types so we can only check while inside this match arm
