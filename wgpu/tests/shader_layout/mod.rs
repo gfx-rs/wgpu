@@ -387,7 +387,9 @@ fn input_layout_test(ctx: TestingContext, storage_type: StorageType) {
             let failure = left != right;
             if failure {
                 eprintln!(
-                    "Inner test failure. Actual {left:?}. Expected {right:?}. Test {test_name}"
+                    "Inner test failure. Actual {:?}. Expected {:?}. Test {test_name}",
+                    left.iter().map(|&v| v - 1).collect::<Vec<_>>(),
+                    right.iter().map(|&v| v - 1).collect::<Vec<_>>(),
                 );
             }
             let backend_failures = match storage_type {
