@@ -1,13 +1,13 @@
 [package]
 name = "wgpu-types"
-version = "0.14.0"
-authors = ["wgpu developers"]
-edition = "2021"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
 description = "WebGPU types"
-homepage = "https://github.com/gfx-rs/wgpu"
-repository = "https://github.com/gfx-rs/wgpu"
-keywords = ["graphics"]
-license = "MIT OR Apache-2.0"
+homepage.workspace = true
+repository.workspace = true
+keywords.workspace = true
+license.workspace = true
 
 [lib]
 
@@ -16,9 +16,9 @@ trace = ["serde", "bitflags_serde_shim"]
 replay = ["serde", "bitflags_serde_shim"]
 
 [dependencies]
-bitflags = "1.0"
-serde = { version = "1.0", features = ["serde_derive"], optional = true }
-bitflags_serde_shim = { version = "0.2", optional = true }
+bitflags.workspace = true
+serde = { workspace = true, features = ["serde_derive"], optional = true }
+bitflags_serde_shim = { workspace = true, optional = true }
 
 [dev-dependencies]
-serde_json = "1.0.85"
+serde_json.workspace = true

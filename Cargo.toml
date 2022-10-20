@@ -10,11 +10,122 @@ members = [
     "wgpu-hal",
     "wgpu-info",
     "wgpu-types",
-    "run-wasm",
+    "run-wasm"
 ]
-exclude = [
-]
+exclude = []
 default-members = ["wgpu", "wgpu-hal", "wgpu-info"]
+
+[workspace.package]
+edition = "2021"
+rust-version = "1.64"
+keywords = ["graphics"]
+license = "MIT OR Apache-2.0"
+homepage = "https://wgpu.rs/"
+repository = "https://github.com/gfx-rs/wgpu"
+version = "0.14.0"
+authors = ["wgpu developers"]
+
+[workspace.dependencies.wgc]
+package = "wgpu-core"
+path = "./wgpu-core"
+
+[workspace.dependencies.wgt]
+package = "wgpu-types"
+path = "./wgpu-types"
+
+[workspace.dependencies.hal]
+package = "wgpu-hal"
+path = "./wgpu-hal"
+
+[workspace.dependencies.naga]
+git = "https://github.com/gfx-rs/naga"
+rev = "c52d9102"
+version = "0.10"
+
+[workspace.dependencies]
+arrayvec = "0.7"
+async-executor = "1.0"
+bitflags = "1"
+bitflags_serde_shim = "0.2"
+bit-vec = "0.6"
+bytemuck = "1.4"
+cargo-run-wasm = "0.2.0"
+cfg_aliases = "0.1"
+cfg-if = "1"
+codespan-reporting = "0.11"
+ddsfile = "0.5"
+env_logger = "0.9"
+futures-intrusive = "0.4"
+fxhash = "0.2.1"
+glam = "0.21.3"
+libloading = "0.7"
+log = "0.4"
+nanorand = { version = "0.7", default-features = false }
+# Opt out of noise's "default-features" to avoid "image" feature as a dependency count optimization.
+# This will not be required in the next release since it has been removed from the default feature in https://github.com/Razaekel/noise-rs/commit/1af9e1522236b2c584fb9a02150c9c67a5e6bb04#diff-2e9d962a08321605940b5a657135052fbcef87b5e360662bb527c96d9a615542
+noise = { version = "0.7", default-features = false }
+obj = "0.10"
+# parking_lot 0.12 switches from `winapi` to `windows`; permit either
+parking_lot = ">=0.11,<0.13"
+png = "0.17.5"
+pollster = "0.2"
+profiling = { version = "1", default-features = false }
+raw-window-handle = "0.5"
+renderdoc-sys = "0.7.1"
+ron = "0.8"
+serde = "1"
+serde_json = "1.0.85"
+smallvec = "1"
+static_assertions = "1.1.0"
+thiserror = "1"
+wgpu = { version = "0.14", path = "./wgpu" }
+winit = "0.27.1"
+
+# Metal dependencies
+block = "0.1"
+foreign-types = "0.3"
+mtl = { package = "metal", version = "0.24.0" }
+objc = "0.2.5"
+core-graphics-types = "0.1"
+
+# Vulkan dependencies
+ash = "0.37"
+gpu-alloc = "0.5"
+gpu-descriptor = "0.2"
+android_system_properties = "0.1.1"
+
+# DX dependencies
+bit-set = "0.5"
+native = { package = "d3d12", version = "0.5.0" }
+range-alloc = "0.1"
+winapi = "0.3"
+
+# Gles dependencies
+egl = { package = "khronos-egl", version = "4.1" }
+# glow = { version = "0.11.2", optional = true }
+# TODO: New glow release
+glow = { git = "https://github.com/grovesNL/glow/", rev = "c8a011fcd57a5c68cc917ed394baa484bdefc909" }
+glutin = "0.29.1"
+
+# wasm32 dependencies
+console_error_panic_hook = "0.1.7"
+console_log = "0.2"
+js-sys = "0.3.60"
+wasm-bindgen = "0.2.83"
+wasm-bindgen-futures = "0.4.33"
+web-sys = "0.3.60"
+
+# deno dependencies
+deno_console = "0.69.0"
+deno_core = "0.151.0"
+deno_url = "0.69.0"
+deno_web = "0.100.0"
+deno_webidl = "0.69.0"
+deno_webgpu = { path = "./deno_webgpu" }
+tokio = "1.19.0"
+termcolor = "1.1.2"
+wgpu-core = { path = "./wgpu-core" }
+wgpu-types = { path = "./wgpu-types" }
 
 [patch."https://github.com/gfx-rs/naga"]
 #naga = { path = "../naga" }
