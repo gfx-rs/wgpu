@@ -3762,7 +3762,7 @@ pub enum PresentMode {
     Mailbox = 5,
 }
 
-/// Specifies how the alpha channel of the textures should be handled during (martin mouv i step)
+/// Specifies how the alpha channel of the textures should be handled during
 /// compositing.
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
