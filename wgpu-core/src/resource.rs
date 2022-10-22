@@ -385,7 +385,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut token = Token::root();
         let (guard, _) = hub.textures.read(&mut token);
         let texture = guard.try_get(id).ok().flatten();
-        let hal_texture = texture.map(|tex| tex.inner.as_raw().unwrap());
+        let hal_texture = texture.and_then(|tex| tex.inner.as_raw());
 
         hal_texture_callback(hal_texture);
     }
