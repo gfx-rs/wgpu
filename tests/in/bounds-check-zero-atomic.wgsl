@@ -23,3 +23,16 @@ fn fetch_add_atomic_static_sized_array(i: i32) -> u32 {
 fn fetch_add_atomic_dynamic_sized_array(i: i32) -> u32 {
    return atomicAdd(&globals.c[i], 1u);
 }
+
+fn exchange_atomic() -> u32 {
+   return atomicExchange(&globals.a, 1u);
+}
+
+fn exchange_atomic_static_sized_array(i: i32) -> u32 {
+   return atomicExchange(&globals.b[i], 1u);
+}
+
+fn exchange_atomic_dynamic_sized_array(i: i32) -> u32 {
+   return atomicExchange(&globals.c[i], 1u);
+}
+

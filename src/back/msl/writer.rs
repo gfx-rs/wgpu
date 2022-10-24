@@ -1188,6 +1188,17 @@ impl<W: Write> Writer<W> {
         value: Handle<crate::Expression>,
         context: &ExpressionContext,
     ) -> BackendResult {
+        self.put_atomic_operation(pointer, "fetch_", key, value, context)
+    }
+
+    fn put_atomic_operation(
+        &mut self,
+        pointer: Handle<crate::Expression>,
+        key1: &str,
+        key2: &str,
+        value: Handle<crate::Expression>,
+        context: &ExpressionContext,
+    ) -> BackendResult {
         // If the pointer we're passing to the atomic operation needs to be conditional
         // for `ReadZeroSkipWrite`, the condition needs to *surround* the atomic op, and
         // the pointer operand should be unchecked.
@@ -1202,8 +1213,8 @@ impl<W: Write> Writer<W> {
 
         write!(
             self.out,
-            "{}::atomic_fetch_{}_explicit({}",
-            NAMESPACE, key, ATOMIC_REFERENCE
+            "{}::atomic_{}{}_explicit({}",
+            NAMESPACE, key1, key2, ATOMIC_REFERENCE
         )?;
         self.put_access_chain(pointer, policy, context)?;
         write!(self.out, ", ")?;
@@ -2725,15 +2736,13 @@ impl<W: Write> Writer<W> {
                             self.put_atomic_fetch(pointer, "max", value, &context.expression)?;
                         }
                         crate::AtomicFunction::Exchange { compare: None } => {
-                            write!(
-                                self.out,
-                                "{}::atomic_exchange_explicit({}",
-                                NAMESPACE, ATOMIC_REFERENCE,
+                            self.put_atomic_operation(
+                                pointer,
+                                "exchange",
+                                "",
+                                value,
+                                &context.expression,
                             )?;
-                            self.put_expression(pointer, &context.expression, true)?;
-                            write!(self.out, ", ")?;
-                            self.put_expression(value, &context.expression, true)?;
-                            write!(self.out, ", {}::memory_order_relaxed)", NAMESPACE)?;
                         }
                         crate::AtomicFunction::Exchange { .. } => {
                             return Err(Error::FeatureNotImplemented(
