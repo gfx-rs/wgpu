@@ -96,8 +96,6 @@ impl<T> Handle<T> {
 
     /// Convert a `usize` index into a `Handle<T>`.
     fn from_usize(index: usize) -> Self {
-        use std::convert::TryFrom;
-
         let handle_index = u32::try_from(index + 1)
             .ok()
             .and_then(Index::new)

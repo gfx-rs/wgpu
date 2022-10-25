@@ -2,7 +2,7 @@
 name = "naga-cli"
 version = "0.10.0"
 authors = ["Naga Developers"]
-edition = "2018"
+edition = "2021"
 description = "Shader translation command line tool"
 homepage = "https://github.com/gfx-rs/naga"
 repository = "https://github.com/gfx-rs/naga"

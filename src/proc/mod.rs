@@ -389,7 +389,6 @@ impl crate::Constant {
     /// `OpArrayType` referring to an inappropriate `OpConstant`). So we return
     /// `Option` and let the caller sort things out.
     pub(crate) fn to_array_length(&self) -> Option<u32> {
-        use std::convert::TryInto;
         match self.inner {
             crate::ConstantInner::Scalar { value, width: _ } => match value {
                 crate::ScalarValue::Uint(value) => value.try_into().ok(),
