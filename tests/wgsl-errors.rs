@@ -929,7 +929,7 @@ fn invalid_arrays() {
         "type Bad = array<sampler, 4>;",
         "type Bad = array<texture_2d<f32>, 4>;":
         Err(naga::valid::ValidationError::Type {
-            error: naga::valid::TypeError::InvalidArrayBaseType(_),
+            source: naga::valid::TypeError::InvalidArrayBaseType(_),
             ..
         })
     }
@@ -941,7 +941,7 @@ fn invalid_arrays() {
             type Bad = array<f32, length>;
         "#:
         Err(naga::valid::ValidationError::Type {
-            error: naga::valid::TypeError::InvalidArraySizeConstant(_),
+            source: naga::valid::TypeError::InvalidArraySizeConstant(_),
             ..
         })
     }
@@ -950,7 +950,7 @@ fn invalid_arrays() {
         "type Bad = array<f32, 0>;",
         "type Bad = array<f32, -1>;":
         Err(naga::valid::ValidationError::Type {
-            error: naga::valid::TypeError::NonPositiveArrayLength(_),
+            source: naga::valid::TypeError::NonPositiveArrayLength(_),
             ..
         })
     }
@@ -962,7 +962,7 @@ fn invalid_structs() {
         "struct Bad { data: sampler }",
         "struct Bad { data: texture_2d<f32> }":
         Err(naga::valid::ValidationError::Type {
-            error: naga::valid::TypeError::InvalidData(_),
+            source: naga::valid::TypeError::InvalidData(_),
             ..
         })
     }
@@ -970,7 +970,7 @@ fn invalid_structs() {
     check_validation! {
         "struct Bad { data: array<f32>, other: f32, }":
         Err(naga::valid::ValidationError::Type {
-            error: naga::valid::TypeError::InvalidDynamicArray(_, _),
+            source: naga::valid::TypeError::InvalidDynamicArray(_, _),
             ..
         })
     }
@@ -978,7 +978,7 @@ fn invalid_structs() {
     check_validation! {
         "struct Empty {}":
         Err(naga::valid::ValidationError::Type {
-            error: naga::valid::TypeError::EmptyStruct,
+            source: naga::valid::TypeError::EmptyStruct,
             ..
         })
     }
@@ -994,7 +994,7 @@ fn invalid_functions() {
         ":
         Err(naga::valid::ValidationError::Function {
             name: function_name,
-            error: naga::valid::FunctionError::InvalidArgumentType {
+            source: naga::valid::FunctionError::InvalidArgumentType {
                 index: 0,
                 name: argument_name,
             },
@@ -1011,7 +1011,7 @@ fn invalid_functions() {
         fn unacceptable_unsized(arg: ptr<workgroup, Unsized>) { }
         ":
         Err(naga::valid::ValidationError::Type {
-            error: naga::valid::TypeError::InvalidPointerToUnsized {
+            source: naga::valid::TypeError::InvalidPointerToUnsized {
                 base: _,
                 space: naga::AddressSpace::WorkGroup { .. },
             },
@@ -1024,7 +1024,7 @@ fn invalid_functions() {
         "fn unacceptable_ptr_space(arg: ptr<storage, array<f32>>) { }":
         Err(naga::valid::ValidationError::Function {
             name: function_name,
-            error: naga::valid::FunctionError::InvalidArgumentPointerSpace {
+            source: naga::valid::FunctionError::InvalidArgumentPointerSpace {
                 index: 0,
                 name: argument_name,
                 space: naga::AddressSpace::Storage { .. },
@@ -1038,7 +1038,7 @@ fn invalid_functions() {
         "fn unacceptable_ptr_space(arg: ptr<uniform, f32>) { }":
         Err(naga::valid::ValidationError::Function {
             name: function_name,
-            error: naga::valid::FunctionError::InvalidArgumentPointerSpace {
+            source: naga::valid::FunctionError::InvalidArgumentPointerSpace {
                 index: 0,
                 name: argument_name,
                 space: naga::AddressSpace::Uniform,
@@ -1062,7 +1062,7 @@ fn invalid_functions() {
         ":
         Err(naga::valid::ValidationError::Function {
             name: function_name,
-            error: naga::valid::FunctionError::NonConstructibleReturnType,
+            source: naga::valid::FunctionError::NonConstructibleReturnType,
             ..
         })
         if function_name == "return_pointer"
@@ -1079,7 +1079,7 @@ fn invalid_functions() {
         ":
         Err(naga::valid::ValidationError::Function {
             name: function_name,
-            error: naga::valid::FunctionError::NonConstructibleReturnType,
+            source: naga::valid::FunctionError::NonConstructibleReturnType,
             ..
         })
         if function_name == "return_atomic"
@@ -1115,7 +1115,7 @@ fn missing_bindings() {
         ":
         Err(naga::valid::ValidationError::EntryPoint {
             stage: naga::ShaderStage::Vertex,
-            error: naga::valid::EntryPointError::Argument(
+            source: naga::valid::EntryPointError::Argument(
                 0,
                 naga::valid::VaryingError::MissingBinding,
             ),
@@ -1132,7 +1132,7 @@ fn missing_bindings() {
         ":
         Err(naga::valid::ValidationError::EntryPoint {
             stage: naga::ShaderStage::Vertex,
-            error: naga::valid::EntryPointError::Argument(
+            source: naga::valid::EntryPointError::Argument(
                 1,
                 naga::valid::VaryingError::MissingBinding,
             ),
@@ -1149,7 +1149,7 @@ fn missing_bindings() {
         ":
         Err(naga::valid::ValidationError::EntryPoint {
             stage: naga::ShaderStage::Vertex,
-            error: naga::valid::EntryPointError::Result(
+            source: naga::valid::EntryPointError::Result(
                 naga::valid::VaryingError::MissingBinding,
             ),
             ..
@@ -1170,7 +1170,7 @@ fn missing_bindings() {
         ":
         Err(naga::valid::ValidationError::EntryPoint {
             stage: naga::ShaderStage::Vertex,
-            error: naga::valid::EntryPointError::Argument(
+            source: naga::valid::EntryPointError::Argument(
                 0,
                 naga::valid::VaryingError::MemberMissingBinding(1),
             ),
@@ -1193,8 +1193,8 @@ fn invalid_access() {
         }
         ":
         Err(naga::valid::ValidationError::Function {
-            error: naga::valid::FunctionError::Expression {
-                error: naga::valid::ExpressionError::IndexMustBeConstant(_),
+            source: naga::valid::FunctionError::Expression {
+                source: naga::valid::ExpressionError::IndexMustBeConstant(_),
                 ..
             },
             ..
@@ -1209,8 +1209,8 @@ fn invalid_access() {
             }
         "#:
         Err(naga::valid::ValidationError::Function {
-            error: naga::valid::FunctionError::Expression {
-                error: naga::valid::ExpressionError::IndexOutOfBounds(_, _),
+            source: naga::valid::FunctionError::Expression {
+                source: naga::valid::ExpressionError::IndexOutOfBounds(_, _),
                 ..
             },
             ..
@@ -1255,9 +1255,9 @@ fn invalid_local_vars() {
         }
         ":
         Err(naga::valid::ValidationError::Function {
-            error: naga::valid::FunctionError::LocalVariable {
+            source: naga::valid::FunctionError::LocalVariable {
                 name: local_var_name,
-                error: naga::valid::LocalVariableError::InvalidType(_),
+                source: naga::valid::LocalVariableError::InvalidType(_),
                 ..
             },
             ..
@@ -1291,7 +1291,7 @@ fn dead_code() {
         }
         ":
         Err(naga::valid::ValidationError::Function {
-            error: naga::valid::FunctionError::InstructionsAfterReturn,
+            source: naga::valid::FunctionError::InstructionsAfterReturn,
             ..
         })
     }
@@ -1321,7 +1321,7 @@ fn invalid_runtime_sized_arrays() {
         ":
         Err(naga::valid::ValidationError::Type {
             name: struct_name,
-            error: naga::valid::TypeError::InvalidDynamicArray(member_name, _),
+            source: naga::valid::TypeError::InvalidDynamicArray(member_name, _),
             ..
         })
         if struct_name == "Outer" && member_name == "_unsized"
@@ -1359,8 +1359,8 @@ fn select() {
         Err(
             naga::valid::ValidationError::Function {
                 name,
-                error: naga::valid::FunctionError::Expression {
-                    error: naga::valid::ExpressionError::InvalidSelectTypes,
+                source: naga::valid::FunctionError::Expression {
+                    source: naga::valid::ExpressionError::InvalidSelectTypes,
                     ..
                 },
                 ..
@@ -1385,7 +1385,7 @@ fn last_case_falltrough() {
         ":
         Err(
             naga::valid::ValidationError::Function {
-                error: naga::valid::FunctionError::LastCaseFallTrough,
+                source: naga::valid::FunctionError::LastCaseFallTrough,
                 ..
             },
         )
@@ -1404,7 +1404,7 @@ fn missing_default_case() {
         ":
         Err(
             naga::valid::ValidationError::Function {
-                error: naga::valid::FunctionError::MissingDefaultCase,
+                source: naga::valid::FunctionError::MissingDefaultCase,
                 ..
             },
         )
@@ -1443,7 +1443,7 @@ fn wrong_access_mode() {
         Err(
             naga::valid::ValidationError::Function {
                 name,
-                error: naga::valid::FunctionError::InvalidStorePointer(_),
+                source: naga::valid::FunctionError::InvalidStorePointer(_),
                 ..
             },
         )
@@ -1485,7 +1485,7 @@ fn io_shareable_types() {
                 naga::valid::ValidationError::EntryPoint {
                     stage: naga::ShaderStage::Vertex,
                     name,
-                    error: naga::valid::EntryPointError::Argument(
+                    source: naga::valid::EntryPointError::Argument(
                         0,
                         naga::valid::VaryingError::NotIOShareableType(
                             _,
@@ -1538,7 +1538,7 @@ fn host_shareable_types() {
                 naga::valid::ValidationError::GlobalVariable {
                     name,
                     handle: _,
-                    error: naga::valid::GlobalVariableError::MissingTypeFlags { .. },
+                    source: naga::valid::GlobalVariableError::MissingTypeFlags { .. },
                 },
             )
             if name == "sbuf"
@@ -1549,7 +1549,7 @@ fn host_shareable_types() {
             Err(naga::valid::ValidationError::GlobalVariable {
                     name,
                     handle: _,
-                    error: naga::valid::GlobalVariableError::MissingTypeFlags { .. },
+                    source: naga::valid::GlobalVariableError::MissingTypeFlags { .. },
                 },
             )
             if name == "ubuf"
@@ -1591,7 +1591,7 @@ fn break_if_bad_condition() {
         ":
         Err(
             naga::valid::ValidationError::Function {
-                error: naga::valid::FunctionError::InvalidIfType(_),
+                source: naga::valid::FunctionError::InvalidIfType(_),
                 ..
             },
         )

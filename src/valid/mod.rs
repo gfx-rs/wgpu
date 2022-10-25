@@ -163,36 +163,31 @@ pub enum ValidationError {
     Type {
         handle: Handle<crate::Type>,
         name: String,
-        #[source]
-        error: TypeError,
+        source: TypeError,
     },
     #[error("Constant {handle:?} '{name}' is invalid")]
     Constant {
         handle: Handle<crate::Constant>,
         name: String,
-        #[source]
-        error: ConstantError,
+        source: ConstantError,
     },
     #[error("Global variable {handle:?} '{name}' is invalid")]
     GlobalVariable {
         handle: Handle<crate::GlobalVariable>,
         name: String,
-        #[source]
-        error: GlobalVariableError,
+        source: GlobalVariableError,
     },
     #[error("Function {handle:?} '{name}' is invalid")]
     Function {
         handle: Handle<crate::Function>,
         name: String,
-        #[source]
-        error: FunctionError,
+        source: FunctionError,
     },
     #[error("Entry point {name} at {stage:?} is invalid")]
     EntryPoint {
         stage: crate::ShaderStage,
         name: String,
-        #[source]
-        error: EntryPointError,
+        source: EntryPointError,
     },
     #[error("Module is corrupted")]
     Corrupted,
@@ -329,11 +324,11 @@ impl Validator {
         if self.flags.contains(ValidationFlags::CONSTANTS) {
             for (handle, constant) in module.constants.iter() {
                 self.validate_constant(handle, &module.constants, &module.types)
-                    .map_err(|error| {
+                    .map_err(|source| {
                         ValidationError::Constant {
                             handle,
                             name: constant.name.clone().unwrap_or_default(),
-                            error,
+                            source,
                         }
                         .with_span_handle(handle, &module.constants)
                     })?
@@ -343,11 +338,11 @@ impl Validator {
         for (handle, ty) in module.types.iter() {
             let ty_info = self
                 .validate_type(handle, &module.types, &module.constants)
-                .map_err(|error| {
+                .map_err(|source| {
                     ValidationError::Type {
                         handle,
                         name: ty.name.clone().unwrap_or_default(),
-                        error,
+                        source,
                     }
                     .with_span_handle(handle, &module.types)
                 })?;
@@ -357,11 +352,11 @@ impl Validator {
         #[cfg(feature = "validate")]
         for (var_handle, var) in module.global_variables.iter() {
             self.validate_global_var(var, &module.types)
-                .map_err(|error| {
+                .map_err(|source| {
                     ValidationError::GlobalVariable {
                         handle: var_handle,
                         name: var.name.clone().unwrap_or_default(),
-                        error,
+                        source,
                     }
                     .with_span_handle(var_handle, &module.global_variables)
                 })?;
@@ -376,11 +371,11 @@ impl Validator {
             match self.validate_function(fun, module, &mod_info, false) {
                 Ok(info) => mod_info.functions.push(info),
                 Err(error) => {
-                    return Err(error.and_then(|error| {
+                    return Err(error.and_then(|source| {
                         ValidationError::Function {
                             handle,
                             name: fun.name.clone().unwrap_or_default(),
-                            error,
+                            source,
                         }
                         .with_span_handle(handle, &module.functions)
                     }))
@@ -394,7 +389,7 @@ impl Validator {
                 return Err(ValidationError::EntryPoint {
                     stage: ep.stage,
                     name: ep.name.clone(),
-                    error: EntryPointError::Conflict,
+                    source: EntryPointError::Conflict,
                 }
                 .with_span()); // TODO: keep some EP span information?
             }
@@ -402,14 +397,14 @@ impl Validator {
             match self.validate_entry_point(ep, module, &mod_info) {
                 Ok(info) => mod_info.entry_points.push(info),
                 Err(error) => {
-                    return Err(error.and_then(|inner| {
+                    return Err(error.and_then(|source| {
                         ValidationError::EntryPoint {
                             stage: ep.stage,
                             name: ep.name.clone(),
-                            error: inner,
+                            source,
                         }
                         .with_span()
-                    }))
+                    }));
                 }
             }
         }

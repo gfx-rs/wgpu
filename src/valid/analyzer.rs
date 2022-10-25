@@ -365,8 +365,8 @@ impl FunctionInfo {
                 GlobalOrArgument::Argument(i) => {
                     let handle = arguments[i as usize];
                     GlobalOrArgument::from_expression(expression_arena, handle).map_err(
-                        |error| {
-                            FunctionError::Expression { handle, error }
+                        |source| {
+                            FunctionError::Expression { handle, source }
                                 .with_span_handle(handle, expression_arena)
                         },
                     )?
@@ -378,8 +378,8 @@ impl FunctionInfo {
                 GlobalOrArgument::Argument(i) => {
                     let handle = arguments[i as usize];
                     GlobalOrArgument::from_expression(expression_arena, handle).map_err(
-                        |error| {
-                            FunctionError::Expression { handle, error }
+                        |source| {
+                            FunctionError::Expression { handle, source }
                                 .with_span_handle(handle, expression_arena)
                         },
                     )?
@@ -956,7 +956,7 @@ impl ModuleInfo {
         };
 
         for (handle, expr) in fun.expressions.iter() {
-            if let Err(error) = info.process_expression(
+            if let Err(source) = info.process_expression(
                 handle,
                 expr,
                 &fun.expressions,
@@ -964,7 +964,7 @@ impl ModuleInfo {
                 &resolve_context,
                 capabilities,
             ) {
-                return Err(FunctionError::Expression { handle, error }
+                return Err(FunctionError::Expression { handle, source }
                     .with_span_handle(handle, &fun.expressions));
             }
         }

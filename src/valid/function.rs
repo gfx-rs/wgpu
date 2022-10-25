@@ -23,8 +23,7 @@ pub enum CallError {
     #[error("Argument {index} expression is invalid")]
     Argument {
         index: usize,
-        #[source]
-        error: ExpressionError,
+        source: ExpressionError,
     },
     #[error("Result expression {0:?} has already been introduced earlier")]
     ResultAlreadyInScope(Handle<crate::Expression>),
@@ -72,8 +71,7 @@ pub enum FunctionError {
     #[error("Expression {handle:?} is invalid")]
     Expression {
         handle: Handle<crate::Expression>,
-        #[source]
-        error: ExpressionError,
+        source: ExpressionError,
     },
     #[error("Expression {0:?} can't be introduced - it's already in scope")]
     ExpressionAlreadyInScope(Handle<crate::Expression>),
@@ -81,8 +79,7 @@ pub enum FunctionError {
     LocalVariable {
         handle: Handle<crate::LocalVariable>,
         name: String,
-        #[source]
-        error: LocalVariableError,
+        source: LocalVariableError,
     },
     #[error("Argument '{name}' at index {index} has a type that can't be passed into functions.")]
     InvalidArgumentType { index: usize, name: String },
@@ -230,7 +227,7 @@ impl<'a> BlockContext<'a> {
         valid_expressions: &BitSet,
     ) -> Result<&crate::TypeInner, WithSpan<FunctionError>> {
         self.resolve_type_impl(handle, valid_expressions)
-            .map_err_inner(|error| FunctionError::Expression { handle, error }.with_span())
+            .map_err_inner(|source| FunctionError::Expression { handle, source }.with_span())
     }
 
     fn resolve_pointer_type(
@@ -240,7 +237,7 @@ impl<'a> BlockContext<'a> {
         if handle.index() >= self.expressions.len() {
             Err(FunctionError::Expression {
                 handle,
-                error: ExpressionError::DoesntExist,
+                source: ExpressionError::DoesntExist,
             })
         } else {
             Ok(self.info[handle].ty.inner_with(self.types))
@@ -272,8 +269,9 @@ impl super::Validator {
         for (index, (arg, &expr)) in fun.arguments.iter().zip(arguments).enumerate() {
             let ty = context
                 .resolve_type_impl(expr, &self.valid_expression_set)
-                .map_err_inner(|error| {
-                    CallError::Argument { index, error }.with_span_handle(expr, context.expressions)
+                .map_err_inner(|source| {
+                    CallError::Argument { index, source }
+                        .with_span_handle(expr, context.expressions)
                 })?;
             let arg_inner = &context.types[arg.ty].inner;
             if !ty.equivalent(arg_inner, context.types) {
@@ -871,11 +869,11 @@ impl super::Validator {
         #[cfg(feature = "validate")]
         for (var_handle, var) in fun.local_variables.iter() {
             self.validate_local_var(var, &module.types, &module.constants)
-                .map_err(|error| {
+                .map_err(|source| {
                     FunctionError::LocalVariable {
                         handle: var_handle,
                         name: var.name.clone().unwrap_or_default(),
-                        error,
+                        source,
                     }
                     .with_span_handle(var.ty, &module.types)
                     .with_handle(var_handle, &fun.local_variables)
@@ -956,8 +954,8 @@ impl super::Validator {
                     &mod_info.functions,
                 ) {
                     Ok(stages) => info.available_stages &= stages,
-                    Err(error) => {
-                        return Err(FunctionError::Expression { handle, error }
+                    Err(source) => {
+                        return Err(FunctionError::Expression { handle, source }
                             .with_span_handle(handle, &fun.expressions))
                     }
                 }
