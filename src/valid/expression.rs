@@ -346,57 +346,9 @@ impl super::Validator {
                 depth_ref,
             } => {
                 // check the validity of expressions
-                let image_ty = match function.expressions[image] {
-                    crate::Expression::GlobalVariable(var_handle) => {
-                        module.global_variables[var_handle].ty
-                    }
-                    crate::Expression::FunctionArgument(i) => function.arguments[i as usize].ty,
-                    crate::Expression::Access { base, .. }
-                    | crate::Expression::AccessIndex { base, .. } => {
-                        match function.expressions[base] {
-                            crate::Expression::GlobalVariable(var_handle) => {
-                                let array_ty = module.global_variables[var_handle].ty;
+                let image_ty = Self::global_var_ty(module, function, image)?;
+                let sampler_ty = Self::global_var_ty(module, function, sampler)?;
 
-                                match module.types[array_ty].inner {
-                                    Ti::BindingArray { base, .. } => base,
-                                    _ => {
-                                        return Err(ExpressionError::ExpectedBindingArrayType(
-                                            array_ty,
-                                        ))
-                                    }
-                                }
-                            }
-                            _ => return Err(ExpressionError::ExpectedGlobalVariable),
-                        }
-                    }
-                    _ => return Err(ExpressionError::ExpectedGlobalVariable),
-                };
-
-                let sampler_ty = match function.expressions[sampler] {
-                    crate::Expression::GlobalVariable(var_handle) => {
-                        module.global_variables[var_handle].ty
-                    }
-                    crate::Expression::FunctionArgument(i) => function.arguments[i as usize].ty,
-                    crate::Expression::Access { base, .. }
-                    | crate::Expression::AccessIndex { base, .. } => {
-                        match function.expressions[base] {
-                            crate::Expression::GlobalVariable(var_handle) => {
-                                let array_ty = module.global_variables[var_handle].ty;
-
-                                match module.types[array_ty].inner {
-                                    Ti::BindingArray { base, .. } => base,
-                                    _ => {
-                                        return Err(ExpressionError::ExpectedBindingArrayType(
-                                            array_ty,
-                                        ))
-                                    }
-                                }
-                            }
-                            _ => return Err(ExpressionError::ExpectedGlobalVariable),
-                        }
-                    }
-                    _ => return Err(ExpressionError::ExpectedGlobalVariable),
-                };
                 let comparison = match module.types[sampler_ty].inner {
                     Ti::Sampler { comparison } => comparison,
                     _ => return Err(ExpressionError::ExpectedSamplerType(sampler_ty)),
@@ -579,31 +531,7 @@ impl super::Validator {
                 sample,
                 level,
             } => {
-                let ty = match function.expressions[image] {
-                    crate::Expression::GlobalVariable(var_handle) => {
-                        module.global_variables[var_handle].ty
-                    }
-                    crate::Expression::FunctionArgument(i) => function.arguments[i as usize].ty,
-                    crate::Expression::Access { base, .. }
-                    | crate::Expression::AccessIndex { base, .. } => {
-                        match function.expressions[base] {
-                            crate::Expression::GlobalVariable(var_handle) => {
-                                let array_ty = module.global_variables[var_handle].ty;
-
-                                match module.types[array_ty].inner {
-                                    Ti::BindingArray { base, .. } => base,
-                                    _ => {
-                                        return Err(ExpressionError::ExpectedBindingArrayType(
-                                            array_ty,
-                                        ))
-                                    }
-                                }
-                            }
-                            _ => return Err(ExpressionError::ExpectedGlobalVariable),
-                        }
-                    }
-                    _ => return Err(ExpressionError::ExpectedGlobalVariable),
-                };
+                let ty = Self::global_var_ty(module, function, image)?;
                 match module.types[ty].inner {
                     Ti::Image {
                         class,
@@ -662,31 +590,7 @@ impl super::Validator {
                 ShaderStages::all()
             }
             E::ImageQuery { image, query } => {
-                let ty = match function.expressions[image] {
-                    crate::Expression::GlobalVariable(var_handle) => {
-                        module.global_variables[var_handle].ty
-                    }
-                    crate::Expression::FunctionArgument(i) => function.arguments[i as usize].ty,
-                    crate::Expression::Access { base, .. }
-                    | crate::Expression::AccessIndex { base, .. } => {
-                        match function.expressions[base] {
-                            crate::Expression::GlobalVariable(var_handle) => {
-                                let array_ty = module.global_variables[var_handle].ty;
-
-                                match module.types[array_ty].inner {
-                                    Ti::BindingArray { base, .. } => base,
-                                    _ => {
-                                        return Err(ExpressionError::ExpectedBindingArrayType(
-                                            array_ty,
-                                        ))
-                                    }
-                                }
-                            }
-                            _ => return Err(ExpressionError::ExpectedGlobalVariable),
-                        }
-                    }
-                    _ => return Err(ExpressionError::ExpectedGlobalVariable),
-                };
+                let ty = Self::global_var_ty(module, function, image)?;
                 match module.types[ty].inner {
                     Ti::Image { class, arrayed, .. } => {
                         let good = match query {
@@ -1517,5 +1421,32 @@ impl super::Validator {
             },
         };
         Ok(stages)
+    }
+
+    fn global_var_ty(
+        module: &crate::Module,
+        function: &crate::Function,
+        expr: Handle<crate::Expression>,
+    ) -> Result<Handle<crate::Type>, ExpressionError> {
+        use crate::Expression as Ex;
+
+        match function.expressions[expr] {
+            Ex::GlobalVariable(var_handle) => Ok(module.global_variables[var_handle].ty),
+            Ex::FunctionArgument(i) => Ok(function.arguments[i as usize].ty),
+            Ex::Access { base, .. } | Ex::AccessIndex { base, .. } => {
+                match function.expressions[base] {
+                    Ex::GlobalVariable(var_handle) => {
+                        let array_ty = module.global_variables[var_handle].ty;
+
+                        match module.types[array_ty].inner {
+                            crate::TypeInner::BindingArray { base, .. } => Ok(base),
+                            _ => Err(ExpressionError::ExpectedBindingArrayType(array_ty)),
+                        }
+                    }
+                    _ => Err(ExpressionError::ExpectedGlobalVariable),
+                }
+            }
+            _ => Err(ExpressionError::ExpectedGlobalVariable),
+        }
     }
 }
