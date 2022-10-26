@@ -15,6 +15,7 @@ use wgpu::{
 
 use crate::common::TestingContext;
 
+mod numeric_builtins;
 mod struct_layout;
 
 #[derive(Clone, Copy, PartialEq)]
