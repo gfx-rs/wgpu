@@ -2,8 +2,7 @@ struct InputStruct {
     {{input_members}}
 }
 
-// The following removed by code in push contant case
-@group(0) @binding(0)
+{{input_bindings}}
 var<{{storage_type}}> input: InputStruct; 
 
 @group(0) @binding(1)

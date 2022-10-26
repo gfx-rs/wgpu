@@ -4,10 +4,10 @@ use wgpu::{Backends, DownlevelFlags, Features, Limits};
 
 use crate::{
     common::{initialize_test, TestParameters},
-    shader::{shader_input_output_test, ShaderTest, StorageType, MAX_BUFFER_SIZE},
+    shader::{shader_input_output_test, InputStorageType, ShaderTest, MAX_BUFFER_SIZE},
 };
 
-fn create_struct_layout_tests(storage_type: StorageType) -> Vec<ShaderTest> {
+fn create_struct_layout_tests(storage_type: InputStorageType) -> Vec<ShaderTest> {
     let input_values: Vec<_> = (0..(MAX_BUFFER_SIZE as u32 / 4)).collect();
     let output_initialization = u32::MAX;
 
@@ -16,7 +16,7 @@ fn create_struct_layout_tests(storage_type: StorageType) -> Vec<ShaderTest> {
     // Vector tests
     for components in [2, 3, 4] {
         for ty in ["f32", "u32", "i32"] {
-            let members = format!("member: vec{components}<{ty}>,");
+            let input_members = format!("member: vec{components}<{ty}>,");
             let mut direct = String::new();
             let mut loaded = String::from("let loaded = input.member;");
             let component_accessors = ["x", "y", "z", "w"]
@@ -34,7 +34,7 @@ fn create_struct_layout_tests(storage_type: StorageType) -> Vec<ShaderTest> {
 
             tests.push(ShaderTest {
                 name: format!("vec{components}<{ty}> - direct"),
-                members: members.clone(),
+                input_members: input_members.clone(),
                 body: direct,
                 input_values: input_values.clone(),
                 output_values: (0..components as u32).collect(),
@@ -44,7 +44,7 @@ fn create_struct_layout_tests(storage_type: StorageType) -> Vec<ShaderTest> {
 
             tests.push(ShaderTest {
                 name: format!("vec{components}<{ty}> - loaded"),
-                members,
+                input_members,
                 body: loaded,
                 input_values: input_values.clone(),
                 output_values: (0..components as u32).collect(),
@@ -58,7 +58,7 @@ fn create_struct_layout_tests(storage_type: StorageType) -> Vec<ShaderTest> {
     for columns in [2, 3, 4] {
         for rows in [2, 3, 4] {
             let ty = format!("mat{columns}x{rows}<f32>");
-            let members = format!("member: {ty},");
+            let input_members = format!("member: {ty},");
             let mut direct = String::new();
             let mut vector_loaded = String::new();
             let mut fully_loaded = String::from("let loaded = input.member;");
@@ -99,8 +99,8 @@ fn create_struct_layout_tests(storage_type: StorageType) -> Vec<ShaderTest> {
                 }
             }
 
-            // https://github.com/gfx-rs/naga/issues/2094
-            let failures = if storage_type == StorageType::Uniform && rows == 3 {
+            // https://github.com/gfx-rs/naga/issues/1785
+            let failures = if storage_type == InputStorageType::Uniform && rows == 2 {
                 Backends::GL
             } else {
                 Backends::empty()
@@ -108,7 +108,7 @@ fn create_struct_layout_tests(storage_type: StorageType) -> Vec<ShaderTest> {
 
             tests.push(ShaderTest {
                 name: format!("{ty} - direct"),
-                members: members.clone(),
+                input_members: input_members.clone(),
                 body: direct,
                 input_values: input_values.clone(),
                 output_values: output_values.clone(),
@@ -118,7 +118,7 @@ fn create_struct_layout_tests(storage_type: StorageType) -> Vec<ShaderTest> {
 
             tests.push(ShaderTest {
                 name: format!("{ty} - vector loaded"),
-                members: members.clone(),
+                input_members: input_members.clone(),
                 body: vector_loaded,
                 input_values: input_values.clone(),
                 output_values: output_values.clone(),
@@ -128,7 +128,7 @@ fn create_struct_layout_tests(storage_type: StorageType) -> Vec<ShaderTest> {
 
             tests.push(ShaderTest {
                 name: format!("{ty} - fully loaded"),
-                members,
+                input_members,
                 body: fully_loaded,
                 input_values: input_values.clone(),
                 output_values,
@@ -145,7 +145,7 @@ fn create_struct_layout_tests(storage_type: StorageType) -> Vec<ShaderTest> {
 
         tests.push(ShaderTest {
             name: format!("vec3<{ty}>, {ty} alignment"),
-            members,
+            input_members: members,
             body: direct,
             input_values: input_values.clone(),
             output_values: vec![3],
@@ -162,7 +162,7 @@ fn create_struct_layout_tests(storage_type: StorageType) -> Vec<ShaderTest> {
 
             tests.push(ShaderTest {
                 name: format!("mat{columns}x3<f32>, {ty} alignment"),
-                members,
+                input_members: members,
                 body: direct,
                 input_values: input_values.clone(),
                 output_values: vec![columns * 4],
@@ -184,8 +184,8 @@ fn uniform_input() {
         |ctx| {
             shader_input_output_test(
                 ctx,
-                StorageType::Uniform,
-                create_struct_layout_tests(StorageType::Uniform),
+                InputStorageType::Uniform,
+                create_struct_layout_tests(InputStorageType::Uniform),
             );
         },
     );
@@ -200,8 +200,8 @@ fn storage_input() {
         |ctx| {
             shader_input_output_test(
                 ctx,
-                StorageType::Storage,
-                create_struct_layout_tests(StorageType::Storage),
+                InputStorageType::Storage,
+                create_struct_layout_tests(InputStorageType::Storage),
             );
         },
     );
@@ -220,8 +220,8 @@ fn push_constant_input() {
         |ctx| {
             shader_input_output_test(
                 ctx,
-                StorageType::PushConstant,
-                create_struct_layout_tests(StorageType::PushConstant),
+                InputStorageType::PushConstant,
+                create_struct_layout_tests(InputStorageType::PushConstant),
             );
         },
     );
