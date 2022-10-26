@@ -11,7 +11,5 @@ var<storage, read_write> output: array<u32>;
 
 @compute @workgroup_size(1)
 fn cs_main() {
-    let loaded = input;
-    var i = 0u;
     {{body}}
 }

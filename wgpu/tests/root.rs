@@ -11,7 +11,7 @@ mod instance;
 mod poll;
 mod resource_descriptor_accessor;
 mod resource_error;
-mod shader_layout;
+mod shader;
 mod shader_primitive_index;
 mod texture_bounds;
 mod vertex_indices;
