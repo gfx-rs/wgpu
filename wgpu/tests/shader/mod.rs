@@ -1,4 +1,4 @@
-use std::{borrow::Cow};
+use std::borrow::Cow;
 
 use wgpu::{
     Backends, BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor, BindGroupLayoutEntry,
@@ -45,7 +45,6 @@ fn shader_input_output_test(
     tests: Vec<ShaderTest>,
 ) {
     let source = String::from(include_str!("shader_test.wgsl"));
-
 
     let bgl = ctx
         .device
@@ -158,7 +157,11 @@ fn shader_input_output_test(
             });
 
         let output_pre_init_data = vec![test.output_initialization; MAX_BUFFER_SIZE as usize / 4];
-        ctx.queue.write_buffer(&output_buffer, 0, bytemuck::cast_slice(&output_pre_init_data));
+        ctx.queue.write_buffer(
+            &output_buffer,
+            0,
+            bytemuck::cast_slice(&output_pre_init_data),
+        );
 
         let mut encoder = ctx
             .device
@@ -175,7 +178,9 @@ fn shader_input_output_test(
                 ctx.queue
                     .write_buffer(&input_buffer, 0, bytemuck::cast_slice(&test.input_values));
             }
-            StorageType::PushConstant => cpass.set_push_constants(0, bytemuck::cast_slice(&test.input_values)),
+            StorageType::PushConstant => {
+                cpass.set_push_constants(0, bytemuck::cast_slice(&test.input_values))
+            }
         }
 
         cpass.dispatch_workgroups(1, 1, 1);
@@ -198,8 +203,8 @@ fn shader_input_output_test(
         if failure {
             eprintln!(
                 "Inner test failure. Actual {:?}. Expected {:?}. Test {test_name}",
-                left.iter().copied().collect::<Vec<_>>(),
-                right.iter().copied().collect::<Vec<_>>(),
+                left.to_vec(),
+                right.to_vec(),
             );
         }
         let backend_failures = match storage_type {
