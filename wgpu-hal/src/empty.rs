@@ -89,6 +89,13 @@ impl crate::Adapter<Api> for Context {
     ) -> crate::TextureFormatCapabilities {
         crate::TextureFormatCapabilities::empty()
     }
+
+    unsafe fn texture_format_sample_count(
+        &self,
+        format: wgt::TextureFormat,
+    ) -> wgt::TextureFormatSampleCountFlags {
+        wgt::TextureFormatSampleCountFlags::empty()
+    }
     unsafe fn surface_capabilities(&self, surface: &Context) -> Option<crate::SurfaceCapabilities> {
         None
     }

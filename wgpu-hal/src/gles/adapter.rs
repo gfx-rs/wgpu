@@ -197,7 +197,6 @@ impl super::Adapter {
             (vendor, renderer)
         };
         let version = gl.get_parameter_string(glow::VERSION);
-
         log::info!("Vendor: {}", vendor);
         log::info!("Renderer: {}", renderer);
         log::info!("Version: {}", version);
@@ -784,6 +783,13 @@ impl crate::Adapter<super::Api> for super::Adapter {
                 channel: AstcChannel::Hdr,
             } => astc_hdr_features,
         }
+    }
+
+    unsafe fn texture_format_sample_count(
+        &self,
+        _format: wgt::TextureFormat,
+    ) -> wgt::TextureFormatSampleCountFlags {
+        wgt::TextureFormatSampleCountFlags::_1 | wgt::TextureFormatSampleCountFlags::_4
     }
 
     unsafe fn surface_capabilities(

@@ -228,6 +228,12 @@ pub trait Adapter<A: Api>: Send + Sync {
         format: wgt::TextureFormat,
     ) -> TextureFormatCapabilities;
 
+    /// Returns the set of supported sample count for a texture format.
+    unsafe fn texture_format_sample_count(
+        &self,
+        format: wgt::TextureFormat,
+    ) -> wgt::TextureFormatSampleCountFlags;
+
     /// Returns the capabilities of working with a specified surface.
     ///
     /// `None` means presentation is not supported for it.

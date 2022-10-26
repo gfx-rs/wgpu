@@ -186,6 +186,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         allowed_usages: wgt::TextureUsages::RENDER_ATTACHMENT,
                         flags: wgt::TextureFormatFeatureFlags::MULTISAMPLE
                             | wgt::TextureFormatFeatureFlags::MULTISAMPLE_RESOLVE,
+                        sample_count: wgt::TextureFormatSampleCountFlags::_1,
                     },
                     initialization_status: TextureInitTracker::new(1, 1),
                     full_range: track::TextureSelector {

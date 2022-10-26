@@ -18,6 +18,13 @@ impl crate::Adapter<super::Api> for super::Adapter {
         todo!()
     }
 
+    unsafe fn texture_format_sample_count(
+        &self,
+        format: wgt::TextureFormat,
+    ) -> wgt::TextureFormatSampleCountFlags {
+        todo!()
+    }
+
     unsafe fn surface_capabilities(
         &self,
         surface: &super::Surface,

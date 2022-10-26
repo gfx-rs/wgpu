@@ -32,6 +32,7 @@ struct Example {
     sample_count: u32,
     rebuild_bundle: bool,
     config: wgpu::SurfaceConfiguration,
+    max_sample_count: u32,
 }
 
 impl Example {
@@ -117,6 +118,10 @@ impl Example {
 }
 
 impl framework::Example for Example {
+    fn optional_features() -> wgt::Features {
+        wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
+    }
+
     fn init(
         config: &wgpu::SurfaceConfiguration,
         _adapter: &wgpu::Adapter,
@@ -124,7 +129,24 @@ impl framework::Example for Example {
         _queue: &wgpu::Queue,
     ) -> Self {
         log::info!("Press left/right arrow keys to change sample_count.");
-        let sample_count = 4;
+
+        let sample_flags = _adapter
+            .get_texture_format_features(config.format)
+            .sample_count;
+
+        let max_sample_count = {
+            if sample_flags.contains(wgpu::TextureFormatSampleCountFlags::_8) {
+                wgpu::TextureFormatSampleCountFlags::_8.bits()
+            } else if sample_flags.contains(wgpu::TextureFormatSampleCountFlags::_4) {
+                wgpu::TextureFormatSampleCountFlags::_4.bits()
+            } else if sample_flags.contains(wgpu::TextureFormatSampleCountFlags::_2) {
+                wgpu::TextureFormatSampleCountFlags::_2.bits()
+            } else {
+                wgpu::TextureFormatSampleCountFlags::_1.bits()
+            }
+        } as u32;
+
+        let sample_count = max_sample_count;
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
@@ -181,6 +203,7 @@ impl framework::Example for Example {
             vertex_buffer,
             vertex_count,
             sample_count,
+            max_sample_count,
             rebuild_bundle: false,
             config: config.clone(),
         }
@@ -195,14 +218,14 @@ impl framework::Example for Example {
                         // TODO: Switch back to full scans of possible options when we expose
                         //       supported sample counts to the user.
                         Some(winit::event::VirtualKeyCode::Left) => {
-                            if self.sample_count == 4 {
+                            if self.sample_count == self.max_sample_count {
                                 self.sample_count = 1;
                                 self.rebuild_bundle = true;
                             }
                         }
                         Some(winit::event::VirtualKeyCode::Right) => {
                             if self.sample_count == 1 {
-                                self.sample_count = 4;
+                                self.sample_count = self.max_sample_count;
                                 self.rebuild_bundle = true;
                             }
                         }

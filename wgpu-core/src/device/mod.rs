@@ -806,6 +806,15 @@ impl<A: HalApi> Device<A> {
             {
                 return Err(CreateTextureError::InvalidMultisampledFormat(desc.format));
             }
+
+            match wgt::TextureFormatSampleCountFlags::from_bits(desc.sample_count as u8) {
+                Some(sample_count) => {
+                    if !format_features.sample_count.contains(sample_count) {
+                        return Err(CreateTextureError::InvalidSampleCount(desc.sample_count));
+                    }
+                }
+                None => return Err(CreateTextureError::InvalidSampleCount(desc.sample_count)),
+            }
         }
 
         let mips = desc.mip_level_count;

@@ -279,6 +279,14 @@ impl crate::Adapter<super::Api> for super::Adapter {
         Tfc::COPY_SRC | Tfc::COPY_DST | Tfc::SAMPLED | extra
     }
 
+    #[allow(trivial_casts)]
+    unsafe fn texture_format_sample_count(
+        &self,
+        _format: wgt::TextureFormat,
+    ) -> wgt::TextureFormatSampleCountFlags {
+        self.shared.private_caps.sample_count_mask
+    }
+
     unsafe fn surface_capabilities(
         &self,
         surface: &super::Surface,
@@ -489,12 +497,13 @@ impl super::PrivateCapabilities {
         version.is_mac = os_is_mac;
         let family_check = version.at_least((10, 15), (13, 0));
 
-        let mut sample_count_mask: u8 = 1 | 4; // 1 and 4 samples are supported on all devices
+        let mut sample_count_mask =
+            wgt::TextureFormatSampleCountFlags::_1 | wgt::TextureFormatSampleCountFlags::_4; // 1 and 4 samples are supported on all devices
         if device.supports_texture_sample_count(2) {
-            sample_count_mask |= 2;
+            sample_count_mask |= wgt::TextureFormatSampleCountFlags::_2;
         }
         if device.supports_texture_sample_count(8) {
-            sample_count_mask |= 8;
+            sample_count_mask |= wgt::TextureFormatSampleCountFlags::_8;
         }
 
         let rw_texture_tier = if version.at_least((10, 13), (11, 0)) {

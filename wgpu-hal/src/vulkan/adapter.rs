@@ -1435,6 +1435,53 @@ impl crate::Adapter<super::Api> for super::Adapter {
         flags
     }
 
+    unsafe fn texture_format_sample_count(
+        &self,
+        format: wgt::TextureFormat,
+    ) -> wgt::TextureFormatSampleCountFlags {
+        use wgt::TextureFormatSampleCountFlags as Tfsc;
+        let mut flags = Tfsc::empty();
+
+        let format_aspect = crate::FormatAspects::from(format);
+        let limits = self.phd_capabilities.properties.limits;
+
+        let sample_flags = if format_aspect.contains(crate::FormatAspects::DEPTH) {
+            limits
+                .framebuffer_depth_sample_counts
+                .min(limits.sampled_image_depth_sample_counts)
+        } else if format_aspect.contains(crate::FormatAspects::STENCIL) {
+            limits
+                .framebuffer_stencil_sample_counts
+                .min(limits.sampled_image_stencil_sample_counts)
+        } else {
+            limits
+                .framebuffer_color_sample_counts
+                .min(limits.sampled_image_color_sample_counts)
+                .min(limits.sampled_image_integer_sample_counts)
+                .min(limits.storage_image_sample_counts)
+        };
+
+        flags.set(
+            Tfsc::_1,
+            sample_flags.contains(vk::SampleCountFlags::TYPE_1),
+        );
+        flags.set(
+            Tfsc::_2,
+            sample_flags.contains(vk::SampleCountFlags::TYPE_2),
+        );
+        flags.set(
+            Tfsc::_4,
+            sample_flags.contains(vk::SampleCountFlags::TYPE_4),
+        );
+
+        flags.set(
+            Tfsc::_8,
+            sample_flags.contains(vk::SampleCountFlags::TYPE_8),
+        );
+
+        flags
+    }
+
     unsafe fn surface_capabilities(
         &self,
         surface: &super::Surface,

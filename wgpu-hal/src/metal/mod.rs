@@ -219,7 +219,7 @@ struct PrivateCapabilities {
     max_varying_components: u32,
     max_threads_per_group: u32,
     max_total_threadgroup_memory: u32,
-    sample_count_mask: u8,
+    sample_count_mask: wgt::TextureFormatSampleCountFlags,
     supports_debug_markers: bool,
     supports_binary_archives: bool,
     supports_capture_manager: bool,

@@ -732,9 +732,6 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                     expected: sample_count,
                 });
             }
-            if sample_count != 1 && sample_count != 4 {
-                return Err(RenderPassErrorInner::InvalidSampleCount(sample_count));
-            }
             attachment_type_name = type_name;
             Ok(())
         };

@@ -1648,6 +1648,24 @@ bitflags::bitflags! {
 #[cfg(feature = "bitflags_serde_shim")]
 bitflags_serde_shim::impl_serde_for_bitflags!(TextureFormatFeatureFlags);
 
+bitflags::bitflags! {
+    /// Texture format sample count flags.
+    #[repr(transparent)]
+    pub struct TextureFormatSampleCountFlags: u8 {
+        ///
+        const _1 = 1 << 0;
+        /// requires [`Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES`] to be enabled
+        const _2 = 1 << 1;
+        ///
+        const _4 = 1 << 2;
+        /// requires [`Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES`] to be enabled
+        const _8 = 1 << 3;
+    }
+}
+
+#[cfg(feature = "bitflags_serde_shim")]
+bitflags_serde_shim::impl_serde_for_bitflags!(TextureFormatSampleCountFlags);
+
 /// Features supported by a given texture format
 ///
 /// Features are defined by WebGPU specification unless `Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES` is enabled.
@@ -1657,6 +1675,8 @@ pub struct TextureFormatFeatures {
     pub allowed_usages: TextureUsages,
     /// Additional property flags for the format.
     pub flags: TextureFormatFeatureFlags,
+    /// supported sample count
+    pub sample_count: TextureFormatSampleCountFlags,
 }
 
 /// Information about a texture format.
@@ -2462,6 +2482,7 @@ impl TextureFormat {
             guaranteed_format_features: TextureFormatFeatures {
                 allowed_usages,
                 flags,
+                sample_count: TextureFormatSampleCountFlags::_1 | TextureFormatSampleCountFlags::_4,
             },
         }
     }
