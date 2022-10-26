@@ -48,6 +48,7 @@ Bottom level categories:
 - Implement `Default` for `CompositeAlphaMode`
 
 #### WebGPU
+
 - Implement `queue_validate_write_buffer` by @jinleili in [#3098](https://github.com/gfx-rs/wgpu/pull/3098)
 
 #### GLES
@@ -62,10 +63,15 @@ Bottom level categories:
 - Add the `"wgsl"` feature, to enable WGSL shaders in `wgpu-core` and `wgpu`. Enabled by default in `wgpu`. By @daxpedda in [#2890](https://github.com/gfx-rs/wgpu/pull/2890).
 - Implement `Clone` for `ShaderSource` and `ShaderModuleDescriptor` in `wgpu`. By @daxpedda in [#3086](https://github.com/gfx-rs/wgpu/pull/3086).
 - Add `get_default_config` for `Surface` to simplify user creation of `SurfaceConfiguration`. By @jinleili in [#3034](https://github.com/gfx-rs/wgpu/pull/3034)
+- Native adapters can now use MSAA x2 and x8 if it's supported , previously only x1 and x4 were supported . By @39ali in [3140](https://github.com/gfx-rs/wgpu/pull/3140)
 
 #### GLES
 
 - Surfaces support now `TextureFormat::Rgba8Unorm` and (non-web only) `TextureFormat::Bgra8Unorm`. By @Wumpf in [#3070](https://github.com/gfx-rs/wgpu/pull/3070)
+
+#### WebGPU
+
+- Add `TextureFormatSampleCountFlags` to `TextureFormatFeatures` to query supported sample count for the current texture format. By @39ali in [3140](https://github.com/gfx-rs/wgpu/pull/3140)
 
 ### Bug Fixes
 
@@ -76,6 +82,7 @@ Bottom level categories:
 - Avoid panicking in some interactions with invalid resources by @nical in (#3094)[https://github.com/gfx-rs/wgpu/pull/3094]
 
 #### WebGPU
+
 - Use `log` instead of `println` in hello example by @JolifantoBambla in [#2858](https://github.com/gfx-rs/wgpu/pull/2858)
 
 #### GLES
@@ -83,6 +90,7 @@ Bottom level categories:
 - Fixed WebGL not displaying srgb targets correctly if a non-screen filling viewport was previously set. By @Wumpf in [#3093](https://github.com/gfx-rs/wgpu/pull/3093)
 
 ### Examples
+
 - Log adapter info in hello example on wasm target by @JolifantoBambla in [#2858](https://github.com/gfx-rs/wgpu/pull/2858)
 
 ### Testing/Internal
@@ -185,6 +193,7 @@ both `raw_window_handle::HasRawWindowHandle` and `raw_window_handle::HasRawDispl
 - Report Apple M2 gpu as integrated. By @i509VCB [#3036](https://github.com/gfx-rs/wgpu/pull/3036)
 
 #### WebGPU
+
 - When called in a web worker, `Context::init()` now uses `web_sys::WorkerGlobalContext` to create a `wgpu::Instance` instead of trying to access the unavailable `web_sys::Window` by @JolifantoBambla in [#2858](https://github.com/gfx-rs/wgpu/pull/2858)
 
 ### Changes
@@ -340,6 +349,7 @@ Added items to the public API
 - Update present_mode docs as most of them don't automatically fall back to Fifo anymore. by @Elabajaba in [#2855](https://github.com/gfx-rs/wgpu/pull/2855)
 
 #### Hal
+
 - Document safety requirements for `Adapter::from_external` in gles hal by @i509VCB in [#2863](https://github.com/gfx-rs/wgpu/pull/2863)
 - Make `AdapterContext` a publicly accessible type in the gles hal by @i509VCB in [#2870](https://github.com/gfx-rs/wgpu/pull/2870)
 
