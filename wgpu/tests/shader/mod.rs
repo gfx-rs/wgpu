@@ -11,7 +11,7 @@ use crate::common::TestingContext;
 
 mod struct_layout;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 enum StorageType {
     Uniform,
     Storage,
@@ -35,6 +35,7 @@ struct ShaderTest {
     input_values: Vec<u32>,
     output_values: Vec<u32>,
     output_initialization: u32,
+    failures: Backends,
 }
 
 const MAX_BUFFER_SIZE: u64 = 128;
@@ -207,12 +208,7 @@ fn shader_input_output_test(
                 right.to_vec(),
             );
         }
-        let backend_failures = match storage_type {
-            StorageType::Uniform => Backends::empty(),
-            StorageType::Storage => Backends::empty(),
-            StorageType::PushConstant => Backends::empty(),
-        };
-        if failure != backend_failures.contains(ctx.adapter.get_info().backend.into()) {
+        if failure != test.failures.contains(ctx.adapter.get_info().backend.into()) {
             fail |= true;
             if !failure {
                 eprintln!("Unexpected test success. Test {test_name}");

@@ -1,13 +1,13 @@
 use std::fmt::Write;
 
-use wgpu::{DownlevelFlags, Features, Limits};
+use wgpu::{Backends, DownlevelFlags, Features, Limits};
 
 use crate::{
     common::{initialize_test, TestParameters},
     shader::{shader_input_output_test, ShaderTest, StorageType, MAX_BUFFER_SIZE},
 };
 
-fn create_struct_layout_tests() -> Vec<ShaderTest> {
+fn create_struct_layout_tests(storage_type: StorageType) -> Vec<ShaderTest> {
     let input_values: Vec<_> = (0..(MAX_BUFFER_SIZE as u32 / 4)).collect();
     let output_initialization = u32::MAX;
 
@@ -39,6 +39,7 @@ fn create_struct_layout_tests() -> Vec<ShaderTest> {
                 input_values: input_values.clone(),
                 output_values: (0..components as u32).collect(),
                 output_initialization,
+                failures: Backends::empty(),
             });
 
             tests.push(ShaderTest {
@@ -48,6 +49,7 @@ fn create_struct_layout_tests() -> Vec<ShaderTest> {
                 input_values: input_values.clone(),
                 output_values: (0..components as u32).collect(),
                 output_initialization,
+                failures: Backends::empty(),
             });
         }
     }
@@ -97,6 +99,13 @@ fn create_struct_layout_tests() -> Vec<ShaderTest> {
                 }
             }
 
+            // https://github.com/gfx-rs/naga/issues/2094
+            let failures = if storage_type == StorageType::Uniform && rows == 3 {
+                Backends::GL
+            } else {
+                Backends::empty()
+            };
+
             tests.push(ShaderTest {
                 name: format!("{ty} - direct"),
                 members: members.clone(),
@@ -104,6 +113,7 @@ fn create_struct_layout_tests() -> Vec<ShaderTest> {
                 input_values: input_values.clone(),
                 output_values: output_values.clone(),
                 output_initialization,
+                failures,
             });
 
             tests.push(ShaderTest {
@@ -113,6 +123,7 @@ fn create_struct_layout_tests() -> Vec<ShaderTest> {
                 input_values: input_values.clone(),
                 output_values: output_values.clone(),
                 output_initialization,
+                failures,
             });
 
             tests.push(ShaderTest {
@@ -122,6 +133,7 @@ fn create_struct_layout_tests() -> Vec<ShaderTest> {
                 input_values: input_values.clone(),
                 output_values,
                 output_initialization,
+                failures,
             });
         }
     }
@@ -138,6 +150,7 @@ fn create_struct_layout_tests() -> Vec<ShaderTest> {
             input_values: input_values.clone(),
             output_values: vec![3],
             output_initialization,
+            failures: Backends::empty(),
         });
     }
 
@@ -154,6 +167,7 @@ fn create_struct_layout_tests() -> Vec<ShaderTest> {
                 input_values: input_values.clone(),
                 output_values: vec![columns * 4],
                 output_initialization,
+                failures: Backends::empty(),
             });
         }
     }
@@ -168,7 +182,11 @@ fn uniform_input() {
             .downlevel_flags(DownlevelFlags::COMPUTE_SHADERS)
             .limits(Limits::downlevel_defaults()),
         |ctx| {
-            shader_input_output_test(ctx, StorageType::Uniform, create_struct_layout_tests());
+            shader_input_output_test(
+                ctx,
+                StorageType::Uniform,
+                create_struct_layout_tests(StorageType::Uniform),
+            );
         },
     );
 }
@@ -180,7 +198,11 @@ fn storage_input() {
             .downlevel_flags(DownlevelFlags::COMPUTE_SHADERS)
             .limits(Limits::downlevel_defaults()),
         |ctx| {
-            shader_input_output_test(ctx, StorageType::Storage, create_struct_layout_tests());
+            shader_input_output_test(
+                ctx,
+                StorageType::Storage,
+                create_struct_layout_tests(StorageType::Storage),
+            );
         },
     );
 }
@@ -196,7 +218,11 @@ fn push_constant_input() {
                 ..Limits::downlevel_defaults()
             }),
         |ctx| {
-            shader_input_output_test(ctx, StorageType::PushConstant, create_struct_layout_tests());
+            shader_input_output_test(
+                ctx,
+                StorageType::PushConstant,
+                create_struct_layout_tests(StorageType::PushConstant),
+            );
         },
     );
 }
