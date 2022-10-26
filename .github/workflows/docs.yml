@@ -30,6 +30,7 @@ jobs:
       - name: Build the docs (nightly)
         run: |
           cargo +nightly doc --no-deps --lib
+        env: RUSTDOCFLAGS="--cfg docsrs"
 
       - name: Build the docs (stable)
         run: cargo +stable doc --no-deps --lib

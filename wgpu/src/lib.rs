@@ -2,7 +2,7 @@
 //!
 //! To start using the API, create an [`Instance`].
 
-#![cfg_attr(docsrs, feature(doc_cfg))] // Allow doc(cfg(feature = "")) for showing in docs that something is feature gated.
+#![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
 #![doc(html_logo_url = "https://raw.githubusercontent.com/gfx-rs/wgpu/master/logo.png")]
 #![warn(missing_docs)]
 
@@ -843,13 +843,11 @@ pub enum ShaderSource<'a> {
     ///
     /// See also: [`util::make_spirv`], [`include_spirv`]
     #[cfg(feature = "spirv")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "spirv")))]
     SpirV(Cow<'a, [u32]>),
     /// GLSL module as a string slice.
     ///
     /// Note: GLSL is not yet fully supported and must be a specific ShaderStage.
     #[cfg(feature = "glsl")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "glsl")))]
     Glsl {
         /// The source code of the shader.
         shader: Cow<'a, str>,
@@ -860,11 +858,9 @@ pub enum ShaderSource<'a> {
     },
     /// WGSL module as a string slice.
     #[cfg(feature = "wgsl")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "wgsl")))]
     Wgsl(Cow<'a, str>),
     /// Naga module.
     #[cfg(feature = "naga")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "naga")))]
     Naga(Cow<'static, naga::Module>),
     /// Dummy variant because `Naga` doesn't have a lifetime and without enough active features it
     /// could be the last one active.

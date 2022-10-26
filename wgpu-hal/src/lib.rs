@@ -14,6 +14,7 @@
  *  - secondary backends (DX11/GLES): 0.5 each
  */
 
+#![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
 #![allow(
     // for `if_then_panic` until it reaches stable
     unknown_lints,
