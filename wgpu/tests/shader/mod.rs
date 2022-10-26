@@ -166,9 +166,11 @@ fn shader_input_output_test(
             .replace("{{body}}", &test.body);
 
         // Add the bindings for all inputs besides push constants.
-        if !matches!(storage_type, InputStorageType::PushConstant) {
-            processed = processed.replace("{{input_bindings}}", "@group(0) @binding(0)");
-        }
+        processed = if matches!(storage_type, InputStorageType::PushConstant) {
+            processed.replace("{{input_bindings}}", "")
+        } else {
+            processed.replace("{{input_bindings}}", "@group(0) @binding(0)")
+        };
 
         let sm = ctx.device.create_shader_module(ShaderModuleDescriptor {
             label: Some(&format!("shader {test_name}")),

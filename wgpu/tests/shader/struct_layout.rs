@@ -17,6 +17,9 @@ fn create_struct_layout_tests(storage_type: InputStorageType) -> Vec<ShaderTest>
     for components in [2, 3, 4] {
         for ty in ["f32", "u32", "i32"] {
             let input_members = format!("member: vec{components}<{ty}>,");
+            // There's 2 possible ways to load a component of a vector:
+            // - Do `input.member.x` (direct)
+            // - Store `input.member` in a variable; do `var.x` (loaded)
             let mut direct = String::new();
             let mut loaded = String::from("let loaded = input.member;");
             let component_accessors = ["x", "y", "z", "w"]
@@ -59,6 +62,10 @@ fn create_struct_layout_tests(storage_type: InputStorageType) -> Vec<ShaderTest>
         for rows in [2, 3, 4] {
             let ty = format!("mat{columns}x{rows}<f32>");
             let input_members = format!("member: {ty},");
+            // There's 3 possible ways to load a component of a matrix:
+            // - Do `input.member[0].x` (direct)
+            // - Store `input.member[0]` in a variable; do `var.x` (vector_loaded)
+            // - Store `input.member` in a variable; do `var[0].x` (fully_loaded)
             let mut direct = String::new();
             let mut vector_loaded = String::new();
             let mut fully_loaded = String::from("let loaded = input.member;");
