@@ -1377,7 +1377,7 @@ dependencies = [
 [[package]]
 name = "naga"
 version = "0.10.0"
-source = "git+https://github.com/gfx-rs/naga?rev=c52d9102#c52d91023d43092323615fcc746162e478033f26"
+source = "git+https://github.com/cwfitzgerald/naga?rev=2e499e26#2e499e26a21af709bc8715804ade9c520857c1fb"
 dependencies = [
  "bit-set",
  "bitflags",
