@@ -1,4 +1,4 @@
-use std::borrow::Cow;
+use std::{borrow::Cow};
 
 use wgpu::{
     Backends, BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor, BindGroupLayoutEntry,
@@ -32,7 +32,9 @@ struct ShaderTest {
     name: String,
     members: String,
     body: String,
+    input_values: Vec<u32>,
     output_values: Vec<u32>,
+    output_initialization: u32,
 }
 
 const MAX_BUFFER_SIZE: u64 = 128;
@@ -44,9 +46,6 @@ fn shader_input_output_test(
 ) {
     let source = String::from(include_str!("shader_test.wgsl"));
 
-    // We go from [1, MAX] for indices so that unwritten values (cleared zeros)
-    // won't be confused for a valid written offset of 0.
-    let values: Vec<_> = (1..=(MAX_BUFFER_SIZE as u32 / 4)).collect();
 
     let bgl = ctx
         .device
@@ -158,12 +157,12 @@ fn shader_input_output_test(
                 entry_point: "cs_main",
             });
 
+        let output_pre_init_data = vec![test.output_initialization; MAX_BUFFER_SIZE as usize / 4];
+        ctx.queue.write_buffer(&output_buffer, 0, bytemuck::cast_slice(&output_pre_init_data));
+
         let mut encoder = ctx
             .device
             .create_command_encoder(&CommandEncoderDescriptor { label: None });
-
-        encoder.clear_buffer(&output_buffer, 0, None);
-        encoder.clear_buffer(&mapping_buffer, 0, None);
 
         let mut cpass = encoder.begin_compute_pass(&ComputePassDescriptor {
             label: Some(&format!("cpass {test_name}")),
@@ -174,9 +173,9 @@ fn shader_input_output_test(
         match storage_type {
             StorageType::Uniform | StorageType::Storage => {
                 ctx.queue
-                    .write_buffer(&input_buffer, 0, bytemuck::cast_slice(&values));
+                    .write_buffer(&input_buffer, 0, bytemuck::cast_slice(&test.input_values));
             }
-            StorageType::PushConstant => cpass.set_push_constants(0, bytemuck::cast_slice(&values)),
+            StorageType::PushConstant => cpass.set_push_constants(0, bytemuck::cast_slice(&test.input_values)),
         }
 
         cpass.dispatch_workgroups(1, 1, 1);

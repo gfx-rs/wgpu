@@ -1,13 +1,16 @@
 use std::fmt::Write;
 
-use wgpu::{DownlevelFlags, Limits, Features};
+use wgpu::{DownlevelFlags, Features, Limits};
 
 use crate::{
     common::{initialize_test, TestParameters},
-    shader::{ShaderTest, StorageType, shader_input_output_test, MAX_BUFFER_SIZE},
+    shader::{shader_input_output_test, ShaderTest, StorageType, MAX_BUFFER_SIZE},
 };
 
 fn create_struct_layout_tests() -> Vec<ShaderTest> {
+    let input_values: Vec<_> = (0..(MAX_BUFFER_SIZE as u32 / 4)).collect();
+    let output_initialization = u32::MAX;
+
     let mut tests = Vec::new();
 
     // Vector tests
@@ -33,14 +36,18 @@ fn create_struct_layout_tests() -> Vec<ShaderTest> {
                 name: format!("vec{components}<{ty}> - direct"),
                 members: members.clone(),
                 body: direct,
-                output_values: (1..=components as u32).collect(),
+                input_values: input_values.clone(),
+                output_values: (0..components as u32).collect(),
+                output_initialization,
             });
 
             tests.push(ShaderTest {
                 name: format!("vec{components}<{ty}> - loaded"),
                 members,
                 body: loaded,
-                output_values: (1..=components as u32).collect(),
+                input_values: input_values.clone(),
+                output_values: (0..components as u32).collect(),
+                output_initialization,
             });
         }
     }
@@ -80,7 +87,7 @@ fn create_struct_layout_tests() -> Vec<ShaderTest> {
                     )
                     .unwrap();
 
-                    output_values.push(current_input_idx + 1);
+                    output_values.push(current_input_idx);
                     current_input_idx += 1;
                     current_output_idx += 1;
                 }
@@ -94,21 +101,27 @@ fn create_struct_layout_tests() -> Vec<ShaderTest> {
                 name: format!("{ty} - direct"),
                 members: members.clone(),
                 body: direct,
+                input_values: input_values.clone(),
                 output_values: output_values.clone(),
+                output_initialization,
             });
 
             tests.push(ShaderTest {
                 name: format!("{ty} - vector loaded"),
                 members: members.clone(),
                 body: vector_loaded,
+                input_values: input_values.clone(),
                 output_values: output_values.clone(),
+                output_initialization,
             });
 
             tests.push(ShaderTest {
                 name: format!("{ty} - fully loaded"),
                 members,
                 body: fully_loaded,
+                input_values: input_values.clone(),
                 output_values,
+                output_initialization,
             });
         }
     }
@@ -122,15 +135,34 @@ fn create_struct_layout_tests() -> Vec<ShaderTest> {
             name: format!("vec3<{ty}>, {ty} alignment"),
             members,
             body: direct,
-            output_values: vec![4],
+            input_values: input_values.clone(),
+            output_values: vec![3],
+            output_initialization,
         });
+    }
+
+    // Mat3 alignment tests
+    for ty in ["f32", "u32", "i32"] {
+        for columns in [2, 3, 4] {
+            let members = format!("_mat: mat{columns}x3<f32>,\nscalar: {ty},");
+            let direct = String::from("output[0] = bitcast<u32>(input.scalar);");
+
+            tests.push(ShaderTest {
+                name: format!("mat{columns}x3<f32>, {ty} alignment"),
+                members,
+                body: direct,
+                input_values: input_values.clone(),
+                output_values: vec![columns * 4],
+                output_initialization,
+            });
+        }
     }
 
     tests
 }
 
 #[test]
-fn input_layout_uniform() {
+fn uniform_input() {
     initialize_test(
         TestParameters::default()
             .downlevel_flags(DownlevelFlags::COMPUTE_SHADERS)
@@ -142,7 +174,7 @@ fn input_layout_uniform() {
 }
 
 #[test]
-fn input_layout_storage() {
+fn storage_input() {
     initialize_test(
         TestParameters::default()
             .downlevel_flags(DownlevelFlags::COMPUTE_SHADERS)
@@ -154,7 +186,7 @@ fn input_layout_storage() {
 }
 
 #[test]
-fn input_layout_push_constant() {
+fn push_constant_input() {
     initialize_test(
         TestParameters::default()
             .features(Features::PUSH_CONSTANTS)
