@@ -144,7 +144,7 @@ fragment gatherOutput gather(
 , metal::depth2d<float, metal::access::sample> image_2d_depth [[user(fake0)]]
 ) {
     metal::float2 tc_2 = metal::float2(0.5);
-    metal::float4 s2d_1 = image_2d.gather(sampler_reg, tc_2, int2(0), metal::component::y);
+    metal::float4 s2d_1 = image_2d.gather(sampler_reg, tc_2, metal::int2(0), metal::component::y);
     metal::float4 s2d_offset_1 = image_2d.gather(sampler_reg, tc_2, const_type_9_, metal::component::w);
     metal::float4 s2d_depth_1 = image_2d_depth.gather_compare(sampler_cmp, tc_2, 0.5);
     metal::float4 s2d_depth_offset = image_2d_depth.gather_compare(sampler_cmp, tc_2, 0.5, const_type_9_);

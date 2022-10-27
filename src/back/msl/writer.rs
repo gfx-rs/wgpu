@@ -1440,7 +1440,7 @@ impl<W: Write> Writer<W> {
                         // Offset always comes before the gather, except
                         // in cube maps where it's not applicable
                         if offset.is_none() && !is_cube_map {
-                            write!(self.out, ", int2(0)")?;
+                            write!(self.out, ", {}::int2(0)", NAMESPACE)?;
                         }
                         let letter = ['x', 'y', 'z', 'w'][component as usize];
                         write!(self.out, ", {}::component::{}", NAMESPACE, letter)?;
