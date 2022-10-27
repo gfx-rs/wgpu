@@ -219,7 +219,10 @@ pub(crate) fn validate_linear_texture_data(
     copy_size: &Extent3d,
     need_copy_aligned_rows: bool,
 ) -> Result<(BufferAddress, BufferAddress), TransferError> {
-    // Convert all inputs to BufferAddress (u64) to prevent overflow issues
+    // Convert all inputs to BufferAddress (u64) to avoid some of the overflow issues
+    // Note: u64 is not always enough to prevent overflow, especially when multiplying
+    // something with a potentially large depth value, so it is preferrable to validate
+    // the copy size before calling this function (for example via `validate_texture_copy_range`).
     let copy_width = copy_size.width as BufferAddress;
     let copy_height = copy_size.height as BufferAddress;
     let copy_depth = copy_size.depth_or_array_layers as BufferAddress;
