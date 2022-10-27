@@ -132,8 +132,6 @@ impl framework::Example for Example {
 
         let sample_flags = _adapter.get_texture_format_features(config.format).flags;
 
-        log::info!("sample_flags :{:?}", sample_flags);
-
         let max_sample_count = {
             if sample_flags.contains(wgpu::TextureFormatFeatureFlags::MULTISAMPLE_X8) {
                 8

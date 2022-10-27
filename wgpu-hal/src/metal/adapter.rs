@@ -122,11 +122,11 @@ impl crate::Adapter<super::Api> for super::Adapter {
                     | Tfc::STORAGE
                     | Tfc::COLOR_ATTACHMENT
                     | Tfc::COLOR_ATTACHMENT_BLEND
-                    | Tfc::MULTISAMPLE
+                    | Tfc::MULTISAMPLE_X4
                     | msaa_resolve_desktop_if
             }
             Tf::Rg8Unorm | Tf::Rg16Float | Tf::Bgra8Unorm => all_caps,
-            Tf::Rg8Uint | Tf::Rg8Sint => Tfc::STORAGE | Tfc::COLOR_ATTACHMENT | Tfc::MULTISAMPLE,
+            Tf::Rg8Uint | Tf::Rg8Sint => Tfc::STORAGE | Tfc::COLOR_ATTACHMENT | Tfc::MULTISAMPLE_X4,
             Tf::R32Uint | Tf::R32Sint => {
                 read_write_tier1_if | Tfc::STORAGE | Tfc::COLOR_ATTACHMENT | msaa_desktop_if
             }
@@ -137,11 +137,13 @@ impl crate::Adapter<super::Api> for super::Adapter {
                     Tfc::STORAGE
                         | Tfc::COLOR_ATTACHMENT
                         | Tfc::COLOR_ATTACHMENT_BLEND
-                        | Tfc::MULTISAMPLE
+                        | Tfc::MULTISAMPLE_X4
                 };
                 read_write_tier1_if | flags
             }
-            Tf::Rg16Uint | Tf::Rg16Sint => Tfc::STORAGE | Tfc::COLOR_ATTACHMENT | Tfc::MULTISAMPLE,
+            Tf::Rg16Uint | Tf::Rg16Sint => {
+                Tfc::STORAGE | Tfc::COLOR_ATTACHMENT | Tfc::MULTISAMPLE_X4
+            }
             Tf::Rgba8UnormSrgb | Tf::Bgra8UnormSrgb => {
                 let mut flags = all_caps;
                 flags.set(Tfc::STORAGE, pc.format_rgba8_srgb_all);
@@ -176,7 +178,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
                 if pc.format_rgba32float_all {
                     flags |= all_caps
                 } else if pc.msaa_apple7 {
-                    flags |= Tfc::MULTISAMPLE
+                    flags |= Tfc::MULTISAMPLE_X4
                 };
                 flags
             }
@@ -189,7 +191,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
             }*/
             Tf::Depth16Unorm => {
                 let mut flags =
-                    Tfc::DEPTH_STENCIL_ATTACHMENT | Tfc::MULTISAMPLE | msaa_resolve_apple3x_if;
+                    Tfc::DEPTH_STENCIL_ATTACHMENT | Tfc::MULTISAMPLE_X4 | msaa_resolve_apple3x_if;
                 if pc.format_depth16unorm {
                     flags |= Tfc::SAMPLED_LINEAR
                 }
@@ -197,14 +199,14 @@ impl crate::Adapter<super::Api> for super::Adapter {
             }
             Tf::Depth32Float | Tf::Depth32FloatStencil8 => {
                 let mut flags =
-                    Tfc::DEPTH_STENCIL_ATTACHMENT | Tfc::MULTISAMPLE | msaa_resolve_apple3x_if;
+                    Tfc::DEPTH_STENCIL_ATTACHMENT | Tfc::MULTISAMPLE_X4 | msaa_resolve_apple3x_if;
                 if pc.format_depth32float_filter {
                     flags |= Tfc::SAMPLED_LINEAR
                 }
                 flags
             }
             Tf::Depth24Plus | Tf::Depth24PlusStencil8 => {
-                let mut flags = Tfc::DEPTH_STENCIL_ATTACHMENT | Tfc::MULTISAMPLE;
+                let mut flags = Tfc::DEPTH_STENCIL_ATTACHMENT | Tfc::MULTISAMPLE_X4;
                 if pc.format_depth24_stencil8 {
                     flags |= Tfc::SAMPLED_LINEAR | Tfc::MULTISAMPLE_RESOLVE
                 } else {
@@ -224,7 +226,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
                     Tfc::SAMPLED_LINEAR
                         | Tfc::COLOR_ATTACHMENT
                         | Tfc::COLOR_ATTACHMENT_BLEND
-                        | Tfc::MULTISAMPLE
+                        | Tfc::MULTISAMPLE_X4
                         | Tfc::MULTISAMPLE_RESOLVE
                 }
             }
@@ -275,8 +277,12 @@ impl crate::Adapter<super::Api> for super::Adapter {
                 }
             }
         };
-        // self.shared.private_caps.sample_count_mask
-        Tfc::COPY_SRC | Tfc::COPY_DST | Tfc::SAMPLED | extra
+
+        Tfc::COPY_SRC
+            | Tfc::COPY_DST
+            | Tfc::SAMPLED
+            | extra
+            | self.shared.private_caps.sample_count_mask
     }
 
     unsafe fn surface_capabilities(
@@ -489,12 +495,12 @@ impl super::PrivateCapabilities {
         version.is_mac = os_is_mac;
         let family_check = version.at_least((10, 15), (13, 0));
 
-        let mut sample_count_mask = wgt::TextureFormatFeatureFlags::MULTISAMPLE_X4; // 1 and 4 samples are supported on all devices
+        let mut sample_count_mask = crate::TextureFormatCapabilities::MULTISAMPLE_X4; // 1 and 4 samples are supported on all devices
         if device.supports_texture_sample_count(2) {
-            sample_count_mask |= wgt::TextureFormatFeatureFlags::MULTISAMPLE_X2;
+            sample_count_mask |= crate::TextureFormatCapabilities::MULTISAMPLE_X2;
         }
         if device.supports_texture_sample_count(8) {
-            sample_count_mask |= wgt::TextureFormatFeatureFlags::MULTISAMPLE_X8;
+            sample_count_mask |= crate::TextureFormatCapabilities::MULTISAMPLE_X8;
         }
 
         let rw_texture_tier = if version.at_least((10, 13), (11, 0)) {

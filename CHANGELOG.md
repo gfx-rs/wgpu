@@ -71,7 +71,7 @@ Bottom level categories:
 
 #### WebGPU
 
-- Add `TextureFormatSampleCountFlags` to `TextureFormatFeatures` to query supported sample count for the current texture format. By @39ali in [3140](https://github.com/gfx-rs/wgpu/pull/3140)
+- Add `MULTISAMPLE_X2`, `MULTISAMPLE_X4` and `MULTISAMPLE_X8` to `TextureFormatFeatureFlags`. By @39ali in [3140](https://github.com/gfx-rs/wgpu/pull/3140)
 
 ### Bug Fixes
 
