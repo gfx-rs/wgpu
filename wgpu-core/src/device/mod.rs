@@ -802,19 +802,33 @@ impl<A: HalApi> Device<A> {
 
             if !format_features
                 .flags
-                .contains(wgt::TextureFormatFeatureFlags::MULTISAMPLE)
+                .contains(wgt::TextureFormatFeatureFlags::MULTISAMPLE_X4)
             {
                 return Err(CreateTextureError::InvalidMultisampledFormat(desc.format));
             }
 
-            match wgt::TextureFormatSampleCountFlags::from_bits(desc.sample_count as u8) {
-                Some(sample_count) => {
-                    if !format_features.sample_count.contains(sample_count) {
-                        return Err(CreateTextureError::InvalidSampleCount(desc.sample_count));
-                    }
-                }
-                None => return Err(CreateTextureError::InvalidSampleCount(desc.sample_count)),
-            }
+            if desc.sample_count == 2
+                && !format_features
+                    .flags
+                    .contains(wgt::TextureFormatFeatureFlags::MULTISAMPLE_X2)
+            {
+                return Err(CreateTextureError::InvalidSampleCount(desc.sample_count));
+            };
+
+            if desc.sample_count == 4
+                && !format_features
+                    .flags
+                    .contains(wgt::TextureFormatFeatureFlags::MULTISAMPLE_X4)
+            {
+                return Err(CreateTextureError::InvalidSampleCount(desc.sample_count));
+            };
+            if desc.sample_count == 8
+                && !format_features
+                    .flags
+                    .contains(wgt::TextureFormatFeatureFlags::MULTISAMPLE_X8)
+            {
+                return Err(CreateTextureError::InvalidSampleCount(desc.sample_count));
+            };
         }
 
         let mips = desc.mip_level_count;
@@ -2663,7 +2677,7 @@ impl<A: HalApi> Device<A> {
                         break Some(pipeline::ColorStateError::FormatNotColor(cs.format));
                     }
                     if desc.multisample.count > 1
-                        && !format_features.flags.contains(Tfff::MULTISAMPLE)
+                        && !format_features.flags.contains(Tfff::MULTISAMPLE_X4)
                     {
                         break Some(pipeline::ColorStateError::FormatNotMultisampled(cs.format));
                     }
@@ -2697,7 +2711,8 @@ impl<A: HalApi> Device<A> {
                         ds.format,
                     ));
                 }
-                if desc.multisample.count > 1 && !format_features.flags.contains(Tfff::MULTISAMPLE)
+                if desc.multisample.count > 1
+                    && !format_features.flags.contains(Tfff::MULTISAMPLE_X4)
                 {
                     break Some(pipeline::DepthStencilStateError::FormatNotMultisampled(
                         ds.format,

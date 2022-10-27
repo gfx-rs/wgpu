@@ -665,10 +665,10 @@ impl crate::Adapter<super::Api> for super::Adapter {
         let empty = Tfc::empty();
         let base = Tfc::COPY_SRC | Tfc::COPY_DST;
         let unfilterable = base | Tfc::SAMPLED;
-        let depth = base | Tfc::SAMPLED | Tfc::MULTISAMPLE | Tfc::DEPTH_STENCIL_ATTACHMENT;
+        let depth = base | Tfc::SAMPLED | Tfc::MULTISAMPLE_X4 | Tfc::DEPTH_STENCIL_ATTACHMENT;
         let filterable = unfilterable | Tfc::SAMPLED_LINEAR;
         let renderable =
-            unfilterable | Tfc::COLOR_ATTACHMENT | Tfc::MULTISAMPLE | Tfc::MULTISAMPLE_RESOLVE;
+            unfilterable | Tfc::COLOR_ATTACHMENT | Tfc::MULTISAMPLE_X4 | Tfc::MULTISAMPLE_RESOLVE;
         let filterable_renderable = filterable | renderable | Tfc::COLOR_ATTACHMENT_BLEND;
         let storage = base | Tfc::STORAGE | Tfc::STORAGE_READ_WRITE;
 
@@ -783,13 +783,6 @@ impl crate::Adapter<super::Api> for super::Adapter {
                 channel: AstcChannel::Hdr,
             } => astc_hdr_features,
         }
-    }
-
-    unsafe fn texture_format_sample_count(
-        &self,
-        _format: wgt::TextureFormat,
-    ) -> wgt::TextureFormatSampleCountFlags {
-        wgt::TextureFormatSampleCountFlags::_1 | wgt::TextureFormatSampleCountFlags::_4
     }
 
     unsafe fn surface_capabilities(

@@ -230,7 +230,7 @@ mod inner {
             }
         }
 
-        println!("\tTexture Format Features:      ┌──────────┬──────────┬──────────Allowed┬Usages───────────┬───────────────────┐ ┌────────────┬─────────────┬──────────────Feature┬Flags───────────────┬─────────────────┬──────────┬Sample─Flags─");
+        println!("\tTexture Format Features:      ┌──────────┬──────────┬──────────Allowed┬Usages───────────┬───────────────────┐ ┌────────────┬────────────────┬──────────────Feature┬Flags──────┬─────────────────────┬────────────────────┬─");
         for format in TEXTURE_FORMAT_LIST {
             let features = adapter.get_texture_format_features(format);
             let format_name = match format {
@@ -272,25 +272,9 @@ mod inner {
                 }
             }
 
-            for i in 0..(size_of::<wgpu::TextureFormatSampleCountFlags>()*8) {
-                let bit = wgpu::TextureFormatSampleCountFlags::from_bits(1 << i);
-                if let Some(bit) = bit {
-                    if i == 0 {
-                         print!("│");
-                    }
-                    if features.sample_count.contains(bit) {
-                        print!("{:?}," , bit.bits());
-                    }
-                    else {
-                        let length = format!("{:?},",bit.bits()).len();
-                        print!("{}", " ".repeat(length))
-                    }
-                }
-            }
-
             println!(" │");
         }
-        println!("\t                              └──────────┴──────────┴─────────────────┴─────────────────┴───────────────────┘ └────────────┴─────────────┴─────────────────────┴────────────────────┴─────────────────┘");
+        println!("\t                              └──────────┴──────────┴─────────────────┴─────────────────┴───────────────────┘ └────────────┴────────────────┴────────────────┴────────────────┴─────────────────────┘");
     }
 
     pub fn main() {

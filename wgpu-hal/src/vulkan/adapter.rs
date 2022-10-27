@@ -1428,20 +1428,9 @@ impl crate::Adapter<super::Api> for super::Adapter {
             ),
         );
         // Vulkan is very permissive about MSAA
-        flags.set(
-            Tfc::MULTISAMPLE | Tfc::MULTISAMPLE_RESOLVE,
-            !format.describe().is_compressed(),
-        );
-        flags
-    }
+        flags.set(Tfc::MULTISAMPLE_RESOLVE, !format.describe().is_compressed());
 
-    unsafe fn texture_format_sample_count(
-        &self,
-        format: wgt::TextureFormat,
-    ) -> wgt::TextureFormatSampleCountFlags {
-        use wgt::TextureFormatSampleCountFlags as Tfsc;
-        let mut flags = Tfsc::empty();
-
+        // get the supported sample counts
         let format_aspect = crate::FormatAspects::from(format);
         let limits = self.phd_capabilities.properties.limits;
 
@@ -1462,20 +1451,16 @@ impl crate::Adapter<super::Api> for super::Adapter {
         };
 
         flags.set(
-            Tfsc::_1,
-            sample_flags.contains(vk::SampleCountFlags::TYPE_1),
-        );
-        flags.set(
-            Tfsc::_2,
+            Tfc::MULTISAMPLE_X2,
             sample_flags.contains(vk::SampleCountFlags::TYPE_2),
         );
         flags.set(
-            Tfsc::_4,
+            Tfc::MULTISAMPLE_X4,
             sample_flags.contains(vk::SampleCountFlags::TYPE_4),
         );
 
         flags.set(
-            Tfsc::_8,
+            Tfc::MULTISAMPLE_X8,
             sample_flags.contains(vk::SampleCountFlags::TYPE_8),
         );
 

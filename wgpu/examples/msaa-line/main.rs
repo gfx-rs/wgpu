@@ -130,21 +130,21 @@ impl framework::Example for Example {
     ) -> Self {
         log::info!("Press left/right arrow keys to change sample_count.");
 
-        let sample_flags = _adapter
-            .get_texture_format_features(config.format)
-            .sample_count;
+        let sample_flags = _adapter.get_texture_format_features(config.format).flags;
+
+        log::info!("sample_flags :{:?}", sample_flags);
 
         let max_sample_count = {
-            if sample_flags.contains(wgpu::TextureFormatSampleCountFlags::_8) {
-                wgpu::TextureFormatSampleCountFlags::_8.bits()
-            } else if sample_flags.contains(wgpu::TextureFormatSampleCountFlags::_4) {
-                wgpu::TextureFormatSampleCountFlags::_4.bits()
-            } else if sample_flags.contains(wgpu::TextureFormatSampleCountFlags::_2) {
-                wgpu::TextureFormatSampleCountFlags::_2.bits()
+            if sample_flags.contains(wgpu::TextureFormatFeatureFlags::MULTISAMPLE_X8) {
+                8
+            } else if sample_flags.contains(wgpu::TextureFormatFeatureFlags::MULTISAMPLE_X4) {
+                4
+            } else if sample_flags.contains(wgpu::TextureFormatFeatureFlags::MULTISAMPLE_X2) {
+                2
             } else {
-                wgpu::TextureFormatSampleCountFlags::_1.bits()
+                1
             }
-        } as u32;
+        };
 
         let sample_count = max_sample_count;
 

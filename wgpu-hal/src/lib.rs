@@ -228,12 +228,6 @@ pub trait Adapter<A: Api>: Send + Sync {
         format: wgt::TextureFormat,
     ) -> TextureFormatCapabilities;
 
-    /// Returns the set of supported sample count for a texture format.
-    unsafe fn texture_format_sample_count(
-        &self,
-        format: wgt::TextureFormat,
-    ) -> wgt::TextureFormatSampleCountFlags;
-
     /// Returns the capabilities of working with a specified surface.
     ///
     /// `None` means presentation is not supported for it.
@@ -588,15 +582,20 @@ bitflags!(
         /// Format can be used as depth-stencil and input attachment.
         const DEPTH_STENCIL_ATTACHMENT = 1 << 8;
 
-        /// Format can be multisampled.
-        const MULTISAMPLE = 1 << 9;
+        /// Format can be multisampled by x2.
+        const MULTISAMPLE_X2   = 1 << 9;
+        /// Format can be multisampled by x4.
+        const MULTISAMPLE_X4   = 1 << 10;
+        /// Format can be multisampled by x8.
+        const MULTISAMPLE_X8   = 1 << 11;
+
         /// Format can be used for render pass resolve targets.
-        const MULTISAMPLE_RESOLVE = 1 << 10;
+        const MULTISAMPLE_RESOLVE = 1 << 12;
 
         /// Format can be copied from.
-        const COPY_SRC = 1 << 11;
+        const COPY_SRC = 1 << 13;
         /// Format can be copied to.
-        const COPY_DST = 1 << 12;
+        const COPY_DST = 1 << 14;
     }
 );
 

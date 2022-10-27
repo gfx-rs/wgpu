@@ -230,7 +230,6 @@ impl<A: HalApi> Adapter<A> {
         use hal::TextureFormatCapabilities as Tfc;
 
         let caps = unsafe { self.raw.adapter.texture_format_capabilities(format) };
-        let sample_count = unsafe { self.raw.adapter.texture_format_sample_count(format) };
         let mut allowed_usages = wgt::TextureUsages::empty();
 
         allowed_usages.set(wgt::TextureUsages::COPY_SRC, caps.contains(Tfc::COPY_SRC));
@@ -269,9 +268,18 @@ impl<A: HalApi> Adapter<A> {
         );
 
         flags.set(
-            wgt::TextureFormatFeatureFlags::MULTISAMPLE,
-            caps.contains(Tfc::MULTISAMPLE),
+            wgt::TextureFormatFeatureFlags::MULTISAMPLE_X2,
+            caps.contains(Tfc::MULTISAMPLE_X2),
         );
+        flags.set(
+            wgt::TextureFormatFeatureFlags::MULTISAMPLE_X4,
+            caps.contains(Tfc::MULTISAMPLE_X4),
+        );
+        flags.set(
+            wgt::TextureFormatFeatureFlags::MULTISAMPLE_X8,
+            caps.contains(Tfc::MULTISAMPLE_X8),
+        );
+
         flags.set(
             wgt::TextureFormatFeatureFlags::MULTISAMPLE_RESOLVE,
             caps.contains(Tfc::MULTISAMPLE_RESOLVE),
@@ -280,7 +288,6 @@ impl<A: HalApi> Adapter<A> {
         wgt::TextureFormatFeatures {
             allowed_usages,
             flags,
-            sample_count,
         }
     }
 

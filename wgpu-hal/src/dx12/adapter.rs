@@ -447,28 +447,11 @@ impl crate::Adapter<super::Api> for super::Adapter {
                 | d3d12::D3D12_FORMAT_SUPPORT1_DEPTH_STENCIL)
             != 0
             && data.Support1 & d3d12::D3D12_FORMAT_SUPPORT1_MULTISAMPLE_RENDERTARGET == 0;
-        caps.set(Tfc::MULTISAMPLE, !no_msaa_load && !no_msaa_target);
+
         caps.set(
             Tfc::MULTISAMPLE_RESOLVE,
             data.Support1 & d3d12::D3D12_FORMAT_SUPPORT1_MULTISAMPLE_RESOLVE != 0,
         );
-
-        caps
-    }
-
-    #[allow(trivial_casts)]
-    unsafe fn texture_format_sample_count(
-        &self,
-        format: wgt::TextureFormat,
-    ) -> wgt::TextureFormatSampleCountFlags {
-        use wgt::TextureFormatSampleCountFlags as Tfsc;
-
-        let raw_format = match auxil::dxgi::conv::map_texture_format_failable(format) {
-            Some(f) => f,
-            None => return Tfsc::empty(),
-        };
-
-        let mut flags = Tfsc::empty();
 
         let mut ms_levels = d3d12::D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS {
             Format: raw_format,
@@ -477,24 +460,25 @@ impl crate::Adapter<super::Api> for super::Adapter {
             NumQualityLevels: 0,
         };
 
-        for i in 0..(mem::size_of::<Tfsc>() * 8) {
-            let bit = Tfsc::from_bits(1 << i);
-            if bit.is_some() {
-                ms_levels.SampleCount = 1 << i;
+        let mut set_sample_count = |sc: u32, tfc: Tfc| {
+            ms_levels.SampleCount = sc;
 
-                if self.device.CheckFeatureSupport(
-                    d3d12::D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS,
-                    &mut ms_levels as *mut _ as *mut _,
-                    mem::size_of::<d3d12::D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS>() as _,
-                ) == winerror::S_OK
-                    && ms_levels.NumQualityLevels != 0
-                {
-                    flags.set(Tfsc::from_bits(ms_levels.SampleCount as u8).unwrap(), true);
-                }
+            if self.device.CheckFeatureSupport(
+                d3d12::D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS,
+                &mut ms_levels as *mut _ as *mut _,
+                mem::size_of::<d3d12::D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS>() as _,
+            ) == winerror::S_OK
+                && ms_levels.NumQualityLevels != 0
+            {
+                caps.set(tfc, !no_msaa_load && !no_msaa_target);
             }
-        }
+        };
 
-        flags
+        set_sample_count(2, Tfc::MULTISAMPLE_X2);
+        set_sample_count(4, Tfc::MULTISAMPLE_X4);
+        set_sample_count(8, Tfc::MULTISAMPLE_X8);
+
+        caps
     }
 
     unsafe fn surface_capabilities(

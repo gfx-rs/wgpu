@@ -1629,42 +1629,28 @@ bitflags::bitflags! {
         /// If not present, the texture can't be sampled with a filtering sampler.
         /// This may overwrite TextureSampleType::Float.filterable
         const FILTERABLE = 1 << 0;
-        /// Allows [`TextureDescriptor::sample_count`] greater than `1`.
-        const MULTISAMPLE = 1 << 1;
+        /// Allows [`TextureDescriptor::sample_count`] to be `2`.
+        const MULTISAMPLE_X2 = 1 << 1;
+          /// Allows [`TextureDescriptor::sample_count`] to be `4`.
+        const MULTISAMPLE_X4 = 1 << 2 ;
+          /// Allows [`TextureDescriptor::sample_count`] to be `8`.
+        const MULTISAMPLE_X8 = 1 << 3 ;
         /// Allows a texture of this format to back a view passed as `resolve_target`
         /// to a render pass for an automatic driver-implemented resolve.
-        const MULTISAMPLE_RESOLVE = 1 << 2;
+        const MULTISAMPLE_RESOLVE = 1 << 4;
         /// When used as a STORAGE texture, then a texture with this format can be bound with
         /// [`StorageTextureAccess::ReadOnly`] or [`StorageTextureAccess::ReadWrite`].
-        const STORAGE_READ_WRITE = 1 << 3;
+        const STORAGE_READ_WRITE = 1 << 5;
         /// When used as a STORAGE texture, then a texture with this format can be written to with atomics.
         // TODO: No access flag exposed as of writing
-        const STORAGE_ATOMICS = 1 << 4;
+        const STORAGE_ATOMICS = 1 << 6;
         /// If not present, the texture can't be blended into the render target.
-        const BLENDABLE = 1 << 5;
+        const BLENDABLE = 1 << 7;
     }
 }
 
 #[cfg(feature = "bitflags_serde_shim")]
 bitflags_serde_shim::impl_serde_for_bitflags!(TextureFormatFeatureFlags);
-
-bitflags::bitflags! {
-    /// Texture format sample count flags.
-    #[repr(transparent)]
-    pub struct TextureFormatSampleCountFlags: u8 {
-        ///
-        const _1 = 1 << 0;
-        /// requires [`Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES`] to be enabled
-        const _2 = 1 << 1;
-        ///
-        const _4 = 1 << 2;
-        /// requires [`Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES`] to be enabled
-        const _8 = 1 << 3;
-    }
-}
-
-#[cfg(feature = "bitflags_serde_shim")]
-bitflags_serde_shim::impl_serde_for_bitflags!(TextureFormatSampleCountFlags);
 
 /// Features supported by a given texture format
 ///
@@ -1675,8 +1661,6 @@ pub struct TextureFormatFeatures {
     pub allowed_usages: TextureUsages,
     /// Additional property flags for the format.
     pub flags: TextureFormatFeatureFlags,
-    /// supported sample count
-    pub sample_count: TextureFormatSampleCountFlags,
 }
 
 /// Information about a texture format.
@@ -2329,9 +2313,9 @@ impl TextureFormat {
 
         // Multisampling
         let noaa = TextureFormatFeatureFlags::empty();
-        let msaa = TextureFormatFeatureFlags::MULTISAMPLE;
-        let msaa_resolve =
-            TextureFormatFeatureFlags::MULTISAMPLE | TextureFormatFeatureFlags::MULTISAMPLE_RESOLVE;
+        let msaa = TextureFormatFeatureFlags::MULTISAMPLE_X4;
+        let msaa_resolve = TextureFormatFeatureFlags::MULTISAMPLE_X4
+            | TextureFormatFeatureFlags::MULTISAMPLE_RESOLVE;
 
         // Flags
         let basic =
@@ -2482,7 +2466,6 @@ impl TextureFormat {
             guaranteed_format_features: TextureFormatFeatures {
                 allowed_usages,
                 flags,
-                sample_count: TextureFormatSampleCountFlags::_1 | TextureFormatSampleCountFlags::_4,
             },
         }
     }

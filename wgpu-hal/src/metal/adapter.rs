@@ -57,12 +57,12 @@ impl crate::Adapter<super::Api> for super::Adapter {
             }
         };
         let msaa_desktop_if = if pc.msaa_desktop {
-            Tfc::MULTISAMPLE
+            Tfc::MULTISAMPLE_X4
         } else {
             Tfc::empty()
         };
         let msaa_apple7x_if = if pc.msaa_desktop | pc.msaa_apple7 {
-            Tfc::MULTISAMPLE
+            Tfc::MULTISAMPLE_X4
         } else {
             Tfc::empty()
         };
@@ -90,7 +90,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
             | Tfc::STORAGE
             | Tfc::COLOR_ATTACHMENT
             | Tfc::COLOR_ATTACHMENT_BLEND
-            | Tfc::MULTISAMPLE
+            | Tfc::MULTISAMPLE_X4
             | Tfc::MULTISAMPLE_RESOLVE;
 
         let extra = match format {
@@ -110,7 +110,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
             | Tf::Rgba8Sint
             | Tf::Rgba16Uint
             | Tf::Rgba16Sint => {
-                read_write_tier2_if | Tfc::STORAGE | Tfc::COLOR_ATTACHMENT | Tfc::MULTISAMPLE
+                read_write_tier2_if | Tfc::STORAGE | Tfc::COLOR_ATTACHMENT | Tfc::MULTISAMPLE_X4
             }
             Tf::R16Unorm
             | Tf::R16Snorm
@@ -275,16 +275,8 @@ impl crate::Adapter<super::Api> for super::Adapter {
                 }
             }
         };
-
+        // self.shared.private_caps.sample_count_mask
         Tfc::COPY_SRC | Tfc::COPY_DST | Tfc::SAMPLED | extra
-    }
-
-    #[allow(trivial_casts)]
-    unsafe fn texture_format_sample_count(
-        &self,
-        _format: wgt::TextureFormat,
-    ) -> wgt::TextureFormatSampleCountFlags {
-        self.shared.private_caps.sample_count_mask
     }
 
     unsafe fn surface_capabilities(
@@ -497,13 +489,12 @@ impl super::PrivateCapabilities {
         version.is_mac = os_is_mac;
         let family_check = version.at_least((10, 15), (13, 0));
 
-        let mut sample_count_mask =
-            wgt::TextureFormatSampleCountFlags::_1 | wgt::TextureFormatSampleCountFlags::_4; // 1 and 4 samples are supported on all devices
+        let mut sample_count_mask = wgt::TextureFormatFeatureFlags::MULTISAMPLE_X4; // 1 and 4 samples are supported on all devices
         if device.supports_texture_sample_count(2) {
-            sample_count_mask |= wgt::TextureFormatSampleCountFlags::_2;
+            sample_count_mask |= wgt::TextureFormatFeatureFlags::MULTISAMPLE_X2;
         }
         if device.supports_texture_sample_count(8) {
-            sample_count_mask |= wgt::TextureFormatSampleCountFlags::_8;
+            sample_count_mask |= wgt::TextureFormatFeatureFlags::MULTISAMPLE_X8;
         }
 
         let rw_texture_tier = if version.at_least((10, 13), (11, 0)) {

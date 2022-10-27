@@ -184,9 +184,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     hal_usage: conv::map_texture_usage(config.usage, config.format.into()),
                     format_features: wgt::TextureFormatFeatures {
                         allowed_usages: wgt::TextureUsages::RENDER_ATTACHMENT,
-                        flags: wgt::TextureFormatFeatureFlags::MULTISAMPLE
+                        flags: wgt::TextureFormatFeatureFlags::MULTISAMPLE_X4
                             | wgt::TextureFormatFeatureFlags::MULTISAMPLE_RESOLVE,
-                        sample_count: wgt::TextureFormatSampleCountFlags::_1,
                     },
                     initialization_status: TextureInitTracker::new(1, 1),
                     full_range: track::TextureSelector {
