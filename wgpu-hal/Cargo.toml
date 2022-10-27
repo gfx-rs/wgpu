@@ -27,7 +27,7 @@ metal = ["naga/msl-out", "block", "foreign-types"]
 vulkan = ["naga/spv-out", "ash", "gpu-alloc", "gpu-descriptor", "libloading", "smallvec"]
 gles = ["naga/glsl-out", "glow", "egl", "libloading"]
 dx11 = ["naga/hlsl-out", "native", "libloading", "winapi/d3d11", "winapi/d3d11_1", "winapi/d3d11_2", "winapi/d3d11sdklayers", "winapi/dxgi1_6"]
-dx12 = ["naga/hlsl-out", "native", "bit-set", "range-alloc", "winapi/d3d12", "winapi/d3d12shader", "winapi/d3d12sdklayers", "winapi/dxgi1_6"]
+dx12 = ["naga/hlsl-out", "native", "bit-set", "range-alloc", "winapi/d3d12", "winapi/d3d12shader", "winapi/d3d12sdklayers", "winapi/dxgi1_6", "gpu-allocator"]
 renderdoc = ["libloading", "renderdoc-sys"]
 emscripten = ["gles"]
 
@@ -66,6 +66,7 @@ glow = { workspace = true, optional = true }
 
 # backend: Dx12
 bit-set = { workspace = true, optional = true }
+gpu-allocator = { version = "0.20",default_features = false, features = ["d3d12", "windows", "public-winapi"], optional = true }
 range-alloc = { workspace = true, optional = true }
 
 [dependencies.wgt]

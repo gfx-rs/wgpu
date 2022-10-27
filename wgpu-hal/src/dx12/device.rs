@@ -12,6 +12,11 @@ use winapi::{
     Interface,
 };
 
+use gpu_allocator::{
+    d3d12::{winapi_d3d12::D3D12_RESOURCE_DESC, AllocationCreateDesc, ToWinapi, ToWindows},
+    MemoryLocation,
+};
+
 // this has to match Naga's HLSL backend, and also needs to be null-terminated
 const NAGA_LOCATION_SEMANTIC: &[u8] = b"LOC\0";
 //TODO: find the exact value
@@ -24,6 +29,18 @@ impl super::Device {
         private_caps: super::PrivateCapabilities,
         library: &Arc<native::D3D12Lib>,
     ) -> Result<Self, crate::DeviceError> {
+        let mem_allocator = {
+            let device = raw.as_ptr();
+
+            match gpu_allocator::d3d12::Allocator::new(&gpu_allocator::d3d12::AllocatorCreateDesc {
+                device: device.as_windows().clone(),
+                debug_settings: Default::default(),
+            }) {
+                Ok(allocator) => allocator,
+                Err(e) => panic!("Failed to create d3d12 allocator, error: {}", e),
+            }
+        };
+
         let mut idle_fence = native::Fence::null();
         let hr = unsafe {
             profiling::scope!("ID3D12Device::CreateFence");
@@ -165,6 +182,7 @@ impl super::Device {
             #[cfg(feature = "renderdoc")]
             render_doc: Default::default(),
             null_rtv_handle,
+            mem_allocator: Mutex::new(mem_allocator),
         })
     }
 
@@ -339,7 +357,7 @@ impl crate::Device<super::Api> for super::Device {
             size = ((size - 1) | align_mask) + 1;
         }
 
-        let raw_desc = d3d12::D3D12_RESOURCE_DESC {
+        let raw_desc = D3D12_RESOURCE_DESC {
             Dimension: d3d12::D3D12_RESOURCE_DIMENSION_BUFFER,
             Alignment: 0,
             Width: size,
@@ -358,32 +376,49 @@ impl crate::Device<super::Api> for super::Device {
         let is_cpu_read = desc.usage.contains(crate::BufferUses::MAP_READ);
         let is_cpu_write = desc.usage.contains(crate::BufferUses::MAP_WRITE);
 
-        let heap_properties = d3d12::D3D12_HEAP_PROPERTIES {
-            Type: d3d12::D3D12_HEAP_TYPE_CUSTOM,
-            CPUPageProperty: if is_cpu_read {
-                d3d12::D3D12_CPU_PAGE_PROPERTY_WRITE_BACK
-            } else if is_cpu_write {
-                d3d12::D3D12_CPU_PAGE_PROPERTY_WRITE_COMBINE
-            } else {
-                d3d12::D3D12_CPU_PAGE_PROPERTY_NOT_AVAILABLE
-            },
-            MemoryPoolPreference: match self.private_caps.memory_architecture {
-                super::MemoryArchitecture::NonUnified if !is_cpu_read && !is_cpu_write => {
-                    d3d12::D3D12_MEMORY_POOL_L1
-                }
-                _ => d3d12::D3D12_MEMORY_POOL_L0,
-            },
-            CreationNodeMask: 0,
-            VisibleNodeMask: 0,
+        // let heap_properties = d3d12::D3D12_HEAP_PROPERTIES {
+        //     Type: d3d12::D3D12_HEAP_TYPE_CUSTOM,
+        //     CPUPageProperty: if is_cpu_read {
+        //         d3d12::D3D12_CPU_PAGE_PROPERTY_WRITE_BACK
+        //     } else if is_cpu_write {
+        //         d3d12::D3D12_CPU_PAGE_PROPERTY_WRITE_COMBINE
+        //     } else {
+        //         d3d12::D3D12_CPU_PAGE_PROPERTY_NOT_AVAILABLE
+        //     },
+        //     MemoryPoolPreference: match self.private_caps.memory_architecture {
+        //         super::MemoryArchitecture::NonUnified if !is_cpu_read && !is_cpu_write => {
+        //             d3d12::D3D12_MEMORY_POOL_L1
+        //         }
+        //         _ => d3d12::D3D12_MEMORY_POOL_L0,
+        //     },
+        //     CreationNodeMask: 0,
+        //     VisibleNodeMask: 0,
+        // };
+
+        // TODO: These are probably wrong?
+        let location = match (is_cpu_read, is_cpu_write) {
+            (true, true) => MemoryLocation::CpuToGpu,
+            (true, false) => MemoryLocation::GpuToCpu,
+            (false, true) => MemoryLocation::CpuToGpu,
+            (false, false) => MemoryLocation::GpuOnly,
         };
 
-        let hr = self.raw.CreateCommittedResource(
-            &heap_properties,
-            if self.private_caps.heap_create_not_zeroed {
-                D3D12_HEAP_FLAG_CREATE_NOT_ZEROED
-            } else {
-                d3d12::D3D12_HEAP_FLAG_NONE
-            },
+        let mut allocator = self.mem_allocator.lock();
+
+        let allocation_desc = AllocationCreateDesc::from_winapi_d3d12_resource_desc(
+            allocator.device().as_winapi(),
+            &raw_desc,
+            "Example allocation",
+            location,
+        );
+
+        let allocation = allocator.allocate(&allocation_desc).unwrap();
+
+        // println!("allocation size: {}, expected size: {}", allocation.size(), size);
+
+        let hr = self.raw.CreatePlacedResource(
+            allocation.heap().as_winapi() as *mut _,
+            allocation.offset(),
             &raw_desc,
             d3d12::D3D12_RESOURCE_STATE_COMMON,
             ptr::null(),
@@ -397,10 +432,20 @@ impl crate::Device<super::Api> for super::Device {
             resource.SetName(cwstr.as_ptr());
         }
 
-        Ok(super::Buffer { resource, size })
+        Ok(super::Buffer {
+            resource,
+            size,
+            allocation: Some(allocation),
+        })
     }
-    unsafe fn destroy_buffer(&self, buffer: super::Buffer) {
+    unsafe fn destroy_buffer(&self, mut buffer: super::Buffer) {
         buffer.resource.destroy();
+        if let Some(alloc) = buffer.allocation.take() {
+            match self.mem_allocator.lock().free(alloc) {
+                Ok(_) => (),
+                Err(e) => panic!("failed to destroy dx12 buffer, {}", e),
+            };
+        }
     }
     unsafe fn map_buffer(
         &self,

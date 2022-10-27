@@ -233,6 +233,7 @@ pub struct Device {
     #[cfg(feature = "renderdoc")]
     render_doc: crate::auxil::renderdoc::RenderDoc,
     null_rtv_handle: descriptor::Handle,
+    mem_allocator: Mutex<gpu_allocator::d3d12::Allocator>,
 }
 
 unsafe impl Send for Device {}
@@ -368,6 +369,7 @@ unsafe impl Sync for CommandBuffer {}
 pub struct Buffer {
     resource: native::Resource,
     size: wgt::BufferAddress,
+    allocation: Option<gpu_allocator::d3d12::Allocation>,
 }
 
 unsafe impl Send for Buffer {}
