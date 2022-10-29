@@ -229,6 +229,16 @@ impl super::Device {
             None => empty_str,
         };
 
+        let mut compile_flags = vec!["-Ges"]/* d3dcompiler::D3DCOMPILE_ENABLE_STRICTNESS */;
+        if self
+            .private_caps
+            .instance_flags
+            .contains(crate::InstanceFlags::DEBUG)
+        {
+            compile_flags.push("-Zi"); /* d3dcompiler::D3DCOMPILE_SKIP_OPTIMIZATION */
+            compile_flags.push("-Od"); /* d3dcompiler::D3DCOMPILE_DEBUG */
+        }
+
         let load_shader_fxc = || {
             let mut shader_data = native::Blob::null();
             let mut compile_flags = d3dcompiler::D3DCOMPILE_ENABLE_STRICTNESS;
@@ -299,7 +309,7 @@ impl super::Device {
             /*this is safe because `raw_ep` was converted from `String`*/
             raw_ep.to_str().unwrap(),
             &full_stage,
-            &vec![],
+            &compile_flags,
             &vec![],
         )) {
             Ok(dxil) => (Ok(super::ShaderDXIL::DXC(dxil)), log::Level::Info),
