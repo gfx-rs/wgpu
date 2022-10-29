@@ -537,6 +537,11 @@ pub struct ShaderModule {
     raw_name: Option<ffi::CString>,
 }
 
+enum ShaderDXIL {
+    DXC(Vec<u8>),
+    FXC(native::Blob),
+}
+
 pub struct RenderPipeline {
     raw: native::PipelineState,
     layout: PipelineLayoutShared,
