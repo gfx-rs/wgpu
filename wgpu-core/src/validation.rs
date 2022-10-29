@@ -236,7 +236,7 @@ pub enum StageError {
     #[error("shader module is invalid")]
     InvalidModule,
     #[error(
-        "shader entry point current workgroup size {current:?} of total {current_total} must be less or equal to {limit:?} and of total {total}"
+        "shader entry point's workgroup size {current:?} ({current_total} total invocations) must be less or equal to the per-dimension limit {limit:?} and the total invocation limit {total}"
     )]
     InvalidWorkgroupSize {
         current: [u32; 3],
