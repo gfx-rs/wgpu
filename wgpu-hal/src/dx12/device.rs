@@ -191,7 +191,7 @@ impl super::Device {
         stage: &crate::ProgrammableStage<super::Api>,
         layout: &super::PipelineLayout,
         naga_stage: naga::ShaderStage,
-    ) -> Result<native::Blob, crate::PipelineError> {
+    ) -> Result<super::ShaderDXIL, crate::PipelineError> {
         use naga::back::hlsl;
 
         let stage_bit = crate::auxil::map_naga_stage(naga_stage);
@@ -211,6 +211,7 @@ impl super::Device {
             naga_stage.to_hlsl_str(),
             layout.naga_options.shader_model.to_str()
         );
+
         let ep_index = module
             .entry_points
             .iter()
@@ -221,62 +222,135 @@ impl super::Device {
             .map(|name| ffi::CString::new(name.as_str()).unwrap())
             .map_err(|e| crate::PipelineError::Linkage(stage_bit, format!("{}", e)))?;
 
-        let mut shader_data = native::Blob::null();
-        let mut error = native::Blob::null();
-        let mut compile_flags = d3dcompiler::D3DCOMPILE_ENABLE_STRICTNESS;
-        if self
-            .private_caps
-            .instance_flags
-            .contains(crate::InstanceFlags::DEBUG)
-        {
-            compile_flags |=
-                d3dcompiler::D3DCOMPILE_DEBUG | d3dcompiler::D3DCOMPILE_SKIP_OPTIMIZATION;
-        }
-
+        let empty_str = "";
         let source_name = match stage.module.raw_name {
-            Some(ref cstr) => cstr.as_c_str().as_ptr(),
-            None => ptr::null(),
+            Some(ref cstr) => cstr.to_str().unwrap_or(empty_str),
+            None => empty_str,
         };
 
-        let hr = unsafe {
-            profiling::scope!("d3dcompiler::D3DCompile");
-            d3dcompiler::D3DCompile(
-                source.as_ptr() as *const _,
-                source.len(),
-                source_name,
-                ptr::null(),
-                ptr::null_mut(),
-                raw_ep.as_ptr(),
-                full_stage.as_ptr() as *const i8,
-                compile_flags,
-                0,
-                shader_data.mut_void() as *mut *mut _,
-                error.mut_void() as *mut *mut _,
-            )
-        };
+        let load_shader_fxc = || {
+            let mut shader_data = native::Blob::null();
+            let mut compile_flags = d3dcompiler::D3DCOMPILE_ENABLE_STRICTNESS;
 
-        let (result, log_level) = match hr.into_result() {
-            Ok(()) => (Ok(shader_data), log::Level::Info),
-            Err(e) => {
-                let mut full_msg = format!("D3DCompile error ({})", e);
-                if !error.is_null() {
-                    use std::fmt::Write as _;
-                    let message = unsafe {
-                        slice::from_raw_parts(
-                            error.GetBufferPointer() as *const u8,
-                            error.GetBufferSize(),
-                        )
-                    };
-                    let _ = write!(full_msg, ": {}", String::from_utf8_lossy(message));
-                    unsafe {
-                        error.destroy();
-                    }
-                }
-                (
-                    Err(crate::PipelineError::Linkage(stage_bit, full_msg)),
-                    log::Level::Warn,
-                )
+            if self
+                .private_caps
+                .instance_flags
+                .contains(crate::InstanceFlags::DEBUG)
+            {
+                compile_flags |=
+                    d3dcompiler::D3DCOMPILE_DEBUG | d3dcompiler::D3DCOMPILE_SKIP_OPTIMIZATION;
             }
+
+            let full_stage = format!(
+                "{}_{}\0",
+                naga_stage.to_hlsl_str(),
+                hlsl::ShaderModel::V5_1.to_str()
+            );
+            let mut error = native::Blob::null();
+
+            let hr = unsafe {
+                profiling::scope!("d3dcompiler::D3DCompile");
+                d3dcompiler::D3DCompile(
+                    source.as_ptr() as *const _,
+                    source.len(),
+                    source_name.as_ptr() as *const i8,
+                    ptr::null(),
+                    ptr::null_mut(),
+                    raw_ep.as_ptr(),
+                    full_stage.as_ptr() as *const i8,
+                    compile_flags,
+                    0,
+                    shader_data.mut_void() as *mut *mut _,
+                    error.mut_void() as *mut *mut _,
+                )
+            };
+
+            match hr.into_result() {
+                Ok(()) => (Ok(super::ShaderDXIL::FXC(shader_data)), log::Level::Info),
+                Err(e) => {
+                    let mut full_msg = format!("D3DCompile error ({})", e);
+                    if !error.is_null() {
+                        use std::fmt::Write as _;
+                        let message = unsafe {
+                            slice::from_raw_parts(
+                                error.GetBufferPointer() as *const u8,
+                                error.GetBufferSize(),
+                            )
+                        };
+                        let _ = write!(full_msg, ": {}", String::from_utf8_lossy(message));
+                        unsafe {
+                            error.destroy();
+                        }
+                    }
+                    (
+                        Err(crate::PipelineError::Linkage(stage_bit, full_msg)),
+                        log::Level::Warn,
+                    )
+                }
+            }
+        };
+
+        // hassle_rs doesn't check for `dxil.dll` if you only call `hassle_rs::compile_hlsl` but calling hassle_rs::Dxil::new will .
+        profiling::scope!("hassle_rs::compile_hlsl");
+        let (result, log_level) = match hassle_rs::Dxil::new(None).and(hassle_rs::compile_hlsl(
+            source_name,
+            &source,
+            /*this is safe because `raw_ep` was converted from `String`*/
+            raw_ep.to_str().unwrap(),
+            &full_stage,
+            &vec![],
+            &vec![],
+        )) {
+            Ok(dxil) => (Ok(super::ShaderDXIL::DXC(dxil)), log::Level::Info),
+            Err(err) => match err {
+                hassle_rs::HassleError::Win32Error(err) => {
+                    let err_str = i32::into_result(err.0).unwrap_err();
+                    (
+                        Err(crate::PipelineError::Linkage(
+                            stage_bit,
+                            format!(
+                                "hassle_rs::compile_hlsl failed with error:({}) :{}",
+                                err, err_str
+                            ),
+                        )),
+                        log::Level::Warn,
+                    )
+                }
+                hassle_rs::HassleError::WindowsOnly(err) => (
+                    Err(crate::PipelineError::Linkage(
+                        stage_bit,
+                        format!("hassle_rs::compile_hlsl failed with error: {}", err),
+                    )),
+                    log::Level::Warn,
+                ),
+
+                hassle_rs::HassleError::LoadLibraryError { filename, inner: _ } => {
+                    log::warn!("{:?} was not found ,falling back to FXC ,in order to use the new hlsl compiler `DXC`,`dxcompiler.dll` and `dxil.dll` should be included in the current execution environment" ,filename );
+                    load_shader_fxc()
+                }
+                hassle_rs::HassleError::LibLoadingError(err) => (
+                    Err(crate::PipelineError::Linkage(
+                        stage_bit,
+                        format!("hassle_rs::compile_hlsl failed with error: {}", err),
+                    )),
+                    log::Level::Warn,
+                ),
+
+                hassle_rs::HassleError::CompileError(err) => (
+                    Err(crate::PipelineError::Linkage(
+                        stage_bit,
+                        format!("hassle_rs::compile_hlsl failed with error: {}", err),
+                    )),
+                    log::Level::Warn,
+                ),
+                hassle_rs::HassleError::ValidationError(err) => (
+                    Err(crate::PipelineError::Linkage(
+                        stage_bit,
+                        format!("hassle_rs::compile_hlsl failed with error: {}", err),
+                    )),
+                    log::Level::Warn,
+                ),
+            },
         };
 
         log::log!(
@@ -1092,7 +1166,7 @@ impl crate::Device<super::Api> for super::Device {
             },
             bind_group_infos,
             naga_options: hlsl::Options {
-                shader_model: hlsl::ShaderModel::V5_1,
+                shader_model: hlsl::ShaderModel::V6_0,
                 binding_map,
                 fake_missing_bindings: false,
                 special_constants_binding,
@@ -1298,7 +1372,7 @@ impl crate::Device<super::Api> for super::Device {
                 shader_stages |= wgt::ShaderStages::FRAGMENT;
                 self.load_shader(stage, desc.layout, naga::ShaderStage::Fragment)?
             }
-            None => native::Blob::null(),
+            None => crate::dx12::ShaderDXIL::DXC(vec![]),
         };
 
         let mut vertex_strides = [None; crate::MAX_VERTEX_BUFFERS];
@@ -1371,11 +1445,19 @@ impl crate::Device<super::Api> for super::Device {
 
         let raw_desc = d3d12::D3D12_GRAPHICS_PIPELINE_STATE_DESC {
             pRootSignature: desc.layout.shared.signature.as_mut_ptr(),
-            VS: *native::Shader::from_blob(blob_vs),
-            PS: if blob_fs.is_null() {
-                *native::Shader::null()
-            } else {
-                *native::Shader::from_blob(blob_fs)
+            VS: match blob_vs {
+                super::ShaderDXIL::DXC(ref blob_vs) => *native::Shader::from_raw(&blob_vs),
+                super::ShaderDXIL::FXC(blob_vs) => *native::Shader::from_blob(blob_vs),
+            },
+            PS: match blob_fs {
+                super::ShaderDXIL::DXC(ref blob_fs) => *native::Shader::from_raw(&blob_fs),
+                super::ShaderDXIL::FXC(blob_fs) => {
+                    if blob_fs.is_null() {
+                        *native::Shader::null()
+                    } else {
+                        *native::Shader::from_blob(blob_fs)
+                    }
+                }
             },
             GS: *native::Shader::null(),
             DS: *native::Shader::null(),
@@ -1448,9 +1530,11 @@ impl crate::Device<super::Api> for super::Device {
             )
         };
 
-        blob_vs.destroy();
-        if !blob_fs.is_null() {
-            blob_fs.destroy();
+        if let super::ShaderDXIL::FXC(vs_fxc) = &blob_vs {
+            vs_fxc.destroy();
+            if !vs_fxc.is_null() {
+                vs_fxc.destroy();
+            }
         }
 
         hr.into_result()
@@ -1482,14 +1566,19 @@ impl crate::Device<super::Api> for super::Device {
             profiling::scope!("ID3D12Device::CreateComputePipelineState");
             self.raw.create_compute_pipeline_state(
                 desc.layout.shared.signature,
-                native::Shader::from_blob(blob_cs),
+                match blob_cs {
+                    crate::dx12::ShaderDXIL::DXC(ref blob_cs) => native::Shader::from_raw(&blob_cs),
+                    crate::dx12::ShaderDXIL::FXC(blob_cs) => native::Shader::from_blob(blob_cs),
+                },
                 0,
                 native::CachedPSO::null(),
                 native::PipelineStateFlags::empty(),
             )
         };
 
-        blob_cs.destroy();
+        if let super::ShaderDXIL::FXC(cs_fxc) = blob_cs {
+            cs_fxc.destroy();
+        }
 
         let raw = pair.into_result().map_err(|err| {
             crate::PipelineError::Linkage(wgt::ShaderStages::COMPUTE, err.into_owned())
