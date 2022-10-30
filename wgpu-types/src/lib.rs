@@ -317,7 +317,9 @@ bitflags::bitflags! {
         /// the consequences.
         ///
         /// Supported platforms:
-        /// - All
+        /// - Vulkan
+        /// - DX12
+        /// - Metal
         ///
         /// This is a native only feature.
         const MAPPABLE_PRIMARY_BUFFERS = 1 << 16;
