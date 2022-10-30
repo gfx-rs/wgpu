@@ -177,7 +177,7 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
         backend_bits,
         None,
     ))
-    .expect("could not find sutable adapter on the system");
+    .expect("could not find suitable adapter on the system");
 
     let adapter_info = adapter.get_info();
     let adapter_lowercase_name = adapter_info.name.to_lowercase();
