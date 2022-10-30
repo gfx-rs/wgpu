@@ -778,7 +778,6 @@ impl super::PrivateCapabilities {
         features.set(F::TEXTURE_COMPRESSION_ETC2, self.format_eac_etc);
 
         features.set(F::DEPTH_CLIP_CONTROL, self.supports_depth_clip_control);
-        features.set(F::DEPTH24PLUS_STENCIL8, self.format_depth24_stencil8);
 
         features.set(
             F::TEXTURE_BINDING_ARRAY
