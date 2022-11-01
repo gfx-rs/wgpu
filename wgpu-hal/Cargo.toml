@@ -66,7 +66,7 @@ glow = { workspace = true, optional = true }
 
 # backend: Dx12
 bit-set = { workspace = true, optional = true }
-gpu-allocator = { version = "0.20",default_features = false, features = ["d3d12", "windows", "public-winapi"], optional = true }
+gpu-allocator = { workspace = true, optional = true }
 range-alloc = { workspace = true, optional = true }
 
 [dependencies.wgt]
