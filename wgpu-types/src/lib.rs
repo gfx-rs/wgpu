@@ -1088,10 +1088,12 @@ bitflags::bitflags! {
         /// WebGL doesn't support this.
         const BUFFER_BINDINGS_NOT_16_BYTE_ALIGNED = 1 << 15;
 
-        /// Supports buffers that have both [`BufferUsages::INDEX`] and [`BufferUsages::VERTEX`] set.
+        /// Supports buffers to combine [`BufferUsages::INDEX`] with usages other than [`BufferUsages::COPY_DST`] and [`BufferUsages::COPY_SRC`].
+        /// Furthermore, in absence of this feature it is not allowed to copy index buffers from/to buffers with usages other than
+        /// [`BufferUsages::INDEX`]/[`BufferUsages::COPY_DST`]/[`BufferUsages::COPY_SRC`].
         ///
         /// WebGL doesn't support this.
-        const BUFFER_USAGE_COMBINE_VERTEX_INDEX = 1 << 16;
+        const UNRESTRICTED_INDEX_BUFFER = 1 << 16;
     }
 }
 
