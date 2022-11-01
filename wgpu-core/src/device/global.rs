@@ -1916,36 +1916,38 @@ impl Global {
             }
 
             if !caps.present_modes.contains(&config.present_mode) {
-                let new_mode = 'error: {
-                    // Automatic present mode checks.
-                    //
-                    // The "Automatic" modes are never supported by the backends.
-                    let fallbacks = match config.present_mode {
-                        wgt::PresentMode::AutoVsync => {
-                            &[wgt::PresentMode::FifoRelaxed, wgt::PresentMode::Fifo][..]
-                        }
-                        // Always end in FIFO to make sure it's always supported
-                        wgt::PresentMode::AutoNoVsync => &[
-                            wgt::PresentMode::Immediate,
-                            wgt::PresentMode::Mailbox,
-                            wgt::PresentMode::Fifo,
-                        ][..],
-                        _ => {
-                            return Err(E::UnsupportedPresentMode {
-                                requested: config.present_mode,
-                                available: caps.present_modes.clone(),
-                            });
-                        }
-                    };
-
-                    for &fallback in fallbacks {
-                        if caps.present_modes.contains(&fallback) {
-                            break 'error fallback;
-                        }
+                // Automatic present mode checks.
+                //
+                // The "Automatic" modes are never supported by the backends.
+                let fallbacks = match config.present_mode {
+                    wgt::PresentMode::AutoVsync => {
+                        &[wgt::PresentMode::FifoRelaxed, wgt::PresentMode::Fifo][..]
                     }
-
-                    unreachable!("Fallback system failed to choose present mode. This is a bug. Mode: {:?}, Options: {:?}", config.present_mode, &caps.present_modes);
+                    // Always end in FIFO to make sure it's always supported
+                    wgt::PresentMode::AutoNoVsync => &[
+                        wgt::PresentMode::Immediate,
+                        wgt::PresentMode::Mailbox,
+                        wgt::PresentMode::Fifo,
+                    ][..],
+                    _ => {
+                        return Err(E::UnsupportedPresentMode {
+                            requested: config.present_mode,
+                            available: caps.present_modes.clone(),
+                        });
+                    }
                 };
+
+                let new_mode = fallbacks
+                    .iter()
+                    .copied()
+                    .find(|fallback| caps.present_modes.contains(fallback))
+                    .unwrap_or_else(|| {
+                        unreachable!(
+                            "Fallback system failed to choose present mode. \
+                            This is a bug. Mode: {:?}, Options: {:?}",
+                            config.present_mode, &caps.present_modes
+                        );
+                    });
 
                 api_log!(
                     "Automatically choosing presentation mode by rule {:?}. Chose {new_mode:?}",
