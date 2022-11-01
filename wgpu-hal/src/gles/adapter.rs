@@ -312,6 +312,12 @@ impl super::Adapter {
             wgt::DownlevelFlags::BUFFER_BINDINGS_NOT_16_BYTE_ALIGNED,
             !(cfg!(target_arch = "wasm32") || is_angle),
         );
+        // https://registry.khronos.org/webgl/specs/latest/1.0/#5.14.5
+        // "A given WebGLBuffer object may only be bound to one of the ARRAY_BUFFER or ELEMENT_ARRAY_BUFFER target in its lifetime."
+        downlevel_flags.set(
+            wgt::DownlevelFlags::BUFFER_USAGE_COMBINE_VERTEX_INDEX,
+            !cfg!(target_arch = "wasm32"),
+        );
 
         let mut features = wgt::Features::empty()
             | wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES

@@ -590,6 +590,13 @@ impl<A: HalApi> Device<A> {
             });
         }
 
+        if desc
+            .usage
+            .contains(wgt::BufferUsages::VERTEX | wgt::BufferUsages::INDEX)
+        {
+            self.require_downlevel_flags(wgt::DownlevelFlags::BUFFER_USAGE_COMBINE_VERTEX_INDEX)?;
+        }
+
         let mut usage = conv::map_buffer_usage(desc.usage);
 
         if desc.usage.is_empty() {

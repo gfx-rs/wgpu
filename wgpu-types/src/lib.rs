@@ -1087,6 +1087,11 @@ bitflags::bitflags! {
         ///
         /// WebGL doesn't support this.
         const BUFFER_BINDINGS_NOT_16_BYTE_ALIGNED = 1 << 15;
+
+        /// Supports buffers that have both [`BufferUsages::INDEX`] and [`BufferUsages::VERTEX`] set.
+        ///
+        /// WebGL doesn't support this.
+        const BUFFER_USAGE_COMBINE_VERTEX_INDEX = 1 << 16;
     }
 }
 
