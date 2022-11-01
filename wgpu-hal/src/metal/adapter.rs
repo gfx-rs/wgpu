@@ -56,16 +56,8 @@ impl crate::Adapter<super::Api> for super::Adapter {
                 (Tfc::STORAGE_READ_WRITE, Tfc::STORAGE_READ_WRITE)
             }
         };
-        let msaa_desktop_if = if pc.msaa_desktop {
-            Tfc::MULTISAMPLE_X4
-        } else {
-            Tfc::empty()
-        };
-        let msaa_apple7x_if = if pc.msaa_desktop | pc.msaa_apple7 {
-            Tfc::MULTISAMPLE_X4
-        } else {
-            Tfc::empty()
-        };
+        let msaa_count = pc.sample_count_mask;
+
         let msaa_resolve_desktop_if = if pc.msaa_desktop {
             Tfc::MULTISAMPLE_RESOLVE
         } else {
@@ -128,7 +120,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
             Tf::Rg8Unorm | Tf::Rg16Float | Tf::Bgra8Unorm => all_caps,
             Tf::Rg8Uint | Tf::Rg8Sint => Tfc::STORAGE | Tfc::COLOR_ATTACHMENT | Tfc::MULTISAMPLE_X4,
             Tf::R32Uint | Tf::R32Sint => {
-                read_write_tier1_if | Tfc::STORAGE | Tfc::COLOR_ATTACHMENT | msaa_desktop_if
+                read_write_tier1_if | Tfc::STORAGE | Tfc::COLOR_ATTACHMENT | msaa_count
             }
             Tf::R32Float => {
                 let flags = if pc.format_r32float_all {
@@ -159,19 +151,16 @@ impl crate::Adapter<super::Api> for super::Adapter {
                 flags.set(Tfc::STORAGE, pc.format_rg11b10_all);
                 flags
             }
-            Tf::Rg32Uint | Tf::Rg32Sint => Tfc::COLOR_ATTACHMENT | Tfc::STORAGE | msaa_apple7x_if,
+            Tf::Rg32Uint | Tf::Rg32Sint => Tfc::COLOR_ATTACHMENT | Tfc::STORAGE | msaa_count,
             Tf::Rg32Float => {
                 if pc.format_rg32float_all {
                     all_caps
                 } else {
-                    Tfc::STORAGE
-                        | Tfc::COLOR_ATTACHMENT
-                        | Tfc::COLOR_ATTACHMENT_BLEND
-                        | msaa_apple7x_if
+                    Tfc::STORAGE | Tfc::COLOR_ATTACHMENT | Tfc::COLOR_ATTACHMENT_BLEND | msaa_count
                 }
             }
             Tf::Rgba32Uint | Tf::Rgba32Sint => {
-                read_write_tier2_if | Tfc::STORAGE | Tfc::COLOR_ATTACHMENT | msaa_desktop_if
+                read_write_tier2_if | Tfc::STORAGE | Tfc::COLOR_ATTACHMENT | msaa_count
             }
             Tf::Rgba32Float => {
                 let mut flags = read_write_tier2_if | Tfc::STORAGE | Tfc::COLOR_ATTACHMENT;

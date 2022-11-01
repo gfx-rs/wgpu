@@ -465,7 +465,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
 
             if self.device.CheckFeatureSupport(
                 d3d12::D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS,
-                &mut ms_levels as *mut _ as *mut _,
+                <*mut _>::cast(&mut ms_levels),
                 mem::size_of::<d3d12::D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS>() as _,
             ) == winerror::S_OK
                 && ms_levels.NumQualityLevels != 0

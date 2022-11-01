@@ -1649,6 +1649,24 @@ bitflags::bitflags! {
     }
 }
 
+impl TextureFormatFeatureFlags {
+    /// Sample count supported by a given texture format.
+    ///
+    /// returns `true` if `count` is a supported sample count.
+    pub fn sample_count_supported(&self, count: u32) -> bool {
+        use TextureFormatFeatureFlags as tfsc;
+
+        if count == 1
+            || (count == 2 && self.contains(tfsc::MULTISAMPLE_X2))
+            || (count == 4 && self.contains(tfsc::MULTISAMPLE_X4))
+            || (count == 8 && self.contains(tfsc::MULTISAMPLE_X8))
+        {
+            return true;
+        }
+        false
+    }
+}
+
 #[cfg(feature = "bitflags_serde_shim")]
 bitflags_serde_shim::impl_serde_for_bitflags!(TextureFormatFeatureFlags);
 
