@@ -161,7 +161,7 @@ impl super::Adapter {
             } else {
                 super::MemoryArchitecture::NonUnified
             },
-            heap_create_not_zeroed: false, //TODO: winapi support for Options7
+            _heap_create_not_zeroed: false, //TODO: winapi support for Options7
         };
 
         // Theoretically vram limited, but in practice 2^20 is the limit

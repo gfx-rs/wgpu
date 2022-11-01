@@ -152,7 +152,7 @@ struct PrivateCapabilities {
     #[allow(unused)]
     heterogeneous_resource_heaps: bool,
     memory_architecture: MemoryArchitecture,
-    heap_create_not_zeroed: bool,
+    _heap_create_not_zeroed: bool,
 }
 
 #[derive(Default)]
@@ -827,7 +827,9 @@ impl From<gpu_allocator::AllocationError> for crate::DeviceError {
             gpu_allocator::AllocationError::NoCompatibleMemoryTypeFound => todo!(),
             gpu_allocator::AllocationError::InvalidAllocationCreateDesc => todo!(),
             gpu_allocator::AllocationError::InvalidAllocatorCreateDesc(_) => todo!(),
-            gpu_allocator::AllocationError::Internal(e) => panic!("gpu-allocator internal error: {}", e),
+            gpu_allocator::AllocationError::Internal(e) => {
+                panic!("gpu-allocator internal error: {}", e)
+            }
         }
     }
 }

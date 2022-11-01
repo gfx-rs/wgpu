@@ -19,8 +19,9 @@ use gpu_allocator::{
 
 // this has to match Naga's HLSL backend, and also needs to be null-terminated
 const NAGA_LOCATION_SEMANTIC: &[u8] = b"LOC\0";
-//TODO: find the exact value
-const D3D12_HEAP_FLAG_CREATE_NOT_ZEROED: u32 = d3d12::D3D12_HEAP_FLAG_NONE;
+// TODO: find the exact value
+// TODO: figure out if this is even needed?
+const _D3D12_HEAP_FLAG_CREATE_NOT_ZEROED: u32 = d3d12::D3D12_HEAP_FLAG_NONE;
 
 impl super::Device {
     pub(super) fn new(
@@ -433,11 +434,11 @@ impl crate::Device<super::Api> for super::Device {
         range: crate::MemoryRange,
     ) -> Result<crate::BufferMapping, crate::DeviceError> {
         let mut ptr = ptr::null_mut();
-        // TODO: 0 for subresource should be fine here until unmap buffer is subresource aware?
+        // TODO: 0 for subresource should be fine here until map and unmap buffer is subresource aware?
         let hr = (*buffer.resource).Map(0, ptr::null(), &mut ptr);
         hr.into_device_result("Map buffer")?;
         Ok(crate::BufferMapping {
-            ptr: ptr::NonNull::new(ptr.offset(range.start as isize) as *mut _).unwrap(),
+            ptr: ptr::NonNull::new(ptr.offset(range.start as isize).cast::<u8>()).unwrap(),
             //TODO: double-check this. Documentation is a bit misleading -
             // it implies that Map/Unmap is needed to invalidate/flush memory.
             is_coherent: true,
