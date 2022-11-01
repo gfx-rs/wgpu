@@ -411,10 +411,7 @@ impl crate::Device<super::Api> for super::Device {
             "Example allocation",
             location,
         );
-
-        let allocation = allocator.allocate(&allocation_desc).unwrap();
-
-        // println!("allocation size: {}, expected size: {}", allocation.size(), size);
+        let allocation = allocator.allocate(&allocation_desc)?;
 
         let hr = self.raw.CreatePlacedResource(
             allocation.heap().as_winapi() as *mut _,

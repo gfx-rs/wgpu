@@ -816,3 +816,16 @@ impl crate::Queue<Api> for Queue {
         (1_000_000_000.0 / frequency as f64) as f32
     }
 }
+
+impl From<gpu_allocator::AllocationError> for crate::DeviceError {
+    fn from(result: gpu_allocator::AllocationError) -> Self {
+        match result {
+            gpu_allocator::AllocationError::OutOfMemory => Self::OutOfMemory,
+            gpu_allocator::AllocationError::FailedToMap(_) => todo!(),
+            gpu_allocator::AllocationError::NoCompatibleMemoryTypeFound => todo!(),
+            gpu_allocator::AllocationError::InvalidAllocationCreateDesc => todo!(),
+            gpu_allocator::AllocationError::InvalidAllocatorCreateDesc(_) => todo!(),
+            gpu_allocator::AllocationError::Internal(e) => panic!("gpu-allocator internal error: {}", e),
+        }
+    }
+}
