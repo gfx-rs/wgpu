@@ -12,6 +12,7 @@
 //! in both debug and release builds.
 
 #[cfg(feature = "strict_asserts")]
+#[macro_export]
 macro_rules! strict_assert {
     ( $( $arg:tt )* ) => {
         assert!( $( $arg )* )
@@ -19,6 +20,7 @@ macro_rules! strict_assert {
 }
 
 #[cfg(feature = "strict_asserts")]
+#[macro_export]
 macro_rules! strict_assert_eq {
     ( $( $arg:tt )* ) => {
         assert_eq!( $( $arg )* )
@@ -26,6 +28,7 @@ macro_rules! strict_assert_eq {
 }
 
 #[cfg(feature = "strict_asserts")]
+#[macro_export]
 macro_rules! strict_assert_ne {
     ( $( $arg:tt )* ) => {
         assert_ne!( $( $arg )* )
@@ -41,6 +44,7 @@ macro_rules! strict_assert {
 }
 
 #[cfg(not(feature = "strict_asserts"))]
+#[macro_export]
 macro_rules! strict_assert_eq {
     ( $( $arg:tt )* ) => {
         debug_assert_eq!( $( $arg )* )
@@ -48,6 +52,7 @@ macro_rules! strict_assert_eq {
 }
 
 #[cfg(not(feature = "strict_asserts"))]
+#[macro_export]
 macro_rules! strict_assert_ne {
     ( $( $arg:tt )* ) => {
         debug_assert_ne!( $( $arg )* )
