@@ -47,6 +47,7 @@ Bottom level categories:
 - Convert all `Default` Implementations on Enums to `derive(Default)`
 - Implement `Default` for `CompositeAlphaMode`
 - Improve compute shader validation error message. By @haraldreingruber in [#3139](https://github.com/gfx-rs/wgpu/pull/3139)
+- New downlevel feature `BUFFER_USAGE_COMBINE_VERTEX_INDEX` to indicate support of buffers that have both usages `VERTEX` and `INDEX` (unsupported on WebGL). By @Wumpf in [#3157](https://github.com/gfx-rs/wgpu/pull/3157)
 
 #### WebGPU
 - Implement `queue_validate_write_buffer` by @jinleili in [#3098](https://github.com/gfx-rs/wgpu/pull/3098)
