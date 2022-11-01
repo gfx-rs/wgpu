@@ -330,6 +330,7 @@ impl super::Device {
             size,
             mip_level_count,
             sample_count,
+            allocation: None,
         }
     }
 }
@@ -472,7 +473,7 @@ impl crate::Device<super::Api> for super::Device {
     ) -> Result<super::Texture, crate::DeviceError> {
         let mut resource = native::Resource::null();
 
-        let raw_desc = d3d12::D3D12_RESOURCE_DESC {
+        let raw_desc = D3D12_RESOURCE_DESC {
             Dimension: conv::map_texture_dimension(desc.dimension),
             Alignment: 0,
             Width: desc.size.width as u64,
@@ -501,24 +502,20 @@ impl crate::Device<super::Api> for super::Device {
             Flags: conv::map_texture_usage_to_resource_flags(desc.usage),
         };
 
-        let heap_properties = d3d12::D3D12_HEAP_PROPERTIES {
-            Type: d3d12::D3D12_HEAP_TYPE_CUSTOM,
-            CPUPageProperty: d3d12::D3D12_CPU_PAGE_PROPERTY_NOT_AVAILABLE,
-            MemoryPoolPreference: match self.private_caps.memory_architecture {
-                super::MemoryArchitecture::NonUnified => d3d12::D3D12_MEMORY_POOL_L1,
-                super::MemoryArchitecture::Unified { .. } => d3d12::D3D12_MEMORY_POOL_L0,
-            },
-            CreationNodeMask: 0,
-            VisibleNodeMask: 0,
-        };
+        // TODO: What memory location should the texture be stored in?
+        let location = MemoryLocation::Unknown;
+        let mut allocator = self.mem_allocator.lock();
+        let allocation_desc = AllocationCreateDesc::from_winapi_d3d12_resource_desc(
+            allocator.device().as_winapi(),
+            &raw_desc,
+            "Example allocation",
+            location,
+        );
+        let allocation = allocator.allocate(&allocation_desc)?;
 
-        let hr = self.raw.CreateCommittedResource(
-            &heap_properties,
-            if self.private_caps.heap_create_not_zeroed {
-                D3D12_HEAP_FLAG_CREATE_NOT_ZEROED
-            } else {
-                d3d12::D3D12_HEAP_FLAG_NONE
-            },
+        let hr = self.raw.CreatePlacedResource(
+            allocation.heap().as_winapi() as *mut _,
+            allocation.offset(),
             &raw_desc,
             d3d12::D3D12_RESOURCE_STATE_COMMON,
             ptr::null(), // clear value
@@ -539,10 +536,18 @@ impl crate::Device<super::Api> for super::Device {
             size: desc.size,
             mip_level_count: desc.mip_level_count,
             sample_count: desc.sample_count,
+            allocation: Some(allocation),
         })
     }
-    unsafe fn destroy_texture(&self, texture: super::Texture) {
+
+    unsafe fn destroy_texture(&self, mut texture: super::Texture) {
         texture.resource.destroy();
+        if let Some(alloc) = texture.allocation.take() {
+            match self.mem_allocator.lock().free(alloc) {
+                Ok(_) => (),
+                Err(e) => panic!("failed to destroy dx12 buffer, {}", e),
+            };
+        }
     }
 
     unsafe fn create_texture_view(

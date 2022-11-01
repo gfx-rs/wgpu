@@ -396,6 +396,7 @@ pub struct Texture {
     size: wgt::Extent3d,
     mip_level_count: u32,
     sample_count: u32,
+    allocation: Option<gpu_allocator::d3d12::Allocation>,
 }
 
 unsafe impl Send for Texture {}
@@ -753,6 +754,7 @@ impl crate::Surface<Api> for Surface {
             size: sc.size,
             mip_level_count: 1,
             sample_count: 1,
+            allocation: None,
         };
         Ok(Some(crate::AcquiredSurfaceTexture {
             texture,
