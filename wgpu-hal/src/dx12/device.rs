@@ -55,7 +55,7 @@ impl super::Device {
 
         let mut zero_buffer = native::Resource::null();
         unsafe {
-            let raw_desc = d3d12::D3D12_RESOURCE_DESC {
+            let raw_desc = D3D12_RESOURCE_DESC {
                 Dimension: d3d12::D3D12_RESOURCE_DIMENSION_BUFFER,
                 Alignment: 0,
                 Width: super::ZERO_BUFFER_SIZE,
@@ -360,6 +360,7 @@ impl crate::Device<super::Api> for super::Device {
 
         let raw_desc = D3D12_RESOURCE_DESC {
             Dimension: d3d12::D3D12_RESOURCE_DIMENSION_BUFFER,
+            // TODO: Alignment, see https://www.asawicki.info/news_1726_secrets_of_direct3d_12_resource_alignment
             Alignment: 0,
             Width: size,
             Height: 1,
@@ -376,26 +377,6 @@ impl crate::Device<super::Api> for super::Device {
 
         let is_cpu_read = desc.usage.contains(crate::BufferUses::MAP_READ);
         let is_cpu_write = desc.usage.contains(crate::BufferUses::MAP_WRITE);
-
-        // let heap_properties = d3d12::D3D12_HEAP_PROPERTIES {
-        //     Type: d3d12::D3D12_HEAP_TYPE_CUSTOM,
-        //     CPUPageProperty: if is_cpu_read {
-        //         d3d12::D3D12_CPU_PAGE_PROPERTY_WRITE_BACK
-        //     } else if is_cpu_write {
-        //         d3d12::D3D12_CPU_PAGE_PROPERTY_WRITE_COMBINE
-        //     } else {
-        //         d3d12::D3D12_CPU_PAGE_PROPERTY_NOT_AVAILABLE
-        //     },
-        //     MemoryPoolPreference: match self.private_caps.memory_architecture {
-        //         super::MemoryArchitecture::NonUnified if !is_cpu_read && !is_cpu_write => {
-        //             d3d12::D3D12_MEMORY_POOL_L1
-        //         }
-        //         _ => d3d12::D3D12_MEMORY_POOL_L0,
-        //     },
-        //     CreationNodeMask: 0,
-        //     VisibleNodeMask: 0,
-        // };
-
         // TODO: These are probably wrong?
         let location = match (is_cpu_read, is_cpu_write) {
             (true, true) => MemoryLocation::CpuToGpu,
@@ -405,7 +386,6 @@ impl crate::Device<super::Api> for super::Device {
         };
 
         let mut allocator = self.mem_allocator.lock();
-
         let allocation_desc = AllocationCreateDesc::from_winapi_d3d12_resource_desc(
             allocator.device().as_winapi(),
             &raw_desc,
@@ -437,10 +417,12 @@ impl crate::Device<super::Api> for super::Device {
         })
     }
     unsafe fn destroy_buffer(&self, mut buffer: super::Buffer) {
+        // TODO: Destroy or Release here?
         buffer.resource.destroy();
         if let Some(alloc) = buffer.allocation.take() {
             match self.mem_allocator.lock().free(alloc) {
                 Ok(_) => (),
+                // TODO: Don't panic here
                 Err(e) => panic!("failed to destroy dx12 buffer, {}", e),
             };
         }
@@ -451,6 +433,7 @@ impl crate::Device<super::Api> for super::Device {
         range: crate::MemoryRange,
     ) -> Result<crate::BufferMapping, crate::DeviceError> {
         let mut ptr = ptr::null_mut();
+        // TODO: 0 for subresource should be fine here until unmap buffer is subresource aware?
         let hr = (*buffer.resource).Map(0, ptr::null(), &mut ptr);
         hr.into_device_result("Map buffer")?;
         Ok(crate::BufferMapping {
