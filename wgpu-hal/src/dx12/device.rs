@@ -223,11 +223,12 @@ impl super::Device {
             .map(|name| ffi::CString::new(name.as_str()).unwrap())
             .map_err(|e| crate::PipelineError::Linkage(stage_bit, format!("{}", e)))?;
 
-        let empty_str = "";
-        let source_name = match stage.module.raw_name {
-            Some(ref cstr) => cstr.to_str().unwrap_or(empty_str),
-            None => empty_str,
-        };
+        let source_name = stage
+            .module
+            .raw_name
+            .as_ref()
+            .and_then(|cstr| cstr.to_str().ok())
+            .unwrap_or_default();
 
         let mut compile_flags = vec!["-Ges"]/* d3dcompiler::D3DCOMPILE_ENABLE_STRICTNESS */;
         if self
@@ -303,15 +304,17 @@ impl super::Device {
 
         // hassle_rs doesn't check for `dxil.dll` if you only call `hassle_rs::compile_hlsl` but calling hassle_rs::Dxil::new will .
         profiling::scope!("hassle_rs::compile_hlsl");
-        let (result, log_level) = match hassle_rs::Dxil::new(None).and(hassle_rs::compile_hlsl(
-            source_name,
-            &source,
-            /*this is safe because `raw_ep` was converted from `String`*/
-            raw_ep.to_str().unwrap(),
-            &full_stage,
-            &compile_flags,
-            &vec![],
-        )) {
+        let (result, log_level) = match hassle_rs::Dxil::new(None).and_then(|_| {
+            hassle_rs::compile_hlsl(
+                source_name,
+                &source,
+                /*this is safe because `raw_ep` was converted from `String`*/
+                raw_ep.to_str().unwrap(),
+                &full_stage,
+                &compile_flags,
+                &vec![],
+            )
+        }) {
             Ok(dxil) => (Ok(super::ShaderDXIL::DXC(dxil)), log::Level::Info),
             Err(err) => match err {
                 hassle_rs::HassleError::Win32Error(err) => {
