@@ -1,6 +1,6 @@
 //! Tests for buffer usages validation.
 
-use crate::common::{fail, initialize_test, valid, TestParameters};
+use crate::common::{fail_if, initialize_test, TestParameters};
 use wgt::BufferAddress;
 
 const BUFFER_SIZE: BufferAddress = 1234;
@@ -15,28 +15,18 @@ fn buffer_usage() {
 
         initialize_test(parameters, |ctx| {
             for (expect_validation_error, usage) in
-                usages
-                    .iter()
-                    .flat_map(|&(expect_validation_error, usages)| {
-                        usages
-                            .iter()
-                            .copied()
-                            .map(move |u| (expect_validation_error, u))
-                    })
+                usages.iter().flat_map(|&(expect_error, usages)| {
+                    usages.iter().copied().map(move |u| (expect_error, u))
+                })
             {
-                let create_buffer = || {
+                fail_if(&ctx.device, expect_validation_error, || {
                     let _buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
                         label: None,
                         size: BUFFER_SIZE,
                         usage,
                         mapped_at_creation: false,
                     });
-                };
-                if expect_validation_error {
-                    fail(&ctx.device, create_buffer);
-                } else {
-                    valid(&ctx.device, create_buffer);
-                }
+                });
             }
         });
     }
@@ -71,7 +61,7 @@ fn buffer_usage() {
         ],
     );
     try_create(
-        true,
+        true, // enable Features::MAPPABLE_PRIMARY_BUFFERS
         &[
             (false, always_valid),
             (false, needs_mappable_primary_buffers),

@@ -331,3 +331,13 @@ pub fn valid<T>(device: &wgpu::Device, callback: impl FnOnce() -> T) -> T {
 
     result
 }
+
+// Run some code in an error scope and assert that validation succeeds or fails depending on the
+// provided `should_fail` boolean.
+pub fn fail_if<T>(device: &wgpu::Device, should_fail: bool, callback: impl FnOnce() -> T) -> T {
+    if should_fail {
+        fail(device, callback)
+    } else {
+        valid(device, callback)
+    }
+}
