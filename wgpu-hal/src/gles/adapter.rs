@@ -314,6 +314,7 @@ impl super::Adapter {
         );
 
         let mut features = wgt::Features::empty()
+            | wgt::Features::DEPTH24PLUS_STENCIL8 // workaround #3112
             | wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
             | wgt::Features::CLEAR_TEXTURE
             | wgt::Features::PUSH_CONSTANTS;

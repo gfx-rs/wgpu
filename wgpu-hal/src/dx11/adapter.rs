@@ -86,6 +86,7 @@ impl super::Adapter {
         // TODO(cwfitzgerald): Needed downlevel features: 3D dispatch
 
         let mut features = wgt::Features::DEPTH_CLIP_CONTROL
+            | wgt::Features::DEPTH24PLUS_STENCIL8 // workaround #3112
             | wgt::Features::PUSH_CONSTANTS
             | wgt::Features::POLYGON_MODE_LINE
             | wgt::Features::CLEAR_TEXTURE

@@ -40,6 +40,12 @@ Bottom level categories:
 
 ## Unreleased
 
+## wgpu-0.14.1 (2022-11-02)
+
+### Bug Fixes
+
+- Make `wgpu::TextureFormat::Depth24PlusStencil8` available on all backends by making the feature unconditionally available and the feature unneeded to use the format. By @Healthire and @cwfitzgerald in [#3151](https://github.com/gfx-rs/wgpu/pull/3151)
+
 ## wgpu-0.14.0 (2022-10-05)
 
 ### Major Changes
