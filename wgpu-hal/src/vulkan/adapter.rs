@@ -307,6 +307,7 @@ impl PhysicalDeviceFeatures {
         use crate::auxil::db;
         use wgt::{DownlevelFlags as Df, Features as F};
         let mut features = F::empty()
+            | F::DEPTH24PLUS_STENCIL8 // workaround #3112
             | F::SPIRV_SHADER_PASSTHROUGH
             | F::MAPPABLE_PRIMARY_BUFFERS
             | F::PUSH_CONSTANTS
@@ -476,17 +477,6 @@ impl PhysicalDeviceFeatures {
                 instance,
                 phd,
                 vk::Format::D32_SFLOAT_S8_UINT,
-                vk::ImageTiling::OPTIMAL,
-                vk::FormatFeatureFlags::DEPTH_STENCIL_ATTACHMENT,
-            ),
-        );
-
-        features.set(
-            F::DEPTH24PLUS_STENCIL8,
-            supports_format(
-                instance,
-                phd,
-                vk::Format::D24_UNORM_S8_UINT,
                 vk::ImageTiling::OPTIMAL,
                 vk::FormatFeatureFlags::DEPTH_STENCIL_ATTACHMENT,
             ),
