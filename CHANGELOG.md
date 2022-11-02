@@ -96,6 +96,13 @@ Bottom level categories:
 
 - Don't use a pointer to a local copy of a `PhysicalDeviceDriverProperties` struct after it has gone out of scope. In fact, don't make a local copy at all. Introduce a helper function for building `CStr`s from C character arrays, and remove some `unsafe` blocks. By @jimblandy in [#3076](https://github.com/gfx-rs/wgpu/pull/3076).
 
+## wgpu-0.14.1 (2022-11-02)
+
+### Bug Fixes
+
+- Make `wgpu::TextureFormat::Depth24PlusStencil8` available on all backends by making the feature unconditionally available and the feature unneeded to use the format. By @Healthire and @cwfitzgerald in [#3165](https://github.com/gfx-rs/wgpu/pull/3165)
+
+
 ## wgpu-0.14.0 (2022-10-05)
 
 ### Major Changes
