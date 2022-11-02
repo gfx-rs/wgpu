@@ -188,15 +188,6 @@ bitflags::bitflags! {
         ///
         /// This is a web and native feature.
         const DEPTH_CLIP_CONTROL = 1 << 0;
-        /// Allows for explicit creation of textures of format [`TextureFormat::Depth24PlusStencil8`]
-        ///
-        /// Supported platforms:
-        /// - Vulkan (some)
-        /// - DX12
-        /// - Metal (Macs with amd GPUs)
-        ///
-        /// This is a web and native feature.
-        const DEPTH24PLUS_STENCIL8 = 1 << 1;
         /// Allows for explicit creation of textures of format [`TextureFormat::Depth32FloatStencil8`]
         ///
         /// Supported platforms:
@@ -2293,7 +2284,6 @@ impl TextureFormat {
         let astc_hdr = Features::TEXTURE_COMPRESSION_ASTC_HDR;
         let norm16bit = Features::TEXTURE_FORMAT_16BIT_NORM;
         let d32_s8 = Features::DEPTH32FLOAT_STENCIL8;
-        let d24_s8 = Features::DEPTH24PLUS_STENCIL8;
 
         // Sample Types
         let uint = TextureSampleType::Uint;
@@ -2378,7 +2368,7 @@ impl TextureFormat {
             // Depth-stencil textures
             Self::Depth16Unorm =>        (   native,   depth,    linear,         msaa, (1, 1),  2, attachment, 1),
             Self::Depth24Plus =>         (   native,   depth,    linear,         msaa, (1, 1),  4, attachment, 1),
-            Self::Depth24PlusStencil8 => (   d24_s8,   depth,    linear,         msaa, (1, 1),  4, attachment, 2),
+            Self::Depth24PlusStencil8 => (   native,   depth,    linear,         msaa, (1, 1),  4, attachment, 2),
             Self::Depth32Float =>        (   native,   depth,    linear,         msaa, (1, 1),  4, attachment, 1),
             Self::Depth32FloatStencil8 =>(   d32_s8,   depth,    linear,         msaa, (1, 1),  4, attachment, 2),
             // Packed uncompressed

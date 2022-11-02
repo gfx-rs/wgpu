@@ -481,17 +481,6 @@ impl PhysicalDeviceFeatures {
             ),
         );
 
-        features.set(
-            F::DEPTH24PLUS_STENCIL8,
-            supports_format(
-                instance,
-                phd,
-                vk::Format::D24_UNORM_S8_UINT,
-                vk::ImageTiling::OPTIMAL,
-                vk::FormatFeatureFlags::DEPTH_STENCIL_ATTACHMENT,
-            ),
-        );
-
         (features, dl_flags)
     }
 
