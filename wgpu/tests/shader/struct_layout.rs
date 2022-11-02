@@ -9,7 +9,6 @@ use crate::{
 
 fn create_struct_layout_tests(storage_type: InputStorageType) -> Vec<ShaderTest> {
     let input_values: Vec<_> = (0..(MAX_BUFFER_SIZE as u32 / 4)).collect();
-    let output_initialization = u32::MAX;
 
     let mut tests = Vec::new();
 
@@ -35,25 +34,21 @@ fn create_struct_layout_tests(storage_type: InputStorageType) -> Vec<ShaderTest>
                 writeln!(loaded, "output[{idx}] = bitcast<u32>(loaded.{component});").unwrap();
             }
 
-            tests.push(ShaderTest {
-                name: format!("vec{components}<{ty}> - direct"),
-                input_members: input_members.clone(),
-                body: direct,
-                input_values: input_values.clone(),
-                output_values: (0..components as u32).collect(),
-                output_initialization,
-                failures: Backends::empty(),
-            });
+            tests.push(ShaderTest::new(
+                format!("vec{components}<{ty}> - direct"),
+                input_members.clone(),
+                direct,
+                &input_values,
+                &(0..components as u32).collect::<Vec<_>>(),
+            ));
 
-            tests.push(ShaderTest {
-                name: format!("vec{components}<{ty}> - loaded"),
-                input_members,
-                body: loaded,
-                input_values: input_values.clone(),
-                output_values: (0..components as u32).collect(),
-                output_initialization,
-                failures: Backends::empty(),
-            });
+            tests.push(ShaderTest::new(
+                format!("vec{components}<{ty}> - loaded"),
+                input_members.clone(),
+                loaded,
+                &input_values,
+                &(0..components as u32).collect::<Vec<_>>(),
+            ));
         }
     }
 
@@ -113,35 +108,38 @@ fn create_struct_layout_tests(storage_type: InputStorageType) -> Vec<ShaderTest>
                 Backends::empty()
             };
 
-            tests.push(ShaderTest {
-                name: format!("{ty} - direct"),
-                input_members: input_members.clone(),
-                body: direct,
-                input_values: input_values.clone(),
-                output_values: output_values.clone(),
-                output_initialization,
-                failures,
-            });
+            tests.push(
+                ShaderTest::new(
+                    format!("{ty} - direct"),
+                    input_members.clone(),
+                    direct,
+                    &input_values,
+                    &output_values,
+                )
+                .failures(failures),
+            );
 
-            tests.push(ShaderTest {
-                name: format!("{ty} - vector loaded"),
-                input_members: input_members.clone(),
-                body: vector_loaded,
-                input_values: input_values.clone(),
-                output_values: output_values.clone(),
-                output_initialization,
-                failures,
-            });
+            tests.push(
+                ShaderTest::new(
+                    format!("{ty} - vector loaded"),
+                    input_members.clone(),
+                    vector_loaded,
+                    &input_values,
+                    &output_values,
+                )
+                .failures(failures),
+            );
 
-            tests.push(ShaderTest {
-                name: format!("{ty} - fully loaded"),
-                input_members,
-                body: fully_loaded,
-                input_values: input_values.clone(),
-                output_values,
-                output_initialization,
-                failures,
-            });
+            tests.push(
+                ShaderTest::new(
+                    format!("{ty} - fully loaded"),
+                    input_members.clone(),
+                    fully_loaded,
+                    &input_values,
+                    &output_values,
+                )
+                .failures(failures),
+            );
         }
     }
 
@@ -150,15 +148,13 @@ fn create_struct_layout_tests(storage_type: InputStorageType) -> Vec<ShaderTest>
         let members = format!("_vec: vec3<{ty}>,\nscalar: {ty},");
         let direct = String::from("output[0] = bitcast<u32>(input.scalar);");
 
-        tests.push(ShaderTest {
-            name: format!("vec3<{ty}>, {ty} alignment"),
-            input_members: members,
-            body: direct,
-            input_values: input_values.clone(),
-            output_values: vec![3],
-            output_initialization,
-            failures: Backends::empty(),
-        });
+        tests.push(ShaderTest::new(
+            format!("vec3<{ty}>, {ty} alignment"),
+            members,
+            direct,
+            &input_values,
+            &[3],
+        ));
     }
 
     // Mat3 alignment tests
@@ -167,15 +163,13 @@ fn create_struct_layout_tests(storage_type: InputStorageType) -> Vec<ShaderTest>
             let members = format!("_mat: mat{columns}x3<f32>,\nscalar: {ty},");
             let direct = String::from("output[0] = bitcast<u32>(input.scalar);");
 
-            tests.push(ShaderTest {
-                name: format!("mat{columns}x3<f32>, {ty} alignment"),
-                input_members: members,
-                body: direct,
-                input_values: input_values.clone(),
-                output_values: vec![columns * 4],
-                output_initialization,
-                failures: Backends::empty(),
-            });
+            tests.push(ShaderTest::new(
+                format!("mat{columns}x3<f32>, {ty} alignment"),
+                members,
+                direct,
+                &input_values,
+                &[columns * 4],
+            ));
         }
     }
 
