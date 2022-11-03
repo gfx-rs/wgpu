@@ -528,8 +528,8 @@ pub struct ShaderModule {
 }
 
 enum ShaderDXIL {
-    DXC(Vec<u8>),
-    FXC(native::Blob),
+    Dxc(Vec<u8>),
+    Fxc(native::Blob),
 }
 
 pub struct RenderPipeline {
