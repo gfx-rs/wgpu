@@ -63,6 +63,7 @@ Bottom level categories:
 - Add the `"wgsl"` feature, to enable WGSL shaders in `wgpu-core` and `wgpu`. Enabled by default in `wgpu`. By @daxpedda in [#2890](https://github.com/gfx-rs/wgpu/pull/2890).
 - Implement `Clone` for `ShaderSource` and `ShaderModuleDescriptor` in `wgpu`. By @daxpedda in [#3086](https://github.com/gfx-rs/wgpu/pull/3086).
 - Add `get_default_config` for `Surface` to simplify user creation of `SurfaceConfiguration`. By @jinleili in [#3034](https://github.com/gfx-rs/wgpu/pull/3034)
+- Add `create_shader_module_non_uniform` to `Device` to allow disabling naga's uniform control flow validation for a single shader. By @DJMcNab in [#notyetassigned](https://github.com/gfx-rs/wgpu/pull/notyetassigned)
 
 #### GLES
 
