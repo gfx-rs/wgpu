@@ -1,8 +1,6 @@
 #![allow(clippy::type_complexity)]
 
 use js_sys::Promise;
-#[cfg(feature = "expose-ids")]
-use std::sync::atomic::{self, AtomicU64};
 use std::{
     cell::RefCell,
     fmt,
@@ -47,7 +45,7 @@ impl<T> crate::GlobalId for Identified<T> {
 pub(crate) type Id = u64;
 
 #[cfg(feature = "expose-ids")]
-static NEXT_ID: AtomicU64 = AtomicU64::new(0);
+static NEXT_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
 #[cfg(not(feature = "expose-ids"))]
 fn create_identified<T>(value: T) -> Identified<T> {
@@ -56,7 +54,10 @@ fn create_identified<T>(value: T) -> Identified<T> {
 
 #[cfg(feature = "expose-ids")]
 fn create_identified<T>(value: T) -> Identified<T> {
-    Identified(value, NEXT_ID.fetch_add(1, atomic::Ordering::Relaxed))
+    Identified(
+        value,
+        NEXT_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
+    )
 }
 
 pub(crate) struct Context(web_sys::Gpu);
