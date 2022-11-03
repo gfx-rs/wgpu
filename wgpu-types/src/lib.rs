@@ -1656,14 +1656,13 @@ impl TextureFormatFeatureFlags {
     pub fn sample_count_supported(&self, count: u32) -> bool {
         use TextureFormatFeatureFlags as tfsc;
 
-        if count == 1
-            || (count == 2 && self.contains(tfsc::MULTISAMPLE_X2))
-            || (count == 4 && self.contains(tfsc::MULTISAMPLE_X4))
-            || (count == 8 && self.contains(tfsc::MULTISAMPLE_X8))
-        {
-            return true;
+        match count {
+            1 => true,
+            2 => self.contains(tfsc::MULTISAMPLE_X2),
+            4 => self.contains(tfsc::MULTISAMPLE_X4),
+            8 => self.contains(tfsc::MULTISAMPLE_X8),
+            _ => false,
         }
-        false
     }
 }
 
