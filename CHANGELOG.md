@@ -83,6 +83,13 @@ Bottom level categories:
 
 - Fixed WebGL not displaying srgb targets correctly if a non-screen filling viewport was previously set. By @Wumpf in [#3093](https://github.com/gfx-rs/wgpu/pull/3093)
 
+#### deno-webgpu
+
+- Let `setVertexBuffer` and `setIndexBuffer` calls on
+  `GPURenderBundleEncoder` throw an error if the `size` argument is
+  zero, rather than treating that as "until the end of the buffer".
+  By @jimblandy in [#3171](https://github.com/gfx-rs/wgpu/pull/3171)
+
 ### Examples
 - Log adapter info in hello example on wasm target by @JolifantoBambla in [#2858](https://github.com/gfx-rs/wgpu/pull/2858)
 
