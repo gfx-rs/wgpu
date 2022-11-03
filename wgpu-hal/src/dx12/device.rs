@@ -240,6 +240,9 @@ impl super::Device {
             compile_flags.push("-Od"); /* d3dcompiler::D3DCOMPILE_DEBUG */
         }
 
+        // This closure gets called if `hassle_rs::compile_hlsl() fails due to a `hassle_rs::HassleError::LoadLibraryError`,
+        //
+        //  This usually means that `dxcompiler.dll` and/or `dxil.dll` could not be found in the current execution environment.
         let load_shader_fxc = || {
             let mut shader_data = native::Blob::null();
             let mut compile_flags = d3dcompiler::D3DCOMPILE_ENABLE_STRICTNESS;
@@ -263,22 +266,22 @@ impl super::Device {
             let hr = unsafe {
                 profiling::scope!("d3dcompiler::D3DCompile");
                 d3dcompiler::D3DCompile(
-                    source.as_ptr() as *const _,
+                    source.as_ptr().cast(),
                     source.len(),
-                    source_name.as_ptr() as *const i8,
+                    source_name.as_ptr().cast(),
                     ptr::null(),
                     ptr::null_mut(),
                     raw_ep.as_ptr(),
-                    full_stage.as_ptr() as *const i8,
+                    full_stage.as_ptr().cast(),
                     compile_flags,
                     0,
-                    shader_data.mut_void() as *mut *mut _,
-                    error.mut_void() as *mut *mut _,
+                    shader_data.mut_void().cast(),
+                    error.mut_void().cast(),
                 )
             };
 
             match hr.into_result() {
-                Ok(()) => (Ok(super::ShaderDXIL::FXC(shader_data)), log::Level::Info),
+                Ok(()) => (Ok(super::ShaderDXIL::Fxc(shader_data)), log::Level::Info),
                 Err(e) => {
                     let mut full_msg = format!("D3DCompile error ({})", e);
                     if !error.is_null() {
@@ -312,10 +315,10 @@ impl super::Device {
                 raw_ep.to_str().unwrap(),
                 &full_stage,
                 &compile_flags,
-                &vec![],
+                &[],
             )
         }) {
-            Ok(dxil) => (Ok(super::ShaderDXIL::DXC(dxil)), log::Level::Info),
+            Ok(dxil) => (Ok(super::ShaderDXIL::Dxc(dxil)), log::Level::Info),
             Err(err) => match err {
                 hassle_rs::HassleError::Win32Error(err) => {
                     let err_str = i32::into_result(err.0).unwrap_err();
@@ -1383,7 +1386,7 @@ impl crate::Device<super::Api> for super::Device {
                 shader_stages |= wgt::ShaderStages::FRAGMENT;
                 self.load_shader(stage, desc.layout, naga::ShaderStage::Fragment)?
             }
-            None => crate::dx12::ShaderDXIL::DXC(vec![]),
+            None => crate::dx12::ShaderDXIL::Dxc(vec![]),
         };
 
         let mut vertex_strides = [None; crate::MAX_VERTEX_BUFFERS];
@@ -1457,12 +1460,12 @@ impl crate::Device<super::Api> for super::Device {
         let raw_desc = d3d12::D3D12_GRAPHICS_PIPELINE_STATE_DESC {
             pRootSignature: desc.layout.shared.signature.as_mut_ptr(),
             VS: match blob_vs {
-                super::ShaderDXIL::DXC(ref blob_vs) => *native::Shader::from_raw(&blob_vs),
-                super::ShaderDXIL::FXC(blob_vs) => *native::Shader::from_blob(blob_vs),
+                super::ShaderDXIL::Dxc(ref blob_vs) => *native::Shader::from_raw(blob_vs),
+                super::ShaderDXIL::Fxc(blob_vs) => *native::Shader::from_blob(blob_vs),
             },
             PS: match blob_fs {
-                super::ShaderDXIL::DXC(ref blob_fs) => *native::Shader::from_raw(&blob_fs),
-                super::ShaderDXIL::FXC(blob_fs) => {
+                super::ShaderDXIL::Dxc(ref blob_fs) => *native::Shader::from_raw(blob_fs),
+                super::ShaderDXIL::Fxc(blob_fs) => {
                     if blob_fs.is_null() {
                         *native::Shader::null()
                     } else {
@@ -1539,7 +1542,7 @@ impl crate::Device<super::Api> for super::Device {
             }
         };
 
-        if let super::ShaderDXIL::FXC(vs_fxc) = &blob_vs {
+        if let super::ShaderDXIL::Fxc(vs_fxc) = &blob_vs {
             unsafe { vs_fxc.destroy() };
             if !vs_fxc.is_null() {
                 unsafe { vs_fxc.destroy() };
@@ -1576,8 +1579,8 @@ impl crate::Device<super::Api> for super::Device {
             self.raw.create_compute_pipeline_state(
                 desc.layout.shared.signature,
                 match blob_cs {
-                    crate::dx12::ShaderDXIL::DXC(ref blob_cs) => native::Shader::from_raw(&blob_cs),
-                    crate::dx12::ShaderDXIL::FXC(blob_cs) => native::Shader::from_blob(blob_cs),
+                    crate::dx12::ShaderDXIL::Dxc(ref blob_cs) => native::Shader::from_raw(blob_cs),
+                    crate::dx12::ShaderDXIL::Fxc(blob_cs) => native::Shader::from_blob(blob_cs),
                 },
                 0,
                 native::CachedPSO::null(),
@@ -1585,7 +1588,7 @@ impl crate::Device<super::Api> for super::Device {
             )
         };
 
-        if let super::ShaderDXIL::FXC(cs_fxc) = blob_cs {
+        if let super::ShaderDXIL::Fxc(cs_fxc) = blob_cs {
             unsafe { cs_fxc.destroy() };
         }
 
