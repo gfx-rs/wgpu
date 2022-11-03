@@ -1017,7 +1017,7 @@ impl<'w> BlockContext<'w> {
                     Id::D3 => 3,
                 };
                 let extended_size_type_id = {
-                    let array_coords = if arrayed { 1 } else { 0 };
+                    let array_coords = usize::from(arrayed);
                     let vector_size = match dim_coords + array_coords {
                         2 => Some(crate::VectorSize::Bi),
                         3 => Some(crate::VectorSize::Tri),

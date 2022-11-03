@@ -274,7 +274,7 @@ impl<'a, W: Write> super::Writer<'a, W> {
         // Write function body
         writeln!(self.out, "{{")?;
 
-        let array_coords = if wiq.arrayed { 1 } else { 0 };
+        let array_coords = usize::from(wiq.arrayed);
         // extra parameter is the mip level count or the sample count
         let extra_coords = match wiq.class {
             crate::ImageClass::Storage { .. } => 0,
@@ -358,7 +358,7 @@ impl<'a, W: Write> super::Writer<'a, W> {
         module: &crate::Module,
         constructor: WrappedConstructor,
     ) -> BackendResult {
-        let name = module.types[constructor.ty].inner.hlsl_type_id(
+        let name = crate::TypeInner::hlsl_type_id(
             constructor.ty,
             &module.types,
             &module.constants,
@@ -927,7 +927,7 @@ impl<'a, W: Write> super::Writer<'a, W> {
 
                     if let Some(crate::AddressSpace::Storage { .. }) = pointer_space {
                         if let Some(ty) = func_ctx.info[handle].ty.handle() {
-                            write_wrapped_constructor(self, ty, module, func_ctx)?;
+                            write_wrapped_constructor(self, ty, module)?;
                         }
                     }
 
@@ -935,12 +935,11 @@ impl<'a, W: Write> super::Writer<'a, W> {
                         writer: &mut super::Writer<'_, W>,
                         ty: Handle<crate::Type>,
                         module: &crate::Module,
-                        func_ctx: &FunctionCtx,
                     ) -> BackendResult {
                         match module.types[ty].inner {
                             crate::TypeInner::Struct { ref members, .. } => {
                                 for member in members {
-                                    write_wrapped_constructor(writer, member.ty, module, func_ctx)?;
+                                    write_wrapped_constructor(writer, member.ty, module)?;
                                 }
 
                                 let constructor = WrappedConstructor { ty };
@@ -951,7 +950,7 @@ impl<'a, W: Write> super::Writer<'a, W> {
                                 }
                             }
                             crate::TypeInner::Array { base, .. } => {
-                                write_wrapped_constructor(writer, base, module, func_ctx)?;
+                                write_wrapped_constructor(writer, base, module)?;
                             }
                             _ => {}
                         };

@@ -73,7 +73,6 @@ impl crate::TypeInner {
 
     /// Used to generate the name of the wrapped type constructor
     pub(super) fn hlsl_type_id<'a>(
-        &self,
         base: crate::Handle<crate::Type>,
         types: &crate::UniqueArena<crate::Type>,
         constants: &crate::Arena<crate::Constant>,
@@ -103,7 +102,7 @@ impl crate::TypeInner {
             } => Cow::Owned(format!(
                 "array{}_{}_",
                 constants[size].to_array_length().unwrap(),
-                self.hlsl_type_id(base, types, constants, names)?
+                Self::hlsl_type_id(base, types, constants, names)?
             )),
             crate::TypeInner::Struct { .. } => {
                 Cow::Borrowed(&names[&crate::proc::NameKey::Type(base)])

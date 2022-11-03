@@ -105,7 +105,7 @@ impl ShaderMetadata {
         self.version = 0;
         self.profile = Profile::Core;
         self.stage = stage;
-        self.workgroup_size = [if stage == ShaderStage::Compute { 1 } else { 0 }; 3];
+        self.workgroup_size = [u32::from(stage == ShaderStage::Compute); 3];
         self.early_fragment_tests = false;
         self.extensions.clear();
     }
