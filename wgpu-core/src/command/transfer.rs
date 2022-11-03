@@ -601,15 +601,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .downlevel
             .flags
             .contains(wgt::DownlevelFlags::UNRESTRICTED_INDEX_BUFFER)
-            && (src_buffer.usage.contains(BufferUsages::INDEX)
-                || dst_buffer.usage.contains(BufferUsages::INDEX))
+            && (src_buffer.usage.contains(wgt::BufferUsages::INDEX)
+                || dst_buffer.usage.contains(wgt::BufferUsages::INDEX))
         {
-            let non_index_non_copy_buffer_usages = wgt::BufferUsages::VERTEX
+            let forbidden_usages = wgt::BufferUsages::VERTEX
                 | wgt::BufferUsages::UNIFORM
                 | wgt::BufferUsages::INDIRECT
                 | wgt::BufferUsages::STORAGE;
-            if src_buffer.usage.contains(non_index_non_copy_buffer_usages)
-                || dst_buffer.usage.contains(non_index_non_copy_buffer_usages)
+            if src_buffer.usage.intersects(forbidden_usages)
+                || dst_buffer.usage.intersects(forbidden_usages)
             {
                 return Err(TransferError::MissingDownlevelFlags(MissingDownlevelFlags(
                     wgt::DownlevelFlags::UNRESTRICTED_INDEX_BUFFER,
