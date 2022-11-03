@@ -1280,7 +1280,14 @@ impl<A: HalApi> Device<A> {
                 wgt::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
             ),
         );
-        let info = naga::valid::Validator::new(naga::valid::ValidationFlags::all(), caps)
+        use naga::valid::ValidationFlags;
+
+        let mut validation = ValidationFlags::all();
+        validation.set(
+            ValidationFlags::CONTROL_FLOW_UNIFORMITY,
+            desc.shader_bound_checks.uniformity_validation(),
+        );
+        let info = naga::valid::Validator::new(validation, caps)
             .validate(&module)
             .map_err(|inner| {
                 pipeline::CreateShaderModuleError::Validation(pipeline::ShaderError {

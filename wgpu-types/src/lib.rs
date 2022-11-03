@@ -5069,6 +5069,7 @@ pub struct DispatchIndirectArgs {
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub struct ShaderBoundChecks {
     runtime_checks: bool,
+    uniformity_validation: bool,
 }
 
 impl ShaderBoundChecks {
@@ -5076,6 +5077,7 @@ impl ShaderBoundChecks {
     pub fn new() -> Self {
         ShaderBoundChecks {
             runtime_checks: true,
+            uniformity_validation: true,
         }
     }
 
@@ -5087,12 +5089,31 @@ impl ShaderBoundChecks {
     pub unsafe fn unchecked() -> Self {
         ShaderBoundChecks {
             runtime_checks: false,
+            uniformity_validation: false,
+        }
+    }
+
+    /// Creates a new configuration where the shader doesn't have bound checking.
+    ///
+    /// # Safety
+    /// The caller MUST ensure that all shaders built with this configuration don't perform any
+    /// invalid non-uniform operation. This should be used if the wgsl validation is too strict
+    /// for your use case.
+    pub unsafe fn allows_non_uniform() -> Self {
+        ShaderBoundChecks {
+            runtime_checks: true,
+            uniformity_validation: false,
         }
     }
 
     /// Query whether runtime bound checks are enabled in this configuration
     pub fn runtime_checks(&self) -> bool {
         self.runtime_checks
+    }
+
+    /// Query whether uniformity analysis is enabled in this configuration
+    pub fn uniformity_validation(&self) -> bool {
+        self.uniformity_validation
     }
 }
 

@@ -2124,6 +2124,31 @@ impl Device {
         }
     }
 
+    /// Creates a shader module from either SPIR-V or WGSL source code without uniformity checks.
+    ///
+    /// # Safety
+    /// In contrast with [`create_shader_module`](Self::create_shader_module) this function
+    /// creates a shader module without unifromity checks which allows shaders to perform
+    /// operations which can lead to undefined behavior like data races, thus it's
+    /// the caller responsibility to pass a shader which doesn't perform any of these
+    /// operations.
+    ///
+    /// This is equivalent to `create_shader_module` effect on web.
+    pub unsafe fn create_shader_module_non_uniform(
+        &self,
+        desc: ShaderModuleDescriptor,
+    ) -> ShaderModule {
+        ShaderModule {
+            context: Arc::clone(&self.context),
+            id: Context::device_create_shader_module(
+                &*self.context,
+                &self.id,
+                desc,
+                wgt::ShaderBoundChecks::allows_non_uniform(),
+            ),
+        }
+    }
+
     /// Creates a shader module from SPIR-V binary directly.
     ///
     /// # Safety
