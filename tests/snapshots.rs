@@ -2,7 +2,10 @@
 // the corresponding warnings aren't helpful.
 #![allow(dead_code)]
 
-use std::{fs, path::PathBuf};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
 const BASE_DIR_IN: &str = "tests/in";
 const BASE_DIR_OUT: &str = "tests/out";
@@ -195,7 +198,7 @@ fn check_targets(module: &naga::Module, name: &str, targets: Targets) {
 fn write_output_spv(
     module: &naga::Module,
     info: &naga::valid::ModuleInfo,
-    destination: &PathBuf,
+    destination: &Path,
     file_name: &str,
     params: &SpirvOutParameters,
     bounds_check_policies: naga::proc::BoundsCheckPolicies,
@@ -224,7 +227,6 @@ fn write_output_spv(
         },
         bounds_check_policies,
         binding_map: params.binding_map.clone(),
-        ..spv::Options::default()
     };
 
     if params.separate_entry_points {
@@ -253,7 +255,7 @@ fn write_output_spv(
 fn write_output_msl(
     module: &naga::Module,
     info: &naga::valid::ModuleInfo,
-    destination: &PathBuf,
+    destination: &Path,
     file_name: &str,
     options: &naga::back::msl::Options,
     pipeline_options: &naga::back::msl::PipelineOptions,
@@ -278,10 +280,11 @@ fn write_output_msl(
 }
 
 #[cfg(feature = "glsl-out")]
+#[allow(clippy::too_many_arguments)]
 fn write_output_glsl(
     module: &naga::Module,
     info: &naga::valid::ModuleInfo,
-    destination: &PathBuf,
+    destination: &Path,
     file_name: &str,
     stage: naga::ShaderStage,
     ep_name: &str,
@@ -322,7 +325,7 @@ fn write_output_glsl(
 fn write_output_hlsl(
     module: &naga::Module,
     info: &naga::valid::ModuleInfo,
-    destination: &PathBuf,
+    destination: &Path,
     file_name: &str,
     options: &naga::back::hlsl::Options,
 ) {
@@ -401,7 +404,7 @@ fn write_output_hlsl(
 fn write_output_wgsl(
     module: &naga::Module,
     info: &naga::valid::ModuleInfo,
-    destination: &PathBuf,
+    destination: &Path,
     file_name: &str,
     params: &WgslOutParameters,
 ) {
@@ -676,7 +679,7 @@ fn convert_glsl_folder() {
                 &module,
                 &info,
                 &dest,
-                &file_name.replace(".", "-"),
+                &file_name.replace('.', "-"),
                 &WgslOutParameters::default(),
             );
         }

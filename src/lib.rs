@@ -202,7 +202,7 @@ tree.
     clippy::pattern_type_mismatch,
     clippy::missing_const_for_fn
 )]
-#![deny(clippy::panic)]
+#![cfg_attr(not(test), deny(clippy::panic))]
 
 mod arena;
 pub mod back;

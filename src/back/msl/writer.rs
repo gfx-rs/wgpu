@@ -3955,12 +3955,13 @@ fn test_stack_size() {
 
     {
         // check expression stack
-        let mut addresses = usize::MAX..0usize;
+        let mut addresses_start = usize::MAX;
+        let mut addresses_end = 0usize;
         for pointer in writer.put_expression_stack_pointers {
-            addresses.start = addresses.start.min(pointer as usize);
-            addresses.end = addresses.end.max(pointer as usize);
+            addresses_start = addresses_start.min(pointer as usize);
+            addresses_end = addresses_end.max(pointer as usize);
         }
-        let stack_size = addresses.end - addresses.start;
+        let stack_size = addresses_end - addresses_start;
         // check the size (in debug only)
         // last observed macOS value: 20528 (CI)
         if !(11000..=25000).contains(&stack_size) {
@@ -3970,12 +3971,13 @@ fn test_stack_size() {
 
     {
         // check block stack
-        let mut addresses = usize::MAX..0usize;
+        let mut addresses_start = usize::MAX;
+        let mut addresses_end = 0usize;
         for pointer in writer.put_block_stack_pointers {
-            addresses.start = addresses.start.min(pointer as usize);
-            addresses.end = addresses.end.max(pointer as usize);
+            addresses_start = addresses_start.min(pointer as usize);
+            addresses_end = addresses_end.max(pointer as usize);
         }
-        let stack_size = addresses.end - addresses.start;
+        let stack_size = addresses_end - addresses_start;
         // check the size (in debug only)
         // last observed macOS value: 19152 (CI)
         if !(9500..=20000).contains(&stack_size) {
