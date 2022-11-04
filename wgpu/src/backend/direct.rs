@@ -815,6 +815,49 @@ pub(crate) struct CommandEncoder {
     open: bool,
 }
 
+pub(crate) type Id = (u32, u32, wgt::Backend);
+
+impl<T: wgc::id::TypedId> crate::GlobalId for T {
+    fn global_id(&self) -> Id {
+        self.unzip()
+    }
+}
+
+impl crate::GlobalId for Surface {
+    fn global_id(&self) -> Id {
+        use wgc::id::TypedId;
+        self.id.unzip()
+    }
+}
+
+impl crate::GlobalId for Device {
+    fn global_id(&self) -> Id {
+        use wgc::id::TypedId;
+        self.id.unzip()
+    }
+}
+
+impl crate::GlobalId for Buffer {
+    fn global_id(&self) -> Id {
+        use wgc::id::TypedId;
+        self.id.unzip()
+    }
+}
+
+impl crate::GlobalId for Texture {
+    fn global_id(&self) -> Id {
+        use wgc::id::TypedId;
+        self.id.unzip()
+    }
+}
+
+impl crate::GlobalId for CommandEncoder {
+    fn global_id(&self) -> Id {
+        use wgc::id::TypedId;
+        self.id.unzip()
+    }
+}
+
 impl crate::Context for Context {
     type AdapterId = wgc::id::AdapterId;
     type DeviceId = Device;
