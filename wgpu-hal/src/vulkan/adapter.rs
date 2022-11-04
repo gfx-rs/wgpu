@@ -600,6 +600,17 @@ impl PhysicalDeviceCapabilities {
         #[cfg(any(target_os = "macos", target_os = "ios"))]
         extensions.push(vk::KhrPortabilitySubsetFn::name());
 
+        #[cfg(target_os = "android")]
+        {
+            extensions.append(&mut vec![
+                vk::KhrBindMemory2Fn::name(),
+                vk::KhrExternalMemoryFn::name(),
+                vk::KhrGetMemoryRequirements2Fn::name(),
+                vk::ExtQueueFamilyForeignFn::name(),
+                vk::AndroidExternalMemoryAndroidHardwareBufferFn::name(),
+            ]);
+        }
+
         if requested_features.contains(wgt::Features::TEXTURE_COMPRESSION_ASTC_HDR) {
             extensions.push(vk::ExtTextureCompressionAstcHdrFn::name());
         }
