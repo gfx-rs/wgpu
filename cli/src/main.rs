@@ -231,11 +231,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     } else {
         return Err(CliError("Input file path is not specified").into());
     };
-    let output_paths = if !args.files.is_empty() {
-        &args.files[1..]
-    } else {
-        &[]
-    };
+    let output_paths = args.files.get(1..).unwrap_or(&[]);
 
     // Update parameters from commandline arguments
     if let Some(bits) = args.validate {
