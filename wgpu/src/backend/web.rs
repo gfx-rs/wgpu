@@ -32,17 +32,15 @@ unsafe impl<T> Sync for Identified<T> {}
 
 impl<T> crate::GlobalId for Identified<T> {
     #[cfg(not(feature = "expose-ids"))]
-    fn global_id(&self) -> Id {
+    fn global_id(&self) -> u64 {
         0
     }
 
     #[cfg(feature = "expose-ids")]
-    fn global_id(&self) -> Id {
+    fn global_id(&self) -> u64 {
         self.1
     }
 }
-
-pub(crate) type Id = u64;
 
 #[cfg(feature = "expose-ids")]
 static NEXT_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);

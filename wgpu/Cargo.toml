@@ -76,7 +76,7 @@ name = "water"
 test = true
 
 [features]
-default = ["wgsl"]
+default = ["wgsl", "expose-ids"]
 spirv = ["naga/spv-in"]
 glsl = ["naga/glsl-in"]
 wgsl = ["wgc?/wgsl"]
