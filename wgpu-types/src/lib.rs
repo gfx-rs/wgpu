@@ -1063,7 +1063,7 @@ bitflags::bitflags! {
 
         /// Supports samplers with anisotropic filtering. Note this isn't actually required by
         /// WebGPU, the implementation is allowed to completely ignore aniso clamp. This flag is
-        /// here for native backends so they can comunicate to the user of aniso is enabled.
+        /// here for native backends so they can communi    cate to the user of aniso is enabled.
         ///
         /// All backends and all devices support anisotropic filtering.
         const ANISOTROPIC_FILTERING = 1 << 10;
@@ -1089,8 +1089,8 @@ bitflags::bitflags! {
         const BUFFER_BINDINGS_NOT_16_BYTE_ALIGNED = 1 << 15;
 
         /// Supports buffers to combine [`BufferUsages::INDEX`] with usages other than [`BufferUsages::COPY_DST`] and [`BufferUsages::COPY_SRC`].
-        /// Furthermore, in absence of this feature it is not allowed to copy index buffers from/to buffers with usages other than
-        /// [`BufferUsages::INDEX`]/[`BufferUsages::COPY_DST`]/[`BufferUsages::COPY_SRC`].
+        /// Furthermore, in absence of this feature it is not allowed to copy index buffers from/to buffers with a set of usage flags containing
+         /// [`BufferUsages::VERTEX`]/[`BufferUsages::UNIFORM`]/[`BufferUsages::STORAGE`] or [`BufferUsages::INDIRECT`].
         ///
         /// WebGL doesn't support this.
         const UNRESTRICTED_INDEX_BUFFER = 1 << 16;
