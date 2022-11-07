@@ -327,11 +327,13 @@ jobs:
       - name: checkout repo
         uses: actions/checkout@v3
 
-      - name: install rust
+      - name: install rust ${{ env.RUST_VERSION }}
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
           toolchain: ${{ env.RUST_VERSION }}
+          override: true
+          components: clippy
 
       - name: disable debug
         shell: bash
