@@ -1,5 +1,5 @@
 use crate::{
-    device::{DeviceError, HostMap, MissingFeatures},
+    device::{DeviceError, HostMap, MissingDownlevelFlags, MissingFeatures},
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Resource, Token},
     id::{AdapterId, DeviceId, SurfaceId, TextureId, Valid},
     init_tracker::{BufferInitTracker, TextureInitTracker},
@@ -248,6 +248,8 @@ pub enum CreateBufferError {
     UsageMismatch(wgt::BufferUsages),
     #[error("Buffer size {requested} is greater than the maximum buffer size ({maximum})")]
     MaxBufferSize { requested: u64, maximum: u64 },
+    #[error(transparent)]
+    MissingDownlevelFlags(#[from] MissingDownlevelFlags),
 }
 
 impl<A: hal::Api> Resource for Buffer<A> {

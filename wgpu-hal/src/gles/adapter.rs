@@ -312,6 +312,11 @@ impl super::Adapter {
             wgt::DownlevelFlags::BUFFER_BINDINGS_NOT_16_BYTE_ALIGNED,
             !(cfg!(target_arch = "wasm32") || is_angle),
         );
+        // see https://registry.khronos.org/webgl/specs/latest/2.0/#BUFFER_OBJECT_BINDING
+        downlevel_flags.set(
+            wgt::DownlevelFlags::UNRESTRICTED_INDEX_BUFFER,
+            !cfg!(target_arch = "wasm32"),
+        );
 
         let mut features = wgt::Features::empty()
             | wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES

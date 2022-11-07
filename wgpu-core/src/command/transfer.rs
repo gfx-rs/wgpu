@@ -544,9 +544,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let hub = A::hub(self);
         let mut token = Token::root();
 
+        let (device_guard, mut token) = hub.devices.read(&mut token);
         let (mut cmd_buf_guard, mut token) = hub.command_buffers.write(&mut token);
         let cmd_buf = CommandBuffer::get_encoder_mut(&mut *cmd_buf_guard, command_encoder_id)?;
         let (buffer_guard, _) = hub.buffers.read(&mut token);
+
+        let device = &device_guard[cmd_buf.device_id.value];
 
         #[cfg(feature = "trace")]
         if let Some(ref mut list) = cmd_buf.commands {
@@ -596,6 +599,26 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
         if destination_offset % wgt::COPY_BUFFER_ALIGNMENT != 0 {
             return Err(TransferError::UnalignedBufferOffset(destination_offset).into());
+        }
+        if !device
+            .downlevel
+            .flags
+            .contains(wgt::DownlevelFlags::UNRESTRICTED_INDEX_BUFFER)
+            && (src_buffer.usage.contains(wgt::BufferUsages::INDEX)
+                || dst_buffer.usage.contains(wgt::BufferUsages::INDEX))
+        {
+            let forbidden_usages = wgt::BufferUsages::VERTEX
+                | wgt::BufferUsages::UNIFORM
+                | wgt::BufferUsages::INDIRECT
+                | wgt::BufferUsages::STORAGE;
+            if src_buffer.usage.intersects(forbidden_usages)
+                || dst_buffer.usage.intersects(forbidden_usages)
+            {
+                return Err(TransferError::MissingDownlevelFlags(MissingDownlevelFlags(
+                    wgt::DownlevelFlags::UNRESTRICTED_INDEX_BUFFER,
+                ))
+                .into());
+            }
         }
 
         let source_end_offset = source_offset + size;
