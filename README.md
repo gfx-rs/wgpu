@@ -31,8 +31,8 @@ For an overview of all the components in the gfx-rs ecosystem, see [the big pict
 
 ### MSRV policy
 
-Minimum Supported Rust Version is **1.64**.
-It is enforced on CI (in "/.github/workflows/ci.yml", "/.github/workflows/cts.yml") with `RUST_VERSION` variable.
+Minimum Supported Rust Version is **1.65**.
+It is enforced on CI (in "/.github/workflows/ci.yml") with `RUST_VERSION` variable.
 This version can only be upgraded in breaking releases.
 
 ## Getting Started

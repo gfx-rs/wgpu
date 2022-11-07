@@ -9,7 +9,7 @@ on:
 
 env:
   RUST_BACKTRACE: 1
-  RUST_VERSION: 1.64
+  RUST_VERSION: 1.65
 
 jobs:
   cts:
