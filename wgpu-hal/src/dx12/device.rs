@@ -1231,7 +1231,7 @@ impl crate::Device<super::Api> for super::Device {
             Some(inner) => {
                 let dual = descriptor::upload(
                     self.raw,
-                    &*inner,
+                    &inner,
                     &self.shared.heap_views,
                     &desc.layout.copy_counts,
                 )?;
@@ -1243,7 +1243,7 @@ impl crate::Device<super::Api> for super::Device {
             Some(inner) => {
                 let dual = descriptor::upload(
                     self.raw,
-                    &*inner,
+                    &inner,
                     &self.shared.heap_samplers,
                     &desc.layout.copy_counts,
                 )?;

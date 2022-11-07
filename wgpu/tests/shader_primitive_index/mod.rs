@@ -237,7 +237,7 @@ fn capture_rgba_u8_texture(
     let slice = output_buffer.slice(..);
     slice.map_async(wgpu::MapMode::Read, |_| ());
     ctx.device.poll(wgpu::Maintain::Wait);
-    let data: Vec<u8> = bytemuck::cast_slice(&*slice.get_mapped_range()).to_vec();
+    let data: Vec<u8> = bytemuck::cast_slice(&slice.get_mapped_range()).to_vec();
     // Chunk rows from output buffer, take actual pixel
     // bytes from each row and flatten into a vector.
     data.chunks_exact(bytes_per_row as usize)
