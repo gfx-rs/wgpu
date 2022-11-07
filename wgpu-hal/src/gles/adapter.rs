@@ -696,12 +696,18 @@ impl crate::Adapter<super::Api> for super::Adapter {
 
         let half_float_renderable = private_caps_fn(
             super::PrivateCapabilities::COLOR_BUFFER_HALF_FLOAT,
-            Tfc::COLOR_ATTACHMENT | Tfc::COLOR_ATTACHMENT_BLEND,
+            Tfc::COLOR_ATTACHMENT
+                | Tfc::COLOR_ATTACHMENT_BLEND
+                | Tfc::MULTISAMPLE
+                | Tfc::MULTISAMPLE_RESOLVE,
         );
 
         let float_renderable = private_caps_fn(
             super::PrivateCapabilities::COLOR_BUFFER_FLOAT,
-            Tfc::COLOR_ATTACHMENT | Tfc::COLOR_ATTACHMENT_BLEND,
+            Tfc::COLOR_ATTACHMENT
+                | Tfc::COLOR_ATTACHMENT_BLEND
+                | Tfc::MULTISAMPLE
+                | Tfc::MULTISAMPLE_RESOLVE,
         );
 
         match format {
