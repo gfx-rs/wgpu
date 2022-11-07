@@ -219,8 +219,7 @@ delete Object.prototype.__proto__;
     util.immutableDefine(globalThis, "Deno", denoNs);
     Object.freeze(globalThis.Deno);
 
-    core.ops();
-    Error.prepareStackTrace = core.createPrepareStackTrace();
+    Error.prepareStackTrace = core.prepareStackTrace;
   }
 
   ObjectDefineProperties(globalThis, {
