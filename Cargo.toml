@@ -17,7 +17,7 @@ default-members = ["wgpu", "wgpu-hal", "wgpu-info"]
 
 [workspace.package]
 edition = "2021"
-rust-version = "1.64"
+rust-version = "1.65"
 keywords = ["graphics"]
 license = "MIT OR Apache-2.0"
 homepage = "https://wgpu.rs/"
