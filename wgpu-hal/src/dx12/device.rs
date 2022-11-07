@@ -7,7 +7,7 @@ use super::{conv, descriptor, view};
 use parking_lot::Mutex;
 use std::{ffi, mem, num::NonZeroU32, ptr, slice, sync::Arc};
 use winapi::{
-    shared::{dxgiformat, dxgitype, winerror},
+    shared::{dxgiformat, dxgitype, minwindef::BOOL, winerror},
     um::{d3d12, d3dcompiler, synchapi, winbase},
     Interface,
 };
@@ -1358,8 +1358,8 @@ impl crate::Device<super::Api> for super::Device {
             DepthBias: bias.constant,
             DepthBiasClamp: bias.clamp,
             SlopeScaledDepthBias: bias.slope_scale,
-            DepthClipEnable: if desc.primitive.unclipped_depth { 0 } else { 1 },
-            MultisampleEnable: if desc.multisample.count > 1 { 1 } else { 0 },
+            DepthClipEnable: BOOL::from(!desc.primitive.unclipped_depth),
+            MultisampleEnable: BOOL::from(desc.multisample.count > 1),
             ForcedSampleCount: 0,
             AntialiasedLineEnable: 0,
             ConservativeRaster: if desc.primitive.conservative {
@@ -1388,11 +1388,7 @@ impl crate::Device<super::Api> for super::Device {
                 RasterizedStream: 0,
             },
             BlendState: d3d12::D3D12_BLEND_DESC {
-                AlphaToCoverageEnable: if desc.multisample.alpha_to_coverage_enabled {
-                    1
-                } else {
-                    0
-                },
+                AlphaToCoverageEnable: BOOL::from(desc.multisample.alpha_to_coverage_enabled),
                 IndependentBlendEnable: 1,
                 RenderTarget: conv::map_render_targets(desc.color_targets),
             },
