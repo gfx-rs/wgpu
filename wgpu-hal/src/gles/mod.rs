@@ -502,6 +502,7 @@ pub struct RenderPipeline {
     depth: Option<DepthState>,
     depth_bias: wgt::DepthBiasState,
     stencil: Option<StencilState>,
+    alpha_to_coverage_enabled: bool,
 }
 
 // SAFE: WASM doesn't have threads
@@ -742,6 +743,7 @@ enum Command {
     SetDepth(DepthState),
     SetDepthBias(wgt::DepthBiasState),
     ConfigureDepthStencil(crate::FormatAspects),
+    SetAlphaToCoverage(bool),
     SetVertexAttribute {
         buffer: Option<glow::Buffer>,
         buffer_desc: VertexBufferDesc,
