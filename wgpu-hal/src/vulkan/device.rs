@@ -1445,7 +1445,7 @@ impl crate::Device<super::Api> for super::Device {
             crate::ShaderInput::SpirV(spv) => Cow::Borrowed(spv),
         };
 
-        let raw = self.create_shader_module_impl(&*spv)?;
+        let raw = self.create_shader_module_impl(&spv)?;
 
         if let Some(label) = desc.label {
             self.shared

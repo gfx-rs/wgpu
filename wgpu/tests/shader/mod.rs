@@ -347,7 +347,7 @@ fn shader_input_output_test(
 
         let mapped = mapping_buffer.slice(..).get_mapped_range();
 
-        let typed: &[u32] = bytemuck::cast_slice(&*mapped);
+        let typed: &[u32] = bytemuck::cast_slice(&mapped);
 
         // -- Check results --
 

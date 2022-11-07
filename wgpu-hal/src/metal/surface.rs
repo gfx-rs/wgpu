@@ -207,7 +207,7 @@ impl crate::Surface<super::Api> for super::Surface {
                 let () = msg_send![*render_layer, setFrame: bounds];
             }
         }
-        render_layer.set_device(&*device_raw);
+        render_layer.set_device(&device_raw);
         render_layer.set_pixel_format(self.raw_swapchain_format);
         render_layer.set_framebuffer_only(framebuffer_only);
         render_layer.set_presents_with_transaction(self.present_with_transaction);
