@@ -1090,6 +1090,7 @@ impl crate::Device<super::Api> for super::Device {
                 .depth_stencil
                 .as_ref()
                 .map(|ds| conv::map_stencil(&ds.stencil)),
+            alpha_to_coverage_enabled: desc.multisample.alpha_to_coverage_enabled,
         })
     }
     unsafe fn destroy_render_pipeline(&self, pipeline: super::RenderPipeline) {

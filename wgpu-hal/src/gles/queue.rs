@@ -992,6 +992,13 @@ impl super::Queue {
                     gl.disable(glow::STENCIL_TEST);
                 }
             }
+            C::SetAlphaToCoverage(enabled) => {
+                if enabled {
+                    gl.enable(glow::SAMPLE_ALPHA_TO_COVERAGE);
+                } else {
+                    gl.disable(glow::SAMPLE_ALPHA_TO_COVERAGE);
+                }
+            }
             C::SetProgram(program) => {
                 gl.use_program(Some(program));
             }
