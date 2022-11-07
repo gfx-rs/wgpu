@@ -797,7 +797,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
                 wgt::TextureFormat::Bgra8Unorm,
             ];
             if surface.supports_srgb() {
-                formats.extend(&[
+                formats.extend([
                     wgt::TextureFormat::Rgba8UnormSrgb,
                     #[cfg(not(target_arch = "wasm32"))]
                     wgt::TextureFormat::Bgra8UnormSrgb,
