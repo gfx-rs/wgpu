@@ -95,7 +95,7 @@ impl Context {
         hal_device: hal::OpenDevice<A>,
         desc: &crate::DeviceDescriptor,
         trace_dir: Option<&std::path::Path>,
-    ) -> Result<(Device, wgc::id::QueueId), crate::RequestDeviceError> {
+    ) -> Result<(Device, Queue), crate::RequestDeviceError> {
         let global = &self.0;
         let (device_id, error) = global.create_device_from_hal(
             *adapter,
@@ -107,12 +107,17 @@ impl Context {
         if let Some(err) = error {
             self.handle_error_fatal(err, "Adapter::create_device_from_hal");
         }
+        let error_sink = Arc::new(Mutex::new(ErrorSinkRaw::new()));
         let device = Device {
             id: device_id,
-            error_sink: Arc::new(Mutex::new(ErrorSinkRaw::new())),
+            error_sink: error_sink.clone(),
             features: desc.features,
         };
-        Ok((device, device_id))
+        let queue = Queue {
+            id: device_id,
+            error_sink,
+        };
+        Ok((device, queue))
     }
 
     #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
@@ -809,6 +814,18 @@ pub struct Texture {
 }
 
 #[derive(Debug)]
+pub struct Queue {
+    id: wgc::id::QueueId,
+    error_sink: ErrorSink,
+}
+
+impl Queue {
+    pub(crate) fn backend(&self) -> wgt::Backend {
+        self.id.backend()
+    }
+}
+
+#[derive(Debug)]
 pub(crate) struct CommandEncoder {
     id: wgc::id::CommandEncoderId,
     error_sink: ErrorSink,
@@ -858,10 +875,17 @@ impl crate::GlobalId for CommandEncoder {
     }
 }
 
+impl crate::GlobalId for Queue {
+    fn global_id(&self) -> Id {
+        use wgc::id::TypedId;
+        self.id.unzip()
+    }
+}
+
 impl crate::Context for Context {
     type AdapterId = wgc::id::AdapterId;
     type DeviceId = Device;
-    type QueueId = wgc::id::QueueId;
+    type QueueId = Queue;
     type ShaderModuleId = wgc::id::ShaderModuleId;
     type BindGroupLayoutId = wgc::id::BindGroupLayoutId;
     type BindGroupId = wgc::id::BindGroupId;
@@ -951,12 +975,17 @@ impl crate::Context for Context {
             log::error!("Error in Adapter::request_device: {}", err);
             return ready(Err(crate::RequestDeviceError));
         }
+        let error_sink = Arc::new(Mutex::new(ErrorSinkRaw::new()));
         let device = Device {
             id: device_id,
-            error_sink: Arc::new(Mutex::new(ErrorSinkRaw::new())),
+            error_sink: error_sink.clone(),
             features: desc.features,
         };
-        ready(Ok((device, device_id)))
+        let queue = Queue {
+            id: device_id,
+            error_sink,
+        };
+        ready(Ok((device, queue)))
     }
 
     fn adapter_is_surface_supported(
@@ -2270,7 +2299,7 @@ impl crate::Context for Context {
     ) {
         let global = &self.0;
         match wgc::gfx_select!(
-            *queue => global.queue_write_buffer(*queue, buffer.id, offset, data)
+            *queue => global.queue_write_buffer(queue.id, buffer.id, offset, data)
         ) {
             Ok(()) => (),
             Err(err) => self.handle_error_fatal(err, "Queue::write_buffer"),
@@ -2286,7 +2315,7 @@ impl crate::Context for Context {
     ) {
         let global = &self.0;
         match wgc::gfx_select!(
-            *queue => global.queue_validate_write_buffer(*queue, buffer.id, offset, size.get())
+            *queue => global.queue_validate_write_buffer(queue.id, buffer.id, offset, size.get())
         ) {
             Ok(()) => (),
             Err(err) => self.handle_error_fatal(err, "Queue::write_buffer_with"),
@@ -2300,7 +2329,7 @@ impl crate::Context for Context {
     ) -> QueueWriteBuffer {
         let global = &self.0;
         match wgc::gfx_select!(
-            *queue => global.queue_create_staging_buffer(*queue, size, ())
+            *queue => global.queue_create_staging_buffer(queue.id, size, ())
         ) {
             Ok((buffer_id, ptr)) => QueueWriteBuffer {
                 buffer_id,
@@ -2322,10 +2351,12 @@ impl crate::Context for Context {
     ) {
         let global = &self.0;
         match wgc::gfx_select!(
-            *queue => global.queue_write_staging_buffer(*queue, buffer.id, offset, staging_buffer.buffer_id)
+            *queue => global.queue_write_staging_buffer(queue.id, buffer.id, offset, staging_buffer.buffer_id)
         ) {
             Ok(()) => (),
-            Err(err) => self.handle_error_fatal(err, "Queue::write_buffer_with"),
+            Err(err) => {
+                self.handle_error_nolabel(&queue.error_sink, err, "Queue::write_buffer_with");
+            }
         }
     }
 
@@ -2339,14 +2370,14 @@ impl crate::Context for Context {
     ) {
         let global = &self.0;
         match wgc::gfx_select!(*queue => global.queue_write_texture(
-            *queue,
+            queue.id,
             &map_texture_copy_view(texture),
             data,
             &data_layout,
             &size
         )) {
             Ok(()) => (),
-            Err(err) => self.handle_error_fatal(err, "Queue::write_texture"),
+            Err(err) => self.handle_error_nolabel(&queue.error_sink, err, "Queue::write_texture"),
         }
     }
 
@@ -2358,7 +2389,7 @@ impl crate::Context for Context {
         let temp_command_buffers = command_buffers.collect::<SmallVec<[_; 4]>>();
 
         let global = &self.0;
-        match wgc::gfx_select!(*queue => global.queue_submit(*queue, &temp_command_buffers)) {
+        match wgc::gfx_select!(*queue => global.queue_submit(queue.id, &temp_command_buffers)) {
             Ok(index) => index,
             Err(err) => self.handle_error_fatal(err, "Queue::submit"),
         }
@@ -2367,7 +2398,7 @@ impl crate::Context for Context {
     fn queue_get_timestamp_period(&self, queue: &Self::QueueId) -> f32 {
         let global = &self.0;
         let res = wgc::gfx_select!(queue => global.queue_get_timestamp_period(
-            *queue
+            queue.id
         ));
         match res {
             Ok(v) => v,
@@ -2385,7 +2416,7 @@ impl crate::Context for Context {
         let closure = wgc::device::queue::SubmittedWorkDoneClosure::from_rust(callback);
 
         let global = &self.0;
-        let res = wgc::gfx_select!(queue => global.queue_on_submitted_work_done(*queue, closure));
+        let res = wgc::gfx_select!(queue => global.queue_on_submitted_work_done(queue.id, closure));
         if let Err(cause) = res {
             self.handle_error_fatal(cause, "Queue::on_submitted_work_done");
         }

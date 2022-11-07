@@ -600,6 +600,19 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (selector, dst_base, texture_format) =
             extract_texture_selector(destination, size, &*texture_guard)?;
         let format_desc = texture_format.describe();
+
+        let dst = texture_guard.get_mut(destination.texture).unwrap();
+        if !dst.desc.usage.contains(wgt::TextureUsages::COPY_DST) {
+            return Err(
+                TransferError::MissingCopyDstUsageFlag(None, Some(destination.texture)).into(),
+            );
+        }
+
+        // Note: Doing the copy range validation early is important because ensures that the
+        // dimensions are not going to cause overflow in other parts of the validation.
+        let (hal_copy_size, array_layer_count) =
+            validate_texture_copy_range(destination, &dst.desc, CopySide::Destination, size)?;
+
         // Note: `_source_bytes_per_array_layer` is ignored since we
         // have a staging copy, and it can have a different value.
         let (_, _source_bytes_per_array_layer) = validate_linear_texture_data(
@@ -641,13 +654,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let block_rows_in_copy =
             (size.depth_or_array_layers - 1) * block_rows_per_image + height_blocks;
         let stage_size = stage_bytes_per_row as u64 * block_rows_in_copy as u64;
-
-        let dst = texture_guard.get_mut(destination.texture).unwrap();
-        if !dst.desc.usage.contains(wgt::TextureUsages::COPY_DST) {
-            return Err(
-                TransferError::MissingCopyDstUsageFlag(None, Some(destination.texture)).into(),
-            );
-        }
 
         let mut trackers = device.trackers.lock();
         let encoder = device.pending_writes.activate();
@@ -702,8 +708,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             )
             .ok_or(TransferError::InvalidTexture(destination.texture))?;
 
-        let (hal_copy_size, array_layer_count) =
-            validate_texture_copy_range(destination, &dst.desc, CopySide::Destination, size)?;
         dst.life_guard.use_at(device.active_submission_index + 1);
 
         let dst_raw = dst

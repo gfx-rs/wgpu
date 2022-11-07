@@ -9,6 +9,7 @@ mod encoder;
 mod example_wgsl;
 mod instance;
 mod poll;
+mod queue_transfer;
 mod resource_descriptor_accessor;
 mod resource_error;
 mod shader;
