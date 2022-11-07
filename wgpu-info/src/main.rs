@@ -140,7 +140,7 @@ mod inner {
         println!("\t  DeviceID: {:?}", info.device);
         println!("\t      Type: {:?}", info.device_type);
         println!("\t    Driver: {:?}", info.driver);
-        println!("\tDriverInfo: {:?}", info.driver);
+        println!("\tDriverInfo: {:?}", info.driver_info);
         println!("\t Compliant: {:?}", downlevel.is_webgpu_compliant());
         println!("\tFeatures:");
         for i in 0..(size_of::<wgpu::Features>() * 8) {
