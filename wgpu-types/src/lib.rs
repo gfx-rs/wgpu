@@ -1063,7 +1063,7 @@ bitflags::bitflags! {
 
         /// Supports samplers with anisotropic filtering. Note this isn't actually required by
         /// WebGPU, the implementation is allowed to completely ignore aniso clamp. This flag is
-        /// here for native backends so they can communi    cate to the user of aniso is enabled.
+        /// here for native backends so they can communicate to the user of aniso is enabled.
         ///
         /// All backends and all devices support anisotropic filtering.
         const ANISOTROPIC_FILTERING = 1 << 10;
