@@ -702,11 +702,7 @@ impl crate::Instance<super::Api> for Instance {
                 EGL_PLATFORM_ANGLE_NATIVE_PLATFORM_TYPE_ANGLE as egl::Attrib,
                 EGL_PLATFORM_X11_KHR as egl::Attrib,
                 EGL_PLATFORM_ANGLE_DEBUG_LAYERS_ENABLED as egl::Attrib,
-                if desc.flags.contains(crate::InstanceFlags::VALIDATION) {
-                    1
-                } else {
-                    0
-                },
+                usize::from(desc.flags.contains(crate::InstanceFlags::VALIDATION)),
                 egl::ATTRIB_NONE,
             ];
             let display = egl
