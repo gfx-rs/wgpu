@@ -98,7 +98,7 @@ impl super::Surface {
     }
 
     /// If not called on the main thread, this will panic.
-    pub unsafe fn get_metal_layer(
+    pub(crate) unsafe fn get_metal_layer(
         view: *mut Object,
         delegate: Option<&HalManagedMetalLayerDelegate>,
     ) -> *mut Object {
