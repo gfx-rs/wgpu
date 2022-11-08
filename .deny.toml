@@ -1,3 +1,14 @@
+[bans]
+multiple-versions = "deny"
+skip-tree = [
+	{ name = "cts_runner" },
+	{ name = "dummy" },
+	{ name = "player" },
+	{ name = "run-wasm" },
+	{ name = "wgpu-info" },
+]
+wildcards = "deny"
+
 [licenses]
 allow = [
 	"Apache-2.0",
