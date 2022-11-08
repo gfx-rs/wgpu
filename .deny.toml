@@ -11,3 +11,16 @@ allow = [
 	"Unicode-DFS-2016",
 	"Zlib",
 ]
+
+[sources]
+allow-git = [
+	"https://github.com/grovesNL/glow",
+]
+unknown-registry = "deny"
+unknown-git = "deny"
+required-git-spec = "rev"
+
+[sources.allow-org]
+github = [
+	"gfx-rs"
+]
