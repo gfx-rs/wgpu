@@ -880,9 +880,10 @@ impl crate::GlobalId for CommandEncoder {
 }
 
 impl crate::GlobalId for Queue {
-    fn global_id(&self) -> Id {
+    #[allow(clippy::useless_conversion)] // because not(id32)
+    fn global_id(&self) -> u64 {
         use wgc::id::TypedId;
-        self.id.unzip()
+        self.id.into_raw().get().into()
     }
 }
 
