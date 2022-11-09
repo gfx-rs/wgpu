@@ -197,7 +197,6 @@ impl super::Adapter {
             (vendor, renderer)
         };
         let version = gl.get_parameter_string(glow::VERSION);
-
         log::info!("Vendor: {}", vendor);
         log::info!("Renderer: {}", renderer);
         log::info!("Version: {}", version);
@@ -664,6 +663,21 @@ impl crate::Adapter<super::Api> for super::Adapter {
         use crate::TextureFormatCapabilities as Tfc;
         use wgt::TextureFormat as Tf;
 
+        let sample_count = {
+            let max_samples = self
+                .shared
+                .context
+                .lock()
+                .get_parameter_i32(glow::MAX_SAMPLES);
+            if max_samples >= 8 {
+                Tfc::MULTISAMPLE_X2 | Tfc::MULTISAMPLE_X4 | Tfc::MULTISAMPLE_X8
+            } else if max_samples >= 4 {
+                Tfc::MULTISAMPLE_X2 | Tfc::MULTISAMPLE_X4
+            } else {
+                Tfc::MULTISAMPLE_X2
+            }
+        };
+
         // Base types are pulled from the table in the OpenGLES 3.0 spec in section 3.8.
         //
         // The storage types are based on table 8.26, in section
@@ -671,10 +685,10 @@ impl crate::Adapter<super::Api> for super::Adapter {
         let empty = Tfc::empty();
         let base = Tfc::COPY_SRC | Tfc::COPY_DST;
         let unfilterable = base | Tfc::SAMPLED;
-        let depth = base | Tfc::SAMPLED | Tfc::MULTISAMPLE | Tfc::DEPTH_STENCIL_ATTACHMENT;
+        let depth = base | Tfc::SAMPLED | sample_count | Tfc::DEPTH_STENCIL_ATTACHMENT;
         let filterable = unfilterable | Tfc::SAMPLED_LINEAR;
         let renderable =
-            unfilterable | Tfc::COLOR_ATTACHMENT | Tfc::MULTISAMPLE | Tfc::MULTISAMPLE_RESOLVE;
+            unfilterable | Tfc::COLOR_ATTACHMENT | sample_count | Tfc::MULTISAMPLE_RESOLVE;
         let filterable_renderable = filterable | renderable | Tfc::COLOR_ATTACHMENT_BLEND;
         let storage = base | Tfc::STORAGE | Tfc::STORAGE_READ_WRITE;
 

@@ -1417,10 +1417,42 @@ impl crate::Adapter<super::Api> for super::Adapter {
             ),
         );
         // Vulkan is very permissive about MSAA
+        flags.set(Tfc::MULTISAMPLE_RESOLVE, !format.describe().is_compressed());
+
+        // get the supported sample counts
+        let format_aspect = crate::FormatAspects::from(format);
+        let limits = self.phd_capabilities.properties.limits;
+
+        let sample_flags = if format_aspect.contains(crate::FormatAspects::DEPTH) {
+            limits
+                .framebuffer_depth_sample_counts
+                .min(limits.sampled_image_depth_sample_counts)
+        } else if format_aspect.contains(crate::FormatAspects::STENCIL) {
+            limits
+                .framebuffer_stencil_sample_counts
+                .min(limits.sampled_image_stencil_sample_counts)
+        } else {
+            limits
+                .framebuffer_color_sample_counts
+                .min(limits.sampled_image_color_sample_counts)
+                .min(limits.sampled_image_integer_sample_counts)
+                .min(limits.storage_image_sample_counts)
+        };
+
         flags.set(
-            Tfc::MULTISAMPLE | Tfc::MULTISAMPLE_RESOLVE,
-            !format.describe().is_compressed(),
+            Tfc::MULTISAMPLE_X2,
+            sample_flags.contains(vk::SampleCountFlags::TYPE_2),
         );
+        flags.set(
+            Tfc::MULTISAMPLE_X4,
+            sample_flags.contains(vk::SampleCountFlags::TYPE_4),
+        );
+
+        flags.set(
+            Tfc::MULTISAMPLE_X8,
+            sample_flags.contains(vk::SampleCountFlags::TYPE_8),
+        );
+
         flags
     }
 

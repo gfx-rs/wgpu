@@ -446,11 +446,36 @@ impl crate::Adapter<super::Api> for super::Adapter {
                 | d3d12::D3D12_FORMAT_SUPPORT1_DEPTH_STENCIL)
             != 0
             && data.Support1 & d3d12::D3D12_FORMAT_SUPPORT1_MULTISAMPLE_RENDERTARGET == 0;
-        caps.set(Tfc::MULTISAMPLE, !no_msaa_load && !no_msaa_target);
+
         caps.set(
             Tfc::MULTISAMPLE_RESOLVE,
             data.Support1 & d3d12::D3D12_FORMAT_SUPPORT1_MULTISAMPLE_RESOLVE != 0,
         );
+
+        let mut ms_levels = d3d12::D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS {
+            Format: raw_format,
+            SampleCount: 0,
+            Flags: d3d12::D3D12_MULTISAMPLE_QUALITY_LEVELS_FLAG_NONE,
+            NumQualityLevels: 0,
+        };
+
+        let mut set_sample_count = |sc: u32, tfc: Tfc| {
+            ms_levels.SampleCount = sc;
+
+            if self.device.CheckFeatureSupport(
+                d3d12::D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS,
+                <*mut _>::cast(&mut ms_levels),
+                mem::size_of::<d3d12::D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS>() as _,
+            ) == winerror::S_OK
+                && ms_levels.NumQualityLevels != 0
+            {
+                caps.set(tfc, !no_msaa_load && !no_msaa_target);
+            }
+        };
+
+        set_sample_count(2, Tfc::MULTISAMPLE_X2);
+        set_sample_count(4, Tfc::MULTISAMPLE_X4);
+        set_sample_count(8, Tfc::MULTISAMPLE_X8);
 
         caps
     }

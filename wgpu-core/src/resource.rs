@@ -517,6 +517,8 @@ pub enum CreateTextureError {
     MultisampledNotRenderAttachment,
     #[error("Texture format {0:?} can't be used due to missing features.")]
     MissingFeatures(wgt::TextureFormat, #[source] MissingFeatures),
+    #[error("Sample count {0} is not supported by format {1:?} on this device. It may be supported by your adapter through the TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES feature.")]
+    InvalidSampleCount(u32, wgt::TextureFormat),
 }
 
 impl<A: hal::Api> Resource for Texture<A> {

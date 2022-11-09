@@ -268,9 +268,18 @@ impl<A: HalApi> Adapter<A> {
         );
 
         flags.set(
-            wgt::TextureFormatFeatureFlags::MULTISAMPLE,
-            caps.contains(Tfc::MULTISAMPLE),
+            wgt::TextureFormatFeatureFlags::MULTISAMPLE_X2,
+            caps.contains(Tfc::MULTISAMPLE_X2),
         );
+        flags.set(
+            wgt::TextureFormatFeatureFlags::MULTISAMPLE_X4,
+            caps.contains(Tfc::MULTISAMPLE_X4),
+        );
+        flags.set(
+            wgt::TextureFormatFeatureFlags::MULTISAMPLE_X8,
+            caps.contains(Tfc::MULTISAMPLE_X8),
+        );
+
         flags.set(
             wgt::TextureFormatFeatureFlags::MULTISAMPLE_RESOLVE,
             caps.contains(Tfc::MULTISAMPLE_RESOLVE),
