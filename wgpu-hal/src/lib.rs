@@ -884,8 +884,27 @@ pub struct PipelineLayoutDescriptor<'a, A: Api> {
 
 #[derive(Debug)]
 pub struct BufferBinding<'a, A: Api> {
+    /// The buffer being bound.
     pub buffer: &'a A::Buffer,
+
+    /// The offset at which the bound region starts.
+    ///
+    /// This must be less than the size of the buffer. Some back ends
+    /// cannot tolerate zero-length regions; for example, see
+    /// [VUID-VkDescriptorBufferInfo-offset-00340][340] and
+    /// [VUID-VkDescriptorBufferInfo-range-00341][341], or the
+    /// documentation for GLES's [glBindBufferRange][bbr].
+    ///
+    /// [340]: https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#VUID-VkDescriptorBufferInfo-offset-00340
+    /// [341]: https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#VUID-VkDescriptorBufferInfo-range-00341
+    /// [bbr]: https://registry.khronos.org/OpenGL-Refpages/es3.0/html/glBindBufferRange.xhtml
     pub offset: wgt::BufferAddress,
+
+    /// The size of the region bound, in bytes.
+    ///
+    /// If `None`, the region extends from `offset` to the end of the
+    /// buffer. Given the restrictions on `offset`, this means that
+    /// the size is always greater than zero.
     pub size: Option<wgt::BufferSize>,
 }
 
