@@ -43,7 +43,7 @@ pub use wgt::{
     QUERY_RESOLVE_BUFFER_ALIGNMENT, QUERY_SET_MAX_QUERIES, QUERY_SIZE, VERTEX_STRIDE_ALIGNMENT,
 };
 
-use backend::{BufferMappedRange, Context as C, Id as BackendId, QueueWriteBuffer};
+use backend::{BufferMappedRange, Context as C, QueueWriteBuffer};
 
 /// Filter for error scopes.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd)]
@@ -165,7 +165,7 @@ trait RenderPassInner<Ctx: Context>: RenderInner<Ctx> {
 }
 
 trait GlobalId {
-    fn global_id(&self) -> BackendId;
+    fn global_id(&self) -> u64;
 }
 
 trait Context: Debug + Send + Sized + Sync {
@@ -3805,7 +3805,7 @@ impl Surface {
 #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
 #[repr(transparent)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-pub struct Id(BackendId);
+pub struct Id(u64);
 
 #[cfg(feature = "expose-ids")]
 impl Adapter {

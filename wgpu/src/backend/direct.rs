@@ -832,46 +832,50 @@ pub(crate) struct CommandEncoder {
     open: bool,
 }
 
-pub(crate) type Id = (u32, u32, wgt::Backend);
-
 impl<T: wgc::id::TypedId> crate::GlobalId for T {
-    fn global_id(&self) -> Id {
-        self.unzip()
+    #[allow(clippy::useless_conversion)] // because not(id32)
+    fn global_id(&self) -> u64 {
+        T::into_raw(*self).get().into()
     }
 }
 
 impl crate::GlobalId for Surface {
-    fn global_id(&self) -> Id {
+    #[allow(clippy::useless_conversion)] // because not(id32)
+    fn global_id(&self) -> u64 {
         use wgc::id::TypedId;
-        self.id.unzip()
+        self.id.into_raw().get().into()
     }
 }
 
 impl crate::GlobalId for Device {
-    fn global_id(&self) -> Id {
+    #[allow(clippy::useless_conversion)] // because not(id32)
+    fn global_id(&self) -> u64 {
         use wgc::id::TypedId;
-        self.id.unzip()
+        self.id.into_raw().get().into()
     }
 }
 
 impl crate::GlobalId for Buffer {
-    fn global_id(&self) -> Id {
+    #[allow(clippy::useless_conversion)] // because not(id32)
+    fn global_id(&self) -> u64 {
         use wgc::id::TypedId;
-        self.id.unzip()
+        self.id.into_raw().get().into()
     }
 }
 
 impl crate::GlobalId for Texture {
-    fn global_id(&self) -> Id {
+    #[allow(clippy::useless_conversion)] // because not(id32)
+    fn global_id(&self) -> u64 {
         use wgc::id::TypedId;
-        self.id.unzip()
+        self.id.into_raw().get().into()
     }
 }
 
 impl crate::GlobalId for CommandEncoder {
-    fn global_id(&self) -> Id {
+    #[allow(clippy::useless_conversion)] // because not(id32)
+    fn global_id(&self) -> u64 {
         use wgc::id::TypedId;
-        self.id.unzip()
+        self.id.into_raw().get().into()
     }
 }
 
