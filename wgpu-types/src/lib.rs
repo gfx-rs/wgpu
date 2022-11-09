@@ -5067,9 +5067,16 @@ pub struct DispatchIndirectArgs {
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
+#[non_exhaustive]
 pub struct ShaderBoundChecks {
-    runtime_checks: bool,
-    uniformity_validation: bool,
+    /// Whether to the shader should be bounds checked
+    /// You MUST ensure that all shaders built with this configuration don't perform any
+    /// out of bounds reads or writes.
+    pub runtime_checks: bool,
+    /// Whether to run uniformity validation on the shader
+    /// The caller MUST ensure that all shaders built with this configuration don't perform any
+    /// invalid non-uniform operation.
+    pub uniformity_validation: bool,
 }
 
 impl ShaderBoundChecks {
@@ -5086,34 +5093,14 @@ impl ShaderBoundChecks {
     /// # Safety
     /// The caller MUST ensure that all shaders built with this configuration don't perform any
     /// out of bounds reads or writes.
-    pub unsafe fn unchecked() -> Self {
+    pub fn unchecked() -> Self {
         ShaderBoundChecks {
             runtime_checks: false,
-            uniformity_validation: false,
+            // Disabling `uniformity_validation` is only a small effect on startup performance,
+            // whereas `runtime_checks` may have a larger effect on startup performance.
+            // Don't provide an example using it
+            uniformity_validation: true,
         }
-    }
-
-    /// Creates a new configuration where the shader doesn't have bound checking.
-    ///
-    /// # Safety
-    /// The caller MUST ensure that all shaders built with this configuration don't perform any
-    /// invalid non-uniform operation. This should be used if the wgsl validation is too strict
-    /// for your use case.
-    pub unsafe fn allows_non_uniform() -> Self {
-        ShaderBoundChecks {
-            runtime_checks: true,
-            uniformity_validation: false,
-        }
-    }
-
-    /// Query whether runtime bound checks are enabled in this configuration
-    pub fn runtime_checks(&self) -> bool {
-        self.runtime_checks
-    }
-
-    /// Query whether uniformity analysis is enabled in this configuration
-    pub fn uniformity_validation(&self) -> bool {
-        self.uniformity_validation
     }
 }
 

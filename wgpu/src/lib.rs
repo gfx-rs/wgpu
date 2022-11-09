@@ -34,12 +34,12 @@ pub use wgt::{
     Face, Features, FilterMode, FrontFace, ImageDataLayout, ImageSubresourceRange, IndexFormat,
     Limits, MultisampleState, Origin3d, PipelineStatisticsTypes, PolygonMode, PowerPreference,
     PresentMode, PrimitiveState, PrimitiveTopology, PushConstantRange, QueryType,
-    RenderBundleDepthStencil, SamplerBindingType, SamplerBorderColor, ShaderLocation, ShaderModel,
-    ShaderStages, StencilFaceState, StencilOperation, StencilState, StorageTextureAccess,
-    SurfaceConfiguration, SurfaceStatus, TextureAspect, TextureDimension, TextureFormat,
-    TextureFormatFeatureFlags, TextureFormatFeatures, TextureSampleType, TextureUsages,
-    TextureViewDimension, VertexAttribute, VertexFormat, VertexStepMode, COPY_BUFFER_ALIGNMENT,
-    COPY_BYTES_PER_ROW_ALIGNMENT, MAP_ALIGNMENT, PUSH_CONSTANT_ALIGNMENT,
+    RenderBundleDepthStencil, SamplerBindingType, SamplerBorderColor, ShaderBoundChecks,
+    ShaderLocation, ShaderModel, ShaderStages, StencilFaceState, StencilOperation, StencilState,
+    StorageTextureAccess, SurfaceConfiguration, SurfaceStatus, TextureAspect, TextureDimension,
+    TextureFormat, TextureFormatFeatureFlags, TextureFormatFeatures, TextureSampleType,
+    TextureUsages, TextureViewDimension, VertexAttribute, VertexFormat, VertexStepMode,
+    COPY_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT, MAP_ALIGNMENT, PUSH_CONSTANT_ALIGNMENT,
     QUERY_RESOLVE_BUFFER_ALIGNMENT, QUERY_SET_MAX_QUERIES, QUERY_SIZE, VERTEX_STRIDE_ALIGNMENT,
 };
 
@@ -2099,53 +2099,24 @@ impl Device {
         }
     }
 
-    /// Creates a shader module from either SPIR-V or WGSL source code without runtime checks.
+    /// Creates a shader module from either SPIR-V or WGSL source code with the specified runtime checks.
     ///
     /// # Safety
-    /// In contrast with [`create_shader_module`](Self::create_shader_module) this function
-    /// creates a shader module without runtime checks which allows shaders to perform
-    /// operations which can lead to undefined behavior like indexing out of bounds, thus it's
-    /// the caller responsibility to pass a shader which doesn't perform any of this
-    /// operations.
+    /// In contrast to [`create_shader_module`](Self::create_shader_module) this function
+    /// may create a shader module without runtime checks, depending on the value of `checks`.
+    /// This may allow performing undefined behavior like indexing out of bounds.
+    /// It's the the caller's responsibility to pass a shader which doesn't perform any such operations
+    /// See the documentation on [`ShaderBoundChecks`]'s fields for more.
     ///
-    /// This has no effect on web.
+    /// This is equivalent to `create_shader_module` on web using WebGPU.
     pub unsafe fn create_shader_module_unchecked(
         &self,
         desc: ShaderModuleDescriptor,
+        checks: ShaderBoundChecks,
     ) -> ShaderModule {
         ShaderModule {
             context: Arc::clone(&self.context),
-            id: Context::device_create_shader_module(
-                &*self.context,
-                &self.id,
-                desc,
-                wgt::ShaderBoundChecks::unchecked(),
-            ),
-        }
-    }
-
-    /// Creates a shader module from either SPIR-V or WGSL source code without uniformity checks.
-    ///
-    /// # Safety
-    /// In contrast with [`create_shader_module`](Self::create_shader_module) this function
-    /// creates a shader module without unifromity checks which allows shaders to perform
-    /// operations which can lead to undefined behavior like data races, thus it's
-    /// the caller responsibility to pass a shader which doesn't perform any of these
-    /// operations.
-    ///
-    /// This is equivalent to `create_shader_module` effect on web.
-    pub unsafe fn create_shader_module_non_uniform(
-        &self,
-        desc: ShaderModuleDescriptor,
-    ) -> ShaderModule {
-        ShaderModule {
-            context: Arc::clone(&self.context),
-            id: Context::device_create_shader_module(
-                &*self.context,
-                &self.id,
-                desc,
-                wgt::ShaderBoundChecks::allows_non_uniform(),
-            ),
+            id: Context::device_create_shader_module(&*self.context, &self.id, desc, checks),
         }
     }
 
