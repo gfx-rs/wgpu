@@ -5,7 +5,7 @@ use winapi::{
         dxgi, dxgi1_2, dxgi1_3, dxgi1_4, dxgi1_5, dxgi1_6, dxgiformat, dxgitype, minwindef::TRUE,
         windef::HWND,
     },
-    um::{d3d12, dxgidebug, unknwnbase::IUnknown},
+    um::{d3d12, dxgidebug, unknwnbase::IUnknown, winnt::HANDLE},
     Interface,
 };
 
@@ -64,6 +64,7 @@ pub type Factory3 = WeakPtr<dxgi1_3::IDXGIFactory3>;
 pub type Factory4 = WeakPtr<dxgi1_4::IDXGIFactory4>;
 pub type Factory5 = WeakPtr<dxgi1_5::IDXGIFactory5>;
 pub type Factory6 = WeakPtr<dxgi1_6::IDXGIFactory6>;
+pub type FactoryMedia = WeakPtr<dxgi1_3::IDXGIFactoryMedia>;
 crate::weak_com_inheritance_chain! {
     #[derive(Debug, Copy, Clone, PartialEq, Hash)]
     pub enum DxgiFactory {
@@ -73,6 +74,7 @@ crate::weak_com_inheritance_chain! {
         Factory4(dxgi1_4::IDXGIFactory4), from_factory4, as_factory4, unwrap_factory4;
         Factory5(dxgi1_5::IDXGIFactory5), from_factory5, as_factory5, unwrap_factory5;
         Factory6(dxgi1_6::IDXGIFactory6), from_factory6, as_factory6, unwrap_factory6;
+        FactoryMedia(dxgi1_3::IDXGIFactoryMedia), from_factory_media, as_factory_media, unwrap_factory_media;
     }
 }
 
@@ -292,6 +294,28 @@ impl Factory4 {
         let hr = unsafe { self.EnumAdapters1(id, adapter.mut_void() as *mut *mut _) };
 
         (adapter, hr)
+    }
+}
+
+impl FactoryMedia {
+    pub fn create_swapchain_for_composition_surface_handle(
+        &self,
+        queue: *mut IUnknown,
+        surface_handle: HANDLE,
+        desc: &SwapchainDesc,
+    ) -> D3DResult<SwapChain1> {
+        let mut swap_chain = SwapChain1::null();
+        let hr = unsafe {
+            self.CreateSwapChainForCompositionSurfaceHandle(
+                queue,
+                surface_handle,
+                &desc.to_desc1(),
+                ptr::null_mut(),
+                swap_chain.mut_void() as *mut *mut _,
+            )
+        };
+
+        (swap_chain, hr)
     }
 }
 
