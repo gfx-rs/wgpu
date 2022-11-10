@@ -1517,6 +1517,22 @@ impl Instance {
         }
     }
 
+    /// Creates a surface from `SurfaceHandle`.
+    ///
+    /// # Safety
+    ///
+    /// - surface_handle must be a valid SurfaceHandle to create a surface upon.
+    #[cfg(target_os = "windows")]
+    pub unsafe fn create_surface_from_surface_handle(
+        &self,
+        surface_handle: *mut std::ffi::c_void,
+    ) -> Surface {
+        unsafe {
+            self.context
+                .create_surface_from_surface_handle(surface_handle)
+        }
+    }
+
     /// Creates a surface from a `web_sys::HtmlCanvasElement`.
     ///
     /// The `canvas` argument must be a valid `<canvas>` element to

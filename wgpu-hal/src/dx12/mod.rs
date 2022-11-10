@@ -108,6 +108,18 @@ impl Instance {
             swap_chain: None,
         }
     }
+
+    pub unsafe fn create_surface_from_surface_handle(
+        &self,
+        surface_handle: winnt::HANDLE,
+    ) -> Surface {
+        Surface {
+            factory: self.factory,
+            target: SurfaceTarget::SurfaceHandle(surface_handle),
+            supports_allow_tearing: self.supports_allow_tearing,
+            swap_chain: None,
+        }
+    }
 }
 
 unsafe impl Send for Instance {}
@@ -128,6 +140,7 @@ struct SwapChain {
 enum SurfaceTarget {
     WndHandle(windef::HWND),
     Visual(native::WeakPtr<dcomp::IDCompositionVisual>),
+    SurfaceHandle(winnt::HANDLE),
 }
 
 pub struct Surface {
@@ -680,6 +693,15 @@ impl crate::Surface<Api> for Surface {
                             )
                             .into_result()
                     }
+                    SurfaceTarget::SurfaceHandle(handle) => self
+                        .factory
+                        .unwrap_factory_media()
+                        .create_swapchain_for_composition_surface_handle(
+                            device.present_queue.as_mut_ptr() as *mut _,
+                            handle,
+                            &desc,
+                        )
+                        .into_result(),
                     SurfaceTarget::WndHandle(hwnd) => {
                         profiling::scope!("IDXGIFactory4::CreateSwapChainForHwnd");
                         self.factory
@@ -703,7 +725,7 @@ impl crate::Surface<Api> for Surface {
                 };
 
                 match self.target {
-                    SurfaceTarget::WndHandle(_) => {}
+                    SurfaceTarget::WndHandle(_) | SurfaceTarget::SurfaceHandle(_) => {}
                     SurfaceTarget::Visual(visual) => {
                         if let Err(err) =
                             unsafe { visual.SetContent(swap_chain1.as_unknown()) }.into_result()
@@ -741,7 +763,7 @@ impl crate::Surface<Api> for Surface {
                     )
                 };
             }
-            SurfaceTarget::Visual(_) => {}
+            SurfaceTarget::Visual(_) | SurfaceTarget::SurfaceHandle(_) => {}
         }
 
         unsafe { swap_chain.SetMaximumFrameLatency(config.swap_chain_size) };

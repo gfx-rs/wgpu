@@ -250,6 +250,24 @@ impl Context {
         }
     }
 
+    #[cfg(target_os = "windows")]
+    pub unsafe fn create_surface_from_surface_handle(
+        self: &Arc<Self>,
+        surface_handle: *mut std::ffi::c_void,
+    ) -> crate::Surface {
+        let id = unsafe {
+            self.0
+                .instance_create_surface_from_surface_handle(surface_handle, ())
+        };
+        crate::Surface {
+            context: Arc::clone(self),
+            id: Surface {
+                id,
+                configured_device: Mutex::default(),
+            },
+        }
+    }
+
     fn handle_error(
         &self,
         sink_mutex: &Mutex<ErrorSinkRaw>,
