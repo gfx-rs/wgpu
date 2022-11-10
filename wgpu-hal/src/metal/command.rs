@@ -155,7 +155,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
 
     unsafe fn clear_buffer(&mut self, buffer: &super::Buffer, range: crate::MemoryRange) {
         let encoder = self.enter_blit();
-        encoder.fill_buffer(&buffer.raw, conv::map_range(&range), 0);
+        encoder.fill_buffer(buffer.raw.as_native(), conv::map_range(&range), 0);
     }
 
     unsafe fn copy_buffer_to_buffer<T>(
@@ -169,9 +169,9 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         let encoder = self.enter_blit();
         for copy in regions {
             encoder.copy_from_buffer(
-                &src.raw,
+                src.raw.as_native(),
                 copy.src_offset,
-                &dst.raw,
+                dst.raw.as_native(),
                 copy.dst_offset,
                 copy.size.get(),
             );
@@ -194,12 +194,12 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             // no clamping is done: Metal expects physical sizes here
             let extent = conv::map_copy_extent(&copy.size);
             encoder.copy_from_texture(
-                &src.raw,
+                src.raw.as_native(),
                 copy.src_base.array_layer as u64,
                 copy.src_base.mip_level as u64,
                 src_origin,
                 extent,
-                &dst.raw,
+                dst.raw.as_native(),
                 copy.dst_base.array_layer as u64,
                 copy.dst_base.mip_level as u64,
                 dst_origin,
@@ -238,12 +238,12 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 0
             };
             encoder.copy_from_buffer_to_texture(
-                &src.raw,
+                src.raw.as_native(),
                 copy.buffer_layout.offset,
                 bytes_per_row,
                 image_byte_stride,
                 conv::map_copy_extent(&extent),
-                &dst.raw,
+                dst.raw.as_native(),
                 copy.texture_base.array_layer as u64,
                 copy.texture_base.mip_level as u64,
                 dst_origin,
@@ -278,12 +278,12 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 .rows_per_image
                 .map_or(0, |v| v.get() as u64 * bytes_per_row);
             encoder.copy_from_texture_to_buffer(
-                &src.raw,
+                src.raw.as_native(),
                 copy.texture_base.array_layer as u64,
                 copy.texture_base.mip_level as u64,
                 src_origin,
                 conv::map_copy_extent(&extent),
-                &dst.raw,
+                dst.raw.as_native(),
                 copy.buffer_layout.offset,
                 bytes_per_row,
                 bytes_per_image,
@@ -341,7 +341,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         encoder.copy_from_buffer(
             &set.raw_buffer,
             range.start as u64 * crate::QUERY_SIZE,
-            &buffer.raw,
+            buffer.raw.as_native(),
             offset,
             size,
         );
@@ -360,10 +360,10 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             for (i, at) in desc.color_attachments.iter().enumerate() {
                 if let Some(at) = at.as_ref() {
                     let at_descriptor = descriptor.color_attachments().object_at(i as u64).unwrap();
-                    at_descriptor.set_texture(Some(&at.target.view.raw));
+                    at_descriptor.set_texture(Some(at.target.view.raw.as_native()));
                     if let Some(ref resolve) = at.resolve_target {
                         //Note: the selection of levels and slices is already handled by `TextureView`
-                        at_descriptor.set_resolve_texture(Some(&resolve.view.raw));
+                        at_descriptor.set_resolve_texture(Some(resolve.view.raw.as_native()));
                     }
                     let load_action = if at.ops.contains(crate::AttachmentOps::LOAD) {
                         mtl::MTLLoadAction::Load
@@ -383,7 +383,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             if let Some(ref at) = desc.depth_stencil_attachment {
                 if at.target.view.aspects.contains(crate::FormatAspects::DEPTH) {
                     let at_descriptor = descriptor.depth_attachment().unwrap();
-                    at_descriptor.set_texture(Some(&at.target.view.raw));
+                    at_descriptor.set_texture(Some(at.target.view.raw.as_native()));
 
                     let load_action = if at.depth_ops.contains(crate::AttachmentOps::LOAD) {
                         mtl::MTLLoadAction::Load
@@ -406,7 +406,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                     .contains(crate::FormatAspects::STENCIL)
                 {
                     let at_descriptor = descriptor.stencil_attachment().unwrap();
-                    at_descriptor.set_texture(Some(&at.target.view.raw));
+                    at_descriptor.set_texture(Some(at.target.view.raw.as_native()));
 
                     let load_action = if at.stencil_ops.contains(crate::AttachmentOps::LOAD) {
                         mtl::MTLLoadAction::Load
@@ -717,7 +717,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             wgt::IndexFormat::Uint32 => (4, mtl::MTLIndexType::UInt32),
         };
         self.state.index = Some(super::IndexState {
-            buffer_ptr: AsNative::from(binding.buffer.raw.as_ref()),
+            buffer_ptr: binding.buffer.raw,
             offset: binding.offset,
             stride,
             raw_type,
@@ -731,7 +731,11 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     ) {
         let buffer_index = self.shared.private_caps.max_vertex_buffers as u64 - 1 - index as u64;
         let encoder = self.state.render.as_ref().unwrap();
-        encoder.set_vertex_buffer(buffer_index, Some(&binding.buffer.raw), binding.offset);
+        encoder.set_vertex_buffer(
+            buffer_index,
+            Some(binding.buffer.raw.as_native()),
+            binding.offset,
+        );
     }
 
     unsafe fn set_viewport(&mut self, rect: &crate::Rect<f32>, depth_range: Range<f32>) {
@@ -852,7 +856,11 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     ) {
         let encoder = self.state.render.as_ref().unwrap();
         for _ in 0..draw_count {
-            encoder.draw_primitives_indirect(self.state.raw_primitive_type, &buffer.raw, offset);
+            encoder.draw_primitives_indirect(
+                self.state.raw_primitive_type,
+                buffer.raw.as_native(),
+                offset,
+            );
             offset += mem::size_of::<wgt::DrawIndirectArgs>() as wgt::BufferAddress;
         }
     }
@@ -871,7 +879,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 index.raw_type,
                 index.buffer_ptr.as_native(),
                 index.offset,
-                &buffer.raw,
+                buffer.raw.as_native(),
                 offset,
             );
             offset += mem::size_of::<wgt::DrawIndexedIndirectArgs>() as wgt::BufferAddress;
@@ -967,6 +975,10 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
 
     unsafe fn dispatch_indirect(&mut self, buffer: &super::Buffer, offset: wgt::BufferAddress) {
         let encoder = self.state.compute.as_ref().unwrap();
-        encoder.dispatch_thread_groups_indirect(&buffer.raw, offset, self.state.raw_wg_size);
+        encoder.dispatch_thread_groups_indirect(
+            buffer.raw.as_native(),
+            offset,
+            self.state.raw_wg_size,
+        );
     }
 }

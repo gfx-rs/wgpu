@@ -29,6 +29,7 @@ use std::{
 
 use arrayvec::ArrayVec;
 use foreign_types::ForeignTypeRef as _;
+use objc::{msg_send, sel, sel_impl};
 use parking_lot::Mutex;
 
 #[derive(Clone)]
@@ -400,24 +401,18 @@ impl crate::Queue<Api> for Queue {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct Buffer {
-    raw: mtl::Buffer,
+    raw: BufferPtr,
     size: wgt::BufferAddress,
 }
 
 unsafe impl Send for Buffer {}
 unsafe impl Sync for Buffer {}
 
-impl Buffer {
-    fn as_raw(&self) -> BufferPtr {
-        unsafe { NonNull::new_unchecked(self.raw.as_ptr()) }
-    }
-}
-
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct Texture {
-    raw: mtl::Texture,
+    raw: TexturePtr,
     raw_format: mtl::MTLPixelFormat,
     raw_type: mtl::MTLTextureType,
     array_layers: u32,
@@ -428,34 +423,22 @@ pub struct Texture {
 unsafe impl Send for Texture {}
 unsafe impl Sync for Texture {}
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct TextureView {
-    raw: mtl::Texture,
+    raw: TexturePtr,
     aspects: crate::FormatAspects,
 }
 
 unsafe impl Send for TextureView {}
 unsafe impl Sync for TextureView {}
 
-impl TextureView {
-    fn as_raw(&self) -> TexturePtr {
-        unsafe { NonNull::new_unchecked(self.raw.as_ptr()) }
-    }
-}
-
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct Sampler {
-    raw: mtl::SamplerState,
+    raw: SamplerPtr,
 }
 
 unsafe impl Send for Sampler {}
 unsafe impl Sync for Sampler {}
-
-impl Sampler {
-    fn as_raw(&self) -> SamplerPtr {
-        unsafe { NonNull::new_unchecked(self.raw.as_ptr()) }
-    }
-}
 
 #[derive(Debug)]
 pub struct BindGroupLayout {
@@ -539,7 +522,9 @@ pub struct PipelineLayout {
 trait AsNative {
     type Native;
     fn from(native: &Self::Native) -> Self;
+    fn own_from(native: &Self::Native) -> Self;
     fn as_native(&self) -> &Self::Native;
+    unsafe fn destroy(self);
 }
 
 type BufferPtr = NonNull<mtl::MTLBuffer>;
@@ -553,8 +538,19 @@ impl AsNative for BufferPtr {
         unsafe { NonNull::new_unchecked(native.as_ptr()) }
     }
     #[inline]
+    fn own_from(native: &Self::Native) -> Self {
+        unsafe {
+            let _: *mut () = msg_send![native, retain];
+            NonNull::new_unchecked(native.as_ptr())
+        }
+    }
+    #[inline]
     fn as_native(&self) -> &Self::Native {
         unsafe { Self::Native::from_ptr(self.as_ptr()) }
+    }
+    #[inline]
+    unsafe fn destroy(self) {
+        let () = msg_send![self.as_ptr(), release];
     }
 }
 
@@ -565,8 +561,19 @@ impl AsNative for TexturePtr {
         unsafe { NonNull::new_unchecked(native.as_ptr()) }
     }
     #[inline]
+    fn own_from(native: &Self::Native) -> Self {
+        unsafe {
+            let _: *mut () = msg_send![native, retain];
+            NonNull::new_unchecked(native.as_ptr())
+        }
+    }
+    #[inline]
     fn as_native(&self) -> &Self::Native {
         unsafe { Self::Native::from_ptr(self.as_ptr()) }
+    }
+    #[inline]
+    unsafe fn destroy(self) {
+        let () = msg_send![self.as_ptr(), release];
     }
 }
 
@@ -577,8 +584,19 @@ impl AsNative for SamplerPtr {
         unsafe { NonNull::new_unchecked(native.as_ptr()) }
     }
     #[inline]
+    fn own_from(native: &Self::Native) -> Self {
+        unsafe {
+            let _: *mut () = msg_send![native, retain];
+            NonNull::new_unchecked(native.as_ptr())
+        }
+    }
+    #[inline]
     fn as_native(&self) -> &Self::Native {
         unsafe { Self::Native::from_ptr(self.as_ptr()) }
+    }
+    #[inline]
+    unsafe fn destroy(self) {
+        let () = msg_send![self.as_ptr(), release];
     }
 }
 

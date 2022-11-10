@@ -1,3 +1,4 @@
+use objc::rc::autoreleasepool;
 use parking_lot::Mutex;
 use std::{
     num::NonZeroU32,
@@ -6,7 +7,7 @@ use std::{
     thread, time,
 };
 
-use super::conv;
+use super::{conv, AsNative};
 use crate::auxil::map_naga_stage;
 
 type DeviceResult<T> = Result<T, crate::DeviceError>;
@@ -210,7 +211,7 @@ impl super::Device {
         copy_size: crate::CopyExtent,
     ) -> super::Texture {
         super::Texture {
-            raw,
+            raw: AsNative::own_from(raw.as_ref()),
             raw_format,
             raw_type,
             array_layers,
@@ -245,25 +246,27 @@ impl crate::Device<super::Api> for super::Device {
 
         //TODO: HazardTrackingModeUntracked
 
-        objc::rc::autoreleasepool(|| {
+        autoreleasepool(|| {
             let raw = self.shared.device.lock().new_buffer(desc.size, options);
             if let Some(label) = desc.label {
                 raw.set_label(label);
             }
             Ok(super::Buffer {
-                raw,
+                raw: AsNative::own_from(raw.as_ref()),
                 size: desc.size,
             })
         })
     }
-    unsafe fn destroy_buffer(&self, _buffer: super::Buffer) {}
+    unsafe fn destroy_buffer(&self, buffer: super::Buffer) {
+        unsafe { buffer.raw.destroy() };
+    }
 
     unsafe fn map_buffer(
         &self,
         buffer: &super::Buffer,
         range: crate::MemoryRange,
     ) -> DeviceResult<crate::BufferMapping> {
-        let ptr = buffer.raw.contents() as *mut u8;
+        let ptr = buffer.raw.as_native().contents() as *mut u8;
         assert!(!ptr.is_null());
         Ok(crate::BufferMapping {
             ptr: ptr::NonNull::new(unsafe { ptr.offset(range.start as isize) }).unwrap(),
@@ -283,7 +286,7 @@ impl crate::Device<super::Api> for super::Device {
     ) -> DeviceResult<super::Texture> {
         let mtl_format = self.shared.private_caps.map_format(desc.format);
 
-        objc::rc::autoreleasepool(|| {
+        autoreleasepool(|| {
             let descriptor = mtl::TextureDescriptor::new();
             let mut array_layers = desc.size.depth_or_array_layers;
             let mut copy_size = crate::CopyExtent {
@@ -333,7 +336,7 @@ impl crate::Device<super::Api> for super::Device {
             }
 
             Ok(super::Texture {
-                raw,
+                raw: AsNative::own_from(raw.as_ref()),
                 raw_format: mtl_format,
                 raw_type: mtl_type,
                 mip_levels: desc.mip_level_count,
@@ -367,7 +370,7 @@ impl crate::Device<super::Api> for super::Device {
         let raw = if format_equal && type_equal && range_full_resource {
             // Some images are marked as framebuffer-only, and we can't create aliases of them.
             // Also helps working around Metal bugs with aliased array textures.
-            texture.raw.to_owned()
+            texture.raw.as_native().to_owned()
         } else {
             let mip_level_count = match desc.range.mip_level_count {
                 Some(count) => count.get(),
@@ -378,8 +381,8 @@ impl crate::Device<super::Api> for super::Device {
                 None => texture.array_layers - desc.range.base_array_layer,
             };
 
-            objc::rc::autoreleasepool(|| {
-                let raw = texture.raw.new_texture_view_from_slice(
+            autoreleasepool(|| {
+                let raw = texture.raw.as_native().new_texture_view_from_slice(
                     raw_format,
                     raw_type,
                     mtl::NSRange {
@@ -399,16 +402,21 @@ impl crate::Device<super::Api> for super::Device {
         };
 
         let aspects = crate::FormatAspects::from(desc.format);
-        Ok(super::TextureView { raw, aspects })
+        Ok(super::TextureView {
+            raw: AsNative::own_from(raw.as_ref()),
+            aspects,
+        })
     }
-    unsafe fn destroy_texture_view(&self, _view: super::TextureView) {}
+    unsafe fn destroy_texture_view(&self, view: super::TextureView) {
+        unsafe { view.raw.destroy() };
+    }
 
     unsafe fn create_sampler(
         &self,
         desc: &crate::SamplerDescriptor,
     ) -> DeviceResult<super::Sampler> {
         let caps = &self.shared.private_caps;
-        objc::rc::autoreleasepool(|| {
+        autoreleasepool(|| {
             let descriptor = mtl::SamplerDescriptor::new();
 
             descriptor.set_min_filter(conv::map_filter_mode(desc.min_filter));
@@ -466,10 +474,14 @@ impl crate::Device<super::Api> for super::Device {
             }
             let raw = self.shared.device.lock().new_sampler(&descriptor);
 
-            Ok(super::Sampler { raw })
+            Ok(super::Sampler {
+                raw: AsNative::own_from(raw.as_ref()),
+            })
         })
     }
-    unsafe fn destroy_sampler(&self, _sampler: super::Sampler) {}
+    unsafe fn destroy_sampler(&self, sampler: super::Sampler) {
+        unsafe { sampler.raw.destroy() };
+    }
 
     unsafe fn create_command_encoder(
         &self,
@@ -746,7 +758,7 @@ impl crate::Device<super::Api> for super::Device {
                                     _ => None,
                                 };
                                 super::BufferResource {
-                                    ptr: source.buffer.as_raw(),
+                                    ptr: source.buffer.raw,
                                     offset: source.offset,
                                     dynamic_index: if has_dynamic_offset {
                                         Some(dynamic_offsets_count - 1)
@@ -763,17 +775,14 @@ impl crate::Device<super::Api> for super::Device {
                         let start = entry.resource_index as usize;
                         let end = start + size as usize;
                         bg.samplers
-                            .extend(desc.samplers[start..end].iter().map(|samp| samp.as_raw()));
+                            .extend(desc.samplers[start..end].iter().map(|samp| samp.raw));
                         counter.samplers += size;
                     }
                     wgt::BindingType::Texture { .. } | wgt::BindingType::StorageTexture { .. } => {
                         let start = entry.resource_index as usize;
                         let end = start + size as usize;
-                        bg.textures.extend(
-                            desc.textures[start..end]
-                                .iter()
-                                .map(|tex| tex.view.as_raw()),
-                        );
+                        bg.textures
+                            .extend(desc.textures[start..end].iter().map(|tex| tex.view.raw));
                         counter.textures += size;
                     }
                 }
@@ -803,7 +812,7 @@ impl crate::Device<super::Api> for super::Device {
         &self,
         desc: &crate::RenderPipelineDescriptor<super::Api>,
     ) -> Result<super::RenderPipeline, crate::PipelineError> {
-        objc::rc::autoreleasepool(|| {
+        autoreleasepool(|| {
             let descriptor = mtl::RenderPipelineDescriptor::new();
 
             let raw_triangle_fill_mode = match desc.primitive.polygon_mode {
@@ -1010,7 +1019,7 @@ impl crate::Device<super::Api> for super::Device {
         &self,
         desc: &crate::ComputePipelineDescriptor<super::Api>,
     ) -> Result<super::ComputePipeline, crate::PipelineError> {
-        objc::rc::autoreleasepool(|| {
+        autoreleasepool(|| {
             let descriptor = mtl::ComputePipelineDescriptor::new();
 
             let cs = self.load_shader(
@@ -1063,7 +1072,7 @@ impl crate::Device<super::Api> for super::Device {
         &self,
         desc: &wgt::QuerySetDescriptor<crate::Label>,
     ) -> DeviceResult<super::QuerySet> {
-        objc::rc::autoreleasepool(|| {
+        autoreleasepool(|| {
             match desc.ty {
                 wgt::QueryType::Occlusion => {
                     let size = desc.count as u64 * crate::QUERY_SIZE;
