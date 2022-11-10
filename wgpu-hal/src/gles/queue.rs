@@ -98,17 +98,16 @@ impl super::Queue {
             }
             super::TextureInner::DefaultRenderbuffer => panic!("Unexpected default RBO"),
             super::TextureInner::Texture { raw, target } => {
-                let num_layers = view.array_layers.end - view.array_layers.start;
-                if num_layers > 1 {
+                if view.array_layer_count > 1 {
                     #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
                     unsafe {
                         gl.framebuffer_texture_multiview_ovr(
                             fbo_target,
                             attachment,
                             Some(raw),
-                            view.mip_levels.start as i32,
-                            view.array_layers.start as i32,
-                            num_layers as i32,
+                            view.base_mip_level as i32,
+                            view.base_array_layer as i32,
+                            view.array_layer_count as i32,
                         )
                     };
                 } else if is_layered_target(target) {
@@ -117,8 +116,8 @@ impl super::Queue {
                             fbo_target,
                             attachment,
                             Some(raw),
-                            view.mip_levels.start as i32,
-                            view.array_layers.start as i32,
+                            view.base_mip_level as i32,
+                            view.base_array_layer as i32,
                         )
                     };
                 } else if target == glow::TEXTURE_CUBE_MAP {
@@ -126,9 +125,9 @@ impl super::Queue {
                         gl.framebuffer_texture_2d(
                             fbo_target,
                             attachment,
-                            CUBEMAP_FACES[view.array_layers.start as usize],
+                            CUBEMAP_FACES[view.base_array_layer as usize],
                             Some(raw),
-                            view.mip_levels.start as i32,
+                            view.base_mip_level as i32,
                         )
                     };
                 } else {
@@ -138,7 +137,7 @@ impl super::Queue {
                             attachment,
                             target,
                             Some(raw),
-                            view.mip_levels.start as i32,
+                            view.base_mip_level as i32,
                         )
                     };
                 }

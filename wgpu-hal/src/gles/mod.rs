@@ -267,7 +267,6 @@ impl TextureInner {
 pub struct Texture {
     inner: TextureInner,
     externally_owned: bool,
-    mip_level_count: u32,
     array_layer_count: u32,
     format: wgt::TextureFormat,
     #[allow(unused)]
@@ -281,7 +280,6 @@ impl Texture {
         Self {
             inner: TextureInner::DefaultRenderbuffer,
             externally_owned: false,
-            mip_level_count: 1,
             array_layer_count: 1,
             format,
             format_desc: TextureFormatDesc {
@@ -332,13 +330,14 @@ impl Texture {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct TextureView {
     inner: TextureInner,
     sample_type: wgt::TextureSampleType,
     aspects: crate::FormatAspects,
-    mip_levels: Range<u32>,
-    array_layers: Range<u32>,
+    base_mip_level: u32,
+    base_array_layer: u32,
+    array_layer_count: u32,
     format: wgt::TextureFormat,
 }
 

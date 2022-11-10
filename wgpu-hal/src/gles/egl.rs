@@ -1259,9 +1259,8 @@ impl crate::Surface<super::Api> for Surface {
             },
             externally_owned: false,
             array_layer_count: 1,
-            mip_level_count: 1,
             format: sc.format,
-            format_desc: sc.format_desc.clone(),
+            format_desc: sc.format_desc,
             copy_size: crate::CopyExtent {
                 width: sc.extent.width,
                 height: sc.extent.height,

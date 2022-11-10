@@ -279,7 +279,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
 
     unsafe fn clear_buffer(&mut self, buffer: &super::Buffer, range: crate::MemoryRange) {
         self.cmd_buffer.commands.push(C::ClearBuffer {
-            dst: buffer.clone(),
+            dst: *buffer,
             dst_target: buffer.target,
             range,
         });
@@ -300,9 +300,9 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         };
         for copy in regions {
             self.cmd_buffer.commands.push(C::CopyBufferToBuffer {
-                src: src.clone(),
+                src: *src,
                 src_target,
-                dst: dst.clone(),
+                dst: *dst,
                 dst_target,
                 copy,
             })
@@ -346,7 +346,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         for mut copy in regions {
             copy.clamp_size_to_virtual(&dst.copy_size);
             self.cmd_buffer.commands.push(C::CopyBufferToTexture {
-                src: src.clone(),
+                src: *src,
                 src_target: src.target,
                 dst: dst_raw,
                 dst_target,
@@ -372,7 +372,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 src: src_raw,
                 src_target,
                 src_format: src.format,
-                dst: dst.clone(),
+                dst: *dst,
                 dst_target: dst.target,
                 copy,
             })
@@ -409,7 +409,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         let query_range = start as u32..self.cmd_buffer.queries.len() as u32;
         self.cmd_buffer.commands.push(C::CopyQueryResults {
             query_range,
-            dst: buffer.clone(),
+            dst: *buffer,
             dst_target: buffer.target,
             dst_offset: offset,
         });
@@ -450,12 +450,10 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                         let attachment = glow::COLOR_ATTACHMENT0 + i as u32;
                         self.cmd_buffer.commands.push(C::BindAttachment {
                             attachment,
-                            view: cat.target.view.clone(),
+                            view: *cat.target.view,
                         });
                         if let Some(ref rat) = cat.resolve_target {
-                            self.state
-                                .resolve_attachments
-                                .push((attachment, rat.view.clone()));
+                            self.state.resolve_attachments.push((attachment, *rat.view));
                         }
                         if !cat.ops.contains(crate::AttachmentOps::STORE) {
                             self.state.invalidate_attachments.push(attachment);
@@ -471,7 +469,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                     };
                     self.cmd_buffer.commands.push(C::BindAttachment {
                         attachment,
-                        view: dsat.target.view.clone(),
+                        view: *dsat.target.view,
                     });
                     if aspects.contains(crate::FormatAspects::DEPTH)
                         && !dsat.depth_ops.contains(crate::AttachmentOps::STORE)

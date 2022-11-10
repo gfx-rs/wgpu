@@ -7,7 +7,7 @@ pub struct Api;
 pub struct Context;
 #[derive(Debug)]
 pub struct Encoder;
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct Resource;
 
 type DeviceResult<T> = Result<T, crate::DeviceError>;

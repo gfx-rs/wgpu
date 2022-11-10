@@ -103,7 +103,6 @@ impl super::Device {
                 target,
             },
             externally_owned,
-            mip_level_count: desc.mip_level_count,
             array_layer_count: if desc.dimension == wgt::TextureDimension::D2 {
                 desc.size.depth_or_array_layers
             } else {
@@ -135,7 +134,6 @@ impl super::Device {
                 raw: glow::NativeRenderbuffer(name),
             },
             externally_owned,
-            mip_level_count: desc.mip_level_count,
             array_layer_count: if desc.dimension == wgt::TextureDimension::D2 {
                 desc.size.depth_or_array_layers
             } else {
@@ -741,7 +739,6 @@ impl crate::Device<super::Api> for super::Device {
         Ok(super::Texture {
             inner,
             externally_owned: false,
-            mip_level_count: desc.mip_level_count,
             array_layer_count: if desc.dimension == wgt::TextureDimension::D2 {
                 desc.size.depth_or_array_layers
             } else {
@@ -773,22 +770,18 @@ impl crate::Device<super::Api> for super::Device {
         texture: &super::Texture,
         desc: &crate::TextureViewDescriptor,
     ) -> Result<super::TextureView, crate::DeviceError> {
-        let end_array_layer = match desc.range.array_layer_count {
-            Some(count) => desc.range.base_array_layer + count.get(),
-            None => texture.array_layer_count,
-        };
-        let end_mip_level = match desc.range.mip_level_count {
-            Some(count) => desc.range.base_mip_level + count.get(),
-            None => texture.mip_level_count,
-        };
         Ok(super::TextureView {
             //TODO: use `conv::map_view_dimension(desc.dimension)`?
-            inner: texture.inner.clone(),
+            inner: texture.inner,
             sample_type: texture.format.describe().sample_type,
             aspects: crate::FormatAspects::from(texture.format)
                 & crate::FormatAspects::from(desc.range.aspect),
-            mip_levels: desc.range.base_mip_level..end_mip_level,
-            array_layers: desc.range.base_array_layer..end_array_layer,
+            base_mip_level: desc.range.base_mip_level,
+            base_array_layer: desc.range.base_array_layer,
+            array_layer_count: match desc.range.array_layer_count {
+                Some(count) => count.get(),
+                None => texture.array_layer_count,
+            },
             format: texture.format,
         })
     }
@@ -1007,7 +1000,7 @@ impl crate::Device<super::Api> for super::Device {
                 }
                 wgt::BindingType::Texture { .. } => {
                     let view = desc.textures[entry.resource_index as usize].view;
-                    if view.mip_levels.start != 0 || view.array_layers.start != 0 {
+                    if view.base_mip_level != 0 || view.base_array_layer != 0 {
                         log::error!("Unable to create a sampled texture binding for non-zero mipmap level or array layer.\n{}",
                             "This is an implementation problem of wgpu-hal/gles backend.")
                     }
@@ -1024,11 +1017,11 @@ impl crate::Device<super::Api> for super::Device {
                     let (raw, _target) = view.inner.as_native();
                     super::RawBinding::Image(super::ImageBinding {
                         raw,
-                        mip_level: view.mip_levels.start,
+                        mip_level: view.base_mip_level,
                         array_layer: match view_dimension {
                             wgt::TextureViewDimension::D2Array
                             | wgt::TextureViewDimension::CubeArray => None,
-                            _ => Some(view.array_layers.start),
+                            _ => Some(view.base_array_layer),
                         },
                         access: conv::map_storage_access(access),
                         format: format_desc.internal,
