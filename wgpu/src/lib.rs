@@ -28,6 +28,8 @@ use std::{
 use context::{Context, DeviceRequest, DynContext, ObjectId};
 use parking_lot::Mutex;
 
+#[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
+pub use wgc::resource::DropGuard;
 pub use wgt::{
     AdapterInfo, AddressMode, AstcBlock, AstcChannel, Backend, Backends, BindGroupLayoutEntry,
     BindingType, BlendComponent, BlendFactor, BlendOperation, BlendState, BufferAddress,
@@ -2071,6 +2073,7 @@ impl Device {
         &self,
         hal_texture: A::Texture,
         desc: &TextureDescriptor,
+        drop_guard: Option<DropGuard>,
     ) -> Texture {
         let texture = unsafe {
             self.context
@@ -2081,6 +2084,7 @@ impl Device {
                     hal_texture,
                     self.data.as_ref().downcast_ref().unwrap(),
                     desc,
+                    drop_guard,
                 )
         };
         Texture {

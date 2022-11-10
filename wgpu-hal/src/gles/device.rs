@@ -85,15 +85,13 @@ impl super::Device {
     ///
     /// - `name` must be created respecting `desc`
     /// - `name` must be a texture
-    /// - If `drop_guard` is [`None`], wgpu-hal will take ownership of the texture. If `drop_guard` is
-    ///   [`Some`], the texture must be valid until the drop implementation
-    ///   of the drop guard is called.
+    /// - If `externally_owned` is `true`, the application must manually destroy the texture.
     #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
     pub unsafe fn texture_from_raw(
         &self,
         name: std::num::NonZeroU32,
         desc: &crate::TextureDescriptor,
-        drop_guard: Option<crate::DropGuard>,
+        externally_owned: bool,
     ) -> super::Texture {
         let mut copy_size = crate::CopyExtent::map_extent_to_copy_size(&desc.size, desc.dimension);
 
@@ -104,7 +102,7 @@ impl super::Device {
                 raw: glow::NativeTexture(name),
                 target,
             },
-            drop_guard,
+            externally_owned,
             mip_level_count: desc.mip_level_count,
             array_layer_count: if desc.dimension == wgt::TextureDimension::D2 {
                 desc.size.depth_or_array_layers
@@ -122,15 +120,13 @@ impl super::Device {
     ///
     /// - `name` must be created respecting `desc`
     /// - `name` must be a renderbuffer
-    /// - If `drop_guard` is [`None`], wgpu-hal will take ownership of the renderbuffer. If `drop_guard` is
-    ///   [`Some`], the renderbuffer must be valid until the drop implementation
-    ///   of the drop guard is called.
+    /// - If `externally_owned` is `true`, the application must manually destroy the RBO.
     #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
     pub unsafe fn texture_from_raw_renderbuffer(
         &self,
         name: std::num::NonZeroU32,
         desc: &crate::TextureDescriptor,
-        drop_guard: Option<crate::DropGuard>,
+        externally_owned: bool,
     ) -> super::Texture {
         let copy_size = crate::CopyExtent::map_extent_to_copy_size(&desc.size, desc.dimension);
 
@@ -138,7 +134,7 @@ impl super::Device {
             inner: super::TextureInner::Renderbuffer {
                 raw: glow::NativeRenderbuffer(name),
             },
-            drop_guard,
+            externally_owned,
             mip_level_count: desc.mip_level_count,
             array_layer_count: if desc.dimension == wgt::TextureDimension::D2 {
                 desc.size.depth_or_array_layers
@@ -744,7 +740,7 @@ impl crate::Device<super::Api> for super::Device {
 
         Ok(super::Texture {
             inner,
-            drop_guard: None,
+            externally_owned: false,
             mip_level_count: desc.mip_level_count,
             array_layer_count: if desc.dimension == wgt::TextureDimension::D2 {
                 desc.size.depth_or_array_layers
@@ -758,7 +754,7 @@ impl crate::Device<super::Api> for super::Device {
         })
     }
     unsafe fn destroy_texture(&self, texture: super::Texture) {
-        if texture.drop_guard.is_none() {
+        if !texture.externally_owned {
             let gl = &self.shared.context.lock();
             match texture.inner {
                 super::TextureInner::Renderbuffer { raw, .. } => {
@@ -770,10 +766,6 @@ impl crate::Device<super::Api> for super::Device {
                 }
             }
         }
-
-        // For clarity, we explicitly drop the drop guard. Although this has no real semantic effect as the
-        // end of the scope will drop the drop guard since this function takes ownership of the texture.
-        drop(texture.drop_guard);
     }
 
     unsafe fn create_texture_view(

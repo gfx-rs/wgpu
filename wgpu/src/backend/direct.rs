@@ -134,6 +134,7 @@ impl Context {
         hal_texture: A::Texture,
         device: &Device,
         desc: &TextureDescriptor,
+        drop_guard: Option<wgc::resource::DropGuard>,
     ) -> Texture {
         let global = &self.0;
         let (id, error) = unsafe {
@@ -141,6 +142,7 @@ impl Context {
                 hal_texture,
                 device.id,
                 &desc.map_label(|l| l.map(Borrowed)),
+                drop_guard,
                 (),
             )
         };

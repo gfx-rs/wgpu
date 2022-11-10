@@ -13,6 +13,9 @@ use thiserror::Error;
 
 use std::{borrow::Borrow, num::NonZeroU8, ops::Range, ptr::NonNull};
 
+/// Drop guard to signal that wgpu is no longer using an externally created object.
+pub type DropGuard = Box<dyn std::any::Any + Send + Sync>;
+
 /// The status code provided to the buffer mapping callback.
 ///
 /// This is very similar to `BufferAccessResult`, except that this is FFI-friendly.
@@ -345,6 +348,7 @@ pub struct Texture<A: hal::Api> {
     pub(crate) full_range: TextureSelector,
     pub(crate) life_guard: LifeGuard,
     pub(crate) clear_mode: TextureClearMode<A>,
+    pub(crate) drop_guard: Option<DropGuard>,
 }
 
 impl<A: hal::Api> Texture<A> {

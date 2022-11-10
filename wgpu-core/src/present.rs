@@ -197,6 +197,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         clear_views,
                         is_color: true,
                     },
+                    drop_guard: None,
                 };
 
                 let ref_count = texture.life_guard.add_ref();

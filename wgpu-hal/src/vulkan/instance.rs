@@ -239,7 +239,7 @@ impl super::Instance {
         extensions: Vec<&'static CStr>,
         flags: crate::InstanceFlags,
         has_nv_optimus: bool,
-        drop_guard: Option<crate::DropGuard>,
+        externally_owned: bool,
     ) -> Result<Self, crate::InstanceError> {
         log::info!("Instance version: 0x{:x}", driver_api_version);
 
@@ -290,8 +290,8 @@ impl super::Instance {
         Ok(Self {
             shared: Arc::new(super::InstanceShared {
                 raw: raw_instance,
+                externally_owned,
                 extensions,
-                drop_guard,
                 flags,
                 debug_utils,
                 get_physical_device_properties,
@@ -479,7 +479,7 @@ impl Drop for super::InstanceShared {
                 du.extension
                     .destroy_debug_utils_messenger(du.messenger, None);
             }
-            if let Some(_drop_guard) = self.drop_guard.take() {
+            if !self.externally_owned {
                 self.raw.destroy_instance(None);
             }
         }
@@ -616,7 +616,7 @@ impl crate::Instance<super::Api> for super::Instance {
                 extensions,
                 desc.flags,
                 has_nv_optimus,
-                Some(Box::new(())), // `Some` signals that wgpu-hal is in charge of destroying vk_instance
+                false, // not externally owned
             )
         }
     }
@@ -788,7 +788,7 @@ impl crate::Surface<super::Api> for super::Surface {
             index,
             texture: super::Texture {
                 raw: sc.images[index as usize],
-                drop_guard: None,
+                externally_owned: false,
                 block: None,
                 usage: sc.config.usage,
                 aspects: crate::FormatAspects::COLOR,

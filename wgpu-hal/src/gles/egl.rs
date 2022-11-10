@@ -1257,7 +1257,7 @@ impl crate::Surface<super::Api> for Surface {
             inner: super::TextureInner::Renderbuffer {
                 raw: sc.renderbuffer,
             },
-            drop_guard: None,
+            externally_owned: false,
             array_layer_count: 1,
             mip_level_count: 1,
             format: sc.format,

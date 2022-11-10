@@ -79,8 +79,8 @@ struct DebugUtils {
 
 pub struct InstanceShared {
     raw: ash::Instance,
+    externally_owned: bool,
     extensions: Vec<&'static CStr>,
-    drop_guard: Option<crate::DropGuard>,
     flags: crate::InstanceFlags,
     debug_utils: Option<DebugUtils>,
     get_physical_device_properties: Option<khr::GetPhysicalDeviceProperties2>,
@@ -346,7 +346,7 @@ pub struct Buffer {
 #[derive(Debug)]
 pub struct Texture {
     raw: vk::Image,
-    drop_guard: Option<crate::DropGuard>,
+    externally_owned: bool,
     block: Option<gpu_alloc::MemoryBlock<vk::DeviceMemory>>,
     usage: crate::TextureUses,
     aspects: crate::FormatAspects,

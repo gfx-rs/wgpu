@@ -183,7 +183,7 @@ impl Default for VertexAttribKind {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 struct TextureFormatDesc {
     internal: u32,
     external: u32,
@@ -240,7 +240,7 @@ pub struct Buffer {
 unsafe impl Sync for Buffer {}
 unsafe impl Send for Buffer {}
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 enum TextureInner {
     Renderbuffer {
         raw: glow::Renderbuffer,
@@ -263,10 +263,10 @@ impl TextureInner {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct Texture {
     inner: TextureInner,
-    drop_guard: Option<crate::DropGuard>,
+    externally_owned: bool,
     mip_level_count: u32,
     array_layer_count: u32,
     format: wgt::TextureFormat,
@@ -280,7 +280,7 @@ impl Texture {
     pub fn default_framebuffer(format: wgt::TextureFormat) -> Self {
         Self {
             inner: TextureInner::DefaultRenderbuffer,
-            drop_guard: None,
+            externally_owned: false,
             mip_level_count: 1,
             array_layer_count: 1,
             format,

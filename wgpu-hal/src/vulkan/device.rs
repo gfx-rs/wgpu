@@ -608,16 +608,15 @@ impl super::Device {
     /// # Safety
     ///
     /// - `vk_image` must be created respecting `desc`
-    /// - If `drop_guard` is `Some`, the application must manually destroy the image handle. This
-    ///   can be done inside the `Drop` impl of `drop_guard`.
+    /// - If `externally_owned` is `true`, the application must manually destroy the image handle.
     pub unsafe fn texture_from_raw(
         vk_image: vk::Image,
         desc: &crate::TextureDescriptor,
-        drop_guard: Option<crate::DropGuard>,
+        externally_owned: bool,
     ) -> super::Texture {
         super::Texture {
             raw: vk_image,
-            drop_guard,
+            externally_owned,
             block: None,
             usage: desc.usage,
             aspects: crate::FormatAspects::from(desc.format),
@@ -942,7 +941,7 @@ impl crate::Device<super::Api> for super::Device {
 
         Ok(super::Texture {
             raw,
-            drop_guard: None,
+            externally_owned: false,
             block: Some(block),
             usage: desc.usage,
             aspects: crate::FormatAspects::from(desc.format),
@@ -952,7 +951,7 @@ impl crate::Device<super::Api> for super::Device {
         })
     }
     unsafe fn destroy_texture(&self, texture: super::Texture) {
-        if texture.drop_guard.is_none() {
+        if !texture.externally_owned {
             unsafe { self.shared.raw.destroy_image(texture.raw, None) };
         }
         if let Some(block) = texture.block {

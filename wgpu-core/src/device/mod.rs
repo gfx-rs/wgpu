@@ -706,6 +706,7 @@ impl<A: HalApi> Device<A> {
             },
             life_guard: LifeGuard::new(desc.label.borrow_or_default()),
             clear_mode,
+            drop_guard: None,
         }
     }
 
@@ -3789,6 +3790,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         hal_texture: A::Texture,
         device_id: id::DeviceId,
         desc: &resource::TextureDescriptor,
+        drop_guard: Option<resource::DropGuard>,
         id_in: Input<G, id::TextureId>,
     ) -> (id::TextureId, Option<resource::CreateTextureError>) {
         profiling::scope!("Device::create_texture");
@@ -3837,6 +3839,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
 
             texture.initialization_status = TextureInitTracker::new(desc.mip_level_count, 0);
+            texture.drop_guard = drop_guard;
 
             let ref_count = texture.life_guard.add_ref();
 

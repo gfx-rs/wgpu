@@ -123,6 +123,7 @@ Additionally `Surface::get_default_config` now returns an Option and returns Non
 - The `strict_assert` family of macros was moved to `wgpu-types`. By @i509VCB in [#3051](https://github.com/gfx-rs/wgpu/pull/3051)
 - Add missing `DEPTH_BIAS_CLAMP` and `FULL_DRAW_INDEX_UINT32` downlevel flags. By @teoxoy in [#3316](https://github.com/gfx-rs/wgpu/pull/3316)
 - Make `ObjectId` structure and invariants idiomatic. By @teoxoy in [#3347](https://github.com/gfx-rs/wgpu/pull/3347)
+- When importing external objects, the `DropGuard` is to be provided to wgpu instead of wgpu-hal. By @kvark in [#3199](https://github.com/gfx-rs/wgpu/pull/3199)
 
 #### WebGPU
 
