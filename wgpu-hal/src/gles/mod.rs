@@ -84,7 +84,7 @@ use arrayvec::ArrayVec;
 
 use glow::HasContext;
 
-use std::{fmt, ops::Range, sync::Arc};
+use std::{fmt, ops::Range, ptr::NonNull, sync::Arc};
 
 #[derive(Clone)]
 pub struct Api;
@@ -228,19 +228,16 @@ pub struct Queue {
     current_index_buffer: Option<glow::Buffer>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct Buffer {
     raw: Option<glow::Buffer>,
     target: BindTarget,
     size: wgt::BufferAddress,
     map_flags: u32,
-    data: Option<Arc<std::sync::Mutex<Vec<u8>>>>,
+    data: Option<NonNull<u8>>,
 }
 
-// Safe: WASM doesn't have threads
-#[cfg(target_arch = "wasm32")]
 unsafe impl Sync for Buffer {}
-#[cfg(target_arch = "wasm32")]
 unsafe impl Send for Buffer {}
 
 #[derive(Clone, Debug)]
@@ -345,7 +342,7 @@ pub struct TextureView {
     format: wgt::TextureFormat,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct Sampler {
     raw: glow::Sampler,
 }

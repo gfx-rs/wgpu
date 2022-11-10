@@ -1,11 +1,7 @@
 use super::conv;
 use crate::auxil::map_naga_stage;
 use glow::HasContext;
-use std::{
-    convert::TryInto,
-    iter, ptr,
-    sync::{Arc, Mutex},
-};
+use std::{convert::TryInto, iter, ptr, sync::Arc};
 
 #[cfg(not(target_arch = "wasm32"))]
 use std::mem;
@@ -439,12 +435,13 @@ impl crate::Device<super::Api> for super::Device {
                 .contains(super::PrivateCapabilities::BUFFER_ALLOCATION);
 
         if emulate_map && desc.usage.intersects(crate::BufferUses::MAP_WRITE) {
+            let data = vec![0; desc.size as usize];
             return Ok(super::Buffer {
                 raw: None,
                 target,
                 size: desc.size,
                 map_flags: 0,
-                data: Some(Arc::new(Mutex::new(vec![0; desc.size as usize]))),
+                data: ptr::NonNull::new(data.leak().as_mut_ptr()),
             });
         }
 
@@ -520,7 +517,8 @@ impl crate::Device<super::Api> for super::Device {
         }
 
         let data = if emulate_map && desc.usage.contains(crate::BufferUses::MAP_READ) {
-            Some(Arc::new(Mutex::new(vec![0; desc.size as usize])))
+            let data = vec![0; desc.size as usize];
+            ptr::NonNull::new(data.leak().as_mut_ptr())
         } else {
             None
         };
@@ -534,6 +532,11 @@ impl crate::Device<super::Api> for super::Device {
         })
     }
     unsafe fn destroy_buffer(&self, buffer: super::Buffer) {
+        if let Some(data) = buffer.data {
+            let _ = unsafe {
+                Vec::from_raw_parts(data.as_ptr(), buffer.size as usize, buffer.size as usize)
+            };
+        }
         if let Some(raw) = buffer.raw {
             let gl = &self.shared.context.lock();
             unsafe { gl.delete_buffer(raw) };
@@ -547,19 +550,23 @@ impl crate::Device<super::Api> for super::Device {
     ) -> Result<crate::BufferMapping, crate::DeviceError> {
         let is_coherent = buffer.map_flags & glow::MAP_COHERENT_BIT != 0;
         let ptr = match buffer.raw {
-            None => {
-                let mut vec = buffer.data.as_ref().unwrap().lock().unwrap();
-                let slice = &mut vec.as_mut_slice()[range.start as usize..range.end as usize];
-                slice.as_mut_ptr()
-            }
+            None => unsafe { buffer.data.unwrap().as_ptr().add(range.start as usize) },
             Some(raw) => {
                 let gl = &self.shared.context.lock();
                 unsafe { gl.bind_buffer(buffer.target, Some(raw)) };
                 let ptr = if let Some(ref map_read_allocation) = buffer.data {
-                    let mut guard = map_read_allocation.lock().unwrap();
-                    let slice = guard.as_mut_slice();
-                    unsafe { self.shared.get_buffer_sub_data(gl, buffer.target, 0, slice) };
-                    slice.as_mut_ptr()
+                    let ptr = unsafe { map_read_allocation.as_ptr().add(range.start as usize) };
+                    let slice = unsafe {
+                        std::slice::from_raw_parts_mut(
+                            ptr,
+                            range.end as usize - range.start as usize,
+                        )
+                    };
+                    unsafe {
+                        self.shared
+                            .get_buffer_sub_data(gl, buffer.target, range.start as _, slice)
+                    };
+                    ptr
                 } else {
                     unsafe {
                         gl.map_buffer_range(

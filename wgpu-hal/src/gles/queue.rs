@@ -1,7 +1,7 @@
 use super::Command as C;
 use arrayvec::ArrayVec;
 use glow::HasContext;
-use std::{mem, slice, sync::Arc};
+use std::{mem, ptr, slice, sync::Arc};
 
 #[cfg(not(target_arch = "wasm32"))]
 const DEBUG_ID: u32 = 0;
@@ -293,9 +293,13 @@ impl super::Queue {
                     }
                 }
                 None => {
-                    dst.data.as_ref().unwrap().lock().unwrap().as_mut_slice()
-                        [range.start as usize..range.end as usize]
-                        .fill(0);
+                    unsafe {
+                        ptr::write_bytes(
+                            dst.data.unwrap().as_ptr().add(range.start as usize),
+                            0,
+                            range.end as usize - range.start as usize,
+                        )
+                    };
                 }
             },
             C::CopyBufferToBuffer {
@@ -335,9 +339,12 @@ impl super::Queue {
                         };
                     }
                     (Some(src), None) => {
-                        let mut data = dst.data.as_ref().unwrap().lock().unwrap();
-                        let dst_data = &mut data.as_mut_slice()
-                            [copy.dst_offset as usize..copy.dst_offset as usize + size];
+                        let dst_data = unsafe {
+                            slice::from_raw_parts_mut(
+                                dst.data.unwrap().as_ptr().add(copy.dst_offset as usize),
+                                size,
+                            )
+                        };
 
                         unsafe { gl.bind_buffer(copy_src_target, Some(src)) };
                         unsafe {
@@ -350,9 +357,12 @@ impl super::Queue {
                         };
                     }
                     (None, Some(dst)) => {
-                        let data = src.data.as_ref().unwrap().lock().unwrap();
-                        let src_data = &data.as_slice()
-                            [copy.src_offset as usize..copy.src_offset as usize + size];
+                        let src_data = unsafe {
+                            slice::from_raw_parts(
+                                src.data.unwrap().as_ptr().add(copy.src_offset as usize),
+                                size,
+                            )
+                        };
                         unsafe { gl.bind_buffer(copy_dst_target, Some(dst)) };
                         unsafe {
                             gl.buffer_sub_data_u8_slice(
@@ -475,7 +485,6 @@ impl super::Queue {
                 unsafe { gl.pixel_store_i32(glow::UNPACK_IMAGE_HEIGHT, column_texels as i32) };
                 let mut unbind_unpack_buffer = false;
                 if !format_info.is_compressed() {
-                    let buffer_data;
                     let unpack_data = match src.raw {
                         Some(buffer) => {
                             unsafe { gl.bind_buffer(glow::PIXEL_UNPACK_BUFFER, Some(buffer)) };
@@ -483,10 +492,12 @@ impl super::Queue {
                             glow::PixelUnpackData::BufferOffset(copy.buffer_layout.offset as u32)
                         }
                         None => {
-                            buffer_data = src.data.as_ref().unwrap().lock().unwrap();
-                            let src_data =
-                                &buffer_data.as_slice()[copy.buffer_layout.offset as usize..];
-                            glow::PixelUnpackData::Slice(src_data)
+                            let buffer_slice = unsafe {
+                                slice::from_raw_parts(src.data.unwrap().as_ptr(), src.size as usize)
+                            };
+                            glow::PixelUnpackData::Slice(
+                                &buffer_slice[copy.buffer_layout.offset as usize..],
+                            )
                         }
                     };
                     match dst_target {
@@ -595,7 +606,6 @@ impl super::Queue {
                         (bytes_per_image * (copy.size.depth - 1)) + minimum_bytes_per_image;
                     let offset = copy.buffer_layout.offset as u32;
 
-                    let buffer_data;
                     let unpack_data = match src.raw {
                         Some(buffer) => {
                             unsafe { gl.bind_buffer(glow::PIXEL_UNPACK_BUFFER, Some(buffer)) };
@@ -605,9 +615,12 @@ impl super::Queue {
                             )
                         }
                         None => {
-                            buffer_data = src.data.as_ref().unwrap().lock().unwrap();
-                            let src_data = &buffer_data.as_slice()
-                                [(offset as usize)..(offset + bytes_in_upload) as usize];
+                            let src_data = unsafe {
+                                slice::from_raw_parts(
+                                    src.data.unwrap().as_ptr().add(offset as usize),
+                                    bytes_in_upload as usize,
+                                )
+                            };
                             glow::CompressedPixelUnpackData::Slice(src_data)
                         }
                     };
@@ -717,7 +730,6 @@ impl super::Queue {
                         )
                     };
                 }
-                let mut buffer_data;
                 let unpack_data = match dst.raw {
                     Some(buffer) => {
                         unsafe { gl.pixel_store_i32(glow::PACK_ROW_LENGTH, row_texels as i32) };
@@ -725,10 +737,12 @@ impl super::Queue {
                         glow::PixelPackData::BufferOffset(copy.buffer_layout.offset as u32)
                     }
                     None => {
-                        buffer_data = dst.data.as_ref().unwrap().lock().unwrap();
-                        let dst_data =
-                            &mut buffer_data.as_mut_slice()[copy.buffer_layout.offset as usize..];
-                        glow::PixelPackData::Slice(dst_data)
+                        let buffer_slice = unsafe {
+                            slice::from_raw_parts_mut(dst.data.unwrap().as_ptr(), dst.size as usize)
+                        };
+                        glow::PixelPackData::Slice(
+                            &mut buffer_slice[copy.buffer_layout.offset as usize..],
+                        )
                     }
                 };
                 unsafe {
@@ -778,9 +792,13 @@ impl super::Queue {
                         };
                     }
                     None => {
-                        let data = &mut dst.data.as_ref().unwrap().lock().unwrap();
-                        let len = query_data.len().min(data.len());
-                        data[..len].copy_from_slice(&query_data[..len]);
+                        unsafe {
+                            ptr::copy_nonoverlapping(
+                                query_data.as_ptr(),
+                                dst.data.unwrap().as_ptr().add(dst_offset as usize),
+                                query_data.len(),
+                            )
+                        };
                     }
                 }
             }
