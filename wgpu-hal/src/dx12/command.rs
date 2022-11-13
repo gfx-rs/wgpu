@@ -273,6 +273,8 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         if let Some(list) = self.list.take() {
             if list.close().into_result().is_ok() {
                 self.free_lists.push(list);
+            } else {
+                list.destroy();
             }
         }
     }
@@ -285,6 +287,8 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         for cmd_buf in command_buffers {
             if cmd_buf.closed {
                 self.free_lists.push(cmd_buf.raw);
+            } else {
+                cmd_buf.raw.close();
             }
         }
         self.allocator.reset();
