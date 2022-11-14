@@ -7,7 +7,7 @@
     // We don't use syntax sugar where it's not necessary.
     clippy::match_like_matches_macro,
 )]
-#![warn(missing_docs)]
+#![warn(missing_docs, unsafe_op_in_unsafe_fn)]
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};

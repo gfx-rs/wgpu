@@ -83,9 +83,11 @@ impl super::Surface {
         delegate: Option<&HalManagedMetalLayerDelegate>,
     ) -> Self {
         let view = view as *mut Object;
-        let render_layer =
-            mem::transmute::<_, &mtl::MetalLayerRef>(Self::get_metal_layer(view, delegate))
-                .to_owned();
+        let render_layer = {
+            let layer = unsafe { Self::get_metal_layer(view, delegate) };
+            unsafe { mem::transmute::<_, &mtl::MetalLayerRef>(layer) }
+        }
+        .to_owned();
         let _: *mut c_void = msg_send![view, retain];
         Self::new(NonNull::new(view), render_layer)
     }
@@ -136,7 +138,7 @@ impl super::Surface {
             {
                 let () = msg_send![view, setLayer: new_layer];
                 let () = msg_send![view, setWantsLayer: YES];
-                let () = msg_send![new_layer, setContentsGravity: kCAGravityTopLeft];
+                let () = msg_send![new_layer, setContentsGravity: unsafe { kCAGravityTopLeft }];
                 let window: *mut Object = msg_send![view, window];
                 if !window.is_null() {
                     let scale_factor: CGFloat = msg_send![window, backingScaleFactor];

@@ -29,15 +29,17 @@ impl Drop for super::Adapter {
 
 impl super::Adapter {
     pub unsafe fn report_live_objects(&self) {
-        if let Ok(debug_device) = self
-            .raw
-            .cast::<d3d12sdklayers::ID3D12DebugDevice>()
-            .into_result()
-        {
-            debug_device.ReportLiveDeviceObjects(
-                d3d12sdklayers::D3D12_RLDO_SUMMARY | d3d12sdklayers::D3D12_RLDO_IGNORE_INTERNAL,
-            );
-            debug_device.destroy();
+        if let Ok(debug_device) = unsafe {
+            self.raw
+                .cast::<d3d12sdklayers::ID3D12DebugDevice>()
+                .into_result()
+        } {
+            unsafe {
+                debug_device.ReportLiveDeviceObjects(
+                    d3d12sdklayers::D3D12_RLDO_SUMMARY | d3d12sdklayers::D3D12_RLDO_IGNORE_INTERNAL,
+                )
+            };
+            unsafe { debug_device.destroy() };
         }
     }
 
@@ -365,35 +367,33 @@ impl crate::Adapter<super::Api> for super::Adapter {
 
         let mut data = d3d12::D3D12_FEATURE_DATA_FORMAT_SUPPORT {
             Format: raw_format,
-            Support1: mem::zeroed(),
-            Support2: mem::zeroed(),
+            Support1: unsafe { mem::zeroed() },
+            Support2: unsafe { mem::zeroed() },
         };
-        assert_eq!(
-            winerror::S_OK,
+        assert_eq!(winerror::S_OK, unsafe {
             self.device.CheckFeatureSupport(
                 d3d12::D3D12_FEATURE_FORMAT_SUPPORT,
                 &mut data as *mut _ as *mut _,
                 mem::size_of::<d3d12::D3D12_FEATURE_DATA_FORMAT_SUPPORT>() as _,
             )
-        );
+        });
 
         // Because we use a different format for SRV and UAV views of depth textures, we need to check
         // the features that use SRV/UAVs using the no-depth format.
         let mut data_no_depth = d3d12::D3D12_FEATURE_DATA_FORMAT_SUPPORT {
             Format: no_depth_format,
-            Support1: mem::zeroed(),
-            Support2: mem::zeroed(),
+            Support1: unsafe { mem::zeroed() },
+            Support2: unsafe { mem::zeroed() },
         };
         if raw_format != no_depth_format {
             // Only-recheck if we're using a different format
-            assert_eq!(
-                winerror::S_OK,
+            assert_eq!(winerror::S_OK, unsafe {
                 self.device.CheckFeatureSupport(
                     d3d12::D3D12_FEATURE_FORMAT_SUPPORT,
                     &mut data_no_depth as *mut _ as *mut _,
                     mem::size_of::<d3d12::D3D12_FEATURE_DATA_FORMAT_SUPPORT>() as _,
                 )
-            );
+            });
         } else {
             // Same format, just copy over.
             data_no_depth = data;
@@ -462,11 +462,13 @@ impl crate::Adapter<super::Api> for super::Adapter {
         let mut set_sample_count = |sc: u32, tfc: Tfc| {
             ms_levels.SampleCount = sc;
 
-            if self.device.CheckFeatureSupport(
-                d3d12::D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS,
-                <*mut _>::cast(&mut ms_levels),
-                mem::size_of::<d3d12::D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS>() as _,
-            ) == winerror::S_OK
+            if unsafe {
+                self.device.CheckFeatureSupport(
+                    d3d12::D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS,
+                    <*mut _>::cast(&mut ms_levels),
+                    mem::size_of::<d3d12::D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS>() as _,
+                )
+            } == winerror::S_OK
                 && ms_levels.NumQualityLevels != 0
             {
                 caps.set(tfc, !no_msaa_load && !no_msaa_target);
@@ -487,8 +489,8 @@ impl crate::Adapter<super::Api> for super::Adapter {
         let current_extent = {
             match surface.target {
                 SurfaceTarget::WndHandle(wnd_handle) => {
-                    let mut rect: windef::RECT = mem::zeroed();
-                    if winuser::GetClientRect(wnd_handle, &mut rect) != 0 {
+                    let mut rect: windef::RECT = unsafe { mem::zeroed() };
+                    if unsafe { winuser::GetClientRect(wnd_handle, &mut rect) } != 0 {
                         Some(wgt::Extent3d {
                             width: (rect.right - rect.left) as u32,
                             height: (rect.bottom - rect.top) as u32,

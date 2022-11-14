@@ -40,25 +40,26 @@ impl fmt::Debug for Context {
 impl Context {
     #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
     pub unsafe fn from_hal_instance<A: wgc::hub::HalApi>(hal_instance: A::Instance) -> Self {
-        Self(wgc::hub::Global::from_hal_instance::<A>(
-            "wgpu",
-            wgc::hub::IdentityManagerFactory,
-            hal_instance,
-        ))
+        Self(unsafe {
+            wgc::hub::Global::from_hal_instance::<A>(
+                "wgpu",
+                wgc::hub::IdentityManagerFactory,
+                hal_instance,
+            )
+        })
     }
 
     /// # Safety
     ///
     /// - The raw instance handle returned must not be manually destroyed.
     pub unsafe fn instance_as_hal<A: wgc::hub::HalApi>(&self) -> Option<&A::Instance> {
-        self.0.instance_as_hal::<A>()
+        unsafe { self.0.instance_as_hal::<A>() }
     }
 
     pub unsafe fn from_core_instance(core_instance: wgc::instance::Instance) -> Self {
-        Self(wgc::hub::Global::from_instance(
-            wgc::hub::IdentityManagerFactory,
-            core_instance,
-        ))
+        Self(unsafe {
+            wgc::hub::Global::from_instance(wgc::hub::IdentityManagerFactory, core_instance)
+        })
     }
 
     pub(crate) fn global(&self) -> &wgc::hub::Global<wgc::hub::IdentityManagerFactory> {
@@ -76,7 +77,7 @@ impl Context {
         &self,
         hal_adapter: hal::ExposedAdapter<A>,
     ) -> wgc::id::AdapterId {
-        self.0.create_adapter_from_hal(hal_adapter, ())
+        unsafe { self.0.create_adapter_from_hal(hal_adapter, ()) }
     }
 
     pub unsafe fn adapter_as_hal<A: wgc::hub::HalApi, F: FnOnce(Option<&A::Adapter>) -> R, R>(
@@ -84,8 +85,10 @@ impl Context {
         adapter: wgc::id::AdapterId,
         hal_adapter_callback: F,
     ) -> R {
-        self.0
-            .adapter_as_hal::<A, F, R>(adapter, hal_adapter_callback)
+        unsafe {
+            self.0
+                .adapter_as_hal::<A, F, R>(adapter, hal_adapter_callback)
+        }
     }
 
     #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
@@ -97,13 +100,15 @@ impl Context {
         trace_dir: Option<&std::path::Path>,
     ) -> Result<(Device, Queue), crate::RequestDeviceError> {
         let global = &self.0;
-        let (device_id, error) = global.create_device_from_hal(
-            *adapter,
-            hal_device,
-            &desc.map_label(|l| l.map(Borrowed)),
-            trace_dir,
-            (),
-        );
+        let (device_id, error) = unsafe {
+            global.create_device_from_hal(
+                *adapter,
+                hal_device,
+                &desc.map_label(|l| l.map(Borrowed)),
+                trace_dir,
+                (),
+            )
+        };
         if let Some(err) = error {
             self.handle_error_fatal(err, "Adapter::create_device_from_hal");
         }
@@ -128,12 +133,14 @@ impl Context {
         desc: &TextureDescriptor,
     ) -> Texture {
         let global = &self.0;
-        let (id, error) = global.create_texture_from_hal::<A>(
-            hal_texture,
-            device.id,
-            &desc.map_label(|l| l.map(Borrowed)),
-            (),
-        );
+        let (id, error) = unsafe {
+            global.create_texture_from_hal::<A>(
+                hal_texture,
+                device.id,
+                &desc.map_label(|l| l.map(Borrowed)),
+                (),
+            )
+        };
         if let Some(cause) = error {
             self.handle_error(
                 &device.error_sink,
@@ -155,8 +162,10 @@ impl Context {
         device: &Device,
         hal_device_callback: F,
     ) -> R {
-        self.0
-            .device_as_hal::<A, F, R>(device.id, hal_device_callback)
+        unsafe {
+            self.0
+                .device_as_hal::<A, F, R>(device.id, hal_device_callback)
+        }
     }
 
     #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
@@ -169,8 +178,10 @@ impl Context {
         surface: &Surface,
         hal_surface_callback: F,
     ) -> R {
-        self.0
-            .surface_as_hal_mut::<A, F, R>(surface.id, hal_surface_callback)
+        unsafe {
+            self.0
+                .surface_as_hal_mut::<A, F, R>(surface.id, hal_surface_callback)
+        }
     }
 
     #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
@@ -179,8 +190,10 @@ impl Context {
         texture: &Texture,
         hal_texture_callback: F,
     ) {
-        self.0
-            .texture_as_hal::<A, F>(texture.id, hal_texture_callback)
+        unsafe {
+            self.0
+                .texture_as_hal::<A, F>(texture.id, hal_texture_callback)
+        }
     }
 
     #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
@@ -232,7 +245,7 @@ impl Context {
         self: &Arc<Self>,
         visual: *mut std::ffi::c_void,
     ) -> crate::Surface {
-        let id = self.0.instance_create_surface_from_visual(visual, ());
+        let id = unsafe { self.0.instance_create_surface_from_visual(visual, ()) };
         crate::Surface {
             context: Arc::clone(self),
             id: Surface {
@@ -1265,7 +1278,7 @@ impl crate::Context for Context {
             label: desc.label.map(Borrowed),
             // Doesn't matter the value since spirv shaders aren't mutated to include
             // runtime checks
-            shader_bound_checks: wgt::ShaderBoundChecks::unchecked(),
+            shader_bound_checks: unsafe { wgt::ShaderBoundChecks::unchecked() },
         };
         let (id, error) = wgc::gfx_select!(
             device.id => global.device_create_shader_module_spirv(device.id, &descriptor, Borrowed(&desc.source), ())

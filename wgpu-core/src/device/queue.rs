@@ -116,7 +116,7 @@ pub(super) struct EncoderInFlight<A: hal::Api> {
 
 impl<A: hal::Api> EncoderInFlight<A> {
     pub(super) unsafe fn land(mut self) -> A::CommandEncoder {
-        self.raw.reset_all(self.cmd_buffers.into_iter());
+        unsafe { self.raw.reset_all(self.cmd_buffers.into_iter()) };
         self.raw
     }
 }
@@ -276,9 +276,9 @@ fn prepare_staging_buffer<A: HalApi>(
 impl<A: hal::Api> StagingBuffer<A> {
     unsafe fn flush(&self, device: &A::Device) -> Result<(), DeviceError> {
         if !self.is_coherent {
-            device.flush_mapped_ranges(&self.raw, iter::once(0..self.size));
+            unsafe { device.flush_mapped_ranges(&self.raw, iter::once(0..self.size)) };
         }
-        device.unmap_buffer(&self.raw)?;
+        unsafe { device.unmap_buffer(&self.raw)? };
         Ok(())
     }
 }

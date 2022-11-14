@@ -21,7 +21,7 @@ impl crate::Instance<super::Api> for super::Instance {
                 Ok(pair) => match pair.into_result() {
                     Ok(debug_controller) => {
                         debug_controller.enable_layer();
-                        debug_controller.Release();
+                        unsafe { debug_controller.Release() };
                     }
                     Err(err) => {
                         log::warn!("Unable to enable D3D12 debug interface: {}", err);
@@ -43,11 +43,13 @@ impl crate::Instance<super::Api> for super::Instance {
         #[allow(trivial_casts)]
         if let Some(factory5) = factory.as_factory5() {
             let mut allow_tearing: minwindef::BOOL = minwindef::FALSE;
-            let hr = factory5.CheckFeatureSupport(
-                dxgi1_5::DXGI_FEATURE_PRESENT_ALLOW_TEARING,
-                &mut allow_tearing as *mut _ as *mut _,
-                mem::size_of::<minwindef::BOOL>() as _,
-            );
+            let hr = unsafe {
+                factory5.CheckFeatureSupport(
+                    dxgi1_5::DXGI_FEATURE_PRESENT_ALLOW_TEARING,
+                    &mut allow_tearing as *mut _ as *mut _,
+                    mem::size_of::<minwindef::BOOL>() as _,
+                )
+            };
 
             match hr.into_result() {
                 Err(err) => log::warn!("Unable to check for tearing support: {}", err),

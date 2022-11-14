@@ -409,8 +409,8 @@ impl<A: hub::HalApi> ResourceMetadata<A> {
 
     /// Resets the metadata for a given index to sane "invalid" values.
     unsafe fn reset(&mut self, index: usize) {
-        *self.ref_counts.get_unchecked_mut(index) = None;
-        *self.epochs.get_unchecked_mut(index) = u32::MAX;
+        unsafe { *self.ref_counts.get_unchecked_mut(index) = None };
+        unsafe { *self.epochs.get_unchecked_mut(index) = u32::MAX };
         self.owned.set(index, false);
     }
 }
@@ -445,18 +445,14 @@ impl<A: hub::HalApi> ResourceMetadataProvider<'_, A> {
             }
             ResourceMetadataProvider::Indirect { metadata } => {
                 metadata.tracker_assert_in_bounds(index);
-                (
-                    *metadata.epochs.get_unchecked(index),
-                    metadata
-                        .ref_counts
-                        .get_unchecked(index)
-                        .clone()
-                        .unwrap_unchecked(),
-                )
+                (unsafe { *metadata.epochs.get_unchecked(index) }, {
+                    let ref_count = unsafe { metadata.ref_counts.get_unchecked(index) };
+                    unsafe { ref_count.clone().unwrap_unchecked() }
+                })
             }
             ResourceMetadataProvider::Resource { epoch } => {
                 strict_assert!(life_guard.is_some());
-                (epoch, life_guard.unwrap_unchecked().add_ref())
+                (epoch, unsafe { life_guard.unwrap_unchecked() }.add_ref())
             }
         }
     }
@@ -472,7 +468,7 @@ impl<A: hub::HalApi> ResourceMetadataProvider<'_, A> {
             | ResourceMetadataProvider::Resource { epoch, .. } => epoch,
             ResourceMetadataProvider::Indirect { metadata } => {
                 metadata.tracker_assert_in_bounds(index);
-                *metadata.epochs.get_unchecked(index)
+                unsafe { *metadata.epochs.get_unchecked(index) }
             }
         }
     }
@@ -564,9 +560,11 @@ impl<A: hub::HalApi> RenderBundleScope<A> {
         textures: &hub::Storage<resource::Texture<A>, id::TextureId>,
         bind_group: &BindGroupStates<A>,
     ) -> Result<(), UsageConflict> {
-        self.buffers.merge_bind_group(&bind_group.buffers)?;
-        self.textures
-            .merge_bind_group(textures, &bind_group.textures)?;
+        unsafe { self.buffers.merge_bind_group(&bind_group.buffers)? };
+        unsafe {
+            self.textures
+                .merge_bind_group(textures, &bind_group.textures)?
+        };
 
         Ok(())
     }
@@ -611,9 +609,11 @@ impl<A: hub::HalApi> UsageScope<A> {
         textures: &hub::Storage<resource::Texture<A>, id::TextureId>,
         bind_group: &BindGroupStates<A>,
     ) -> Result<(), UsageConflict> {
-        self.buffers.merge_bind_group(&bind_group.buffers)?;
-        self.textures
-            .merge_bind_group(textures, &bind_group.textures)?;
+        unsafe {
+            self.buffers.merge_bind_group(&bind_group.buffers)?;
+            self.textures
+                .merge_bind_group(textures, &bind_group.textures)?;
+        }
 
         Ok(())
     }
@@ -740,13 +740,19 @@ impl<A: hub::HalApi> Tracker<A> {
         scope: &mut UsageScope<A>,
         bind_group: &BindGroupStates<A>,
     ) {
-        self.buffers
-            .set_and_remove_from_usage_scope_sparse(&mut scope.buffers, bind_group.buffers.used());
-        self.textures.set_and_remove_from_usage_scope_sparse(
-            textures,
-            &mut scope.textures,
-            &bind_group.textures,
-        );
+        unsafe {
+            self.buffers.set_and_remove_from_usage_scope_sparse(
+                &mut scope.buffers,
+                bind_group.buffers.used(),
+            )
+        };
+        unsafe {
+            self.textures.set_and_remove_from_usage_scope_sparse(
+                textures,
+                &mut scope.textures,
+                &bind_group.textures,
+            )
+        };
     }
 
     /// Tracks the stateless resources from the given renderbundle. It is expected

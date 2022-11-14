@@ -526,7 +526,8 @@ impl BindGroupStateChange {
             if let Some(current_bind_group) = self.last_states.get_mut(index as usize) {
                 current_bind_group.reset();
             }
-            dynamic_offsets.extend_from_slice(slice::from_raw_parts(offsets, offset_length));
+            dynamic_offsets
+                .extend_from_slice(unsafe { slice::from_raw_parts(offsets, offset_length) });
         }
         false
     }
