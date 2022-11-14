@@ -8,6 +8,7 @@ homepage.workspace = true
 repository.workspace = true
 keywords.workspace = true
 license.workspace = true
+publish = false
 
 [dependencies]
 env_logger.workspace = true
