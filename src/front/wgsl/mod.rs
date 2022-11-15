@@ -3619,26 +3619,9 @@ impl Parser {
                 return Ok(());
             }
             (Token::Paren('{'), _) => {
-                self.push_rule_span(Rule::Block, lexer);
-                // Push a new lexical scope for the block statement
-                context.symbol_table.push_scope();
-
-                let _ = lexer.next();
-                let mut statements = crate::Block::new();
-                while !lexer.skip(Token::Paren('}')) {
-                    self.parse_statement(
-                        lexer,
-                        context.reborrow(),
-                        &mut statements,
-                        is_uniform_control_flow,
-                    )?;
-                }
-                // Pop the block statement lexical scope
-                context.symbol_table.pop_scope();
-
-                self.pop_rule_span(lexer);
-                let span = NagaSpan::from(self.pop_rule_span(lexer));
-                block.push(crate::Statement::Block(statements), span);
+                let body = self.parse_block(lexer, context, is_uniform_control_flow)?;
+                let span = self.pop_rule_span(lexer);
+                block.push(crate::Statement::Block(body), NagaSpan::from(span));
                 return Ok(());
             }
             (Token::Word(word), _) => {
@@ -3993,7 +3976,6 @@ impl Parser {
                                 lexer,
                                 context.as_expression(&mut body, &mut emitter),
                             )?;
-                            lexer.expect(Token::Paren('{'))?;
                             body.extend(emitter.finish(context.expressions));
                             Ok(condition)
                         })?;
@@ -4007,14 +3989,8 @@ impl Parser {
                             },
                             NagaSpan::from(span),
                         );
-                        // Push a lexical scope for the while loop body
-                        context.symbol_table.push_scope();
 
-                        while !lexer.skip(Token::Paren('}')) {
-                            self.parse_statement(lexer, context.reborrow(), &mut body, false)?;
-                        }
-                        // Pop the while loop body lexical scope
-                        context.symbol_table.pop_scope();
+                        body.extend_block(self.parse_block(lexer, context.reborrow(), false)?);
 
                         Some(crate::Statement::Loop {
                             body,
@@ -4093,11 +4069,9 @@ impl Parser {
                             }
                             lexer.expect(Token::Paren(')'))?;
                         }
-                        lexer.expect(Token::Paren('{'))?;
 
-                        while !lexer.skip(Token::Paren('}')) {
-                            self.parse_statement(lexer, context.reborrow(), &mut body, false)?;
-                        }
+                        body.extend_block(self.parse_block(lexer, context.reborrow(), false)?);
+
                         // Pop the for loop lexical scope
                         context.symbol_table.pop_scope();
 
@@ -4306,6 +4280,7 @@ impl Parser {
         })
     }
 
+    /// compound_statement
     fn parse_block<'a>(
         &mut self,
         lexer: &mut Lexer<'a>,
@@ -4326,7 +4301,7 @@ impl Parser {
                 is_uniform_control_flow,
             )?;
         }
-        //Pop the block lexical scope
+        // Pop the block lexical scope
         context.symbol_table.pop_scope();
 
         self.pop_rule_span(lexer);
