@@ -1092,12 +1092,11 @@ unsafe fn insert<A: hub::HalApi>(
         }
     }
 
-    let (epoch, ref_count) =
-        unsafe { metadata_provider.get_own(texture_data.map(|(life_guard, _)| life_guard), index) };
-
-    resource_metadata.owned.set(index, true);
-    unsafe { *resource_metadata.epochs.get_unchecked_mut(index) = epoch };
-    unsafe { *resource_metadata.ref_counts.get_unchecked_mut(index) = Some(ref_count) };
+    unsafe {
+        let (epoch, ref_count) =
+            metadata_provider.get_own(texture_data.map(|(life_guard, _)| life_guard), index);
+        resource_metadata.insert(index, epoch, ref_count);
+    }
 }
 
 #[inline(always)]

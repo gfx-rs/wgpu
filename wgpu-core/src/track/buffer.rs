@@ -720,11 +720,7 @@ unsafe fn insert<A: hub::HalApi>(
         *current_states.get_unchecked_mut(index) = new_end_state;
 
         let (epoch, ref_count) = metadata_provider.get_own(life_guard, index);
-
-        resource_metadata.owned.set(index, true);
-
-        *resource_metadata.epochs.get_unchecked_mut(index) = epoch;
-        *resource_metadata.ref_counts.get_unchecked_mut(index) = Some(ref_count);
+        resource_metadata.insert(index, epoch, ref_count);
     }
 }
 

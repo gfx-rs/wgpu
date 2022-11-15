@@ -109,9 +109,7 @@ impl<A: hub::HalApi, T: hub::Resource, Id: TypedId> StatelessTracker<A, T, Id> {
         self.tracker_assert_in_bounds(index);
 
         unsafe {
-            *self.metadata.epochs.get_unchecked_mut(index) = epoch;
-            *self.metadata.ref_counts.get_unchecked_mut(index) = Some(ref_count);
-            self.metadata.owned.set(index, true);
+            self.metadata.insert(index, epoch, ref_count);
         }
     }
 
@@ -130,9 +128,8 @@ impl<A: hub::HalApi, T: hub::Resource, Id: TypedId> StatelessTracker<A, T, Id> {
         self.tracker_assert_in_bounds(index);
 
         unsafe {
-            *self.metadata.epochs.get_unchecked_mut(index) = epoch;
-            *self.metadata.ref_counts.get_unchecked_mut(index) = Some(item.life_guard().add_ref());
-            self.metadata.owned.set(index, true);
+            self.metadata
+                .insert(index, epoch, item.life_guard().add_ref());
         }
 
         Some(item)
@@ -155,18 +152,14 @@ impl<A: hub::HalApi, T: hub::Resource, Id: TypedId> StatelessTracker<A, T, Id> {
                 let previously_owned = self.metadata.owned.get(index).unwrap_unchecked();
 
                 if !previously_owned {
-                    self.metadata.owned.set(index, true);
-
                     let other_ref_count = other
                         .metadata
                         .ref_counts
                         .get_unchecked(index)
                         .clone()
                         .unwrap_unchecked();
-                    *self.metadata.ref_counts.get_unchecked_mut(index) = Some(other_ref_count);
-
                     let epoch = *other.metadata.epochs.get_unchecked(index);
-                    *self.metadata.epochs.get_unchecked_mut(index) = epoch;
+                    self.metadata.insert(index, epoch, other_ref_count);
                 }
             }
         }

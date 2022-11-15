@@ -396,6 +396,24 @@ impl<A: hub::HalApi> ResourceMetadata<A> {
         !self.owned.any()
     }
 
+    /// Insert a resource into the set.
+    ///
+    /// Add the resource with the given index, epoch, and reference count to the
+    /// set.
+    ///
+    /// # Safety
+    ///
+    /// The given `index` must be in bounds for this `ResourceMetadata`'s
+    /// existing tables. See `tracker_assert_in_bounds`.
+    #[inline(always)]
+    pub(super) unsafe fn insert(&mut self, index: usize, epoch: Epoch, ref_count: RefCount) {
+        self.owned.set(index, true);
+        unsafe {
+            *self.epochs.get_unchecked_mut(index) = epoch;
+            *self.ref_counts.get_unchecked_mut(index) = Some(ref_count);
+        }
+    }
+
     /// Returns ids for all resources we own.
     fn used<Id: TypedId>(&self) -> impl Iterator<Item = id::Valid<Id>> + '_ {
         if !self.owned.is_empty() {
