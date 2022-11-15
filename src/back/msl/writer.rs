@@ -2546,19 +2546,30 @@ impl<W: Write> Writer<W> {
                     for case in cases.iter() {
                         match case.value {
                             crate::SwitchValue::Integer(value) => {
-                                writeln!(self.out, "{}case {}{}: {{", lcase, value, type_postfix)?;
+                                write!(self.out, "{}case {}{}:", lcase, value, type_postfix)?;
                             }
                             crate::SwitchValue::Default => {
-                                writeln!(self.out, "{}default: {{", lcase)?;
+                                write!(self.out, "{}default:", lcase)?;
                             }
                         }
+
+                        let write_block_braces = !(case.fall_through && case.body.is_empty());
+                        if write_block_braces {
+                            writeln!(self.out, " {{")?;
+                        } else {
+                            writeln!(self.out)?;
+                        }
+
                         self.put_block(lcase.next(), &case.body, context)?;
                         if !case.fall_through
                             && case.body.last().map_or(true, |s| !s.is_terminator())
                         {
                             writeln!(self.out, "{}break;", lcase.next())?;
                         }
-                        writeln!(self.out, "{}}}", lcase)?;
+
+                        if write_block_braces {
+                            writeln!(self.out, "{}}}", lcase)?;
+                        }
                     }
                     writeln!(self.out, "{}}}", level)?;
                 }

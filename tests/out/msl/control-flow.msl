@@ -68,8 +68,7 @@ kernel void main_(
             pos = 1;
             break;
         }
-        case 3: {
-        }
+        case 3:
         case 4: {
             pos = 2;
             break;
@@ -78,8 +77,7 @@ kernel void main_(
             pos = 3;
             break;
         }
-        default: {
-        }
+        default:
         case 6: {
             pos = 4;
             break;
