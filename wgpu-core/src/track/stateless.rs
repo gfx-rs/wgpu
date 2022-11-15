@@ -191,11 +191,11 @@ impl<A: hub::HalApi, T: hub::Resource, Id: TypedId> StatelessTracker<A, T, Id> {
 
         unsafe {
             if self.metadata.owned.get(index).unwrap_unchecked() {
-                let existing_epoch = self.metadata.epochs.get_unchecked_mut(index);
-                let existing_ref_count = self.metadata.ref_counts.get_unchecked_mut(index);
+                let existing_epoch = self.metadata.epochs.get_unchecked(index);
+                let existing_ref_count = self.metadata.ref_counts.get_unchecked(index);
 
                 if *existing_epoch == epoch
-                    && existing_ref_count.as_mut().unwrap_unchecked().load() == 1
+                    && existing_ref_count.as_ref().unwrap_unchecked().load() == 1
                 {
                     self.metadata.reset(index);
 
