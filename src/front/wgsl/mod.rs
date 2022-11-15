@@ -1513,13 +1513,20 @@ impl Parser {
         lexer.span_from(initial)
     }
 
-    fn parse_switch_value<'a>(lexer: &mut Lexer<'a>, uint: bool) -> Result<i32, Error<'a>> {
-        let token_span = lexer.next();
-        match token_span.0 {
-            Token::Number(Ok(Number::U32(num))) if uint => Ok(num as i32),
-            Token::Number(Ok(Number::I32(num))) if !uint => Ok(num),
-            Token::Number(Err(e)) => Err(Error::BadNumber(token_span.1, e)),
-            _ => Err(Error::Unexpected(token_span.1, ExpectedToken::Integer)),
+    fn parse_switch_value<'a>(
+        lexer: &mut Lexer<'a>,
+        uint: bool,
+    ) -> Result<crate::SwitchValue, Error<'a>> {
+        match lexer.next() {
+            (Token::Word("default"), _) => Ok(crate::SwitchValue::Default),
+            (Token::Number(Ok(Number::U32(num))), _) if uint => {
+                Ok(crate::SwitchValue::Integer(num as i32))
+            }
+            (Token::Number(Ok(Number::I32(num))), _) if !uint => {
+                Ok(crate::SwitchValue::Integer(num))
+            }
+            (Token::Number(Err(e)), span) => Err(Error::BadNumber(span, e)),
+            (_, span) => Err(Error::Unexpected(span, ExpectedToken::Integer)),
         }
     }
 
@@ -3576,34 +3583,6 @@ impl Parser {
         Ok(())
     }
 
-    fn parse_switch_case_body<'a, 'out>(
-        &mut self,
-        lexer: &mut Lexer<'a>,
-        mut context: StatementContext<'a, '_, 'out>,
-    ) -> Result<(bool, crate::Block), Error<'a>> {
-        let mut body = crate::Block::new();
-        // Push a new lexical scope for the switch case body
-        context.symbol_table.push_scope();
-
-        lexer.expect(Token::Paren('{'))?;
-        let fall_through = loop {
-            // default statements
-            if lexer.skip(Token::Word("fallthrough")) {
-                lexer.expect(Token::Separator(';'))?;
-                lexer.expect(Token::Paren('}'))?;
-                break true;
-            }
-            if lexer.skip(Token::Paren('}')) {
-                break false;
-            }
-            self.parse_statement(lexer, context.reborrow(), &mut body, false)?;
-        };
-        // Pop the switch case body lexical scope
-        context.symbol_table.pop_scope();
-
-        Ok((fall_through, body))
-    }
-
     fn parse_statement<'a, 'out>(
         &mut self,
         lexer: &mut Lexer<'a>,
@@ -3928,37 +3907,34 @@ impl Parser {
                                             break value;
                                         }
                                         cases.push(crate::SwitchCase {
-                                            value: crate::SwitchValue::Integer(value),
+                                            value,
                                             body: crate::Block::new(),
                                             fall_through: true,
                                         });
                                     };
 
-                                    let (fall_through, body) =
-                                        self.parse_switch_case_body(lexer, context.reborrow())?;
-
+                                    let body =
+                                        self.parse_block(lexer, context.reborrow(), false)?;
                                     cases.push(crate::SwitchCase {
-                                        value: crate::SwitchValue::Integer(value),
+                                        value,
                                         body,
-                                        fall_through,
+                                        fall_through: false,
                                     });
                                 }
                                 (Token::Word("default"), _) => {
                                     lexer.skip(Token::Separator(':'));
-                                    let (fall_through, body) =
-                                        self.parse_switch_case_body(lexer, context.reborrow())?;
+
+                                    let body =
+                                        self.parse_block(lexer, context.reborrow(), false)?;
                                     cases.push(crate::SwitchCase {
                                         value: crate::SwitchValue::Default,
                                         body,
-                                        fall_through,
+                                        fall_through: false,
                                     });
                                 }
                                 (Token::Paren('}'), _) => break,
-                                other => {
-                                    return Err(Error::Unexpected(
-                                        other.1,
-                                        ExpectedToken::SwitchItem,
-                                    ))
+                                (_, span) => {
+                                    return Err(Error::Unexpected(span, ExpectedToken::SwitchItem))
                                 }
                             }
                         }

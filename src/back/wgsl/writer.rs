@@ -880,25 +880,47 @@ impl<W: Write> Writer<W> {
                 };
 
                 let l2 = level.next();
-                if !cases.is_empty() {
-                    for case in cases {
-                        match case.value {
-                            crate::SwitchValue::Integer(value) => {
-                                writeln!(self.out, "{}case {}{}: {{", l2, value, type_postfix)?;
+                let mut new_case = true;
+                for case in cases {
+                    if case.fall_through && !case.body.is_empty() {
+                        // TODO: we could do the same workaround as we did for the HLSL backend
+                        return Err(Error::Unimplemented(
+                            "fall-through switch case block".into(),
+                        ));
+                    }
+
+                    match case.value {
+                        crate::SwitchValue::Integer(value) => {
+                            if new_case {
+                                write!(self.out, "{}case ", l2)?;
                             }
-                            crate::SwitchValue::Default => {
-                                writeln!(self.out, "{}default: {{", l2)?;
+                            write!(self.out, "{}{}", value, type_postfix)?;
+                        }
+                        crate::SwitchValue::Default => {
+                            if new_case {
+                                if case.fall_through {
+                                    write!(self.out, "{}case ", l2)?;
+                                } else {
+                                    write!(self.out, "{}", l2)?;
+                                }
                             }
+                            write!(self.out, "default")?;
                         }
+                    }
 
-                        for sta in case.body.iter() {
-                            self.write_stmt(module, sta, func_ctx, l2.next())?;
-                        }
+                    new_case = !case.fall_through;
 
-                        if case.fall_through {
-                            writeln!(self.out, "{}fallthrough;", l2.next())?;
-                        }
+                    if case.fall_through {
+                        write!(self.out, ", ")?;
+                    } else {
+                        writeln!(self.out, ": {{")?;
+                    }
 
+                    for sta in case.body.iter() {
+                        self.write_stmt(module, sta, func_ctx, l2.next())?;
+                    }
+
+                    if !case.fall_through {
                         writeln!(self.out, "{}}}", l2)?;
                     }
                 }

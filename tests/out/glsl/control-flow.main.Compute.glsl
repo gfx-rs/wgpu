@@ -56,12 +56,16 @@ void main() {
             pos = 1;
             break;
         case 3:
-            pos = 2;
             /* fallthrough */
         case 4:
+            pos = 2;
+            break;
+        case 5:
             pos = 3;
-            /* fallthrough */
+            break;
         default:
+            /* fallthrough */
+        case 6:
             pos = 4;
             break;
     }
@@ -81,7 +85,7 @@ void main() {
             return;
         case 3:
             pos = 2;
-            /* fallthrough */
+            return;
         case 4:
             return;
         default:

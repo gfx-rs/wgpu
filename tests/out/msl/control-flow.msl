@@ -69,12 +69,18 @@ kernel void main_(
             break;
         }
         case 3: {
-            pos = 2;
         }
         case 4: {
+            pos = 2;
+            break;
+        }
+        case 5: {
             pos = 3;
+            break;
         }
         default: {
+        }
+        case 6: {
             pos = 4;
             break;
         }
@@ -99,6 +105,7 @@ kernel void main_(
         }
         case 3: {
             pos = 2;
+            return;
         }
         case 4: {
             return;

@@ -1371,28 +1371,6 @@ fn select() {
 }
 
 #[test]
-fn last_case_falltrough() {
-    check_validation! {
-        "
-        fn test_falltrough() {
-          switch(0) {
-            default: {}
-            case 0: {
-              fallthrough;
-            }
-          }
-        }
-        ":
-        Err(
-            naga::valid::ValidationError::Function {
-                source: naga::valid::FunctionError::LastCaseFallTrough,
-                ..
-            },
-        )
-    }
-}
-
-#[test]
 fn missing_default_case() {
     check_validation! {
         "
