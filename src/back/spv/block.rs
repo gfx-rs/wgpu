@@ -1680,25 +1680,35 @@ impl<'w> BlockContext<'w> {
                         spirv::SelectionControl::NONE,
                     ));
 
-                    let default_id = self.gen_id();
+                    let mut default_id = None;
+                    // id of previous empty fall-through case
+                    let mut last_id = None;
 
                     let mut raw_cases = Vec::with_capacity(cases.len());
                     let mut case_ids = Vec::with_capacity(cases.len());
                     for case in cases.iter() {
+                        let label_id = last_id.take().unwrap_or_else(|| self.gen_id());
+
+                        if case.fall_through && case.body.is_empty() {
+                            last_id = Some(label_id);
+                        }
+
+                        case_ids.push(label_id);
+
                         match case.value {
                             crate::SwitchValue::Integer(value) => {
-                                let label_id = self.gen_id();
                                 raw_cases.push(super::instructions::Case {
                                     value: value as Word,
                                     label_id,
                                 });
-                                case_ids.push(label_id);
                             }
                             crate::SwitchValue::Default => {
-                                case_ids.push(default_id);
+                                default_id = Some(label_id);
                             }
                         }
                     }
+
+                    let default_id = default_id.unwrap();
 
                     self.function.consume(
                         block,
@@ -1710,7 +1720,12 @@ impl<'w> BlockContext<'w> {
                         ..loop_context
                     };
 
-                    for (i, (case, label_id)) in cases.iter().zip(case_ids.iter()).enumerate() {
+                    for (i, (case, label_id)) in cases
+                        .iter()
+                        .zip(case_ids.iter())
+                        .filter(|&(case, _)| !(case.fall_through && case.body.is_empty()))
+                        .enumerate()
+                    {
                         let case_finish_id = if case.fall_through {
                             case_ids[i + 1]
                         } else {
