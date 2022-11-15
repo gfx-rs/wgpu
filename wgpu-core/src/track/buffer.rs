@@ -514,7 +514,7 @@ impl<A: hub::HalApi> BufferTracker<A> {
                 )
             };
 
-            unsafe { scope.metadata.reset(index) };
+            unsafe { scope.metadata.remove(index) };
         }
     }
 
@@ -543,7 +543,7 @@ impl<A: hub::HalApi> BufferTracker<A> {
                 if *existing_epoch == epoch
                     && existing_ref_count.as_ref().unwrap_unchecked().load() == 1
                 {
-                    self.metadata.reset(index);
+                    self.metadata.remove(index);
 
                     return true;
                 }

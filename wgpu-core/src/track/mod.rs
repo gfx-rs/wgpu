@@ -442,9 +442,11 @@ impl<A: hub::HalApi> ResourceMetadata<A> {
     }
 
     /// Remove the resource with the given index from the set.
-    unsafe fn reset(&mut self, index: usize) {
-        unsafe { *self.ref_counts.get_unchecked_mut(index) = None };
-        unsafe { *self.epochs.get_unchecked_mut(index) = u32::MAX };
+    unsafe fn remove(&mut self, index: usize) {
+        unsafe {
+            *self.ref_counts.get_unchecked_mut(index) = None;
+            *self.epochs.get_unchecked_mut(index) = u32::MAX;
+        }
         self.owned.set(index, false);
     }
 }

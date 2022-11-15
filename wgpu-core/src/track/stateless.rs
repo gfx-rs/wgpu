@@ -190,7 +190,7 @@ impl<A: hub::HalApi, T: hub::Resource, Id: TypedId> StatelessTracker<A, T, Id> {
                 if *existing_epoch == epoch
                     && existing_ref_count.as_ref().unwrap_unchecked().load() == 1
                 {
-                    self.metadata.reset(index);
+                    self.metadata.remove(index);
 
                     return true;
                 }

@@ -698,7 +698,7 @@ impl<A: hub::HalApi> TextureTracker<A> {
                 )
             };
 
-            unsafe { scope.metadata.reset(index) };
+            unsafe { scope.metadata.remove(index) };
         }
     }
 
@@ -726,7 +726,7 @@ impl<A: hub::HalApi> TextureTracker<A> {
                 self.start_set.complex.remove(&index32);
                 self.end_set.complex.remove(&index32);
 
-                self.metadata.reset(index);
+                self.metadata.remove(index);
 
                 return true;
             }
@@ -763,7 +763,7 @@ impl<A: hub::HalApi> TextureTracker<A> {
                     self.start_set.complex.remove(&index32);
                     self.end_set.complex.remove(&index32);
 
-                    self.metadata.reset(index);
+                    self.metadata.remove(index);
 
                     return true;
                 }
