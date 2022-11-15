@@ -59,14 +59,7 @@ void main(uint3 global_id : SV_DispatchThreadID)
             pos = 1;
             break;
         }
-        case 3: {
-            {
-            }
-            {
-                pos = 2;
-            }
-            break;
-        }
+        case 3:
         case 4: {
             pos = 2;
             break;
@@ -75,14 +68,7 @@ void main(uint3 global_id : SV_DispatchThreadID)
             pos = 3;
             break;
         }
-        default: {
-            {
-            }
-            {
-                pos = 4;
-            }
-            break;
-        }
+        default:
         case 6: {
             pos = 4;
             break;
