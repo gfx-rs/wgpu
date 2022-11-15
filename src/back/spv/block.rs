@@ -1682,26 +1682,20 @@ impl<'w> BlockContext<'w> {
 
                     let default_id = self.gen_id();
 
-                    let mut reached_default = false;
                     let mut raw_cases = Vec::with_capacity(cases.len());
                     let mut case_ids = Vec::with_capacity(cases.len());
                     for case in cases.iter() {
                         match case.value {
                             crate::SwitchValue::Integer(value) => {
                                 let label_id = self.gen_id();
-                                // No cases should be added after the default case is encountered
-                                // since the default case catches all
-                                if !reached_default {
-                                    raw_cases.push(super::instructions::Case {
-                                        value: value as Word,
-                                        label_id,
-                                    });
-                                }
+                                raw_cases.push(super::instructions::Case {
+                                    value: value as Word,
+                                    label_id,
+                                });
                                 case_ids.push(label_id);
                             }
                             crate::SwitchValue::Default => {
                                 case_ids.push(default_id);
-                                reached_default = true;
                             }
                         }
                     }
@@ -1728,17 +1722,6 @@ impl<'w> BlockContext<'w> {
                             BlockExit::Branch {
                                 target: case_finish_id,
                             },
-                            inner_context,
-                        )?;
-                    }
-
-                    // If no default was encountered write a empty block to satisfy the presence of
-                    // a block the default label
-                    if !reached_default {
-                        self.write_block(
-                            default_id,
-                            &[],
-                            BlockExit::Branch { target: merge_id },
                             inner_context,
                         )?;
                     }

@@ -92,7 +92,7 @@ OpBranch %50
 %50 = OpLabel
 %52 = OpLoad  %4  %37
 OpSelectionMerge %53 None
-OpSwitch %52 %54 1 %55 2 %56 3 %57 4 %58 5 %59
+OpSwitch %52 %54 1 %55 2 %56 3 %57 4 %58 5 %59 6 %60
 %55 = OpLabel
 OpStore %37 %5
 OpBranch %53
