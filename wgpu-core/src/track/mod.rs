@@ -431,7 +431,7 @@ impl<A: hub::HalApi> ResourceMetadata<A> {
     }
 
     /// Returns ids for all resources we own.
-    fn used<Id: TypedId>(&self) -> impl Iterator<Item = id::Valid<Id>> + '_ {
+    fn owned_ids<Id: TypedId>(&self) -> impl Iterator<Item = id::Valid<Id>> + '_ {
         if !self.owned.is_empty() {
             self.tracker_assert_in_bounds(self.owned.len() - 1)
         };

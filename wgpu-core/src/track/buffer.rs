@@ -124,7 +124,7 @@ impl<A: hub::HalApi> BufferUsageScope<A> {
 
     /// Returns a list of all buffers tracked.
     pub fn used(&self) -> impl Iterator<Item = Valid<BufferId>> + '_ {
-        self.metadata.used()
+        self.metadata.owned_ids()
     }
 
     /// Merge the list of buffer states in the given bind group into this usage scope.
@@ -293,7 +293,7 @@ impl<A: hub::HalApi> BufferTracker<A> {
 
     /// Returns a list of all buffers tracked.
     pub fn used(&self) -> impl Iterator<Item = Valid<BufferId>> + '_ {
-        self.metadata.used()
+        self.metadata.owned_ids()
     }
 
     /// Drains all currently pending transitions.

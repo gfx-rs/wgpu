@@ -91,7 +91,7 @@ impl<A: hub::HalApi, T: hub::Resource, Id: TypedId> StatelessTracker<A, T, Id> {
 
     /// Returns a list of all resources tracked.
     pub fn used(&self) -> impl Iterator<Item = Valid<Id>> + '_ {
-        self.metadata.used()
+        self.metadata.owned_ids()
     }
 
     /// Inserts a single resource into the resource tracker.

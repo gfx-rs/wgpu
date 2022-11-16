@@ -258,7 +258,7 @@ impl<A: hub::HalApi> TextureUsageScope<A> {
 
     /// Returns a list of all textures tracked.
     pub fn used(&self) -> impl Iterator<Item = Valid<TextureId>> + '_ {
-        self.metadata.used()
+        self.metadata.owned_ids()
     }
 
     /// Returns true if the tracker owns no resources.
@@ -447,7 +447,7 @@ impl<A: hub::HalApi> TextureTracker<A> {
 
     /// Returns a list of all textures tracked.
     pub fn used(&self) -> impl Iterator<Item = Valid<TextureId>> + '_ {
-        self.metadata.used()
+        self.metadata.owned_ids()
     }
 
     /// Drains all currently pending transitions.
