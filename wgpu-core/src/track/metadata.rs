@@ -8,16 +8,25 @@ use crate::{
 use bit_vec::BitVec;
 use std::{borrow::Cow, marker::PhantomData, mem};
 
-/// SOA container for storing metadata of a resource.
+/// A set of resources, holding a [`RefCount`] and epoch for each member.
 ///
-/// This contains the ownership bitvec, the refcount of
-/// the resource, and the epoch of the object's full ID.
+/// Testing for membership is fast, and iterating over members is
+/// reasonably fast in practice. Storage consumption is proportional
+/// to the largest id index of any member, not to the number of
+/// members, but a bit vector tracks occupancy, so iteration touches
+/// only occupied elements.
 #[derive(Debug)]
 pub(super) struct ResourceMetadata<A: hub::HalApi> {
+    /// If the resource with index `i` is a member, `owned[i]` is `true`.
     owned: BitVec<usize>,
+
+    /// A vector parallel to `owned`, holding clones of members' `RefCount`s.
     ref_counts: Vec<Option<RefCount>>,
+
+    /// A vector parallel to `owned`, holding the epoch of each members' id.
     epochs: Vec<Epoch>,
 
+    /// This tells Rust that this type should be covariant with `A`.
     _phantom: PhantomData<A>,
 }
 
@@ -102,6 +111,12 @@ impl<A: hub::HalApi> ResourceMetadata<A> {
         }
     }
 
+    /// Get the [`RefCount`] of the resource with the given index.
+    ///
+    /// # Safety
+    ///
+    /// The given `index` must be in bounds for this `ResourceMetadata`'s
+    /// existing tables. See `tracker_assert_in_bounds`.
     #[inline(always)]
     pub(super) unsafe fn get_ref_count_unchecked(&self, index: usize) -> &RefCount {
         unsafe {
@@ -112,6 +127,12 @@ impl<A: hub::HalApi> ResourceMetadata<A> {
         }
     }
 
+    /// Get the [`Epoch`] of the id of the resource with the given index.
+    ///
+    /// # Safety
+    ///
+    /// The given `index` must be in bounds for this `ResourceMetadata`'s
+    /// existing tables. See `tracker_assert_in_bounds`.
     #[inline(always)]
     pub(super) unsafe fn get_epoch_unchecked(&self, index: usize) -> Epoch {
         unsafe { *self.epochs.get_unchecked(index) }
