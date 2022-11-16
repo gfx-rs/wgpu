@@ -84,7 +84,7 @@ impl<A: hub::HalApi, T: hub::Resource, Id: TypedId> StatelessTracker<A, T, Id> {
 
     /// Extend the vectors to let the given index be valid.
     fn allow_index(&mut self, index: usize) {
-        if index >= self.metadata.owned.len() {
+        if index >= self.metadata.size() {
             self.set_size(index + 1);
         }
     }
@@ -140,8 +140,8 @@ impl<A: hub::HalApi, T: hub::Resource, Id: TypedId> StatelessTracker<A, T, Id> {
     /// If the ID is higher than the length of internal vectors,
     /// the vectors will be extended. A call to set_size is not needed.
     pub fn add_from_tracker(&mut self, other: &Self) {
-        let incoming_size = other.metadata.owned.len();
-        if incoming_size > self.metadata.owned.len() {
+        let incoming_size = other.metadata.size();
+        if incoming_size > self.metadata.size() {
             self.set_size(incoming_size);
         }
 
@@ -176,7 +176,7 @@ impl<A: hub::HalApi, T: hub::Resource, Id: TypedId> StatelessTracker<A, T, Id> {
         let (index32, epoch, _) = id.0.unzip();
         let index = index32 as usize;
 
-        if index > self.metadata.owned.len() {
+        if index > self.metadata.size() {
             return false;
         }
 

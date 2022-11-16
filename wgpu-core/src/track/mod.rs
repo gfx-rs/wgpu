@@ -365,6 +365,11 @@ impl<A: hub::HalApi> ResourceMetadata<A> {
         }
     }
 
+    /// Returns the number of indices we can accommodate.
+    pub fn size(&self) -> usize {
+        self.owned.len()
+    }
+
     pub fn set_size(&mut self, size: usize) {
         self.ref_counts.resize(size, None);
         self.epochs.resize(size, u32::MAX);
