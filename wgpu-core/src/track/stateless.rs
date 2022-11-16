@@ -149,7 +149,7 @@ impl<A: hub::HalApi, T: hub::Resource, Id: TypedId> StatelessTracker<A, T, Id> {
             self.tracker_assert_in_bounds(index);
             other.tracker_assert_in_bounds(index);
             unsafe {
-                let previously_owned = self.metadata.owned.get(index).unwrap_unchecked();
+                let previously_owned = self.metadata.contains_unchecked(index);
 
                 if !previously_owned {
                     let other_ref_count = other
@@ -183,7 +183,7 @@ impl<A: hub::HalApi, T: hub::Resource, Id: TypedId> StatelessTracker<A, T, Id> {
         self.tracker_assert_in_bounds(index);
 
         unsafe {
-            if self.metadata.owned.get(index).unwrap_unchecked() {
+            if self.metadata.contains_unchecked(index) {
                 let existing_epoch = self.metadata.epochs.get_unchecked(index);
                 let existing_ref_count = self.metadata.ref_counts.get_unchecked(index);
 

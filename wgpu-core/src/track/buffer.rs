@@ -316,7 +316,7 @@ impl<A: hub::HalApi> BufferTracker<A> {
         self.tracker_assert_in_bounds(index);
 
         unsafe {
-            let currently_owned = self.metadata.owned.get(index).unwrap_unchecked();
+            let currently_owned = self.metadata.contains_unchecked(index);
 
             if currently_owned {
                 panic!("Tried to insert buffer already tracked");
@@ -492,7 +492,7 @@ impl<A: hub::HalApi> BufferTracker<A> {
 
             scope.tracker_assert_in_bounds(index);
 
-            if unsafe { !scope.metadata.owned.get(index).unwrap_unchecked() } {
+            if unsafe { !scope.metadata.contains_unchecked(index) } {
                 continue;
             }
             unsafe {
@@ -536,7 +536,7 @@ impl<A: hub::HalApi> BufferTracker<A> {
         self.tracker_assert_in_bounds(index);
 
         unsafe {
-            if self.metadata.owned.get(index).unwrap_unchecked() {
+            if self.metadata.contains_unchecked(index) {
                 let existing_epoch = self.metadata.epochs.get_unchecked(index);
                 let existing_ref_count = self.metadata.ref_counts.get_unchecked(index);
 
@@ -600,7 +600,7 @@ unsafe fn insert_or_merge<A: hub::HalApi>(
     state_provider: BufferStateProvider<'_>,
     metadata_provider: ResourceMetadataProvider<'_, A>,
 ) -> Result<(), UsageConflict> {
-    let currently_owned = unsafe { resource_metadata.owned.get(index).unwrap_unchecked() };
+    let currently_owned = unsafe { resource_metadata.contains_unchecked(index) };
 
     if !currently_owned {
         unsafe {
@@ -659,7 +659,7 @@ unsafe fn insert_or_barrier_update<A: hub::HalApi>(
     metadata_provider: ResourceMetadataProvider<'_, A>,
     barriers: &mut Vec<PendingTransition<BufferUses>>,
 ) {
-    let currently_owned = unsafe { resource_metadata.owned.get(index).unwrap_unchecked() };
+    let currently_owned = unsafe { resource_metadata.contains_unchecked(index) };
 
     if !currently_owned {
         unsafe {

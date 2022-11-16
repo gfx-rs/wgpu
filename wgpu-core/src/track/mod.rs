@@ -382,7 +382,7 @@ impl<A: hub::HalApi> ResourceMetadata<A> {
         strict_assert!(index < self.ref_counts.len());
         strict_assert!(index < self.epochs.len());
 
-        strict_assert!(if self.owned.get(index).unwrap() {
+        strict_assert!(if self.contains(index) {
             self.ref_counts[index].is_some()
         } else {
             true
@@ -394,6 +394,22 @@ impl<A: hub::HalApi> ResourceMetadata<A> {
     /// This is a O(n) operation.
     fn is_empty(&self) -> bool {
         !self.owned.any()
+    }
+
+    /// Returns true if the set contains the resource with the given index.
+    pub(super) fn contains(&self, index: usize) -> bool {
+        self.owned[index]
+    }
+
+    /// Returns true if the set contains the resource with the given index.
+    ///
+    /// # Safety
+    ///
+    /// The given `index` must be in bounds for this `ResourceMetadata`'s
+    /// existing tables. See `tracker_assert_in_bounds`.
+    #[inline(always)]
+    pub(super) unsafe fn contains_unchecked(&self, index: usize) -> bool {
+        unsafe { self.owned.get(index).unwrap_unchecked() }
     }
 
     /// Insert a resource into the set.
@@ -425,7 +441,7 @@ impl<A: hub::HalApi> ResourceMetadata<A> {
         })
     }
 
-    /// Resets the metadata for a given index to sane "invalid" values.
+    /// Remove the resource with the given index from the set.
     unsafe fn reset(&mut self, index: usize) {
         unsafe { *self.ref_counts.get_unchecked_mut(index) = None };
         unsafe { *self.epochs.get_unchecked_mut(index) = u32::MAX };
