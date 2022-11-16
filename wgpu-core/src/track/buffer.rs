@@ -13,8 +13,8 @@ use crate::{
     id::{BufferId, TypedId, Valid},
     resource::Buffer,
     track::{
-        invalid_resource_state, iterate_bitvec_indices, skip_barrier, ResourceMetadata,
-        ResourceMetadataProvider, ResourceUses, UsageConflict,
+        invalid_resource_state, skip_barrier, ResourceMetadata, ResourceMetadataProvider,
+        ResourceUses, UsageConflict,
     },
     LifeGuard, RefCount,
 };
@@ -180,7 +180,7 @@ impl<A: hub::HalApi> BufferUsageScope<A> {
             self.set_size(incoming_size);
         }
 
-        for index in iterate_bitvec_indices(&scope.metadata.owned) {
+        for index in scope.metadata.owned_indices() {
             self.tracker_assert_in_bounds(index);
             scope.tracker_assert_in_bounds(index);
 
@@ -394,7 +394,7 @@ impl<A: hub::HalApi> BufferTracker<A> {
             self.set_size(incoming_size);
         }
 
-        for index in iterate_bitvec_indices(&tracker.metadata.owned) {
+        for index in tracker.metadata.owned_indices() {
             self.tracker_assert_in_bounds(index);
             tracker.tracker_assert_in_bounds(index);
             unsafe {
@@ -434,7 +434,7 @@ impl<A: hub::HalApi> BufferTracker<A> {
             self.set_size(incoming_size);
         }
 
-        for index in iterate_bitvec_indices(&scope.metadata.owned) {
+        for index in scope.metadata.owned_indices() {
             self.tracker_assert_in_bounds(index);
             scope.tracker_assert_in_bounds(index);
             unsafe {

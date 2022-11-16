@@ -9,7 +9,7 @@ use std::marker::PhantomData;
 use crate::{
     hub,
     id::{TypedId, Valid},
-    track::{iterate_bitvec_indices, ResourceMetadata},
+    track::ResourceMetadata,
     RefCount,
 };
 
@@ -145,7 +145,7 @@ impl<A: hub::HalApi, T: hub::Resource, Id: TypedId> StatelessTracker<A, T, Id> {
             self.set_size(incoming_size);
         }
 
-        for index in iterate_bitvec_indices(&other.metadata.owned) {
+        for index in other.metadata.owned_indices() {
             self.tracker_assert_in_bounds(index);
             other.tracker_assert_in_bounds(index);
             unsafe {

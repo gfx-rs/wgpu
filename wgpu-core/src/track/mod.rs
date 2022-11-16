@@ -430,7 +430,7 @@ impl<A: hub::HalApi> ResourceMetadata<A> {
         }
     }
 
-    /// Returns ids for all resources we own.
+    /// Returns an iterator over the ids for all resources owned by `self`.
     fn owned_ids<Id: TypedId>(&self) -> impl Iterator<Item = id::Valid<Id>> + '_ {
         if !self.owned.is_empty() {
             self.tracker_assert_in_bounds(self.owned.len() - 1)
@@ -439,6 +439,14 @@ impl<A: hub::HalApi> ResourceMetadata<A> {
             let epoch = unsafe { *self.epochs.get_unchecked(index) };
             id::Valid(Id::zip(index as u32, epoch, A::VARIANT))
         })
+    }
+
+    /// Returns an iterator over the indices of all resources owned by `self`.
+    fn owned_indices(&self) -> impl Iterator<Item = usize> + '_ {
+        if !self.owned.is_empty() {
+            self.tracker_assert_in_bounds(self.owned.len() - 1)
+        };
+        iterate_bitvec_indices(&self.owned)
     }
 
     /// Remove the resource with the given index from the set.

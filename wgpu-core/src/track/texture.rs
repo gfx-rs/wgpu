@@ -25,8 +25,8 @@ use crate::{
     id::{TextureId, TypedId, Valid},
     resource::Texture,
     track::{
-        invalid_resource_state, iterate_bitvec_indices, skip_barrier, ResourceMetadata,
-        ResourceMetadataProvider, ResourceUses, UsageConflict,
+        invalid_resource_state, skip_barrier, ResourceMetadata, ResourceMetadataProvider,
+        ResourceUses, UsageConflict,
     },
     LifeGuard, RefCount,
 };
@@ -285,7 +285,7 @@ impl<A: hub::HalApi> TextureUsageScope<A> {
             self.set_size(incoming_size);
         }
 
-        for index in iterate_bitvec_indices(&scope.metadata.owned) {
+        for index in scope.metadata.owned_indices() {
             let index32 = index as u32;
 
             self.tracker_assert_in_bounds(index);
@@ -573,7 +573,7 @@ impl<A: hub::HalApi> TextureTracker<A> {
             self.set_size(incoming_size);
         }
 
-        for index in iterate_bitvec_indices(&tracker.metadata.owned) {
+        for index in tracker.metadata.owned_indices() {
             let index32 = index as u32;
 
             self.tracker_assert_in_bounds(index);
@@ -619,7 +619,7 @@ impl<A: hub::HalApi> TextureTracker<A> {
             self.set_size(incoming_size);
         }
 
-        for index in iterate_bitvec_indices(&scope.metadata.owned) {
+        for index in scope.metadata.owned_indices() {
             let index32 = index as u32;
 
             self.tracker_assert_in_bounds(index);
