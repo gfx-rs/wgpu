@@ -152,14 +152,9 @@ impl<A: hub::HalApi, T: hub::Resource, Id: TypedId> StatelessTracker<A, T, Id> {
                 let previously_owned = self.metadata.contains_unchecked(index);
 
                 if !previously_owned {
-                    let other_ref_count = other
-                        .metadata
-                        .ref_counts
-                        .get_unchecked(index)
-                        .clone()
-                        .unwrap_unchecked();
-                    let epoch = *other.metadata.epochs.get_unchecked(index);
-                    self.metadata.insert(index, epoch, other_ref_count);
+                    let epoch = other.metadata.get_epoch_unchecked(index);
+                    let other_ref_count = other.metadata.get_ref_count_unchecked(index);
+                    self.metadata.insert(index, epoch, other_ref_count.clone());
                 }
             }
         }
@@ -184,14 +179,11 @@ impl<A: hub::HalApi, T: hub::Resource, Id: TypedId> StatelessTracker<A, T, Id> {
 
         unsafe {
             if self.metadata.contains_unchecked(index) {
-                let existing_epoch = self.metadata.epochs.get_unchecked(index);
-                let existing_ref_count = self.metadata.ref_counts.get_unchecked(index);
+                let existing_epoch = self.metadata.get_epoch_unchecked(index);
+                let existing_ref_count = self.metadata.get_ref_count_unchecked(index);
 
-                if *existing_epoch == epoch
-                    && existing_ref_count.as_ref().unwrap_unchecked().load() == 1
-                {
+                if existing_epoch == epoch && existing_ref_count.load() == 1 {
                     self.metadata.remove(index);
-
                     return true;
                 }
             }

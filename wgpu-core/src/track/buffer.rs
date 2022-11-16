@@ -537,14 +537,11 @@ impl<A: hub::HalApi> BufferTracker<A> {
 
         unsafe {
             if self.metadata.contains_unchecked(index) {
-                let existing_epoch = self.metadata.epochs.get_unchecked(index);
-                let existing_ref_count = self.metadata.ref_counts.get_unchecked(index);
+                let existing_epoch = self.metadata.get_epoch_unchecked(index);
+                let existing_ref_count = self.metadata.get_ref_count_unchecked(index);
 
-                if *existing_epoch == epoch
-                    && existing_ref_count.as_ref().unwrap_unchecked().load() == 1
-                {
+                if existing_epoch == epoch && existing_ref_count.load() == 1 {
                     self.metadata.remove(index);
-
                     return true;
                 }
             }

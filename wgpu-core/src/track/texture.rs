@@ -469,8 +469,7 @@ impl<A: hub::HalApi> TextureTracker<A> {
 
         self.tracker_assert_in_bounds(index);
 
-        let ref_count = unsafe { self.metadata.ref_counts.get_unchecked(index) };
-        unsafe { ref_count.as_ref().unwrap_unchecked() }
+        unsafe { self.metadata.get_ref_count_unchecked(index) }
     }
 
     /// Inserts a single texture and a state into the resource tracker.
@@ -720,7 +719,7 @@ impl<A: hub::HalApi> TextureTracker<A> {
 
         unsafe {
             if self.metadata.contains_unchecked(index) {
-                let existing_epoch = *self.metadata.epochs.get_unchecked_mut(index);
+                let existing_epoch = self.metadata.get_epoch_unchecked(index);
                 assert_eq!(existing_epoch, epoch);
 
                 self.start_set.complex.remove(&index32);
@@ -754,12 +753,10 @@ impl<A: hub::HalApi> TextureTracker<A> {
 
         unsafe {
             if self.metadata.contains_unchecked(index) {
-                let existing_epoch = self.metadata.epochs.get_unchecked(index);
-                let existing_ref_count = self.metadata.ref_counts.get_unchecked(index);
+                let existing_epoch = self.metadata.get_epoch_unchecked(index);
+                let existing_ref_count = self.metadata.get_ref_count_unchecked(index);
 
-                if *existing_epoch == epoch
-                    && existing_ref_count.as_ref().unwrap_unchecked().load() == 1
-                {
+                if existing_epoch == epoch && existing_ref_count.load() == 1 {
                     self.start_set.complex.remove(&index32);
                     self.end_set.complex.remove(&index32);
 

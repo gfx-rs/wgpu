@@ -435,6 +435,21 @@ impl<A: hub::HalApi> ResourceMetadata<A> {
         }
     }
 
+    #[inline(always)]
+    pub unsafe fn get_ref_count_unchecked(&self, index: usize) -> &RefCount {
+        unsafe {
+            self.ref_counts
+                .get_unchecked(index)
+                .as_ref()
+                .unwrap_unchecked()
+        }
+    }
+
+    #[inline(always)]
+    pub unsafe fn get_epoch_unchecked(&self, index: usize) -> Epoch {
+        unsafe { *self.epochs.get_unchecked(index) }
+    }
+
     /// Returns an iterator over the ids for all resources owned by `self`.
     fn owned_ids<Id: TypedId>(&self) -> impl Iterator<Item = id::Valid<Id>> + '_ {
         if !self.owned.is_empty() {
