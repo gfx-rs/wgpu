@@ -108,7 +108,7 @@ Bottom level categories:
 
 ### Testing/Internal
 
-- Update the `minimum supported rust version` to 1.65
+- Update the `minimum supported rust version` to 1.64
 - Use cargo 1.64 workspace inheritance feature. By @jinleili in [#3107](https://github.com/gfx-rs/wgpu/pull/3107)
 
 #### Vulkan
