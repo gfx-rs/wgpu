@@ -2395,8 +2395,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         }
                     },
                 };
-                write!(self.out, "{}", op_str)?;
+                write!(self.out, "{}(", op_str)?;
                 self.write_expr(module, expr, func_ctx)?;
+                write!(self.out, ")")?;
             }
             Expression::As {
                 expr,

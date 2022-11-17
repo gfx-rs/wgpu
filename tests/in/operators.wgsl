@@ -105,8 +105,6 @@ fn logical() {
 
 fn arithmetic() {
     // unary
-    // TODO: uncomment when we get the changes from https://github.com/gfx-rs/rspirv/pull/231
-    // _ = -1;
     _ = -1.0;
     _ = -vec2(1);
     _ = -vec2(1.0);
@@ -313,4 +311,15 @@ fn main() {
     bit();
     comparison();
     assignment();
+}
+
+fn negation_avoids_prefix_decrement() {
+    _ = -1;
+    _ = - -2;
+    _ = -(-3);
+    _ = -(- 4);
+    _ = - - -5;
+    _ = - - - - 6;
+    _ = - - -(- -7);
+    _ = (- - - - -8);
 }
