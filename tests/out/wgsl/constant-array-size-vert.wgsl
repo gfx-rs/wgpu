@@ -5,7 +5,7 @@ struct Data {
 @group(1) @binding(0) 
 var<uniform> global: Data;
 
-fn function_() -> vec4<f32> {
+fn function() -> vec4<f32> {
     var sum: vec4<f32>;
     var i: i32;
 
