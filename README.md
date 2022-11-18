@@ -31,9 +31,12 @@ For an overview of all the components in the gfx-rs ecosystem, see [the big pict
 
 ### MSRV policy
 
-Minimum Supported Rust Version is **1.64**.
+`wgpu`'s Minimum Supported Rust Version (MSRV) is **1.63**.
 It is enforced on CI (in "/.github/workflows/ci.yml") with `RUST_VERSION` variable.
 This version can only be upgraded in breaking releases.
+This should never be ahead of Firefox's MSRV for nightly builds,
+which is determined by the value of `MINIMUM_RUST_VERSION`
+in [`python/mozboot/mozboot/util.py`](https://searchfox.org/mozilla-central/source/python/mozboot/mozboot/util.py).
 
 ## Getting Started
 

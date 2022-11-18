@@ -1,13 +1,15 @@
 [package]
 name = "player"
-version.workspace = true
-authors.workspace = true
-edition.workspace = true
+version = "0.1.0"
+authors = [
+	"Dzmitry Malyshau <kvark@mozilla.com>",
+]
+edition = "2021"
 description = "WebGPU trace player"
-homepage.workspace = true
-repository.workspace = true
-keywords.workspace = true
-license.workspace = true
+homepage = "https://github.com/gfx-rs/wgpu"
+repository = "https://github.com/gfx-rs/wgpu"
+keywords = ["graphics"]
+license = "MIT OR Apache-2.0"
 publish = false
 
 [features]
@@ -15,19 +17,21 @@ angle = ["wgc/angle"]
 vulkan-portability = ["wgc/vulkan-portability"]
 
 [dependencies]
-env_logger.workspace = true
-log.workspace = true
-raw-window-handle.workspace = true
-ron.workspace = true
-winit = { workspace = true, optional = true }
+env_logger = "0.9"
+log = "0.4"
+raw-window-handle = "0.5"
+ron = "0.8"
+winit = { version = "0.27", optional = true }
 
 [dependencies.wgt]
-workspace = true
+path = "../wgpu-types"
+package = "wgpu-types"
 features = ["replay"]
 
 [dependencies.wgc]
-workspace = true
+path = "../wgpu-core"
+package = "wgpu-core"
 features = ["replay", "raw-window-handle", "strict_asserts", "wgsl"]
 
 [dev-dependencies]
-serde.workspace = true
+serde = "1"
