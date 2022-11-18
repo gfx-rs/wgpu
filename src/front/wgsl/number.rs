@@ -397,13 +397,13 @@ fn parse_dec_float(input: &str, kind: Option<FloatKind>) -> Result<Number, Numbe
         None => {
             let num = input.parse::<f64>().unwrap(); // will never fail
             num.is_finite()
-                .then(|| Number::AbstractFloat(num))
+                .then_some(Number::AbstractFloat(num))
                 .ok_or(NumberError::NotRepresentable)
         }
         Some(FloatKind::F32) => {
             let num = input.parse::<f32>().unwrap(); // will never fail
             num.is_finite()
-                .then(|| Number::F32(num))
+                .then_some(Number::F32(num))
                 .ok_or(NumberError::NotRepresentable)
         }
         Some(FloatKind::F16) => Err(NumberError::UnimplementedF16),
