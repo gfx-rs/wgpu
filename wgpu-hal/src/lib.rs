@@ -42,6 +42,7 @@
 #![warn(
     trivial_casts,
     trivial_numeric_casts,
+    unsafe_op_in_unsafe_fn,
     unused_extern_crates,
     unused_qualifications,
     // We don't match on a reference, unless required.
@@ -582,15 +583,20 @@ bitflags!(
         /// Format can be used as depth-stencil and input attachment.
         const DEPTH_STENCIL_ATTACHMENT = 1 << 8;
 
-        /// Format can be multisampled.
-        const MULTISAMPLE = 1 << 9;
+        /// Format can be multisampled by x2.
+        const MULTISAMPLE_X2   = 1 << 9;
+        /// Format can be multisampled by x4.
+        const MULTISAMPLE_X4   = 1 << 10;
+        /// Format can be multisampled by x8.
+        const MULTISAMPLE_X8   = 1 << 11;
+
         /// Format can be used for render pass resolve targets.
-        const MULTISAMPLE_RESOLVE = 1 << 10;
+        const MULTISAMPLE_RESOLVE = 1 << 12;
 
         /// Format can be copied from.
-        const COPY_SRC = 1 << 11;
+        const COPY_SRC = 1 << 13;
         /// Format can be copied to.
-        const COPY_DST = 1 << 12;
+        const COPY_DST = 1 << 14;
     }
 );
 
@@ -879,8 +885,27 @@ pub struct PipelineLayoutDescriptor<'a, A: Api> {
 
 #[derive(Debug)]
 pub struct BufferBinding<'a, A: Api> {
+    /// The buffer being bound.
     pub buffer: &'a A::Buffer,
+
+    /// The offset at which the bound region starts.
+    ///
+    /// This must be less than the size of the buffer. Some back ends
+    /// cannot tolerate zero-length regions; for example, see
+    /// [VUID-VkDescriptorBufferInfo-offset-00340][340] and
+    /// [VUID-VkDescriptorBufferInfo-range-00341][341], or the
+    /// documentation for GLES's [glBindBufferRange][bbr].
+    ///
+    /// [340]: https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#VUID-VkDescriptorBufferInfo-offset-00340
+    /// [341]: https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#VUID-VkDescriptorBufferInfo-range-00341
+    /// [bbr]: https://registry.khronos.org/OpenGL-Refpages/es3.0/html/glBindBufferRange.xhtml
     pub offset: wgt::BufferAddress,
+
+    /// The size of the region bound, in bytes.
+    ///
+    /// If `None`, the region extends from `offset` to the end of the
+    /// buffer. Given the restrictions on `offset`, this means that
+    /// the size is always greater than zero.
     pub size: Option<wgt::BufferSize>,
 }
 

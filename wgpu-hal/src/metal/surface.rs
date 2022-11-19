@@ -83,9 +83,11 @@ impl super::Surface {
         delegate: Option<&HalManagedMetalLayerDelegate>,
     ) -> Self {
         let view = view as *mut Object;
-        let render_layer =
-            mem::transmute::<_, &mtl::MetalLayerRef>(Self::get_metal_layer(view, delegate))
-                .to_owned();
+        let render_layer = {
+            let layer = unsafe { Self::get_metal_layer(view, delegate) };
+            unsafe { mem::transmute::<_, &mtl::MetalLayerRef>(layer) }
+        }
+        .to_owned();
         let _: *mut c_void = msg_send![view, retain];
         Self::new(NonNull::new(view), render_layer)
     }
@@ -98,7 +100,7 @@ impl super::Surface {
     }
 
     /// If not called on the main thread, this will panic.
-    pub unsafe fn get_metal_layer(
+    pub(crate) unsafe fn get_metal_layer(
         view: *mut Object,
         delegate: Option<&HalManagedMetalLayerDelegate>,
     ) -> *mut Object {
@@ -136,7 +138,7 @@ impl super::Surface {
             {
                 let () = msg_send![view, setLayer: new_layer];
                 let () = msg_send![view, setWantsLayer: YES];
-                let () = msg_send![new_layer, setContentsGravity: kCAGravityTopLeft];
+                let () = msg_send![new_layer, setContentsGravity: unsafe { kCAGravityTopLeft }];
                 let window: *mut Object = msg_send![view, window];
                 if !window.is_null() {
                     let scale_factor: CGFloat = msg_send![window, backingScaleFactor];
@@ -207,7 +209,7 @@ impl crate::Surface<super::Api> for super::Surface {
                 let () = msg_send![*render_layer, setFrame: bounds];
             }
         }
-        render_layer.set_device(&*device_raw);
+        render_layer.set_device(&device_raw);
         render_layer.set_pixel_format(self.raw_swapchain_format);
         render_layer.set_framebuffer_only(framebuffer_only);
         render_layer.set_presents_with_transaction(self.present_with_transaction);

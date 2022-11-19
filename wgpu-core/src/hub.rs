@@ -1156,7 +1156,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut surface_guard = self.surfaces.data.write();
         let hub = A::hub(self);
         // this is used for tests, which keep the adapter
-        hub.clear(&mut *surface_guard, false);
+        hub.clear(&mut surface_guard, false);
     }
 
     pub fn generate_report(&self) -> GlobalReport {
@@ -1205,23 +1205,23 @@ impl<G: GlobalIdentityHandlerFactory> Drop for Global<G> {
         // destroy hubs before the instance gets dropped
         #[cfg(vulkan)]
         {
-            self.hubs.vulkan.clear(&mut *surface_guard, true);
+            self.hubs.vulkan.clear(&mut surface_guard, true);
         }
         #[cfg(metal)]
         {
-            self.hubs.metal.clear(&mut *surface_guard, true);
+            self.hubs.metal.clear(&mut surface_guard, true);
         }
         #[cfg(dx12)]
         {
-            self.hubs.dx12.clear(&mut *surface_guard, true);
+            self.hubs.dx12.clear(&mut surface_guard, true);
         }
         #[cfg(dx11)]
         {
-            self.hubs.dx11.clear(&mut *surface_guard, true);
+            self.hubs.dx11.clear(&mut surface_guard, true);
         }
         #[cfg(gl)]
         {
-            self.hubs.gl.clear(&mut *surface_guard, true);
+            self.hubs.gl.clear(&mut surface_guard, true);
         }
 
         // destroy surfaces

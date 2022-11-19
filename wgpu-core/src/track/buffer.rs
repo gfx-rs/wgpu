@@ -147,19 +147,21 @@ impl<A: hub::HalApi> BufferUsageScope<A> {
             let (index32, epoch, _) = id.0.unzip();
             let index = index32 as usize;
 
-            insert_or_merge(
-                None,
-                None,
-                &mut self.state,
-                &mut self.metadata,
-                index32,
-                index,
-                BufferStateProvider::Direct { state },
-                ResourceMetadataProvider::Direct {
-                    epoch,
-                    ref_count: Cow::Borrowed(ref_count),
-                },
-            )?;
+            unsafe {
+                insert_or_merge(
+                    None,
+                    None,
+                    &mut self.state,
+                    &mut self.metadata,
+                    index32,
+                    index,
+                    BufferStateProvider::Direct { state },
+                    ResourceMetadataProvider::Direct {
+                        epoch,
+                        ref_count: Cow::Borrowed(ref_count),
+                    },
+                )?
+            };
         }
 
         Ok(())
@@ -490,27 +492,29 @@ impl<A: hub::HalApi> BufferTracker<A> {
 
             scope.tracker_assert_in_bounds(index);
 
-            if !scope.metadata.owned.get(index).unwrap_unchecked() {
+            if unsafe { !scope.metadata.owned.get(index).unwrap_unchecked() } {
                 continue;
             }
-            insert_or_barrier_update(
-                None,
-                Some(&mut self.start),
-                &mut self.end,
-                &mut self.metadata,
-                index as u32,
-                index,
-                BufferStateProvider::Indirect {
-                    state: &scope.state,
-                },
-                None,
-                ResourceMetadataProvider::Indirect {
-                    metadata: &scope.metadata,
-                },
-                &mut self.temp,
-            );
+            unsafe {
+                insert_or_barrier_update(
+                    None,
+                    Some(&mut self.start),
+                    &mut self.end,
+                    &mut self.metadata,
+                    index as u32,
+                    index,
+                    BufferStateProvider::Indirect {
+                        state: &scope.state,
+                    },
+                    None,
+                    ResourceMetadataProvider::Indirect {
+                        metadata: &scope.metadata,
+                    },
+                    &mut self.temp,
+                )
+            };
 
-            scope.metadata.reset(index);
+            unsafe { scope.metadata.reset(index) };
         }
     }
 
@@ -533,11 +537,11 @@ impl<A: hub::HalApi> BufferTracker<A> {
 
         unsafe {
             if self.metadata.owned.get(index).unwrap_unchecked() {
-                let existing_epoch = self.metadata.epochs.get_unchecked_mut(index);
-                let existing_ref_count = self.metadata.ref_counts.get_unchecked_mut(index);
+                let existing_epoch = self.metadata.epochs.get_unchecked(index);
+                let existing_ref_count = self.metadata.ref_counts.get_unchecked(index);
 
                 if *existing_epoch == epoch
-                    && existing_ref_count.as_mut().unwrap_unchecked().load() == 1
+                    && existing_ref_count.as_ref().unwrap_unchecked().load() == 1
                 {
                     self.metadata.reset(index);
 
@@ -570,7 +574,7 @@ impl BufferStateProvider<'_> {
             BufferStateProvider::Direct { state } => state,
             BufferStateProvider::Indirect { state } => {
                 strict_assert!(index < state.len());
-                *state.get_unchecked(index)
+                *unsafe { state.get_unchecked(index) }
             }
         }
     }
@@ -596,29 +600,33 @@ unsafe fn insert_or_merge<A: hub::HalApi>(
     state_provider: BufferStateProvider<'_>,
     metadata_provider: ResourceMetadataProvider<'_, A>,
 ) -> Result<(), UsageConflict> {
-    let currently_owned = resource_metadata.owned.get(index).unwrap_unchecked();
+    let currently_owned = unsafe { resource_metadata.owned.get(index).unwrap_unchecked() };
 
     if !currently_owned {
-        insert(
-            life_guard,
-            start_states,
-            current_states,
-            resource_metadata,
-            index,
-            state_provider,
-            None,
-            metadata_provider,
-        );
+        unsafe {
+            insert(
+                life_guard,
+                start_states,
+                current_states,
+                resource_metadata,
+                index,
+                state_provider,
+                None,
+                metadata_provider,
+            )
+        };
         return Ok(());
     }
 
-    merge(
-        current_states,
-        index32,
-        index,
-        state_provider,
-        metadata_provider,
-    )
+    unsafe {
+        merge(
+            current_states,
+            index32,
+            index,
+            state_provider,
+            metadata_provider,
+        )
+    }
 }
 
 /// If the resource isn't tracked
@@ -651,32 +659,36 @@ unsafe fn insert_or_barrier_update<A: hub::HalApi>(
     metadata_provider: ResourceMetadataProvider<'_, A>,
     barriers: &mut Vec<PendingTransition<BufferUses>>,
 ) {
-    let currently_owned = resource_metadata.owned.get(index).unwrap_unchecked();
+    let currently_owned = unsafe { resource_metadata.owned.get(index).unwrap_unchecked() };
 
     if !currently_owned {
-        insert(
-            life_guard,
-            start_states,
-            current_states,
-            resource_metadata,
-            index,
-            start_state_provider,
-            end_state_provider,
-            metadata_provider,
-        );
+        unsafe {
+            insert(
+                life_guard,
+                start_states,
+                current_states,
+                resource_metadata,
+                index,
+                start_state_provider,
+                end_state_provider,
+                metadata_provider,
+            )
+        };
         return;
     }
 
     let update_state_provider = end_state_provider.unwrap_or_else(|| start_state_provider.clone());
-    barrier(
-        current_states,
-        index32,
-        index,
-        start_state_provider,
-        barriers,
-    );
+    unsafe {
+        barrier(
+            current_states,
+            index32,
+            index,
+            start_state_provider,
+            barriers,
+        )
+    };
 
-    update(current_states, index, update_state_provider);
+    unsafe { update(current_states, index, update_state_provider) };
 }
 
 #[inline(always)]
@@ -690,8 +702,9 @@ unsafe fn insert<A: hub::HalApi>(
     end_state_provider: Option<BufferStateProvider<'_>>,
     metadata_provider: ResourceMetadataProvider<'_, A>,
 ) {
-    let new_start_state = start_state_provider.get_state(index);
-    let new_end_state = end_state_provider.map_or(new_start_state, |p| p.get_state(index));
+    let new_start_state = unsafe { start_state_provider.get_state(index) };
+    let new_end_state =
+        end_state_provider.map_or(new_start_state, |p| unsafe { p.get_state(index) });
 
     // This should only ever happen with a wgpu bug, but let's just double
     // check that resource states don't have any conflicts.
@@ -700,16 +713,19 @@ unsafe fn insert<A: hub::HalApi>(
 
     log::trace!("\tbuf {index}: insert {new_start_state:?}..{new_end_state:?}");
 
-    if let Some(&mut ref mut start_state) = start_states {
-        *start_state.get_unchecked_mut(index) = new_start_state;
+    unsafe {
+        if let Some(&mut ref mut start_state) = start_states {
+            *start_state.get_unchecked_mut(index) = new_start_state;
+        }
+        *current_states.get_unchecked_mut(index) = new_end_state;
+
+        let (epoch, ref_count) = metadata_provider.get_own(life_guard, index);
+
+        resource_metadata.owned.set(index, true);
+
+        *resource_metadata.epochs.get_unchecked_mut(index) = epoch;
+        *resource_metadata.ref_counts.get_unchecked_mut(index) = Some(ref_count);
     }
-    *current_states.get_unchecked_mut(index) = new_end_state;
-
-    let (epoch, ref_count) = metadata_provider.get_own(life_guard, index);
-
-    resource_metadata.owned.set(index, true);
-    *resource_metadata.epochs.get_unchecked_mut(index) = epoch;
-    *resource_metadata.ref_counts.get_unchecked_mut(index) = Some(ref_count);
 }
 
 #[inline(always)]
@@ -720,14 +736,18 @@ unsafe fn merge<A: hub::HalApi>(
     state_provider: BufferStateProvider<'_>,
     metadata_provider: ResourceMetadataProvider<'_, A>,
 ) -> Result<(), UsageConflict> {
-    let current_state = current_states.get_unchecked_mut(index);
-    let new_state = state_provider.get_state(index);
+    let current_state = unsafe { current_states.get_unchecked_mut(index) };
+    let new_state = unsafe { state_provider.get_state(index) };
 
     let merged_state = *current_state | new_state;
 
     if invalid_resource_state(merged_state) {
         return Err(UsageConflict::from_buffer(
-            BufferId::zip(index32, metadata_provider.get_epoch(index), A::VARIANT),
+            BufferId::zip(
+                index32,
+                unsafe { metadata_provider.get_epoch(index) },
+                A::VARIANT,
+            ),
             *current_state,
             new_state,
         ));
@@ -748,8 +768,8 @@ unsafe fn barrier(
     state_provider: BufferStateProvider<'_>,
     barriers: &mut Vec<PendingTransition<BufferUses>>,
 ) {
-    let current_state = *current_states.get_unchecked(index);
-    let new_state = state_provider.get_state(index);
+    let current_state = unsafe { *current_states.get_unchecked(index) };
+    let new_state = unsafe { state_provider.get_state(index) };
 
     if skip_barrier(current_state, new_state) {
         return;
@@ -770,8 +790,8 @@ unsafe fn update(
     index: usize,
     state_provider: BufferStateProvider<'_>,
 ) {
-    let current_state = current_states.get_unchecked_mut(index);
-    let new_state = state_provider.get_state(index);
+    let current_state = unsafe { current_states.get_unchecked_mut(index) };
+    let new_state = unsafe { state_provider.get_state(index) };
 
     *current_state = new_state;
 }

@@ -40,25 +40,26 @@ impl fmt::Debug for Context {
 impl Context {
     #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
     pub unsafe fn from_hal_instance<A: wgc::hub::HalApi>(hal_instance: A::Instance) -> Self {
-        Self(wgc::hub::Global::from_hal_instance::<A>(
-            "wgpu",
-            wgc::hub::IdentityManagerFactory,
-            hal_instance,
-        ))
+        Self(unsafe {
+            wgc::hub::Global::from_hal_instance::<A>(
+                "wgpu",
+                wgc::hub::IdentityManagerFactory,
+                hal_instance,
+            )
+        })
     }
 
     /// # Safety
     ///
     /// - The raw instance handle returned must not be manually destroyed.
     pub unsafe fn instance_as_hal<A: wgc::hub::HalApi>(&self) -> Option<&A::Instance> {
-        self.0.instance_as_hal::<A>()
+        unsafe { self.0.instance_as_hal::<A>() }
     }
 
     pub unsafe fn from_core_instance(core_instance: wgc::instance::Instance) -> Self {
-        Self(wgc::hub::Global::from_instance(
-            wgc::hub::IdentityManagerFactory,
-            core_instance,
-        ))
+        Self(unsafe {
+            wgc::hub::Global::from_instance(wgc::hub::IdentityManagerFactory, core_instance)
+        })
     }
 
     pub(crate) fn global(&self) -> &wgc::hub::Global<wgc::hub::IdentityManagerFactory> {
@@ -76,7 +77,7 @@ impl Context {
         &self,
         hal_adapter: hal::ExposedAdapter<A>,
     ) -> wgc::id::AdapterId {
-        self.0.create_adapter_from_hal(hal_adapter, ())
+        unsafe { self.0.create_adapter_from_hal(hal_adapter, ()) }
     }
 
     pub unsafe fn adapter_as_hal<A: wgc::hub::HalApi, F: FnOnce(Option<&A::Adapter>) -> R, R>(
@@ -84,8 +85,10 @@ impl Context {
         adapter: wgc::id::AdapterId,
         hal_adapter_callback: F,
     ) -> R {
-        self.0
-            .adapter_as_hal::<A, F, R>(adapter, hal_adapter_callback)
+        unsafe {
+            self.0
+                .adapter_as_hal::<A, F, R>(adapter, hal_adapter_callback)
+        }
     }
 
     #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
@@ -95,24 +98,31 @@ impl Context {
         hal_device: hal::OpenDevice<A>,
         desc: &crate::DeviceDescriptor,
         trace_dir: Option<&std::path::Path>,
-    ) -> Result<(Device, wgc::id::QueueId), crate::RequestDeviceError> {
+    ) -> Result<(Device, Queue), crate::RequestDeviceError> {
         let global = &self.0;
-        let (device_id, error) = global.create_device_from_hal(
-            *adapter,
-            hal_device,
-            &desc.map_label(|l| l.map(Borrowed)),
-            trace_dir,
-            (),
-        );
+        let (device_id, error) = unsafe {
+            global.create_device_from_hal(
+                *adapter,
+                hal_device,
+                &desc.map_label(|l| l.map(Borrowed)),
+                trace_dir,
+                (),
+            )
+        };
         if let Some(err) = error {
             self.handle_error_fatal(err, "Adapter::create_device_from_hal");
         }
+        let error_sink = Arc::new(Mutex::new(ErrorSinkRaw::new()));
         let device = Device {
             id: device_id,
-            error_sink: Arc::new(Mutex::new(ErrorSinkRaw::new())),
+            error_sink: error_sink.clone(),
             features: desc.features,
         };
-        Ok((device, device_id))
+        let queue = Queue {
+            id: device_id,
+            error_sink,
+        };
+        Ok((device, queue))
     }
 
     #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
@@ -123,12 +133,14 @@ impl Context {
         desc: &TextureDescriptor,
     ) -> Texture {
         let global = &self.0;
-        let (id, error) = global.create_texture_from_hal::<A>(
-            hal_texture,
-            device.id,
-            &desc.map_label(|l| l.map(Borrowed)),
-            (),
-        );
+        let (id, error) = unsafe {
+            global.create_texture_from_hal::<A>(
+                hal_texture,
+                device.id,
+                &desc.map_label(|l| l.map(Borrowed)),
+                (),
+            )
+        };
         if let Some(cause) = error {
             self.handle_error(
                 &device.error_sink,
@@ -150,8 +162,10 @@ impl Context {
         device: &Device,
         hal_device_callback: F,
     ) -> R {
-        self.0
-            .device_as_hal::<A, F, R>(device.id, hal_device_callback)
+        unsafe {
+            self.0
+                .device_as_hal::<A, F, R>(device.id, hal_device_callback)
+        }
     }
 
     #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
@@ -164,8 +178,10 @@ impl Context {
         surface: &Surface,
         hal_surface_callback: F,
     ) -> R {
-        self.0
-            .surface_as_hal_mut::<A, F, R>(surface.id, hal_surface_callback)
+        unsafe {
+            self.0
+                .surface_as_hal_mut::<A, F, R>(surface.id, hal_surface_callback)
+        }
     }
 
     #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
@@ -174,8 +190,10 @@ impl Context {
         texture: &Texture,
         hal_texture_callback: F,
     ) {
-        self.0
-            .texture_as_hal::<A, F>(texture.id, hal_texture_callback)
+        unsafe {
+            self.0
+                .texture_as_hal::<A, F>(texture.id, hal_texture_callback)
+        }
     }
 
     #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
@@ -227,7 +245,7 @@ impl Context {
         self: &Arc<Self>,
         visual: *mut std::ffi::c_void,
     ) -> crate::Surface {
-        let id = self.0.instance_create_surface_from_visual(visual, ());
+        let id = unsafe { self.0.instance_create_surface_from_visual(visual, ()) };
         crate::Surface {
             context: Arc::clone(self),
             id: Surface {
@@ -809,16 +827,83 @@ pub struct Texture {
 }
 
 #[derive(Debug)]
+pub struct Queue {
+    id: wgc::id::QueueId,
+    error_sink: ErrorSink,
+}
+
+impl Queue {
+    pub(crate) fn backend(&self) -> wgt::Backend {
+        self.id.backend()
+    }
+}
+
+#[derive(Debug)]
 pub(crate) struct CommandEncoder {
     id: wgc::id::CommandEncoderId,
     error_sink: ErrorSink,
     open: bool,
 }
 
+impl<T: wgc::id::TypedId> crate::GlobalId for T {
+    #[allow(clippy::useless_conversion)] // because not(id32)
+    fn global_id(&self) -> u64 {
+        T::into_raw(*self).get().into()
+    }
+}
+
+impl crate::GlobalId for Surface {
+    #[allow(clippy::useless_conversion)] // because not(id32)
+    fn global_id(&self) -> u64 {
+        use wgc::id::TypedId;
+        self.id.into_raw().get().into()
+    }
+}
+
+impl crate::GlobalId for Device {
+    #[allow(clippy::useless_conversion)] // because not(id32)
+    fn global_id(&self) -> u64 {
+        use wgc::id::TypedId;
+        self.id.into_raw().get().into()
+    }
+}
+
+impl crate::GlobalId for Buffer {
+    #[allow(clippy::useless_conversion)] // because not(id32)
+    fn global_id(&self) -> u64 {
+        use wgc::id::TypedId;
+        self.id.into_raw().get().into()
+    }
+}
+
+impl crate::GlobalId for Texture {
+    #[allow(clippy::useless_conversion)] // because not(id32)
+    fn global_id(&self) -> u64 {
+        use wgc::id::TypedId;
+        self.id.into_raw().get().into()
+    }
+}
+
+impl crate::GlobalId for CommandEncoder {
+    #[allow(clippy::useless_conversion)] // because not(id32)
+    fn global_id(&self) -> u64 {
+        use wgc::id::TypedId;
+        self.id.into_raw().get().into()
+    }
+}
+
+impl crate::GlobalId for Queue {
+    #[allow(clippy::useless_conversion)] // because not(id32)
+    fn global_id(&self) -> u64 {
+        use wgc::id::TypedId;
+        self.id.into_raw().get().into()
+    }
+}
+
 impl crate::Context for Context {
     type AdapterId = wgc::id::AdapterId;
     type DeviceId = Device;
-    type QueueId = wgc::id::QueueId;
+    type QueueId = Queue;
     type ShaderModuleId = wgc::id::ShaderModuleId;
     type BindGroupLayoutId = wgc::id::BindGroupLayoutId;
     type BindGroupId = wgc::id::BindGroupId;
@@ -908,12 +993,17 @@ impl crate::Context for Context {
             log::error!("Error in Adapter::request_device: {}", err);
             return ready(Err(crate::RequestDeviceError));
         }
+        let error_sink = Arc::new(Mutex::new(ErrorSinkRaw::new()));
         let device = Device {
             id: device_id,
-            error_sink: Arc::new(Mutex::new(ErrorSinkRaw::new())),
+            error_sink: error_sink.clone(),
             features: desc.features,
         };
-        ready(Ok((device, device_id)))
+        let queue = Queue {
+            id: device_id,
+            error_sink,
+        };
+        ready(Ok((device, queue)))
     }
 
     fn adapter_is_surface_supported(
@@ -1188,7 +1278,7 @@ impl crate::Context for Context {
             label: desc.label.map(Borrowed),
             // Doesn't matter the value since spirv shaders aren't mutated to include
             // runtime checks
-            shader_bound_checks: wgt::ShaderBoundChecks::unchecked(),
+            shader_bound_checks: unsafe { wgt::ShaderBoundChecks::unchecked() },
         };
         let (id, error) = wgc::gfx_select!(
             device.id => global.device_create_shader_module_spirv(device.id, &descriptor, Borrowed(&desc.source), ())
@@ -2227,7 +2317,7 @@ impl crate::Context for Context {
     ) {
         let global = &self.0;
         match wgc::gfx_select!(
-            *queue => global.queue_write_buffer(*queue, buffer.id, offset, data)
+            *queue => global.queue_write_buffer(queue.id, buffer.id, offset, data)
         ) {
             Ok(()) => (),
             Err(err) => self.handle_error_fatal(err, "Queue::write_buffer"),
@@ -2243,7 +2333,7 @@ impl crate::Context for Context {
     ) {
         let global = &self.0;
         match wgc::gfx_select!(
-            *queue => global.queue_validate_write_buffer(*queue, buffer.id, offset, size.get())
+            *queue => global.queue_validate_write_buffer(queue.id, buffer.id, offset, size.get())
         ) {
             Ok(()) => (),
             Err(err) => self.handle_error_fatal(err, "Queue::write_buffer_with"),
@@ -2257,7 +2347,7 @@ impl crate::Context for Context {
     ) -> QueueWriteBuffer {
         let global = &self.0;
         match wgc::gfx_select!(
-            *queue => global.queue_create_staging_buffer(*queue, size, ())
+            *queue => global.queue_create_staging_buffer(queue.id, size, ())
         ) {
             Ok((buffer_id, ptr)) => QueueWriteBuffer {
                 buffer_id,
@@ -2279,10 +2369,12 @@ impl crate::Context for Context {
     ) {
         let global = &self.0;
         match wgc::gfx_select!(
-            *queue => global.queue_write_staging_buffer(*queue, buffer.id, offset, staging_buffer.buffer_id)
+            *queue => global.queue_write_staging_buffer(queue.id, buffer.id, offset, staging_buffer.buffer_id)
         ) {
             Ok(()) => (),
-            Err(err) => self.handle_error_fatal(err, "Queue::write_buffer_with"),
+            Err(err) => {
+                self.handle_error_nolabel(&queue.error_sink, err, "Queue::write_buffer_with");
+            }
         }
     }
 
@@ -2296,14 +2388,14 @@ impl crate::Context for Context {
     ) {
         let global = &self.0;
         match wgc::gfx_select!(*queue => global.queue_write_texture(
-            *queue,
+            queue.id,
             &map_texture_copy_view(texture),
             data,
             &data_layout,
             &size
         )) {
             Ok(()) => (),
-            Err(err) => self.handle_error_fatal(err, "Queue::write_texture"),
+            Err(err) => self.handle_error_nolabel(&queue.error_sink, err, "Queue::write_texture"),
         }
     }
 
@@ -2315,7 +2407,7 @@ impl crate::Context for Context {
         let temp_command_buffers = command_buffers.collect::<SmallVec<[_; 4]>>();
 
         let global = &self.0;
-        match wgc::gfx_select!(*queue => global.queue_submit(*queue, &temp_command_buffers)) {
+        match wgc::gfx_select!(*queue => global.queue_submit(queue.id, &temp_command_buffers)) {
             Ok(index) => index,
             Err(err) => self.handle_error_fatal(err, "Queue::submit"),
         }
@@ -2324,7 +2416,7 @@ impl crate::Context for Context {
     fn queue_get_timestamp_period(&self, queue: &Self::QueueId) -> f32 {
         let global = &self.0;
         let res = wgc::gfx_select!(queue => global.queue_get_timestamp_period(
-            *queue
+            queue.id
         ));
         match res {
             Ok(v) => v,
@@ -2342,7 +2434,7 @@ impl crate::Context for Context {
         let closure = wgc::device::queue::SubmittedWorkDoneClosure::from_rust(callback);
 
         let global = &self.0;
-        let res = wgc::gfx_select!(queue => global.queue_on_submitted_work_done(*queue, closure));
+        let res = wgc::gfx_select!(queue => global.queue_on_submitted_work_done(queue.id, closure));
         if let Err(cause) = res {
             self.handle_error_fatal(cause, "Queue::on_submitted_work_done");
         }

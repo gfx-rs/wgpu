@@ -177,7 +177,7 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
         backend_bits,
         None,
     ))
-    .expect("could not find sutable adapter on the system");
+    .expect("could not find suitable adapter on the system");
 
     let adapter_info = adapter.get_info();
     let adapter_lowercase_name = adapter_info.name.to_lowercase();
@@ -330,4 +330,14 @@ pub fn valid<T>(device: &wgpu::Device, callback: impl FnOnce() -> T) -> T {
     assert!(pollster::block_on(device.pop_error_scope()).is_none());
 
     result
+}
+
+// Run some code in an error scope and assert that validation succeeds or fails depending on the
+// provided `should_fail` boolean.
+pub fn fail_if<T>(device: &wgpu::Device, should_fail: bool, callback: impl FnOnce() -> T) -> T {
+    if should_fail {
+        fail(device, callback)
+    } else {
+        valid(device, callback)
+    }
 }

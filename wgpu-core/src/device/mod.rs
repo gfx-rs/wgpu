@@ -590,6 +590,17 @@ impl<A: HalApi> Device<A> {
             });
         }
 
+        if desc.usage.contains(wgt::BufferUsages::INDEX)
+            && desc.usage.contains(
+                wgt::BufferUsages::VERTEX
+                    | wgt::BufferUsages::UNIFORM
+                    | wgt::BufferUsages::INDIRECT
+                    | wgt::BufferUsages::STORAGE,
+            )
+        {
+            self.require_downlevel_flags(wgt::DownlevelFlags::UNRESTRICTED_INDEX_BUFFER)?;
+        }
+
         let mut usage = conv::map_buffer_usage(desc.usage);
 
         if desc.usage.is_empty() {
@@ -800,12 +811,23 @@ impl<A: HalApi> Device<A> {
                 return Err(CreateTextureError::MultisampledNotRenderAttachment);
             }
 
-            if !format_features
-                .flags
-                .contains(wgt::TextureFormatFeatureFlags::MULTISAMPLE)
-            {
+            if !format_features.flags.intersects(
+                wgt::TextureFormatFeatureFlags::MULTISAMPLE_X4
+                    | wgt::TextureFormatFeatureFlags::MULTISAMPLE_X2
+                    | wgt::TextureFormatFeatureFlags::MULTISAMPLE_X8,
+            ) {
                 return Err(CreateTextureError::InvalidMultisampledFormat(desc.format));
             }
+
+            if !format_features
+                .flags
+                .sample_count_supported(desc.sample_count)
+            {
+                return Err(CreateTextureError::InvalidSampleCount(
+                    desc.sample_count,
+                    desc.format,
+                ));
+            };
         }
 
         let mips = desc.mip_level_count;
@@ -2654,7 +2676,9 @@ impl<A: HalApi> Device<A> {
                         break Some(pipeline::ColorStateError::FormatNotColor(cs.format));
                     }
                     if desc.multisample.count > 1
-                        && !format_features.flags.contains(Tfff::MULTISAMPLE)
+                        && !format_features
+                            .flags
+                            .sample_count_supported(desc.multisample.count)
                     {
                         break Some(pipeline::ColorStateError::FormatNotMultisampled(cs.format));
                     }
@@ -2688,7 +2712,10 @@ impl<A: HalApi> Device<A> {
                         ds.format,
                     ));
                 }
-                if desc.multisample.count > 1 && !format_features.flags.contains(Tfff::MULTISAMPLE)
+                if desc.multisample.count > 1
+                    && !format_features
+                        .flags
+                        .sample_count_supported(desc.multisample.count)
                 {
                     break Some(pipeline::DepthStencilStateError::FormatNotMultisampled(
                         ds.format,
@@ -4492,10 +4519,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 });
             };
 
-            let shader = match device.create_shader_module_spirv(device_id, desc, &source) {
-                Ok(shader) => shader,
-                Err(e) => break e,
-            };
+            let shader =
+                match unsafe { device.create_shader_module_spirv(device_id, desc, &source) } {
+                    Ok(shader) => shader,
+                    Err(e) => break e,
+                };
             let id = fid.assign(shader, &mut token);
             return (id.0, None);
         };
@@ -5147,7 +5175,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .composite_alpha_modes
                 .contains(&config.composite_alpha_mode)
             {
-                let new_alpha_mode = 'b: loop {
+                let new_alpha_mode = 'alpha: loop {
                     // Automatic alpha mode checks.
                     let fallbacks = match config.composite_alpha_mode {
                         wgt::CompositeAlphaMode::Auto => &[
@@ -5164,7 +5192,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                     for &fallback in fallbacks {
                         if caps.composite_alpha_modes.contains(&fallback) {
-                            break 'b fallback;
+                            break 'alpha fallback;
                         }
                     }
 

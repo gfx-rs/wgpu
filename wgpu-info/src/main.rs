@@ -132,7 +132,7 @@ mod inner {
         let downlevel = adapter.get_downlevel_capabilities();
         let features = adapter.features();
         let limits = adapter.limits();
-    
+
         println!("Adapter {}:", idx);
         println!("\t   Backend: {:?}", info.backend);
         println!("\t      Name: {:?}", info.name);
@@ -140,7 +140,7 @@ mod inner {
         println!("\t  DeviceID: {:?}", info.device);
         println!("\t      Type: {:?}", info.device_type);
         println!("\t    Driver: {:?}", info.driver);
-        println!("\tDriverInfo: {:?}", info.driver);
+        println!("\tDriverInfo: {:?}", info.driver_info);
         println!("\t Compliant: {:?}", downlevel.is_webgpu_compliant());
         println!("\tFeatures:");
         for i in 0..(size_of::<wgpu::Features>() * 8) {
@@ -151,7 +151,7 @@ mod inner {
                 }
             }
         }
-    
+
         println!("\tLimits:");
         let wgpu::Limits {
             max_texture_dimension_1d,
@@ -213,7 +213,7 @@ mod inner {
         println!("\t\t                    Max Compute Workgroup Size Y: {}", max_compute_workgroup_size_y);
         println!("\t\t                    Max Compute Workgroup Size Z: {}", max_compute_workgroup_size_z);
         println!("\t\t            Max Compute Workgroups Per Dimension: {}", max_compute_workgroups_per_dimension);
-    
+
         println!("\tDownlevel Properties:");
         let wgpu::DownlevelCapabilities {
             shader_model,
@@ -230,7 +230,7 @@ mod inner {
             }
         }
 
-        println!("\tTexture Format Features:      ┌──────────┬──────────┬──────────Allowed┬Usages───────────┬───────────────────┐ ┌────────────┬─────────────┬──────────────Feature┬Flags───────────────┬─────────────────┐");
+        println!("\tTexture Format Features:      ┌──────────┬──────────┬──────────Allowed┬Usages───────────┬───────────────────┐ ┌────────────┬────────────────┬──────────────Feature┬Flags──────┬─────────────────────┬────────────────────┬─");
         for format in TEXTURE_FORMAT_LIST {
             let features = adapter.get_texture_format_features(format);
             let format_name = match format {
@@ -271,9 +271,10 @@ mod inner {
                     }
                 }
             }
+
             println!(" │");
         }
-        println!("\t                              └──────────┴──────────┴─────────────────┴─────────────────┴───────────────────┘ └────────────┴─────────────┴─────────────────────┴────────────────────┴─────────────────┘");
+        println!("\t                              └──────────┴──────────┴─────────────────┴─────────────────┴───────────────────┘ └────────────┴────────────────┴────────────────┴────────────────┴─────────────────────┘");
     }
 
     pub fn main() {

@@ -31,17 +31,17 @@ unsafe extern "system" fn debug_utils_messenger_callback(
         _ => log::Level::Warn,
     };
 
-    let cd = &*callback_data_ptr;
+    let cd = unsafe { &*callback_data_ptr };
 
     let message_id_name = if cd.p_message_id_name.is_null() {
         Cow::from("")
     } else {
-        CStr::from_ptr(cd.p_message_id_name).to_string_lossy()
+        unsafe { CStr::from_ptr(cd.p_message_id_name) }.to_string_lossy()
     };
     let message = if cd.p_message.is_null() {
         Cow::from("")
     } else {
-        CStr::from_ptr(cd.p_message).to_string_lossy()
+        unsafe { CStr::from_ptr(cd.p_message) }.to_string_lossy()
     };
 
     let _ = std::panic::catch_unwind(|| {
@@ -56,14 +56,13 @@ unsafe extern "system" fn debug_utils_messenger_callback(
     });
 
     if cd.queue_label_count != 0 {
-        let labels = slice::from_raw_parts(cd.p_queue_labels, cd.queue_label_count as usize);
+        let labels =
+            unsafe { slice::from_raw_parts(cd.p_queue_labels, cd.queue_label_count as usize) };
         let names = labels
             .iter()
             .flat_map(|dul_obj| {
-                dul_obj
-                    .p_label_name
-                    .as_ref()
-                    .map(|lbl| CStr::from_ptr(lbl).to_string_lossy())
+                unsafe { dul_obj.p_label_name.as_ref() }
+                    .map(|lbl| unsafe { CStr::from_ptr(lbl) }.to_string_lossy())
             })
             .collect::<Vec<_>>();
 
@@ -73,14 +72,13 @@ unsafe extern "system" fn debug_utils_messenger_callback(
     }
 
     if cd.cmd_buf_label_count != 0 {
-        let labels = slice::from_raw_parts(cd.p_cmd_buf_labels, cd.cmd_buf_label_count as usize);
+        let labels =
+            unsafe { slice::from_raw_parts(cd.p_cmd_buf_labels, cd.cmd_buf_label_count as usize) };
         let names = labels
             .iter()
             .flat_map(|dul_obj| {
-                dul_obj
-                    .p_label_name
-                    .as_ref()
-                    .map(|lbl| CStr::from_ptr(lbl).to_string_lossy())
+                unsafe { dul_obj.p_label_name.as_ref() }
+                    .map(|lbl| unsafe { CStr::from_ptr(lbl) }.to_string_lossy())
             })
             .collect::<Vec<_>>();
 
@@ -90,15 +88,13 @@ unsafe extern "system" fn debug_utils_messenger_callback(
     }
 
     if cd.object_count != 0 {
-        let labels = slice::from_raw_parts(cd.p_objects, cd.object_count as usize);
+        let labels = unsafe { slice::from_raw_parts(cd.p_objects, cd.object_count as usize) };
         //TODO: use color fields of `vk::DebugUtilsLabelExt`?
         let names = labels
             .iter()
             .map(|obj_info| {
-                let name = obj_info
-                    .p_object_name
-                    .as_ref()
-                    .map(|name| CStr::from_ptr(name).to_string_lossy())
+                let name = unsafe { obj_info.p_object_name.as_ref() }
+                    .map(|name| unsafe { CStr::from_ptr(name) }.to_string_lossy())
                     .unwrap_or(Cow::Borrowed("?"));
 
                 format!(
@@ -125,9 +121,9 @@ impl super::Swapchain {
         profiling::scope!("Swapchain::release_resources");
         {
             profiling::scope!("vkDeviceWaitIdle");
-            let _ = device.device_wait_idle();
+            let _ = unsafe { device.device_wait_idle() };
         };
-        device.destroy_fence(self.fence, None);
+        unsafe { device.destroy_fence(self.fence, None) };
         self
     }
 }
@@ -256,9 +252,8 @@ impl super::Instance {
                         | vk::DebugUtilsMessageTypeFlagsEXT::PERFORMANCE,
                 )
                 .pfn_user_callback(Some(debug_utils_messenger_callback));
-            let messenger = extension
-                .create_debug_utils_messenger(&vk_info, None)
-                .unwrap();
+            let messenger =
+                unsafe { extension.create_debug_utils_messenger(&vk_info, None) }.unwrap();
             Some(super::DebugUtils {
                 extension,
                 messenger,
@@ -484,7 +479,7 @@ impl crate::Instance<super::Api> for super::Instance {
     unsafe fn init(desc: &crate::InstanceDescriptor) -> Result<Self, crate::InstanceError> {
         use crate::auxil::cstr_from_bytes_until_nul;
 
-        let entry = match ash::Entry::load() {
+        let entry = match unsafe { ash::Entry::load() } {
             Ok(entry) => entry,
             Err(err) => {
                 log::info!("Missing Vulkan entry points: {:?}", err);
@@ -595,22 +590,24 @@ impl crate::Instance<super::Api> for super::Instance {
                 .enabled_layer_names(&str_pointers[..layers.len()])
                 .enabled_extension_names(&str_pointers[layers.len()..]);
 
-            entry.create_instance(&create_info, None).map_err(|e| {
+            unsafe { entry.create_instance(&create_info, None) }.map_err(|e| {
                 log::warn!("create_instance: {:?}", e);
                 crate::InstanceError
             })?
         };
 
-        Self::from_raw(
-            entry,
-            vk_instance,
-            driver_api_version,
-            android_sdk_version,
-            extensions,
-            desc.flags,
-            has_nv_optimus,
-            Some(Box::new(())), // `Some` signals that wgpu-hal is in charge of destroying vk_instance
-        )
+        unsafe {
+            Self::from_raw(
+                entry,
+                vk_instance,
+                driver_api_version,
+                android_sdk_version,
+                extensions,
+                desc.flags,
+                has_nv_optimus,
+                Some(Box::new(())), // `Some` signals that wgpu-hal is in charge of destroying vk_instance
+            )
+        }
     }
 
     unsafe fn create_surface(
@@ -635,7 +632,7 @@ impl crate::Instance<super::Api> for super::Instance {
             (Rwh::Win32(handle), _) => {
                 use winapi::um::libloaderapi::GetModuleHandleW;
 
-                let hinstance = GetModuleHandleW(std::ptr::null());
+                let hinstance = unsafe { GetModuleHandleW(std::ptr::null()) };
                 self.create_surface_from_hwnd(hinstance as *mut _, handle.hwnd)
             }
             #[cfg(target_os = "macos")]
@@ -655,13 +652,13 @@ impl crate::Instance<super::Api> for super::Instance {
     }
 
     unsafe fn destroy_surface(&self, surface: super::Surface) {
-        surface.functor.destroy_surface(surface.raw, None);
+        unsafe { surface.functor.destroy_surface(surface.raw, None) };
     }
 
     unsafe fn enumerate_adapters(&self) -> Vec<crate::ExposedAdapter<super::Api>> {
         use crate::auxil::db;
 
-        let raw_devices = match self.shared.raw.enumerate_physical_devices() {
+        let raw_devices = match unsafe { self.shared.raw.enumerate_physical_devices() } {
             Ok(devices) => devices,
             Err(err) => {
                 log::error!("enumerate_adapters: {}", err);
@@ -708,9 +705,9 @@ impl crate::Surface<super::Api> for super::Surface {
         let old = self
             .swapchain
             .take()
-            .map(|sc| sc.release_resources(&device.shared.raw));
+            .map(|sc| unsafe { sc.release_resources(&device.shared.raw) });
 
-        let swapchain = device.create_swapchain(self, config, old)?;
+        let swapchain = unsafe { device.create_swapchain(self, config, old)? };
         self.swapchain = Some(swapchain);
 
         Ok(())
@@ -718,8 +715,8 @@ impl crate::Surface<super::Api> for super::Surface {
 
     unsafe fn unconfigure(&mut self, device: &super::Device) {
         if let Some(sc) = self.swapchain.take() {
-            let swapchain = sc.release_resources(&device.shared.raw);
-            swapchain.functor.destroy_swapchain(swapchain.raw, None);
+            let swapchain = unsafe { sc.release_resources(&device.shared.raw) };
+            unsafe { swapchain.functor.destroy_swapchain(swapchain.raw, None) };
         }
     }
 
@@ -748,23 +745,22 @@ impl crate::Surface<super::Api> for super::Surface {
         }
 
         // will block if no image is available
-        let (index, suboptimal) =
-            match sc
-                .functor
+        let (index, suboptimal) = match unsafe {
+            sc.functor
                 .acquire_next_image(sc.raw, timeout_ns, vk::Semaphore::null(), sc.fence)
-            {
-                Ok(pair) => pair,
-                Err(error) => {
-                    return match error {
-                        vk::Result::TIMEOUT => Ok(None),
-                        vk::Result::NOT_READY | vk::Result::ERROR_OUT_OF_DATE_KHR => {
-                            Err(crate::SurfaceError::Outdated)
-                        }
-                        vk::Result::ERROR_SURFACE_LOST_KHR => Err(crate::SurfaceError::Lost),
-                        other => Err(crate::DeviceError::from(other).into()),
+        } {
+            Ok(pair) => pair,
+            Err(error) => {
+                return match error {
+                    vk::Result::TIMEOUT => Ok(None),
+                    vk::Result::NOT_READY | vk::Result::ERROR_OUT_OF_DATE_KHR => {
+                        Err(crate::SurfaceError::Outdated)
                     }
+                    vk::Result::ERROR_SURFACE_LOST_KHR => Err(crate::SurfaceError::Lost),
+                    other => Err(crate::DeviceError::from(other).into()),
                 }
-            };
+            }
+        };
 
         // special case for Intel Vulkan returning bizzare values (ugh)
         if sc.device.vendor_id == crate::auxil::db::intel::VENDOR && index > 0x100 {
@@ -773,14 +769,9 @@ impl crate::Surface<super::Api> for super::Surface {
 
         let fences = &[sc.fence];
 
-        sc.device
-            .raw
-            .wait_for_fences(fences, true, !0)
+        unsafe { sc.device.raw.wait_for_fences(fences, true, !0) }
             .map_err(crate::DeviceError::from)?;
-        sc.device
-            .raw
-            .reset_fences(fences)
-            .map_err(crate::DeviceError::from)?;
+        unsafe { sc.device.raw.reset_fences(fences) }.map_err(crate::DeviceError::from)?;
 
         let texture = super::SurfaceTexture {
             index,

@@ -800,13 +800,15 @@ pub mod compute_ffi {
         offsets: *const DynamicOffset,
         offset_length: usize,
     ) {
-        let redundant = pass.current_bind_groups.set_and_check_redundant(
-            bind_group_id,
-            index,
-            &mut pass.base.dynamic_offsets,
-            offsets,
-            offset_length,
-        );
+        let redundant = unsafe {
+            pass.current_bind_groups.set_and_check_redundant(
+                bind_group_id,
+                index,
+                &mut pass.base.dynamic_offsets,
+                offsets,
+                offset_length,
+            )
+        };
 
         if redundant {
             return;
@@ -854,7 +856,7 @@ pub mod compute_ffi {
             0,
             "Push constant size must be aligned to 4 bytes."
         );
-        let data_slice = slice::from_raw_parts(data, size_bytes as usize);
+        let data_slice = unsafe { slice::from_raw_parts(data, size_bytes as usize) };
         let value_offset = pass.base.push_constant_data.len().try_into().expect(
             "Ran out of push constant space. Don't set 4gb of push constants per ComputePass.",
         );
@@ -905,7 +907,7 @@ pub mod compute_ffi {
         label: RawString,
         color: u32,
     ) {
-        let bytes = ffi::CStr::from_ptr(label).to_bytes();
+        let bytes = unsafe { ffi::CStr::from_ptr(label) }.to_bytes();
         pass.base.string_data.extend_from_slice(bytes);
 
         pass.base.commands.push(ComputeCommand::PushDebugGroup {
@@ -929,7 +931,7 @@ pub mod compute_ffi {
         label: RawString,
         color: u32,
     ) {
-        let bytes = ffi::CStr::from_ptr(label).to_bytes();
+        let bytes = unsafe { ffi::CStr::from_ptr(label) }.to_bytes();
         pass.base.string_data.extend_from_slice(bytes);
 
         pass.base.commands.push(ComputeCommand::InsertDebugMarker {

@@ -9,6 +9,7 @@ on:
 
 env:
   RUST_BACKTRACE: 1
+  RUST_VERSION: 1.65
 
 jobs:
   cts:
@@ -46,12 +47,13 @@ jobs:
           cd cts
           git checkout $(cat ../wgpu/cts_runner/revision.txt)
 
-      - name: install rust
+      - name: install rust ${{ env.RUST_VERSION }}
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: stable
+          toolchain: ${{ env.RUST_VERSION }}
           target: ${{ matrix.target }}
           profile: minimal
+          override: true
 
       - name: caching
         uses: Swatinem/rust-cache@v1
