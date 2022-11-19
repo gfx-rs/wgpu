@@ -718,7 +718,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
             super::PrivateCapabilities::COLOR_BUFFER_HALF_FLOAT,
             Tfc::COLOR_ATTACHMENT
                 | Tfc::COLOR_ATTACHMENT_BLEND
-                | Tfc::MULTISAMPLE
+                | sample_count
                 | Tfc::MULTISAMPLE_RESOLVE,
         );
 
@@ -726,7 +726,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
             super::PrivateCapabilities::COLOR_BUFFER_FLOAT,
             Tfc::COLOR_ATTACHMENT
                 | Tfc::COLOR_ATTACHMENT_BLEND
-                | Tfc::MULTISAMPLE
+                | sample_count
                 | Tfc::MULTISAMPLE_RESOLVE,
         );
 
