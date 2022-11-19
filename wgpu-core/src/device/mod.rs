@@ -1156,6 +1156,25 @@ impl<A: HalApi> Device<A> {
         })
     }
 
+    fn create_sampler_from_hal(
+        &self,
+        hal_sampler: A::Sampler,
+        self_id: id::DeviceId,
+        desc: &resource::SamplerDescriptor,
+    ) -> resource::Sampler<A> {
+        resource::Sampler {
+            raw: hal_sampler,
+            device_id: Stored {
+                value: id::Valid(self_id),
+                ref_count: self.life_guard.add_ref(),
+            },
+            life_guard: LifeGuard::new(desc.label.borrow_or_default()),
+            comparison: desc.compare.is_some(),
+            filtering: desc.min_filter == wgt::FilterMode::Linear
+                || desc.mag_filter == wgt::FilterMode::Linear,
+        }
+    }
+
     fn create_sampler(
         &self,
         self_id: id::DeviceId,
@@ -1218,17 +1237,7 @@ impl<A: HalApi> Device<A> {
                 .create_sampler(&hal_desc)
                 .map_err(DeviceError::from)?
         };
-        Ok(resource::Sampler {
-            raw,
-            device_id: Stored {
-                value: id::Valid(self_id),
-                ref_count: self.life_guard.add_ref(),
-            },
-            life_guard: LifeGuard::new(desc.label.borrow_or_default()),
-            comparison: desc.compare.is_some(),
-            filtering: desc.min_filter == wgt::FilterMode::Linear
-                || desc.mag_filter == wgt::FilterMode::Linear,
-        })
+        Ok(self.create_sampler_from_hal(raw, self_id, desc))
     }
 
     fn create_shader_module<'a>(
@@ -4080,6 +4089,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         desc: &resource::SamplerDescriptor,
         id_in: Input<G, id::SamplerId>,
     ) -> (id::SamplerId, Option<resource::CreateSamplerError>) {
+        self.create_sampler_from_hal::<A>(None, device_id, desc, id_in)
+    }
+
+    pub fn create_sampler_from_hal<A: HalApi>(
+        &self,
+        hal_sampler: Option<A::Sampler>,
+        device_id: id::DeviceId,
+        desc: &resource::SamplerDescriptor,
+        id_in: Input<G, id::SamplerId>,
+    ) -> (id::SamplerId, Option<resource::CreateSamplerError>) {
         profiling::scope!("Device::create_sampler");
 
         let hub = A::hub(self);
@@ -4092,6 +4111,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(device) => device,
                 Err(_) => break DeviceError::Invalid.into(),
             };
+
+            // Any change done through the raw sampler handle will not be recorded in the replay
             #[cfg(feature = "trace")]
             if let Some(ref trace) = device.trace {
                 trace
@@ -4099,10 +4120,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     .add(trace::Action::CreateSampler(fid.id(), desc.clone()));
             }
 
-            let sampler = match device.create_sampler(device_id, desc) {
-                Ok(sampler) => sampler,
-                Err(e) => break e,
+            let sampler = match hal_sampler {
+                Some(hal_sampler) => device.create_sampler_from_hal(hal_sampler, device_id, desc),
+                None => match device.create_sampler(device_id, desc) {
+                    Ok(sampler) => sampler,
+                    Err(e) => break e,
+                },
             };
+
             let ref_count = sampler.life_guard.add_ref();
             let id = fid.assign(sampler, &mut token);
 

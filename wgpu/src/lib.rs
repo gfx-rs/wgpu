@@ -2278,6 +2278,27 @@ impl Device {
         }
     }
 
+    /// Creates a new [`Sampler`].
+    ///
+    /// # Safety
+    ///
+    /// - `hal_sampler` must be created from this device internal handle
+    /// - `hal_sampler` must be created respecting `desc`
+    /// - `hal_sampler` must be initialized
+    #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
+    pub fn create_sampler_from_hal<A: wgc::hub::HalApi>(
+        &self,
+        hal_sampler: A::Sampler,
+        desc: &SamplerDescriptor,
+    ) -> Sampler {
+        Sampler {
+            context: Arc::clone(&self.context),
+            id: self
+                .context
+                .create_sampler_from_hal::<A>(Some(hal_sampler), &self.id, desc),
+        }
+    }
+
     /// Creates a new [`QuerySet`].
     pub fn create_query_set(&self, desc: &QuerySetDescriptor) -> QuerySet {
         QuerySet {

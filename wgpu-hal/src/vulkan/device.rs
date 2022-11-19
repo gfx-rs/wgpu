@@ -627,6 +627,10 @@ impl super::Device {
         }
     }
 
+    pub unsafe fn sampler_from_raw(raw: vk::Sampler) -> super::Sampler {
+        super::Sampler { raw }
+    }
+
     fn create_shader_module_impl(
         &self,
         spv: &[u32],
