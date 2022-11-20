@@ -246,6 +246,7 @@ pub(crate) type NamedExpressions = FastHashMap<Handle<Expression>, String>;
 ///   - GLSL: `layout(early_fragment_tests) in;`
 ///   - HLSL: `Attribute earlydepthstencil`
 ///   - SPIR-V: `ExecutionMode EarlyFragmentTests`
+///   - WGSL: `@early_depth_test`
 ///
 /// For more, see:
 ///   - <https://www.khronos.org/opengl/wiki/Early_Fragment_Test#Explicit_specification>
@@ -265,6 +266,7 @@ pub struct EarlyDepthTest {
 ///     - `depth_any` option behaves as if the layout qualifier was not present.
 ///   - HLSL: `SV_DepthGreaterEqual`/`SV_DepthLessEqual`/`SV_Depth`
 ///   - SPIR-V: `ExecutionMode Depth<Greater/Less/Unchanged>`
+///   - WGSL: `@early_depth_test(greater_equal/less_equal/unchanged)`
 ///
 /// For more, see:
 ///   - <https://www.khronos.org/registry/OpenGL/extensions/ARB/ARB_conservative_depth.txt>
