@@ -395,15 +395,17 @@ impl crate::Device<super::Api> for super::Device {
         );
         let allocation = allocator.allocate(&allocation_desc)?;
 
-        let hr = self.raw.CreatePlacedResource(
-            allocation.heap().as_winapi() as *mut _,
-            allocation.offset(),
-            &raw_desc,
-            d3d12::D3D12_RESOURCE_STATE_COMMON,
-            ptr::null(),
-            &d3d12::ID3D12Resource::uuidof(),
-            resource.mut_void(),
-        );
+        let hr = unsafe {
+            self.raw.CreatePlacedResource(
+                allocation.heap().as_winapi() as *mut _,
+                allocation.offset(),
+                &raw_desc,
+                d3d12::D3D12_RESOURCE_STATE_COMMON,
+                ptr::null(),
+                &d3d12::ID3D12Resource::uuidof(),
+                resource.mut_void(),
+            )
+        };
 
         hr.into_device_result("Buffer creation")?;
         if let Some(label) = desc.label {
@@ -419,7 +421,7 @@ impl crate::Device<super::Api> for super::Device {
     }
     unsafe fn destroy_buffer(&self, mut buffer: super::Buffer) {
         // TODO: Destroy or Release here?
-        buffer.resource.destroy();
+        unsafe { buffer.resource.destroy() };
         if let Some(alloc) = buffer.allocation.take() {
             match self.mem_allocator.lock().free(alloc) {
                 Ok(_) => (),
@@ -435,10 +437,11 @@ impl crate::Device<super::Api> for super::Device {
     ) -> Result<crate::BufferMapping, crate::DeviceError> {
         let mut ptr = ptr::null_mut();
         // TODO: 0 for subresource should be fine here until map and unmap buffer is subresource aware?
-        let hr = (*buffer.resource).Map(0, ptr::null(), &mut ptr);
+        let hr = unsafe { (*buffer.resource).Map(0, ptr::null(), &mut ptr) };
         hr.into_device_result("Map buffer")?;
         Ok(crate::BufferMapping {
-            ptr: ptr::NonNull::new(ptr.offset(range.start as isize).cast::<u8>()).unwrap(),
+            ptr: ptr::NonNull::new(unsafe { ptr.offset(range.start as isize).cast::<u8>() })
+                .unwrap(),
             //TODO: double-check this. Documentation is a bit misleading -
             // it implies that Map/Unmap is needed to invalidate/flush memory.
             is_coherent: true,
@@ -497,15 +500,17 @@ impl crate::Device<super::Api> for super::Device {
         );
         let allocation = allocator.allocate(&allocation_desc)?;
 
-        let hr = self.raw.CreatePlacedResource(
-            allocation.heap().as_winapi() as *mut _,
-            allocation.offset(),
-            &raw_desc,
-            d3d12::D3D12_RESOURCE_STATE_COMMON,
-            ptr::null(), // clear value
-            &d3d12::ID3D12Resource::uuidof(),
-            resource.mut_void(),
-        );
+        let hr = unsafe {
+            self.raw.CreatePlacedResource(
+                allocation.heap().as_winapi() as *mut _,
+                allocation.offset(),
+                &raw_desc,
+                d3d12::D3D12_RESOURCE_STATE_COMMON,
+                ptr::null(), // clear value
+                &d3d12::ID3D12Resource::uuidof(),
+                resource.mut_void(),
+            )
+        };
 
         hr.into_device_result("Texture creation")?;
         if let Some(label) = desc.label {
@@ -525,7 +530,7 @@ impl crate::Device<super::Api> for super::Device {
     }
 
     unsafe fn destroy_texture(&self, mut texture: super::Texture) {
-        texture.resource.destroy();
+        unsafe { texture.resource.destroy() };
         if let Some(alloc) = texture.allocation.take() {
             match self.mem_allocator.lock().free(alloc) {
                 Ok(_) => (),
