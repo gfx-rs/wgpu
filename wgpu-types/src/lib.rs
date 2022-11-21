@@ -7,7 +7,7 @@
     // We don't use syntax sugar where it's not necessary.
     clippy::match_like_matches_macro,
 )]
-#![warn(missing_docs)]
+#![warn(missing_docs, unsafe_op_in_unsafe_fn)]
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -188,15 +188,6 @@ bitflags::bitflags! {
         ///
         /// This is a web and native feature.
         const DEPTH_CLIP_CONTROL = 1 << 0;
-        /// Allows for explicit creation of textures of format [`TextureFormat::Depth24PlusStencil8`]
-        ///
-        /// Supported platforms:
-        /// - Vulkan (some)
-        /// - DX12
-        /// - Metal (Macs with amd GPUs)
-        ///
-        /// This is a web and native feature.
-        const DEPTH24PLUS_STENCIL8 = 1 << 1;
         /// Allows for explicit creation of textures of format [`TextureFormat::Depth32FloatStencil8`]
         ///
         /// Supported platforms:
@@ -317,7 +308,9 @@ bitflags::bitflags! {
         /// the consequences.
         ///
         /// Supported platforms:
-        /// - All
+        /// - Vulkan
+        /// - DX12
+        /// - Metal
         ///
         /// This is a native only feature.
         const MAPPABLE_PRIMARY_BUFFERS = 1 << 16;
@@ -1063,7 +1056,7 @@ bitflags::bitflags! {
 
         /// Supports samplers with anisotropic filtering. Note this isn't actually required by
         /// WebGPU, the implementation is allowed to completely ignore aniso clamp. This flag is
-        /// here for native backends so they can comunicate to the user of aniso is enabled.
+        /// here for native backends so they can communicate to the user of aniso is enabled.
         ///
         /// All backends and all devices support anisotropic filtering.
         const ANISOTROPIC_FILTERING = 1 << 10;
@@ -1087,6 +1080,13 @@ bitflags::bitflags! {
         ///
         /// WebGL doesn't support this.
         const BUFFER_BINDINGS_NOT_16_BYTE_ALIGNED = 1 << 15;
+
+        /// Supports buffers to combine [`BufferUsages::INDEX`] with usages other than [`BufferUsages::COPY_DST`] and [`BufferUsages::COPY_SRC`].
+        /// Furthermore, in absence of this feature it is not allowed to copy index buffers from/to buffers with a set of usage flags containing
+         /// [`BufferUsages::VERTEX`]/[`BufferUsages::UNIFORM`]/[`BufferUsages::STORAGE`] or [`BufferUsages::INDIRECT`].
+        ///
+        /// WebGL doesn't support this.
+        const UNRESTRICTED_INDEX_BUFFER = 1 << 16;
     }
 }
 
@@ -1629,19 +1629,40 @@ bitflags::bitflags! {
         /// If not present, the texture can't be sampled with a filtering sampler.
         /// This may overwrite TextureSampleType::Float.filterable
         const FILTERABLE = 1 << 0;
-        /// Allows [`TextureDescriptor::sample_count`] greater than `1`.
-        const MULTISAMPLE = 1 << 1;
+        /// Allows [`TextureDescriptor::sample_count`] to be `2`.
+        const MULTISAMPLE_X2 = 1 << 1;
+          /// Allows [`TextureDescriptor::sample_count`] to be `4`.
+        const MULTISAMPLE_X4 = 1 << 2 ;
+          /// Allows [`TextureDescriptor::sample_count`] to be `8`.
+        const MULTISAMPLE_X8 = 1 << 3 ;
         /// Allows a texture of this format to back a view passed as `resolve_target`
         /// to a render pass for an automatic driver-implemented resolve.
-        const MULTISAMPLE_RESOLVE = 1 << 2;
+        const MULTISAMPLE_RESOLVE = 1 << 4;
         /// When used as a STORAGE texture, then a texture with this format can be bound with
         /// [`StorageTextureAccess::ReadOnly`] or [`StorageTextureAccess::ReadWrite`].
-        const STORAGE_READ_WRITE = 1 << 3;
+        const STORAGE_READ_WRITE = 1 << 5;
         /// When used as a STORAGE texture, then a texture with this format can be written to with atomics.
         // TODO: No access flag exposed as of writing
-        const STORAGE_ATOMICS = 1 << 4;
+        const STORAGE_ATOMICS = 1 << 6;
         /// If not present, the texture can't be blended into the render target.
-        const BLENDABLE = 1 << 5;
+        const BLENDABLE = 1 << 7;
+    }
+}
+
+impl TextureFormatFeatureFlags {
+    /// Sample count supported by a given texture format.
+    ///
+    /// returns `true` if `count` is a supported sample count.
+    pub fn sample_count_supported(&self, count: u32) -> bool {
+        use TextureFormatFeatureFlags as tfsc;
+
+        match count {
+            1 => true,
+            2 => self.contains(tfsc::MULTISAMPLE_X2),
+            4 => self.contains(tfsc::MULTISAMPLE_X4),
+            8 => self.contains(tfsc::MULTISAMPLE_X8),
+            _ => false,
+        }
     }
 }
 
@@ -2291,7 +2312,6 @@ impl TextureFormat {
         let astc_hdr = Features::TEXTURE_COMPRESSION_ASTC_HDR;
         let norm16bit = Features::TEXTURE_FORMAT_16BIT_NORM;
         let d32_s8 = Features::DEPTH32FLOAT_STENCIL8;
-        let d24_s8 = Features::DEPTH24PLUS_STENCIL8;
 
         // Sample Types
         let uint = TextureSampleType::Uint;
@@ -2309,9 +2329,9 @@ impl TextureFormat {
 
         // Multisampling
         let noaa = TextureFormatFeatureFlags::empty();
-        let msaa = TextureFormatFeatureFlags::MULTISAMPLE;
-        let msaa_resolve =
-            TextureFormatFeatureFlags::MULTISAMPLE | TextureFormatFeatureFlags::MULTISAMPLE_RESOLVE;
+        let msaa = TextureFormatFeatureFlags::MULTISAMPLE_X4;
+        let msaa_resolve = TextureFormatFeatureFlags::MULTISAMPLE_X4
+            | TextureFormatFeatureFlags::MULTISAMPLE_RESOLVE;
 
         // Flags
         let basic =
@@ -2376,7 +2396,7 @@ impl TextureFormat {
             // Depth-stencil textures
             Self::Depth16Unorm =>        (   native,   depth,    linear,         msaa, (1, 1),  2, attachment, 1),
             Self::Depth24Plus =>         (   native,   depth,    linear,         msaa, (1, 1),  4, attachment, 1),
-            Self::Depth24PlusStencil8 => (   d24_s8,   depth,    linear,         msaa, (1, 1),  4, attachment, 2),
+            Self::Depth24PlusStencil8 => (   native,   depth,    linear,         msaa, (1, 1),  4, attachment, 2),
             Self::Depth32Float =>        (   native,   depth,    linear,         msaa, (1, 1),  4, attachment, 1),
             Self::Depth32FloatStencil8 =>(   d32_s8,   depth,    linear,         msaa, (1, 1),  4, attachment, 2),
             // Packed uncompressed

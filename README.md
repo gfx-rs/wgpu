@@ -31,7 +31,7 @@ For an overview of all the components in the gfx-rs ecosystem, see [the big pict
 
 ### MSRV policy
 
-Minimum Supported Rust Version is **1.64**.
+Minimum Supported Rust Version is **1.65**.
 It is enforced on CI (in "/.github/workflows/ci.yml") with `RUST_VERSION` variable.
 This version can only be upgraded in breaking releases.
 
@@ -93,7 +93,7 @@ Note that the WGSL specification is still under development,
 so the [draft specification][wgsl spec] does not exactly describe what `wgpu` supports.
 See [below](#tracking-the-webgpu-and-wgsl-draft-specifications) for details.
 
-To enable SPIR-V shaders, enable the `spirv` feature of wgpu.  
+To enable SPIR-V shaders, enable the `spirv` feature of wgpu.
 To enable GLSL shaders, enable the `glsl` feature of wgpu.
 
 ### Angle
@@ -101,7 +101,7 @@ To enable GLSL shaders, enable the `glsl` feature of wgpu.
 [Angle](http://angleproject.org) is a translation layer from GLES to other backends, developed by Google.
 We support running our GLES3 backend over it in order to reach platforms with GLES2 or DX11 support, which aren't accessible otherwise.
 In order to run with Angle, "angle" feature has to be enabled, and Angle libraries placed in a location visible to the application.
-These binaries can be downloaded from [gfbuild-angle](https://github.com/DileSoft/gfbuild-angle) artifacts, [manual compilation](https://github.com/google/angle/blob/main/doc/DevSetup.md) may be required on Macs with Apple silicon. 
+These binaries can be downloaded from [gfbuild-angle](https://github.com/DileSoft/gfbuild-angle) artifacts, [manual compilation](https://github.com/google/angle/blob/main/doc/DevSetup.md) may be required on Macs with Apple silicon.
 
 On Windows, you generally need to copy them into the working directory, in the same directory as the executable, or somewhere in your path.
 On Linux, you can point to them using `LD_LIBRARY_PATH` environment.
@@ -204,7 +204,7 @@ Exactly which WGSL features `wgpu` supports depends on how you are using it:
   for catching up to the WGSL specification,
   but in general there is no up-to-date summary
   of the differences between Naga and the WGSL spec.
-  
+
 - When running in a web browser (by compilation to WebAssembly)
   without the `"webgl"` feature enabled,
   `wgpu` relies on the browser's own WebGPU implementation.

@@ -125,7 +125,7 @@ fn pulling_common(
     let slice = buffer.slice(..);
     slice.map_async(wgpu::MapMode::Read, |_| ());
     ctx.device.poll(wgpu::Maintain::Wait);
-    let data: Vec<u32> = bytemuck::cast_slice(&*slice.get_mapped_range()).to_vec();
+    let data: Vec<u32> = bytemuck::cast_slice(&slice.get_mapped_range()).to_vec();
 
     assert_eq!(data, expected);
 }

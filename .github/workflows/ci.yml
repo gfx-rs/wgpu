@@ -8,7 +8,7 @@ on:
 
 env:
   RUST_BACKTRACE: 1
-  RUST_VERSION: 1.64
+  RUST_VERSION: 1.65
   PKG_CONFIG_ALLOW_CROSS: 1 # allow android to work
   RUSTFLAGS: --cfg=web_sys_unstable_apis -D warnings
   RUSTDOCFLAGS: -Dwarnings
@@ -23,7 +23,7 @@ env:
 # entirely on clippy jobs and reduce it to line-numbers
 # only for ones where we run tests.
 #
-# Additionally, we disable incremental builds entirely 
+# Additionally, we disable incremental builds entirely
 # as our caching system doesn't actually cache our crates.
 # It adds overhead to the build and another point of failure.
 
@@ -38,7 +38,7 @@ jobs:
             os: windows-2022
             target: x86_64-pc-windows-msvc
             kind: native
-          
+
           # MacOS
           - name: MacOS x86_64
             os: macos-12
@@ -49,7 +49,7 @@ jobs:
             os: macos-12
             target: aarch64-apple-darwin
             kind: native
-          
+
           # IOS
           - name: IOS aarch64
             os: macos-12
@@ -175,7 +175,7 @@ jobs:
           - name: Linux x86_64
             os: ubuntu-22.04
             backends: vulkan gl
-    
+
     name: Test ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
 
@@ -195,24 +195,24 @@ jobs:
         uses: taiki-e/install-action@nextest
       - name: install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
-        
+
       - name: install swiftshader
         if: matrix.os == 'ubuntu-22.04'
         shell: bash
         run: |
           set -e
-          
+
           mkdir -p swiftshader
           curl -LsSf https://github.com/gfx-rs/ci-build/releases/latest/download/swiftshader-linux-x86_64.tar.xz | tar -xf - -C swiftshader
 
           echo "LD_LIBRARY_PATH=$PWD/swiftshader" >> $GITHUB_ENV
-        
+
       - name: install llvmpipe, vulkan sdk
         if: matrix.os == 'ubuntu-22.04'
         shell: bash
         run: |
           set -e
-          
+
           sudo apt-get update -y -qq
 
           # vulkan sdk
@@ -264,7 +264,7 @@ jobs:
         uses: codecov/codecov-action@v3
         with:
           files: lcov.info
-  
+
   doctest:
     name: Doctest
     runs-on: ubuntu-22.04
@@ -327,11 +327,13 @@ jobs:
       - name: checkout repo
         uses: actions/checkout@v3
 
-      - name: install rust
+      - name: install rust ${{ env.RUST_VERSION }}
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
           toolchain: ${{ env.RUST_VERSION }}
+          override: true
+          components: clippy
 
       - name: disable debug
         shell: bash

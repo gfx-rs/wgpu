@@ -589,10 +589,11 @@ impl crate::Queue<Api> for Queue {
                 } => {
                     fence_raw = match free.pop() {
                         Some(raw) => raw,
-                        None => self
-                            .device
-                            .raw
-                            .create_fence(&vk::FenceCreateInfo::builder(), None)?,
+                        None => unsafe {
+                            self.device
+                                .raw
+                                .create_fence(&vk::FenceCreateInfo::builder(), None)?
+                        },
                     };
                     active.push((value, fence_raw));
                 }
@@ -620,9 +621,11 @@ impl crate::Queue<Api> for Queue {
         vk_info = vk_info.signal_semaphores(&signal_semaphores[..signal_count]);
 
         profiling::scope!("vkQueueSubmit");
-        self.device
-            .raw
-            .queue_submit(self.raw, &[vk_info.build()], fence_raw)?;
+        unsafe {
+            self.device
+                .raw
+                .queue_submit(self.raw, &[vk_info.build()], fence_raw)?
+        };
         Ok(())
     }
 
@@ -645,13 +648,13 @@ impl crate::Queue<Api> for Queue {
 
         let suboptimal = {
             profiling::scope!("vkQueuePresentKHR");
-            self.swapchain_fn
-                .queue_present(self.raw, &vk_info)
-                .map_err(|error| match error {
+            unsafe { self.swapchain_fn.queue_present(self.raw, &vk_info) }.map_err(|error| {
+                match error {
                     vk::Result::ERROR_OUT_OF_DATE_KHR => crate::SurfaceError::Outdated,
                     vk::Result::ERROR_SURFACE_LOST_KHR => crate::SurfaceError::Lost,
                     _ => crate::DeviceError::from(error).into(),
-                })?
+                }
+            })?
         };
         if suboptimal {
             log::warn!("Suboptimal present of frame {}", texture.index);

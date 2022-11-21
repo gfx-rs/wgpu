@@ -22,7 +22,7 @@ rustdoc-args = ["--cfg", "docsrs"]
 [lib]
 
 [features]
-default = []
+default = ["gles"]
 metal = ["naga/msl-out", "block", "foreign-types"]
 vulkan = ["naga/spv-out", "ash", "gpu-alloc", "gpu-descriptor", "libloading", "smallvec"]
 gles = ["naga/glsl-out", "glow", "egl", "libloading"]
