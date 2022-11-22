@@ -66,7 +66,7 @@ impl<A: hal::Api> Resource for ShaderModule<A> {
 pub struct ShaderError<E> {
     pub source: String,
     pub label: Option<String>,
-    pub inner: E,
+    pub inner: Box<E>,
 }
 #[cfg(feature = "wgsl")]
 impl fmt::Display for ShaderError<naga::front::wgsl::ParseError> {
