@@ -94,6 +94,7 @@ Bottom level categories:
 #### GLES
 
 - Fixed WebGL not displaying srgb targets correctly if a non-screen filling viewport was previously set. By @Wumpf in [#3093](https://github.com/gfx-rs/wgpu/pull/3093)
+- Fix disallowing multisampling for float textures if otherwise supported. By @Wumpf in [#3183](https://github.com/gfx-rs/wgpu/pull/3183)
 
 #### deno-webgpu
 
