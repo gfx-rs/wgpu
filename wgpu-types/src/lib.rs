@@ -1179,7 +1179,7 @@ pub struct DeviceDescriptor<L> {
 }
 
 impl<L> DeviceDescriptor<L> {
-    ///
+    /// Takes a closure and maps the label of the device descriptor into another.
     pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> DeviceDescriptor<K> {
         DeviceDescriptor {
             label: fun(&self.label),
@@ -2049,7 +2049,7 @@ pub enum TextureFormat {
     Astc {
         /// compressed block dimensions
         block: AstcBlock,
-        ///
+        /// astc RGBA channel
         channel: AstcChannel,
     },
 }
@@ -3672,7 +3672,7 @@ pub struct BufferDescriptor<L> {
 }
 
 impl<L> BufferDescriptor<L> {
-    ///
+    /// Takes a closure and maps the label of the buffer descriptor into another.
     pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> BufferDescriptor<K> {
         BufferDescriptor {
             label: fun(&self.label),
@@ -3697,7 +3697,7 @@ pub struct CommandEncoderDescriptor<L> {
 }
 
 impl<L> CommandEncoderDescriptor<L> {
-    ///
+    /// Takes a closure and maps the label of the command encoder descriptor into another.
     pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> CommandEncoderDescriptor<K> {
         CommandEncoderDescriptor {
             label: fun(&self.label),
@@ -3900,13 +3900,13 @@ pub enum SurfaceStatus {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct Color {
-    ///
+    /// red component of the color
     pub r: f64,
-    ///
+    /// green component of the color
     pub g: f64,
-    ///
+    /// blue component of the color
     pub b: f64,
-    ///
+    /// alpha component of the color
     pub a: f64,
 }
 
@@ -3980,11 +3980,11 @@ pub enum TextureDimension {
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct Origin3d {
-    ///
+    /// x position of the origin
     pub x: u32,
-    ///
+    /// y position of the origin
     pub y: u32,
-    ///
+    /// z position of the origin
     pub z: u32,
 }
 
@@ -4009,11 +4009,11 @@ impl Default for Origin3d {
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct Extent3d {
-    ///
+    /// height of the extent
     pub width: u32,
-    ///
+    /// width of the extent
     pub height: u32,
-    ///
+    /// the depth of the extent or the number of array layers
     #[cfg_attr(feature = "serde", serde(default = "default_depth"))]
     pub depth_or_array_layers: u32,
 }
@@ -4218,7 +4218,7 @@ pub struct TextureDescriptor<L> {
 }
 
 impl<L> TextureDescriptor<L> {
-    ///
+    /// Takes a closure and maps the label of the texture descriptor into another.
     pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> TextureDescriptor<K> {
         TextureDescriptor {
             label: fun(&self.label),
@@ -4380,7 +4380,7 @@ pub struct CommandBufferDescriptor<L> {
 }
 
 impl<L> CommandBufferDescriptor<L> {
-    ///
+    /// Takes a closure and maps the label of the command buffer descriptor into another.
     pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> CommandBufferDescriptor<K> {
         CommandBufferDescriptor {
             label: fun(&self.label),
@@ -4419,7 +4419,7 @@ pub struct RenderBundleDescriptor<L> {
 }
 
 impl<L> RenderBundleDescriptor<L> {
-    ///
+    /// Takes a closure and maps the label of the render bundle descriptor into another.
     pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> RenderBundleDescriptor<K> {
         RenderBundleDescriptor {
             label: fun(&self.label),
@@ -4971,7 +4971,7 @@ pub struct QuerySetDescriptor<L> {
 }
 
 impl<L> QuerySetDescriptor<L> {
-    ///
+    /// Takes a closure and maps the label of the query set descriptor into another.
     pub fn map_label<'a, K>(&'a self, fun: impl FnOnce(&'a L) -> K) -> QuerySetDescriptor<K> {
         QuerySetDescriptor {
             label: fun(&self.label),

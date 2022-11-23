@@ -4023,14 +4023,14 @@ impl<T> UncapturedErrorHandler for T where T: Fn(Error) + Send + 'static {}
 pub enum Error {
     /// Out of memory error
     OutOfMemory {
-        ///
+        /// Lower level source of the error.
         source: Box<dyn error::Error + Send + 'static>,
     },
     /// Validation error, signifying a bug in code or data
     Validation {
-        ///
+        /// Lower level source of the error.
         source: Box<dyn error::Error + Send + 'static>,
-        ///
+        /// Description of the validation error.
         description: String,
     },
 }
