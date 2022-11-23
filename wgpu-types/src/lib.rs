@@ -658,9 +658,9 @@ impl Features {
 /// - [`Limits::downlevel_webgl2_defaults()`] This is a set of limits that is lower even than the
 ///   [`downlevel_defaults()`], configured to be low enough to support running in the browser using
 ///   WebGL2.
-/// - [`Limits::default()`]. This is the set of limits that is guarenteed to work on all modern
-///   backends and is guarenteed to be supported by WebGPU. Applications needing more modern
-///   features can use this as a reasonable set of limits if they are targetting only desktop and
+/// - [`Limits::default()`]. This is the set of limits that is guaranteed to work on all modern
+///   backends and is guaranteed to be supported by WebGPU. Applications needing more modern
+///   features can use this as a reasonable set of limits if they are targeting only desktop and
 ///   modern mobile devices.
 ///
 /// We recommend starting with the most restrictive limits you can and manually increasing the
@@ -773,7 +773,7 @@ pub struct Limits {
     pub max_compute_workgroups_per_dimension: u32,
     /// A limit above which buffer allocations are guaranteed to fail.
     ///
-    /// Buffer allocations below the maximum buffer size may not succed depending on available memory,
+    /// Buffer allocations below the maximum buffer size may not succeed depending on available memory,
     /// fragmentation and other factors.
     pub max_buffer_size: u64,
 }
@@ -815,7 +815,7 @@ impl Default for Limits {
 }
 
 impl Limits {
-    /// These default limits are guarenteed to be compatible with GLES-3.1, and D3D11
+    /// These default limits are guaranteed to be compatible with GLES-3.1, and D3D11
     pub fn downlevel_defaults() -> Self {
         Self {
             max_texture_dimension_1d: 2048,
@@ -850,7 +850,7 @@ impl Limits {
         }
     }
 
-    /// These default limits are guarenteed to be compatible with GLES-3.0, and D3D11, and WebGL2
+    /// These default limits are guaranteed to be compatible with GLES-3.0, and D3D11, and WebGL2
     pub fn downlevel_webgl2_defaults() -> Self {
         Self {
             max_uniform_buffers_per_shader_stage: 11,

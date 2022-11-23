@@ -3118,7 +3118,7 @@ impl<'a> RenderPass<'a> {
 
 /// [`Features::MULTI_DRAW_INDIRECT_COUNT`] must be enabled on the device in order to call these functions.
 impl<'a> RenderPass<'a> {
-    /// Disptaches multiple draw calls from the active vertex buffer(s) based on the contents of the `indirect_buffer`.
+    /// Dispatches multiple draw calls from the active vertex buffer(s) based on the contents of the `indirect_buffer`.
     /// The count buffer is read to determine how many draws to issue.
     ///
     /// The indirect buffer must be long enough to account for `max_count` draws, however only `count` will
