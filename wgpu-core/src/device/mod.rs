@@ -80,10 +80,7 @@ pub(crate) struct RenderPassContext {
 #[derive(Clone, Debug, Error)]
 pub enum RenderPassCompatibilityError {
     #[error("Incompatible color attachment: the renderpass expected {0:?} but was given {1:?}")]
-    IncompatibleColorAttachment(
-        ArrayVec<Option<TextureFormat>, { hal::MAX_COLOR_ATTACHMENTS }>,
-        ArrayVec<Option<TextureFormat>, { hal::MAX_COLOR_ATTACHMENTS }>,
-    ),
+    IncompatibleColorAttachment(Vec<Option<TextureFormat>>, Vec<Option<TextureFormat>>),
     #[error(
         "Incompatible depth-stencil attachment: the renderpass expected {0:?} but was given {1:?}"
     )]
@@ -102,8 +99,8 @@ impl RenderPassContext {
     ) -> Result<(), RenderPassCompatibilityError> {
         if self.attachments.colors != other.attachments.colors {
             return Err(RenderPassCompatibilityError::IncompatibleColorAttachment(
-                self.attachments.colors.clone(),
-                other.attachments.colors.clone(),
+                self.attachments.colors.iter().cloned().collect(),
+                other.attachments.colors.iter().cloned().collect(),
             ));
         }
         if self.attachments.depth_stencil != other.attachments.depth_stencil {
@@ -1245,7 +1242,7 @@ impl<A: HalApi> Device<A> {
                     pipeline::CreateShaderModuleError::Parsing(pipeline::ShaderError {
                         source: code.to_string(),
                         label: desc.label.as_ref().map(|l| l.to_string()),
-                        inner,
+                        inner: Box::new(inner),
                     })
                 })?;
                 (Cow::Owned(module), code.into_owned())
@@ -1308,7 +1305,7 @@ impl<A: HalApi> Device<A> {
                 pipeline::CreateShaderModuleError::Validation(pipeline::ShaderError {
                     source,
                     label: desc.label.as_ref().map(|l| l.to_string()),
-                    inner,
+                    inner: Box::new(inner),
                 })
             })?;
         let interface =

@@ -86,6 +86,7 @@ Bottom level categories:
 - Avoid panicking in some interactions with invalid resources by @nical in (#3094)[https://github.com/gfx-rs/wgpu/pull/3094]
 - Remove `wgpu_types::Features::DEPTH24PLUS_STENCIL8`, making `wgpu::TextureFormat::Depth24PlusStencil8` available on all backends. By @Healthire in (#3151)[https://github.com/gfx-rs/wgpu/pull/3151]
 - Fix an integer overflow in `queue_write_texture` by @nical in (#3146)[https://github.com/gfx-rs/wgpu/pull/3146]
+- Make `RenderPassCompatibilityError` and `CreateShaderModuleError` not so huge. By @jimblandy in (#3226)[https://github.com/gfx-rs/wgpu/pull/3226]
 
 #### WebGPU
 
@@ -109,7 +110,7 @@ Bottom level categories:
 
 ### Testing/Internal
 
-- Update the `minimum supported rust version` to 1.65
+- Update the `minimum supported rust version` to 1.64
 - Use cargo 1.64 workspace inheritance feature. By @jinleili in [#3107](https://github.com/gfx-rs/wgpu/pull/3107)
 
 #### Vulkan
