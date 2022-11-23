@@ -620,7 +620,7 @@ bitflags::bitflags! {
         ///
         /// This is a native-only feature.
         const TEXTURE_COMPRESSION_ASTC_HDR = 1 << 40;
-        /// Allows for timestamp queries inside renderpasses. Metal does not allow this
+        /// Allows for timestamp queries inside render passes. Metal does not allow this
         /// on Apple GPUs.
         ///
         /// Implies [`Features::TIMESTAMP_QUERIES`] is supported.
@@ -3841,7 +3841,7 @@ bitflags::bitflags! {
         const TEXTURE_BINDING = 1 << 2;
         /// Allows a texture to be a [`BindingType::StorageTexture`] in a bind group.
         const STORAGE_BINDING = 1 << 3;
-        /// Allows a texture to be an output attachment of a renderpass.
+        /// Allows a texture to be an output attachment of a render pass.
         const RENDER_ATTACHMENT = 1 << 4;
     }
 }
