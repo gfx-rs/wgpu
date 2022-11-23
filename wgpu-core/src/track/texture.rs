@@ -25,8 +25,8 @@ use crate::{
     id::{TextureId, TypedId, Valid},
     resource::Texture,
     track::{
-        invalid_resource_state, iterate_bitvec_indices, skip_barrier, ResourceMetadata,
-        ResourceMetadataProvider, ResourceUses, UsageConflict,
+        invalid_resource_state, skip_barrier, ResourceMetadata, ResourceMetadataProvider,
+        ResourceUses, UsageConflict,
     },
     LifeGuard, RefCount,
 };
@@ -238,7 +238,7 @@ impl<A: hub::HalApi> TextureUsageScope<A> {
 
         strict_assert!(index < self.set.simple.len());
 
-        strict_assert!(if self.metadata.owned.get(index).unwrap()
+        strict_assert!(if self.metadata.contains(index)
             && self.set.simple[index] == TextureUses::COMPLEX
         {
             self.set.complex.contains_key(&(index as u32))
@@ -258,7 +258,7 @@ impl<A: hub::HalApi> TextureUsageScope<A> {
 
     /// Returns a list of all textures tracked.
     pub fn used(&self) -> impl Iterator<Item = Valid<TextureId>> + '_ {
-        self.metadata.used()
+        self.metadata.owned_ids()
     }
 
     /// Returns true if the tracker owns no resources.
@@ -285,7 +285,7 @@ impl<A: hub::HalApi> TextureUsageScope<A> {
             self.set_size(incoming_size);
         }
 
-        for index in iterate_bitvec_indices(&scope.metadata.owned) {
+        for index in scope.metadata.owned_indices() {
             let index32 = index as u32;
 
             self.tracker_assert_in_bounds(index);
@@ -411,14 +411,14 @@ impl<A: hub::HalApi> TextureTracker<A> {
         strict_assert!(index < self.start_set.simple.len());
         strict_assert!(index < self.end_set.simple.len());
 
-        strict_assert!(if self.metadata.owned.get(index).unwrap()
+        strict_assert!(if self.metadata.contains(index)
             && self.start_set.simple[index] == TextureUses::COMPLEX
         {
             self.start_set.complex.contains_key(&(index as u32))
         } else {
             true
         });
-        strict_assert!(if self.metadata.owned.get(index).unwrap()
+        strict_assert!(if self.metadata.contains(index)
             && self.end_set.simple[index] == TextureUses::COMPLEX
         {
             self.end_set.complex.contains_key(&(index as u32))
@@ -447,7 +447,7 @@ impl<A: hub::HalApi> TextureTracker<A> {
 
     /// Returns a list of all textures tracked.
     pub fn used(&self) -> impl Iterator<Item = Valid<TextureId>> + '_ {
-        self.metadata.used()
+        self.metadata.owned_ids()
     }
 
     /// Drains all currently pending transitions.
@@ -469,8 +469,7 @@ impl<A: hub::HalApi> TextureTracker<A> {
 
         self.tracker_assert_in_bounds(index);
 
-        let ref_count = unsafe { self.metadata.ref_counts.get_unchecked(index) };
-        unsafe { ref_count.as_ref().unwrap_unchecked() }
+        unsafe { self.metadata.get_ref_count_unchecked(index) }
     }
 
     /// Inserts a single texture and a state into the resource tracker.
@@ -488,7 +487,7 @@ impl<A: hub::HalApi> TextureTracker<A> {
         self.tracker_assert_in_bounds(index);
 
         unsafe {
-            let currently_owned = self.metadata.owned.get(index).unwrap_unchecked();
+            let currently_owned = self.metadata.contains_unchecked(index);
 
             if currently_owned {
                 panic!("Tried to insert texture already tracked");
@@ -573,7 +572,7 @@ impl<A: hub::HalApi> TextureTracker<A> {
             self.set_size(incoming_size);
         }
 
-        for index in iterate_bitvec_indices(&tracker.metadata.owned) {
+        for index in tracker.metadata.owned_indices() {
             let index32 = index as u32;
 
             self.tracker_assert_in_bounds(index);
@@ -619,7 +618,7 @@ impl<A: hub::HalApi> TextureTracker<A> {
             self.set_size(incoming_size);
         }
 
-        for index in iterate_bitvec_indices(&scope.metadata.owned) {
+        for index in scope.metadata.owned_indices() {
             let index32 = index as u32;
 
             self.tracker_assert_in_bounds(index);
@@ -677,7 +676,7 @@ impl<A: hub::HalApi> TextureTracker<A> {
             let index = index32 as usize;
             scope.tracker_assert_in_bounds(index);
 
-            if unsafe { !scope.metadata.owned.get(index).unwrap_unchecked() } {
+            if unsafe { !scope.metadata.contains_unchecked(index) } {
                 continue;
             }
             let texture_data = unsafe { texture_data_from_texture(storage, index32) };
@@ -698,7 +697,7 @@ impl<A: hub::HalApi> TextureTracker<A> {
                 )
             };
 
-            unsafe { scope.metadata.reset(index) };
+            unsafe { scope.metadata.remove(index) };
         }
     }
 
@@ -712,21 +711,21 @@ impl<A: hub::HalApi> TextureTracker<A> {
         let (index32, epoch, _) = id.0.unzip();
         let index = index32 as usize;
 
-        if index > self.metadata.owned.len() {
+        if index > self.metadata.size() {
             return false;
         }
 
         self.tracker_assert_in_bounds(index);
 
         unsafe {
-            if self.metadata.owned.get(index).unwrap_unchecked() {
-                let existing_epoch = *self.metadata.epochs.get_unchecked_mut(index);
+            if self.metadata.contains_unchecked(index) {
+                let existing_epoch = self.metadata.get_epoch_unchecked(index);
                 assert_eq!(existing_epoch, epoch);
 
                 self.start_set.complex.remove(&index32);
                 self.end_set.complex.remove(&index32);
 
-                self.metadata.reset(index);
+                self.metadata.remove(index);
 
                 return true;
             }
@@ -746,24 +745,22 @@ impl<A: hub::HalApi> TextureTracker<A> {
         let (index32, epoch, _) = id.0.unzip();
         let index = index32 as usize;
 
-        if index > self.metadata.owned.len() {
+        if index > self.metadata.size() {
             return false;
         }
 
         self.tracker_assert_in_bounds(index);
 
         unsafe {
-            if self.metadata.owned.get(index).unwrap_unchecked() {
-                let existing_epoch = self.metadata.epochs.get_unchecked(index);
-                let existing_ref_count = self.metadata.ref_counts.get_unchecked(index);
+            if self.metadata.contains_unchecked(index) {
+                let existing_epoch = self.metadata.get_epoch_unchecked(index);
+                let existing_ref_count = self.metadata.get_ref_count_unchecked(index);
 
-                if *existing_epoch == epoch
-                    && existing_ref_count.as_ref().unwrap_unchecked().load() == 1
-                {
+                if existing_epoch == epoch && existing_ref_count.load() == 1 {
                     self.start_set.complex.remove(&index32);
                     self.end_set.complex.remove(&index32);
 
-                    self.metadata.reset(index);
+                    self.metadata.remove(index);
 
                     return true;
                 }
@@ -906,7 +903,7 @@ unsafe fn insert_or_merge<A: hub::HalApi>(
     state_provider: TextureStateProvider<'_>,
     metadata_provider: ResourceMetadataProvider<'_, A>,
 ) -> Result<(), UsageConflict> {
-    let currently_owned = unsafe { resource_metadata.owned.get(index).unwrap_unchecked() };
+    let currently_owned = unsafe { resource_metadata.contains_unchecked(index) };
 
     if !currently_owned {
         unsafe {
@@ -967,7 +964,7 @@ unsafe fn insert_or_barrier_update<A: hub::HalApi>(
     metadata_provider: ResourceMetadataProvider<'_, A>,
     barriers: &mut Vec<PendingTransition<TextureUses>>,
 ) {
-    let currently_owned = unsafe { resource_metadata.owned.get(index).unwrap_unchecked() };
+    let currently_owned = unsafe { resource_metadata.contains_unchecked(index) };
 
     if !currently_owned {
         unsafe {
@@ -1092,12 +1089,11 @@ unsafe fn insert<A: hub::HalApi>(
         }
     }
 
-    let (epoch, ref_count) =
-        unsafe { metadata_provider.get_own(texture_data.map(|(life_guard, _)| life_guard), index) };
-
-    resource_metadata.owned.set(index, true);
-    unsafe { *resource_metadata.epochs.get_unchecked_mut(index) = epoch };
-    unsafe { *resource_metadata.ref_counts.get_unchecked_mut(index) = Some(ref_count) };
+    unsafe {
+        let (epoch, ref_count) =
+            metadata_provider.get_own(texture_data.map(|(life_guard, _)| life_guard), index);
+        resource_metadata.insert(index, epoch, ref_count);
+    }
 }
 
 #[inline(always)]
