@@ -64,7 +64,6 @@ pub type Factory3 = WeakPtr<dxgi1_3::IDXGIFactory3>;
 pub type Factory4 = WeakPtr<dxgi1_4::IDXGIFactory4>;
 pub type Factory5 = WeakPtr<dxgi1_5::IDXGIFactory5>;
 pub type Factory6 = WeakPtr<dxgi1_6::IDXGIFactory6>;
-pub type FactoryMedia = WeakPtr<dxgi1_3::IDXGIFactoryMedia>;
 crate::weak_com_inheritance_chain! {
     #[derive(Debug, Copy, Clone, PartialEq, Hash)]
     pub enum DxgiFactory {
@@ -74,9 +73,10 @@ crate::weak_com_inheritance_chain! {
         Factory4(dxgi1_4::IDXGIFactory4), from_factory4, as_factory4, unwrap_factory4;
         Factory5(dxgi1_5::IDXGIFactory5), from_factory5, as_factory5, unwrap_factory5;
         Factory6(dxgi1_6::IDXGIFactory6), from_factory6, as_factory6, unwrap_factory6;
-        FactoryMedia(dxgi1_3::IDXGIFactoryMedia), from_factory_media, as_factory_media, unwrap_factory_media;
     }
 }
+
+pub type FactoryMedia = WeakPtr<dxgi1_3::IDXGIFactoryMedia>;
 
 pub type SwapChain = WeakPtr<dxgi::IDXGISwapChain>;
 pub type SwapChain1 = WeakPtr<dxgi1_2::IDXGISwapChain1>;
@@ -137,6 +137,22 @@ impl DxgiLib {
         let hr = unsafe {
             let func: libloading::Symbol<Fun> = self.lib.get(b"CreateDXGIFactory1")?;
             func(&dxgi::IDXGIFactory1::uuidof(), factory.mut_void())
+        };
+
+        Ok((factory, hr))
+    }
+
+    pub fn create_factory_media(&self) -> Result<D3DResult<FactoryMedia>, libloading::Error> {
+        type Fun = extern "system" fn(
+            winapi::shared::guiddef::REFIID,
+            *mut *mut winapi::ctypes::c_void,
+        ) -> HRESULT;
+
+        let mut factory = FactoryMedia::null();
+        let hr = unsafe {
+            // https://learn.microsoft.com/en-us/windows/win32/api/dxgi1_3/nn-dxgi1_3-idxgifactorymedia
+            let func: libloading::Symbol<Fun> = self.lib.get(b"CreateDXGIFactory1")?;
+            func(&dxgi1_3::IDXGIFactoryMedia::uuidof(), factory.mut_void())
         };
 
         Ok((factory, hr))
