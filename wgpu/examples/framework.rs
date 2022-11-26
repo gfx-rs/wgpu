@@ -267,7 +267,9 @@ fn start<E: Example>(
     }: Setup,
 ) {
     let spawner = Spawner::new();
-    let mut config = surface.get_default_config(&adapter, size.width, size.height);
+    let mut config = surface
+        .get_default_config(&adapter, size.width, size.height)
+        .expect("Surface isn't supported by the adapter.");
     surface.configure(&device, &config);
 
     log::info!("Initializing the example...");

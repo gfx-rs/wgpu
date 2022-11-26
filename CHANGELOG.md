@@ -56,6 +56,13 @@ The various surface capability functions were combined into a single call that g
 + let alpha_modes = caps.alpha_modes;
 ```
 
+Additionally `Surface::get_default_config` now returns an Option and returns None if the surface isn't supported by the adapter.
+
+```diff
+- let config = surface.get_default_config(&adapter);
++ let config = surface.get_default_config(&adapter).expect("Surface unsupported by adapter");
+```
+
 ### Changes
 
 #### General
@@ -65,6 +72,7 @@ The various surface capability functions were combined into a single call that g
 - Improve compute shader validation error message. By @haraldreingruber in [#3139](https://github.com/gfx-rs/wgpu/pull/3139)
 - New downlevel feature `UNRESTRICTED_INDEX_BUFFER` to indicate support for using `INDEX` together with other non-copy/map usages (unsupported on WebGL). By @Wumpf in [#3157](https://github.com/gfx-rs/wgpu/pull/3157)
 - Combine `Surface::get_supported_formats`, `Surface::get_supported_present_modes`, and `Surface::get_supported_alpha_modes` into `Surface::get_capabilities` and `SurfaceCapabilities`. By @cwfitzgerald in [#3157](https://github.com/gfx-rs/wgpu/pull/3157)
+- Make `Surface::get_default_config` return an Option to prevent panics. By @cwfitzgerald in [#3157](https://github.com/gfx-rs/wgpu/pull/3157)
 
 #### WebGPU
 
