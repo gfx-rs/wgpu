@@ -8,7 +8,7 @@ use crate::{
 
 use wgt::{Backend, Backends, PowerPreference};
 
-use hal::{Adapter as _, Instance as _, SurfaceCapabilities};
+use hal::{Adapter as _, Instance as _};
 use thiserror::Error;
 
 pub type RequestAdapterOptions = wgt::RequestAdapterOptions<SurfaceId>;
@@ -152,37 +152,10 @@ impl crate::hub::Resource for Surface {
 }
 
 impl Surface {
-    pub fn get_supported_formats<A: HalApi>(
+    pub fn get_capabilities<A: HalApi>(
         &self,
         adapter: &Adapter<A>,
-    ) -> Result<Vec<wgt::TextureFormat>, GetSurfaceSupportError> {
-        self.get_capabilities(adapter).map(|mut caps| {
-            // TODO: maybe remove once we support texture view changing srgb-ness
-            caps.formats.sort_by_key(|f| !f.describe().srgb);
-            caps.formats
-        })
-    }
-
-    pub fn get_supported_present_modes<A: HalApi>(
-        &self,
-        adapter: &Adapter<A>,
-    ) -> Result<Vec<wgt::PresentMode>, GetSurfaceSupportError> {
-        self.get_capabilities(adapter)
-            .map(|caps| caps.present_modes)
-    }
-
-    pub fn get_supported_alpha_modes<A: HalApi>(
-        &self,
-        adapter: &Adapter<A>,
-    ) -> Result<Vec<wgt::CompositeAlphaMode>, GetSurfaceSupportError> {
-        self.get_capabilities(adapter)
-            .map(|caps| caps.composite_alpha_modes)
-    }
-
-    fn get_capabilities<A: HalApi>(
-        &self,
-        adapter: &Adapter<A>,
-    ) -> Result<SurfaceCapabilities, GetSurfaceSupportError> {
+    ) -> Result<hal::SurfaceCapabilities, GetSurfaceSupportError> {
         let suf = A::get_surface(self).ok_or(GetSurfaceSupportError::Unsupported)?;
         profiling::scope!("surface_capabilities");
         let caps = unsafe {

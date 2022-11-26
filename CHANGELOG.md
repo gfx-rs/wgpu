@@ -40,6 +40,22 @@ Bottom level categories:
 
 ## Unreleased
 
+### Major Changes
+
+#### Surface Capabilities API
+
+The various surface capability functions were combined into a single call that gives you all the capabilities.
+
+```diff
+- let formats = surface.get_supported_formats(&adapter);
+- let present_modes = surface.get_supported_present_modes(&adapter);
+- let alpha_modes = surface.get_supported_alpha_modes(&adapter);
++ let caps = surface.get_capabilities(&adapter);
++ let formats = caps.formats;
++ let present_modes = caps.present_modes;
++ let alpha_modes = caps.alpha_modes;
+```
+
 ### Changes
 
 #### General
@@ -48,6 +64,7 @@ Bottom level categories:
 - Implement `Default` for `CompositeAlphaMode`
 - Improve compute shader validation error message. By @haraldreingruber in [#3139](https://github.com/gfx-rs/wgpu/pull/3139)
 - New downlevel feature `UNRESTRICTED_INDEX_BUFFER` to indicate support for using `INDEX` together with other non-copy/map usages (unsupported on WebGL). By @Wumpf in [#3157](https://github.com/gfx-rs/wgpu/pull/3157)
+- Combine `Surface::get_supported_formats`, `Surface::get_supported_present_modes`, and `Surface::get_supported_alpha_modes` into `Surface::get_capabilities` and `SurfaceCapabilities`. By @cwfitzgerald in [#3157](https://github.com/gfx-rs/wgpu/pull/3157)
 
 #### WebGPU
 
