@@ -151,8 +151,12 @@ fn read_pixel(canvas: HtmlCanvasElement, x: i32, y: i32) -> [u8; 4] {
         .dyn_into::<web_sys::WebGl2RenderingContext>()
         .unwrap();
 
-    context.read_pixels_with_u8_array_and_dst_offset(
-            x, y, 1, 1,
+    context
+        .read_pixels_with_u8_array_and_dst_offset(
+            x,
+            y,
+            1,
+            1,
             web_sys::WebGl2RenderingContext::RGBA,
             web_sys::WebGl2RenderingContext::UNSIGNED_BYTE,
             &mut result,
@@ -162,14 +166,7 @@ fn read_pixel(canvas: HtmlCanvasElement, x: i32, y: i32) -> [u8; 4] {
     result
 }
 
-async fn init() -> (
-    Window,
-    EventLoop<()>,
-    Surface,
-    Adapter,
-    Device,
-    Queue,
-) {
+async fn init() -> (Window, EventLoop<()>, Surface, Adapter, Device, Queue) {
     let event_loop = EventLoop::new();
     let window = winit::window::Window::new(&event_loop).unwrap();
 
