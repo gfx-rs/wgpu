@@ -21,6 +21,7 @@ fn queue_write_texture_overflow() {
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::Rgba32Float,
             usage: wgpu::TextureUsages::COPY_DST,
+            view_formats: None,
         });
 
         let data = vec![255; 128];

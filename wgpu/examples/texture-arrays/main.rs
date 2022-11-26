@@ -164,21 +164,26 @@ impl framework::Example for Example {
             format: wgpu::TextureFormat::Rgba8UnormSrgb,
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
             label: None,
+            view_formats: None,
         };
         let red_texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("red"),
+            view_formats: None,
             ..texture_descriptor
         });
         let green_texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("green"),
+            view_formats: None,
             ..texture_descriptor
         });
         let blue_texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("blue"),
+            view_formats: None,
             ..texture_descriptor
         });
         let white_texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("white"),
+            view_formats: None,
             ..texture_descriptor
         });
 

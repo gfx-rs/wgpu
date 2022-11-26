@@ -852,7 +852,16 @@ impl<A: HalApi> Device<A> {
             ));
         }
 
-        // TODO: validate missing TextureDescriptor::view_formats.
+        if let Some(ref view_formats) = desc.view_formats {
+            for format in view_formats {
+                if desc.format == *format {
+                    continue;
+                }
+                if desc.format.remove_srgb_suffix() != format.remove_srgb_suffix() {
+                    return Err(CreateTextureError::InvalidViewFormat(*format, desc.format));
+                }
+            }
+        }
 
         // Enforce having COPY_DST/DEPTH_STENCIL_WRIT/COLOR_TARGET otherwise we
         // wouldn't be able to initialize the texture.
@@ -1086,10 +1095,16 @@ impl<A: HalApi> Device<A> {
         }
         let format = desc.format.unwrap_or(texture.desc.format);
         if format != texture.desc.format {
-            return Err(resource::CreateTextureViewError::FormatReinterpretation {
-                texture: texture.desc.format,
-                view: format,
-            });
+            let compatible = match texture.desc.view_formats {
+                Some(ref view_formats) => view_formats.contains(&format),
+                None => false,
+            };
+            if !compatible {
+                return Err(resource::CreateTextureViewError::FormatReinterpretation {
+                    texture: texture.desc.format,
+                    view: format,
+                });
+            }
         }
 
         // filter the usages based on the other criteria

@@ -523,6 +523,7 @@ pub fn test<E: Example>(mut params: FrameworkRefTest) {
                 dimension: wgpu::TextureDimension::D2,
                 format: wgpu::TextureFormat::Rgba8UnormSrgb,
                 usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+                view_formats: None,
             });
 
             let dst_view = dst_texture.create_view(&wgpu::TextureViewDescriptor::default());

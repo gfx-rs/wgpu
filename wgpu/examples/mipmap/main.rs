@@ -232,6 +232,7 @@ impl framework::Example for Example {
                 | wgpu::TextureUsages::RENDER_ATTACHMENT
                 | wgpu::TextureUsages::COPY_DST,
             label: None,
+            view_formats: None,
         });
         let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
         //Note: we could use queue.write_texture instead, and this is what other

@@ -507,6 +507,8 @@ pub enum CreateTextureError {
         if *.2 { " due to downlevel restrictions" } else { "" }
     )]
     InvalidFormatUsages(wgt::TextureUsages, wgt::TextureFormat, bool),
+    #[error("The view format {0:?} is not compatible with texture format {1:?}.")]
+    InvalidViewFormat(wgt::TextureFormat, wgt::TextureFormat),
     #[error("Texture usages {0:?} are not allowed on a texture of dimensions {1:?}")]
     InvalidDimensionUsages(wgt::TextureUsages, wgt::TextureDimension),
     #[error("Texture usage STORAGE_BINDING is not allowed for multisampled textures")]

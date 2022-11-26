@@ -225,6 +225,7 @@ fn single_texture_clear_test(
         // Forces internally the required usages to be able to clear it.
         // This is not visible on the API level.
         usage: wgpu::TextureUsages::TEXTURE_BINDING,
+        view_formats: None,
     });
     let mut encoder = ctx
         .device

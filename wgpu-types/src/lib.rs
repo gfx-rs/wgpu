@@ -2537,6 +2537,29 @@ impl TextureFormat {
             },
         }
     }
+
+    /// Get texture view format compatible none `Srgb` suffix format.
+    pub fn remove_srgb_suffix(&self) -> TextureFormat {
+        match *self {
+            Self::Rgba8UnormSrgb => Self::Rgba8Unorm,
+            Self::Bgra8UnormSrgb => Self::Bgra8Unorm,
+            Self::Bc1RgbaUnormSrgb => Self::Bc1RgbaUnorm,
+            Self::Bc2RgbaUnormSrgb => Self::Bc2RgbaUnorm,
+            Self::Bc3RgbaUnormSrgb => Self::Bc3RgbaUnorm,
+            Self::Bc7RgbaUnormSrgb => Self::Bc7RgbaUnorm,
+            Self::Etc2Rgb8UnormSrgb => Self::Etc2Rgb8Unorm,
+            Self::Etc2Rgb8A1UnormSrgb => Self::Etc2Rgb8A1Unorm,
+            Self::Etc2Rgba8UnormSrgb => Self::Etc2Rgba8Unorm,
+            Self::Astc {
+                block,
+                channel: AstcChannel::UnormSrgb,
+            } => Self::Astc {
+                block,
+                channel: AstcChannel::Unorm,
+            },
+            _ => *self,
+        }
+    }
 }
 
 #[test]
@@ -4336,7 +4359,10 @@ pub struct TextureDescriptor<L> {
     pub format: TextureFormat,
     /// Allowed usages of the texture. If used in other ways, the operation will panic.
     pub usage: TextureUsages,
-    // TODO: missing view_formats https://www.w3.org/TR/webgpu/#dom-gputexturedescriptor-viewformats
+    /// Specifies what view format values will be allowed when calling create_view() on this texture.
+    /// Note: Adding a format to this list may have a significant performance impact,
+    /// so it is best to avoid adding formats unnecessarily.
+    pub view_formats: Option<Vec<TextureFormat>>,
 }
 
 impl<L> TextureDescriptor<L> {
@@ -4350,6 +4376,7 @@ impl<L> TextureDescriptor<L> {
             dimension: self.dimension,
             format: self.format,
             usage: self.usage,
+            view_formats: self.view_formats.clone(),
         }
     }
 
@@ -4370,6 +4397,7 @@ impl<L> TextureDescriptor<L> {
     ///   dimension: wgpu::TextureDimension::D3,
     ///   format: wgpu::TextureFormat::Rgba8Sint,
     ///   usage: wgpu::TextureUsages::empty(),
+    ///   view_formats: None
     /// };
     ///
     /// assert_eq!(desc.mip_level_size(0), Some(wgpu::Extent3d { width: 100, height: 60, depth_or_array_layers: 1 }));
