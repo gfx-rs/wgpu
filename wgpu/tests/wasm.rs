@@ -1,3 +1,5 @@
+#![cfg(target_arch = "wasm32")]
+
 use std::borrow::Cow;
 
 use wasm_bindgen_test::*;
@@ -10,7 +12,7 @@ use winit::{
 
 use wasm_bindgen::JsCast;
 use web_sys::HtmlCanvasElement;
-use wgpu::{Adapter, Device, Instance, Queue, Surface};
+use wgpu::{Adapter, Device, Queue, Surface};
 
 wasm_bindgen_test_configure!(run_in_browser);
 
@@ -160,7 +162,6 @@ fn read_pixel(canvas: HtmlCanvasElement, x: i32, y: i32) -> [u8; 4] {
     result
 }
 
-#[cfg(target_arch = "wasm32")]
 async fn init() -> (
     Window,
     EventLoop<()>,
