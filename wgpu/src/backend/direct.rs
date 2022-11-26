@@ -4,7 +4,7 @@ use crate::{
     DownlevelCapabilities, Features, Label, Limits, LoadOp, MapMode, Operations,
     PipelineLayoutDescriptor, RenderBundleEncoderDescriptor, RenderPipelineDescriptor,
     SamplerDescriptor, ShaderModuleDescriptor, ShaderModuleDescriptorSpirV, ShaderSource,
-    SurfaceStatus, TextureDescriptor, TextureFormat, TextureViewDescriptor,
+    SurfaceStatus, TextureDescriptor, TextureViewDescriptor,
 };
 
 use arrayvec::ArrayVec;
@@ -19,7 +19,6 @@ use std::{
     slice,
     sync::Arc,
 };
-use wgt::{CompositeAlphaMode, PresentMode};
 
 const LABEL: &str = "label";
 
@@ -1064,47 +1063,18 @@ impl crate::Context for Context {
         }
     }
 
-    fn surface_get_supported_formats(
+    fn surface_get_capabilities(
         &self,
         surface: &Self::SurfaceId,
         adapter: &Self::AdapterId,
-    ) -> Vec<TextureFormat> {
+    ) -> wgt::SurfaceCapabilities {
         let global = &self.0;
-        match wgc::gfx_select!(adapter => global.surface_get_supported_formats(surface.id, *adapter))
-        {
-            Ok(formats) => formats,
-            Err(wgc::instance::GetSurfaceSupportError::Unsupported) => vec![],
-            Err(err) => self.handle_error_fatal(err, "Surface::get_supported_formats"),
-        }
-    }
-
-    fn surface_get_supported_present_modes(
-        &self,
-        surface: &Self::SurfaceId,
-        adapter: &Self::AdapterId,
-    ) -> Vec<PresentMode> {
-        let global = &self.0;
-        match wgc::gfx_select!(adapter => global.surface_get_supported_present_modes(surface.id, *adapter))
-        {
-            Ok(modes) => modes,
-            Err(wgc::instance::GetSurfaceSupportError::Unsupported) => vec![],
-            Err(err) => self.handle_error_fatal(err, "Surface::get_supported_present_modes"),
-        }
-    }
-
-    fn surface_get_supported_alpha_modes(
-        &self,
-        surface: &Self::SurfaceId,
-        adapter: &Self::AdapterId,
-    ) -> Vec<CompositeAlphaMode> {
-        let global = &self.0;
-        match wgc::gfx_select!(adapter => global.surface_get_supported_alpha_modes(surface.id, *adapter))
-        {
-            Ok(modes) => modes,
+        match wgc::gfx_select!(adapter => global.surface_get_capabilities(surface.id, *adapter)) {
+            Ok(caps) => caps,
             Err(wgc::instance::GetSurfaceSupportError::Unsupported) => {
-                vec![CompositeAlphaMode::Opaque]
+                wgt::SurfaceCapabilities::default()
             }
-            Err(err) => self.handle_error_fatal(err, "Surface::get_supported_alpha_modes"),
+            Err(err) => self.handle_error_fatal(err, "Surface::get_supported_formats"),
         }
     }
 

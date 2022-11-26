@@ -1322,33 +1322,22 @@ impl crate::Context for Context {
         format.describe().guaranteed_format_features
     }
 
-    fn surface_get_supported_formats(
+    fn surface_get_capabilities(
         &self,
         _surface: &Self::SurfaceId,
         _adapter: &Self::AdapterId,
-    ) -> Vec<wgt::TextureFormat> {
-        // https://gpuweb.github.io/gpuweb/#supported-context-formats
-        vec![
-            wgt::TextureFormat::Bgra8Unorm,
-            wgt::TextureFormat::Rgba8Unorm,
-            wgt::TextureFormat::Rgba16Float,
-        ]
-    }
-
-    fn surface_get_supported_present_modes(
-        &self,
-        _surface: &Self::SurfaceId,
-        _adapter: &Self::AdapterId,
-    ) -> Vec<wgt::PresentMode> {
-        vec![wgt::PresentMode::Fifo]
-    }
-
-    fn surface_get_supported_alpha_modes(
-        &self,
-        _surface: &Self::SurfaceId,
-        _adapter: &Self::AdapterId,
-    ) -> Vec<wgt::CompositeAlphaMode> {
-        vec![wgt::CompositeAlphaMode::Opaque]
+    ) -> wgt::SurfaceCapabilities {
+        wgt::SurfaceCapabilities {
+            // https://gpuweb.github.io/gpuweb/#supported-context-formats
+            formats: vec![
+                wgt::TextureFormat::Bgra8Unorm,
+                wgt::TextureFormat::Rgba8Unorm,
+                wgt::TextureFormat::Rgba16Float,
+            ],
+            // Doesn't really have meaning on the web.
+            present_modes: vec![wgt::PresentMode::Fifo],
+            alpha_modes: vec![wgt::CompositeAlphaMode::Opaque],
+        }
     }
 
     fn surface_configure(

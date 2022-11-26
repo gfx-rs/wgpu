@@ -3883,6 +3883,33 @@ bitflags::bitflags! {
 
 impl_bitflags!(TextureUsages);
 
+/// Defines the capabilities of a given surface and adapter.
+#[derive(Debug)]
+pub struct SurfaceCapabilities {
+    /// List of supported formats to use with the given adapter. The first format in the vector is preferred.
+    ///
+    /// Returns an empty vector if the surface is incompatible with the adapter.
+    pub formats: Vec<TextureFormat>,
+    /// List of supported presentation modes to use with the given adapter.
+    ///
+    /// Returns an empty vector if the surface is incompatible with the adapter.
+    pub present_modes: Vec<PresentMode>,
+    /// List of supported alpha modes to use with the given adapter.
+    ///
+    /// Will return at least one element, CompositeAlphaMode::Opaque or CompositeAlphaMode::Inherit.
+    pub alpha_modes: Vec<CompositeAlphaMode>,
+}
+
+impl Default for SurfaceCapabilities {
+    fn default() -> Self {
+        Self {
+            formats: Vec::new(),
+            present_modes: Vec::new(),
+            alpha_modes: vec![CompositeAlphaMode::Opaque],
+        }
+    }
+}
+
 /// Configures a [`Surface`] for presentation.
 ///
 /// [`Surface`]: ../wgpu/struct.Surface.html

@@ -36,10 +36,10 @@ pub use wgt::{
     PresentMode, PrimitiveState, PrimitiveTopology, PushConstantRange, QueryType,
     RenderBundleDepthStencil, SamplerBindingType, SamplerBorderColor, ShaderLocation, ShaderModel,
     ShaderStages, StencilFaceState, StencilOperation, StencilState, StorageTextureAccess,
-    SurfaceConfiguration, SurfaceStatus, TextureAspect, TextureDimension, TextureFormat,
-    TextureFormatFeatureFlags, TextureFormatFeatures, TextureSampleType, TextureUsages,
-    TextureViewDimension, VertexAttribute, VertexFormat, VertexStepMode, COPY_BUFFER_ALIGNMENT,
-    COPY_BYTES_PER_ROW_ALIGNMENT, MAP_ALIGNMENT, PUSH_CONSTANT_ALIGNMENT,
+    SurfaceCapabilities, SurfaceConfiguration, SurfaceStatus, TextureAspect, TextureDimension,
+    TextureFormat, TextureFormatFeatureFlags, TextureFormatFeatures, TextureSampleType,
+    TextureUsages, TextureViewDimension, VertexAttribute, VertexFormat, VertexStepMode,
+    COPY_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT, MAP_ALIGNMENT, PUSH_CONSTANT_ALIGNMENT,
     QUERY_RESOLVE_BUFFER_ALIGNMENT, QUERY_SET_MAX_QUERIES, QUERY_SIZE, VERTEX_STRIDE_ALIGNMENT,
 };
 
@@ -231,21 +231,11 @@ trait Context: Debug + Send + Sized + Sync {
         format: TextureFormat,
     ) -> TextureFormatFeatures;
 
-    fn surface_get_supported_formats(
+    fn surface_get_capabilities(
         &self,
         surface: &Self::SurfaceId,
         adapter: &Self::AdapterId,
-    ) -> Vec<TextureFormat>;
-    fn surface_get_supported_present_modes(
-        &self,
-        surface: &Self::SurfaceId,
-        adapter: &Self::AdapterId,
-    ) -> Vec<PresentMode>;
-    fn surface_get_supported_alpha_modes(
-        &self,
-        surface: &Self::SurfaceId,
-        adapter: &Self::AdapterId,
-    ) -> Vec<CompositeAlphaMode>;
+    ) -> wgt::SurfaceCapabilities;
     fn surface_configure(
         &self,
         surface: &Self::SurfaceId,
@@ -3714,26 +3704,11 @@ impl Drop for SurfaceTexture {
 }
 
 impl Surface {
-    /// Returns a vec of supported texture formats to use for the [`Surface`] with this adapter.
-    /// Note: The first format in the vector is preferred
-    ///
-    /// Returns an empty vector if the surface is incompatible with the adapter.
-    pub fn get_supported_formats(&self, adapter: &Adapter) -> Vec<TextureFormat> {
-        Context::surface_get_supported_formats(&*self.context, &self.id, &adapter.id)
-    }
-
-    /// Returns a vec of supported presentation modes to use for the [`Surface`] with this adapter.
-    ///
-    /// Returns an empty vector if the surface is incompatible with the adapter.
-    pub fn get_supported_present_modes(&self, adapter: &Adapter) -> Vec<PresentMode> {
-        Context::surface_get_supported_present_modes(&*self.context, &self.id, &adapter.id)
-    }
-
-    /// Returns a vec of supported alpha modes to use for the [`Surface`] with this adapter.
-    ///
-    /// Will return at least one element, CompositeAlphaMode::Opaque or CompositeAlphaMode::Inherit.
-    pub fn get_supported_alpha_modes(&self, adapter: &Adapter) -> Vec<CompositeAlphaMode> {
-        Context::surface_get_supported_alpha_modes(&*self.context, &self.id, &adapter.id)
+    /// Returns the capabilities of the surface when used with the given adapter.
+    /// 
+    /// Returns specified values (see [`SurfaceCapabilities`]) if surface is incompatible with the adapter.
+    pub fn get_capabilities(&self, adapter: &Adapter) -> SurfaceCapabilities {
+        Context::surface_get_capabilities(&*self.context, &self.id, &adapter.id)
     }
 
     /// Return a default `SurfaceConfiguration` from width and height to use for the [`Surface`] with this adapter.
@@ -3743,12 +3718,13 @@ impl Surface {
         width: u32,
         height: u32,
     ) -> wgt::SurfaceConfiguration {
+        let caps = self.get_capabilities(adapter);
         wgt::SurfaceConfiguration {
             usage: wgt::TextureUsages::RENDER_ATTACHMENT,
-            format: self.get_supported_formats(adapter)[0],
+            format: caps.formats[0],
             width,
             height,
-            present_mode: self.get_supported_present_modes(adapter)[0],
+            present_mode: caps.present_modes[0],
             alpha_mode: wgt::CompositeAlphaMode::Auto,
         }
     }

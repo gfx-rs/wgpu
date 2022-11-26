@@ -46,7 +46,8 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
         push_constant_ranges: &[],
     });
 
-    let swapchain_format = surface.get_supported_formats(&adapter)[0];
+    let swapchain_capabilities = surface.get_capabilities(&adapter);
+    let swapchain_format = swapchain_capabilities.formats[0];
 
     let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: None,
@@ -73,7 +74,7 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
         width: size.width,
         height: size.height,
         present_mode: wgpu::PresentMode::Fifo,
-        alpha_mode: surface.get_supported_alpha_modes(&adapter)[0],
+        alpha_mode: swapchain_capabilities.alpha_modes[0],
     };
 
     surface.configure(&device, &config);
