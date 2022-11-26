@@ -16,6 +16,34 @@ wasm_bindgen_test_configure!(run_in_browser);
 
 #[wasm_bindgen_test]
 async fn test_triangle_rendering() {
+    render_triangle(|window| {
+        let size = window.inner_size();
+
+        // fetch triangle pixel
+        let result = read_pixel(
+            window.canvas(),
+            (size.width as f32 * 0.5) as i32,
+            (size.height as f32 * 0.5) as i32,
+        );
+        let red = [255, 0, 0, 255_u8];
+        assert_eq!(result, red);
+
+        // fetch background pixel
+        let result = read_pixel(
+            window.canvas(),
+            (size.width as f32 * 0.1) as i32,
+            (size.height as f32 * 0.9) as i32,
+        );
+        let green = [0, 255, 0, 255_u8];
+        assert_eq!(result, green);
+    })
+    .await;
+}
+
+async fn render_triangle<F>(assert_rendering_result: F)
+where
+    F: Fn(&Window) + 'static,
+{
     let (window, event_loop, surface, adapter, device, queue): (
         Window,
         EventLoop<()>,
@@ -24,6 +52,7 @@ async fn test_triangle_rendering() {
         Device,
         Queue,
     ) = init().await;
+
     let size = window.inner_size();
 
     // Load the shaders from disk
@@ -100,26 +129,9 @@ async fn test_triangle_rendering() {
                 }
 
                 queue.submit(Some(encoder.finish()));
-
                 frame.present();
 
-                // fetch triangle pixel
-                let result = read_pixel(
-                    window.canvas(),
-                    (size.width as f32 * 0.5) as i32,
-                    (size.height as f32 * 0.5) as i32,
-                );
-                let red = [255, 0, 0, 255_u8];
-                assert_eq!(result, red);
-
-                // fetch background pixel
-                let result = read_pixel(
-                    window.canvas(),
-                    (size.width as f32 * 0.1) as i32,
-                    (size.height as f32 * 0.9) as i32,
-                );
-                let green = [0, 255, 0, 255_u8];
-                assert_eq!(result, green);
+                assert_rendering_result(&window);
 
                 *control_flow = ControlFlow::Exit;
             }
@@ -136,12 +148,9 @@ fn read_pixel(canvas: HtmlCanvasElement, x: i32, y: i32) -> [u8; 4] {
         .unwrap()
         .dyn_into::<web_sys::WebGl2RenderingContext>()
         .unwrap();
-    context
-        .read_pixels_with_u8_array_and_dst_offset(
-            x,
-            y,
-            1,
-            1,
+
+    context.read_pixels_with_u8_array_and_dst_offset(
+            x, y, 1, 1,
             web_sys::WebGl2RenderingContext::RGBA,
             web_sys::WebGl2RenderingContext::UNSIGNED_BYTE,
             &mut result,
@@ -202,7 +211,5 @@ async fn init() -> (
         .await
         .expect("Failed to create device");
 
-    (
-        window, event_loop, surface, adapter, device, queue,
-    )
+    (window, event_loop, surface, adapter, device, queue)
 }
