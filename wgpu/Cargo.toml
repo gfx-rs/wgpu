@@ -126,7 +126,8 @@ obj.workspace = true
 pollster.workspace = true
 png.workspace = true
 nanorand = { workspace = true, features = ["wyrand"] }
-winit.workspace = true                                 # for "halmark" example                                                        # for "halmark" example
+wasm-bindgen-test.workspace = true
+winit.workspace = true # for "halmark" example
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 async-executor.workspace = true

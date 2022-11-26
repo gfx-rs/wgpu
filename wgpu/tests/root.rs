@@ -16,5 +16,6 @@ mod shader;
 mod shader_primitive_index;
 mod texture_bounds;
 mod vertex_indices;
+mod wasm;
 mod write_texture;
 mod zero_init_texture_after_discard;
