@@ -14,6 +14,48 @@ use serde::{Deserialize, Serialize};
 use std::hash::{Hash, Hasher};
 use std::{num::NonZeroU32, ops::Range};
 
+// Use this macro instead of the one provided by the bitflags_serde_shim crate
+// because the latter produces an error when deserializing bits that are not
+// specified in the bitflags, while we want deserialization to succeed and
+// and unspecified bits to lead to errors handled in wgpu-core.
+// Note that plainly deriving Serialize and Deserialized would have a similar
+// behavior to this macro (unspecified bit do not produce an error).
+macro_rules! impl_bitflags {
+    ($name:ident) => {
+        #[cfg(feature = "trace")]
+        impl serde::Serialize for $name {
+            fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+            where
+                S: serde::Serializer,
+            {
+                self.bits().serialize(serializer)
+            }
+        }
+
+        #[cfg(feature = "replay")]
+        impl<'de> serde::Deserialize<'de> for $name {
+            fn deserialize<D>(deserializer: D) -> Result<$name, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                let value = <_ as serde::Deserialize<'de>>::deserialize(deserializer)?;
+                // Note: newer version of bitflags replaced from_bits_unchecked with
+                // from_bits_retain which is not marked as unsafe (same implementation).
+                Ok(unsafe { $name::from_bits_unchecked(value) })
+            }
+        }
+
+        impl $name {
+            /// Returns true if the bitflags contains bits that are not part of
+            /// the bitflags definition.
+            pub fn contains_invalid_bits(&self) -> bool {
+                let all = Self::all().bits();
+                (self.bits() | all) != all
+            }
+        }
+    };
+}
+
 /// Integral type used for buffer offsets.
 pub type BufferAddress = u64;
 /// Integral type used for buffer slice sizes.
@@ -115,8 +157,7 @@ bitflags::bitflags! {
     }
 }
 
-#[cfg(feature = "bitflags_serde_shim")]
-bitflags_serde_shim::impl_serde_for_bitflags!(Backends);
+impl_bitflags!(Backends);
 
 impl From<Backend> for Backends {
     fn from(backend: Backend) -> Self {
@@ -633,8 +674,7 @@ bitflags::bitflags! {
     }
 }
 
-#[cfg(feature = "bitflags_serde_shim")]
-bitflags_serde_shim::impl_serde_for_bitflags!(Features);
+impl_bitflags!(Features);
 
 impl Features {
     /// Mask of all features which are part of the upstream WebGPU standard.
@@ -1090,8 +1130,7 @@ bitflags::bitflags! {
     }
 }
 
-#[cfg(feature = "bitflags_serde_shim")]
-bitflags_serde_shim::impl_serde_for_bitflags!(DownlevelFlags);
+impl_bitflags!(DownlevelFlags);
 
 impl DownlevelFlags {
     /// All flags that indicate if the backend is WebGPU compliant
@@ -1213,8 +1252,7 @@ bitflags::bitflags! {
     }
 }
 
-#[cfg(feature = "bitflags_serde_shim")]
-bitflags_serde_shim::impl_serde_for_bitflags!(ShaderStages);
+impl_bitflags!(ShaderStages);
 
 /// Dimensions of a particular texture view.
 ///
@@ -1666,8 +1704,7 @@ impl TextureFormatFeatureFlags {
     }
 }
 
-#[cfg(feature = "bitflags_serde_shim")]
-bitflags_serde_shim::impl_serde_for_bitflags!(TextureFormatFeatureFlags);
+impl_bitflags!(TextureFormatFeatureFlags);
 
 /// Features supported by a given texture format
 ///
@@ -3085,8 +3122,7 @@ bitflags::bitflags! {
     }
 }
 
-#[cfg(feature = "bitflags_serde_shim")]
-bitflags_serde_shim::impl_serde_for_bitflags!(ColorWrites);
+impl_bitflags!(ColorWrites);
 
 impl Default for ColorWrites {
     fn default() -> Self {
@@ -3644,8 +3680,7 @@ bitflags::bitflags! {
     }
 }
 
-#[cfg(feature = "bitflags_serde_shim")]
-bitflags_serde_shim::impl_serde_for_bitflags!(BufferUsages);
+impl_bitflags!(BufferUsages);
 
 /// Describes a [`Buffer`](../wgpu/struct.Buffer.html).
 ///
@@ -3846,8 +3881,7 @@ bitflags::bitflags! {
     }
 }
 
-#[cfg(feature = "bitflags_serde_shim")]
-bitflags_serde_shim::impl_serde_for_bitflags!(TextureUsages);
+impl_bitflags!(TextureUsages);
 
 /// Configures a [`Surface`] for presentation.
 ///
@@ -5046,8 +5080,7 @@ bitflags::bitflags! {
     }
 }
 
-#[cfg(feature = "bitflags_serde_shim")]
-bitflags_serde_shim::impl_serde_for_bitflags!(PipelineStatisticsTypes);
+impl_bitflags!(PipelineStatisticsTypes);
 
 /// Argument buffer layout for draw_indirect commands.
 #[repr(C)]

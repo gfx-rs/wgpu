@@ -303,6 +303,8 @@ pub enum ColorStateError {
     },
     #[error("blend factors for {0:?} must be `One`")]
     InvalidMinMaxBlendFactors(wgt::BlendComponent),
+    #[error("invalid write mask {0:?}")]
+    InvalidWriteMask(wgt::ColorWrites),
 }
 
 #[derive(Clone, Debug, Error)]

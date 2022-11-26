@@ -600,8 +600,8 @@ impl<A: HalApi> Device<A> {
 
         let mut usage = conv::map_buffer_usage(desc.usage);
 
-        if desc.usage.is_empty() {
-            return Err(resource::CreateBufferError::EmptyUsage);
+        if desc.usage.is_empty() || desc.usage.contains_invalid_bits() {
+            return Err(resource::CreateBufferError::InvalidUsage(desc.usage));
         }
 
         if !self
@@ -717,8 +717,8 @@ impl<A: HalApi> Device<A> {
     ) -> Result<resource::Texture<A>, resource::CreateTextureError> {
         use resource::{CreateTextureError, TextureDimensionError};
 
-        if desc.usage.is_empty() {
-            return Err(CreateTextureError::EmptyUsage);
+        if desc.usage.is_empty() || desc.usage.contains_invalid_bits() {
+            return Err(CreateTextureError::InvalidUsage(desc.usage));
         }
 
         conv::check_texture_dimension_size(
@@ -1560,6 +1560,13 @@ impl<A: HalApi> Device<A> {
                         error,
                     })?;
             }
+
+            if entry.visibility.contains_invalid_bits() {
+                return Err(
+                    binding_model::CreateBindGroupLayoutError::InvalidVisibility(entry.visibility),
+                );
+            }
+
             if entry.visibility.contains(wgt::ShaderStages::VERTEX) {
                 if writable_storage == WritableStorage::Yes {
                     required_features |= wgt::Features::VERTEX_WRITABLE_STORAGE;
@@ -2650,6 +2657,10 @@ impl<A: HalApi> Device<A> {
         for (i, cs) in color_targets.iter().enumerate() {
             if let Some(cs) = cs.as_ref() {
                 let error = loop {
+                    if cs.write_mask.contains_invalid_bits() {
+                        break Some(pipeline::ColorStateError::InvalidWriteMask(cs.write_mask));
+                    }
+
                     let format_features = self.describe_format_features(adapter, cs.format)?;
                     if !format_features
                         .allowed_usages

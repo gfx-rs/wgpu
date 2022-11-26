@@ -50,6 +50,8 @@ pub enum CreateBindGroupLayoutError {
     TooManyBindings(BindingTypeMaxCountError),
     #[error("Binding index {binding} is greater than the maximum index {maximum}")]
     InvalidBindingIndex { binding: u32, maximum: u32 },
+    #[error("Invalid visibility {0:?}")]
+    InvalidVisibility(wgt::ShaderStages),
 }
 
 //TODO: refactor this to move out `enum BindingError`.
