@@ -161,6 +161,28 @@ jobs:
           # build docs
           cargo doc --target ${{ matrix.target }} -p wgpu -p wgpu-core -p wgpu-info -p player --all-features --no-deps
 
+  wasm-test:
+    name: Test Wasm
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout repo
+        uses: actions/checkout@v3
+
+      - name: install rust stable
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          override: true
+
+      - name: install wasm-pack
+        uses: jetli/wasm-pack-action@v0.4.0
+
+      - name: execute tests
+        run: |
+          cd wgpu
+          wasm-pack test --headless --chrome --features webgl
+
   gpu-test:
     strategy:
       fail-fast: false
