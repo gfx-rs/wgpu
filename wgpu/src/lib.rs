@@ -3705,28 +3705,30 @@ impl Drop for SurfaceTexture {
 
 impl Surface {
     /// Returns the capabilities of the surface when used with the given adapter.
-    /// 
+    ///
     /// Returns specified values (see [`SurfaceCapabilities`]) if surface is incompatible with the adapter.
     pub fn get_capabilities(&self, adapter: &Adapter) -> SurfaceCapabilities {
         Context::surface_get_capabilities(&*self.context, &self.id, &adapter.id)
     }
 
     /// Return a default `SurfaceConfiguration` from width and height to use for the [`Surface`] with this adapter.
+    ///
+    /// Returns None if the surface isn't supported by this adapter
     pub fn get_default_config(
         &self,
         adapter: &Adapter,
         width: u32,
         height: u32,
-    ) -> wgt::SurfaceConfiguration {
+    ) -> Option<wgt::SurfaceConfiguration> {
         let caps = self.get_capabilities(adapter);
-        wgt::SurfaceConfiguration {
+        Some(wgt::SurfaceConfiguration {
             usage: wgt::TextureUsages::RENDER_ATTACHMENT,
-            format: caps.formats[0],
+            format: *caps.formats.get(0)?,
             width,
             height,
-            present_mode: caps.present_modes[0],
+            present_mode: *caps.present_modes.get(0)?,
             alpha_mode: wgt::CompositeAlphaMode::Auto,
-        }
+        })
     }
 
     /// Initializes [`Surface`] for presentation.
