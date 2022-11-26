@@ -44,7 +44,6 @@ mod view;
 use crate::auxil::{self, dxgi::result::HResult as _};
 
 use arrayvec::ArrayVec;
-use log::error;
 use parking_lot::Mutex;
 use std::{ffi, fmt, mem, num::NonZeroU32, sync::Arc};
 use winapi::{
@@ -153,7 +152,8 @@ struct PrivateCapabilities {
     #[allow(unused)]
     heterogeneous_resource_heaps: bool,
     memory_architecture: MemoryArchitecture,
-    _heap_create_not_zeroed: bool,
+    #[allow(unused)] // TODO: Exists until windows-rs is standard, then it can probably be removed?
+    heap_create_not_zeroed: bool,
 }
 
 #[derive(Default)]
@@ -238,6 +238,7 @@ pub struct Device {
     #[cfg(feature = "renderdoc")]
     render_doc: crate::auxil::renderdoc::RenderDoc,
     null_rtv_handle: descriptor::Handle,
+    #[cfg(feature = "windows_rs")]
     mem_allocator: Mutex<gpu_allocator::d3d12::Allocator>,
 }
 
@@ -374,6 +375,7 @@ unsafe impl Sync for CommandBuffer {}
 pub struct Buffer {
     resource: native::Resource,
     size: wgt::BufferAddress,
+    #[cfg(feature = "windows_rs")]
     allocation: Option<gpu_allocator::d3d12::Allocation>,
 }
 
@@ -401,6 +403,7 @@ pub struct Texture {
     size: wgt::Extent3d,
     mip_level_count: u32,
     sample_count: u32,
+    #[cfg(feature = "windows_rs")]
     allocation: Option<gpu_allocator::d3d12::Allocation>,
 }
 
@@ -768,6 +771,7 @@ impl crate::Surface<Api> for Surface {
             size: sc.size,
             mip_level_count: 1,
             sample_count: 1,
+            #[cfg(feature = "windows_rs")]
             allocation: None,
         };
         Ok(Some(crate::AcquiredSurfaceTexture {
@@ -833,8 +837,11 @@ impl crate::Queue<Api> for Queue {
     }
 }
 
+#[cfg(feature = "windows_rs")]
 impl From<gpu_allocator::AllocationError> for crate::DeviceError {
     fn from(result: gpu_allocator::AllocationError) -> Self {
+        use log::error;
+
         match result {
             gpu_allocator::AllocationError::OutOfMemory => Self::OutOfMemory,
             gpu_allocator::AllocationError::FailedToMap(e) => {

@@ -12,6 +12,10 @@ use winapi::{
     Interface,
 };
 
+#[cfg(not(feature = "windows_rs"))]
+use winapi::um::d3d12::D3D12_RESOURCE_DESC;
+
+#[cfg(feature = "windows_rs")]
 use gpu_allocator::{
     d3d12::{winapi_d3d12::D3D12_RESOURCE_DESC, AllocationCreateDesc, ToWinapi, ToWindows},
     MemoryLocation,
@@ -21,7 +25,8 @@ use gpu_allocator::{
 const NAGA_LOCATION_SEMANTIC: &[u8] = b"LOC\0";
 // TODO: find the exact value
 // TODO: figure out if this is even needed?
-const _D3D12_HEAP_FLAG_CREATE_NOT_ZEROED: u32 = d3d12::D3D12_HEAP_FLAG_NONE;
+#[allow(unused)] // TODO: Exists until windows-rs is standard, then it can probably be removed?
+const D3D12_HEAP_FLAG_CREATE_NOT_ZEROED: u32 = d3d12::D3D12_HEAP_FLAG_NONE;
 
 impl super::Device {
     pub(super) fn new(
@@ -30,6 +35,7 @@ impl super::Device {
         private_caps: super::PrivateCapabilities,
         library: &Arc<native::D3D12Lib>,
     ) -> Result<Self, crate::DeviceError> {
+        #[cfg(feature = "windows_rs")]
         let mem_allocator = {
             let device = raw.as_ptr();
 
@@ -183,6 +189,7 @@ impl super::Device {
             #[cfg(feature = "renderdoc")]
             render_doc: Default::default(),
             null_rtv_handle,
+            #[cfg(feature = "windows_rs")]
             mem_allocator: Mutex::new(mem_allocator),
         })
     }
@@ -331,6 +338,7 @@ impl super::Device {
             size,
             mip_level_count,
             sample_count,
+            #[cfg(feature = "windows_rs")]
             allocation: None,
         }
     }
@@ -348,6 +356,7 @@ impl crate::Device<super::Api> for super::Device {
         unsafe { queue.raw.destroy() };
     }
 
+    #[cfg(feature = "windows_rs")]
     unsafe fn create_buffer(
         &self,
         desc: &crate::BufferDescriptor,
@@ -419,6 +428,83 @@ impl crate::Device<super::Api> for super::Device {
             allocation: Some(allocation),
         })
     }
+
+    #[cfg(not(feature = "windows_rs"))]
+    unsafe fn create_buffer(
+        &self,
+        desc: &crate::BufferDescriptor,
+    ) -> Result<super::Buffer, crate::DeviceError> {
+        let mut resource = native::Resource::null();
+        let mut size = desc.size;
+        if desc.usage.contains(crate::BufferUses::UNIFORM) {
+            let align_mask = d3d12::D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT as u64 - 1;
+            size = ((size - 1) | align_mask) + 1;
+        }
+
+        let raw_desc = D3D12_RESOURCE_DESC {
+            Dimension: d3d12::D3D12_RESOURCE_DIMENSION_BUFFER,
+            Alignment: 0,
+            Width: size,
+            Height: 1,
+            DepthOrArraySize: 1,
+            MipLevels: 1,
+            Format: dxgiformat::DXGI_FORMAT_UNKNOWN,
+            SampleDesc: dxgitype::DXGI_SAMPLE_DESC {
+                Count: 1,
+                Quality: 0,
+            },
+            Layout: d3d12::D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
+            Flags: conv::map_buffer_usage_to_resource_flags(desc.usage),
+        };
+
+        let is_cpu_read = desc.usage.contains(crate::BufferUses::MAP_READ);
+        let is_cpu_write = desc.usage.contains(crate::BufferUses::MAP_WRITE);
+
+        let heap_properties = d3d12::D3D12_HEAP_PROPERTIES {
+            Type: d3d12::D3D12_HEAP_TYPE_CUSTOM,
+            CPUPageProperty: if is_cpu_read {
+                d3d12::D3D12_CPU_PAGE_PROPERTY_WRITE_BACK
+            } else if is_cpu_write {
+                d3d12::D3D12_CPU_PAGE_PROPERTY_WRITE_COMBINE
+            } else {
+                d3d12::D3D12_CPU_PAGE_PROPERTY_NOT_AVAILABLE
+            },
+            MemoryPoolPreference: match self.private_caps.memory_architecture {
+                super::MemoryArchitecture::NonUnified if !is_cpu_read && !is_cpu_write => {
+                    d3d12::D3D12_MEMORY_POOL_L1
+                }
+                _ => d3d12::D3D12_MEMORY_POOL_L0,
+            },
+            CreationNodeMask: 0,
+            VisibleNodeMask: 0,
+        };
+
+        let hr = unsafe {
+            self.raw.CreateCommittedResource(
+                &heap_properties,
+                if self.private_caps.heap_create_not_zeroed {
+                    D3D12_HEAP_FLAG_CREATE_NOT_ZEROED
+                } else {
+                    d3d12::D3D12_HEAP_FLAG_NONE
+                },
+                &raw_desc,
+                d3d12::D3D12_RESOURCE_STATE_COMMON,
+                ptr::null(),
+                &d3d12::ID3D12Resource::uuidof(),
+                resource.mut_void(),
+            )
+        };
+
+        hr.into_device_result("Buffer creation")?;
+        if let Some(label) = desc.label {
+            let cwstr = conv::map_label(label);
+            unsafe { resource.SetName(cwstr.as_ptr()) };
+        }
+
+        Ok(super::Buffer { resource, size })
+    }
+
+    #[cfg(feature = "windows_rs")]
     unsafe fn destroy_buffer(&self, mut buffer: super::Buffer) {
         // TODO: Destroy or Release here?
         unsafe { buffer.resource.destroy() };
@@ -430,6 +516,13 @@ impl crate::Device<super::Api> for super::Device {
             };
         }
     }
+
+    #[cfg(not(feature = "windows_rs"))]
+    unsafe fn destroy_buffer(&self, buffer: super::Buffer) {
+        unsafe { buffer.resource.destroy() };
+    }
+
+    #[cfg(feature = "windows_rs")]
     unsafe fn map_buffer(
         &self,
         buffer: &super::Buffer,
@@ -447,13 +540,41 @@ impl crate::Device<super::Api> for super::Device {
             is_coherent: true,
         })
     }
+
+    #[cfg(not(feature = "windows_rs"))]
+    unsafe fn map_buffer(
+        &self,
+        buffer: &super::Buffer,
+        range: crate::MemoryRange,
+    ) -> Result<crate::BufferMapping, crate::DeviceError> {
+        let mut ptr = ptr::null_mut();
+        let hr = unsafe { (*buffer.resource).Map(0, ptr::null(), &mut ptr) };
+        hr.into_device_result("Map buffer")?;
+        Ok(crate::BufferMapping {
+            ptr: ptr::NonNull::new(unsafe { ptr.offset(range.start as isize).cast::<u8>() })
+                .unwrap(),
+            //TODO: double-check this. Documentation is a bit misleading -
+            // it implies that Map/Unmap is needed to invalidate/flush memory.
+            is_coherent: true,
+        })
+    }
+
+    #[cfg(feature = "windows_rs")]
     unsafe fn unmap_buffer(&self, buffer: &super::Buffer) -> Result<(), crate::DeviceError> {
         unsafe { (*buffer.resource).Unmap(0, ptr::null()) };
         Ok(())
     }
+
+    #[cfg(not(feature = "windows_rs"))]
+    unsafe fn unmap_buffer(&self, buffer: &super::Buffer) -> Result<(), crate::DeviceError> {
+        unsafe { (*buffer.resource).Unmap(0, ptr::null()) };
+        Ok(())
+    }
+
     unsafe fn flush_mapped_ranges<I>(&self, _buffer: &super::Buffer, _ranges: I) {}
     unsafe fn invalidate_mapped_ranges<I>(&self, _buffer: &super::Buffer, _ranges: I) {}
 
+    #[cfg(feature = "windows_rs")]
     unsafe fn create_texture(
         &self,
         desc: &crate::TextureDescriptor,
@@ -529,6 +650,86 @@ impl crate::Device<super::Api> for super::Device {
         })
     }
 
+    #[cfg(not(feature = "windows_rs"))]
+    unsafe fn create_texture(
+        &self,
+        desc: &crate::TextureDescriptor,
+    ) -> Result<super::Texture, crate::DeviceError> {
+        let mut resource = native::Resource::null();
+
+        let raw_desc = D3D12_RESOURCE_DESC {
+            Dimension: conv::map_texture_dimension(desc.dimension),
+            Alignment: 0,
+            Width: desc.size.width as u64,
+            Height: desc.size.height,
+            DepthOrArraySize: desc.size.depth_or_array_layers as u16,
+            MipLevels: desc.mip_level_count as u16,
+            Format: if crate::FormatAspects::from(desc.format).contains(crate::FormatAspects::COLOR)
+                || !desc.usage.intersects(
+                    crate::TextureUses::RESOURCE
+                        | crate::TextureUses::STORAGE_READ
+                        | crate::TextureUses::STORAGE_READ_WRITE,
+                ) {
+                auxil::dxgi::conv::map_texture_format(desc.format)
+            } else {
+                // This branch is needed if it's a depth texture, and it's ever needed to be viewed as SRV or UAV,
+                // because then we'd create a non-depth format view of it.
+                // Note: we can skip this branch if
+                // `D3D12_FEATURE_D3D12_OPTIONS3::CastingFullyTypedFormatSupported`
+                auxil::dxgi::conv::map_texture_format_depth_typeless(desc.format)
+            },
+            SampleDesc: dxgitype::DXGI_SAMPLE_DESC {
+                Count: desc.sample_count,
+                Quality: 0,
+            },
+            Layout: d3d12::D3D12_TEXTURE_LAYOUT_UNKNOWN,
+            Flags: conv::map_texture_usage_to_resource_flags(desc.usage),
+        };
+
+        let heap_properties = d3d12::D3D12_HEAP_PROPERTIES {
+            Type: d3d12::D3D12_HEAP_TYPE_CUSTOM,
+            CPUPageProperty: d3d12::D3D12_CPU_PAGE_PROPERTY_NOT_AVAILABLE,
+            MemoryPoolPreference: match self.private_caps.memory_architecture {
+                super::MemoryArchitecture::NonUnified => d3d12::D3D12_MEMORY_POOL_L1,
+                super::MemoryArchitecture::Unified { .. } => d3d12::D3D12_MEMORY_POOL_L0,
+            },
+            CreationNodeMask: 0,
+            VisibleNodeMask: 0,
+        };
+
+        let hr = unsafe {
+            self.raw.CreateCommittedResource(
+                &heap_properties,
+                if self.private_caps.heap_create_not_zeroed {
+                    D3D12_HEAP_FLAG_CREATE_NOT_ZEROED
+                } else {
+                    d3d12::D3D12_HEAP_FLAG_NONE
+                },
+                &raw_desc,
+                d3d12::D3D12_RESOURCE_STATE_COMMON,
+                ptr::null(), // clear value
+                &d3d12::ID3D12Resource::uuidof(),
+                resource.mut_void(),
+            )
+        };
+
+        hr.into_device_result("Texture creation")?;
+        if let Some(label) = desc.label {
+            let cwstr = conv::map_label(label);
+            unsafe { resource.SetName(cwstr.as_ptr()) };
+        }
+
+        Ok(super::Texture {
+            resource,
+            format: desc.format,
+            dimension: desc.dimension,
+            size: desc.size,
+            mip_level_count: desc.mip_level_count,
+            sample_count: desc.sample_count,
+        })
+    }
+
+    #[cfg(feature = "windows_rs")]
     unsafe fn destroy_texture(&self, mut texture: super::Texture) {
         unsafe { texture.resource.destroy() };
         if let Some(alloc) = texture.allocation.take() {
@@ -537,6 +738,11 @@ impl crate::Device<super::Api> for super::Device {
                 Err(e) => panic!("failed to destroy dx12 buffer, {}", e),
             };
         }
+    }
+
+    #[cfg(not(feature = "windows_rs"))]
+    unsafe fn destroy_texture(&self, texture: super::Texture) {
+        unsafe { texture.resource.destroy() };
     }
 
     unsafe fn create_texture_view(
