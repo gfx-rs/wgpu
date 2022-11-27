@@ -427,6 +427,15 @@
       converter: webidl.converters["GPUTextureUsageFlags"],
       required: true,
     },
+    {
+      key: "viewFormats",
+      converter: webidl.createSequenceConverter(
+        webidl.converters["GPUTextureFormat"],
+      ),
+      get defaultValue() {
+        return [];
+      },
+    },
   ];
   webidl.converters["GPUTextureDescriptor"] = webidl.createDictionaryConverter(
     "GPUTextureDescriptor",
