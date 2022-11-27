@@ -2538,7 +2538,7 @@ impl TextureFormat {
         }
     }
 
-    /// Get texture view format compatible none `Srgb` suffix format.
+    /// Strips the `Srgb` suffix from the given texture format.
     pub fn remove_srgb_suffix(&self) -> TextureFormat {
         match *self {
             Self::Rgba8UnormSrgb => Self::Rgba8Unorm,
