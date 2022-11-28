@@ -33,14 +33,15 @@ pub use wgt::{
     DepthStencilState, DeviceType, DownlevelCapabilities, DownlevelFlags, DynamicOffset, Extent3d,
     Face, Features, FilterMode, FrontFace, ImageDataLayout, ImageSubresourceRange, IndexFormat,
     Limits, MultisampleState, Origin3d, PipelineStatisticsTypes, PolygonMode, PowerPreference,
-    PresentMode, PrimitiveState, PrimitiveTopology, PushConstantRange, QueryType,
-    RenderBundleDepthStencil, SamplerBindingType, SamplerBorderColor, ShaderLocation, ShaderModel,
-    ShaderStages, StencilFaceState, StencilOperation, StencilState, StorageTextureAccess,
-    SurfaceCapabilities, SurfaceConfiguration, SurfaceStatus, TextureAspect, TextureDimension,
-    TextureFormat, TextureFormatFeatureFlags, TextureFormatFeatures, TextureSampleType,
-    TextureUsages, TextureViewDimension, VertexAttribute, VertexFormat, VertexStepMode,
-    COPY_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT, MAP_ALIGNMENT, PUSH_CONSTANT_ALIGNMENT,
-    QUERY_RESOLVE_BUFFER_ALIGNMENT, QUERY_SET_MAX_QUERIES, QUERY_SIZE, VERTEX_STRIDE_ALIGNMENT,
+    PresentMode, PresentationTimestamp, PrimitiveState, PrimitiveTopology, PushConstantRange,
+    QueryType, RenderBundleDepthStencil, SamplerBindingType, SamplerBorderColor, ShaderLocation,
+    ShaderModel, ShaderStages, StencilFaceState, StencilOperation, StencilState,
+    StorageTextureAccess, SurfaceCapabilities, SurfaceConfiguration, SurfaceStatus, TextureAspect,
+    TextureDimension, TextureFormat, TextureFormatFeatureFlags, TextureFormatFeatures,
+    TextureSampleType, TextureUsages, TextureViewDimension, VertexAttribute, VertexFormat,
+    VertexStepMode, COPY_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT, MAP_ALIGNMENT,
+    PUSH_CONSTANT_ALIGNMENT, QUERY_RESOLVE_BUFFER_ALIGNMENT, QUERY_SET_MAX_QUERIES, QUERY_SIZE,
+    VERTEX_STRIDE_ALIGNMENT,
 };
 
 use backend::{BufferMappedRange, Context as C, QueueWriteBuffer};
@@ -209,13 +210,13 @@ trait Context: Debug + Send + Sized + Sync {
         &self,
         options: &RequestAdapterOptions<'_>,
     ) -> Self::RequestAdapterFuture;
+    fn instance_poll_all_devices(&self, force_wait: bool) -> bool;
     fn adapter_request_device(
         &self,
         adapter: &Self::AdapterId,
         desc: &DeviceDescriptor,
         trace_dir: Option<&std::path::Path>,
     ) -> Self::RequestDeviceFuture;
-    fn instance_poll_all_devices(&self, force_wait: bool) -> bool;
     fn adapter_is_surface_supported(
         &self,
         adapter: &Self::AdapterId,
@@ -230,6 +231,13 @@ trait Context: Debug + Send + Sized + Sync {
         adapter: &Self::AdapterId,
         format: TextureFormat,
     ) -> TextureFormatFeatures;
+    fn adapter_correlate_presentation_timestamp<F, T>(
+        &self,
+        adapter: &Self::AdapterId,
+        function: F,
+    ) -> (PresentationTimestamp, T)
+    where
+        F: FnOnce() -> T;
 
     fn surface_get_capabilities(
         &self,
@@ -2053,6 +2061,40 @@ impl Adapter {
     /// To disable these restrictions on a device, request the [`Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES`] feature.
     pub fn get_texture_format_features(&self, format: TextureFormat) -> TextureFormatFeatures {
         Context::adapter_get_texture_format_features(&*self.context, &self.id, format)
+    }
+
+    /// Correleates presentation timestamps with a given user timestamp by generating a presentation timestamp
+    /// immediately after calling the user's timestamp function.
+    ///
+    /// When comparing completely opaque timestamp systems, we need a way of generating timestamps that signal
+    /// the exact same time. This function allows you to generate a timestamp (such as an [Instant]) at the
+    /// exact same time as a `PresentationTimestamp` is generated, allowing you to translate from one to another.
+    ///
+    /// ```no_run
+    /// # let adapter: wgpu::Adapter = panic!();
+    /// # let some_code = || wgpu::PresentationTimestamp::INVALID_TIMESTAMP;
+    /// use std::time::{Duration, Instant};
+    /// let (presentation, instant) = adapter.correlate_presentation_timestamp(Instant::now);
+    ///
+    /// // We can now turn a new presentation timestamp into an Instant.
+    /// let some_pres_timestamp = some_code();
+    /// let duration = Duration::from_nanos((some_pres_timestamp.0 - presentation.0) as u64);
+    /// let new_instant: Instant = instant + duration;
+    /// ```
+    //
+    /// [Instant]: std::time::Instant
+    pub fn correlate_presentation_timestamp<F, T>(
+        &self,
+        user_timestamp_function: F,
+    ) -> (PresentationTimestamp, T)
+    where
+        F: FnOnce() -> T,
+    {
+        Context::adapter_correlate_presentation_timestamp(
+            &*self.context,
+            &self.id,
+            user_timestamp_function,
+        )
     }
 }
 

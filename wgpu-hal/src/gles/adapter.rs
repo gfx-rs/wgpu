@@ -858,6 +858,14 @@ impl crate::Adapter<super::Api> for super::Adapter {
             None
         }
     }
+
+    unsafe fn correlate_presentation_timestamp(
+        &self,
+        function: &mut dyn FnMut(),
+    ) -> wgt::PresentationTimestamp {
+        function();
+        wgt::PresentationTimestamp::INVALID_TIMESTAMP
+    }
 }
 
 impl super::AdapterShared {

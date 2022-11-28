@@ -1063,6 +1063,34 @@ impl crate::Context for Context {
         }
     }
 
+    fn adapter_correlate_presentation_timestamp<F, T>(
+        &self,
+        adapter: &Self::AdapterId,
+        user_timestamp_function: F,
+    ) -> (wgt::PresentationTimestamp, T)
+    where
+        F: FnOnce() -> T,
+    {
+        // Turns a FnOnce into an FnMut by panicing if it's ever called twice
+        let mut result = None;
+        let mut optional_function = Some(user_timestamp_function);
+        let mut mutable_function = || {
+            result = Some(optional_function.take().expect(
+                "correlate_presentation_timestamp function called more than once",
+            )())
+        };
+
+        let global = &self.0;
+        match wgc::gfx_select!(*adapter => global.adapter_correlate_presentation_timestamp(*adapter, &mut mutable_function))
+        {
+            Ok(timestamp) => (
+                timestamp,
+                result.expect("correlate_presentation_timestamp function never called"),
+            ),
+            Err(err) => self.handle_error_fatal(err, "Adapter::correlate_presentation_timestamp"),
+        }
+    }
+
     fn surface_get_capabilities(
         &self,
         surface: &Self::SurfaceId,

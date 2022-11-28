@@ -93,6 +93,14 @@ impl crate::Adapter<Api> for Context {
     unsafe fn surface_capabilities(&self, surface: &Context) -> Option<crate::SurfaceCapabilities> {
         None
     }
+
+    unsafe fn correlate_presentation_timestamp(
+        &self,
+        function: &mut dyn FnMut(),
+    ) -> wgt::PresentationTimestamp {
+        function();
+        wgt::PresentationTimestamp::INVALID_TIMESTAMP
+    }
 }
 
 impl crate::Queue<Api> for Context {

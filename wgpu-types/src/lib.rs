@@ -3953,6 +3953,43 @@ pub enum SurfaceStatus {
     Lost,
 }
 
+/// Nanosecond timestamp used by the presentation engine.
+///
+/// These specific clock depends on the WSI used.
+///
+/// <table>
+/// <tr>
+/// 	<td>WSI
+/// 	<td>Clock
+/// <tr>
+/// 	<td>IDXGISwapchain
+/// 	<td><a href="https://docs.microsoft.com/en-us/windows/win32/api/profileapi/nf-profileapi-queryperformancecounter">QueryPerformanceCounter</a>
+/// <tr>
+/// 	<td>IPresentationManager
+/// 	<td><a href="https://docs.microsoft.com/en-us/windows/win32/api/realtimeapiset/nf-realtimeapiset-queryinterrupttimeprecise">QueryInterruptTimePrecise</a>
+/// <tr>
+/// 	<td>CAMetalLayer
+/// 	<td><a href="https://developer.apple.com/documentation/kernel/1462446-mach_absolute_time">mach_absolute_time</a>
+/// <tr>
+/// 	<td>VK_GOOGLE_display_timing
+/// 	<td><a href="https://linux.die.net/man/3/clock_gettime">clock_gettime(CLOCK_MONOTONIC)</a>
+/// </table>
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct PresentationTimestamp(
+    /// Timestamp in nanoseconds.
+    pub u128,
+);
+
+impl PresentationTimestamp {
+    /// A timestamp that is invalid due to the platform not having a timestamp system.
+    pub const INVALID_TIMESTAMP: Self = Self(u128::MAX);
+
+    /// Returns true if this timestamp is the invalid timestamp.
+    pub fn is_invalid(self) -> bool {
+        self == Self::INVALID_TIMESTAMP
+    }
+}
+
 /// RGBA double precision color.
 ///
 /// This is not to be used as a generic color type, only for specific wgpu interfaces.
