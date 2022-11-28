@@ -1322,6 +1322,17 @@ impl crate::Context for Context {
         format.describe().guaranteed_format_features
     }
 
+    fn adapter_correlate_presentation_timestamp<F, T>(
+        &self,
+        _adapter: &Self::AdapterId,
+        user_timestamp_function: F,
+    ) -> (wgt::PresentationTimestamp, T)
+    where
+        F: FnOnce() -> T,
+    {
+        (wgt::PresentationTimestamp::INVALID_TIMESTAMP, user_timestamp_function())
+    }
+
     fn surface_get_capabilities(
         &self,
         _surface: &Self::SurfaceId,

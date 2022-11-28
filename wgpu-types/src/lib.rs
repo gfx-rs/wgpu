@@ -3959,20 +3959,20 @@ pub enum SurfaceStatus {
 ///
 /// <table>
 /// <tr>
-/// 	<td>WSI
-/// 	<td>Clock
+///     <td>WSI
+///     <td>Clock
 /// <tr>
-/// 	<td>IDXGISwapchain
-/// 	<td><a href="https://docs.microsoft.com/en-us/windows/win32/api/profileapi/nf-profileapi-queryperformancecounter">QueryPerformanceCounter</a>
+///     <td>IDXGISwapchain
+///     <td><a href="https://docs.microsoft.com/en-us/windows/win32/api/profileapi/nf-profileapi-queryperformancecounter">QueryPerformanceCounter</a>
 /// <tr>
-/// 	<td>IPresentationManager
-/// 	<td><a href="https://docs.microsoft.com/en-us/windows/win32/api/realtimeapiset/nf-realtimeapiset-queryinterrupttimeprecise">QueryInterruptTimePrecise</a>
+///     <td>IPresentationManager
+///     <td><a href="https://docs.microsoft.com/en-us/windows/win32/api/realtimeapiset/nf-realtimeapiset-queryinterrupttimeprecise">QueryInterruptTimePrecise</a>
 /// <tr>
-/// 	<td>CAMetalLayer
-/// 	<td><a href="https://developer.apple.com/documentation/kernel/1462446-mach_absolute_time">mach_absolute_time</a>
+///     <td>CAMetalLayer
+///     <td><a href="https://developer.apple.com/documentation/kernel/1462446-mach_absolute_time">mach_absolute_time</a>
 /// <tr>
-/// 	<td>VK_GOOGLE_display_timing
-/// 	<td><a href="https://linux.die.net/man/3/clock_gettime">clock_gettime(CLOCK_MONOTONIC)</a>
+///     <td>VK_GOOGLE_display_timing
+///     <td><a href="https://linux.die.net/man/3/clock_gettime">clock_gettime(CLOCK_MONOTONIC)</a>
 /// </table>
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct PresentationTimestamp(
