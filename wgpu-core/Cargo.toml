@@ -60,17 +60,15 @@ workspace = true
 [target.'cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))'.dependencies]
 web-sys = { workspace = true, features = ["HtmlCanvasElement", "OffscreenCanvas"] }
 
-[target.'cfg(target_arch = "wasm32")'.dependencies]
-hal = { workspace = true, features = ["gles"] }
-
 [target.'cfg(all(not(target_arch = "wasm32"), any(target_os = "ios", target_os = "macos")))'.dependencies]
 hal = { workspace = true, features = ["metal"] }
 #Note: could also enable "vulkan" for Vulkan Portability
 
+# Non-Apple, non-wasm Unix
 [target.'cfg(all(not(target_arch = "wasm32"), unix, not(target_os = "ios"), not(target_os = "macos")))'.dependencies]
-hal = { workspace = true, features = ["vulkan", "gles", "renderdoc"] }
+hal = { workspace = true, features = ["vulkan", "renderdoc"] }
 
-[target.'cfg(all(not(target_arch = "wasm32"), windows))'.dependencies]
+[target.'cfg(windows)'.dependencies]
 hal = { workspace = true, features = ["vulkan", "dx12", "dx11", "renderdoc"] }
 
 [target.'cfg(target_os = "emscripten")'.dependencies]

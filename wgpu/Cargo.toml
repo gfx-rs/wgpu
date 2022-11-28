@@ -102,6 +102,7 @@ workspace = true
 
 [target.'cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))'.dependencies.hal]
 workspace = true
+features = ["gles"]
 
 [dependencies]
 arrayvec.workspace = true
