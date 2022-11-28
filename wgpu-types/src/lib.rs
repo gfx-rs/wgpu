@@ -1139,6 +1139,11 @@ bitflags::bitflags! {
         ///
         /// Corresponds to Vulkan's `VkPhysicalDeviceFeatures.depthBiasClamp`
         const DEPTH_BIAS_CLAMP = 1 << 18;
+
+        /// Supports specifying which view format values are allowed when create_view() is called on a texture.
+        ///
+        /// The WebGL and GLES backends doesn't support this.
+        const VIEW_FORMATS = 1 << 19;
     }
 }
 
@@ -4360,9 +4365,7 @@ pub struct TextureDescriptor<L> {
     /// Allowed usages of the texture. If used in other ways, the operation will panic.
     pub usage: TextureUsages,
     /// Specifies what view format values will be allowed when calling create_view() on this texture.
-    /// Note: Adding a format to this list may have a significant performance impact,
-    /// so it is best to avoid adding formats unnecessarily.
-    pub view_formats: Option<Vec<TextureFormat>>,
+    pub view_formats: Vec<TextureFormat>,
 }
 
 impl<L> TextureDescriptor<L> {
@@ -4397,7 +4400,7 @@ impl<L> TextureDescriptor<L> {
     ///   dimension: wgpu::TextureDimension::D3,
     ///   format: wgpu::TextureFormat::Rgba8Sint,
     ///   usage: wgpu::TextureUsages::empty(),
-    ///   view_formats: None
+    ///   view_formats: &[]
     /// };
     ///
     /// assert_eq!(desc.mip_level_size(0), Some(wgpu::Extent3d { width: 100, height: 60, depth_or_array_layers: 1 }));

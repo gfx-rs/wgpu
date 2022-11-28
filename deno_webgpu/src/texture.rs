@@ -56,7 +56,7 @@ pub fn op_webgpu_create_texture(
         dimension: args.dimension,
         format: args.format,
         usage: wgpu_types::TextureUsages::from_bits_truncate(args.usage),
-        view_formats: Some(args.view_formats),
+        view_formats: args.view_formats,
     };
 
     gfx_put!(device => instance.device_create_texture(

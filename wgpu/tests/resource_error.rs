@@ -44,7 +44,7 @@ fn bad_texture() {
                 dimension: wgpu::TextureDimension::D2,
                 format: wgpu::TextureFormat::Rgba8UnormSrgb,
                 usage: wgpu::TextureUsages::all(),
-                view_formats: None,
+                view_formats: &[],
             })
         });
 

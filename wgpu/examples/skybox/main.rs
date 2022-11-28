@@ -85,7 +85,7 @@ impl Skybox {
             format: Self::DEPTH_FORMAT,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             label: None,
-            view_formats: None,
+            view_formats: &[],
         });
 
         depth_texture.create_view(&wgpu::TextureViewDescriptor::default())
@@ -329,7 +329,7 @@ impl framework::Example for Skybox {
                 format: skybox_format,
                 usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
                 label: None,
-                view_formats: None,
+                view_formats: &[],
             },
             &image.data,
         );

@@ -852,14 +852,12 @@ impl<A: HalApi> Device<A> {
             ));
         }
 
-        if let Some(ref view_formats) = desc.view_formats {
-            for format in view_formats {
-                if desc.format == *format {
-                    continue;
-                }
-                if desc.format.remove_srgb_suffix() != format.remove_srgb_suffix() {
-                    return Err(CreateTextureError::InvalidViewFormat(*format, desc.format));
-                }
+        for format in desc.view_formats.iter() {
+            if desc.format == *format {
+                continue;
+            }
+            if desc.format.remove_srgb_suffix() != format.remove_srgb_suffix() {
+                return Err(CreateTextureError::InvalidViewFormat(*format, desc.format));
             }
         }
 
@@ -1094,17 +1092,11 @@ impl<A: HalApi> Device<A> {
             extent.depth_or_array_layers = view_layer_count;
         }
         let format = desc.format.unwrap_or(texture.desc.format);
-        if format != texture.desc.format {
-            let compatible = match texture.desc.view_formats {
-                Some(ref view_formats) => view_formats.contains(&format),
-                None => false,
-            };
-            if !compatible {
-                return Err(resource::CreateTextureViewError::FormatReinterpretation {
-                    texture: texture.desc.format,
-                    view: format,
-                });
-            }
+        if format != texture.desc.format && !texture.desc.view_formats.contains(&format) {
+            return Err(resource::CreateTextureViewError::FormatReinterpretation {
+                texture: texture.desc.format,
+                view: format,
+            });
         }
 
         // filter the usages based on the other criteria

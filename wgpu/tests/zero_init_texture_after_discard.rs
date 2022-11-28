@@ -208,7 +208,7 @@ fn create_white_texture_and_readback_buffer(
                 | wgpu::TextureUsages::COPY_SRC
                 | wgpu::TextureUsages::RENDER_ATTACHMENT
         },
-        view_formats: None,
+        view_formats: &[],
     });
 
     // Clear using a write_texture operation. We could also clear using a render_pass clear.
