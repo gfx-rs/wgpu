@@ -915,6 +915,7 @@ pub struct TextureDescriptor<'a> {
     /// Allowed usages of the texture. If used in other ways, the operation will panic.
     pub usage: TextureUsages,
     /// Specifies what view format values will be allowed when calling create_view() on this texture.
+    /// Note: currenly, only srgb-ness is allowed.
     pub view_formats: &'a [TextureFormat],
 }
 static_assertions::assert_impl_all!(TextureDescriptor: Send, Sync);
