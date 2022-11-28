@@ -1546,6 +1546,12 @@ impl crate::context::Context for Context {
         mapped_desc.dimension(map_texture_dimension(desc.dimension));
         mapped_desc.mip_level_count(desc.mip_level_count);
         mapped_desc.sample_count(desc.sample_count);
+        let mapped_view_formats = desc
+            .view_formats
+            .iter()
+            .map(|format| JsValue::from(map_texture_format(*format)))
+            .collect::<js_sys::Array>();
+        mapped_desc.view_formats(&mapped_view_formats);
         (create_identified(device.0.create_texture(&mapped_desc)), ())
     }
 
