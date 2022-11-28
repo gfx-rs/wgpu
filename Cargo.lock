@@ -2200,7 +2200,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu"
-version = "0.14.0"
+version = "0.14.2"
 dependencies = [
  "arrayvec 0.7.2",
  "async-executor",
@@ -2218,7 +2218,7 @@ dependencies = [
  "nanorand",
  "noise",
  "obj",
- "parking_lot 0.12.1",
+ "parking_lot 0.11.2",
  "png",
  "pollster",
  "raw-window-handle 0.5.0",
@@ -2236,7 +2236,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-core"
-version = "0.14.0"
+version = "0.14.2"
 dependencies = [
  "arrayvec 0.7.2",
  "bit-vec",
@@ -2246,7 +2246,7 @@ dependencies = [
  "fxhash",
  "log",
  "naga",
- "parking_lot 0.12.1",
+ "parking_lot 0.11.2",
  "profiling",
  "raw-window-handle 0.5.0",
  "ron",

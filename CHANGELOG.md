@@ -40,6 +40,12 @@ Bottom level categories:
 
 ## Unreleased
 
+## wgpu-0.14.2 (2022-11-28)
+
+### Bug Fixes
+
+- Fix incorrect offset in `get_mapped_range` by @nical in [#3233](https://github.com/gfx-rs/wgpu/pull/3233)
+
 ## wgpu-0.14.1 (2022-11-02)
 
 ### Bug Fixes
