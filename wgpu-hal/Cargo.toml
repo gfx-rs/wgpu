@@ -86,7 +86,7 @@ egl = { workspace = true, features = ["static", "no-pkg-config"] }
 libloading = { workspace = true, optional = true }
 
 [target.'cfg(windows)'.dependencies]
-winapi = { workspace = true, features = ["libloaderapi", "windef", "winuser", "dcomp"] }
+winapi = { workspace = true, features = ["profileapi", "libloaderapi", "windef", "winuser", "dcomp"] }
 native = { workspace = true, features = ["libloading"], optional = true }
 
 [target.'cfg(any(target_os="macos", target_os="ios"))'.dependencies]
@@ -98,6 +98,9 @@ core-graphics-types.workspace = true
 wasm-bindgen.workspace = true
 web-sys = { workspace = true, features = ["Window", "HtmlCanvasElement", "WebGl2RenderingContext", "OffscreenCanvas"] }
 js-sys.workspace = true
+
+[target.'cfg(unix)'.dependencies]
+libc.workspace = true
 
 [target.'cfg(target_os = "android")'.dependencies]
 android_system_properties.workspace = true

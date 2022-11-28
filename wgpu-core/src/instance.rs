@@ -929,8 +929,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         adapter_id: AdapterId,
         user_timestamp_function: &mut dyn FnMut(),
-    ) -> Result<wgt::PresentationTimestamp, InvalidAdapter>
-    {
+    ) -> Result<wgt::PresentationTimestamp, InvalidAdapter> {
         let hub = A::hub(self);
         let mut token = Token::root();
         let (adapter_guard, _) = hub.adapters.read(&mut token);

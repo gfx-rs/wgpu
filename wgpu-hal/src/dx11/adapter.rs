@@ -24,6 +24,13 @@ impl crate::Adapter<super::Api> for super::Adapter {
     ) -> Option<crate::SurfaceCapabilities> {
         todo!()
     }
+
+    unsafe fn correlate_presentation_timestamp(
+        &self,
+        user_timestamp_function: &mut dyn FnMut(),
+    ) -> wgt::PresentationTimestamp {
+        todo!()
+    }
 }
 
 impl super::Adapter {

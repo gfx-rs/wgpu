@@ -2856,6 +2856,7 @@ dependencies = [
  "gpu-descriptor",
  "js-sys",
  "khronos-egl",
+ "libc",
  "libloading",
  "log",
  "metal",

@@ -1582,6 +1582,32 @@ impl crate::Adapter<super::Api> for super::Adapter {
             composite_alpha_modes: conv::map_vk_composite_alpha(caps.supported_composite_alpha),
         })
     }
+
+    unsafe fn correlate_presentation_timestamp(
+        &self,
+        user_timestamp_function: &mut dyn FnMut(),
+    ) -> wgt::PresentationTimestamp {
+        #[cfg(unix)]
+        {
+            let mut timespec = libc::timespec {
+                tv_sec: 0,
+                tv_nsec: 0,
+            };
+            user_timestamp_function();
+            unsafe {
+                libc::clock_gettime(libc::CLOCK_MONOTONIC, &mut timespec);
+            }
+
+            wgt::PresentationTimestamp(
+                timespec.tv_sec as u128 * 1_000_000_000 + timespec.tv_nsec as u128,
+            )
+        }
+        #[cfg(not(unix))]
+        {
+            user_timestamp_function();
+            wgt::PresentationTimestamp::INVALID_TIMESTAMP
+        }
+    }
 }
 
 fn is_format_16bit_norm_supported(instance: &ash::Instance, phd: vk::PhysicalDevice) -> bool {

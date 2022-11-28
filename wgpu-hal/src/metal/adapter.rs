@@ -323,8 +323,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
     unsafe fn correlate_presentation_timestamp(
         &self,
         user_tiemstamp_function: &mut dyn FnMut(),
-    ) -> wgt::PresentationTimestamp
-    {
+    ) -> wgt::PresentationTimestamp {
         #[repr(C)]
         #[derive(Debug)]
         struct mach_timebase_info {
@@ -346,7 +345,8 @@ impl crate::Adapter<super::Api> for super::Adapter {
             denominator: 0,
         };
         unsafe { mach_timebase_info(&mut info) };
-        let timestamp_scaled = (timestamp_base as u128 * info.numerator as u128) / info.denominator as u128;
+        let timestamp_scaled =
+            (timestamp_base as u128 * info.numerator as u128) / info.denominator as u128;
 
         wgt::PresentationTimestamp(timestamp_scaled)
     }

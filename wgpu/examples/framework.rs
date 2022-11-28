@@ -340,7 +340,6 @@ fn start<E: Example>(
                 }
             },
             event::Event::RedrawRequested(_) => {
-                dbg!(adapter.correlate_presentation_timestamp(Instant::now));
                 #[cfg(not(target_arch = "wasm32"))]
                 {
                     accum_time += last_frame_inst.elapsed().as_secs_f32();
