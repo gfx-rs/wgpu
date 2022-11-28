@@ -9,7 +9,7 @@ use winapi::um::{
 
 pub enum PresentationTimer {
     /// DXGI uses QueryPerformanceCounter
-    DXGI {
+    Dxgi {
         /// How many ticks of QPC per second
         frequency: u64,
     },
@@ -23,7 +23,7 @@ pub enum PresentationTimer {
 impl std::fmt::Debug for PresentationTimer {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match *self {
-            Self::DXGI { frequency } => f
+            Self::Dxgi { frequency } => f
                 .debug_struct("DXGI")
                 .field("frequency", &frequency)
                 .finish(),
@@ -47,13 +47,13 @@ impl PresentationTimer {
         let success = unsafe { QueryPerformanceFrequency(&mut frequency) };
         assert_ne!(success, 0);
 
-        Self::DXGI {
+        Self::Dxgi {
             frequency: unsafe { *frequency.QuadPart() } as u64,
         }
     }
 
     /// Create a presentation timer using QueryInterruptTimePrecise (what IPresentationManager uses for presentation times)
-    /// 
+    ///
     /// Panics if QueryInterruptTimePrecise isn't found (below Win10)
     pub fn new_ipresentation_manager() -> Self {
         // We need to load this explicitly, as QueryInterruptTimePrecise is only available on Windows 10+
@@ -70,7 +70,7 @@ impl PresentationTimer {
     pub fn get_timestamp_ns(&self) -> u128 {
         // Always do u128 math _after_ hitting the timing function.
         match *self {
-            PresentationTimer::DXGI { frequency } => {
+            PresentationTimer::Dxgi { frequency } => {
                 let mut counter: LARGE_INTEGER = unsafe { mem::zeroed() };
                 let success = unsafe { QueryPerformanceCounter(&mut counter) };
                 assert_ne!(success, 0);

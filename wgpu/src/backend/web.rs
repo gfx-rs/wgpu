@@ -1330,7 +1330,10 @@ impl crate::Context for Context {
     where
         F: FnOnce() -> T,
     {
-        (wgt::PresentationTimestamp::INVALID_TIMESTAMP, user_timestamp_function())
+        (
+            wgt::PresentationTimestamp::INVALID_TIMESTAMP,
+            user_timestamp_function(),
+        )
     }
 
     fn surface_get_capabilities(
