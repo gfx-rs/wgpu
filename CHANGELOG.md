@@ -130,6 +130,10 @@ Additionally `Surface::get_default_config` now returns an Option and returns Non
   zero, rather than treating that as "until the end of the buffer".
   By @jimblandy in [#3171](https://github.com/gfx-rs/wgpu/pull/3171)
 
+#### Emscripten
+
+- Let the wgpu examples `framework.rs` compile again under Emscripten. By @jimblandy in [#3246](https://github.com/gfx-rs/wgpu/pull/3246)
+
 ### Examples
 
 - Log adapter info in hello example on wasm target by @JolifantoBambla in [#2858](https://github.com/gfx-rs/wgpu/pull/2858)
