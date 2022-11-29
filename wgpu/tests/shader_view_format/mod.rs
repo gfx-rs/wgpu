@@ -1,10 +1,13 @@
 use crate::common::{image::calc_difference, initialize_test, TestParameters, TestingContext};
 use std::num::NonZeroU32;
-use wgpu::{util::DeviceExt, TextureFormat};
+use wgpu::{util::DeviceExt, DownlevelFlags, Limits, TextureFormat};
 
 #[test]
 fn reinterpret_srgb_ness() {
-    let parameters = TestParameters::default();
+    let parameters = TestParameters::default()
+        .downlevel_flags(DownlevelFlags::VIEW_FORMATS)
+        .limits(Limits::downlevel_defaults())
+        .specific_failure(Some(wgpu::Backends::GL), None, None, true);
     initialize_test(parameters, |ctx| {
         let unorm_data: [[u8; 4]; 4] = [
             [180, 0, 0, 255],

@@ -1092,11 +1092,15 @@ impl<A: HalApi> Device<A> {
             extent.depth_or_array_layers = view_layer_count;
         }
         let format = desc.format.unwrap_or(texture.desc.format);
-        if format != texture.desc.format && !texture.desc.view_formats.contains(&format) {
-            return Err(resource::CreateTextureViewError::FormatReinterpretation {
-                texture: texture.desc.format,
-                view: format,
-            });
+        if format != texture.desc.format {
+            if texture.desc.view_formats.contains(&format) {
+                self.require_downlevel_flags(wgt::DownlevelFlags::VIEW_FORMATS)?;
+            } else {
+                return Err(resource::CreateTextureViewError::FormatReinterpretation {
+                    texture: texture.desc.format,
+                    view: format,
+                });
+            }
         }
 
         // filter the usages based on the other criteria
