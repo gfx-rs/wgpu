@@ -6,15 +6,6 @@ use wgpu::{util::DeviceExt, TextureFormat};
 fn reinterpret_srgb_ness() {
     let parameters = TestParameters::default();
     initialize_test(parameters, |ctx| {
-        let shader = ctx
-            .device
-            .create_shader_module(wgpu::include_wgsl!("view_format.wgsl"));
-
-        let size = wgpu::Extent3d {
-            width: 2,
-            height: 2,
-            depth_or_array_layers: 1,
-        };
         let unorm_data: [[u8; 4]; 4] = [
             [180, 0, 0, 255],
             [0, 84, 0, 127],
@@ -27,6 +18,16 @@ fn reinterpret_srgb_ness() {
             [0, 0, 12, 100],
             [12, 116, 23, 90],
         ];
+
+        let size = wgpu::Extent3d {
+            width: 2,
+            height: 2,
+            depth_or_array_layers: 1,
+        };
+
+        let shader = ctx
+            .device
+            .create_shader_module(wgpu::include_wgsl!("view_format.wgsl"));
 
         // Reinterpret Rgba8Unorm as Rgba8UnormSrgb
         reinterpret(
@@ -111,7 +112,7 @@ fn reinterpret(
         label: None,
     });
 
-    let out_tex = ctx.device.create_texture(&wgpu::TextureDescriptor {
+    let target_tex = ctx.device.create_texture(&wgpu::TextureDescriptor {
         label: None,
         size,
         mip_level_count: 1,
@@ -121,7 +122,7 @@ fn reinterpret(
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
     });
-    let target_view = out_tex.create_view(&wgpu::TextureViewDescriptor::default());
+    let target_view = target_tex.create_view(&wgpu::TextureViewDescriptor::default());
 
     let mut encoder = ctx
         .device
@@ -153,7 +154,7 @@ fn reinterpret(
         .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
     encoder.copy_texture_to_buffer(
         wgpu::ImageCopyTexture {
-            texture: &out_tex,
+            texture: &target_tex,
             mip_level: 0,
             origin: wgpu::Origin3d::ZERO,
             aspect: wgpu::TextureAspect::All,
@@ -175,15 +176,18 @@ fn reinterpret(
     ctx.device.poll(wgpu::Maintain::Wait);
 
     let data: Vec<u8> = slice.get_mapped_range().to_vec();
+    let tolerance_data: [[u8; 4]; 4] = [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [1, 1, 1, 0]];
+
     for h in 0..size.height {
         let offset = h * wgpu::COPY_BYTES_PER_ROW_ALIGNMENT;
         for w in 0..size.width {
             let expect = expect_data[(h * size.width + w) as usize];
+            let tolerance = tolerance_data[(h * size.width + w) as usize];
             let index = (w * 4 + offset) as usize;
-            if calc_difference(expect[0], data[index]) > 1
-                || calc_difference(expect[1], data[index + 1]) > 1
-                || calc_difference(expect[2], data[index + 2]) > 1
-                || calc_difference(expect[3], data[index + 3]) > 0
+            if calc_difference(expect[0], data[index]) > tolerance[0]
+                || calc_difference(expect[1], data[index + 1]) > tolerance[1]
+                || calc_difference(expect[2], data[index + 2]) > tolerance[2]
+                || calc_difference(expect[3], data[index + 3]) > tolerance[3]
             {
                 panic!(
                     "Reinterpret {:?} as {:?} mismatch! expect {:?} get [{}, {}, {}, {}]",
