@@ -1,6 +1,6 @@
 [package]
 name = "wgpu"
-version = "0.14.0"
+version = "0.14.2"
 authors = ["wgpu developers"]
 edition = "2021"
 description = "Rusty WebGPU API wrapper"
@@ -89,7 +89,7 @@ vulkan-portability = ["wgc/vulkan-portability"]
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies.wgc]
 package = "wgpu-core"
 path = "../wgpu-core"
-version = "0.14"
+version = "0.14.2"
 features = ["raw-window-handle"]
 
 [target.'cfg(target_arch = "wasm32")'.dependencies.wgc]
