@@ -1,5 +1,8 @@
 # Change Log
 
+## v0.8.2 (2022-11-30)
+  - Fix build failure in rust 1.64 [#2967](https://github.com/gfx-rs/wgpu/pull/2967)
+
 ## wgpu-types-0.8.1 (2021-06-08)
   - fix dynamic stencil reference for Replace ops
 
@@ -45,6 +48,9 @@
     - filtering of textures by samplers
     - interpolation qualifiers
     - allow vertex components to be underspecified
+
+## v0.7.2 (2022-11-30)
+  - Fix build failure in rust 1.64 [#2966](https://github.com/gfx-rs/wgpu/pull/2966)
 
 ## v0.7.1 (2021-02-25)
   - expose `wgc::device::queue` sub-module in public
