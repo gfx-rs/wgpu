@@ -183,7 +183,12 @@ jobs:
         run: |
           cargo install --git https://github.com/haraldreingruber/wasm-pack wasm-pack
 
-      - name: execute tests
+      - name: execute tests (Firefox)
+        run: |
+          cd wgpu
+          wasm-pack test --headless --firefox --features webgl
+
+      - name: execute tests (Chrome)
         run: |
           cd wgpu
           wasm-pack test --headless --chrome --features webgl
