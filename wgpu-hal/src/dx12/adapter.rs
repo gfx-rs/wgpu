@@ -2,9 +2,9 @@ use crate::{
     auxil::{self, dxgi::result::HResult as _},
     dx12::SurfaceTarget,
 };
-use std::{mem, sync::Arc, thread};
+use std::{mem, ptr, sync::Arc, thread};
 use winapi::{
-    shared::{dxgi, dxgi1_2, windef, winerror},
+    shared::{dxgi, dxgi1_2, minwindef::DWORD, windef, winerror},
     um::{d3d12, d3d12sdklayers, winuser},
 };
 
@@ -386,16 +386,17 @@ impl crate::Adapter<super::Api> for super::Adapter {
         // the features that use SRV/UAVs using the no-depth format.
         let mut data_no_depth = d3d12::D3D12_FEATURE_DATA_FORMAT_SUPPORT {
             Format: no_depth_format,
-            Support1: unsafe { mem::zeroed() },
-            Support2: unsafe { mem::zeroed() },
+            Support1: d3d12::D3D12_FORMAT_SUPPORT1_NONE,
+            Support2: d3d12::D3D12_FORMAT_SUPPORT2_NONE,
         };
         if raw_format != no_depth_format {
             // Only-recheck if we're using a different format
             assert_eq!(winerror::S_OK, unsafe {
                 self.device.CheckFeatureSupport(
                     d3d12::D3D12_FEATURE_FORMAT_SUPPORT,
-                    &mut data_no_depth as *mut _ as *mut _,
-                    mem::size_of::<d3d12::D3D12_FEATURE_DATA_FORMAT_SUPPORT>() as _,
+                    ptr::addr_of_mut!(data_no_depth).cast(),
+                    DWORD::try_from(mem::size_of::<d3d12::D3D12_FEATURE_DATA_FORMAT_SUPPORT>())
+                        .unwrap(),
                 )
             });
         } else {

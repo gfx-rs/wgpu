@@ -131,6 +131,10 @@ Additionally `Surface::get_default_config` now returns an Option and returns Non
   zero, rather than treating that as "until the end of the buffer".
   By @jimblandy in [#3171](https://github.com/gfx-rs/wgpu/pull/3171)
 
+#### Emscripten
+
+- Let the wgpu examples `framework.rs` compile again under Emscripten. By @jimblandy in [#3246](https://github.com/gfx-rs/wgpu/pull/3246)
+
 ### Examples
 
 - Log adapter info in hello example on wasm target by @JolifantoBambla in [#2858](https://github.com/gfx-rs/wgpu/pull/2858)
@@ -144,6 +148,14 @@ Additionally `Surface::get_default_config` now returns an Option and returns Non
 #### Vulkan
 
 - Don't use a pointer to a local copy of a `PhysicalDeviceDriverProperties` struct after it has gone out of scope. In fact, don't make a local copy at all. Introduce a helper function for building `CStr`s from C character arrays, and remove some `unsafe` blocks. By @jimblandy in [#3076](https://github.com/gfx-rs/wgpu/pull/3076).
+
+
+## wgpu-0.14.2 (2022-11-28)
+
+### Bug Fixes
+
+- Fix incorrect offset in `get_mapped_range` by @nical in [#3233](https://github.com/gfx-rs/wgpu/pull/3233)
+
 
 ## wgpu-0.14.1 (2022-11-02)
 

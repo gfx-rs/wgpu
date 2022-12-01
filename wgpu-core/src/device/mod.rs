@@ -5677,7 +5677,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         max: range.end,
                     });
                 }
-                unsafe { Ok((ptr.as_ptr().offset(offset as isize), range_size)) }
+                // ptr points to the beginning of the range we mapped in map_async
+                // rather thant the beginning of the buffer.
+                let relative_offset = (offset - range.start) as isize;
+                unsafe { Ok((ptr.as_ptr().offset(relative_offset), range_size)) }
             }
             resource::BufferMapState::Idle | resource::BufferMapState::Waiting(_) => {
                 Err(BufferAccessError::NotMapped)
