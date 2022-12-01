@@ -1,4 +1,4 @@
-use crate::common::{initialize_test, TestParameters, fail};
+use crate::common::{fail, initialize_test, TestParameters};
 
 #[test]
 fn copy_overflow_z() {
