@@ -18,6 +18,7 @@ mod command;
 mod conv;
 mod device;
 mod surface;
+mod time;
 
 use std::{
     fmt, iter, ops,
@@ -252,6 +253,7 @@ struct AdapterShared {
     disabilities: PrivateDisabilities,
     private_caps: PrivateCapabilities,
     settings: Settings,
+    presentation_timer: time::PresentationTimer,
 }
 
 unsafe impl Send for AdapterShared {}
@@ -267,6 +269,7 @@ impl AdapterShared {
             private_caps,
             device: Mutex::new(device),
             settings: Settings::default(),
+            presentation_timer: time::PresentationTimer::new(),
         }
     }
 }

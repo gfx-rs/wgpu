@@ -324,31 +324,10 @@ impl crate::Adapter<super::Api> for super::Adapter {
         &self,
         user_tiemstamp_function: &mut dyn FnMut(),
     ) -> wgt::PresentationTimestamp {
-        #[repr(C)]
-        #[derive(Debug)]
-        struct mach_timebase_info {
-            numerator: u32,
-            denominator: u32,
-        }
-        extern "C" {
-            fn mach_timebase_info(out: *mut mach_timebase_info) -> u32;
-            fn mach_absolute_time() -> u64;
-        }
-
-        // Get the two timestamps as close as possible to each other.
-        // Doing timestamp processing _after_ both functions are called.
         user_tiemstamp_function();
-        let timestamp_base = unsafe { mach_absolute_time() };
+        let timestamp = self.shared.presentation_timer.get_timestamp_ns();
 
-        let mut info = mach_timebase_info {
-            numerator: 0,
-            denominator: 0,
-        };
-        unsafe { mach_timebase_info(&mut info) };
-        let timestamp_scaled =
-            (timestamp_base as u128 * info.numerator as u128) / info.denominator as u128;
-
-        wgt::PresentationTimestamp(timestamp_scaled)
+        wgt::PresentationTimestamp(timestamp)
     }
 }
 
