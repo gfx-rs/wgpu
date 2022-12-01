@@ -219,24 +219,30 @@ impl Context {
     pub fn instance_create_surface_from_canvas(
         self: &Arc<Self>,
         canvas: &web_sys::HtmlCanvasElement,
-    ) -> Surface {
-        let id = self.0.create_surface_webgl_canvas(canvas, ());
-        Surface {
+    ) -> Result<Surface, crate::CreateSurfaceError> {
+        let id = self
+            .0
+            .create_surface_webgl_canvas(canvas, ())
+            .map_err(|hal::InstanceError| crate::CreateSurfaceError {})?;
+        Ok(Surface {
             id,
             configured_device: Mutex::default(),
-        }
+        })
     }
 
     #[cfg(all(target_arch = "wasm32", feature = "webgl", not(feature = "emscripten")))]
     pub fn instance_create_surface_from_offscreen_canvas(
         self: &Arc<Self>,
         canvas: &web_sys::OffscreenCanvas,
-    ) -> Surface {
-        let id = self.0.create_surface_webgl_offscreen_canvas(canvas, ());
-        Surface {
+    ) -> Result<Surface, crate::CreateSurfaceError> {
+        let id = self
+            .0
+            .create_surface_webgl_offscreen_canvas(canvas, ())
+            .map_err(|hal::InstanceError| crate::CreateSurfaceError {})?;
+        Ok(Surface {
             id,
             configured_device: Mutex::default(),
-        }
+        })
     }
 
     #[cfg(target_os = "windows")]
@@ -943,13 +949,13 @@ impl crate::Context for Context {
         &self,
         display_handle: raw_window_handle::RawDisplayHandle,
         window_handle: raw_window_handle::RawWindowHandle,
-    ) -> Self::SurfaceId {
-        Surface {
+    ) -> Result<Self::SurfaceId, crate::CreateSurfaceError> {
+        Ok(Surface {
             id: self
                 .0
                 .instance_create_surface(display_handle, window_handle, ()),
             configured_device: Mutex::new(None),
-        }
+        })
     }
 
     fn instance_request_adapter(
