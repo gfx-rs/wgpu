@@ -601,7 +601,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             extract_texture_selector(destination, size, dst)?;
         let format_desc = texture_format.describe();
 
-        let dst = texture_guard.get_mut(destination.texture).unwrap();
         if !dst.desc.usage.contains(wgt::TextureUsages::COPY_DST) {
             return Err(
                 TransferError::MissingCopyDstUsageFlag(None, Some(destination.texture)).into(),
