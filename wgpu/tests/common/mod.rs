@@ -363,7 +363,7 @@ fn initialize_adapter() -> Adapter {
 
 #[cfg(all(target_arch = "wasm32", feature = "webgl"))]
 fn create_html_canvas() -> HtmlCanvasElement {
-    return web_sys::window()
+    web_sys::window()
         .and_then(|win| win.document())
         .and_then(|doc| {
             let body = doc.body().unwrap();
@@ -372,19 +372,16 @@ fn create_html_canvas() -> HtmlCanvasElement {
             body.append_child(&canvas).unwrap();
             canvas.dyn_into::<web_sys::HtmlCanvasElement>().ok()
         })
-        .expect("couldn't append canvas to document body");
+        .expect("couldn't append canvas to document body")
 }
 
 #[cfg(all(target_arch = "wasm32", feature = "webgl"))]
 fn delete_html_canvas() {
-    web_sys::window()
-        .and_then(|win| win.document())
-        .and_then(|document| {
-            if let Some(element) = document.get_element_by_id(CANVAS_ID) {
-                element.remove();
-            }
-            Some(())
-        });
+    if let Some(document) = web_sys::window().and_then(|win| win.document()) {
+        if let Some(element) = document.get_element_by_id(CANVAS_ID) {
+            element.remove();
+        }
+    };
 }
 
 // Run some code in an error scope and assert that validation fails.
