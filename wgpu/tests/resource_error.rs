@@ -1,6 +1,10 @@
 use crate::common::{fail, initialize_test, valid, TestParameters};
+use wasm_bindgen_test::*;
+
+wasm_bindgen_test_configure!(run_in_browser);
 
 #[test]
+#[wasm_bindgen_test]
 fn bad_buffer() {
     // Create a buffer with bad parameters and call a few methods.
     // Validation should fail but there should be not panic.
@@ -24,6 +28,7 @@ fn bad_buffer() {
 }
 
 #[test]
+#[wasm_bindgen_test]
 fn bad_texture() {
     // Create a texture with bad parameters and call a few methods.
     // Validation should fail but there should be not panic.

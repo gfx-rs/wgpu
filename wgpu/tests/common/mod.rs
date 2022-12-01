@@ -5,9 +5,16 @@ use std::panic::{catch_unwind, AssertUnwindSafe};
 
 use wgt::{Backends, DeviceDescriptor, DownlevelCapabilities, Features, Limits};
 
-use wgpu::{util, Adapter, Device, DownlevelFlags, Instance, Queue};
+use wgpu::{Adapter, Device, DownlevelFlags, Instance, Queue};
+
+#[cfg(all(target_arch = "wasm32", feature = "webgl"))]
+use wasm_bindgen::JsCast;
+#[cfg(all(target_arch = "wasm32", feature = "webgl"))]
+use web_sys::HtmlCanvasElement;
 
 pub mod image;
+
+const CANVAS_ID: &str = "test-canvas";
 
 async fn initialize_device(
     adapter: &Adapter,
@@ -170,14 +177,7 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
     // We don't actually care if it fails
     let _ = env_logger::try_init();
 
-    let backend_bits = util::backend_bits_from_env().unwrap_or_else(Backends::all);
-    let instance = Instance::new(backend_bits);
-    let adapter = pollster::block_on(util::initialize_adapter_from_env_or_default(
-        &instance,
-        backend_bits,
-        None,
-    ))
-    .expect("could not find suitable adapter on the system");
+    let adapter = initialize_adapter();
 
     let adapter_info = adapter.get_info();
     let adapter_lowercase_name = adapter_info.name.to_lowercase();
@@ -187,11 +187,18 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
 
     let missing_features = parameters.required_features - adapter_features;
     if !missing_features.is_empty() {
+        #[cfg(all(target_arch = "wasm32", feature = "webgl"))]
+        delete_html_canvas();
+
+        // TODO: we probably should use log crate here for logging also to wasm console
         println!("TEST SKIPPED: MISSING FEATURES {:?}", missing_features);
         return;
     }
 
     if !parameters.required_limits.check_limits(&adapter_limits) {
+        #[cfg(all(target_arch = "wasm32", feature = "webgl"))]
+        delete_html_canvas();
+
         println!("TEST SKIPPED: LIMIT TOO LOW");
         return;
     }
@@ -199,6 +206,9 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
     let missing_downlevel_flags =
         parameters.required_downlevel_properties.flags - adapter_downlevel_capabilities.flags;
     if !missing_downlevel_flags.is_empty() {
+        #[cfg(all(target_arch = "wasm32", feature = "webgl"))]
+        delete_html_canvas();
+
         println!(
             "TEST SKIPPED: MISSING DOWNLEVEL FLAGS {:?}",
             missing_downlevel_flags
@@ -209,6 +219,9 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
     if adapter_downlevel_capabilities.shader_model
         < parameters.required_downlevel_properties.shader_model
     {
+        #[cfg(all(target_arch = "wasm32", feature = "webgl"))]
+        delete_html_canvas();
+
         println!(
             "TEST SKIPPED: LOW SHADER MODEL {:?}",
             adapter_downlevel_capabilities.shader_model
@@ -273,6 +286,9 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
     });
 
     if let Some((reason, true)) = expected_failure_reason {
+        #[cfg(all(target_arch = "wasm32", feature = "webgl"))]
+        delete_html_canvas();
+
         println!("EXPECTED TEST FAILURE SKIPPED: {:?}", reason);
         return;
     }
@@ -312,6 +328,63 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
     } else {
         panic!("UNEXPECTED TEST FAILURE DUE TO {}", failure_cause)
     }
+}
+
+#[cfg(not(all(target_arch = "wasm32", feature = "webgl")))]
+fn initialize_adapter() -> Adapter {
+    let backend_bits = wgpu::util::backend_bits_from_env().unwrap_or_else(Backends::all);
+    let instance = Instance::new(backend_bits);
+
+    pollster::block_on(wgpu::util::initialize_adapter_from_env_or_default(
+        &instance,
+        backend_bits,
+        None,
+    ))
+    .expect("could not find suitable adapter on the system")
+}
+
+#[cfg(all(target_arch = "wasm32", feature = "webgl"))]
+fn initialize_adapter() -> Adapter {
+    // On wasm, append a canvas to the document body for initializing the adapter
+    delete_html_canvas(); // if there is a previous one
+    let canvas = create_html_canvas();
+
+    let instance = Instance::new(Backends::GL);
+    let surface = instance.create_surface_from_canvas(&canvas);
+
+    pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+        power_preference: wgpu::PowerPreference::default(),
+        force_fallback_adapter: false,
+        // Request an adapter which can render to our surface
+        compatible_surface: Some(&surface),
+    }))
+    .expect("could not find suitable adapter on the system")
+}
+
+#[cfg(all(target_arch = "wasm32", feature = "webgl"))]
+fn create_html_canvas() -> HtmlCanvasElement {
+    return web_sys::window()
+        .and_then(|win| win.document())
+        .and_then(|doc| {
+            let body = doc.body().unwrap();
+            let canvas = doc.create_element("Canvas").unwrap();
+            canvas.set_id(CANVAS_ID);
+            body.append_child(&canvas).unwrap();
+            canvas.dyn_into::<web_sys::HtmlCanvasElement>().ok()
+        })
+        .expect("couldn't append canvas to document body");
+}
+
+#[cfg(all(target_arch = "wasm32", feature = "webgl"))]
+fn delete_html_canvas() {
+    web_sys::window()
+        .and_then(|win| win.document())
+        .and_then(|document| {
+            if let Some(element) = document.get_element_by_id(CANVAS_ID) {
+                element.remove();
+            }
+            Some(())
+        });
 }
 
 // Run some code in an error scope and assert that validation fails.

@@ -7,6 +7,9 @@ use wgpu::{
 };
 
 use crate::common::{initialize_test, TestParameters, TestingContext};
+use wasm_bindgen_test::*;
+
+wasm_bindgen_test_configure!(run_in_browser);
 
 fn generate_dummy_work(ctx: &TestingContext) -> CommandBuffer {
     let buffer = ctx.device.create_buffer(&BufferDescriptor {
@@ -53,6 +56,7 @@ fn generate_dummy_work(ctx: &TestingContext) -> CommandBuffer {
 }
 
 #[test]
+#[wasm_bindgen_test]
 fn wait() {
     initialize_test(TestParameters::default().skip(), |ctx| {
         let cmd_buf = generate_dummy_work(&ctx);
@@ -63,6 +67,7 @@ fn wait() {
 }
 
 #[test]
+#[wasm_bindgen_test]
 fn double_wait() {
     initialize_test(TestParameters::default().skip(), |ctx| {
         let cmd_buf = generate_dummy_work(&ctx);
@@ -74,6 +79,7 @@ fn double_wait() {
 }
 
 #[test]
+#[wasm_bindgen_test]
 fn wait_on_submission() {
     initialize_test(TestParameters::default().skip(), |ctx| {
         let cmd_buf = generate_dummy_work(&ctx);
@@ -84,6 +90,7 @@ fn wait_on_submission() {
 }
 
 #[test]
+#[wasm_bindgen_test]
 fn double_wait_on_submission() {
     initialize_test(TestParameters::default().skip(), |ctx| {
         let cmd_buf = generate_dummy_work(&ctx);
@@ -95,6 +102,7 @@ fn double_wait_on_submission() {
 }
 
 #[test]
+#[wasm_bindgen_test]
 fn wait_out_of_order() {
     initialize_test(TestParameters::default().skip(), |ctx| {
         let cmd_buf1 = generate_dummy_work(&ctx);

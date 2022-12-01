@@ -1,5 +1,8 @@
 use crate::common::{initialize_test, TestParameters, TestingContext};
+use wasm_bindgen_test::*;
 use wgpu::util::align_to;
+
+wasm_bindgen_test_configure!(run_in_browser);
 
 static TEXTURE_FORMATS_UNCOMPRESSED: &[wgpu::TextureFormat] = &[
     wgpu::TextureFormat::R8Unorm,
@@ -304,6 +307,7 @@ fn clear_texture_tests(
 }
 
 #[test]
+#[wasm_bindgen_test]
 fn clear_texture_2d_uncompressed() {
     initialize_test(
         TestParameters::default().features(wgpu::Features::CLEAR_TEXTURE),
@@ -315,6 +319,7 @@ fn clear_texture_2d_uncompressed() {
 }
 
 #[test]
+#[wasm_bindgen_test]
 fn clear_texture_d32_s8() {
     initialize_test(
         TestParameters::default()
