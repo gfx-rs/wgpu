@@ -28,12 +28,12 @@ impl std::fmt::Debug for PresentationTimer {
                 .field("frequency", &frequency)
                 .finish(),
             Self::IPresentationManager {
-                fnQueryInterruptTimePrecise: QueryInterruptTimePrecise,
+                fnQueryInterruptTimePrecise,
             } => f
                 .debug_struct("IPresentationManager")
                 .field(
                     "QueryInterruptTimePrecise",
-                    &(QueryInterruptTimePrecise as usize),
+                    &(fnQueryInterruptTimePrecise as usize),
                 )
                 .finish(),
         }

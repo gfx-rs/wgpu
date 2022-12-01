@@ -12,6 +12,7 @@ extern "C" {
 }
 
 /// A timer which uses mach_absolute_time to get its time. This is what the metal callbacks use.
+#[derive(Debug)]
 pub struct PresentationTimer {
     scale: MachTimebaseInfo,
 }
