@@ -5407,27 +5407,27 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut closures = UserClosures::default();
         let mut all_queue_empty = true;
 
-        #[cfg(vulkan)]
+        #[cfg(feature = "vulkan")]
         {
             all_queue_empty = self.poll_devices::<hal::api::Vulkan>(force_wait, &mut closures)?
                 && all_queue_empty;
         }
-        #[cfg(metal)]
+        #[cfg(feature = "metal")]
         {
             all_queue_empty =
                 self.poll_devices::<hal::api::Metal>(force_wait, &mut closures)? && all_queue_empty;
         }
-        #[cfg(dx12)]
+        #[cfg(feature = "dx12")]
         {
             all_queue_empty =
                 self.poll_devices::<hal::api::Dx12>(force_wait, &mut closures)? && all_queue_empty;
         }
-        #[cfg(dx11)]
+        #[cfg(feature = "dx11")]
         {
             all_queue_empty =
                 self.poll_devices::<hal::api::Dx11>(force_wait, &mut closures)? && all_queue_empty;
         }
-        #[cfg(gl)]
+        #[cfg(feature = "gles")]
         {
             all_queue_empty =
                 self.poll_devices::<hal::api::Gles>(force_wait, &mut closures)? && all_queue_empty;
