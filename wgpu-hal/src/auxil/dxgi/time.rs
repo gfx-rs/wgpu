@@ -16,7 +16,7 @@ pub enum PresentationTimer {
     /// IPresentationManager uses QueryInterruptTimePrecise
     #[allow(non_snake_case)]
     IPresentationManager {
-        QueryInterruptTimePrecise: unsafe extern "system" fn(*mut winapi::ctypes::c_ulonglong),
+        fnQueryInterruptTimePrecise: unsafe extern "system" fn(*mut winapi::ctypes::c_ulonglong),
     },
 }
 
@@ -28,7 +28,7 @@ impl std::fmt::Debug for PresentationTimer {
                 .field("frequency", &frequency)
                 .finish(),
             Self::IPresentationManager {
-                QueryInterruptTimePrecise,
+                fnQueryInterruptTimePrecise: QueryInterruptTimePrecise,
             } => f
                 .debug_struct("IPresentationManager")
                 .field(
@@ -57,12 +57,14 @@ impl PresentationTimer {
     /// Panics if QueryInterruptTimePrecise isn't found (below Win10)
     pub fn new_ipresentation_manager() -> Self {
         // We need to load this explicitly, as QueryInterruptTimePrecise is only available on Windows 10+
-        let kernel32 =
+        //
+        // Docs say it's in kernel32.dll, but it's actually in kernelbase.dll.
+        let kernelbase =
             libloading::os::windows::Library::open_already_loaded("kernelbase.dll").unwrap();
         // No concerns about lifetimes here as kernelbase is always there.
-        let ptr = unsafe { kernel32.get(b"QueryInterruptTimePrecise").unwrap() };
+        let ptr = unsafe { kernelbase.get(b"QueryInterruptTimePrecise").unwrap() };
         Self::IPresentationManager {
-            QueryInterruptTimePrecise: *ptr,
+            fnQueryInterruptTimePrecise: *ptr,
         }
     }
 
@@ -79,10 +81,10 @@ impl PresentationTimer {
                 (unsafe { *counter.QuadPart() } as u128 * 1_000_000_000) / frequency as u128
             }
             PresentationTimer::IPresentationManager {
-                QueryInterruptTimePrecise,
+                fnQueryInterruptTimePrecise,
             } => {
                 let mut counter = 0;
-                unsafe { QueryInterruptTimePrecise(&mut counter) };
+                unsafe { fnQueryInterruptTimePrecise(&mut counter) };
 
                 // QueryInterruptTimePrecise uses units of 100ns for its tick.
                 counter as u128 * 100

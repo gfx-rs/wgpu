@@ -1587,6 +1587,10 @@ impl crate::Adapter<super::Api> for super::Adapter {
         &self,
         user_timestamp_function: &mut dyn FnMut(),
     ) -> wgt::PresentationTimestamp {
+        // VK_GOOGLE_display_timing is the only way to get presentation
+        // timestamps on vulkan right now and it is only ever available
+        // on android and linux. This includes mac, but there's no alternative
+        // on mac, so this is fine.
         #[cfg(unix)]
         {
             let mut timespec = libc::timespec {
