@@ -7,7 +7,7 @@ use super::{conv, descriptor, view};
 use parking_lot::Mutex;
 use std::{ffi, mem, num::NonZeroU32, ptr, slice, sync::Arc};
 use winapi::{
-    shared::{dxgiformat, dxgitype, winerror},
+    shared::{dxgiformat, dxgitype, minwindef::BOOL, winerror},
     um::{d3d12, d3dcompiler, synchapi, winbase},
     Interface,
 };
@@ -182,7 +182,7 @@ impl super::Device {
             .fence
             .set_event_on_completion(self.idler.event, value);
         hr.into_device_result("Set event")?;
-        synchapi::WaitForSingleObject(self.idler.event.0, winbase::INFINITE);
+        unsafe { synchapi::WaitForSingleObject(self.idler.event.0, winbase::INFINITE) };
         Ok(())
     }
 
@@ -319,13 +319,13 @@ impl super::Device {
 impl crate::Device<super::Api> for super::Device {
     unsafe fn exit(self, queue: super::Queue) {
         self.rtv_pool.lock().free_handle(self.null_rtv_handle);
-        self.rtv_pool.into_inner().destroy();
-        self.dsv_pool.into_inner().destroy();
-        self.srv_uav_pool.into_inner().destroy();
-        self.sampler_pool.into_inner().destroy();
-        self.shared.destroy();
-        self.idler.destroy();
-        queue.raw.destroy();
+        unsafe { self.rtv_pool.into_inner().destroy() };
+        unsafe { self.dsv_pool.into_inner().destroy() };
+        unsafe { self.srv_uav_pool.into_inner().destroy() };
+        unsafe { self.sampler_pool.into_inner().destroy() };
+        unsafe { self.shared.destroy() };
+        unsafe { self.idler.destroy() };
+        unsafe { queue.raw.destroy() };
     }
 
     unsafe fn create_buffer(
@@ -377,30 +377,32 @@ impl crate::Device<super::Api> for super::Device {
             VisibleNodeMask: 0,
         };
 
-        let hr = self.raw.CreateCommittedResource(
-            &heap_properties,
-            if self.private_caps.heap_create_not_zeroed {
-                D3D12_HEAP_FLAG_CREATE_NOT_ZEROED
-            } else {
-                d3d12::D3D12_HEAP_FLAG_NONE
-            },
-            &raw_desc,
-            d3d12::D3D12_RESOURCE_STATE_COMMON,
-            ptr::null(),
-            &d3d12::ID3D12Resource::uuidof(),
-            resource.mut_void(),
-        );
+        let hr = unsafe {
+            self.raw.CreateCommittedResource(
+                &heap_properties,
+                if self.private_caps.heap_create_not_zeroed {
+                    D3D12_HEAP_FLAG_CREATE_NOT_ZEROED
+                } else {
+                    d3d12::D3D12_HEAP_FLAG_NONE
+                },
+                &raw_desc,
+                d3d12::D3D12_RESOURCE_STATE_COMMON,
+                ptr::null(),
+                &d3d12::ID3D12Resource::uuidof(),
+                resource.mut_void(),
+            )
+        };
 
         hr.into_device_result("Buffer creation")?;
         if let Some(label) = desc.label {
             let cwstr = conv::map_label(label);
-            resource.SetName(cwstr.as_ptr());
+            unsafe { resource.SetName(cwstr.as_ptr()) };
         }
 
         Ok(super::Buffer { resource, size })
     }
     unsafe fn destroy_buffer(&self, buffer: super::Buffer) {
-        buffer.resource.destroy();
+        unsafe { buffer.resource.destroy() };
     }
     unsafe fn map_buffer(
         &self,
@@ -408,17 +410,17 @@ impl crate::Device<super::Api> for super::Device {
         range: crate::MemoryRange,
     ) -> Result<crate::BufferMapping, crate::DeviceError> {
         let mut ptr = ptr::null_mut();
-        let hr = (*buffer.resource).Map(0, ptr::null(), &mut ptr);
+        let hr = unsafe { (*buffer.resource).Map(0, ptr::null(), &mut ptr) };
         hr.into_device_result("Map buffer")?;
         Ok(crate::BufferMapping {
-            ptr: ptr::NonNull::new(ptr.offset(range.start as isize) as *mut _).unwrap(),
+            ptr: ptr::NonNull::new(unsafe { ptr.offset(range.start as isize) } as *mut _).unwrap(),
             //TODO: double-check this. Documentation is a bit misleading -
             // it implies that Map/Unmap is needed to invalidate/flush memory.
             is_coherent: true,
         })
     }
     unsafe fn unmap_buffer(&self, buffer: &super::Buffer) -> Result<(), crate::DeviceError> {
-        (*buffer.resource).Unmap(0, ptr::null());
+        unsafe { (*buffer.resource).Unmap(0, ptr::null()) };
         Ok(())
     }
     unsafe fn flush_mapped_ranges<I>(&self, _buffer: &super::Buffer, _ranges: I) {}
@@ -470,24 +472,26 @@ impl crate::Device<super::Api> for super::Device {
             VisibleNodeMask: 0,
         };
 
-        let hr = self.raw.CreateCommittedResource(
-            &heap_properties,
-            if self.private_caps.heap_create_not_zeroed {
-                D3D12_HEAP_FLAG_CREATE_NOT_ZEROED
-            } else {
-                d3d12::D3D12_HEAP_FLAG_NONE
-            },
-            &raw_desc,
-            d3d12::D3D12_RESOURCE_STATE_COMMON,
-            ptr::null(), // clear value
-            &d3d12::ID3D12Resource::uuidof(),
-            resource.mut_void(),
-        );
+        let hr = unsafe {
+            self.raw.CreateCommittedResource(
+                &heap_properties,
+                if self.private_caps.heap_create_not_zeroed {
+                    D3D12_HEAP_FLAG_CREATE_NOT_ZEROED
+                } else {
+                    d3d12::D3D12_HEAP_FLAG_NONE
+                },
+                &raw_desc,
+                d3d12::D3D12_RESOURCE_STATE_COMMON,
+                ptr::null(), // clear value
+                &d3d12::ID3D12Resource::uuidof(),
+                resource.mut_void(),
+            )
+        };
 
         hr.into_device_result("Texture creation")?;
         if let Some(label) = desc.label {
             let cwstr = conv::map_label(label);
-            resource.SetName(cwstr.as_ptr());
+            unsafe { resource.SetName(cwstr.as_ptr()) };
         }
 
         Ok(super::Texture {
@@ -500,7 +504,7 @@ impl crate::Device<super::Api> for super::Device {
         })
     }
     unsafe fn destroy_texture(&self, texture: super::Texture) {
-        texture.resource.destroy();
+        unsafe { texture.resource.destroy() };
     }
 
     unsafe fn create_texture_view(
@@ -518,13 +522,15 @@ impl crate::Device<super::Api> for super::Device {
                 texture.calc_subresource(desc.range.base_mip_level, desc.range.base_array_layer, 0),
             ),
             handle_srv: if desc.usage.intersects(crate::TextureUses::RESOURCE) {
-                let raw_desc = view_desc.to_srv();
+                let raw_desc = unsafe { view_desc.to_srv() };
                 let handle = self.srv_uav_pool.lock().alloc_handle();
-                self.raw.CreateShaderResourceView(
-                    texture.resource.as_mut_ptr(),
-                    &raw_desc,
-                    handle.raw,
-                );
+                unsafe {
+                    self.raw.CreateShaderResourceView(
+                        texture.resource.as_mut_ptr(),
+                        &raw_desc,
+                        handle.raw,
+                    )
+                };
                 Some(handle)
             } else {
                 None
@@ -532,26 +538,30 @@ impl crate::Device<super::Api> for super::Device {
             handle_uav: if desc.usage.intersects(
                 crate::TextureUses::STORAGE_READ | crate::TextureUses::STORAGE_READ_WRITE,
             ) {
-                let raw_desc = view_desc.to_uav();
+                let raw_desc = unsafe { view_desc.to_uav() };
                 let handle = self.srv_uav_pool.lock().alloc_handle();
-                self.raw.CreateUnorderedAccessView(
-                    texture.resource.as_mut_ptr(),
-                    ptr::null_mut(),
-                    &raw_desc,
-                    handle.raw,
-                );
+                unsafe {
+                    self.raw.CreateUnorderedAccessView(
+                        texture.resource.as_mut_ptr(),
+                        ptr::null_mut(),
+                        &raw_desc,
+                        handle.raw,
+                    )
+                };
                 Some(handle)
             } else {
                 None
             },
             handle_rtv: if desc.usage.intersects(crate::TextureUses::COLOR_TARGET) {
-                let raw_desc = view_desc.to_rtv();
+                let raw_desc = unsafe { view_desc.to_rtv() };
                 let handle = self.rtv_pool.lock().alloc_handle();
-                self.raw.CreateRenderTargetView(
-                    texture.resource.as_mut_ptr(),
-                    &raw_desc,
-                    handle.raw,
-                );
+                unsafe {
+                    self.raw.CreateRenderTargetView(
+                        texture.resource.as_mut_ptr(),
+                        &raw_desc,
+                        handle.raw,
+                    )
+                };
                 Some(handle)
             } else {
                 None
@@ -560,13 +570,15 @@ impl crate::Device<super::Api> for super::Device {
                 .usage
                 .intersects(crate::TextureUses::DEPTH_STENCIL_READ)
             {
-                let raw_desc = view_desc.to_dsv(desc.format.into());
+                let raw_desc = unsafe { view_desc.to_dsv(desc.format.into()) };
                 let handle = self.dsv_pool.lock().alloc_handle();
-                self.raw.CreateDepthStencilView(
-                    texture.resource.as_mut_ptr(),
-                    &raw_desc,
-                    handle.raw,
-                );
+                unsafe {
+                    self.raw.CreateDepthStencilView(
+                        texture.resource.as_mut_ptr(),
+                        &raw_desc,
+                        handle.raw,
+                    )
+                };
                 Some(handle)
             } else {
                 None
@@ -575,13 +587,15 @@ impl crate::Device<super::Api> for super::Device {
                 .usage
                 .intersects(crate::TextureUses::DEPTH_STENCIL_WRITE)
             {
-                let raw_desc = view_desc.to_dsv(FormatAspects::empty());
+                let raw_desc = unsafe { view_desc.to_dsv(FormatAspects::empty()) };
                 let handle = self.dsv_pool.lock().alloc_handle();
-                self.raw.CreateDepthStencilView(
-                    texture.resource.as_mut_ptr(),
-                    &raw_desc,
-                    handle.raw,
-                );
+                unsafe {
+                    self.raw.CreateDepthStencilView(
+                        texture.resource.as_mut_ptr(),
+                        &raw_desc,
+                        handle.raw,
+                    )
+                };
                 Some(handle)
             } else {
                 None
@@ -664,7 +678,7 @@ impl crate::Device<super::Api> for super::Device {
 
         if let Some(label) = desc.label {
             let cwstr = conv::map_label(label);
-            allocator.SetName(cwstr.as_ptr());
+            unsafe { allocator.SetName(cwstr.as_ptr()) };
         }
 
         Ok(super::CommandEncoder {
@@ -681,12 +695,12 @@ impl crate::Device<super::Api> for super::Device {
     unsafe fn destroy_command_encoder(&self, encoder: super::CommandEncoder) {
         if let Some(list) = encoder.list {
             list.close();
-            list.destroy();
+            unsafe { list.destroy() };
         }
         for list in encoder.free_lists {
-            list.destroy();
+            unsafe { list.destroy() };
         }
-        encoder.allocator.destroy();
+        unsafe { encoder.allocator.destroy() };
     }
 
     unsafe fn create_bind_group_layout(
@@ -737,10 +751,10 @@ impl crate::Device<super::Api> for super::Device {
     }
     unsafe fn destroy_bind_group_layout(&self, bg_layout: super::BindGroupLayout) {
         if let Some(cpu_heap) = bg_layout.cpu_heap_views {
-            cpu_heap.destroy();
+            unsafe { cpu_heap.destroy() };
         }
         if let Some(cpu_heap) = bg_layout.cpu_heap_samplers {
-            cpu_heap.destroy();
+            unsafe { cpu_heap.destroy() };
         }
     }
 
@@ -1064,9 +1078,9 @@ impl crate::Device<super::Api> for super::Device {
         if !error.is_null() {
             log::error!(
                 "Root signature serialization error: {:?}",
-                error.as_c_str().to_str().unwrap()
+                unsafe { error.as_c_str() }.to_str().unwrap()
             );
-            error.destroy();
+            unsafe { error.destroy() };
             return Err(crate::DeviceError::Lost);
         }
 
@@ -1074,13 +1088,13 @@ impl crate::Device<super::Api> for super::Device {
             .raw
             .create_root_signature(blob, 0)
             .into_device_result("Root signature creation")?;
-        blob.destroy();
+        unsafe { blob.destroy() };
 
         log::debug!("\traw = {:?}", raw);
 
         if let Some(label) = desc.label {
             let cwstr = conv::map_label(label);
-            raw.SetName(cwstr.as_ptr());
+            unsafe { raw.SetName(cwstr.as_ptr()) };
         }
 
         Ok(super::PipelineLayout {
@@ -1101,7 +1115,7 @@ impl crate::Device<super::Api> for super::Device {
         })
     }
     unsafe fn destroy_pipeline_layout(&self, pipeline_layout: super::PipelineLayout) {
-        pipeline_layout.shared.signature.destroy();
+        unsafe { pipeline_layout.shared.signature.destroy() };
     }
 
     unsafe fn create_bind_group(
@@ -1155,7 +1169,7 @@ impl crate::Device<super::Api> for super::Device {
                                     BufferLocation: gpu_address,
                                     SizeInBytes: ((size - 1) | size_mask) + 1,
                                 };
-                                self.raw.CreateConstantBufferView(&raw_desc, handle);
+                                unsafe { self.raw.CreateConstantBufferView(&raw_desc, handle) };
                             }
                             wgt::BufferBindingType::Storage { read_only: true } => {
                                 let mut raw_desc = d3d12::D3D12_SHADER_RESOURCE_VIEW_DESC {
@@ -1163,39 +1177,47 @@ impl crate::Device<super::Api> for super::Device {
                                     Shader4ComponentMapping:
                                         view::D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
                                     ViewDimension: d3d12::D3D12_SRV_DIMENSION_BUFFER,
-                                    u: mem::zeroed(),
+                                    u: unsafe { mem::zeroed() },
                                 };
-                                *raw_desc.u.Buffer_mut() = d3d12::D3D12_BUFFER_SRV {
-                                    FirstElement: data.offset / 4,
-                                    NumElements: size / 4,
-                                    StructureByteStride: 0,
-                                    Flags: d3d12::D3D12_BUFFER_SRV_FLAG_RAW,
+                                unsafe {
+                                    *raw_desc.u.Buffer_mut() = d3d12::D3D12_BUFFER_SRV {
+                                        FirstElement: data.offset / 4,
+                                        NumElements: size / 4,
+                                        StructureByteStride: 0,
+                                        Flags: d3d12::D3D12_BUFFER_SRV_FLAG_RAW,
+                                    }
                                 };
-                                self.raw.CreateShaderResourceView(
-                                    data.buffer.resource.as_mut_ptr(),
-                                    &raw_desc,
-                                    handle,
-                                );
+                                unsafe {
+                                    self.raw.CreateShaderResourceView(
+                                        data.buffer.resource.as_mut_ptr(),
+                                        &raw_desc,
+                                        handle,
+                                    )
+                                };
                             }
                             wgt::BufferBindingType::Storage { read_only: false } => {
                                 let mut raw_desc = d3d12::D3D12_UNORDERED_ACCESS_VIEW_DESC {
                                     Format: dxgiformat::DXGI_FORMAT_R32_TYPELESS,
                                     ViewDimension: d3d12::D3D12_UAV_DIMENSION_BUFFER,
-                                    u: mem::zeroed(),
+                                    u: unsafe { mem::zeroed() },
                                 };
-                                *raw_desc.u.Buffer_mut() = d3d12::D3D12_BUFFER_UAV {
-                                    FirstElement: data.offset / 4,
-                                    NumElements: size / 4,
-                                    StructureByteStride: 0,
-                                    CounterOffsetInBytes: 0,
-                                    Flags: d3d12::D3D12_BUFFER_UAV_FLAG_RAW,
+                                unsafe {
+                                    *raw_desc.u.Buffer_mut() = d3d12::D3D12_BUFFER_UAV {
+                                        FirstElement: data.offset / 4,
+                                        NumElements: size / 4,
+                                        StructureByteStride: 0,
+                                        CounterOffsetInBytes: 0,
+                                        Flags: d3d12::D3D12_BUFFER_UAV_FLAG_RAW,
+                                    }
                                 };
-                                self.raw.CreateUnorderedAccessView(
-                                    data.buffer.resource.as_mut_ptr(),
-                                    ptr::null_mut(),
-                                    &raw_desc,
-                                    handle,
-                                );
+                                unsafe {
+                                    self.raw.CreateUnorderedAccessView(
+                                        data.buffer.resource.as_mut_ptr(),
+                                        ptr::null_mut(),
+                                        &raw_desc,
+                                        handle,
+                                    )
+                                };
                             }
                         }
                         inner.stage.push(handle);
@@ -1229,24 +1251,28 @@ impl crate::Device<super::Api> for super::Device {
 
         let handle_views = match cpu_views {
             Some(inner) => {
-                let dual = descriptor::upload(
-                    self.raw,
-                    &*inner,
-                    &self.shared.heap_views,
-                    &desc.layout.copy_counts,
-                )?;
+                let dual = unsafe {
+                    descriptor::upload(
+                        self.raw,
+                        &inner,
+                        &self.shared.heap_views,
+                        &desc.layout.copy_counts,
+                    )
+                }?;
                 Some(dual)
             }
             None => None,
         };
         let handle_samplers = match cpu_samplers {
             Some(inner) => {
-                let dual = descriptor::upload(
-                    self.raw,
-                    &*inner,
-                    &self.shared.heap_samplers,
-                    &desc.layout.copy_counts,
-                )?;
+                let dual = unsafe {
+                    descriptor::upload(
+                        self.raw,
+                        &inner,
+                        &self.shared.heap_samplers,
+                        &desc.layout.copy_counts,
+                    )
+                }?;
                 Some(dual)
             }
             None => None,
@@ -1260,10 +1286,10 @@ impl crate::Device<super::Api> for super::Device {
     }
     unsafe fn destroy_bind_group(&self, group: super::BindGroup) {
         if let Some(dual) = group.handle_views {
-            let _ = self.shared.heap_views.free_slice(dual);
+            self.shared.heap_views.free_slice(dual);
         }
         if let Some(dual) = group.handle_samplers {
-            let _ = self.shared.heap_samplers.free_slice(dual);
+            self.shared.heap_samplers.free_slice(dual);
         }
     }
 
@@ -1358,8 +1384,8 @@ impl crate::Device<super::Api> for super::Device {
             DepthBias: bias.constant,
             DepthBiasClamp: bias.clamp,
             SlopeScaledDepthBias: bias.slope_scale,
-            DepthClipEnable: if desc.primitive.unclipped_depth { 0 } else { 1 },
-            MultisampleEnable: if desc.multisample.count > 1 { 1 } else { 0 },
+            DepthClipEnable: BOOL::from(!desc.primitive.unclipped_depth),
+            MultisampleEnable: BOOL::from(desc.multisample.count > 1),
             ForcedSampleCount: 0,
             AntialiasedLineEnable: 0,
             ConservativeRaster: if desc.primitive.conservative {
@@ -1388,11 +1414,7 @@ impl crate::Device<super::Api> for super::Device {
                 RasterizedStream: 0,
             },
             BlendState: d3d12::D3D12_BLEND_DESC {
-                AlphaToCoverageEnable: if desc.multisample.alpha_to_coverage_enabled {
-                    1
-                } else {
-                    0
-                },
+                AlphaToCoverageEnable: BOOL::from(desc.multisample.alpha_to_coverage_enabled),
                 IndependentBlendEnable: 1,
                 RenderTarget: conv::map_render_targets(desc.color_targets),
             },
@@ -1400,7 +1422,7 @@ impl crate::Device<super::Api> for super::Device {
             RasterizerState: raw_rasterizer,
             DepthStencilState: match desc.depth_stencil {
                 Some(ref ds) => conv::map_depth_stencil(ds),
-                None => mem::zeroed(),
+                None => unsafe { mem::zeroed() },
             },
             InputLayout: d3d12::D3D12_INPUT_LAYOUT_DESC {
                 pInputElementDescs: if input_element_descs.is_empty() {
@@ -1441,16 +1463,18 @@ impl crate::Device<super::Api> for super::Device {
         let mut raw = native::PipelineState::null();
         let hr = {
             profiling::scope!("ID3D12Device::CreateGraphicsPipelineState");
-            self.raw.CreateGraphicsPipelineState(
-                &raw_desc,
-                &d3d12::ID3D12PipelineState::uuidof(),
-                raw.mut_void(),
-            )
+            unsafe {
+                self.raw.CreateGraphicsPipelineState(
+                    &raw_desc,
+                    &d3d12::ID3D12PipelineState::uuidof(),
+                    raw.mut_void(),
+                )
+            }
         };
 
-        blob_vs.destroy();
+        unsafe { blob_vs.destroy() };
         if !blob_fs.is_null() {
-            blob_fs.destroy();
+            unsafe { blob_fs.destroy() };
         }
 
         hr.into_result()
@@ -1458,7 +1482,7 @@ impl crate::Device<super::Api> for super::Device {
 
         if let Some(name) = desc.label {
             let cwstr = conv::map_label(name);
-            raw.SetName(cwstr.as_ptr());
+            unsafe { raw.SetName(cwstr.as_ptr()) };
         }
 
         Ok(super::RenderPipeline {
@@ -1469,7 +1493,7 @@ impl crate::Device<super::Api> for super::Device {
         })
     }
     unsafe fn destroy_render_pipeline(&self, pipeline: super::RenderPipeline) {
-        pipeline.raw.destroy();
+        unsafe { pipeline.raw.destroy() };
     }
 
     unsafe fn create_compute_pipeline(
@@ -1489,7 +1513,7 @@ impl crate::Device<super::Api> for super::Device {
             )
         };
 
-        blob_cs.destroy();
+        unsafe { blob_cs.destroy() };
 
         let raw = pair.into_result().map_err(|err| {
             crate::PipelineError::Linkage(wgt::ShaderStages::COMPUTE, err.into_owned())
@@ -1497,7 +1521,7 @@ impl crate::Device<super::Api> for super::Device {
 
         if let Some(name) = desc.label {
             let cwstr = conv::map_label(name);
-            raw.SetName(cwstr.as_ptr());
+            unsafe { raw.SetName(cwstr.as_ptr()) };
         }
 
         Ok(super::ComputePipeline {
@@ -1506,7 +1530,7 @@ impl crate::Device<super::Api> for super::Device {
         })
     }
     unsafe fn destroy_compute_pipeline(&self, pipeline: super::ComputePipeline) {
-        pipeline.raw.destroy();
+        unsafe { pipeline.raw.destroy() };
     }
 
     unsafe fn create_query_set(
@@ -1535,34 +1559,36 @@ impl crate::Device<super::Api> for super::Device {
 
         if let Some(label) = desc.label {
             let cwstr = conv::map_label(label);
-            raw.SetName(cwstr.as_ptr());
+            unsafe { raw.SetName(cwstr.as_ptr()) };
         }
 
         Ok(super::QuerySet { raw, raw_ty })
     }
     unsafe fn destroy_query_set(&self, set: super::QuerySet) {
-        set.raw.destroy();
+        unsafe { set.raw.destroy() };
     }
 
     unsafe fn create_fence(&self) -> Result<super::Fence, crate::DeviceError> {
         let mut raw = native::Fence::null();
-        let hr = self.raw.CreateFence(
-            0,
-            d3d12::D3D12_FENCE_FLAG_NONE,
-            &d3d12::ID3D12Fence::uuidof(),
-            raw.mut_void(),
-        );
+        let hr = unsafe {
+            self.raw.CreateFence(
+                0,
+                d3d12::D3D12_FENCE_FLAG_NONE,
+                &d3d12::ID3D12Fence::uuidof(),
+                raw.mut_void(),
+            )
+        };
         hr.into_device_result("Fence creation")?;
         Ok(super::Fence { raw })
     }
     unsafe fn destroy_fence(&self, fence: super::Fence) {
-        fence.raw.destroy();
+        unsafe { fence.raw.destroy() };
     }
     unsafe fn get_fence_value(
         &self,
         fence: &super::Fence,
     ) -> Result<crate::FenceValue, crate::DeviceError> {
-        Ok(fence.raw.GetCompletedValue())
+        Ok(unsafe { fence.raw.GetCompletedValue() })
     }
     unsafe fn wait(
         &self,
@@ -1570,13 +1596,13 @@ impl crate::Device<super::Api> for super::Device {
         value: crate::FenceValue,
         timeout_ms: u32,
     ) -> Result<bool, crate::DeviceError> {
-        if fence.raw.GetCompletedValue() >= value {
+        if unsafe { fence.raw.GetCompletedValue() } >= value {
             return Ok(true);
         }
         let hr = fence.raw.set_event_on_completion(self.idler.event, value);
         hr.into_device_result("Set event")?;
 
-        match synchapi::WaitForSingleObject(self.idler.event.0, timeout_ms) {
+        match unsafe { synchapi::WaitForSingleObject(self.idler.event.0, timeout_ms) } {
             winbase::WAIT_ABANDONED | winbase::WAIT_FAILED => Err(crate::DeviceError::Lost),
             winbase::WAIT_OBJECT_0 => Ok(true),
             winerror::WAIT_TIMEOUT => Ok(false),
@@ -1590,8 +1616,10 @@ impl crate::Device<super::Api> for super::Device {
     unsafe fn start_capture(&self) -> bool {
         #[cfg(feature = "renderdoc")]
         {
-            self.render_doc
-                .start_frame_capture(self.raw.as_mut_ptr() as *mut _, ptr::null_mut())
+            unsafe {
+                self.render_doc
+                    .start_frame_capture(self.raw.as_mut_ptr() as *mut _, ptr::null_mut())
+            }
         }
         #[cfg(not(feature = "renderdoc"))]
         false
@@ -1599,7 +1627,9 @@ impl crate::Device<super::Api> for super::Device {
 
     unsafe fn stop_capture(&self) {
         #[cfg(feature = "renderdoc")]
-        self.render_doc
-            .end_frame_capture(self.raw.as_mut_ptr() as *mut _, ptr::null_mut())
+        unsafe {
+            self.render_doc
+                .end_frame_capture(self.raw.as_mut_ptr() as *mut _, ptr::null_mut())
+        }
     }
 }

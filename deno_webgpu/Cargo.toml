@@ -4,15 +4,15 @@
 name = "deno_webgpu"
 version = "0.63.0"
 authors = ["the Deno authors"]
-edition = "2021"
+edition.workspace = true
 license = "MIT"
 readme = "README.md"
-repository = "https://github.com/gfx-rs/wgpu"
+repository.workspace = true
 description = "WebGPU implementation for Deno"
 
 [dependencies]
-deno_core = "0.151.0"
-serde = { version = "1.0", features = ["derive"] }
-tokio = { version = "1.19", features = ["full"] }
-wgpu-core = { path = "../wgpu-core", features = ["trace", "replay", "serde", "strict_asserts", "wgsl"] }
-wgpu-types = { path = "../wgpu-types", features = ["trace", "replay", "serde"] }
+deno_core.workspace = true
+serde = { workspace = true, features = ["derive"] }
+tokio = { workspace = true, features = ["full"] }
+wgpu-core = { workspace = true, features = ["trace", "replay", "serde", "strict_asserts", "wgsl"] }
+wgpu-types = { workspace = true, features = ["trace", "replay", "serde"] }

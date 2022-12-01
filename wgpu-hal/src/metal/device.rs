@@ -16,7 +16,17 @@ struct CompiledShader {
     function: mtl::Function,
     wg_size: mtl::MTLSize,
     wg_memory_sizes: Vec<u32>,
+
+    /// Bindings of WGSL `storage` globals that contain variable-sized arrays.
+    ///
+    /// In order to implement bounds checks and the `arrayLength` function for
+    /// WGSL runtime-sized arrays, we pass the entry point a struct with a
+    /// member for each global variable that contains such an array. That member
+    /// is a `u32` holding the variable's total size in bytes---which is simply
+    /// the size of the `Buffer` supplying that variable's contents for the
+    /// draw call.
     sized_bindings: Vec<naga::ResourceBinding>,
+
     immutable_buffer_mask: usize,
 }
 
@@ -256,7 +266,7 @@ impl crate::Device<super::Api> for super::Device {
         let ptr = buffer.raw.contents() as *mut u8;
         assert!(!ptr.is_null());
         Ok(crate::BufferMapping {
-            ptr: ptr::NonNull::new(ptr.offset(range.start as isize)).unwrap(),
+            ptr: ptr::NonNull::new(unsafe { ptr.offset(range.start as isize) }).unwrap(),
             is_coherent: true,
         })
     }
@@ -724,6 +734,8 @@ impl crate::Device<super::Api> for super::Device {
                         let end = start + size as usize;
                         bg.buffers
                             .extend(desc.buffers[start..end].iter().map(|source| {
+                                // Given the restrictions on `BufferBinding::offset`,
+                                // this should never be `None`.
                                 let remaining_size =
                                     wgt::BufferSize::new(source.buffer.size - source.offset);
                                 let binding_size = match ty {

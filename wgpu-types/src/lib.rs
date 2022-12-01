@@ -2,16 +2,59 @@
  *  This API is used for targeting both Web and Native.
  */
 
+#![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
 #![allow(
     // We don't use syntax sugar where it's not necessary.
     clippy::match_like_matches_macro,
 )]
-#![warn(missing_docs)]
+#![warn(missing_docs, unsafe_op_in_unsafe_fn)]
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 use std::hash::{Hash, Hasher};
 use std::{num::NonZeroU32, ops::Range};
+
+// Use this macro instead of the one provided by the bitflags_serde_shim crate
+// because the latter produces an error when deserializing bits that are not
+// specified in the bitflags, while we want deserialization to succeed and
+// and unspecified bits to lead to errors handled in wgpu-core.
+// Note that plainly deriving Serialize and Deserialized would have a similar
+// behavior to this macro (unspecified bit do not produce an error).
+macro_rules! impl_bitflags {
+    ($name:ident) => {
+        #[cfg(feature = "trace")]
+        impl serde::Serialize for $name {
+            fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+            where
+                S: serde::Serializer,
+            {
+                self.bits().serialize(serializer)
+            }
+        }
+
+        #[cfg(feature = "replay")]
+        impl<'de> serde::Deserialize<'de> for $name {
+            fn deserialize<D>(deserializer: D) -> Result<$name, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                let value = <_ as serde::Deserialize<'de>>::deserialize(deserializer)?;
+                // Note: newer version of bitflags replaced from_bits_unchecked with
+                // from_bits_retain which is not marked as unsafe (same implementation).
+                Ok(unsafe { $name::from_bits_unchecked(value) })
+            }
+        }
+
+        impl $name {
+            /// Returns true if the bitflags contains bits that are not part of
+            /// the bitflags definition.
+            pub fn contains_invalid_bits(&self) -> bool {
+                let all = Self::all().bits();
+                (self.bits() | all) != all
+            }
+        }
+    };
+}
 
 /// Integral type used for buffer offsets.
 pub type BufferAddress = u64;
@@ -114,8 +157,7 @@ bitflags::bitflags! {
     }
 }
 
-#[cfg(feature = "bitflags_serde_shim")]
-bitflags_serde_shim::impl_serde_for_bitflags!(Backends);
+impl_bitflags!(Backends);
 
 impl From<Backend> for Backends {
     fn from(backend: Backend) -> Self {
@@ -187,15 +229,6 @@ bitflags::bitflags! {
         ///
         /// This is a web and native feature.
         const DEPTH_CLIP_CONTROL = 1 << 0;
-        /// Allows for explicit creation of textures of format [`TextureFormat::Depth24PlusStencil8`]
-        ///
-        /// Supported platforms:
-        /// - Vulkan (some)
-        /// - DX12
-        /// - Metal (Macs with amd GPUs)
-        ///
-        /// This is a web and native feature.
-        const DEPTH24PLUS_STENCIL8 = 1 << 1;
         /// Allows for explicit creation of textures of format [`TextureFormat::Depth32FloatStencil8`]
         ///
         /// Supported platforms:
@@ -316,7 +349,9 @@ bitflags::bitflags! {
         /// the consequences.
         ///
         /// Supported platforms:
-        /// - All
+        /// - Vulkan
+        /// - DX12
+        /// - Metal
         ///
         /// This is a native only feature.
         const MAPPABLE_PRIMARY_BUFFERS = 1 << 16;
@@ -586,6 +621,7 @@ bitflags::bitflags! {
         ///
         /// Supported platforms:
         /// - Vulkan
+        /// - OpenGL (web only)
         ///
         /// This is a native only feature.
         const MULTIVIEW = 1 << 37;
@@ -638,8 +674,7 @@ bitflags::bitflags! {
     }
 }
 
-#[cfg(feature = "bitflags_serde_shim")]
-bitflags_serde_shim::impl_serde_for_bitflags!(Features);
+impl_bitflags!(Features);
 
 impl Features {
     /// Mask of all features which are part of the upstream WebGPU standard.
@@ -1061,7 +1096,7 @@ bitflags::bitflags! {
 
         /// Supports samplers with anisotropic filtering. Note this isn't actually required by
         /// WebGPU, the implementation is allowed to completely ignore aniso clamp. This flag is
-        /// here for native backends so they can comunicate to the user of aniso is enabled.
+        /// here for native backends so they can communicate to the user of aniso is enabled.
         ///
         /// All backends and all devices support anisotropic filtering.
         const ANISOTROPIC_FILTERING = 1 << 10;
@@ -1085,11 +1120,17 @@ bitflags::bitflags! {
         ///
         /// WebGL doesn't support this.
         const BUFFER_BINDINGS_NOT_16_BYTE_ALIGNED = 1 << 15;
+
+        /// Supports buffers to combine [`BufferUsages::INDEX`] with usages other than [`BufferUsages::COPY_DST`] and [`BufferUsages::COPY_SRC`].
+        /// Furthermore, in absence of this feature it is not allowed to copy index buffers from/to buffers with a set of usage flags containing
+         /// [`BufferUsages::VERTEX`]/[`BufferUsages::UNIFORM`]/[`BufferUsages::STORAGE`] or [`BufferUsages::INDIRECT`].
+        ///
+        /// WebGL doesn't support this.
+        const UNRESTRICTED_INDEX_BUFFER = 1 << 16;
     }
 }
 
-#[cfg(feature = "bitflags_serde_shim")]
-bitflags_serde_shim::impl_serde_for_bitflags!(DownlevelFlags);
+impl_bitflags!(DownlevelFlags);
 
 impl DownlevelFlags {
     /// All flags that indicate if the backend is WebGPU compliant
@@ -1211,8 +1252,7 @@ bitflags::bitflags! {
     }
 }
 
-#[cfg(feature = "bitflags_serde_shim")]
-bitflags_serde_shim::impl_serde_for_bitflags!(ShaderStages);
+impl_bitflags!(ShaderStages);
 
 /// Dimensions of a particular texture view.
 ///
@@ -1627,24 +1667,44 @@ bitflags::bitflags! {
         /// If not present, the texture can't be sampled with a filtering sampler.
         /// This may overwrite TextureSampleType::Float.filterable
         const FILTERABLE = 1 << 0;
-        /// Allows [`TextureDescriptor::sample_count`] greater than `1`.
-        const MULTISAMPLE = 1 << 1;
+        /// Allows [`TextureDescriptor::sample_count`] to be `2`.
+        const MULTISAMPLE_X2 = 1 << 1;
+          /// Allows [`TextureDescriptor::sample_count`] to be `4`.
+        const MULTISAMPLE_X4 = 1 << 2 ;
+          /// Allows [`TextureDescriptor::sample_count`] to be `8`.
+        const MULTISAMPLE_X8 = 1 << 3 ;
         /// Allows a texture of this format to back a view passed as `resolve_target`
         /// to a render pass for an automatic driver-implemented resolve.
-        const MULTISAMPLE_RESOLVE = 1 << 2;
+        const MULTISAMPLE_RESOLVE = 1 << 4;
         /// When used as a STORAGE texture, then a texture with this format can be bound with
         /// [`StorageTextureAccess::ReadOnly`] or [`StorageTextureAccess::ReadWrite`].
-        const STORAGE_READ_WRITE = 1 << 3;
+        const STORAGE_READ_WRITE = 1 << 5;
         /// When used as a STORAGE texture, then a texture with this format can be written to with atomics.
         // TODO: No access flag exposed as of writing
-        const STORAGE_ATOMICS = 1 << 4;
+        const STORAGE_ATOMICS = 1 << 6;
         /// If not present, the texture can't be blended into the render target.
-        const BLENDABLE = 1 << 5;
+        const BLENDABLE = 1 << 7;
     }
 }
 
-#[cfg(feature = "bitflags_serde_shim")]
-bitflags_serde_shim::impl_serde_for_bitflags!(TextureFormatFeatureFlags);
+impl TextureFormatFeatureFlags {
+    /// Sample count supported by a given texture format.
+    ///
+    /// returns `true` if `count` is a supported sample count.
+    pub fn sample_count_supported(&self, count: u32) -> bool {
+        use TextureFormatFeatureFlags as tfsc;
+
+        match count {
+            1 => true,
+            2 => self.contains(tfsc::MULTISAMPLE_X2),
+            4 => self.contains(tfsc::MULTISAMPLE_X4),
+            8 => self.contains(tfsc::MULTISAMPLE_X8),
+            _ => false,
+        }
+    }
+}
+
+impl_bitflags!(TextureFormatFeatureFlags);
 
 /// Features supported by a given texture format
 ///
@@ -2289,7 +2349,6 @@ impl TextureFormat {
         let astc_hdr = Features::TEXTURE_COMPRESSION_ASTC_HDR;
         let norm16bit = Features::TEXTURE_FORMAT_16BIT_NORM;
         let d32_s8 = Features::DEPTH32FLOAT_STENCIL8;
-        let d24_s8 = Features::DEPTH24PLUS_STENCIL8;
 
         // Sample Types
         let uint = TextureSampleType::Uint;
@@ -2307,9 +2366,9 @@ impl TextureFormat {
 
         // Multisampling
         let noaa = TextureFormatFeatureFlags::empty();
-        let msaa = TextureFormatFeatureFlags::MULTISAMPLE;
-        let msaa_resolve =
-            TextureFormatFeatureFlags::MULTISAMPLE | TextureFormatFeatureFlags::MULTISAMPLE_RESOLVE;
+        let msaa = TextureFormatFeatureFlags::MULTISAMPLE_X4;
+        let msaa_resolve = TextureFormatFeatureFlags::MULTISAMPLE_X4
+            | TextureFormatFeatureFlags::MULTISAMPLE_RESOLVE;
 
         // Flags
         let basic =
@@ -2374,7 +2433,7 @@ impl TextureFormat {
             // Depth-stencil textures
             Self::Depth16Unorm =>        (   native,   depth,    linear,         msaa, (1, 1),  2, attachment, 1),
             Self::Depth24Plus =>         (   native,   depth,    linear,         msaa, (1, 1),  4, attachment, 1),
-            Self::Depth24PlusStencil8 => (   d24_s8,   depth,    linear,         msaa, (1, 1),  4, attachment, 2),
+            Self::Depth24PlusStencil8 => (   native,   depth,    linear,         msaa, (1, 1),  4, attachment, 2),
             Self::Depth32Float =>        (   native,   depth,    linear,         msaa, (1, 1),  4, attachment, 1),
             Self::Depth32FloatStencil8 =>(   d32_s8,   depth,    linear,         msaa, (1, 1),  4, attachment, 2),
             // Packed uncompressed
@@ -3063,8 +3122,7 @@ bitflags::bitflags! {
     }
 }
 
-#[cfg(feature = "bitflags_serde_shim")]
-bitflags_serde_shim::impl_serde_for_bitflags!(ColorWrites);
+impl_bitflags!(ColorWrites);
 
 impl Default for ColorWrites {
     fn default() -> Self {
@@ -3622,8 +3680,7 @@ bitflags::bitflags! {
     }
 }
 
-#[cfg(feature = "bitflags_serde_shim")]
-bitflags_serde_shim::impl_serde_for_bitflags!(BufferUsages);
+impl_bitflags!(BufferUsages);
 
 /// Describes a [`Buffer`](../wgpu/struct.Buffer.html).
 ///
@@ -3761,7 +3818,7 @@ pub enum PresentMode {
     Mailbox = 5,
 }
 
-/// Specifies how the alpha channel of the textures should be handled during (martin mouv i step)
+/// Specifies how the alpha channel of the textures should be handled during
 /// compositing.
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -3824,8 +3881,34 @@ bitflags::bitflags! {
     }
 }
 
-#[cfg(feature = "bitflags_serde_shim")]
-bitflags_serde_shim::impl_serde_for_bitflags!(TextureUsages);
+impl_bitflags!(TextureUsages);
+
+/// Defines the capabilities of a given surface and adapter.
+#[derive(Debug)]
+pub struct SurfaceCapabilities {
+    /// List of supported formats to use with the given adapter. The first format in the vector is preferred.
+    ///
+    /// Returns an empty vector if the surface is incompatible with the adapter.
+    pub formats: Vec<TextureFormat>,
+    /// List of supported presentation modes to use with the given adapter.
+    ///
+    /// Returns an empty vector if the surface is incompatible with the adapter.
+    pub present_modes: Vec<PresentMode>,
+    /// List of supported alpha modes to use with the given adapter.
+    ///
+    /// Will return at least one element, CompositeAlphaMode::Opaque or CompositeAlphaMode::Inherit.
+    pub alpha_modes: Vec<CompositeAlphaMode>,
+}
+
+impl Default for SurfaceCapabilities {
+    fn default() -> Self {
+        Self {
+            formats: Vec::new(),
+            present_modes: Vec::new(),
+            alpha_modes: vec![CompositeAlphaMode::Opaque],
+        }
+    }
+}
 
 /// Configures a [`Surface`] for presentation.
 ///
@@ -5024,8 +5107,7 @@ bitflags::bitflags! {
     }
 }
 
-#[cfg(feature = "bitflags_serde_shim")]
-bitflags_serde_shim::impl_serde_for_bitflags!(PipelineStatisticsTypes);
+impl_bitflags!(PipelineStatisticsTypes);
 
 /// Argument buffer layout for draw_indirect commands.
 #[repr(C)]

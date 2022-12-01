@@ -13,6 +13,7 @@ use std::cell::RefCell;
 use std::convert::TryFrom;
 use std::rc::Rc;
 use std::time::Duration;
+use wgpu_core::resource::BufferAccessResult;
 
 use super::error::DomExceptionOperationError;
 use super::error::WebGpuResult;
@@ -70,7 +71,7 @@ pub async fn op_webgpu_buffer_get_map_async(
     offset: u64,
     size: u64,
 ) -> Result<WebGpuResult, AnyError> {
-    let (sender, receiver) = oneshot::channel::<Result<(), AnyError>>();
+    let (sender, receiver) = oneshot::channel::<BufferAccessResult>();
 
     let device;
     {
@@ -84,12 +85,7 @@ pub async fn op_webgpu_buffer_get_map_async(
         device = device_resource.0;
 
         let callback = Box::new(move |status| {
-            sender
-                .send(match status {
-                    wgpu_core::resource::BufferMapAsyncStatus::Success => Ok(()),
-                    _ => unreachable!(), // TODO
-                })
-                .unwrap();
+            sender.send(status).unwrap();
         });
 
         // TODO(lucacasonato): error handling

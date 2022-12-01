@@ -316,8 +316,9 @@ impl<T, I: id::TypedId> Storage<T, I> {
     ///
     /// Returns [`None`] if there is an epoch mismatch, or the entry is empty.
     ///
-    /// This function is primarily intended for the `as_hal` family of functions where you may need to
-    /// fallibly get a object backed by an id that could be in a different hub.
+    /// This function is primarily intended for the `as_hal` family of functions
+    /// where you may need to fallibly get a object backed by an id that could
+    /// be in a different hub.
     pub(crate) fn try_get(&self, id: I) -> Result<Option<&T>, InvalidId> {
         let (index, epoch, _) = id.unzip();
         let (result, storage_epoch) = match self.map.get(index as usize) {
@@ -1155,7 +1156,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut surface_guard = self.surfaces.data.write();
         let hub = A::hub(self);
         // this is used for tests, which keep the adapter
-        hub.clear(&mut *surface_guard, false);
+        hub.clear(&mut surface_guard, false);
     }
 
     pub fn generate_report(&self) -> GlobalReport {
@@ -1204,23 +1205,23 @@ impl<G: GlobalIdentityHandlerFactory> Drop for Global<G> {
         // destroy hubs before the instance gets dropped
         #[cfg(vulkan)]
         {
-            self.hubs.vulkan.clear(&mut *surface_guard, true);
+            self.hubs.vulkan.clear(&mut surface_guard, true);
         }
         #[cfg(metal)]
         {
-            self.hubs.metal.clear(&mut *surface_guard, true);
+            self.hubs.metal.clear(&mut surface_guard, true);
         }
         #[cfg(dx12)]
         {
-            self.hubs.dx12.clear(&mut *surface_guard, true);
+            self.hubs.dx12.clear(&mut surface_guard, true);
         }
         #[cfg(dx11)]
         {
-            self.hubs.dx11.clear(&mut *surface_guard, true);
+            self.hubs.dx11.clear(&mut surface_guard, true);
         }
         #[cfg(gl)]
         {
-            self.hubs.gl.clear(&mut *surface_guard, true);
+            self.hubs.gl.clear(&mut surface_guard, true);
         }
 
         // destroy surfaces

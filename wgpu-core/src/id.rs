@@ -167,6 +167,7 @@ pub(crate) struct Valid<I>(pub I);
 pub trait TypedId: Copy {
     fn zip(index: Index, epoch: Epoch, backend: Backend) -> Self;
     fn unzip(self) -> (Index, Epoch, Backend);
+    fn into_raw(self) -> NonZeroId;
 }
 
 #[allow(trivial_numeric_casts)]
@@ -186,6 +187,10 @@ impl<T> TypedId for Id<T> {
             (((self.0.get() >> INDEX_BITS) as ZippedIndex) & (EPOCH_MASK as ZippedIndex)) as Index,
             self.backend(),
         )
+    }
+
+    fn into_raw(self) -> NonZeroId {
+        self.0
     }
 }
 

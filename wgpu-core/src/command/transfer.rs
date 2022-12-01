@@ -197,8 +197,15 @@ pub(crate) fn extract_texture_selector<A: hal::Api>(
     Ok((selector, base, format))
 }
 
-/// Function copied with some modifications from webgpu standard <https://gpuweb.github.io/gpuweb/#copy-between-buffer-texture>
-/// If successful, returns (number of buffer bytes required for this copy, number of bytes between array layers).
+/// WebGPU's [validating linear texture data][vltd] algorithm.
+///
+/// Copied with some modifications from WebGPU standard.
+///
+/// If successful, returns a pair `(bytes, stride)`, where:
+/// - `bytes` is the number of buffer bytes required for this copy, and
+/// - `stride` number of bytes between array layers.
+///
+/// [vltd]: https://gpuweb.github.io/gpuweb/#abstract-opdef-validating-linear-texture-data
 pub(crate) fn validate_linear_texture_data(
     layout: &wgt::ImageDataLayout,
     format: wgt::TextureFormat,
@@ -208,7 +215,10 @@ pub(crate) fn validate_linear_texture_data(
     copy_size: &Extent3d,
     need_copy_aligned_rows: bool,
 ) -> Result<(BufferAddress, BufferAddress), TransferError> {
-    // Convert all inputs to BufferAddress (u64) to prevent overflow issues
+    // Convert all inputs to BufferAddress (u64) to avoid some of the overflow issues
+    // Note: u64 is not always enough to prevent overflow, especially when multiplying
+    // something with a potentially large depth value, so it is preferrable to validate
+    // the copy size before calling this function (for example via `validate_texture_copy_range`).
     let copy_width = copy_size.width as BufferAddress;
     let copy_height = copy_size.height as BufferAddress;
     let copy_depth = copy_size.depth_or_array_layers as BufferAddress;
@@ -288,8 +298,13 @@ pub(crate) fn validate_linear_texture_data(
     Ok((required_bytes_in_copy, bytes_per_image))
 }
 
-/// Function copied with minor modifications from webgpu standard <https://gpuweb.github.io/gpuweb/#valid-texture-copy-range>
+/// WebGPU's [validating texture copy range][vtcr] algorithm.
+///
+/// Copied with minor modifications from WebGPU standard.
+///
 /// Returns the HAL copy extent and the layer count.
+///
+/// [vtcr]: https://gpuweb.github.io/gpuweb/#valid-texture-copy-range
 pub(crate) fn validate_texture_copy_range(
     texture_copy_view: &ImageCopyTexture,
     desc: &wgt::TextureDescriptor<()>,
@@ -441,7 +456,10 @@ fn handle_texture_init<A: HalApi>(
     }
 }
 
-// Ensures the source texture of a transfer is in the right initialization state and records the state for after the transfer operation.
+/// Prepare a transfer's source texture.
+///
+/// Ensure the source texture of a transfer is in the right initialization
+/// state, and record the state for after the transfer operation.
 fn handle_src_texture_init<A: HalApi>(
     cmd_buf: &mut CommandBuffer<A>,
     device: &Device<A>,
@@ -464,7 +482,10 @@ fn handle_src_texture_init<A: HalApi>(
     Ok(())
 }
 
-// Ensures the destination texture of a transfer is in the right initialization state and records the state for after the transfer operation.
+/// Prepare a transfer's destination texture.
+///
+/// Ensure the destination texture of a transfer is in the right initialization
+/// state, and record the state for after the transfer operation.
 fn handle_dst_texture_init<A: HalApi>(
     cmd_buf: &mut CommandBuffer<A>,
     device: &Device<A>,
@@ -476,8 +497,10 @@ fn handle_dst_texture_init<A: HalApi>(
         .get(destination.texture)
         .map_err(|_| TransferError::InvalidTexture(destination.texture))?;
 
-    // Attention: If we don't write full texture subresources, we need to a full clear first since we don't track subrects.
-    // This means that in rare cases even a *destination* texture of a transfer may need an immediate texture init.
+    // Attention: If we don't write full texture subresources, we need to a full
+    // clear first since we don't track subrects. This means that in rare cases
+    // even a *destination* texture of a transfer may need an immediate texture
+    // init.
     let dst_init_kind = if has_copy_partial_init_tracker_coverage(
         copy_size,
         destination.mip_level,
@@ -517,9 +540,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let hub = A::hub(self);
         let mut token = Token::root();
 
+        let (device_guard, mut token) = hub.devices.read(&mut token);
         let (mut cmd_buf_guard, mut token) = hub.command_buffers.write(&mut token);
         let cmd_buf = CommandBuffer::get_encoder_mut(&mut *cmd_buf_guard, command_encoder_id)?;
         let (buffer_guard, _) = hub.buffers.read(&mut token);
+
+        let device = &device_guard[cmd_buf.device_id.value];
 
         #[cfg(feature = "trace")]
         if let Some(ref mut list) = cmd_buf.commands {
@@ -569,6 +595,26 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
         if destination_offset % wgt::COPY_BUFFER_ALIGNMENT != 0 {
             return Err(TransferError::UnalignedBufferOffset(destination_offset).into());
+        }
+        if !device
+            .downlevel
+            .flags
+            .contains(wgt::DownlevelFlags::UNRESTRICTED_INDEX_BUFFER)
+            && (src_buffer.usage.contains(wgt::BufferUsages::INDEX)
+                || dst_buffer.usage.contains(wgt::BufferUsages::INDEX))
+        {
+            let forbidden_usages = wgt::BufferUsages::VERTEX
+                | wgt::BufferUsages::UNIFORM
+                | wgt::BufferUsages::INDIRECT
+                | wgt::BufferUsages::STORAGE;
+            if src_buffer.usage.intersects(forbidden_usages)
+                || dst_buffer.usage.intersects(forbidden_usages)
+            {
+                return Err(TransferError::MissingDownlevelFlags(MissingDownlevelFlags(
+                    wgt::DownlevelFlags::UNRESTRICTED_INDEX_BUFFER,
+                ))
+                .into());
+            }
         }
 
         let source_end_offset = source_offset + size;
@@ -674,7 +720,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (dst_range, dst_base, _) =
             extract_texture_selector(destination, copy_size, dst_texture)?;
 
-        // Handle texture init *before* dealing with barrier transitions so we have an easier time inserting "immediate-inits" that may be required by prior discards in rare cases.
+        // Handle texture init *before* dealing with barrier transitions so we
+        // have an easier time inserting "immediate-inits" that may be required
+        // by prior discards in rare cases.
         handle_dst_texture_init(cmd_buf, device, destination, copy_size, &texture_guard)?;
 
         let (src_buffer, src_pending) = cmd_buf
@@ -801,7 +849,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let (src_range, src_base, _) = extract_texture_selector(source, copy_size, src_texture)?;
 
-        // Handle texture init *before* dealing with barrier transitions so we have an easier time inserting "immediate-inits" that may be required by prior discards in rare cases.
+        // Handle texture init *before* dealing with barrier transitions so we
+        // have an easier time inserting "immediate-inits" that may be required
+        // by prior discards in rare cases.
         handle_src_texture_init(cmd_buf, device, source, copy_size, &texture_guard)?;
 
         let src_pending = cmd_buf
@@ -988,7 +1038,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             return Err(TransferError::MismatchedAspects.into());
         }
 
-        // Handle texture init *before* dealing with barrier transitions so we have an easier time inserting "immediate-inits" that may be required by prior discards in rare cases.
+        // Handle texture init *before* dealing with barrier transitions so we
+        // have an easier time inserting "immediate-inits" that may be required
+        // by prior discards in rare cases.
         handle_src_texture_init(cmd_buf, device, source, copy_size, &texture_guard)?;
         handle_dst_texture_init(cmd_buf, device, destination, copy_size, &texture_guard)?;
 

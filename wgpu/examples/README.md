@@ -1,7 +1,7 @@
 ## Structure
 
 For the simplest examples without using any helping code (see `framework.rs` here), check out:
-  - `hello ` for printing adapter information
+  - `hello` for printing adapter information
   - `hello-triangle` for graphics and presentation
   - `hello-compute` for pure computing
 

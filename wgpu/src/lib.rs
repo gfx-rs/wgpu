@@ -2,9 +2,9 @@
 //!
 //! To start using the API, create an [`Instance`].
 
-#![cfg_attr(docsrs, feature(doc_cfg))] // Allow doc(cfg(feature = "")) for showing in docs that something is feature gated.
+#![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
 #![doc(html_logo_url = "https://raw.githubusercontent.com/gfx-rs/wgpu/master/logo.png")]
-#![warn(missing_docs)]
+#![warn(missing_docs, unsafe_op_in_unsafe_fn)]
 
 mod backend;
 pub mod util;
@@ -36,10 +36,10 @@ pub use wgt::{
     PresentMode, PrimitiveState, PrimitiveTopology, PushConstantRange, QueryType,
     RenderBundleDepthStencil, SamplerBindingType, SamplerBorderColor, ShaderLocation, ShaderModel,
     ShaderStages, StencilFaceState, StencilOperation, StencilState, StorageTextureAccess,
-    SurfaceConfiguration, SurfaceStatus, TextureAspect, TextureDimension, TextureFormat,
-    TextureFormatFeatureFlags, TextureFormatFeatures, TextureSampleType, TextureUsages,
-    TextureViewDimension, VertexAttribute, VertexFormat, VertexStepMode, COPY_BUFFER_ALIGNMENT,
-    COPY_BYTES_PER_ROW_ALIGNMENT, MAP_ALIGNMENT, PUSH_CONSTANT_ALIGNMENT,
+    SurfaceCapabilities, SurfaceConfiguration, SurfaceStatus, TextureAspect, TextureDimension,
+    TextureFormat, TextureFormatFeatureFlags, TextureFormatFeatures, TextureSampleType,
+    TextureUsages, TextureViewDimension, VertexAttribute, VertexFormat, VertexStepMode,
+    COPY_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT, MAP_ALIGNMENT, PUSH_CONSTANT_ALIGNMENT,
     QUERY_RESOLVE_BUFFER_ALIGNMENT, QUERY_SET_MAX_QUERIES, QUERY_SIZE, VERTEX_STRIDE_ALIGNMENT,
 };
 
@@ -164,28 +164,32 @@ trait RenderPassInner<Ctx: Context>: RenderInner<Ctx> {
     );
 }
 
+trait GlobalId {
+    fn global_id(&self) -> u64;
+}
+
 trait Context: Debug + Send + Sized + Sync {
-    type AdapterId: Debug + Send + Sync + 'static;
-    type DeviceId: Debug + Send + Sync + 'static;
-    type QueueId: Debug + Send + Sync + 'static;
-    type ShaderModuleId: Debug + Send + Sync + 'static;
-    type BindGroupLayoutId: Debug + Send + Sync + 'static;
-    type BindGroupId: Debug + Send + Sync + 'static;
-    type TextureViewId: Debug + Send + Sync + 'static;
-    type SamplerId: Debug + Send + Sync + 'static;
-    type BufferId: Debug + Send + Sync + 'static;
-    type TextureId: Debug + Send + Sync + 'static;
-    type QuerySetId: Debug + Send + Sync + 'static;
-    type PipelineLayoutId: Debug + Send + Sync + 'static;
-    type RenderPipelineId: Debug + Send + Sync + 'static;
-    type ComputePipelineId: Debug + Send + Sync + 'static;
+    type AdapterId: GlobalId + Debug + Send + Sync + 'static;
+    type DeviceId: GlobalId + Debug + Send + Sync + 'static;
+    type QueueId: GlobalId + Debug + Send + Sync + 'static;
+    type ShaderModuleId: GlobalId + Debug + Send + Sync + 'static;
+    type BindGroupLayoutId: GlobalId + Debug + Send + Sync + 'static;
+    type BindGroupId: GlobalId + Debug + Send + Sync + 'static;
+    type TextureViewId: GlobalId + Debug + Send + Sync + 'static;
+    type SamplerId: GlobalId + Debug + Send + Sync + 'static;
+    type BufferId: GlobalId + Debug + Send + Sync + 'static;
+    type TextureId: GlobalId + Debug + Send + Sync + 'static;
+    type QuerySetId: GlobalId + Debug + Send + Sync + 'static;
+    type PipelineLayoutId: GlobalId + Debug + Send + Sync + 'static;
+    type RenderPipelineId: GlobalId + Debug + Send + Sync + 'static;
+    type ComputePipelineId: GlobalId + Debug + Send + Sync + 'static;
     type CommandEncoderId: Debug;
     type ComputePassId: Debug + ComputePassInner<Self>;
     type RenderPassId: Debug + RenderPassInner<Self>;
     type CommandBufferId: Debug + Send + Sync;
     type RenderBundleEncoderId: Debug + RenderInner<Self>;
-    type RenderBundleId: Debug + Send + Sync + 'static;
-    type SurfaceId: Debug + Send + Sync + 'static;
+    type RenderBundleId: GlobalId + Debug + Send + Sync + 'static;
+    type SurfaceId: GlobalId + Debug + Send + Sync + 'static;
 
     type SurfaceOutputDetail: Send;
     type SubmissionIndex: Debug + Copy + Clone + Send + 'static;
@@ -227,21 +231,11 @@ trait Context: Debug + Send + Sized + Sync {
         format: TextureFormat,
     ) -> TextureFormatFeatures;
 
-    fn surface_get_supported_formats(
+    fn surface_get_capabilities(
         &self,
         surface: &Self::SurfaceId,
         adapter: &Self::AdapterId,
-    ) -> Vec<TextureFormat>;
-    fn surface_get_supported_present_modes(
-        &self,
-        surface: &Self::SurfaceId,
-        adapter: &Self::AdapterId,
-    ) -> Vec<PresentMode>;
-    fn surface_get_supported_alpha_modes(
-        &self,
-        surface: &Self::SurfaceId,
-        adapter: &Self::AdapterId,
-    ) -> Vec<CompositeAlphaMode>;
+    ) -> wgt::SurfaceCapabilities;
     fn surface_configure(
         &self,
         surface: &Self::SurfaceId,
@@ -843,13 +837,11 @@ pub enum ShaderSource<'a> {
     ///
     /// See also: [`util::make_spirv`], [`include_spirv`]
     #[cfg(feature = "spirv")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "spirv")))]
     SpirV(Cow<'a, [u32]>),
     /// GLSL module as a string slice.
     ///
     /// Note: GLSL is not yet fully supported and must be a specific ShaderStage.
     #[cfg(feature = "glsl")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "glsl")))]
     Glsl {
         /// The source code of the shader.
         shader: Cow<'a, str>,
@@ -860,11 +852,9 @@ pub enum ShaderSource<'a> {
     },
     /// WGSL module as a string slice.
     #[cfg(feature = "wgsl")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "wgsl")))]
     Wgsl(Cow<'a, str>),
     /// Naga module.
     #[cfg(feature = "naga")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "naga")))]
     Naga(Cow<'static, naga::Module>),
     /// Dummy variant because `Naga` doesn't have a lifetime and without enough active features it
     /// could be the last one active.
@@ -1738,7 +1728,7 @@ impl Instance {
     #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
     pub unsafe fn from_hal<A: wgc::hub::HalApi>(hal_instance: A::Instance) -> Self {
         Self {
-            context: Arc::new(C::from_hal_instance::<A>(hal_instance)),
+            context: Arc::new(unsafe { C::from_hal_instance::<A>(hal_instance) }),
         }
     }
 
@@ -1754,7 +1744,7 @@ impl Instance {
     /// [`Instance`]: hal::Api::Instance
     #[cfg(any(not(target_arch = "wasm32"), feature = "webgl"))]
     pub unsafe fn as_hal<A: wgc::hub::HalApi>(&self) -> Option<&A::Instance> {
-        self.context.instance_as_hal::<A>()
+        unsafe { self.context.instance_as_hal::<A>() }
     }
 
     /// Create an new instance of wgpu from a wgpu-core instance.
@@ -1769,7 +1759,7 @@ impl Instance {
     #[cfg(any(not(target_arch = "wasm32"), feature = "webgl"))]
     pub unsafe fn from_core(core_instance: wgc::instance::Instance) -> Self {
         Self {
-            context: Arc::new(C::from_core_instance(core_instance)),
+            context: Arc::new(unsafe { C::from_core_instance(core_instance) }),
         }
     }
 
@@ -1815,7 +1805,7 @@ impl Instance {
         hal_adapter: hal::ExposedAdapter<A>,
     ) -> Adapter {
         let context = Arc::clone(&self.context);
-        let id = context.create_adapter_from_hal(hal_adapter);
+        let id = unsafe { context.create_adapter_from_hal(hal_adapter) };
         Adapter { context, id }
     }
 
@@ -1855,7 +1845,7 @@ impl Instance {
         &self,
         layer: *mut std::ffi::c_void,
     ) -> Surface {
-        self.context.create_surface_from_core_animation_layer(layer)
+        unsafe { self.context.create_surface_from_core_animation_layer(layer) }
     }
 
     /// Creates a surface from `IDCompositionVisual`.
@@ -1865,7 +1855,7 @@ impl Instance {
     /// - visual must be a valid IDCompositionVisual to create a surface upon.
     #[cfg(target_os = "windows")]
     pub unsafe fn create_surface_from_visual(&self, visual: *mut std::ffi::c_void) -> Surface {
-        self.context.create_surface_from_visual(visual)
+        unsafe { self.context.create_surface_from_visual(visual) }
     }
 
     /// Creates a surface from a `web_sys::HtmlCanvasElement`.
@@ -1978,20 +1968,22 @@ impl Adapter {
         trace_path: Option<&std::path::Path>,
     ) -> Result<(Device, Queue), RequestDeviceError> {
         let context = Arc::clone(&self.context);
-        self.context
-            .create_device_from_hal(&self.id, hal_device, desc, trace_path)
-            .map(|(device_id, queue_id)| {
-                (
-                    Device {
-                        context: Arc::clone(&context),
-                        id: device_id,
-                    },
-                    Queue {
-                        context,
-                        id: queue_id,
-                    },
-                )
-            })
+        unsafe {
+            self.context
+                .create_device_from_hal(&self.id, hal_device, desc, trace_path)
+        }
+        .map(|(device_id, queue_id)| {
+            (
+                Device {
+                    context: Arc::clone(&context),
+                    id: device_id,
+                },
+                Queue {
+                    context,
+                    id: queue_id,
+                },
+            )
+        })
     }
 
     /// Apply a callback to this `Adapter`'s underlying backend adapter.
@@ -2018,8 +2010,10 @@ impl Adapter {
         &self,
         hal_adapter_callback: F,
     ) -> R {
-        self.context
-            .adapter_as_hal::<A, F, R>(self.id, hal_adapter_callback)
+        unsafe {
+            self.context
+                .adapter_as_hal::<A, F, R>(self.id, hal_adapter_callback)
+        }
     }
 
     /// Returns whether this adapter may present to the passed surface.
@@ -2119,12 +2113,14 @@ impl Device {
     ) -> ShaderModule {
         ShaderModule {
             context: Arc::clone(&self.context),
-            id: Context::device_create_shader_module(
-                &*self.context,
-                &self.id,
-                desc,
-                wgt::ShaderBoundChecks::unchecked(),
-            ),
+            id: unsafe {
+                Context::device_create_shader_module(
+                    &*self.context,
+                    &self.id,
+                    desc,
+                    wgt::ShaderBoundChecks::unchecked(),
+                )
+            },
         }
     }
 
@@ -2142,7 +2138,9 @@ impl Device {
     ) -> ShaderModule {
         ShaderModule {
             context: Arc::clone(&self.context),
-            id: Context::device_create_shader_module_spirv(&*self.context, &self.id, desc),
+            id: unsafe {
+                Context::device_create_shader_module_spirv(&*self.context, &self.id, desc)
+            },
         }
     }
 
@@ -2252,9 +2250,10 @@ impl Device {
     ) -> Texture {
         Texture {
             context: Arc::clone(&self.context),
-            id: self
-                .context
-                .create_texture_from_hal::<A>(hal_texture, &self.id, desc),
+            id: unsafe {
+                self.context
+                    .create_texture_from_hal::<A>(hal_texture, &self.id, desc)
+            },
             owned: true,
         }
     }
@@ -2326,8 +2325,10 @@ impl Device {
         &self,
         hal_device_callback: F,
     ) -> R {
-        self.context
-            .device_as_hal::<A, F, R>(&self.id, hal_device_callback)
+        unsafe {
+            self.context
+                .device_as_hal::<A, F, R>(&self.id, hal_device_callback)
+        }
     }
 }
 
@@ -2637,8 +2638,10 @@ impl Texture {
         &self,
         hal_texture_callback: F,
     ) {
-        self.context
-            .texture_as_hal::<A, F>(&self.id, hal_texture_callback)
+        unsafe {
+            self.context
+                .texture_as_hal::<A, F>(&self.id, hal_texture_callback)
+        }
     }
 
     /// Creates a view of this texture.
@@ -3600,13 +3603,23 @@ impl Queue {
         }
     }
 
-    /// Schedule a data write into `texture`.
+    /// Schedule a write of some data into a texture.
+    ///
+    /// * `data` contains the texels to be written, which must be in
+    ///   [the same format as the texture](TextureFormat).
+    /// * `data_layout` describes the memory layout of `data`, which does not necessarily
+    ///   have to have tightly packed rows.
+    /// * `texture` specifies the texture to write into, and the location within the
+    ///   texture (coordinate offset, mip level) that will be overwritten.
+    /// * `size` is the size, in texels, of the region to be written.
     ///
     /// This method is intended to have low performance costs.
     /// As such, the write is not immediately submitted, and instead enqueued
     /// internally to happen at the start of the next `submit()` call.
+    /// However, `data` will be immediately copied into staging memory; so the caller may
+    /// discard it any time after this call completes.
     ///
-    /// This method fails if `data` overruns the size of fragment of `texture` specified with `size`.
+    /// This method fails if `size` overruns the size of `texture`, or if `data` is too short.
     pub fn write_texture(
         &self,
         texture: ImageCopyTexture,
@@ -3617,7 +3630,7 @@ impl Queue {
         Context::queue_write_texture(&*self.context, &self.id, texture, data, data_layout, size)
     }
 
-    /// Schedule a copy of data from `image` into `texture`
+    /// Schedule a copy of data from `image` into `texture`.
     #[cfg(all(target_arch = "wasm32", not(feature = "webgl")))]
     pub fn copy_external_image_to_texture(
         &self,
@@ -3691,43 +3704,31 @@ impl Drop for SurfaceTexture {
 }
 
 impl Surface {
-    /// Returns a vec of supported texture formats to use for the [`Surface`] with this adapter.
-    /// Note: The first format in the vector is preferred
+    /// Returns the capabilities of the surface when used with the given adapter.
     ///
-    /// Returns an empty vector if the surface is incompatible with the adapter.
-    pub fn get_supported_formats(&self, adapter: &Adapter) -> Vec<TextureFormat> {
-        Context::surface_get_supported_formats(&*self.context, &self.id, &adapter.id)
-    }
-
-    /// Returns a vec of supported presentation modes to use for the [`Surface`] with this adapter.
-    ///
-    /// Returns an empty vector if the surface is incompatible with the adapter.
-    pub fn get_supported_present_modes(&self, adapter: &Adapter) -> Vec<PresentMode> {
-        Context::surface_get_supported_present_modes(&*self.context, &self.id, &adapter.id)
-    }
-
-    /// Returns a vec of supported alpha modes to use for the [`Surface`] with this adapter.
-    ///
-    /// Will return at least one element, CompositeAlphaMode::Opaque or CompositeAlphaMode::Inherit.
-    pub fn get_supported_alpha_modes(&self, adapter: &Adapter) -> Vec<CompositeAlphaMode> {
-        Context::surface_get_supported_alpha_modes(&*self.context, &self.id, &adapter.id)
+    /// Returns specified values (see [`SurfaceCapabilities`]) if surface is incompatible with the adapter.
+    pub fn get_capabilities(&self, adapter: &Adapter) -> SurfaceCapabilities {
+        Context::surface_get_capabilities(&*self.context, &self.id, &adapter.id)
     }
 
     /// Return a default `SurfaceConfiguration` from width and height to use for the [`Surface`] with this adapter.
+    ///
+    /// Returns None if the surface isn't supported by this adapter
     pub fn get_default_config(
         &self,
         adapter: &Adapter,
         width: u32,
         height: u32,
-    ) -> wgt::SurfaceConfiguration {
-        wgt::SurfaceConfiguration {
+    ) -> Option<wgt::SurfaceConfiguration> {
+        let caps = self.get_capabilities(adapter);
+        Some(wgt::SurfaceConfiguration {
             usage: wgt::TextureUsages::RENDER_ATTACHMENT,
-            format: self.get_supported_formats(adapter)[0],
+            format: *caps.formats.get(0)?,
             width,
             height,
-            present_mode: self.get_supported_present_modes(adapter)[0],
+            present_mode: *caps.present_modes.get(0)?,
             alpha_mode: wgt::CompositeAlphaMode::Auto,
-        }
+        })
     }
 
     /// Initializes [`Surface`] for presentation.
@@ -3772,6 +3773,222 @@ impl Surface {
                 detail,
             })
             .ok_or(SurfaceError::Lost)
+    }
+
+    /// Returns the inner hal Surface using a callback. The hal surface will be `None` if the
+    /// backend type argument does not match with this wgpu Surface
+    ///
+    /// # Safety
+    ///
+    /// - The raw handle obtained from the hal Surface must not be manually destroyed
+    #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
+    pub unsafe fn as_hal_mut<A: wgc::hub::HalApi, F: FnOnce(Option<&mut A::Surface>) -> R, R>(
+        &mut self,
+        hal_surface_callback: F,
+    ) -> R {
+        unsafe {
+            self.context
+                .surface_as_hal_mut::<A, F, R>(&self.id, hal_surface_callback)
+        }
+    }
+}
+
+/// Opaque globally-unique identifier
+#[cfg(feature = "expose-ids")]
+#[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
+#[repr(transparent)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub struct Id(u64);
+
+#[cfg(feature = "expose-ids")]
+impl Adapter {
+    /// Returns a globally-unique identifier for this `Adapter`.
+    ///
+    /// Calling this method multiple times on the same object will always return the same value.
+    /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
+    #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
+    pub fn global_id(&self) -> Id {
+        Id(self.id.global_id())
+    }
+}
+
+#[cfg(feature = "expose-ids")]
+impl Device {
+    /// Returns a globally-unique identifier for this `Device`.
+    ///
+    /// Calling this method multiple times on the same object will always return the same value.
+    /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
+    #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
+    pub fn global_id(&self) -> Id {
+        Id(self.id.global_id())
+    }
+}
+
+#[cfg(feature = "expose-ids")]
+impl Queue {
+    /// Returns a globally-unique identifier for this `Queue`.
+    ///
+    /// Calling this method multiple times on the same object will always return the same value.
+    /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
+    #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
+    pub fn global_id(&self) -> Id {
+        Id(self.id.global_id())
+    }
+}
+
+#[cfg(feature = "expose-ids")]
+impl ShaderModule {
+    /// Returns a globally-unique identifier for this `ShaderModule`.
+    ///
+    /// Calling this method multiple times on the same object will always return the same value.
+    /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
+    #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
+    pub fn global_id(&self) -> Id {
+        Id(self.id.global_id())
+    }
+}
+
+#[cfg(feature = "expose-ids")]
+impl BindGroupLayout {
+    /// Returns a globally-unique identifier for this `BindGroupLayout`.
+    ///
+    /// Calling this method multiple times on the same object will always return the same value.
+    /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
+    #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
+    pub fn global_id(&self) -> Id {
+        Id(self.id.global_id())
+    }
+}
+
+#[cfg(feature = "expose-ids")]
+impl BindGroup {
+    /// Returns a globally-unique identifier for this `BindGroup`.
+    ///
+    /// Calling this method multiple times on the same object will always return the same value.
+    /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
+    #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
+    pub fn global_id(&self) -> Id {
+        Id(self.id.global_id())
+    }
+}
+
+#[cfg(feature = "expose-ids")]
+impl TextureView {
+    /// Returns a globally-unique identifier for this `TextureView`.
+    ///
+    /// Calling this method multiple times on the same object will always return the same value.
+    /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
+    #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
+    pub fn global_id(&self) -> Id {
+        Id(self.id.global_id())
+    }
+}
+
+#[cfg(feature = "expose-ids")]
+impl Sampler {
+    /// Returns a globally-unique identifier for this `Sampler`.
+    ///
+    /// Calling this method multiple times on the same object will always return the same value.
+    /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
+    #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
+    pub fn global_id(&self) -> Id {
+        Id(self.id.global_id())
+    }
+}
+
+#[cfg(feature = "expose-ids")]
+impl Buffer {
+    /// Returns a globally-unique identifier for this `Buffer`.
+    ///
+    /// Calling this method multiple times on the same object will always return the same value.
+    /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
+    #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
+    pub fn global_id(&self) -> Id {
+        Id(self.id.global_id())
+    }
+}
+
+#[cfg(feature = "expose-ids")]
+impl Texture {
+    /// Returns a globally-unique identifier for this `Texture`.
+    ///
+    /// Calling this method multiple times on the same object will always return the same value.
+    /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
+    #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
+    pub fn global_id(&self) -> Id {
+        Id(self.id.global_id())
+    }
+}
+
+#[cfg(feature = "expose-ids")]
+impl QuerySet {
+    /// Returns a globally-unique identifier for this `QuerySet`.
+    ///
+    /// Calling this method multiple times on the same object will always return the same value.
+    /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
+    #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
+    pub fn global_id(&self) -> Id {
+        Id(self.id.global_id())
+    }
+}
+
+#[cfg(feature = "expose-ids")]
+impl PipelineLayout {
+    /// Returns a globally-unique identifier for this `PipelineLayout`.
+    ///
+    /// Calling this method multiple times on the same object will always return the same value.
+    /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
+    #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
+    pub fn global_id(&self) -> Id {
+        Id(self.id.global_id())
+    }
+}
+
+#[cfg(feature = "expose-ids")]
+impl RenderPipeline {
+    /// Returns a globally-unique identifier for this `RenderPipeline`.
+    ///
+    /// Calling this method multiple times on the same object will always return the same value.
+    /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
+    #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
+    pub fn global_id(&self) -> Id {
+        Id(self.id.global_id())
+    }
+}
+
+#[cfg(feature = "expose-ids")]
+impl ComputePipeline {
+    /// Returns a globally-unique identifier for this `ComputePipeline`.
+    ///
+    /// Calling this method multiple times on the same object will always return the same value.
+    /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
+    #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
+    pub fn global_id(&self) -> Id {
+        Id(self.id.global_id())
+    }
+}
+
+#[cfg(feature = "expose-ids")]
+impl RenderBundle {
+    /// Returns a globally-unique identifier for this `RenderBundle`.
+    ///
+    /// Calling this method multiple times on the same object will always return the same value.
+    /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
+    #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
+    pub fn global_id(&self) -> Id {
+        Id(self.id.global_id())
+    }
+}
+
+#[cfg(feature = "expose-ids")]
+impl Surface {
+    /// Returns a globally-unique identifier for this `Surface`.
+    ///
+    /// Calling this method multiple times on the same object will always return the same value.
+    /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
+    #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
+    pub fn global_id(&self) -> Id {
+        Id(self.id.global_id())
     }
 }
 

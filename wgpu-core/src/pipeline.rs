@@ -66,7 +66,7 @@ impl<A: hal::Api> Resource for ShaderModule<A> {
 pub struct ShaderError<E> {
     pub source: String,
     pub label: Option<String>,
-    pub inner: E,
+    pub inner: Box<E>,
 }
 #[cfg(feature = "wgsl")]
 impl fmt::Display for ShaderError<naga::front::wgsl::ParseError> {
@@ -303,6 +303,8 @@ pub enum ColorStateError {
     },
     #[error("blend factors for {0:?} must be `One`")]
     InvalidMinMaxBlendFactors(wgt::BlendComponent),
+    #[error("invalid write mask {0:?}")]
+    InvalidWriteMask(wgt::ColorWrites),
 }
 
 #[derive(Clone, Debug, Error)]

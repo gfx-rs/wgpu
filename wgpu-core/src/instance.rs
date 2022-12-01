@@ -8,7 +8,7 @@ use crate::{
 
 use wgt::{Backend, Backends, PowerPreference};
 
-use hal::{Adapter as _, Instance as _, SurfaceCapabilities};
+use hal::{Adapter as _, Instance as _};
 use thiserror::Error;
 
 pub type RequestAdapterOptions = wgt::RequestAdapterOptions<SurfaceId>;
@@ -152,37 +152,10 @@ impl crate::hub::Resource for Surface {
 }
 
 impl Surface {
-    pub fn get_supported_formats<A: HalApi>(
+    pub fn get_capabilities<A: HalApi>(
         &self,
         adapter: &Adapter<A>,
-    ) -> Result<Vec<wgt::TextureFormat>, GetSurfaceSupportError> {
-        self.get_capabilities(adapter).map(|mut caps| {
-            // TODO: maybe remove once we support texture view changing srgb-ness
-            caps.formats.sort_by_key(|f| !f.describe().srgb);
-            caps.formats
-        })
-    }
-
-    pub fn get_supported_present_modes<A: HalApi>(
-        &self,
-        adapter: &Adapter<A>,
-    ) -> Result<Vec<wgt::PresentMode>, GetSurfaceSupportError> {
-        self.get_capabilities(adapter)
-            .map(|caps| caps.present_modes)
-    }
-
-    pub fn get_supported_alpha_modes<A: HalApi>(
-        &self,
-        adapter: &Adapter<A>,
-    ) -> Result<Vec<wgt::CompositeAlphaMode>, GetSurfaceSupportError> {
-        self.get_capabilities(adapter)
-            .map(|caps| caps.composite_alpha_modes)
-    }
-
-    fn get_capabilities<A: HalApi>(
-        &self,
-        adapter: &Adapter<A>,
-    ) -> Result<SurfaceCapabilities, GetSurfaceSupportError> {
+    ) -> Result<hal::SurfaceCapabilities, GetSurfaceSupportError> {
         let suf = A::get_surface(self).ok_or(GetSurfaceSupportError::Unsupported)?;
         profiling::scope!("surface_capabilities");
         let caps = unsafe {
@@ -268,9 +241,18 @@ impl<A: HalApi> Adapter<A> {
         );
 
         flags.set(
-            wgt::TextureFormatFeatureFlags::MULTISAMPLE,
-            caps.contains(Tfc::MULTISAMPLE),
+            wgt::TextureFormatFeatureFlags::MULTISAMPLE_X2,
+            caps.contains(Tfc::MULTISAMPLE_X2),
         );
+        flags.set(
+            wgt::TextureFormatFeatureFlags::MULTISAMPLE_X4,
+            caps.contains(Tfc::MULTISAMPLE_X4),
+        );
+        flags.set(
+            wgt::TextureFormatFeatureFlags::MULTISAMPLE_X8,
+            caps.contains(Tfc::MULTISAMPLE_X8),
+        );
+
         flags.set(
             wgt::TextureFormatFeatureFlags::MULTISAMPLE_RESOLVE,
             caps.contains(Tfc::MULTISAMPLE_RESOLVE),
@@ -336,7 +318,10 @@ impl<A: HalApi> Adapter<A> {
             .contains(wgt::Features::MAPPABLE_PRIMARY_BUFFERS)
             && self.raw.info.device_type == wgt::DeviceType::DiscreteGpu
         {
-            log::warn!("Feature MAPPABLE_PRIMARY_BUFFERS enabled on a discrete gpu. This is a massive performance footgun and likely not what you wanted");
+            log::warn!(
+                "Feature MAPPABLE_PRIMARY_BUFFERS enabled on a discrete gpu. \
+                        This is a massive performance footgun and likely not what you wanted"
+            );
         }
 
         if let Some(_) = desc.label {
@@ -445,10 +430,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     ) -> SurfaceId {
         profiling::scope!("Instance::create_surface");
 
-        //Note: using a dummy argument to work around the following error:
-        //> cannot provide explicit generic arguments when `impl Trait` is used in argument position
         fn init<A: hal::Api>(
-            _: A,
             inst: &Option<A::Instance>,
             display_handle: raw_window_handle::RawDisplayHandle,
             window_handle: raw_window_handle::RawWindowHandle,
@@ -470,40 +452,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let surface = Surface {
             presentation: None,
             #[cfg(vulkan)]
-            vulkan: init(
-                hal::api::Vulkan,
-                &self.instance.vulkan,
-                display_handle,
-                window_handle,
-            ),
+            vulkan: init::<hal::api::Vulkan>(&self.instance.vulkan, display_handle, window_handle),
             #[cfg(metal)]
-            metal: init(
-                hal::api::Metal,
-                &self.instance.metal,
-                display_handle,
-                window_handle,
-            ),
+            metal: init::<hal::api::Metal>(&self.instance.metal, display_handle, window_handle),
             #[cfg(dx12)]
-            dx12: init(
-                hal::api::Dx12,
-                &self.instance.dx12,
-                display_handle,
-                window_handle,
-            ),
+            dx12: init::<hal::api::Dx12>(&self.instance.dx12, display_handle, window_handle),
             #[cfg(dx11)]
-            dx11: init(
-                hal::api::Dx11,
-                &self.instance.dx11,
-                display_handle,
-                window_handle,
-            ),
+            dx11: init::<hal::api::Dx11>(&self.instance.dx11, display_handle, window_handle),
             #[cfg(gl)]
-            gl: init(
-                hal::api::Gles,
-                &self.instance.gl,
-                display_handle,
-                window_handle,
-            ),
+            gl: init::<hal::api::Gles>(&self.instance.gl, display_handle, window_handle),
         };
 
         let mut token = Token::root();
@@ -602,7 +559,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             #[cfg(vulkan)]
             vulkan: None,
             dx12: self.instance.dx12.as_ref().map(|inst| HalSurface {
-                raw: { inst.create_surface_from_visual(visual as _) },
+                raw: unsafe { inst.create_surface_from_visual(visual as _) },
             }),
             dx11: None,
             #[cfg(gl)]
@@ -731,7 +688,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     if let Some(surface) = compatible_surface {
                         let surface = &A::get_surface(surface);
                         adapters.retain(|exposed| unsafe {
-                            // If the surface does not exist for this backend, then the surface is not supported.
+                            // If the surface does not exist for this backend,
+                            // then the surface is not supported.
                             surface.is_some()
                                 && exposed
                                     .adapter
@@ -835,10 +793,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         let preferred_gpu = match desc.power_preference {
-            // Since devices of type "Other" might really be "Unknown" and come from APIs like OpenGL that don't specify device type,
-            // Prefer more Specific types over Other.
-            // This means that backends which do provide accurate device types will be preferred
-            // if their device type indicates an actual hardware GPU (integrated or discrete).
+            // Since devices of type "Other" might really be "Unknown" and come
+            // from APIs like OpenGL that don't specify device type, Prefer more
+            // Specific types over Other.
+            //
+            // This means that backends which do provide accurate device types
+            // will be preferred if their device type indicates an actual
+            // hardware GPU (integrated or discrete).
             PowerPreference::LowPower => integrated.or(discrete).or(other).or(virt).or(cpu),
             PowerPreference::HighPerformance => discrete.or(integrated).or(other).or(virt).or(cpu),
         };

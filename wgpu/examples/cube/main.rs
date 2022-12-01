@@ -415,7 +415,7 @@ fn cube() {
         optional_features: wgpu::Features::default(),
         base_test_parameters: framework::test_common::TestParameters::default(),
         tolerance: 1,
-        max_outliers: 500, // Bounded by rpi4
+        max_outliers: 1225, // Bounded by swiftshader
     });
 }
 
@@ -428,6 +428,6 @@ fn cube_lines() {
         optional_features: wgpu::Features::POLYGON_MODE_LINE,
         base_test_parameters: framework::test_common::TestParameters::default(),
         tolerance: 2,
-        max_outliers: 600, // Bounded by rpi4 on GL
+        max_outliers: 1250, // Bounded by swiftshader
     });
 }

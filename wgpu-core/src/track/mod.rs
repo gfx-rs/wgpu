@@ -1,95 +1,100 @@
 /*! Resource State and Lifetime Trackers
- *
- * These structures are responsible for keeping track of resource state,
- * generating barriers where needed, and making sure resources are kept
- * alive until the trackers die.
- *
- * ## General Architecture
- *
- * Tracking is some of the hottest code in the entire codebase, so the trackers
- * are designed to be as cache efficient as possible. They store resource state
- * in flat vectors, storing metadata SOA style, one vector per type of metadata.
- *
- * A lot of the tracker code is deeply unsafe, using unchecked accesses all over
- * to make performance as good as possible. However, for all unsafe accesses, there
- * is a corresponding debug assert the checks if that access is valid. This helps
- * get bugs caught fast, while still letting users not need to pay for the bounds
- * checks.
- *
- * In wgpu, resource IDs are allocated and re-used, so will always be as low
- * as reasonably possible. This allows us to use the ID as an index into an array.
- *
- * ## Statefulness
- *
- * There are two main types of trackers, stateful and stateless.
- *
- * Stateful trackers are for buffers and textures. They both have
- * resource state attached to them which needs to be used to generate
- * automatic synchronization. Because of the different requirements of
- * buffers and textures, they have two separate tracking structures.
- *
- * Stateless trackers only store metadata and own the given resource.
- *
- * ## Use Case
- *
- * Within each type of tracker, the trackers are further split into 3 different
- * use cases, Bind Group, Usage Scope, and a full Tracker.
- *
- * Bind Group trackers are just a list of different resources, their refcount,
- * and how they are used. Textures are used via a selector and a usage type.
- * Buffers by just a usage type. Stateless resources don't have a usage type.
- *
- * Usage Scope trackers are only for stateful resources. These trackers represent
- * a single [`UsageScope`] in the spec. When a use is added to a usage scope,
- * it is merged with all other uses of that resource in that scope. If there
- * is a usage conflict, merging will fail and an error will be reported.
- *
- * Full trackers represent a before and after state of a resource. These
- * are used for tracking on the device and on command buffers. The before
- * state represents the state the resource is first used as in the command buffer,
- * the after state is the state the command buffer leaves the resource in.
- * These double ended buffers can then be used to generate the needed transitions
- * between command buffers.
- *
- * ## Dense Datastructure with Sparse Data
- *
- * This tracking system is based on having completely dense data, but trackers do
- * not always contain every resource. Some resources (or even most resources) go
- * unused in any given command buffer. So to help speed up the process of iterating
- * through possibly thousands of resources, we use a bit vector to represent if
- * a resource is in the buffer or not. This allows us extremely efficient memory
- * utilization, as well as being able to bail out of whole blocks of 32-64 resources
- * with a single usize comparison with zero. In practice this means that merging
- * partially resident buffers is extremely quick.
- *
- * The main advantage of this dense datastructure is that we can do merging
- * of trackers in an extremely efficient fashion that results in us doing linear
- * scans down a couple of buffers. CPUs and their caches absolutely eat this up.
- *
- * ## Stateful Resource Operations
- *
- * All operations on stateful trackers boil down to one of four operations:
- * - `insert(tracker, new_state)` adds a resource with a given state to the tracker
- *   for the first time.
- * - `merge(tracker, new_state)` merges this new state with the previous state, checking
- *   for usage conflicts.
- * - `barrier(tracker, new_state)` compares the given state to the existing state and
- *   generates the needed barriers.
- * - `update(tracker, new_state)` takes the given new state and overrides the old state.
- *
- * This allows us to compose the operations to form the various kinds of tracker merges
- * that need to happen in the codebase. For each resource in the given merger, the following
- * operation applies:
- *
- * UsageScope <- Resource = insert(scope, usage) OR merge(scope, usage)
- * UsageScope <- UsageScope = insert(scope, scope) OR merge(scope, scope)
- * CommandBuffer <- UsageScope = insert(buffer.start, buffer.end, scope) OR barrier(buffer.end, scope) + update(buffer.end, scope)
- * Deivce <- CommandBuffer = insert(device.start, device.end, buffer.start, buffer.end) OR barrier(device.end, buffer.start) + update(device.end, buffer.end)
- *
- * [`UsageScope`]: https://gpuweb.github.io/gpuweb/#programming-model-synchronization
-!*/
+
+These structures are responsible for keeping track of resource state,
+generating barriers where needed, and making sure resources are kept
+alive until the trackers die.
+
+## General Architecture
+
+Tracking is some of the hottest code in the entire codebase, so the trackers
+are designed to be as cache efficient as possible. They store resource state
+in flat vectors, storing metadata SOA style, one vector per type of metadata.
+
+A lot of the tracker code is deeply unsafe, using unchecked accesses all over
+to make performance as good as possible. However, for all unsafe accesses, there
+is a corresponding debug assert the checks if that access is valid. This helps
+get bugs caught fast, while still letting users not need to pay for the bounds
+checks.
+
+In wgpu, resource IDs are allocated and re-used, so will always be as low
+as reasonably possible. This allows us to use the ID as an index into an array.
+
+## Statefulness
+
+There are two main types of trackers, stateful and stateless.
+
+Stateful trackers are for buffers and textures. They both have
+resource state attached to them which needs to be used to generate
+automatic synchronization. Because of the different requirements of
+buffers and textures, they have two separate tracking structures.
+
+Stateless trackers only store metadata and own the given resource.
+
+## Use Case
+
+Within each type of tracker, the trackers are further split into 3 different
+use cases, Bind Group, Usage Scope, and a full Tracker.
+
+Bind Group trackers are just a list of different resources, their refcount,
+and how they are used. Textures are used via a selector and a usage type.
+Buffers by just a usage type. Stateless resources don't have a usage type.
+
+Usage Scope trackers are only for stateful resources. These trackers represent
+a single [`UsageScope`] in the spec. When a use is added to a usage scope,
+it is merged with all other uses of that resource in that scope. If there
+is a usage conflict, merging will fail and an error will be reported.
+
+Full trackers represent a before and after state of a resource. These
+are used for tracking on the device and on command buffers. The before
+state represents the state the resource is first used as in the command buffer,
+the after state is the state the command buffer leaves the resource in.
+These double ended buffers can then be used to generate the needed transitions
+between command buffers.
+
+## Dense Datastructure with Sparse Data
+
+This tracking system is based on having completely dense data, but trackers do
+not always contain every resource. Some resources (or even most resources) go
+unused in any given command buffer. So to help speed up the process of iterating
+through possibly thousands of resources, we use a bit vector to represent if
+a resource is in the buffer or not. This allows us extremely efficient memory
+utilization, as well as being able to bail out of whole blocks of 32-64 resources
+with a single usize comparison with zero. In practice this means that merging
+partially resident buffers is extremely quick.
+
+The main advantage of this dense datastructure is that we can do merging
+of trackers in an extremely efficient fashion that results in us doing linear
+scans down a couple of buffers. CPUs and their caches absolutely eat this up.
+
+## Stateful Resource Operations
+
+All operations on stateful trackers boil down to one of four operations:
+- `insert(tracker, new_state)` adds a resource with a given state to the tracker
+  for the first time.
+- `merge(tracker, new_state)` merges this new state with the previous state, checking
+  for usage conflicts.
+- `barrier(tracker, new_state)` compares the given state to the existing state and
+  generates the needed barriers.
+- `update(tracker, new_state)` takes the given new state and overrides the old state.
+
+This allows us to compose the operations to form the various kinds of tracker merges
+that need to happen in the codebase. For each resource in the given merger, the following
+operation applies:
+
+```
+UsageScope <- Resource = insert(scope, usage) OR merge(scope, usage)
+UsageScope <- UsageScope = insert(scope, scope) OR merge(scope, scope)
+CommandBuffer <- UsageScope = insert(buffer.start, buffer.end, scope)
+                              OR barrier(buffer.end, scope) + update(buffer.end, scope)
+Device <- CommandBuffer = insert(device.start, device.end, buffer.start, buffer.end)
+                          OR barrier(device.end, buffer.start) + update(device.end, buffer.end)
+```
+
+[`UsageScope`]: https://gpuweb.github.io/gpuweb/#programming-model-synchronization
+*/
 
 mod buffer;
+mod metadata;
 mod range;
 mod stateless;
 mod texture;
@@ -97,14 +102,14 @@ mod texture;
 use crate::{
     binding_model, command, conv, hub,
     id::{self, TypedId},
-    pipeline, resource, Epoch, LifeGuard, RefCount,
+    pipeline, resource,
 };
 
-use bit_vec::BitVec;
-use std::{borrow::Cow, fmt, marker::PhantomData, mem, num::NonZeroU32, ops};
+use std::{fmt, num::NonZeroU32, ops};
 use thiserror::Error;
 
 pub(crate) use buffer::{BufferBindGroupState, BufferTracker, BufferUsageScope};
+use metadata::{ResourceMetadata, ResourceMetadataProvider};
 pub(crate) use stateless::{StatelessBindGroupSate, StatelessTracker};
 pub(crate) use texture::{
     TextureBindGroupState, TextureSelector, TextureTracker, TextureUsageScope,
@@ -199,43 +204,6 @@ fn skip_barrier<T: ResourceUses>(old_state: T, new_state: T) -> bool {
     // If the state didn't change and all the usages are ordered, the hardware
     // will guarentee the order of accesses, so we do not need to issue a barrier at all
     old_state == new_state && old_state.all_ordered()
-}
-
-/// Resizes the given bitvec to the given size. I'm not sure why this is hard to do but it is.
-fn resize_bitvec<B: bit_vec::BitBlock>(vec: &mut BitVec<B>, size: usize) {
-    let owned_size_to_grow = size.checked_sub(vec.len());
-    if let Some(delta) = owned_size_to_grow {
-        if delta != 0 {
-            vec.grow(delta, false);
-        }
-    } else {
-        vec.truncate(size);
-    }
-}
-
-/// Produces an iterator that yields the indexes of all bits that are set in the bitvec.
-///
-/// Will skip entire usize's worth of bits if they are all false.
-fn iterate_bitvec_indices(ownership: &BitVec<usize>) -> impl Iterator<Item = usize> + '_ {
-    const BITS_PER_BLOCK: usize = mem::size_of::<usize>() * 8;
-
-    let size = ownership.len();
-
-    ownership
-        .blocks()
-        .enumerate()
-        .filter(|&(_, word)| word != 0)
-        .flat_map(move |(word_index, mut word)| {
-            let bit_start = word_index * BITS_PER_BLOCK;
-            let bit_end = (bit_start + BITS_PER_BLOCK).min(size);
-
-            (bit_start..bit_end).filter(move |_| {
-                let active = word & 0b1 != 0;
-                word >>= 1;
-
-                active
-            })
-        })
 }
 
 #[derive(Clone, Debug, Error, Eq, PartialEq)]
@@ -338,142 +306,6 @@ impl<T: ResourceUses> fmt::Display for InvalidUse<T> {
     }
 }
 
-/// SOA container for storing metadata of a resource.
-///
-/// This contins the ownership bitvec, the refcount of
-/// the resource, and the epoch of the object's full ID.
-#[derive(Debug)]
-pub(crate) struct ResourceMetadata<A: hub::HalApi> {
-    owned: BitVec<usize>,
-    ref_counts: Vec<Option<RefCount>>,
-    epochs: Vec<Epoch>,
-
-    _phantom: PhantomData<A>,
-}
-impl<A: hub::HalApi> ResourceMetadata<A> {
-    pub fn new() -> Self {
-        Self {
-            owned: BitVec::default(),
-            ref_counts: Vec::new(),
-            epochs: Vec::new(),
-
-            _phantom: PhantomData,
-        }
-    }
-
-    pub fn set_size(&mut self, size: usize) {
-        self.ref_counts.resize(size, None);
-        self.epochs.resize(size, u32::MAX);
-
-        resize_bitvec(&mut self.owned, size);
-    }
-
-    /// Ensures a given index is in bounds for all arrays and does
-    /// sanity checks of the presence of a refcount.
-    ///
-    /// In release mode this function is completely empty and is removed.
-    #[cfg_attr(not(feature = "strict_asserts"), allow(unused_variables))]
-    fn tracker_assert_in_bounds(&self, index: usize) {
-        strict_assert!(index < self.owned.len());
-        strict_assert!(index < self.ref_counts.len());
-        strict_assert!(index < self.epochs.len());
-
-        strict_assert!(if self.owned.get(index).unwrap() {
-            self.ref_counts[index].is_some()
-        } else {
-            true
-        });
-    }
-
-    /// Returns true if the tracker owns no resources.
-    ///
-    /// This is a O(n) operation.
-    fn is_empty(&self) -> bool {
-        !self.owned.any()
-    }
-
-    /// Returns ids for all resources we own.
-    fn used<Id: TypedId>(&self) -> impl Iterator<Item = id::Valid<Id>> + '_ {
-        if !self.owned.is_empty() {
-            self.tracker_assert_in_bounds(self.owned.len() - 1)
-        };
-        iterate_bitvec_indices(&self.owned).map(move |index| {
-            let epoch = unsafe { *self.epochs.get_unchecked(index) };
-            id::Valid(Id::zip(index as u32, epoch, A::VARIANT))
-        })
-    }
-
-    /// Resets the metadata for a given index to sane "invalid" values.
-    unsafe fn reset(&mut self, index: usize) {
-        *self.ref_counts.get_unchecked_mut(index) = None;
-        *self.epochs.get_unchecked_mut(index) = u32::MAX;
-        self.owned.set(index, false);
-    }
-}
-
-/// A source of resource metadata.
-///
-/// This is used to abstract over the various places
-/// trackers can get new resource metadata from.
-enum ResourceMetadataProvider<'a, A: hub::HalApi> {
-    /// Comes directly from explicit values.
-    Direct {
-        epoch: Epoch,
-        ref_count: Cow<'a, RefCount>,
-    },
-    /// Comes from another metadata tracker.
-    Indirect { metadata: &'a ResourceMetadata<A> },
-    /// The epoch is given directly, but the life count comes from the resource itself.
-    Resource { epoch: Epoch },
-}
-impl<A: hub::HalApi> ResourceMetadataProvider<'_, A> {
-    /// Get the epoch and an owned refcount from this.
-    ///
-    /// # Safety
-    ///
-    /// - The index must be in bounds of the metadata tracker if this uses an indirect source.
-    /// - life_guard must be Some if this uses a Resource source.
-    #[inline(always)]
-    unsafe fn get_own(self, life_guard: Option<&LifeGuard>, index: usize) -> (Epoch, RefCount) {
-        match self {
-            ResourceMetadataProvider::Direct { epoch, ref_count } => {
-                (epoch, ref_count.into_owned())
-            }
-            ResourceMetadataProvider::Indirect { metadata } => {
-                metadata.tracker_assert_in_bounds(index);
-                (
-                    *metadata.epochs.get_unchecked(index),
-                    metadata
-                        .ref_counts
-                        .get_unchecked(index)
-                        .clone()
-                        .unwrap_unchecked(),
-                )
-            }
-            ResourceMetadataProvider::Resource { epoch } => {
-                strict_assert!(life_guard.is_some());
-                (epoch, life_guard.unwrap_unchecked().add_ref())
-            }
-        }
-    }
-    /// Get the epoch from this.
-    ///
-    /// # Safety
-    ///
-    /// - The index must be in bounds of the metadata tracker if this uses an indirect source.
-    #[inline(always)]
-    unsafe fn get_epoch(self, index: usize) -> Epoch {
-        match self {
-            ResourceMetadataProvider::Direct { epoch, .. }
-            | ResourceMetadataProvider::Resource { epoch, .. } => epoch,
-            ResourceMetadataProvider::Indirect { metadata } => {
-                metadata.tracker_assert_in_bounds(index);
-                *metadata.epochs.get_unchecked(index)
-            }
-        }
-    }
-}
-
 /// All the usages that a bind group contains. The uses are not deduplicated in any way
 /// and may include conflicting uses. This is fully compliant by the WebGPU spec.
 ///
@@ -560,9 +392,11 @@ impl<A: hub::HalApi> RenderBundleScope<A> {
         textures: &hub::Storage<resource::Texture<A>, id::TextureId>,
         bind_group: &BindGroupStates<A>,
     ) -> Result<(), UsageConflict> {
-        self.buffers.merge_bind_group(&bind_group.buffers)?;
-        self.textures
-            .merge_bind_group(textures, &bind_group.textures)?;
+        unsafe { self.buffers.merge_bind_group(&bind_group.buffers)? };
+        unsafe {
+            self.textures
+                .merge_bind_group(textures, &bind_group.textures)?
+        };
 
         Ok(())
     }
@@ -607,9 +441,11 @@ impl<A: hub::HalApi> UsageScope<A> {
         textures: &hub::Storage<resource::Texture<A>, id::TextureId>,
         bind_group: &BindGroupStates<A>,
     ) -> Result<(), UsageConflict> {
-        self.buffers.merge_bind_group(&bind_group.buffers)?;
-        self.textures
-            .merge_bind_group(textures, &bind_group.textures)?;
+        unsafe {
+            self.buffers.merge_bind_group(&bind_group.buffers)?;
+            self.textures
+                .merge_bind_group(textures, &bind_group.textures)?;
+        }
 
         Ok(())
     }
@@ -736,13 +572,19 @@ impl<A: hub::HalApi> Tracker<A> {
         scope: &mut UsageScope<A>,
         bind_group: &BindGroupStates<A>,
     ) {
-        self.buffers
-            .set_and_remove_from_usage_scope_sparse(&mut scope.buffers, bind_group.buffers.used());
-        self.textures.set_and_remove_from_usage_scope_sparse(
-            textures,
-            &mut scope.textures,
-            &bind_group.textures,
-        );
+        unsafe {
+            self.buffers.set_and_remove_from_usage_scope_sparse(
+                &mut scope.buffers,
+                bind_group.buffers.used(),
+            )
+        };
+        unsafe {
+            self.textures.set_and_remove_from_usage_scope_sparse(
+                textures,
+                &mut scope.textures,
+                &bind_group.textures,
+            )
+        };
     }
 
     /// Tracks the stateless resources from the given renderbundle. It is expected
