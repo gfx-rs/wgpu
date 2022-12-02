@@ -305,7 +305,6 @@ fn clear_texture_tests(
 }
 
 #[test]
-#[wasm_bindgen_test]
 fn clear_texture_2d_uncompressed() {
     initialize_test(
         TestParameters::default().features(wgpu::Features::CLEAR_TEXTURE),

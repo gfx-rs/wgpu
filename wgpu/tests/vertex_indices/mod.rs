@@ -1,6 +1,7 @@
 use std::num::NonZeroU64;
 
 use wgpu::util::DeviceExt;
+use wasm_bindgen_test::*;
 
 use crate::common::{initialize_test, TestParameters, TestingContext};
 
@@ -131,6 +132,7 @@ fn pulling_common(
 }
 
 #[test]
+#[wasm_bindgen_test]
 fn draw() {
     initialize_test(TestParameters::default().test_features_limits(), |ctx| {
         pulling_common(ctx, &[0, 1, 2, 3, 4, 5], |cmb| {
@@ -140,6 +142,7 @@ fn draw() {
 }
 
 #[test]
+#[wasm_bindgen_test]
 fn draw_vertex_offset() {
     initialize_test(
         TestParameters::default()
@@ -155,6 +158,7 @@ fn draw_vertex_offset() {
 }
 
 #[test]
+#[wasm_bindgen_test]
 fn draw_instanced() {
     initialize_test(TestParameters::default().test_features_limits(), |ctx| {
         pulling_common(ctx, &[0, 1, 2, 3, 4, 5], |cmb| {
@@ -164,6 +168,7 @@ fn draw_instanced() {
 }
 
 #[test]
+#[wasm_bindgen_test]
 fn draw_instanced_offset() {
     initialize_test(
         TestParameters::default()
