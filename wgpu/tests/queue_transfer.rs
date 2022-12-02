@@ -5,8 +5,6 @@ use std::num::NonZeroU32;
 use crate::common::{fail, initialize_test, TestParameters};
 use wasm_bindgen_test::*;
 
-wasm_bindgen_test_configure!(run_in_browser);
-
 #[test]
 #[wasm_bindgen_test]
 fn queue_write_texture_overflow() {

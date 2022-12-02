@@ -3,8 +3,6 @@ use std::num::NonZeroU32;
 use crate::common::{initialize_test, TestParameters};
 use wasm_bindgen_test::*;
 
-wasm_bindgen_test_configure!(run_in_browser);
-
 // Checks if discarding a color target resets its init state, causing a zero read of this texture when copied in after submit of the encoder.
 #[test]
 #[wasm_bindgen_test]

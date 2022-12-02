@@ -5,8 +5,6 @@ use crate::common::{initialize_test, TestParameters};
 use std::num::NonZeroU32;
 use wasm_bindgen_test::*;
 
-wasm_bindgen_test_configure!(run_in_browser);
-
 #[test]
 #[wasm_bindgen_test]
 fn write_texture_subset() {

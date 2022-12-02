@@ -1,8 +1,6 @@
 use crate::common::{initialize_test, TestParameters};
 use wasm_bindgen_test::*;
 
-wasm_bindgen_test_configure!(run_in_browser);
-
 /// Buffer's size and usage can be read back.
 #[test]
 #[wasm_bindgen_test]

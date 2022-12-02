@@ -4,8 +4,6 @@ use crate::common::{fail_if, initialize_test, TestParameters};
 use wasm_bindgen_test::*;
 use wgt::BufferAddress;
 
-wasm_bindgen_test_configure!(run_in_browser);
-
 const BUFFER_SIZE: BufferAddress = 1234;
 
 #[test]

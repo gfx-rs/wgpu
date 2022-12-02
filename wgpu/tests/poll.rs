@@ -9,8 +9,6 @@ use wgpu::{
 use crate::common::{initialize_test, TestParameters, TestingContext};
 use wasm_bindgen_test::*;
 
-wasm_bindgen_test_configure!(run_in_browser);
-
 fn generate_dummy_work(ctx: &TestingContext) -> CommandBuffer {
     let buffer = ctx.device.create_buffer(&BufferDescriptor {
         label: None,
