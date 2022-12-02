@@ -1,7 +1,7 @@
 use crate::common::{initialize_test, TestParameters, TestingContext};
 use std::num::NonZeroU32;
-use wgpu::util::{align_to, DeviceExt};
 use wasm_bindgen_test::*;
+use wgpu::util::{align_to, DeviceExt};
 
 //
 // These tests render two triangles to a 2x2 render target. The first triangle

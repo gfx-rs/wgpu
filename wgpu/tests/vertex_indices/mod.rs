@@ -1,7 +1,7 @@
 use std::num::NonZeroU64;
 
-use wgpu::util::DeviceExt;
 use wasm_bindgen_test::*;
+use wgpu::util::DeviceExt;
 
 use crate::common::{initialize_test, TestParameters, TestingContext};
 
