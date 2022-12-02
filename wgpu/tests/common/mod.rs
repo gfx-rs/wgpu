@@ -1,16 +1,14 @@
 //! This module contains common test-only code that needs to be shared between the examples and the tests.
 #![allow(dead_code)] // This module is used in a lot of contexts and only parts of it will be used
 
-use std::panic::{catch_unwind, AssertUnwindSafe};
-
-use wgt::{Backends, DeviceDescriptor, DownlevelCapabilities, Features, Limits};
-
-use wgpu::{Adapter, Device, DownlevelFlags, Instance, Queue};
+use std::panic::{AssertUnwindSafe, catch_unwind};
 
 #[cfg(all(target_arch = "wasm32", feature = "webgl"))]
 use wasm_bindgen::JsCast;
 #[cfg(all(target_arch = "wasm32", feature = "webgl"))]
 use web_sys::HtmlCanvasElement;
+use wgpu::{Adapter, Device, DownlevelFlags, Instance, Queue, Surface};
+use wgt::{Backends, DeviceDescriptor, DownlevelCapabilities, Features, Limits};
 
 pub mod image;
 
@@ -330,34 +328,39 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
     }
 }
 
-#[cfg(not(all(target_arch = "wasm32", feature = "webgl")))]
 fn initialize_adapter() -> Adapter {
-    let backend_bits = wgpu::util::backend_bits_from_env().unwrap_or_else(Backends::all);
-    let instance = Instance::new(backend_bits);
+    let instance;
+    let backend_bits;
+    let mut compatible_surface;
 
+    #[cfg(not(all(target_arch = "wasm32", feature = "webgl")))]
+    {
+        backend_bits = wgpu::util::backend_bits_from_env().unwrap_or_else(Backends::all);
+        instance = Instance::new(backend_bits);
+
+        compatible_surface = None;
+    }
+
+    #[cfg(all(target_arch = "wasm32", feature = "webgl"))]
+    {
+        backend_bits = Backends::GL;
+        instance = Instance::new(backend_bits);
+
+        // On wasm, append a canvas to the document body for initializing the adapter
+        delete_html_canvas(); // if there is a previous one
+        let canvas = create_html_canvas();
+
+        let surface = instance.create_surface_from_canvas(&canvas);
+        
+        compatible_surface = Some(surface);
+    }
+
+    let compatible_surface: Option<&Surface> = compatible_surface.as_ref();
     pollster::block_on(wgpu::util::initialize_adapter_from_env_or_default(
         &instance,
         backend_bits,
-        None,
+        compatible_surface,
     ))
-    .expect("could not find suitable adapter on the system")
-}
-
-#[cfg(all(target_arch = "wasm32", feature = "webgl"))]
-fn initialize_adapter() -> Adapter {
-    // On wasm, append a canvas to the document body for initializing the adapter
-    delete_html_canvas(); // if there is a previous one
-    let canvas = create_html_canvas();
-
-    let instance = Instance::new(Backends::GL);
-    let surface = instance.create_surface_from_canvas(&canvas);
-
-    pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-        power_preference: wgpu::PowerPreference::default(),
-        force_fallback_adapter: false,
-        // Request an adapter which can render to our surface
-        compatible_surface: Some(&surface),
-    }))
     .expect("could not find suitable adapter on the system")
 }
 
