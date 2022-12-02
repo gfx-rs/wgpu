@@ -34,7 +34,10 @@ impl ExprPos {
     /// Returns an lhs position if the current position is lhs otherwise AccessBase
     const fn maybe_access_base(&self, constant_index: bool) -> Self {
         match *self {
-            ExprPos::Lhs => *self,
+            ExprPos::Lhs
+            | ExprPos::AccessBase {
+                constant_index: false,
+            } => *self,
             _ => ExprPos::AccessBase { constant_index },
         }
     }
@@ -476,7 +479,7 @@ impl Context {
     ) -> Result<(Option<Handle<Expression>>, Span)> {
         let HirExpr { ref kind, meta } = stmt.hir_exprs[expr];
 
-        log::debug!("Lowering {:?}", expr);
+        log::debug!("Lowering {:?} (kind {:?}, pos {:?})", expr, kind, pos);
 
         let handle = match *kind {
             HirExprKind::Access { base, index } => {
@@ -537,9 +540,7 @@ impl Context {
                 pointer
             }
             HirExprKind::Select { base, ref field } => {
-                let base = self
-                    .lower_expect_inner(stmt, parser, base, pos.maybe_access_base(true), body)?
-                    .0;
+                let base = self.lower_expect_inner(stmt, parser, base, pos, body)?.0;
 
                 parser.field_selection(self, pos, body, base, field, meta)?
             }

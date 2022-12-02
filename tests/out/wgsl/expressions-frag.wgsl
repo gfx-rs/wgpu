@@ -6,6 +6,10 @@ struct a_buf {
     a: array<f32>,
 }
 
+struct TestStruct {
+    array_: array<vec4<u32>,2u>,
+}
+
 struct FragmentOutput {
     @location(0) o_color: vec4<f32>,
 }
@@ -396,30 +400,44 @@ fn testConstantLength(a_24: array<f32,4u>) {
     return;
 }
 
+fn indexConstantNonConstantIndex(i: i32) {
+    var i_1: i32;
+    var local_5: TestStruct = TestStruct(array<vec4<u32>,2u>(vec4<u32>(0u, 0u, 0u, 0u), vec4<u32>(1u, 1u, 1u, 1u)));
+    var a_26: vec4<u32>;
+
+    _ = (&global_1.a);
+    i_1 = i;
+    let _e6 = i_1;
+    let _e10 = local_5.array_[_e6];
+    a_26 = _e10;
+    return;
+}
+
 fn main_1() {
-    var local_5: f32;
+    var local_6: f32;
 
     _ = (&global_1.a);
     _ = global;
-    let _e5 = global;
-    local_5 = _e5;
-    privatePointer((&local_5));
-    let _e7 = local_5;
-    global = _e7;
-    let _e8 = o_color;
-    _ = _e8.xyzw;
-    let _e11 = vec4<f32>(1.0);
-    o_color.x = _e11.x;
-    o_color.y = _e11.y;
-    o_color.z = _e11.z;
-    o_color.w = _e11.w;
+    let _e6 = global;
+    local_6 = _e6;
+    privatePointer((&local_6));
+    let _e8 = local_6;
+    global = _e8;
+    let _e9 = o_color;
+    _ = _e9.xyzw;
+    let _e12 = vec4<f32>(1.0);
+    o_color.x = _e12.x;
+    o_color.y = _e12.y;
+    o_color.z = _e12.z;
+    o_color.w = _e12.w;
     return;
 }
 
 @fragment 
 fn main() -> FragmentOutput {
     _ = (&global_1.a);
+    _ = TestStruct(array<vec4<u32>,2u>(vec4<u32>(u32(0)), vec4<u32>(u32(1))));
     main_1();
-    let _e7 = o_color;
-    return FragmentOutput(_e7);
+    let _e17 = o_color;
+    return FragmentOutput(_e17);
 }

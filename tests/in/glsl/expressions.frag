@@ -144,6 +144,13 @@ void testConstantLength(float a[4u]) {
     int len = a.length();
 }
 
+struct TestStruct { uvec4 array[2]; };
+const TestStruct strct = { { uvec4(0), uvec4(1) } };
+
+void indexConstantNonConstantIndex(int i) {
+    const uvec4 a = strct.array[i];
+}
+
 out vec4 o_color;
 void main() {
     privatePointer(global);
