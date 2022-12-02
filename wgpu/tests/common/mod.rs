@@ -173,7 +173,10 @@ impl TestParameters {
 }
 pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(TestingContext)) {
     // We don't actually care if it fails
+    #[cfg(not(target_arch = "wasm32"))]
     let _ = env_logger::try_init();
+    #[cfg(target_arch = "wasm32")]
+    let _ = console_log::init_with_level(log::Level::Info);
 
     let (adapter, _) = initialize_adapter();
 
@@ -186,19 +189,19 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
     let missing_features = parameters.required_features - adapter_features;
     if !missing_features.is_empty() {
         // TODO: we probably should use log crate here for logging also to wasm console
-        println!("TEST SKIPPED: MISSING FEATURES {:?}", missing_features);
+        log::info!("TEST SKIPPED: MISSING FEATURES {:?}", missing_features);
         return;
     }
 
     if !parameters.required_limits.check_limits(&adapter_limits) {
-        println!("TEST SKIPPED: LIMIT TOO LOW");
+        log::info!("TEST SKIPPED: LIMIT TOO LOW");
         return;
     }
 
     let missing_downlevel_flags =
         parameters.required_downlevel_properties.flags - adapter_downlevel_capabilities.flags;
     if !missing_downlevel_flags.is_empty() {
-        println!(
+        log::info!(
             "TEST SKIPPED: MISSING DOWNLEVEL FLAGS {:?}",
             missing_downlevel_flags
         );
@@ -208,7 +211,7 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
     if adapter_downlevel_capabilities.shader_model
         < parameters.required_downlevel_properties.shader_model
     {
-        println!(
+        log::info!(
             "TEST SKIPPED: LOW SHADER MODEL {:?}",
             adapter_downlevel_capabilities.shader_model
         );
@@ -272,7 +275,7 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
     });
 
     if let Some((reason, true)) = expected_failure_reason {
-        println!("EXPECTED TEST FAILURE SKIPPED: {:?}", reason);
+        log::info!("EXPECTED TEST FAILURE SKIPPED: {:?}", reason);
         return;
     }
 
@@ -300,7 +303,7 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
         // We got the conditions we expected
         if let Some((expected_reason, _)) = expected_failure_reason {
             // Print out reason for the failure
-            println!(
+            log::info!(
                 "GOT EXPECTED TEST FAILURE DUE TO {}: {:?}",
                 failure_cause, expected_reason
             );
