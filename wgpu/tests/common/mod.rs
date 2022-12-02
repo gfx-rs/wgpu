@@ -1,7 +1,7 @@
 //! This module contains common test-only code that needs to be shared between the examples and the tests.
 #![allow(dead_code)] // This module is used in a lot of contexts and only parts of it will be used
 
-use std::panic::{AssertUnwindSafe, catch_unwind};
+use std::panic::{catch_unwind, AssertUnwindSafe};
 
 #[cfg(all(target_arch = "wasm32", feature = "webgl"))]
 use wasm_bindgen::JsCast;
@@ -305,7 +305,8 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
             // Print out reason for the failure
             log::info!(
                 "GOT EXPECTED TEST FAILURE DUE TO {}: {:?}",
-                failure_cause, expected_reason
+                failure_cause,
+                expected_reason
             );
         }
     } else if let Some((reason, _)) = expected_failure_reason {
@@ -337,8 +338,10 @@ fn initialize_adapter() -> (Adapter, SurfaceGuard) {
         // On wasm, append a canvas to the document body for initializing the adapter
         let canvas = create_html_canvas();
 
-        let surface = instance.create_surface_from_canvas(&canvas);
-        
+        let surface = instance
+            .create_surface_from_canvas(&canvas)
+            .expect("could not create surface from canvas");
+
         compatible_surface = Some(surface);
     }
 
