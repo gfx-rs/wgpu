@@ -174,11 +174,11 @@ jobs:
           toolchain: stable
           profile: minimal
           override: true
-# doesn't work for this project because of https://github.com/rustwasm/wasm-pack/issues/1180
-#      - name: install wasm-pack
-#        uses: jetli/wasm-pack-action@v0.4.0
-#
-# install from fork until this is merged: https://github.com/rustwasm/wasm-pack/pull/1185
+					# doesn't work for this project because of https://github.com/rustwasm/wasm-pack/issues/1180
+					#      - name: install wasm-pack
+					#        uses: jetli/wasm-pack-action@v0.4.0
+					#
+					# install from fork until this is merged: https://github.com/rustwasm/wasm-pack/pull/1185
       - name: install wasm-pack
         run: |
           cargo install --git https://github.com/haraldreingruber/wasm-pack wasm-pack
