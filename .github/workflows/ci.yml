@@ -162,7 +162,7 @@ jobs:
           cargo doc --target ${{ matrix.target }} -p wgpu -p wgpu-core -p wgpu-info -p player --all-features --no-deps
 
   wasm-test:
-    name: Test Wasm
+    name: Test Webassembly
     runs-on: ubuntu-latest
     steps:
       - name: checkout repo
