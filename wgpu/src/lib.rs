@@ -36,10 +36,10 @@ pub use wgt::{
     PresentMode, PrimitiveState, PrimitiveTopology, PushConstantRange, QueryType,
     RenderBundleDepthStencil, SamplerBindingType, SamplerBorderColor, ShaderLocation, ShaderModel,
     ShaderStages, StencilFaceState, StencilOperation, StencilState, StorageTextureAccess,
-    SurfaceConfiguration, SurfaceStatus, TextureAspect, TextureDimension, TextureFormat,
-    TextureFormatFeatureFlags, TextureFormatFeatures, TextureSampleType, TextureUsages,
-    TextureViewDimension, VertexAttribute, VertexFormat, VertexStepMode, COPY_BUFFER_ALIGNMENT,
-    COPY_BYTES_PER_ROW_ALIGNMENT, MAP_ALIGNMENT, PUSH_CONSTANT_ALIGNMENT,
+    SurfaceCapabilities, SurfaceConfiguration, SurfaceStatus, TextureAspect, TextureDimension,
+    TextureFormat, TextureFormatFeatureFlags, TextureFormatFeatures, TextureSampleType,
+    TextureUsages, TextureViewDimension, VertexAttribute, VertexFormat, VertexStepMode,
+    COPY_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT, MAP_ALIGNMENT, PUSH_CONSTANT_ALIGNMENT,
     QUERY_RESOLVE_BUFFER_ALIGNMENT, QUERY_SET_MAX_QUERIES, QUERY_SIZE, VERTEX_STRIDE_ALIGNMENT,
 };
 
@@ -204,7 +204,7 @@ trait Context: Debug + Send + Sized + Sync {
         &self,
         display_handle: raw_window_handle::RawDisplayHandle,
         window_handle: raw_window_handle::RawWindowHandle,
-    ) -> Self::SurfaceId;
+    ) -> Result<Self::SurfaceId, crate::CreateSurfaceError>;
     fn instance_request_adapter(
         &self,
         options: &RequestAdapterOptions<'_>,
@@ -231,21 +231,11 @@ trait Context: Debug + Send + Sized + Sync {
         format: TextureFormat,
     ) -> TextureFormatFeatures;
 
-    fn surface_get_supported_formats(
+    fn surface_get_capabilities(
         &self,
         surface: &Self::SurfaceId,
         adapter: &Self::AdapterId,
-    ) -> Vec<TextureFormat>;
-    fn surface_get_supported_present_modes(
-        &self,
-        surface: &Self::SurfaceId,
-        adapter: &Self::AdapterId,
-    ) -> Vec<PresentMode>;
-    fn surface_get_supported_alpha_modes(
-        &self,
-        surface: &Self::SurfaceId,
-        adapter: &Self::AdapterId,
-    ) -> Vec<CompositeAlphaMode>;
+    ) -> wgt::SurfaceCapabilities;
     fn surface_configure(
         &self,
         surface: &Self::SurfaceId,
@@ -600,6 +590,9 @@ static_assertions::assert_impl_all!(Device: Send, Sync);
 /// Identifier for a particular call to [`Queue::submit`]. Can be used
 /// as part of an argument to [`Device::poll`] to block for a particular
 /// submission to finish.
+///
+/// This type is unique to the Rust API of `wgpu`.
+/// There is no analogue in the WebGPU specification.
 #[derive(Debug, Copy, Clone)]
 pub struct SubmissionIndex(<C as Context>::SubmissionIndex);
 static_assertions::assert_impl_all!(SubmissionIndex: Send, Sync);
@@ -681,9 +674,12 @@ static_assertions::assert_impl_all!(Buffer: Send, Sync);
 
 /// Slice into a [`Buffer`].
 ///
-/// Created by calling [`Buffer::slice`]. To use the whole buffer, call with unbounded slice:
+/// It can be created with [`Buffer::slice`]. To use the whole buffer, call with unbounded slice:
 ///
 /// `buffer.slice(..)`
+///
+/// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
+/// an offset and size are specified as arguments to each call working with the [`Buffer`], instead.
 #[derive(Copy, Clone, Debug)]
 pub struct BufferSlice<'a> {
     buffer: &'a Buffer,
@@ -746,6 +742,10 @@ impl Drop for Sampler {
 ///
 /// A `Surface` represents a platform-specific surface (e.g. a window) onto which rendered images may
 /// be presented. A `Surface` may be created with the unsafe function [`Instance::create_surface`].
+///
+/// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
+/// [`GPUCanvasContext`](https://gpuweb.github.io/gpuweb/#canvas-context)
+/// serves a similar role.
 #[derive(Debug)]
 pub struct Surface {
     context: Arc<C>,
@@ -839,6 +839,9 @@ impl Drop for ShaderModule {
 ///
 /// Any necessary shader translation (e.g. from WGSL to SPIR-V or vice versa)
 /// will be done internally by wgpu.
+///
+/// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
+/// only WGSL source code strings are accepted.
 #[cfg_attr(feature = "naga", allow(clippy::large_enum_variant))]
 #[derive(Clone)]
 #[non_exhaustive]
@@ -886,7 +889,11 @@ pub struct ShaderModuleDescriptor<'a> {
 }
 static_assertions::assert_impl_all!(ShaderModuleDescriptor: Send, Sync);
 
-/// Descriptor for a shader module given by SPIR-V binary.
+/// Descriptor for a shader module given by SPIR-V binary, for use with
+/// [`Device::create_shader_module_spirv`].
+///
+/// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
+/// only WGSL source code strings are accepted.
 pub struct ShaderModuleDescriptorSpirV<'a> {
     /// Debug label of the shader module. This will show up in graphics debuggers for easy identification.
     pub label: Label<'a>,
@@ -1201,7 +1208,7 @@ pub struct BufferBinding<'a> {
 }
 static_assertions::assert_impl_all!(BufferBinding: Send, Sync);
 
-/// Operation to perform to the output attachment at the start of a renderpass.
+/// Operation to perform to the output attachment at the start of a render pass.
 ///
 /// The render target must be cleared at least once before its content is loaded.
 ///
@@ -1223,6 +1230,9 @@ impl<V: Default> Default for LoadOp<V> {
 }
 
 /// Pair of load and store operations for an attachment aspect.
+///
+/// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
+/// separate `loadOp` and `storeOp` fields are used instead.
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
@@ -1659,13 +1669,13 @@ pub struct RenderBundleEncoderDescriptor<'a> {
     /// Debug label of the render bundle encoder. This will show up in graphics debuggers for easy identification.
     pub label: Label<'a>,
     /// The formats of the color attachments that this render bundle is capable to rendering to. This
-    /// must match the formats of the color attachments in the renderpass this render bundle is executed in.
+    /// must match the formats of the color attachments in the render pass this render bundle is executed in.
     pub color_formats: &'a [Option<TextureFormat>],
     /// Information about the depth attachment that this render bundle is capable to rendering to. This
-    /// must match the format of the depth attachments in the renderpass this render bundle is executed in.
+    /// must match the format of the depth attachments in the render pass this render bundle is executed in.
     pub depth_stencil: Option<RenderBundleDepthStencil>,
     /// Sample count this render bundle is capable of rendering to. This must match the pipelines and
-    /// the renderpasses it is used in.
+    /// the render passes it is used in.
     pub sample_count: u32,
     /// If this render bundle will rendering to multiple array layers in the attachments at the same time.
     pub multiview: Option<NonZeroU32>,
@@ -1674,6 +1684,10 @@ static_assertions::assert_impl_all!(RenderBundleEncoderDescriptor: Send, Sync);
 
 /// Surface texture that can be rendered to.
 /// Result of a successful call to [`Surface::get_current_texture`].
+///
+/// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
+/// the [`GPUCanvasContext`](https://gpuweb.github.io/gpuweb/#canvas-context) provides
+/// a texture without any additional information.
 #[derive(Debug)]
 pub struct SurfaceTexture {
     /// Accessible view of the frame.
@@ -1826,23 +1840,34 @@ impl Instance {
     ///
     /// # Safety
     ///
-    /// - Raw Window Handle must be a valid object to create a surface upon and
-    ///   must remain valid for the lifetime of the returned surface.
-    /// - If not called on the main thread, metal backend will panic.
+    /// - `raw_window_handle` must be a valid object to create a surface upon.
+    /// - `raw_window_handle` must remain valid until after the returned [`Surface`] is
+    ///   dropped.
+    ///
+    /// # Errors
+    ///
+    /// - On WebGL2: Will return an error if the browser does not support WebGL2,
+    ///   or declines to provide GPU access (such as due to a resource shortage).
+    ///
+    /// # Panics
+    ///
+    /// - On macOS/Metal: will panic if not called on the main thread.
+    /// - On web: will panic if the `raw_window_handle` does not properly refer to a
+    ///   canvas element.
     pub unsafe fn create_surface<
         W: raw_window_handle::HasRawWindowHandle + raw_window_handle::HasRawDisplayHandle,
     >(
         &self,
         window: &W,
-    ) -> Surface {
-        Surface {
+    ) -> Result<Surface, CreateSurfaceError> {
+        Ok(Surface {
             context: Arc::clone(&self.context),
             id: Context::instance_create_surface(
                 &*self.context,
                 raw_window_handle::HasRawDisplayHandle::raw_display_handle(window),
                 raw_window_handle::HasRawWindowHandle::raw_window_handle(window),
-            ),
-        }
+            )?,
+        })
     }
 
     /// Creates a surface from `CoreAnimationLayer`.
@@ -1872,29 +1897,42 @@ impl Instance {
     ///
     /// The `canvas` argument must be a valid `<canvas>` element to
     /// create a surface upon.
+    ///
+    /// # Errors
+    ///
+    /// - On WebGL2: Will return an error if the browser does not support WebGL2,
+    ///   or declines to provide GPU access (such as due to a resource shortage).
     #[cfg(all(target_arch = "wasm32", not(feature = "emscripten")))]
-    pub fn create_surface_from_canvas(&self, canvas: &web_sys::HtmlCanvasElement) -> Surface {
-        Surface {
+    pub fn create_surface_from_canvas(
+        &self,
+        canvas: &web_sys::HtmlCanvasElement,
+    ) -> Result<Surface, CreateSurfaceError> {
+        Ok(Surface {
             context: Arc::clone(&self.context),
-            id: self.context.instance_create_surface_from_canvas(canvas),
-        }
+            id: self.context.instance_create_surface_from_canvas(canvas)?,
+        })
     }
 
     /// Creates a surface from a `web_sys::OffscreenCanvas`.
     ///
     /// The `canvas` argument must be a valid `OffscreenCanvas` object
     /// to create a surface upon.
+    ///
+    /// # Errors
+    ///
+    /// - On WebGL2: Will return an error if the browser does not support WebGL2,
+    ///   or declines to provide GPU access (such as due to a resource shortage).
     #[cfg(all(target_arch = "wasm32", not(feature = "emscripten")))]
     pub fn create_surface_from_offscreen_canvas(
         &self,
         canvas: &web_sys::OffscreenCanvas,
-    ) -> Surface {
-        Surface {
+    ) -> Result<Surface, CreateSurfaceError> {
+        Ok(Surface {
             context: Arc::clone(&self.context),
             id: self
                 .context
-                .instance_create_surface_from_offscreen_canvas(canvas),
-        }
+                .instance_create_surface_from_offscreen_canvas(canvas)?,
+        })
     }
 
     /// Polls all devices.
@@ -2362,6 +2400,22 @@ impl Display for RequestDeviceError {
 }
 
 impl error::Error for RequestDeviceError {}
+
+/// [`Instance::create_surface()`] or a related function failed.
+#[derive(Clone, PartialEq, Eq, Debug)]
+#[non_exhaustive]
+pub struct CreateSurfaceError {
+    // TODO: Report diagnostic clues
+}
+static_assertions::assert_impl_all!(CreateSurfaceError: Send, Sync);
+
+impl Display for CreateSurfaceError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Creating a surface failed")
+    }
+}
+
+impl error::Error for CreateSurfaceError {}
 
 /// Error occurred when trying to async map a buffer.
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -3118,7 +3172,7 @@ impl<'a> RenderPass<'a> {
 
 /// [`Features::MULTI_DRAW_INDIRECT_COUNT`] must be enabled on the device in order to call these functions.
 impl<'a> RenderPass<'a> {
-    /// Disptaches multiple draw calls from the active vertex buffer(s) based on the contents of the `indirect_buffer`.
+    /// Dispatches multiple draw calls from the active vertex buffer(s) based on the contents of the `indirect_buffer`.
     /// The count buffer is read to determine how many draws to issue.
     ///
     /// The indirect buffer must be long enough to account for `max_count` draws, however only `count` will
@@ -3714,43 +3768,31 @@ impl Drop for SurfaceTexture {
 }
 
 impl Surface {
-    /// Returns a vec of supported texture formats to use for the [`Surface`] with this adapter.
-    /// Note: The first format in the vector is preferred
+    /// Returns the capabilities of the surface when used with the given adapter.
     ///
-    /// Returns an empty vector if the surface is incompatible with the adapter.
-    pub fn get_supported_formats(&self, adapter: &Adapter) -> Vec<TextureFormat> {
-        Context::surface_get_supported_formats(&*self.context, &self.id, &adapter.id)
-    }
-
-    /// Returns a vec of supported presentation modes to use for the [`Surface`] with this adapter.
-    ///
-    /// Returns an empty vector if the surface is incompatible with the adapter.
-    pub fn get_supported_present_modes(&self, adapter: &Adapter) -> Vec<PresentMode> {
-        Context::surface_get_supported_present_modes(&*self.context, &self.id, &adapter.id)
-    }
-
-    /// Returns a vec of supported alpha modes to use for the [`Surface`] with this adapter.
-    ///
-    /// Will return at least one element, CompositeAlphaMode::Opaque or CompositeAlphaMode::Inherit.
-    pub fn get_supported_alpha_modes(&self, adapter: &Adapter) -> Vec<CompositeAlphaMode> {
-        Context::surface_get_supported_alpha_modes(&*self.context, &self.id, &adapter.id)
+    /// Returns specified values (see [`SurfaceCapabilities`]) if surface is incompatible with the adapter.
+    pub fn get_capabilities(&self, adapter: &Adapter) -> SurfaceCapabilities {
+        Context::surface_get_capabilities(&*self.context, &self.id, &adapter.id)
     }
 
     /// Return a default `SurfaceConfiguration` from width and height to use for the [`Surface`] with this adapter.
+    ///
+    /// Returns None if the surface isn't supported by this adapter
     pub fn get_default_config(
         &self,
         adapter: &Adapter,
         width: u32,
         height: u32,
-    ) -> wgt::SurfaceConfiguration {
-        wgt::SurfaceConfiguration {
+    ) -> Option<wgt::SurfaceConfiguration> {
+        let caps = self.get_capabilities(adapter);
+        Some(wgt::SurfaceConfiguration {
             usage: wgt::TextureUsages::RENDER_ATTACHMENT,
-            format: self.get_supported_formats(adapter)[0],
+            format: *caps.formats.get(0)?,
             width,
             height,
-            present_mode: self.get_supported_present_modes(adapter)[0],
+            present_mode: *caps.present_modes.get(0)?,
             alpha_mode: wgt::CompositeAlphaMode::Auto,
-        }
+        })
     }
 
     /// Initializes [`Surface`] for presentation.
@@ -4023,14 +4065,14 @@ impl<T> UncapturedErrorHandler for T where T: Fn(Error) + Send + 'static {}
 pub enum Error {
     /// Out of memory error
     OutOfMemory {
-        ///
+        /// Lower level source of the error.
         source: Box<dyn error::Error + Send + 'static>,
     },
     /// Validation error, signifying a bug in code or data
     Validation {
-        ///
+        /// Lower level source of the error.
         source: Box<dyn error::Error + Send + 'static>,
-        ///
+        /// Description of the validation error.
         description: String,
     },
 }

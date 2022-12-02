@@ -141,7 +141,11 @@ jobs:
           set -e
 
           # build for Emscripten/WebGL
-          cargo clippy --target ${{ matrix.target }} -p wgpu -p wgpu-hal --no-default-features --features webgl,emscripten
+          cargo clippy --target ${{ matrix.target }} -p wgpu -p wgpu-hal \
+                       --no-default-features --features webgl,emscripten
+
+          # build cube example
+          cargo clippy --target ${{ matrix.target }} --example cube --features webgl,emscripten
 
           # build raw-gles example
           cargo clippy --target ${{ matrix.target }} --example raw-gles --features webgl,emscripten
@@ -379,3 +383,31 @@ jobs:
       - name: build Deno
         run: |
           cargo clippy --manifest-path cts_runner/Cargo.toml
+
+  cargo-deny-check-advisories:
+    name: "Run `cargo deny check advisories`"
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout repo
+        uses: actions/checkout@v3
+
+      - name: Run `cargo deny check`
+        uses: EmbarkStudios/cargo-deny-action@v1
+        with:
+          command: check advisories
+          arguments: --all-features --workspace
+          rust-version: ${{ env.RUST_VERSION }}
+
+  cargo-deny-check-rest:
+    name: "Run `cargo deny check`"
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout repo
+        uses: actions/checkout@v3
+
+      - name: Run `cargo deny check`
+        uses: EmbarkStudios/cargo-deny-action@v1
+        with:
+          command: check bans licenses sources
+          arguments: --all-features --workspace
+          rust-version: ${{ env.RUST_VERSION }}

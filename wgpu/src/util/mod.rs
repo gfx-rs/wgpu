@@ -1,4 +1,7 @@
-//! Utility structures and functions.
+//! Utility structures and functions that are built on top of the main `wgpu` API.
+//!
+//! Nothing in this module is a part of the WebGPU API specification;
+//! they are unique to the `wgpu` library.
 
 mod belt;
 mod device;

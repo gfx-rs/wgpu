@@ -40,6 +40,33 @@ Bottom level categories:
 
 ## Unreleased
 
+### Major Changes
+
+#### Surface Capabilities API
+
+The various surface capability functions were combined into a single call that gives you all the capabilities.
+
+```diff
+- let formats = surface.get_supported_formats(&adapter);
+- let present_modes = surface.get_supported_present_modes(&adapter);
+- let alpha_modes = surface.get_supported_alpha_modes(&adapter);
++ let caps = surface.get_capabilities(&adapter);
++ let formats = caps.formats;
++ let present_modes = caps.present_modes;
++ let alpha_modes = caps.alpha_modes;
+```
+
+Additionally `Surface::get_default_config` now returns an Option and returns None if the surface isn't supported by the adapter.
+
+```diff
+- let config = surface.get_default_config(&adapter);
++ let config = surface.get_default_config(&adapter).expect("Surface unsupported by adapter");
+```
+
+#### Fallible surface creation
+
+`Instance::create_surface()` now returns `Result<Surface, CreateSurfaceError>` instead of `Surface`. This allows an error to be returned instead of panicking if the given window is a HTML canvas and obtaining a WebGPU or WebGL 2 context fails. (No other platforms currently report any errors through this path.) By @kpreid in [#3052](https://github.com/gfx-rs/wgpu/pull/3052/)
+
 ### Changes
 
 #### General
@@ -48,6 +75,8 @@ Bottom level categories:
 - Implement `Default` for `CompositeAlphaMode`
 - Improve compute shader validation error message. By @haraldreingruber in [#3139](https://github.com/gfx-rs/wgpu/pull/3139)
 - New downlevel feature `UNRESTRICTED_INDEX_BUFFER` to indicate support for using `INDEX` together with other non-copy/map usages (unsupported on WebGL). By @Wumpf in [#3157](https://github.com/gfx-rs/wgpu/pull/3157)
+- Combine `Surface::get_supported_formats`, `Surface::get_supported_present_modes`, and `Surface::get_supported_alpha_modes` into `Surface::get_capabilities` and `SurfaceCapabilities`. By @cwfitzgerald in [#3157](https://github.com/gfx-rs/wgpu/pull/3157)
+- Make `Surface::get_default_config` return an Option to prevent panics. By @cwfitzgerald in [#3157](https://github.com/gfx-rs/wgpu/pull/3157)
 
 #### WebGPU
 
@@ -84,6 +113,7 @@ Bottom level categories:
 - Bother to free the `hal::Api::CommandBuffer` when a `wgpu_core::command::CommandEncoder` is dropped. By @jimblandy in [#3069](https://github.com/gfx-rs/wgpu/pull/3069).
 - Fixed the mipmap example by adding the missing WRITE_TIMESTAMP_INSIDE_PASSES feature. By @Olaroll in [#3081](https://github.com/gfx-rs/wgpu/pull/3081).
 - Avoid panicking in some interactions with invalid resources by @nical in (#3094)[https://github.com/gfx-rs/wgpu/pull/3094]
+- Fixed an integer overflow in `copy_texture_to_texture` by @nical [#3090](https://github.com/gfx-rs/wgpu/pull/3090)
 - Remove `wgpu_types::Features::DEPTH24PLUS_STENCIL8`, making `wgpu::TextureFormat::Depth24PlusStencil8` available on all backends. By @Healthire in (#3151)[https://github.com/gfx-rs/wgpu/pull/3151]
 - Fix an integer overflow in `queue_write_texture` by @nical in (#3146)[https://github.com/gfx-rs/wgpu/pull/3146]
 - Make `RenderPassCompatibilityError` and `CreateShaderModuleError` not so huge. By @jimblandy in (#3226)[https://github.com/gfx-rs/wgpu/pull/3226]
@@ -105,6 +135,10 @@ Bottom level categories:
   zero, rather than treating that as "until the end of the buffer".
   By @jimblandy in [#3171](https://github.com/gfx-rs/wgpu/pull/3171)
 
+#### Emscripten
+
+- Let the wgpu examples `framework.rs` compile again under Emscripten. By @jimblandy in [#3246](https://github.com/gfx-rs/wgpu/pull/3246)
+
 ### Examples
 
 - Log adapter info in hello example on wasm target by @JolifantoBambla in [#2858](https://github.com/gfx-rs/wgpu/pull/2858)
@@ -118,6 +152,14 @@ Bottom level categories:
 #### Vulkan
 
 - Don't use a pointer to a local copy of a `PhysicalDeviceDriverProperties` struct after it has gone out of scope. In fact, don't make a local copy at all. Introduce a helper function for building `CStr`s from C character arrays, and remove some `unsafe` blocks. By @jimblandy in [#3076](https://github.com/gfx-rs/wgpu/pull/3076).
+
+
+## wgpu-0.14.2 (2022-11-28)
+
+### Bug Fixes
+
+- Fix incorrect offset in `get_mapped_range` by @nical in [#3233](https://github.com/gfx-rs/wgpu/pull/3233)
+
 
 ## wgpu-0.14.1 (2022-11-02)
 

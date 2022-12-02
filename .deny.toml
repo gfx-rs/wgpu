@@ -1,0 +1,37 @@
+[bans]
+multiple-versions = "deny"
+skip-tree = [
+	{ name = "cts_runner" },
+	{ name = "dummy" },
+	{ name = "player" },
+	{ name = "run-wasm" },
+	{ name = "wgpu-info" },
+]
+wildcards = "deny"
+
+[licenses]
+allow = [
+	"Apache-2.0",
+	"Apache-2.0 WITH LLVM-exception",
+	"BSD-2-Clause",
+	"BSD-3-Clause",
+	"CC0-1.0",
+	"ISC",
+	"MIT",
+	"MPL-2.0",
+	"Unicode-DFS-2016",
+	"Zlib",
+]
+
+[sources]
+allow-git = [
+	"https://github.com/grovesNL/glow",
+]
+unknown-registry = "deny"
+unknown-git = "deny"
+required-git-spec = "rev"
+
+[sources.allow-org]
+github = [
+	"gfx-rs"
+]

@@ -3225,43 +3225,21 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         Ok(adapter.is_surface_supported(surface))
     }
 
-    pub fn surface_get_supported_formats<A: HalApi>(
+    pub fn surface_get_capabilities<A: HalApi>(
         &self,
         surface_id: id::SurfaceId,
         adapter_id: id::AdapterId,
-    ) -> Result<Vec<TextureFormat>, instance::GetSurfaceSupportError> {
-        profiling::scope!("Surface::get_supported_formats");
-        self.fetch_adapter_and_surface::<A, _, Vec<TextureFormat>>(
-            surface_id,
-            adapter_id,
-            |adapter, surface| surface.get_supported_formats(adapter),
-        )
-    }
+    ) -> Result<wgt::SurfaceCapabilities, instance::GetSurfaceSupportError> {
+        profiling::scope!("Surface::get_capabilities");
+        self.fetch_adapter_and_surface::<A, _, _>(surface_id, adapter_id, |adapter, surface| {
+            let hal_caps = surface.get_capabilities(adapter)?;
 
-    pub fn surface_get_supported_present_modes<A: HalApi>(
-        &self,
-        surface_id: id::SurfaceId,
-        adapter_id: id::AdapterId,
-    ) -> Result<Vec<wgt::PresentMode>, instance::GetSurfaceSupportError> {
-        profiling::scope!("Surface::get_supported_present_modes");
-        self.fetch_adapter_and_surface::<A, _, Vec<wgt::PresentMode>>(
-            surface_id,
-            adapter_id,
-            |adapter, surface| surface.get_supported_present_modes(adapter),
-        )
-    }
-
-    pub fn surface_get_supported_alpha_modes<A: HalApi>(
-        &self,
-        surface_id: id::SurfaceId,
-        adapter_id: id::AdapterId,
-    ) -> Result<Vec<wgt::CompositeAlphaMode>, instance::GetSurfaceSupportError> {
-        profiling::scope!("Surface::get_supported_alpha_modes");
-        self.fetch_adapter_and_surface::<A, _, Vec<wgt::CompositeAlphaMode>>(
-            surface_id,
-            adapter_id,
-            |adapter, surface| surface.get_supported_alpha_modes(adapter),
-        )
+            Ok(wgt::SurfaceCapabilities {
+                formats: hal_caps.formats,
+                present_modes: hal_caps.present_modes,
+                alpha_modes: hal_caps.composite_alpha_modes,
+            })
+        })
     }
 
     fn fetch_adapter_and_surface<
@@ -5699,7 +5677,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         max: range.end,
                     });
                 }
-                unsafe { Ok((ptr.as_ptr().offset(offset as isize), range_size)) }
+                // ptr points to the beginning of the range we mapped in map_async
+                // rather thant the beginning of the buffer.
+                let relative_offset = (offset - range.start) as isize;
+                unsafe { Ok((ptr.as_ptr().offset(relative_offset), range_size)) }
             }
             resource::BufferMapState::Idle | resource::BufferMapState::Waiting(_) => {
                 Err(BufferAccessError::NotMapped)
