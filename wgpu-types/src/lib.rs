@@ -2049,7 +2049,7 @@ pub enum TextureFormat {
     Astc {
         /// compressed block dimensions
         block: AstcBlock,
-        /// astc RGBA channel
+        /// ASTC RGBA channel
         channel: AstcChannel,
     },
 }
@@ -3900,13 +3900,13 @@ pub enum SurfaceStatus {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct Color {
-    /// red component of the color
+    /// Red component of the color
     pub r: f64,
-    /// green component of the color
+    /// Green component of the color
     pub g: f64,
-    /// blue component of the color
+    /// Blue component of the color
     pub b: f64,
-    /// alpha component of the color
+    /// Alpha component of the color
     pub a: f64,
 }
 
@@ -3980,11 +3980,11 @@ pub enum TextureDimension {
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct Origin3d {
-    /// x position of the origin
+    /// X position of the origin
     pub x: u32,
-    /// y position of the origin
+    /// Y position of the origin
     pub y: u32,
-    /// z position of the origin
+    /// Z position of the origin
     pub z: u32,
 }
 
@@ -4009,11 +4009,11 @@ impl Default for Origin3d {
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct Extent3d {
-    /// height of the extent
+    /// Width of the extent
     pub width: u32,
-    /// width of the extent
+    /// Height of the extent
     pub height: u32,
-    /// the depth of the extent or the number of array layers
+    /// The depth of the extent or the number of array layers
     #[cfg_attr(feature = "serde", serde(default = "default_depth"))]
     pub depth_or_array_layers: u32,
 }
