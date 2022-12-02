@@ -118,6 +118,7 @@ Additionally `Surface::get_default_config` now returns an Option and returns Non
 - Fix an integer overflow in `queue_write_texture` by @nical in (#3146)[https://github.com/gfx-rs/wgpu/pull/3146]
 - Make `RenderPassCompatibilityError` and `CreateShaderModuleError` not so huge. By @jimblandy in (#3226)[https://github.com/gfx-rs/wgpu/pull/3226]
 - Check for invalid bitflag bits in wgpu-core and allow them to be captured/replayed by @nical in (#3229)[https://github.com/gfx-rs/wgpu/pull/3229]
+- Evaluate `gfx_select!`'s `#[cfg]` conditions at the right time. By @jimblandy in [#3253](https://github.com/gfx-rs/wgpu/pull/3253)
 
 #### WebGPU
 
