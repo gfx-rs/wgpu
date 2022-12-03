@@ -849,7 +849,7 @@ impl Default for Limits {
             max_compute_workgroup_size_y: 256,
             max_compute_workgroup_size_z: 64,
             max_compute_workgroups_per_dimension: 65535,
-            max_buffer_size: 1 << 30,
+            max_buffer_size: 1 << 28,
         }
     }
 }
