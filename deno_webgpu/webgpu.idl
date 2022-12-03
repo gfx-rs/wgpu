@@ -790,6 +790,23 @@ dictionary GPUVertexAttribute {
     required GPUIndex32 shaderLocation;
 };
 
+dictionary GPUImageDataLayout {
+    GPUSize64 offset = 0;
+    GPUSize32 bytesPerRow;
+    GPUSize32 rowsPerImage;
+};
+
+dictionary GPUImageCopyBuffer : GPUImageDataLayout {
+    required GPUBuffer buffer;
+};
+
+dictionary GPUImageCopyTexture {
+    required GPUTexture texture;
+    GPUIntegerCoordinate mipLevel = 0;
+    GPUOrigin3D origin = {};
+    GPUTextureAspect aspect = "all";
+};
+
 [Exposed=(Window, DedicatedWorker), SecureContext]
 interface GPUCommandBuffer {
 };
@@ -849,23 +866,6 @@ GPUCommandEncoder includes GPUCommandsMixin;
 GPUCommandEncoder includes GPUDebugCommandsMixin;
 
 dictionary GPUCommandEncoderDescriptor : GPUObjectDescriptorBase {
-};
-
-dictionary GPUImageDataLayout {
-    GPUSize64 offset = 0;
-    GPUSize32 bytesPerRow;
-    GPUSize32 rowsPerImage;
-};
-
-dictionary GPUImageCopyBuffer : GPUImageDataLayout {
-    required GPUBuffer buffer;
-};
-
-dictionary GPUImageCopyTexture {
-    required GPUTexture texture;
-    GPUIntegerCoordinate mipLevel = 0;
-    GPUOrigin3D origin = {};
-    GPUTextureAspect aspect = "all";
 };
 
 interface mixin GPUBindingCommandsMixin {
@@ -972,7 +972,7 @@ enum GPUStoreOp {
     "discard"
 };
 
-dictionary GPURenderPassLayout: GPUObjectDescriptorBase {
+dictionary GPURenderPassLayout : GPUObjectDescriptorBase {
     required sequence<GPUTextureFormat?> colorFormats;
     GPUTextureFormat depthStencilFormat;
     GPUSize32 sampleCount = 1;
