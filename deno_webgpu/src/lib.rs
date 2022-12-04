@@ -67,6 +67,8 @@ pub mod queue;
 pub mod render_pass;
 pub mod sampler;
 pub mod shader;
+#[cfg(feature = "surface")]
+pub mod surface;
 pub mod texture;
 
 pub struct Unstable(pub bool);

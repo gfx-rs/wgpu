@@ -5251,6 +5251,8 @@
   const GPUQuerySetPrototype = GPUQuerySet.prototype;
 
   window.__bootstrap.webgpu = {
+    _device,
+    assertDevice,
     gpu: webidl.createBranded(GPU),
     GPU,
     GPUAdapter,
