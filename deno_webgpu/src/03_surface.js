@@ -49,7 +49,7 @@
         height: this[_height],
         alpha_mode: configuration.alphaMode,
       });
-      
+
       device.pushError(err);
     }
 
@@ -66,4 +66,18 @@
   }
   const GPUCanvasContextPrototype = GPUCanvasContext.prototype;
 
+  function createCanvasContext(rawHandleRid) {
+    const canvasContext = webidl.createBranded(GPUCanvasContext);
+    const { rid } = ops.op_webgpu_create_surface(rawHandleRid);
+    canvasContext[_surfaceRid] = rid;
+    return canvasContext;
+  }
+
+  window.__bootstrap.webgpu = {
+    ...window.__bootstrap.webgpu,
+    _width,
+    _height,
+    GPUCanvasContext,
+    createCanvasContext,
+  };
 })(this);
