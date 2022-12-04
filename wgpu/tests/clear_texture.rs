@@ -203,9 +203,11 @@ fn single_texture_clear_test(
     size: wgpu::Extent3d,
     dimension: wgpu::TextureDimension,
 ) {
-    println!(
+    log::info!(
         "clearing texture with {:?}, dimension {:?}, size {:?}",
-        format, dimension, size
+        format,
+        dimension,
+        size
     );
 
     let texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
