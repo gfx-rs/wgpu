@@ -78,12 +78,12 @@ fn invalid_float() {
 #[test]
 fn invalid_texture_sample_type() {
     check(
-        "let x: texture_2d<f16>;",
-        r###"error: texture sample type must be one of f32, i32 or u32, but found f16
+        "let x: texture_2d<bool>;",
+        r###"error: texture sample type must be one of f32, i32 or u32, but found bool
   ┌─ wgsl:1:19
   │
-1 │ let x: texture_2d<f16>;
-  │                   ^^^ must be one of f32, i32 or u32
+1 │ let x: texture_2d<bool>;
+  │                   ^^^^ must be one of f32, i32 or u32
 
 "###,
     );
@@ -373,7 +373,7 @@ fn unknown_scalar_type() {
 2 │             let a: vec2<something>;
   │                         ^^^^^^^^^ unknown scalar type
   │
-  = note: Valid scalar types are f16, f32, f64, i8, i16, i32, i64, u8, u16, u32, u64, bool
+  = note: Valid scalar types are f32, f64, i32, u32, bool
 
 "#,
     );
