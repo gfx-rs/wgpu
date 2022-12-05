@@ -153,6 +153,15 @@ impl<T> Iterator for Range<T> {
     }
 }
 
+impl<T> Range<T> {
+    pub fn new_from_bounds(first: Handle<T>, last: Handle<T>) -> Self {
+        Self {
+            inner: (first.index() as u32)..(last.index() as u32 + 1),
+            marker: Default::default(),
+        }
+    }
+}
+
 /// An arena holding some kind of component (e.g., type, constant,
 /// instruction, etc.) that can be referenced.
 ///
