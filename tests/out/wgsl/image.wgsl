@@ -19,14 +19,18 @@ var image_1d: texture_1d<f32>;
 @group(0) @binding(1) 
 var image_2d: texture_2d<f32>;
 @group(0) @binding(2) 
-var image_2d_array: texture_2d_array<f32>;
+var image_2d_u32_: texture_2d<u32>;
 @group(0) @binding(3) 
-var image_cube: texture_cube<f32>;
+var image_2d_i32_: texture_2d<i32>;
 @group(0) @binding(4) 
-var image_cube_array: texture_cube_array<f32>;
+var image_2d_array: texture_2d_array<f32>;
 @group(0) @binding(5) 
-var image_3d: texture_3d<f32>;
+var image_cube: texture_cube<f32>;
 @group(0) @binding(6) 
+var image_cube_array: texture_cube_array<f32>;
+@group(0) @binding(7) 
+var image_3d: texture_3d<f32>;
+@group(0) @binding(8) 
 var image_aa: texture_multisampled_2d<f32>;
 @group(1) @binding(0) 
 var sampler_reg: sampler;
@@ -120,7 +124,10 @@ fn gather() -> @location(0) vec4<f32> {
     let s2d_offset_1 = textureGather(3, image_2d, sampler_reg, tc_2, vec2<i32>(3, 1));
     let s2d_depth_1 = textureGatherCompare(image_2d_depth, sampler_cmp, tc_2, 0.5);
     let s2d_depth_offset = textureGatherCompare(image_2d_depth, sampler_cmp, tc_2, 0.5, vec2<i32>(3, 1));
-    return (((s2d_1 + s2d_offset_1) + s2d_depth_1) + s2d_depth_offset);
+    let u = textureGather(0, image_2d_u32_, sampler_reg, tc_2);
+    let i = textureGather(0, image_2d_i32_, sampler_reg, tc_2);
+    let f = (vec4<f32>(u) + vec4<f32>(i));
+    return ((((s2d_1 + s2d_offset_1) + s2d_depth_1) + s2d_depth_offset) + f);
 }
 
 @fragment 

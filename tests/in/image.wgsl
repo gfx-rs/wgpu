@@ -45,14 +45,18 @@ var image_1d: texture_1d<f32>;
 @group(0) @binding(1)
 var image_2d: texture_2d<f32>;
 @group(0) @binding(2)
-var image_2d_array: texture_2d_array<f32>;
+var image_2d_u32: texture_2d<u32>;
 @group(0) @binding(3)
-var image_cube: texture_cube<f32>;
+var image_2d_i32: texture_2d<i32>;
 @group(0) @binding(4)
-var image_cube_array: texture_cube_array<f32>;
+var image_2d_array: texture_2d_array<f32>;
 @group(0) @binding(5)
-var image_3d: texture_3d<f32>;
+var image_cube: texture_cube<f32>;
 @group(0) @binding(6)
+var image_cube_array: texture_cube_array<f32>;
+@group(0) @binding(7)
+var image_3d: texture_3d<f32>;
+@group(0) @binding(8)
 var image_aa: texture_multisampled_2d<f32>;
 
 @vertex
@@ -71,7 +75,7 @@ fn queries() -> @builtin(position) vec4<f32> {
     let dim_3d_lod = textureDimensions(image_3d, 1);
     let dim_2s_ms = textureDimensions(image_aa);
 
-    let sum = dim_1d + dim_2d.y + dim_2d_lod.y + dim_2d_array.y + dim_2d_array_lod.y +
+    let sum = dim_1d + dim_2d.y + dim_2d_lod.y + dim_2d_array.y + dim_2d_array_lod.y + 
         dim_cube.y + dim_cube_lod.y + dim_cube_array.y + dim_cube_array_lod.y +
         dim_3d.z + dim_3d_lod.z;
     return vec4<f32>(f32(sum));
@@ -134,7 +138,12 @@ fn gather() -> @location(0) vec4<f32> {
     let s2d_offset = textureGather(3, image_2d, sampler_reg, tc, vec2<i32>(3, 1));
     let s2d_depth = textureGatherCompare(image_2d_depth, sampler_cmp, tc, dref);
     let s2d_depth_offset = textureGatherCompare(image_2d_depth, sampler_cmp, tc, dref, vec2<i32>(3, 1));
-    return s2d + s2d_offset + s2d_depth + s2d_depth_offset;
+
+    let u = textureGather(0, image_2d_u32, sampler_reg, tc);
+    let i = textureGather(0, image_2d_i32, sampler_reg, tc);
+    let f = vec4<f32>(u) + vec4<f32>(i);
+
+    return s2d + s2d_offset + s2d_depth + s2d_depth_offset + f;
 }
 
 @fragment

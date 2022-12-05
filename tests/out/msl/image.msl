@@ -139,6 +139,8 @@ struct gatherOutput {
 };
 fragment gatherOutput gather(
   metal::texture2d<float, metal::access::sample> image_2d [[user(fake0)]]
+, metal::texture2d<uint, metal::access::sample> image_2d_u32_ [[user(fake0)]]
+, metal::texture2d<int, metal::access::sample> image_2d_i32_ [[user(fake0)]]
 , metal::sampler sampler_reg [[user(fake0)]]
 , metal::sampler sampler_cmp [[user(fake0)]]
 , metal::depth2d<float, metal::access::sample> image_2d_depth [[user(fake0)]]
@@ -148,7 +150,10 @@ fragment gatherOutput gather(
     metal::float4 s2d_offset_1 = image_2d.gather(sampler_reg, tc_2, const_type_9_, metal::component::w);
     metal::float4 s2d_depth_1 = image_2d_depth.gather_compare(sampler_cmp, tc_2, 0.5);
     metal::float4 s2d_depth_offset = image_2d_depth.gather_compare(sampler_cmp, tc_2, 0.5, const_type_9_);
-    return gatherOutput { ((s2d_1 + s2d_offset_1) + s2d_depth_1) + s2d_depth_offset };
+    metal::uint4 u = image_2d_u32_.gather(sampler_reg, tc_2);
+    metal::int4 i = image_2d_i32_.gather(sampler_reg, tc_2);
+    metal::float4 f = static_cast<metal::float4>(u) + static_cast<metal::float4>(i);
+    return gatherOutput { (((s2d_1 + s2d_offset_1) + s2d_depth_1) + s2d_depth_offset) + f };
 }
 
 

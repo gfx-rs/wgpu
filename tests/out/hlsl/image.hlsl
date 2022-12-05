@@ -9,11 +9,13 @@ Texture1D<uint4> image_1d_src : register(t7);
 RWTexture1D<uint4> image_dst : register(u2);
 Texture1D<float4> image_1d : register(t0);
 Texture2D<float4> image_2d : register(t1);
-Texture2DArray<float4> image_2d_array : register(t2);
-TextureCube<float4> image_cube : register(t3);
-TextureCubeArray<float4> image_cube_array : register(t4);
-Texture3D<float4> image_3d : register(t5);
-Texture2DMS<float4> image_aa : register(t6);
+Texture2D<uint4> image_2d_u32_ : register(t2);
+Texture2D<int4> image_2d_i32_ : register(t3);
+Texture2DArray<float4> image_2d_array : register(t4);
+TextureCube<float4> image_cube : register(t5);
+TextureCubeArray<float4> image_cube_array : register(t6);
+Texture3D<float4> image_3d : register(t7);
+Texture2DMS<float4> image_aa : register(t8);
 SamplerState sampler_reg : register(s0, space1);
 SamplerComparisonState sampler_cmp : register(s1, space1);
 Texture2D<float> image_2d_depth : register(t2, space1);
@@ -258,7 +260,10 @@ float4 gather() : SV_Target0
     float4 s2d_offset_1 = image_2d.GatherAlpha(sampler_reg, tc_2, int2(3, 1));
     float4 s2d_depth_1 = image_2d_depth.GatherCmp(sampler_cmp, tc_2, 0.5);
     float4 s2d_depth_offset = image_2d_depth.GatherCmp(sampler_cmp, tc_2, 0.5, int2(3, 1));
-    return (((s2d_1 + s2d_offset_1) + s2d_depth_1) + s2d_depth_offset);
+    uint4 u = image_2d_u32_.Gather(sampler_reg, tc_2);
+    int4 i = image_2d_i32_.Gather(sampler_reg, tc_2);
+    float4 f = (float4(u) + float4(i));
+    return ((((s2d_1 + s2d_offset_1) + s2d_depth_1) + s2d_depth_offset) + f);
 }
 
 float4 depth_no_comparison() : SV_Target0
