@@ -279,8 +279,7 @@ impl<'a> Error<'a> {
             Error::UnknownScalarType(ref bad_span) => ParseError {
                 message: format!("unknown scalar type: '{}'", &source[bad_span.clone()]),
                 labels: vec![(bad_span.clone(), "unknown scalar type".into())],
-                notes: vec!["Valid scalar types are f32, f64, i32, u32, bool"
-                    .into()],
+                notes: vec!["Valid scalar types are f32, f64, i32, u32, bool".into()],
             },
             Error::BadTextureSampleType {
                 ref span,
