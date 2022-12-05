@@ -16,11 +16,7 @@ var image_1d_src: texture_1d<u32>;
 var image_dst: texture_storage_1d<r32uint,write>;
 
 @compute @workgroup_size(16)
-fn main(
-    @builtin(local_invocation_id) local_id: vec3<u32>,
-    //TODO: https://github.com/gpuweb/gpuweb/issues/1590
-    //@builtin(workgroup_size) wg_size: vec3<u32>
-) {
+fn main(@builtin(local_invocation_id) local_id: vec3<u32>) {
     let dim = textureDimensions(image_storage_src);
     let itc = dim * vec2<i32>(local_id.xy) % vec2<i32>(10, 20);
     let value1 = textureLoad(image_mipmapped_src, itc, i32(local_id.z));
