@@ -96,9 +96,9 @@ impl crate::Adapter<Api> for Context {
 
     unsafe fn correlate_presentation_timestamp(
         &self,
-        function: &mut dyn FnMut(),
+        user_timestamp_function: &mut dyn FnMut(),
     ) -> wgt::PresentationTimestamp {
-        function();
+        user_timestamp_function();
         wgt::PresentationTimestamp::INVALID_TIMESTAMP
     }
 }
