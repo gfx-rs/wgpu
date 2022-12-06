@@ -23,5 +23,14 @@ replay = ["serde"]
 bitflags.workspace = true
 serde = { workspace = true, features = ["serde_derive"], optional = true }
 
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+js-sys.workspace = true
+web-sys = { workspace = true, features = [
+    "ImageBitmap",
+    "HtmlVideoElement",
+    "HtmlCanvasElement",
+    "OffscreenCanvas",
+] }
+
 [dev-dependencies]
 serde_json.workspace = true

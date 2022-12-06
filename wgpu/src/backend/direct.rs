@@ -2375,6 +2375,17 @@ impl crate::Context for Context {
         }
     }
 
+    #[cfg(target_arch = "wasm32")]
+    fn queue_copy_external_image_to_texture(
+        &self,
+        _queue: &Self::QueueId,
+        _source: wgt::ImageCopyExternalImage,
+        _dest: crate::ImageCopyTextureTagged,
+        _size: wgt::Extent3d,
+    ) {
+        todo!()
+    }
+
     fn queue_submit<I: Iterator<Item = Self::CommandBufferId>>(
         &self,
         queue: &Self::QueueId,

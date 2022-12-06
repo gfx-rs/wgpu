@@ -199,6 +199,7 @@ web-sys = { workspace = true, features = [
     "GpuDeviceLostReason",
     "GpuError",
     "GpuErrorFilter",
+    # "GpuExtent2dDict", Not yet implemented in web_sys
     "GpuExtent3dDict",
     "GpuFeatureName",
     "GpuFilterMode",

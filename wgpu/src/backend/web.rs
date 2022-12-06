@@ -827,6 +827,12 @@ fn map_vertex_step_mode(mode: wgt::VertexStepMode) -> web_sys::GpuVertexStepMode
     }
 }
 
+// fn map_extent_2d(extent: wgt::Extent2d) -> web_sys::GpuExtent2dDict {
+//     let mut mapped = web_sys::GpuExtent2dDict::new(extent.width);
+//     mapped.height(extent.height);
+//     mapped
+// }
+
 fn map_extent_3d(extent: wgt::Extent3d) -> web_sys::GpuExtent3dDict {
     let mut mapped = web_sys::GpuExtent3dDict::new(extent.width);
     mapped.height(extent.height);
@@ -884,11 +890,23 @@ fn map_texture_copy_view(view: crate::ImageCopyTexture) -> web_sys::GpuImageCopy
 }
 
 fn map_tagged_texture_copy_view(
-    view: crate::ImageCopyTexture,
+    view: crate::ImageCopyTextureTagged,
 ) -> web_sys::GpuImageCopyTextureTagged {
     let mut mapped = web_sys::GpuImageCopyTextureTagged::new(&view.texture.id.0);
     mapped.mip_level(view.mip_level);
     mapped.origin(&map_origin_3d(view.origin));
+    mapped.aspect(map_texture_aspect(view.aspect));
+    // mapped.color_space(map_color_space(view.color_space));
+    mapped.premultiplied_alpha(view.premultiplied_alpha);
+    mapped
+}
+
+fn map_external_texture_copy_view(
+    view: crate::ImageCopyExternalImage,
+) -> web_sys::GpuImageCopyExternalImage {
+    let mut mapped = web_sys::GpuImageCopyExternalImage::new(&view.source);
+    // mapped.origin(&map_extent_2d(view.extent));
+    mapped.flip_y(view.flip_y);
     mapped
 }
 
@@ -1071,22 +1089,6 @@ impl Context {
             .expect("canvas context is not a GPUCanvasContext");
 
         Ok(create_identified(context))
-    }
-
-    pub fn queue_copy_external_image_to_texture(
-        &self,
-        queue: &Identified<web_sys::GpuQueue>,
-        image: &web_sys::ImageBitmap,
-        texture: crate::ImageCopyTexture,
-        size: wgt::Extent3d,
-    ) {
-        queue
-            .0
-            .copy_external_image_to_texture_with_gpu_extent_3d_dict(
-                &web_sys::GpuImageCopyExternalImage::new(image),
-                &map_tagged_texture_copy_view(texture),
-                &map_extent_3d(size),
-            );
     }
 }
 
@@ -2484,6 +2486,23 @@ impl crate::Context for Context {
                 &map_texture_copy_view(texture),
                 &js_sys::Uint8Array::from(data).buffer(),
                 &mapped_data_layout,
+                &map_extent_3d(size),
+            );
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    fn queue_copy_external_image_to_texture(
+        &self,
+        queue: &Self::QueueId,
+        source: wgt::ImageCopyExternalImage,
+        dest: crate::ImageCopyTextureTagged,
+        size: wgt::Extent3d,
+    ) {
+        queue
+            .0
+            .copy_external_image_to_texture_with_gpu_extent_3d_dict(
+                &map_external_texture_copy_view(source),
+                &map_tagged_texture_copy_view(dest),
                 &map_extent_3d(size),
             );
     }

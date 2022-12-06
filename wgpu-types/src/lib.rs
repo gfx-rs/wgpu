@@ -1123,10 +1123,15 @@ bitflags::bitflags! {
 
         /// Supports buffers to combine [`BufferUsages::INDEX`] with usages other than [`BufferUsages::COPY_DST`] and [`BufferUsages::COPY_SRC`].
         /// Furthermore, in absence of this feature it is not allowed to copy index buffers from/to buffers with a set of usage flags containing
-         /// [`BufferUsages::VERTEX`]/[`BufferUsages::UNIFORM`]/[`BufferUsages::STORAGE`] or [`BufferUsages::INDIRECT`].
+        /// [`BufferUsages::VERTEX`]/[`BufferUsages::UNIFORM`]/[`BufferUsages::STORAGE`] or [`BufferUsages::INDIRECT`].
         ///
         /// WebGL doesn't support this.
         const UNRESTRICTED_INDEX_BUFFER = 1 << 16;
+
+        /// External textures, on the web, support copying from an OffscreenCanvas.
+        ///
+        /// WebGL doesn't support this.
+        const EXTERNAL_TEXTURE_OFFSCREEN_CANVAS = 1 << 17;
     }
 }
 
@@ -4031,10 +4036,26 @@ pub enum TextureDimension {
     D3,
 }
 
+/// Origin of a copy from a 2D image.
+///
+/// Corresponds to [WebGPU `GPUOrigin2D`](
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpuorigin2ddict).
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "trace", derive(Serialize))]
+#[cfg_attr(feature = "replay", derive(Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
+pub struct Origin2d {
+    ///
+    pub x: u32,
+    ///
+    pub y: u32,
+}
+
 /// Origin of a copy to/from a texture.
 ///
 /// Corresponds to [WebGPU `GPUOrigin3D`](
-/// https://gpuweb.github.io/gpuweb/#typedefdef-gpuorigin3d).
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpuorigin3ddict).
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
@@ -4063,7 +4084,7 @@ impl Default for Origin3d {
 /// Extent of a texture related operation.
 ///
 /// Corresponds to [WebGPU `GPUExtent3D`](
-/// https://gpuweb.github.io/gpuweb/#typedefdef-gpuextent3d).
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpuextent3ddict).
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
@@ -4937,12 +4958,106 @@ pub struct ImageCopyTexture<T> {
     pub texture: T,
     /// The target mip level of the texture.
     pub mip_level: u32,
-    /// The base texel of the texture in the selected `mip_level`.
+    /// The base texel of the texture in the selected `mip_level`. Together
+    /// with the `copy_size` argument to copy functions, defines the
+    /// sub-region of the texture to copy.
     #[cfg_attr(any(feature = "trace", feature = "replay"), serde(default))]
     pub origin: Origin3d,
     /// The copy aspect.
     #[cfg_attr(any(feature = "trace", feature = "replay"), serde(default))]
     pub aspect: TextureAspect,
+}
+
+/// View of an external texture that cna be used to copy to a texture.
+///
+/// Corresponds to [WebGPU `GPUImageCopyExternalImage`](
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpuimagecopyexternalimage).
+#[cfg(target_arch = "wasm32")]
+#[derive(Clone, Debug)]
+pub struct ImageCopyExternalImage<'a> {
+    /// The texture to be copied from. The copy source data is captured at the moment
+    /// the copy is issued.
+    pub source: ExternalImageSource<'a>,
+    /// The base texel used for copying from the external image. Together
+    /// with the `copy_size` argument to copy functions, defines the
+    /// sub-region of the image to copy.
+    ///
+    /// Relative to the top left of the image.
+    pub origin: Origin2d,
+    /// If the Y coordinate of the image should be flipped. Even if this is
+    /// true, `origin` is still relative to the top left.
+    pub flip_y: bool,
+}
+
+/// Source of an external texture copy.
+///
+/// Corresponds to the [implicit union type on WebGPU `GPUImageCopyExternalImage.source`](
+/// https://gpuweb.github.io/gpuweb/#dom-gpuimagecopyexternalimage-source).
+#[cfg(target_arch = "wasm32")]
+#[derive(Clone, Debug)]
+pub enum ExternalImageSource<'a> {
+    /// Copy from a previously-decoded image bitmap.
+    ImageBitmap(&'a web_sys::ImageBitmap),
+    /// Copy from a current frame of a video element.
+    HTMLVideoElement(&'a web_sys::HtmlVideoElement),
+    /// Copy from a on-screen canvas.
+    HTMLCanvasElement(&'a web_sys::HtmlCanvasElement),
+    /// Copy from a off-screen canvas.
+    ///
+    /// Requies [`DownlevelFlags::EXTERNAL_TEXTURE_OFFSCREEN_CANVAS`]
+    OffscreenCanvas(&'a web_sys::OffscreenCanvas),
+}
+
+#[cfg(target_arch = "wasm32")]
+impl<'a> std::ops::Deref for ExternalImageSource<'a> {
+    type Target = js_sys::Object;
+
+    fn deref(&self) -> &Self::Target {
+        match self {
+            Self::ImageBitmap(b) => b,
+            Self::HTMLVideoElement(v) => v,
+            Self::HTMLCanvasElement(c) => c,
+            Self::OffscreenCanvas(c) => c,
+        }
+    }
+}
+
+/// Color spaces supported on the web.
+///
+/// Corresponds to [HTML Canvas `PredefinedColorSpace`](
+/// https://html.spec.whatwg.org/multipage/canvas.html#predefinedcolorspace).
+#[derive(Copy, Clone, Debug)]
+#[cfg_attr(feature = "trace", derive(serde::Serialize))]
+#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
+pub enum PredefinedColorSpace {
+    /// sRGB color space
+    Srgb,
+    /// Display-P3 color space
+    DisplayP3,
+}
+
+/// View of a texture which can be used to copy to a texture, including
+/// color space and alpha premultiplication information.
+///
+/// Corresponds to [WebGPU `GPUImageCopyTextureTagged`](
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpuimagecopytexturetagged).
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "trace", derive(serde::Serialize))]
+#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
+pub struct ImageCopyTextureTagged<T> {
+    /// The texture to be copied to/from.
+    pub texture: T,
+    /// The target mip level of the texture.
+    pub mip_level: u32,
+    /// The base texel of the texture in the selected `mip_level`.
+    pub origin: Origin3d,
+    /// The copy aspect.
+    pub aspect: TextureAspect,
+    /// The color space of this texture.
+    pub color_space: PredefinedColorSpace,
+    /// The premultiplication of this texture
+    pub premultiplied_alpha: bool,
 }
 
 /// Subresource range within an image
