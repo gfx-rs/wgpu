@@ -66,6 +66,9 @@ bitflags::bitflags! {
         /// Constants.
         #[cfg(feature = "validate")]
         const CONSTANTS = 0x10;
+        /// Group, binding, and location attributes.
+        #[cfg(feature = "validate")]
+        const BINDINGS = 0x20;
     }
 }
 

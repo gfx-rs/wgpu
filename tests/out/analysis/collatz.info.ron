@@ -2,7 +2,7 @@
     functions: [
         (
             flags: (
-                bits: 31,
+                bits: 63,
             ),
             available_stages: (
                 bits: 7,
@@ -346,7 +346,7 @@
     entry_points: [
         (
             flags: (
-                bits: 31,
+                bits: 63,
             ),
             available_stages: (
                 bits: 7,
