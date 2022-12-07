@@ -48,6 +48,8 @@ pub use wgt::{
 // specific, but these need to depend on web-sys.
 #[cfg(target_arch = "wasm32")]
 pub use wgt::{ExternalImageSource, ImageCopyExternalImage};
+#[cfg(target_arch = "wasm32")]
+static_assertions::assert_impl_all!(ExternalImageSource: Send, Sync);
 
 use backend::{BufferMappedRange, Context as C, QueueWriteBuffer};
 
@@ -525,7 +527,7 @@ trait Context: Debug + Send + Sized + Sync {
     fn queue_copy_external_image_to_texture(
         &self,
         queue: &Self::QueueId,
-        source: ImageCopyExternalImage,
+        source: &ImageCopyExternalImage,
         dest: ImageCopyTextureTagged,
         size: Extent3d,
     );
@@ -3721,7 +3723,7 @@ impl Queue {
     #[cfg(target_arch = "wasm32")]
     pub fn copy_external_image_to_texture(
         &self,
-        source: wgt::ImageCopyExternalImage,
+        source: &wgt::ImageCopyExternalImage,
         dest: ImageCopyTextureTagged,
         size: Extent3d,
     ) {

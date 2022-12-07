@@ -309,6 +309,30 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         }
     }
 
+    #[cfg(target_arch = "wasm32")]
+    unsafe fn copy_external_image_to_texture<T>(
+        &mut self,
+        src: &wgt::ExternalImageSource,
+        dst: &super::Texture,
+        regions: T,
+    ) where
+        T: Iterator<Item = crate::TextureCopy>,
+    {
+        let (dst_raw, dst_target) = dst.inner.as_native();
+        for copy in regions {
+            // TODO: Clamp size?
+            self.cmd_buffer
+                .commands
+                .push(C::CopyExternalImageToTexture {
+                    src: src.clone(),
+                    dst: dst_raw,
+                    dst_target,
+                    dst_format: dst.format,
+                    copy,
+                })
+        }
+    }
+
     unsafe fn copy_texture_to_texture<T>(
         &mut self,
         src: &super::Texture,

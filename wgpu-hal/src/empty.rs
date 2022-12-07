@@ -260,6 +260,17 @@ impl crate::CommandEncoder<Api> for Encoder {
 
     unsafe fn copy_buffer_to_buffer<T>(&mut self, src: &Resource, dst: &Resource, regions: T) {}
 
+    #[cfg(target_arch = "wasm32")]
+    unsafe fn copy_external_image_to_texture<T>(
+        &mut self,
+        src: &wgt::ExternalImageSource,
+        dst: &Resource,
+        regions: T,
+    ) where
+        T: Iterator<Item = crate::TextureCopy>,
+    {
+    }
+
     unsafe fn copy_texture_to_texture<T>(
         &mut self,
         src: &Resource,

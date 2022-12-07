@@ -4052,6 +4052,20 @@ pub struct Origin2d {
     pub y: u32,
 }
 
+impl Origin2d {
+    /// Zero origin.
+    pub const ZERO: Self = Self { x: 0, y: 0 };
+
+    /// Adds the third dimension to this origin
+    pub fn to_3d(self, z: u32) -> Origin3d {
+        Origin3d {
+            x: self.x,
+            y: self.y,
+            z,
+        }
+    }
+}
+
 /// Origin of a copy to/from a texture.
 ///
 /// Corresponds to [WebGPU `GPUOrigin3D`](
@@ -4073,6 +4087,14 @@ pub struct Origin3d {
 impl Origin3d {
     /// Zero origin.
     pub const ZERO: Self = Self { x: 0, y: 0, z: 0 };
+
+    /// Removes the third dimension from this origin
+    pub fn to_2d(self) -> Origin2d {
+        Origin2d {
+            x: self.x,
+            y: self.y,
+        }
+    }
 }
 
 impl Default for Origin3d {
@@ -4950,7 +4972,7 @@ pub struct ImageCopyBuffer<B> {
 /// Corresponds to [WebGPU `GPUImageCopyTexture`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpuimagecopytexture).
 #[repr(C)]
-#[derive(Clone, Debug)]
+#[derive(Copy, Clone, Debug)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub struct ImageCopyTexture<T> {
@@ -4968,16 +4990,35 @@ pub struct ImageCopyTexture<T> {
     pub aspect: TextureAspect,
 }
 
+impl<T> ImageCopyTexture<T> {
+    /// Adds color space and premultiplied alpha information to make this
+    /// descriptor tagged.
+    pub fn to_tagged(
+        self,
+        color_space: PredefinedColorSpace,
+        premultiplied_alpha: bool,
+    ) -> ImageCopyTextureTagged<T> {
+        ImageCopyTextureTagged {
+            texture: self.texture,
+            mip_level: self.mip_level,
+            origin: self.origin,
+            aspect: self.aspect,
+            color_space,
+            premultiplied_alpha,
+        }
+    }
+}
+
 /// View of an external texture that cna be used to copy to a texture.
 ///
 /// Corresponds to [WebGPU `GPUImageCopyExternalImage`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpuimagecopyexternalimage).
 #[cfg(target_arch = "wasm32")]
 #[derive(Clone, Debug)]
-pub struct ImageCopyExternalImage<'a> {
+pub struct ImageCopyExternalImage {
     /// The texture to be copied from. The copy source data is captured at the moment
     /// the copy is issued.
-    pub source: ExternalImageSource<'a>,
+    pub source: ExternalImageSource,
     /// The base texel used for copying from the external image. Together
     /// with the `copy_size` argument to copy functions, defines the
     /// sub-region of the image to copy.
@@ -4995,21 +5036,44 @@ pub struct ImageCopyExternalImage<'a> {
 /// https://gpuweb.github.io/gpuweb/#dom-gpuimagecopyexternalimage-source).
 #[cfg(target_arch = "wasm32")]
 #[derive(Clone, Debug)]
-pub enum ExternalImageSource<'a> {
+pub enum ExternalImageSource {
     /// Copy from a previously-decoded image bitmap.
-    ImageBitmap(&'a web_sys::ImageBitmap),
+    ImageBitmap(web_sys::ImageBitmap),
     /// Copy from a current frame of a video element.
-    HTMLVideoElement(&'a web_sys::HtmlVideoElement),
+    HTMLVideoElement(web_sys::HtmlVideoElement),
     /// Copy from a on-screen canvas.
-    HTMLCanvasElement(&'a web_sys::HtmlCanvasElement),
+    HTMLCanvasElement(web_sys::HtmlCanvasElement),
     /// Copy from a off-screen canvas.
     ///
     /// Requies [`DownlevelFlags::EXTERNAL_TEXTURE_OFFSCREEN_CANVAS`]
-    OffscreenCanvas(&'a web_sys::OffscreenCanvas),
+    OffscreenCanvas(web_sys::OffscreenCanvas),
 }
 
 #[cfg(target_arch = "wasm32")]
-impl<'a> std::ops::Deref for ExternalImageSource<'a> {
+impl ExternalImageSource {
+    /// Gets the pixel, not css, width of the source.
+    pub fn width(&self) -> u32 {
+        match self {
+            ExternalImageSource::ImageBitmap(b) => b.width(),
+            ExternalImageSource::HTMLVideoElement(v) => v.video_width(),
+            ExternalImageSource::HTMLCanvasElement(c) => c.width(),
+            ExternalImageSource::OffscreenCanvas(c) => c.width(),
+        }
+    }
+
+    /// Gets the pixel, not css, height of the source.
+    pub fn height(&self) -> u32 {
+        match self {
+            ExternalImageSource::ImageBitmap(b) => b.height(),
+            ExternalImageSource::HTMLVideoElement(v) => v.video_height(),
+            ExternalImageSource::HTMLCanvasElement(c) => c.height(),
+            ExternalImageSource::OffscreenCanvas(c) => c.height(),
+        }
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+impl std::ops::Deref for ExternalImageSource {
     type Target = js_sys::Object;
 
     fn deref(&self) -> &Self::Target {
@@ -5021,6 +5085,11 @@ impl<'a> std::ops::Deref for ExternalImageSource<'a> {
         }
     }
 }
+
+#[cfg(target_arch = "wasm32")]
+unsafe impl Send for ExternalImageSource {}
+#[cfg(target_arch = "wasm32")]
+unsafe impl Sync for ExternalImageSource {}
 
 /// Color spaces supported on the web.
 ///
@@ -5042,7 +5111,7 @@ pub enum PredefinedColorSpace {
 ///
 /// Corresponds to [WebGPU `GPUImageCopyTextureTagged`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpuimagecopytexturetagged).
-#[derive(Clone, Debug)]
+#[derive(Copy, Clone, Debug)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub struct ImageCopyTextureTagged<T> {
@@ -5058,6 +5127,18 @@ pub struct ImageCopyTextureTagged<T> {
     pub color_space: PredefinedColorSpace,
     /// The premultiplication of this texture
     pub premultiplied_alpha: bool,
+}
+
+impl<T: Copy> ImageCopyTextureTagged<T> {
+    /// Removes the colorspace information from the type.
+    pub fn to_untagged(self) -> ImageCopyTexture<T> {
+        ImageCopyTexture {
+            texture: self.texture,
+            mip_level: self.mip_level,
+            origin: self.origin,
+            aspect: self.aspect,
+        }
+    }
 }
 
 /// Subresource range within an image

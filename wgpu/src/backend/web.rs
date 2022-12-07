@@ -902,7 +902,7 @@ fn map_tagged_texture_copy_view(
 }
 
 fn map_external_texture_copy_view(
-    view: crate::ImageCopyExternalImage,
+    view: &crate::ImageCopyExternalImage,
 ) -> web_sys::GpuImageCopyExternalImage {
     let mut mapped = web_sys::GpuImageCopyExternalImage::new(&view.source);
     // mapped.origin(&map_extent_2d(view.extent));
@@ -2494,7 +2494,7 @@ impl crate::Context for Context {
     fn queue_copy_external_image_to_texture(
         &self,
         queue: &Self::QueueId,
-        source: wgt::ImageCopyExternalImage,
+        source: &wgt::ImageCopyExternalImage,
         dest: crate::ImageCopyTextureTagged,
         size: wgt::Extent3d,
     ) {

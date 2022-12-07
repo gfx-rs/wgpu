@@ -765,6 +765,19 @@ fn map_texture_copy_view(view: crate::ImageCopyTexture) -> wgc::command::ImageCo
     }
 }
 
+fn map_texture_tagged_copy_view(
+    view: crate::ImageCopyTextureTagged,
+) -> wgc::command::ImageCopyTextureTagged {
+    wgc::command::ImageCopyTextureTagged {
+        texture: view.texture.id.id,
+        mip_level: view.mip_level,
+        origin: view.origin,
+        aspect: view.aspect,
+        color_space: view.color_space,
+        premultiplied_alpha: view.premultiplied_alpha,
+    }
+}
+
 fn map_pass_channel<V: Copy + Default>(
     ops: Option<&Operations<V>>,
 ) -> wgc::command::PassChannel<V> {
@@ -2378,12 +2391,21 @@ impl crate::Context for Context {
     #[cfg(target_arch = "wasm32")]
     fn queue_copy_external_image_to_texture(
         &self,
-        _queue: &Self::QueueId,
-        _source: wgt::ImageCopyExternalImage,
-        _dest: crate::ImageCopyTextureTagged,
-        _size: wgt::Extent3d,
+        queue: &Self::QueueId,
+        source: &wgt::ImageCopyExternalImage,
+        dest: crate::ImageCopyTextureTagged,
+        size: wgt::Extent3d,
     ) {
-        todo!()
+        let global = &self.0;
+        match wgc::gfx_select!(*queue => global.queue_copy_external_image_to_texture(
+            queue.id,
+            source,
+            map_texture_tagged_copy_view(dest),
+            size
+        )) {
+            Ok(()) => (),
+            Err(err) => self.handle_error_nolabel(&queue.error_sink, err, "Queue::write_texture"),
+        }
     }
 
     fn queue_submit<I: Iterator<Item = Self::CommandBufferId>>(

@@ -24,6 +24,7 @@ use std::iter;
 
 pub type ImageCopyBuffer = wgt::ImageCopyBuffer<BufferId>;
 pub type ImageCopyTexture = wgt::ImageCopyTexture<TextureId>;
+pub type ImageCopyTextureTagged = wgt::ImageCopyTextureTagged<TextureId>;
 
 #[derive(Clone, Copy, Debug)]
 pub enum CopySide {
@@ -44,6 +45,8 @@ pub enum TransferError {
     MissingCopySrcUsageFlag,
     #[error("destination buffer/texture is missing the `COPY_DST` usage flag")]
     MissingCopyDstUsageFlag(Option<BufferId>, Option<TextureId>),
+    #[error("destination texture is missing the `RENDER_ATTACHMENT` usage flag")]
+    MissingRenderAttachmentUsageFlag(TextureId),
     #[error("copy of {start_offset}..{end_offset} would end up overrunning the bounds of the {side:?} buffer of size {buffer_size}")]
     BufferOverrun {
         start_offset: BufferAddress,
@@ -66,6 +69,8 @@ pub enum TransferError {
     },
     #[error("unable to select texture mip level {level} out of {total}")]
     InvalidTextureMipLevel { level: u32, total: u32 },
+    #[error("texture dimension must be 2D when copying from an external texture")]
+    InvalidDimensionExternal(TextureId),
     #[error("buffer offset {0} is not aligned to block size or `COPY_BUFFER_ALIGNMENT`")]
     UnalignedBufferOffset(BufferAddress),
     #[error("copy size {0} does not respect `COPY_BUFFER_ALIGNMENT`")]
@@ -96,6 +101,8 @@ pub enum TransferError {
     CopyFromForbiddenTextureFormat(wgt::TextureFormat),
     #[error("copying to textures with format {0:?} is forbidden")]
     CopyToForbiddenTextureFormat(wgt::TextureFormat),
+    #[error("copying to textures with format {0:?} is forbidden when copying from external texture")]
+    ExternalCopyToForbiddenTextureFormat(wgt::TextureFormat),
     #[error("the entire texture must be copied when copying from depth texture")]
     InvalidDepthTextureExtent,
     #[error(
