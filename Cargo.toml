@@ -88,7 +88,7 @@ objc = "0.2.5"
 core-graphics-types = "0.1"
 
 # Vulkan dependencies
-ash = "0.37"
+ash = ">=0.37.1,<0.38"
 gpu-alloc = "0.5"
 gpu-descriptor = "0.2"
 android_system_properties = "0.1.1"
