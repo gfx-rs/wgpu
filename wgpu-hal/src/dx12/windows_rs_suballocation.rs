@@ -57,7 +57,7 @@ pub(crate) fn create_allocator_wrapper(
         device: device.as_windows().clone(),
         debug_settings: Default::default(),
     }) {
-        Ok(allocator) => return Ok(Some(Mutex::new(GpuAllocatorWrapper { allocator }))),
+        Ok(allocator) => Ok(Some(Mutex::new(GpuAllocatorWrapper { allocator }))),
         Err(e) => {
             error!("Failed to create d3d12 allocator, error: {}", e);
             Err(e)?
@@ -233,7 +233,7 @@ pub(crate) fn free_buffer_allocation(
     _allocation: AllocationWrapper,
     _allocator: &Mutex<GpuAllocatorWrapper>,
 ) {
-    ()
+    // No-op when not using gpu-allocator
 }
 
 #[cfg(feature = "windows_rs")]
@@ -253,7 +253,7 @@ pub(crate) fn free_texture_allocation(
     _allocation: AllocationWrapper,
     _allocator: &Mutex<GpuAllocatorWrapper>,
 ) {
-    ()
+    // No-op when not using gpu-allocator
 }
 
 #[cfg(feature = "windows_rs")]

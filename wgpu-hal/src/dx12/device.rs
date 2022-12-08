@@ -327,7 +327,7 @@ impl super::Device {
 }
 
 impl crate::Device<super::Api> for super::Device {
-    unsafe fn exit(mut self, queue: super::Queue) {
+    unsafe fn exit(#[allow(unused_mut)] mut self, queue: super::Queue) {
         self.rtv_pool.lock().free_handle(self.null_rtv_handle);
         unsafe { self.rtv_pool.into_inner().destroy() };
         unsafe { self.dsv_pool.into_inner().destroy() };
@@ -335,6 +335,7 @@ impl crate::Device<super::Api> for super::Device {
         unsafe { self.sampler_pool.into_inner().destroy() };
         unsafe { self.shared.destroy() };
         unsafe { self.idler.destroy() };
+        #[cfg(feature = "windows_rs")]
         drop(self.mem_allocator.take());
         unsafe { queue.raw.destroy() };
     }
