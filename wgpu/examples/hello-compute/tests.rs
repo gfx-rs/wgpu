@@ -71,7 +71,9 @@ fn test_multithreaded_compute() {
         TestParameters::default()
             .downlevel_flags(wgpu::DownlevelFlags::COMPUTE_SHADERS)
             .limits(wgpu::Limits::downlevel_defaults())
-            .specific_failure(None, None, Some("V3D"), true),
+            .specific_failure(None, None, Some("V3D"), true)
+            // https://github.com/gfx-rs/wgpu/issues/3250
+            .specific_failure(Some(wgpu::Backends::GL), None, Some("llvmpipe"), true),
         |ctx| {
             use std::{sync::mpsc, thread, time::Duration};
 

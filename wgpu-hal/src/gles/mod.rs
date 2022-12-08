@@ -148,6 +148,8 @@ bitflags::bitflags! {
         const COLOR_BUFFER_HALF_FLOAT = 1 << 8;
         /// Supports `f11/f10` and `f32` color buffers
         const COLOR_BUFFER_FLOAT = 1 << 9;
+        /// Supports linear flitering `f32` textures.
+        const TEXTURE_FLOAT_LINEAR = 1 << 10;
     }
 }
 

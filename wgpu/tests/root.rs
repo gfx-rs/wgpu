@@ -1,6 +1,7 @@
 // All files containing tests
 mod common;
 
+mod buffer;
 mod buffer_copy;
 mod buffer_usages;
 mod clear_texture;
@@ -15,6 +16,7 @@ mod resource_error;
 mod shader;
 mod shader_primitive_index;
 mod texture_bounds;
+mod transfer;
 mod vertex_indices;
 mod write_texture;
 mod zero_init_texture_after_discard;

@@ -8,7 +8,7 @@ use crate::{
 
 use wgt::{Backend, Backends, PowerPreference};
 
-use hal::{Adapter as _, Instance as _, SurfaceCapabilities};
+use hal::{Adapter as _, Instance as _};
 use thiserror::Error;
 
 pub type RequestAdapterOptions = wgt::RequestAdapterOptions<SurfaceId>;
@@ -152,37 +152,10 @@ impl crate::hub::Resource for Surface {
 }
 
 impl Surface {
-    pub fn get_supported_formats<A: HalApi>(
+    pub fn get_capabilities<A: HalApi>(
         &self,
         adapter: &Adapter<A>,
-    ) -> Result<Vec<wgt::TextureFormat>, GetSurfaceSupportError> {
-        self.get_capabilities(adapter).map(|mut caps| {
-            // TODO: maybe remove once we support texture view changing srgb-ness
-            caps.formats.sort_by_key(|f| !f.describe().srgb);
-            caps.formats
-        })
-    }
-
-    pub fn get_supported_present_modes<A: HalApi>(
-        &self,
-        adapter: &Adapter<A>,
-    ) -> Result<Vec<wgt::PresentMode>, GetSurfaceSupportError> {
-        self.get_capabilities(adapter)
-            .map(|caps| caps.present_modes)
-    }
-
-    pub fn get_supported_alpha_modes<A: HalApi>(
-        &self,
-        adapter: &Adapter<A>,
-    ) -> Result<Vec<wgt::CompositeAlphaMode>, GetSurfaceSupportError> {
-        self.get_capabilities(adapter)
-            .map(|caps| caps.composite_alpha_modes)
-    }
-
-    fn get_capabilities<A: HalApi>(
-        &self,
-        adapter: &Adapter<A>,
-    ) -> Result<SurfaceCapabilities, GetSurfaceSupportError> {
+    ) -> Result<hal::SurfaceCapabilities, GetSurfaceSupportError> {
         let suf = A::get_surface(self).ok_or(GetSurfaceSupportError::Unsupported)?;
         profiling::scope!("surface_capabilities");
         let caps = unsafe {
@@ -529,22 +502,26 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         canvas: &web_sys::HtmlCanvasElement,
         id_in: Input<G, SurfaceId>,
-    ) -> SurfaceId {
+    ) -> Result<SurfaceId, hal::InstanceError> {
         profiling::scope!("Instance::create_surface_webgl_canvas");
 
         let surface = Surface {
             presentation: None,
-            gl: self.instance.gl.as_ref().map(|inst| HalSurface {
-                raw: {
-                    inst.create_surface_from_canvas(canvas)
-                        .expect("Create surface from canvas")
-                },
-            }),
+            gl: self
+                .instance
+                .gl
+                .as_ref()
+                .map(|inst| {
+                    Ok(HalSurface {
+                        raw: inst.create_surface_from_canvas(canvas)?,
+                    })
+                })
+                .transpose()?,
         };
 
         let mut token = Token::root();
         let id = self.surfaces.prepare(id_in).assign(surface, &mut token);
-        id.0
+        Ok(id.0)
     }
 
     #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
@@ -552,22 +529,26 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         canvas: &web_sys::OffscreenCanvas,
         id_in: Input<G, SurfaceId>,
-    ) -> SurfaceId {
+    ) -> Result<SurfaceId, hal::InstanceError> {
         profiling::scope!("Instance::create_surface_webgl_offscreen_canvas");
 
         let surface = Surface {
             presentation: None,
-            gl: self.instance.gl.as_ref().map(|inst| HalSurface {
-                raw: {
-                    inst.create_surface_from_offscreen_canvas(canvas)
-                        .expect("Create surface from offscreen canvas")
-                },
-            }),
+            gl: self
+                .instance
+                .gl
+                .as_ref()
+                .map(|inst| {
+                    Ok(HalSurface {
+                        raw: inst.create_surface_from_offscreen_canvas(canvas)?,
+                    })
+                })
+                .transpose()?,
         };
 
         let mut token = Token::root();
         let id = self.surfaces.prepare(id_in).assign(surface, &mut token);
-        id.0
+        Ok(id.0)
     }
 
     #[cfg(dx12)]

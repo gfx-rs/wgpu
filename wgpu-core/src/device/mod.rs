@@ -80,10 +80,7 @@ pub(crate) struct RenderPassContext {
 #[derive(Clone, Debug, Error)]
 pub enum RenderPassCompatibilityError {
     #[error("Incompatible color attachment: the renderpass expected {0:?} but was given {1:?}")]
-    IncompatibleColorAttachment(
-        ArrayVec<Option<TextureFormat>, { hal::MAX_COLOR_ATTACHMENTS }>,
-        ArrayVec<Option<TextureFormat>, { hal::MAX_COLOR_ATTACHMENTS }>,
-    ),
+    IncompatibleColorAttachment(Vec<Option<TextureFormat>>, Vec<Option<TextureFormat>>),
     #[error(
         "Incompatible depth-stencil attachment: the renderpass expected {0:?} but was given {1:?}"
     )]
@@ -102,8 +99,8 @@ impl RenderPassContext {
     ) -> Result<(), RenderPassCompatibilityError> {
         if self.attachments.colors != other.attachments.colors {
             return Err(RenderPassCompatibilityError::IncompatibleColorAttachment(
-                self.attachments.colors.clone(),
-                other.attachments.colors.clone(),
+                self.attachments.colors.iter().cloned().collect(),
+                other.attachments.colors.iter().cloned().collect(),
             ));
         }
         if self.attachments.depth_stencil != other.attachments.depth_stencil {
@@ -603,8 +600,8 @@ impl<A: HalApi> Device<A> {
 
         let mut usage = conv::map_buffer_usage(desc.usage);
 
-        if desc.usage.is_empty() {
-            return Err(resource::CreateBufferError::EmptyUsage);
+        if desc.usage.is_empty() || desc.usage.contains_invalid_bits() {
+            return Err(resource::CreateBufferError::InvalidUsage(desc.usage));
         }
 
         if !self
@@ -720,8 +717,8 @@ impl<A: HalApi> Device<A> {
     ) -> Result<resource::Texture<A>, resource::CreateTextureError> {
         use resource::{CreateTextureError, TextureDimensionError};
 
-        if desc.usage.is_empty() {
-            return Err(CreateTextureError::EmptyUsage);
+        if desc.usage.is_empty() || desc.usage.contains_invalid_bits() {
+            return Err(CreateTextureError::InvalidUsage(desc.usage));
         }
 
         conv::check_texture_dimension_size(
@@ -1245,7 +1242,7 @@ impl<A: HalApi> Device<A> {
                     pipeline::CreateShaderModuleError::Parsing(pipeline::ShaderError {
                         source: code.to_string(),
                         label: desc.label.as_ref().map(|l| l.to_string()),
-                        inner,
+                        inner: Box::new(inner),
                     })
                 })?;
                 (Cow::Owned(module), code.into_owned())
@@ -1308,7 +1305,7 @@ impl<A: HalApi> Device<A> {
                 pipeline::CreateShaderModuleError::Validation(pipeline::ShaderError {
                     source,
                     label: desc.label.as_ref().map(|l| l.to_string()),
-                    inner,
+                    inner: Box::new(inner),
                 })
             })?;
         let interface =
@@ -1563,6 +1560,13 @@ impl<A: HalApi> Device<A> {
                         error,
                     })?;
             }
+
+            if entry.visibility.contains_invalid_bits() {
+                return Err(
+                    binding_model::CreateBindGroupLayoutError::InvalidVisibility(entry.visibility),
+                );
+            }
+
             if entry.visibility.contains(wgt::ShaderStages::VERTEX) {
                 if writable_storage == WritableStorage::Yes {
                     required_features |= wgt::Features::VERTEX_WRITABLE_STORAGE;
@@ -2653,6 +2657,10 @@ impl<A: HalApi> Device<A> {
         for (i, cs) in color_targets.iter().enumerate() {
             if let Some(cs) = cs.as_ref() {
                 let error = loop {
+                    if cs.write_mask.contains_invalid_bits() {
+                        break Some(pipeline::ColorStateError::InvalidWriteMask(cs.write_mask));
+                    }
+
                     let format_features = self.describe_format_features(adapter, cs.format)?;
                     if !format_features
                         .allowed_usages
@@ -3217,43 +3225,21 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         Ok(adapter.is_surface_supported(surface))
     }
 
-    pub fn surface_get_supported_formats<A: HalApi>(
+    pub fn surface_get_capabilities<A: HalApi>(
         &self,
         surface_id: id::SurfaceId,
         adapter_id: id::AdapterId,
-    ) -> Result<Vec<TextureFormat>, instance::GetSurfaceSupportError> {
-        profiling::scope!("Surface::get_supported_formats");
-        self.fetch_adapter_and_surface::<A, _, Vec<TextureFormat>>(
-            surface_id,
-            adapter_id,
-            |adapter, surface| surface.get_supported_formats(adapter),
-        )
-    }
+    ) -> Result<wgt::SurfaceCapabilities, instance::GetSurfaceSupportError> {
+        profiling::scope!("Surface::get_capabilities");
+        self.fetch_adapter_and_surface::<A, _, _>(surface_id, adapter_id, |adapter, surface| {
+            let hal_caps = surface.get_capabilities(adapter)?;
 
-    pub fn surface_get_supported_present_modes<A: HalApi>(
-        &self,
-        surface_id: id::SurfaceId,
-        adapter_id: id::AdapterId,
-    ) -> Result<Vec<wgt::PresentMode>, instance::GetSurfaceSupportError> {
-        profiling::scope!("Surface::get_supported_present_modes");
-        self.fetch_adapter_and_surface::<A, _, Vec<wgt::PresentMode>>(
-            surface_id,
-            adapter_id,
-            |adapter, surface| surface.get_supported_present_modes(adapter),
-        )
-    }
-
-    pub fn surface_get_supported_alpha_modes<A: HalApi>(
-        &self,
-        surface_id: id::SurfaceId,
-        adapter_id: id::AdapterId,
-    ) -> Result<Vec<wgt::CompositeAlphaMode>, instance::GetSurfaceSupportError> {
-        profiling::scope!("Surface::get_supported_alpha_modes");
-        self.fetch_adapter_and_surface::<A, _, Vec<wgt::CompositeAlphaMode>>(
-            surface_id,
-            adapter_id,
-            |adapter, surface| surface.get_supported_alpha_modes(adapter),
-        )
+            Ok(wgt::SurfaceCapabilities {
+                formats: hal_caps.formats,
+                present_modes: hal_caps.present_modes,
+                alpha_modes: hal_caps.composite_alpha_modes,
+            })
+        })
     }
 
     fn fetch_adapter_and_surface<
@@ -5691,7 +5677,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         max: range.end,
                     });
                 }
-                unsafe { Ok((ptr.as_ptr().offset(offset as isize), range_size)) }
+                // ptr points to the beginning of the range we mapped in map_async
+                // rather thant the beginning of the buffer.
+                let relative_offset = (offset - range.start) as isize;
+                unsafe { Ok((ptr.as_ptr().offset(relative_offset), range_size)) }
             }
             resource::BufferMapState::Idle | resource::BufferMapState::Waiting(_) => {
                 Err(BufferAccessError::NotMapped)

@@ -8,7 +8,12 @@ homepage.workspace = true
 repository.workspace = true
 keywords.workspace = true
 license.workspace = true
-rust-version.workspace = true
+
+# Override the workspace's `rust-version` key. Firefox uses `cargo vendor` to
+# copy the crates it actually uses out of the workspace, so it's meaningful for
+# them to have less restrictive MSRVs individually than the workspace as a
+# whole, if their code permits. See `../README.md` for details.
+rust-version = "1.60"
 
 [package.metadata.docs.rs]
 # Ideally we would enable all the features.
@@ -22,7 +27,7 @@ rustdoc-args = ["--cfg", "docsrs"]
 [lib]
 
 [features]
-default = ["gles"]
+default = []
 metal = ["naga/msl-out", "block", "foreign-types"]
 vulkan = ["naga/spv-out", "ash", "gpu-alloc", "gpu-descriptor", "libloading", "smallvec"]
 gles = ["naga/glsl-out", "glow", "egl", "libloading"]

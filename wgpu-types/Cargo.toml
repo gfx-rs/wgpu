@@ -16,13 +16,12 @@ rustdoc-args = ["--cfg", "docsrs"]
 [lib]
 
 [features]
-trace = ["serde", "bitflags_serde_shim"]
-replay = ["serde", "bitflags_serde_shim"]
+trace = ["serde"]
+replay = ["serde"]
 
 [dependencies]
 bitflags.workspace = true
 serde = { workspace = true, features = ["serde_derive"], optional = true }
-bitflags_serde_shim = { workspace = true, optional = true }
 
 [dev-dependencies]
 serde_json.workspace = true

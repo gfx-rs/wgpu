@@ -594,14 +594,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             return Ok(());
         }
 
-        // For clear we need write access to the texture.
-        // TODO: Can we acquire write lock later?
-        let (mut texture_guard, _) = hub.textures.write(&mut token);
+        let (mut texture_guard, _) = hub.textures.write(&mut token); // For clear we need write access to the texture. TODO: Can we acquire write lock later?
+        let dst = texture_guard.get_mut(destination.texture).unwrap();
+
         let (selector, dst_base, texture_format) =
-            extract_texture_selector(destination, size, &*texture_guard)?;
+            extract_texture_selector(destination, size, dst)?;
         let format_desc = texture_format.describe();
 
-        let dst = texture_guard.get_mut(destination.texture).unwrap();
         if !dst.desc.usage.contains(wgt::TextureUsages::COPY_DST) {
             return Err(
                 TransferError::MissingCopyDstUsageFlag(None, Some(destination.texture)).into(),
@@ -655,6 +654,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             (size.depth_or_array_layers - 1) * block_rows_per_image + height_blocks;
         let stage_size = stage_bytes_per_row as u64 * block_rows_in_copy as u64;
 
+        if !dst.desc.usage.contains(wgt::TextureUsages::COPY_DST) {
+            return Err(
+                TransferError::MissingCopyDstUsageFlag(None, Some(destination.texture)).into(),
+            );
+        }
+
         let mut trackers = device.trackers.lock();
         let encoder = device.pending_writes.activate();
 
@@ -698,10 +703,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
         }
 
-        let (dst, transition) = trackers
+        let dst = texture_guard.get(destination.texture).unwrap();
+        let transition = trackers
             .textures
             .set_single(
-                &*texture_guard,
+                dst,
                 destination.texture,
                 selector,
                 hal::TextureUses::COPY_DST,

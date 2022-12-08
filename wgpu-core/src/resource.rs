@@ -242,8 +242,8 @@ pub enum CreateBufferError {
     AccessError(#[from] BufferAccessError),
     #[error("buffers that are mapped at creation have to be aligned to `COPY_BUFFER_ALIGNMENT`")]
     UnalignedSize,
-    #[error("Buffers cannot have empty usage flags")]
-    EmptyUsage,
+    #[error("Invalid usage flags {0:?}")]
+    InvalidUsage(wgt::BufferUsages),
     #[error("`MAP` usage can only be combined with the opposite `COPY`, requested {0:?}")]
     UsageMismatch(wgt::BufferUsages),
     #[error("Buffer size {requested} is greater than the maximum buffer size ({maximum})")]
@@ -490,8 +490,8 @@ pub enum TextureDimensionError {
 pub enum CreateTextureError {
     #[error(transparent)]
     Device(#[from] DeviceError),
-    #[error("Textures cannot have empty usage flags")]
-    EmptyUsage,
+    #[error("Invalid usage flags {0:?}")]
+    InvalidUsage(wgt::TextureUsages),
     #[error(transparent)]
     InvalidDimension(#[from] TextureDimensionError),
     #[error("Depth texture ({1:?}) can't be created as {0:?}")]

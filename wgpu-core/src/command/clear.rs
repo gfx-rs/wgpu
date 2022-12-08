@@ -280,9 +280,8 @@ pub(crate) fn clear_texture<A: HalApi>(
     // clear_texture api in order to remove this check and call the cheaper
     // change_replace_tracked whenever possible.
     let dst_barrier = texture_tracker
-        .set_single(storage, dst_texture_id.0, selector, clear_usage)
+        .set_single(dst_texture, dst_texture_id.0, selector, clear_usage)
         .unwrap()
-        .1
         .map(|pending| pending.into_hal(dst_texture));
     unsafe {
         encoder.transition_textures(dst_barrier.into_iter());

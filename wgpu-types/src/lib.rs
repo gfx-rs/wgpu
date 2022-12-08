@@ -14,6 +14,48 @@ use serde::{Deserialize, Serialize};
 use std::hash::{Hash, Hasher};
 use std::{num::NonZeroU32, ops::Range};
 
+// Use this macro instead of the one provided by the bitflags_serde_shim crate
+// because the latter produces an error when deserializing bits that are not
+// specified in the bitflags, while we want deserialization to succeed and
+// and unspecified bits to lead to errors handled in wgpu-core.
+// Note that plainly deriving Serialize and Deserialized would have a similar
+// behavior to this macro (unspecified bit do not produce an error).
+macro_rules! impl_bitflags {
+    ($name:ident) => {
+        #[cfg(feature = "trace")]
+        impl serde::Serialize for $name {
+            fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+            where
+                S: serde::Serializer,
+            {
+                self.bits().serialize(serializer)
+            }
+        }
+
+        #[cfg(feature = "replay")]
+        impl<'de> serde::Deserialize<'de> for $name {
+            fn deserialize<D>(deserializer: D) -> Result<$name, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                let value = <_ as serde::Deserialize<'de>>::deserialize(deserializer)?;
+                // Note: newer version of bitflags replaced from_bits_unchecked with
+                // from_bits_retain which is not marked as unsafe (same implementation).
+                Ok(unsafe { $name::from_bits_unchecked(value) })
+            }
+        }
+
+        impl $name {
+            /// Returns true if the bitflags contains bits that are not part of
+            /// the bitflags definition.
+            pub fn contains_invalid_bits(&self) -> bool {
+                let all = Self::all().bits();
+                (self.bits() | all) != all
+            }
+        }
+    };
+}
+
 /// Integral type used for buffer offsets.
 pub type BufferAddress = u64;
 /// Integral type used for buffer slice sizes.
@@ -115,8 +157,7 @@ bitflags::bitflags! {
     }
 }
 
-#[cfg(feature = "bitflags_serde_shim")]
-bitflags_serde_shim::impl_serde_for_bitflags!(Backends);
+impl_bitflags!(Backends);
 
 impl From<Backend> for Backends {
     fn from(backend: Backend) -> Self {
@@ -620,7 +661,7 @@ bitflags::bitflags! {
         ///
         /// This is a native-only feature.
         const TEXTURE_COMPRESSION_ASTC_HDR = 1 << 40;
-        /// Allows for timestamp queries inside renderpasses. Metal does not allow this
+        /// Allows for timestamp queries inside render passes. Metal does not allow this
         /// on Apple GPUs.
         ///
         /// Implies [`Features::TIMESTAMP_QUERIES`] is supported.
@@ -633,8 +674,7 @@ bitflags::bitflags! {
     }
 }
 
-#[cfg(feature = "bitflags_serde_shim")]
-bitflags_serde_shim::impl_serde_for_bitflags!(Features);
+impl_bitflags!(Features);
 
 impl Features {
     /// Mask of all features which are part of the upstream WebGPU standard.
@@ -658,9 +698,9 @@ impl Features {
 /// - [`Limits::downlevel_webgl2_defaults()`] This is a set of limits that is lower even than the
 ///   [`downlevel_defaults()`], configured to be low enough to support running in the browser using
 ///   WebGL2.
-/// - [`Limits::default()`]. This is the set of limits that is guarenteed to work on all modern
-///   backends and is guarenteed to be supported by WebGPU. Applications needing more modern
-///   features can use this as a reasonable set of limits if they are targetting only desktop and
+/// - [`Limits::default()`]. This is the set of limits that is guaranteed to work on all modern
+///   backends and is guaranteed to be supported by WebGPU. Applications needing more modern
+///   features can use this as a reasonable set of limits if they are targeting only desktop and
 ///   modern mobile devices.
 ///
 /// We recommend starting with the most restrictive limits you can and manually increasing the
@@ -773,7 +813,7 @@ pub struct Limits {
     pub max_compute_workgroups_per_dimension: u32,
     /// A limit above which buffer allocations are guaranteed to fail.
     ///
-    /// Buffer allocations below the maximum buffer size may not succed depending on available memory,
+    /// Buffer allocations below the maximum buffer size may not succeed depending on available memory,
     /// fragmentation and other factors.
     pub max_buffer_size: u64,
 }
@@ -809,13 +849,13 @@ impl Default for Limits {
             max_compute_workgroup_size_y: 256,
             max_compute_workgroup_size_z: 64,
             max_compute_workgroups_per_dimension: 65535,
-            max_buffer_size: 1 << 30,
+            max_buffer_size: 1 << 28,
         }
     }
 }
 
 impl Limits {
-    /// These default limits are guarenteed to be compatible with GLES-3.1, and D3D11
+    /// These default limits are guaranteed to be compatible with GLES-3.1, and D3D11
     pub fn downlevel_defaults() -> Self {
         Self {
             max_texture_dimension_1d: 2048,
@@ -850,7 +890,7 @@ impl Limits {
         }
     }
 
-    /// These default limits are guarenteed to be compatible with GLES-3.0, and D3D11, and WebGL2
+    /// These default limits are guaranteed to be compatible with GLES-3.0, and D3D11, and WebGL2
     pub fn downlevel_webgl2_defaults() -> Self {
         Self {
             max_uniform_buffers_per_shader_stage: 11,
@@ -1090,8 +1130,7 @@ bitflags::bitflags! {
     }
 }
 
-#[cfg(feature = "bitflags_serde_shim")]
-bitflags_serde_shim::impl_serde_for_bitflags!(DownlevelFlags);
+impl_bitflags!(DownlevelFlags);
 
 impl DownlevelFlags {
     /// All flags that indicate if the backend is WebGPU compliant
@@ -1179,7 +1218,7 @@ pub struct DeviceDescriptor<L> {
 }
 
 impl<L> DeviceDescriptor<L> {
-    ///
+    /// Takes a closure and maps the label of the device descriptor into another.
     pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> DeviceDescriptor<K> {
         DeviceDescriptor {
             label: fun(&self.label),
@@ -1213,8 +1252,7 @@ bitflags::bitflags! {
     }
 }
 
-#[cfg(feature = "bitflags_serde_shim")]
-bitflags_serde_shim::impl_serde_for_bitflags!(ShaderStages);
+impl_bitflags!(ShaderStages);
 
 /// Dimensions of a particular texture view.
 ///
@@ -1666,8 +1704,7 @@ impl TextureFormatFeatureFlags {
     }
 }
 
-#[cfg(feature = "bitflags_serde_shim")]
-bitflags_serde_shim::impl_serde_for_bitflags!(TextureFormatFeatureFlags);
+impl_bitflags!(TextureFormatFeatureFlags);
 
 /// Features supported by a given texture format
 ///
@@ -2049,7 +2086,7 @@ pub enum TextureFormat {
     Astc {
         /// compressed block dimensions
         block: AstcBlock,
-        ///
+        /// ASTC RGBA channel
         channel: AstcChannel,
     },
 }
@@ -3085,8 +3122,7 @@ bitflags::bitflags! {
     }
 }
 
-#[cfg(feature = "bitflags_serde_shim")]
-bitflags_serde_shim::impl_serde_for_bitflags!(ColorWrites);
+impl_bitflags!(ColorWrites);
 
 impl Default for ColorWrites {
     fn default() -> Self {
@@ -3644,8 +3680,7 @@ bitflags::bitflags! {
     }
 }
 
-#[cfg(feature = "bitflags_serde_shim")]
-bitflags_serde_shim::impl_serde_for_bitflags!(BufferUsages);
+impl_bitflags!(BufferUsages);
 
 /// Describes a [`Buffer`](../wgpu/struct.Buffer.html).
 ///
@@ -3672,7 +3707,7 @@ pub struct BufferDescriptor<L> {
 }
 
 impl<L> BufferDescriptor<L> {
-    ///
+    /// Takes a closure and maps the label of the buffer descriptor into another.
     pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> BufferDescriptor<K> {
         BufferDescriptor {
             label: fun(&self.label),
@@ -3697,7 +3732,7 @@ pub struct CommandEncoderDescriptor<L> {
 }
 
 impl<L> CommandEncoderDescriptor<L> {
-    ///
+    /// Takes a closure and maps the label of the command encoder descriptor into another.
     pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> CommandEncoderDescriptor<K> {
         CommandEncoderDescriptor {
             label: fun(&self.label),
@@ -3841,13 +3876,39 @@ bitflags::bitflags! {
         const TEXTURE_BINDING = 1 << 2;
         /// Allows a texture to be a [`BindingType::StorageTexture`] in a bind group.
         const STORAGE_BINDING = 1 << 3;
-        /// Allows a texture to be an output attachment of a renderpass.
+        /// Allows a texture to be an output attachment of a render pass.
         const RENDER_ATTACHMENT = 1 << 4;
     }
 }
 
-#[cfg(feature = "bitflags_serde_shim")]
-bitflags_serde_shim::impl_serde_for_bitflags!(TextureUsages);
+impl_bitflags!(TextureUsages);
+
+/// Defines the capabilities of a given surface and adapter.
+#[derive(Debug)]
+pub struct SurfaceCapabilities {
+    /// List of supported formats to use with the given adapter. The first format in the vector is preferred.
+    ///
+    /// Returns an empty vector if the surface is incompatible with the adapter.
+    pub formats: Vec<TextureFormat>,
+    /// List of supported presentation modes to use with the given adapter.
+    ///
+    /// Returns an empty vector if the surface is incompatible with the adapter.
+    pub present_modes: Vec<PresentMode>,
+    /// List of supported alpha modes to use with the given adapter.
+    ///
+    /// Will return at least one element, CompositeAlphaMode::Opaque or CompositeAlphaMode::Inherit.
+    pub alpha_modes: Vec<CompositeAlphaMode>,
+}
+
+impl Default for SurfaceCapabilities {
+    fn default() -> Self {
+        Self {
+            formats: Vec::new(),
+            present_modes: Vec::new(),
+            alpha_modes: vec![CompositeAlphaMode::Opaque],
+        }
+    }
+}
 
 /// Configures a [`Surface`] for presentation.
 ///
@@ -3900,13 +3961,13 @@ pub enum SurfaceStatus {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct Color {
-    ///
+    /// Red component of the color
     pub r: f64,
-    ///
+    /// Green component of the color
     pub g: f64,
-    ///
+    /// Blue component of the color
     pub b: f64,
-    ///
+    /// Alpha component of the color
     pub a: f64,
 }
 
@@ -3980,11 +4041,11 @@ pub enum TextureDimension {
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct Origin3d {
-    ///
+    /// X position of the origin
     pub x: u32,
-    ///
+    /// Y position of the origin
     pub y: u32,
-    ///
+    /// Z position of the origin
     pub z: u32,
 }
 
@@ -4009,11 +4070,11 @@ impl Default for Origin3d {
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct Extent3d {
-    ///
+    /// Width of the extent
     pub width: u32,
-    ///
+    /// Height of the extent
     pub height: u32,
-    ///
+    /// The depth of the extent or the number of array layers
     #[cfg_attr(feature = "serde", serde(default = "default_depth"))]
     pub depth_or_array_layers: u32,
 }
@@ -4218,7 +4279,7 @@ pub struct TextureDescriptor<L> {
 }
 
 impl<L> TextureDescriptor<L> {
-    ///
+    /// Takes a closure and maps the label of the texture descriptor into another.
     pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> TextureDescriptor<K> {
         TextureDescriptor {
             label: fun(&self.label),
@@ -4380,7 +4441,7 @@ pub struct CommandBufferDescriptor<L> {
 }
 
 impl<L> CommandBufferDescriptor<L> {
-    ///
+    /// Takes a closure and maps the label of the command buffer descriptor into another.
     pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> CommandBufferDescriptor<K> {
         CommandBufferDescriptor {
             label: fun(&self.label),
@@ -4419,7 +4480,7 @@ pub struct RenderBundleDescriptor<L> {
 }
 
 impl<L> RenderBundleDescriptor<L> {
-    ///
+    /// Takes a closure and maps the label of the render bundle descriptor into another.
     pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> RenderBundleDescriptor<K> {
         RenderBundleDescriptor {
             label: fun(&self.label),
@@ -4971,7 +5032,7 @@ pub struct QuerySetDescriptor<L> {
 }
 
 impl<L> QuerySetDescriptor<L> {
-    ///
+    /// Takes a closure and maps the label of the query set descriptor into another.
     pub fn map_label<'a, K>(&'a self, fun: impl FnOnce(&'a L) -> K) -> QuerySetDescriptor<K> {
         QuerySetDescriptor {
             label: fun(&self.label),
@@ -5046,8 +5107,7 @@ bitflags::bitflags! {
     }
 }
 
-#[cfg(feature = "bitflags_serde_shim")]
-bitflags_serde_shim::impl_serde_for_bitflags!(PipelineStatisticsTypes);
+impl_bitflags!(PipelineStatisticsTypes);
 
 /// Argument buffer layout for draw_indirect commands.
 #[repr(C)]
