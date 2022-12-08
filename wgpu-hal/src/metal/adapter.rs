@@ -726,6 +726,8 @@ impl super::PrivateCapabilities {
             supports_depth_clip_control: os_is_mac
                 || device.supports_feature_set(MTLFeatureSet::iOS_GPUFamily4_v1),
             supports_preserve_invariance: version.at_least((11, 0), (13, 0)),
+            // Metal 2.2 on mac, 2.3 on iOS.
+            supports_shader_primitive_index: version.at_least((10, 15), (14, 0)),
             has_unified_memory: if version.at_least((10, 15), (13, 0)) {
                 Some(device.has_unified_memory())
             } else {
@@ -764,6 +766,10 @@ impl super::PrivateCapabilities {
         features.set(F::TEXTURE_COMPRESSION_ETC2, self.format_eac_etc);
 
         features.set(F::DEPTH_CLIP_CONTROL, self.supports_depth_clip_control);
+        features.set(
+            F::SHADER_PRIMITIVE_INDEX,
+            self.supports_shader_primitive_index,
+        );
 
         features.set(
             F::TEXTURE_BINDING_ARRAY
