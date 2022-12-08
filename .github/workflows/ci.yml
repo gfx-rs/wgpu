@@ -186,6 +186,9 @@ jobs:
           #        uses: jetli/wasm-pack-action@v0.4.0
           cargo install --git https://github.com/haraldreingruber/wasm-pack wasm-pack
 
+      - name: Setup firefox
+        uses: browser-actions/setup-firefox@latest
+
       - name: execute tests (Firefox)
         run: |
           cd wgpu
