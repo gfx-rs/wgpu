@@ -49,6 +49,15 @@
     clippy::pattern_type_mismatch,
 )]
 
+#[cfg(not(any(
+    feature = "dx11",
+    feature = "dx12",
+    feature = "gles",
+    feature = "metal",
+    feature = "vulkan"
+)))]
+compile_error!("No back ends enabled in `wgpu-hal`. Enable at least one backend feature.");
+
 #[cfg(all(feature = "metal", not(any(target_os = "macos", target_os = "ios"))))]
 compile_error!("Metal API enabled on non-Apple OS. If your project is not using resolver=\"2\" in Cargo.toml, it should.");
 #[cfg(all(feature = "dx12", not(windows)))]

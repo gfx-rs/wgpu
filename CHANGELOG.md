@@ -42,6 +42,42 @@ Bottom level categories:
 
 ### Major Changes
 
+#### Backend selection by features
+
+Whereas `wgpu-core` used to automatically select backends to enable
+based on the target OS and architecture, it now has separate features
+to enable each backend:
+
+- "metal", for the Metal API on macOS and iOS
+- "vulkan", for the Vulkan API (Linux, some Android, and occasionally Windows)
+- "dx12", for Microsoft's Direct3D 12 API
+- "gles", OpenGL ES, available on many systems
+- "dx11", for Microsoft's Direct3D 11 API
+
+None are enabled by default, but the `wgpu` crate automatically
+selects these features based on the target operating system and
+architecture, using the same rules that `wgpu-core` used to, so users
+of `wgpu` should be unaffected by this change. However, other crates
+using `wgpu-core` directly will need to copy `wgpu`'s logic or write
+their own. See the `[target]` section of `wgpu/Cargo.toml` for
+details.
+
+Similarly, `wgpu-core` now has `emscripten` and `renderdoc` features
+that `wgpu` enables on appropriate platforms.
+
+In previous releases, the `wgpu-core` crate decided which backends to
+support. However, this left `wgpu-core`'s users with no way to
+override those choices. (Firefox doesn't want the GLES back end, for
+example.) There doesn't seem to be any way to have a crate select
+backends based on target OS and architecture that users of that crate
+can still override. Default features can't be selected based on the
+target, for example. That implies that we should do the selection as
+late in the dependency DAG as feasible. Having `wgpu` (and
+`wgpu-core`'s other dependents) choose backends seems like the best
+option.
+
+By @jimblandy in [#3254](https://github.com/gfx-rs/wgpu/pull/3254).
+
 #### Surface Capabilities API
 
 The various surface capability functions were combined into a single call that gives you all the capabilities.
