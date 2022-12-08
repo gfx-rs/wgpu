@@ -1,0 +1,13 @@
+{
+  "moz:firefoxOptions": {
+    "prefs": {
+      "gfx.prefer-mesa-llvmpipe": true
+    },
+    "args": [
+    ]
+  },
+  "goog:chromeOptions": {
+    "args": [
+    ]
+  }
+}
