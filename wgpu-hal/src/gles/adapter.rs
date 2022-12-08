@@ -338,6 +338,10 @@ impl super::Adapter {
             wgt::Features::MULTIVIEW,
             extensions.contains("OVR_multiview2"),
         );
+        features.set(
+            wgt::Features::SHADER_PRIMITIVE_INDEX,
+            ver >= (3, 2) || extensions.contains("OES_geometry_shader"),
+        );
         let gles_bcn_exts = [
             "GL_EXT_texture_compression_s3tc_srgb",
             "GL_EXT_texture_compression_rgtc",
