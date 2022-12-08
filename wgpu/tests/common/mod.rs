@@ -3,10 +3,6 @@
 
 use std::panic::{catch_unwind, AssertUnwindSafe};
 
-#[cfg(all(target_arch = "wasm32", feature = "webgl"))]
-use wasm_bindgen::JsCast;
-#[cfg(all(target_arch = "wasm32", feature = "webgl"))]
-use web_sys::HtmlCanvasElement;
 use wgpu::{Adapter, Device, DownlevelFlags, Instance, Queue, Surface};
 use wgt::{Backends, DeviceDescriptor, DownlevelCapabilities, Features, Limits};
 
@@ -188,7 +184,6 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
 
     let missing_features = parameters.required_features - adapter_features;
     if !missing_features.is_empty() {
-        // TODO: we probably should use log crate here for logging also to wasm console
         log::info!("TEST SKIPPED: MISSING FEATURES {:?}", missing_features);
         return;
     }
@@ -318,23 +313,16 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
 }
 
 fn initialize_adapter() -> (Adapter, SurfaceGuard) {
-    let instance;
-    let backend_bits;
+    let backend_bits = wgpu::util::backend_bits_from_env().unwrap_or_else(Backends::all);
+    let instance = Instance::new(backend_bits);
     let compatible_surface;
 
     #[cfg(not(all(target_arch = "wasm32", feature = "webgl")))]
     {
-        backend_bits = wgpu::util::backend_bits_from_env().unwrap_or_else(Backends::all);
-        instance = Instance::new(backend_bits);
-
         compatible_surface = None;
     }
-
     #[cfg(all(target_arch = "wasm32", feature = "webgl"))]
     {
-        backend_bits = Backends::GL;
-        instance = Instance::new(backend_bits);
-
         // On wasm, append a canvas to the document body for initializing the adapter
         let canvas = create_html_canvas();
 
@@ -366,7 +354,9 @@ impl Drop for SurfaceGuard {
 }
 
 #[cfg(all(target_arch = "wasm32", feature = "webgl"))]
-fn create_html_canvas() -> HtmlCanvasElement {
+fn create_html_canvas() -> web_sys::HtmlCanvasElement {
+    use wasm_bindgen::JsCast;
+
     web_sys::window()
         .and_then(|win| win.document())
         .and_then(|doc| {
