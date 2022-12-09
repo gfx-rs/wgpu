@@ -1687,6 +1687,7 @@ impl<'w> BlockContext<'w> {
                     let mut raw_cases = Vec::with_capacity(cases.len());
                     let mut case_ids = Vec::with_capacity(cases.len());
                     for case in cases.iter() {
+                        // take id of previous empty fall-through case or generate a new one
                         let label_id = last_id.take().unwrap_or_else(|| self.gen_id());
 
                         if case.fall_through && case.body.is_empty() {

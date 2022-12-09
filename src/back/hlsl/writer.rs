@@ -1835,6 +1835,12 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         }
                     }
 
+                    // The new block is not only stylistic, it plays a role here:
+                    // We might end up having to write the same case body
+                    // multiple times due to FXC not supporting fallthrough.
+                    // Therefore, some `Expression`s written by `Statement::Emit`
+                    // will end up having the same name (`_expr<handle_index>`).
+                    // So we need to put each case in its own scope.
                     let write_block_braces = !(case.fall_through && case.body.is_empty());
                     if write_block_braces {
                         writeln!(self.out, " {{")?;
@@ -1842,7 +1848,23 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         writeln!(self.out)?;
                     }
 
-                    // FXC doesn't support fallthrough so we duplicate the body of the following case blocks
+                    // Although FXC does support a series of case clauses before
+                    // a block[^yes], it does not support fallthrough from a
+                    // non-empty case block to the next[^no]. If this case has a
+                    // non-empty body with a fallthrough, emulate that by
+                    // duplicating the bodies of all the cases it would fall
+                    // into as extensions of this case's own body. This makes
+                    // the HLSL output potentially quadratic in the size of the
+                    // Naga IR.
+                    //
+                    // [^yes]: ```hlsl
+                    // case 1:
+                    // case 2: do_stuff()
+                    // ```
+                    // [^no]: ```hlsl
+                    // case 1: do_this();
+                    // case 2: do_that();
+                    // ```
                     if case.fall_through && !case.body.is_empty() {
                         let curr_len = i + 1;
                         let end_case_idx = curr_len
