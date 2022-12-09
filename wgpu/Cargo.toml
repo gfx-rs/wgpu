@@ -151,10 +151,10 @@ raw-window-handle.workspace = true
 serde = { workspace = true, features = ["derive"], optional = true }
 smallvec.workspace = true
 static_assertions.workspace = true
+cfg-if.workspace = true
 
 [dev-dependencies]
 bitflags.workspace = true
-cfg-if.workspace = true
 bytemuck = { workspace = true, features = ["derive"] }
 glam.workspace = true
 ddsfile.workspace = true

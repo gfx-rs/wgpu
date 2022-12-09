@@ -23,19 +23,19 @@ use crate::{
     UncapturedErrorHandler,
 };
 
-#[cfg(feature = "expose-ids")]
-static NEXT_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-
-#[cfg(not(feature = "expose-ids"))]
 fn create_identified<T>(value: T) -> Identified<T> {
-    Identified(value)
-}
+    let id = cfg_if::cfg_if! {
+        if #[cfg(feature = "expose-ids")] {
+            static NEXT_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+            NEXT_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+        } else {
+            0
+        }
+    };
 
-#[cfg(feature = "expose-ids")]
-fn create_identified<T>(value: T) -> Identified<T> {
     Identified(
         value,
-        NEXT_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
+        id,
     )
 }
 
