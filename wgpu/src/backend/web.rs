@@ -42,33 +42,25 @@ fn create_identified<T>(value: T) -> Identified<T> {
 // type is (for now) harmless.  Eventually wasm32 will support threading, and depending on how this
 // is integrated (or not integrated) with values like those in webgpu, this may become unsound.
 
-unsafe fn wasm_from_id<T: FromWasmAbi>(id: ObjectId) -> T
-where
-    T::Abi: From<u32>,
-{
-    let raw = NonZeroU128::from(id);
-    let abi = <T::Abi>::from(raw.get() as u32);
-    unsafe { T::from_abi(abi) }
-}
-
-impl<T: FromWasmAbi> From<ObjectId> for Identified<T>
-where
-    T::Abi: From<u32>,
-{
+impl<T: FromWasmAbi<Abi = u32> + JsCast> From<ObjectId> for Identified<T> {
     fn from(id: ObjectId) -> Self {
         let raw = std::num::NonZeroU128::from(id);
-        let wasm = unsafe { wasm_from_id(id) };
         let global_id = (raw.get() >> 64) as u64;
-        Self(wasm, global_id)
+
+        // SAFETY: wasm_bindgen says an ABI representation may only be cast to a wrapper type if it was created
+        // using into_abi.
+        //
+        // This assumption we sadly have to assume to prevent littering the code with unsafe blocks.
+        let wasm = unsafe { JsValue::from_abi(raw.get() as u32) };
+        strict_assert!(wasm.is_instance_of::<T>());
+        // SAFETY: The ABI of the type must be a u32, and strict asserts ensure the right type is used.
+        Self(wasm.unchecked_into(), global_id)
     }
 }
 
-impl<T: IntoWasmAbi> From<Identified<T>> for ObjectId
-where
-    T::Abi: Into<u32>,
-{
+impl<T: IntoWasmAbi<Abi = u32>> From<Identified<T>> for ObjectId {
     fn from(id: Identified<T>) -> Self {
-        let abi = id.0.into_abi().into();
+        let abi = id.0.into_abi();
         let id = abi as u128 | ((id.1 as u128) << 64);
         Self::from(NonZeroU128::new(id).unwrap())
     }
@@ -1342,8 +1334,7 @@ impl crate::context::Context for Context {
                         size,
                     }) => {
                         let buffer = &<<Context as crate::Context>::BufferId>::from(buffer.id).0;
-                        let mut mapped_buffer_binding =
-                            web_sys::GpuBufferBinding::new(buffer);
+                        let mut mapped_buffer_binding = web_sys::GpuBufferBinding::new(buffer);
                         mapped_buffer_binding.offset(offset as f64);
                         if let Some(s) = size {
                             mapped_buffer_binding.size(s.get() as f64);
@@ -1372,8 +1363,7 @@ impl crate::context::Context for Context {
             .collect::<js_sys::Array>();
 
         let bgl = &<<Context as crate::Context>::BindGroupLayoutId>::from(desc.layout.id).0;
-        let mut mapped_desc =
-            web_sys::GpuBindGroupDescriptor::new(&mapped_entries, bgl);
+        let mut mapped_desc = web_sys::GpuBindGroupDescriptor::new(&mapped_entries, bgl);
         if let Some(label) = desc.label {
             mapped_desc.label(label);
         }
@@ -1411,10 +1401,7 @@ impl crate::context::Context for Context {
         desc: &crate::RenderPipelineDescriptor,
     ) -> (Self::RenderPipelineId, Self::RenderPipelineData) {
         let module = &<<Context as crate::Context>::ShaderModuleId>::from(desc.vertex.module.id).0;
-        let mut mapped_vertex_state = web_sys::GpuVertexState::new(
-            desc.vertex.entry_point,
-            module,
-        );
+        let mut mapped_vertex_state = web_sys::GpuVertexState::new(desc.vertex.entry_point, module);
 
         let buffers = desc
             .vertex
@@ -1483,11 +1470,8 @@ impl crate::context::Context for Context {
                 })
                 .collect::<js_sys::Array>();
             let module = &<<Context as crate::Context>::ShaderModuleId>::from(frag.module.id).0;
-            let mapped_fragment_desc = web_sys::GpuFragmentState::new(
-                frag.entry_point,
-                module,
-                &targets,
-            );
+            let mapped_fragment_desc =
+                web_sys::GpuFragmentState::new(frag.entry_point, module, &targets);
             mapped_desc.fragment(&mapped_fragment_desc);
         }
 
@@ -2050,7 +2034,8 @@ impl crate::context::Context for Context {
                         mapped_color_attachment.clear_value(&cv);
                     }
                     if let Some(rt) = ca.resolve_target {
-                        let texture_view = &<<Context as crate::Context>::TextureViewId>::from(rt.id).0;
+                        let texture_view =
+                            &<<Context as crate::Context>::TextureViewId>::from(rt.id).0;
                         mapped_color_attachment.resolve_target(texture_view);
                     }
                     mapped_color_attachment.store_op(map_store_op(ca.ops.store));
@@ -2097,7 +2082,9 @@ impl crate::context::Context for Context {
                 None => (web_sys::GpuLoadOp::Load, web_sys::GpuStoreOp::Store),
             };
             let mut mapped_depth_stencil_attachment =
-                web_sys::GpuRenderPassDepthStencilAttachment::new(&<<Context as crate::Context>::TextureViewId>::from(dsa.view.id).0);
+                web_sys::GpuRenderPassDepthStencilAttachment::new(
+                    &<<Context as crate::Context>::TextureViewId>::from(dsa.view.id).0,
+                );
             mapped_depth_stencil_attachment.depth_clear_value(depth_clear_value);
             mapped_depth_stencil_attachment.depth_load_op(depth_load_op);
             mapped_depth_stencil_attachment.depth_store_op(depth_store_op);

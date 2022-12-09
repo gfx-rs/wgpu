@@ -76,7 +76,7 @@ name = "water"
 test = true
 
 [features]
-default = ["wgsl", "expose-ids"]
+default = ["wgsl", "expose-ids", "strict_asserts"]
 # Apply run-time checks, even in release builds. These are in addition
 # to the validation carried out at public APIs in all builds.
 strict_asserts = ["wgc/strict_asserts"]
