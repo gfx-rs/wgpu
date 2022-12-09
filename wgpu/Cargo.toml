@@ -163,7 +163,8 @@ obj.workspace = true
 pollster.workspace = true
 png.workspace = true
 nanorand = { workspace = true, features = ["wyrand"] }
-winit.workspace = true                                 # for "halmark" example                                                        # for "halmark" example
+wasm-bindgen-test.workspace = true
+winit.workspace = true # for "halmark" example
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 async-executor.workspace = true
@@ -320,12 +321,13 @@ parking_lot.workspace = true
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 console_error_panic_hook.workspace = true
 console_log.workspace = true
-# We need these features in the framework examples
+# We need these features in the framework examples and tests
 web-sys = { workspace = true, features = [
     "Location",
     "Blob",
     "RequestInit",
     "RequestMode",
     "Request",
-    "Response"
+    "Response",
+    "WebGl2RenderingContext"
 ] }

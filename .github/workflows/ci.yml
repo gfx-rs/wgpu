@@ -172,6 +172,32 @@ jobs:
           cargo doc --target ${{ matrix.target }} -p wgpu -p wgpu-info -p player --all-features --no-deps
           cargo doc --target ${{ matrix.target }} -p wgpu-core --no-deps --features="portable_features"
 
+  wasm-test:
+    name: Test WebAssembly
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout repo
+        uses: actions/checkout@v3
+
+      - name: install rust stable
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          override: true
+
+      - name: install wasm-pack  # install from fork until this is merged: https://github.com/rustwasm/wasm-pack/pull/1185
+        run: |
+          # replace with "install wasm-pack action", which doesn't work for this project because of https://github.com/rustwasm/wasm-pack/issues/1180
+          #      - name: install wasm-pack
+          #        uses: jetli/wasm-pack-action@v0.4.0
+          cargo install --git https://github.com/haraldreingruber/wasm-pack wasm-pack
+
+      - name: execute tests
+        run: |
+          cd wgpu
+          wasm-pack test --headless --chrome --features webgl
+
   gpu-test:
     strategy:
       fail-fast: false
