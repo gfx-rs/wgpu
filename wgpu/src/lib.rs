@@ -27,7 +27,7 @@ use std::{
     thread,
 };
 
-use context::{Context, DynContext, ObjectId};
+use context::{Context, DeviceRequest, DynContext, ObjectId};
 use parking_lot::Mutex;
 
 pub use wgt::{
@@ -1629,9 +1629,13 @@ impl Adapter {
             trace_path,
         );
         async move {
-            device
-                .await
-                .map(|(device_id, device_data, queue_id, queue_data)| {
+            device.await.map(
+                |DeviceRequest {
+                     device_id,
+                     device_data,
+                     queue_id,
+                     queue_data,
+                 }| {
                     (
                         Device {
                             context: Arc::clone(&context),
@@ -1644,7 +1648,8 @@ impl Adapter {
                             data: queue_data,
                         },
                     )
-                })
+                },
+            )
         }
     }
 

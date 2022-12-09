@@ -23,7 +23,7 @@ use crate::{
 ///
 /// There is no need to manually implement this trait since there is a blanket implementation for this trait.
 pub trait ContextId: Into<ObjectId> + From<ObjectId> + Debug + 'static {}
-impl<T: Into<ObjectId> + From<ObjectId> + Debug + 'static> ContextId for T  {}
+impl<T: Into<ObjectId> + From<ObjectId> + Debug + 'static> ContextId for T {}
 
 /// Meta trait for an data associated with an id tracked by a context.
 ///
@@ -1022,6 +1022,13 @@ fn downcast_mut<T: Debug + Send + Sync + 'static>(data: &mut crate::Data) -> &mu
     unsafe { &mut *(data as *mut dyn Any as *mut T) }
 }
 
+pub(crate) struct DeviceRequest {
+    pub device_id: ObjectId,
+    pub device_data: Box<crate::Data>,
+    pub queue_id: ObjectId,
+    pub queue_data: Box<crate::Data>,
+}
+
 /// An object safe variant of [`Context`] implemented by all types that implement [`Context`].
 pub(crate) trait DynContext: Debug + Send + Sync {
     fn as_any(&self) -> &dyn Any;
@@ -1036,23 +1043,13 @@ pub(crate) trait DynContext: Debug + Send + Sync {
         &self,
         options: &RequestAdapterOptions<'_>,
     ) -> Pin<Box<dyn Future<Output = Option<(ObjectId, Box<crate::Data>)>> + Send>>;
-    #[allow(clippy::type_complexity)]
     fn adapter_request_device(
         &self,
         adapter: &ObjectId,
         adapter_data: &crate::Data,
         desc: &DeviceDescriptor,
         trace_dir: Option<&std::path::Path>,
-    ) -> Pin<
-        Box<
-            dyn Future<
-                    Output = Result<
-                        (ObjectId, Box<crate::Data>, ObjectId, Box<crate::Data>),
-                        RequestDeviceError,
-                    >,
-                > + Send,
-        >,
-    >;
+    ) -> Pin<Box<dyn Future<Output = Result<DeviceRequest, RequestDeviceError>> + Send>>;
 
     fn instance_poll_all_devices(&self, force_wait: bool) -> bool;
     fn adapter_is_surface_supported(
@@ -1883,28 +1880,19 @@ where
         adapter_data: &crate::Data,
         desc: &DeviceDescriptor,
         trace_dir: Option<&std::path::Path>,
-    ) -> Pin<
-        Box<
-            dyn Future<
-                    Output = Result<
-                        (ObjectId, Box<crate::Data>, ObjectId, Box<crate::Data>),
-                        RequestDeviceError,
-                    >,
-                > + Send,
-        >,
-    > {
+    ) -> Pin<Box<dyn Future<Output = Result<DeviceRequest, RequestDeviceError>> + Send>> {
         let adapter = <T::AdapterId>::from(*adapter);
         let adapter_data = downcast_ref(adapter_data);
         let future = Context::adapter_request_device(self, &adapter, adapter_data, desc, trace_dir);
 
         Box::pin(async move {
-            let (device, device_data, queue, queue_data) = future.await?;
-            Ok((
-                device.into(),
-                Box::new(device_data) as _,
-                queue.into(),
-                Box::new(queue_data) as _,
-            ))
+            let (device_id, device_data, queue_id, queue_data) = future.await?;
+            Ok(DeviceRequest {
+                device_id: device_id.into(),
+                device_data: Box::new(device_data) as _,
+                queue_id: queue_id.into(),
+                queue_data: Box::new(queue_data) as _,
+            })
         })
     }
 

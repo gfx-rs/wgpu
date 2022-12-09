@@ -24,16 +24,14 @@ use crate::{
 };
 
 fn create_identified<T>(value: T) -> Identified<T> {
-    let id = cfg_if::cfg_if! {
+    cfg_if::cfg_if! {
         if #[cfg(feature = "expose-ids")] {
             static NEXT_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-            NEXT_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+            Identified(value, NEXT_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed))
         } else {
-            0
+            Identified(value, 0)
         }
-    };
-
-    Identified(value, id)
+    }
 }
 
 // We need to make a wrapper for some of the handle types returned by the web backend to make them
@@ -44,7 +42,7 @@ fn create_identified<T>(value: T) -> Identified<T> {
 // type is (for now) harmless.  Eventually wasm32 will support threading, and depending on how this
 // is integrated (or not integrated) with values like those in webgpu, this may become unsound.
 
-fn wasm_from_id<T: FromWasmAbi>(id: ObjectId) -> T
+unsafe fn wasm_from_id<T: FromWasmAbi>(id: ObjectId) -> T
 where
     T::Abi: From<u32>,
 {
@@ -59,7 +57,7 @@ where
 {
     fn from(id: ObjectId) -> Self {
         let raw = std::num::NonZeroU128::from(id);
-        let wasm = wasm_from_id(id);
+        let wasm = unsafe { wasm_from_id(id) };
         let global_id = (raw.get() >> 64) as u64;
         Self(wasm, global_id)
     }
@@ -455,7 +453,8 @@ fn map_texture_view_dimension(
 }
 
 fn map_buffer_copy_view(view: crate::ImageCopyBuffer) -> web_sys::GpuImageCopyBuffer {
-    let mut mapped = web_sys::GpuImageCopyBuffer::new(&wasm_from_id(view.buffer.id));
+    let buffer = &<<Context as crate::Context>::BufferId>::from(view.buffer.id).0;
+    let mut mapped = web_sys::GpuImageCopyBuffer::new(buffer);
     if let Some(bytes_per_row) = view.layout.bytes_per_row {
         mapped.bytes_per_row(bytes_per_row.get());
     }
@@ -467,7 +466,8 @@ fn map_buffer_copy_view(view: crate::ImageCopyBuffer) -> web_sys::GpuImageCopyBu
 }
 
 fn map_texture_copy_view(view: crate::ImageCopyTexture) -> web_sys::GpuImageCopyTexture {
-    let mut mapped = web_sys::GpuImageCopyTexture::new(&wasm_from_id(view.texture.id));
+    let texture = &<<Context as crate::Context>::TextureId>::from(view.texture.id).0;
+    let mut mapped = web_sys::GpuImageCopyTexture::new(texture);
     mapped.mip_level(view.mip_level);
     mapped.origin(&map_origin_3d(view.origin));
     mapped
@@ -476,7 +476,8 @@ fn map_texture_copy_view(view: crate::ImageCopyTexture) -> web_sys::GpuImageCopy
 fn map_tagged_texture_copy_view(
     view: crate::ImageCopyTexture,
 ) -> web_sys::GpuImageCopyTextureTagged {
-    let mut mapped = web_sys::GpuImageCopyTextureTagged::new(&wasm_from_id(view.texture.id));
+    let texture = &<<Context as crate::Context>::TextureId>::from(view.texture.id).0;
+    let mut mapped = web_sys::GpuImageCopyTextureTagged::new(texture);
     mapped.mip_level(view.mip_level);
     mapped.origin(&map_origin_3d(view.origin));
     mapped
@@ -1340,8 +1341,9 @@ impl crate::context::Context for Context {
                         offset,
                         size,
                     }) => {
+                        let buffer = &<<Context as crate::Context>::BufferId>::from(buffer.id).0;
                         let mut mapped_buffer_binding =
-                            web_sys::GpuBufferBinding::new(&wasm_from_id(buffer.id));
+                            web_sys::GpuBufferBinding::new(buffer);
                         mapped_buffer_binding.offset(offset as f64);
                         if let Some(s) = size {
                             mapped_buffer_binding.size(s.get() as f64);
@@ -1369,8 +1371,9 @@ impl crate::context::Context for Context {
             })
             .collect::<js_sys::Array>();
 
+        let bgl = &<<Context as crate::Context>::BindGroupLayoutId>::from(desc.layout.id).0;
         let mut mapped_desc =
-            web_sys::GpuBindGroupDescriptor::new(&mapped_entries, &wasm_from_id(desc.layout.id));
+            web_sys::GpuBindGroupDescriptor::new(&mapped_entries, bgl);
         if let Some(label) = desc.label {
             mapped_desc.label(label);
         }
@@ -1407,9 +1410,10 @@ impl crate::context::Context for Context {
         _device_data: &Self::DeviceData,
         desc: &crate::RenderPipelineDescriptor,
     ) -> (Self::RenderPipelineId, Self::RenderPipelineData) {
+        let module = &<<Context as crate::Context>::ShaderModuleId>::from(desc.vertex.module.id).0;
         let mut mapped_vertex_state = web_sys::GpuVertexState::new(
             desc.vertex.entry_point,
-            &wasm_from_id(desc.vertex.module.id),
+            module,
         );
 
         let buffers = desc
@@ -1478,9 +1482,10 @@ impl crate::context::Context for Context {
                     None => wasm_bindgen::JsValue::null(),
                 })
                 .collect::<js_sys::Array>();
+            let module = &<<Context as crate::Context>::ShaderModuleId>::from(frag.module.id).0;
             let mapped_fragment_desc = web_sys::GpuFragmentState::new(
                 frag.entry_point,
-                &wasm_from_id(frag.module.id),
+                module,
                 &targets,
             );
             mapped_desc.fragment(&mapped_fragment_desc);
@@ -1507,8 +1512,9 @@ impl crate::context::Context for Context {
         _device_data: &Self::DeviceData,
         desc: &crate::ComputePipelineDescriptor,
     ) -> (Self::ComputePipelineId, Self::ComputePipelineData) {
+        let shader_module = &<<Context as crate::Context>::ShaderModuleId>::from(desc.module.id).0;
         let mapped_compute_stage =
-            web_sys::GpuProgrammableStage::new(desc.entry_point, &wasm_from_id(desc.module.id));
+            web_sys::GpuProgrammableStage::new(desc.entry_point, shader_module);
         let auto_layout = wasm_bindgen::JsValue::from(web_sys::GpuAutoLayoutMode::Auto);
         let mut mapped_desc = web_sys::GpuComputePipelineDescriptor::new(
             &match desc.layout {
@@ -2038,13 +2044,14 @@ impl crate::context::Context for Context {
                     let mut mapped_color_attachment = web_sys::GpuRenderPassColorAttachment::new(
                         load_value,
                         map_store_op(ca.ops.store),
-                        &wasm_from_id(ca.view.id),
+                        &<<Context as crate::Context>::TextureViewId>::from(ca.view.id).0,
                     );
                     if let Some(cv) = clear_value {
                         mapped_color_attachment.clear_value(&cv);
                     }
                     if let Some(rt) = ca.resolve_target {
-                        mapped_color_attachment.resolve_target(&wasm_from_id(rt.id));
+                        let texture_view = &<<Context as crate::Context>::TextureViewId>::from(rt.id).0;
+                        mapped_color_attachment.resolve_target(texture_view);
                     }
                     mapped_color_attachment.store_op(map_store_op(ca.ops.store));
 
@@ -2090,7 +2097,7 @@ impl crate::context::Context for Context {
                 None => (web_sys::GpuLoadOp::Load, web_sys::GpuStoreOp::Store),
             };
             let mut mapped_depth_stencil_attachment =
-                web_sys::GpuRenderPassDepthStencilAttachment::new(&wasm_from_id(dsa.view.id));
+                web_sys::GpuRenderPassDepthStencilAttachment::new(&<<Context as crate::Context>::TextureViewId>::from(dsa.view.id).0);
             mapped_depth_stencil_attachment.depth_clear_value(depth_clear_value);
             mapped_depth_stencil_attachment.depth_load_op(depth_load_op);
             mapped_depth_stencil_attachment.depth_store_op(depth_store_op);
