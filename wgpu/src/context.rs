@@ -19,60 +19,65 @@ use crate::{
     UncapturedErrorHandler,
 };
 
+/// Meta trait for an id tracked by a context.
+///
+/// There is no need to manually implement this trait since there is a blanket implementation for this trait.
+pub trait ContextId: Into<ObjectId> + From<ObjectId> + Debug + 'static {}
+impl<T: Into<ObjectId> + From<ObjectId> + Debug + 'static> ContextId for T  {}
+
+/// Meta trait for an data associated with an id tracked by a context.
+///
+/// There is no need to manually implement this trait since there is a blanket implementation for this trait.
+pub trait ContextData: Debug + Send + Sync + 'static {}
+impl<T: Debug + Send + Sync + 'static> ContextData for T {}
+
 pub trait Context: Debug + Send + Sized + Sync {
-    type AdapterId: Into<ObjectId> + From<ObjectId> + Debug + Send + Sync + 'static;
-    type AdapterData: Debug + Send + Sync + 'static;
-    type DeviceId: Into<ObjectId> + From<ObjectId> + Debug + Send + Sync + 'static;
-    type DeviceData: Debug + Send + Sync + 'static;
-    type QueueId: Into<ObjectId> + From<ObjectId> + Debug + Send + Sync + 'static;
-    type QueueData: Debug + Send + Sync + 'static;
-    type ShaderModuleId: Into<ObjectId> + From<ObjectId> + Debug + Send + Sync + 'static;
-    type ShaderModuleData: Debug + Send + Sync + 'static;
-    type BindGroupLayoutId: Into<ObjectId> + From<ObjectId> + Debug + Send + Sync + 'static;
-    type BindGroupLayoutData: Debug + Send + Sync + 'static;
-    type BindGroupId: Into<ObjectId> + From<ObjectId> + Debug + Send + Sync + 'static;
-    type BindGroupData: Debug + Send + Sync + 'static;
-    type TextureViewId: Into<ObjectId> + From<ObjectId> + Debug + Send + Sync + 'static;
-    type TextureViewData: Debug + Send + Sync + 'static;
-    type SamplerId: Into<ObjectId> + From<ObjectId> + Debug + Send + Sync + 'static;
-    type SamplerData: Debug + Send + Sync + 'static;
-    type BufferId: Into<ObjectId> + From<ObjectId> + Debug + Send + Sync + 'static;
-    type BufferData: Debug + Send + Sync + 'static;
-    type TextureId: Into<ObjectId> + From<ObjectId> + Debug + Send + Sync + 'static;
-    type TextureData: Debug + Send + Sync + 'static;
-    type QuerySetId: Into<ObjectId> + From<ObjectId> + Debug + Send + Sync + 'static;
-    type QuerySetData: Debug + Send + Sync + 'static;
-    type PipelineLayoutId: Into<ObjectId> + From<ObjectId> + Debug + Send + Sync + 'static;
-    type PipelineLayoutData: Debug + Send + Sync + 'static;
-    type RenderPipelineId: Into<ObjectId> + From<ObjectId> + Debug + Send + Sync + 'static;
-    type RenderPipelineData: Debug + Send + Sync + 'static;
-    type ComputePipelineId: Into<ObjectId> + From<ObjectId> + Debug + Send + Sync + 'static;
-    type ComputePipelineData: Debug + Send + Sync + 'static;
-    type CommandEncoderId: Into<ObjectId> + From<ObjectId> + Debug + Send + Sync + 'static;
-    type CommandEncoderData: Debug + Send + Sync + 'static;
-    type ComputePassId: Into<ObjectId> + From<ObjectId> + Debug + 'static;
-    type ComputePassData: Debug + Send + Sync + 'static;
-    type RenderPassId: Into<ObjectId> + From<ObjectId> + Debug + 'static;
-    type RenderPassData: Debug + Send + Sync + 'static;
-    type CommandBufferId: Into<ObjectId> + From<ObjectId> + Debug + Send + Sync + 'static;
-    type CommandBufferData: Debug + Send + Sync + 'static;
-    type RenderBundleEncoderId: Into<ObjectId> + From<ObjectId> + Debug + 'static;
-    type RenderBundleEncoderData: Debug + Send + Sync + 'static;
-    type RenderBundleId: Into<ObjectId> + From<ObjectId> + Debug + Send + Sync + 'static;
-    type RenderBundleData: Debug + Send + Sync + 'static;
-    type SurfaceId: Into<ObjectId> + From<ObjectId> + Debug + Send + Sync + 'static;
-    type SurfaceData: Debug + Send + Sync + 'static;
+    type AdapterId: ContextId + Send + Sync;
+    type AdapterData: ContextData;
+    type DeviceId: ContextId + Send + Sync;
+    type DeviceData: ContextData;
+    type QueueId: ContextId + Send + Sync;
+    type QueueData: ContextData;
+    type ShaderModuleId: ContextId + Send + Sync;
+    type ShaderModuleData: ContextData;
+    type BindGroupLayoutId: ContextId + Send + Sync;
+    type BindGroupLayoutData: ContextData;
+    type BindGroupId: ContextId + Send + Sync;
+    type BindGroupData: ContextData;
+    type TextureViewId: ContextId + Send + Sync;
+    type TextureViewData: ContextData;
+    type SamplerId: ContextId + Send + Sync;
+    type SamplerData: ContextData;
+    type BufferId: ContextId + Send + Sync;
+    type BufferData: ContextData;
+    type TextureId: ContextId + Send + Sync;
+    type TextureData: ContextData;
+    type QuerySetId: ContextId + Send + Sync;
+    type QuerySetData: ContextData;
+    type PipelineLayoutId: ContextId + Send + Sync;
+    type PipelineLayoutData: ContextData;
+    type RenderPipelineId: ContextId + Send + Sync;
+    type RenderPipelineData: ContextData;
+    type ComputePipelineId: ContextId + Send + Sync;
+    type ComputePipelineData: ContextData;
+    type CommandEncoderId: ContextId + Send + Sync;
+    type CommandEncoderData: ContextData;
+    type ComputePassId: ContextId;
+    type ComputePassData: ContextData;
+    type RenderPassId: ContextId;
+    type RenderPassData: ContextData;
+    type CommandBufferId: ContextId + Send + Sync;
+    type CommandBufferData: ContextData;
+    type RenderBundleEncoderId: ContextId;
+    type RenderBundleEncoderData: ContextData;
+    type RenderBundleId: ContextId + Send + Sync;
+    type RenderBundleData: ContextData;
+    type SurfaceId: ContextId + Send + Sync;
+    type SurfaceData: ContextData;
 
     type SurfaceOutputDetail: Send + Sync + 'static;
-    type SubmissionIndex: Into<ObjectId>
-        + From<ObjectId>
-        + Debug
-        + Clone
-        + Copy
-        + Send
-        + Sync
-        + 'static;
-    type SubmissionIndexData: Debug + Clone + Copy + Send + Sync + 'static;
+    type SubmissionIndex: ContextId + Clone + Copy + Send + Sync;
+    type SubmissionIndexData: ContextData + Copy;
 
     type RequestAdapterFuture: Future<Output = Option<(Self::AdapterId, Self::AdapterData)>>
         + Send

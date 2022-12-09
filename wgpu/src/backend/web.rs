@@ -33,10 +33,7 @@ fn create_identified<T>(value: T) -> Identified<T> {
         }
     };
 
-    Identified(
-        value,
-        id,
-    )
+    Identified(value, id)
 }
 
 // We need to make a wrapper for some of the handle types returned by the web backend to make them
