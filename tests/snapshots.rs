@@ -1,6 +1,6 @@
 // A lot of the code can be unused based on configuration flags,
 // the corresponding warnings aren't helpful.
-#![allow(dead_code)]
+#![allow(dead_code, unused_imports)]
 
 use std::{
     fs,
