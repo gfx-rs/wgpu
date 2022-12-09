@@ -13,12 +13,9 @@ use winapi::{
 // Currently this will work the older, slower way if the windows_rs feature is disabled,
 // and will suballocate buffers using gpu_allocator if the windows_rs feature is enabled.
 
-#[cfg(not(feature = "windows_rs"))]
-use winapi::um::d3d12::D3D12_RESOURCE_DESC;
-
 #[cfg(feature = "windows_rs")]
 use gpu_allocator::{
-    d3d12::{winapi_d3d12::D3D12_RESOURCE_DESC, AllocationCreateDesc, ToWinapi, ToWindows},
+    d3d12::{AllocationCreateDesc, ToWinapi, ToWindows},
     MemoryLocation,
 };
 
@@ -73,10 +70,10 @@ pub(crate) fn create_allocator_wrapper(
 }
 
 #[cfg(feature = "windows_rs")]
-pub(crate) fn my_buffer_hr(
+pub(crate) fn create_buffer_resource(
     device: &super::Device,
     desc: &crate::BufferDescriptor,
-    raw_desc: D3D12_RESOURCE_DESC,
+    raw_desc: d3d12::D3D12_RESOURCE_DESC,
     resource: &mut WeakPtr<ID3D12Resource>,
 ) -> Result<(HRESULT, Option<AllocationWrapper>), crate::DeviceError> {
     let is_cpu_read = desc.usage.contains(crate::BufferUses::MAP_READ);
@@ -89,11 +86,13 @@ pub(crate) fn my_buffer_hr(
         (false, false) => MemoryLocation::GpuOnly,
     };
 
+    let name = desc.label.unwrap_or("Unlabeled buffer");
+
     let mut allocator = device.mem_allocator.as_ref().unwrap().lock();
     let allocation_desc = AllocationCreateDesc::from_winapi_d3d12_resource_desc(
         allocator.allocator.device().as_winapi(),
         &raw_desc,
-        "Example allocation",
+        name,
         location,
     );
     let allocation = allocator.allocator.allocate(&allocation_desc)?;
@@ -114,10 +113,10 @@ pub(crate) fn my_buffer_hr(
 }
 
 #[cfg(not(feature = "windows_rs"))]
-pub(crate) fn my_buffer_hr(
+pub(crate) fn create_buffer_resource(
     device: &super::Device,
     desc: &crate::BufferDescriptor,
-    raw_desc: D3D12_RESOURCE_DESC,
+    raw_desc: d3d12::D3D12_RESOURCE_DESC,
     resource: &mut WeakPtr<ID3D12Resource>,
 ) -> Result<(HRESULT, Option<AllocationWrapper>), crate::DeviceError> {
     let is_cpu_read = desc.usage.contains(crate::BufferUses::MAP_READ);
@@ -162,17 +161,21 @@ pub(crate) fn my_buffer_hr(
 }
 
 #[cfg(feature = "windows_rs")]
-pub(crate) fn my_texture_hr(
+pub(crate) fn create_texture_resource(
     device: &super::Device,
-    raw_desc: D3D12_RESOURCE_DESC,
+    desc: &crate::TextureDescriptor,
+    raw_desc: d3d12::D3D12_RESOURCE_DESC,
     resource: &mut WeakPtr<ID3D12Resource>,
 ) -> Result<(HRESULT, Option<AllocationWrapper>), crate::DeviceError> {
     let location = MemoryLocation::GpuOnly;
+
+    let name = desc.label.unwrap_or("Unlabeled texture");
+
     let mut allocator = device.mem_allocator.as_ref().unwrap().lock();
     let allocation_desc = AllocationCreateDesc::from_winapi_d3d12_resource_desc(
         allocator.allocator.device().as_winapi(),
         &raw_desc,
-        "Example allocation",
+        name,
         location,
     );
     let allocation = allocator.allocator.allocate(&allocation_desc)?;
@@ -193,9 +196,10 @@ pub(crate) fn my_texture_hr(
 }
 
 #[cfg(not(feature = "windows_rs"))]
-pub(crate) fn my_texture_hr(
+pub(crate) fn create_texture_resource(
     device: &super::Device,
-    raw_desc: D3D12_RESOURCE_DESC,
+    _desc: &crate::TextureDescriptor,
+    raw_desc: d3d12::D3D12_RESOURCE_DESC,
     resource: &mut WeakPtr<ID3D12Resource>,
 ) -> Result<(HRESULT, Option<AllocationWrapper>), crate::DeviceError> {
     let heap_properties = d3d12::D3D12_HEAP_PROPERTIES {
@@ -244,7 +248,7 @@ pub(crate) fn free_buffer_allocation(
     match allocator.lock().allocator.free(allocation.allocation) {
         Ok(_) => (),
         // TODO: Don't panic here
-        Err(e) => panic!("failed to destroy dx12 buffer, {}", e),
+        Err(e) => panic!("Failed to destroy dx12 buffer, {}", e),
     };
 }
 
@@ -264,38 +268,36 @@ pub(crate) fn free_texture_allocation(
     match allocator.lock().allocator.free(allocation.allocation) {
         Ok(_) => (),
         // TODO: Don't panic here
-        Err(e) => panic!("failed to destroy dx12 texture, {}", e),
+        Err(e) => panic!("Failed to destroy dx12 texture, {}", e),
     };
 }
 
 #[cfg(feature = "windows_rs")]
 impl From<gpu_allocator::AllocationError> for crate::DeviceError {
     fn from(result: gpu_allocator::AllocationError) -> Self {
-        use log::error;
-
         match result {
             gpu_allocator::AllocationError::OutOfMemory => Self::OutOfMemory,
             gpu_allocator::AllocationError::FailedToMap(e) => {
-                error!("DX12 gpu-allocator: Failed to map: {}", e);
+                log::error!("DX12 gpu-allocator: Failed to map: {}", e);
                 Self::Lost
             }
             gpu_allocator::AllocationError::NoCompatibleMemoryTypeFound => {
-                error!("DX12 gpu-allocator: No Compatible Memory Type Found");
+                log::error!("DX12 gpu-allocator: No Compatible Memory Type Found");
                 Self::Lost
             }
             gpu_allocator::AllocationError::InvalidAllocationCreateDesc => {
-                error!("DX12 gpu-allocator: Invalid Allocation Creation Description");
+                log::error!("DX12 gpu-allocator: Invalid Allocation Creation Description");
                 Self::Lost
             }
             gpu_allocator::AllocationError::InvalidAllocatorCreateDesc(e) => {
-                error!(
+                log::error!(
                     "DX12 gpu-allocator: Invalid Allocator Creation Description: {}",
                     e
                 );
                 Self::Lost
             }
             gpu_allocator::AllocationError::Internal(e) => {
-                error!("DX12 gpu-allocator: Internal Error: {}", e);
+                log::error!("DX12 gpu-allocator: Internal Error: {}", e);
                 Self::Lost
             }
         }

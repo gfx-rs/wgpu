@@ -39,8 +39,8 @@ mod conv;
 mod descriptor;
 mod device;
 mod instance;
+mod suballocation;
 mod view;
-mod windows_rs_suballocation;
 
 use crate::auxil::{self, dxgi::result::HResult as _};
 
@@ -52,8 +52,6 @@ use winapi::{
     um::{d3d12, dcomp, synchapi, winbase, winnt},
     Interface as _,
 };
-
-use self::windows_rs_suballocation::{AllocationWrapper, GpuAllocatorWrapper};
 
 #[derive(Clone)]
 pub struct Api;
@@ -241,7 +239,7 @@ pub struct Device {
     #[cfg(feature = "renderdoc")]
     render_doc: crate::auxil::renderdoc::RenderDoc,
     null_rtv_handle: descriptor::Handle,
-    mem_allocator: Option<Mutex<GpuAllocatorWrapper>>,
+    mem_allocator: Option<Mutex<suballocation::GpuAllocatorWrapper>>,
 }
 
 unsafe impl Send for Device {}
@@ -377,7 +375,7 @@ unsafe impl Sync for CommandBuffer {}
 pub struct Buffer {
     resource: native::Resource,
     size: wgt::BufferAddress,
-    allocation: Option<AllocationWrapper>,
+    allocation: Option<suballocation::AllocationWrapper>,
 }
 
 unsafe impl Send for Buffer {}
@@ -404,7 +402,7 @@ pub struct Texture {
     size: wgt::Extent3d,
     mip_level_count: u32,
     sample_count: u32,
-    allocation: Option<AllocationWrapper>,
+    allocation: Option<suballocation::AllocationWrapper>,
 }
 
 unsafe impl Send for Texture {}

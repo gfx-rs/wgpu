@@ -3,20 +3,12 @@ use crate::{
     FormatAspects,
 };
 
-use super::{
-    conv, descriptor, view,
-    windows_rs_suballocation::{
-        create_allocator_wrapper, free_buffer_allocation, free_texture_allocation,
-    },
-};
+use super::{conv, descriptor, view};
 use parking_lot::Mutex;
 use std::{ffi, mem, num::NonZeroU32, ptr, slice, sync::Arc};
 use winapi::{
     shared::{dxgiformat, dxgitype, minwindef::BOOL, winerror},
-    um::{
-        d3d12::{self, D3D12_RESOURCE_DESC},
-        d3dcompiler, synchapi, winbase,
-    },
+    um::{d3d12, d3dcompiler, synchapi, winbase},
     Interface,
 };
 
@@ -30,7 +22,7 @@ impl super::Device {
         private_caps: super::PrivateCapabilities,
         library: &Arc<native::D3D12Lib>,
     ) -> Result<Self, crate::DeviceError> {
-        let mem_allocator = create_allocator_wrapper(&raw)?;
+        let mem_allocator = super::suballocation::create_allocator_wrapper(&raw)?;
 
         let mut idle_fence = native::Fence::null();
         let hr = unsafe {
@@ -46,7 +38,7 @@ impl super::Device {
 
         let mut zero_buffer = native::Resource::null();
         unsafe {
-            let raw_desc = D3D12_RESOURCE_DESC {
+            let raw_desc = d3d12::D3D12_RESOURCE_DESC {
                 Dimension: d3d12::D3D12_RESOURCE_DIMENSION_BUFFER,
                 Alignment: 0,
                 Width: super::ZERO_BUFFER_SIZE,
@@ -327,7 +319,7 @@ impl super::Device {
 }
 
 impl crate::Device<super::Api> for super::Device {
-    unsafe fn exit(#[allow(unused_mut)] mut self, queue: super::Queue) {
+    unsafe fn exit(mut self, queue: super::Queue) {
         self.rtv_pool.lock().free_handle(self.null_rtv_handle);
         unsafe { self.rtv_pool.into_inner().destroy() };
         unsafe { self.dsv_pool.into_inner().destroy() };
@@ -335,8 +327,7 @@ impl crate::Device<super::Api> for super::Device {
         unsafe { self.sampler_pool.into_inner().destroy() };
         unsafe { self.shared.destroy() };
         unsafe { self.idler.destroy() };
-        #[cfg(feature = "windows_rs")]
-        drop(self.mem_allocator.take());
+        self.mem_allocator = None;
         unsafe { queue.raw.destroy() };
     }
 
@@ -344,8 +335,6 @@ impl crate::Device<super::Api> for super::Device {
         &self,
         desc: &crate::BufferDescriptor,
     ) -> Result<super::Buffer, crate::DeviceError> {
-        use super::windows_rs_suballocation::my_buffer_hr;
-
         let mut resource = native::Resource::null();
         let mut size = desc.size;
         if desc.usage.contains(crate::BufferUses::UNIFORM) {
@@ -353,7 +342,7 @@ impl crate::Device<super::Api> for super::Device {
             size = ((size - 1) | align_mask) + 1;
         }
 
-        let raw_desc = D3D12_RESOURCE_DESC {
+        let raw_desc = d3d12::D3D12_RESOURCE_DESC {
             Dimension: d3d12::D3D12_RESOURCE_DIMENSION_BUFFER,
             Alignment: 0,
             Width: size,
@@ -369,7 +358,8 @@ impl crate::Device<super::Api> for super::Device {
             Flags: conv::map_buffer_usage_to_resource_flags(desc.usage),
         };
 
-        let (hr, allocation) = my_buffer_hr(self, desc, raw_desc, &mut resource)?;
+        let (hr, allocation) =
+            super::suballocation::create_buffer_resource(self, desc, raw_desc, &mut resource)?;
 
         hr.into_device_result("Buffer creation")?;
         if let Some(label) = desc.label {
@@ -388,7 +378,10 @@ impl crate::Device<super::Api> for super::Device {
         unsafe { buffer.resource.destroy() };
         // Only happens when it's using the windows_rs feature and there's an allocation
         if let Some(alloc) = buffer.allocation.take() {
-            free_buffer_allocation(alloc, self.mem_allocator.as_ref().unwrap());
+            super::suballocation::free_buffer_allocation(
+                alloc,
+                self.mem_allocator.as_ref().unwrap(),
+            );
         }
     }
 
@@ -422,11 +415,11 @@ impl crate::Device<super::Api> for super::Device {
         &self,
         desc: &crate::TextureDescriptor,
     ) -> Result<super::Texture, crate::DeviceError> {
-        use super::windows_rs_suballocation::my_texture_hr;
+        use super::suballocation::create_texture_resource;
 
         let mut resource = native::Resource::null();
 
-        let raw_desc = D3D12_RESOURCE_DESC {
+        let raw_desc = d3d12::D3D12_RESOURCE_DESC {
             Dimension: conv::map_texture_dimension(desc.dimension),
             Alignment: 0,
             Width: desc.size.width as u64,
@@ -455,7 +448,7 @@ impl crate::Device<super::Api> for super::Device {
             Flags: conv::map_texture_usage_to_resource_flags(desc.usage),
         };
 
-        let (hr, allocation) = my_texture_hr(self, raw_desc, &mut resource)?;
+        let (hr, allocation) = create_texture_resource(self, desc, raw_desc, &mut resource)?;
 
         hr.into_device_result("Texture creation")?;
         if let Some(label) = desc.label {
@@ -477,7 +470,10 @@ impl crate::Device<super::Api> for super::Device {
     unsafe fn destroy_texture(&self, mut texture: super::Texture) {
         unsafe { texture.resource.destroy() };
         if let Some(alloc) = texture.allocation.take() {
-            free_texture_allocation(alloc, self.mem_allocator.as_ref().unwrap());
+            super::suballocation::free_texture_allocation(
+                alloc,
+                self.mem_allocator.as_ref().unwrap(),
+            );
         }
     }
 
