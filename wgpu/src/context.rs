@@ -3,9 +3,9 @@ use std::{
 };
 
 use wgt::{
-    AdapterInfo, BufferAddress, BufferSize, Color, DownlevelCapabilities, DynamicOffset, Extent3d,
-    Features, ImageDataLayout, ImageSubresourceRange, IndexFormat, Limits, ShaderStages,
-    SurfaceConfiguration, SurfaceStatus, TextureFormat, TextureFormatFeatures,
+    strict_assert, AdapterInfo, BufferAddress, BufferSize, Color, DownlevelCapabilities,
+    DynamicOffset, Extent3d, Features, ImageDataLayout, ImageSubresourceRange, IndexFormat, Limits,
+    ShaderStages, SurfaceConfiguration, SurfaceStatus, TextureFormat, TextureFormatFeatures,
 };
 
 use crate::{

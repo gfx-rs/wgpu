@@ -6,8 +6,6 @@
 #![doc(html_logo_url = "https://raw.githubusercontent.com/gfx-rs/wgpu/master/logo.png")]
 #![warn(missing_docs, unsafe_op_in_unsafe_fn)]
 
-#[macro_use]
-mod assertions;
 mod backend;
 mod context;
 pub mod util;

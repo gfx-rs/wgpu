@@ -14,6 +14,8 @@ use serde::{Deserialize, Serialize};
 use std::hash::{Hash, Hasher};
 use std::{num::NonZeroU32, ops::Range};
 
+mod assertions;
+
 // Use this macro instead of the one provided by the bitflags_serde_shim crate
 // because the latter produces an error when deserializing bits that are not
 // specified in the bitflags, while we want deserialization to succeed and
