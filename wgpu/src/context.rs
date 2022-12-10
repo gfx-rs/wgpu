@@ -5,7 +5,7 @@ use std::{
 use wgt::{
     strict_assert, AdapterInfo, BufferAddress, BufferSize, Color, DownlevelCapabilities,
     DynamicOffset, Extent3d, Features, ImageDataLayout, ImageSubresourceRange, IndexFormat, Limits,
-    ShaderStages, SurfaceConfiguration, SurfaceStatus, TextureFormat, TextureFormatFeatures,
+    ShaderStages, SurfaceConfiguration, SurfaceStatus, TextureFormat, TextureFormatFeatures, strict_assert_eq,
 };
 
 use crate::{
@@ -1015,6 +1015,27 @@ fn downcast_mut<T: Debug + Send + Sync + 'static>(data: &mut crate::Data) -> &mu
     strict_assert!(data.is::<T>());
     // Copied from std.
     unsafe { &mut *(data as *mut dyn Any as *mut T) }
+}
+
+/// Representation of an object id that is not used.
+///
+/// This may be used as the id type when only a the data associated type is used for a specific type of object.
+#[derive(Debug, Clone, Copy)]
+pub struct Unused;
+
+const UNUSED_SENTINEL: Option<NonZeroU128> = NonZeroU128::new(u128::MAX);
+
+impl From<ObjectId> for Unused {
+    fn from(id: ObjectId) -> Self {
+        strict_assert_eq!(Some(NonZeroU128::from(id)), UNUSED_SENTINEL);
+        Self
+    }
+}
+
+impl From<Unused> for ObjectId {
+    fn from(_: Unused) -> Self {
+        ObjectId::from(UNUSED_SENTINEL.expect("This should never panic"))
+    }
 }
 
 pub(crate) struct DeviceRequest {

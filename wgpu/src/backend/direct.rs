@@ -1,5 +1,5 @@
 use crate::{
-    context::ObjectId, AdapterInfo, BindGroupDescriptor, BindGroupLayoutDescriptor,
+    context::{ObjectId, Unused}, AdapterInfo, BindGroupDescriptor, BindGroupLayoutDescriptor,
     BindingResource, BufferBinding, CommandEncoderDescriptor, ComputePassDescriptor,
     ComputePipelineDescriptor, DownlevelCapabilities, Features, Label, Limits, LoadOp, MapMode,
     Operations, PipelineLayoutDescriptor, RenderBundleEncoderDescriptor, RenderPipelineDescriptor,
@@ -16,14 +16,12 @@ use std::{
     error::Error,
     fmt,
     future::{ready, Ready},
-    num::NonZeroU128,
     ops::Range,
     slice,
     sync::Arc,
 };
 use wgc::command::{bundle_ffi::*, compute_ffi::*, render_ffi::*};
 use wgc::id::TypedId;
-use wgt::strict_assert_eq;
 
 const LABEL: &str = "label";
 
@@ -450,27 +448,6 @@ impl Queue {
 pub struct CommandEncoder {
     error_sink: ErrorSink,
     open: bool,
-}
-
-/// Representation of an object id that is not used.
-///
-/// This may be used as the id type when only a the data associated type is used for a specific type of object.
-#[derive(Debug, Clone, Copy)]
-pub struct Unused;
-
-const UNUSED_SENTINEL: Option<NonZeroU128> = NonZeroU128::new(u128::MAX);
-
-impl From<ObjectId> for Unused {
-    fn from(id: ObjectId) -> Self {
-        strict_assert_eq!(Some(NonZeroU128::from(id)), UNUSED_SENTINEL);
-        Self
-    }
-}
-
-impl From<Unused> for ObjectId {
-    fn from(_: Unused) -> Self {
-        ObjectId::from(UNUSED_SENTINEL.expect("This should never panic"))
-    }
 }
 
 impl crate::Context for Context {

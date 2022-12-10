@@ -19,7 +19,7 @@ use wasm_bindgen::{
 };
 
 use crate::{
-    context::{ObjectId, QueueWriteBuffer},
+    context::{ObjectId, QueueWriteBuffer, Unused},
     UncapturedErrorHandler,
 };
 
@@ -52,7 +52,7 @@ impl<T: FromWasmAbi<Abi = u32> + JsCast> From<ObjectId> for Identified<T> {
         //
         // This assumption we sadly have to assume to prevent littering the code with unsafe blocks.
         let wasm = unsafe { JsValue::from_abi(raw.get() as u32) };
-        strict_assert!(wasm.is_instance_of::<T>());
+        wgt::strict_assert!(wasm.is_instance_of::<T>());
         // SAFETY: The ABI of the type must be a u32, and strict asserts ensure the right type is used.
         Self(wasm.unchecked_into(), global_id)
     }
@@ -695,24 +695,6 @@ extern "C" {
     fn worker(this: &Global) -> JsValue;
 }
 
-// The web doesn't provide any way to identify specific queue
-// submissions. But Clippy gets concerned if we pass around `()` as if
-// it were meaningful.
-#[derive(Debug, Clone, Copy)]
-pub struct SubmissionIndex;
-
-impl From<ObjectId> for SubmissionIndex {
-    fn from(_: ObjectId) -> Self {
-        Self
-    }
-}
-
-impl From<SubmissionIndex> for ObjectId {
-    fn from(_: SubmissionIndex) -> Self {
-        Self::dummy()
-    }
-}
-
 impl crate::context::Context for Context {
     type AdapterId = Identified<web_sys::GpuAdapter>;
     type AdapterData = ();
@@ -758,7 +740,7 @@ impl crate::context::Context for Context {
     type SurfaceData = ();
 
     type SurfaceOutputDetail = SurfaceOutputDetail;
-    type SubmissionIndex = SubmissionIndex;
+    type SubmissionIndex = Unused;
     type SubmissionIndexData = ();
 
     type RequestAdapterFuture = MakeSendFuture<
@@ -2364,7 +2346,7 @@ impl crate::context::Context for Context {
 
         queue.0.submit(&temp_command_buffers);
 
-        (SubmissionIndex, ())
+        (Unused, ())
     }
 
     fn queue_get_timestamp_period(
