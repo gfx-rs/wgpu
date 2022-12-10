@@ -1,8 +1,9 @@
 use crate::{
-    context::{ObjectId, Unused}, AdapterInfo, BindGroupDescriptor, BindGroupLayoutDescriptor,
-    BindingResource, BufferBinding, CommandEncoderDescriptor, ComputePassDescriptor,
-    ComputePipelineDescriptor, DownlevelCapabilities, Features, Label, Limits, LoadOp, MapMode,
-    Operations, PipelineLayoutDescriptor, RenderBundleEncoderDescriptor, RenderPipelineDescriptor,
+    context::{ObjectId, Unused},
+    AdapterInfo, BindGroupDescriptor, BindGroupLayoutDescriptor, BindingResource, BufferBinding,
+    CommandEncoderDescriptor, ComputePassDescriptor, ComputePipelineDescriptor,
+    DownlevelCapabilities, Features, Label, Limits, LoadOp, MapMode, Operations,
+    PipelineLayoutDescriptor, RenderBundleEncoderDescriptor, RenderPipelineDescriptor,
     SamplerDescriptor, ShaderModuleDescriptor, ShaderModuleDescriptorSpirV, ShaderSource,
     SurfaceStatus, TextureDescriptor, TextureViewDescriptor, UncapturedErrorHandler,
 };
