@@ -986,11 +986,6 @@ pub trait Context: Debug + Send + Sized + Sync {
 pub struct ObjectId(NonZeroU128);
 
 impl ObjectId {
-    // DO NOT MERGE: This is definitely not ideal
-    pub fn dummy() -> Self {
-        Self(NonZeroU128::new(u128::MAX).unwrap())
-    }
-
     pub fn global_id(&self) -> u64 {
         (self.0.get() >> 64) as u64
     }

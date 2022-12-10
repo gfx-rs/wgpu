@@ -16,12 +16,14 @@ use std::{
     error::Error,
     fmt,
     future::{ready, Ready},
+    num::NonZeroU128,
     ops::Range,
     slice,
     sync::Arc,
 };
 use wgc::command::{bundle_ffi::*, compute_ffi::*, render_ffi::*};
 use wgc::id::TypedId;
+use wgt::strict_assert_eq;
 
 const LABEL: &str = "label";
 
@@ -450,6 +452,27 @@ pub struct CommandEncoder {
     open: bool,
 }
 
+/// Representation of an object id that is not used.
+///
+/// This may be used as the id type when only a the data associated type is used for a specific type of object.
+#[derive(Debug, Clone, Copy)]
+pub struct Unused;
+
+const UNUSED_SENTINEL: Option<NonZeroU128> = NonZeroU128::new(u128::MAX);
+
+impl From<ObjectId> for Unused {
+    fn from(id: ObjectId) -> Self {
+        strict_assert_eq!(Some(NonZeroU128::from(id)), UNUSED_SENTINEL);
+        Self
+    }
+}
+
+impl From<Unused> for ObjectId {
+    fn from(_: Unused) -> Self {
+        ObjectId::from(UNUSED_SENTINEL.expect("This should never panic"))
+    }
+}
+
 impl crate::Context for Context {
     type AdapterId = wgc::id::AdapterId;
     type AdapterData = ();
@@ -481,13 +504,13 @@ impl crate::Context for Context {
     type ComputePipelineData = ();
     type CommandEncoderId = wgc::id::CommandEncoderId;
     type CommandEncoderData = CommandEncoder;
-    type ComputePassId = ObjectId;
+    type ComputePassId = Unused;
     type ComputePassData = wgc::command::ComputePass;
-    type RenderPassId = ObjectId;
+    type RenderPassId = Unused;
     type RenderPassData = wgc::command::RenderPass;
     type CommandBufferId = wgc::id::CommandBufferId;
     type CommandBufferData = ();
-    type RenderBundleEncoderId = ObjectId;
+    type RenderBundleEncoderId = Unused;
     type RenderBundleEncoderData = wgc::command::RenderBundleEncoder;
     type RenderBundleId = wgc::id::RenderBundleId;
     type RenderBundleData = ();
@@ -495,7 +518,7 @@ impl crate::Context for Context {
     type SurfaceId = wgc::id::SurfaceId;
     type SurfaceData = Surface;
     type SurfaceOutputDetail = SurfaceOutputDetail;
-    type SubmissionIndex = ObjectId;
+    type SubmissionIndex = Unused;
     type SubmissionIndexData = wgc::device::queue::WrappedSubmissionIndex;
 
     type RequestAdapterFuture = Ready<Option<(Self::AdapterId, Self::AdapterData)>>;
@@ -1359,7 +1382,7 @@ impl crate::Context for Context {
             multiview: desc.multiview,
         };
         match wgc::command::RenderBundleEncoder::new(&descriptor, *device, None) {
-            Ok(encoder) => (ObjectId::dummy(), encoder),
+            Ok(encoder) => (Unused, encoder),
             Err(e) => panic!("Error in Device::create_render_bundle_encoder: {}", e),
         }
     }
@@ -1781,7 +1804,7 @@ impl crate::Context for Context {
         desc: &ComputePassDescriptor,
     ) -> (Self::ComputePassId, Self::ComputePassData) {
         (
-            ObjectId::dummy(),
+            Unused,
             wgc::command::ComputePass::new(
                 *encoder,
                 &wgc::command::ComputePassDescriptor {
@@ -1841,7 +1864,7 @@ impl crate::Context for Context {
         });
 
         (
-            ObjectId::dummy(),
+            Unused,
             wgc::command::RenderPass::new(
                 *encoder,
                 &wgc::command::RenderPassDescriptor {
@@ -2175,7 +2198,7 @@ impl crate::Context for Context {
             Ok(index) => index,
             Err(err) => self.handle_error_fatal(err, "Queue::submit"),
         };
-        (ObjectId::dummy(), index)
+        (Unused, index)
     }
 
     fn queue_get_timestamp_period(
