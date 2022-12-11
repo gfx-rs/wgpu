@@ -101,7 +101,9 @@ pub enum TransferError {
     CopyFromForbiddenTextureFormat(wgt::TextureFormat),
     #[error("copying to textures with format {0:?} is forbidden")]
     CopyToForbiddenTextureFormat(wgt::TextureFormat),
-    #[error("copying to textures with format {0:?} is forbidden when copying from external texture")]
+    #[error(
+        "copying to textures with format {0:?} is forbidden when copying from external texture"
+    )]
     ExternalCopyToForbiddenTextureFormat(wgt::TextureFormat),
     #[error("the entire texture must be copied when copying from depth texture")]
     InvalidDepthTextureExtent,

@@ -395,27 +395,27 @@ impl super::Queue {
                                 copy.dst_base.origin.z as i32,
                                 copy.size.width as i32,
                                 copy.size.height as i32,
-                                0,
+                                copy.size.depth as i32,
                                 format_desc.external,
                                 format_desc.data_type,
                                 b,
                             );
                         },
-                        wgt::ExternalImageSource::HTMLVideoElement(ref _v) => {
-                            // gl.tex_sub_image_3d_with_html_video_element(
-                            //     dst_target,
-                            //     copy.dst_base.mip_level as i32,
-                            //     copy.dst_base.origin.x as i32,
-                            //     copy.dst_base.origin.y as i32,
-                            //     copy.dst_base.origin.z as i32,
-                            //     copy.size.width as i32,
-                            //     copy.size.height as i32,
-                            //     0,
-                            //     format_desc.external,
-                            //     format_desc.data_type,
-                            //     b,
-                            // );
-                        }
+                        wgt::ExternalImageSource::HTMLVideoElement(ref v) => unsafe {
+                            gl.tex_sub_image_3d_with_html_video_element(
+                                dst_target,
+                                copy.dst_base.mip_level as i32,
+                                copy.dst_base.origin.x as i32,
+                                copy.dst_base.origin.y as i32,
+                                copy.dst_base.origin.z as i32,
+                                copy.size.width as i32,
+                                copy.size.height as i32,
+                                copy.size.depth as i32,
+                                format_desc.external,
+                                format_desc.data_type,
+                                v,
+                            );
+                        },
                         wgt::ExternalImageSource::HTMLCanvasElement(ref c) => unsafe {
                             gl.tex_sub_image_3d_with_html_canvas_element(
                                 dst_target,
@@ -425,7 +425,7 @@ impl super::Queue {
                                 copy.dst_base.origin.z as i32,
                                 copy.size.width as i32,
                                 copy.size.height as i32,
-                                0,
+                                copy.size.depth as i32,
                                 format_desc.external,
                                 format_desc.data_type,
                                 c,
@@ -441,38 +441,38 @@ impl super::Queue {
                                 copy.dst_base.mip_level as i32,
                                 copy.dst_base.origin.x as i32,
                                 copy.dst_base.origin.y as i32,
-                                // copy.size.width as i32,
-                                // copy.size.height as i32,
+                                copy.size.width as i32,
+                                copy.size.height as i32,
                                 format_desc.external,
                                 format_desc.data_type,
                                 b,
                             );
                         },
-                        wgt::ExternalImageSource::HTMLVideoElement(ref _v) => {
-                            // gl.tex_sub_image_2d_with_html_video_element(
-                            //     dst_target,
-                            //     copy.dst_base.mip_level as i32,
-                            //     copy.dst_base.origin.x as i32,
-                            //     copy.dst_base.origin.y as i32,
-                            //     // copy.size.width as i32,
-                            //     // copy.size.height as i32,
-                            //     format_desc.external,
-                            //     format_desc.data_type,
-                            //     b,
-                            // );
-                        }
+                        wgt::ExternalImageSource::HTMLVideoElement(ref v) => unsafe {
+                            gl.tex_sub_image_2d_with_html_video(
+                                dst_target,
+                                copy.dst_base.mip_level as i32,
+                                copy.dst_base.origin.x as i32,
+                                copy.dst_base.origin.y as i32,
+                                copy.size.width as i32,
+                                copy.size.height as i32,
+                                format_desc.external,
+                                format_desc.data_type,
+                                v,
+                            )
+                        },
                         wgt::ExternalImageSource::HTMLCanvasElement(ref c) => unsafe {
                             gl.tex_sub_image_2d_with_html_canvas(
                                 dst_target,
                                 copy.dst_base.mip_level as i32,
                                 copy.dst_base.origin.x as i32,
                                 copy.dst_base.origin.y as i32,
-                                // copy.size.width as i32,
-                                // copy.size.height as i32,
+                                copy.size.width as i32,
+                                copy.size.height as i32,
                                 format_desc.external,
                                 format_desc.data_type,
                                 c,
-                            );
+                            )
                         },
                         wgt::ExternalImageSource::OffscreenCanvas(_) => unreachable!(),
                     }

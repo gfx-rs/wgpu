@@ -833,7 +833,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             extract_texture_selector(&destination.to_untagged(), &size, dst)?;
 
         if !conv::is_valid_external_image_copy_dst_texture_format(dst.desc.format) {
-            return Err(TransferError::ExternalCopyToForbiddenTextureFormat(dst.desc.format).into());
+            return Err(
+                TransferError::ExternalCopyToForbiddenTextureFormat(dst.desc.format).into(),
+            );
         }
         if dst.desc.dimension != wgt::TextureDimension::D2 {
             return Err(TransferError::InvalidDimensionExternal(destination.texture).into());

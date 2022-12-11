@@ -103,7 +103,7 @@ winapi = "0.3"
 egl = { package = "khronos-egl", version = "4.1" }
 # glow = { version = "0.11.2", optional = true }
 # TODO: New glow release
-glow = { git = "https://github.com/grovesNL/glow", rev = "c8a011fcd57a5c68cc917ed394baa484bdefc909" }
+glow = { git = "https://github.com/cwfitzgerald/glow", rev = "843c2e4bcad8726db7fb664a0dc8dedc15f31211" }
 glutin = "0.29.1"
 
 # wasm32 dependencies
