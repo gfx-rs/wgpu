@@ -823,6 +823,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             return Ok(());
         }
 
+        if matches!(source.source, wgt::ExternalImageSource::OffscreenCanvas(_)) {
+            device
+                .require_downlevel_flags(wgt::DownlevelFlags::UNRESTRICTED_EXTERNAL_TEXTURE_COPIES)
+                .map_err(TransferError::from)?;
+        }
+
         let src_width = source.source.width();
         let src_height = source.source.height();
 

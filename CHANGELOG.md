@@ -67,6 +67,10 @@ Additionally `Surface::get_default_config` now returns an Option and returns Non
 
 `Instance::create_surface()` now returns `Result<Surface, CreateSurfaceError>` instead of `Surface`. This allows an error to be returned instead of panicking if the given window is a HTML canvas and obtaining a WebGPU or WebGL 2 context fails. (No other platforms currently report any errors through this path.) By @kpreid in [#3052](https://github.com/gfx-rs/wgpu/pull/3052/)
 
+#### `Queue::copy_external_image_to_texture` on WebAssembly
+
+There's a new api `Queue::copy_external_image_to_texture` which allows you to create wgpu textures from various web image primitives. Specificically from HtmlVideoElement, HtmlCanvasElement, OffscreenCanvas, and ImageBitmap. This provides multiple low-copy ways of interacting with the browser. WebGL is also supported, though WebGL has some additional restrictions, represented by the UNRESTRICTED_EXTERNAL_IMAGE_COPIES downlevel flag. By @cwfitzgerald in [#3288](https://github.com/gfx-rs/wgpu/pull/3288)
+
 ### Changes
 
 #### General
@@ -156,20 +160,17 @@ Additionally `Surface::get_default_config` now returns an Option and returns Non
 
 - Don't use a pointer to a local copy of a `PhysicalDeviceDriverProperties` struct after it has gone out of scope. In fact, don't make a local copy at all. Introduce a helper function for building `CStr`s from C character arrays, and remove some `unsafe` blocks. By @jimblandy in [#3076](https://github.com/gfx-rs/wgpu/pull/3076).
 
-
 ## wgpu-0.14.2 (2022-11-28)
 
 ### Bug Fixes
 
 - Fix incorrect offset in `get_mapped_range` by @nical in [#3233](https://github.com/gfx-rs/wgpu/pull/3233)
 
-
 ## wgpu-0.14.1 (2022-11-02)
 
 ### Bug Fixes
 
 - Make `wgpu::TextureFormat::Depth24PlusStencil8` available on all backends by making the feature unconditionally available and the feature unneeded to use the format. By @Healthire and @cwfitzgerald in [#3165](https://github.com/gfx-rs/wgpu/pull/3165)
-
 
 ## wgpu-0.14.0 (2022-10-05)
 

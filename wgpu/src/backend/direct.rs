@@ -765,6 +765,7 @@ fn map_texture_copy_view(view: crate::ImageCopyTexture) -> wgc::command::ImageCo
     }
 }
 
+#[cfg_attr(not(target_arch = "wasm32"), allow(unused))]
 fn map_texture_tagged_copy_view(
     view: crate::ImageCopyTextureTagged,
 ) -> wgc::command::ImageCopyTextureTagged {

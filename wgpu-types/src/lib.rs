@@ -1128,10 +1128,10 @@ bitflags::bitflags! {
         /// WebGL doesn't support this.
         const UNRESTRICTED_INDEX_BUFFER = 1 << 16;
 
-        /// External textures, on the web, support copying from an OffscreenCanvas.
+        /// Supports copying from an OffscreenCanvas in `Queue::copy_external_image_to_texture`.
         ///
         /// WebGL doesn't support this.
-        const EXTERNAL_TEXTURE_OFFSCREEN_CANVAS = 1 << 17;
+        const UNRESTRICTED_EXTERNAL_TEXTURE_COPIES = 1 << 17;
     }
 }
 
