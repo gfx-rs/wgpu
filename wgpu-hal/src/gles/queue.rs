@@ -375,6 +375,7 @@ impl super::Queue {
                     unsafe { gl.bind_buffer(copy_dst_target, None) };
                 }
             }
+            #[cfg(target_arch = "wasm32")]
             C::CopyExternalImageToTexture {
                 ref src,
                 dst,
