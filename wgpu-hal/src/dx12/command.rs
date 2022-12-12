@@ -288,7 +288,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             if cmd_buf.closed {
                 self.free_lists.push(cmd_buf.raw);
             } else {
-                cmd_buf.raw.close();
+                cmd_buf.raw.destroy();
             }
         }
         self.allocator.reset();
