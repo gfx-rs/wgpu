@@ -1,6 +1,6 @@
 struct PushConstants {
     index: u32,
-    double: vec2<f32>,
+    double: vec2<f64>,
 }
 
 struct FragmentIn {
