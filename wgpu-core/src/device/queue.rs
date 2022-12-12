@@ -582,7 +582,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let mut trace = trace.lock();
             let data_path = trace.make_binary("bin", data);
             trace.add(Action::WriteTexture {
-                to: destination.clone(),
+                to: *destination,
                 data: data_path,
                 layout: *data_layout,
                 size: *size,

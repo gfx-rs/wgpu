@@ -4957,7 +4957,7 @@ pub struct BindGroupLayoutEntry {
 /// Corresponds to [WebGPU `GPUImageCopyBuffer`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpuimagecopybuffer).
 #[repr(C)]
-#[derive(Clone, Debug)]
+#[derive(Copy, Clone, Debug)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub struct ImageCopyBuffer<B> {

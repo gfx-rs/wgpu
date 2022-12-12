@@ -704,8 +704,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         #[cfg(feature = "trace")]
         if let Some(ref mut list) = cmd_buf.commands {
             list.push(TraceCommand::CopyBufferToTexture {
-                src: source.clone(),
-                dst: destination.clone(),
+                src: *source,
+                dst: *destination,
                 size: *copy_size,
             });
         }
@@ -838,8 +838,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         #[cfg(feature = "trace")]
         if let Some(ref mut list) = cmd_buf.commands {
             list.push(TraceCommand::CopyTextureToBuffer {
-                src: source.clone(),
-                dst: destination.clone(),
+                src: *source,
+                dst: *destination,
                 size: *copy_size,
             });
         }
@@ -1001,8 +1001,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         #[cfg(feature = "trace")]
         if let Some(ref mut list) = cmd_buf.commands {
             list.push(TraceCommand::CopyTextureToTexture {
-                src: source.clone(),
-                dst: destination.clone(),
+                src: *source,
+                dst: *destination,
                 size: *copy_size,
             });
         }
