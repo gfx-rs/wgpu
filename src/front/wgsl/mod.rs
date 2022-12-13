@@ -1630,8 +1630,13 @@ impl Parser {
 
         let expression = match *ctx.resolve_type(value)? {
             crate::TypeInner::Scalar { kind, width } => crate::Expression::AtomicResult {
-                kind,
-                width,
+                ty: ctx.types.insert(
+                    crate::Type {
+                        name: None,
+                        inner: crate::TypeInner::Scalar { kind, width },
+                    },
+                    NagaSpan::UNDEFINED,
+                ),
                 comparison: false,
             },
             _ => return Err(Error::InvalidAtomicOperandType(value_span)),
@@ -1861,9 +1866,48 @@ impl Parser {
 
                     let expression = match *ctx.resolve_type(value)? {
                         crate::TypeInner::Scalar { kind, width } => {
+                            let bool_ty = ctx.types.insert(
+                                crate::Type {
+                                    name: None,
+                                    inner: crate::TypeInner::Scalar {
+                                        kind: crate::ScalarKind::Bool,
+                                        width: crate::BOOL_WIDTH,
+                                    },
+                                },
+                                NagaSpan::UNDEFINED,
+                            );
+                            let scalar_ty = ctx.types.insert(
+                                crate::Type {
+                                    name: None,
+                                    inner: crate::TypeInner::Scalar { kind, width },
+                                },
+                                NagaSpan::UNDEFINED,
+                            );
+                            let struct_ty = ctx.types.insert(
+                                crate::Type {
+                                    name: Some("__atomic_compare_exchange_result".to_string()),
+                                    inner: crate::TypeInner::Struct {
+                                        members: vec![
+                                            crate::StructMember {
+                                                name: Some("old_value".to_string()),
+                                                ty: scalar_ty,
+                                                binding: None,
+                                                offset: 0,
+                                            },
+                                            crate::StructMember {
+                                                name: Some("exchanged".to_string()),
+                                                ty: bool_ty,
+                                                binding: None,
+                                                offset: 4,
+                                            },
+                                        ],
+                                        span: 8,
+                                    },
+                                },
+                                NagaSpan::UNDEFINED,
+                            );
                             crate::Expression::AtomicResult {
-                                kind,
-                                width,
+                                ty: struct_ty,
                                 comparison: true,
                             }
                         }

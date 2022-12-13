@@ -1401,11 +1401,7 @@ pub enum Expression {
     /// Result of calling another function.
     CallResult(Handle<Function>),
     /// Result of an atomic operation.
-    AtomicResult {
-        kind: ScalarKind,
-        width: Bytes,
-        comparison: bool,
-    },
+    AtomicResult { ty: Handle<Type>, comparison: bool },
     /// Get the length of an array.
     /// The expression must resolve to a pointer to an array with a dynamic size.
     ///

@@ -1,5 +1,8 @@
 #[cfg(feature = "validate")]
-use super::{compose::validate_compose, FunctionInfo, ShaderStages, TypeFlags};
+use super::{
+    compose::validate_compose, validate_atomic_compare_exchange_struct, FunctionInfo, ShaderStages,
+    TypeFlags,
+};
 #[cfg(feature = "validate")]
 use crate::arena::UniqueArena;
 
@@ -115,8 +118,8 @@ pub enum ExpressionError {
     WrongArgumentCount(crate::MathFunction),
     #[error("Argument [{1}] to {0:?} as expression {2:?} has an invalid type.")]
     InvalidArgumentType(crate::MathFunction, u32, Handle<crate::Expression>),
-    #[error("Atomic result type can't be {0:?} of {1} bytes")]
-    InvalidAtomicResultType(crate::ScalarKind, crate::Bytes),
+    #[error("Atomic result type can't be {0:?}")]
+    InvalidAtomicResultType(Handle<crate::Type>),
     #[error("Shader requires capability {0:?}")]
     MissingCapabilities(super::Capabilities),
 }
@@ -1389,19 +1392,27 @@ impl super::Validator {
                 ShaderStages::all()
             }
             E::CallResult(function) => other_infos[function.index()].available_stages,
-            E::AtomicResult {
-                kind,
-                width,
-                comparison: _,
-            } => {
-                let good = match kind {
-                    crate::ScalarKind::Uint | crate::ScalarKind::Sint => {
-                        self.check_width(kind, width)
+            E::AtomicResult { ty, comparison } => {
+                let scalar_predicate = |ty: &crate::TypeInner| match ty {
+                    &crate::TypeInner::Scalar {
+                        kind: kind @ (crate::ScalarKind::Uint | crate::ScalarKind::Sint),
+                        width,
+                    } => self.check_width(kind, width),
+                    _ => false,
+                };
+                let good = match &module.types[ty].inner {
+                    ty if !comparison => scalar_predicate(ty),
+                    &crate::TypeInner::Struct { ref members, .. } if comparison => {
+                        validate_atomic_compare_exchange_struct(
+                            &module.types,
+                            members,
+                            scalar_predicate,
+                        )
                     }
                     _ => false,
                 };
                 if !good {
-                    return Err(ExpressionError::InvalidAtomicResultType(kind, width));
+                    return Err(ExpressionError::InvalidAtomicResultType(ty));
                 }
                 ShaderStages::all()
             }

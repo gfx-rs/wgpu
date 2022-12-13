@@ -412,3 +412,20 @@ impl Validator {
         Ok(mod_info)
     }
 }
+
+#[cfg(feature = "validate")]
+fn validate_atomic_compare_exchange_struct(
+    types: &UniqueArena<crate::Type>,
+    members: &[crate::StructMember],
+    scalar_predicate: impl FnOnce(&crate::TypeInner) -> bool,
+) -> bool {
+    members.len() == 2
+        && members[0].name.as_deref() == Some("old_value")
+        && scalar_predicate(&types[members[0].ty].inner)
+        && members[1].name.as_deref() == Some("exchanged")
+        && types[members[1].ty].inner
+            == crate::TypeInner::Scalar {
+                kind: crate::ScalarKind::Bool,
+                width: crate::BOOL_WIDTH,
+            }
+}
