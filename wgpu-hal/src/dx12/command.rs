@@ -228,35 +228,32 @@ impl super::CommandEncoder {
 
 impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     unsafe fn begin_encoding(&mut self, label: crate::Label) -> Result<(), crate::DeviceError> {
-        let list = match self.free_lists.pop() {
-            Some(list) => {
-                if list
+        let list = loop {
+            if let Some(list) = self.free_lists.pop() {
+                let reset_result = list
                     .reset(self.allocator, native::PipelineState::null())
-                    .into_result()
-                    .is_ok()
-                {
-                    list
+                    .into_result();
+                if reset_result.is_ok() {
+                    break Some(list);
                 } else {
                     list.destroy();
-                    self.device
-                        .create_graphics_command_list(
-                            native::CmdListType::Direct,
-                            self.allocator,
-                            native::PipelineState::null(),
-                            0,
-                        )
-                        .into_device_result("Create command list")?
                 }
+            } else {
+                break None;
             }
-            None => self
-                .device
+        };
+
+        let list = if let Some(list) = list {
+            list
+        } else {
+            self.device
                 .create_graphics_command_list(
                     native::CmdListType::Direct,
                     self.allocator,
                     native::PipelineState::null(),
                     0,
                 )
-                .into_device_result("Create command list")?,
+                .into_device_result("Create command list")?
         };
 
         if let Some(label) = label {
