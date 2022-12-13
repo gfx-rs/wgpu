@@ -236,7 +236,9 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 if reset_result.is_ok() {
                     break Some(list);
                 } else {
-                    list.destroy();
+                    unsafe {
+                        list.destroy();
+                    }
                 }
             } else {
                 break None;
@@ -271,7 +273,9 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             if list.close().into_result().is_ok() {
                 self.free_lists.push(list);
             } else {
-                list.destroy();
+                unsafe {
+                    list.destroy();
+                }
             }
         }
     }
@@ -285,7 +289,9 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             if cmd_buf.closed {
                 self.free_lists.push(cmd_buf.raw);
             } else {
-                cmd_buf.raw.destroy();
+                unsafe {
+                    cmd_buf.raw.destroy();
+                }
             }
         }
         self.allocator.reset();
