@@ -85,7 +85,7 @@ replay = ["serde", "wgc/replay"]
 angle = ["wgc/angle"]
 webgl = ["hal", "wgc"]
 emscripten = ["webgl"]
-vulkan-portability = ["wgc/vulkan-portability"]
+vulkan-portability = ["wgc/vulkan"]
 expose-ids = []
 
 # wgpu-core is always available as an optional dependency, "wgc".
@@ -115,7 +115,7 @@ workspace = true
 features = ["dx11", "dx12"]
 
 # We want the wgpu-core Vulkan backend on Unix (but not Emscripten) and Windows.
-[target.'cfg(any(windows, all(unix, not(target_arch = "emscripten"))))'.dependencies.wgc]
+[target.'cfg(any(windows, all(unix, not(target_arch = "emscripten"), not(target_os = "ios"), not(target_os = "macos"))))'.dependencies.wgc]
 workspace = true
 features = ["vulkan"]
 
@@ -164,7 +164,7 @@ pollster.workspace = true
 png.workspace = true
 nanorand = { workspace = true, features = ["wyrand"] }
 wasm-bindgen-test.workspace = true
-winit.workspace = true # for "halmark" example
+winit.workspace = true                                 # for "halmark" example
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 async-executor.workspace = true
