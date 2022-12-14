@@ -7,6 +7,7 @@ use wgpu::{Adapter, Device, DownlevelFlags, Instance, Queue, Surface};
 use wgt::{Backends, DeviceDescriptor, DownlevelCapabilities, Features, Limits};
 
 pub mod image;
+mod isolation;
 
 const CANVAS_ID: &str = "test-canvas";
 
@@ -167,12 +168,15 @@ impl TestParameters {
         self
     }
 }
+
 pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(TestingContext)) {
     // We don't actually care if it fails
     #[cfg(not(target_arch = "wasm32"))]
     let _ = env_logger::try_init();
     #[cfg(target_arch = "wasm32")]
     let _ = console_log::init_with_level(log::Level::Info);
+
+    let _test_guard = isolation::OneTestPerProcessGuard::new();
 
     let (adapter, _) = initialize_adapter();
 
