@@ -224,12 +224,12 @@ impl<'a> ConstantSolver<'a> {
                                         ScalarValue::Sint(a),
                                         ScalarValue::Sint(b),
                                         ScalarValue::Sint(c),
-                                    ) => ScalarValue::Sint(a.max(b).min(c)),
+                                    ) => ScalarValue::Sint(a.clamp(b, c)),
                                     (
                                         ScalarValue::Uint(a),
                                         ScalarValue::Uint(b),
                                         ScalarValue::Uint(c),
-                                    ) => ScalarValue::Uint(a.max(b).min(c)),
+                                    ) => ScalarValue::Uint(a.clamp(b, c)),
                                     (
                                         ScalarValue::Float(a),
                                         ScalarValue::Float(b),
