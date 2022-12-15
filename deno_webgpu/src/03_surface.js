@@ -16,9 +16,10 @@
   const { _device, assertDevice, createGPUTexture } = window.__bootstrap.webgpu;
 
   const _surfaceRid = Symbol("[[surfaceRid]]");
-  const _config = Symbol("[[config]]");
+  const _configuration = Symbol("[[configuration]]");
   const _width = Symbol("[[width]]");
   const _height = Symbol("[[height]]");
+  const _canvas = Symbol("[[canvas]]");
   class GPUCanvasContext {
     [_surfaceRid];
     /** @type {number} */
@@ -27,7 +28,13 @@
     [_height];
     /** @type {InnerGPUDevice} */
     [_device];
-    [_config];
+    [_configuration];
+    [_canvas];
+
+    get canvas() {
+      webidl.assertBranded(this, GPUCanvasContextPrototype);
+      return this[_canvas];
+    }
 
     constructor() {
       webidl.illegalConstructor();
@@ -43,7 +50,7 @@
       });
 
       this[_device] = configuration.device[_device];
-      this[_config] = configuration;
+      this[_configuration] = configuration;
       const device = assertDevice(this, { prefix, context: "configuration.device" });
 
       const { err } = ops.op_webgpu_surface_configure({
@@ -62,12 +69,18 @@
     unconfigure() {
       webidl.assertBranded(this, GPUCanvasContextPrototype);
 
-      // TODO
+      this[_configuration] = null;
+      this[_device] = null;
     }
 
     getCurrentTexture() {
       webidl.assertBranded(this, GPUCanvasContextPrototype);
       const prefix = "Failed to execute 'getCurrentTexture' on 'GPUCanvasContext'";
+
+      if (this[_configuration] === null) {
+        throw new DOMException("context is not configured.", "InvalidStateError");
+      }
+
       const device = assertDevice(this, { prefix, context: "this" });
 
       const { rid } = ops.op_webgpu_surface_get_current_texture(device.rid, this[_surfaceRid]);
@@ -82,8 +95,8 @@
           mipLevelCount: 1,
           sampleCount: 1,
           dimension: "2d",
-          format: this[_config].format,
-          usage: this[_config].usage,
+          format: this[_configuration].format,
+          usage: this[_configuration].usage,
         },
         device,
         rid,
@@ -92,7 +105,8 @@
       return texture;
     }
 
-    present() { // TODO: not part of spec
+    // Extended from spec. Required to present the texture; browser don't need this.
+    present() {
       webidl.assertBranded(this, GPUCanvasContextPrototype);
       const prefix = "Failed to execute 'present' on 'GPUCanvasContext'";
       const device = assertDevice(this, { prefix, context: "this" });
@@ -101,11 +115,10 @@
   }
   const GPUCanvasContextPrototype = GPUCanvasContext.prototype;
 
-  function createCanvasContext(surfaceRid, width, height) {
+  function createCanvasContext(options) {
     const canvasContext = webidl.createBranded(GPUCanvasContext);
-    canvasContext[_surfaceRid] = surfaceRid;
-    canvasContext[_width] = width;
-    canvasContext[_height] = height;
+    canvasContext[_surfaceRid] = options.surfaceRid;
+    canvasContext[_canvas] = options.canvas;
     return canvasContext;
   }
 
