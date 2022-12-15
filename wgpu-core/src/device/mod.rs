@@ -1732,6 +1732,9 @@ impl<A: HalApi> Device<A> {
         // Record binding info for validating dynamic offsets
         if dynamic {
             dynamic_binding_info.push(binding_model::BindGroupDynamicBindingData {
+                binding_idx: binding,
+                buffer_size: buffer.size,
+                binding_range: bb.offset..bind_end,
                 maximum_dynamic_offset: buffer.size - bind_end,
                 binding_type: binding_ty,
             });
