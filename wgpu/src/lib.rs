@@ -494,12 +494,12 @@ trait Context: Debug + Send + Sized + Sync {
         buffer: &Self::BufferId,
         offset: wgt::BufferAddress,
         size: wgt::BufferSize,
-    );
+    ) -> Option<()>;
     fn queue_create_staging_buffer(
         &self,
         queue: &Self::QueueId,
         size: BufferSize,
-    ) -> QueueWriteBuffer;
+    ) -> Option<QueueWriteBuffer>;
     fn queue_write_staging_buffer(
         &self,
         queue: &Self::QueueId,
@@ -3656,15 +3656,15 @@ impl Queue {
         buffer: &'a Buffer,
         offset: BufferAddress,
         size: BufferSize,
-    ) -> QueueWriteBufferView<'a> {
-        Context::queue_validate_write_buffer(&*self.context, &self.id, &buffer.id, offset, size);
-        let staging_buffer = Context::queue_create_staging_buffer(&*self.context, &self.id, size);
-        QueueWriteBufferView {
+    ) -> Option<QueueWriteBufferView<'a>> {
+        Context::queue_validate_write_buffer(&*self.context, &self.id, &buffer.id, offset, size)?;
+        let staging_buffer = Context::queue_create_staging_buffer(&*self.context, &self.id, size)?;
+        Some(QueueWriteBufferView {
             queue: self,
             buffer,
             offset,
             inner: staging_buffer,
-        }
+        })
     }
 
     /// Schedule a write of some data into a texture.

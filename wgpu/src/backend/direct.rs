@@ -2296,7 +2296,7 @@ impl crate::Context for Context {
             *queue => global.queue_write_buffer(queue.id, buffer.id, offset, data)
         ) {
             Ok(()) => (),
-            Err(err) => self.handle_error_fatal(err, "Queue::write_buffer"),
+            Err(err) => self.handle_error_nolabel(&queue.error_sink, err, "Queue::write_buffer"),
         }
     }
 
@@ -2306,13 +2306,16 @@ impl crate::Context for Context {
         buffer: &Self::BufferId,
         offset: wgt::BufferAddress,
         size: wgt::BufferSize,
-    ) {
+    ) -> Option<()> {
         let global = &self.0;
         match wgc::gfx_select!(
             *queue => global.queue_validate_write_buffer(queue.id, buffer.id, offset, size.get())
         ) {
-            Ok(()) => (),
-            Err(err) => self.handle_error_fatal(err, "Queue::write_buffer_with"),
+            Ok(()) => Some(()),
+            Err(err) => {
+                self.handle_error_nolabel(&queue.error_sink, err, "Queue::write_buffer_with");
+                None
+            }
         }
     }
 
@@ -2320,19 +2323,22 @@ impl crate::Context for Context {
         &self,
         queue: &Self::QueueId,
         size: wgt::BufferSize,
-    ) -> QueueWriteBuffer {
+    ) -> Option<QueueWriteBuffer> {
         let global = &self.0;
         match wgc::gfx_select!(
             *queue => global.queue_create_staging_buffer(queue.id, size, ())
         ) {
-            Ok((buffer_id, ptr)) => QueueWriteBuffer {
+            Ok((buffer_id, ptr)) => Some(QueueWriteBuffer {
                 buffer_id,
                 mapping: BufferMappedRange {
                     ptr,
                     size: size.get() as usize,
                 },
-            },
-            Err(err) => self.handle_error_fatal(err, "Queue::write_buffer_with"),
+            }),
+            Err(err) => {
+                self.handle_error_nolabel(&queue.error_sink, err, "Queue::write_buffer_with");
+                None
+            }
         }
     }
 
