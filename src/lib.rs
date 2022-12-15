@@ -1262,7 +1262,7 @@ pub enum Expression {
     /// Load a value indirectly.
     ///
     /// For [`TypeInner::Atomic`] the result is a corresponding scalar.
-    /// For other types behind the pointer<T>, the result is T.
+    /// For other types behind the `pointer<T>`, the result is `T`.
     Load { pointer: Handle<Expression> },
     /// Sample a point from a sampled or a depth image.
     ImageSample {
@@ -1562,7 +1562,7 @@ pub enum Statement {
     ///
     /// For [`TypeInner::Atomic`] type behind the pointer, the value
     /// has to be a corresponding scalar.
-    /// For other types behind the pointer<T>, the value is T.
+    /// For other types behind the `pointer<T>`, the value is `T`.
     ///
     /// This statement is a barrier for any operations on the
     /// `Expression::LocalVariable` or `Expression::GlobalVariable`
