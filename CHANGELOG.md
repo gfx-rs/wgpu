@@ -191,7 +191,6 @@ Additionally `Surface::get_default_config` now returns an Option and returns Non
 ### Testing/Internal
 
 - Update the `minimum supported rust version` to 1.64
-- Use cargo 1.64 workspace inheritance feature. By @jinleili in [#3107](https://github.com/gfx-rs/wgpu/pull/3107)
 - Move `ResourceMetadata` into its own module. By @jimblandy in [#3213](https://github.com/gfx-rs/wgpu/pull/3213)
 - Add WebAssembly testing infrastructure. By @haraldreingruber in [#3238](https://github.com/gfx-rs/wgpu/pull/3238)
 - Error message when you forget to use cargo-nextest. By @cwfitzgerald in [#3293](https://github.com/gfx-rs/wgpu/pull/3293)
