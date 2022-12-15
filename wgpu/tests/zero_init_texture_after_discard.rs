@@ -7,7 +7,7 @@ use wasm_bindgen_test::*;
 #[test]
 #[wasm_bindgen_test]
 fn discarding_color_target_resets_texture_init_state_check_visible_on_copy_after_submit() {
-    initialize_test(TestParameters::default(), |ctx| {
+    initialize_test(TestParameters::default().webgl2_failure(), |ctx| {
         let (texture, readback_buffer) =
             create_white_texture_and_readback_buffer(&ctx, wgpu::TextureFormat::Rgba8UnormSrgb);
         {
@@ -43,7 +43,7 @@ fn discarding_color_target_resets_texture_init_state_check_visible_on_copy_after
 #[test]
 #[wasm_bindgen_test]
 fn discarding_color_target_resets_texture_init_state_check_visible_on_copy_in_same_encoder() {
-    initialize_test(TestParameters::default(), |ctx| {
+    initialize_test(TestParameters::default().webgl2_failure(), |ctx| {
         let (texture, readback_buffer) =
             create_white_texture_and_readback_buffer(&ctx, wgpu::TextureFormat::Rgba8UnormSrgb);
         {

@@ -307,9 +307,12 @@ fn clear_texture_tests(
 }
 
 #[test]
+#[wasm_bindgen_test]
 fn clear_texture_2d_uncompressed() {
     initialize_test(
-        TestParameters::default().features(wgpu::Features::CLEAR_TEXTURE),
+        TestParameters::default()
+            .webgl2_failure()
+            .features(wgpu::Features::CLEAR_TEXTURE),
         |ctx| {
             clear_texture_tests(&ctx, TEXTURE_FORMATS_UNCOMPRESSED, true, true);
             clear_texture_tests(&ctx, TEXTURE_FORMATS_DEPTH, false, false);

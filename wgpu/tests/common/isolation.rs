@@ -27,7 +27,10 @@ pub struct OneTestPerProcessGuard(());
 impl OneTestPerProcessGuard {
     pub fn new() -> Self {
         let other_tests_in_flight = TEST_ACTIVE_IN_PROCESS.swap(true, Ordering::SeqCst);
-        if other_tests_in_flight {
+
+        // We never abort if we're on wasm. Wasm tests are inherently single threaded, and panics cannot
+        // unwind the stack and trigger all the guards, so we don't actually need to check.
+        if other_tests_in_flight && !cfg!(target_arch = "wasm32") {
             log::error!("{}", OTHER_TEST_IN_PROGRESS_ERROR);
             // Hard exit to call attention to the error
             std::process::abort();
