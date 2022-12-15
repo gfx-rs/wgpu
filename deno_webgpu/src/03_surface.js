@@ -13,9 +13,10 @@
   const ops = core.ops;
   const webidl = window.__bootstrap.webidl;
   const { Symbol } = window.__bootstrap.primordials;
-  const { _device, assertDevice } = window.__bootstrap.webgpu;
+  const { _device, assertDevice, createGPUTexture } = window.__bootstrap.webgpu;
 
   const _surfaceRid = Symbol("[[surfaceRid]]");
+  const _config = Symbol("[[config]]");
   const _width = Symbol("[[width]]");
   const _height = Symbol("[[height]]");
   class GPUCanvasContext {
@@ -24,6 +25,9 @@
     [_width];
     /** @type {number} */
     [_height];
+    /** @type {InnerGPUDevice} */
+    [_device];
+    [_config];
 
     constructor() {
       webidl.illegalConstructor();
@@ -38,16 +42,18 @@
         context: "Argument 1",
       });
 
-      const device = assertDevice({ [_device]: configuration.device }, { prefix, context: "configuration.device" });
+      this[_device] = configuration.device[_device];
+      this[_config] = configuration;
+      const device = assertDevice(this, { prefix, context: "configuration.device" });
 
       const { err } = ops.op_webgpu_surface_configure({
-        surface_rid: this[_surfaceRid],
+        surfaceRid: this[_surfaceRid],
         deviceRid: device.rid,
         format: configuration.format,
         usage: configuration.usage,
         width: this[_width],
         height: this[_height],
-        alpha_mode: configuration.alphaMode,
+        alphaMode: configuration.alphaMode,
       });
 
       device.pushError(err);
@@ -61,15 +67,45 @@
 
     getCurrentTexture() {
       webidl.assertBranded(this, GPUCanvasContextPrototype);
+      const prefix = "Failed to execute 'getCurrentTexture' on 'GPUCanvasContext'";
+      const device = assertDevice(this, { prefix, context: "this" });
 
+      const { rid } = ops.op_webgpu_surface_get_current_texture(device.rid, this[_surfaceRid]);
+
+      const texture = createGPUTexture(
+        {
+          size: {
+            width: this[_width],
+            height: this[_height],
+            depthOrArrayLayers: 1,
+          },
+          mipLevelCount: 1,
+          sampleCount: 1,
+          dimension: "2d",
+          format: this[_config].format,
+          usage: this[_config].usage,
+        },
+        device,
+        rid,
+      );
+      device.trackResource(texture);
+      return texture;
+    }
+
+    present() { // TODO: not part of spec
+      webidl.assertBranded(this, GPUCanvasContextPrototype);
+      const prefix = "Failed to execute 'present' on 'GPUCanvasContext'";
+      const device = assertDevice(this, { prefix, context: "this" });
+      ops.op_webgpu_surface_present(device.rid, this[_surfaceRid]);
     }
   }
   const GPUCanvasContextPrototype = GPUCanvasContext.prototype;
 
-  function createCanvasContext(rawHandleRid) {
+  function createCanvasContext(surfaceRid, width, height) {
     const canvasContext = webidl.createBranded(GPUCanvasContext);
-    const { rid } = ops.op_webgpu_create_surface(rawHandleRid);
-    canvasContext[_surfaceRid] = rid;
+    canvasContext[_surfaceRid] = surfaceRid;
+    canvasContext[_width] = width;
+    canvasContext[_height] = height;
     return canvasContext;
   }
 

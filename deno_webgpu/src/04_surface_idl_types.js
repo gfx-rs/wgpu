@@ -30,6 +30,19 @@
     ],
   );
 
+  // NON-SPEC: ENUM: GPUPresentMode
+  webidl.converters["GPUPresentMode"] = webidl.createEnumConverter(
+    "GPUPresentMode",
+    [
+      "autoVsync",
+      "autoNoVsync",
+      "fifo",
+      "fifoRelaxed",
+      "immediate",
+      "mailbox",
+    ],
+  );
+
   // DICT: GPUCanvasConfiguration
   const dictMembersGPUCanvasConfiguration = [
     { key: "device", converter: webidl.converters.GPUDevice, required: true },
@@ -47,6 +60,10 @@
       key: "alphaMode",
       converter: webidl.converters["GPUCanvasAlphaMode"],
       defaultValue: "opaque",
+    },
+    {
+      key: "presentMode",
+      converter: webidl.converters["GPUPresentMode"],
     },
   ];
   webidl.converters["GPUCanvasConfiguration"] = webidl
