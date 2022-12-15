@@ -329,7 +329,10 @@ fn main() {
     framework::run::<Example>("boids");
 }
 
+wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
+
 #[test]
+#[wasm_bindgen_test::wasm_bindgen_test]
 fn boids() {
     framework::test::<Example>(framework::FrameworkRefTest {
         image_path: "/examples/boids/screenshot.png",

@@ -818,7 +818,10 @@ fn main() {
     framework::run::<Example>("water");
 }
 
+wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
+
 #[test]
+#[wasm_bindgen_test::wasm_bindgen_test]
 fn water() {
     framework::test::<Example>(framework::FrameworkRefTest {
         image_path: "/examples/water/screenshot.png",
