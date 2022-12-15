@@ -1364,8 +1364,8 @@ pub struct TextureViewDescriptor<'a> {
     pub label: Label<'a>,
     /// Format of the texture view. At this time, it must be the same as the underlying format of the texture.
     pub format: Option<TextureFormat>,
-    /// The dimension of the texture view. For 1D textures, this must be `1D`. For 2D textures it must be one of
-    /// `D2`, `D2Array`, `Cube`, and `CubeArray`. For 3D textures it must be `3D`
+    /// The dimension of the texture view. For 1D textures, this must be `D1`. For 2D textures it must be one of
+    /// `D2`, `D2Array`, `Cube`, and `CubeArray`. For 3D textures it must be `D3`
     pub dimension: Option<TextureViewDimension>,
     /// Aspect of the texture. Color textures must be [`TextureAspect::All`].
     pub aspect: TextureAspect,
