@@ -19,7 +19,7 @@ pub struct PresentationTimer {
 impl PresentationTimer {
     /// Generates a new timer.
     pub fn new() -> Self {
-        // Default to 1 / 1 incase the call to timebase_info fails.
+        // Default to 1 / 1 in case the call to timebase_info fails.
         let mut scale = MachTimebaseInfo {
             numerator: 1,
             denominator: 1,
