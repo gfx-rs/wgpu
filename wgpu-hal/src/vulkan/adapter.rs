@@ -1583,10 +1583,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
         })
     }
 
-    unsafe fn correlate_presentation_timestamp(
-        &self,
-        user_timestamp_function: &mut dyn FnMut(),
-    ) -> wgt::PresentationTimestamp {
+    unsafe fn get_presentation_timestamp(&self) -> wgt::PresentationTimestamp {
         // VK_GOOGLE_display_timing is the only way to get presentation
         // timestamps on vulkan right now and it is only ever available
         // on android and linux. This includes mac, but there's no alternative
@@ -1597,7 +1594,6 @@ impl crate::Adapter<super::Api> for super::Adapter {
                 tv_sec: 0,
                 tv_nsec: 0,
             };
-            user_timestamp_function();
             unsafe {
                 libc::clock_gettime(libc::CLOCK_MONOTONIC, &mut timespec);
             }
@@ -1608,7 +1604,6 @@ impl crate::Adapter<super::Api> for super::Adapter {
         }
         #[cfg(not(unix))]
         {
-            user_timestamp_function();
             wgt::PresentationTimestamp::INVALID_TIMESTAMP
         }
     }

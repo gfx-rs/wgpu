@@ -25,10 +25,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
         todo!()
     }
 
-    unsafe fn correlate_presentation_timestamp(
-        &self,
-        user_timestamp_function: &mut dyn FnMut(),
-    ) -> wgt::PresentationTimestamp {
+    unsafe fn get_presentation_timestamp(&self) -> wgt::PresentationTimestamp {
         todo!()
     }
 }

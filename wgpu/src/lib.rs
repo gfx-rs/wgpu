@@ -231,13 +231,10 @@ trait Context: Debug + Send + Sized + Sync {
         adapter: &Self::AdapterId,
         format: TextureFormat,
     ) -> TextureFormatFeatures;
-    fn adapter_correlate_presentation_timestamp<F, T>(
+    fn adapter_get_presentation_timestamp(
         &self,
         adapter: &Self::AdapterId,
-        function: F,
-    ) -> (PresentationTimestamp, T)
-    where
-        F: FnOnce() -> T;
+    ) -> PresentationTimestamp;
 
     fn surface_get_capabilities(
         &self,
@@ -2087,18 +2084,19 @@ impl Adapter {
         Context::adapter_get_texture_format_features(&*self.context, &self.id, format)
     }
 
-    /// Correleates presentation timestamps with a given user timestamp by generating a presentation timestamp
-    /// immediately after calling the user's timestamp function.
+    /// Generates a timestamp using the clock used by the presentation engine.
     ///
     /// When comparing completely opaque timestamp systems, we need a way of generating timestamps that signal
-    /// the exact same time. This function allows you to generate a timestamp (such as an [Instant]) at the
-    /// exact same time as a `PresentationTimestamp` is generated, allowing you to translate from one to another.
+    /// the exact same time. You can do this by calling your own timestamp function immediately after a call to
+    /// this function. This should result in timestamps that are 0.5 to 5 microseconds apart. There are locks
+    /// that must be taken during the call, so don't call your function before.
     ///
     /// ```no_run
     /// # let adapter: wgpu::Adapter = panic!();
     /// # let some_code = || wgpu::PresentationTimestamp::INVALID_TIMESTAMP;
     /// use std::time::{Duration, Instant};
-    /// let (presentation, instant) = adapter.correlate_presentation_timestamp(Instant::now);
+    /// let presentation = adapter.get_presentation_timestamp();
+    /// let instant = Instant::now();
     ///
     /// // We can now turn a new presentation timestamp into an Instant.
     /// let some_pres_timestamp = some_code();
@@ -2107,18 +2105,8 @@ impl Adapter {
     /// ```
     //
     /// [Instant]: std::time::Instant
-    pub fn correlate_presentation_timestamp<F, T>(
-        &self,
-        user_timestamp_function: F,
-    ) -> (PresentationTimestamp, T)
-    where
-        F: FnOnce() -> T,
-    {
-        Context::adapter_correlate_presentation_timestamp(
-            &*self.context,
-            &self.id,
-            user_timestamp_function,
-        )
+    pub fn get_presentation_timestamp(&self) -> PresentationTimestamp {
+        Context::adapter_get_presentation_timestamp(&*self.context, &self.id)
     }
 }
 

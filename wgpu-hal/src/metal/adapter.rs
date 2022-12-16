@@ -320,11 +320,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
         })
     }
 
-    unsafe fn correlate_presentation_timestamp(
-        &self,
-        user_tiemstamp_function: &mut dyn FnMut(),
-    ) -> wgt::PresentationTimestamp {
-        user_tiemstamp_function();
+    unsafe fn get_presentation_timestamp(&self) -> wgt::PresentationTimestamp {
         let timestamp = self.shared.presentation_timer.get_timestamp_ns();
 
         wgt::PresentationTimestamp(timestamp)

@@ -234,15 +234,10 @@ pub trait Adapter<A: Api>: Send + Sync {
     /// `None` means presentation is not supported for it.
     unsafe fn surface_capabilities(&self, surface: &A::Surface) -> Option<SurfaceCapabilities>;
 
-    /// Creates a [PresentationTimestamp](wgt::PresentationTimestamp) then immediately calls the user_timestamp_function,
-    /// allowing the user to correlate the presentation timestamp with another set of timestamps (like `Instant`s).
-    ///
-    /// While user_timestamp_function is an FnMut, this is because of higher level internal details. It will only ever be called once
-    /// and it will unconditionally be called.
-    unsafe fn correlate_presentation_timestamp(
-        &self,
-        user_timestamp_function: &mut dyn FnMut(),
-    ) -> wgt::PresentationTimestamp;
+    /// Creates a [`PresentationTimestamp`] using the adapter's WSI.
+    /// 
+    /// [`PresentationTimestamp`]: wgt::PresentationTimestamp
+    unsafe fn get_presentation_timestamp(&self) -> wgt::PresentationTimestamp;
 }
 
 pub trait Device<A: Api>: Send + Sync {
