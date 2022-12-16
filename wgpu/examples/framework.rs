@@ -164,7 +164,7 @@ async fn setup<E: Example>(title: &str) -> Setup {
         let size = window.inner_size();
 
         #[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))]
-        let surface = instance.create_surface(&window);
+        let surface = instance.create_surface(&window).unwrap();
         #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
         let surface = {
             if let Some(offscreen_canvas_setup) = &offscreen_canvas_setup {
@@ -174,7 +174,8 @@ async fn setup<E: Example>(title: &str) -> Setup {
             } else {
                 instance.create_surface(&window)
             }
-        };
+        }
+        .unwrap();
 
         (size, surface)
     };

@@ -1,30 +1,32 @@
 //! Tests for texture copy bounds checks.
 
-use crate::common::{initialize_test, TestParameters};
+use crate::common::{fail_if, initialize_test, TestParameters};
 use std::num::NonZeroU32;
+use wasm_bindgen_test::*;
 
 #[test]
+#[wasm_bindgen_test]
 fn bad_copy_origin() {
     fn try_origin(origin: wgpu::Origin3d, size: wgpu::Extent3d, should_panic: bool) {
-        let mut parameters = TestParameters::default();
-        if should_panic {
-            parameters = parameters.failure();
-        }
+        let parameters = TestParameters::default();
 
         initialize_test(parameters, |ctx| {
             let texture = ctx.device.create_texture(&TEXTURE_DESCRIPTOR);
             let data = vec![255; BUFFER_SIZE as usize];
-            ctx.queue.write_texture(
-                wgpu::ImageCopyTexture {
-                    texture: &texture,
-                    mip_level: 0,
-                    origin,
-                    aspect: wgpu::TextureAspect::All,
-                },
-                &data,
-                BUFFER_COPY_LAYOUT,
-                size,
-            );
+
+            fail_if(&ctx.device, should_panic, || {
+                ctx.queue.write_texture(
+                    wgpu::ImageCopyTexture {
+                        texture: &texture,
+                        mip_level: 0,
+                        origin,
+                        aspect: wgpu::TextureAspect::All,
+                    },
+                    &data,
+                    BUFFER_COPY_LAYOUT,
+                    size,
+                )
+            });
         });
     }
 

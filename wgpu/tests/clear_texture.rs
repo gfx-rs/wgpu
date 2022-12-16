@@ -1,4 +1,5 @@
 use crate::common::{initialize_test, TestParameters, TestingContext};
+use wasm_bindgen_test::*;
 use wgpu::util::align_to;
 
 static TEXTURE_FORMATS_UNCOMPRESSED: &[wgpu::TextureFormat] = &[
@@ -202,9 +203,11 @@ fn single_texture_clear_test(
     size: wgpu::Extent3d,
     dimension: wgpu::TextureDimension,
 ) {
-    println!(
+    log::info!(
         "clearing texture with {:?}, dimension {:?}, size {:?}",
-        format, dimension, size
+        format,
+        dimension,
+        size
     );
 
     let texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
@@ -315,6 +318,7 @@ fn clear_texture_2d_uncompressed() {
 }
 
 #[test]
+#[wasm_bindgen_test]
 fn clear_texture_d32_s8() {
     initialize_test(
         TestParameters::default()

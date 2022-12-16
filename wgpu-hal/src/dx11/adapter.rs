@@ -127,6 +127,7 @@ impl super::Adapter {
             features |= wgt::Features::DEPTH_CLIP_CONTROL;
             features |= wgt::Features::TIMESTAMP_QUERY;
             features |= wgt::Features::PIPELINE_STATISTICS_QUERY;
+            features |= wgt::Features::SHADER_PRIMITIVE_INDEX;
         }
 
         if feature_level >= FL10_1 {

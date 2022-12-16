@@ -20,7 +20,7 @@ struct Viewport {
 
 impl ViewportDesc {
     fn new(window: Window, background: wgpu::Color, instance: &wgpu::Instance) -> Self {
-        let surface = unsafe { instance.create_surface(&window) };
+        let surface = unsafe { instance.create_surface(&window) }.unwrap();
         Self {
             window,
             background,

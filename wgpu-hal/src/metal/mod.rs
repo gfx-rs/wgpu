@@ -231,6 +231,7 @@ struct PrivateCapabilities {
     supports_mutability: bool,
     supports_depth_clip_control: bool,
     supports_preserve_invariance: bool,
+    supports_shader_primitive_index: bool,
     has_unified_memory: Option<bool>,
 }
 
