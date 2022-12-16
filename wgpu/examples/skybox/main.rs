@@ -322,7 +322,7 @@ impl framework::Example for Skybox {
             queue,
             &wgpu::TextureDescriptor {
                 size,
-                mip_level_count: max_mips as u32,
+                mip_level_count: max_mips,
                 sample_count: 1,
                 dimension: wgpu::TextureDimension::D2,
                 format: skybox_format,

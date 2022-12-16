@@ -117,7 +117,7 @@ impl DeviceExt for crate::Device {
                 queue.write_texture(
                     crate::ImageCopyTexture {
                         texture: &texture,
-                        mip_level: mip as u32,
+                        mip_level: mip,
                         origin: crate::Origin3d {
                             x: 0,
                             y: 0,
