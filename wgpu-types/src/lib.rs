@@ -3955,7 +3955,7 @@ pub enum SurfaceStatus {
 
 /// Nanosecond timestamp used by the presentation engine.
 ///
-/// These specific clock depends on the WSI used.
+/// The specific clock depends on the window system integration (WSI) API used.
 ///
 /// <table>
 /// <tr>
