@@ -10,7 +10,7 @@ use super::{CallError, ExpressionError, FunctionError, ModuleInfo, ShaderStages,
 use crate::span::{AddSpan as _, WithSpan};
 use crate::{
     arena::{Arena, Handle},
-    proc::{ResolveContext, ResolveError, TypeResolution},
+    proc::{ResolveContext, TypeResolution},
 };
 use std::ops;
 
@@ -706,12 +706,7 @@ impl FunctionInfo {
             },
         };
 
-        let ty = resolve_context.resolve(expression, |h| {
-            self.expressions
-                .get(h.index())
-                .map(|ei| &ei.ty)
-                .ok_or(ResolveError::ExpressionForwardDependency(h))
-        })?;
+        let ty = resolve_context.resolve(expression, |h| Ok(&self[h].ty))?;
         self.expressions[handle.index()] = ExpressionInfo {
             uniformity,
             ref_count: 0,

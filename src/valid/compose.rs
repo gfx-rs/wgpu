@@ -4,13 +4,11 @@ use crate::{
     proc::TypeResolution,
 };
 
-use crate::arena::{BadHandle, Handle};
+use crate::arena::Handle;
 
 #[derive(Clone, Debug, thiserror::Error)]
 #[cfg_attr(test, derive(PartialEq))]
 pub enum ComposeError {
-    #[error(transparent)]
-    BadHandle(#[from] BadHandle),
     #[error("Composing of type {0:?} can't be done")]
     Type(Handle<crate::Type>),
     #[error("Composing expects {expected} components but {given} were given")]
@@ -28,8 +26,7 @@ pub fn validate_compose(
 ) -> Result<(), ComposeError> {
     use crate::TypeInner as Ti;
 
-    let self_ty = type_arena.get_handle(self_ty_handle)?;
-    match self_ty.inner {
+    match type_arena[self_ty_handle].inner {
         // vectors are composed from scalars or other vectors
         Ti::Vector { size, kind, width } => {
             let mut total = 0;

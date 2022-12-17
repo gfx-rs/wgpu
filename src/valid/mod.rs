@@ -6,6 +6,7 @@ mod analyzer;
 mod compose;
 mod expression;
 mod function;
+mod handles;
 mod interface;
 mod r#type;
 
@@ -13,7 +14,7 @@ mod r#type;
 use crate::arena::{Arena, UniqueArena};
 
 use crate::{
-    arena::{BadHandle, Handle},
+    arena::Handle,
     proc::{LayoutError, Layouter},
     FastHashSet,
 };
@@ -30,6 +31,8 @@ pub use expression::ExpressionError;
 pub use function::{CallError, FunctionError, LocalVariableError};
 pub use interface::{EntryPointError, GlobalVariableError, VaryingError};
 pub use r#type::{Disalignment, TypeError, TypeFlags};
+
+use self::handles::InvalidHandleError;
 
 bitflags::bitflags! {
     /// Validation flags.
@@ -146,8 +149,6 @@ pub struct Validator {
 
 #[derive(Clone, Debug, thiserror::Error)]
 pub enum ConstantError {
-    #[error(transparent)]
-    BadHandle(#[from] BadHandle),
     #[error("The type doesn't match the constant")]
     InvalidType,
     #[error("The component handle {0:?} can not be resolved")]
@@ -160,6 +161,8 @@ pub enum ConstantError {
 
 #[derive(Clone, Debug, thiserror::Error)]
 pub enum ValidationError {
+    #[error(transparent)]
+    InvalidHandle(#[from] InvalidHandleError),
     #[error(transparent)]
     Layouter(#[from] LayoutError),
     #[error("Type {handle:?} '{name}' is invalid")]
@@ -283,7 +286,7 @@ impl Validator {
                 }
             }
             crate::ConstantInner::Composite { ty, ref components } => {
-                match types.get_handle(ty)?.inner {
+                match types[ty].inner {
                     crate::TypeInner::Array {
                         size: crate::ArraySize::Constant(size_handle),
                         ..
@@ -315,6 +318,9 @@ impl Validator {
     ) -> Result<ModuleInfo, WithSpan<ValidationError>> {
         self.reset();
         self.reset_types(module.types.len());
+
+        #[cfg(feature = "validate")]
+        Self::validate_module_handles(module).map_err(|e| e.with_span())?;
 
         self.layouter
             .update(&module.types, &module.constants)

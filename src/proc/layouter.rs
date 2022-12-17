@@ -1,4 +1,4 @@
-use crate::arena::{Arena, BadHandle, Handle, UniqueArena};
+use crate::arena::{Arena, Handle, UniqueArena};
 use std::{fmt::Display, num::NonZeroU32, ops};
 
 /// A newtype struct where its only valid values are powers of 2
@@ -130,8 +130,6 @@ pub enum LayoutErrorInner {
     InvalidStructMemberType(u32, Handle<crate::Type>),
     #[error("Type width must be a power of two")]
     NonPowerOfTwoWidth,
-    #[error("Array size is a bad handle")]
-    BadHandle(#[from] BadHandle),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, thiserror::Error)]
@@ -175,10 +173,7 @@ impl Layouter {
         use crate::TypeInner as Ti;
 
         for (ty_handle, ty) in types.iter().skip(self.layouts.len()) {
-            let size = ty
-                .inner
-                .try_size(constants)
-                .map_err(|error| LayoutErrorInner::BadHandle(error).with(ty_handle))?;
+            let size = ty.inner.size(constants);
             let layout = match ty.inner {
                 Ti::Scalar { width, .. } | Ti::Atomic { width, .. } => {
                     let alignment = Alignment::new(width as u32)

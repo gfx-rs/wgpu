@@ -15,6 +15,15 @@ pub struct BadHandle {
     pub index: usize,
 }
 
+impl BadHandle {
+    fn new<T>(handle: Handle<T>) -> Self {
+        Self {
+            kind: std::any::type_name::<T>(),
+            index: handle.index(),
+        }
+    }
+}
+
 /// A strongly typed reference to an arena item.
 ///
 /// A `Handle` value can be used as an index into an [`Arena`] or [`UniqueArena`].
@@ -121,6 +130,35 @@ pub struct Range<T> {
     inner: ops::Range<u32>,
     #[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(skip))]
     marker: PhantomData<T>,
+}
+
+impl<T> Range<T> {
+    pub(crate) const fn erase_type(self) -> Range<()> {
+        let Self { inner, marker: _ } = self;
+        Range {
+            inner,
+            marker: PhantomData,
+        }
+    }
+}
+
+// NOTE: Keep this diagnostic in sync with that of [`BadHandle`].
+#[derive(Clone, Debug, thiserror::Error)]
+#[error("Handle range {range:?} of {kind} is either not present, or inaccessible yet")]
+pub struct BadRangeError {
+    // This error is used for many `Handle` types, but there's no point in making this generic, so
+    // we just flatten them all to `Handle<()>` here.
+    kind: &'static str,
+    range: Range<()>,
+}
+
+impl BadRangeError {
+    pub fn new<T>(range: Range<T>) -> Self {
+        Self {
+            kind: std::any::type_name::<T>(),
+            range: range.erase_type(),
+        }
+    }
 }
 
 impl<T> Clone for Range<T> {
@@ -282,10 +320,9 @@ impl<T> Arena<T> {
     }
 
     pub fn try_get(&self, handle: Handle<T>) -> Result<&T, BadHandle> {
-        self.data.get(handle.index()).ok_or_else(|| BadHandle {
-            kind: std::any::type_name::<T>(),
-            index: handle.index(),
-        })
+        self.data
+            .get(handle.index())
+            .ok_or_else(|| BadHandle::new(handle))
     }
 
     /// Get a mutable reference to an element in the arena.
@@ -318,6 +355,31 @@ impl<T> Arena<T> {
         {
             let _ = handle;
             Span::default()
+        }
+    }
+
+    /// Assert that `handle` is valid for this arena.
+    pub fn check_contains_handle(&self, handle: Handle<T>) -> Result<(), BadHandle> {
+        if handle.index() < self.data.len() {
+            Ok(())
+        } else {
+            Err(BadHandle::new(handle))
+        }
+    }
+
+    /// Assert that `range` is valid for this arena.
+    pub fn check_contains_range(&self, range: &Range<T>) -> Result<(), BadRangeError> {
+        // Since `range.inner` is a `Range<u32>`, we only need to
+        // check that the start precedes the end, and that the end is
+        // in range.
+        if range.inner.start > range.inner.end
+            || self
+                .check_contains_handle(Handle::new(range.inner.end.try_into().unwrap()))
+                .is_err()
+        {
+            Err(BadRangeError::new(range.clone()))
+        } else {
+            Ok(())
         }
     }
 }
@@ -540,10 +602,18 @@ impl<T: Eq + hash::Hash> UniqueArena<T> {
 
     /// Return this arena's value at `handle`, if that is a valid handle.
     pub fn get_handle(&self, handle: Handle<T>) -> Result<&T, BadHandle> {
-        self.set.get_index(handle.index()).ok_or_else(|| BadHandle {
-            kind: std::any::type_name::<T>(),
-            index: handle.index(),
-        })
+        self.set
+            .get_index(handle.index())
+            .ok_or_else(|| BadHandle::new(handle))
+    }
+
+    /// Assert that `handle` is valid for this arena.
+    pub fn check_contains_handle(&self, handle: Handle<T>) -> Result<(), BadHandle> {
+        if handle.index() < self.set.len() {
+            Ok(())
+        } else {
+            Err(BadHandle::new(handle))
+        }
     }
 }
 

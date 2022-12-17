@@ -2,7 +2,7 @@ use super::{
     analyzer::{FunctionInfo, GlobalUse},
     Capabilities, Disalignment, FunctionError, ModuleInfo,
 };
-use crate::arena::{BadHandle, Handle, UniqueArena};
+use crate::arena::{Handle, UniqueArena};
 
 use crate::span::{AddSpan as _, MapErrWithSpan as _, SpanProvider as _, WithSpan};
 use bit_set::BitSet;
@@ -12,8 +12,6 @@ const MAX_WORKGROUP_SIZE: u32 = 0x4000;
 
 #[derive(Clone, Debug, thiserror::Error)]
 pub enum GlobalVariableError {
-    #[error(transparent)]
-    BadHandle(#[from] BadHandle),
     #[error("Usage isn't compatible with address space {0:?}")]
     InvalidUsage(crate::AddressSpace),
     #[error("Type isn't compatible with address space {0:?}")]
@@ -380,10 +378,7 @@ impl super::Validator {
         use super::TypeFlags;
 
         log::debug!("var {:?}", var);
-        let type_info = self.types.get(var.ty.index()).ok_or_else(|| BadHandle {
-            kind: "type",
-            index: var.ty.index(),
-        })?;
+        let type_info = &self.types[var.ty.index()];
 
         let (required_type_flags, is_resource) = match var.space {
             crate::AddressSpace::Function => {

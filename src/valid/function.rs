@@ -1,6 +1,6 @@
+use crate::arena::Handle;
 #[cfg(feature = "validate")]
 use crate::arena::{Arena, UniqueArena};
-use crate::arena::{BadHandle, Handle};
 
 #[cfg(feature = "validate")]
 use super::validate_atomic_compare_exchange_struct;
@@ -19,8 +19,6 @@ use bit_set::BitSet;
 #[derive(Clone, Debug, thiserror::Error)]
 #[cfg_attr(test, derive(PartialEq))]
 pub enum CallError {
-    #[error(transparent)]
-    BadHandle(#[from] BadHandle),
     #[error("The callee is declared after the caller")]
     ForwardDeclaredFunction,
     #[error("Argument {index} expression is invalid")]
@@ -69,8 +67,6 @@ pub enum LocalVariableError {
 #[derive(Clone, Debug, thiserror::Error)]
 #[cfg_attr(test, derive(PartialEq))]
 pub enum FunctionError {
-    #[error(transparent)]
-    BadHandle(#[from] BadHandle),
     #[error("Expression {handle:?} is invalid")]
     Expression {
         handle: Handle<crate::Expression>,
@@ -203,11 +199,8 @@ impl<'a> BlockContext<'a> {
         BlockContext { abilities, ..*self }
     }
 
-    fn get_expression(
-        &self,
-        handle: Handle<crate::Expression>,
-    ) -> Result<&'a crate::Expression, FunctionError> {
-        Ok(self.expressions.try_get(handle)?)
+    fn get_expression(&self, handle: Handle<crate::Expression>) -> &'a crate::Expression {
+        &self.expressions[handle]
     }
 
     fn resolve_type_impl(
@@ -257,11 +250,7 @@ impl super::Validator {
         result: Option<Handle<crate::Expression>>,
         context: &BlockContext,
     ) -> Result<super::ShaderStages, WithSpan<CallError>> {
-        let fun = context
-            .functions
-            .try_get(function)
-            .map_err(CallError::BadHandle)
-            .map_err(WithSpan::new)?;
+        let fun = &context.functions[function];
         if fun.arguments.len() != arguments.len() {
             return Err(CallError::ArgumentCount {
                 required: fun.arguments.len(),
@@ -689,14 +678,14 @@ impl super::Validator {
                 } => {
                     //Note: this code uses a lot of `FunctionError::InvalidImageStore`,
                     // and could probably be refactored.
-                    let var = match *context.get_expression(image).map_err(|e| e.with_span())? {
+                    let var = match *context.get_expression(image) {
                         crate::Expression::GlobalVariable(var_handle) => {
                             &context.global_vars[var_handle]
                         }
                         // We're looking at a binding index situation, so punch through the index and look at the global behind it.
                         crate::Expression::Access { base, .. }
                         | crate::Expression::AccessIndex { base, .. } => {
-                            match *context.get_expression(base).map_err(|e| e.with_span())? {
+                            match *context.get_expression(base) {
                                 crate::Expression::GlobalVariable(var_handle) => {
                                     &context.global_vars[var_handle]
                                 }
@@ -899,10 +888,7 @@ impl super::Validator {
 
         #[cfg(feature = "validate")]
         for (index, argument) in fun.arguments.iter().enumerate() {
-            let ty = module.types.get_handle(argument.ty).map_err(|err| {
-                FunctionError::from(err).with_span_handle(argument.ty, &module.types)
-            })?;
-            match ty.inner.pointer_space() {
+            match module.types[argument.ty].inner.pointer_space() {
                 Some(
                     crate::AddressSpace::Private
                     | crate::AddressSpace::Function
