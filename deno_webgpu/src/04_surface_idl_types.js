@@ -65,6 +65,13 @@
       key: "presentMode",
       converter: webidl.converters["GPUPresentMode"],
     },
+    {
+      key: "width",
+      converter: webidl.converters["long"],
+    },{
+      key: "height",
+      converter: webidl.converters["long"],
+    },
   ];
   webidl.converters["GPUCanvasConfiguration"] = webidl
     .createDictionaryConverter(

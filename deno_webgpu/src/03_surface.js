@@ -17,15 +17,9 @@
 
   const _surfaceRid = Symbol("[[surfaceRid]]");
   const _configuration = Symbol("[[configuration]]");
-  const _width = Symbol("[[width]]");
-  const _height = Symbol("[[height]]");
   const _canvas = Symbol("[[canvas]]");
   class GPUCanvasContext {
     [_surfaceRid];
-    /** @type {number} */
-    [_width];
-    /** @type {number} */
-    [_height];
     /** @type {InnerGPUDevice} */
     [_device];
     [_configuration];
@@ -58,8 +52,8 @@
         deviceRid: device.rid,
         format: configuration.format,
         usage: configuration.usage,
-        width: this[_width],
-        height: this[_height],
+        width: configuration.width,
+        height: configuration.height,
         alphaMode: configuration.alphaMode,
       });
 
@@ -88,8 +82,8 @@
       const texture = createGPUTexture(
         {
           size: {
-            width: this[_width],
-            height: this[_height],
+            width: this[_configuration].width,
+            height: this[_configuration].height,
             depthOrArrayLayers: 1,
           },
           mipLevelCount: 1,
@@ -124,8 +118,6 @@
 
   window.__bootstrap.webgpu = {
     ...window.__bootstrap.webgpu,
-    _width,
-    _height,
     GPUCanvasContext,
     createCanvasContext,
   };
