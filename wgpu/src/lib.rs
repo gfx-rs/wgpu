@@ -2508,6 +2508,7 @@ pub struct BufferViewMut<'a> {
 impl std::ops::Deref for BufferView<'_> {
     type Target = [u8];
 
+    #[inline]
     fn deref(&self) -> &[u8] {
         self.data.slice()
     }
@@ -2516,6 +2517,7 @@ impl std::ops::Deref for BufferView<'_> {
 impl std::ops::Deref for BufferViewMut<'_> {
     type Target = [u8];
 
+    #[inline]
     fn deref(&self) -> &[u8] {
         assert!(
             self.readable,
@@ -2527,18 +2529,21 @@ impl std::ops::Deref for BufferViewMut<'_> {
 }
 
 impl std::ops::DerefMut for BufferViewMut<'_> {
+    #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.data.slice_mut()
     }
 }
 
 impl AsRef<[u8]> for BufferView<'_> {
+    #[inline]
     fn as_ref(&self) -> &[u8] {
         self.data.slice()
     }
 }
 
 impl AsMut<[u8]> for BufferViewMut<'_> {
+    #[inline]
     fn as_mut(&mut self) -> &mut [u8] {
         self.data.slice_mut()
     }
@@ -3608,6 +3613,7 @@ impl<'a> std::ops::Deref for QueueWriteBufferView<'a> {
 }
 
 impl<'a> std::ops::DerefMut for QueueWriteBufferView<'a> {
+    #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.inner
     }
