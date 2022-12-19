@@ -380,7 +380,8 @@ impl crate::Device<super::Api> for super::Device {
         if let Some(alloc) = buffer.allocation.take() {
             super::suballocation::free_buffer_allocation(
                 alloc,
-                self.mem_allocator.as_ref().unwrap(),
+                // SAFETY: for allocations to exist, the allocator must exist
+                unsafe { self.mem_allocator.as_ref().unwrap_unchecked() },
             );
         }
     }
@@ -472,7 +473,8 @@ impl crate::Device<super::Api> for super::Device {
         if let Some(alloc) = texture.allocation.take() {
             super::suballocation::free_texture_allocation(
                 alloc,
-                self.mem_allocator.as_ref().unwrap(),
+                // SAFETY: for allocations to exist, the allocator must exist
+                unsafe { self.mem_allocator.as_ref().unwrap_unchecked() },
             );
         }
     }
