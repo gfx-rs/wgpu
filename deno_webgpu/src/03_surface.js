@@ -19,6 +19,7 @@
   const _configuration = Symbol("[[configuration]]");
   const _canvas = Symbol("[[canvas]]");
   class GPUCanvasContext {
+    /** @type {number} */
     [_surfaceRid];
     /** @type {InnerGPUDevice} */
     [_device];

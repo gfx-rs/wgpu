@@ -61,6 +61,8 @@
       converter: webidl.converters["GPUCanvasAlphaMode"],
       defaultValue: "opaque",
     },
+
+    // Extended from spec
     {
       key: "presentMode",
       converter: webidl.converters["GPUPresentMode"],
@@ -68,9 +70,12 @@
     {
       key: "width",
       converter: webidl.converters["long"],
-    },{
+      required: true,
+    },
+    {
       key: "height",
       converter: webidl.converters["long"],
+      required: true,
     },
   ];
   webidl.converters["GPUCanvasConfiguration"] = webidl
