@@ -338,6 +338,10 @@ impl super::Adapter {
             wgt::Features::MULTIVIEW,
             extensions.contains("OVR_multiview2"),
         );
+        features.set(
+            wgt::Features::SHADER_PRIMITIVE_INDEX,
+            ver >= (3, 2) || extensions.contains("OES_geometry_shader"),
+        );
         let gles_bcn_exts = [
             "GL_EXT_texture_compression_s3tc_srgb",
             "GL_EXT_texture_compression_rgtc",
@@ -420,6 +424,10 @@ impl super::Adapter {
         private_caps.set(
             super::PrivateCapabilities::COLOR_BUFFER_FLOAT,
             color_buffer_float,
+        );
+        private_caps.set(
+            super::PrivateCapabilities::TEXTURE_FLOAT_LINEAR,
+            extensions.contains("OES_texture_float_linear"),
         );
 
         let max_texture_size = unsafe { gl.get_parameter_i32(glow::MAX_TEXTURE_SIZE) } as u32;
@@ -730,6 +738,9 @@ impl crate::Adapter<super::Api> for super::Adapter {
                 | Tfc::MULTISAMPLE_RESOLVE,
         );
 
+        let texture_float_linear =
+            private_caps_fn(super::PrivateCapabilities::TEXTURE_FLOAT_LINEAR, filterable);
+
         match format {
             Tf::R8Unorm => filterable_renderable,
             Tf::R8Snorm => filterable,
@@ -746,7 +757,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
             Tf::Rg8Sint => renderable,
             Tf::R32Uint => renderable | storage,
             Tf::R32Sint => renderable | storage,
-            Tf::R32Float => unfilterable | storage | float_renderable,
+            Tf::R32Float => unfilterable | storage | float_renderable | texture_float_linear,
             Tf::Rg16Uint => renderable,
             Tf::Rg16Sint => renderable,
             Tf::Rg16Unorm => empty,
@@ -761,7 +772,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
             Tf::Rg11b10Float => filterable | float_renderable,
             Tf::Rg32Uint => renderable,
             Tf::Rg32Sint => renderable,
-            Tf::Rg32Float => unfilterable | float_renderable,
+            Tf::Rg32Float => unfilterable | float_renderable | texture_float_linear,
             Tf::Rgba16Uint => renderable | storage,
             Tf::Rgba16Sint => renderable | storage,
             Tf::Rgba16Unorm => empty,
@@ -769,7 +780,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
             Tf::Rgba16Float => filterable | storage | half_float_renderable,
             Tf::Rgba32Uint => renderable | storage,
             Tf::Rgba32Sint => renderable | storage,
-            Tf::Rgba32Float => unfilterable | storage | float_renderable,
+            Tf::Rgba32Float => unfilterable | storage | float_renderable | texture_float_linear,
             //Tf::Stencil8 |
             Tf::Depth16Unorm
             | Tf::Depth32Float

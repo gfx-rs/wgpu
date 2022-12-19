@@ -1,11 +1,13 @@
 //! Tests for buffer usages validation.
 
 use crate::common::{fail_if, initialize_test, TestParameters};
+use wasm_bindgen_test::*;
 use wgt::BufferAddress;
 
 const BUFFER_SIZE: BufferAddress = 1234;
 
 #[test]
+#[wasm_bindgen_test]
 fn buffer_usage() {
     fn try_create(enable_mappable_primary_buffers: bool, usages: &[(bool, &[wgpu::BufferUsages])]) {
         let mut parameters = TestParameters::default();

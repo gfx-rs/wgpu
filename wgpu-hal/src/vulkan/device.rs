@@ -52,7 +52,7 @@ impl super::DeviceShared {
         let name = unsafe { CStr::from_bytes_with_nul_unchecked(name_bytes) };
 
         let _result = unsafe {
-            extension.debug_utils_set_object_name(
+            extension.set_debug_utils_object_name(
                 self.raw.handle(),
                 &vk::DebugUtilsObjectNameInfoEXT::builder()
                     .object_type(object_type)

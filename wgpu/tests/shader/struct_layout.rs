@@ -1,5 +1,6 @@
 use std::fmt::Write;
 
+use wasm_bindgen_test::*;
 use wgpu::{Backends, DownlevelFlags, Features, Limits};
 
 use crate::{
@@ -177,6 +178,7 @@ fn create_struct_layout_tests(storage_type: InputStorageType) -> Vec<ShaderTest>
 }
 
 #[test]
+#[wasm_bindgen_test]
 fn uniform_input() {
     initialize_test(
         TestParameters::default()
@@ -193,6 +195,7 @@ fn uniform_input() {
 }
 
 #[test]
+#[wasm_bindgen_test]
 fn storage_input() {
     initialize_test(
         TestParameters::default()
@@ -209,6 +212,7 @@ fn storage_input() {
 }
 
 #[test]
+#[wasm_bindgen_test]
 fn push_constant_input() {
     initialize_test(
         TestParameters::default()

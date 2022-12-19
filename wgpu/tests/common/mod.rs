@@ -3,11 +3,13 @@
 
 use std::panic::{catch_unwind, AssertUnwindSafe};
 
+use wgpu::{Adapter, Device, DownlevelFlags, Instance, Queue, Surface};
 use wgt::{Backends, DeviceDescriptor, DownlevelCapabilities, Features, Limits};
 
-use wgpu::{util, Adapter, Device, DownlevelFlags, Instance, Queue};
-
 pub mod image;
+mod isolation;
+
+const CANVAS_ID: &str = "test-canvas";
 
 async fn initialize_device(
     adapter: &Adapter,
@@ -166,18 +168,17 @@ impl TestParameters {
         self
     }
 }
+
 pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(TestingContext)) {
     // We don't actually care if it fails
+    #[cfg(not(target_arch = "wasm32"))]
     let _ = env_logger::try_init();
+    #[cfg(target_arch = "wasm32")]
+    let _ = console_log::init_with_level(log::Level::Info);
 
-    let backend_bits = util::backend_bits_from_env().unwrap_or_else(Backends::all);
-    let instance = Instance::new(backend_bits);
-    let adapter = pollster::block_on(util::initialize_adapter_from_env_or_default(
-        &instance,
-        backend_bits,
-        None,
-    ))
-    .expect("could not find suitable adapter on the system");
+    let _test_guard = isolation::OneTestPerProcessGuard::new();
+
+    let (adapter, _) = initialize_adapter();
 
     let adapter_info = adapter.get_info();
     let adapter_lowercase_name = adapter_info.name.to_lowercase();
@@ -187,19 +188,19 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
 
     let missing_features = parameters.required_features - adapter_features;
     if !missing_features.is_empty() {
-        println!("TEST SKIPPED: MISSING FEATURES {:?}", missing_features);
+        log::info!("TEST SKIPPED: MISSING FEATURES {:?}", missing_features);
         return;
     }
 
     if !parameters.required_limits.check_limits(&adapter_limits) {
-        println!("TEST SKIPPED: LIMIT TOO LOW");
+        log::info!("TEST SKIPPED: LIMIT TOO LOW");
         return;
     }
 
     let missing_downlevel_flags =
         parameters.required_downlevel_properties.flags - adapter_downlevel_capabilities.flags;
     if !missing_downlevel_flags.is_empty() {
-        println!(
+        log::info!(
             "TEST SKIPPED: MISSING DOWNLEVEL FLAGS {:?}",
             missing_downlevel_flags
         );
@@ -209,7 +210,7 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
     if adapter_downlevel_capabilities.shader_model
         < parameters.required_downlevel_properties.shader_model
     {
-        println!(
+        log::info!(
             "TEST SKIPPED: LOW SHADER MODEL {:?}",
             adapter_downlevel_capabilities.shader_model
         );
@@ -273,7 +274,7 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
     });
 
     if let Some((reason, true)) = expected_failure_reason {
-        println!("EXPECTED TEST FAILURE SKIPPED: {:?}", reason);
+        log::info!("EXPECTED TEST FAILURE SKIPPED: {:?}", reason);
         return;
     }
 
@@ -301,9 +302,10 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
         // We got the conditions we expected
         if let Some((expected_reason, _)) = expected_failure_reason {
             // Print out reason for the failure
-            println!(
+            log::info!(
                 "GOT EXPECTED TEST FAILURE DUE TO {}: {:?}",
-                failure_cause, expected_reason
+                failure_cause,
+                expected_reason
             );
         }
     } else if let Some((reason, _)) = expected_failure_reason {
@@ -312,6 +314,72 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
     } else {
         panic!("UNEXPECTED TEST FAILURE DUE TO {}", failure_cause)
     }
+}
+
+fn initialize_adapter() -> (Adapter, SurfaceGuard) {
+    let backend_bits = wgpu::util::backend_bits_from_env().unwrap_or_else(Backends::all);
+    let instance = Instance::new(backend_bits);
+    let compatible_surface;
+
+    #[cfg(not(all(target_arch = "wasm32", feature = "webgl")))]
+    {
+        compatible_surface = None;
+    }
+    #[cfg(all(target_arch = "wasm32", feature = "webgl"))]
+    {
+        // On wasm, append a canvas to the document body for initializing the adapter
+        let canvas = create_html_canvas();
+
+        let surface = instance
+            .create_surface_from_canvas(&canvas)
+            .expect("could not create surface from canvas");
+
+        compatible_surface = Some(surface);
+    }
+
+    let compatible_surface: Option<&Surface> = compatible_surface.as_ref();
+    let adapter = pollster::block_on(wgpu::util::initialize_adapter_from_env_or_default(
+        &instance,
+        backend_bits,
+        compatible_surface,
+    ))
+    .expect("could not find suitable adapter on the system");
+
+    (adapter, SurfaceGuard)
+}
+
+struct SurfaceGuard;
+
+#[cfg(all(target_arch = "wasm32", feature = "webgl"))]
+impl Drop for SurfaceGuard {
+    fn drop(&mut self) {
+        delete_html_canvas();
+    }
+}
+
+#[cfg(all(target_arch = "wasm32", feature = "webgl"))]
+fn create_html_canvas() -> web_sys::HtmlCanvasElement {
+    use wasm_bindgen::JsCast;
+
+    web_sys::window()
+        .and_then(|win| win.document())
+        .and_then(|doc| {
+            let body = doc.body().unwrap();
+            let canvas = doc.create_element("Canvas").unwrap();
+            canvas.set_id(CANVAS_ID);
+            body.append_child(&canvas).unwrap();
+            canvas.dyn_into::<web_sys::HtmlCanvasElement>().ok()
+        })
+        .expect("couldn't append canvas to document body")
+}
+
+#[cfg(all(target_arch = "wasm32", feature = "webgl"))]
+fn delete_html_canvas() {
+    if let Some(document) = web_sys::window().and_then(|win| win.document()) {
+        if let Some(element) = document.get_element_by_id(CANVAS_ID) {
+            element.remove();
+        }
+    };
 }
 
 // Run some code in an error scope and assert that validation fails.
