@@ -12,15 +12,6 @@
   const webidl = window.__bootstrap.webidl;
   const { GPUTextureUsage } = window.__bootstrap.webgpu;
 
-  // ENUM: PredefinedColorSpace
-  webidl.converters["PredefinedColorSpace"] = webidl.createEnumConverter(
-    "PredefinedColorSpace",
-    [
-      "srgb",
-      "display-p3",
-    ],
-  );
-
   // ENUM: GPUCanvasAlphaMode
   webidl.converters["GPUCanvasAlphaMode"] = webidl.createEnumConverter(
     "GPUCanvasAlphaMode",

@@ -374,11 +374,6 @@ interface GPUExternalTexture {
 };
 GPUExternalTexture includes GPUObjectBase;
 
-dictionary GPUExternalTextureDescriptor : GPUObjectDescriptorBase {
-    required HTMLVideoElement source;
-    PredefinedColorSpace colorSpace = "srgb";
-};
-
 [Exposed=(Window, DedicatedWorker), SecureContext]
 interface GPUSampler {
 };
