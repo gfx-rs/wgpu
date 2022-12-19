@@ -1,5 +1,6 @@
 use crate::common::{initialize_test, TestParameters, TestingContext};
 use std::num::NonZeroU32;
+use wasm_bindgen_test::*;
 use wgpu::util::{align_to, DeviceExt};
 
 //
@@ -37,6 +38,7 @@ use wgpu::util::{align_to, DeviceExt};
 // buffer [3, 4, 5, 0, 1, 2]. This also swaps the resulting pixel colors.
 //
 #[test]
+#[wasm_bindgen_test]
 fn draw() {
     //
     //   +-----+-----+
@@ -61,6 +63,7 @@ fn draw() {
 }
 
 #[test]
+#[wasm_bindgen_test]
 fn draw_indexed() {
     //
     //   +-----+-----+

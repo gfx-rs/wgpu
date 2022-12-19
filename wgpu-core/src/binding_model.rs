@@ -683,23 +683,56 @@ pub enum BindingResource<'a> {
 
 #[derive(Clone, Debug, Error)]
 pub enum BindError {
-    #[error("number of dynamic offsets ({actual}) doesn't match the number of dynamic bindings in the bind group layout ({expected})")]
-    MismatchedDynamicOffsetCount { actual: usize, expected: usize },
     #[error(
-        "dynamic binding at index {idx}: offset {offset} does not respect device's requested `{limit_name}` limit {alignment}"
+        "Bind group {group} expects {expected} dynamic offset{s0}. However {actual} dynamic offset{s1} were provided.",
+        s0 = if *.expected >= 2 { "s" } else { "" },
+        s1 = if *.actual >= 2 { "s" } else { "" },
+    )]
+    MismatchedDynamicOffsetCount {
+        group: u8,
+        actual: usize,
+        expected: usize,
+    },
+    #[error(
+        "Dynamic binding index {idx} (targeting bind group {group}, binding {binding}) with value {offset}, does not respect device's requested `{limit_name}` limit: {alignment}"
     )]
     UnalignedDynamicBinding {
         idx: usize,
+        group: u8,
+        binding: u32,
         offset: u32,
         alignment: u32,
         limit_name: &'static str,
     },
-    #[error("dynamic binding at index {idx} with offset {offset} would overrun the buffer (limit: {max})")]
-    DynamicBindingOutOfBounds { idx: usize, offset: u32, max: u64 },
+    #[error(
+        "Dynamic binding offset index {idx} with offset {offset} would overrun the buffer bound to bind group {group} -> binding {binding}. \
+         Buffer size is {buffer_size} bytes, the binding binds bytes {binding_range:?}, meaning the maximum the binding can be offset is {maximum_dynamic_offset} bytes",
+    )]
+    DynamicBindingOutOfBounds {
+        idx: usize,
+        group: u8,
+        binding: u32,
+        offset: u32,
+        buffer_size: wgt::BufferAddress,
+        binding_range: Range<wgt::BufferAddress>,
+        maximum_dynamic_offset: wgt::BufferAddress,
+    },
 }
 
 #[derive(Debug)]
 pub struct BindGroupDynamicBindingData {
+    /// The index of the binding.
+    ///
+    /// Used for more descriptive errors.
+    pub(crate) binding_idx: u32,
+    /// The size of the buffer.
+    ///
+    /// Used for more descriptive errors.
+    pub(crate) buffer_size: wgt::BufferAddress,
+    /// The range that the binding covers.
+    ///
+    /// Used for more descriptive errors.
+    pub(crate) binding_range: Range<wgt::BufferAddress>,
     /// The maximum value the dynamic offset can have before running off the end of the buffer.
     pub(crate) maximum_dynamic_offset: wgt::BufferAddress,
     /// The binding type.
@@ -739,11 +772,13 @@ pub struct BindGroup<A: HalApi> {
 impl<A: HalApi> BindGroup<A> {
     pub(crate) fn validate_dynamic_bindings(
         &self,
+        bind_group_index: u8,
         offsets: &[wgt::DynamicOffset],
         limits: &wgt::Limits,
     ) -> Result<(), BindError> {
         if self.dynamic_binding_info.len() != offsets.len() {
             return Err(BindError::MismatchedDynamicOffsetCount {
+                group: bind_group_index,
                 expected: self.dynamic_binding_info.len(),
                 actual: offsets.len(),
             });
@@ -758,6 +793,8 @@ impl<A: HalApi> BindGroup<A> {
             let (alignment, limit_name) = buffer_binding_type_alignment(limits, info.binding_type);
             if offset as wgt::BufferAddress % alignment as u64 != 0 {
                 return Err(BindError::UnalignedDynamicBinding {
+                    group: bind_group_index,
+                    binding: info.binding_idx,
                     idx,
                     offset,
                     alignment,
@@ -767,9 +804,13 @@ impl<A: HalApi> BindGroup<A> {
 
             if offset as wgt::BufferAddress > info.maximum_dynamic_offset {
                 return Err(BindError::DynamicBindingOutOfBounds {
+                    group: bind_group_index,
+                    binding: info.binding_idx,
                     idx,
                     offset,
-                    max: info.maximum_dynamic_offset,
+                    buffer_size: info.buffer_size,
+                    binding_range: info.binding_range.clone(),
+                    maximum_dynamic_offset: info.maximum_dynamic_offset,
                 });
             }
         }

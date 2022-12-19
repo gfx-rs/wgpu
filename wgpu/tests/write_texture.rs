@@ -3,8 +3,10 @@
 use crate::common::{initialize_test, TestParameters};
 
 use std::num::NonZeroU32;
+use wasm_bindgen_test::*;
 
 #[test]
+#[wasm_bindgen_test]
 fn write_texture_subset() {
     let size = 256;
     let parameters = TestParameters::default().backend_failure(wgpu::Backends::DX12);

@@ -1,4 +1,7 @@
+use wasm_bindgen_test::*;
+
 #[test]
+#[wasm_bindgen_test]
 fn initialize() {
     let _ = wgpu::Instance::new(
         wgpu::util::backend_bits_from_env().unwrap_or_else(wgpu::Backends::all),

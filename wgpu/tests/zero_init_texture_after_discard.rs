@@ -1,9 +1,11 @@
 use std::num::NonZeroU32;
 
 use crate::common::{initialize_test, TestParameters};
+use wasm_bindgen_test::*;
 
 // Checks if discarding a color target resets its init state, causing a zero read of this texture when copied in after submit of the encoder.
 #[test]
+#[wasm_bindgen_test]
 fn discarding_color_target_resets_texture_init_state_check_visible_on_copy_after_submit() {
     initialize_test(TestParameters::default(), |ctx| {
         let (texture, readback_buffer) =
@@ -39,6 +41,7 @@ fn discarding_color_target_resets_texture_init_state_check_visible_on_copy_after
 
 // Checks if discarding a color target resets its init state, causing a zero read of this texture when copied in the same encoder to a buffer.
 #[test]
+#[wasm_bindgen_test]
 fn discarding_color_target_resets_texture_init_state_check_visible_on_copy_in_same_encoder() {
     initialize_test(TestParameters::default(), |ctx| {
         let (texture, readback_buffer) =
@@ -67,6 +70,7 @@ fn discarding_color_target_resets_texture_init_state_check_visible_on_copy_in_sa
 }
 
 #[test]
+#[wasm_bindgen_test]
 #[allow(clippy::single_element_loop)]
 fn discarding_depth_target_resets_texture_init_state_check_visible_on_copy_in_same_encoder() {
     initialize_test(
@@ -109,6 +113,7 @@ fn discarding_depth_target_resets_texture_init_state_check_visible_on_copy_in_sa
 }
 
 #[test]
+#[wasm_bindgen_test]
 fn discarding_either_depth_or_stencil_aspect() {
     initialize_test(TestParameters::default(), |ctx| {
         let (texture, _) = create_white_texture_and_readback_buffer(

@@ -1,3 +1,4 @@
+use wasm_bindgen_test::*;
 use wgpu::{DownlevelFlags, Limits};
 
 use crate::{
@@ -40,6 +41,7 @@ fn create_numeric_builtin_test() -> Vec<ShaderTest> {
 }
 
 #[test]
+#[wasm_bindgen_test]
 fn numeric_builtins() {
     initialize_test(
         TestParameters::default()
