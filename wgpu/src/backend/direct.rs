@@ -2501,6 +2501,7 @@ impl std::ops::Deref for QueueWriteBuffer {
 }
 
 impl std::ops::DerefMut for QueueWriteBuffer {
+    #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
         use crate::BufferMappedRangeSlice;
         self.mapping.slice_mut()
@@ -2517,10 +2518,12 @@ unsafe impl Send for BufferMappedRange {}
 unsafe impl Sync for BufferMappedRange {}
 
 impl crate::BufferMappedRangeSlice for BufferMappedRange {
+    #[inline]
     fn slice(&self) -> &[u8] {
         unsafe { slice::from_raw_parts(self.ptr, self.size) }
     }
 
+    #[inline]
     fn slice_mut(&mut self) -> &mut [u8] {
         unsafe { slice::from_raw_parts_mut(self.ptr, self.size) }
     }

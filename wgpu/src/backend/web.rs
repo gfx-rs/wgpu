@@ -2530,6 +2530,7 @@ impl std::ops::Deref for QueueWriteBuffer {
 }
 
 impl std::ops::DerefMut for QueueWriteBuffer {
+    #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
@@ -2542,10 +2543,12 @@ pub struct BufferMappedRange {
 }
 
 impl crate::BufferMappedRangeSlice for BufferMappedRange {
+    #[inline]
     fn slice(&self) -> &[u8] {
         &self.temporary_mapping
     }
 
+    #[inline]
     fn slice_mut(&mut self) -> &mut [u8] {
         &mut self.temporary_mapping
     }
