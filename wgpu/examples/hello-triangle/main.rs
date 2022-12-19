@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 use winit::{
     event::{Event, WindowEvent},
-    event_loop::{ControlFlow, EventLoop},
+    event_loop::{EventLoop},
     window::Window,
 };
 
@@ -85,7 +85,7 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
         // the resources are properly cleaned up.
         let _ = (&instance, &adapter, &shader, &pipeline_layout);
 
-        *control_flow = ControlFlow::Wait;
+        control_flow.set_wait();
         match event {
             Event::WindowEvent {
                 event: WindowEvent::Resized(size),
@@ -130,7 +130,7 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
             Event::WindowEvent {
                 event: WindowEvent::CloseRequested,
                 ..
-            } => *control_flow = ControlFlow::Exit,
+            } => control_flow.set_exit(),
             _ => {}
         }
     });

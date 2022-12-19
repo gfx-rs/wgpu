@@ -282,7 +282,7 @@ impl framework::Example for Example {
         let terrain_vertex_size = mem::size_of::<point_gen::TerrainVertexAttributes>();
 
         // Noise generation
-        let terrain_noise = noise::OpenSimplex::new();
+        let terrain_noise = noise::OpenSimplex::default();
 
         // Random colouration
         let mut terrain_random = WyRand::new_seed(42);

@@ -70,7 +70,7 @@ pub fn initialize_adapter_from_env(
 /// Initialize the adapter obeying the WGPU_ADAPTER_NAME environment variable and if it doesn't exist fall back on a default adapter.
 pub async fn initialize_adapter_from_env_or_default(
     instance: &Instance,
-    backend_bits: wgt::Backends,
+    backend_bits: Backends,
     compatible_surface: Option<&Surface>,
 ) -> Option<Adapter> {
     match initialize_adapter_from_env(instance, backend_bits) {

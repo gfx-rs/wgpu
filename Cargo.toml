@@ -53,16 +53,14 @@ cfg_aliases = "0.1"
 cfg-if = "1"
 codespan-reporting = "0.11"
 ddsfile = "0.5"
-env_logger = "0.9"
-futures-intrusive = "0.4"
+env_logger = "0.10.0"
+futures-intrusive = "0.5.0"
 fxhash = "0.2.1"
-glam = "0.21.3"
+glam = "0.22.0"
 libloading = "0.7"
 log = "0.4"
 nanorand = { version = "0.7", default-features = false }
-# Opt out of noise's "default-features" to avoid "image" feature as a dependency count optimization.
-# This will not be required in the next release since it has been removed from the default feature in https://github.com/Razaekel/noise-rs/commit/1af9e1522236b2c584fb9a02150c9c67a5e6bb04#diff-2e9d962a08321605940b5a657135052fbcef87b5e360662bb527c96d9a615542
-noise = { version = "0.7", default-features = false }
+noise = { version = "0.8.2" }
 obj = "0.10"
 # parking_lot 0.12 switches from `winapi` to `windows`; permit either
 parking_lot = ">=0.11,<0.13"
@@ -82,7 +80,7 @@ winit = "0.27.1"
 
 # Metal dependencies
 block = "0.1"
-foreign-types = "0.3"
+foreign-types = "0.5.0"
 mtl = { package = "metal", version = "0.24.0" }
 objc = "0.2.5"
 core-graphics-types = "0.1"
@@ -104,7 +102,7 @@ egl = { package = "khronos-egl", version = "4.1" }
 # glow = { version = "0.11.2", optional = true }
 # TODO: New glow release
 glow = { git = "https://github.com/grovesNL/glow", rev = "c8a011fcd57a5c68cc917ed394baa484bdefc909" }
-glutin = "0.29.1"
+glutin = "0.30.3"
 
 # wasm32 dependencies
 console_error_panic_hook = "0.1.7"
@@ -116,11 +114,11 @@ wasm-bindgen-test = "0.3"
 web-sys = "0.3.60"
 
 # deno dependencies
-deno_console = "0.80.0"
-deno_core = "0.162.0"
-deno_url = "0.80.0"
-deno_web = "0.111.0"
-deno_webidl = "0.80.0"
+deno_console = "0.82.0"
+deno_core = "0.164.0"
+deno_url = "0.82.0"
+deno_web = "0.113.0"
+deno_webidl = "0.82.0"
 deno_webgpu = { path = "./deno_webgpu" }
 tokio = "1.19.0"
 termcolor = "1.1.2"

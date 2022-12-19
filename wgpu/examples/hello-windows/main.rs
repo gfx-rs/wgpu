@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 use winit::{
     event::{Event, WindowEvent},
-    event_loop::{ControlFlow, EventLoop},
+    event_loop::{EventLoop},
     window::{Window, WindowId},
 };
 
@@ -100,7 +100,8 @@ async fn run(event_loop: EventLoop<()>, viewports: Vec<(Window, wgpu::Color)>) {
         // the resources are properly cleaned up.
         let _ = (&instance, &adapter);
 
-        *control_flow = ControlFlow::Wait;
+        control_flow.set_wait();
+        
         match event {
             Event::WindowEvent {
                 window_id,
@@ -148,7 +149,7 @@ async fn run(event_loop: EventLoop<()>, viewports: Vec<(Window, wgpu::Color)>) {
             } => {
                 viewports.remove(&window_id);
                 if viewports.is_empty() {
-                    *control_flow = ControlFlow::Exit
+                   control_flow.set_exit();
                 }
             }
             _ => {}

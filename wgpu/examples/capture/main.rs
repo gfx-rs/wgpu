@@ -230,7 +230,7 @@ mod tests {
         assert_generated_data_matches_expected();
     }
 
-    fn assert_generated_data_matches_expected() {
+    async fn assert_generated_data_matches_expected() {
         let (device, output_buffer, dimensions) =
             create_red_image_with_dimensions(100usize, 200usize).await;
         let buffer_slice = output_buffer.slice(..);

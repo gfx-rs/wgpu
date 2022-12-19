@@ -284,10 +284,10 @@ fn start<E: Example>(
     log::info!("Entering render loop...");
     event_loop.run(move |event, _, control_flow| {
         let _ = (&instance, &adapter); // force ownership by the closure
-        *control_flow = if cfg!(feature = "metal-auto-capture") {
-            ControlFlow::Exit
+        if cfg!(feature = "metal-auto-capture") {
+            control_flow.set_exit();
         } else {
-            ControlFlow::Poll
+            control_flow.set_poll();
         };
         match event {
             event::Event::RedrawEventsCleared => {
@@ -322,7 +322,7 @@ fn start<E: Example>(
                     ..
                 }
                 | WindowEvent::CloseRequested => {
-                    *control_flow = ControlFlow::Exit;
+                   control_flow.set_exit();
                 }
                 #[cfg(not(target_arch = "wasm32"))]
                 WindowEvent::KeyboardInput {
