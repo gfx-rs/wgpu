@@ -115,6 +115,14 @@ Additionally `Surface::get_default_config` now returns an Option and returns Non
 - Make `Surface::get_default_config` return an Option to prevent panics. By @cwfitzgerald in [#3157](https://github.com/gfx-rs/wgpu/pull/3157)
 - Lower the `max_buffer_size` limit value for compatibility with Apple2 and WebGPU compliance. By @jinleili in [#3255](https://github.com/gfx-rs/wgpu/pull/3255)
 
+### Dependency 
+- env_logger 0.9 -> 0.10 By @Snowiiii in [3308](https://github.com/gfx-rs/wgpu/pull/3308)
+- futures-intrusive 0.4 -> 0.5 By @Snowiiii in [3308](https://github.com/gfx-rs/wgpu/pull/3308)
+- glam 0.21.3 -> 0.22.0 By @Snowiiii in [3308](https://github.com/gfx-rs/wgpu/pull/3308)
+- noise 0.7 -> 0.8.2 By @Snowiiii in [3308](https://github.com/gfx-rs/wgpu/pull/3308)
+- foreign-types 0.3 -> 0.5 By @Snowiiii in [3308](https://github.com/gfx-rs/wgpu/pull/3308)
+- glutin 0.29.2 -> 0.30.3 By @Snowiiii in [3308](https://github.com/gfx-rs/wgpu/pull/3308)
+
 #### WebGPU
 
 - Implement `queue_validate_write_buffer` by @jinleili in [#3098](https://github.com/gfx-rs/wgpu/pull/3098)
