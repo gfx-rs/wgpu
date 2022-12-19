@@ -74,7 +74,7 @@ glow = { git = "https://github.com/grovesNL/glow", rev = "c8a011fcd57a5c68cc917e
 # backend: Dx12
 bit-set = { version = "0.5", optional = true }
 range-alloc = { version = "0.1", optional = true }
-gpu-allocator = { workspace = true, optional = true }
+gpu-allocator = { version = "0.21", default_features = false, features = ["d3d12", "windows", "public-winapi"], optional = true }
 
 [dependencies.wgt]
 package = "wgpu-types"
