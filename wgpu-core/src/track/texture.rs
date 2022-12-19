@@ -814,7 +814,7 @@ enum TextureStateProvider<'a> {
     TextureSet { set: &'a TextureStateSet },
 }
 impl<'a> TextureStateProvider<'a> {
-    /// Convenience function turning Option<Selector> into this enum.
+    /// Convenience function turning `Option<Selector>` into this enum.
     fn from_option(selector: Option<TextureSelector>, state: TextureUses) -> Self {
         match selector {
             Some(selector) => Self::Selector { selector, state },
