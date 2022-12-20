@@ -2393,7 +2393,7 @@ impl TextureFormat {
         ) = match self {
             // Normal 8 bit textures
             Self::R8Unorm =>             (   native,   float,    linear, msaa_resolve, (1, 1),  1, attachment, 1),
-            Self::R8Snorm =>             (   native,   float,    linear,         msaa, (1, 1),  1,      basic, 1),
+            Self::R8Snorm =>             (   native,   float,    linear,         noaa, (1, 1),  1,      basic, 1),
             Self::R8Uint =>              (   native,    uint,    linear,         msaa, (1, 1),  1, attachment, 1),
             Self::R8Sint =>              (   native,    sint,    linear,         msaa, (1, 1),  1, attachment, 1),
             // Normal 16 bit textures
@@ -2401,9 +2401,9 @@ impl TextureFormat {
             Self::R16Sint =>             (   native,    sint,    linear,         msaa, (1, 1),  2, attachment, 1),
             Self::R16Float =>            (   native,   float,    linear, msaa_resolve, (1, 1),  2, attachment, 1),
             Self::Rg8Unorm =>            (   native,   float,    linear, msaa_resolve, (1, 1),  2, attachment, 2),
-            Self::Rg8Snorm =>            (   native,   float,    linear,         msaa, (1, 1),  2, attachment, 2),
+            Self::Rg8Snorm =>            (   native,   float,    linear,         noaa, (1, 1),  2,      basic, 2),
             Self::Rg8Uint =>             (   native,    uint,    linear,         msaa, (1, 1),  2, attachment, 2),
-            Self::Rg8Sint =>             (   native,    sint,    linear,         msaa, (1, 1),  2,      basic, 2),
+            Self::Rg8Sint =>             (   native,    sint,    linear,         msaa, (1, 1),  2, attachment, 2),
             // Normal 32 bit textures
             Self::R32Uint =>             (   native,    uint,    linear,         noaa, (1, 1),  4,  all_flags, 1),
             Self::R32Sint =>             (   native,    sint,    linear,         noaa, (1, 1),  4,  all_flags, 1),
@@ -2413,7 +2413,7 @@ impl TextureFormat {
             Self::Rg16Float =>           (   native,   float,    linear, msaa_resolve, (1, 1),  4, attachment, 2),
             Self::Rgba8Unorm =>          (   native,   float,    linear, msaa_resolve, (1, 1),  4,  all_flags, 4),
             Self::Rgba8UnormSrgb =>      (   native,   float, corrected, msaa_resolve, (1, 1),  4, attachment, 4),
-            Self::Rgba8Snorm =>          (   native,   float,    linear,         msaa, (1, 1),  4,    storage, 4),
+            Self::Rgba8Snorm =>          (   native,   float,    linear,         noaa, (1, 1),  4,    storage, 4),
             Self::Rgba8Uint =>           (   native,    uint,    linear,         msaa, (1, 1),  4,  all_flags, 4),
             Self::Rgba8Sint =>           (   native,    sint,    linear,         msaa, (1, 1),  4,  all_flags, 4),
             Self::Bgra8Unorm =>          (   native,   float,    linear, msaa_resolve, (1, 1),  4, attachment, 4),
