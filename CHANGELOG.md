@@ -103,6 +103,10 @@ Additionally `Surface::get_default_config` now returns an Option and returns Non
 
 `Instance::create_surface()` now returns `Result<Surface, CreateSurfaceError>` instead of `Surface`. This allows an error to be returned instead of panicking if the given window is a HTML canvas and obtaining a WebGPU or WebGL 2 context fails. (No other platforms currently report any errors through this path.) By @kpreid in [#3052](https://github.com/gfx-rs/wgpu/pull/3052/)
 
+#### Suballocate DX12 buffers and textures
+
+`wgpu`'s DX12 backend can now suballocate buffers and textures when the `windows_rs` feature is enabled, which can give a significant increase in performance (in testing I've seen a 10000%+ improvement in a simple scene with 200 `write_buffer` calls per frame, and a 40%+ improvement in [Bistro using Bevy](https://github.com/vleue/bevy_bistro_playground)). Previously `wgpu-hal`'s DX12 backend created a new heap on the GPU every time you called write_buffer (by calling `CreateCommittedResource`), whereas now with the `windows_rs` feature enabled it uses [`gpu_allocator`](https://crates.io/crates/gpu-allocator) to manage GPU memory (and calls `CreatePlacedResource` with a suballocated heap). By @Elabajaba in [#3163](https://github.com/gfx-rs/wgpu/pull/3163)
+
 ### Changes
 
 #### General

@@ -64,3 +64,23 @@ macro_rules! strict_assert_ne {
         debug_assert_ne!( $( $arg )* )
     };
 }
+
+/// Used to implement strict_assert for unwrap_unchecked
+pub trait StrictAssertUnwrapExt<T> {
+    /// Implementation of strict_assert for unwrap_unchecked
+    fn strict_unwrap_unchecked(self) -> T;
+}
+
+impl<T> StrictAssertUnwrapExt<T> for Option<T> {
+    fn strict_unwrap_unchecked(self) -> T {
+        strict_assert!(self.is_some(), "Called strict_unwrap_unchecked on None");
+        unsafe { self.unwrap_unchecked() }
+    }
+}
+
+impl<T, E> StrictAssertUnwrapExt<T> for Result<T, E> {
+    fn strict_unwrap_unchecked(self) -> T {
+        strict_assert!(self.is_ok(), "Called strict_unwrap_unchecked on Err");
+        unsafe { self.unwrap_unchecked() }
+    }
+}
