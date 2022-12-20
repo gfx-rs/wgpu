@@ -2250,27 +2250,33 @@ impl crate::context::Context for Context {
         _buffer_data: &Self::BufferData,
         offset: wgt::BufferAddress,
         size: wgt::BufferSize,
-    ) {
+    ) -> Option<()> {
         let usage = wgt::BufferUsages::from_bits_truncate(buffer.0.usage());
+        // TODO: actually send this down the error scope
         if !usage.contains(wgt::BufferUsages::COPY_DST) {
-            panic!("Destination buffer is missing the `COPY_DST` usage flag");
+            log::error!("Destination buffer is missing the `COPY_DST` usage flag");
+            return None;
         }
         let write_size = u64::from(size);
         if write_size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
-            panic!(
+            log::error!(
                 "Copy size {} does not respect `COPY_BUFFER_ALIGNMENT`",
                 size
             );
+            return None;
         }
         if offset % wgt::COPY_BUFFER_ALIGNMENT != 0 {
-            panic!(
+            log::error!(
                 "Buffer offset {} is not aligned to block size or `COPY_BUFFER_ALIGNMENT`",
                 offset
             );
+            return None;
         }
         if write_size + offset > buffer.0.size() as u64 {
-            panic!("copy of {}..{} would end up overrunning the bounds of the destination buffer of size {}", offset, offset + write_size, buffer.0.size());
+            log::error!("copy of {}..{} would end up overrunning the bounds of the destination buffer of size {}", offset, offset + write_size, buffer.0.size());
+            return None;
         }
+        Some(())
     }
 
     fn queue_create_staging_buffer(
@@ -2278,10 +2284,10 @@ impl crate::context::Context for Context {
         _queue: &Self::QueueId,
         _queue_data: &Self::QueueData,
         size: wgt::BufferSize,
-    ) -> Box<dyn QueueWriteBuffer> {
-        Box::new(WebQueueWriteBuffer(
+    ) -> Option<Box<dyn QueueWriteBuffer>> {
+        Some(Box::new(WebQueueWriteBuffer(
             vec![0; size.get() as usize].into_boxed_slice(),
-        ))
+        )))
     }
 
     fn queue_write_staging_buffer(

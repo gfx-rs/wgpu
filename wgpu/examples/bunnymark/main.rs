@@ -357,7 +357,10 @@ fn main() {
     framework::run::<Example>("bunnymark");
 }
 
+wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
+
 #[test]
+#[wasm_bindgen_test::wasm_bindgen_test]
 fn bunnymark() {
     framework::test::<Example>(framework::FrameworkRefTest {
         image_path: "/examples/bunnymark/screenshot.png",

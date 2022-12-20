@@ -538,13 +538,13 @@ pub trait Context: Debug + Send + Sized + Sync {
         buffer_data: &Self::BufferData,
         offset: wgt::BufferAddress,
         size: wgt::BufferSize,
-    );
+    ) -> Option<()>;
     fn queue_create_staging_buffer(
         &self,
         queue: &Self::QueueId,
         queue_data: &Self::QueueData,
         size: BufferSize,
-    ) -> Box<dyn QueueWriteBuffer>;
+    ) -> Option<Box<dyn QueueWriteBuffer>>;
     fn queue_write_staging_buffer(
         &self,
         queue: &Self::QueueId,
@@ -1438,13 +1438,13 @@ pub(crate) trait DynContext: Debug + Send + Sync {
         buffer_data: &crate::Data,
         offset: wgt::BufferAddress,
         size: wgt::BufferSize,
-    );
+    ) -> Option<()>;
     fn queue_create_staging_buffer(
         &self,
         queue: &ObjectId,
         queue_data: &crate::Data,
         size: BufferSize,
-    ) -> Box<dyn QueueWriteBuffer>;
+    ) -> Option<Box<dyn QueueWriteBuffer>>;
     fn queue_write_staging_buffer(
         &self,
         queue: &ObjectId,
@@ -2785,7 +2785,7 @@ where
         buffer_data: &crate::Data,
         offset: wgt::BufferAddress,
         size: wgt::BufferSize,
-    ) {
+    ) -> Option<()> {
         let queue = <T::QueueId>::from(*queue);
         let queue_data = downcast_ref(queue_data);
         let buffer = <T::BufferId>::from(*buffer);
@@ -2806,7 +2806,7 @@ where
         queue: &ObjectId,
         queue_data: &crate::Data,
         size: BufferSize,
-    ) -> Box<dyn QueueWriteBuffer> {
+    ) -> Option<Box<dyn QueueWriteBuffer>> {
         let queue = <T::QueueId>::from(*queue);
         let queue_data = downcast_ref(queue_data);
         Context::queue_create_staging_buffer(self, &queue, queue_data, size)

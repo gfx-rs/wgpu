@@ -59,7 +59,7 @@ static_assertions::assert_impl_all!(ErrorFilter: Send, Sync);
 type C = dyn DynContext;
 type Data = dyn Any + Send + Sync;
 
-/// Context for all other wgpu objects. Instance of wgpu.
+/// Context for all other wgpu objects. Instan ce of wgpu.
 ///
 /// This is the first thing you create when using wgpu.
 /// Its primary use is to create [`Adapter`]s and [`Surface`]s.
@@ -3734,7 +3734,7 @@ impl Queue {
         buffer: &'a Buffer,
         offset: BufferAddress,
         size: BufferSize,
-    ) -> QueueWriteBufferView<'a> {
+    ) -> Option<QueueWriteBufferView<'a>> {
         DynContext::queue_validate_write_buffer(
             &*self.context,
             &self.id,
@@ -3743,19 +3743,19 @@ impl Queue {
             buffer.data.as_ref(),
             offset,
             size,
-        );
+        )?;
         let staging_buffer = DynContext::queue_create_staging_buffer(
             &*self.context,
             &self.id,
             self.data.as_ref(),
             size,
-        );
-        QueueWriteBufferView {
+        )?;
+        Some(QueueWriteBufferView {
             queue: self,
             buffer,
             offset,
             inner: staging_buffer,
-        }
+        })
     }
 
     /// Schedule a write of some data into a texture.

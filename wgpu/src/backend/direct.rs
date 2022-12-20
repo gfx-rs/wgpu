@@ -2072,7 +2072,7 @@ impl crate::Context for Context {
     fn queue_write_buffer(
         &self,
         queue: &Self::QueueId,
-        _queue_data: &Self::QueueData,
+        queue_data: &Self::QueueData,
         buffer: &Self::BufferId,
         _buffer_data: &Self::BufferData,
         offset: wgt::BufferAddress,
@@ -2083,46 +2083,54 @@ impl crate::Context for Context {
             *queue => global.queue_write_buffer(*queue, *buffer, offset, data)
         ) {
             Ok(()) => (),
-            Err(err) => self.handle_error_fatal(err, "Queue::write_buffer"),
+            Err(err) => {
+                self.handle_error_nolabel(&queue_data.error_sink, err, "Queue::write_buffer")
+            }
         }
     }
 
     fn queue_validate_write_buffer(
         &self,
         queue: &Self::QueueId,
-        _queue_data: &Self::QueueData,
+        queue_data: &Self::QueueData,
         buffer: &Self::BufferId,
         _buffer_data: &Self::BufferData,
         offset: wgt::BufferAddress,
         size: wgt::BufferSize,
-    ) {
+    ) -> Option<()> {
         let global = &self.0;
         match wgc::gfx_select!(
             *queue => global.queue_validate_write_buffer(*queue, *buffer, offset, size.get())
         ) {
-            Ok(()) => (),
-            Err(err) => self.handle_error_fatal(err, "Queue::write_buffer_with"),
+            Ok(()) => Some(()),
+            Err(err) => {
+                self.handle_error_nolabel(&queue_data.error_sink, err, "Queue::write_buffer_with");
+                None
+            }
         }
     }
 
     fn queue_create_staging_buffer(
         &self,
         queue: &Self::QueueId,
-        _queue_data: &Self::QueueData,
+        queue_data: &Self::QueueData,
         size: wgt::BufferSize,
-    ) -> Box<dyn crate::context::QueueWriteBuffer> {
+    ) -> Option<Box<dyn crate::context::QueueWriteBuffer>> {
         let global = &self.0;
         match wgc::gfx_select!(
             *queue => global.queue_create_staging_buffer(*queue, size, ())
         ) {
-            Ok((buffer_id, ptr)) => Box::new(QueueWriteBuffer {
+            Ok((buffer_id, ptr)) => Some(Box::new(QueueWriteBuffer {
                 buffer_id,
                 mapping: BufferMappedRange {
                     ptr,
                     size: size.get() as usize,
                 },
-            }),
-            Err(err) => self.handle_error_fatal(err, "Queue::write_buffer_with"),
+            })),
+            Err(err) => {
+                self.handle_error_nolabel(&queue_data.error_sink, err, "Queue::write_buffer_with");
+                None
+            }
         }
     }
 

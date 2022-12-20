@@ -406,7 +406,10 @@ fn main() {
     framework::run::<Example>("texture-arrays");
 }
 
+wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
+
 #[test]
+#[wasm_bindgen_test::wasm_bindgen_test]
 fn texture_arrays_uniform() {
     framework::test::<Example>(framework::FrameworkRefTest {
         image_path: "/examples/texture-arrays/screenshot.png",
@@ -420,6 +423,7 @@ fn texture_arrays_uniform() {
 }
 
 #[test]
+#[wasm_bindgen_test::wasm_bindgen_test]
 fn texture_arrays_non_uniform() {
     framework::test::<Example>(framework::FrameworkRefTest {
         image_path: "/examples/texture-arrays/screenshot.png",

@@ -1,21 +1,20 @@
 //! Tests for buffer copy validation.
 
+use wasm_bindgen_test::wasm_bindgen_test;
 use wgt::BufferAddress;
 
-use crate::common::{initialize_test, TestParameters};
+use crate::common::{fail_if, initialize_test, TestParameters};
 
 #[test]
+#[wasm_bindgen_test]
 fn copy_alignment() {
-    fn try_copy(offset: BufferAddress, size: BufferAddress, should_panic: bool) {
-        let mut parameters = TestParameters::default();
-        if should_panic {
-            parameters = parameters.failure();
-        }
-
-        initialize_test(parameters, |ctx| {
+    fn try_copy(offset: BufferAddress, size: BufferAddress, should_fail: bool) {
+        initialize_test(TestParameters::default(), |ctx| {
             let buffer = ctx.device.create_buffer(&BUFFER_DESCRIPTOR);
             let data = vec![255; size as usize];
-            ctx.queue.write_buffer(&buffer, offset, &data);
+            fail_if(&ctx.device, should_fail, || {
+                ctx.queue.write_buffer(&buffer, offset, &data)
+            });
         });
     }
 

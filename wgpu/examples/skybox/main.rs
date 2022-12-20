@@ -465,20 +465,29 @@ fn main() {
     framework::run::<Skybox>("skybox");
 }
 
+wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
+
 #[test]
+#[wasm_bindgen_test::wasm_bindgen_test]
 fn skybox() {
     framework::test::<Skybox>(framework::FrameworkRefTest {
         image_path: "/examples/skybox/screenshot.png",
         width: 1024,
         height: 768,
         optional_features: wgpu::Features::default(),
-        base_test_parameters: framework::test_common::TestParameters::default(),
+        base_test_parameters: framework::test_common::TestParameters::default().specific_failure(
+            Some(wgpu::Backends::GL),
+            None,
+            Some("ANGLE"),
+            false,
+        ),
         tolerance: 3,
         max_outliers: 207, // bounded by swiftshader
     });
 }
 
 #[test]
+#[wasm_bindgen_test::wasm_bindgen_test]
 fn skybox_bc1() {
     framework::test::<Skybox>(framework::FrameworkRefTest {
         image_path: "/examples/skybox/screenshot-bc1.png",
@@ -492,6 +501,7 @@ fn skybox_bc1() {
 }
 
 #[test]
+#[wasm_bindgen_test::wasm_bindgen_test]
 fn skybox_etc2() {
     framework::test::<Skybox>(framework::FrameworkRefTest {
         image_path: "/examples/skybox/screenshot-etc2.png",
@@ -505,6 +515,7 @@ fn skybox_etc2() {
 }
 
 #[test]
+#[wasm_bindgen_test::wasm_bindgen_test]
 fn skybox_astc() {
     framework::test::<Skybox>(framework::FrameworkRefTest {
         image_path: "/examples/skybox/screenshot-astc.png",

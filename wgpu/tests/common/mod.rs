@@ -145,6 +145,20 @@ impl TestParameters {
         self
     }
 
+    /// Mark the test as always failing on WebGL. Because limited ability of wasm to recover from errors, we need to wholesale
+    /// skip the test if it's not supported.
+    pub fn webgl2_failure(mut self) -> Self {
+        let _ = &mut self;
+        #[cfg(target_arch = "wasm32")]
+        self.failures.push(FailureCase {
+            backends: Some(wgpu::Backends::GL),
+            vendor: None,
+            adapter: None,
+            skip: true,
+        });
+        self
+    }
+
     /// Determines if a test should fail under a particular set of conditions. If any of these are None, that means that it will match anything in that field.
     ///
     /// ex.
@@ -178,7 +192,7 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
 
     let _test_guard = isolation::OneTestPerProcessGuard::new();
 
-    let (adapter, _) = initialize_adapter();
+    let (adapter, _surface_guard) = initialize_adapter();
 
     let adapter_info = adapter.get_info();
     let adapter_lowercase_name = adapter_info.name.to_lowercase();
@@ -283,7 +297,7 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
         if #[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))] {
             let canary_set = hal::VALIDATION_CANARY.get_and_reset();
         } else {
-            let canary_set = false;
+            let canary_set = _surface_guard.check_for_unreported_errors();
         }
     );
 
@@ -319,10 +333,12 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
 fn initialize_adapter() -> (Adapter, SurfaceGuard) {
     let backend_bits = wgpu::util::backend_bits_from_env().unwrap_or_else(Backends::all);
     let instance = Instance::new(backend_bits);
+    let surface_guard;
     let compatible_surface;
 
     #[cfg(not(all(target_arch = "wasm32", feature = "webgl")))]
     {
+        surface_guard = SurfaceGuard {};
         compatible_surface = None;
     }
     #[cfg(all(target_arch = "wasm32", feature = "webgl"))]
@@ -333,6 +349,8 @@ fn initialize_adapter() -> (Adapter, SurfaceGuard) {
         let surface = instance
             .create_surface_from_canvas(&canvas)
             .expect("could not create surface from canvas");
+
+        surface_guard = SurfaceGuard { canvas };
 
         compatible_surface = Some(surface);
     }
@@ -345,10 +363,34 @@ fn initialize_adapter() -> (Adapter, SurfaceGuard) {
     ))
     .expect("could not find suitable adapter on the system");
 
-    (adapter, SurfaceGuard)
+    (adapter, surface_guard)
 }
 
-struct SurfaceGuard;
+struct SurfaceGuard {
+    #[cfg(all(target_arch = "wasm32", feature = "webgl"))]
+    canvas: web_sys::HtmlCanvasElement,
+}
+
+impl SurfaceGuard {
+    fn check_for_unreported_errors(&self) -> bool {
+        cfg_if::cfg_if! {
+            if #[cfg(all(target_arch = "wasm32", feature = "webgl"))] {
+                use wasm_bindgen::JsCast;
+
+                self.canvas
+                    .get_context("webgl2")
+                    .unwrap()
+                    .unwrap()
+                    .dyn_into::<web_sys::WebGl2RenderingContext>()
+                    .unwrap()
+                    .get_error()
+                    != web_sys::WebGl2RenderingContext::NO_ERROR
+            } else {
+                false
+            }
+        }
+    }
+}
 
 #[cfg(all(target_arch = "wasm32", feature = "webgl"))]
 impl Drop for SurfaceGuard {
