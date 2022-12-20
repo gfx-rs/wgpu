@@ -3,6 +3,12 @@ pub(crate) use allocation::{
     free_buffer_allocation, free_texture_allocation, AllocationWrapper, GpuAllocatorWrapper,
 };
 
+// This exists to work around https://github.com/gfx-rs/wgpu/issues/3207
+// Currently this will work the older, slower way if the windows_rs feature is disabled,
+// and will use the fast path of suballocating buffers and textures using gpu_allocator if
+// the windows_rs feature is enabled.
+
+// This is the fast path using gpu_allocator to suballocate buffers and textures.
 #[cfg(feature = "windows_rs")]
 mod allocation {
     use native::WeakPtr;
@@ -191,9 +197,8 @@ mod allocation {
     }
 }
 
-// This exists to work around https://github.com/gfx-rs/wgpu/issues/3207
-// Currently this will work the older, slower way if the windows_rs feature is disabled,
-// and will suballocate buffers using gpu_allocator if the windows_rs feature is enabled.
+// This is the older, slower path where it doesn't suballocate buffers.
+// Tracking issue for when it can be removed: https://github.com/gfx-rs/wgpu/issues/3207
 #[cfg(not(feature = "windows_rs"))]
 mod allocation {
     use native::WeakPtr;
@@ -209,9 +214,11 @@ mod allocation {
 
     const D3D12_HEAP_FLAG_CREATE_NOT_ZEROED: u32 = d3d12::D3D12_HEAP_FLAG_NONE; // TODO: find the exact value
 
+    // Allocator isn't needed when not suballocating with gpu_allocator
     #[derive(Debug)]
     pub(crate) struct GpuAllocatorWrapper {}
 
+    // Allocations aren't needed when not suballocating with gpu_allocator
     #[derive(Debug)]
     pub(crate) struct AllocationWrapper {}
 
