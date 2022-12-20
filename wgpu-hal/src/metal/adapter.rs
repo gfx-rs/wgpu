@@ -319,6 +319,12 @@ impl crate::Adapter<super::Api> for super::Adapter {
             usage: crate::TextureUses::COLOR_TARGET | crate::TextureUses::COPY_DST, //TODO: expose more
         })
     }
+
+    unsafe fn get_presentation_timestamp(&self) -> wgt::PresentationTimestamp {
+        let timestamp = self.shared.presentation_timer.get_timestamp_ns();
+
+        wgt::PresentationTimestamp(timestamp)
+    }
 }
 
 const RESOURCE_HEAP_SUPPORT: &[MTLFeatureSet] = &[

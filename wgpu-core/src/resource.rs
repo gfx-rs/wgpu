@@ -551,9 +551,9 @@ pub struct TextureViewDescriptor<'a> {
     pub format: Option<wgt::TextureFormat>,
     /// The dimension of the texture view.
     ///
-    /// - For 1D textures, this must be `1D`.
+    /// - For 1D textures, this must be `D1`.
     /// - For 2D textures it must be one of `D2`, `D2Array`, `Cube`, or `CubeArray`.
-    /// - For 3D textures it must be `3D`.
+    /// - For 3D textures it must be `D3`.
     pub dimension: Option<wgt::TextureViewDimension>,
     /// Range within the texture that is accessible via this view.
     pub range: wgt::ImageSubresourceRange,

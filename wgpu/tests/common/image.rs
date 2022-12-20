@@ -127,7 +127,7 @@ pub fn compare_image_output(
 
             write_png(actual_path, width, height, data, png::Compression::Fast);
             write_png(
-                &difference_path,
+                difference_path,
                 width,
                 height,
                 &difference_data,

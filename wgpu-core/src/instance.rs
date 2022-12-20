@@ -933,6 +933,18 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .map_err(|_| InvalidAdapter)
     }
 
+    pub fn adapter_get_presentation_timestamp<A: HalApi>(
+        &self,
+        adapter_id: AdapterId,
+    ) -> Result<wgt::PresentationTimestamp, InvalidAdapter> {
+        let hub = A::hub(self);
+        let mut token = Token::root();
+        let (adapter_guard, _) = hub.adapters.read(&mut token);
+        let adapter = adapter_guard.get(adapter_id).map_err(|_| InvalidAdapter)?;
+
+        Ok(unsafe { adapter.raw.adapter.get_presentation_timestamp() })
+    }
+
     pub fn adapter_drop<A: HalApi>(&self, adapter_id: AdapterId) {
         profiling::scope!("Adapter::drop");
 

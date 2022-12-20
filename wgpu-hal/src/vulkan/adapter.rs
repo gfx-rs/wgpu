@@ -316,7 +316,18 @@ impl PhysicalDeviceFeatures {
             | F::WRITE_TIMESTAMP_INSIDE_PASSES
             | F::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
             | F::CLEAR_TEXTURE;
-        let mut dl_flags = Df::all();
+
+        let mut dl_flags = Df::COMPUTE_SHADERS
+            | Df::BASE_VERTEX
+            | Df::READ_ONLY_DEPTH_STENCIL
+            | Df::NON_POWER_OF_TWO_MIPMAPPED_TEXTURES
+            | Df::COMPARISON_SAMPLERS
+            | Df::VERTEX_STORAGE
+            | Df::FRAGMENT_STORAGE
+            | Df::DEPTH_TEXTURE_AND_BUFFER_COPIES
+            | Df::WEBGPU_TEXTURE_FORMAT_SUPPORT
+            | Df::BUFFER_BINDINGS_NOT_16_BYTE_ALIGNED
+            | Df::UNRESTRICTED_INDEX_BUFFER;
 
         dl_flags.set(Df::CUBE_ARRAY_TEXTURES, self.core.image_cube_array != 0);
         dl_flags.set(Df::ANISOTROPIC_FILTERING, self.core.sampler_anisotropy != 0);
@@ -326,6 +337,11 @@ impl PhysicalDeviceFeatures {
         );
         dl_flags.set(Df::MULTISAMPLED_SHADING, self.core.sample_rate_shading != 0);
         dl_flags.set(Df::INDEPENDENT_BLEND, self.core.independent_blend != 0);
+        dl_flags.set(
+            Df::FULL_DRAW_INDEX_UINT32,
+            self.core.full_draw_index_uint32 != 0,
+        );
+        dl_flags.set(Df::DEPTH_BIAS_CLAMP, self.core.depth_bias_clamp != 0);
 
         features.set(
             F::INDIRECT_FIRST_INSTANCE,
@@ -1581,6 +1597,31 @@ impl crate::Adapter<super::Api> for super::Adapter {
                 .collect(),
             composite_alpha_modes: conv::map_vk_composite_alpha(caps.supported_composite_alpha),
         })
+    }
+
+    unsafe fn get_presentation_timestamp(&self) -> wgt::PresentationTimestamp {
+        // VK_GOOGLE_display_timing is the only way to get presentation
+        // timestamps on vulkan right now and it is only ever available
+        // on android and linux. This includes mac, but there's no alternative
+        // on mac, so this is fine.
+        #[cfg(unix)]
+        {
+            let mut timespec = libc::timespec {
+                tv_sec: 0,
+                tv_nsec: 0,
+            };
+            unsafe {
+                libc::clock_gettime(libc::CLOCK_MONOTONIC, &mut timespec);
+            }
+
+            wgt::PresentationTimestamp(
+                timespec.tv_sec as u128 * 1_000_000_000 + timespec.tv_nsec as u128,
+            )
+        }
+        #[cfg(not(unix))]
+        {
+            wgt::PresentationTimestamp::INVALID_TIMESTAMP
+        }
     }
 }
 
