@@ -2739,13 +2739,8 @@ impl<A: HalApi> Device<A> {
                 return Err(pipeline::CreateRenderPipelineError::DepthStencilState(e));
             }
 
-            if ds.bias.clamp != 0.0
-                && !self
-                    .shared
-                    .downlevel_flags
-                    .contains(wgt::DownlevelFlags::DEPTH_BIAS_CLAMP)
-            {
-                return Err(MissingDownlevelFlags(wgt::DownlevelFlags::DEPTH_BIAS_CLAMP).into());
+            if ds.bias.clamp != 0.0 {
+                self.require_downlevel_flags(wgt::DownlevelFlags::DEPTH_BIAS_CLAMP)?;
             }
         }
 
