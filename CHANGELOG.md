@@ -120,6 +120,7 @@ Additionally `Surface::get_default_config` now returns an Option and returns Non
 #### WebGPU
 
 - Implement `queue_validate_write_buffer` by @jinleili in [#3098](https://github.com/gfx-rs/wgpu/pull/3098)
+- Sync depth/stencil copy restrictions with the spec by @teoxoy in [#3314](https://github.com/gfx-rs/wgpu/pull/3314)
 
 #### GLES
 
