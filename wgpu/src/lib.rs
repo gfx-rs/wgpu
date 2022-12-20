@@ -36,14 +36,15 @@ pub use wgt::{
     DepthStencilState, DeviceType, DownlevelCapabilities, DownlevelFlags, DynamicOffset, Extent3d,
     Face, Features, FilterMode, FrontFace, ImageDataLayout, ImageSubresourceRange, IndexFormat,
     Limits, MultisampleState, Origin3d, PipelineStatisticsTypes, PolygonMode, PowerPreference,
-    PresentMode, PrimitiveState, PrimitiveTopology, PushConstantRange, QueryType,
-    RenderBundleDepthStencil, SamplerBindingType, SamplerBorderColor, ShaderLocation, ShaderModel,
-    ShaderStages, StencilFaceState, StencilOperation, StencilState, StorageTextureAccess,
-    SurfaceCapabilities, SurfaceConfiguration, SurfaceStatus, TextureAspect, TextureDimension,
-    TextureFormat, TextureFormatFeatureFlags, TextureFormatFeatures, TextureSampleType,
-    TextureUsages, TextureViewDimension, VertexAttribute, VertexFormat, VertexStepMode,
-    COPY_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT, MAP_ALIGNMENT, PUSH_CONSTANT_ALIGNMENT,
-    QUERY_RESOLVE_BUFFER_ALIGNMENT, QUERY_SET_MAX_QUERIES, QUERY_SIZE, VERTEX_STRIDE_ALIGNMENT,
+    PresentMode, PresentationTimestamp, PrimitiveState, PrimitiveTopology, PushConstantRange,
+    QueryType, RenderBundleDepthStencil, SamplerBindingType, SamplerBorderColor, ShaderLocation,
+    ShaderModel, ShaderStages, StencilFaceState, StencilOperation, StencilState,
+    StorageTextureAccess, SurfaceCapabilities, SurfaceConfiguration, SurfaceStatus, TextureAspect,
+    TextureDimension, TextureFormat, TextureFormatFeatureFlags, TextureFormatFeatures,
+    TextureSampleType, TextureUsages, TextureViewDimension, VertexAttribute, VertexFormat,
+    VertexStepMode, COPY_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT, MAP_ALIGNMENT,
+    PUSH_CONSTANT_ALIGNMENT, QUERY_RESOLVE_BUFFER_ALIGNMENT, QUERY_SET_MAX_QUERIES, QUERY_SIZE,
+    VERTEX_STRIDE_ALIGNMENT,
 };
 
 /// Filter for error scopes.
@@ -1769,6 +1770,31 @@ impl Adapter {
             self.data.as_ref(),
             format,
         )
+    }
+
+    /// Generates a timestamp using the clock used by the presentation engine.
+    ///
+    /// When comparing completely opaque timestamp systems, we need a way of generating timestamps that signal
+    /// the exact same time. You can do this by calling your own timestamp function immediately after a call to
+    /// this function. This should result in timestamps that are 0.5 to 5 microseconds apart. There are locks
+    /// that must be taken during the call, so don't call your function before.
+    ///
+    /// ```no_run
+    /// # let adapter: wgpu::Adapter = panic!();
+    /// # let some_code = || wgpu::PresentationTimestamp::INVALID_TIMESTAMP;
+    /// use std::time::{Duration, Instant};
+    /// let presentation = adapter.get_presentation_timestamp();
+    /// let instant = Instant::now();
+    ///
+    /// // We can now turn a new presentation timestamp into an Instant.
+    /// let some_pres_timestamp = some_code();
+    /// let duration = Duration::from_nanos((some_pres_timestamp.0 - presentation.0) as u64);
+    /// let new_instant: Instant = instant + duration;
+    /// ```
+    //
+    /// [Instant]: std::time::Instant
+    pub fn get_presentation_timestamp(&self) -> PresentationTimestamp {
+        DynContext::adapter_get_presentation_timestamp(&*self.context, &self.id, self.data.as_ref())
     }
 }
 
