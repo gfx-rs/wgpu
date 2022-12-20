@@ -244,7 +244,7 @@ pub trait Adapter<A: Api>: Send + Sync {
     unsafe fn surface_capabilities(&self, surface: &A::Surface) -> Option<SurfaceCapabilities>;
 
     /// Creates a [`PresentationTimestamp`] using the adapter's WSI.
-    /// 
+    ///
     /// [`PresentationTimestamp`]: wgt::PresentationTimestamp
     unsafe fn get_presentation_timestamp(&self) -> wgt::PresentationTimestamp;
 }

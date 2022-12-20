@@ -2738,6 +2738,10 @@ impl<A: HalApi> Device<A> {
             if let Some(e) = error {
                 return Err(pipeline::CreateRenderPipelineError::DepthStencilState(e));
             }
+
+            if ds.bias.clamp != 0.0 {
+                self.require_downlevel_flags(wgt::DownlevelFlags::DEPTH_BIAS_CLAMP)?;
+            }
         }
 
         if desc.layout.is_none() {
@@ -5242,8 +5246,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             };
 
             let num_frames = present::DESIRED_NUM_FRAMES
-                .max(*caps.swap_chain_sizes.start())
-                .min(*caps.swap_chain_sizes.end());
+                .clamp(*caps.swap_chain_sizes.start(), *caps.swap_chain_sizes.end());
             let mut hal_config = hal::SurfaceConfiguration {
                 swap_chain_size: num_frames,
                 present_mode: config.present_mode,

@@ -114,6 +114,8 @@ impl super::Adapter {
             downlevel |= wgt::DownlevelFlags::INDEPENDENT_BLEND;
             // formally FL9_1 supports aniso 2, but we don't support that level of distinction
             downlevel |= wgt::DownlevelFlags::ANISOTROPIC_FILTERING;
+            // this is actually the first FL that supports u32 at all
+            downlevel |= wgt::DownlevelFlags::FULL_DRAW_INDEX_UINT32;
         }
 
         if feature_level >= FL9_3 {
@@ -124,6 +126,7 @@ impl super::Adapter {
             downlevel |= wgt::DownlevelFlags::INDEPENDENT_BLEND;
             downlevel |= wgt::DownlevelFlags::FRAGMENT_STORAGE;
             downlevel |= wgt::DownlevelFlags::FRAGMENT_WRITABLE_STORAGE;
+            downlevel |= wgt::DownlevelFlags::DEPTH_BIAS_CLAMP;
             features |= wgt::Features::DEPTH_CLIP_CONTROL;
             features |= wgt::Features::TIMESTAMP_QUERY;
             features |= wgt::Features::PIPELINE_STATISTICS_QUERY;

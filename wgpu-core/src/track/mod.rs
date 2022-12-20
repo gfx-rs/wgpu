@@ -114,6 +114,7 @@ pub(crate) use stateless::{StatelessBindGroupSate, StatelessTracker};
 pub(crate) use texture::{
     TextureBindGroupState, TextureSelector, TextureTracker, TextureUsageScope,
 };
+use wgt::strict_assert_ne;
 
 /// A structure containing all the information about a particular resource
 /// transition. User code should be able to generate a pipeline barrier

@@ -14,8 +14,6 @@ use winapi::{
 
 // this has to match Naga's HLSL backend, and also needs to be null-terminated
 const NAGA_LOCATION_SEMANTIC: &[u8] = b"LOC\0";
-//TODO: find the exact value
-const D3D12_HEAP_FLAG_CREATE_NOT_ZEROED: u32 = d3d12::D3D12_HEAP_FLAG_NONE;
 
 impl super::Device {
     pub(super) fn new(
@@ -24,6 +22,8 @@ impl super::Device {
         private_caps: super::PrivateCapabilities,
         library: &Arc<native::D3D12Lib>,
     ) -> Result<Self, crate::DeviceError> {
+        let mem_allocator = super::suballocation::create_allocator_wrapper(&raw)?;
+
         let mut idle_fence = native::Fence::null();
         let hr = unsafe {
             profiling::scope!("ID3D12Device::CreateFence");
@@ -165,6 +165,7 @@ impl super::Device {
             #[cfg(feature = "renderdoc")]
             render_doc: Default::default(),
             null_rtv_handle,
+            mem_allocator,
         })
     }
 
@@ -312,12 +313,13 @@ impl super::Device {
             size,
             mip_level_count,
             sample_count,
+            allocation: None,
         }
     }
 }
 
 impl crate::Device<super::Api> for super::Device {
-    unsafe fn exit(self, queue: super::Queue) {
+    unsafe fn exit(mut self, queue: super::Queue) {
         self.rtv_pool.lock().free_handle(self.null_rtv_handle);
         unsafe { self.rtv_pool.into_inner().destroy() };
         unsafe { self.dsv_pool.into_inner().destroy() };
@@ -325,6 +327,7 @@ impl crate::Device<super::Api> for super::Device {
         unsafe { self.sampler_pool.into_inner().destroy() };
         unsafe { self.shared.destroy() };
         unsafe { self.idler.destroy() };
+        self.mem_allocator = None;
         unsafe { queue.raw.destroy() };
     }
 
@@ -355,43 +358,8 @@ impl crate::Device<super::Api> for super::Device {
             Flags: conv::map_buffer_usage_to_resource_flags(desc.usage),
         };
 
-        let is_cpu_read = desc.usage.contains(crate::BufferUses::MAP_READ);
-        let is_cpu_write = desc.usage.contains(crate::BufferUses::MAP_WRITE);
-
-        let heap_properties = d3d12::D3D12_HEAP_PROPERTIES {
-            Type: d3d12::D3D12_HEAP_TYPE_CUSTOM,
-            CPUPageProperty: if is_cpu_read {
-                d3d12::D3D12_CPU_PAGE_PROPERTY_WRITE_BACK
-            } else if is_cpu_write {
-                d3d12::D3D12_CPU_PAGE_PROPERTY_WRITE_COMBINE
-            } else {
-                d3d12::D3D12_CPU_PAGE_PROPERTY_NOT_AVAILABLE
-            },
-            MemoryPoolPreference: match self.private_caps.memory_architecture {
-                super::MemoryArchitecture::NonUnified if !is_cpu_read && !is_cpu_write => {
-                    d3d12::D3D12_MEMORY_POOL_L1
-                }
-                _ => d3d12::D3D12_MEMORY_POOL_L0,
-            },
-            CreationNodeMask: 0,
-            VisibleNodeMask: 0,
-        };
-
-        let hr = unsafe {
-            self.raw.CreateCommittedResource(
-                &heap_properties,
-                if self.private_caps.heap_create_not_zeroed {
-                    D3D12_HEAP_FLAG_CREATE_NOT_ZEROED
-                } else {
-                    d3d12::D3D12_HEAP_FLAG_NONE
-                },
-                &raw_desc,
-                d3d12::D3D12_RESOURCE_STATE_COMMON,
-                ptr::null(),
-                &d3d12::ID3D12Resource::uuidof(),
-                resource.mut_void(),
-            )
-        };
+        let (hr, allocation) =
+            super::suballocation::create_buffer_resource(self, desc, raw_desc, &mut resource)?;
 
         hr.into_device_result("Buffer creation")?;
         if let Some(label) = desc.label {
@@ -399,30 +367,48 @@ impl crate::Device<super::Api> for super::Device {
             unsafe { resource.SetName(cwstr.as_ptr()) };
         }
 
-        Ok(super::Buffer { resource, size })
+        Ok(super::Buffer {
+            resource,
+            size,
+            allocation,
+        })
     }
-    unsafe fn destroy_buffer(&self, buffer: super::Buffer) {
+
+    unsafe fn destroy_buffer(&self, mut buffer: super::Buffer) {
         unsafe { buffer.resource.destroy() };
+        // Only happens when it's using the windows_rs feature and there's an allocation
+        if let Some(alloc) = buffer.allocation.take() {
+            super::suballocation::free_buffer_allocation(
+                alloc,
+                // SAFETY: for allocations to exist, the allocator must exist
+                unsafe { self.mem_allocator.as_ref().unwrap_unchecked() },
+            );
+        }
     }
+
     unsafe fn map_buffer(
         &self,
         buffer: &super::Buffer,
         range: crate::MemoryRange,
     ) -> Result<crate::BufferMapping, crate::DeviceError> {
         let mut ptr = ptr::null_mut();
+        // TODO: 0 for subresource should be fine here until map and unmap buffer is subresource aware?
         let hr = unsafe { (*buffer.resource).Map(0, ptr::null(), &mut ptr) };
         hr.into_device_result("Map buffer")?;
         Ok(crate::BufferMapping {
-            ptr: ptr::NonNull::new(unsafe { ptr.offset(range.start as isize) } as *mut _).unwrap(),
+            ptr: ptr::NonNull::new(unsafe { ptr.offset(range.start as isize).cast::<u8>() })
+                .unwrap(),
             //TODO: double-check this. Documentation is a bit misleading -
             // it implies that Map/Unmap is needed to invalidate/flush memory.
             is_coherent: true,
         })
     }
+
     unsafe fn unmap_buffer(&self, buffer: &super::Buffer) -> Result<(), crate::DeviceError> {
         unsafe { (*buffer.resource).Unmap(0, ptr::null()) };
         Ok(())
     }
+
     unsafe fn flush_mapped_ranges<I>(&self, _buffer: &super::Buffer, _ranges: I) {}
     unsafe fn invalidate_mapped_ranges<I>(&self, _buffer: &super::Buffer, _ranges: I) {}
 
@@ -430,6 +416,8 @@ impl crate::Device<super::Api> for super::Device {
         &self,
         desc: &crate::TextureDescriptor,
     ) -> Result<super::Texture, crate::DeviceError> {
+        use super::suballocation::create_texture_resource;
+
         let mut resource = native::Resource::null();
 
         let raw_desc = d3d12::D3D12_RESOURCE_DESC {
@@ -461,32 +449,7 @@ impl crate::Device<super::Api> for super::Device {
             Flags: conv::map_texture_usage_to_resource_flags(desc.usage),
         };
 
-        let heap_properties = d3d12::D3D12_HEAP_PROPERTIES {
-            Type: d3d12::D3D12_HEAP_TYPE_CUSTOM,
-            CPUPageProperty: d3d12::D3D12_CPU_PAGE_PROPERTY_NOT_AVAILABLE,
-            MemoryPoolPreference: match self.private_caps.memory_architecture {
-                super::MemoryArchitecture::NonUnified => d3d12::D3D12_MEMORY_POOL_L1,
-                super::MemoryArchitecture::Unified { .. } => d3d12::D3D12_MEMORY_POOL_L0,
-            },
-            CreationNodeMask: 0,
-            VisibleNodeMask: 0,
-        };
-
-        let hr = unsafe {
-            self.raw.CreateCommittedResource(
-                &heap_properties,
-                if self.private_caps.heap_create_not_zeroed {
-                    D3D12_HEAP_FLAG_CREATE_NOT_ZEROED
-                } else {
-                    d3d12::D3D12_HEAP_FLAG_NONE
-                },
-                &raw_desc,
-                d3d12::D3D12_RESOURCE_STATE_COMMON,
-                ptr::null(), // clear value
-                &d3d12::ID3D12Resource::uuidof(),
-                resource.mut_void(),
-            )
-        };
+        let (hr, allocation) = create_texture_resource(self, desc, raw_desc, &mut resource)?;
 
         hr.into_device_result("Texture creation")?;
         if let Some(label) = desc.label {
@@ -501,10 +464,19 @@ impl crate::Device<super::Api> for super::Device {
             size: desc.size,
             mip_level_count: desc.mip_level_count,
             sample_count: desc.sample_count,
+            allocation,
         })
     }
-    unsafe fn destroy_texture(&self, texture: super::Texture) {
+
+    unsafe fn destroy_texture(&self, mut texture: super::Texture) {
         unsafe { texture.resource.destroy() };
+        if let Some(alloc) = texture.allocation.take() {
+            super::suballocation::free_texture_allocation(
+                alloc,
+                // SAFETY: for allocations to exist, the allocator must exist
+                unsafe { self.mem_allocator.as_ref().unwrap_unchecked() },
+            );
+        }
     }
 
     unsafe fn create_texture_view(

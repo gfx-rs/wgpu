@@ -624,8 +624,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             false,
         )?;
 
-        if !conv::is_valid_copy_dst_texture_format(texture_format) {
-            return Err(TransferError::CopyToForbiddenTextureFormat(texture_format).into());
+        if !conv::is_valid_copy_dst_texture_format(texture_format, destination.aspect) {
+            return Err(TransferError::CopyToForbiddenTextureFormat {
+                format: texture_format,
+                aspect: destination.aspect,
+            }
+            .into());
         }
         let (block_width, block_height) = format_desc.block_dimensions;
         let width_blocks = size.width / block_width as u32;
