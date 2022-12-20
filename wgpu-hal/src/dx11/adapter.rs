@@ -24,6 +24,10 @@ impl crate::Adapter<super::Api> for super::Adapter {
     ) -> Option<crate::SurfaceCapabilities> {
         todo!()
     }
+
+    unsafe fn get_presentation_timestamp(&self) -> wgt::PresentationTimestamp {
+        todo!()
+    }
 }
 
 impl super::Adapter {

@@ -58,6 +58,7 @@ futures-intrusive = "0.4"
 fxhash = "0.2.1"
 glam = "0.21.3"
 libloading = "0.7"
+libc = "0.2"
 log = "0.4"
 nanorand = { version = "0.7", default-features = false }
 # Opt out of noise's "default-features" to avoid "image" feature as a dependency count optimization.

@@ -1598,6 +1598,31 @@ impl crate::Adapter<super::Api> for super::Adapter {
             composite_alpha_modes: conv::map_vk_composite_alpha(caps.supported_composite_alpha),
         })
     }
+
+    unsafe fn get_presentation_timestamp(&self) -> wgt::PresentationTimestamp {
+        // VK_GOOGLE_display_timing is the only way to get presentation
+        // timestamps on vulkan right now and it is only ever available
+        // on android and linux. This includes mac, but there's no alternative
+        // on mac, so this is fine.
+        #[cfg(unix)]
+        {
+            let mut timespec = libc::timespec {
+                tv_sec: 0,
+                tv_nsec: 0,
+            };
+            unsafe {
+                libc::clock_gettime(libc::CLOCK_MONOTONIC, &mut timespec);
+            }
+
+            wgt::PresentationTimestamp(
+                timespec.tv_sec as u128 * 1_000_000_000 + timespec.tv_nsec as u128,
+            )
+        }
+        #[cfg(not(unix))]
+        {
+            wgt::PresentationTimestamp::INVALID_TIMESTAMP
+        }
+    }
 }
 
 fn is_format_16bit_norm_supported(instance: &ash::Instance, phd: vk::PhysicalDevice) -> bool {

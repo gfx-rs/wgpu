@@ -672,6 +672,18 @@ impl crate::Context for Context {
         }
     }
 
+    fn adapter_get_presentation_timestamp(
+        &self,
+        adapter: &Self::AdapterId,
+        _adapter_data: &Self::AdapterData,
+    ) -> wgt::PresentationTimestamp {
+        let global = &self.0;
+        match wgc::gfx_select!(*adapter => global.adapter_get_presentation_timestamp(*adapter)) {
+            Ok(timestamp) => timestamp,
+            Err(err) => self.handle_error_fatal(err, "Adapter::correlate_presentation_timestamp"),
+        }
+    }
+
     fn surface_get_capabilities(
         &self,
         surface: &Self::SurfaceId,

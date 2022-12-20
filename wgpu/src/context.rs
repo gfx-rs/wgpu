@@ -145,6 +145,11 @@ pub trait Context: Debug + Send + Sized + Sync {
         adapter_data: &Self::AdapterData,
         format: TextureFormat,
     ) -> TextureFormatFeatures;
+    fn adapter_get_presentation_timestamp(
+        &self,
+        adapter: &Self::AdapterId,
+        adapter_data: &Self::AdapterData,
+    ) -> wgt::PresentationTimestamp;
 
     fn surface_get_capabilities(
         &self,
@@ -1090,6 +1095,12 @@ pub(crate) trait DynContext: Debug + Send + Sync {
         adapter_data: &crate::Data,
         format: TextureFormat,
     ) -> TextureFormatFeatures;
+    fn adapter_get_presentation_timestamp(
+        &self,
+        adapter: &ObjectId,
+        adapter_data: &crate::Data,
+    ) -> wgt::PresentationTimestamp;
+
     fn surface_get_capabilities(
         &self,
         surface: &ObjectId,
@@ -1968,6 +1979,15 @@ where
         let adapter = <T::AdapterId>::from(*adapter);
         let adapter_data = downcast_ref(adapter_data);
         Context::adapter_get_texture_format_features(self, &adapter, adapter_data, format)
+    }
+    fn adapter_get_presentation_timestamp(
+        &self,
+        adapter: &ObjectId,
+        adapter_data: &crate::Data,
+    ) -> wgt::PresentationTimestamp {
+        let adapter = <T::AdapterId>::from(*adapter);
+        let adapter_data = downcast_ref(adapter_data);
+        Context::adapter_get_presentation_timestamp(self, &adapter, adapter_data)
     }
 
     fn surface_get_capabilities(

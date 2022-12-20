@@ -874,6 +874,10 @@ impl crate::Adapter<super::Api> for super::Adapter {
             None
         }
     }
+
+    unsafe fn get_presentation_timestamp(&self) -> wgt::PresentationTimestamp {
+        wgt::PresentationTimestamp::INVALID_TIMESTAMP
+    }
 }
 
 impl super::AdapterShared {

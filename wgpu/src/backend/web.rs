@@ -986,6 +986,14 @@ impl crate::context::Context for Context {
         format.describe().guaranteed_format_features
     }
 
+    fn adapter_get_presentation_timestamp(
+        &self,
+        _adapter: &Self::AdapterId,
+        _adapter_data: &Self::AdapterData,
+    ) -> wgt::PresentationTimestamp {
+        wgt::PresentationTimestamp::INVALID_TIMESTAMP
+    }
+
     fn surface_get_capabilities(
         &self,
         _surface: &Self::SurfaceId,

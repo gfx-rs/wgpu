@@ -90,7 +90,7 @@ egl = { package = "khronos-egl", version = "4.1", features = ["static", "no-pkg-
 libloading = { version = "0.7", optional = true }
 
 [target.'cfg(windows)'.dependencies]
-winapi = { version = "0.3", features = ["libloaderapi", "windef", "winuser", "dcomp"] }
+winapi = { version = "0.3", features = ["profileapi", "libloaderapi", "windef", "winuser", "dcomp"] }
 native = { package = "d3d12", version = "0.5.0", features = ["libloading"], optional = true }
 
 [target.'cfg(any(target_os="macos", target_os="ios"))'.dependencies]
@@ -102,6 +102,9 @@ core-graphics-types = "0.1"
 wasm-bindgen = "0.2.83"
 web-sys = { version = "0.3.60", features = ["Window", "HtmlCanvasElement", "WebGl2RenderingContext", "OffscreenCanvas"] }
 js-sys = "0.3.60"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
 
 [target.'cfg(target_os = "android")'.dependencies]
 android_system_properties = "0.1.1"

@@ -169,6 +169,7 @@ pub struct Adapter {
     device: native::Device,
     library: Arc<native::D3D12Lib>,
     private_caps: PrivateCapabilities,
+    presentation_timer: auxil::dxgi::time::PresentationTimer,
     //Note: this isn't used right now, but we'll need it later.
     #[allow(unused)]
     workarounds: Workarounds,
