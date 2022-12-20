@@ -316,7 +316,18 @@ impl PhysicalDeviceFeatures {
             | F::WRITE_TIMESTAMP_INSIDE_PASSES
             | F::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
             | F::CLEAR_TEXTURE;
-        let mut dl_flags = Df::all();
+
+        let mut dl_flags = Df::COMPUTE_SHADERS
+            | Df::BASE_VERTEX
+            | Df::READ_ONLY_DEPTH_STENCIL
+            | Df::NON_POWER_OF_TWO_MIPMAPPED_TEXTURES
+            | Df::COMPARISON_SAMPLERS
+            | Df::VERTEX_STORAGE
+            | Df::FRAGMENT_STORAGE
+            | Df::DEPTH_TEXTURE_AND_BUFFER_COPIES
+            | Df::WEBGPU_TEXTURE_FORMAT_SUPPORT
+            | Df::BUFFER_BINDINGS_NOT_16_BYTE_ALIGNED
+            | Df::UNRESTRICTED_INDEX_BUFFER;
 
         dl_flags.set(Df::CUBE_ARRAY_TEXTURES, self.core.image_cube_array != 0);
         dl_flags.set(Df::ANISOTROPIC_FILTERING, self.core.sampler_anisotropy != 0);
@@ -326,6 +337,11 @@ impl PhysicalDeviceFeatures {
         );
         dl_flags.set(Df::MULTISAMPLED_SHADING, self.core.sample_rate_shading != 0);
         dl_flags.set(Df::INDEPENDENT_BLEND, self.core.independent_blend != 0);
+        dl_flags.set(
+            Df::FULL_DRAW_INDEX_UINT32,
+            self.core.full_draw_index_uint32 != 0,
+        );
+        dl_flags.set(Df::DEPTH_BIAS_CLAMP, self.core.depth_bias_clamp != 0);
 
         features.set(
             F::INDIRECT_FIRST_INSTANCE,
