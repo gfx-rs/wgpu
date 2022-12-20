@@ -1,17 +1,19 @@
 use crate::{
+    context::{ObjectId, Unused},
     AdapterInfo, BindGroupDescriptor, BindGroupLayoutDescriptor, BindingResource, BufferBinding,
     CommandEncoderDescriptor, ComputePassDescriptor, ComputePipelineDescriptor,
     DownlevelCapabilities, Features, Label, Limits, LoadOp, MapMode, Operations,
     PipelineLayoutDescriptor, RenderBundleEncoderDescriptor, RenderPipelineDescriptor,
     SamplerDescriptor, ShaderModuleDescriptor, ShaderModuleDescriptorSpirV, ShaderSource,
-    SurfaceStatus, TextureDescriptor, TextureViewDescriptor,
+    SurfaceStatus, TextureDescriptor, TextureViewDescriptor, UncapturedErrorHandler,
 };
 
 use arrayvec::ArrayVec;
 use parking_lot::Mutex;
 use smallvec::SmallVec;
 use std::{
-    borrow::Cow::Borrowed,
+    any::Any,
+    borrow::Cow::{Borrowed, Owned},
     error::Error,
     fmt,
     future::{ready, Ready},
@@ -19,6 +21,8 @@ use std::{
     slice,
     sync::Arc,
 };
+use wgc::command::{bundle_ffi::*, compute_ffi::*, render_ffi::*};
+use wgc::id::TypedId;
 
 const LABEL: &str = "label";
 
@@ -202,22 +206,19 @@ impl Context {
 
     #[cfg(any(target_os = "ios", target_os = "macos"))]
     pub unsafe fn create_surface_from_core_animation_layer(
-        self: &Arc<Self>,
+        &self,
         layer: *mut std::ffi::c_void,
-    ) -> crate::Surface {
+    ) -> Surface {
         let id = self.0.instance_create_surface_metal(layer, ());
-        crate::Surface {
-            context: Arc::clone(self),
-            id: Surface {
-                id,
-                configured_device: Mutex::default(),
-            },
+        Surface {
+            id,
+            configured_device: Mutex::default(),
         }
     }
 
     #[cfg(all(target_arch = "wasm32", feature = "webgl", not(feature = "emscripten")))]
     pub fn instance_create_surface_from_canvas(
-        self: &Arc<Self>,
+        &self,
         canvas: &web_sys::HtmlCanvasElement,
     ) -> Result<Surface, crate::CreateSurfaceError> {
         let id = self
@@ -232,7 +233,7 @@ impl Context {
 
     #[cfg(all(target_arch = "wasm32", feature = "webgl", not(feature = "emscripten")))]
     pub fn instance_create_surface_from_offscreen_canvas(
-        self: &Arc<Self>,
+        &self,
         canvas: &web_sys::OffscreenCanvas,
     ) -> Result<Surface, crate::CreateSurfaceError> {
         let id = self
@@ -246,17 +247,11 @@ impl Context {
     }
 
     #[cfg(target_os = "windows")]
-    pub unsafe fn create_surface_from_visual(
-        self: &Arc<Self>,
-        visual: *mut std::ffi::c_void,
-    ) -> crate::Surface {
+    pub unsafe fn create_surface_from_visual(&self, visual: *mut std::ffi::c_void) -> Surface {
         let id = unsafe { self.0.instance_create_surface_from_visual(visual, ()) };
-        crate::Surface {
-            context: Arc::clone(self),
-            id: Surface {
-                id,
-                configured_device: Mutex::default(),
-            },
+        Surface {
+            id,
+            configured_device: Mutex::default(),
         }
     }
 
@@ -331,434 +326,16 @@ impl Context {
     }
 }
 
-mod pass_impl {
-    use super::Context;
-    use smallvec::SmallVec;
-    use std::convert::TryInto;
-    use std::ops::Range;
-    use wgc::command::{bundle_ffi::*, compute_ffi::*, render_ffi::*};
-
-    impl crate::ComputePassInner<Context> for wgc::command::ComputePass {
-        fn set_pipeline(&mut self, pipeline: &wgc::id::ComputePipelineId) {
-            wgpu_compute_pass_set_pipeline(self, *pipeline)
-        }
-        fn set_bind_group(
-            &mut self,
-            index: u32,
-            bind_group: &wgc::id::BindGroupId,
-            offsets: &[wgt::DynamicOffset],
-        ) {
-            unsafe {
-                wgpu_compute_pass_set_bind_group(
-                    self,
-                    index,
-                    *bind_group,
-                    offsets.as_ptr(),
-                    offsets.len(),
-                )
-            }
-        }
-        fn set_push_constants(&mut self, offset: u32, data: &[u8]) {
-            unsafe {
-                wgpu_compute_pass_set_push_constant(
-                    self,
-                    offset,
-                    data.len().try_into().unwrap(),
-                    data.as_ptr(),
-                )
-            }
-        }
-        fn insert_debug_marker(&mut self, label: &str) {
-            unsafe {
-                let label = std::ffi::CString::new(label).unwrap();
-                wgpu_compute_pass_insert_debug_marker(self, label.as_ptr(), 0);
-            }
-        }
-
-        fn push_debug_group(&mut self, group_label: &str) {
-            unsafe {
-                let label = std::ffi::CString::new(group_label).unwrap();
-                wgpu_compute_pass_push_debug_group(self, label.as_ptr(), 0);
-            }
-        }
-        fn pop_debug_group(&mut self) {
-            wgpu_compute_pass_pop_debug_group(self);
-        }
-
-        fn write_timestamp(&mut self, query_set: &wgc::id::QuerySetId, query_index: u32) {
-            wgpu_compute_pass_write_timestamp(self, *query_set, query_index)
-        }
-
-        fn begin_pipeline_statistics_query(
-            &mut self,
-            query_set: &wgc::id::QuerySetId,
-            query_index: u32,
-        ) {
-            wgpu_compute_pass_begin_pipeline_statistics_query(self, *query_set, query_index)
-        }
-
-        fn end_pipeline_statistics_query(&mut self) {
-            wgpu_compute_pass_end_pipeline_statistics_query(self)
-        }
-
-        fn dispatch_workgroups(&mut self, x: u32, y: u32, z: u32) {
-            wgpu_compute_pass_dispatch_workgroups(self, x, y, z)
-        }
-        fn dispatch_workgroups_indirect(
-            &mut self,
-            indirect_buffer: &super::Buffer,
-            indirect_offset: wgt::BufferAddress,
-        ) {
-            wgpu_compute_pass_dispatch_workgroups_indirect(
-                self,
-                indirect_buffer.id,
-                indirect_offset,
-            )
-        }
-    }
-
-    impl crate::RenderInner<Context> for wgc::command::RenderPass {
-        fn set_pipeline(&mut self, pipeline: &wgc::id::RenderPipelineId) {
-            wgpu_render_pass_set_pipeline(self, *pipeline)
-        }
-        fn set_bind_group(
-            &mut self,
-            index: u32,
-            bind_group: &wgc::id::BindGroupId,
-            offsets: &[wgt::DynamicOffset],
-        ) {
-            unsafe {
-                wgpu_render_pass_set_bind_group(
-                    self,
-                    index,
-                    *bind_group,
-                    offsets.as_ptr(),
-                    offsets.len(),
-                )
-            }
-        }
-        fn set_index_buffer(
-            &mut self,
-            buffer: &super::Buffer,
-            index_format: wgt::IndexFormat,
-            offset: wgt::BufferAddress,
-            size: Option<wgt::BufferSize>,
-        ) {
-            self.set_index_buffer(buffer.id, index_format, offset, size)
-        }
-        fn set_vertex_buffer(
-            &mut self,
-            slot: u32,
-            buffer: &super::Buffer,
-            offset: wgt::BufferAddress,
-            size: Option<wgt::BufferSize>,
-        ) {
-            wgpu_render_pass_set_vertex_buffer(self, slot, buffer.id, offset, size)
-        }
-        fn set_push_constants(&mut self, stages: wgt::ShaderStages, offset: u32, data: &[u8]) {
-            unsafe {
-                wgpu_render_pass_set_push_constants(
-                    self,
-                    stages,
-                    offset,
-                    data.len().try_into().unwrap(),
-                    data.as_ptr(),
-                )
-            }
-        }
-        fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>) {
-            wgpu_render_pass_draw(
-                self,
-                vertices.end - vertices.start,
-                instances.end - instances.start,
-                vertices.start,
-                instances.start,
-            )
-        }
-        fn draw_indexed(&mut self, indices: Range<u32>, base_vertex: i32, instances: Range<u32>) {
-            wgpu_render_pass_draw_indexed(
-                self,
-                indices.end - indices.start,
-                instances.end - instances.start,
-                indices.start,
-                base_vertex,
-                instances.start,
-            )
-        }
-        fn draw_indirect(
-            &mut self,
-            indirect_buffer: &super::Buffer,
-            indirect_offset: wgt::BufferAddress,
-        ) {
-            wgpu_render_pass_draw_indirect(self, indirect_buffer.id, indirect_offset)
-        }
-        fn draw_indexed_indirect(
-            &mut self,
-            indirect_buffer: &super::Buffer,
-            indirect_offset: wgt::BufferAddress,
-        ) {
-            wgpu_render_pass_draw_indexed_indirect(self, indirect_buffer.id, indirect_offset)
-        }
-        fn multi_draw_indirect(
-            &mut self,
-            indirect_buffer: &super::Buffer,
-            indirect_offset: wgt::BufferAddress,
-            count: u32,
-        ) {
-            wgpu_render_pass_multi_draw_indirect(self, indirect_buffer.id, indirect_offset, count)
-        }
-        fn multi_draw_indexed_indirect(
-            &mut self,
-            indirect_buffer: &super::Buffer,
-            indirect_offset: wgt::BufferAddress,
-            count: u32,
-        ) {
-            wgpu_render_pass_multi_draw_indexed_indirect(
-                self,
-                indirect_buffer.id,
-                indirect_offset,
-                count,
-            )
-        }
-        fn multi_draw_indirect_count(
-            &mut self,
-            indirect_buffer: &super::Buffer,
-            indirect_offset: wgt::BufferAddress,
-            count_buffer: &super::Buffer,
-            count_buffer_offset: wgt::BufferAddress,
-            max_count: u32,
-        ) {
-            wgpu_render_pass_multi_draw_indirect_count(
-                self,
-                indirect_buffer.id,
-                indirect_offset,
-                count_buffer.id,
-                count_buffer_offset,
-                max_count,
-            )
-        }
-        fn multi_draw_indexed_indirect_count(
-            &mut self,
-            indirect_buffer: &super::Buffer,
-            indirect_offset: wgt::BufferAddress,
-            count_buffer: &super::Buffer,
-            count_buffer_offset: wgt::BufferAddress,
-            max_count: u32,
-        ) {
-            wgpu_render_pass_multi_draw_indexed_indirect_count(
-                self,
-                indirect_buffer.id,
-                indirect_offset,
-                count_buffer.id,
-                count_buffer_offset,
-                max_count,
-            )
-        }
-    }
-
-    impl crate::RenderPassInner<Context> for wgc::command::RenderPass {
-        fn set_blend_constant(&mut self, color: wgt::Color) {
-            wgpu_render_pass_set_blend_constant(self, &color)
-        }
-        fn set_scissor_rect(&mut self, x: u32, y: u32, width: u32, height: u32) {
-            wgpu_render_pass_set_scissor_rect(self, x, y, width, height)
-        }
-        fn set_viewport(
-            &mut self,
-            x: f32,
-            y: f32,
-            width: f32,
-            height: f32,
-            min_depth: f32,
-            max_depth: f32,
-        ) {
-            wgpu_render_pass_set_viewport(self, x, y, width, height, min_depth, max_depth)
-        }
-        fn set_stencil_reference(&mut self, reference: u32) {
-            wgpu_render_pass_set_stencil_reference(self, reference)
-        }
-
-        fn insert_debug_marker(&mut self, label: &str) {
-            unsafe {
-                let label = std::ffi::CString::new(label).unwrap();
-                wgpu_render_pass_insert_debug_marker(self, label.as_ptr(), 0);
-            }
-        }
-
-        fn push_debug_group(&mut self, group_label: &str) {
-            unsafe {
-                let label = std::ffi::CString::new(group_label).unwrap();
-                wgpu_render_pass_push_debug_group(self, label.as_ptr(), 0);
-            }
-        }
-
-        fn pop_debug_group(&mut self) {
-            wgpu_render_pass_pop_debug_group(self);
-        }
-
-        fn write_timestamp(&mut self, query_set: &wgc::id::QuerySetId, query_index: u32) {
-            wgpu_render_pass_write_timestamp(self, *query_set, query_index)
-        }
-
-        fn begin_pipeline_statistics_query(
-            &mut self,
-            query_set: &wgc::id::QuerySetId,
-            query_index: u32,
-        ) {
-            wgpu_render_pass_begin_pipeline_statistics_query(self, *query_set, query_index)
-        }
-
-        fn end_pipeline_statistics_query(&mut self) {
-            wgpu_render_pass_end_pipeline_statistics_query(self)
-        }
-
-        fn execute_bundles<'a, I: Iterator<Item = &'a wgc::id::RenderBundleId>>(
-            &mut self,
-            render_bundles: I,
-        ) {
-            let temp_render_bundles = render_bundles.cloned().collect::<SmallVec<[_; 4]>>();
-            unsafe {
-                wgpu_render_pass_execute_bundles(
-                    self,
-                    temp_render_bundles.as_ptr(),
-                    temp_render_bundles.len(),
-                )
-            }
-        }
-    }
-
-    impl crate::RenderInner<Context> for wgc::command::RenderBundleEncoder {
-        fn set_pipeline(&mut self, pipeline: &wgc::id::RenderPipelineId) {
-            wgpu_render_bundle_set_pipeline(self, *pipeline)
-        }
-        fn set_bind_group(
-            &mut self,
-            index: u32,
-            bind_group: &wgc::id::BindGroupId,
-            offsets: &[wgt::DynamicOffset],
-        ) {
-            unsafe {
-                wgpu_render_bundle_set_bind_group(
-                    self,
-                    index,
-                    *bind_group,
-                    offsets.as_ptr(),
-                    offsets.len(),
-                )
-            }
-        }
-        fn set_index_buffer(
-            &mut self,
-            buffer: &super::Buffer,
-            index_format: wgt::IndexFormat,
-            offset: wgt::BufferAddress,
-            size: Option<wgt::BufferSize>,
-        ) {
-            self.set_index_buffer(buffer.id, index_format, offset, size)
-        }
-        fn set_vertex_buffer(
-            &mut self,
-            slot: u32,
-            buffer: &super::Buffer,
-            offset: wgt::BufferAddress,
-            size: Option<wgt::BufferSize>,
-        ) {
-            wgpu_render_bundle_set_vertex_buffer(self, slot, buffer.id, offset, size)
-        }
-
-        fn set_push_constants(&mut self, stages: wgt::ShaderStages, offset: u32, data: &[u8]) {
-            unsafe {
-                wgpu_render_bundle_set_push_constants(
-                    self,
-                    stages,
-                    offset,
-                    data.len().try_into().unwrap(),
-                    data.as_ptr(),
-                )
-            }
-        }
-        fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>) {
-            wgpu_render_bundle_draw(
-                self,
-                vertices.end - vertices.start,
-                instances.end - instances.start,
-                vertices.start,
-                instances.start,
-            )
-        }
-        fn draw_indexed(&mut self, indices: Range<u32>, base_vertex: i32, instances: Range<u32>) {
-            wgpu_render_bundle_draw_indexed(
-                self,
-                indices.end - indices.start,
-                instances.end - instances.start,
-                indices.start,
-                base_vertex,
-                instances.start,
-            )
-        }
-        fn draw_indirect(
-            &mut self,
-            indirect_buffer: &super::Buffer,
-            indirect_offset: wgt::BufferAddress,
-        ) {
-            wgpu_render_bundle_draw_indirect(self, indirect_buffer.id, indirect_offset)
-        }
-        fn draw_indexed_indirect(
-            &mut self,
-            indirect_buffer: &super::Buffer,
-            indirect_offset: wgt::BufferAddress,
-        ) {
-            wgpu_render_bundle_draw_indexed_indirect(self, indirect_buffer.id, indirect_offset)
-        }
-        fn multi_draw_indirect(
-            &mut self,
-            _indirect_buffer: &super::Buffer,
-            _indirect_offset: wgt::BufferAddress,
-            _count: u32,
-        ) {
-            unimplemented!()
-        }
-        fn multi_draw_indexed_indirect(
-            &mut self,
-            _indirect_buffer: &super::Buffer,
-            _indirect_offset: wgt::BufferAddress,
-            _count: u32,
-        ) {
-            unimplemented!()
-        }
-        fn multi_draw_indirect_count(
-            &mut self,
-            _indirect_buffer: &super::Buffer,
-            _indirect_offset: wgt::BufferAddress,
-            _count_buffer: &super::Buffer,
-            _count_buffer_offset: wgt::BufferAddress,
-            _max_count: u32,
-        ) {
-            unimplemented!()
-        }
-        fn multi_draw_indexed_indirect_count(
-            &mut self,
-            _indirect_buffer: &super::Buffer,
-            _indirect_offset: wgt::BufferAddress,
-            _count_buffer: &super::Buffer,
-            _count_buffer_offset: wgt::BufferAddress,
-            _max_count: u32,
-        ) {
-            unimplemented!()
-        }
-    }
-}
-
 fn map_buffer_copy_view(view: crate::ImageCopyBuffer) -> wgc::command::ImageCopyBuffer {
     wgc::command::ImageCopyBuffer {
-        buffer: view.buffer.id.id,
+        buffer: view.buffer.id.into(),
         layout: view.layout,
     }
 }
 
 fn map_texture_copy_view(view: crate::ImageCopyTexture) -> wgc::command::ImageCopyTexture {
     wgc::command::ImageCopyTexture {
-        texture: view.texture.id.id,
+        texture: view.texture.id.into(),
         mip_level: view.mip_level,
         origin: view.origin,
         aspect: view.aspect,
@@ -812,6 +389,14 @@ pub struct Surface {
     configured_device: Mutex<Option<wgc::id::DeviceId>>,
 }
 
+impl Surface {
+    // Not used on every platform
+    #[allow(dead_code)]
+    pub fn id(&self) -> wgc::id::SurfaceId {
+        self.id
+    }
+}
+
 #[derive(Debug)]
 pub struct Device {
     id: wgc::id::DeviceId,
@@ -819,9 +404,16 @@ pub struct Device {
     features: Features,
 }
 
+impl Device {
+    // Not used on every platform
+    #[allow(dead_code)]
+    pub fn id(&self) -> wgc::id::DeviceId {
+        self.id
+    }
+}
+
 #[derive(Debug)]
-pub(crate) struct Buffer {
-    id: wgc::id::BufferId,
+pub struct Buffer {
     error_sink: ErrorSink,
 }
 
@@ -831,6 +423,14 @@ pub struct Texture {
     error_sink: ErrorSink,
 }
 
+impl Texture {
+    // Not used on every platform
+    #[allow(dead_code)]
+    pub fn id(&self) -> wgc::id::TextureId {
+        self.id
+    }
+}
+
 #[derive(Debug)]
 pub struct Queue {
     id: wgc::id::QueueId,
@@ -838,103 +438,82 @@ pub struct Queue {
 }
 
 impl Queue {
-    pub(crate) fn backend(&self) -> wgt::Backend {
-        self.id.backend()
+    // Not used on every platform
+    #[allow(dead_code)]
+    pub fn id(&self) -> wgc::id::QueueId {
+        self.id
     }
 }
 
 #[derive(Debug)]
-pub(crate) struct CommandEncoder {
-    id: wgc::id::CommandEncoderId,
+pub struct CommandEncoder {
     error_sink: ErrorSink,
     open: bool,
 }
 
-impl<T: wgc::id::TypedId> crate::GlobalId for T {
-    #[allow(clippy::useless_conversion)] // because not(id32)
-    fn global_id(&self) -> u64 {
-        T::into_raw(*self).get().into()
-    }
-}
-
-impl crate::GlobalId for Surface {
-    #[allow(clippy::useless_conversion)] // because not(id32)
-    fn global_id(&self) -> u64 {
-        use wgc::id::TypedId;
-        self.id.into_raw().get().into()
-    }
-}
-
-impl crate::GlobalId for Device {
-    #[allow(clippy::useless_conversion)] // because not(id32)
-    fn global_id(&self) -> u64 {
-        use wgc::id::TypedId;
-        self.id.into_raw().get().into()
-    }
-}
-
-impl crate::GlobalId for Buffer {
-    #[allow(clippy::useless_conversion)] // because not(id32)
-    fn global_id(&self) -> u64 {
-        use wgc::id::TypedId;
-        self.id.into_raw().get().into()
-    }
-}
-
-impl crate::GlobalId for Texture {
-    #[allow(clippy::useless_conversion)] // because not(id32)
-    fn global_id(&self) -> u64 {
-        use wgc::id::TypedId;
-        self.id.into_raw().get().into()
-    }
-}
-
-impl crate::GlobalId for CommandEncoder {
-    #[allow(clippy::useless_conversion)] // because not(id32)
-    fn global_id(&self) -> u64 {
-        use wgc::id::TypedId;
-        self.id.into_raw().get().into()
-    }
-}
-
-impl crate::GlobalId for Queue {
-    #[allow(clippy::useless_conversion)] // because not(id32)
-    fn global_id(&self) -> u64 {
-        use wgc::id::TypedId;
-        self.id.into_raw().get().into()
-    }
-}
-
 impl crate::Context for Context {
     type AdapterId = wgc::id::AdapterId;
-    type DeviceId = Device;
-    type QueueId = Queue;
+    type AdapterData = ();
+    type DeviceId = wgc::id::DeviceId;
+    type DeviceData = Device;
+    type QueueId = wgc::id::QueueId;
+    type QueueData = Queue;
     type ShaderModuleId = wgc::id::ShaderModuleId;
+    type ShaderModuleData = ();
     type BindGroupLayoutId = wgc::id::BindGroupLayoutId;
+    type BindGroupLayoutData = ();
     type BindGroupId = wgc::id::BindGroupId;
+    type BindGroupData = ();
     type TextureViewId = wgc::id::TextureViewId;
+    type TextureViewData = ();
     type SamplerId = wgc::id::SamplerId;
+    type SamplerData = ();
+    type BufferId = wgc::id::BufferId;
+    type BufferData = Buffer;
+    type TextureId = wgc::id::TextureId;
+    type TextureData = Texture;
     type QuerySetId = wgc::id::QuerySetId;
-    type BufferId = Buffer;
-    type TextureId = Texture;
+    type QuerySetData = ();
     type PipelineLayoutId = wgc::id::PipelineLayoutId;
+    type PipelineLayoutData = ();
     type RenderPipelineId = wgc::id::RenderPipelineId;
+    type RenderPipelineData = ();
     type ComputePipelineId = wgc::id::ComputePipelineId;
-    type CommandEncoderId = CommandEncoder;
-    type ComputePassId = wgc::command::ComputePass;
-    type RenderPassId = wgc::command::RenderPass;
+    type ComputePipelineData = ();
+    type CommandEncoderId = wgc::id::CommandEncoderId;
+    type CommandEncoderData = CommandEncoder;
+    type ComputePassId = Unused;
+    type ComputePassData = wgc::command::ComputePass;
+    type RenderPassId = Unused;
+    type RenderPassData = wgc::command::RenderPass;
     type CommandBufferId = wgc::id::CommandBufferId;
-    type RenderBundleEncoderId = wgc::command::RenderBundleEncoder;
+    type CommandBufferData = ();
+    type RenderBundleEncoderId = Unused;
+    type RenderBundleEncoderData = wgc::command::RenderBundleEncoder;
     type RenderBundleId = wgc::id::RenderBundleId;
-    type SurfaceId = Surface;
+    type RenderBundleData = ();
 
+    type SurfaceId = wgc::id::SurfaceId;
+    type SurfaceData = Surface;
     type SurfaceOutputDetail = SurfaceOutputDetail;
-    type SubmissionIndex = wgc::device::queue::WrappedSubmissionIndex;
+    type SubmissionIndex = Unused;
+    type SubmissionIndexData = wgc::device::queue::WrappedSubmissionIndex;
 
-    type RequestAdapterFuture = Ready<Option<Self::AdapterId>>;
+    type RequestAdapterFuture = Ready<Option<(Self::AdapterId, Self::AdapterData)>>;
+
     #[allow(clippy::type_complexity)]
-    type RequestDeviceFuture =
-        Ready<Result<(Self::DeviceId, Self::QueueId), crate::RequestDeviceError>>;
+    type RequestDeviceFuture = Ready<
+        Result<
+            (
+                Self::DeviceId,
+                Self::DeviceData,
+                Self::QueueId,
+                Self::QueueData,
+            ),
+            crate::RequestDeviceError,
+        >,
+    >;
+
     type PopErrorScopeFuture = Ready<Option<crate::Error>>;
 
     fn init(backends: wgt::Backends) -> Self {
@@ -949,13 +528,18 @@ impl crate::Context for Context {
         &self,
         display_handle: raw_window_handle::RawDisplayHandle,
         window_handle: raw_window_handle::RawWindowHandle,
-    ) -> Result<Self::SurfaceId, crate::CreateSurfaceError> {
-        Ok(Surface {
-            id: self
-                .0
-                .instance_create_surface(display_handle, window_handle, ()),
-            configured_device: Mutex::new(None),
-        })
+    ) -> Result<(Self::SurfaceId, Self::SurfaceData), crate::CreateSurfaceError> {
+        let id = self
+            .0
+            .instance_create_surface(display_handle, window_handle, ());
+
+        Ok((
+            id,
+            Surface {
+                id,
+                configured_device: Mutex::new(None),
+            },
+        ))
     }
 
     fn instance_request_adapter(
@@ -966,24 +550,17 @@ impl crate::Context for Context {
             &wgc::instance::RequestAdapterOptions {
                 power_preference: options.power_preference,
                 force_fallback_adapter: options.force_fallback_adapter,
-                compatible_surface: options.compatible_surface.map(|surface| surface.id.id),
+                compatible_surface: options.compatible_surface.map(|surface| surface.id.into()),
             },
             wgc::instance::AdapterInputs::Mask(wgt::Backends::all(), |_| ()),
         );
-        ready(id.ok())
-    }
-
-    fn instance_poll_all_devices(&self, force_wait: bool) -> bool {
-        let global = &self.0;
-        match global.poll_all_devices(force_wait) {
-            Ok(all_queue_empty) => all_queue_empty,
-            Err(err) => self.handle_error_fatal(err, "Device::poll"),
-        }
+        ready(id.ok().map(|id| (id, ())))
     }
 
     fn adapter_request_device(
         &self,
         adapter: &Self::AdapterId,
+        _adapter_data: &Self::AdapterData,
         desc: &crate::DeviceDescriptor,
         trace_dir: Option<&std::path::Path>,
     ) -> Self::RequestDeviceFuture {
@@ -1008,23 +585,36 @@ impl crate::Context for Context {
             id: device_id,
             error_sink,
         };
-        ready(Ok((device, queue)))
+        ready(Ok((device_id, device, device_id, queue)))
+    }
+
+    fn instance_poll_all_devices(&self, force_wait: bool) -> bool {
+        let global = &self.0;
+        match global.poll_all_devices(force_wait) {
+            Ok(all_queue_empty) => all_queue_empty,
+            Err(err) => self.handle_error_fatal(err, "Device::poll"),
+        }
     }
 
     fn adapter_is_surface_supported(
         &self,
         adapter: &Self::AdapterId,
+        _adapter_data: &Self::AdapterData,
         surface: &Self::SurfaceId,
+        _surface_data: &Self::SurfaceData,
     ) -> bool {
         let global = &self.0;
-        match wgc::gfx_select!(adapter => global.adapter_is_surface_supported(*adapter, surface.id))
-        {
+        match wgc::gfx_select!(adapter => global.adapter_is_surface_supported(*adapter, *surface)) {
             Ok(result) => result,
             Err(err) => self.handle_error_fatal(err, "Adapter::is_surface_supported"),
         }
     }
 
-    fn adapter_features(&self, adapter: &Self::AdapterId) -> Features {
+    fn adapter_features(
+        &self,
+        adapter: &Self::AdapterId,
+        _adapter_data: &Self::AdapterData,
+    ) -> Features {
         let global = &self.0;
         match wgc::gfx_select!(*adapter => global.adapter_features(*adapter)) {
             Ok(features) => features,
@@ -1032,7 +622,11 @@ impl crate::Context for Context {
         }
     }
 
-    fn adapter_limits(&self, adapter: &Self::AdapterId) -> Limits {
+    fn adapter_limits(
+        &self,
+        adapter: &Self::AdapterId,
+        _adapter_data: &Self::AdapterData,
+    ) -> Limits {
         let global = &self.0;
         match wgc::gfx_select!(*adapter => global.adapter_limits(*adapter)) {
             Ok(limits) => limits,
@@ -1040,7 +634,11 @@ impl crate::Context for Context {
         }
     }
 
-    fn adapter_downlevel_capabilities(&self, adapter: &Self::AdapterId) -> DownlevelCapabilities {
+    fn adapter_downlevel_capabilities(
+        &self,
+        adapter: &Self::AdapterId,
+        _adapter_data: &Self::AdapterData,
+    ) -> DownlevelCapabilities {
         let global = &self.0;
         match wgc::gfx_select!(*adapter => global.adapter_downlevel_capabilities(*adapter)) {
             Ok(downlevel) => downlevel,
@@ -1048,7 +646,11 @@ impl crate::Context for Context {
         }
     }
 
-    fn adapter_get_info(&self, adapter: &wgc::id::AdapterId) -> AdapterInfo {
+    fn adapter_get_info(
+        &self,
+        adapter: &wgc::id::AdapterId,
+        _adapter_data: &Self::AdapterData,
+    ) -> AdapterInfo {
         let global = &self.0;
         match wgc::gfx_select!(*adapter => global.adapter_get_info(*adapter)) {
             Ok(info) => info,
@@ -1059,6 +661,7 @@ impl crate::Context for Context {
     fn adapter_get_texture_format_features(
         &self,
         adapter: &Self::AdapterId,
+        _adapter_data: &Self::AdapterData,
         format: wgt::TextureFormat,
     ) -> wgt::TextureFormatFeatures {
         let global = &self.0;
@@ -1072,10 +675,12 @@ impl crate::Context for Context {
     fn surface_get_capabilities(
         &self,
         surface: &Self::SurfaceId,
+        _surface_data: &Self::SurfaceData,
         adapter: &Self::AdapterId,
+        _adapter_data: &Self::AdapterData,
     ) -> wgt::SurfaceCapabilities {
         let global = &self.0;
-        match wgc::gfx_select!(adapter => global.surface_get_capabilities(surface.id, *adapter)) {
+        match wgc::gfx_select!(adapter => global.surface_get_capabilities(*surface, *adapter)) {
             Ok(caps) => caps,
             Err(wgc::instance::GetSurfaceSupportError::Unsupported) => {
                 wgt::SurfaceCapabilities::default()
@@ -1087,52 +692,65 @@ impl crate::Context for Context {
     fn surface_configure(
         &self,
         surface: &Self::SurfaceId,
+        surface_data: &Self::SurfaceData,
         device: &Self::DeviceId,
+        _device_data: &Self::DeviceData,
         config: &wgt::SurfaceConfiguration,
     ) {
         let global = &self.0;
-        let error =
-            wgc::gfx_select!(device.id => global.surface_configure(surface.id, device.id, config));
+        let error = wgc::gfx_select!(device => global.surface_configure(*surface, *device, config));
         if let Some(e) = error {
             self.handle_error_fatal(e, "Surface::configure");
         } else {
-            *surface.configured_device.lock() = Some(device.id);
+            *surface_data.configured_device.lock() = Some(*device);
         }
     }
 
     fn surface_get_current_texture(
         &self,
         surface: &Self::SurfaceId,
+        surface_data: &Self::SurfaceData,
     ) -> (
         Option<Self::TextureId>,
+        Option<Self::TextureData>,
         SurfaceStatus,
         Self::SurfaceOutputDetail,
     ) {
         let global = &self.0;
-        let device_id = surface
+        let device_id = surface_data
             .configured_device
             .lock()
             .expect("Surface was not configured?");
         match wgc::gfx_select!(
-            device_id => global.surface_get_current_texture(surface.id, ())
+            device_id => global.surface_get_current_texture(*surface, ())
         ) {
-            Ok(wgc::present::SurfaceOutput { status, texture_id }) => (
-                texture_id.map(|id| Texture {
+            Ok(wgc::present::SurfaceOutput { status, texture_id }) => {
+                let (id, data) = {
+                    (
+                        texture_id,
+                        texture_id.map(|id| Texture {
+                            id,
+                            error_sink: Arc::new(Mutex::new(ErrorSinkRaw::new())),
+                        }),
+                    )
+                };
+
+                (
                     id,
-                    error_sink: Arc::new(Mutex::new(ErrorSinkRaw::new())),
-                }),
-                status,
-                SurfaceOutputDetail {
-                    surface_id: surface.id,
-                },
-            ),
+                    data,
+                    status,
+                    SurfaceOutputDetail {
+                        surface_id: *surface,
+                    },
+                )
+            }
             Err(err) => self.handle_error_fatal(err, "Surface::get_current_texture_view"),
         }
     }
 
     fn surface_present(&self, texture: &Self::TextureId, detail: &Self::SurfaceOutputDetail) {
         let global = &self.0;
-        match wgc::gfx_select!(texture.id => global.surface_present(detail.surface_id)) {
+        match wgc::gfx_select!(texture => global.surface_present(detail.surface_id)) {
             Ok(_status) => (),
             Err(err) => self.handle_error_fatal(err, "Surface::present"),
         }
@@ -1144,31 +762,39 @@ impl crate::Context for Context {
         detail: &Self::SurfaceOutputDetail,
     ) {
         let global = &self.0;
-        match wgc::gfx_select!(texture.id => global.surface_texture_discard(detail.surface_id)) {
+        match wgc::gfx_select!(texture => global.surface_texture_discard(detail.surface_id)) {
             Ok(_status) => (),
             Err(err) => self.handle_error_fatal(err, "Surface::discard_texture"),
         }
     }
 
-    fn device_features(&self, device: &Self::DeviceId) -> Features {
+    fn device_features(
+        &self,
+        device: &Self::DeviceId,
+        _device_data: &Self::DeviceData,
+    ) -> Features {
         let global = &self.0;
-        match wgc::gfx_select!(device.id => global.device_features(device.id)) {
+        match wgc::gfx_select!(device => global.device_features(*device)) {
             Ok(features) => features,
             Err(err) => self.handle_error_fatal(err, "Device::features"),
         }
     }
 
-    fn device_limits(&self, device: &Self::DeviceId) -> Limits {
+    fn device_limits(&self, device: &Self::DeviceId, _device_data: &Self::DeviceData) -> Limits {
         let global = &self.0;
-        match wgc::gfx_select!(device.id => global.device_limits(device.id)) {
+        match wgc::gfx_select!(device => global.device_limits(*device)) {
             Ok(limits) => limits,
             Err(err) => self.handle_error_fatal(err, "Device::limits"),
         }
     }
 
-    fn device_downlevel_properties(&self, device: &Self::DeviceId) -> DownlevelCapabilities {
+    fn device_downlevel_properties(
+        &self,
+        device: &Self::DeviceId,
+        _device_data: &Self::DeviceData,
+    ) -> DownlevelCapabilities {
         let global = &self.0;
-        match wgc::gfx_select!(device.id => global.device_downlevel_properties(device.id)) {
+        match wgc::gfx_select!(device => global.device_downlevel_properties(*device)) {
             Ok(limits) => limits,
             Err(err) => self.handle_error_fatal(err, "Device::downlevel_properties"),
         }
@@ -1186,9 +812,10 @@ impl crate::Context for Context {
     fn device_create_shader_module(
         &self,
         device: &Self::DeviceId,
+        device_data: &Self::DeviceData,
         desc: ShaderModuleDescriptor,
         shader_bound_checks: wgt::ShaderBoundChecks,
-    ) -> Self::ShaderModuleId {
+    ) -> (Self::ShaderModuleId, Self::ShaderModuleData) {
         let global = &self.0;
         let descriptor = wgc::pipeline::ShaderModuleDescriptor {
             label: desc.label.map(Borrowed),
@@ -1205,7 +832,7 @@ impl crate::Context for Context {
                 };
                 let parser = naga::front::spv::Parser::new(spv.iter().cloned(), &options);
                 let module = parser.parse().unwrap();
-                wgc::pipeline::ShaderModuleSource::Naga(std::borrow::Cow::Owned(module))
+                wgc::pipeline::ShaderModuleSource::Naga(Owned(module))
             }
             #[cfg(feature = "glsl")]
             ShaderSource::Glsl {
@@ -1221,7 +848,7 @@ impl crate::Context for Context {
                 let mut parser = naga::front::glsl::Parser::default();
                 let module = parser.parse(&options, shader).unwrap();
 
-                wgc::pipeline::ShaderModuleSource::Naga(std::borrow::Cow::Owned(module))
+                wgc::pipeline::ShaderModuleSource::Naga(Owned(module))
             }
             #[cfg(feature = "wgsl")]
             ShaderSource::Wgsl(ref code) => wgc::pipeline::ShaderModuleSource::Wgsl(Borrowed(code)),
@@ -1230,25 +857,26 @@ impl crate::Context for Context {
             ShaderSource::Dummy(_) => panic!("found `ShaderSource::Dummy`"),
         };
         let (id, error) = wgc::gfx_select!(
-            device.id => global.device_create_shader_module(device.id, &descriptor, source, ())
+            device => global.device_create_shader_module(*device, &descriptor, source, ())
         );
         if let Some(cause) = error {
             self.handle_error(
-                &device.error_sink,
+                &device_data.error_sink,
                 cause,
                 LABEL,
                 desc.label,
                 "Device::create_shader_module",
             );
         }
-        id
+        (id, ())
     }
 
     unsafe fn device_create_shader_module_spirv(
         &self,
         device: &Self::DeviceId,
+        device_data: &Self::DeviceData,
         desc: &ShaderModuleDescriptorSpirV,
-    ) -> Self::ShaderModuleId {
+    ) -> (Self::ShaderModuleId, Self::ShaderModuleData) {
         let global = &self.0;
         let descriptor = wgc::pipeline::ShaderModuleDescriptor {
             label: desc.label.map(Borrowed),
@@ -1257,62 +885,66 @@ impl crate::Context for Context {
             shader_bound_checks: unsafe { wgt::ShaderBoundChecks::unchecked() },
         };
         let (id, error) = wgc::gfx_select!(
-            device.id => global.device_create_shader_module_spirv(device.id, &descriptor, Borrowed(&desc.source), ())
+            device => global.device_create_shader_module_spirv(*device, &descriptor, Borrowed(&desc.source), ())
         );
         if let Some(cause) = error {
             self.handle_error(
-                &device.error_sink,
+                &device_data.error_sink,
                 cause,
                 LABEL,
                 desc.label,
                 "Device::create_shader_module_spirv",
             );
         }
-        id
+        (id, ())
     }
 
     fn device_create_bind_group_layout(
         &self,
         device: &Self::DeviceId,
+        device_data: &Self::DeviceData,
         desc: &BindGroupLayoutDescriptor,
-    ) -> Self::BindGroupLayoutId {
+    ) -> (Self::BindGroupLayoutId, Self::BindGroupLayoutData) {
         let global = &self.0;
         let descriptor = wgc::binding_model::BindGroupLayoutDescriptor {
             label: desc.label.map(Borrowed),
             entries: Borrowed(desc.entries),
         };
         let (id, error) = wgc::gfx_select!(
-            device.id => global.device_create_bind_group_layout(device.id, &descriptor, ())
+            device => global.device_create_bind_group_layout(*device, &descriptor, ())
         );
         if let Some(cause) = error {
             self.handle_error(
-                &device.error_sink,
+                &device_data.error_sink,
                 cause,
                 LABEL,
                 desc.label,
                 "Device::create_bind_group_layout",
             );
         }
-        id
+        (id, ())
     }
-
     fn device_create_bind_group(
         &self,
         device: &Self::DeviceId,
+        device_data: &Self::DeviceData,
         desc: &BindGroupDescriptor,
-    ) -> Self::BindGroupId {
+    ) -> (Self::BindGroupId, Self::BindGroupData) {
         use wgc::binding_model as bm;
 
-        let mut arrayed_texture_views = Vec::new();
-        let mut arrayed_samplers = Vec::new();
-        if device.features.contains(Features::TEXTURE_BINDING_ARRAY) {
+        let mut arrayed_texture_views = Vec::<ObjectId>::new();
+        let mut arrayed_samplers = Vec::<ObjectId>::new();
+        if device_data
+            .features
+            .contains(Features::TEXTURE_BINDING_ARRAY)
+        {
             // gather all the array view IDs first
             for entry in desc.entries.iter() {
                 if let BindingResource::TextureViewArray(array) = entry.resource {
-                    arrayed_texture_views.extend(array.iter().map(|view| view.id));
+                    arrayed_texture_views.extend(array.iter().map(|view| &view.id));
                 }
                 if let BindingResource::SamplerArray(array) = entry.resource {
-                    arrayed_samplers.extend(array.iter().map(|sampler| sampler.id));
+                    arrayed_samplers.extend(array.iter().map(|sampler| &sampler.id));
                 }
             }
         }
@@ -1320,12 +952,15 @@ impl crate::Context for Context {
         let mut remaining_arrayed_samplers = &arrayed_samplers[..];
 
         let mut arrayed_buffer_bindings = Vec::new();
-        if device.features.contains(Features::BUFFER_BINDING_ARRAY) {
+        if device_data
+            .features
+            .contains(Features::BUFFER_BINDING_ARRAY)
+        {
             // gather all the buffers first
             for entry in desc.entries.iter() {
                 if let BindingResource::BufferArray(array) = entry.resource {
                     arrayed_buffer_bindings.extend(array.iter().map(|binding| bm::BufferBinding {
-                        buffer_id: binding.buffer.id.id,
+                        buffer_id: binding.buffer.id.into(),
                         offset: binding.offset,
                         size: binding.size,
                     }));
@@ -1345,7 +980,7 @@ impl crate::Context for Context {
                         offset,
                         size,
                     }) => bm::BindingResource::Buffer(bm::BufferBinding {
-                        buffer_id: buffer.id.id,
+                        buffer_id: buffer.id.into(),
                         offset,
                         size,
                     }),
@@ -1355,53 +990,61 @@ impl crate::Context for Context {
                             &remaining_arrayed_buffer_bindings[array.len()..];
                         bm::BindingResource::BufferArray(Borrowed(slice))
                     }
-                    BindingResource::Sampler(sampler) => bm::BindingResource::Sampler(sampler.id),
+                    BindingResource::Sampler(sampler) => {
+                        bm::BindingResource::Sampler(sampler.id.into())
+                    }
                     BindingResource::SamplerArray(array) => {
-                        let slice = &remaining_arrayed_samplers[..array.len()];
+                        let samplers = remaining_arrayed_samplers[..array.len()]
+                            .iter()
+                            .map(|id| <Self::SamplerId>::from(*id))
+                            .collect::<Vec<_>>();
                         remaining_arrayed_samplers = &remaining_arrayed_samplers[array.len()..];
-                        bm::BindingResource::SamplerArray(Borrowed(slice))
+                        bm::BindingResource::SamplerArray(Owned(samplers))
                     }
                     BindingResource::TextureView(texture_view) => {
-                        bm::BindingResource::TextureView(texture_view.id)
+                        bm::BindingResource::TextureView(texture_view.id.into())
                     }
                     BindingResource::TextureViewArray(array) => {
-                        let slice = &remaining_arrayed_texture_views[..array.len()];
+                        let views = remaining_arrayed_texture_views[..array.len()]
+                            .iter()
+                            .map(|id| <Self::TextureViewId>::from(*id))
+                            .collect::<Vec<_>>();
                         remaining_arrayed_texture_views =
                             &remaining_arrayed_texture_views[array.len()..];
-                        bm::BindingResource::TextureViewArray(Borrowed(slice))
+                        bm::BindingResource::TextureViewArray(Owned(views))
                     }
                 },
             })
             .collect::<Vec<_>>();
         let descriptor = bm::BindGroupDescriptor {
             label: desc.label.as_ref().map(|label| Borrowed(&label[..])),
-            layout: desc.layout.id,
+            layout: desc.layout.id.into(),
             entries: Borrowed(&entries),
         };
 
         let global = &self.0;
-        let (id, error) = wgc::gfx_select!(device.id => global.device_create_bind_group(
-            device.id,
+        let (id, error) = wgc::gfx_select!(device => global.device_create_bind_group(
+            *device,
             &descriptor,
             ()
         ));
         if let Some(cause) = error {
             self.handle_error(
-                &device.error_sink,
+                &device_data.error_sink,
                 cause,
                 LABEL,
                 desc.label,
                 "Device::create_bind_group",
             );
         }
-        id
+        (id, ())
     }
-
     fn device_create_pipeline_layout(
         &self,
         device: &Self::DeviceId,
+        device_data: &Self::DeviceData,
         desc: &PipelineLayoutDescriptor,
-    ) -> Self::PipelineLayoutId {
+    ) -> (Self::PipelineLayoutId, Self::PipelineLayoutData) {
         // Limit is always less or equal to hal::MAX_BIND_GROUPS, so this is always right
         // Guards following ArrayVec
         assert!(
@@ -1414,7 +1057,7 @@ impl crate::Context for Context {
         let temp_layouts = desc
             .bind_group_layouts
             .iter()
-            .map(|bgl| bgl.id)
+            .map(|bgl| bgl.id.into())
             .collect::<ArrayVec<_, { wgc::MAX_BIND_GROUPS }>>();
         let descriptor = wgc::binding_model::PipelineLayoutDescriptor {
             label: desc.label.map(Borrowed),
@@ -1423,28 +1066,28 @@ impl crate::Context for Context {
         };
 
         let global = &self.0;
-        let (id, error) = wgc::gfx_select!(device.id => global.device_create_pipeline_layout(
-            device.id,
+        let (id, error) = wgc::gfx_select!(device => global.device_create_pipeline_layout(
+            *device,
             &descriptor,
             ()
         ));
         if let Some(cause) = error {
             self.handle_error(
-                &device.error_sink,
+                &device_data.error_sink,
                 cause,
                 LABEL,
                 desc.label,
                 "Device::create_pipeline_layout",
             );
         }
-        id
+        (id, ())
     }
-
     fn device_create_render_pipeline(
         &self,
         device: &Self::DeviceId,
+        device_data: &Self::DeviceData,
         desc: &RenderPipelineDescriptor,
-    ) -> Self::RenderPipelineId {
+    ) -> (Self::RenderPipelineId, Self::RenderPipelineData) {
         use wgc::pipeline as pipe;
 
         let vertex_buffers: ArrayVec<_, { wgc::MAX_VERTEX_BUFFERS }> = desc
@@ -1467,10 +1110,10 @@ impl crate::Context for Context {
         };
         let descriptor = pipe::RenderPipelineDescriptor {
             label: desc.label.map(Borrowed),
-            layout: desc.layout.map(|l| l.id),
+            layout: desc.layout.map(|l| l.id.into()),
             vertex: pipe::VertexState {
                 stage: pipe::ProgrammableStageDescriptor {
-                    module: desc.vertex.module.id,
+                    module: desc.vertex.module.id.into(),
                     entry_point: Borrowed(desc.vertex.entry_point),
                 },
                 buffers: Borrowed(&vertex_buffers),
@@ -1480,7 +1123,7 @@ impl crate::Context for Context {
             multisample: desc.multisample,
             fragment: desc.fragment.as_ref().map(|frag| pipe::FragmentState {
                 stage: pipe::ProgrammableStageDescriptor {
-                    module: frag.module.id,
+                    module: frag.module.id.into(),
                     entry_point: Borrowed(frag.entry_point),
                 },
                 targets: Borrowed(frag.targets),
@@ -1489,8 +1132,8 @@ impl crate::Context for Context {
         };
 
         let global = &self.0;
-        let (id, error) = wgc::gfx_select!(device.id => global.device_create_render_pipeline(
-            device.id,
+        let (id, error) = wgc::gfx_select!(device => global.device_create_render_pipeline(
+            *device,
             &descriptor,
             (),
             implicit_pipeline_ids
@@ -1501,21 +1144,21 @@ impl crate::Context for Context {
                 log::error!("Please report it to https://github.com/gfx-rs/naga");
             }
             self.handle_error(
-                &device.error_sink,
+                &device_data.error_sink,
                 cause,
                 LABEL,
                 desc.label,
                 "Device::create_render_pipeline",
             );
         }
-        id
+        (id, ())
     }
-
     fn device_create_compute_pipeline(
         &self,
         device: &Self::DeviceId,
+        device_data: &Self::DeviceData,
         desc: &ComputePipelineDescriptor,
-    ) -> Self::ComputePipelineId {
+    ) -> (Self::ComputePipelineId, Self::ComputePipelineData) {
         use wgc::pipeline as pipe;
 
         let implicit_pipeline_ids = match desc.layout {
@@ -1527,16 +1170,16 @@ impl crate::Context for Context {
         };
         let descriptor = pipe::ComputePipelineDescriptor {
             label: desc.label.map(Borrowed),
-            layout: desc.layout.map(|l| l.id),
+            layout: desc.layout.map(|l| l.id.into()),
             stage: pipe::ProgrammableStageDescriptor {
-                module: desc.module.id,
+                module: desc.module.id.into(),
                 entry_point: Borrowed(desc.entry_point),
             },
         };
 
         let global = &self.0;
-        let (id, error) = wgc::gfx_select!(device.id => global.device_create_compute_pipeline(
-            device.id,
+        let (id, error) = wgc::gfx_select!(device => global.device_create_compute_pipeline(
+            *device,
             &descriptor,
             (),
             implicit_pipeline_ids
@@ -1551,73 +1194,78 @@ impl crate::Context for Context {
                 log::warn!("Please report it to https://github.com/gfx-rs/naga");
             }
             self.handle_error(
-                &device.error_sink,
+                &device_data.error_sink,
                 cause,
                 LABEL,
                 desc.label,
                 "Device::create_compute_pipeline",
             );
         }
-        id
+        (id, ())
     }
-
     fn device_create_buffer(
         &self,
         device: &Self::DeviceId,
+        device_data: &Self::DeviceData,
         desc: &crate::BufferDescriptor<'_>,
-    ) -> Self::BufferId {
+    ) -> (Self::BufferId, Self::BufferData) {
         let global = &self.0;
-        let (id, error) = wgc::gfx_select!(device.id => global.device_create_buffer(
-            device.id,
+        let (id, error) = wgc::gfx_select!(device => global.device_create_buffer(
+            *device,
             &desc.map_label(|l| l.map(Borrowed)),
             ()
         ));
         if let Some(cause) = error {
             self.handle_error(
-                &device.error_sink,
+                &device_data.error_sink,
                 cause,
                 LABEL,
                 desc.label,
                 "Device::create_buffer",
             );
         }
-        Buffer {
+        (
             id,
-            error_sink: Arc::clone(&device.error_sink),
-        }
+            Buffer {
+                error_sink: Arc::clone(&device_data.error_sink),
+            },
+        )
     }
-
     fn device_create_texture(
         &self,
         device: &Self::DeviceId,
+        device_data: &Self::DeviceData,
         desc: &TextureDescriptor,
-    ) -> Self::TextureId {
+    ) -> (Self::TextureId, Self::TextureData) {
         let global = &self.0;
-        let (id, error) = wgc::gfx_select!(device.id => global.device_create_texture(
-            device.id,
+        let (id, error) = wgc::gfx_select!(device => global.device_create_texture(
+            *device,
             &desc.map_label(|l| l.map(Borrowed)),
             ()
         ));
         if let Some(cause) = error {
             self.handle_error(
-                &device.error_sink,
+                &device_data.error_sink,
                 cause,
                 LABEL,
                 desc.label,
                 "Device::create_texture",
             );
         }
-        Texture {
+        (
             id,
-            error_sink: Arc::clone(&device.error_sink),
-        }
+            Texture {
+                id,
+                error_sink: Arc::clone(&device_data.error_sink),
+            },
+        )
     }
-
     fn device_create_sampler(
         &self,
         device: &Self::DeviceId,
+        device_data: &Self::DeviceData,
         desc: &SamplerDescriptor,
-    ) -> Self::SamplerId {
+    ) -> (Self::SamplerId, Self::SamplerData) {
         let descriptor = wgc::resource::SamplerDescriptor {
             label: desc.label.map(Borrowed),
             address_modes: [
@@ -1636,72 +1284,74 @@ impl crate::Context for Context {
         };
 
         let global = &self.0;
-        let (id, error) = wgc::gfx_select!(device.id => global.device_create_sampler(
-            device.id,
+        let (id, error) = wgc::gfx_select!(device => global.device_create_sampler(
+            *device,
             &descriptor,
             ()
         ));
         if let Some(cause) = error {
             self.handle_error(
-                &device.error_sink,
+                &device_data.error_sink,
                 cause,
                 LABEL,
                 desc.label,
                 "Device::create_sampler",
             );
         }
-        id
+        (id, ())
     }
-
     fn device_create_query_set(
         &self,
         device: &Self::DeviceId,
+        device_data: &Self::DeviceData,
         desc: &wgt::QuerySetDescriptor<Label>,
-    ) -> Self::QuerySetId {
+    ) -> (Self::QuerySetId, Self::QuerySetData) {
         let global = &self.0;
-        let (id, error) = wgc::gfx_select!(device.id => global.device_create_query_set(
-            device.id,
+        let (id, error) = wgc::gfx_select!(device => global.device_create_query_set(
+            *device,
             &desc.map_label(|l| l.map(Borrowed)),
             ()
         ));
         if let Some(cause) = error {
-            self.handle_error_nolabel(&device.error_sink, cause, "Device::create_query_set");
+            self.handle_error_nolabel(&device_data.error_sink, cause, "Device::create_query_set");
         }
-        id
+        (id, ())
     }
-
     fn device_create_command_encoder(
         &self,
         device: &Self::DeviceId,
+        device_data: &Self::DeviceData,
         desc: &CommandEncoderDescriptor,
-    ) -> Self::CommandEncoderId {
+    ) -> (Self::CommandEncoderId, Self::CommandEncoderData) {
         let global = &self.0;
-        let (id, error) = wgc::gfx_select!(device.id => global.device_create_command_encoder(
-            device.id,
+        let (id, error) = wgc::gfx_select!(device => global.device_create_command_encoder(
+            *device,
             &desc.map_label(|l| l.map(Borrowed)),
             ()
         ));
         if let Some(cause) = error {
             self.handle_error(
-                &device.error_sink,
+                &device_data.error_sink,
                 cause,
                 LABEL,
                 desc.label,
                 "Device::create_command_encoder",
             );
         }
-        CommandEncoder {
+        (
             id,
-            error_sink: Arc::clone(&device.error_sink),
-            open: true,
-        }
+            CommandEncoder {
+                error_sink: Arc::clone(&device_data.error_sink),
+                open: true,
+            },
+        )
     }
-
     fn device_create_render_bundle_encoder(
         &self,
         device: &Self::DeviceId,
+        _device_data: &Self::DeviceData,
         desc: &RenderBundleEncoderDescriptor,
-    ) -> Self::RenderBundleEncoderId {
+    ) -> (Self::RenderBundleEncoderId, Self::RenderBundleEncoderData) {
         let descriptor = wgc::command::RenderBundleEncoderDescriptor {
             label: desc.label.map(Borrowed),
             color_formats: Borrowed(desc.color_formats),
@@ -1709,72 +1359,80 @@ impl crate::Context for Context {
             sample_count: desc.sample_count,
             multiview: desc.multiview,
         };
-        match wgc::command::RenderBundleEncoder::new(&descriptor, device.id, None) {
-            Ok(id) => id,
+        match wgc::command::RenderBundleEncoder::new(&descriptor, *device, None) {
+            Ok(encoder) => (Unused, encoder),
             Err(e) => panic!("Error in Device::create_render_bundle_encoder: {}", e),
         }
     }
-
     #[cfg_attr(target_arch = "wasm32", allow(unused))]
-    fn device_drop(&self, device: &Self::DeviceId) {
+    fn device_drop(&self, device: &Self::DeviceId, _device_data: &Self::DeviceData) {
         let global = &self.0;
 
         #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
         {
-            match wgc::gfx_select!(device.id => global.device_poll(device.id, wgt::Maintain::Wait))
-            {
+            match wgc::gfx_select!(device => global.device_poll(*device, wgt::Maintain::Wait)) {
                 Ok(_) => (),
                 Err(err) => self.handle_error_fatal(err, "Device::drop"),
             }
         }
 
-        wgc::gfx_select!(device.id => global.device_drop(device.id));
+        wgc::gfx_select!(device => global.device_drop(*device));
     }
-
-    fn device_poll(&self, device: &Self::DeviceId, maintain: crate::Maintain) -> bool {
+    fn device_poll(
+        &self,
+        device: &Self::DeviceId,
+        _device_data: &Self::DeviceData,
+        maintain: crate::Maintain,
+    ) -> bool {
         let global = &self.0;
-        let maintain_inner = maintain.map_index(|i| i.0);
-        match wgc::gfx_select!(device.id => global.device_poll(
-            device.id,
+        let maintain_inner = maintain.map_index(|i| *i.1.as_ref().downcast_ref().unwrap());
+        match wgc::gfx_select!(device => global.device_poll(
+            *device,
             maintain_inner
         )) {
             Ok(queue_empty) => queue_empty,
             Err(err) => self.handle_error_fatal(err, "Device::poll"),
         }
     }
-
     fn device_on_uncaptured_error(
         &self,
-        device: &Self::DeviceId,
-        handler: impl crate::UncapturedErrorHandler,
+        _device: &Self::DeviceId,
+        device_data: &Self::DeviceData,
+        handler: Box<dyn UncapturedErrorHandler>,
     ) {
-        let mut error_sink = device.error_sink.lock();
-        error_sink.uncaptured_handler = Box::new(handler);
+        let mut error_sink = device_data.error_sink.lock();
+        error_sink.uncaptured_handler = handler;
     }
-
-    fn device_push_error_scope(&self, device: &Self::DeviceId, filter: crate::ErrorFilter) {
-        let mut error_sink = device.error_sink.lock();
+    fn device_push_error_scope(
+        &self,
+        _device: &Self::DeviceId,
+        device_data: &Self::DeviceData,
+        filter: crate::ErrorFilter,
+    ) {
+        let mut error_sink = device_data.error_sink.lock();
         error_sink.scopes.push(ErrorScope {
             error: None,
             filter,
         });
     }
-
-    fn device_pop_error_scope(&self, device: &Self::DeviceId) -> Self::PopErrorScopeFuture {
-        let mut error_sink = device.error_sink.lock();
+    fn device_pop_error_scope(
+        &self,
+        _device: &Self::DeviceId,
+        device_data: &Self::DeviceData,
+    ) -> Self::PopErrorScopeFuture {
+        let mut error_sink = device_data.error_sink.lock();
         let scope = error_sink.scopes.pop().unwrap();
         ready(scope.error)
     }
 
-    fn buffer_map_async<F>(
+    fn buffer_map_async(
         &self,
         buffer: &Self::BufferId,
+        buffer_data: &Self::BufferData,
         mode: MapMode,
         range: Range<wgt::BufferAddress>,
-        callback: F,
-    ) where
-        F: FnOnce(Result<(), crate::BufferAsyncError>) + Send + 'static,
-    {
+        callback: Box<dyn FnOnce(Result<(), crate::BufferAsyncError>) + Send + 'static>,
+    ) {
         let operation = wgc::resource::BufferMapOperation {
             host: match mode {
                 MapMode::Read => wgc::device::HostMap::Read,
@@ -1787,38 +1445,40 @@ impl crate::Context for Context {
         };
 
         let global = &self.0;
-        match wgc::gfx_select!(buffer.id => global.buffer_map_async(buffer.id, range, operation)) {
+        match wgc::gfx_select!(buffer => global.buffer_map_async(*buffer, range, operation)) {
             Ok(()) => (),
-            Err(cause) => self.handle_error_nolabel(&buffer.error_sink, cause, "Buffer::map_async"),
+            Err(cause) => {
+                self.handle_error_nolabel(&buffer_data.error_sink, cause, "Buffer::map_async")
+            }
         }
     }
-
     fn buffer_get_mapped_range(
         &self,
         buffer: &Self::BufferId,
+        _buffer_data: &Self::BufferData,
         sub_range: Range<wgt::BufferAddress>,
-    ) -> BufferMappedRange {
+    ) -> Box<dyn crate::context::BufferMappedRange> {
         let size = sub_range.end - sub_range.start;
         let global = &self.0;
-        match wgc::gfx_select!(buffer.id => global.buffer_get_mapped_range(
-            buffer.id,
+        match wgc::gfx_select!(buffer => global.buffer_get_mapped_range(
+            *buffer,
             sub_range.start,
             Some(size)
         )) {
-            Ok((ptr, size)) => BufferMappedRange {
+            Ok((ptr, size)) => Box::new(BufferMappedRange {
                 ptr,
                 size: size as usize,
-            },
+            }),
             Err(err) => self.handle_error_fatal(err, "Buffer::get_mapped_range"),
         }
     }
 
-    fn buffer_unmap(&self, buffer: &Self::BufferId) {
+    fn buffer_unmap(&self, buffer: &Self::BufferId, buffer_data: &Self::BufferData) {
         let global = &self.0;
-        match wgc::gfx_select!(buffer.id => global.buffer_unmap(buffer.id)) {
+        match wgc::gfx_select!(buffer => global.buffer_unmap(*buffer)) {
             Ok(()) => (),
             Err(cause) => {
-                self.handle_error_nolabel(&buffer.error_sink, cause, "Buffer::buffer_unmap")
+                self.handle_error_nolabel(&buffer_data.error_sink, cause, "Buffer::buffer_unmap")
             }
         }
     }
@@ -1826,8 +1486,9 @@ impl crate::Context for Context {
     fn texture_create_view(
         &self,
         texture: &Self::TextureId,
+        texture_data: &Self::TextureData,
         desc: &TextureViewDescriptor,
-    ) -> Self::TextureViewId {
+    ) -> (Self::TextureViewId, Self::TextureViewData) {
         let descriptor = wgc::resource::TextureViewDescriptor {
             label: desc.label.map(Borrowed),
             format: desc.format,
@@ -1842,95 +1503,148 @@ impl crate::Context for Context {
         };
         let global = &self.0;
         let (id, error) = wgc::gfx_select!(
-            texture.id => global.texture_create_view(texture.id, &descriptor, ())
+            texture => global.texture_create_view(*texture, &descriptor, ())
         );
         if let Some(cause) = error {
             self.handle_error(
-                &texture.error_sink,
+                &texture_data.error_sink,
                 cause,
                 LABEL,
                 desc.label,
                 "Texture::create_view",
             );
         }
-        id
+        (id, ())
     }
 
-    fn surface_drop(&self, _surface: &Self::SurfaceId) {
+    fn surface_drop(&self, _surface: &Self::SurfaceId, _surface_data: &Self::SurfaceData) {
         //TODO: swapchain needs to hold the surface alive
         //self.0.surface_drop(*surface)
     }
 
-    fn adapter_drop(&self, adapter: &Self::AdapterId) {
+    fn adapter_drop(&self, adapter: &Self::AdapterId, _adapter_data: &Self::AdapterData) {
         let global = &self.0;
         wgc::gfx_select!(*adapter => global.adapter_drop(*adapter))
     }
 
-    fn buffer_destroy(&self, buffer: &Self::BufferId) {
+    fn buffer_destroy(&self, buffer: &Self::BufferId, _buffer_data: &Self::BufferData) {
         // Per spec, no error to report. Even calling destroy multiple times is valid.
         let global = &self.0;
-        let _ = wgc::gfx_select!(buffer.id => global.buffer_destroy(buffer.id));
+        let _ = wgc::gfx_select!(buffer => global.buffer_destroy(*buffer));
     }
-    fn buffer_drop(&self, buffer: &Self::BufferId) {
+
+    fn buffer_drop(&self, buffer: &Self::BufferId, _buffer_data: &Self::BufferData) {
         let global = &self.0;
-        wgc::gfx_select!(buffer.id => global.buffer_drop(buffer.id, false))
+        wgc::gfx_select!(buffer => global.buffer_drop(*buffer, false))
     }
-    fn texture_destroy(&self, texture: &Self::TextureId) {
+
+    fn texture_destroy(&self, texture: &Self::TextureId, _texture_data: &Self::TextureData) {
         // Per spec, no error to report. Even calling destroy multiple times is valid.
         let global = &self.0;
-        let _ = wgc::gfx_select!(texture.id => global.texture_destroy(texture.id));
+        let _ = wgc::gfx_select!(texture => global.texture_destroy(*texture));
     }
-    fn texture_drop(&self, texture: &Self::TextureId) {
+
+    fn texture_drop(&self, texture: &Self::TextureId, _texture_data: &Self::TextureData) {
         let global = &self.0;
-        wgc::gfx_select!(texture.id => global.texture_drop(texture.id, false))
+        wgc::gfx_select!(texture => global.texture_drop(*texture, false))
     }
-    fn texture_view_drop(&self, texture_view: &Self::TextureViewId) {
+
+    fn texture_view_drop(
+        &self,
+        texture_view: &Self::TextureViewId,
+        __texture_view_data: &Self::TextureViewData,
+    ) {
         let global = &self.0;
         let _ = wgc::gfx_select!(*texture_view => global.texture_view_drop(*texture_view, false));
     }
-    fn sampler_drop(&self, sampler: &Self::SamplerId) {
+
+    fn sampler_drop(&self, sampler: &Self::SamplerId, _sampler_data: &Self::SamplerData) {
         let global = &self.0;
         wgc::gfx_select!(*sampler => global.sampler_drop(*sampler))
     }
-    fn query_set_drop(&self, query_set: &Self::QuerySetId) {
+
+    fn query_set_drop(&self, query_set: &Self::QuerySetId, _query_set_data: &Self::QuerySetData) {
         let global = &self.0;
         wgc::gfx_select!(*query_set => global.query_set_drop(*query_set))
     }
-    fn bind_group_drop(&self, bind_group: &Self::BindGroupId) {
+
+    fn bind_group_drop(
+        &self,
+        bind_group: &Self::BindGroupId,
+        _bind_group_data: &Self::BindGroupData,
+    ) {
         let global = &self.0;
         wgc::gfx_select!(*bind_group => global.bind_group_drop(*bind_group))
     }
-    fn bind_group_layout_drop(&self, bind_group_layout: &Self::BindGroupLayoutId) {
+
+    fn bind_group_layout_drop(
+        &self,
+        bind_group_layout: &Self::BindGroupLayoutId,
+        _bind_group_layout_data: &Self::BindGroupLayoutData,
+    ) {
         let global = &self.0;
         wgc::gfx_select!(*bind_group_layout => global.bind_group_layout_drop(*bind_group_layout))
     }
-    fn pipeline_layout_drop(&self, pipeline_layout: &Self::PipelineLayoutId) {
+
+    fn pipeline_layout_drop(
+        &self,
+        pipeline_layout: &Self::PipelineLayoutId,
+        _pipeline_layout_data: &Self::PipelineLayoutData,
+    ) {
         let global = &self.0;
         wgc::gfx_select!(*pipeline_layout => global.pipeline_layout_drop(*pipeline_layout))
     }
-    fn shader_module_drop(&self, shader_module: &Self::ShaderModuleId) {
+    fn shader_module_drop(
+        &self,
+        shader_module: &Self::ShaderModuleId,
+        _shader_module_data: &Self::ShaderModuleData,
+    ) {
         let global = &self.0;
         wgc::gfx_select!(*shader_module => global.shader_module_drop(*shader_module))
     }
-    fn command_encoder_drop(&self, command_encoder: &Self::CommandEncoderId) {
-        if command_encoder.open {
+    fn command_encoder_drop(
+        &self,
+        command_encoder: &Self::CommandEncoderId,
+        command_encoder_data: &Self::CommandEncoderData,
+    ) {
+        if command_encoder_data.open {
             let global = &self.0;
-            wgc::gfx_select!(command_encoder.id => global.command_encoder_drop(command_encoder.id))
+            wgc::gfx_select!(command_encoder => global.command_encoder_drop(*command_encoder))
         }
     }
-    fn command_buffer_drop(&self, command_buffer: &Self::CommandBufferId) {
+
+    fn command_buffer_drop(
+        &self,
+        command_buffer: &Self::CommandBufferId,
+        _command_buffer_data: &Self::CommandBufferData,
+    ) {
         let global = &self.0;
         wgc::gfx_select!(*command_buffer => global.command_buffer_drop(*command_buffer))
     }
-    fn render_bundle_drop(&self, render_bundle: &Self::RenderBundleId) {
+
+    fn render_bundle_drop(
+        &self,
+        render_bundle: &Self::RenderBundleId,
+        _render_bundle_data: &Self::RenderBundleData,
+    ) {
         let global = &self.0;
         wgc::gfx_select!(*render_bundle => global.render_bundle_drop(*render_bundle))
     }
-    fn compute_pipeline_drop(&self, pipeline: &Self::ComputePipelineId) {
+
+    fn compute_pipeline_drop(
+        &self,
+        pipeline: &Self::ComputePipelineId,
+        _pipeline_data: &Self::ComputePipelineData,
+    ) {
         let global = &self.0;
         wgc::gfx_select!(*pipeline => global.compute_pipeline_drop(*pipeline))
     }
-    fn render_pipeline_drop(&self, pipeline: &Self::RenderPipelineId) {
+
+    fn render_pipeline_drop(
+        &self,
+        pipeline: &Self::RenderPipelineId,
+        _pipeline_data: &Self::RenderPipelineData,
+    ) {
         let global = &self.0;
         wgc::gfx_select!(*pipeline => global.render_pipeline_drop(*pipeline))
     }
@@ -1938,48 +1652,54 @@ impl crate::Context for Context {
     fn compute_pipeline_get_bind_group_layout(
         &self,
         pipeline: &Self::ComputePipelineId,
+        _pipeline_data: &Self::ComputePipelineData,
         index: u32,
-    ) -> Self::BindGroupLayoutId {
+    ) -> (Self::BindGroupLayoutId, Self::BindGroupLayoutData) {
         let global = &self.0;
         let (id, error) = wgc::gfx_select!(*pipeline => global.compute_pipeline_get_bind_group_layout(*pipeline, index, ()));
         if let Some(err) = error {
             panic!("Error reflecting bind group {}: {}", index, err);
         }
-        id
+        (id, ())
     }
+
     fn render_pipeline_get_bind_group_layout(
         &self,
         pipeline: &Self::RenderPipelineId,
+        _pipeline_data: &Self::RenderPipelineData,
         index: u32,
-    ) -> Self::BindGroupLayoutId {
+    ) -> (Self::BindGroupLayoutId, Self::BindGroupLayoutData) {
         let global = &self.0;
         let (id, error) = wgc::gfx_select!(*pipeline => global.render_pipeline_get_bind_group_layout(*pipeline, index, ()));
         if let Some(err) = error {
             panic!("Error reflecting bind group {}: {}", index, err);
         }
-        id
+        (id, ())
     }
 
     fn command_encoder_copy_buffer_to_buffer(
         &self,
         encoder: &Self::CommandEncoderId,
+        encoder_data: &Self::CommandEncoderData,
         source: &Self::BufferId,
+        _source_data: &Self::BufferData,
         source_offset: wgt::BufferAddress,
         destination: &Self::BufferId,
+        _destination_data: &Self::BufferData,
         destination_offset: wgt::BufferAddress,
         copy_size: wgt::BufferAddress,
     ) {
         let global = &self.0;
-        if let Err(cause) = wgc::gfx_select!(encoder.id => global.command_encoder_copy_buffer_to_buffer(
-            encoder.id,
-            source.id,
+        if let Err(cause) = wgc::gfx_select!(encoder => global.command_encoder_copy_buffer_to_buffer(
+            *encoder,
+            *source,
             source_offset,
-            destination.id,
+            *destination,
             destination_offset,
             copy_size
         )) {
             self.handle_error_nolabel(
-                &encoder.error_sink,
+                &encoder_data.error_sink,
                 cause,
                 "CommandEncoder::copy_buffer_to_buffer",
             );
@@ -1989,19 +1709,20 @@ impl crate::Context for Context {
     fn command_encoder_copy_buffer_to_texture(
         &self,
         encoder: &Self::CommandEncoderId,
+        encoder_data: &Self::CommandEncoderData,
         source: crate::ImageCopyBuffer,
         destination: crate::ImageCopyTexture,
         copy_size: wgt::Extent3d,
     ) {
         let global = &self.0;
-        if let Err(cause) = wgc::gfx_select!(encoder.id => global.command_encoder_copy_buffer_to_texture(
-            encoder.id,
+        if let Err(cause) = wgc::gfx_select!(encoder => global.command_encoder_copy_buffer_to_texture(
+            *encoder,
             &map_buffer_copy_view(source),
             &map_texture_copy_view(destination),
             &copy_size
         )) {
             self.handle_error_nolabel(
-                &encoder.error_sink,
+                &encoder_data.error_sink,
                 cause,
                 "CommandEncoder::copy_buffer_to_texture",
             );
@@ -2011,19 +1732,20 @@ impl crate::Context for Context {
     fn command_encoder_copy_texture_to_buffer(
         &self,
         encoder: &Self::CommandEncoderId,
+        encoder_data: &Self::CommandEncoderData,
         source: crate::ImageCopyTexture,
         destination: crate::ImageCopyBuffer,
         copy_size: wgt::Extent3d,
     ) {
         let global = &self.0;
-        if let Err(cause) = wgc::gfx_select!(encoder.id => global.command_encoder_copy_texture_to_buffer(
-            encoder.id,
+        if let Err(cause) = wgc::gfx_select!(encoder => global.command_encoder_copy_texture_to_buffer(
+            *encoder,
             &map_texture_copy_view(source),
             &map_buffer_copy_view(destination),
             &copy_size
         )) {
             self.handle_error_nolabel(
-                &encoder.error_sink,
+                &encoder_data.error_sink,
                 cause,
                 "CommandEncoder::copy_texture_to_buffer",
             );
@@ -2033,67 +1755,22 @@ impl crate::Context for Context {
     fn command_encoder_copy_texture_to_texture(
         &self,
         encoder: &Self::CommandEncoderId,
+        encoder_data: &Self::CommandEncoderData,
         source: crate::ImageCopyTexture,
         destination: crate::ImageCopyTexture,
         copy_size: wgt::Extent3d,
     ) {
         let global = &self.0;
-        if let Err(cause) = wgc::gfx_select!(encoder.id => global.command_encoder_copy_texture_to_texture(
-            encoder.id,
+        if let Err(cause) = wgc::gfx_select!(encoder => global.command_encoder_copy_texture_to_texture(
+            *encoder,
             &map_texture_copy_view(source),
             &map_texture_copy_view(destination),
             &copy_size
         )) {
             self.handle_error_nolabel(
-                &encoder.error_sink,
+                &encoder_data.error_sink,
                 cause,
                 "CommandEncoder::copy_texture_to_texture",
-            );
-        }
-    }
-
-    fn command_encoder_write_timestamp(
-        &self,
-        encoder: &Self::CommandEncoderId,
-        query_set: &Self::QuerySetId,
-        query_index: u32,
-    ) {
-        let global = &self.0;
-        if let Err(cause) = wgc::gfx_select!(encoder.id => global.command_encoder_write_timestamp(
-            encoder.id,
-            *query_set,
-            query_index
-        )) {
-            self.handle_error_nolabel(
-                &encoder.error_sink,
-                cause,
-                "CommandEncoder::write_timestamp",
-            );
-        }
-    }
-
-    fn command_encoder_resolve_query_set(
-        &self,
-        encoder: &Self::CommandEncoderId,
-        query_set: &Self::QuerySetId,
-        first_query: u32,
-        query_count: u32,
-        destination: &Self::BufferId,
-        destination_offset: wgt::BufferAddress,
-    ) {
-        let global = &self.0;
-        if let Err(cause) = wgc::gfx_select!(encoder.id => global.command_encoder_resolve_query_set(
-            encoder.id,
-            *query_set,
-            first_query,
-            query_count,
-            destination.id,
-            destination_offset
-        )) {
-            self.handle_error_nolabel(
-                &encoder.error_sink,
-                cause,
-                "CommandEncoder::resolve_query_set",
             );
         }
     }
@@ -2101,28 +1778,34 @@ impl crate::Context for Context {
     fn command_encoder_begin_compute_pass(
         &self,
         encoder: &Self::CommandEncoderId,
+        _encoder_data: &Self::CommandEncoderData,
         desc: &ComputePassDescriptor,
-    ) -> Self::ComputePassId {
-        wgc::command::ComputePass::new(
-            encoder.id,
-            &wgc::command::ComputePassDescriptor {
-                label: desc.label.map(Borrowed),
-            },
+    ) -> (Self::ComputePassId, Self::ComputePassData) {
+        (
+            Unused,
+            wgc::command::ComputePass::new(
+                *encoder,
+                &wgc::command::ComputePassDescriptor {
+                    label: desc.label.map(Borrowed),
+                },
+            ),
         )
     }
 
     fn command_encoder_end_compute_pass(
         &self,
         encoder: &Self::CommandEncoderId,
-        pass: &mut Self::ComputePassId,
+        encoder_data: &Self::CommandEncoderData,
+        _pass: &mut Self::ComputePassId,
+        pass_data: &mut Self::ComputePassData,
     ) {
         let global = &self.0;
         if let Err(cause) = wgc::gfx_select!(
-            encoder.id => global.command_encoder_run_compute_pass(encoder.id, pass)
+            encoder => global.command_encoder_run_compute_pass(*encoder, pass_data)
         ) {
-            let name = wgc::gfx_select!(encoder.id => global.command_buffer_label(encoder.id));
+            let name = wgc::gfx_select!(encoder => global.command_buffer_label(*encoder));
             self.handle_error(
-                &encoder.error_sink,
+                &encoder_data.error_sink,
                 cause,
                 "encoder",
                 Some(&name),
@@ -2134,16 +1817,17 @@ impl crate::Context for Context {
     fn command_encoder_begin_render_pass<'a>(
         &self,
         encoder: &Self::CommandEncoderId,
+        _encoder_data: &Self::CommandEncoderData,
         desc: &crate::RenderPassDescriptor<'a, '_>,
-    ) -> Self::RenderPassId {
+    ) -> (Self::RenderPassId, Self::RenderPassData) {
         let colors = desc
             .color_attachments
             .iter()
             .map(|ca| {
                 ca.as_ref()
                     .map(|at| wgc::command::RenderPassColorAttachment {
-                        view: at.view.id,
-                        resolve_target: at.resolve_target.map(|rt| rt.id),
+                        view: at.view.id.into(),
+                        resolve_target: at.resolve_target.map(|rt| rt.id.into()),
                         channel: map_pass_channel(Some(&at.ops)),
                     })
             })
@@ -2151,34 +1835,39 @@ impl crate::Context for Context {
 
         let depth_stencil = desc.depth_stencil_attachment.as_ref().map(|dsa| {
             wgc::command::RenderPassDepthStencilAttachment {
-                view: dsa.view.id,
+                view: dsa.view.id.into(),
                 depth: map_pass_channel(dsa.depth_ops.as_ref()),
                 stencil: map_pass_channel(dsa.stencil_ops.as_ref()),
             }
         });
 
-        wgc::command::RenderPass::new(
-            encoder.id,
-            &wgc::command::RenderPassDescriptor {
-                label: desc.label.map(Borrowed),
-                color_attachments: Borrowed(&colors),
-                depth_stencil_attachment: depth_stencil.as_ref(),
-            },
+        (
+            Unused,
+            wgc::command::RenderPass::new(
+                *encoder,
+                &wgc::command::RenderPassDescriptor {
+                    label: desc.label.map(Borrowed),
+                    color_attachments: Borrowed(&colors),
+                    depth_stencil_attachment: depth_stencil.as_ref(),
+                },
+            ),
         )
     }
 
     fn command_encoder_end_render_pass(
         &self,
         encoder: &Self::CommandEncoderId,
-        pass: &mut Self::RenderPassId,
+        encoder_data: &Self::CommandEncoderData,
+        _pass: &mut Self::RenderPassId,
+        pass_data: &mut Self::RenderPassData,
     ) {
         let global = &self.0;
         if let Err(cause) =
-            wgc::gfx_select!(encoder.id => global.command_encoder_run_render_pass(encoder.id, pass))
+            wgc::gfx_select!(encoder => global.command_encoder_run_render_pass(*encoder, pass_data))
         {
-            let name = wgc::gfx_select!(encoder.id => global.command_buffer_label(encoder.id));
+            let name = wgc::gfx_select!(encoder => global.command_buffer_label(*encoder));
             self.handle_error(
-                &encoder.error_sink,
+                &encoder_data.error_sink,
                 cause,
                 "encoder",
                 Some(&name),
@@ -2187,113 +1876,199 @@ impl crate::Context for Context {
         }
     }
 
-    fn command_encoder_finish(&self, mut encoder: Self::CommandEncoderId) -> Self::CommandBufferId {
+    fn command_encoder_finish(
+        &self,
+        encoder: Self::CommandEncoderId,
+        encoder_data: &mut Self::CommandEncoderData,
+    ) -> (Self::CommandBufferId, Self::CommandBufferData) {
         let descriptor = wgt::CommandBufferDescriptor::default();
-        encoder.open = false; // prevent the drop
+        encoder_data.open = false; // prevent the drop
         let global = &self.0;
         let (id, error) =
-            wgc::gfx_select!(encoder.id => global.command_encoder_finish(encoder.id, &descriptor));
+            wgc::gfx_select!(encoder => global.command_encoder_finish(encoder, &descriptor));
         if let Some(cause) = error {
-            self.handle_error_nolabel(&encoder.error_sink, cause, "a CommandEncoder");
+            self.handle_error_nolabel(&encoder_data.error_sink, cause, "a CommandEncoder");
         }
-        id
+        (id, ())
     }
 
     fn command_encoder_clear_texture(
         &self,
         encoder: &Self::CommandEncoderId,
+        encoder_data: &Self::CommandEncoderData,
         texture: &crate::Texture,
         subresource_range: &wgt::ImageSubresourceRange,
     ) {
         let global = &self.0;
-        if let Err(cause) = wgc::gfx_select!(encoder.id => global.command_encoder_clear_texture(
-            encoder.id,
-            texture.id.id,
+        if let Err(cause) = wgc::gfx_select!(encoder => global.command_encoder_clear_texture(
+            *encoder,
+            texture.id.into(),
             subresource_range
         )) {
-            self.handle_error_nolabel(&encoder.error_sink, cause, "CommandEncoder::clear_texture");
+            self.handle_error_nolabel(
+                &encoder_data.error_sink,
+                cause,
+                "CommandEncoder::clear_texture",
+            );
         }
     }
 
     fn command_encoder_clear_buffer(
         &self,
         encoder: &Self::CommandEncoderId,
+        encoder_data: &Self::CommandEncoderData,
         buffer: &crate::Buffer,
         offset: wgt::BufferAddress,
         size: Option<wgt::BufferSize>,
     ) {
         let global = &self.0;
-        if let Err(cause) = wgc::gfx_select!(encoder.id => global.command_encoder_clear_buffer(
-            encoder.id,
-            buffer.id.id,
+        if let Err(cause) = wgc::gfx_select!(encoder => global.command_encoder_clear_buffer(
+            *encoder,
+            buffer.id.into(),
             offset, size
         )) {
-            self.handle_error_nolabel(&encoder.error_sink, cause, "CommandEncoder::fill_buffer");
+            self.handle_error_nolabel(
+                &encoder_data.error_sink,
+                cause,
+                "CommandEncoder::fill_buffer",
+            );
         }
     }
 
-    fn command_encoder_insert_debug_marker(&self, encoder: &Self::CommandEncoderId, label: &str) {
+    fn command_encoder_insert_debug_marker(
+        &self,
+        encoder: &Self::CommandEncoderId,
+        encoder_data: &Self::CommandEncoderData,
+        label: &str,
+    ) {
         let global = &self.0;
-        if let Err(cause) = wgc::gfx_select!(encoder.id => global.command_encoder_insert_debug_marker(encoder.id, label))
+        if let Err(cause) =
+            wgc::gfx_select!(encoder => global.command_encoder_insert_debug_marker(*encoder, label))
         {
             self.handle_error_nolabel(
-                &encoder.error_sink,
+                &encoder_data.error_sink,
                 cause,
                 "CommandEncoder::insert_debug_marker",
             );
         }
     }
-    fn command_encoder_push_debug_group(&self, encoder: &Self::CommandEncoderId, label: &str) {
+
+    fn command_encoder_push_debug_group(
+        &self,
+        encoder: &Self::CommandEncoderId,
+        encoder_data: &Self::CommandEncoderData,
+        label: &str,
+    ) {
         let global = &self.0;
-        if let Err(cause) = wgc::gfx_select!(encoder.id => global.command_encoder_push_debug_group(encoder.id, label))
+        if let Err(cause) =
+            wgc::gfx_select!(encoder => global.command_encoder_push_debug_group(*encoder, label))
         {
             self.handle_error_nolabel(
-                &encoder.error_sink,
+                &encoder_data.error_sink,
                 cause,
                 "CommandEncoder::push_debug_group",
             );
         }
     }
-    fn command_encoder_pop_debug_group(&self, encoder: &Self::CommandEncoderId) {
+
+    fn command_encoder_pop_debug_group(
+        &self,
+        encoder: &Self::CommandEncoderId,
+        encoder_data: &Self::CommandEncoderData,
+    ) {
         let global = &self.0;
         if let Err(cause) =
-            wgc::gfx_select!(encoder.id => global.command_encoder_pop_debug_group(encoder.id))
+            wgc::gfx_select!(encoder => global.command_encoder_pop_debug_group(*encoder))
         {
             self.handle_error_nolabel(
-                &encoder.error_sink,
+                &encoder_data.error_sink,
                 cause,
                 "CommandEncoder::pop_debug_group",
             );
         }
     }
 
+    fn command_encoder_write_timestamp(
+        &self,
+        encoder: &Self::CommandEncoderId,
+        encoder_data: &Self::CommandEncoderData,
+        query_set: &Self::QuerySetId,
+        _query_set_data: &Self::QuerySetData,
+        query_index: u32,
+    ) {
+        let global = &self.0;
+        if let Err(cause) = wgc::gfx_select!(encoder => global.command_encoder_write_timestamp(
+            *encoder,
+            *query_set,
+            query_index
+        )) {
+            self.handle_error_nolabel(
+                &encoder_data.error_sink,
+                cause,
+                "CommandEncoder::write_timestamp",
+            );
+        }
+    }
+
+    fn command_encoder_resolve_query_set(
+        &self,
+        encoder: &Self::CommandEncoderId,
+        encoder_data: &Self::CommandEncoderData,
+        query_set: &Self::QuerySetId,
+        _query_set_data: &Self::QuerySetData,
+        first_query: u32,
+        query_count: u32,
+        destination: &Self::BufferId,
+        _destination_data: &Self::BufferData,
+        destination_offset: wgt::BufferAddress,
+    ) {
+        let global = &self.0;
+        if let Err(cause) = wgc::gfx_select!(encoder => global.command_encoder_resolve_query_set(
+            *encoder,
+            *query_set,
+            first_query,
+            query_count,
+            *destination,
+            destination_offset
+        )) {
+            self.handle_error_nolabel(
+                &encoder_data.error_sink,
+                cause,
+                "CommandEncoder::resolve_query_set",
+            );
+        }
+    }
+
     fn render_bundle_encoder_finish(
         &self,
-        encoder: Self::RenderBundleEncoderId,
+        _encoder: Self::RenderBundleEncoderId,
+        encoder_data: Self::RenderBundleEncoderData,
         desc: &crate::RenderBundleDescriptor,
-    ) -> Self::RenderBundleId {
+    ) -> (Self::RenderBundleId, Self::RenderBundleData) {
         let global = &self.0;
-        let (id, error) = wgc::gfx_select!(encoder.parent() => global.render_bundle_encoder_finish(
-            encoder,
+        let (id, error) = wgc::gfx_select!(encoder_data.parent() => global.render_bundle_encoder_finish(
+            encoder_data,
             &desc.map_label(|l| l.map(Borrowed)),
             ()
         ));
         if let Some(err) = error {
             self.handle_error_fatal(err, "RenderBundleEncoder::finish");
         }
-        id
+        (id, ())
     }
 
     fn queue_write_buffer(
         &self,
         queue: &Self::QueueId,
+        _queue_data: &Self::QueueData,
         buffer: &Self::BufferId,
+        _buffer_data: &Self::BufferData,
         offset: wgt::BufferAddress,
         data: &[u8],
     ) {
         let global = &self.0;
         match wgc::gfx_select!(
-            *queue => global.queue_write_buffer(queue.id, buffer.id, offset, data)
+            *queue => global.queue_write_buffer(*queue, *buffer, offset, data)
         ) {
             Ok(()) => (),
             Err(err) => self.handle_error_fatal(err, "Queue::write_buffer"),
@@ -2303,13 +2078,15 @@ impl crate::Context for Context {
     fn queue_validate_write_buffer(
         &self,
         queue: &Self::QueueId,
+        _queue_data: &Self::QueueData,
         buffer: &Self::BufferId,
+        _buffer_data: &Self::BufferData,
         offset: wgt::BufferAddress,
         size: wgt::BufferSize,
     ) {
         let global = &self.0;
         match wgc::gfx_select!(
-            *queue => global.queue_validate_write_buffer(queue.id, buffer.id, offset, size.get())
+            *queue => global.queue_validate_write_buffer(*queue, *buffer, offset, size.get())
         ) {
             Ok(()) => (),
             Err(err) => self.handle_error_fatal(err, "Queue::write_buffer_with"),
@@ -2319,19 +2096,20 @@ impl crate::Context for Context {
     fn queue_create_staging_buffer(
         &self,
         queue: &Self::QueueId,
+        _queue_data: &Self::QueueData,
         size: wgt::BufferSize,
-    ) -> QueueWriteBuffer {
+    ) -> Box<dyn crate::context::QueueWriteBuffer> {
         let global = &self.0;
         match wgc::gfx_select!(
-            *queue => global.queue_create_staging_buffer(queue.id, size, ())
+            *queue => global.queue_create_staging_buffer(*queue, size, ())
         ) {
-            Ok((buffer_id, ptr)) => QueueWriteBuffer {
+            Ok((buffer_id, ptr)) => Box::new(QueueWriteBuffer {
                 buffer_id,
                 mapping: BufferMappedRange {
                     ptr,
                     size: size.get() as usize,
                 },
-            },
+            }),
             Err(err) => self.handle_error_fatal(err, "Queue::write_buffer_with"),
         }
     }
@@ -2339,17 +2117,23 @@ impl crate::Context for Context {
     fn queue_write_staging_buffer(
         &self,
         queue: &Self::QueueId,
+        queue_data: &Self::QueueData,
         buffer: &Self::BufferId,
+        _buffer_data: &Self::BufferData,
         offset: wgt::BufferAddress,
-        staging_buffer: &QueueWriteBuffer,
+        staging_buffer: &dyn crate::context::QueueWriteBuffer,
     ) {
         let global = &self.0;
+        let staging_buffer = staging_buffer
+            .as_any()
+            .downcast_ref::<QueueWriteBuffer>()
+            .unwrap();
         match wgc::gfx_select!(
-            *queue => global.queue_write_staging_buffer(queue.id, buffer.id, offset, staging_buffer.buffer_id)
+            *queue => global.queue_write_staging_buffer(*queue, *buffer, offset, staging_buffer.buffer_id)
         ) {
             Ok(()) => (),
             Err(err) => {
-                self.handle_error_nolabel(&queue.error_sink, err, "Queue::write_buffer_with");
+                self.handle_error_nolabel(&queue_data.error_sink, err, "Queue::write_buffer_with");
             }
         }
     }
@@ -2357,6 +2141,7 @@ impl crate::Context for Context {
     fn queue_write_texture(
         &self,
         queue: &Self::QueueId,
+        queue_data: &Self::QueueData,
         texture: crate::ImageCopyTexture,
         data: &[u8],
         data_layout: wgt::ImageDataLayout,
@@ -2364,35 +2149,44 @@ impl crate::Context for Context {
     ) {
         let global = &self.0;
         match wgc::gfx_select!(*queue => global.queue_write_texture(
-            queue.id,
+            *queue,
             &map_texture_copy_view(texture),
             data,
             &data_layout,
             &size
         )) {
             Ok(()) => (),
-            Err(err) => self.handle_error_nolabel(&queue.error_sink, err, "Queue::write_texture"),
+            Err(err) => {
+                self.handle_error_nolabel(&queue_data.error_sink, err, "Queue::write_texture")
+            }
         }
     }
 
     fn queue_submit<I: Iterator<Item = Self::CommandBufferId>>(
         &self,
         queue: &Self::QueueId,
+        _queue_data: &Self::QueueData,
         command_buffers: I,
-    ) -> Self::SubmissionIndex {
+    ) -> (Self::SubmissionIndex, Self::SubmissionIndexData) {
         let temp_command_buffers = command_buffers.collect::<SmallVec<[_; 4]>>();
 
         let global = &self.0;
-        match wgc::gfx_select!(*queue => global.queue_submit(queue.id, &temp_command_buffers)) {
+        let index = match wgc::gfx_select!(*queue => global.queue_submit(*queue, &temp_command_buffers))
+        {
             Ok(index) => index,
             Err(err) => self.handle_error_fatal(err, "Queue::submit"),
-        }
+        };
+        (Unused, index)
     }
 
-    fn queue_get_timestamp_period(&self, queue: &Self::QueueId) -> f32 {
+    fn queue_get_timestamp_period(
+        &self,
+        queue: &Self::QueueId,
+        _queue_data: &Self::QueueData,
+    ) -> f32 {
         let global = &self.0;
         let res = wgc::gfx_select!(queue => global.queue_get_timestamp_period(
-            queue.id
+            *queue
         ));
         match res {
             Ok(v) => v,
@@ -2405,30 +2199,693 @@ impl crate::Context for Context {
     fn queue_on_submitted_work_done(
         &self,
         queue: &Self::QueueId,
+        _queue_data: &Self::QueueData,
         callback: Box<dyn FnOnce() + Send + 'static>,
     ) {
         let closure = wgc::device::queue::SubmittedWorkDoneClosure::from_rust(callback);
 
         let global = &self.0;
-        let res = wgc::gfx_select!(queue => global.queue_on_submitted_work_done(queue.id, closure));
+        let res = wgc::gfx_select!(queue => global.queue_on_submitted_work_done(*queue, closure));
         if let Err(cause) = res {
             self.handle_error_fatal(cause, "Queue::on_submitted_work_done");
         }
     }
 
-    fn device_start_capture(&self, device: &Self::DeviceId) {
+    fn device_start_capture(&self, device: &Self::DeviceId, _device_data: &Self::DeviceData) {
         let global = &self.0;
-        wgc::gfx_select!(device.id => global.device_start_capture(device.id));
+        wgc::gfx_select!(device => global.device_start_capture(*device));
     }
 
-    fn device_stop_capture(&self, device: &Self::DeviceId) {
+    fn device_stop_capture(&self, device: &Self::DeviceId, _device_data: &Self::DeviceData) {
         let global = &self.0;
-        wgc::gfx_select!(device.id => global.device_stop_capture(device.id));
+        wgc::gfx_select!(device => global.device_stop_capture(*device));
+    }
+
+    fn compute_pass_set_pipeline(
+        &self,
+        _pass: &mut Self::ComputePassId,
+        pass_data: &mut Self::ComputePassData,
+        pipeline: &Self::ComputePipelineId,
+        _pipeline_data: &Self::ComputePipelineData,
+    ) {
+        wgpu_compute_pass_set_pipeline(pass_data, *pipeline)
+    }
+
+    fn compute_pass_set_bind_group(
+        &self,
+        _pass: &mut Self::ComputePassId,
+        pass_data: &mut Self::ComputePassData,
+        index: u32,
+        bind_group: &Self::BindGroupId,
+        _bind_group_data: &Self::BindGroupData,
+        offsets: &[wgt::DynamicOffset],
+    ) {
+        unsafe {
+            wgpu_compute_pass_set_bind_group(
+                pass_data,
+                index,
+                *bind_group,
+                offsets.as_ptr(),
+                offsets.len(),
+            )
+        }
+    }
+
+    fn compute_pass_set_push_constants(
+        &self,
+        _pass: &mut Self::ComputePassId,
+        pass_data: &mut Self::ComputePassData,
+        offset: u32,
+        data: &[u8],
+    ) {
+        unsafe {
+            wgpu_compute_pass_set_push_constant(
+                pass_data,
+                offset,
+                data.len().try_into().unwrap(),
+                data.as_ptr(),
+            )
+        }
+    }
+
+    fn compute_pass_insert_debug_marker(
+        &self,
+        _pass: &mut Self::ComputePassId,
+        pass_data: &mut Self::ComputePassData,
+        label: &str,
+    ) {
+        unsafe {
+            let label = std::ffi::CString::new(label).unwrap();
+            wgpu_compute_pass_insert_debug_marker(pass_data, label.as_ptr(), 0);
+        }
+    }
+
+    fn compute_pass_push_debug_group(
+        &self,
+        _pass: &mut Self::ComputePassId,
+        pass_data: &mut Self::ComputePassData,
+        group_label: &str,
+    ) {
+        unsafe {
+            let label = std::ffi::CString::new(group_label).unwrap();
+            wgpu_compute_pass_push_debug_group(pass_data, label.as_ptr(), 0);
+        }
+    }
+
+    fn compute_pass_pop_debug_group(
+        &self,
+        _pass: &mut Self::ComputePassId,
+        pass_data: &mut Self::ComputePassData,
+    ) {
+        wgpu_compute_pass_pop_debug_group(pass_data);
+    }
+
+    fn compute_pass_write_timestamp(
+        &self,
+        _pass: &mut Self::ComputePassId,
+        pass_data: &mut Self::ComputePassData,
+        query_set: &Self::QuerySetId,
+        _query_set_data: &Self::QuerySetData,
+        query_index: u32,
+    ) {
+        wgpu_compute_pass_write_timestamp(pass_data, *query_set, query_index)
+    }
+
+    fn compute_pass_begin_pipeline_statistics_query(
+        &self,
+        _pass: &mut Self::ComputePassId,
+        pass_data: &mut Self::ComputePassData,
+        query_set: &Self::QuerySetId,
+        _query_set_data: &Self::QuerySetData,
+        query_index: u32,
+    ) {
+        wgpu_compute_pass_begin_pipeline_statistics_query(pass_data, *query_set, query_index)
+    }
+
+    fn compute_pass_end_pipeline_statistics_query(
+        &self,
+        _pass: &mut Self::ComputePassId,
+        pass_data: &mut Self::ComputePassData,
+    ) {
+        wgpu_compute_pass_end_pipeline_statistics_query(pass_data)
+    }
+
+    fn compute_pass_dispatch_workgroups(
+        &self,
+        _pass: &mut Self::ComputePassId,
+        pass_data: &mut Self::ComputePassData,
+        x: u32,
+        y: u32,
+        z: u32,
+    ) {
+        wgpu_compute_pass_dispatch_workgroups(pass_data, x, y, z)
+    }
+
+    fn compute_pass_dispatch_workgroups_indirect(
+        &self,
+        _pass: &mut Self::ComputePassId,
+        pass_data: &mut Self::ComputePassData,
+        indirect_buffer: &Self::BufferId,
+        _indirect_buffer_data: &Self::BufferData,
+        indirect_offset: wgt::BufferAddress,
+    ) {
+        wgpu_compute_pass_dispatch_workgroups_indirect(pass_data, *indirect_buffer, indirect_offset)
+    }
+
+    fn render_bundle_encoder_set_pipeline(
+        &self,
+        _encoder: &mut Self::RenderBundleEncoderId,
+        encoder_data: &mut Self::RenderBundleEncoderData,
+        pipeline: &Self::RenderPipelineId,
+        _pipeline_data: &Self::RenderPipelineData,
+    ) {
+        wgpu_render_bundle_set_pipeline(encoder_data, *pipeline)
+    }
+
+    fn render_bundle_encoder_set_bind_group(
+        &self,
+        __encoder: &mut Self::RenderBundleEncoderId,
+        encoder_data: &mut Self::RenderBundleEncoderData,
+        index: u32,
+        bind_group: &Self::BindGroupId,
+        __bind_group_data: &Self::BindGroupData,
+        offsets: &[wgt::DynamicOffset],
+    ) {
+        unsafe {
+            wgpu_render_bundle_set_bind_group(
+                encoder_data,
+                index,
+                *bind_group,
+                offsets.as_ptr(),
+                offsets.len(),
+            )
+        }
+    }
+
+    fn render_bundle_encoder_set_index_buffer(
+        &self,
+        __encoder: &mut Self::RenderBundleEncoderId,
+        encoder_data: &mut Self::RenderBundleEncoderData,
+        buffer: &Self::BufferId,
+        __buffer_data: &Self::BufferData,
+        index_format: wgt::IndexFormat,
+        offset: wgt::BufferAddress,
+        size: Option<wgt::BufferSize>,
+    ) {
+        encoder_data.set_index_buffer(*buffer, index_format, offset, size)
+    }
+
+    fn render_bundle_encoder_set_vertex_buffer(
+        &self,
+        __encoder: &mut Self::RenderBundleEncoderId,
+        encoder_data: &mut Self::RenderBundleEncoderData,
+        slot: u32,
+        buffer: &Self::BufferId,
+        __buffer_data: &Self::BufferData,
+        offset: wgt::BufferAddress,
+        size: Option<wgt::BufferSize>,
+    ) {
+        wgpu_render_bundle_set_vertex_buffer(encoder_data, slot, *buffer, offset, size)
+    }
+
+    fn render_bundle_encoder_set_push_constants(
+        &self,
+        __encoder: &mut Self::RenderBundleEncoderId,
+        encoder_data: &mut Self::RenderBundleEncoderData,
+        stages: wgt::ShaderStages,
+        offset: u32,
+        data: &[u8],
+    ) {
+        unsafe {
+            wgpu_render_bundle_set_push_constants(
+                encoder_data,
+                stages,
+                offset,
+                data.len().try_into().unwrap(),
+                data.as_ptr(),
+            )
+        }
+    }
+
+    fn render_bundle_encoder_draw(
+        &self,
+        _encoder: &mut Self::RenderBundleEncoderId,
+        encoder_data: &mut Self::RenderBundleEncoderData,
+        vertices: Range<u32>,
+        instances: Range<u32>,
+    ) {
+        wgpu_render_bundle_draw(
+            encoder_data,
+            vertices.end - vertices.start,
+            instances.end - instances.start,
+            vertices.start,
+            instances.start,
+        )
+    }
+
+    fn render_bundle_encoder_draw_indexed(
+        &self,
+        _encoder: &mut Self::RenderBundleEncoderId,
+        encoder_data: &mut Self::RenderBundleEncoderData,
+        indices: Range<u32>,
+        base_vertex: i32,
+        instances: Range<u32>,
+    ) {
+        wgpu_render_bundle_draw_indexed(
+            encoder_data,
+            indices.end - indices.start,
+            instances.end - instances.start,
+            indices.start,
+            base_vertex,
+            instances.start,
+        )
+    }
+
+    fn render_bundle_encoder_draw_indirect(
+        &self,
+        _encoder: &mut Self::RenderBundleEncoderId,
+        encoder_data: &mut Self::RenderBundleEncoderData,
+        indirect_buffer: &Self::BufferId,
+        _indirect_buffer_data: &Self::BufferData,
+        indirect_offset: wgt::BufferAddress,
+    ) {
+        wgpu_render_bundle_draw_indirect(encoder_data, *indirect_buffer, indirect_offset)
+    }
+
+    fn render_bundle_encoder_draw_indexed_indirect(
+        &self,
+        _encoder: &mut Self::RenderBundleEncoderId,
+        encoder_data: &mut Self::RenderBundleEncoderData,
+        indirect_buffer: &Self::BufferId,
+        _indirect_buffer_data: &Self::BufferData,
+        indirect_offset: wgt::BufferAddress,
+    ) {
+        wgpu_render_bundle_draw_indexed_indirect(encoder_data, *indirect_buffer, indirect_offset)
+    }
+
+    fn render_bundle_encoder_multi_draw_indirect(
+        &self,
+        _encoder: &mut Self::RenderBundleEncoderId,
+        _encoder_data: &mut Self::RenderBundleEncoderData,
+        _indirect_buffer: &Self::BufferId,
+        _indirect_buffer_data: &Self::BufferData,
+        _indirect_offset: wgt::BufferAddress,
+        _count: u32,
+    ) {
+        unimplemented!()
+    }
+
+    fn render_bundle_encoder_multi_draw_indexed_indirect(
+        &self,
+        _encoder: &mut Self::RenderBundleEncoderId,
+        _encoder_data: &mut Self::RenderBundleEncoderData,
+        _indirect_buffer: &Self::BufferId,
+        _indirect_buffer_data: &Self::BufferData,
+        _indirect_offset: wgt::BufferAddress,
+        _count: u32,
+    ) {
+        unimplemented!()
+    }
+
+    fn render_bundle_encoder_multi_draw_indirect_count(
+        &self,
+        _encoder: &mut Self::RenderBundleEncoderId,
+        _encoder_data: &mut Self::RenderBundleEncoderData,
+        _indirect_buffer: &Self::BufferId,
+        _indirect_buffer_data: &Self::BufferData,
+        _indirect_offset: wgt::BufferAddress,
+        _count_buffer: &Self::BufferId,
+        _count_buffer_data: &Self::BufferData,
+        _count_buffer_offset: wgt::BufferAddress,
+        _max_count: u32,
+    ) {
+        unimplemented!()
+    }
+
+    fn render_bundle_encoder_multi_draw_indexed_indirect_count(
+        &self,
+        _encoder: &mut Self::RenderBundleEncoderId,
+        _encoder_data: &mut Self::RenderBundleEncoderData,
+        _indirect_buffer: &Self::BufferId,
+        _indirect_buffer_data: &Self::BufferData,
+        _indirect_offset: wgt::BufferAddress,
+        _count_buffer: &Self::BufferId,
+        _count_buffer_data: &Self::BufferData,
+        _count_buffer_offset: wgt::BufferAddress,
+        _max_count: u32,
+    ) {
+        unimplemented!()
+    }
+
+    fn render_pass_set_pipeline(
+        &self,
+        _pass: &mut Self::RenderPassId,
+        pass_data: &mut Self::RenderPassData,
+        pipeline: &Self::RenderPipelineId,
+        _pipeline_data: &Self::RenderPipelineData,
+    ) {
+        wgpu_render_pass_set_pipeline(pass_data, *pipeline)
+    }
+
+    fn render_pass_set_bind_group(
+        &self,
+        _pass: &mut Self::RenderPassId,
+        pass_data: &mut Self::RenderPassData,
+        index: u32,
+        bind_group: &Self::BindGroupId,
+        _bind_group_data: &Self::BindGroupData,
+        offsets: &[wgt::DynamicOffset],
+    ) {
+        unsafe {
+            wgpu_render_pass_set_bind_group(
+                pass_data,
+                index,
+                *bind_group,
+                offsets.as_ptr(),
+                offsets.len(),
+            )
+        }
+    }
+
+    fn render_pass_set_index_buffer(
+        &self,
+        _pass: &mut Self::RenderPassId,
+        pass_data: &mut Self::RenderPassData,
+        buffer: &Self::BufferId,
+        _buffer_data: &Self::BufferData,
+        index_format: wgt::IndexFormat,
+        offset: wgt::BufferAddress,
+        size: Option<wgt::BufferSize>,
+    ) {
+        pass_data.set_index_buffer(*buffer, index_format, offset, size)
+    }
+
+    fn render_pass_set_vertex_buffer(
+        &self,
+        _pass: &mut Self::RenderPassId,
+        pass_data: &mut Self::RenderPassData,
+        slot: u32,
+        buffer: &Self::BufferId,
+        _buffer_data: &Self::BufferData,
+        offset: wgt::BufferAddress,
+        size: Option<wgt::BufferSize>,
+    ) {
+        wgpu_render_pass_set_vertex_buffer(pass_data, slot, *buffer, offset, size)
+    }
+
+    fn render_pass_set_push_constants(
+        &self,
+        _pass: &mut Self::RenderPassId,
+        pass_data: &mut Self::RenderPassData,
+        stages: wgt::ShaderStages,
+        offset: u32,
+        data: &[u8],
+    ) {
+        unsafe {
+            wgpu_render_pass_set_push_constants(
+                pass_data,
+                stages,
+                offset,
+                data.len().try_into().unwrap(),
+                data.as_ptr(),
+            )
+        }
+    }
+
+    fn render_pass_draw(
+        &self,
+        _pass: &mut Self::RenderPassId,
+        pass_data: &mut Self::RenderPassData,
+        vertices: Range<u32>,
+        instances: Range<u32>,
+    ) {
+        wgpu_render_pass_draw(
+            pass_data,
+            vertices.end - vertices.start,
+            instances.end - instances.start,
+            vertices.start,
+            instances.start,
+        )
+    }
+
+    fn render_pass_draw_indexed(
+        &self,
+        _pass: &mut Self::RenderPassId,
+        pass_data: &mut Self::RenderPassData,
+        indices: Range<u32>,
+        base_vertex: i32,
+        instances: Range<u32>,
+    ) {
+        wgpu_render_pass_draw_indexed(
+            pass_data,
+            indices.end - indices.start,
+            instances.end - instances.start,
+            indices.start,
+            base_vertex,
+            instances.start,
+        )
+    }
+
+    fn render_pass_draw_indirect(
+        &self,
+        _pass: &mut Self::RenderPassId,
+        pass_data: &mut Self::RenderPassData,
+        indirect_buffer: &Self::BufferId,
+        _indirect_buffer_data: &Self::BufferData,
+        indirect_offset: wgt::BufferAddress,
+    ) {
+        wgpu_render_pass_draw_indirect(pass_data, *indirect_buffer, indirect_offset)
+    }
+
+    fn render_pass_draw_indexed_indirect(
+        &self,
+        _pass: &mut Self::RenderPassId,
+        pass_data: &mut Self::RenderPassData,
+        indirect_buffer: &Self::BufferId,
+        _indirect_buffer_data: &Self::BufferData,
+        indirect_offset: wgt::BufferAddress,
+    ) {
+        wgpu_render_pass_draw_indexed_indirect(pass_data, *indirect_buffer, indirect_offset)
+    }
+
+    fn render_pass_multi_draw_indirect(
+        &self,
+        _pass: &mut Self::RenderPassId,
+        pass_data: &mut Self::RenderPassData,
+        indirect_buffer: &Self::BufferId,
+        _indirect_buffer_data: &Self::BufferData,
+        indirect_offset: wgt::BufferAddress,
+        count: u32,
+    ) {
+        wgpu_render_pass_multi_draw_indirect(pass_data, *indirect_buffer, indirect_offset, count)
+    }
+
+    fn render_pass_multi_draw_indexed_indirect(
+        &self,
+        _pass: &mut Self::RenderPassId,
+        pass_data: &mut Self::RenderPassData,
+        indirect_buffer: &Self::BufferId,
+        _indirect_buffer_data: &Self::BufferData,
+        indirect_offset: wgt::BufferAddress,
+        count: u32,
+    ) {
+        wgpu_render_pass_multi_draw_indexed_indirect(
+            pass_data,
+            *indirect_buffer,
+            indirect_offset,
+            count,
+        )
+    }
+
+    fn render_pass_multi_draw_indirect_count(
+        &self,
+        _pass: &mut Self::RenderPassId,
+        pass_data: &mut Self::RenderPassData,
+        indirect_buffer: &Self::BufferId,
+        _indirect_buffer_data: &Self::BufferData,
+        indirect_offset: wgt::BufferAddress,
+        count_buffer: &Self::BufferId,
+        _count_buffer_data: &Self::BufferData,
+        count_buffer_offset: wgt::BufferAddress,
+        max_count: u32,
+    ) {
+        wgpu_render_pass_multi_draw_indirect_count(
+            pass_data,
+            *indirect_buffer,
+            indirect_offset,
+            *count_buffer,
+            count_buffer_offset,
+            max_count,
+        )
+    }
+
+    fn render_pass_multi_draw_indexed_indirect_count(
+        &self,
+        _pass: &mut Self::RenderPassId,
+        pass_data: &mut Self::RenderPassData,
+        indirect_buffer: &Self::BufferId,
+        _indirect_buffer_data: &Self::BufferData,
+        indirect_offset: wgt::BufferAddress,
+        count_buffer: &Self::BufferId,
+        _count_buffer_data: &Self::BufferData,
+        count_buffer_offset: wgt::BufferAddress,
+        max_count: u32,
+    ) {
+        wgpu_render_pass_multi_draw_indexed_indirect_count(
+            pass_data,
+            *indirect_buffer,
+            indirect_offset,
+            *count_buffer,
+            count_buffer_offset,
+            max_count,
+        )
+    }
+
+    fn render_pass_set_blend_constant(
+        &self,
+        _pass: &mut Self::RenderPassId,
+        pass_data: &mut Self::RenderPassData,
+        color: wgt::Color,
+    ) {
+        wgpu_render_pass_set_blend_constant(pass_data, &color)
+    }
+
+    fn render_pass_set_scissor_rect(
+        &self,
+        _pass: &mut Self::RenderPassId,
+        pass_data: &mut Self::RenderPassData,
+        x: u32,
+        y: u32,
+        width: u32,
+        height: u32,
+    ) {
+        wgpu_render_pass_set_scissor_rect(pass_data, x, y, width, height)
+    }
+
+    fn render_pass_set_viewport(
+        &self,
+        _pass: &mut Self::RenderPassId,
+        pass_data: &mut Self::RenderPassData,
+        x: f32,
+        y: f32,
+        width: f32,
+        height: f32,
+        min_depth: f32,
+        max_depth: f32,
+    ) {
+        wgpu_render_pass_set_viewport(pass_data, x, y, width, height, min_depth, max_depth)
+    }
+
+    fn render_pass_set_stencil_reference(
+        &self,
+        _pass: &mut Self::RenderPassId,
+        pass_data: &mut Self::RenderPassData,
+        reference: u32,
+    ) {
+        wgpu_render_pass_set_stencil_reference(pass_data, reference)
+    }
+
+    fn render_pass_insert_debug_marker(
+        &self,
+        _pass: &mut Self::RenderPassId,
+        pass_data: &mut Self::RenderPassData,
+        label: &str,
+    ) {
+        unsafe {
+            let label = std::ffi::CString::new(label).unwrap();
+            wgpu_render_pass_insert_debug_marker(pass_data, label.as_ptr(), 0);
+        }
+    }
+
+    fn render_pass_push_debug_group(
+        &self,
+        _pass: &mut Self::RenderPassId,
+        pass_data: &mut Self::RenderPassData,
+        group_label: &str,
+    ) {
+        unsafe {
+            let label = std::ffi::CString::new(group_label).unwrap();
+            wgpu_render_pass_push_debug_group(pass_data, label.as_ptr(), 0);
+        }
+    }
+
+    fn render_pass_pop_debug_group(
+        &self,
+        _pass: &mut Self::RenderPassId,
+        pass_data: &mut Self::RenderPassData,
+    ) {
+        wgpu_render_pass_pop_debug_group(pass_data);
+    }
+
+    fn render_pass_write_timestamp(
+        &self,
+        _pass: &mut Self::RenderPassId,
+        pass_data: &mut Self::RenderPassData,
+        query_set: &Self::QuerySetId,
+        _query_set_data: &Self::QuerySetData,
+        query_index: u32,
+    ) {
+        wgpu_render_pass_write_timestamp(pass_data, *query_set, query_index)
+    }
+
+    fn render_pass_begin_pipeline_statistics_query(
+        &self,
+        _pass: &mut Self::RenderPassId,
+        pass_data: &mut Self::RenderPassData,
+        query_set: &Self::QuerySetId,
+        _query_set_data: &Self::QuerySetData,
+        query_index: u32,
+    ) {
+        wgpu_render_pass_begin_pipeline_statistics_query(pass_data, *query_set, query_index)
+    }
+
+    fn render_pass_end_pipeline_statistics_query(
+        &self,
+        _pass: &mut Self::RenderPassId,
+        pass_data: &mut Self::RenderPassData,
+    ) {
+        wgpu_render_pass_end_pipeline_statistics_query(pass_data)
+    }
+
+    fn render_pass_execute_bundles<'a>(
+        &self,
+        _pass: &mut Self::RenderPassId,
+        pass_data: &mut Self::RenderPassData,
+        render_bundles: Box<dyn Iterator<Item = Self::RenderBundleId> + 'a>,
+    ) {
+        let temp_render_bundles = render_bundles.collect::<SmallVec<[_; 4]>>();
+        unsafe {
+            wgpu_render_pass_execute_bundles(
+                pass_data,
+                temp_render_bundles.as_ptr(),
+                temp_render_bundles.len(),
+            )
+        }
+    }
+}
+
+impl<T> From<ObjectId> for wgc::id::Id<T> {
+    // If the id32 feature is enabled, this conversion is not useless.
+    #[allow(clippy::useless_conversion)]
+    fn from(id: ObjectId) -> Self {
+        let raw = std::num::NonZeroU128::from(id);
+        // If the id32 feature is enabled, this will truncate the id to a NonZeroU32.
+        let id = raw.try_into().expect("Id exceeded 32-bits");
+        // FIXME: This is not safe
+        unsafe { Self::from_raw(id) }
+    }
+}
+
+impl<T> From<wgc::id::Id<T>> for ObjectId {
+    // If the id32 feature is enabled, this conversion is not useless.
+    #[allow(clippy::useless_conversion)]
+    fn from(id: wgc::id::Id<T>) -> Self {
+        ObjectId::from(std::num::NonZeroU128::from(id.as_raw()))
     }
 }
 
 #[derive(Debug)]
-pub(crate) struct SurfaceOutputDetail {
+pub struct SurfaceOutputDetail {
     surface_id: wgc::id::SurfaceId,
 }
 
@@ -2492,18 +2949,19 @@ pub struct QueueWriteBuffer {
     mapping: BufferMappedRange,
 }
 
-impl std::ops::Deref for QueueWriteBuffer {
-    type Target = [u8];
-
-    fn deref(&self) -> &Self::Target {
-        panic!("QueueWriteBuffer is write-only!");
+impl crate::context::QueueWriteBuffer for QueueWriteBuffer {
+    fn slice(&self) -> &[u8] {
+        panic!()
     }
-}
 
-impl std::ops::DerefMut for QueueWriteBuffer {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        use crate::BufferMappedRangeSlice;
+    #[inline]
+    fn slice_mut(&mut self) -> &mut [u8] {
+        use crate::context::BufferMappedRange;
         self.mapping.slice_mut()
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 
@@ -2516,11 +2974,13 @@ pub struct BufferMappedRange {
 unsafe impl Send for BufferMappedRange {}
 unsafe impl Sync for BufferMappedRange {}
 
-impl crate::BufferMappedRangeSlice for BufferMappedRange {
+impl crate::context::BufferMappedRange for BufferMappedRange {
+    #[inline]
     fn slice(&self) -> &[u8] {
         unsafe { slice::from_raw_parts(self.ptr, self.size) }
     }
 
+    #[inline]
     fn slice_mut(&mut self) -> &mut [u8] {
         unsafe { slice::from_raw_parts_mut(self.ptr, self.size) }
     }

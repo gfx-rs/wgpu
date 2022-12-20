@@ -34,7 +34,7 @@ emscripten = ["hal/emscripten"]
 
 # Apply run-time checks, even in release builds. These are in addition
 # to the validation carried out at public APIs in all builds.
-strict_asserts = []
+strict_asserts = ["wgt/strict_asserts"]
 angle = ["hal/gles"]
 # Enable API tracing
 trace = ["ron", "serde", "wgt/trace", "arrayvec/serde", "naga/serialize"]

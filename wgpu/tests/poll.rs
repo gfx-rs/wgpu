@@ -94,7 +94,8 @@ fn double_wait_on_submission() {
         let cmd_buf = generate_dummy_work(&ctx);
 
         let index = ctx.queue.submit(Some(cmd_buf));
-        ctx.device.poll(Maintain::WaitForSubmissionIndex(index));
+        ctx.device
+            .poll(Maintain::WaitForSubmissionIndex(index.clone()));
         ctx.device.poll(Maintain::WaitForSubmissionIndex(index));
     })
 }

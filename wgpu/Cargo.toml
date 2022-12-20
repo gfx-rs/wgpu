@@ -76,7 +76,10 @@ name = "water"
 test = true
 
 [features]
-default = ["wgsl", "expose-ids"]
+default = ["wgsl", "expose-ids", "strict_asserts"]
+# Apply run-time checks, even in release builds. These are in addition
+# to the validation carried out at public APIs in all builds.
+strict_asserts = ["wgc/strict_asserts", "wgt/strict_asserts"]
 spirv = ["naga/spv-in"]
 glsl = ["naga/glsl-in"]
 wgsl = ["wgc?/wgsl"]
@@ -148,10 +151,10 @@ raw-window-handle.workspace = true
 serde = { workspace = true, features = ["derive"], optional = true }
 smallvec.workspace = true
 static_assertions.workspace = true
+cfg-if.workspace = true
 
 [dev-dependencies]
 bitflags.workspace = true
-cfg-if.workspace = true
 bytemuck = { workspace = true, features = ["derive"] }
 glam.workspace = true
 ddsfile.workspace = true
