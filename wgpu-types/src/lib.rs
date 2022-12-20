@@ -1129,6 +1129,16 @@ bitflags::bitflags! {
         ///
         /// WebGL doesn't support this.
         const UNRESTRICTED_INDEX_BUFFER = 1 << 16;
+
+        /// Supports full 32-bit range indices (2^32-1 as opposed to 2^24-1 without this flag)
+        ///
+        /// Corresponds to Vulkan's `VkPhysicalDeviceFeatures.fullDrawIndexUint32`
+        const FULL_DRAW_INDEX_UINT32 = 1 << 17;
+
+        /// Supports depth bias clamping
+        ///
+        /// Corresponds to Vulkan's `VkPhysicalDeviceFeatures.depthBiasClamp`
+        const DEPTH_BIAS_CLAMP = 1 << 18;
     }
 }
 

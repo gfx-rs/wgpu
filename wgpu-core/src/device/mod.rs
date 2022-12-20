@@ -2738,6 +2738,10 @@ impl<A: HalApi> Device<A> {
             if let Some(e) = error {
                 return Err(pipeline::CreateRenderPipelineError::DepthStencilState(e));
             }
+
+            if ds.bias.clamp != 0.0 {
+                self.require_downlevel_flags(wgt::DownlevelFlags::DEPTH_BIAS_CLAMP)?;
+            }
         }
 
         if desc.layout.is_none() {
