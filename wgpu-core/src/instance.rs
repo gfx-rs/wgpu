@@ -176,7 +176,19 @@ pub struct Adapter<A: hal::Api> {
 }
 
 impl<A: HalApi> Adapter<A> {
-    fn new(raw: hal::ExposedAdapter<A>) -> Self {
+    fn new(mut raw: hal::ExposedAdapter<A>) -> Self {
+        // WebGPU requires this offset alignment as lower bound on all adapters.
+        const MIN_BUFFER_OFFSET_ALIGNMENT_LOWER_BOUND: u32 = 32;
+
+        let limits = &mut raw.capabilities.limits;
+
+        limits.min_uniform_buffer_offset_alignment = limits
+            .min_uniform_buffer_offset_alignment
+            .max(MIN_BUFFER_OFFSET_ALIGNMENT_LOWER_BOUND);
+        limits.min_storage_buffer_offset_alignment = limits
+            .min_storage_buffer_offset_alignment
+            .max(MIN_BUFFER_OFFSET_ALIGNMENT_LOWER_BOUND);
+
         Self {
             raw,
             life_guard: LifeGuard::new("<Adapter>"),
