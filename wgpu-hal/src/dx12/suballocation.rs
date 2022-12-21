@@ -73,11 +73,13 @@ mod allocation {
         let name = desc.label.unwrap_or("Unlabeled buffer");
 
         // SAFETY: allocator exists when the windows_rs feature is enabled
-        let mut allocator = device
-            .mem_allocator
-            .as_ref()
-            .strict_unwrap_unchecked()
-            .lock();
+        let mut allocator = unsafe {
+            device
+                .mem_allocator
+                .as_ref()
+                .strict_unwrap_unchecked()
+                .lock()
+        };
 
         // let mut allocator = unsafe { device.mem_allocator.as_ref().unwrap_unchecked().lock() };
         let allocation_desc = AllocationCreateDesc::from_winapi_d3d12_resource_desc(
@@ -114,11 +116,13 @@ mod allocation {
         let name = desc.label.unwrap_or("Unlabeled texture");
 
         // SAFETY: allocator exists when the windows_rs feature is enabled
-        let mut allocator = device
-            .mem_allocator
-            .as_ref()
-            .strict_unwrap_unchecked()
-            .lock();
+        let mut allocator = unsafe {
+            device
+                .mem_allocator
+                .as_ref()
+                .strict_unwrap_unchecked()
+                .lock()
+        };
         let allocation_desc = AllocationCreateDesc::from_winapi_d3d12_resource_desc(
             allocator.allocator.device().as_winapi(),
             &raw_desc,
