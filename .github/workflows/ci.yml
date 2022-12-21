@@ -336,7 +336,7 @@ jobs:
         run: |
           set -e
 
-          cargo test --doc
+          cargo test --doc -p wgpu -p wgpu-core -p wgpu-hal -p wgpu-types
 
   fmt:
     name: Format

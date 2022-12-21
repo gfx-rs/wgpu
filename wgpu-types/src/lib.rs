@@ -9,7 +9,7 @@
 )]
 #![warn(missing_docs, unsafe_op_in_unsafe_fn)]
 
-#[cfg(feature = "serde")]
+#[cfg(any(feature = "serde", test))]
 use serde::{Deserialize, Serialize};
 use std::hash::{Hash, Hasher};
 use std::{num::NonZeroU32, ops::Range};
@@ -2103,7 +2103,7 @@ pub enum TextureFormat {
     },
 }
 
-#[cfg(feature = "serde")]
+#[cfg(any(feature = "serde", test))]
 impl<'de> Deserialize<'de> for TextureFormat {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -2239,7 +2239,7 @@ impl<'de> Deserialize<'de> for TextureFormat {
     }
 }
 
-#[cfg(feature = "serde")]
+#[cfg(any(feature = "serde", test))]
 impl Serialize for TextureFormat {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
