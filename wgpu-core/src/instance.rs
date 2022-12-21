@@ -184,10 +184,10 @@ impl<A: HalApi> Adapter<A> {
 
         limits.min_uniform_buffer_offset_alignment = limits
             .min_uniform_buffer_offset_alignment
-            .min(MIN_BUFFER_OFFSET_ALIGNMENT_LOWER_BOUND);
+            .max(MIN_BUFFER_OFFSET_ALIGNMENT_LOWER_BOUND);
         limits.min_storage_buffer_offset_alignment = limits
             .min_storage_buffer_offset_alignment
-            .min(MIN_BUFFER_OFFSET_ALIGNMENT_LOWER_BOUND);
+            .max(MIN_BUFFER_OFFSET_ALIGNMENT_LOWER_BOUND);
 
         Self {
             raw,
