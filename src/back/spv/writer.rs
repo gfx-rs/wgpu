@@ -1231,6 +1231,7 @@ impl Writer {
                     Bi::VertexIndex => BuiltIn::VertexIndex,
                     // fragment
                     Bi::FragDepth => BuiltIn::FragDepth,
+                    Bi::PointCoord => BuiltIn::PointCoord,
                     Bi::FrontFacing => BuiltIn::FrontFacing,
                     Bi::PrimitiveIndex => {
                         self.require_any(

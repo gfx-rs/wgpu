@@ -340,6 +340,7 @@ pub enum BuiltIn {
     VertexIndex,
     // fragment
     FragDepth,
+    PointCoord,
     FrontFacing,
     PrimitiveIndex,
     SampleIndex,

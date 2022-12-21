@@ -391,6 +391,7 @@ impl ResolvedBinding {
                     Bi::VertexIndex => "vertex_id",
                     // fragment
                     Bi::FragDepth => "depth(any)",
+                    Bi::PointCoord => "point_coord",
                     Bi::FrontFacing => "front_facing",
                     Bi::PrimitiveIndex => "primitive_id",
                     Bi::SampleIndex => "sample_id",

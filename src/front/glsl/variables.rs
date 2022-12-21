@@ -128,6 +128,16 @@ impl Parser {
                 mutable: false,
                 storage: StorageQualifier::Input,
             },
+            "gl_PointCoord" => BuiltInData {
+                inner: TypeInner::Vector {
+                    size: VectorSize::Bi,
+                    kind: ScalarKind::Float,
+                    width: 4,
+                },
+                builtin: BuiltIn::PointCoord,
+                mutable: false,
+                storage: StorageQualifier::Input,
+            },
             "gl_GlobalInvocationID"
             | "gl_NumWorkGroups"
             | "gl_WorkGroupSize"

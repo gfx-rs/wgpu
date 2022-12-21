@@ -177,7 +177,7 @@ impl crate::BuiltIn {
             Self::BaseInstance | Self::BaseVertex | Self::WorkGroupSize => {
                 return Err(Error::Unimplemented(format!("builtin {:?}", self)))
             }
-            Self::ViewIndex => {
+            Self::ViewIndex | Self::PointCoord => {
                 return Err(Error::Custom(format!("Unsupported builtin {:?}", self)))
             }
         })
