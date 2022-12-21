@@ -19,6 +19,7 @@ use crate::{
     LifeGuard, RefCount,
 };
 use hal::BufferUses;
+use wgt::{strict_assert, strict_assert_eq};
 
 impl ResourceUses for BufferUses {
     const EXCLUSIVE: Self = Self::EXCLUSIVE;

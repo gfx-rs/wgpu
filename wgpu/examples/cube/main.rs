@@ -406,7 +406,10 @@ fn main() {
     framework::run::<Example>("cube");
 }
 
+wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
+
 #[test]
+#[wasm_bindgen_test::wasm_bindgen_test]
 fn cube() {
     framework::test::<Example>(framework::FrameworkRefTest {
         image_path: "/examples/cube/screenshot.png",
@@ -420,6 +423,7 @@ fn cube() {
 }
 
 #[test]
+#[wasm_bindgen_test::wasm_bindgen_test]
 fn cube_lines() {
     framework::test::<Example>(framework::FrameworkRefTest {
         image_path: "/examples/cube/screenshot-lines.png",

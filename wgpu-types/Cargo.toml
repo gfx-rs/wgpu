@@ -18,6 +18,7 @@ rustdoc-args = ["--cfg", "docsrs"]
 [features]
 trace = ["serde"]
 replay = ["serde"]
+strict_asserts = []
 
 [dependencies]
 bitflags = "1"

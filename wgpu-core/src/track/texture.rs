@@ -34,6 +34,7 @@ use hal::TextureUses;
 
 use arrayvec::ArrayVec;
 use naga::FastHashMap;
+use wgt::{strict_assert, strict_assert_eq};
 
 use std::{borrow::Cow, iter, marker::PhantomData, ops::Range, vec::Drain};
 
@@ -814,7 +815,7 @@ enum TextureStateProvider<'a> {
     TextureSet { set: &'a TextureStateSet },
 }
 impl<'a> TextureStateProvider<'a> {
-    /// Convenience function turning Option<Selector> into this enum.
+    /// Convenience function turning `Option<Selector>` into this enum.
     fn from_option(selector: Option<TextureSelector>, state: TextureUses) -> Self {
         match selector {
             Some(selector) => Self::Selector { selector, state },

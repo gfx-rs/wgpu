@@ -310,7 +310,10 @@ fn main() {
     framework::run::<Example>("msaa-line");
 }
 
+wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
+
 #[test]
+#[wasm_bindgen_test::wasm_bindgen_test]
 fn msaa_line() {
     framework::test::<Example>(framework::FrameworkRefTest {
         image_path: "/examples/msaa-line/screenshot.png",

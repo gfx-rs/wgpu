@@ -58,6 +58,7 @@ futures-intrusive = "0.4"
 fxhash = "0.2.1"
 glam = "0.21.3"
 libloading = "0.7"
+libc = "0.2"
 log = "0.4"
 nanorand = { version = "0.7", default-features = false }
 # Opt out of noise's "default-features" to avoid "image" feature as a dependency count optimization.
@@ -95,6 +96,7 @@ android_system_properties = "0.1.1"
 
 # DX dependencies
 bit-set = "0.5"
+gpu-allocator = { version = "0.21", default_features = false, features = ["d3d12", "windows", "public-winapi"] }
 native = { package = "d3d12", version = "0.5.0" }
 range-alloc = "0.1"
 winapi = "0.3"
