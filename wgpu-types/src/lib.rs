@@ -5019,6 +5019,61 @@ pub struct ImageSubresourceRange {
 }
 
 impl ImageSubresourceRange {
+    /// Returns if the given range represents a full resource, with a texture of the given
+    /// layer count and mip count.
+    ///
+    /// ```rust
+    /// # use wgpu_types as wgpu;
+    /// use std::num::NonZeroU32;
+    ///
+    /// let range_none = wgpu::ImageSubresourceRange {
+    ///     aspect: wgpu::TextureAspect::All,
+    ///     base_mip_level: 0,
+    ///     mip_level_count: None,
+    ///     base_array_layer: 0,
+    ///     array_layer_count: None,
+    /// };
+    /// assert_eq!(range_none.is_full_resource(5, 10), true);
+    ///
+    /// let range_some = wgpu::ImageSubresourceRange {
+    ///     aspect: wgpu::TextureAspect::All,
+    ///     base_mip_level: 0,
+    ///     mip_level_count: NonZeroU32::new(5),
+    ///     base_array_layer: 0,
+    ///     array_layer_count: NonZeroU32::new(10),
+    /// };
+    /// assert_eq!(range_some.is_full_resource(5, 10), true);
+    ///
+    /// let range_mixed = wgpu::ImageSubresourceRange {
+    ///     aspect: wgpu::TextureAspect::All,
+    ///     base_mip_level: 0,
+    ///     // Only partial resource
+    ///     mip_level_count: NonZeroU32::new(3),
+    ///     base_array_layer: 0,
+    ///     array_layer_count: None,
+    /// };
+    /// assert_eq!(range_mixed.is_full_resource(5, 10), false);
+    /// ```
+    pub fn is_full_resource(&self, mip_levels: u32, array_layers: u32) -> bool {
+        // Mip level count and array layer count need to deal with both the None and Some(count) case.
+        let mip_level_count = self.mip_level_count.map_or(mip_levels, NonZeroU32::get);
+        let array_layer_count = self.array_layer_count.map_or(array_layers, NonZeroU32::get);
+
+        let aspect_eq = self.aspect == TextureAspect::All;
+
+        let base_mip_level_eq = self.base_mip_level == 0;
+        let mip_level_count_eq = mip_level_count == mip_levels;
+
+        let base_array_layer_eq = self.base_array_layer == 0;
+        let array_layer_count_eq = array_layer_count == array_layers;
+
+        aspect_eq
+            && base_mip_level_eq
+            && mip_level_count_eq
+            && base_array_layer_eq
+            && array_layer_count_eq
+    }
+
     /// Returns the mip level range of a subresource range describes for a specific texture.
     pub fn mip_range<L>(&self, texture_desc: &TextureDescriptor<L>) -> Range<u32> {
         self.base_mip_level..match self.mip_level_count {
