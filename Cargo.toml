@@ -13,7 +13,7 @@ members = [
     "run-wasm"
 ]
 exclude = []
-default-members = ["wgpu", "wgpu-hal", "wgpu-info"]
+default-members = ["wgpu", "wgpu-hal", "wgpu-info", "wgpu-types"]
 
 [workspace.package]
 edition = "2021"
