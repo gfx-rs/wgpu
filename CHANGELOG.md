@@ -183,6 +183,10 @@ Additionally `Surface::get_default_config` now returns an Option and returns Non
 - Fixed WebGL not displaying srgb targets correctly if a non-screen filling viewport was previously set. By @Wumpf in [#3093](https://github.com/gfx-rs/wgpu/pull/3093)
 - Fix disallowing multisampling for float textures if otherwise supported. By @Wumpf in [#3183](https://github.com/gfx-rs/wgpu/pull/3183)
 
+#### Vulkan
+
+- Document and improve extension detection. By @teoxoy in [#3327](https://github.com/gfx-rs/wgpu/pull/3327)
+
 #### deno-webgpu
 
 - Let `setVertexBuffer` and `setIndexBuffer` calls on
