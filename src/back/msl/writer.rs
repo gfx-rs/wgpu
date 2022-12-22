@@ -3399,33 +3399,52 @@ impl<W: Write> Writer<W> {
                     if fun_info[var_handle].is_empty() {
                         continue;
                     }
-                    if let Some(ref br) = var.binding {
-                        let good = match options.per_stage_map[ep.stage].resources.get(br) {
-                            Some(target) => {
-                                let binding_ty = match module.types[var.ty].inner {
-                                    crate::TypeInner::BindingArray { base, .. } => {
-                                        &module.types[base].inner
-                                    }
-                                    ref ty => ty,
-                                };
-                                match *binding_ty {
-                                    crate::TypeInner::Image { .. } => target.texture.is_some(),
-                                    crate::TypeInner::Sampler { .. } => target.sampler.is_some(),
-                                    _ => target.buffer.is_some(),
+                    match var.space {
+                        crate::AddressSpace::Uniform
+                        | crate::AddressSpace::Storage { .. }
+                        | crate::AddressSpace::Handle => {
+                            let br = match var.binding {
+                                Some(ref br) => br,
+                                None => {
+                                    let var_name = var.name.clone().unwrap_or_default();
+                                    ep_error =
+                                        Some(super::EntryPointError::MissingBinding(var_name));
+                                    break;
                                 }
+                            };
+                            let good = match options.per_stage_map[ep.stage].resources.get(br) {
+                                Some(target) => {
+                                    let binding_ty = match module.types[var.ty].inner {
+                                        crate::TypeInner::BindingArray { base, .. } => {
+                                            &module.types[base].inner
+                                        }
+                                        ref ty => ty,
+                                    };
+                                    match *binding_ty {
+                                        crate::TypeInner::Image { .. } => target.texture.is_some(),
+                                        crate::TypeInner::Sampler { .. } => {
+                                            target.sampler.is_some()
+                                        }
+                                        _ => target.buffer.is_some(),
+                                    }
+                                }
+                                None => false,
+                            };
+                            if !good {
+                                ep_error =
+                                    Some(super::EntryPointError::MissingBindTarget(br.clone()));
+                                break;
                             }
-                            None => false,
-                        };
-                        if !good {
-                            ep_error = Some(super::EntryPointError::MissingBinding(br.clone()));
-                            break;
                         }
-                    }
-                    if var.space == crate::AddressSpace::PushConstant {
-                        if let Err(e) = options.resolve_push_constants(ep.stage) {
-                            ep_error = Some(e);
-                            break;
+                        crate::AddressSpace::PushConstant => {
+                            if let Err(e) = options.resolve_push_constants(ep.stage) {
+                                ep_error = Some(e);
+                                break;
+                            }
                         }
+                        crate::AddressSpace::Function
+                        | crate::AddressSpace::Private
+                        | crate::AddressSpace::WorkGroup => {}
                     }
                 }
                 if supports_array_length {
