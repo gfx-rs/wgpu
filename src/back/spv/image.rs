@@ -317,6 +317,22 @@ impl<'w> BlockContext<'w> {
         let array_index_i32_id = self.cached[array_index];
         let reconciled_array_index_id = if component_kind == crate::ScalarKind::Sint {
             array_index_i32_id
+        } else if component_kind == crate::ScalarKind::Uint {
+            let u32_id = self.get_type_id(LookupType::Local(LocalType::Value {
+                vector_size: None,
+                kind: crate::ScalarKind::Uint,
+                width: 4,
+                pointer_space: None,
+            }));
+
+            let reconciled_id = self.gen_id();
+            block.body.push(Instruction::unary(
+                spirv::Op::Bitcast,
+                u32_id,
+                reconciled_id,
+                array_index_i32_id,
+            ));
+            reconciled_id
         } else {
             let component_type_id = self.get_type_id(LookupType::Local(LocalType::Value {
                 vector_size: None,

@@ -24,7 +24,13 @@ kernel void main_(
     metal::uint4 value4_ = image_storage_src.read(metal::uint2(itc));
     metal::uint4 value5_ = image_array_src.read(metal::uint2(itc), static_cast<int>(local_id.z), static_cast<int>(local_id.z) + 1);
     metal::uint4 value6_ = image_1d_src.read(uint(static_cast<int>(local_id.x)));
+    metal::uint4 value1u = image_mipmapped_src.read(metal::uint2(static_cast<metal::uint2>(itc)), static_cast<int>(local_id.z));
+    metal::uint4 value2u = image_multisampled_src.read(metal::uint2(static_cast<metal::uint2>(itc)), static_cast<int>(local_id.z));
+    metal::uint4 value4u = image_storage_src.read(metal::uint2(static_cast<metal::uint2>(itc)));
+    metal::uint4 value5u = image_array_src.read(metal::uint2(static_cast<metal::uint2>(itc)), static_cast<int>(local_id.z), static_cast<int>(local_id.z) + 1);
+    metal::uint4 value6u = image_1d_src.read(uint(static_cast<uint>(local_id.x)));
     image_dst.write((((value1_ + value2_) + value4_) + value5_) + value6_, uint(itc.x));
+    image_dst.write((((value1u + value2u) + value4u) + value5u) + value6u, uint(static_cast<uint>(itc.x)));
     return;
 }
 

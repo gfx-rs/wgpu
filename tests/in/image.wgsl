@@ -19,12 +19,22 @@ var image_dst: texture_storage_1d<r32uint,write>;
 fn main(@builtin(local_invocation_id) local_id: vec3<u32>) {
     let dim = textureDimensions(image_storage_src);
     let itc = dim * vec2<i32>(local_id.xy) % vec2<i32>(10, 20);
+    // loads with ivec2 coords.
     let value1 = textureLoad(image_mipmapped_src, itc, i32(local_id.z));
     let value2 = textureLoad(image_multisampled_src, itc, i32(local_id.z));
     let value4 = textureLoad(image_storage_src, itc);
     let value5 = textureLoad(image_array_src, itc, i32(local_id.z), i32(local_id.z) + 1);
     let value6 = textureLoad(image_1d_src, i32(local_id.x), i32(local_id.z));
+    // loads with uvec2 coords.
+    let value1u = textureLoad(image_mipmapped_src, vec2<u32>(itc), i32(local_id.z));
+    let value2u = textureLoad(image_multisampled_src, vec2<u32>(itc), i32(local_id.z));
+    let value4u = textureLoad(image_storage_src, vec2<u32>(itc));
+    let value5u = textureLoad(image_array_src, vec2<u32>(itc), i32(local_id.z), i32(local_id.z) + 1);
+    let value6u = textureLoad(image_1d_src, u32(local_id.x), i32(local_id.z));
+    // store with ivec2 coords.
     textureStore(image_dst, itc.x, value1 + value2 + value4 + value5 + value6);
+    // store with uvec2 coords.
+    textureStore(image_dst, u32(itc.x), value1u + value2u + value4u + value5u + value6u);
 }
 
 @compute @workgroup_size(16, 1, 1)

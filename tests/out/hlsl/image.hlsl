@@ -38,7 +38,13 @@ void main(uint3 local_id : SV_GroupThreadID)
     uint4 value4_ = image_storage_src.Load(itc);
     uint4 value5_ = image_array_src.Load(int4(itc, int(local_id.z), (int(local_id.z) + 1)));
     uint4 value6_ = image_1d_src.Load(int2(int(local_id.x), int(local_id.z)));
+    uint4 value1u = image_mipmapped_src.Load(int3(uint2(itc), int(local_id.z)));
+    uint4 value2u = image_multisampled_src.Load(uint2(itc), int(local_id.z));
+    uint4 value4u = image_storage_src.Load(uint2(itc));
+    uint4 value5u = image_array_src.Load(int4(uint2(itc), int(local_id.z), (int(local_id.z) + 1)));
+    uint4 value6u = image_1d_src.Load(int2(uint(local_id.x), int(local_id.z)));
     image_dst[itc.x] = ((((value1_ + value2_) + value4_) + value5_) + value6_);
+    image_dst[uint(itc.x)] = ((((value1u + value2u) + value4u) + value5u) + value6u);
     return;
 }
 

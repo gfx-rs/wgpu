@@ -3144,12 +3144,32 @@ impl<'a, W: Write> Writer<'a, W> {
             }
             // Otherwise write just the expression (and the 1D hack if needed)
             None => {
+                let uvec_size = match *ctx.info[coordinate].ty.inner_with(&self.module.types) {
+                    TypeInner::Scalar {
+                        kind: crate::ScalarKind::Uint,
+                        ..
+                    } => Some(None),
+                    TypeInner::Vector {
+                        size,
+                        kind: crate::ScalarKind::Uint,
+                        ..
+                    } => Some(Some(size as u32)),
+                    _ => None,
+                };
                 if tex_1d_hack {
                     write!(self.out, "ivec2(")?;
+                } else if uvec_size.is_some() {
+                    match uvec_size {
+                        Some(None) => write!(self.out, "int(")?,
+                        Some(Some(size)) => write!(self.out, "ivec{}(", size)?,
+                        _ => {}
+                    }
                 }
                 self.write_expr(coordinate, ctx)?;
                 if tex_1d_hack {
                     write!(self.out, ", 0)")?;
+                } else if uvec_size.is_some() {
+                    write!(self.out, ")")?;
                 }
             }
         }

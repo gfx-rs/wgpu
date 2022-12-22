@@ -50,7 +50,13 @@ fn main(@builtin(local_invocation_id) local_id: vec3<u32>) {
     let value4_ = textureLoad(image_storage_src, itc);
     let value5_ = textureLoad(image_array_src, itc, i32(local_id.z), (i32(local_id.z) + 1));
     let value6_ = textureLoad(image_1d_src, i32(local_id.x), i32(local_id.z));
+    let value1u = textureLoad(image_mipmapped_src, vec2<u32>(itc), i32(local_id.z));
+    let value2u = textureLoad(image_multisampled_src, vec2<u32>(itc), i32(local_id.z));
+    let value4u = textureLoad(image_storage_src, vec2<u32>(itc));
+    let value5u = textureLoad(image_array_src, vec2<u32>(itc), i32(local_id.z), (i32(local_id.z) + 1));
+    let value6u = textureLoad(image_1d_src, u32(local_id.x), i32(local_id.z));
     textureStore(image_dst, itc.x, ((((value1_ + value2_) + value4_) + value5_) + value6_));
+    textureStore(image_dst, u32(itc.x), ((((value1u + value2u) + value4u) + value5u) + value6u));
     return;
 }
 
