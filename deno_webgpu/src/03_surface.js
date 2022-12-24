@@ -18,6 +18,7 @@
   const _surfaceRid = Symbol("[[surfaceRid]]");
   const _configuration = Symbol("[[configuration]]");
   const _canvas = Symbol("[[canvas]]");
+  const _currentTexture = Symbol("[[currentTexture]]");
   class GPUCanvasContext {
     /** @type {number} */
     [_surfaceRid];
@@ -25,6 +26,8 @@
     [_device];
     [_configuration];
     [_canvas];
+    /** @type {GPUTexture | undefined} */
+    [_currentTexture];
 
     get canvas() {
       webidl.assertBranded(this, GPUCanvasContextPrototype);
@@ -78,6 +81,10 @@
 
       const device = assertDevice(this, { prefix, context: "this" });
 
+      if (this[_currentTexture]) {
+        return this[_currentTexture];
+      }
+
       const { rid } = ops.op_webgpu_surface_get_current_texture(device.rid, this[_surfaceRid]);
 
       const texture = createGPUTexture(
@@ -97,6 +104,7 @@
         rid,
       );
       device.trackResource(texture);
+      this[_currentTexture] = texture;
       return texture;
     }
 
@@ -104,7 +112,8 @@
     present() {
       webidl.assertBranded(this, GPUCanvasContextPrototype);
       const prefix = "Failed to execute 'present' on 'GPUCanvasContext'";
-      const device = assertDevice(this, { prefix, context: "this" });
+      const device = assertDevice(this[_currentTexture], { prefix, context: "this" });
+      this[_currentTexture] = undefined;
       ops.op_webgpu_surface_present(device.rid, this[_surfaceRid]);
     }
   }
