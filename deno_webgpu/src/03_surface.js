@@ -113,8 +113,9 @@
       webidl.assertBranded(this, GPUCanvasContextPrototype);
       const prefix = "Failed to execute 'present' on 'GPUCanvasContext'";
       const device = assertDevice(this[_currentTexture], { prefix, context: "this" });
-      this[_currentTexture] = undefined;
       ops.op_webgpu_surface_present(device.rid, this[_surfaceRid]);
+      this[_currentTexture].destroy();
+      this[_currentTexture] = undefined;
     }
   }
   const GPUCanvasContextPrototype = GPUCanvasContext.prototype;
