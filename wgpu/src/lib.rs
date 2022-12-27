@@ -3813,7 +3813,7 @@ impl Queue {
     ///
     /// The returned value can be converted into a `&mut [u8]` with the `as_mut` method.
     /// However, `as_ref` is not implemented for [`QueueWriteBufferView`].
-    /// (It is notunsound to read through the `&mut [u8]` anyway, but doing so will not
+    /// (It is not unsound to read through the `&mut [u8]` anyway, but doing so will not
     /// yield the existing contents of `buffer` from the GPU, and it is likely to be slow.)
     ///
     /// This method is intended to have low performance costs.
