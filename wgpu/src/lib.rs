@@ -2313,27 +2313,6 @@ impl std::ops::Deref for BufferView<'_> {
     }
 }
 
-impl std::ops::Deref for BufferViewMut<'_> {
-    type Target = [u8];
-
-    #[inline]
-    fn deref(&self) -> &[u8] {
-        assert!(
-            self.readable,
-            "Attempting to read a write-only mapping for buffer {:?}",
-            self.slice.buffer.id
-        );
-        self.data.slice()
-    }
-}
-
-impl std::ops::DerefMut for BufferViewMut<'_> {
-    #[inline]
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        self.data.slice_mut()
-    }
-}
-
 impl AsRef<[u8]> for BufferView<'_> {
     #[inline]
     fn as_ref(&self) -> &[u8] {
