@@ -107,6 +107,30 @@ Additionally `Surface::get_default_config` now returns an Option and returns Non
 
 `wgpu`'s DX12 backend can now suballocate buffers and textures when the `windows_rs` feature is enabled, which can give a significant increase in performance (in testing I've seen a 10000%+ improvement in a simple scene with 200 `write_buffer` calls per frame, and a 40%+ improvement in [Bistro using Bevy](https://github.com/vleue/bevy_bistro_playground)). Previously `wgpu-hal`'s DX12 backend created a new heap on the GPU every time you called write_buffer (by calling `CreateCommittedResource`), whereas now with the `windows_rs` feature enabled it uses [`gpu_allocator`](https://crates.io/crates/gpu-allocator) to manage GPU memory (and calls `CreatePlacedResource` with a suballocated heap). By @Elabajaba in [#3163](https://github.com/gfx-rs/wgpu/pull/3163)
 
+#### New API for `QueueWriteBufferView` and `BufferViewMut`
+
+According to the documentation for [`Queue::write_buffer_with`](https://docs.rs/wgpu/0.14.0/wgpu/struct.Queue.html#method.write_buffer_with):
+
+> The returned value can be dereferenced to a `&mut [u8]`; dereferencing it to a `&[u8]` panics!
+
+According to the documentation for [`Deref`](https://doc.rust-lang.org/nightly/core/ops/trait.Deref.html):
+
+> **this trait should never fail**. Failure during dereferencing can be extremely confusing when `Deref` is invoked implicitly.
+
+The ideal solution would be to keep the implementation `DerefMut` but get rid of `Deref`, but Rust doesn't allow for `DerefMut` without `Deref`. Because of this, `QueueWriteBufferView` no longer implements `Deref` or `DerefMut`. Instead, it implements `AsMut<[u8]>`
+
+```diff
+- let slice = buffer.slice(..).get_mapped_range_mut()[..unpadded_size as usize];
++ let slice = buffer.slice(..).get_mapped_range_mut().as_mut()[..unpadded_size as usize];
+```
+
+A similar problem appears in `BufferViewMut`. It implements `Deref`, which fails if the buffer is write-only. It also implements `AsRef<[u8]>`, which also should not fail. To replace these, a new dedicated method was added to `BufferViewMut`, which returns an `Option<&[u8]>`.
+
+```diff
+- let slice = *view;
++ let slice = view.read().unwrap();
+```
+
 ### Changes
 
 #### General
