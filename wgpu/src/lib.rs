@@ -3768,7 +3768,11 @@ impl<'a> RenderBundleEncoder<'a> {
     }
 }
 
-/// A write-only view into a staging buffer
+/// A read-only view into a staging buffer.
+///
+/// Reading into this buffer won't yield the contents of the buffer from the
+/// GPU and is likely to be slow. Because of this, although [`AsMut`] is
+/// implemented for this type, [`AsRef`] is not.
 pub struct QueueWriteBufferView<'a> {
     queue: &'a Queue,
     buffer: &'a Buffer,
@@ -3777,17 +3781,8 @@ pub struct QueueWriteBufferView<'a> {
 }
 static_assertions::assert_impl_all!(QueueWriteBufferView: Send, Sync);
 
-impl<'a> std::ops::Deref for QueueWriteBufferView<'a> {
-    type Target = [u8];
-
-    fn deref(&self) -> &Self::Target {
-        panic!("QueueWriteBufferView is write-only!");
-    }
-}
-
-impl<'a> std::ops::DerefMut for QueueWriteBufferView<'a> {
-    #[inline]
-    fn deref_mut(&mut self) -> &mut Self::Target {
+impl<'a> std::convert::AsMut<[u8]> for QueueWriteBufferView<'a> {
+    fn as_mut(&mut self) -> &mut [u8] {
         self.inner.slice_mut()
     }
 }
@@ -3827,11 +3822,11 @@ impl Queue {
     }
 
     /// Schedule a data write into `buffer` starting at `offset` via the returned
-    /// [QueueWriteBufferView].
+    /// [`QueueWriteBufferView`].
     ///
-    /// The returned value can be dereferenced to a `&mut [u8]`; dereferencing it to a
-    /// `&[u8]` panics!
-    /// (It is not unsound to read through the `&mut [u8]` anyway, but doing so will not
+    /// The returned value can be converted into a `&mut [u8]` with the `as_mut` method.
+    /// However, `as_ref` is not implemented for [`QueueWriteBufferView`].
+    /// (It is notunsound to read through the `&mut [u8]` anyway, but doing so will not
     /// yield the existing contents of `buffer` from the GPU, and it is likely to be slow.)
     ///
     /// This method is intended to have low performance costs.
