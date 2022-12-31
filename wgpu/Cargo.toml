@@ -75,6 +75,10 @@ test = true
 name = "water"
 test = true
 
+[[example]]
+name = "stencil-triangles"
+test = true
+
 [features]
 default = ["wgsl", "expose-ids"]
 # Apply run-time checks, even in release builds. These are in addition
