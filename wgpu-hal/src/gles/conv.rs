@@ -56,7 +56,11 @@ impl super::AdapterShared {
             Tf::Rgba32Uint => (glow::RGBA32UI, glow::RGBA_INTEGER, glow::UNSIGNED_INT),
             Tf::Rgba32Sint => (glow::RGBA32I, glow::RGBA_INTEGER, glow::INT),
             Tf::Rgba32Float => (glow::RGBA32F, glow::RGBA, glow::FLOAT),
-            //Tf::Stencil8 => (glow::R8UI, glow::STENCIL_COMPONENTS, glow::UNSIGNED_BYTE),
+            Tf::Stencil8 => (
+                glow::STENCIL_INDEX8,
+                glow::STENCIL_COMPONENTS,
+                glow::UNSIGNED_BYTE,
+            ),
             Tf::Depth16Unorm => (
                 glow::DEPTH_COMPONENT16,
                 glow::DEPTH_COMPONENT,

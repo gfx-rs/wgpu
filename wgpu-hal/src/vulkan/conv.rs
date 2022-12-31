@@ -64,7 +64,15 @@ impl super::PrivateCapabilities {
                     F::D32_SFLOAT_S8_UINT
                 }
             }
-            //Tf::Stencil8 => F::R8_UNORM,
+            Tf::Stencil8 => {
+                if self.texture_s8 {
+                    F::S8_UINT
+                } else if self.texture_d24_s8 {
+                    F::D24_UNORM_S8_UINT
+                } else {
+                    F::D32_SFLOAT_S8_UINT
+                }
+            }
             Tf::Depth16Unorm => F::D16_UNORM,
             Tf::Rgb9e5Ufloat => F::E5B9G9R9_UFLOAT_PACK32,
             Tf::Bc1RgbaUnorm => F::BC1_RGBA_UNORM_BLOCK,
