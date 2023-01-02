@@ -1929,7 +1929,7 @@ pub enum TextureFormat {
 
     // Depth and stencil formats
     /// Stencil format with 8 bit integer stencil.
-    //Stencil8,
+    Stencil8,
     /// Special depth format with 16 bit integer depth.
     Depth16Unorm,
     /// Special depth format with at least 24 bit integer depth.
@@ -2163,6 +2163,7 @@ impl<'de> Deserialize<'de> for TextureFormat {
                     "rgba32uint" => TextureFormat::Rgba32Uint,
                     "rgba32sint" => TextureFormat::Rgba32Sint,
                     "rgba32float" => TextureFormat::Rgba32Float,
+                    "stencil8" => TextureFormat::Stencil8,
                     "depth32float" => TextureFormat::Depth32Float,
                     "depth32float-stencil8" => TextureFormat::Depth32FloatStencil8,
                     "depth16unorm" => TextureFormat::Depth16Unorm,
@@ -2288,6 +2289,7 @@ impl Serialize for TextureFormat {
             TextureFormat::Rgba32Uint => "rgba32uint",
             TextureFormat::Rgba32Sint => "rgba32sint",
             TextureFormat::Rgba32Float => "rgba32float",
+            TextureFormat::Stencil8 => "stencil8",
             TextureFormat::Depth32Float => "depth32float",
             TextureFormat::Depth16Unorm => "depth16unorm",
             TextureFormat::Depth32FloatStencil8 => "depth32float-stencil8",
@@ -2443,6 +2445,7 @@ impl TextureFormat {
             Self::Rgba32Sint =>          (   native,    sint,    linear,         noaa, (1, 1), 16,  all_flags, 4),
             Self::Rgba32Float =>         (   native, nearest,    linear,         noaa, (1, 1), 16,  all_flags, 4),
             // Depth-stencil textures
+            Self::Stencil8 =>            (   native,   depth,    linear,         msaa, (1, 1),  2, attachment, 1),
             Self::Depth16Unorm =>        (   native,   depth,    linear,         msaa, (1, 1),  2, attachment, 1),
             Self::Depth24Plus =>         (   native,   depth,    linear,         msaa, (1, 1),  4, attachment, 1),
             Self::Depth24PlusStencil8 => (   native,   depth,    linear,         msaa, (1, 1),  4, attachment, 2),
@@ -2701,6 +2704,10 @@ fn texture_format_serialize() {
     assert_eq!(
         serde_json::to_string(&TextureFormat::Rgba32Float).unwrap(),
         "\"rgba32float\"".to_string()
+    );
+    assert_eq!(
+        serde_json::to_string(&TextureFormat::Stencil8).unwrap(),
+        "\"stencil8\"".to_string()
     );
     assert_eq!(
         serde_json::to_string(&TextureFormat::Depth32Float).unwrap(),
@@ -2989,6 +2996,10 @@ fn texture_format_deserialize() {
     assert_eq!(
         serde_json::from_str::<TextureFormat>("\"rgba32float\"").unwrap(),
         TextureFormat::Rgba32Float
+    );
+    assert_eq!(
+        serde_json::from_str::<TextureFormat>("\"stencil8\"").unwrap(),
+        TextureFormat::Stencil8
     );
     assert_eq!(
         serde_json::from_str::<TextureFormat>("\"depth32float\"").unwrap(),

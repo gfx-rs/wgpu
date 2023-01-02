@@ -1016,6 +1016,13 @@ impl super::Instance {
                     .optimal_tiling_features
                     .contains(vk::FormatFeatureFlags::DEPTH_STENCIL_ATTACHMENT)
             },
+            texture_s8: unsafe {
+                self.shared
+                    .raw
+                    .get_physical_device_format_properties(phd, vk::Format::S8_UINT)
+                    .optimal_tiling_features
+                    .contains(vk::FormatFeatureFlags::DEPTH_STENCIL_ATTACHMENT)
+            },
             non_coherent_map_mask: phd_capabilities.properties.limits.non_coherent_atom_size - 1,
             can_present: true,
             //TODO: make configurable
