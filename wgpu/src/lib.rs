@@ -197,6 +197,7 @@ pub struct Buffer {
     map_context: Mutex<MapContext>,
     size: wgt::BufferAddress,
     usage: BufferUsages,
+    // Todo: missing map_state https://www.w3.org/TR/webgpu/#dom-gpubuffer-mapstate
 }
 static_assertions::assert_impl_all!(Buffer: Send, Sync);
 
@@ -227,6 +228,14 @@ pub struct Texture {
     id: ObjectId,
     data: Box<Data>,
     owned: bool,
+    width: u32,
+    height: u32,
+    depth_or_array_layers: u32,
+    mip_level_count: u32,
+    sample_count: u32,
+    dimension: TextureDimension,
+    format: TextureFormat,
+    usage: TextureUsages,
 }
 static_assertions::assert_impl_all!(Texture: Send, Sync);
 
@@ -2038,6 +2047,14 @@ impl Device {
             id,
             data,
             owned: true,
+            width: desc.size.width,
+            height: desc.size.height,
+            depth_or_array_layers: desc.size.depth_or_array_layers,
+            mip_level_count: desc.mip_level_count,
+            sample_count: desc.sample_count,
+            dimension: desc.dimension,
+            format: desc.format,
+            usage: desc.usage,
         }
     }
 
@@ -2070,6 +2087,14 @@ impl Device {
             id: ObjectId::from(texture.id()),
             data: Box::new(texture),
             owned: true,
+            width: desc.size.width,
+            height: desc.size.height,
+            depth_or_array_layers: desc.size.depth_or_array_layers,
+            mip_level_count: desc.mip_level_count,
+            sample_count: desc.sample_count,
+            dimension: desc.dimension,
+            format: desc.format,
+            usage: desc.usage,
         }
     }
 
@@ -2386,7 +2411,7 @@ impl Buffer {
     /// Returns the length of the buffer allocation in bytes.
     ///
     /// This is always equal to the `size` that was specified when creating the buffer.
-    pub fn size(&self) -> wgt::BufferAddress {
+    pub fn size(&self) -> BufferAddress {
         self.size
     }
 
@@ -2521,6 +2546,62 @@ impl Texture {
             origin: Origin3d::ZERO,
             aspect: TextureAspect::All,
         }
+    }
+
+    /// Returns the width of this `Texture`.
+    ///
+    /// This is always equal to the `size.width` that was specified when creating the texture.
+    pub fn width(&self) -> u32 {
+        self.width
+    }
+
+    /// Returns the height of this `Texture`.
+    ///
+    /// This is always equal to the `size.height` that was specified when creating the texture.
+    pub fn height(&self) -> u32 {
+        self.height
+    }
+
+    /// Returns the depth or layer count of this `Texture`.
+    ///
+    /// This is always equal to the `size.depth_or_array_layers` that was specified when creating the texture.
+    pub fn depth_or_array_layers(&self) -> u32 {
+        self.depth_or_array_layers
+    }
+
+    /// Returns the mip_level_count of this `Texture`.
+    ///
+    /// This is always equal to the `mip_level_count` that was specified when creating the texture.
+    pub fn mip_level_count(&self) -> u32 {
+        self.mip_level_count
+    }
+
+    /// Returns the sample_count of this `Texture`.
+    ///
+    /// This is always equal to the `sample_count` that was specified when creating the texture.
+    pub fn sample_count(&self) -> u32 {
+        self.sample_count
+    }
+
+    /// Returns the dimension of this `Texture`.
+    ///
+    /// This is always equal to the `dimension` that was specified when creating the texture.
+    pub fn dimension(&self) -> TextureDimension {
+        self.dimension
+    }
+
+    /// Returns the format of this `Texture`.
+    ///
+    /// This is always equal to the `format` that was specified when creating the texture.
+    pub fn format(&self) -> TextureFormat {
+        self.format
+    }
+
+    /// Returns the allowed usages of this `Texture`.
+    ///
+    /// This is always equal to the `usage` that was specified when creating the texture.
+    pub fn usage(&self) -> TextureUsages {
+        self.usage
     }
 }
 
@@ -3990,6 +4071,18 @@ impl Surface {
                     id,
                     data,
                     owned: false,
+
+                    // Todo: how do we specify these values correctly?
+                    // they are part of the `SurfaceConfiguration`, which is not available here
+                    width: 0,
+                    height: 0,
+                    format: TextureFormat::R8Unorm,
+                    usage: TextureUsages::RENDER_ATTACHMENT,
+
+                    depth_or_array_layers: 1,
+                    mip_level_count: 1,
+                    sample_count: 1,
+                    dimension: TextureDimension::D2,
                 },
                 suboptimal,
                 presented: false,
