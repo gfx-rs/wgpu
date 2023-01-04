@@ -222,7 +222,7 @@ impl super::Device {
     pub unsafe fn device_from_raw(raw: mtl::Device, features: wgt::Features) -> super::Device {
         super::Device {
             shared: Arc::new(super::AdapterShared::new(raw)),
-            features
+            features,
         }
     }
 

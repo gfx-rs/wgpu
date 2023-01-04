@@ -289,7 +289,7 @@ unsafe impl Sync for Queue {}
 impl Queue {
     pub unsafe fn queue_from_raw(raw: mtl::CommandQueue) -> Self {
         Self {
-            raw: Arc::new(Mutex::new(raw))
+            raw: Arc::new(Mutex::new(raw)),
         }
     }
 }
