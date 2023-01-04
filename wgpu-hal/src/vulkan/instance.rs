@@ -153,7 +153,7 @@ impl super::Instance {
 
     pub fn required_extensions(
         entry: &ash::Entry,
-        driver_api_version: u32,
+        _driver_api_version: u32,
         flags: crate::InstanceFlags,
     ) -> Result<Vec<&'static CStr>, crate::InstanceError> {
         let instance_extensions = entry
@@ -205,9 +205,11 @@ impl super::Instance {
         extensions.push(vk::ExtSwapchainColorspaceFn::name());
 
         // VK_KHR_get_physical_device_properties2
-        if driver_api_version < vk::API_VERSION_1_1 {
-            extensions.push(vk::KhrGetPhysicalDeviceProperties2Fn::name());
-        }
+        // Even though the extension was promoted to Vulkan 1.1, we still require the extension
+        // so that we don't have to conditionally use the functions provided by the 1.1 instance
+        // if driver_api_version < vk::API_VERSION_1_1 {
+        extensions.push(vk::KhrGetPhysicalDeviceProperties2Fn::name());
+        // }
 
         // Only keep available extensions.
         extensions.retain(|&ext| {
