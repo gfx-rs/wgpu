@@ -202,6 +202,7 @@ Additionally `Surface::get_default_config` now returns an Option and returns Non
 #### DX12
 
 - Fix `depth16Unorm` formats by @teoxoy in [#3313](https://github.com/gfx-rs/wgpu/pull/3313)
+- Don't re-use `GraphicsCommandList` when `close` or `reset` fails. By @xiaopengli89 in [#3204](https://github.com/gfx-rs/wgpu/pull/3204)
 
 ### Examples
 
