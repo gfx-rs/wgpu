@@ -4027,7 +4027,7 @@ impl Surface {
 #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
 #[repr(transparent)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-pub struct Id(u64);
+pub struct Id(core::num::NonZeroU64);
 
 #[cfg(feature = "expose-ids")]
 impl Adapter {
@@ -4037,7 +4037,7 @@ impl Adapter {
     /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
     #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
     pub fn global_id(&self) -> Id {
-        Id(self.id.global_id())
+        self.id.global_id()
     }
 }
 
@@ -4049,7 +4049,7 @@ impl Device {
     /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
     #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
     pub fn global_id(&self) -> Id {
-        Id(self.id.global_id())
+        self.id.global_id()
     }
 }
 
@@ -4061,7 +4061,7 @@ impl Queue {
     /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
     #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
     pub fn global_id(&self) -> Id {
-        Id(self.id.global_id())
+        self.id.global_id()
     }
 }
 
@@ -4073,7 +4073,7 @@ impl ShaderModule {
     /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
     #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
     pub fn global_id(&self) -> Id {
-        Id(self.id.global_id())
+        self.id.global_id()
     }
 }
 
@@ -4085,7 +4085,7 @@ impl BindGroupLayout {
     /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
     #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
     pub fn global_id(&self) -> Id {
-        Id(self.id.global_id())
+        self.id.global_id()
     }
 }
 
@@ -4097,7 +4097,7 @@ impl BindGroup {
     /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
     #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
     pub fn global_id(&self) -> Id {
-        Id(self.id.global_id())
+        self.id.global_id()
     }
 }
 
@@ -4109,7 +4109,7 @@ impl TextureView {
     /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
     #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
     pub fn global_id(&self) -> Id {
-        Id(self.id.global_id())
+        self.id.global_id()
     }
 }
 
@@ -4121,7 +4121,7 @@ impl Sampler {
     /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
     #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
     pub fn global_id(&self) -> Id {
-        Id(self.id.global_id())
+        self.id.global_id()
     }
 }
 
@@ -4133,7 +4133,7 @@ impl Buffer {
     /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
     #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
     pub fn global_id(&self) -> Id {
-        Id(self.id.global_id())
+        self.id.global_id()
     }
 }
 
@@ -4145,7 +4145,7 @@ impl Texture {
     /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
     #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
     pub fn global_id(&self) -> Id {
-        Id(self.id.global_id())
+        self.id.global_id()
     }
 }
 
@@ -4157,7 +4157,7 @@ impl QuerySet {
     /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
     #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
     pub fn global_id(&self) -> Id {
-        Id(self.id.global_id())
+        self.id.global_id()
     }
 }
 
@@ -4169,7 +4169,7 @@ impl PipelineLayout {
     /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
     #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
     pub fn global_id(&self) -> Id {
-        Id(self.id.global_id())
+        self.id.global_id()
     }
 }
 
@@ -4181,7 +4181,7 @@ impl RenderPipeline {
     /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
     #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
     pub fn global_id(&self) -> Id {
-        Id(self.id.global_id())
+        self.id.global_id()
     }
 }
 
@@ -4193,7 +4193,7 @@ impl ComputePipeline {
     /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
     #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
     pub fn global_id(&self) -> Id {
-        Id(self.id.global_id())
+        self.id.global_id()
     }
 }
 
@@ -4205,7 +4205,7 @@ impl RenderBundle {
     /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
     #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
     pub fn global_id(&self) -> Id {
-        Id(self.id.global_id())
+        self.id.global_id()
     }
 }
 
@@ -4217,7 +4217,7 @@ impl Surface {
     /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
     #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
     pub fn global_id(&self) -> Id {
-        Id(self.id.global_id())
+        self.id.global_id()
     }
 }
 
