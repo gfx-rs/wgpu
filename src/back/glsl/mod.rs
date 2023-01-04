@@ -3634,13 +3634,6 @@ impl<'a, W: Write> Writer<'a, W> {
                 continue;
             }
             match self.module.types[var.ty].inner {
-                crate::TypeInner::Struct { .. } => match var.space {
-                    crate::AddressSpace::Uniform | crate::AddressSpace::Storage { .. } => {
-                        let name = self.reflection_names_globals[&handle].clone();
-                        uniforms.insert(handle, name);
-                    }
-                    _ => (),
-                },
                 crate::TypeInner::Image { .. } => {
                     let tex_name = self.reflection_names_globals[&handle].clone();
                     match texture_mapping.entry(tex_name) {
@@ -3655,7 +3648,13 @@ impl<'a, W: Write> Writer<'a, W> {
                         }
                     }
                 }
-                _ => {}
+                _ => match var.space {
+                    crate::AddressSpace::Uniform | crate::AddressSpace::Storage { .. } => {
+                        let name = self.reflection_names_globals[&handle].clone();
+                        uniforms.insert(handle, name);
+                    }
+                    _ => (),
+                },
             }
         }
 
