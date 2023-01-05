@@ -2842,28 +2842,12 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
 
     /// Helper function that write default zero initialization
     fn write_default_init(&mut self, module: &Module, ty: Handle<crate::Type>) -> BackendResult {
-        match module.types[ty].inner {
-            TypeInner::Array {
-                size: crate::ArraySize::Constant(const_handle),
-                base,
-                ..
-            } => {
-                write!(self.out, "{{")?;
-                let count = module.constants[const_handle].to_array_length().unwrap();
-                for i in 0..count {
-                    if i != 0 {
-                        write!(self.out, ",")?;
-                    }
-                    self.write_default_init(module, base)?;
-                }
-                write!(self.out, "}}")?;
-            }
-            _ => {
-                write!(self.out, "(")?;
-                self.write_type(module, ty)?;
-                write!(self.out, ")0")?;
-            }
+        write!(self.out, "(")?;
+        self.write_type(module, ty)?;
+        if let TypeInner::Array { base, size, .. } = module.types[ty].inner {
+            self.write_array_size(module, base, size)?;
         }
+        write!(self.out, ")0")?;
         Ok(())
     }
 

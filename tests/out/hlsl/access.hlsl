@@ -253,7 +253,7 @@ ret_Constructarray5_int_ Constructarray5_int_(int arg0, int arg1, int arg2, int 
 float4 foo_vert(uint vi : SV_VertexID) : SV_Position
 {
     float foo = (float)0;
-    int c2_[5] = {(int)0,(int)0,(int)0,(int)0,(int)0};
+    int c2_[5] = (int[5])0;
 
     foo = 0.0;
     float baz_1 = foo;
