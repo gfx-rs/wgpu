@@ -4070,9 +4070,9 @@ impl Surface {
             SurfaceStatus::Lost => return Err(SurfaceError::Lost),
         };
 
-        let config = self
-            .config
-            .lock()
+        let guard = self.config.lock();
+        let config = guard
+            .as_ref()
             .expect("This surface has not been configured yet.");
 
         let descriptor = TextureDescriptor {
