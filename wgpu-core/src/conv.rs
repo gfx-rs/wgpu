@@ -33,7 +33,10 @@ pub fn is_valid_copy_dst_texture_format(
     }
 }
 
-#[cfg_attr(not(target_arch = "wasm32"), allow(unused))]
+#[cfg_attr(
+    any(not(target_arch = "wasm32"), feature = "emscripten"),
+    allow(unused)
+)]
 pub fn is_valid_external_image_copy_dst_texture_format(format: wgt::TextureFormat) -> bool {
     use wgt::TextureFormat as Tf;
     match format {

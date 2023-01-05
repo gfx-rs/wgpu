@@ -342,7 +342,10 @@ fn map_texture_copy_view(view: crate::ImageCopyTexture) -> wgc::command::ImageCo
     }
 }
 
-#[cfg_attr(not(target_arch = "wasm32"), allow(unused))]
+#[cfg_attr(
+    any(not(target_arch = "wasm32"), feature = "emscripten"),
+    allow(unused)
+)]
 fn map_texture_tagged_copy_view(
     view: crate::ImageCopyTextureTagged,
 ) -> wgc::command::ImageCopyTextureTagged {
@@ -2196,7 +2199,7 @@ impl crate::Context for Context {
         }
     }
 
-    #[cfg(target_arch = "wasm32")]
+    #[cfg(all(target_arch = "wasm32", not(feature = "emscripten")))]
     fn queue_copy_external_image_to_texture(
         &self,
         queue: &Self::QueueId,

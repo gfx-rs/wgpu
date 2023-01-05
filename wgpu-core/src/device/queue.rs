@@ -805,7 +805,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         Ok(())
     }
 
-    #[cfg(target_arch = "wasm32")]
+    #[cfg(all(target_arch = "wasm32", not(feature = "emscripten")))]
     pub fn queue_copy_external_image_to_texture<A: HalApi>(
         &self,
         queue_id: id::QueueId,

@@ -309,7 +309,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         }
     }
 
-    #[cfg(target_arch = "wasm32")]
+    #[cfg(all(target_arch = "wasm32", not(feature = "emscripten")))]
     unsafe fn copy_external_image_to_texture<T>(
         &mut self,
         src: &wgt::ExternalImageSource,

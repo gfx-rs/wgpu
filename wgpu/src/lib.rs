@@ -49,9 +49,9 @@ pub use wgt::{
 
 // wasm-only types, we try to keep as many types non-platform
 // specific, but these need to depend on web-sys.
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(target_arch = "wasm32", not(feature = "emscripten")))]
 pub use wgt::{ExternalImageSource, ImageCopyExternalImage};
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(target_arch = "wasm32", not(feature = "emscripten")))]
 static_assertions::assert_impl_all!(ExternalImageSource: Send, Sync);
 
 /// Filter for error scopes.
@@ -3921,7 +3921,7 @@ impl Queue {
     }
 
     /// Schedule a copy of data from `image` into `texture`.
-    #[cfg(target_arch = "wasm32")]
+    #[cfg(all(target_arch = "wasm32", not(feature = "emscripten")))]
     pub fn copy_external_image_to_texture(
         &self,
         source: &wgt::ImageCopyExternalImage,
