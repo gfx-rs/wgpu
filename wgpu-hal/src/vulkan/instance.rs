@@ -153,6 +153,7 @@ impl super::Instance {
 
     pub fn required_extensions(
         entry: &ash::Entry,
+        _driver_api_version: u32,
         flags: crate::InstanceFlags,
     ) -> Result<Vec<&'static CStr>, crate::InstanceError> {
         let instance_extensions = entry
@@ -164,6 +165,8 @@ impl super::Instance {
 
         // Check our extensions against the available extensions
         let mut extensions: Vec<&'static CStr> = Vec::new();
+
+        // VK_KHR_surface
         extensions.push(khr::Surface::name());
 
         // Platform-specific WSI extensions
@@ -172,28 +175,39 @@ impl super::Instance {
             not(target_os = "android"),
             not(target_os = "macos")
         )) {
+            // VK_KHR_xlib_surface
             extensions.push(khr::XlibSurface::name());
+            // VK_KHR_xcb_surface
             extensions.push(khr::XcbSurface::name());
+            // VK_KHR_wayland_surface
             extensions.push(khr::WaylandSurface::name());
         }
         if cfg!(target_os = "android") {
+            // VK_KHR_android_surface
             extensions.push(khr::AndroidSurface::name());
         }
         if cfg!(target_os = "windows") {
+            // VK_KHR_win32_surface
             extensions.push(khr::Win32Surface::name());
         }
         if cfg!(target_os = "macos") {
+            // VK_EXT_metal_surface
             extensions.push(ext::MetalSurface::name());
         }
 
         if flags.contains(crate::InstanceFlags::DEBUG) {
+            // VK_EXT_debug_utils
             extensions.push(ext::DebugUtils::name());
         }
 
-        extensions.push(vk::KhrGetPhysicalDeviceProperties2Fn::name());
-
+        // VK_EXT_swapchain_colorspace
         // Provid wide color gamut
         extensions.push(vk::ExtSwapchainColorspaceFn::name());
+
+        // VK_KHR_get_physical_device_properties2
+        // Even though the extension was promoted to Vulkan 1.1, we still require the extension
+        // so that we don't have to conditionally use the functions provided by the 1.1 instance
+        extensions.push(vk::KhrGetPhysicalDeviceProperties2Fn::name());
 
         // Only keep available extensions.
         extensions.retain(|&ext| {
@@ -262,19 +276,16 @@ impl super::Instance {
             None
         };
 
-        // We can't use any of Vulkan-1.1+ abilities on Vk 1.0 instance,
-        // so disabling this query helps.
-        let get_physical_device_properties = if driver_api_version >= vk::API_VERSION_1_1
-            && extensions.contains(&khr::GetPhysicalDeviceProperties2::name())
-        {
-            log::info!("Enabling device properties2");
-            Some(khr::GetPhysicalDeviceProperties2::new(
-                &entry,
-                &raw_instance,
-            ))
-        } else {
-            None
-        };
+        let get_physical_device_properties =
+            if extensions.contains(&khr::GetPhysicalDeviceProperties2::name()) {
+                log::info!("Enabling device properties2");
+                Some(khr::GetPhysicalDeviceProperties2::new(
+                    &entry,
+                    &raw_instance,
+                ))
+            } else {
+                None
+            };
 
         Ok(Self {
             shared: Arc::new(super::InstanceShared {
@@ -519,7 +530,7 @@ impl crate::Instance<super::Api> for super::Instance {
                 },
             );
 
-        let extensions = Self::required_extensions(&entry, desc.flags)?;
+        let extensions = Self::required_extensions(&entry, driver_api_version, desc.flags)?;
 
         let instance_layers = entry.enumerate_instance_layer_properties().map_err(|e| {
             log::info!("enumerate_instance_layer_properties: {:?}", e);
