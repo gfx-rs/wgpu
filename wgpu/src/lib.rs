@@ -284,7 +284,7 @@ pub struct Surface {
     context: Arc<C>,
     id: ObjectId,
     data: Box<Data>,
-    // config: SurfaceConfiguration,
+    config: Mutex<Option<SurfaceConfiguration>>,
 }
 static_assertions::assert_impl_all!(Surface: Send, Sync);
 
@@ -1451,6 +1451,7 @@ impl Instance {
             context: Arc::clone(&self.context),
             id,
             data,
+            config: Mutex::new(None),
         })
     }
 
@@ -1475,6 +1476,7 @@ impl Instance {
             context: Arc::clone(&self.context),
             id: ObjectId::from(surface.id()),
             data: Box::new(surface),
+            config: Mutex::new(None),
         }
     }
 
@@ -1496,6 +1498,7 @@ impl Instance {
             context: Arc::clone(&self.context),
             id: ObjectId::from(surface.id()),
             data: Box::new(surface),
+            config: Mutex::new(None),
         }
     }
 
@@ -1531,6 +1534,8 @@ impl Instance {
             id: ObjectId::from(surface),
             #[cfg(all(target_arch = "wasm32", not(feature = "webgl")))]
             data: Box::new(()),
+            #[cfg(all(target_arch = "wasm32", not(feature = "webgl")))]
+            config: Mutex::new(None),
         })
     }
 
@@ -1566,6 +1571,8 @@ impl Instance {
             id: ObjectId::from(surface),
             #[cfg(all(target_arch = "wasm32", not(feature = "webgl")))]
             data: Box::new(()),
+            #[cfg(all(target_arch = "wasm32", not(feature = "webgl")))]
+            config: Mutex::new(None),
         })
     }
 
@@ -4033,7 +4040,10 @@ impl Surface {
             &device.id,
             device.data.as_ref(),
             config,
-        )
+        );
+
+        let mut conf = self.config.lock();
+        *conf = Some(config.clone());
     }
 
     /// Returns the next texture to be presented by the swapchain for drawing.
@@ -4056,6 +4066,25 @@ impl Surface {
             SurfaceStatus::Lost => return Err(SurfaceError::Lost),
         };
 
+        let config = self
+            .config
+            .lock()
+            .expect("This surface has not been configured yet.");
+
+        let descriptor = TextureDescriptor {
+            label: None,
+            size: Extent3d {
+                width: config.width,
+                height: config.height,
+                depth_or_array_layers: 1,
+            },
+            format: config.format,
+            usage: config.usage,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: TextureDimension::D2,
+        };
+
         texture_id
             .zip(texture_data)
             .map(|(id, data)| SurfaceTexture {
@@ -4064,24 +4093,7 @@ impl Surface {
                     id,
                     data,
                     owned: false,
-
-                    // Todo: how do we specify these values correctly?
-                    // they are part of the `SurfaceConfiguration`, which is not available here
-                    descriptor: TextureDescriptor {
-                        label: None,
-                        size: Extent3d {
-                            width: 0,
-                            height: 0,
-                            depth_or_array_layers: 1,
-                        },
-
-                        format: TextureFormat::R8Unorm,
-                        usage: TextureUsages::RENDER_ATTACHMENT,
-
-                        mip_level_count: 1,
-                        sample_count: 1,
-                        dimension: TextureDimension::D2,
-                    },
+                    descriptor,
                 },
                 suboptimal,
                 presented: false,
