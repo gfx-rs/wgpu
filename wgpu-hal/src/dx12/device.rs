@@ -24,6 +24,27 @@ impl super::Device {
     ) -> Result<Self, crate::DeviceError> {
         let mem_allocator = super::suballocation::create_allocator_wrapper(&raw)?;
 
+        // TODO: dxc path
+        // TODO: handle this not existing
+        let dxc = hassle_rs::Dxc::new(None)?;
+        let dxc_compiler = match dxc.create_compiler() {
+            Ok(compiler) => Some(Mutex::new(compiler)),
+            Err(err) => {
+                panic!("TODO: error handling");
+
+                log::warn!("Failed to create DXC compiler: {}", err);
+                None
+            }
+        };
+        let dxc_library = match dxc.create_library() {
+            Ok(library) => Some(Mutex::new(library)),
+            Err(err) => {
+                panic!("make sure dxc exists");
+                log::warn!("Failed to create DXC library: {}", err);
+                None
+            }
+        };
+
         let mut idle_fence = native::Fence::null();
         let hr = unsafe {
             profiling::scope!("ID3D12Device::CreateFence");
@@ -166,6 +187,8 @@ impl super::Device {
             render_doc: Default::default(),
             null_rtv_handle,
             mem_allocator,
+            dxc_compiler,
+            dxc_library,
         })
     }
 
@@ -218,9 +241,9 @@ impl super::Device {
             .iter()
             .position(|ep| ep.stage == naga_stage && ep.name == stage.entry_point)
             .ok_or(crate::PipelineError::EntryPoint(naga_stage))?;
+
         let raw_ep = reflection_info.entry_point_names[ep_index]
             .as_ref()
-            .map(|name| ffi::CString::new(name.as_str()).unwrap())
             .map_err(|e| crate::PipelineError::Linkage(stage_bit, format!("{}", e)))?;
 
         let source_name = stage
@@ -240,134 +263,94 @@ impl super::Device {
             compile_flags.push("-Od"); /* d3dcompiler::D3DCOMPILE_DEBUG */
         }
 
-        // This closure gets called if `hassle_rs::compile_hlsl() fails due to a `hassle_rs::HassleError::LoadLibraryError`,
-        //
-        //  This usually means that `dxcompiler.dll` and/or `dxil.dll` could not be found in the current execution environment.
-        let load_shader_fxc = || {
-            let mut shader_data = native::Blob::null();
-            let mut compile_flags = d3dcompiler::D3DCOMPILE_ENABLE_STRICTNESS;
+        let (result, log_level) = if let (Some(dxc_library), Some(dxc_compiler)) =
+            (&self.dxc_library, &self.dxc_compiler)
+        {
+            profiling::scope!("hassle_rs::compile_hlsl");
+            let dxc_library = dxc_library.lock();
+            let dxc_compiler = dxc_compiler.lock();
 
-            if self
-                .private_caps
-                .instance_flags
-                .contains(crate::InstanceFlags::DEBUG)
-            {
-                compile_flags |=
-                    d3dcompiler::D3DCOMPILE_DEBUG | d3dcompiler::D3DCOMPILE_SKIP_OPTIMIZATION;
-            }
+            // let compiled = hassle_rs::utils::compile_hlsl(
+            //     source_name,
+            //     &source,
+            //     raw_ep,
+            //     &full_stage,
+            //     &compile_flags,
+            //     &[],
+            // );
+            
+            // let (result, log_level) = match compiled {
+            //     Ok(dxc_result) => {
+            //         let validated = hassle_rs::validate_dxil(&dxc_result).map_err(|e| {
+            //             crate::PipelineError::Linkage(stage_bit, format!("DXC validate error: {}", e))
+            //         })?;
+            //         (Ok(super::ShaderDXIL::Dxc(validated)), log::Level::Info)
+            //     }
+            //     Err(e) => (
+            //         Err(crate::PipelineError::Linkage(
+            //             stage_bit,
+            //             format!("DXC compile error: {:?}", e),
+            //         )),
+            //         log::Level::Warn,
+            //     ),
+            // };
 
-            let full_stage = format!(
-                "{}_{}\0",
-                naga_stage.to_hlsl_str(),
-                hlsl::ShaderModel::V5_1.to_str()
-            );
-            let mut error = native::Blob::null();
+            // This is broken and I don't know why...
+            let blob = dxc_library.create_blob_with_encoding(source.as_bytes()).map_err(|e| {
+                crate::PipelineError::Linkage(stage_bit, format!("DXC blob error: {}", e))
+            })?;
 
-            let hr = unsafe {
-                profiling::scope!("d3dcompiler::D3DCompile");
-                d3dcompiler::D3DCompile(
-                    source.as_ptr().cast(),
-                    source.len(),
-                    source_name.as_ptr().cast(),
-                    ptr::null(),
-                    ptr::null_mut(),
-                    raw_ep.as_ptr(),
-                    full_stage.as_ptr().cast(),
-                    compile_flags,
-                    0,
-                    shader_data.mut_void().cast(),
-                    error.mut_void().cast(),
-                )
-            };
+            // let blob = dxc_library
+            //     .create_blob_with_encoding_from_str(&source)
+            //     .map_err(|e| {
+            //         crate::PipelineError::Linkage(stage_bit, format!("DXC blob error: {}", e))
+            //     })?;
 
-            match hr.into_result() {
-                Ok(()) => (Ok(super::ShaderDXIL::Fxc(shader_data)), log::Level::Info),
-                Err(e) => {
-                    let mut full_msg = format!("D3DCompile error ({})", e);
-                    if !error.is_null() {
-                        use std::fmt::Write as _;
-                        let message = unsafe {
-                            slice::from_raw_parts(
-                                error.GetBufferPointer() as *const u8,
-                                error.GetBufferSize(),
-                            )
-                        };
-                        let _ = write!(full_msg, ": {}", String::from_utf8_lossy(message));
-                        unsafe {
-                            error.destroy();
-                        }
-                    }
-                    (
-                        Err(crate::PipelineError::Linkage(stage_bit, full_msg)),
-                        log::Level::Warn,
-                    )
-                }
-            }
-        };
-
-        // hassle_rs doesn't check for `dxil.dll` if you only call `hassle_rs::compile_hlsl` but calling hassle_rs::Dxil::new will .
-        profiling::scope!("hassle_rs::compile_hlsl");
-        let (result, log_level) = match hassle_rs::Dxil::new(None).and_then(|_| {
-            hassle_rs::compile_hlsl(
+            let compiled = dxc_compiler.compile(
+                &blob,
                 source_name,
-                &source,
-                /*this is safe because `raw_ep` was converted from `String`*/
-                raw_ep.to_str().unwrap(),
+                raw_ep,
                 &full_stage,
                 &compile_flags,
+                None, // Some(hassle_rs::DxcIncludeHandler {}), // TODO: idk what the include handler does
                 &[],
-            )
-        }) {
-            Ok(dxil) => (Ok(super::ShaderDXIL::Dxc(dxil)), log::Level::Info),
-            Err(err) => match err {
-                hassle_rs::HassleError::Win32Error(err) => {
-                    let err_str = i32::into_result(err.0).unwrap_err();
-                    (
+            );
+
+
+            let (result, log_level) = match compiled {
+                Ok(dxc_result) => match dxc_result.get_result() {
+                    Ok(dxc_blob) => (
+                        Ok(super::ShaderDXIL::Dxc(dxc_blob.to_vec())),
+                        log::Level::Info,
+                    ),
+                    Err(e) => (
                         Err(crate::PipelineError::Linkage(
                             stage_bit,
-                            format!(
-                                "hassle_rs::compile_hlsl failed with error:({}) :{}",
-                                err, err_str
-                            ),
+                            format!("DXC compile error: {}", e),
                         )),
                         log::Level::Warn,
-                    )
-                }
-                hassle_rs::HassleError::WindowsOnly(err) => (
+                    ),
+                },
+                Err(e) => (
                     Err(crate::PipelineError::Linkage(
                         stage_bit,
-                        format!("hassle_rs::compile_hlsl failed with error: {}", err),
+                        format!("DXC compile error: {:?}", e),
                     )),
                     log::Level::Warn,
                 ),
+            };
 
-                hassle_rs::HassleError::LoadLibraryError { filename, inner: _ } => {
-                    log::warn!("{:?} was not found ,falling back to FXC ,in order to use the new hlsl compiler `DXC`,`dxcompiler.dll` and `dxil.dll` should be included in the current execution environment" ,filename );
-                    load_shader_fxc()
-                }
-                hassle_rs::HassleError::LibLoadingError(err) => (
-                    Err(crate::PipelineError::Linkage(
-                        stage_bit,
-                        format!("hassle_rs::compile_hlsl failed with error: {}", err),
-                    )),
-                    log::Level::Warn,
-                ),
-
-                hassle_rs::HassleError::CompileError(err) => (
-                    Err(crate::PipelineError::Linkage(
-                        stage_bit,
-                        format!("hassle_rs::compile_hlsl failed with error: {}", err),
-                    )),
-                    log::Level::Warn,
-                ),
-                hassle_rs::HassleError::ValidationError(err) => (
-                    Err(crate::PipelineError::Linkage(
-                        stage_bit,
-                        format!("hassle_rs::compile_hlsl failed with error: {}", err),
-                    )),
-                    log::Level::Warn,
-                ),
-            },
+            (result, log_level)
+        } else {
+            profiling::scope!("wgpu::backend::directx12::compile_fxc");
+            let (fxc_result, log_level) = self.compile_fxc(
+                naga_stage,
+                &source,
+                source_name,
+                &ffi::CString::new(raw_ep.as_str()).unwrap(),
+                stage_bit,
+            );
+            (fxc_result, log_level)
         };
 
         log::log!(
@@ -378,6 +361,77 @@ impl super::Device {
             source
         );
         result
+    }
+
+    // This function gets called if `device::dxc_compiler` is None, or if TODO: flag is set that disables DXC.
+    fn compile_fxc(
+        &self,
+        naga_stage: naga::ShaderStage,
+        source: &String,
+        source_name: &str,
+        raw_ep: &ffi::CString,
+        stage_bit: wgt::ShaderStages,
+    ) -> (Result<super::ShaderDXIL, crate::PipelineError>, log::Level) {
+        use naga::back::hlsl;
+
+        let mut shader_data = native::Blob::null();
+        let mut compile_flags = d3dcompiler::D3DCOMPILE_ENABLE_STRICTNESS;
+        if self
+            .private_caps
+            .instance_flags
+            .contains(crate::InstanceFlags::DEBUG)
+        {
+            compile_flags |=
+                d3dcompiler::D3DCOMPILE_DEBUG | d3dcompiler::D3DCOMPILE_SKIP_OPTIMIZATION;
+        }
+        let full_stage = format!(
+            "{}_{}\0",
+            naga_stage.to_hlsl_str(),
+            hlsl::ShaderModel::V5_1.to_str()
+        );
+        let mut error = native::Blob::null();
+        let hr = unsafe {
+            profiling::scope!("d3dcompiler::D3DCompile");
+            d3dcompiler::D3DCompile(
+                source.as_ptr().cast(),
+                source.len(),
+                source_name.as_ptr().cast(),
+                ptr::null(),
+                ptr::null_mut(),
+                raw_ep.as_ptr(),
+                full_stage.as_ptr().cast(),
+                compile_flags,
+                0,
+                shader_data.mut_void().cast(),
+                error.mut_void().cast(),
+            )
+        };
+
+        match hr.into_result() {
+            Ok(()) => {
+                (Ok(super::ShaderDXIL::Fxc(shader_data)), log::Level::Info)
+            }
+            Err(e) => {
+                let mut full_msg = format!("FXC D3DCompile error ({})", e);
+                if !error.is_null() {
+                    use std::fmt::Write as _;
+                    let message = unsafe {
+                        slice::from_raw_parts(
+                            error.GetBufferPointer() as *const u8,
+                            error.GetBufferSize(),
+                        )
+                    };
+                    let _ = write!(full_msg, ": {}", String::from_utf8_lossy(message));
+                    unsafe {
+                        error.destroy();
+                    }
+                }
+                (
+                    Err(crate::PipelineError::Linkage(stage_bit, full_msg)),
+                    log::Level::Warn,
+                )
+            }
+        }
     }
 
     pub fn raw_device(&self) -> &native::Device {
@@ -1168,7 +1222,7 @@ impl crate::Device<super::Api> for super::Device {
             },
             bind_group_infos,
             naga_options: hlsl::Options {
-                shader_model: hlsl::ShaderModel::V6_0,
+                shader_model: hlsl::ShaderModel::V6_0, // TODO: Set this based on whether fxc or dxc is used
                 binding_map,
                 fake_missing_bindings: false,
                 special_constants_binding,
@@ -1384,9 +1438,9 @@ impl crate::Device<super::Api> for super::Device {
         let blob_fs = match desc.fragment_stage {
             Some(ref stage) => {
                 shader_stages |= wgt::ShaderStages::FRAGMENT;
-                self.load_shader(stage, desc.layout, naga::ShaderStage::Fragment)?
+                Some(self.load_shader(stage, desc.layout, naga::ShaderStage::Fragment)?)
             }
-            None => crate::dx12::ShaderDXIL::Dxc(vec![]),
+            None => None,
         };
 
         let mut vertex_strides = [None; crate::MAX_VERTEX_BUFFERS];
@@ -1464,14 +1518,9 @@ impl crate::Device<super::Api> for super::Device {
                 super::ShaderDXIL::Fxc(blob_vs) => *native::Shader::from_blob(blob_vs),
             },
             PS: match blob_fs {
-                super::ShaderDXIL::Dxc(ref blob_fs) => *native::Shader::from_raw(blob_fs),
-                super::ShaderDXIL::Fxc(blob_fs) => {
-                    if blob_fs.is_null() {
-                        *native::Shader::null()
-                    } else {
-                        *native::Shader::from_blob(blob_fs)
-                    }
-                }
+                Some(super::ShaderDXIL::Dxc(ref blob_fs)) => *native::Shader::from_raw(blob_fs),
+                Some(super::ShaderDXIL::Fxc(blob_fs)) => *native::Shader::from_blob(blob_fs),
+                None => *native::Shader::null(),
             },
             GS: *native::Shader::null(),
             DS: *native::Shader::null(),
@@ -1544,9 +1593,10 @@ impl crate::Device<super::Api> for super::Device {
 
         if let super::ShaderDXIL::Fxc(vs_fxc) = &blob_vs {
             unsafe { vs_fxc.destroy() };
-            if !vs_fxc.is_null() {
-                unsafe { vs_fxc.destroy() };
-            }
+        }
+
+        if let Some(super::ShaderDXIL::Fxc(fs_fxc)) = &blob_fs {
+            unsafe { fs_fxc.destroy() };
         }
 
         hr.into_result()

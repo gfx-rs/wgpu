@@ -241,6 +241,10 @@ pub struct Device {
     render_doc: crate::auxil::renderdoc::RenderDoc,
     null_rtv_handle: descriptor::Handle,
     mem_allocator: Option<Mutex<suballocation::GpuAllocatorWrapper>>,
+    // todo: mutex is just for testing, remove later
+    dxc_compiler: Option<Mutex<hassle_rs::DxcCompiler>>,
+    // todo: mutex is just for testing, remove later
+    dxc_library: Option<Mutex<hassle_rs::DxcLibrary>>,
 }
 
 unsafe impl Send for Device {}
@@ -837,5 +841,21 @@ impl crate::Queue<Api> for Queue {
         let mut frequency = 0u64;
         unsafe { self.raw.GetTimestampFrequency(&mut frequency) };
         (1_000_000_000.0 / frequency as f64) as f32
+    }
+}
+
+impl From<hassle_rs::HassleError> for crate::DeviceError {
+    fn from(value: hassle_rs::HassleError) -> Self {
+        match value {
+            hassle_rs::HassleError::Win32Error(_) => todo!(),
+            hassle_rs::HassleError::CompileError(_) => todo!(),
+            hassle_rs::HassleError::ValidationError(_) => todo!(),
+            hassle_rs::HassleError::LoadLibraryError { filename, inner } => {
+                println!("Failed to load library {filename:?}, {inner:?}");
+                crate::DeviceError::Lost
+            }
+            hassle_rs::HassleError::LibLoadingError(_) => todo!(),
+            hassle_rs::HassleError::WindowsOnly(_) => todo!(),
+        }
     }
 }
