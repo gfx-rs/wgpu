@@ -276,17 +276,16 @@ impl super::Instance {
             None
         };
 
-        let get_physical_device_properties = if driver_api_version >= vk::API_VERSION_1_1
-            || extensions.contains(&khr::GetPhysicalDeviceProperties2::name())
-        {
-            log::info!("Enabling device properties2");
-            Some(khr::GetPhysicalDeviceProperties2::new(
-                &entry,
-                &raw_instance,
-            ))
-        } else {
-            None
-        };
+        let get_physical_device_properties =
+            if extensions.contains(&khr::GetPhysicalDeviceProperties2::name()) {
+                log::info!("Enabling device properties2");
+                Some(khr::GetPhysicalDeviceProperties2::new(
+                    &entry,
+                    &raw_instance,
+                ))
+            } else {
+                None
+            };
 
         Ok(Self {
             shared: Arc::new(super::InstanceShared {
