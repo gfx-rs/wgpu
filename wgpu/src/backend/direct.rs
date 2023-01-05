@@ -2213,7 +2213,11 @@ impl crate::Context for Context {
             size
         )) {
             Ok(()) => (),
-            Err(err) => self.handle_error_nolabel(&queue_data.error_sink, err, "Queue::copy_external_image_to_texture"),
+            Err(err) => self.handle_error_nolabel(
+                &queue_data.error_sink,
+                err,
+                "Queue::copy_external_image_to_texture",
+            ),
         }
     }
 

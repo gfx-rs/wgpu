@@ -1487,7 +1487,7 @@ pub(crate) trait DynContext: Debug + Send + Sync {
         data: &[u8],
         data_layout: ImageDataLayout,
         size: Extent3d,
-    );    
+    );
     #[cfg(target_arch = "wasm32")]
     fn queue_copy_external_image_to_texture(
         &self,
@@ -2883,7 +2883,6 @@ where
         let queue_data = downcast_ref(queue_data);
         Context::queue_write_texture(self, &queue, queue_data, texture, data, data_layout, size)
     }
-
 
     #[cfg(target_arch = "wasm32")]
     fn queue_copy_external_image_to_texture(
