@@ -207,9 +207,7 @@ impl super::Instance {
         // VK_KHR_get_physical_device_properties2
         // Even though the extension was promoted to Vulkan 1.1, we still require the extension
         // so that we don't have to conditionally use the functions provided by the 1.1 instance
-        // if driver_api_version < vk::API_VERSION_1_1 {
         extensions.push(vk::KhrGetPhysicalDeviceProperties2Fn::name());
-        // }
 
         // Only keep available extensions.
         extensions.retain(|&ext| {
