@@ -847,15 +847,26 @@ impl crate::Queue<Api> for Queue {
 impl From<hassle_rs::HassleError> for crate::DeviceError {
     fn from(value: hassle_rs::HassleError) -> Self {
         match value {
-            hassle_rs::HassleError::Win32Error(_) => todo!(),
-            hassle_rs::HassleError::CompileError(_) => todo!(),
-            hassle_rs::HassleError::ValidationError(_) => todo!(),
-            hassle_rs::HassleError::LoadLibraryError { filename, inner } => {
-                println!("Failed to load library {filename:?}, {inner:?}");
+            hassle_rs::HassleError::Win32Error(e) => {
+                // TODO: This returns an HRESULT, should we try and use the associated Windows error message?
+                log::error!("Win32 error: {e:?}");
                 crate::DeviceError::Lost
             }
-            hassle_rs::HassleError::LibLoadingError(_) => todo!(),
-            hassle_rs::HassleError::WindowsOnly(_) => todo!(),
+            hassle_rs::HassleError::LoadLibraryError { filename, inner } => {
+                log::error!("Failed to load dxc library {filename:?}. Inner error: {inner:?}");
+                crate::DeviceError::Lost
+            }
+            hassle_rs::HassleError::LibLoadingError(e) => {
+                log::error!("Failed to load dxc library. {e:?}");
+                crate::DeviceError::Lost
+            }
+            hassle_rs::HassleError::WindowsOnly(e) => {
+                log::error!("Signing with dxil.dll is only supported on Windows. {e:?}");
+                crate::DeviceError::Lost
+            }
+            // `ValidationError` and `CompileError` should never happen in a context involving `DeviceError`
+            hassle_rs::HassleError::ValidationError(e) => unimplemented!(),
+            hassle_rs::HassleError::CompileError(e) => unimplemented!(),
         }
     }
 }
