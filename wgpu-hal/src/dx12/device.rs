@@ -26,23 +26,22 @@ impl super::Device {
 
         // TODO: dxc path
         // TODO: handle this not existing
-        let dxc = hassle_rs::Dxc::new(None)?;
-        let dxc_compiler = match dxc.create_compiler() {
-            Ok(compiler) => Some(Mutex::new(compiler)),
-            Err(err) => {
-                panic!("TODO: error handling");
+        let dxc_container = if true {
+            let dxc = hassle_rs::Dxc::new(Some("./".into()))?;
+            let dxc_compiler = dxc.create_compiler()?;
+            let dxc_library = dxc.create_library()?;
 
-                log::warn!("Failed to create DXC compiler: {}", err);
-                None
-            }
-        };
-        let dxc_library = match dxc.create_library() {
-            Ok(library) => Some(Mutex::new(library)),
-            Err(err) => {
-                panic!("make sure dxc exists");
-                log::warn!("Failed to create DXC library: {}", err);
-                None
-            }
+            let dxil = hassle_rs::Dxil::new(Some("./".into()))?;
+            let dxc_validator = dxil.create_validator()?;
+            Some(super::DxcContainer {
+                _dxc: dxc,
+                dxc_compiler,
+                dxc_library,
+                // _dxil: dxil,
+                dxc_validator,
+            })
+        } else {
+            None
         };
 
         let mut idle_fence = native::Fence::null();
@@ -187,8 +186,7 @@ impl super::Device {
             render_doc: Default::default(),
             null_rtv_handle,
             mem_allocator,
-            dxc_compiler,
-            dxc_library,
+            dxc_container,
         })
     }
 
@@ -263,66 +261,41 @@ impl super::Device {
             compile_flags.push("-Od"); /* d3dcompiler::D3DCOMPILE_DEBUG */
         }
 
-        let (result, log_level) = if let (Some(dxc_library), Some(dxc_compiler)) =
-            (&self.dxc_library, &self.dxc_compiler)
-        {
+        let (result, log_level) = if let Some(dxc_container) = &self.dxc_container {
             profiling::scope!("hassle_rs::compile_hlsl");
-            let dxc_library = dxc_library.lock();
-            let dxc_compiler = dxc_compiler.lock();
+            let blob = dxc_container
+                .dxc_library
+                .create_blob_with_encoding_from_str(&source)
+                .map_err(|e| {
+                    crate::PipelineError::Linkage(stage_bit, format!("DXC blob error: {}", e))
+                })?;
 
-            // let compiled = hassle_rs::utils::compile_hlsl(
-            //     source_name,
-            //     &source,
-            //     raw_ep,
-            //     &full_stage,
-            //     &compile_flags,
-            //     &[],
-            // );
-            
-            // let (result, log_level) = match compiled {
-            //     Ok(dxc_result) => {
-            //         let validated = hassle_rs::validate_dxil(&dxc_result).map_err(|e| {
-            //             crate::PipelineError::Linkage(stage_bit, format!("DXC validate error: {}", e))
-            //         })?;
-            //         (Ok(super::ShaderDXIL::Dxc(validated)), log::Level::Info)
-            //     }
-            //     Err(e) => (
-            //         Err(crate::PipelineError::Linkage(
-            //             stage_bit,
-            //             format!("DXC compile error: {:?}", e),
-            //         )),
-            //         log::Level::Warn,
-            //     ),
-            // };
-
-            // This is broken and I don't know why...
-            let blob = dxc_library.create_blob_with_encoding(source.as_bytes()).map_err(|e| {
-                crate::PipelineError::Linkage(stage_bit, format!("DXC blob error: {}", e))
-            })?;
-
-            // let blob = dxc_library
-            //     .create_blob_with_encoding_from_str(&source)
-            //     .map_err(|e| {
-            //         crate::PipelineError::Linkage(stage_bit, format!("DXC blob error: {}", e))
-            //     })?;
-
-            let compiled = dxc_compiler.compile(
+            let compiled = dxc_container.dxc_compiler.compile(
                 &blob,
                 source_name,
                 raw_ep,
                 &full_stage,
                 &compile_flags,
-                None, // Some(hassle_rs::DxcIncludeHandler {}), // TODO: idk what the include handler does
+                None, // TODO: idk what the include handler does
                 &[],
             );
 
-
             let (result, log_level) = match compiled {
                 Ok(dxc_result) => match dxc_result.get_result() {
-                    Ok(dxc_blob) => (
-                        Ok(super::ShaderDXIL::Dxc(dxc_blob.to_vec())),
-                        log::Level::Info,
-                    ),
+                    Ok(dxc_blob) => match dxc_container.dxc_validator.validate(dxc_blob) {
+                        Ok(validated) => (
+                            Ok(super::ShaderDXIL::Dxc(validated.to_vec())),
+                            log::Level::Info,
+                        ),
+                        Err(e) => (
+                            Err(crate::PipelineError::Linkage(
+                                stage_bit,
+                                // I don't like this, but the nested matches are already too deep
+                                format!("DXC validation error: {:?}. {}", e.0, e.1),
+                            )),
+                            log::Level::Warn,
+                        ),
+                    },
                     Err(e) => (
                         Err(crate::PipelineError::Linkage(
                             stage_bit,
@@ -408,9 +381,7 @@ impl super::Device {
         };
 
         match hr.into_result() {
-            Ok(()) => {
-                (Ok(super::ShaderDXIL::Fxc(shader_data)), log::Level::Info)
-            }
+            Ok(()) => (Ok(super::ShaderDXIL::Fxc(shader_data)), log::Level::Info),
             Err(e) => {
                 let mut full_msg = format!("FXC D3DCompile error ({})", e);
                 if !error.is_null() {

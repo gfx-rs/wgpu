@@ -241,10 +241,7 @@ pub struct Device {
     render_doc: crate::auxil::renderdoc::RenderDoc,
     null_rtv_handle: descriptor::Handle,
     mem_allocator: Option<Mutex<suballocation::GpuAllocatorWrapper>>,
-    // todo: mutex is just for testing, remove later
-    dxc_compiler: Option<Mutex<hassle_rs::DxcCompiler>>,
-    // todo: mutex is just for testing, remove later
-    dxc_library: Option<Mutex<hassle_rs::DxcLibrary>>,
+    dxc_container: Option<DxcContainer>,
 }
 
 unsafe impl Send for Device {}
@@ -563,6 +560,16 @@ pub struct ComputePipeline {
 
 unsafe impl Send for ComputePipeline {}
 unsafe impl Sync for ComputePipeline {}
+
+pub(crate) struct DxcContainer {
+    dxc_compiler: hassle_rs::DxcCompiler,
+    dxc_library: hassle_rs::DxcLibrary,
+    dxc_validator: hassle_rs::DxcValidator,
+    // Has to be held onto for the lifetime of the device otherwise shaders will fail to compile
+    _dxc: hassle_rs::Dxc,
+    // Has to be held onto for the lifetime of the device otherwise shaders will fail to compile
+    // _dxil: hassle_rs::Dxil,
+}
 
 impl SwapChain {
     unsafe fn release_resources(self) -> native::WeakPtr<dxgi1_4::IDXGISwapChain3> {
