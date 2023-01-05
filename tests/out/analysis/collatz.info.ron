@@ -1,4 +1,18 @@
 (
+    type_flags: [
+        (
+            bits: 223,
+        ),
+        (
+            bits: 21,
+        ),
+        (
+            bits: 21,
+        ),
+        (
+            bits: 223,
+        ),
+    ],
     functions: [
         (
             flags: (

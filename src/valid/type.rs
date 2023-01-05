@@ -9,6 +9,8 @@ bitflags::bitflags! {
     ///
     /// [`Type`]: crate::Type
     /// [`Validator`]: crate::valid::Validator
+    #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+    #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
     #[repr(transparent)]
     pub struct TypeFlags: u8 {
         /// Can be used for data variables.

@@ -1,4 +1,99 @@
 (
+    type_flags: [
+        (
+            bits: 223,
+        ),
+        (
+            bits: 223,
+        ),
+        (
+            bits: 223,
+        ),
+        (
+            bits: 223,
+        ),
+        (
+            bits: 199,
+        ),
+        (
+            bits: 223,
+        ),
+        (
+            bits: 64,
+        ),
+        (
+            bits: 64,
+        ),
+        (
+            bits: 223,
+        ),
+        (
+            bits: 70,
+        ),
+        (
+            bits: 70,
+        ),
+        (
+            bits: 223,
+        ),
+        (
+            bits: 223,
+        ),
+        (
+            bits: 6,
+        ),
+        (
+            bits: 6,
+        ),
+        (
+            bits: 6,
+        ),
+        (
+            bits: 215,
+        ),
+        (
+            bits: 215,
+        ),
+        (
+            bits: 21,
+        ),
+        (
+            bits: 21,
+        ),
+        (
+            bits: 6,
+        ),
+        (
+            bits: 6,
+        ),
+        (
+            bits: 6,
+        ),
+        (
+            bits: 6,
+        ),
+        (
+            bits: 70,
+        ),
+        (
+            bits: 70,
+        ),
+        (
+            bits: 6,
+        ),
+        (
+            bits: 6,
+        ),
+        (
+            bits: 70,
+        ),
+        (
+            bits: 64,
+        ),
+        (
+            bits: 64,
+        ),
+    ],
     functions: [
         (
             flags: (

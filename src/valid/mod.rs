@@ -124,8 +124,16 @@ bitflags::bitflags! {
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub struct ModuleInfo {
+    type_flags: Vec<TypeFlags>,
     functions: Vec<FunctionInfo>,
     entry_points: Vec<FunctionInfo>,
+}
+
+impl ops::Index<Handle<crate::Type>> for ModuleInfo {
+    type Output = TypeFlags;
+    fn index(&self, handle: Handle<crate::Type>) -> &Self::Output {
+        &self.type_flags[handle.index()]
+    }
 }
 
 impl ops::Index<Handle<crate::Function>> for ModuleInfo {
@@ -346,6 +354,12 @@ impl Validator {
             }
         }
 
+        let mut mod_info = ModuleInfo {
+            type_flags: Vec::with_capacity(module.types.len()),
+            functions: Vec::with_capacity(module.functions.len()),
+            entry_points: Vec::with_capacity(module.entry_points.len()),
+        };
+
         for (handle, ty) in module.types.iter() {
             let ty_info = self
                 .validate_type(handle, &module.types, &module.constants)
@@ -357,6 +371,7 @@ impl Validator {
                     }
                     .with_span_handle(handle, &module.types)
                 })?;
+            mod_info.type_flags.push(ty_info.flags);
             self.types[handle.index()] = ty_info;
         }
 
@@ -372,11 +387,6 @@ impl Validator {
                     .with_span_handle(var_handle, &module.global_variables)
                 })?;
         }
-
-        let mut mod_info = ModuleInfo {
-            functions: Vec::with_capacity(module.functions.len()),
-            entry_points: Vec::with_capacity(module.entry_points.len()),
-        };
 
         for (handle, fun) in module.functions.iter() {
             match self.validate_function(fun, module, &mod_info, false) {
