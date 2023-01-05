@@ -284,6 +284,12 @@ pub struct Surface {
     context: Arc<C>,
     id: ObjectId,
     data: Box<Data>,
+    // Stores the latest `SurfaceConfiguration` that was set using `Surface::configure`.
+    // It is required to set the attributes of the `SurfaceTexture` in the
+    // `Surface::get_current_texture` method.
+    // Because the `Surface::configure` method operates on an immutable reference this type has to
+    // be wrapped in a mutex and since the configuration is only supplied after the surface has
+    // been created is is additionally wrapped in an option.
     config: Mutex<Option<SurfaceConfiguration>>,
 }
 static_assertions::assert_impl_all!(Surface: Send, Sync);
@@ -1534,7 +1540,6 @@ impl Instance {
             id: ObjectId::from(surface),
             #[cfg(all(target_arch = "wasm32", not(feature = "webgl")))]
             data: Box::new(()),
-            #[cfg(all(target_arch = "wasm32", not(feature = "webgl")))]
             config: Mutex::new(None),
         })
     }
@@ -1571,7 +1576,6 @@ impl Instance {
             id: ObjectId::from(surface),
             #[cfg(all(target_arch = "wasm32", not(feature = "webgl")))]
             data: Box::new(()),
-            #[cfg(all(target_arch = "wasm32", not(feature = "webgl")))]
             config: Mutex::new(None),
         })
     }
