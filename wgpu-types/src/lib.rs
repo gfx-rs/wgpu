@@ -9,10 +9,12 @@
 )]
 #![warn(missing_docs, unsafe_op_in_unsafe_fn)]
 
-#[cfg(feature = "serde")]
+#[cfg(any(feature = "serde", test))]
 use serde::{Deserialize, Serialize};
 use std::hash::{Hash, Hasher};
 use std::{num::NonZeroU32, ops::Range};
+
+pub mod assertions;
 
 // Use this macro instead of the one provided by the bitflags_serde_shim crate
 // because the latter produces an error when deserializing bits that are not
@@ -1128,10 +1130,20 @@ bitflags::bitflags! {
         /// WebGL doesn't support this.
         const UNRESTRICTED_INDEX_BUFFER = 1 << 16;
 
+        /// Supports full 32-bit range indices (2^32-1 as opposed to 2^24-1 without this flag)
+        ///
+        /// Corresponds to Vulkan's `VkPhysicalDeviceFeatures.fullDrawIndexUint32`
+        const FULL_DRAW_INDEX_UINT32 = 1 << 17;
+
+        /// Supports depth bias clamping
+        ///
+        /// Corresponds to Vulkan's `VkPhysicalDeviceFeatures.depthBiasClamp`
+        const DEPTH_BIAS_CLAMP = 1 << 18;
+
         /// Supports copying from an OffscreenCanvas in `Queue::copy_external_image_to_texture`.
         ///
         /// WebGL doesn't support this.
-        const UNRESTRICTED_EXTERNAL_TEXTURE_COPIES = 1 << 17;
+        const UNRESTRICTED_EXTERNAL_TEXTURE_COPIES = 1 << 19;
     }
 }
 
@@ -1922,7 +1934,7 @@ pub enum TextureFormat {
 
     // Depth and stencil formats
     /// Stencil format with 8 bit integer stencil.
-    //Stencil8,
+    Stencil8,
     /// Special depth format with 16 bit integer depth.
     Depth16Unorm,
     /// Special depth format with at least 24 bit integer depth.
@@ -2096,7 +2108,7 @@ pub enum TextureFormat {
     },
 }
 
-#[cfg(feature = "serde")]
+#[cfg(any(feature = "serde", test))]
 impl<'de> Deserialize<'de> for TextureFormat {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -2156,6 +2168,7 @@ impl<'de> Deserialize<'de> for TextureFormat {
                     "rgba32uint" => TextureFormat::Rgba32Uint,
                     "rgba32sint" => TextureFormat::Rgba32Sint,
                     "rgba32float" => TextureFormat::Rgba32Float,
+                    "stencil8" => TextureFormat::Stencil8,
                     "depth32float" => TextureFormat::Depth32Float,
                     "depth32float-stencil8" => TextureFormat::Depth32FloatStencil8,
                     "depth16unorm" => TextureFormat::Depth16Unorm,
@@ -2232,7 +2245,7 @@ impl<'de> Deserialize<'de> for TextureFormat {
     }
 }
 
-#[cfg(feature = "serde")]
+#[cfg(any(feature = "serde", test))]
 impl Serialize for TextureFormat {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -2281,6 +2294,7 @@ impl Serialize for TextureFormat {
             TextureFormat::Rgba32Uint => "rgba32uint",
             TextureFormat::Rgba32Sint => "rgba32sint",
             TextureFormat::Rgba32Float => "rgba32float",
+            TextureFormat::Stencil8 => "stencil8",
             TextureFormat::Depth32Float => "depth32float",
             TextureFormat::Depth16Unorm => "depth16unorm",
             TextureFormat::Depth32FloatStencil8 => "depth32float-stencil8",
@@ -2396,7 +2410,7 @@ impl TextureFormat {
         ) = match self {
             // Normal 8 bit textures
             Self::R8Unorm =>             (   native,   float,    linear, msaa_resolve, (1, 1),  1, attachment, 1),
-            Self::R8Snorm =>             (   native,   float,    linear,         msaa, (1, 1),  1,      basic, 1),
+            Self::R8Snorm =>             (   native,   float,    linear,         noaa, (1, 1),  1,      basic, 1),
             Self::R8Uint =>              (   native,    uint,    linear,         msaa, (1, 1),  1, attachment, 1),
             Self::R8Sint =>              (   native,    sint,    linear,         msaa, (1, 1),  1, attachment, 1),
             // Normal 16 bit textures
@@ -2404,9 +2418,9 @@ impl TextureFormat {
             Self::R16Sint =>             (   native,    sint,    linear,         msaa, (1, 1),  2, attachment, 1),
             Self::R16Float =>            (   native,   float,    linear, msaa_resolve, (1, 1),  2, attachment, 1),
             Self::Rg8Unorm =>            (   native,   float,    linear, msaa_resolve, (1, 1),  2, attachment, 2),
-            Self::Rg8Snorm =>            (   native,   float,    linear,         msaa, (1, 1),  2, attachment, 2),
+            Self::Rg8Snorm =>            (   native,   float,    linear,         noaa, (1, 1),  2,      basic, 2),
             Self::Rg8Uint =>             (   native,    uint,    linear,         msaa, (1, 1),  2, attachment, 2),
-            Self::Rg8Sint =>             (   native,    sint,    linear,         msaa, (1, 1),  2,      basic, 2),
+            Self::Rg8Sint =>             (   native,    sint,    linear,         msaa, (1, 1),  2, attachment, 2),
             // Normal 32 bit textures
             Self::R32Uint =>             (   native,    uint,    linear,         noaa, (1, 1),  4,  all_flags, 1),
             Self::R32Sint =>             (   native,    sint,    linear,         noaa, (1, 1),  4,  all_flags, 1),
@@ -2416,7 +2430,7 @@ impl TextureFormat {
             Self::Rg16Float =>           (   native,   float,    linear, msaa_resolve, (1, 1),  4, attachment, 2),
             Self::Rgba8Unorm =>          (   native,   float,    linear, msaa_resolve, (1, 1),  4,  all_flags, 4),
             Self::Rgba8UnormSrgb =>      (   native,   float, corrected, msaa_resolve, (1, 1),  4, attachment, 4),
-            Self::Rgba8Snorm =>          (   native,   float,    linear,         msaa, (1, 1),  4,    storage, 4),
+            Self::Rgba8Snorm =>          (   native,   float,    linear,         noaa, (1, 1),  4,    storage, 4),
             Self::Rgba8Uint =>           (   native,    uint,    linear,         msaa, (1, 1),  4,  all_flags, 4),
             Self::Rgba8Sint =>           (   native,    sint,    linear,         msaa, (1, 1),  4,  all_flags, 4),
             Self::Bgra8Unorm =>          (   native,   float,    linear, msaa_resolve, (1, 1),  4, attachment, 4),
@@ -2436,6 +2450,7 @@ impl TextureFormat {
             Self::Rgba32Sint =>          (   native,    sint,    linear,         noaa, (1, 1), 16,  all_flags, 4),
             Self::Rgba32Float =>         (   native, nearest,    linear,         noaa, (1, 1), 16,  all_flags, 4),
             // Depth-stencil textures
+            Self::Stencil8 =>            (   native,   depth,    linear,         msaa, (1, 1),  2, attachment, 1),
             Self::Depth16Unorm =>        (   native,   depth,    linear,         msaa, (1, 1),  2, attachment, 1),
             Self::Depth24Plus =>         (   native,   depth,    linear,         msaa, (1, 1),  4, attachment, 1),
             Self::Depth24PlusStencil8 => (   native,   depth,    linear,         msaa, (1, 1),  4, attachment, 2),
@@ -2694,6 +2709,10 @@ fn texture_format_serialize() {
     assert_eq!(
         serde_json::to_string(&TextureFormat::Rgba32Float).unwrap(),
         "\"rgba32float\"".to_string()
+    );
+    assert_eq!(
+        serde_json::to_string(&TextureFormat::Stencil8).unwrap(),
+        "\"stencil8\"".to_string()
     );
     assert_eq!(
         serde_json::to_string(&TextureFormat::Depth32Float).unwrap(),
@@ -2982,6 +3001,10 @@ fn texture_format_deserialize() {
     assert_eq!(
         serde_json::from_str::<TextureFormat>("\"rgba32float\"").unwrap(),
         TextureFormat::Rgba32Float
+    );
+    assert_eq!(
+        serde_json::from_str::<TextureFormat>("\"stencil8\"").unwrap(),
+        TextureFormat::Stencil8
     );
     assert_eq!(
         serde_json::from_str::<TextureFormat>("\"depth32float\"").unwrap(),
@@ -3956,6 +3979,43 @@ pub enum SurfaceStatus {
     Outdated,
     /// The surface under the swap chain is lost.
     Lost,
+}
+
+/// Nanosecond timestamp used by the presentation engine.
+///
+/// The specific clock depends on the window system integration (WSI) API used.
+///
+/// <table>
+/// <tr>
+///     <td>WSI
+///     <td>Clock
+/// <tr>
+///     <td>IDXGISwapchain
+///     <td><a href="https://docs.microsoft.com/en-us/windows/win32/api/profileapi/nf-profileapi-queryperformancecounter">QueryPerformanceCounter</a>
+/// <tr>
+///     <td>IPresentationManager
+///     <td><a href="https://docs.microsoft.com/en-us/windows/win32/api/realtimeapiset/nf-realtimeapiset-queryinterrupttimeprecise">QueryInterruptTimePrecise</a>
+/// <tr>
+///     <td>CAMetalLayer
+///     <td><a href="https://developer.apple.com/documentation/kernel/1462446-mach_absolute_time">mach_absolute_time</a>
+/// <tr>
+///     <td>VK_GOOGLE_display_timing
+///     <td><a href="https://linux.die.net/man/3/clock_gettime">clock_gettime(CLOCK_MONOTONIC)</a>
+/// </table>
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct PresentationTimestamp(
+    /// Timestamp in nanoseconds.
+    pub u128,
+);
+
+impl PresentationTimestamp {
+    /// A timestamp that is invalid due to the platform not having a timestamp system.
+    pub const INVALID_TIMESTAMP: Self = Self(u128::MAX);
+
+    /// Returns true if this timestamp is the invalid timestamp.
+    pub fn is_invalid(self) -> bool {
+        self == Self::INVALID_TIMESTAMP
+    }
 }
 
 /// RGBA double precision color.
@@ -5166,6 +5226,61 @@ pub struct ImageSubresourceRange {
 }
 
 impl ImageSubresourceRange {
+    /// Returns if the given range represents a full resource, with a texture of the given
+    /// layer count and mip count.
+    ///
+    /// ```rust
+    /// # use wgpu_types as wgpu;
+    /// use std::num::NonZeroU32;
+    ///
+    /// let range_none = wgpu::ImageSubresourceRange {
+    ///     aspect: wgpu::TextureAspect::All,
+    ///     base_mip_level: 0,
+    ///     mip_level_count: None,
+    ///     base_array_layer: 0,
+    ///     array_layer_count: None,
+    /// };
+    /// assert_eq!(range_none.is_full_resource(5, 10), true);
+    ///
+    /// let range_some = wgpu::ImageSubresourceRange {
+    ///     aspect: wgpu::TextureAspect::All,
+    ///     base_mip_level: 0,
+    ///     mip_level_count: NonZeroU32::new(5),
+    ///     base_array_layer: 0,
+    ///     array_layer_count: NonZeroU32::new(10),
+    /// };
+    /// assert_eq!(range_some.is_full_resource(5, 10), true);
+    ///
+    /// let range_mixed = wgpu::ImageSubresourceRange {
+    ///     aspect: wgpu::TextureAspect::All,
+    ///     base_mip_level: 0,
+    ///     // Only partial resource
+    ///     mip_level_count: NonZeroU32::new(3),
+    ///     base_array_layer: 0,
+    ///     array_layer_count: None,
+    /// };
+    /// assert_eq!(range_mixed.is_full_resource(5, 10), false);
+    /// ```
+    pub fn is_full_resource(&self, mip_levels: u32, array_layers: u32) -> bool {
+        // Mip level count and array layer count need to deal with both the None and Some(count) case.
+        let mip_level_count = self.mip_level_count.map_or(mip_levels, NonZeroU32::get);
+        let array_layer_count = self.array_layer_count.map_or(array_layers, NonZeroU32::get);
+
+        let aspect_eq = self.aspect == TextureAspect::All;
+
+        let base_mip_level_eq = self.base_mip_level == 0;
+        let mip_level_count_eq = mip_level_count == mip_levels;
+
+        let base_array_layer_eq = self.base_array_layer == 0;
+        let array_layer_count_eq = array_layer_count == array_layers;
+
+        aspect_eq
+            && base_mip_level_eq
+            && mip_level_count_eq
+            && base_array_layer_eq
+            && array_layer_count_eq
+    }
+
     /// Returns the mip level range of a subresource range describes for a specific texture.
     pub fn mip_range<L>(&self, texture_desc: &TextureDescriptor<L>) -> Range<u32> {
         self.base_mip_level..match self.mip_level_count {

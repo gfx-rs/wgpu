@@ -3,8 +3,10 @@
 use std::num::NonZeroU32;
 
 use crate::common::{fail, initialize_test, TestParameters};
+use wasm_bindgen_test::*;
 
 #[test]
+#[wasm_bindgen_test]
 fn queue_write_texture_overflow() {
     initialize_test(TestParameters::default(), |ctx| {
         let texture = ctx.device.create_texture(&wgpu::TextureDescriptor {

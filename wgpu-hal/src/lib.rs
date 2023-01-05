@@ -49,6 +49,15 @@
     clippy::pattern_type_mismatch,
 )]
 
+#[cfg(not(any(
+    feature = "dx11",
+    feature = "dx12",
+    feature = "gles",
+    feature = "metal",
+    feature = "vulkan"
+)))]
+compile_error!("No back ends enabled in `wgpu-hal`. Enable at least one backend feature.");
+
 #[cfg(all(feature = "metal", not(any(target_os = "macos", target_os = "ios"))))]
 compile_error!("Metal API enabled on non-Apple OS. If your project is not using resolver=\"2\" in Cargo.toml, it should.");
 #[cfg(all(feature = "dx12", not(windows)))]
@@ -233,6 +242,11 @@ pub trait Adapter<A: Api>: Send + Sync {
     ///
     /// `None` means presentation is not supported for it.
     unsafe fn surface_capabilities(&self, surface: &A::Surface) -> Option<SurfaceCapabilities>;
+
+    /// Creates a [`PresentationTimestamp`] using the adapter's WSI.
+    ///
+    /// [`PresentationTimestamp`]: wgt::PresentationTimestamp
+    unsafe fn get_presentation_timestamp(&self) -> wgt::PresentationTimestamp;
 }
 
 pub trait Device<A: Api>: Send + Sync {
@@ -635,7 +649,7 @@ impl From<wgt::TextureAspect> for FormatAspects {
 impl From<wgt::TextureFormat> for FormatAspects {
     fn from(format: wgt::TextureFormat) -> Self {
         match format {
-            //wgt::TextureFormat::Stencil8 => Self::STENCIL,
+            wgt::TextureFormat::Stencil8 => Self::STENCIL,
             wgt::TextureFormat::Depth16Unorm => Self::DEPTH,
             wgt::TextureFormat::Depth32Float | wgt::TextureFormat::Depth24Plus => Self::DEPTH,
             wgt::TextureFormat::Depth32FloatStencil8 | wgt::TextureFormat::Depth24PlusStencil8 => {

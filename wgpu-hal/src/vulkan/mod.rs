@@ -160,6 +160,7 @@ struct PrivateCapabilities {
     timeline_semaphores: bool,
     texture_d24: bool,
     texture_d24_s8: bool,
+    texture_s8: bool,
     /// Ability to present contents to any screen. Only needed to work around broken platform configurations.
     can_present: bool,
     non_coherent_map_mask: wgt::BufferAddress,

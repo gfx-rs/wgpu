@@ -93,6 +93,13 @@ impl<T> From<SerialId> for Id<T> {
 }
 
 impl<T> Id<T> {
+    /// # Safety
+    ///
+    /// The raw id must be valid for the type.
+    pub unsafe fn from_raw(raw: NonZeroId) -> Self {
+        Self(raw, PhantomData)
+    }
+
     #[allow(dead_code)]
     pub(crate) fn dummy(index: u32) -> Valid<Self> {
         Valid(Id::zip(index, 1, Backend::Empty))

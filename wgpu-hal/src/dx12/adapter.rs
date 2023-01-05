@@ -209,7 +209,8 @@ impl super::Adapter {
             | wgt::Features::TEXTURE_COMPRESSION_BC
             | wgt::Features::CLEAR_TEXTURE
             | wgt::Features::TEXTURE_FORMAT_16BIT_NORM
-            | wgt::Features::PUSH_CONSTANTS;
+            | wgt::Features::PUSH_CONSTANTS
+            | wgt::Features::SHADER_PRIMITIVE_INDEX;
         //TODO: in order to expose this, we need to run a compute shader
         // that extract the necessary statistics out of the D3D12 result.
         // Alternatively, we could allocate a buffer for the query set,
@@ -229,6 +230,9 @@ impl super::Adapter {
             shader_model_support.HighestShaderModel >= d3d12::D3D_SHADER_MODEL_5_1,
         );
 
+        // TODO: Determine if IPresentationManager is supported
+        let presentation_timer = auxil::dxgi::time::PresentationTimer::new_dxgi();
+
         let base = wgt::Limits::default();
 
         Some(crate::ExposedAdapter {
@@ -237,6 +241,7 @@ impl super::Adapter {
                 device,
                 library: Arc::clone(library),
                 private_caps,
+                presentation_timer,
                 workarounds,
             },
             info,
@@ -539,5 +544,9 @@ impl crate::Adapter<super::Api> for super::Adapter {
             present_modes,
             composite_alpha_modes: vec![wgt::CompositeAlphaMode::Opaque],
         })
+    }
+
+    unsafe fn get_presentation_timestamp(&self) -> wgt::PresentationTimestamp {
+        wgt::PresentationTimestamp(self.presentation_timer.get_timestamp_ns())
     }
 }

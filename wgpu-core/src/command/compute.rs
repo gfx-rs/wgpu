@@ -428,7 +428,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .ok_or(ComputePassErrorInner::InvalidBindGroup(bind_group_id))
                         .map_pass_err(scope)?;
                     bind_group
-                        .validate_dynamic_bindings(&temp_offsets, &cmd_buf.limits)
+                        .validate_dynamic_bindings(index, &temp_offsets, &cmd_buf.limits)
                         .map_pass_err(scope)?;
 
                     cmd_buf.buffer_memory_init_actions.extend(

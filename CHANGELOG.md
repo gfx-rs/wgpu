@@ -42,6 +42,42 @@ Bottom level categories:
 
 ### Major Changes
 
+#### Backend selection by features
+
+Whereas `wgpu-core` used to automatically select backends to enable
+based on the target OS and architecture, it now has separate features
+to enable each backend:
+
+- "metal", for the Metal API on macOS and iOS
+- "vulkan", for the Vulkan API (Linux, some Android, and occasionally Windows)
+- "dx12", for Microsoft's Direct3D 12 API
+- "gles", OpenGL ES, available on many systems
+- "dx11", for Microsoft's Direct3D 11 API
+
+None are enabled by default, but the `wgpu` crate automatically
+selects these features based on the target operating system and
+architecture, using the same rules that `wgpu-core` used to, so users
+of `wgpu` should be unaffected by this change. However, other crates
+using `wgpu-core` directly will need to copy `wgpu`'s logic or write
+their own. See the `[target]` section of `wgpu/Cargo.toml` for
+details.
+
+Similarly, `wgpu-core` now has `emscripten` and `renderdoc` features
+that `wgpu` enables on appropriate platforms.
+
+In previous releases, the `wgpu-core` crate decided which backends to
+support. However, this left `wgpu-core`'s users with no way to
+override those choices. (Firefox doesn't want the GLES back end, for
+example.) There doesn't seem to be any way to have a crate select
+backends based on target OS and architecture that users of that crate
+can still override. Default features can't be selected based on the
+target, for example. That implies that we should do the selection as
+late in the dependency DAG as feasible. Having `wgpu` (and
+`wgpu-core`'s other dependents) choose backends seems like the best
+option.
+
+By @jimblandy in [#3254](https://github.com/gfx-rs/wgpu/pull/3254).
+
 #### Surface Capabilities API
 
 The various surface capability functions were combined into a single call that gives you all the capabilities.
@@ -71,6 +107,10 @@ Additionally `Surface::get_default_config` now returns an Option and returns Non
 
 There's a new api `Queue::copy_external_image_to_texture` which allows you to create wgpu textures from various web image primitives. Specificically from HtmlVideoElement, HtmlCanvasElement, OffscreenCanvas, and ImageBitmap. This provides multiple low-copy ways of interacting with the browser. WebGL is also supported, though WebGL has some additional restrictions, represented by the UNRESTRICTED_EXTERNAL_IMAGE_COPIES downlevel flag. By @cwfitzgerald in [#3288](https://github.com/gfx-rs/wgpu/pull/3288)
 
+#### Suballocate DX12 buffers and textures
+
+`wgpu`'s DX12 backend can now suballocate buffers and textures when the `windows_rs` feature is enabled, which can give a significant increase in performance (in testing I've seen a 10000%+ improvement in a simple scene with 200 `write_buffer` calls per frame, and a 40%+ improvement in [Bistro using Bevy](https://github.com/vleue/bevy_bistro_playground)). Previously `wgpu-hal`'s DX12 backend created a new heap on the GPU every time you called write_buffer (by calling `CreateCommittedResource`), whereas now with the `windows_rs` feature enabled it uses [`gpu_allocator`](https://crates.io/crates/gpu-allocator) to manage GPU memory (and calls `CreatePlacedResource` with a suballocated heap). By @Elabajaba in [#3163](https://github.com/gfx-rs/wgpu/pull/3163)
+
 ### Changes
 
 #### General
@@ -82,10 +122,16 @@ There's a new api `Queue::copy_external_image_to_texture` which allows you to cr
 - Combine `Surface::get_supported_formats`, `Surface::get_supported_present_modes`, and `Surface::get_supported_alpha_modes` into `Surface::get_capabilities` and `SurfaceCapabilities`. By @cwfitzgerald in [#3157](https://github.com/gfx-rs/wgpu/pull/3157)
 - Make `Surface::get_default_config` return an Option to prevent panics. By @cwfitzgerald in [#3157](https://github.com/gfx-rs/wgpu/pull/3157)
 - Lower the `max_buffer_size` limit value for compatibility with Apple2 and WebGPU compliance. By @jinleili in [#3255](https://github.com/gfx-rs/wgpu/pull/3255)
+- Limits `min_uniform_buffer_offset_alignment` and `min_storage_buffer_offset_alignment` is now always at least 32. By @wumpf [#3262](https://github.com/gfx-rs/wgpu/pull/3262)
+- Dereferencing a buffer view is now marked inline. By @Wumpf in [#3307](https://github.com/gfx-rs/wgpu/pull/3307)
+- The `strict_assert` family of macros was moved to `wgpu-types`. By @i509VCB in [#3051](https://github.com/gfx-rs/wgpu/pull/3051)
+- Add missing `DEPTH_BIAS_CLAMP` and `FULL_DRAW_INDEX_UINT32` downlevel flags. By @teoxoy in [#3316](https://github.com/gfx-rs/wgpu/pull/3316)
+- Make `ObjectId` structure and invariants idiomatic. By @teoxoy in [#3347](https://github.com/gfx-rs/wgpu/pull/3347)
 
 #### WebGPU
 
 - Implement `queue_validate_write_buffer` by @jinleili in [#3098](https://github.com/gfx-rs/wgpu/pull/3098)
+- Sync depth/stencil copy restrictions with the spec by @teoxoy in [#3314](https://github.com/gfx-rs/wgpu/pull/3314)
 
 #### GLES
 
@@ -100,6 +146,9 @@ There's a new api `Queue::copy_external_image_to_texture` which allows you to cr
 - Implement `Clone` for `ShaderSource` and `ShaderModuleDescriptor` in `wgpu`. By @daxpedda in [#3086](https://github.com/gfx-rs/wgpu/pull/3086).
 - Add `get_default_config` for `Surface` to simplify user creation of `SurfaceConfiguration`. By @jinleili in [#3034](https://github.com/gfx-rs/wgpu/pull/3034)
 - Native adapters can now use MSAA x2 and x8 if it's supported , previously only x1 and x4 were supported . By @39ali in [3140](https://github.com/gfx-rs/wgpu/pull/3140)
+- Implemented correleation between user timestamps and platform specific presentation timestamps via [`Adapter::get_presentation_timestamp`]. By @cwfitzgerald in [#3240](https://github.com/gfx-rs/wgpu/pull/3240)
+- Added support for `Features::SHADER_PRIMITIVE_INDEX` on all backends. By @cwfitzgerald in [#3272](https://github.com/gfx-rs/wgpu/pull/3272)
+- Implemented `TextureFormat::Stencil8`, allowing for stencil testing without depth components. By @Dinnerbone in [#3343](https://github.com/gfx-rs/wgpu/pull/3343)
 
 #### GLES
 
@@ -110,6 +159,7 @@ There's a new api `Queue::copy_external_image_to_texture` which allows you to cr
 #### WebGPU
 
 - Add `MULTISAMPLE_X2`, `MULTISAMPLE_X4` and `MULTISAMPLE_X8` to `TextureFormatFeatureFlags`. By @39ali in [3140](https://github.com/gfx-rs/wgpu/pull/3140)
+- Sync `TextureFormat.describe` with the spec. By @teoxoy in [3312](https://github.com/gfx-rs/wgpu/pull/3312)
 
 ### Bug Fixes
 
@@ -125,6 +175,10 @@ There's a new api `Queue::copy_external_image_to_texture` which allows you to cr
 - Make `RenderPassCompatibilityError` and `CreateShaderModuleError` not so huge. By @jimblandy in (#3226)[https://github.com/gfx-rs/wgpu/pull/3226]
 - Check for invalid bitflag bits in wgpu-core and allow them to be captured/replayed by @nical in (#3229)[https://github.com/gfx-rs/wgpu/pull/3229]
 - Evaluate `gfx_select!`'s `#[cfg]` conditions at the right time. By @jimblandy in [#3253](https://github.com/gfx-rs/wgpu/pull/3253)
+- Improve error messages when binding bind group with dynamic offsets. By @cwfitzgerald in [#3294](https://github.com/gfx-rs/wgpu/pull/3294)
+
+#### Metal
+- Fix texture view creation with full-resource views when using an explicit `mip_level_count` or `array_layer_count`. By @cwfitzgerald in [#3323](https://github.com/gfx-rs/wgpu/pull/3323)
 
 #### WebGPU
 
@@ -134,6 +188,10 @@ There's a new api `Queue::copy_external_image_to_texture` which allows you to cr
 
 - Fixed WebGL not displaying srgb targets correctly if a non-screen filling viewport was previously set. By @Wumpf in [#3093](https://github.com/gfx-rs/wgpu/pull/3093)
 - Fix disallowing multisampling for float textures if otherwise supported. By @Wumpf in [#3183](https://github.com/gfx-rs/wgpu/pull/3183)
+
+#### Vulkan
+
+- Document and improve extension detection. By @teoxoy in [#3327](https://github.com/gfx-rs/wgpu/pull/3327)
 
 #### deno-webgpu
 
@@ -146,15 +204,26 @@ There's a new api `Queue::copy_external_image_to_texture` which allows you to cr
 
 - Let the wgpu examples `framework.rs` compile again under Emscripten. By @jimblandy in [#3246](https://github.com/gfx-rs/wgpu/pull/3246)
 
+#### Vulkan
+
+- Update ash to 0.37.1+1.3.235 to fix CI breaking by changing a call to the deprecated `debug_utils_set_object_name()` function to `set_debug_utils_object_name()` by @elabajaba in [#3273](https://github.com/gfx-rs/wgpu/pull/3273)
+
+#### DX12
+
+- Fix `depth16Unorm` formats by @teoxoy in [#3313](https://github.com/gfx-rs/wgpu/pull/3313)
+- Don't re-use `GraphicsCommandList` when `close` or `reset` fails. By @xiaopengli89 in [#3204](https://github.com/gfx-rs/wgpu/pull/3204)
+
 ### Examples
 
 - Log adapter info in hello example on wasm target by @JolifantoBambla in [#2858](https://github.com/gfx-rs/wgpu/pull/2858)
+- Added new example `stencil-triangles` to show basic use of stencil testing. By @Dinnerbone in [#3343](https://github.com/gfx-rs/wgpu/pull/3343)
 
 ### Testing/Internal
 
 - Update the `minimum supported rust version` to 1.64
-- Use cargo 1.64 workspace inheritance feature. By @jinleili in [#3107](https://github.com/gfx-rs/wgpu/pull/3107)
 - Move `ResourceMetadata` into its own module. By @jimblandy in [#3213](https://github.com/gfx-rs/wgpu/pull/3213)
+- Add WebAssembly testing infrastructure. By @haraldreingruber in [#3238](https://github.com/gfx-rs/wgpu/pull/3238)
+- Error message when you forget to use cargo-nextest. By @cwfitzgerald in [#3293](https://github.com/gfx-rs/wgpu/pull/3293)
 
 #### Vulkan
 

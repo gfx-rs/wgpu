@@ -1,12 +1,17 @@
 struct Globals {
     mvp: mat4x4<f32>,
     size: vec2<f32>,
+    _pad0: u32,
+    _pad1: u32,
 };
 
 struct Locals {
     position: vec2<f32>,
     velocity: vec2<f32>,
     color: u32,
+    _pad0: u32,
+    _pad1: u32,
+    _pad2: u32,
 };
 
 @group(0)

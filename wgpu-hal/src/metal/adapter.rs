@@ -166,13 +166,9 @@ impl crate::Adapter<super::Api> for super::Adapter {
                 };
                 flags
             }
-            /*Tf::Stencil8 => {
-                let mut flags = all_caps
-                    | Tfc::DEPTH_STENCIL_ATTACHMENT
-                    | Tfc::MULTISAMPLE
-                    | msaa_resolve_apple3x_if;
-                flags
-            }*/
+            Tf::Stencil8 => {
+                all_caps | Tfc::DEPTH_STENCIL_ATTACHMENT | msaa_count | msaa_resolve_apple3x_if
+            }
             Tf::Depth16Unorm => {
                 let mut flags =
                     Tfc::DEPTH_STENCIL_ATTACHMENT | msaa_count | msaa_resolve_apple3x_if;
@@ -318,6 +314,12 @@ impl crate::Adapter<super::Api> for super::Adapter {
             },
             usage: crate::TextureUses::COLOR_TARGET | crate::TextureUses::COPY_DST, //TODO: expose more
         })
+    }
+
+    unsafe fn get_presentation_timestamp(&self) -> wgt::PresentationTimestamp {
+        let timestamp = self.shared.presentation_timer.get_timestamp_ns();
+
+        wgt::PresentationTimestamp(timestamp)
     }
 }
 
@@ -726,6 +728,8 @@ impl super::PrivateCapabilities {
             supports_depth_clip_control: os_is_mac
                 || device.supports_feature_set(MTLFeatureSet::iOS_GPUFamily4_v1),
             supports_preserve_invariance: version.at_least((11, 0), (13, 0)),
+            // Metal 2.2 on mac, 2.3 on iOS.
+            supports_shader_primitive_index: version.at_least((10, 15), (14, 0)),
             has_unified_memory: if version.at_least((10, 15), (13, 0)) {
                 Some(device.has_unified_memory())
             } else {
@@ -764,6 +768,10 @@ impl super::PrivateCapabilities {
         features.set(F::TEXTURE_COMPRESSION_ETC2, self.format_eac_etc);
 
         features.set(F::DEPTH_CLIP_CONTROL, self.supports_depth_clip_control);
+        features.set(
+            F::SHADER_PRIMITIVE_INDEX,
+            self.supports_shader_primitive_index,
+        );
 
         features.set(
             F::TEXTURE_BINDING_ARRAY
@@ -897,7 +905,7 @@ impl super::PrivateCapabilities {
             Tf::Rgba32Uint => RGBA32Uint,
             Tf::Rgba32Sint => RGBA32Sint,
             Tf::Rgba32Float => RGBA32Float,
-            //Tf::Stencil8 => R8Unorm,
+            Tf::Stencil8 => Stencil8,
             Tf::Depth16Unorm => Depth16Unorm,
             Tf::Depth32Float => Depth32Float,
             Tf::Depth32FloatStencil8 => Depth32Float_Stencil8,

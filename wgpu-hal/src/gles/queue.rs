@@ -437,7 +437,7 @@ impl super::Queue {
                 } else {
                     match *src {
                         wgt::ExternalImageSource::ImageBitmap(ref b) => unsafe {
-                            gl.tex_sub_image_2d_with_image_bitmap(
+                            gl.tex_sub_image_2d_with_image_bitmap_and_width_and_height(
                                 dst_target,
                                 copy.dst_base.mip_level as i32,
                                 copy.dst_base.origin.x as i32,
@@ -450,7 +450,7 @@ impl super::Queue {
                             );
                         },
                         wgt::ExternalImageSource::HTMLVideoElement(ref v) => unsafe {
-                            gl.tex_sub_image_2d_with_html_video(
+                            gl.tex_sub_image_2d_with_html_video_and_width_and_height(
                                 dst_target,
                                 copy.dst_base.mip_level as i32,
                                 copy.dst_base.origin.x as i32,
@@ -463,7 +463,7 @@ impl super::Queue {
                             )
                         },
                         wgt::ExternalImageSource::HTMLCanvasElement(ref c) => unsafe {
-                            gl.tex_sub_image_2d_with_html_canvas(
+                            gl.tex_sub_image_2d_with_html_canvas_and_width_and_height(
                                 dst_target,
                                 copy.dst_base.mip_level as i32,
                                 copy.dst_base.origin.x as i32,

@@ -75,8 +75,15 @@ test = true
 name = "water"
 test = true
 
+[[example]]
+name = "stencil-triangles"
+test = true
+
 [features]
-default = ["wgsl", "expose-ids"]
+default = ["wgsl"]
+# Apply run-time checks, even in release builds. These are in addition
+# to the validation carried out at public APIs in all builds.
+strict_asserts = ["wgc?/strict_asserts", "wgt/strict_asserts"]
 spirv = ["naga/spv-in"]
 glsl = ["naga/glsl-in"]
 wgsl = ["wgc?/wgsl"]
@@ -85,23 +92,56 @@ replay = ["serde", "wgc/replay"]
 angle = ["wgc/angle"]
 webgl = ["hal", "wgc"]
 emscripten = ["webgl"]
-vulkan-portability = ["wgc/vulkan-portability"]
+vulkan-portability = ["wgc/vulkan"]
 expose-ids = []
 
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies.wgc]
-workspace = true
-features = ["raw-window-handle"]
-
-[target.'cfg(target_arch = "wasm32")'.dependencies.wgc]
-workspace = true
-features = ["raw-window-handle"]
+# wgpu-core is always available as an optional dependency, "wgc".
+# Whenever wgpu-core is selected, we want the GLES backend and raw
+# window handle support.
+[dependencies.wgc]
 optional = true
+workspace = true
+features = ["raw-window-handle", "gles"]
+
+# wgpu-core is required whenever not targeting web APIs directly.
+# Whenever wgpu-core is selected, we want the GLES backend and raw
+# window handle support.
+[target.'cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))'.dependencies.wgc]
+workspace = true
+features = ["raw-window-handle", "gles"]
+
+# We want the wgpu-core Metal backend on macOS and iOS.
+# (We should consider also enabling "vulkan" for Vulkan Portability.)
+[target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies.wgc]
+workspace = true
+features = ["metal"]
+
+# We want the wgpu-core Direct3D backends on Windows.
+[target.'cfg(windows)'.dependencies.wgc]
+workspace = true
+features = ["dx11", "dx12"]
+
+# We want the wgpu-core Vulkan backend on Unix (but not Emscripten) and Windows.
+[target.'cfg(any(windows, all(unix, not(target_arch = "emscripten"), not(target_os = "ios"), not(target_os = "macos"))))'.dependencies.wgc]
+workspace = true
+features = ["vulkan"]
+
+[target.'cfg(target_os = "emscripten")'.dependencies.wgc]
+workspace = true
+features = ["emscripten"]
 
 [dependencies.wgt]
 workspace = true
 
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies.hal]
-workspace = true
+# We need wgpu-hal unless we're targeting the web APIs.
+[target.'cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))'.dependencies]
+hal = { workspace = true }
+
+[target.'cfg(all(not(target_arch = "wasm32"), unix, not(target_os = "ios"), not(target_os = "macos")))'.dependencies]
+hal = { workspace = true, features = ["renderdoc"] }
+
+[target.'cfg(windows)'.dependencies]
+hal = { workspace = true, features = ["renderdoc", "windows_rs"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies.hal]
 workspace = true
@@ -115,10 +155,10 @@ raw-window-handle.workspace = true
 serde = { workspace = true, features = ["derive"], optional = true }
 smallvec.workspace = true
 static_assertions.workspace = true
+cfg-if.workspace = true
 
 [dev-dependencies]
 bitflags.workspace = true
-cfg-if.workspace = true
 bytemuck = { workspace = true, features = ["derive"] }
 glam.workspace = true
 ddsfile.workspace = true
@@ -130,7 +170,8 @@ obj.workspace = true
 pollster.workspace = true
 png.workspace = true
 nanorand = { workspace = true, features = ["wyrand"] }
-winit.workspace = true                                 # for "halmark" example                                                        # for "halmark" example
+wasm-bindgen-test.workspace = true
+winit.workspace = true # for "halmark" example
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 async-executor.workspace = true
@@ -288,12 +329,13 @@ parking_lot.workspace = true
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 console_error_panic_hook.workspace = true
 console_log.workspace = true
-# We need these features in the framework examples
+# We need these features in the framework examples and tests
 web-sys = { workspace = true, features = [
     "Location",
     "Blob",
     "RequestInit",
     "RequestMode",
     "Request",
-    "Response"
+    "Response",
+    "WebGl2RenderingContext"
 ] }

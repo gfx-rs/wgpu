@@ -81,7 +81,7 @@ This allows us to compose the operations to form the various kinds of tracker me
 that need to happen in the codebase. For each resource in the given merger, the following
 operation applies:
 
-```
+```text
 UsageScope <- Resource = insert(scope, usage) OR merge(scope, usage)
 UsageScope <- UsageScope = insert(scope, scope) OR merge(scope, scope)
 CommandBuffer <- UsageScope = insert(buffer.start, buffer.end, scope)
@@ -114,6 +114,7 @@ pub(crate) use stateless::{StatelessBindGroupSate, StatelessTracker};
 pub(crate) use texture::{
     TextureBindGroupState, TextureSelector, TextureTracker, TextureUsageScope,
 };
+use wgt::strict_assert_ne;
 
 /// A structure containing all the information about a particular resource
 /// transition. User code should be able to generate a pipeline barrier

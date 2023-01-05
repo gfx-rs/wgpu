@@ -1,13 +1,13 @@
 [package]
 name = "wgpu-core"
-version.workspace = true
-authors.workspace = true
-edition.workspace = true
+version = "0.14.0"
+authors = ["wgpu developers"]
+edition = "2021"
 description = "WebGPU core logic on wgpu-hal"
-homepage.workspace = true
-repository.workspace = true
-keywords.workspace = true
-license.workspace = true
+homepage = "https://wgpu.rs/"
+repository = "https://github.com/gfx-rs/wgpu"
+keywords = ["graphics"]
+license = "MIT OR Apache-2.0"
 
 [package.metadata.docs.rs]
 all-features = true
@@ -17,9 +17,24 @@ rustdoc-args = ["--cfg", "docsrs"]
 
 [features]
 default = []
+
+# Backends, passed through to wgpu-hal
+metal = ["hal/metal"]
+vulkan = ["hal/vulkan"]
+gles = ["hal/gles"]
+dx11 = ["hal/dx11"]
+dx12 = ["hal/dx12"]
+
+# Support the Renderdoc graphics debugger:
+# https://renderdoc.org/
+renderdoc = ["hal/renderdoc"]
+
+# Compile for the Emscripten POSIX-in-a-web-page emulation environment.
+emscripten = ["hal/emscripten"]
+
 # Apply run-time checks, even in release builds. These are in addition
 # to the validation carried out at public APIs in all builds.
-strict_asserts = []
+strict_asserts = ["wgt/strict_asserts"]
 angle = ["hal/gles"]
 # Enable API tracing
 trace = ["ron", "serde", "wgt/trace", "arrayvec/serde", "naga/serialize"]
@@ -30,51 +45,39 @@ serial-pass = ["serde", "wgt/serde", "arrayvec/serde"]
 id32 = []
 # Enable `ShaderModuleSource::Wgsl`
 wgsl = ["naga/wgsl-in"]
-vulkan-portability = ["hal/vulkan"]
+
+# Features that are intended to work on all platforms.
+portable_features = ["gles", "strict_asserts", "trace", "replay", "serial-pass", "id32", "wgsl"]
 
 [dependencies]
-arrayvec.workspace = true
-bitflags.workspace = true
-bit-vec.workspace = true
-codespan-reporting.workspace = true
-fxhash.workspace = true
-log.workspace = true
-parking_lot.workspace = true
-profiling.workspace = true
-raw-window-handle = { workspace = true, optional = true }
-ron = { workspace = true, optional = true }
-serde = { workspace = true, features = ["serde_derive"], optional = true }
-smallvec.workspace = true
-thiserror.workspace = true
+arrayvec = "0.7"
+bitflags = "1"
+bit-vec = "0.6"
+codespan-reporting = "0.11"
+fxhash = "0.2.1"
+log = "0.4"
+# parking_lot 0.12 switches from `winapi` to `windows`; permit either
+parking_lot = ">=0.11,<0.13"
+profiling = { version = "1", default-features = false }
+raw-window-handle = { version = "0.5", optional = true }
+ron = { version = "0.8", optional = true }
+serde = { version = "1", features = ["serde_derive"], optional = true }
+smallvec = "1"
+thiserror = "1"
 
 [dependencies.naga]
-workspace = true
+git = "https://github.com/gfx-rs/naga"
+rev = "e7fc8e6"
+version = "0.10"
 features = ["clone", "span", "validate"]
 
 [dependencies.wgt]
-workspace = true
+package = "wgpu-types"
+path = "../wgpu-types"
 
 [dependencies.hal]
-workspace = true
+package = "wgpu-hal"
+path = "../wgpu-hal"
 
 [target.'cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))'.dependencies]
-web-sys = { workspace = true, features = ["HtmlCanvasElement", "OffscreenCanvas"] }
-
-[target.'cfg(target_arch = "wasm32")'.dependencies]
-hal = { workspace = true, features = ["gles"] }
-
-[target.'cfg(all(not(target_arch = "wasm32"), any(target_os = "ios", target_os = "macos")))'.dependencies]
-hal = { workspace = true, features = ["metal"] }
-#Note: could also enable "vulkan" for Vulkan Portability
-
-[target.'cfg(all(not(target_arch = "wasm32"), unix, not(target_os = "ios"), not(target_os = "macos")))'.dependencies]
-hal = { workspace = true, features = ["vulkan", "gles", "renderdoc"] }
-
-[target.'cfg(all(not(target_arch = "wasm32"), windows))'.dependencies]
-hal = { workspace = true, features = ["vulkan", "dx12", "dx11", "renderdoc"] }
-
-[target.'cfg(target_os = "emscripten")'.dependencies]
-hal = { workspace = true, features = ["emscripten"] }
-
-[build-dependencies]
-cfg_aliases.workspace = true
+web-sys = { version = "0.3.60", features = ["HtmlCanvasElement", "OffscreenCanvas"] }

@@ -97,10 +97,16 @@ pub enum TransferError {
     InvalidRowsPerImage,
     #[error("source and destination layers have different aspects")]
     MismatchedAspects,
-    #[error("copying from textures with format {0:?} is forbidden")]
-    CopyFromForbiddenTextureFormat(wgt::TextureFormat),
-    #[error("copying to textures with format {0:?} is forbidden")]
-    CopyToForbiddenTextureFormat(wgt::TextureFormat),
+    #[error("copying from textures with format {format:?} and aspect {aspect:?} is forbidden")]
+    CopyFromForbiddenTextureFormat {
+        format: wgt::TextureFormat,
+        aspect: wgt::TextureAspect,
+    },
+    #[error("copying to textures with format {format:?} and aspect {aspect:?} is forbidden")]
+    CopyToForbiddenTextureFormat {
+        format: wgt::TextureFormat,
+        aspect: wgt::TextureAspect,
+    },
     #[error(
         "copying to textures with format {0:?} is forbidden when copying from external texture"
     )]
@@ -334,8 +340,8 @@ pub(crate) fn validate_texture_copy_range(
     let extent = extent_virtual.physical_size(desc.format);
 
     match desc.format {
-        //wgt::TextureFormat::Stencil8 |
-        wgt::TextureFormat::Depth16Unorm
+        wgt::TextureFormat::Stencil8
+        | wgt::TextureFormat::Depth16Unorm
         | wgt::TextureFormat::Depth32Float
         | wgt::TextureFormat::Depth32FloatStencil8
         | wgt::TextureFormat::Depth24Plus
@@ -780,10 +786,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             true,
         )?;
 
-        if !conv::is_valid_copy_dst_texture_format(dst_texture.desc.format) {
-            return Err(
-                TransferError::CopyToForbiddenTextureFormat(dst_texture.desc.format).into(),
-            );
+        if !conv::is_valid_copy_dst_texture_format(dst_texture.desc.format, destination.aspect) {
+            return Err(TransferError::CopyToForbiddenTextureFormat {
+                format: dst_texture.desc.format,
+                aspect: destination.aspect,
+            }
+            .into());
         }
 
         cmd_buf
@@ -926,10 +934,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             true,
         )?;
 
-        if !conv::is_valid_copy_src_texture_format(src_texture.desc.format) {
-            return Err(
-                TransferError::CopyFromForbiddenTextureFormat(src_texture.desc.format).into(),
-            );
+        if !conv::is_valid_copy_src_texture_format(src_texture.desc.format, source.aspect) {
+            return Err(TransferError::CopyFromForbiddenTextureFormat {
+                format: src_texture.desc.format,
+                aspect: source.aspect,
+            }
+            .into());
         }
 
         if format_desc.sample_type == wgt::TextureSampleType::Depth

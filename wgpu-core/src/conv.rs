@@ -8,23 +8,27 @@ pub fn is_power_of_two_u32(val: u32) -> bool {
     val != 0 && (val & (val - 1)) == 0
 }
 
-pub fn is_valid_copy_src_texture_format(format: wgt::TextureFormat) -> bool {
+pub fn is_valid_copy_src_texture_format(
+    format: wgt::TextureFormat,
+    aspect: wgt::TextureAspect,
+) -> bool {
+    use wgt::TextureAspect as Ta;
     use wgt::TextureFormat as Tf;
-    match format {
-        Tf::Depth24Plus | Tf::Depth24PlusStencil8 => false,
+    match (format, aspect) {
+        (Tf::Depth24Plus, _) | (Tf::Depth24PlusStencil8, Ta::DepthOnly) => false,
         _ => true,
     }
 }
 
-pub fn is_valid_copy_dst_texture_format(format: wgt::TextureFormat) -> bool {
+pub fn is_valid_copy_dst_texture_format(
+    format: wgt::TextureFormat,
+    aspect: wgt::TextureAspect,
+) -> bool {
+    use wgt::TextureAspect as Ta;
     use wgt::TextureFormat as Tf;
-    match format {
-        //Tf::Stencil8 |
-        Tf::Depth16Unorm
-        | Tf::Depth32Float
-        | Tf::Depth32FloatStencil8
-        | Tf::Depth24Plus
-        | Tf::Depth24PlusStencil8 => false,
+    match (format, aspect) {
+        (Tf::Depth24Plus | Tf::Depth32Float, _)
+        | (Tf::Depth24PlusStencil8 | Tf::Depth32FloatStencil8, Ta::DepthOnly) => false,
         _ => true,
     }
 }
