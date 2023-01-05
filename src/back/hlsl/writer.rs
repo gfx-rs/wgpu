@@ -1690,13 +1690,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             Statement::Break => writeln!(self.out, "{}break;", level)?,
             Statement::Continue => writeln!(self.out, "{}continue;", level)?,
             Statement::Barrier(barrier) => {
-                if barrier.contains(crate::Barrier::STORAGE) {
-                    writeln!(self.out, "{}DeviceMemoryBarrierWithGroupSync();", level)?;
-                }
-
-                if barrier.contains(crate::Barrier::WORK_GROUP) {
-                    writeln!(self.out, "{}GroupMemoryBarrierWithGroupSync();", level)?;
-                }
+                self.write_barrier(barrier, level)?;
             }
             Statement::ImageStore {
                 image,
@@ -2869,6 +2863,16 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 self.write_type(module, ty)?;
                 write!(self.out, ")0")?;
             }
+        }
+        Ok(())
+    }
+
+    fn write_barrier(&mut self, barrier: crate::Barrier, level: back::Level) -> BackendResult {
+        if barrier.contains(crate::Barrier::STORAGE) {
+            writeln!(self.out, "{}DeviceMemoryBarrierWithGroupSync();", level)?;
+        }
+        if barrier.contains(crate::Barrier::WORK_GROUP) {
+            writeln!(self.out, "{}GroupMemoryBarrierWithGroupSync();", level)?;
         }
         Ok(())
     }

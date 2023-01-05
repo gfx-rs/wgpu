@@ -1841,28 +1841,7 @@ impl<'w> BlockContext<'w> {
                     return Ok(());
                 }
                 crate::Statement::Barrier(flags) => {
-                    let memory_scope = if flags.contains(crate::Barrier::STORAGE) {
-                        spirv::Scope::Device
-                    } else {
-                        spirv::Scope::Workgroup
-                    };
-                    let mut semantics = spirv::MemorySemantics::ACQUIRE_RELEASE;
-                    semantics.set(
-                        spirv::MemorySemantics::UNIFORM_MEMORY,
-                        flags.contains(crate::Barrier::STORAGE),
-                    );
-                    semantics.set(
-                        spirv::MemorySemantics::WORKGROUP_MEMORY,
-                        flags.contains(crate::Barrier::WORK_GROUP),
-                    );
-                    let exec_scope_id = self.get_index_constant(spirv::Scope::Workgroup as u32);
-                    let mem_scope_id = self.get_index_constant(memory_scope as u32);
-                    let semantics_id = self.get_index_constant(semantics.bits());
-                    block.body.push(Instruction::control_barrier(
-                        exec_scope_id,
-                        mem_scope_id,
-                        semantics_id,
-                    ));
+                    self.writer.write_barrier(flags, &mut block);
                 }
                 crate::Statement::Store { pointer, value } => {
                     let value_id = self.cached[value];

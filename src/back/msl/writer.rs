@@ -2624,29 +2624,7 @@ impl<W: Write> Writer<W> {
                     writeln!(self.out, "{}{}::discard_fragment();", level, NAMESPACE)?;
                 }
                 crate::Statement::Barrier(flags) => {
-                    //Note: OR-ring bitflags requires `__HAVE_MEMFLAG_OPERATORS__`,
-                    // so we try to avoid it here.
-                    if flags.is_empty() {
-                        writeln!(
-                            self.out,
-                            "{}{}::threadgroup_barrier({}::mem_flags::mem_none);",
-                            level, NAMESPACE, NAMESPACE,
-                        )?;
-                    }
-                    if flags.contains(crate::Barrier::STORAGE) {
-                        writeln!(
-                            self.out,
-                            "{}{}::threadgroup_barrier({}::mem_flags::mem_device);",
-                            level, NAMESPACE, NAMESPACE,
-                        )?;
-                    }
-                    if flags.contains(crate::Barrier::WORK_GROUP) {
-                        writeln!(
-                            self.out,
-                            "{}{}::threadgroup_barrier({}::mem_flags::mem_threadgroup);",
-                            level, NAMESPACE, NAMESPACE,
-                        )?;
-                    }
+                    self.write_barrier(flags, level)?;
                 }
                 crate::Statement::Store { pointer, value } => {
                     self.put_store(pointer, value, level, context)?
@@ -3931,6 +3909,33 @@ impl<W: Write> Writer<W> {
         }
 
         Ok(info)
+    }
+
+    fn write_barrier(&mut self, flags: crate::Barrier, level: back::Level) -> BackendResult {
+        // Note: OR-ring bitflags requires `__HAVE_MEMFLAG_OPERATORS__`,
+        // so we try to avoid it here.
+        if flags.is_empty() {
+            writeln!(
+                self.out,
+                "{}{}::threadgroup_barrier({}::mem_flags::mem_none);",
+                level, NAMESPACE, NAMESPACE,
+            )?;
+        }
+        if flags.contains(crate::Barrier::STORAGE) {
+            writeln!(
+                self.out,
+                "{}{}::threadgroup_barrier({}::mem_flags::mem_device);",
+                level, NAMESPACE, NAMESPACE,
+            )?;
+        }
+        if flags.contains(crate::Barrier::WORK_GROUP) {
+            writeln!(
+                self.out,
+                "{}{}::threadgroup_barrier({}::mem_flags::mem_threadgroup);",
+                level, NAMESPACE, NAMESPACE,
+            )?;
+        }
+        Ok(())
     }
 }
 
