@@ -701,6 +701,8 @@ pub struct Sampler<A: hal::Api> {
 pub enum CreateSamplerError {
     #[error(transparent)]
     Device(#[from] DeviceError),
+    #[error("invalid lod clamp lod_min_clamp:{} lod_max_clamp:{}, must satisfy lod_min_clamp >= 0 and lod_max_clamp >= lod_min_clamp ", .0.start, .0.end)]
+    InvalidLodClamp(Range<f32>),
     #[error("invalid anisotropic clamp {0}, must be one of 1, 2, 4, 8 or 16")]
     InvalidClamp(u8),
     #[error("cannot create any more samplers")]
