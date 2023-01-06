@@ -1171,7 +1171,9 @@ impl<A: HalApi> Device<A> {
         }
 
         if desc.lod_min_clamp < 0.0 || desc.lod_max_clamp < desc.lod_min_clamp {
-            return Err(resource::CreateSamplerError::InvalidLodClamp(desc.lod_min_clamp..desc.lod_max_clamp));
+            return Err(resource::CreateSamplerError::InvalidLodClamp(
+                desc.lod_min_clamp..desc.lod_max_clamp,
+            ));
         }
 
         let lod_clamp = if desc.lod_min_clamp > 0.0 || desc.lod_max_clamp < 32.0 {
