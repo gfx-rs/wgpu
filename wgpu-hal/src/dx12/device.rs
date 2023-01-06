@@ -252,7 +252,8 @@ impl super::Device {
         // Compile with DXC if available, otherwise fall back to FXC
         let (result, log_level) = if let Some(ref dxc_container) = self.dxc_container {
             profiling::scope!("hassle_rs::compile_hlsl");
-            let mut compile_flags = vec!["-Ges"]/* d3dcompiler::D3DCOMPILE_ENABLE_STRICTNESS */;
+            let mut compile_flags = arrayvec::ArrayVec::<&str, 3>::new_const();
+            compile_flags.push("-Ges"); // d3dcompiler::D3DCOMPILE_ENABLE_STRICTNESS
             if self
                 .private_caps
                 .instance_flags
@@ -1181,7 +1182,7 @@ impl crate::Device<super::Api> for super::Device {
             },
             bind_group_infos,
             naga_options: hlsl::Options {
-                shader_model: match &self.dxc_container {
+                shader_model: match self.dxc_container {
                     // DXC
                     Some(_) => hlsl::ShaderModel::V6_0,
                     // FXC doesn't support SM 6.0
