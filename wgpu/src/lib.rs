@@ -197,6 +197,7 @@ pub struct Buffer {
     map_context: Mutex<MapContext>,
     size: wgt::BufferAddress,
     usage: BufferUsages,
+    // Todo: missing map_state https://www.w3.org/TR/webgpu/#dom-gpubuffer-mapstate
 }
 static_assertions::assert_impl_all!(Buffer: Send, Sync);
 
@@ -227,6 +228,7 @@ pub struct Texture {
     id: ObjectId,
     data: Box<Data>,
     owned: bool,
+    descriptor: TextureDescriptor<'static>,
 }
 static_assertions::assert_impl_all!(Texture: Send, Sync);
 
@@ -282,6 +284,13 @@ pub struct Surface {
     context: Arc<C>,
     id: ObjectId,
     data: Box<Data>,
+    // Stores the latest `SurfaceConfiguration` that was set using `Surface::configure`.
+    // It is required to set the attributes of the `SurfaceTexture` in the
+    // `Surface::get_current_texture` method.
+    // Because the `Surface::configure` method operates on an immutable reference this type has to
+    // be wrapped in a mutex and since the configuration is only supplied after the surface has
+    // been created is is additionally wrapped in an option.
+    config: Mutex<Option<SurfaceConfiguration>>,
 }
 static_assertions::assert_impl_all!(Surface: Send, Sync);
 
@@ -1448,6 +1457,7 @@ impl Instance {
             context: Arc::clone(&self.context),
             id,
             data,
+            config: Mutex::new(None),
         })
     }
 
@@ -1472,6 +1482,7 @@ impl Instance {
             context: Arc::clone(&self.context),
             id: ObjectId::from(surface.id()),
             data: Box::new(surface),
+            config: Mutex::new(None),
         }
     }
 
@@ -1493,6 +1504,7 @@ impl Instance {
             context: Arc::clone(&self.context),
             id: ObjectId::from(surface.id()),
             data: Box::new(surface),
+            config: Mutex::new(None),
         }
     }
 
@@ -1528,6 +1540,7 @@ impl Instance {
             id: ObjectId::from(surface),
             #[cfg(all(target_arch = "wasm32", not(feature = "webgl")))]
             data: Box::new(()),
+            config: Mutex::new(None),
         })
     }
 
@@ -1563,6 +1576,7 @@ impl Instance {
             id: ObjectId::from(surface),
             #[cfg(all(target_arch = "wasm32", not(feature = "webgl")))]
             data: Box::new(()),
+            config: Mutex::new(None),
         })
     }
 
@@ -2038,6 +2052,10 @@ impl Device {
             id,
             data,
             owned: true,
+            descriptor: TextureDescriptor {
+                label: None,
+                ..desc.clone()
+            },
         }
     }
 
@@ -2070,6 +2088,10 @@ impl Device {
             id: ObjectId::from(texture.id()),
             data: Box::new(texture),
             owned: true,
+            descriptor: TextureDescriptor {
+                label: None,
+                ..desc.clone()
+            },
         }
     }
 
@@ -2386,7 +2408,7 @@ impl Buffer {
     /// Returns the length of the buffer allocation in bytes.
     ///
     /// This is always equal to the `size` that was specified when creating the buffer.
-    pub fn size(&self) -> wgt::BufferAddress {
+    pub fn size(&self) -> BufferAddress {
         self.size
     }
 
@@ -2521,6 +2543,69 @@ impl Texture {
             origin: Origin3d::ZERO,
             aspect: TextureAspect::All,
         }
+    }
+
+    /// Returns the size of this `Texture`.
+    ///
+    /// This is always equal to the `size` that was specified when creating the texture.
+    pub fn size(&self) -> Extent3d {
+        self.descriptor.size
+    }
+
+    /// Returns the width of this `Texture`.
+    ///
+    /// This is always equal to the `size.width` that was specified when creating the texture.
+    pub fn width(&self) -> u32 {
+        self.descriptor.size.width
+    }
+
+    /// Returns the height of this `Texture`.
+    ///
+    /// This is always equal to the `size.height` that was specified when creating the texture.
+    pub fn height(&self) -> u32 {
+        self.descriptor.size.height
+    }
+
+    /// Returns the depth or layer count of this `Texture`.
+    ///
+    /// This is always equal to the `size.depth_or_array_layers` that was specified when creating the texture.
+    pub fn depth_or_array_layers(&self) -> u32 {
+        self.descriptor.size.depth_or_array_layers
+    }
+
+    /// Returns the mip_level_count of this `Texture`.
+    ///
+    /// This is always equal to the `mip_level_count` that was specified when creating the texture.
+    pub fn mip_level_count(&self) -> u32 {
+        self.descriptor.mip_level_count
+    }
+
+    /// Returns the sample_count of this `Texture`.
+    ///
+    /// This is always equal to the `sample_count` that was specified when creating the texture.
+    pub fn sample_count(&self) -> u32 {
+        self.descriptor.sample_count
+    }
+
+    /// Returns the dimension of this `Texture`.
+    ///
+    /// This is always equal to the `dimension` that was specified when creating the texture.
+    pub fn dimension(&self) -> TextureDimension {
+        self.descriptor.dimension
+    }
+
+    /// Returns the format of this `Texture`.
+    ///
+    /// This is always equal to the `format` that was specified when creating the texture.
+    pub fn format(&self) -> TextureFormat {
+        self.descriptor.format
+    }
+
+    /// Returns the allowed usages of this `Texture`.
+    ///
+    /// This is always equal to the `usage` that was specified when creating the texture.
+    pub fn usage(&self) -> TextureUsages {
+        self.descriptor.usage
     }
 }
 
@@ -3959,7 +4044,10 @@ impl Surface {
             &device.id,
             device.data.as_ref(),
             config,
-        )
+        );
+
+        let mut conf = self.config.lock();
+        *conf = Some(config.clone());
     }
 
     /// Returns the next texture to be presented by the swapchain for drawing.
@@ -3982,6 +4070,25 @@ impl Surface {
             SurfaceStatus::Lost => return Err(SurfaceError::Lost),
         };
 
+        let guard = self.config.lock();
+        let config = guard
+            .as_ref()
+            .expect("This surface has not been configured yet.");
+
+        let descriptor = TextureDescriptor {
+            label: None,
+            size: Extent3d {
+                width: config.width,
+                height: config.height,
+                depth_or_array_layers: 1,
+            },
+            format: config.format,
+            usage: config.usage,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: TextureDimension::D2,
+        };
+
         texture_id
             .zip(texture_data)
             .map(|(id, data)| SurfaceTexture {
@@ -3990,6 +4097,7 @@ impl Surface {
                     id,
                     data,
                     owned: false,
+                    descriptor,
                 },
                 suboptimal,
                 presented: false,
@@ -4027,7 +4135,7 @@ impl Surface {
 #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
 #[repr(transparent)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-pub struct Id(u64);
+pub struct Id(core::num::NonZeroU64);
 
 #[cfg(feature = "expose-ids")]
 impl Adapter {
@@ -4037,7 +4145,7 @@ impl Adapter {
     /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
     #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
     pub fn global_id(&self) -> Id {
-        Id(self.id.global_id())
+        self.id.global_id()
     }
 }
 
@@ -4049,7 +4157,7 @@ impl Device {
     /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
     #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
     pub fn global_id(&self) -> Id {
-        Id(self.id.global_id())
+        self.id.global_id()
     }
 }
 
@@ -4061,7 +4169,7 @@ impl Queue {
     /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
     #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
     pub fn global_id(&self) -> Id {
-        Id(self.id.global_id())
+        self.id.global_id()
     }
 }
 
@@ -4073,7 +4181,7 @@ impl ShaderModule {
     /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
     #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
     pub fn global_id(&self) -> Id {
-        Id(self.id.global_id())
+        self.id.global_id()
     }
 }
 
@@ -4085,7 +4193,7 @@ impl BindGroupLayout {
     /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
     #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
     pub fn global_id(&self) -> Id {
-        Id(self.id.global_id())
+        self.id.global_id()
     }
 }
 
@@ -4097,7 +4205,7 @@ impl BindGroup {
     /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
     #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
     pub fn global_id(&self) -> Id {
-        Id(self.id.global_id())
+        self.id.global_id()
     }
 }
 
@@ -4109,7 +4217,7 @@ impl TextureView {
     /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
     #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
     pub fn global_id(&self) -> Id {
-        Id(self.id.global_id())
+        self.id.global_id()
     }
 }
 
@@ -4121,7 +4229,7 @@ impl Sampler {
     /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
     #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
     pub fn global_id(&self) -> Id {
-        Id(self.id.global_id())
+        self.id.global_id()
     }
 }
 
@@ -4133,7 +4241,7 @@ impl Buffer {
     /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
     #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
     pub fn global_id(&self) -> Id {
-        Id(self.id.global_id())
+        self.id.global_id()
     }
 }
 
@@ -4145,7 +4253,7 @@ impl Texture {
     /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
     #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
     pub fn global_id(&self) -> Id {
-        Id(self.id.global_id())
+        self.id.global_id()
     }
 }
 
@@ -4157,7 +4265,7 @@ impl QuerySet {
     /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
     #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
     pub fn global_id(&self) -> Id {
-        Id(self.id.global_id())
+        self.id.global_id()
     }
 }
 
@@ -4169,7 +4277,7 @@ impl PipelineLayout {
     /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
     #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
     pub fn global_id(&self) -> Id {
-        Id(self.id.global_id())
+        self.id.global_id()
     }
 }
 
@@ -4181,7 +4289,7 @@ impl RenderPipeline {
     /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
     #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
     pub fn global_id(&self) -> Id {
-        Id(self.id.global_id())
+        self.id.global_id()
     }
 }
 
@@ -4193,7 +4301,7 @@ impl ComputePipeline {
     /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
     #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
     pub fn global_id(&self) -> Id {
-        Id(self.id.global_id())
+        self.id.global_id()
     }
 }
 
@@ -4205,7 +4313,7 @@ impl RenderBundle {
     /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
     #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
     pub fn global_id(&self) -> Id {
-        Id(self.id.global_id())
+        self.id.global_id()
     }
 }
 
@@ -4217,7 +4325,7 @@ impl Surface {
     /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
     #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
     pub fn global_id(&self) -> Id {
-        Id(self.id.global_id())
+        self.id.global_id()
     }
 }
 

@@ -6,7 +6,6 @@ use std::{
     cell::RefCell,
     fmt,
     future::Future,
-    num::NonZeroU128,
     ops::Range,
     pin::Pin,
     rc::Rc,
@@ -26,10 +25,11 @@ use crate::{
 fn create_identified<T>(value: T) -> Identified<T> {
     cfg_if::cfg_if! {
         if #[cfg(feature = "expose-ids")] {
-            static NEXT_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-            Identified(value, NEXT_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed))
+            static NEXT_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+            let id = NEXT_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            Identified(value, crate::Id(core::num::NonZeroU64::new(id).unwrap()))
         } else {
-            Identified(value, 0)
+            Identified(value)
         }
     }
 }
@@ -44,25 +44,30 @@ fn create_identified<T>(value: T) -> Identified<T> {
 
 impl<T: FromWasmAbi<Abi = u32> + JsCast> From<ObjectId> for Identified<T> {
     fn from(id: ObjectId) -> Self {
-        let raw = std::num::NonZeroU128::from(id);
-        let global_id = (raw.get() >> 64) as u64;
-
+        let id = id.id().get() as u32;
         // SAFETY: wasm_bindgen says an ABI representation may only be cast to a wrapper type if it was created
         // using into_abi.
         //
         // This assumption we sadly have to assume to prevent littering the code with unsafe blocks.
-        let wasm = unsafe { JsValue::from_abi(raw.get() as u32) };
+        let wasm = unsafe { JsValue::from_abi(id) };
         wgt::strict_assert!(wasm.is_instance_of::<T>());
         // SAFETY: The ABI of the type must be a u32, and strict asserts ensure the right type is used.
-        Self(wasm.unchecked_into(), global_id)
+        Self(
+            wasm.unchecked_into(),
+            #[cfg(feature = "expose-ids")]
+            id.global_id(),
+        )
     }
 }
 
 impl<T: IntoWasmAbi<Abi = u32>> From<Identified<T>> for ObjectId {
     fn from(id: Identified<T>) -> Self {
-        let abi = id.0.into_abi();
-        let id = abi as u128 | ((id.1 as u128) << 64);
-        Self::from(NonZeroU128::new(id).unwrap())
+        let id = core::num::NonZeroU64::new(id.0.into_abi() as u64).unwrap();
+        Self::new(
+            id,
+            #[cfg(feature = "expose-ids")]
+            id.1,
+        )
     }
 }
 
@@ -72,7 +77,7 @@ unsafe impl<T> Send for Sendable<T> {}
 unsafe impl<T> Sync for Sendable<T> {}
 
 #[derive(Clone, Debug)]
-pub(crate) struct Identified<T>(T, #[cfg(feature = "expose-ids")] u64);
+pub(crate) struct Identified<T>(T, #[cfg(feature = "expose-ids")] crate::Id);
 unsafe impl<T> Send for Identified<T> {}
 unsafe impl<T> Sync for Identified<T> {}
 
@@ -183,7 +188,7 @@ fn map_texture_format(texture_format: wgt::TextureFormat) -> web_sys::GpuTexture
         TextureFormat::Rgba32Sint => tf::Rgba32sint,
         TextureFormat::Rgba32Float => tf::Rgba32float,
         // Depth/stencil formats
-        //TextureFormat::Stencil8 => tf::Stencil8,
+        TextureFormat::Stencil8 => tf::Stencil8,
         TextureFormat::Depth16Unorm => tf::Depth16unorm,
         TextureFormat::Depth24Plus => tf::Depth24plus,
         TextureFormat::Depth24PlusStencil8 => tf::Depth24plusStencil8,
