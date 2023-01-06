@@ -1,5 +1,4 @@
 #version 310 es
-#extension GL_EXT_gpu_shader5 : require
 
 precision highp float;
 precision highp int;
@@ -11,7 +10,7 @@ vec2 test_fma() {
     vec2 a = vec2(2.0, 2.0);
     vec2 b = vec2(0.5, 0.5);
     vec2 c = vec2(0.5, 0.5);
-    return fma(a, b, c);
+    return (a * b + c);
 }
 
 int test_integer_dot_product() {
