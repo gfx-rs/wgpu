@@ -219,6 +219,10 @@ impl super::Device {
         }
     }
 
+    pub unsafe fn buffer_from_raw(raw: mtl::Buffer, size: wgt::BufferAddress) -> super::Buffer {
+        super::Buffer { raw, size }
+    }
+
     pub fn raw_device(&self) -> &Mutex<mtl::Device> {
         &self.shared.device
     }
