@@ -295,6 +295,17 @@ impl super::Device {
             allocation: None,
         }
     }
+
+    pub unsafe fn buffer_from_raw(
+        resource: d3d12::Resource,
+        size: wgt::BufferAddress,
+    ) -> super::Buffer {
+        super::Buffer {
+            resource,
+            size,
+            allocation: None,
+        }
+    }
 }
 
 impl crate::Device<super::Api> for super::Device {
