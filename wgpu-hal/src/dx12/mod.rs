@@ -538,7 +538,7 @@ pub struct ShaderModule {
     raw_name: Option<ffi::CString>,
 }
 
-enum ShaderDXIL {
+enum CompiledShader {
     Dxc(Vec<u8>),
     Fxc(native::Blob),
 }
@@ -564,11 +564,8 @@ unsafe impl Sync for ComputePipeline {}
 pub(crate) struct DxcContainer {
     dxc_compiler: hassle_rs::DxcCompiler,
     dxc_library: hassle_rs::DxcLibrary,
-    dxc_validator: hassle_rs::DxcValidator,
     // Has to be held onto for the lifetime of the device otherwise shaders will fail to compile
     _dxc: hassle_rs::Dxc,
-    // Has to be held onto for the lifetime of the device otherwise shaders will fail to compile
-    // _dxil: hassle_rs::Dxil,
 }
 
 impl SwapChain {

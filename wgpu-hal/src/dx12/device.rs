@@ -24,21 +24,19 @@ impl super::Device {
     ) -> Result<Self, crate::DeviceError> {
         let mem_allocator = super::suballocation::create_allocator_wrapper(&raw)?;
 
-        // TODO: dxc path
+        // TODO: path to dxcompiler.dll and dxil.dll should be configurable
         // TODO: handle this not existing
         let dxc_container = if true {
             let dxc = hassle_rs::Dxc::new(Some("./".into()))?;
             let dxc_compiler = dxc.create_compiler()?;
             let dxc_library = dxc.create_library()?;
+            // Make sure that dxil.dll exists.
+            let _ = hassle_rs::Dxil::new(Some("./".into()))?;
 
-            let dxil = hassle_rs::Dxil::new(Some("./".into()))?;
-            let dxc_validator = dxil.create_validator()?;
             Some(super::DxcContainer {
                 _dxc: dxc,
                 dxc_compiler,
                 dxc_library,
-                // _dxil: dxil,
-                dxc_validator,
             })
         } else {
             None
@@ -213,7 +211,7 @@ impl super::Device {
         stage: &crate::ProgrammableStage<super::Api>,
         layout: &super::PipelineLayout,
         naga_stage: naga::ShaderStage,
-    ) -> Result<super::ShaderDXIL, crate::PipelineError> {
+    ) -> Result<super::CompiledShader, crate::PipelineError> {
         use naga::back::hlsl;
 
         let stage_bit = crate::auxil::map_naga_stage(naga_stage);
@@ -251,18 +249,19 @@ impl super::Device {
             .and_then(|cstr| cstr.to_str().ok())
             .unwrap_or_default();
 
-        let mut compile_flags = vec!["-Ges"]/* d3dcompiler::D3DCOMPILE_ENABLE_STRICTNESS */;
-        if self
-            .private_caps
-            .instance_flags
-            .contains(crate::InstanceFlags::DEBUG)
-        {
-            compile_flags.push("-Zi"); /* d3dcompiler::D3DCOMPILE_SKIP_OPTIMIZATION */
-            compile_flags.push("-Od"); /* d3dcompiler::D3DCOMPILE_DEBUG */
-        }
-
+        // Compile with DXC if available, otherwise fall back to FXC
         let (result, log_level) = if let Some(ref dxc_container) = self.dxc_container {
             profiling::scope!("hassle_rs::compile_hlsl");
+            let mut compile_flags = vec!["-Ges"]/* d3dcompiler::D3DCOMPILE_ENABLE_STRICTNESS */;
+            if self
+                .private_caps
+                .instance_flags
+                .contains(crate::InstanceFlags::DEBUG)
+            {
+                compile_flags.push("-Zi"); /* d3dcompiler::D3DCOMPILE_SKIP_OPTIMIZATION */
+                compile_flags.push("-Od"); /* d3dcompiler::D3DCOMPILE_DEBUG */
+            }
+
             let blob = dxc_container
                 .dxc_library
                 .create_blob_with_encoding_from_str(&source)
@@ -282,20 +281,10 @@ impl super::Device {
 
             let (result, log_level) = match compiled {
                 Ok(dxc_result) => match dxc_result.get_result() {
-                    Ok(dxc_blob) => match dxc_container.dxc_validator.validate(dxc_blob) {
-                        Ok(validated) => (
-                            Ok(super::ShaderDXIL::Dxc(validated.to_vec())),
-                            log::Level::Info,
-                        ),
-                        Err(e) => (
-                            Err(crate::PipelineError::Linkage(
-                                stage_bit,
-                                // I don't like this, but the nested matches are already too deep
-                                format!("DXC validation error: {:?}. {}", e.0, e.1),
-                            )),
-                            log::Level::Warn,
-                        ),
-                    },
+                    Ok(dxc_blob) => (
+                        Ok(super::CompiledShader::Dxc(dxc_blob.to_vec())),
+                        log::Level::Info,
+                    ),
                     Err(e) => (
                         Err(crate::PipelineError::Linkage(
                             stage_bit,
@@ -317,11 +306,11 @@ impl super::Device {
         } else {
             profiling::scope!("wgpu::backend::directx12::compile_fxc");
             let (fxc_result, log_level) = self.compile_fxc(
-                naga_stage,
                 &source,
                 source_name,
                 &ffi::CString::new(raw_ep.as_str()).unwrap(),
                 stage_bit,
+                full_stage,
             );
             (fxc_result, log_level)
         };
@@ -339,14 +328,15 @@ impl super::Device {
     // This function gets called if `device::dxc_compiler` is None, or if TODO: flag is set that disables DXC.
     fn compile_fxc(
         &self,
-        naga_stage: naga::ShaderStage,
         source: &String,
         source_name: &str,
         raw_ep: &ffi::CString,
         stage_bit: wgt::ShaderStages,
-    ) -> (Result<super::ShaderDXIL, crate::PipelineError>, log::Level) {
-        use naga::back::hlsl;
-
+        full_stage: String,
+    ) -> (
+        Result<super::CompiledShader, crate::PipelineError>,
+        log::Level,
+    ) {
         let mut shader_data = native::Blob::null();
         let mut compile_flags = d3dcompiler::D3DCOMPILE_ENABLE_STRICTNESS;
         if self
@@ -357,11 +347,6 @@ impl super::Device {
             compile_flags |=
                 d3dcompiler::D3DCOMPILE_DEBUG | d3dcompiler::D3DCOMPILE_SKIP_OPTIMIZATION;
         }
-        let full_stage = format!(
-            "{}_{}\0",
-            naga_stage.to_hlsl_str(),
-            hlsl::ShaderModel::V5_1.to_str()
-        );
         let mut error = native::Blob::null();
         let hr = unsafe {
             profiling::scope!("d3dcompiler::D3DCompile");
@@ -381,7 +366,10 @@ impl super::Device {
         };
 
         match hr.into_result() {
-            Ok(()) => (Ok(super::ShaderDXIL::Fxc(shader_data)), log::Level::Info),
+            Ok(()) => (
+                Ok(super::CompiledShader::Fxc(shader_data)),
+                log::Level::Info,
+            ),
             Err(e) => {
                 let mut full_msg = format!("FXC D3DCompile error ({})", e);
                 if !error.is_null() {
@@ -1193,7 +1181,12 @@ impl crate::Device<super::Api> for super::Device {
             },
             bind_group_infos,
             naga_options: hlsl::Options {
-                shader_model: hlsl::ShaderModel::V6_0, // TODO: Set this based on whether fxc or dxc is used
+                shader_model: match &self.dxc_container {
+                    // DXC
+                    Some(_) => hlsl::ShaderModel::V6_0,
+                    // FXC doesn't support SM 6.0
+                    None => hlsl::ShaderModel::V5_1,
+                },
                 binding_map,
                 fake_missing_bindings: false,
                 special_constants_binding,
@@ -1485,12 +1478,12 @@ impl crate::Device<super::Api> for super::Device {
         let raw_desc = d3d12::D3D12_GRAPHICS_PIPELINE_STATE_DESC {
             pRootSignature: desc.layout.shared.signature.as_mut_ptr(),
             VS: match blob_vs {
-                super::ShaderDXIL::Dxc(ref blob_vs) => *native::Shader::from_raw(blob_vs),
-                super::ShaderDXIL::Fxc(blob_vs) => *native::Shader::from_blob(blob_vs),
+                super::CompiledShader::Dxc(ref blob_vs) => *native::Shader::from_raw(blob_vs),
+                super::CompiledShader::Fxc(blob_vs) => *native::Shader::from_blob(blob_vs),
             },
             PS: match blob_fs {
-                Some(super::ShaderDXIL::Dxc(ref blob_fs)) => *native::Shader::from_raw(blob_fs),
-                Some(super::ShaderDXIL::Fxc(blob_fs)) => *native::Shader::from_blob(blob_fs),
+                Some(super::CompiledShader::Dxc(ref blob_fs)) => *native::Shader::from_raw(blob_fs),
+                Some(super::CompiledShader::Fxc(blob_fs)) => *native::Shader::from_blob(blob_fs),
                 None => *native::Shader::null(),
             },
             GS: *native::Shader::null(),
@@ -1562,11 +1555,11 @@ impl crate::Device<super::Api> for super::Device {
             }
         };
 
-        if let super::ShaderDXIL::Fxc(ref vs_fxc) = blob_vs {
+        if let super::CompiledShader::Fxc(ref vs_fxc) = blob_vs {
             unsafe { vs_fxc.destroy() };
         }
 
-        if let Some(super::ShaderDXIL::Fxc(ref fs_fxc)) = blob_fs {
+        if let Some(super::CompiledShader::Fxc(ref fs_fxc)) = blob_fs {
             unsafe { fs_fxc.destroy() };
         }
 
@@ -1600,8 +1593,10 @@ impl crate::Device<super::Api> for super::Device {
             self.raw.create_compute_pipeline_state(
                 desc.layout.shared.signature,
                 match blob_cs {
-                    crate::dx12::ShaderDXIL::Dxc(ref blob_cs) => native::Shader::from_raw(blob_cs),
-                    crate::dx12::ShaderDXIL::Fxc(blob_cs) => native::Shader::from_blob(blob_cs),
+                    crate::dx12::CompiledShader::Dxc(ref blob_cs) => {
+                        native::Shader::from_raw(blob_cs)
+                    }
+                    crate::dx12::CompiledShader::Fxc(blob_cs) => native::Shader::from_blob(blob_cs),
                 },
                 0,
                 native::CachedPSO::null(),
@@ -1609,7 +1604,7 @@ impl crate::Device<super::Api> for super::Device {
             )
         };
 
-        if let super::ShaderDXIL::Fxc(cs_fxc) = blob_cs {
+        if let super::CompiledShader::Fxc(cs_fxc) = blob_cs {
             unsafe { cs_fxc.destroy() };
         }
 
