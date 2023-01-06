@@ -872,8 +872,8 @@ impl From<hassle_rs::HassleError> for crate::DeviceError {
                 crate::DeviceError::Lost
             }
             // `ValidationError` and `CompileError` should never happen in a context involving `DeviceError`
-            hassle_rs::HassleError::ValidationError(e) => unimplemented!(),
-            hassle_rs::HassleError::CompileError(e) => unimplemented!(),
+            hassle_rs::HassleError::ValidationError(_e) => unimplemented!(),
+            hassle_rs::HassleError::CompileError(_e) => unimplemented!(),
         }
     }
 }

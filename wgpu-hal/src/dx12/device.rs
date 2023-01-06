@@ -261,7 +261,7 @@ impl super::Device {
             compile_flags.push("-Od"); /* d3dcompiler::D3DCOMPILE_DEBUG */
         }
 
-        let (result, log_level) = if let Some(dxc_container) = &self.dxc_container {
+        let (result, log_level) = if let Some(ref dxc_container) = self.dxc_container {
             profiling::scope!("hassle_rs::compile_hlsl");
             let blob = dxc_container
                 .dxc_library
@@ -1562,11 +1562,11 @@ impl crate::Device<super::Api> for super::Device {
             }
         };
 
-        if let super::ShaderDXIL::Fxc(vs_fxc) = &blob_vs {
+        if let super::ShaderDXIL::Fxc(ref vs_fxc) = blob_vs {
             unsafe { vs_fxc.destroy() };
         }
 
-        if let Some(super::ShaderDXIL::Fxc(fs_fxc)) = &blob_fs {
+        if let Some(super::ShaderDXIL::Fxc(ref fs_fxc)) = blob_fs {
             unsafe { fs_fxc.destroy() };
         }
 
