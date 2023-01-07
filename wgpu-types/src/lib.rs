@@ -1140,7 +1140,9 @@ bitflags::bitflags! {
         /// Corresponds to Vulkan's `VkPhysicalDeviceFeatures.depthBiasClamp`
         const DEPTH_BIAS_CLAMP = 1 << 18;
 
-        /// Supports copying from an OffscreenCanvas in `Queue::copy_external_image_to_texture`.
+        /// Supports the following on `Queue::copy_external_image_to_texture`:
+        /// - Copying from an OffscreenCanvas
+        /// - Non-zero [`ImageCopyExternalImage::origin`].
         ///
         /// WebGL doesn't support this.
         const UNRESTRICTED_EXTERNAL_TEXTURE_COPIES = 1 << 19;
@@ -5084,6 +5086,8 @@ pub struct ImageCopyExternalImage {
     /// sub-region of the image to copy.
     ///
     /// Relative to the top left of the image.
+    ///
+    /// Must be [`Origin2d::ZERO`] if [`DownlevelFlags::UNRESTRICTED_EXTERNAL_TEXTURE_COPIES`] is not supported.
     pub origin: Origin2d,
     /// If the Y coordinate of the image should be flipped. Even if this is
     /// true, `origin` is still relative to the top left.

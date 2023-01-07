@@ -10,6 +10,7 @@ mod clear_texture;
 mod device;
 mod encoder;
 mod example_wgsl;
+mod external_texture;
 mod instance;
 mod poll;
 mod queue_transfer;

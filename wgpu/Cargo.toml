@@ -164,6 +164,7 @@ glam.workspace = true
 ddsfile.workspace = true
 futures-intrusive.workspace = true
 env_logger.workspace = true
+image.workspace = true
 log.workspace = true
 noise = { workspace = true }
 obj.workspace = true
