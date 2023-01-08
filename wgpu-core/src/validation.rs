@@ -212,10 +212,10 @@ pub enum BindingError {
 
 #[derive(Clone, Debug, Error)]
 pub enum FilteringError {
-    #[error("integer textures can't be sampled")]
+    #[error("integer textures can't be sampled with a filtering sampler")]
     Integer,
-    #[error("non-filterable float texture")]
-    NonFilterable,
+    #[error("non-filterable float textures can't be sampled with a filtering sampler")]
+    Float,
 }
 
 #[derive(Clone, Debug, Error)]
@@ -1049,27 +1049,22 @@ impl Interface {
                 assert!(texture_layout.visibility.contains(stage_bit));
                 assert!(sampler_layout.visibility.contains(stage_bit));
 
-                let error = match texture_layout.ty {
-                    wgt::BindingType::Texture {
-                        sample_type: wgt::TextureSampleType::Float { filterable },
-                        ..
-                    } => match sampler_layout.ty {
-                        wgt::BindingType::Sampler(wgt::SamplerBindingType::Filtering)
-                            if !filterable =>
-                        {
-                            Some(FilteringError::NonFilterable)
-                        }
-                        _ => None,
-                    },
-                    wgt::BindingType::Texture {
-                        sample_type: wgt::TextureSampleType::Sint,
-                        ..
+                let sampler_filtering = matches!(
+                    sampler_layout.ty,
+                    wgt::BindingType::Sampler(wgt::SamplerBindingType::Filtering)
+                );
+                let texture_sample_type = match texture_layout.ty {
+                    BindingType::Texture { sample_type, .. } => sample_type,
+                    _ => unreachable!(),
+                };
+
+                let error = match (sampler_filtering, texture_sample_type) {
+                    (true, wgt::TextureSampleType::Float { filterable: false }) => {
+                        Some(FilteringError::Float)
                     }
-                    | wgt::BindingType::Texture {
-                        sample_type: wgt::TextureSampleType::Uint,
-                        ..
-                    } => Some(FilteringError::Integer),
-                    _ => None, // unreachable, really
+                    (true, wgt::TextureSampleType::Sint) => Some(FilteringError::Integer),
+                    (true, wgt::TextureSampleType::Uint) => Some(FilteringError::Integer),
+                    _ => None,
                 };
 
                 if let Some(error) = error {
