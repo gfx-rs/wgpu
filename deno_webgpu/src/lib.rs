@@ -1,5 +1,7 @@
 // Copyright 2018-2022 the Deno authors. All rights reserved. MIT license.
 
+#![warn(unsafe_op_in_unsafe_fn)]
+
 use deno_core::error::AnyError;
 use deno_core::include_js_files;
 use deno_core::op;

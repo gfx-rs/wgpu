@@ -5,10 +5,32 @@ pub(super) mod dxgi;
 pub(super) mod renderdoc;
 
 pub mod db {
+    pub mod amd {
+        pub const VENDOR: u32 = 0x1002;
+    }
+    pub mod apple {
+        pub const VENDOR: u32 = 0x106B;
+    }
+    pub mod arm {
+        pub const VENDOR: u32 = 0x13B5;
+    }
+    pub mod broadcom {
+        pub const VENDOR: u32 = 0x14E4;
+    }
+    pub mod imgtec {
+        pub const VENDOR: u32 = 0x1010;
+    }
     pub mod intel {
         pub const VENDOR: u32 = 0x8086;
         pub const DEVICE_KABY_LAKE_MASK: u32 = 0x5900;
         pub const DEVICE_SKY_LAKE_MASK: u32 = 0x1900;
+    }
+    pub mod mesa {
+        // Mesa does not actually have a PCI vendor id.
+        //
+        // To match Vulkan, we use the VkVendorId for Mesa in the gles backend so that lavapipe (Vulkan) and
+        // llvmpipe (OpenGL) have the same vendor id.
+        pub const VENDOR: u32 = 0x10005;
     }
     pub mod nvidia {
         pub const VENDOR: u32 = 0x10DE;
@@ -44,6 +66,17 @@ pub fn align_to(value: u32, alignment: u32) -> u32 {
 }
 
 impl crate::CopyExtent {
+    pub fn map_extent_to_copy_size(extent: &wgt::Extent3d, dim: wgt::TextureDimension) -> Self {
+        Self {
+            width: extent.width,
+            height: extent.height,
+            depth: match dim {
+                wgt::TextureDimension::D1 | wgt::TextureDimension::D2 => 1,
+                wgt::TextureDimension::D3 => extent.depth_or_array_layers,
+            },
+        }
+    }
+
     pub fn min(&self, other: &Self) -> Self {
         Self {
             width: self.width.min(other.width),
@@ -91,5 +124,26 @@ impl crate::TextureCopy {
         let max_src_size = self.src_base.max_copy_size(full_src_size);
         let max_dst_size = self.dst_base.max_copy_size(full_dst_size);
         self.size = self.size.min(&max_src_size).min(&max_dst_size);
+    }
+}
+
+/// Construct a `CStr` from a byte slice, up to the first zero byte.
+///
+/// Return a `CStr` extending from the start of `bytes` up to and
+/// including the first zero byte. If there is no zero byte in
+/// `bytes`, return `None`.
+///
+/// This can be removed when `CStr::from_bytes_until_nul` is stabilized.
+/// ([#95027](https://github.com/rust-lang/rust/issues/95027))
+#[allow(dead_code)]
+pub(crate) fn cstr_from_bytes_until_nul(bytes: &[std::os::raw::c_char]) -> Option<&std::ffi::CStr> {
+    if bytes.contains(&0) {
+        // Safety for `CStr::from_ptr`:
+        // - We've ensured that the slice does contain a null terminator.
+        // - The range is valid to read, because the slice covers it.
+        // - The memory won't be changed, because the slice borrows it.
+        unsafe { Some(std::ffi::CStr::from_ptr(bytes.as_ptr())) }
+    } else {
+        None
     }
 }

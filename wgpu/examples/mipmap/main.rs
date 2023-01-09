@@ -200,7 +200,9 @@ impl Example {
 
 impl framework::Example for Example {
     fn optional_features() -> wgpu::Features {
-        wgpu::Features::TIMESTAMP_QUERY | wgpu::Features::PIPELINE_STATISTICS_QUERY
+        wgpu::Features::TIMESTAMP_QUERY
+            | wgpu::Features::PIPELINE_STATISTICS_QUERY
+            | wgpu::Features::WRITE_TIMESTAMP_INSIDE_PASSES
     }
 
     fn init(
@@ -323,10 +325,11 @@ impl framework::Example for Example {
         });
 
         // If both kinds of query are supported, use queries
-        let query_sets = if device
-            .features()
-            .contains(wgpu::Features::TIMESTAMP_QUERY | wgpu::Features::PIPELINE_STATISTICS_QUERY)
-        {
+        let query_sets = if device.features().contains(
+            wgpu::Features::TIMESTAMP_QUERY
+                | wgpu::Features::PIPELINE_STATISTICS_QUERY
+                | wgpu::Features::WRITE_TIMESTAMP_INSIDE_PASSES,
+        ) {
             // For N total mips, it takes N - 1 passes to generate them, and we're measuring those.
             let mip_passes = MIP_LEVEL_COUNT - 1;
 
@@ -397,9 +400,9 @@ impl framework::Example for Example {
                 .slice(pipeline_statistics_offset()..)
                 .get_mapped_range();
             // Convert the raw data into a useful structure
-            let timestamp_data: &TimestampQueries = bytemuck::from_bytes(&*timestamp_view);
+            let timestamp_data: &TimestampQueries = bytemuck::from_bytes(&timestamp_view);
             let pipeline_stats_data: &PipelineStatisticsQueries =
-                bytemuck::from_bytes(&*pipeline_stats_view);
+                bytemuck::from_bytes(&pipeline_stats_view);
             // Iterate over the data
             for (idx, (timestamp, pipeline)) in timestamp_data
                 .iter()
@@ -484,7 +487,10 @@ fn main() {
     framework::run::<Example>("mipmap");
 }
 
+wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
+
 #[test]
+#[wasm_bindgen_test::wasm_bindgen_test]
 fn mipmap() {
     framework::test::<Example>(framework::FrameworkRefTest {
         image_path: "/examples/mipmap/screenshot.png",

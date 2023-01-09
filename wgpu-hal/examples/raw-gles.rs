@@ -48,7 +48,7 @@ fn main() {
         *control_flow = ControlFlow::Wait;
 
         match event {
-            Event::LoopDestroyed => return,
+            Event::LoopDestroyed => (),
             Event::WindowEvent { event, .. } => match event {
                 WindowEvent::CloseRequested
                 | WindowEvent::KeyboardInput {

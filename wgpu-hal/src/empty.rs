@@ -5,6 +5,7 @@ use std::ops::Range;
 #[derive(Clone)]
 pub struct Api;
 pub struct Context;
+#[derive(Debug)]
 pub struct Encoder;
 #[derive(Debug)]
 pub struct Resource;
@@ -43,7 +44,8 @@ impl crate::Instance<Api> for Context {
     }
     unsafe fn create_surface(
         &self,
-        rwh: &impl raw_window_handle::HasRawWindowHandle,
+        _display_handle: raw_window_handle::RawDisplayHandle,
+        _window_handle: raw_window_handle::RawWindowHandle,
     ) -> Result<Context, crate::InstanceError> {
         Ok(Context)
     }
@@ -87,8 +89,13 @@ impl crate::Adapter<Api> for Context {
     ) -> crate::TextureFormatCapabilities {
         crate::TextureFormatCapabilities::empty()
     }
+
     unsafe fn surface_capabilities(&self, surface: &Context) -> Option<crate::SurfaceCapabilities> {
         None
+    }
+
+    unsafe fn get_presentation_timestamp(&self) -> wgt::PresentationTimestamp {
+        wgt::PresentationTimestamp::INVALID_TIMESTAMP
     }
 }
 

@@ -31,7 +31,7 @@ mod conv;
 mod device;
 mod instance;
 
-use std::{borrow::Borrow, ffi::CStr, num::NonZeroU32, sync::Arc};
+use std::{borrow::Borrow, ffi::CStr, fmt, num::NonZeroU32, sync::Arc};
 
 use arrayvec::ArrayVec;
 use ash::{
@@ -42,8 +42,6 @@ use parking_lot::Mutex;
 
 const MILLIS_TO_NANOS: u64 = 1_000_000;
 const MAX_TOTAL_ATTACHMENTS: usize = crate::MAX_COLOR_ATTACHMENTS * 2 + 1;
-
-pub type DropGuard = Box<dyn std::any::Any + Send + Sync>;
 
 #[derive(Clone)]
 pub struct Api;
@@ -82,7 +80,7 @@ struct DebugUtils {
 pub struct InstanceShared {
     raw: ash::Instance,
     extensions: Vec<&'static CStr>,
-    drop_guard: Option<DropGuard>,
+    drop_guard: Option<crate::DropGuard>,
     flags: crate::InstanceFlags,
     debug_utils: Option<DebugUtils>,
     get_physical_device_properties: Option<khr::GetPhysicalDeviceProperties2>,
@@ -162,6 +160,7 @@ struct PrivateCapabilities {
     timeline_semaphores: bool,
     texture_d24: bool,
     texture_d24_s8: bool,
+    texture_s8: bool,
     /// Ability to present contents to any screen. Only needed to work around broken platform configurations.
     can_present: bool,
     non_coherent_map_mask: wgt::BufferAddress,
@@ -347,7 +346,7 @@ pub struct Buffer {
 #[derive(Debug)]
 pub struct Texture {
     raw: vk::Image,
-    drop_guard: Option<DropGuard>,
+    drop_guard: Option<crate::DropGuard>,
     block: Option<gpu_alloc::MemoryBlock<vk::DeviceMemory>>,
     usage: crate::TextureUses,
     aspects: crate::FormatAspects,
@@ -443,6 +442,15 @@ pub struct CommandEncoder {
     rpass_debug_marker_active: bool,
 }
 
+impl fmt::Debug for CommandEncoder {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("CommandEncoder")
+            .field("raw", &self.raw)
+            .finish()
+    }
+}
+
+#[derive(Debug)]
 pub struct CommandBuffer {
     raw: vk::CommandBuffer,
 }
@@ -582,10 +590,11 @@ impl crate::Queue<Api> for Queue {
                 } => {
                     fence_raw = match free.pop() {
                         Some(raw) => raw,
-                        None => self
-                            .device
-                            .raw
-                            .create_fence(&vk::FenceCreateInfo::builder(), None)?,
+                        None => unsafe {
+                            self.device
+                                .raw
+                                .create_fence(&vk::FenceCreateInfo::builder(), None)?
+                        },
                     };
                     active.push((value, fence_raw));
                 }
@@ -613,9 +622,11 @@ impl crate::Queue<Api> for Queue {
         vk_info = vk_info.signal_semaphores(&signal_semaphores[..signal_count]);
 
         profiling::scope!("vkQueueSubmit");
-        self.device
-            .raw
-            .queue_submit(self.raw, &[vk_info.build()], fence_raw)?;
+        unsafe {
+            self.device
+                .raw
+                .queue_submit(self.raw, &[vk_info.build()], fence_raw)?
+        };
         Ok(())
     }
 
@@ -638,13 +649,13 @@ impl crate::Queue<Api> for Queue {
 
         let suboptimal = {
             profiling::scope!("vkQueuePresentKHR");
-            self.swapchain_fn
-                .queue_present(self.raw, &vk_info)
-                .map_err(|error| match error {
+            unsafe { self.swapchain_fn.queue_present(self.raw, &vk_info) }.map_err(|error| {
+                match error {
                     vk::Result::ERROR_OUT_OF_DATE_KHR => crate::SurfaceError::Outdated,
                     vk::Result::ERROR_SURFACE_LOST_KHR => crate::SurfaceError::Lost,
                     _ => crate::DeviceError::from(error).into(),
-                })?
+                }
+            })?
         };
         if suboptimal {
             log::warn!("Suboptimal present of frame {}", texture.index);

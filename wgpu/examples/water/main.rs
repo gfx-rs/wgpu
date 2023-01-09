@@ -23,7 +23,7 @@ const SIZE: f32 = 29.0;
 /// Location of the camera.
 /// Location of light is in terrain/water shaders.
 ///
-const CAMERA: Vec3 = glam::const_vec3!([-200.0, 70.0, 200.0,]);
+const CAMERA: Vec3 = glam::Vec3::new(-200.0, 70.0, 200.0);
 
 struct Matrices {
     view: glam::Mat4,
@@ -818,7 +818,10 @@ fn main() {
     framework::run::<Example>("water");
 }
 
+wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
+
 #[test]
+#[wasm_bindgen_test::wasm_bindgen_test]
 fn water() {
     framework::test::<Example>(framework::FrameworkRefTest {
         image_path: "/examples/water/screenshot.png",
@@ -826,9 +829,8 @@ fn water() {
         height: 768,
         optional_features: wgpu::Features::default(),
         base_test_parameters: framework::test_common::TestParameters::default()
-            .downlevel_flags(wgpu::DownlevelFlags::READ_ONLY_DEPTH_STENCIL)
-            .specific_failure(Some(wgpu::Backends::DX12), None, Some("Basic"), false), // WARP has a bug https://github.com/gfx-rs/wgpu/issues/1730
+            .downlevel_flags(wgpu::DownlevelFlags::READ_ONLY_DEPTH_STENCIL),
         tolerance: 5,
-        max_outliers: 470, // bounded by DX12, then AMD Radeon Polaris12 on vk linux
+        max_outliers: 1693, // bounded by swiftshader
     });
 }

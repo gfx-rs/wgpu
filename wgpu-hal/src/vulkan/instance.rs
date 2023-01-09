@@ -31,17 +31,17 @@ unsafe extern "system" fn debug_utils_messenger_callback(
         _ => log::Level::Warn,
     };
 
-    let cd = &*callback_data_ptr;
+    let cd = unsafe { &*callback_data_ptr };
 
     let message_id_name = if cd.p_message_id_name.is_null() {
         Cow::from("")
     } else {
-        CStr::from_ptr(cd.p_message_id_name).to_string_lossy()
+        unsafe { CStr::from_ptr(cd.p_message_id_name) }.to_string_lossy()
     };
     let message = if cd.p_message.is_null() {
         Cow::from("")
     } else {
-        CStr::from_ptr(cd.p_message).to_string_lossy()
+        unsafe { CStr::from_ptr(cd.p_message) }.to_string_lossy()
     };
 
     let _ = std::panic::catch_unwind(|| {
@@ -56,14 +56,13 @@ unsafe extern "system" fn debug_utils_messenger_callback(
     });
 
     if cd.queue_label_count != 0 {
-        let labels = slice::from_raw_parts(cd.p_queue_labels, cd.queue_label_count as usize);
+        let labels =
+            unsafe { slice::from_raw_parts(cd.p_queue_labels, cd.queue_label_count as usize) };
         let names = labels
             .iter()
             .flat_map(|dul_obj| {
-                dul_obj
-                    .p_label_name
-                    .as_ref()
-                    .map(|lbl| CStr::from_ptr(lbl).to_string_lossy())
+                unsafe { dul_obj.p_label_name.as_ref() }
+                    .map(|lbl| unsafe { CStr::from_ptr(lbl) }.to_string_lossy())
             })
             .collect::<Vec<_>>();
 
@@ -73,14 +72,13 @@ unsafe extern "system" fn debug_utils_messenger_callback(
     }
 
     if cd.cmd_buf_label_count != 0 {
-        let labels = slice::from_raw_parts(cd.p_cmd_buf_labels, cd.cmd_buf_label_count as usize);
+        let labels =
+            unsafe { slice::from_raw_parts(cd.p_cmd_buf_labels, cd.cmd_buf_label_count as usize) };
         let names = labels
             .iter()
             .flat_map(|dul_obj| {
-                dul_obj
-                    .p_label_name
-                    .as_ref()
-                    .map(|lbl| CStr::from_ptr(lbl).to_string_lossy())
+                unsafe { dul_obj.p_label_name.as_ref() }
+                    .map(|lbl| unsafe { CStr::from_ptr(lbl) }.to_string_lossy())
             })
             .collect::<Vec<_>>();
 
@@ -90,15 +88,13 @@ unsafe extern "system" fn debug_utils_messenger_callback(
     }
 
     if cd.object_count != 0 {
-        let labels = slice::from_raw_parts(cd.p_objects, cd.object_count as usize);
+        let labels = unsafe { slice::from_raw_parts(cd.p_objects, cd.object_count as usize) };
         //TODO: use color fields of `vk::DebugUtilsLabelExt`?
         let names = labels
             .iter()
             .map(|obj_info| {
-                let name = obj_info
-                    .p_object_name
-                    .as_ref()
-                    .map(|name| CStr::from_ptr(name).to_string_lossy())
+                let name = unsafe { obj_info.p_object_name.as_ref() }
+                    .map(|name| unsafe { CStr::from_ptr(name) }.to_string_lossy())
                     .unwrap_or(Cow::Borrowed("?"));
 
                 format!(
@@ -125,9 +121,9 @@ impl super::Swapchain {
         profiling::scope!("Swapchain::release_resources");
         {
             profiling::scope!("vkDeviceWaitIdle");
-            let _ = device.device_wait_idle();
+            let _ = unsafe { device.device_wait_idle() };
         };
-        device.destroy_fence(self.fence, None);
+        unsafe { device.destroy_fence(self.fence, None) };
         self
     }
 }
@@ -157,6 +153,7 @@ impl super::Instance {
 
     pub fn required_extensions(
         entry: &ash::Entry,
+        _driver_api_version: u32,
         flags: crate::InstanceFlags,
     ) -> Result<Vec<&'static CStr>, crate::InstanceError> {
         let instance_extensions = entry
@@ -168,6 +165,8 @@ impl super::Instance {
 
         // Check our extensions against the available extensions
         let mut extensions: Vec<&'static CStr> = Vec::new();
+
+        // VK_KHR_surface
         extensions.push(khr::Surface::name());
 
         // Platform-specific WSI extensions
@@ -176,35 +175,45 @@ impl super::Instance {
             not(target_os = "android"),
             not(target_os = "macos")
         )) {
+            // VK_KHR_xlib_surface
             extensions.push(khr::XlibSurface::name());
+            // VK_KHR_xcb_surface
             extensions.push(khr::XcbSurface::name());
+            // VK_KHR_wayland_surface
             extensions.push(khr::WaylandSurface::name());
         }
         if cfg!(target_os = "android") {
+            // VK_KHR_android_surface
             extensions.push(khr::AndroidSurface::name());
         }
         if cfg!(target_os = "windows") {
+            // VK_KHR_win32_surface
             extensions.push(khr::Win32Surface::name());
         }
         if cfg!(target_os = "macos") {
+            // VK_EXT_metal_surface
             extensions.push(ext::MetalSurface::name());
         }
 
         if flags.contains(crate::InstanceFlags::DEBUG) {
+            // VK_EXT_debug_utils
             extensions.push(ext::DebugUtils::name());
         }
 
-        extensions.push(vk::KhrGetPhysicalDeviceProperties2Fn::name());
-
+        // VK_EXT_swapchain_colorspace
         // Provid wide color gamut
         extensions.push(vk::ExtSwapchainColorspaceFn::name());
 
+        // VK_KHR_get_physical_device_properties2
+        // Even though the extension was promoted to Vulkan 1.1, we still require the extension
+        // so that we don't have to conditionally use the functions provided by the 1.1 instance
+        extensions.push(vk::KhrGetPhysicalDeviceProperties2Fn::name());
+
         // Only keep available extensions.
         extensions.retain(|&ext| {
-            if instance_extensions
-                .iter()
-                .any(|inst_ext| unsafe { CStr::from_ptr(inst_ext.extension_name.as_ptr()) == ext })
-            {
+            if instance_extensions.iter().any(|inst_ext| {
+                crate::auxil::cstr_from_bytes_until_nul(&inst_ext.extension_name) == Some(ext)
+            }) {
                 true
             } else {
                 log::info!("Unable to find extension: {}", ext.to_string_lossy());
@@ -230,7 +239,7 @@ impl super::Instance {
         extensions: Vec<&'static CStr>,
         flags: crate::InstanceFlags,
         has_nv_optimus: bool,
-        drop_guard: Option<super::DropGuard>,
+        drop_guard: Option<crate::DropGuard>,
     ) -> Result<Self, crate::InstanceError> {
         log::info!("Instance version: 0x{:x}", driver_api_version);
 
@@ -257,9 +266,8 @@ impl super::Instance {
                         | vk::DebugUtilsMessageTypeFlagsEXT::PERFORMANCE,
                 )
                 .pfn_user_callback(Some(debug_utils_messenger_callback));
-            let messenger = extension
-                .create_debug_utils_messenger(&vk_info, None)
-                .unwrap();
+            let messenger =
+                unsafe { extension.create_debug_utils_messenger(&vk_info, None) }.unwrap();
             Some(super::DebugUtils {
                 extension,
                 messenger,
@@ -268,19 +276,16 @@ impl super::Instance {
             None
         };
 
-        // We can't use any of Vulkan-1.1+ abilities on Vk 1.0 instance,
-        // so disabling this query helps.
-        let get_physical_device_properties = if driver_api_version >= vk::API_VERSION_1_1
-            && extensions.contains(&khr::GetPhysicalDeviceProperties2::name())
-        {
-            log::info!("Enabling device properties2");
-            Some(khr::GetPhysicalDeviceProperties2::new(
-                &entry,
-                &raw_instance,
-            ))
-        } else {
-            None
-        };
+        let get_physical_device_properties =
+            if extensions.contains(&khr::GetPhysicalDeviceProperties2::name()) {
+                log::info!("Enabling device properties2");
+                Some(khr::GetPhysicalDeviceProperties2::new(
+                    &entry,
+                    &raw_instance,
+                ))
+            } else {
+                None
+            };
 
         Ok(Self {
             shared: Arc::new(super::InstanceShared {
@@ -303,9 +308,10 @@ impl super::Instance {
         &self,
         dpy: *mut vk::Display,
         window: vk::Window,
-    ) -> super::Surface {
+    ) -> Result<super::Surface, crate::InstanceError> {
         if !self.shared.extensions.contains(&khr::XlibSurface::name()) {
-            panic!("Vulkan driver does not support VK_KHR_XLIB_SURFACE");
+            log::warn!("Vulkan driver does not support VK_KHR_xlib_surface");
+            return Err(crate::InstanceError);
         }
 
         let surface = {
@@ -319,7 +325,7 @@ impl super::Instance {
                 .expect("XlibSurface::create_xlib_surface() failed")
         };
 
-        self.create_surface_from_vk_surface_khr(surface)
+        Ok(self.create_surface_from_vk_surface_khr(surface))
     }
 
     #[allow(dead_code)]
@@ -327,9 +333,10 @@ impl super::Instance {
         &self,
         connection: *mut vk::xcb_connection_t,
         window: vk::xcb_window_t,
-    ) -> super::Surface {
+    ) -> Result<super::Surface, crate::InstanceError> {
         if !self.shared.extensions.contains(&khr::XcbSurface::name()) {
-            panic!("Vulkan driver does not support VK_KHR_XCB_SURFACE");
+            log::warn!("Vulkan driver does not support VK_KHR_xcb_surface");
+            return Err(crate::InstanceError);
         }
 
         let surface = {
@@ -343,7 +350,7 @@ impl super::Instance {
                 .expect("XcbSurface::create_xcb_surface() failed")
         };
 
-        self.create_surface_from_vk_surface_khr(surface)
+        Ok(self.create_surface_from_vk_surface_khr(surface))
     }
 
     #[allow(dead_code)]
@@ -351,13 +358,14 @@ impl super::Instance {
         &self,
         display: *mut c_void,
         surface: *mut c_void,
-    ) -> super::Surface {
+    ) -> Result<super::Surface, crate::InstanceError> {
         if !self
             .shared
             .extensions
             .contains(&khr::WaylandSurface::name())
         {
-            panic!("Vulkan driver does not support VK_KHR_WAYLAND_SURFACE");
+            log::debug!("Vulkan driver does not support VK_KHR_wayland_surface");
+            return Err(crate::InstanceError);
         }
 
         let surface = {
@@ -370,11 +378,23 @@ impl super::Instance {
             unsafe { w_loader.create_wayland_surface(&info, None) }.expect("WaylandSurface failed")
         };
 
-        self.create_surface_from_vk_surface_khr(surface)
+        Ok(self.create_surface_from_vk_surface_khr(surface))
     }
 
     #[allow(dead_code)]
-    fn create_surface_android(&self, window: *const c_void) -> super::Surface {
+    fn create_surface_android(
+        &self,
+        window: *const c_void,
+    ) -> Result<super::Surface, crate::InstanceError> {
+        if !self
+            .shared
+            .extensions
+            .contains(&khr::AndroidSurface::name())
+        {
+            log::warn!("Vulkan driver does not support VK_KHR_android_surface");
+            return Err(crate::InstanceError);
+        }
+
         let surface = {
             let a_loader = khr::AndroidSurface::new(&self.shared.entry, &self.shared.raw);
             let info = vk::AndroidSurfaceCreateInfoKHR::builder()
@@ -384,7 +404,7 @@ impl super::Instance {
             unsafe { a_loader.create_android_surface(&info, None) }.expect("AndroidSurface failed")
         };
 
-        self.create_surface_from_vk_surface_khr(surface)
+        Ok(self.create_surface_from_vk_surface_khr(surface))
     }
 
     #[allow(dead_code)]
@@ -392,9 +412,10 @@ impl super::Instance {
         &self,
         hinstance: *mut c_void,
         hwnd: *mut c_void,
-    ) -> super::Surface {
+    ) -> Result<super::Surface, crate::InstanceError> {
         if !self.shared.extensions.contains(&khr::Win32Surface::name()) {
-            panic!("Vulkan driver does not support VK_KHR_WIN32_SURFACE");
+            log::debug!("Vulkan driver does not support VK_KHR_win32_surface");
+            return Err(crate::InstanceError);
         }
 
         let surface = {
@@ -410,11 +431,19 @@ impl super::Instance {
             }
         };
 
-        self.create_surface_from_vk_surface_khr(surface)
+        Ok(self.create_surface_from_vk_surface_khr(surface))
     }
 
     #[cfg(any(target_os = "macos", target_os = "ios"))]
-    fn create_surface_from_view(&self, view: *mut c_void) -> super::Surface {
+    fn create_surface_from_view(
+        &self,
+        view: *mut c_void,
+    ) -> Result<super::Surface, crate::InstanceError> {
+        if !self.shared.extensions.contains(&ext::MetalSurface::name()) {
+            log::warn!("Vulkan driver does not support VK_EXT_metal_surface");
+            return Err(crate::InstanceError);
+        }
+
         let layer = unsafe {
             crate::metal::Surface::get_metal_layer(view as *mut objc::runtime::Object, None)
         };
@@ -429,7 +458,7 @@ impl super::Instance {
             unsafe { metal_loader.create_metal_surface(&vk_info, None).unwrap() }
         };
 
-        self.create_surface_from_vk_surface_khr(surface)
+        Ok(self.create_surface_from_vk_surface_khr(surface))
     }
 
     fn create_surface_from_vk_surface_khr(&self, surface: vk::SurfaceKHR) -> super::Surface {
@@ -459,7 +488,9 @@ impl Drop for super::InstanceShared {
 
 impl crate::Instance<super::Api> for super::Instance {
     unsafe fn init(desc: &crate::InstanceDescriptor) -> Result<Self, crate::InstanceError> {
-        let entry = match ash::Entry::load() {
+        use crate::auxil::cstr_from_bytes_until_nul;
+
+        let entry = match unsafe { ash::Entry::load() } {
             Ok(entry) => entry,
             Err(err) => {
                 log::info!("Missing Vulkan entry points: {:?}", err);
@@ -499,7 +530,7 @@ impl crate::Instance<super::Api> for super::Instance {
                 },
             );
 
-        let extensions = Self::required_extensions(&entry, desc.flags)?;
+        let extensions = Self::required_extensions(&entry, driver_api_version, desc.flags)?;
 
         let instance_layers = entry.enumerate_instance_layer_properties().map_err(|e| {
             log::info!("enumerate_instance_layer_properties: {:?}", e);
@@ -507,9 +538,9 @@ impl crate::Instance<super::Api> for super::Instance {
         })?;
 
         let nv_optimus_layer = CStr::from_bytes_with_nul(b"VK_LAYER_NV_optimus\0").unwrap();
-        let has_nv_optimus = instance_layers
-            .iter()
-            .any(|inst_layer| CStr::from_ptr(inst_layer.layer_name.as_ptr()) == nv_optimus_layer);
+        let has_nv_optimus = instance_layers.iter().any(|inst_layer| {
+            cstr_from_bytes_until_nul(&inst_layer.layer_name) == Some(nv_optimus_layer)
+        });
 
         // Check requested layers against the available layers
         let layers = {
@@ -520,10 +551,9 @@ impl crate::Instance<super::Api> for super::Instance {
 
             // Only keep available layers.
             layers.retain(|&layer| {
-                if instance_layers
-                    .iter()
-                    .any(|inst_layer| CStr::from_ptr(inst_layer.layer_name.as_ptr()) == layer)
-                {
+                if instance_layers.iter().any(|inst_layer| {
+                    cstr_from_bytes_until_nul(&inst_layer.layer_name) == Some(layer)
+                }) {
                     true
                 } else {
                     log::warn!("Unable to find layer: {}", layer.to_string_lossy());
@@ -571,80 +601,75 @@ impl crate::Instance<super::Api> for super::Instance {
                 .enabled_layer_names(&str_pointers[..layers.len()])
                 .enabled_extension_names(&str_pointers[layers.len()..]);
 
-            entry.create_instance(&create_info, None).map_err(|e| {
+            unsafe { entry.create_instance(&create_info, None) }.map_err(|e| {
                 log::warn!("create_instance: {:?}", e);
                 crate::InstanceError
             })?
         };
 
-        Self::from_raw(
-            entry,
-            vk_instance,
-            driver_api_version,
-            android_sdk_version,
-            extensions,
-            desc.flags,
-            has_nv_optimus,
-            Some(Box::new(())), // `Some` signals that wgpu-hal is in charge of destroying vk_instance
-        )
+        unsafe {
+            Self::from_raw(
+                entry,
+                vk_instance,
+                driver_api_version,
+                android_sdk_version,
+                extensions,
+                desc.flags,
+                has_nv_optimus,
+                Some(Box::new(())), // `Some` signals that wgpu-hal is in charge of destroying vk_instance
+            )
+        }
     }
 
     unsafe fn create_surface(
         &self,
-        has_handle: &(impl raw_window_handle::HasRawWindowHandle
-              + raw_window_handle::HasRawDisplayHandle),
+        display_handle: raw_window_handle::RawDisplayHandle,
+        window_handle: raw_window_handle::RawWindowHandle,
     ) -> Result<super::Surface, crate::InstanceError> {
         use raw_window_handle::{RawDisplayHandle as Rdh, RawWindowHandle as Rwh};
 
-        match (
-            has_handle.raw_window_handle(),
-            has_handle.raw_display_handle(),
-        ) {
+        match (window_handle, display_handle) {
             (Rwh::Wayland(handle), Rdh::Wayland(display)) => {
-                Ok(self.create_surface_from_wayland(display.display, handle.surface))
+                self.create_surface_from_wayland(display.display, handle.surface)
             }
-            (Rwh::Xlib(handle), Rdh::Xlib(display))
-                if self.shared.extensions.contains(&khr::XlibSurface::name()) =>
-            {
-                Ok(self.create_surface_from_xlib(display.display as *mut _, handle.window))
+            (Rwh::Xlib(handle), Rdh::Xlib(display)) => {
+                self.create_surface_from_xlib(display.display as *mut _, handle.window)
             }
-            (Rwh::Xcb(handle), Rdh::Xcb(display))
-                if self.shared.extensions.contains(&khr::XcbSurface::name()) =>
-            {
-                Ok(self.create_surface_from_xcb(display.connection, handle.window))
+            (Rwh::Xcb(handle), Rdh::Xcb(display)) => {
+                self.create_surface_from_xcb(display.connection, handle.window)
             }
-            (Rwh::AndroidNdk(handle), _) => Ok(self.create_surface_android(handle.a_native_window)),
+            (Rwh::AndroidNdk(handle), _) => self.create_surface_android(handle.a_native_window),
             #[cfg(windows)]
             (Rwh::Win32(handle), _) => {
                 use winapi::um::libloaderapi::GetModuleHandleW;
 
-                let hinstance = GetModuleHandleW(std::ptr::null());
-                Ok(self.create_surface_from_hwnd(hinstance as *mut _, handle.hwnd))
+                let hinstance = unsafe { GetModuleHandleW(std::ptr::null()) };
+                self.create_surface_from_hwnd(hinstance as *mut _, handle.hwnd)
             }
             #[cfg(target_os = "macos")]
             (Rwh::AppKit(handle), _)
                 if self.shared.extensions.contains(&ext::MetalSurface::name()) =>
             {
-                Ok(self.create_surface_from_view(handle.ns_view))
+                self.create_surface_from_view(handle.ns_view)
             }
             #[cfg(target_os = "ios")]
             (Rwh::UiKit(handle), _)
                 if self.shared.extensions.contains(&ext::MetalSurface::name()) =>
             {
-                Ok(self.create_surface_from_view(handle.ui_view))
+                self.create_surface_from_view(handle.ui_view)
             }
             (_, _) => Err(crate::InstanceError),
         }
     }
 
     unsafe fn destroy_surface(&self, surface: super::Surface) {
-        surface.functor.destroy_surface(surface.raw, None);
+        unsafe { surface.functor.destroy_surface(surface.raw, None) };
     }
 
     unsafe fn enumerate_adapters(&self) -> Vec<crate::ExposedAdapter<super::Api>> {
         use crate::auxil::db;
 
-        let raw_devices = match self.shared.raw.enumerate_physical_devices() {
+        let raw_devices = match unsafe { self.shared.raw.enumerate_physical_devices() } {
             Ok(devices) => devices,
             Err(err) => {
                 log::error!("enumerate_adapters: {}", err);
@@ -691,9 +716,9 @@ impl crate::Surface<super::Api> for super::Surface {
         let old = self
             .swapchain
             .take()
-            .map(|sc| sc.release_resources(&device.shared.raw));
+            .map(|sc| unsafe { sc.release_resources(&device.shared.raw) });
 
-        let swapchain = device.create_swapchain(self, config, old)?;
+        let swapchain = unsafe { device.create_swapchain(self, config, old)? };
         self.swapchain = Some(swapchain);
 
         Ok(())
@@ -701,8 +726,8 @@ impl crate::Surface<super::Api> for super::Surface {
 
     unsafe fn unconfigure(&mut self, device: &super::Device) {
         if let Some(sc) = self.swapchain.take() {
-            let swapchain = sc.release_resources(&device.shared.raw);
-            swapchain.functor.destroy_swapchain(swapchain.raw, None);
+            let swapchain = unsafe { sc.release_resources(&device.shared.raw) };
+            unsafe { swapchain.functor.destroy_swapchain(swapchain.raw, None) };
         }
     }
 
@@ -731,23 +756,22 @@ impl crate::Surface<super::Api> for super::Surface {
         }
 
         // will block if no image is available
-        let (index, suboptimal) =
-            match sc
-                .functor
+        let (index, suboptimal) = match unsafe {
+            sc.functor
                 .acquire_next_image(sc.raw, timeout_ns, vk::Semaphore::null(), sc.fence)
-            {
-                Ok(pair) => pair,
-                Err(error) => {
-                    return match error {
-                        vk::Result::TIMEOUT => Ok(None),
-                        vk::Result::NOT_READY | vk::Result::ERROR_OUT_OF_DATE_KHR => {
-                            Err(crate::SurfaceError::Outdated)
-                        }
-                        vk::Result::ERROR_SURFACE_LOST_KHR => Err(crate::SurfaceError::Lost),
-                        other => Err(crate::DeviceError::from(other).into()),
+        } {
+            Ok(pair) => pair,
+            Err(error) => {
+                return match error {
+                    vk::Result::TIMEOUT => Ok(None),
+                    vk::Result::NOT_READY | vk::Result::ERROR_OUT_OF_DATE_KHR => {
+                        Err(crate::SurfaceError::Outdated)
                     }
+                    vk::Result::ERROR_SURFACE_LOST_KHR => Err(crate::SurfaceError::Lost),
+                    other => Err(crate::DeviceError::from(other).into()),
                 }
-            };
+            }
+        };
 
         // special case for Intel Vulkan returning bizzare values (ugh)
         if sc.device.vendor_id == crate::auxil::db::intel::VENDOR && index > 0x100 {
@@ -756,14 +780,9 @@ impl crate::Surface<super::Api> for super::Surface {
 
         let fences = &[sc.fence];
 
-        sc.device
-            .raw
-            .wait_for_fences(fences, true, !0)
+        unsafe { sc.device.raw.wait_for_fences(fences, true, !0) }
             .map_err(crate::DeviceError::from)?;
-        sc.device
-            .raw
-            .reset_fences(fences)
-            .map_err(crate::DeviceError::from)?;
+        unsafe { sc.device.raw.reset_fences(fences) }.map_err(crate::DeviceError::from)?;
 
         let texture = super::SurfaceTexture {
             index,

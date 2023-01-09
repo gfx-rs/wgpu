@@ -2,15 +2,61 @@
  *  This API is used for targeting both Web and Native.
  */
 
+#![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
 #![allow(
     // We don't use syntax sugar where it's not necessary.
     clippy::match_like_matches_macro,
 )]
-#![warn(missing_docs)]
+#![warn(missing_docs, unsafe_op_in_unsafe_fn)]
 
-#[cfg(feature = "serde")]
+#[cfg(any(feature = "serde", test))]
 use serde::{Deserialize, Serialize};
+use std::hash::{Hash, Hasher};
 use std::{num::NonZeroU32, ops::Range};
+
+pub mod assertions;
+
+// Use this macro instead of the one provided by the bitflags_serde_shim crate
+// because the latter produces an error when deserializing bits that are not
+// specified in the bitflags, while we want deserialization to succeed and
+// and unspecified bits to lead to errors handled in wgpu-core.
+// Note that plainly deriving Serialize and Deserialized would have a similar
+// behavior to this macro (unspecified bit do not produce an error).
+macro_rules! impl_bitflags {
+    ($name:ident) => {
+        #[cfg(feature = "trace")]
+        impl serde::Serialize for $name {
+            fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+            where
+                S: serde::Serializer,
+            {
+                self.bits().serialize(serializer)
+            }
+        }
+
+        #[cfg(feature = "replay")]
+        impl<'de> serde::Deserialize<'de> for $name {
+            fn deserialize<D>(deserializer: D) -> Result<$name, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                let value = <_ as serde::Deserialize<'de>>::deserialize(deserializer)?;
+                // Note: newer version of bitflags replaced from_bits_unchecked with
+                // from_bits_retain which is not marked as unsafe (same implementation).
+                Ok(unsafe { $name::from_bits_unchecked(value) })
+            }
+        }
+
+        impl $name {
+            /// Returns true if the bitflags contains bits that are not part of
+            /// the bitflags definition.
+            pub fn contains_invalid_bits(&self) -> bool {
+                let all = Self::all().bits();
+                (self.bits() | all) != all
+            }
+        }
+    };
+}
 
 /// Integral type used for buffer offsets.
 pub type BufferAddress = u64;
@@ -70,21 +116,16 @@ pub enum Backend {
 /// Corresponds to [WebGPU `GPUPowerPreference`](
 /// https://gpuweb.github.io/gpuweb/#enumdef-gpupowerpreference).
 #[repr(C)]
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub enum PowerPreference {
     /// Adapter that uses the least possible power. This is often an integrated GPU.
+    #[default]
     LowPower = 0,
     /// Adapter that has the highest performance. This is often a discrete GPU.
     HighPerformance = 1,
-}
-
-impl Default for PowerPreference {
-    fn default() -> Self {
-        Self::LowPower
-    }
 }
 
 bitflags::bitflags! {
@@ -118,8 +159,7 @@ bitflags::bitflags! {
     }
 }
 
-#[cfg(feature = "bitflags_serde_shim")]
-bitflags_serde_shim::impl_serde_for_bitflags!(Backends);
+impl_bitflags!(Backends);
 
 impl From<Backend> for Backends {
     fn from(backend: Backend) -> Self {
@@ -191,15 +231,6 @@ bitflags::bitflags! {
         ///
         /// This is a web and native feature.
         const DEPTH_CLIP_CONTROL = 1 << 0;
-        /// Allows for explicit creation of textures of format [`TextureFormat::Depth24UnormStencil8`]
-        ///
-        /// Supported platforms:
-        /// - Vulkan (some)
-        /// - DX12
-        /// - Metal (Macs with amd GPUs)
-        ///
-        /// This is a web and native feature.
-        const DEPTH24UNORM_STENCIL8 = 1 << 1;
         /// Allows for explicit creation of textures of format [`TextureFormat::Depth32FloatStencil8`]
         ///
         /// Supported platforms:
@@ -320,7 +351,9 @@ bitflags::bitflags! {
         /// the consequences.
         ///
         /// Supported platforms:
-        /// - All
+        /// - Vulkan
+        /// - DX12
+        /// - Metal
         ///
         /// This is a native only feature.
         const MAPPABLE_PRIMARY_BUFFERS = 1 << 16;
@@ -590,6 +623,7 @@ bitflags::bitflags! {
         ///
         /// Supported platforms:
         /// - Vulkan
+        /// - OpenGL (web only)
         ///
         /// This is a native only feature.
         const MULTIVIEW = 1 << 37;
@@ -625,10 +659,11 @@ bitflags::bitflags! {
         /// Supported Platforms:
         /// - Metal
         /// - Vulkan
+        /// - OpenGL
         ///
         /// This is a native-only feature.
         const TEXTURE_COMPRESSION_ASTC_HDR = 1 << 40;
-        /// Allows for timestamp queries inside renderpasses. Metal does not allow this
+        /// Allows for timestamp queries inside render passes. Metal does not allow this
         /// on Apple GPUs.
         ///
         /// Implies [`Features::TIMESTAMP_QUERIES`] is supported.
@@ -641,8 +676,7 @@ bitflags::bitflags! {
     }
 }
 
-#[cfg(feature = "bitflags_serde_shim")]
-bitflags_serde_shim::impl_serde_for_bitflags!(Features);
+impl_bitflags!(Features);
 
 impl Features {
     /// Mask of all features which are part of the upstream WebGPU standard.
@@ -666,9 +700,9 @@ impl Features {
 /// - [`Limits::downlevel_webgl2_defaults()`] This is a set of limits that is lower even than the
 ///   [`downlevel_defaults()`], configured to be low enough to support running in the browser using
 ///   WebGL2.
-/// - [`Limits::default()`]. This is the set of limits that is guarenteed to work on all modern
-///   backends and is guarenteed to be supported by WebGPU. Applications needing more modern
-///   features can use this as a reasonable set of limits if they are targetting only desktop and
+/// - [`Limits::default()`]. This is the set of limits that is guaranteed to work on all modern
+///   backends and is guaranteed to be supported by WebGPU. Applications needing more modern
+///   features can use this as a reasonable set of limits if they are targeting only desktop and
 ///   modern mobile devices.
 ///
 /// We recommend starting with the most restrictive limits you can and manually increasing the
@@ -710,6 +744,8 @@ pub struct Limits {
     pub max_texture_array_layers: u32,
     /// Amount of bind groups that can be attached to a pipeline at the same time. Defaults to 4. Higher is "better".
     pub max_bind_groups: u32,
+    /// Maximum binding index allowed in `create_bind_group_layout`. Defaults to 640.
+    pub max_bindings_per_bind_group: u32,
     /// Amount of uniform buffer bindings that can be dynamic in a single pipeline. Defaults to 8. Higher is "better".
     pub max_dynamic_uniform_buffers_per_pipeline_layout: u32,
     /// Amount of storage buffer bindings that can be dynamic in a single pipeline. Defaults to 4. Higher is "better".
@@ -779,7 +815,7 @@ pub struct Limits {
     pub max_compute_workgroups_per_dimension: u32,
     /// A limit above which buffer allocations are guaranteed to fail.
     ///
-    /// Buffer allocations below the maximum buffer size may not succed depending on available memory,
+    /// Buffer allocations below the maximum buffer size may not succeed depending on available memory,
     /// fragmentation and other factors.
     pub max_buffer_size: u64,
 }
@@ -792,6 +828,7 @@ impl Default for Limits {
             max_texture_dimension_3d: 2048,
             max_texture_array_layers: 256,
             max_bind_groups: 4,
+            max_bindings_per_bind_group: 640,
             max_dynamic_uniform_buffers_per_pipeline_layout: 8,
             max_dynamic_storage_buffers_per_pipeline_layout: 4,
             max_sampled_textures_per_shader_stage: 16,
@@ -814,13 +851,13 @@ impl Default for Limits {
             max_compute_workgroup_size_y: 256,
             max_compute_workgroup_size_z: 64,
             max_compute_workgroups_per_dimension: 65535,
-            max_buffer_size: 1 << 30,
+            max_buffer_size: 1 << 28,
         }
     }
 }
 
 impl Limits {
-    /// These default limits are guarenteed to be compatible with GLES-3.1, and D3D11
+    /// These default limits are guaranteed to be compatible with GLES-3.1, and D3D11
     pub fn downlevel_defaults() -> Self {
         Self {
             max_texture_dimension_1d: 2048,
@@ -828,6 +865,7 @@ impl Limits {
             max_texture_dimension_3d: 256,
             max_texture_array_layers: 256,
             max_bind_groups: 4,
+            max_bindings_per_bind_group: 640,
             max_dynamic_uniform_buffers_per_pipeline_layout: 8,
             max_dynamic_storage_buffers_per_pipeline_layout: 4,
             max_sampled_textures_per_shader_stage: 16,
@@ -854,7 +892,7 @@ impl Limits {
         }
     }
 
-    /// These default limits are guarenteed to be compatible with GLES-3.0, and D3D11, and WebGL2
+    /// These default limits are guaranteed to be compatible with GLES-3.0, and D3D11, and WebGL2
     pub fn downlevel_webgl2_defaults() -> Self {
         Self {
             max_uniform_buffers_per_shader_stage: 11,
@@ -1060,7 +1098,7 @@ bitflags::bitflags! {
 
         /// Supports samplers with anisotropic filtering. Note this isn't actually required by
         /// WebGPU, the implementation is allowed to completely ignore aniso clamp. This flag is
-        /// here for native backends so they can comunicate to the user of aniso is enabled.
+        /// here for native backends so they can communicate to the user of aniso is enabled.
         ///
         /// All backends and all devices support anisotropic filtering.
         const ANISOTROPIC_FILTERING = 1 << 10;
@@ -1084,11 +1122,27 @@ bitflags::bitflags! {
         ///
         /// WebGL doesn't support this.
         const BUFFER_BINDINGS_NOT_16_BYTE_ALIGNED = 1 << 15;
+
+        /// Supports buffers to combine [`BufferUsages::INDEX`] with usages other than [`BufferUsages::COPY_DST`] and [`BufferUsages::COPY_SRC`].
+        /// Furthermore, in absence of this feature it is not allowed to copy index buffers from/to buffers with a set of usage flags containing
+         /// [`BufferUsages::VERTEX`]/[`BufferUsages::UNIFORM`]/[`BufferUsages::STORAGE`] or [`BufferUsages::INDIRECT`].
+        ///
+        /// WebGL doesn't support this.
+        const UNRESTRICTED_INDEX_BUFFER = 1 << 16;
+
+        /// Supports full 32-bit range indices (2^32-1 as opposed to 2^24-1 without this flag)
+        ///
+        /// Corresponds to Vulkan's `VkPhysicalDeviceFeatures.fullDrawIndexUint32`
+        const FULL_DRAW_INDEX_UINT32 = 1 << 17;
+
+        /// Supports depth bias clamping
+        ///
+        /// Corresponds to Vulkan's `VkPhysicalDeviceFeatures.depthBiasClamp`
+        const DEPTH_BIAS_CLAMP = 1 << 18;
     }
 }
 
-#[cfg(feature = "bitflags_serde_shim")]
-bitflags_serde_shim::impl_serde_for_bitflags!(DownlevelFlags);
+impl_bitflags!(DownlevelFlags);
 
 impl DownlevelFlags {
     /// All flags that indicate if the backend is WebGPU compliant
@@ -1140,11 +1194,18 @@ pub struct AdapterInfo {
     /// Adapter name
     pub name: String,
     /// Vendor PCI id of the adapter
+    ///
+    /// If the vendor has no PCI id, then this value will be the backend's vendor id equivalent. On Vulkan,
+    /// Mesa would have a vendor id equivalent to it's `VkVendorId` value.
     pub vendor: usize,
     /// PCI id of the adapter
     pub device: usize,
     /// Type of device
     pub device_type: DeviceType,
+    /// Driver name
+    pub driver: String,
+    /// Driver info
+    pub driver_info: String,
     /// Backend used for device
     pub backend: Backend,
 }
@@ -1169,7 +1230,7 @@ pub struct DeviceDescriptor<L> {
 }
 
 impl<L> DeviceDescriptor<L> {
-    ///
+    /// Takes a closure and maps the label of the device descriptor into another.
     pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> DeviceDescriptor<K> {
         DeviceDescriptor {
             label: fun(&self.label),
@@ -1203,15 +1264,14 @@ bitflags::bitflags! {
     }
 }
 
-#[cfg(feature = "bitflags_serde_shim")]
-bitflags_serde_shim::impl_serde_for_bitflags!(ShaderStages);
+impl_bitflags!(ShaderStages);
 
 /// Dimensions of a particular texture view.
 ///
 /// Corresponds to [WebGPU `GPUTextureViewDimension`](
 /// https://gpuweb.github.io/gpuweb/#enumdef-gputextureviewdimension).
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Default, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub enum TextureViewDimension {
@@ -1220,6 +1280,7 @@ pub enum TextureViewDimension {
     D1,
     /// A two dimensional texture. `texture_2d` in WGSL and `texture2D` in GLSL.
     #[cfg_attr(feature = "serde", serde(rename = "2d"))]
+    #[default]
     D2,
     /// A two dimensional array texture. `texture_2d_array` in WGSL and `texture2DArray` in GLSL.
     #[cfg_attr(feature = "serde", serde(rename = "2d-array"))]
@@ -1233,12 +1294,6 @@ pub enum TextureViewDimension {
     /// A three dimensional texture. `texture_3d` in WGSL and `texture3D` in GLSL.
     #[cfg_attr(feature = "serde", serde(rename = "3d"))]
     D3,
-}
-
-impl Default for TextureViewDimension {
-    fn default() -> Self {
-        Self::D2
-    }
 }
 
 impl TextureViewDimension {
@@ -1299,12 +1354,13 @@ pub enum BlendFactor {
 /// Corresponds to [WebGPU `GPUBlendOperation`](
 /// https://gpuweb.github.io/gpuweb/#enumdef-gpublendoperation).
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Default, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub enum BlendOperation {
     /// Src + Dst
+    #[default]
     Add = 0,
     /// Src - Dst
     Subtract = 1,
@@ -1314,12 +1370,6 @@ pub enum BlendOperation {
     Min = 3,
     /// max(Src, Dst)
     Max = 4,
-}
-
-impl Default for BlendOperation {
-    fn default() -> Self {
-        Self::Add
-    }
 }
 
 /// Describes a blend component of a [`BlendState`].
@@ -1456,7 +1506,7 @@ impl From<TextureFormat> for ColorTargetState {
 /// Corresponds to [WebGPU `GPUPrimitiveTopology`](
 /// https://gpuweb.github.io/gpuweb/#enumdef-gpuprimitivetopology).
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Default, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
@@ -1474,17 +1524,12 @@ pub enum PrimitiveTopology {
     /// Vertex data is a list of triangles. Each set of 3 vertices composes a new triangle.
     ///
     /// Vertices `0 1 2 3 4 5` create two triangles `0 1 2` and `3 4 5`
+    #[default]
     TriangleList = 3,
     /// Vertex data is a triangle strip. Each set of three adjacent vertices form a triangle.
     ///
     /// Vertices `0 1 2 3 4 5` creates four triangles `0 1 2`, `2 1 3`, `2 3 4`, and `4 3 5`
     TriangleStrip = 4,
-}
-
-impl Default for PrimitiveTopology {
-    fn default() -> Self {
-        PrimitiveTopology::TriangleList
-    }
 }
 
 impl PrimitiveTopology {
@@ -1502,7 +1547,7 @@ impl PrimitiveTopology {
 /// Corresponds to [WebGPU `GPUFrontFace`](
 /// https://gpuweb.github.io/gpuweb/#enumdef-gpufrontface).
 #[repr(C)]
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
@@ -1510,17 +1555,12 @@ pub enum FrontFace {
     /// Triangles with vertices in counter clockwise order are considered the front face.
     ///
     /// This is the default with right handed coordinate spaces.
+    #[default]
     Ccw = 0,
     /// Triangles with vertices in clockwise order are considered the front face.
     ///
     /// This is the default with left handed coordinate spaces.
     Cw = 1,
-}
-
-impl Default for FrontFace {
-    fn default() -> Self {
-        Self::Ccw
-    }
 }
 
 /// Face of a vertex.
@@ -1542,23 +1582,18 @@ pub enum Face {
 
 /// Type of drawing mode for polygons
 #[repr(C)]
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub enum PolygonMode {
     /// Polygons are filled
+    #[default]
     Fill = 0,
     /// Polygons are drawn as line segments
     Line = 1,
     /// Polygons are drawn as points
     Point = 2,
-}
-
-impl Default for PolygonMode {
-    fn default() -> Self {
-        Self::Fill
-    }
 }
 
 /// Describes the state of primitive assembly and rasterization in a render pipeline.
@@ -1644,22 +1679,44 @@ bitflags::bitflags! {
         /// If not present, the texture can't be sampled with a filtering sampler.
         /// This may overwrite TextureSampleType::Float.filterable
         const FILTERABLE = 1 << 0;
-        /// Allows [`TextureDescriptor::sample_count`] greater than `1`.
-        const MULTISAMPLE = 1 << 1;
+        /// Allows [`TextureDescriptor::sample_count`] to be `2`.
+        const MULTISAMPLE_X2 = 1 << 1;
+          /// Allows [`TextureDescriptor::sample_count`] to be `4`.
+        const MULTISAMPLE_X4 = 1 << 2 ;
+          /// Allows [`TextureDescriptor::sample_count`] to be `8`.
+        const MULTISAMPLE_X8 = 1 << 3 ;
         /// Allows a texture of this format to back a view passed as `resolve_target`
         /// to a render pass for an automatic driver-implemented resolve.
-        const MULTISAMPLE_RESOLVE = 1 << 2;
+        const MULTISAMPLE_RESOLVE = 1 << 4;
         /// When used as a STORAGE texture, then a texture with this format can be bound with
         /// [`StorageTextureAccess::ReadOnly`] or [`StorageTextureAccess::ReadWrite`].
-        const STORAGE_READ_WRITE = 1 << 3;
+        const STORAGE_READ_WRITE = 1 << 5;
         /// When used as a STORAGE texture, then a texture with this format can be written to with atomics.
         // TODO: No access flag exposed as of writing
-        const STORAGE_ATOMICS = 1 << 4;
+        const STORAGE_ATOMICS = 1 << 6;
+        /// If not present, the texture can't be blended into the render target.
+        const BLENDABLE = 1 << 7;
     }
 }
 
-#[cfg(feature = "bitflags_serde_shim")]
-bitflags_serde_shim::impl_serde_for_bitflags!(TextureFormatFeatureFlags);
+impl TextureFormatFeatureFlags {
+    /// Sample count supported by a given texture format.
+    ///
+    /// returns `true` if `count` is a supported sample count.
+    pub fn sample_count_supported(&self, count: u32) -> bool {
+        use TextureFormatFeatureFlags as tfsc;
+
+        match count {
+            1 => true,
+            2 => self.contains(tfsc::MULTISAMPLE_X2),
+            4 => self.contains(tfsc::MULTISAMPLE_X4),
+            8 => self.contains(tfsc::MULTISAMPLE_X8),
+            _ => false,
+        }
+    }
+}
+
+impl_bitflags!(TextureFormatFeatureFlags);
 
 /// Features supported by a given texture format
 ///
@@ -1761,176 +1818,128 @@ pub enum AstcChannel {
 /// https://gpuweb.github.io/gpuweb/#enumdef-gputextureformat).
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
-#[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
 pub enum TextureFormat {
     // Normal 8 bit formats
     /// Red channel only. 8 bit integer per channel. [0, 255] converted to/from float [0, 1] in shader.
-    #[cfg_attr(feature = "serde", serde(rename = "r8unorm"))]
     R8Unorm,
     /// Red channel only. 8 bit integer per channel. [-127, 127] converted to/from float [-1, 1] in shader.
-    #[cfg_attr(feature = "serde", serde(rename = "r8snorm"))]
     R8Snorm,
     /// Red channel only. 8 bit integer per channel. Unsigned in shader.
-    #[cfg_attr(feature = "serde", serde(rename = "r8uint"))]
     R8Uint,
     /// Red channel only. 8 bit integer per channel. Signed in shader.
-    #[cfg_attr(feature = "serde", serde(rename = "r8sint"))]
     R8Sint,
 
     // Normal 16 bit formats
     /// Red channel only. 16 bit integer per channel. Unsigned in shader.
-    #[cfg_attr(feature = "serde", serde(rename = "r16uint"))]
     R16Uint,
     /// Red channel only. 16 bit integer per channel. Signed in shader.
-    #[cfg_attr(feature = "serde", serde(rename = "r16sint"))]
     R16Sint,
     /// Red channel only. 16 bit integer per channel. [0, 65535] converted to/from float [0, 1] in shader.
     ///
     /// [`Features::TEXTURE_FORMAT_16BIT_NORM`] must be enabled to use this texture format.
-    #[cfg_attr(feature = "serde", serde(rename = "r16unorm"))]
     R16Unorm,
     /// Red channel only. 16 bit integer per channel. [0, 65535] converted to/from float [-1, 1] in shader.
     ///
     /// [`Features::TEXTURE_FORMAT_16BIT_NORM`] must be enabled to use this texture format.
-    #[cfg_attr(feature = "serde", serde(rename = "r16snorm"))]
     R16Snorm,
     /// Red channel only. 16 bit float per channel. Float in shader.
-    #[cfg_attr(feature = "serde", serde(rename = "r16float"))]
     R16Float,
     /// Red and green channels. 8 bit integer per channel. [0, 255] converted to/from float [0, 1] in shader.
-    #[cfg_attr(feature = "serde", serde(rename = "rg8unorm"))]
     Rg8Unorm,
     /// Red and green channels. 8 bit integer per channel. [-127, 127] converted to/from float [-1, 1] in shader.
-    #[cfg_attr(feature = "serde", serde(rename = "rg8snorm"))]
     Rg8Snorm,
     /// Red and green channels. 8 bit integer per channel. Unsigned in shader.
-    #[cfg_attr(feature = "serde", serde(rename = "rg8uint"))]
     Rg8Uint,
     /// Red and green channels. 8 bit integer per channel. Signed in shader.
-    #[cfg_attr(feature = "serde", serde(rename = "rg8sint"))]
     Rg8Sint,
 
     // Normal 32 bit formats
     /// Red channel only. 32 bit integer per channel. Unsigned in shader.
-    #[cfg_attr(feature = "serde", serde(rename = "r32uint"))]
     R32Uint,
     /// Red channel only. 32 bit integer per channel. Signed in shader.
-    #[cfg_attr(feature = "serde", serde(rename = "r32sint"))]
     R32Sint,
     /// Red channel only. 32 bit float per channel. Float in shader.
-    #[cfg_attr(feature = "serde", serde(rename = "r32float"))]
     R32Float,
     /// Red and green channels. 16 bit integer per channel. Unsigned in shader.
-    #[cfg_attr(feature = "serde", serde(rename = "rg16uint"))]
     Rg16Uint,
     /// Red and green channels. 16 bit integer per channel. Signed in shader.
-    #[cfg_attr(feature = "serde", serde(rename = "rg16sint"))]
     Rg16Sint,
     /// Red and green channels. 16 bit integer per channel. [0, 65535] converted to/from float [0, 1] in shader.
     ///
     /// [`Features::TEXTURE_FORMAT_16BIT_NORM`] must be enabled to use this texture format.
-    #[cfg_attr(feature = "serde", serde(rename = "rg16unorm"))]
     Rg16Unorm,
     /// Red and green channels. 16 bit integer per channel. [0, 65535] converted to/from float [-1, 1] in shader.
     ///
     /// [`Features::TEXTURE_FORMAT_16BIT_NORM`] must be enabled to use this texture format.
-    #[cfg_attr(feature = "serde", serde(rename = "rg16snorm"))]
     Rg16Snorm,
     /// Red and green channels. 16 bit float per channel. Float in shader.
-    #[cfg_attr(feature = "serde", serde(rename = "rg16float"))]
     Rg16Float,
     /// Red, green, blue, and alpha channels. 8 bit integer per channel. [0, 255] converted to/from float [0, 1] in shader.
-    #[cfg_attr(feature = "serde", serde(rename = "rgba8unorm"))]
     Rgba8Unorm,
     /// Red, green, blue, and alpha channels. 8 bit integer per channel. Srgb-color [0, 255] converted to/from linear-color float [0, 1] in shader.
-    #[cfg_attr(feature = "serde", serde(rename = "rgba8unorm-srgb"))]
     Rgba8UnormSrgb,
     /// Red, green, blue, and alpha channels. 8 bit integer per channel. [-127, 127] converted to/from float [-1, 1] in shader.
-    #[cfg_attr(feature = "serde", serde(rename = "rgba8snorm"))]
     Rgba8Snorm,
     /// Red, green, blue, and alpha channels. 8 bit integer per channel. Unsigned in shader.
-    #[cfg_attr(feature = "serde", serde(rename = "rgba8uint"))]
     Rgba8Uint,
     /// Red, green, blue, and alpha channels. 8 bit integer per channel. Signed in shader.
-    #[cfg_attr(feature = "serde", serde(rename = "rgba8sint"))]
     Rgba8Sint,
     /// Blue, green, red, and alpha channels. 8 bit integer per channel. [0, 255] converted to/from float [0, 1] in shader.
-    #[cfg_attr(feature = "serde", serde(rename = "bgra8unorm"))]
     Bgra8Unorm,
     /// Blue, green, red, and alpha channels. 8 bit integer per channel. Srgb-color [0, 255] converted to/from linear-color float [0, 1] in shader.
-    #[cfg_attr(feature = "serde", serde(rename = "bgra8unorm-srgb"))]
     Bgra8UnormSrgb,
 
     // Packed 32 bit formats
+    /// Packed unsigned float with 9 bits mantisa for each RGB component, then a common 5 bits exponent
+    Rgb9e5Ufloat,
     /// Red, green, blue, and alpha channels. 10 bit integer for RGB channels, 2 bit integer for alpha channel. [0, 1023] ([0, 3] for alpha) converted to/from float [0, 1] in shader.
-    #[cfg_attr(feature = "serde", serde(rename = "rgb10a2unorm"))]
     Rgb10a2Unorm,
     /// Red, green, and blue channels. 11 bit float with no sign bit for RG channels. 10 bit float with no sign bit for blue channel. Float in shader.
-    #[cfg_attr(feature = "serde", serde(rename = "rg11b10ufloat"))]
     Rg11b10Float,
 
     // Normal 64 bit formats
     /// Red and green channels. 32 bit integer per channel. Unsigned in shader.
-    #[cfg_attr(feature = "serde", serde(rename = "rg32uint"))]
     Rg32Uint,
     /// Red and green channels. 32 bit integer per channel. Signed in shader.
-    #[cfg_attr(feature = "serde", serde(rename = "rg32sint"))]
     Rg32Sint,
     /// Red and green channels. 32 bit float per channel. Float in shader.
-    #[cfg_attr(feature = "serde", serde(rename = "rg32float"))]
     Rg32Float,
     /// Red, green, blue, and alpha channels. 16 bit integer per channel. Unsigned in shader.
-    #[cfg_attr(feature = "serde", serde(rename = "rgba16uint"))]
     Rgba16Uint,
     /// Red, green, blue, and alpha channels. 16 bit integer per channel. Signed in shader.
-    #[cfg_attr(feature = "serde", serde(rename = "rgba16sint"))]
     Rgba16Sint,
     /// Red, green, blue, and alpha channels. 16 bit integer per channel. [0, 65535] converted to/from float [0, 1] in shader.
     ///
     /// [`Features::TEXTURE_FORMAT_16BIT_NORM`] must be enabled to use this texture format.
-    #[cfg_attr(feature = "serde", serde(rename = "rgba16unorm"))]
     Rgba16Unorm,
     /// Red, green, blue, and alpha. 16 bit integer per channel. [0, 65535] converted to/from float [-1, 1] in shader.
     ///
     /// [`Features::TEXTURE_FORMAT_16BIT_NORM`] must be enabled to use this texture format.
-    #[cfg_attr(feature = "serde", serde(rename = "rgba16snorm"))]
     Rgba16Snorm,
     /// Red, green, blue, and alpha channels. 16 bit float per channel. Float in shader.
-    #[cfg_attr(feature = "serde", serde(rename = "rgba16float"))]
     Rgba16Float,
 
     // Normal 128 bit formats
     /// Red, green, blue, and alpha channels. 32 bit integer per channel. Unsigned in shader.
-    #[cfg_attr(feature = "serde", serde(rename = "rgba32uint"))]
     Rgba32Uint,
     /// Red, green, blue, and alpha channels. 32 bit integer per channel. Signed in shader.
-    #[cfg_attr(feature = "serde", serde(rename = "rgba32sint"))]
     Rgba32Sint,
     /// Red, green, blue, and alpha channels. 32 bit float per channel. Float in shader.
-    #[cfg_attr(feature = "serde", serde(rename = "rgba32float"))]
     Rgba32Float,
 
     // Depth and stencil formats
-    /// Special depth format with 32 bit floating point depth.
-    #[cfg_attr(feature = "serde", serde(rename = "depth32float"))]
-    Depth32Float,
-    /// Special depth/stencil format with 32 bit floating point depth and 8 bits integer stencil.
-    #[cfg_attr(feature = "serde", serde(rename = "depth32float-stencil8"))]
-    Depth32FloatStencil8,
+    /// Stencil format with 8 bit integer stencil.
+    Stencil8,
+    /// Special depth format with 16 bit integer depth.
+    Depth16Unorm,
     /// Special depth format with at least 24 bit integer depth.
-    #[cfg_attr(feature = "serde", serde(rename = "depth24plus"))]
     Depth24Plus,
     /// Special depth/stencil format with at least 24 bit integer depth and 8 bits integer stencil.
-    #[cfg_attr(feature = "serde", serde(rename = "depth24plus-stencil8"))]
     Depth24PlusStencil8,
-    /// Special depth/stencil format with 24 bit integer depth and 8 bits integer stencil.
-    #[cfg_attr(feature = "serde", serde(rename = "depth24unorm-stencil8"))]
-    Depth24UnormStencil8,
-
-    // Packed uncompressed texture formats
-    /// Packed unsigned float with 9 bits mantisa for each RGB component, then a common 5 bits exponent
-    #[cfg_attr(feature = "serde", serde(rename = "rgb9e5ufloat"))]
-    Rgb9e5Ufloat,
+    /// Special depth format with 32 bit floating point depth.
+    Depth32Float,
+    /// Special depth/stencil format with 32 bit floating point depth and 8 bits integer stencil.
+    Depth32FloatStencil8,
 
     // Compressed textures usable with `TEXTURE_COMPRESSION_BC` feature.
     /// 4x4 block compressed texture. 8 bytes per block (4 bit/px). 4 color + alpha pallet. 5 bit R + 6 bit G + 5 bit B + 1 bit alpha.
@@ -1939,7 +1948,6 @@ pub enum TextureFormat {
     /// Also known as DXT1.
     ///
     /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
-    #[cfg_attr(feature = "serde", serde(rename = "bc1-rgba-unorm"))]
     Bc1RgbaUnorm,
     /// 4x4 block compressed texture. 8 bytes per block (4 bit/px). 4 color + alpha pallet. 5 bit R + 6 bit G + 5 bit B + 1 bit alpha.
     /// Srgb-color [0, 63] ([0, 1] for alpha) converted to/from linear-color float [0, 1] in shader.
@@ -1947,7 +1955,6 @@ pub enum TextureFormat {
     /// Also known as DXT1.
     ///
     /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
-    #[cfg_attr(feature = "serde", serde(rename = "bc1-rgba-unorm-srgb"))]
     Bc1RgbaUnormSrgb,
     /// 4x4 block compressed texture. 16 bytes per block (8 bit/px). 4 color pallet. 5 bit R + 6 bit G + 5 bit B + 4 bit alpha.
     /// [0, 63] ([0, 15] for alpha) converted to/from float [0, 1] in shader.
@@ -1955,7 +1962,6 @@ pub enum TextureFormat {
     /// Also known as DXT3.
     ///
     /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
-    #[cfg_attr(feature = "serde", serde(rename = "bc2-rgba-unorm"))]
     Bc2RgbaUnorm,
     /// 4x4 block compressed texture. 16 bytes per block (8 bit/px). 4 color pallet. 5 bit R + 6 bit G + 5 bit B + 4 bit alpha.
     /// Srgb-color [0, 63] ([0, 255] for alpha) converted to/from linear-color float [0, 1] in shader.
@@ -1963,7 +1969,6 @@ pub enum TextureFormat {
     /// Also known as DXT3.
     ///
     /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
-    #[cfg_attr(feature = "serde", serde(rename = "bc2-rgba-unorm-srgb"))]
     Bc2RgbaUnormSrgb,
     /// 4x4 block compressed texture. 16 bytes per block (8 bit/px). 4 color pallet + 8 alpha pallet. 5 bit R + 6 bit G + 5 bit B + 8 bit alpha.
     /// [0, 63] ([0, 255] for alpha) converted to/from float [0, 1] in shader.
@@ -1971,7 +1976,6 @@ pub enum TextureFormat {
     /// Also known as DXT5.
     ///
     /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
-    #[cfg_attr(feature = "serde", serde(rename = "bc3-rgba-unorm"))]
     Bc3RgbaUnorm,
     /// 4x4 block compressed texture. 16 bytes per block (8 bit/px). 4 color pallet + 8 alpha pallet. 5 bit R + 6 bit G + 5 bit B + 8 bit alpha.
     /// Srgb-color [0, 63] ([0, 255] for alpha) converted to/from linear-color float [0, 1] in shader.
@@ -1979,7 +1983,6 @@ pub enum TextureFormat {
     /// Also known as DXT5.
     ///
     /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
-    #[cfg_attr(feature = "serde", serde(rename = "bc3-rgba-unorm-srgb"))]
     Bc3RgbaUnormSrgb,
     /// 4x4 block compressed texture. 8 bytes per block (4 bit/px). 8 color pallet. 8 bit R.
     /// [0, 255] converted to/from float [0, 1] in shader.
@@ -1987,7 +1990,6 @@ pub enum TextureFormat {
     /// Also known as RGTC1.
     ///
     /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
-    #[cfg_attr(feature = "serde", serde(rename = "bc4-r-unorm"))]
     Bc4RUnorm,
     /// 4x4 block compressed texture. 8 bytes per block (4 bit/px). 8 color pallet. 8 bit R.
     /// [-127, 127] converted to/from float [-1, 1] in shader.
@@ -1995,7 +1997,6 @@ pub enum TextureFormat {
     /// Also known as RGTC1.
     ///
     /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
-    #[cfg_attr(feature = "serde", serde(rename = "bc4-r-snorm"))]
     Bc4RSnorm,
     /// 4x4 block compressed texture. 16 bytes per block (8 bit/px). 8 color red pallet + 8 color green pallet. 8 bit RG.
     /// [0, 255] converted to/from float [0, 1] in shader.
@@ -2003,7 +2004,6 @@ pub enum TextureFormat {
     /// Also known as RGTC2.
     ///
     /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
-    #[cfg_attr(feature = "serde", serde(rename = "bc5-rg-unorm"))]
     Bc5RgUnorm,
     /// 4x4 block compressed texture. 16 bytes per block (8 bit/px). 8 color red pallet + 8 color green pallet. 8 bit RG.
     /// [-127, 127] converted to/from float [-1, 1] in shader.
@@ -2011,21 +2011,18 @@ pub enum TextureFormat {
     /// Also known as RGTC2.
     ///
     /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
-    #[cfg_attr(feature = "serde", serde(rename = "bc5-rg-snorm"))]
     Bc5RgSnorm,
     /// 4x4 block compressed texture. 16 bytes per block (8 bit/px). Variable sized pallet. 16 bit unsigned float RGB. Float in shader.
     ///
     /// Also known as BPTC (float).
     ///
     /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
-    #[cfg_attr(feature = "serde", serde(rename = "bc6h-rgb-ufloat"))]
     Bc6hRgbUfloat,
     /// 4x4 block compressed texture. 16 bytes per block (8 bit/px). Variable sized pallet. 16 bit signed float RGB. Float in shader.
     ///
     /// Also known as BPTC (float).
     ///
     /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
-    #[cfg_attr(feature = "serde", serde(rename = "bc6h-rgb-float"))]
     Bc6hRgbSfloat,
     /// 4x4 block compressed texture. 16 bytes per block (8 bit/px). Variable sized pallet. 8 bit integer RGBA.
     /// [0, 255] converted to/from float [0, 1] in shader.
@@ -2033,7 +2030,6 @@ pub enum TextureFormat {
     /// Also known as BPTC (unorm).
     ///
     /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
-    #[cfg_attr(feature = "serde", serde(rename = "bc7-rgba-unorm"))]
     Bc7RgbaUnorm,
     /// 4x4 block compressed texture. 16 bytes per block (8 bit/px). Variable sized pallet. 8 bit integer RGBA.
     /// Srgb-color [0, 255] converted to/from linear-color float [0, 1] in shader.
@@ -2041,67 +2037,56 @@ pub enum TextureFormat {
     /// Also known as BPTC (unorm).
     ///
     /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
-    #[cfg_attr(feature = "serde", serde(rename = "bc7-rgba-unorm-srgb"))]
     Bc7RgbaUnormSrgb,
     /// 4x4 block compressed texture. 8 bytes per block (4 bit/px). Complex pallet. 8 bit integer RGB.
     /// [0, 255] converted to/from float [0, 1] in shader.
     ///
     /// [`Features::TEXTURE_COMPRESSION_ETC2`] must be enabled to use this texture format.
-    #[cfg_attr(feature = "serde", serde(rename = "etc2-rgb8unorm"))]
     Etc2Rgb8Unorm,
     /// 4x4 block compressed texture. 8 bytes per block (4 bit/px). Complex pallet. 8 bit integer RGB.
     /// Srgb-color [0, 255] converted to/from linear-color float [0, 1] in shader.
     ///
     /// [`Features::TEXTURE_COMPRESSION_ETC2`] must be enabled to use this texture format.
-    #[cfg_attr(feature = "serde", serde(rename = "etc2-rgb8unorm-srgb"))]
     Etc2Rgb8UnormSrgb,
     /// 4x4 block compressed texture. 8 bytes per block (4 bit/px). Complex pallet. 8 bit integer RGB + 1 bit alpha.
     /// [0, 255] ([0, 1] for alpha) converted to/from float [0, 1] in shader.
     ///
     /// [`Features::TEXTURE_COMPRESSION_ETC2`] must be enabled to use this texture format.
-    #[cfg_attr(feature = "serde", serde(rename = "etc2-rgb8a1unorm"))]
     Etc2Rgb8A1Unorm,
     /// 4x4 block compressed texture. 8 bytes per block (4 bit/px). Complex pallet. 8 bit integer RGB + 1 bit alpha.
     /// Srgb-color [0, 255] ([0, 1] for alpha) converted to/from linear-color float [0, 1] in shader.
     ///
     /// [`Features::TEXTURE_COMPRESSION_ETC2`] must be enabled to use this texture format.
-    #[cfg_attr(feature = "serde", serde(rename = "etc2-rgb8a1unorm-srgb"))]
     Etc2Rgb8A1UnormSrgb,
     /// 4x4 block compressed texture. 16 bytes per block (8 bit/px). Complex pallet. 8 bit integer RGB + 8 bit alpha.
     /// [0, 255] converted to/from float [0, 1] in shader.
     ///
     /// [`Features::TEXTURE_COMPRESSION_ETC2`] must be enabled to use this texture format.
-    #[cfg_attr(feature = "serde", serde(rename = "etc2-rgba8unorm"))]
     Etc2Rgba8Unorm,
     /// 4x4 block compressed texture. 16 bytes per block (8 bit/px). Complex pallet. 8 bit integer RGB + 8 bit alpha.
     /// Srgb-color [0, 255] converted to/from linear-color float [0, 1] in shader.
     ///
     /// [`Features::TEXTURE_COMPRESSION_ETC2`] must be enabled to use this texture format.
-    #[cfg_attr(feature = "serde", serde(rename = "etc2-rgba8unorm-srgb"))]
     Etc2Rgba8UnormSrgb,
     /// 4x4 block compressed texture. 8 bytes per block (4 bit/px). Complex pallet. 11 bit integer R.
     /// [0, 255] converted to/from float [0, 1] in shader.
     ///
     /// [`Features::TEXTURE_COMPRESSION_ETC2`] must be enabled to use this texture format.
-    #[cfg_attr(feature = "serde", serde(rename = "eac-r11unorm"))]
     EacR11Unorm,
     /// 4x4 block compressed texture. 8 bytes per block (4 bit/px). Complex pallet. 11 bit integer R.
     /// [-127, 127] converted to/from float [-1, 1] in shader.
     ///
     /// [`Features::TEXTURE_COMPRESSION_ETC2`] must be enabled to use this texture format.
-    #[cfg_attr(feature = "serde", serde(rename = "eac-r11snorm"))]
     EacR11Snorm,
     /// 4x4 block compressed texture. 16 bytes per block (8 bit/px). Complex pallet. 11 bit integer R + 11 bit integer G.
     /// [0, 255] converted to/from float [0, 1] in shader.
     ///
     /// [`Features::TEXTURE_COMPRESSION_ETC2`] must be enabled to use this texture format.
-    #[cfg_attr(feature = "serde", serde(rename = "eac-rg11unorm"))]
     EacRg11Unorm,
     /// 4x4 block compressed texture. 16 bytes per block (8 bit/px). Complex pallet. 11 bit integer R + 11 bit integer G.
     /// [-127, 127] converted to/from float [-1, 1] in shader.
     ///
     /// [`Features::TEXTURE_COMPRESSION_ETC2`] must be enabled to use this texture format.
-    #[cfg_attr(feature = "serde", serde(rename = "eac-rg11snorm"))]
     EacRg11Snorm,
     /// block compressed texture. 16 bytes per block.
     ///
@@ -2113,9 +2098,258 @@ pub enum TextureFormat {
     Astc {
         /// compressed block dimensions
         block: AstcBlock,
-        ///
+        /// ASTC RGBA channel
         channel: AstcChannel,
     },
+}
+
+#[cfg(any(feature = "serde", test))]
+impl<'de> Deserialize<'de> for TextureFormat {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        use serde::de::{self, Error, Unexpected};
+
+        struct TextureFormatVisitor;
+
+        impl<'de> de::Visitor<'de> for TextureFormatVisitor {
+            type Value = TextureFormat;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("a valid texture format")
+            }
+
+            fn visit_str<E: Error>(self, s: &str) -> Result<Self::Value, E> {
+                let format = match s {
+                    "r8unorm" => TextureFormat::R8Unorm,
+                    "r8snorm" => TextureFormat::R8Snorm,
+                    "r8uint" => TextureFormat::R8Uint,
+                    "r8sint" => TextureFormat::R8Sint,
+                    "r16uint" => TextureFormat::R16Uint,
+                    "r16sint" => TextureFormat::R16Sint,
+                    "r16unorm" => TextureFormat::R16Unorm,
+                    "r16snorm" => TextureFormat::R16Snorm,
+                    "r16float" => TextureFormat::R16Float,
+                    "rg8unorm" => TextureFormat::Rg8Unorm,
+                    "rg8snorm" => TextureFormat::Rg8Snorm,
+                    "rg8uint" => TextureFormat::Rg8Uint,
+                    "rg8sint" => TextureFormat::Rg8Sint,
+                    "r32uint" => TextureFormat::R32Uint,
+                    "r32sint" => TextureFormat::R32Sint,
+                    "r32float" => TextureFormat::R32Float,
+                    "rg16uint" => TextureFormat::Rg16Uint,
+                    "rg16sint" => TextureFormat::Rg16Sint,
+                    "rg16unorm" => TextureFormat::Rg16Unorm,
+                    "rg16snorm" => TextureFormat::Rg16Snorm,
+                    "rg16float" => TextureFormat::Rg16Float,
+                    "rgba8unorm" => TextureFormat::Rgba8Unorm,
+                    "rgba8unorm-srgb" => TextureFormat::Rgba8UnormSrgb,
+                    "rgba8snorm" => TextureFormat::Rgba8Snorm,
+                    "rgba8uint" => TextureFormat::Rgba8Uint,
+                    "rgba8sint" => TextureFormat::Rgba8Sint,
+                    "bgra8unorm" => TextureFormat::Bgra8Unorm,
+                    "bgra8unorm-srgb" => TextureFormat::Bgra8UnormSrgb,
+                    "rgb10a2unorm" => TextureFormat::Rgb10a2Unorm,
+                    "rg11b10ufloat" => TextureFormat::Rg11b10Float,
+                    "rg32uint" => TextureFormat::Rg32Uint,
+                    "rg32sint" => TextureFormat::Rg32Sint,
+                    "rg32float" => TextureFormat::Rg32Float,
+                    "rgba16uint" => TextureFormat::Rgba16Uint,
+                    "rgba16sint" => TextureFormat::Rgba16Sint,
+                    "rgba16unorm" => TextureFormat::Rgba16Unorm,
+                    "rgba16snorm" => TextureFormat::Rgba16Snorm,
+                    "rgba16float" => TextureFormat::Rgba16Float,
+                    "rgba32uint" => TextureFormat::Rgba32Uint,
+                    "rgba32sint" => TextureFormat::Rgba32Sint,
+                    "rgba32float" => TextureFormat::Rgba32Float,
+                    "stencil8" => TextureFormat::Stencil8,
+                    "depth32float" => TextureFormat::Depth32Float,
+                    "depth32float-stencil8" => TextureFormat::Depth32FloatStencil8,
+                    "depth16unorm" => TextureFormat::Depth16Unorm,
+                    "depth24plus" => TextureFormat::Depth24Plus,
+                    "depth24plus-stencil8" => TextureFormat::Depth24PlusStencil8,
+                    "rgb9e5ufloat" => TextureFormat::Rgb9e5Ufloat,
+                    "bc1-rgba-unorm" => TextureFormat::Bc1RgbaUnorm,
+                    "bc1-rgba-unorm-srgb" => TextureFormat::Bc1RgbaUnormSrgb,
+                    "bc2-rgba-unorm" => TextureFormat::Bc2RgbaUnorm,
+                    "bc2-rgba-unorm-srgb" => TextureFormat::Bc2RgbaUnormSrgb,
+                    "bc3-rgba-unorm" => TextureFormat::Bc3RgbaUnorm,
+                    "bc3-rgba-unorm-srgb" => TextureFormat::Bc3RgbaUnormSrgb,
+                    "bc4-r-unorm" => TextureFormat::Bc4RUnorm,
+                    "bc4-r-snorm" => TextureFormat::Bc4RSnorm,
+                    "bc5-rg-unorm" => TextureFormat::Bc5RgUnorm,
+                    "bc5-rg-snorm" => TextureFormat::Bc5RgSnorm,
+                    "bc6h-rgb-ufloat" => TextureFormat::Bc6hRgbUfloat,
+                    "bc6h-rgb-float" => TextureFormat::Bc6hRgbSfloat,
+                    "bc7-rgba-unorm" => TextureFormat::Bc7RgbaUnorm,
+                    "bc7-rgba-unorm-srgb" => TextureFormat::Bc7RgbaUnormSrgb,
+                    "etc2-rgb8unorm" => TextureFormat::Etc2Rgb8Unorm,
+                    "etc2-rgb8unorm-srgb" => TextureFormat::Etc2Rgb8UnormSrgb,
+                    "etc2-rgb8a1unorm" => TextureFormat::Etc2Rgb8A1Unorm,
+                    "etc2-rgb8a1unorm-srgb" => TextureFormat::Etc2Rgb8A1UnormSrgb,
+                    "etc2-rgba8unorm" => TextureFormat::Etc2Rgba8Unorm,
+                    "etc2-rgba8unorm-srgb" => TextureFormat::Etc2Rgba8UnormSrgb,
+                    "eac-r11unorm" => TextureFormat::EacR11Unorm,
+                    "eac-r11snorm" => TextureFormat::EacR11Snorm,
+                    "eac-rg11unorm" => TextureFormat::EacRg11Unorm,
+                    "eac-rg11snorm" => TextureFormat::EacRg11Snorm,
+                    other => {
+                        if let Some(parts) = other.strip_prefix("astc-") {
+                            let (block, channel) = parts
+                                .split_once('-')
+                                .ok_or_else(|| E::invalid_value(Unexpected::Str(s), &self))?;
+
+                            let block = match block {
+                                "4x4" => AstcBlock::B4x4,
+                                "5x4" => AstcBlock::B5x4,
+                                "5x5" => AstcBlock::B5x5,
+                                "6x5" => AstcBlock::B6x5,
+                                "6x6" => AstcBlock::B6x6,
+                                "8x5" => AstcBlock::B8x5,
+                                "8x6" => AstcBlock::B8x6,
+                                "8x8" => AstcBlock::B8x8,
+                                "10x5" => AstcBlock::B10x5,
+                                "10x6" => AstcBlock::B10x6,
+                                "10x8" => AstcBlock::B10x8,
+                                "10x10" => AstcBlock::B10x10,
+                                "12x10" => AstcBlock::B12x10,
+                                "12x12" => AstcBlock::B12x12,
+                                _ => return Err(E::invalid_value(Unexpected::Str(s), &self)),
+                            };
+
+                            let channel = match channel {
+                                "unorm" => AstcChannel::Unorm,
+                                "unorm-srgb" => AstcChannel::UnormSrgb,
+                                "hdr" => AstcChannel::Hdr,
+                                _ => return Err(E::invalid_value(Unexpected::Str(s), &self)),
+                            };
+
+                            TextureFormat::Astc { block, channel }
+                        } else {
+                            return Err(E::invalid_value(Unexpected::Str(s), &self));
+                        }
+                    }
+                };
+
+                Ok(format)
+            }
+        }
+
+        deserializer.deserialize_str(TextureFormatVisitor)
+    }
+}
+
+#[cfg(any(feature = "serde", test))]
+impl Serialize for TextureFormat {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let s: String;
+        let name = match *self {
+            TextureFormat::R8Unorm => "r8unorm",
+            TextureFormat::R8Snorm => "r8snorm",
+            TextureFormat::R8Uint => "r8uint",
+            TextureFormat::R8Sint => "r8sint",
+            TextureFormat::R16Uint => "r16uint",
+            TextureFormat::R16Sint => "r16sint",
+            TextureFormat::R16Unorm => "r16unorm",
+            TextureFormat::R16Snorm => "r16snorm",
+            TextureFormat::R16Float => "r16float",
+            TextureFormat::Rg8Unorm => "rg8unorm",
+            TextureFormat::Rg8Snorm => "rg8snorm",
+            TextureFormat::Rg8Uint => "rg8uint",
+            TextureFormat::Rg8Sint => "rg8sint",
+            TextureFormat::R32Uint => "r32uint",
+            TextureFormat::R32Sint => "r32sint",
+            TextureFormat::R32Float => "r32float",
+            TextureFormat::Rg16Uint => "rg16uint",
+            TextureFormat::Rg16Sint => "rg16sint",
+            TextureFormat::Rg16Unorm => "rg16unorm",
+            TextureFormat::Rg16Snorm => "rg16snorm",
+            TextureFormat::Rg16Float => "rg16float",
+            TextureFormat::Rgba8Unorm => "rgba8unorm",
+            TextureFormat::Rgba8UnormSrgb => "rgba8unorm-srgb",
+            TextureFormat::Rgba8Snorm => "rgba8snorm",
+            TextureFormat::Rgba8Uint => "rgba8uint",
+            TextureFormat::Rgba8Sint => "rgba8sint",
+            TextureFormat::Bgra8Unorm => "bgra8unorm",
+            TextureFormat::Bgra8UnormSrgb => "bgra8unorm-srgb",
+            TextureFormat::Rgb10a2Unorm => "rgb10a2unorm",
+            TextureFormat::Rg11b10Float => "rg11b10ufloat",
+            TextureFormat::Rg32Uint => "rg32uint",
+            TextureFormat::Rg32Sint => "rg32sint",
+            TextureFormat::Rg32Float => "rg32float",
+            TextureFormat::Rgba16Uint => "rgba16uint",
+            TextureFormat::Rgba16Sint => "rgba16sint",
+            TextureFormat::Rgba16Unorm => "rgba16unorm",
+            TextureFormat::Rgba16Snorm => "rgba16snorm",
+            TextureFormat::Rgba16Float => "rgba16float",
+            TextureFormat::Rgba32Uint => "rgba32uint",
+            TextureFormat::Rgba32Sint => "rgba32sint",
+            TextureFormat::Rgba32Float => "rgba32float",
+            TextureFormat::Stencil8 => "stencil8",
+            TextureFormat::Depth32Float => "depth32float",
+            TextureFormat::Depth16Unorm => "depth16unorm",
+            TextureFormat::Depth32FloatStencil8 => "depth32float-stencil8",
+            TextureFormat::Depth24Plus => "depth24plus",
+            TextureFormat::Depth24PlusStencil8 => "depth24plus-stencil8",
+            TextureFormat::Rgb9e5Ufloat => "rgb9e5ufloat",
+            TextureFormat::Bc1RgbaUnorm => "bc1-rgba-unorm",
+            TextureFormat::Bc1RgbaUnormSrgb => "bc1-rgba-unorm-srgb",
+            TextureFormat::Bc2RgbaUnorm => "bc2-rgba-unorm",
+            TextureFormat::Bc2RgbaUnormSrgb => "bc2-rgba-unorm-srgb",
+            TextureFormat::Bc3RgbaUnorm => "bc3-rgba-unorm",
+            TextureFormat::Bc3RgbaUnormSrgb => "bc3-rgba-unorm-srgb",
+            TextureFormat::Bc4RUnorm => "bc4-r-unorm",
+            TextureFormat::Bc4RSnorm => "bc4-r-snorm",
+            TextureFormat::Bc5RgUnorm => "bc5-rg-unorm",
+            TextureFormat::Bc5RgSnorm => "bc5-rg-snorm",
+            TextureFormat::Bc6hRgbUfloat => "bc6h-rgb-ufloat",
+            TextureFormat::Bc6hRgbSfloat => "bc6h-rgb-float",
+            TextureFormat::Bc7RgbaUnorm => "bc7-rgba-unorm",
+            TextureFormat::Bc7RgbaUnormSrgb => "bc7-rgba-unorm-srgb",
+            TextureFormat::Etc2Rgb8Unorm => "etc2-rgb8unorm",
+            TextureFormat::Etc2Rgb8UnormSrgb => "etc2-rgb8unorm-srgb",
+            TextureFormat::Etc2Rgb8A1Unorm => "etc2-rgb8a1unorm",
+            TextureFormat::Etc2Rgb8A1UnormSrgb => "etc2-rgb8a1unorm-srgb",
+            TextureFormat::Etc2Rgba8Unorm => "etc2-rgba8unorm",
+            TextureFormat::Etc2Rgba8UnormSrgb => "etc2-rgba8unorm-srgb",
+            TextureFormat::EacR11Unorm => "eac-r11unorm",
+            TextureFormat::EacR11Snorm => "eac-r11snorm",
+            TextureFormat::EacRg11Unorm => "eac-rg11unorm",
+            TextureFormat::EacRg11Snorm => "eac-rg11snorm",
+            TextureFormat::Astc { block, channel } => {
+                let block = match block {
+                    AstcBlock::B4x4 => "4x4",
+                    AstcBlock::B5x4 => "5x4",
+                    AstcBlock::B5x5 => "5x5",
+                    AstcBlock::B6x5 => "6x5",
+                    AstcBlock::B6x6 => "6x6",
+                    AstcBlock::B8x5 => "8x5",
+                    AstcBlock::B8x6 => "8x6",
+                    AstcBlock::B8x8 => "8x8",
+                    AstcBlock::B10x5 => "10x5",
+                    AstcBlock::B10x6 => "10x6",
+                    AstcBlock::B10x8 => "10x8",
+                    AstcBlock::B10x10 => "10x10",
+                    AstcBlock::B12x10 => "12x10",
+                    AstcBlock::B12x12 => "12x12",
+                };
+
+                let channel = match channel {
+                    AstcChannel::Unorm => "unorm",
+                    AstcChannel::UnormSrgb => "unorm-srgb",
+                    AstcChannel::Hdr => "hdr",
+                };
+
+                s = format!("astc-{block}-{channel}");
+                &s
+            }
+        };
+        serializer.serialize_str(name)
+    }
 }
 
 impl TextureFormat {
@@ -2129,7 +2363,6 @@ impl TextureFormat {
         let astc_hdr = Features::TEXTURE_COMPRESSION_ASTC_HDR;
         let norm16bit = Features::TEXTURE_FORMAT_16BIT_NORM;
         let d32_s8 = Features::DEPTH32FLOAT_STENCIL8;
-        let d24_s8 = Features::DEPTH24UNORM_STENCIL8;
 
         // Sample Types
         let uint = TextureSampleType::Uint;
@@ -2147,9 +2380,9 @@ impl TextureFormat {
 
         // Multisampling
         let noaa = TextureFormatFeatureFlags::empty();
-        let msaa = TextureFormatFeatureFlags::MULTISAMPLE;
-        let msaa_resolve =
-            TextureFormatFeatureFlags::MULTISAMPLE | TextureFormatFeatureFlags::MULTISAMPLE_RESOLVE;
+        let msaa = TextureFormatFeatureFlags::MULTISAMPLE_X4;
+        let msaa_resolve = TextureFormatFeatureFlags::MULTISAMPLE_X4
+            | TextureFormatFeatureFlags::MULTISAMPLE_RESOLVE;
 
         // Flags
         let basic =
@@ -2172,19 +2405,17 @@ impl TextureFormat {
         ) = match self {
             // Normal 8 bit textures
             Self::R8Unorm =>             (   native,   float,    linear, msaa_resolve, (1, 1),  1, attachment, 1),
-            Self::R8Snorm =>             (   native,   float,    linear,         msaa, (1, 1),  1,      basic, 1),
+            Self::R8Snorm =>             (   native,   float,    linear,         noaa, (1, 1),  1,      basic, 1),
             Self::R8Uint =>              (   native,    uint,    linear,         msaa, (1, 1),  1, attachment, 1),
             Self::R8Sint =>              (   native,    sint,    linear,         msaa, (1, 1),  1, attachment, 1),
-
             // Normal 16 bit textures
             Self::R16Uint =>             (   native,    uint,    linear,         msaa, (1, 1),  2, attachment, 1),
             Self::R16Sint =>             (   native,    sint,    linear,         msaa, (1, 1),  2, attachment, 1),
             Self::R16Float =>            (   native,   float,    linear, msaa_resolve, (1, 1),  2, attachment, 1),
             Self::Rg8Unorm =>            (   native,   float,    linear, msaa_resolve, (1, 1),  2, attachment, 2),
-            Self::Rg8Snorm =>            (   native,   float,    linear,         msaa, (1, 1),  2, attachment, 2),
+            Self::Rg8Snorm =>            (   native,   float,    linear,         noaa, (1, 1),  2,      basic, 2),
             Self::Rg8Uint =>             (   native,    uint,    linear,         msaa, (1, 1),  2, attachment, 2),
-            Self::Rg8Sint =>             (   native,    sint,    linear,         msaa, (1, 1),  2,      basic, 2),
-
+            Self::Rg8Sint =>             (   native,    sint,    linear,         msaa, (1, 1),  2, attachment, 2),
             // Normal 32 bit textures
             Self::R32Uint =>             (   native,    uint,    linear,         noaa, (1, 1),  4,  all_flags, 1),
             Self::R32Sint =>             (   native,    sint,    linear,         noaa, (1, 1),  4,  all_flags, 1),
@@ -2194,16 +2425,14 @@ impl TextureFormat {
             Self::Rg16Float =>           (   native,   float,    linear, msaa_resolve, (1, 1),  4, attachment, 2),
             Self::Rgba8Unorm =>          (   native,   float,    linear, msaa_resolve, (1, 1),  4,  all_flags, 4),
             Self::Rgba8UnormSrgb =>      (   native,   float, corrected, msaa_resolve, (1, 1),  4, attachment, 4),
-            Self::Rgba8Snorm =>          (   native,   float,    linear,         msaa, (1, 1),  4,    storage, 4),
+            Self::Rgba8Snorm =>          (   native,   float,    linear,         noaa, (1, 1),  4,    storage, 4),
             Self::Rgba8Uint =>           (   native,    uint,    linear,         msaa, (1, 1),  4,  all_flags, 4),
             Self::Rgba8Sint =>           (   native,    sint,    linear,         msaa, (1, 1),  4,  all_flags, 4),
             Self::Bgra8Unorm =>          (   native,   float,    linear, msaa_resolve, (1, 1),  4, attachment, 4),
             Self::Bgra8UnormSrgb =>      (   native,   float, corrected, msaa_resolve, (1, 1),  4, attachment, 4),
-
             // Packed 32 bit textures
             Self::Rgb10a2Unorm =>        (   native,   float,    linear, msaa_resolve, (1, 1),  4, attachment, 4),
             Self::Rg11b10Float =>        (   native,   float,    linear,         msaa, (1, 1),  4,      basic, 3),
-
             // Packed 32 bit textures
             Self::Rg32Uint =>            (   native,    uint,    linear,         noaa, (1, 1),  8,  all_flags, 2),
             Self::Rg32Sint =>            (   native,    sint,    linear,         noaa, (1, 1),  8,  all_flags, 2),
@@ -2211,22 +2440,19 @@ impl TextureFormat {
             Self::Rgba16Uint =>          (   native,    uint,    linear,         msaa, (1, 1),  8,  all_flags, 4),
             Self::Rgba16Sint =>          (   native,    sint,    linear,         msaa, (1, 1),  8,  all_flags, 4),
             Self::Rgba16Float =>         (   native,   float,    linear, msaa_resolve, (1, 1),  8,  all_flags, 4),
-
             // Packed 32 bit textures
             Self::Rgba32Uint =>          (   native,    uint,    linear,         noaa, (1, 1), 16,  all_flags, 4),
             Self::Rgba32Sint =>          (   native,    sint,    linear,         noaa, (1, 1), 16,  all_flags, 4),
             Self::Rgba32Float =>         (   native, nearest,    linear,         noaa, (1, 1), 16,  all_flags, 4),
-
             // Depth-stencil textures
-            Self::Depth32Float =>        (   native,   depth,    linear,         msaa, (1, 1),  4, attachment, 1),
-            Self::Depth32FloatStencil8 =>(   d32_s8,   depth,    linear,         msaa, (1, 1),  4, attachment, 2),
+            Self::Stencil8 =>            (   native,   depth,    linear,         msaa, (1, 1),  2, attachment, 1),
+            Self::Depth16Unorm =>        (   native,   depth,    linear,         msaa, (1, 1),  2, attachment, 1),
             Self::Depth24Plus =>         (   native,   depth,    linear,         msaa, (1, 1),  4, attachment, 1),
             Self::Depth24PlusStencil8 => (   native,   depth,    linear,         msaa, (1, 1),  4, attachment, 2),
-            Self::Depth24UnormStencil8 => (  d24_s8,   depth,    linear,         msaa, (1, 1),  4, attachment, 2),
-
+            Self::Depth32Float =>        (   native,   depth,    linear,         msaa, (1, 1),  4, attachment, 1),
+            Self::Depth32FloatStencil8 =>(   d32_s8,   depth,    linear,         msaa, (1, 1),  4, attachment, 2),
             // Packed uncompressed
             Self::Rgb9e5Ufloat =>        (   native,   float,    linear,         noaa, (1, 1),  4,      basic, 3),
-
             // Optional normalized 16-bit-per-channel formats
             Self::R16Unorm =>            (norm16bit,   float,    linear,         msaa, (1, 1),  2,    storage, 1),
             Self::R16Snorm =>            (norm16bit,   float,    linear,         msaa, (1, 1),  2,    storage, 1),
@@ -2234,7 +2460,6 @@ impl TextureFormat {
             Self::Rg16Snorm =>           (norm16bit,   float,    linear,         msaa, (1, 1),  4,    storage, 2),
             Self::Rgba16Unorm =>         (norm16bit,   float,    linear,         msaa, (1, 1),  8,    storage, 4),
             Self::Rgba16Snorm =>         (norm16bit,   float,    linear,         msaa, (1, 1),  8,    storage, 4),
-
             // BCn compressed textures
             Self::Bc1RgbaUnorm =>        (       bc,   float,    linear,         noaa, (4, 4),  8,      basic, 4),
             Self::Bc1RgbaUnormSrgb =>    (       bc,   float, corrected,         noaa, (4, 4),  8,      basic, 4),
@@ -2250,7 +2475,6 @@ impl TextureFormat {
             Self::Bc6hRgbSfloat =>       (       bc,   float,    linear,         noaa, (4, 4), 16,      basic, 3),
             Self::Bc7RgbaUnorm =>        (       bc,   float,    linear,         noaa, (4, 4), 16,      basic, 4),
             Self::Bc7RgbaUnormSrgb =>    (       bc,   float, corrected,         noaa, (4, 4), 16,      basic, 4),
-
             // ETC compressed textures
             Self::Etc2Rgb8Unorm =>       (     etc2,   float,    linear,         noaa, (4, 4),  8,      basic, 3),
             Self::Etc2Rgb8UnormSrgb =>   (     etc2,   float, corrected,         noaa, (4, 4),  8,      basic, 3),
@@ -2262,7 +2486,6 @@ impl TextureFormat {
             Self::EacR11Snorm =>         (     etc2,   float,    linear,         noaa, (4, 4),  8,      basic, 1),
             Self::EacRg11Unorm =>        (     etc2,   float,    linear,         noaa, (4, 4), 16,      basic, 2),
             Self::EacRg11Snorm =>        (     etc2,   float,    linear,         noaa, (4, 4), 16,      basic, 2),
-
             // ASTC compressed textures
             Self::Astc { block, channel } => {
                 let (feature, color_space) = match channel {
@@ -2291,10 +2514,12 @@ impl TextureFormat {
         };
 
         let mut flags = msaa_flags;
+        let filterable_sample_type = sample_type == TextureSampleType::Float { filterable: true };
         flags.set(
             TextureFormatFeatureFlags::FILTERABLE,
-            sample_type == TextureSampleType::Float { filterable: true },
+            filterable_sample_type,
         );
+        flags.set(TextureFormatFeatureFlags::BLENDABLE, filterable_sample_type);
 
         TextureFormatInfo {
             required_features,
@@ -2312,6 +2537,590 @@ impl TextureFormat {
             },
         }
     }
+}
+
+#[test]
+fn texture_format_serialize() {
+    assert_eq!(
+        serde_json::to_string(&TextureFormat::R8Unorm).unwrap(),
+        "\"r8unorm\"".to_string()
+    );
+    assert_eq!(
+        serde_json::to_string(&TextureFormat::R8Snorm).unwrap(),
+        "\"r8snorm\"".to_string()
+    );
+    assert_eq!(
+        serde_json::to_string(&TextureFormat::R8Uint).unwrap(),
+        "\"r8uint\"".to_string()
+    );
+    assert_eq!(
+        serde_json::to_string(&TextureFormat::R8Sint).unwrap(),
+        "\"r8sint\"".to_string()
+    );
+    assert_eq!(
+        serde_json::to_string(&TextureFormat::R16Uint).unwrap(),
+        "\"r16uint\"".to_string()
+    );
+    assert_eq!(
+        serde_json::to_string(&TextureFormat::R16Sint).unwrap(),
+        "\"r16sint\"".to_string()
+    );
+    assert_eq!(
+        serde_json::to_string(&TextureFormat::R16Unorm).unwrap(),
+        "\"r16unorm\"".to_string()
+    );
+    assert_eq!(
+        serde_json::to_string(&TextureFormat::R16Snorm).unwrap(),
+        "\"r16snorm\"".to_string()
+    );
+    assert_eq!(
+        serde_json::to_string(&TextureFormat::R16Float).unwrap(),
+        "\"r16float\"".to_string()
+    );
+    assert_eq!(
+        serde_json::to_string(&TextureFormat::Rg8Unorm).unwrap(),
+        "\"rg8unorm\"".to_string()
+    );
+    assert_eq!(
+        serde_json::to_string(&TextureFormat::Rg8Snorm).unwrap(),
+        "\"rg8snorm\"".to_string()
+    );
+    assert_eq!(
+        serde_json::to_string(&TextureFormat::Rg8Uint).unwrap(),
+        "\"rg8uint\"".to_string()
+    );
+    assert_eq!(
+        serde_json::to_string(&TextureFormat::Rg8Sint).unwrap(),
+        "\"rg8sint\"".to_string()
+    );
+    assert_eq!(
+        serde_json::to_string(&TextureFormat::R32Uint).unwrap(),
+        "\"r32uint\"".to_string()
+    );
+    assert_eq!(
+        serde_json::to_string(&TextureFormat::R32Sint).unwrap(),
+        "\"r32sint\"".to_string()
+    );
+    assert_eq!(
+        serde_json::to_string(&TextureFormat::R32Float).unwrap(),
+        "\"r32float\"".to_string()
+    );
+    assert_eq!(
+        serde_json::to_string(&TextureFormat::Rg16Uint).unwrap(),
+        "\"rg16uint\"".to_string()
+    );
+    assert_eq!(
+        serde_json::to_string(&TextureFormat::Rg16Sint).unwrap(),
+        "\"rg16sint\"".to_string()
+    );
+    assert_eq!(
+        serde_json::to_string(&TextureFormat::Rg16Unorm).unwrap(),
+        "\"rg16unorm\"".to_string()
+    );
+    assert_eq!(
+        serde_json::to_string(&TextureFormat::Rg16Snorm).unwrap(),
+        "\"rg16snorm\"".to_string()
+    );
+    assert_eq!(
+        serde_json::to_string(&TextureFormat::Rg16Float).unwrap(),
+        "\"rg16float\"".to_string()
+    );
+    assert_eq!(
+        serde_json::to_string(&TextureFormat::Rgba8Unorm).unwrap(),
+        "\"rgba8unorm\"".to_string()
+    );
+    assert_eq!(
+        serde_json::to_string(&TextureFormat::Rgba8UnormSrgb).unwrap(),
+        "\"rgba8unorm-srgb\"".to_string()
+    );
+    assert_eq!(
+        serde_json::to_string(&TextureFormat::Rgba8Snorm).unwrap(),
+        "\"rgba8snorm\"".to_string()
+    );
+    assert_eq!(
+        serde_json::to_string(&TextureFormat::Rgba8Uint).unwrap(),
+        "\"rgba8uint\"".to_string()
+    );
+    assert_eq!(
+        serde_json::to_string(&TextureFormat::Rgba8Sint).unwrap(),
+        "\"rgba8sint\"".to_string()
+    );
+    assert_eq!(
+        serde_json::to_string(&TextureFormat::Bgra8Unorm).unwrap(),
+        "\"bgra8unorm\"".to_string()
+    );
+    assert_eq!(
+        serde_json::to_string(&TextureFormat::Bgra8UnormSrgb).unwrap(),
+        "\"bgra8unorm-srgb\"".to_string()
+    );
+    assert_eq!(
+        serde_json::to_string(&TextureFormat::Rgb10a2Unorm).unwrap(),
+        "\"rgb10a2unorm\"".to_string()
+    );
+    assert_eq!(
+        serde_json::to_string(&TextureFormat::Rg11b10Float).unwrap(),
+        "\"rg11b10ufloat\"".to_string()
+    );
+    assert_eq!(
+        serde_json::to_string(&TextureFormat::Rg32Uint).unwrap(),
+        "\"rg32uint\"".to_string()
+    );
+    assert_eq!(
+        serde_json::to_string(&TextureFormat::Rg32Sint).unwrap(),
+        "\"rg32sint\"".to_string()
+    );
+    assert_eq!(
+        serde_json::to_string(&TextureFormat::Rg32Float).unwrap(),
+        "\"rg32float\"".to_string()
+    );
+    assert_eq!(
+        serde_json::to_string(&TextureFormat::Rgba16Uint).unwrap(),
+        "\"rgba16uint\"".to_string()
+    );
+    assert_eq!(
+        serde_json::to_string(&TextureFormat::Rgba16Sint).unwrap(),
+        "\"rgba16sint\"".to_string()
+    );
+    assert_eq!(
+        serde_json::to_string(&TextureFormat::Rgba16Unorm).unwrap(),
+        "\"rgba16unorm\"".to_string()
+    );
+    assert_eq!(
+        serde_json::to_string(&TextureFormat::Rgba16Snorm).unwrap(),
+        "\"rgba16snorm\"".to_string()
+    );
+    assert_eq!(
+        serde_json::to_string(&TextureFormat::Rgba16Float).unwrap(),
+        "\"rgba16float\"".to_string()
+    );
+    assert_eq!(
+        serde_json::to_string(&TextureFormat::Rgba32Uint).unwrap(),
+        "\"rgba32uint\"".to_string()
+    );
+    assert_eq!(
+        serde_json::to_string(&TextureFormat::Rgba32Sint).unwrap(),
+        "\"rgba32sint\"".to_string()
+    );
+    assert_eq!(
+        serde_json::to_string(&TextureFormat::Rgba32Float).unwrap(),
+        "\"rgba32float\"".to_string()
+    );
+    assert_eq!(
+        serde_json::to_string(&TextureFormat::Stencil8).unwrap(),
+        "\"stencil8\"".to_string()
+    );
+    assert_eq!(
+        serde_json::to_string(&TextureFormat::Depth32Float).unwrap(),
+        "\"depth32float\"".to_string()
+    );
+    assert_eq!(
+        serde_json::to_string(&TextureFormat::Depth16Unorm).unwrap(),
+        "\"depth16unorm\"".to_string()
+    );
+    assert_eq!(
+        serde_json::to_string(&TextureFormat::Depth32FloatStencil8).unwrap(),
+        "\"depth32float-stencil8\"".to_string()
+    );
+    assert_eq!(
+        serde_json::to_string(&TextureFormat::Depth24Plus).unwrap(),
+        "\"depth24plus\"".to_string()
+    );
+    assert_eq!(
+        serde_json::to_string(&TextureFormat::Depth24PlusStencil8).unwrap(),
+        "\"depth24plus-stencil8\"".to_string()
+    );
+    assert_eq!(
+        serde_json::to_string(&TextureFormat::Rgb9e5Ufloat).unwrap(),
+        "\"rgb9e5ufloat\"".to_string()
+    );
+    assert_eq!(
+        serde_json::to_string(&TextureFormat::Bc1RgbaUnorm).unwrap(),
+        "\"bc1-rgba-unorm\"".to_string()
+    );
+    assert_eq!(
+        serde_json::to_string(&TextureFormat::Bc1RgbaUnormSrgb).unwrap(),
+        "\"bc1-rgba-unorm-srgb\"".to_string()
+    );
+    assert_eq!(
+        serde_json::to_string(&TextureFormat::Bc2RgbaUnorm).unwrap(),
+        "\"bc2-rgba-unorm\"".to_string()
+    );
+    assert_eq!(
+        serde_json::to_string(&TextureFormat::Bc2RgbaUnormSrgb).unwrap(),
+        "\"bc2-rgba-unorm-srgb\"".to_string()
+    );
+    assert_eq!(
+        serde_json::to_string(&TextureFormat::Bc3RgbaUnorm).unwrap(),
+        "\"bc3-rgba-unorm\"".to_string()
+    );
+    assert_eq!(
+        serde_json::to_string(&TextureFormat::Bc3RgbaUnormSrgb).unwrap(),
+        "\"bc3-rgba-unorm-srgb\"".to_string()
+    );
+    assert_eq!(
+        serde_json::to_string(&TextureFormat::Bc4RUnorm).unwrap(),
+        "\"bc4-r-unorm\"".to_string()
+    );
+    assert_eq!(
+        serde_json::to_string(&TextureFormat::Bc4RSnorm).unwrap(),
+        "\"bc4-r-snorm\"".to_string()
+    );
+    assert_eq!(
+        serde_json::to_string(&TextureFormat::Bc5RgUnorm).unwrap(),
+        "\"bc5-rg-unorm\"".to_string()
+    );
+    assert_eq!(
+        serde_json::to_string(&TextureFormat::Bc5RgSnorm).unwrap(),
+        "\"bc5-rg-snorm\"".to_string()
+    );
+    assert_eq!(
+        serde_json::to_string(&TextureFormat::Bc6hRgbUfloat).unwrap(),
+        "\"bc6h-rgb-ufloat\"".to_string()
+    );
+    assert_eq!(
+        serde_json::to_string(&TextureFormat::Bc6hRgbSfloat).unwrap(),
+        "\"bc6h-rgb-float\"".to_string()
+    );
+    assert_eq!(
+        serde_json::to_string(&TextureFormat::Bc7RgbaUnorm).unwrap(),
+        "\"bc7-rgba-unorm\"".to_string()
+    );
+    assert_eq!(
+        serde_json::to_string(&TextureFormat::Bc7RgbaUnormSrgb).unwrap(),
+        "\"bc7-rgba-unorm-srgb\"".to_string()
+    );
+    assert_eq!(
+        serde_json::to_string(&TextureFormat::Etc2Rgb8Unorm).unwrap(),
+        "\"etc2-rgb8unorm\"".to_string()
+    );
+    assert_eq!(
+        serde_json::to_string(&TextureFormat::Etc2Rgb8UnormSrgb).unwrap(),
+        "\"etc2-rgb8unorm-srgb\"".to_string()
+    );
+    assert_eq!(
+        serde_json::to_string(&TextureFormat::Etc2Rgb8A1Unorm).unwrap(),
+        "\"etc2-rgb8a1unorm\"".to_string()
+    );
+    assert_eq!(
+        serde_json::to_string(&TextureFormat::Etc2Rgb8A1UnormSrgb).unwrap(),
+        "\"etc2-rgb8a1unorm-srgb\"".to_string()
+    );
+    assert_eq!(
+        serde_json::to_string(&TextureFormat::Etc2Rgba8Unorm).unwrap(),
+        "\"etc2-rgba8unorm\"".to_string()
+    );
+    assert_eq!(
+        serde_json::to_string(&TextureFormat::Etc2Rgba8UnormSrgb).unwrap(),
+        "\"etc2-rgba8unorm-srgb\"".to_string()
+    );
+    assert_eq!(
+        serde_json::to_string(&TextureFormat::EacR11Unorm).unwrap(),
+        "\"eac-r11unorm\"".to_string()
+    );
+    assert_eq!(
+        serde_json::to_string(&TextureFormat::EacR11Snorm).unwrap(),
+        "\"eac-r11snorm\"".to_string()
+    );
+    assert_eq!(
+        serde_json::to_string(&TextureFormat::EacRg11Unorm).unwrap(),
+        "\"eac-rg11unorm\"".to_string()
+    );
+    assert_eq!(
+        serde_json::to_string(&TextureFormat::EacRg11Snorm).unwrap(),
+        "\"eac-rg11snorm\"".to_string()
+    );
+}
+
+#[test]
+fn texture_format_deserialize() {
+    assert_eq!(
+        serde_json::from_str::<TextureFormat>("\"r8unorm\"").unwrap(),
+        TextureFormat::R8Unorm
+    );
+    assert_eq!(
+        serde_json::from_str::<TextureFormat>("\"r8snorm\"").unwrap(),
+        TextureFormat::R8Snorm
+    );
+    assert_eq!(
+        serde_json::from_str::<TextureFormat>("\"r8uint\"").unwrap(),
+        TextureFormat::R8Uint
+    );
+    assert_eq!(
+        serde_json::from_str::<TextureFormat>("\"r8sint\"").unwrap(),
+        TextureFormat::R8Sint
+    );
+    assert_eq!(
+        serde_json::from_str::<TextureFormat>("\"r16uint\"").unwrap(),
+        TextureFormat::R16Uint
+    );
+    assert_eq!(
+        serde_json::from_str::<TextureFormat>("\"r16sint\"").unwrap(),
+        TextureFormat::R16Sint
+    );
+    assert_eq!(
+        serde_json::from_str::<TextureFormat>("\"r16unorm\"").unwrap(),
+        TextureFormat::R16Unorm
+    );
+    assert_eq!(
+        serde_json::from_str::<TextureFormat>("\"r16snorm\"").unwrap(),
+        TextureFormat::R16Snorm
+    );
+    assert_eq!(
+        serde_json::from_str::<TextureFormat>("\"r16float\"").unwrap(),
+        TextureFormat::R16Float
+    );
+    assert_eq!(
+        serde_json::from_str::<TextureFormat>("\"rg8unorm\"").unwrap(),
+        TextureFormat::Rg8Unorm
+    );
+    assert_eq!(
+        serde_json::from_str::<TextureFormat>("\"rg8snorm\"").unwrap(),
+        TextureFormat::Rg8Snorm
+    );
+    assert_eq!(
+        serde_json::from_str::<TextureFormat>("\"rg8uint\"").unwrap(),
+        TextureFormat::Rg8Uint
+    );
+    assert_eq!(
+        serde_json::from_str::<TextureFormat>("\"rg8sint\"").unwrap(),
+        TextureFormat::Rg8Sint
+    );
+    assert_eq!(
+        serde_json::from_str::<TextureFormat>("\"r32uint\"").unwrap(),
+        TextureFormat::R32Uint
+    );
+    assert_eq!(
+        serde_json::from_str::<TextureFormat>("\"r32sint\"").unwrap(),
+        TextureFormat::R32Sint
+    );
+    assert_eq!(
+        serde_json::from_str::<TextureFormat>("\"r32float\"").unwrap(),
+        TextureFormat::R32Float
+    );
+    assert_eq!(
+        serde_json::from_str::<TextureFormat>("\"rg16uint\"").unwrap(),
+        TextureFormat::Rg16Uint
+    );
+    assert_eq!(
+        serde_json::from_str::<TextureFormat>("\"rg16sint\"").unwrap(),
+        TextureFormat::Rg16Sint
+    );
+    assert_eq!(
+        serde_json::from_str::<TextureFormat>("\"rg16unorm\"").unwrap(),
+        TextureFormat::Rg16Unorm
+    );
+    assert_eq!(
+        serde_json::from_str::<TextureFormat>("\"rg16snorm\"").unwrap(),
+        TextureFormat::Rg16Snorm
+    );
+    assert_eq!(
+        serde_json::from_str::<TextureFormat>("\"rg16float\"").unwrap(),
+        TextureFormat::Rg16Float
+    );
+    assert_eq!(
+        serde_json::from_str::<TextureFormat>("\"rgba8unorm\"").unwrap(),
+        TextureFormat::Rgba8Unorm
+    );
+    assert_eq!(
+        serde_json::from_str::<TextureFormat>("\"rgba8unorm-srgb\"").unwrap(),
+        TextureFormat::Rgba8UnormSrgb
+    );
+    assert_eq!(
+        serde_json::from_str::<TextureFormat>("\"rgba8snorm\"").unwrap(),
+        TextureFormat::Rgba8Snorm
+    );
+    assert_eq!(
+        serde_json::from_str::<TextureFormat>("\"rgba8uint\"").unwrap(),
+        TextureFormat::Rgba8Uint
+    );
+    assert_eq!(
+        serde_json::from_str::<TextureFormat>("\"rgba8sint\"").unwrap(),
+        TextureFormat::Rgba8Sint
+    );
+    assert_eq!(
+        serde_json::from_str::<TextureFormat>("\"bgra8unorm\"").unwrap(),
+        TextureFormat::Bgra8Unorm
+    );
+    assert_eq!(
+        serde_json::from_str::<TextureFormat>("\"bgra8unorm-srgb\"").unwrap(),
+        TextureFormat::Bgra8UnormSrgb
+    );
+    assert_eq!(
+        serde_json::from_str::<TextureFormat>("\"rgb10a2unorm\"").unwrap(),
+        TextureFormat::Rgb10a2Unorm
+    );
+    assert_eq!(
+        serde_json::from_str::<TextureFormat>("\"rg11b10ufloat\"").unwrap(),
+        TextureFormat::Rg11b10Float
+    );
+    assert_eq!(
+        serde_json::from_str::<TextureFormat>("\"rg32uint\"").unwrap(),
+        TextureFormat::Rg32Uint
+    );
+    assert_eq!(
+        serde_json::from_str::<TextureFormat>("\"rg32sint\"").unwrap(),
+        TextureFormat::Rg32Sint
+    );
+    assert_eq!(
+        serde_json::from_str::<TextureFormat>("\"rg32float\"").unwrap(),
+        TextureFormat::Rg32Float
+    );
+    assert_eq!(
+        serde_json::from_str::<TextureFormat>("\"rgba16uint\"").unwrap(),
+        TextureFormat::Rgba16Uint
+    );
+    assert_eq!(
+        serde_json::from_str::<TextureFormat>("\"rgba16sint\"").unwrap(),
+        TextureFormat::Rgba16Sint
+    );
+    assert_eq!(
+        serde_json::from_str::<TextureFormat>("\"rgba16unorm\"").unwrap(),
+        TextureFormat::Rgba16Unorm
+    );
+    assert_eq!(
+        serde_json::from_str::<TextureFormat>("\"rgba16snorm\"").unwrap(),
+        TextureFormat::Rgba16Snorm
+    );
+    assert_eq!(
+        serde_json::from_str::<TextureFormat>("\"rgba16float\"").unwrap(),
+        TextureFormat::Rgba16Float
+    );
+    assert_eq!(
+        serde_json::from_str::<TextureFormat>("\"rgba32uint\"").unwrap(),
+        TextureFormat::Rgba32Uint
+    );
+    assert_eq!(
+        serde_json::from_str::<TextureFormat>("\"rgba32sint\"").unwrap(),
+        TextureFormat::Rgba32Sint
+    );
+    assert_eq!(
+        serde_json::from_str::<TextureFormat>("\"rgba32float\"").unwrap(),
+        TextureFormat::Rgba32Float
+    );
+    assert_eq!(
+        serde_json::from_str::<TextureFormat>("\"stencil8\"").unwrap(),
+        TextureFormat::Stencil8
+    );
+    assert_eq!(
+        serde_json::from_str::<TextureFormat>("\"depth32float\"").unwrap(),
+        TextureFormat::Depth32Float
+    );
+    assert_eq!(
+        serde_json::from_str::<TextureFormat>("\"depth16unorm\"").unwrap(),
+        TextureFormat::Depth16Unorm
+    );
+    assert_eq!(
+        serde_json::from_str::<TextureFormat>("\"depth32float-stencil8\"").unwrap(),
+        TextureFormat::Depth32FloatStencil8
+    );
+    assert_eq!(
+        serde_json::from_str::<TextureFormat>("\"depth24plus\"").unwrap(),
+        TextureFormat::Depth24Plus
+    );
+    assert_eq!(
+        serde_json::from_str::<TextureFormat>("\"depth24plus-stencil8\"").unwrap(),
+        TextureFormat::Depth24PlusStencil8
+    );
+    assert_eq!(
+        serde_json::from_str::<TextureFormat>("\"rgb9e5ufloat\"").unwrap(),
+        TextureFormat::Rgb9e5Ufloat
+    );
+    assert_eq!(
+        serde_json::from_str::<TextureFormat>("\"bc1-rgba-unorm\"").unwrap(),
+        TextureFormat::Bc1RgbaUnorm
+    );
+    assert_eq!(
+        serde_json::from_str::<TextureFormat>("\"bc1-rgba-unorm-srgb\"").unwrap(),
+        TextureFormat::Bc1RgbaUnormSrgb
+    );
+    assert_eq!(
+        serde_json::from_str::<TextureFormat>("\"bc2-rgba-unorm\"").unwrap(),
+        TextureFormat::Bc2RgbaUnorm
+    );
+    assert_eq!(
+        serde_json::from_str::<TextureFormat>("\"bc2-rgba-unorm-srgb\"").unwrap(),
+        TextureFormat::Bc2RgbaUnormSrgb
+    );
+    assert_eq!(
+        serde_json::from_str::<TextureFormat>("\"bc3-rgba-unorm\"").unwrap(),
+        TextureFormat::Bc3RgbaUnorm
+    );
+    assert_eq!(
+        serde_json::from_str::<TextureFormat>("\"bc3-rgba-unorm-srgb\"").unwrap(),
+        TextureFormat::Bc3RgbaUnormSrgb
+    );
+    assert_eq!(
+        serde_json::from_str::<TextureFormat>("\"bc4-r-unorm\"").unwrap(),
+        TextureFormat::Bc4RUnorm
+    );
+    assert_eq!(
+        serde_json::from_str::<TextureFormat>("\"bc4-r-snorm\"").unwrap(),
+        TextureFormat::Bc4RSnorm
+    );
+    assert_eq!(
+        serde_json::from_str::<TextureFormat>("\"bc5-rg-unorm\"").unwrap(),
+        TextureFormat::Bc5RgUnorm
+    );
+    assert_eq!(
+        serde_json::from_str::<TextureFormat>("\"bc5-rg-snorm\"").unwrap(),
+        TextureFormat::Bc5RgSnorm
+    );
+    assert_eq!(
+        serde_json::from_str::<TextureFormat>("\"bc6h-rgb-ufloat\"").unwrap(),
+        TextureFormat::Bc6hRgbUfloat
+    );
+    assert_eq!(
+        serde_json::from_str::<TextureFormat>("\"bc6h-rgb-float\"").unwrap(),
+        TextureFormat::Bc6hRgbSfloat
+    );
+    assert_eq!(
+        serde_json::from_str::<TextureFormat>("\"bc7-rgba-unorm\"").unwrap(),
+        TextureFormat::Bc7RgbaUnorm
+    );
+    assert_eq!(
+        serde_json::from_str::<TextureFormat>("\"bc7-rgba-unorm-srgb\"").unwrap(),
+        TextureFormat::Bc7RgbaUnormSrgb
+    );
+    assert_eq!(
+        serde_json::from_str::<TextureFormat>("\"etc2-rgb8unorm\"").unwrap(),
+        TextureFormat::Etc2Rgb8Unorm
+    );
+    assert_eq!(
+        serde_json::from_str::<TextureFormat>("\"etc2-rgb8unorm-srgb\"").unwrap(),
+        TextureFormat::Etc2Rgb8UnormSrgb
+    );
+    assert_eq!(
+        serde_json::from_str::<TextureFormat>("\"etc2-rgb8a1unorm\"").unwrap(),
+        TextureFormat::Etc2Rgb8A1Unorm
+    );
+    assert_eq!(
+        serde_json::from_str::<TextureFormat>("\"etc2-rgb8a1unorm-srgb\"").unwrap(),
+        TextureFormat::Etc2Rgb8A1UnormSrgb
+    );
+    assert_eq!(
+        serde_json::from_str::<TextureFormat>("\"etc2-rgba8unorm\"").unwrap(),
+        TextureFormat::Etc2Rgba8Unorm
+    );
+    assert_eq!(
+        serde_json::from_str::<TextureFormat>("\"etc2-rgba8unorm-srgb\"").unwrap(),
+        TextureFormat::Etc2Rgba8UnormSrgb
+    );
+    assert_eq!(
+        serde_json::from_str::<TextureFormat>("\"eac-r11unorm\"").unwrap(),
+        TextureFormat::EacR11Unorm
+    );
+    assert_eq!(
+        serde_json::from_str::<TextureFormat>("\"eac-r11snorm\"").unwrap(),
+        TextureFormat::EacR11Snorm
+    );
+    assert_eq!(
+        serde_json::from_str::<TextureFormat>("\"eac-rg11unorm\"").unwrap(),
+        TextureFormat::EacRg11Unorm
+    );
+    assert_eq!(
+        serde_json::from_str::<TextureFormat>("\"eac-rg11snorm\"").unwrap(),
+        TextureFormat::EacRg11Snorm
+    );
 }
 
 bitflags::bitflags! {
@@ -2336,8 +3145,7 @@ bitflags::bitflags! {
     }
 }
 
-#[cfg(feature = "bitflags_serde_shim")]
-bitflags_serde_shim::impl_serde_for_bitflags!(ColorWrites);
+impl_bitflags!(ColorWrites);
 
 impl Default for ColorWrites {
     fn default() -> Self {
@@ -2426,7 +3234,7 @@ impl StencilState {
 /// Corresponds to a portion of [WebGPU `GPUDepthStencilState`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpudepthstencilstate).
 #[repr(C)]
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, Default)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub struct DepthBiasState {
@@ -2445,12 +3253,30 @@ impl DepthBiasState {
     }
 }
 
+impl Hash for DepthBiasState {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.constant.hash(state);
+        self.slope_scale.to_bits().hash(state);
+        self.clamp.to_bits().hash(state);
+    }
+}
+
+impl PartialEq for DepthBiasState {
+    fn eq(&self, other: &Self) -> bool {
+        (self.constant == other.constant)
+            && (self.slope_scale.to_bits() == other.slope_scale.to_bits())
+            && (self.clamp.to_bits() == other.clamp.to_bits())
+    }
+}
+
+impl Eq for DepthBiasState {}
+
 /// Describes the depth/stencil state in a render pipeline.
 ///
 /// Corresponds to [WebGPU `GPUDepthStencilState`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpudepthstencilstate).
 #[repr(C)]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub struct DepthStencilState {
@@ -2498,20 +3324,15 @@ impl DepthStencilState {
 /// Corresponds to [WebGPU `GPUIndexFormat`](
 /// https://gpuweb.github.io/gpuweb/#enumdef-gpuindexformat).
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Default, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub enum IndexFormat {
     /// Indices are 16 bit unsigned integers.
     Uint16 = 0,
     /// Indices are 32 bit unsigned integers.
+    #[default]
     Uint32 = 1,
-}
-
-impl Default for IndexFormat {
-    fn default() -> Self {
-        Self::Uint32
-    }
 }
 
 /// Operation to perform on the stencil value.
@@ -2519,12 +3340,13 @@ impl Default for IndexFormat {
 /// Corresponds to [WebGPU `GPUStencilOperation`](
 /// https://gpuweb.github.io/gpuweb/#enumdef-gpustenciloperation).
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Default, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub enum StencilOperation {
     /// Keep stencil value unchanged.
+    #[default]
     Keep = 0,
     /// Set stencil value to zero.
     Zero = 1,
@@ -2543,12 +3365,6 @@ pub enum StencilOperation {
     IncrementWrap = 6,
     /// Decrements stencil value by one, wrapping on underflow.
     DecrementWrap = 7,
-}
-
-impl Default for StencilOperation {
-    fn default() -> Self {
-        Self::Keep
-    }
 }
 
 /// Describes stencil state in a render pipeline.
@@ -2697,21 +3513,16 @@ impl CompareFunction {
 /// [`Vertex`]: VertexStepMode::Vertex
 /// [`Instance`]: VertexStepMode::Instance
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Default, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub enum VertexStepMode {
     /// Vertex data is advanced every vertex.
+    #[default]
     Vertex = 0,
     /// Vertex data is advanced every instance.
     Instance = 1,
-}
-
-impl Default for VertexStepMode {
-    fn default() -> Self {
-        VertexStepMode::Vertex
-    }
 }
 
 /// Vertex inputs (attributes) to shaders.
@@ -2892,8 +3703,7 @@ bitflags::bitflags! {
     }
 }
 
-#[cfg(feature = "bitflags_serde_shim")]
-bitflags_serde_shim::impl_serde_for_bitflags!(BufferUsages);
+impl_bitflags!(BufferUsages);
 
 /// Describes a [`Buffer`](../wgpu/struct.Buffer.html).
 ///
@@ -2913,11 +3723,14 @@ pub struct BufferDescriptor<L> {
     pub usage: BufferUsages,
     /// Allows a buffer to be mapped immediately after they are made. It does not have to be [`BufferUsages::MAP_READ`] or
     /// [`BufferUsages::MAP_WRITE`], all buffers are allowed to be mapped at creation.
+    ///
+    /// If this is `true`, [`size`](#structfield.size) must be a multiple of
+    /// [`COPY_BUFFER_ALIGNMENT`].
     pub mapped_at_creation: bool,
 }
 
 impl<L> BufferDescriptor<L> {
-    ///
+    /// Takes a closure and maps the label of the buffer descriptor into another.
     pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> BufferDescriptor<K> {
         BufferDescriptor {
             label: fun(&self.label),
@@ -2942,7 +3755,7 @@ pub struct CommandEncoderDescriptor<L> {
 }
 
 impl<L> CommandEncoderDescriptor<L> {
-    ///
+    /// Takes a closure and maps the label of the command encoder descriptor into another.
     pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> CommandEncoderDescriptor<K> {
         CommandEncoderDescriptor {
             label: fun(&self.label),
@@ -2958,7 +3771,7 @@ impl<T> Default for CommandEncoderDescriptor<Option<T>> {
 
 /// Behavior of the presentation engine based on frame rate.
 #[repr(C)]
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub enum PresentMode {
@@ -2984,6 +3797,7 @@ pub enum PresentMode {
     /// Supported on all platforms.
     ///
     /// If you don't know what mode to choose, choose this mode. This is traditionally called "Vsync On".
+    #[default]
     Fifo = 2,
     /// Presentation frames are kept in a First-In-First-Out queue approximately 3 frames
     /// long. Every vertical blanking period, the presentation engine will pop a frame
@@ -3027,9 +3841,41 @@ pub enum PresentMode {
     Mailbox = 5,
 }
 
-impl Default for PresentMode {
+/// Specifies how the alpha channel of the textures should be handled during
+/// compositing.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "trace", derive(Serialize))]
+#[cfg_attr(feature = "replay", derive(Deserialize))]
+pub enum CompositeAlphaMode {
+    /// Chooses either `Opaque` or `Inherit` automatically，depending on the
+    /// `alpha_mode` that the current surface can support.
+    Auto = 0,
+    /// The alpha channel, if it exists, of the textures is ignored in the
+    /// compositing process. Instead, the textures is treated as if it has a
+    /// constant alpha of 1.0.
+    Opaque = 1,
+    /// The alpha channel, if it exists, of the textures is respected in the
+    /// compositing process. The non-alpha channels of the textures are
+    /// expected to already be multiplied by the alpha channel by the
+    /// application.
+    PreMultiplied = 2,
+    /// The alpha channel, if it exists, of the textures is respected in the
+    /// compositing process. The non-alpha channels of the textures are not
+    /// expected to already be multiplied by the alpha channel by the
+    /// application; instead, the compositor will multiply the non-alpha
+    /// channels of the texture by the alpha channel during compositing.
+    PostMultiplied = 3,
+    /// The alpha channel, if it exists, of the textures is unknown for processing
+    /// during compositing. Instead, the application is responsible for setting
+    /// the composite alpha blending mode using native WSI command. If not set,
+    /// then a platform-specific default will be used.
+    Inherit = 4,
+}
+
+impl Default for CompositeAlphaMode {
     fn default() -> Self {
-        Self::Fifo
+        Self::Auto
     }
 }
 
@@ -3053,13 +3899,39 @@ bitflags::bitflags! {
         const TEXTURE_BINDING = 1 << 2;
         /// Allows a texture to be a [`BindingType::StorageTexture`] in a bind group.
         const STORAGE_BINDING = 1 << 3;
-        /// Allows a texture to be an output attachment of a renderpass.
+        /// Allows a texture to be an output attachment of a render pass.
         const RENDER_ATTACHMENT = 1 << 4;
     }
 }
 
-#[cfg(feature = "bitflags_serde_shim")]
-bitflags_serde_shim::impl_serde_for_bitflags!(TextureUsages);
+impl_bitflags!(TextureUsages);
+
+/// Defines the capabilities of a given surface and adapter.
+#[derive(Debug)]
+pub struct SurfaceCapabilities {
+    /// List of supported formats to use with the given adapter. The first format in the vector is preferred.
+    ///
+    /// Returns an empty vector if the surface is incompatible with the adapter.
+    pub formats: Vec<TextureFormat>,
+    /// List of supported presentation modes to use with the given adapter.
+    ///
+    /// Returns an empty vector if the surface is incompatible with the adapter.
+    pub present_modes: Vec<PresentMode>,
+    /// List of supported alpha modes to use with the given adapter.
+    ///
+    /// Will return at least one element, CompositeAlphaMode::Opaque or CompositeAlphaMode::Inherit.
+    pub alpha_modes: Vec<CompositeAlphaMode>,
+}
+
+impl Default for SurfaceCapabilities {
+    fn default() -> Self {
+        Self {
+            formats: Vec::new(),
+            present_modes: Vec::new(),
+            alpha_modes: vec![CompositeAlphaMode::Opaque],
+        }
+    }
+}
 
 /// Configures a [`Surface`] for presentation.
 ///
@@ -3083,6 +3955,8 @@ pub struct SurfaceConfiguration {
     /// AutoNoVsync will gracefully do a designed sets of fallbacks if their primary modes are
     /// unsupported.
     pub present_mode: PresentMode,
+    /// Specifies how the alpha channel of the textures should be handled during compositing.
+    pub alpha_mode: CompositeAlphaMode,
 }
 
 /// Status of the recieved surface image.
@@ -3102,6 +3976,43 @@ pub enum SurfaceStatus {
     Lost,
 }
 
+/// Nanosecond timestamp used by the presentation engine.
+///
+/// The specific clock depends on the window system integration (WSI) API used.
+///
+/// <table>
+/// <tr>
+///     <td>WSI
+///     <td>Clock
+/// <tr>
+///     <td>IDXGISwapchain
+///     <td><a href="https://docs.microsoft.com/en-us/windows/win32/api/profileapi/nf-profileapi-queryperformancecounter">QueryPerformanceCounter</a>
+/// <tr>
+///     <td>IPresentationManager
+///     <td><a href="https://docs.microsoft.com/en-us/windows/win32/api/realtimeapiset/nf-realtimeapiset-queryinterrupttimeprecise">QueryInterruptTimePrecise</a>
+/// <tr>
+///     <td>CAMetalLayer
+///     <td><a href="https://developer.apple.com/documentation/kernel/1462446-mach_absolute_time">mach_absolute_time</a>
+/// <tr>
+///     <td>VK_GOOGLE_display_timing
+///     <td><a href="https://linux.die.net/man/3/clock_gettime">clock_gettime(CLOCK_MONOTONIC)</a>
+/// </table>
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct PresentationTimestamp(
+    /// Timestamp in nanoseconds.
+    pub u128,
+);
+
+impl PresentationTimestamp {
+    /// A timestamp that is invalid due to the platform not having a timestamp system.
+    pub const INVALID_TIMESTAMP: Self = Self(u128::MAX);
+
+    /// Returns true if this timestamp is the invalid timestamp.
+    pub fn is_invalid(self) -> bool {
+        self == Self::INVALID_TIMESTAMP
+    }
+}
+
 /// RGBA double precision color.
 ///
 /// This is not to be used as a generic color type, only for specific wgpu interfaces.
@@ -3110,13 +4021,13 @@ pub enum SurfaceStatus {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct Color {
-    ///
+    /// Red component of the color
     pub r: f64,
-    ///
+    /// Green component of the color
     pub g: f64,
-    ///
+    /// Blue component of the color
     pub b: f64,
-    ///
+    /// Alpha component of the color
     pub a: f64,
 }
 
@@ -3190,11 +4101,11 @@ pub enum TextureDimension {
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct Origin3d {
-    ///
+    /// X position of the origin
     pub x: u32,
-    ///
+    /// Y position of the origin
     pub y: u32,
-    ///
+    /// Z position of the origin
     pub z: u32,
 }
 
@@ -3219,11 +4130,11 @@ impl Default for Origin3d {
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct Extent3d {
-    ///
+    /// Width of the extent
     pub width: u32,
-    ///
+    /// Height of the extent
     pub height: u32,
-    ///
+    /// The depth of the extent or the number of array layers
     #[cfg_attr(feature = "serde", serde(default = "default_depth"))]
     pub depth_or_array_layers: u32,
 }
@@ -3428,7 +4339,7 @@ pub struct TextureDescriptor<L> {
 }
 
 impl<L> TextureDescriptor<L> {
-    ///
+    /// Takes a closure and maps the label of the texture descriptor into another.
     pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> TextureDescriptor<K> {
         TextureDescriptor {
             label: fun(&self.label),
@@ -3494,12 +4405,13 @@ impl<L> TextureDescriptor<L> {
 /// Corresponds to [WebGPU `GPUTextureAspect`](
 /// https://gpuweb.github.io/gpuweb/#enumdef-gputextureaspect).
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Default, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub enum TextureAspect {
     /// Depth, Stencil, and Color.
+    #[default]
     All,
     /// Stencil.
     StencilOnly,
@@ -3507,18 +4419,12 @@ pub enum TextureAspect {
     DepthOnly,
 }
 
-impl Default for TextureAspect {
-    fn default() -> Self {
-        Self::All
-    }
-}
-
 /// How edges should be handled in texture addressing.
 ///
 /// Corresponds to [WebGPU `GPUAddressMode`](
 /// https://gpuweb.github.io/gpuweb/#enumdef-gpuaddressmode).
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Default, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
@@ -3527,6 +4433,7 @@ pub enum AddressMode {
     ///
     /// -0.25 -> 0.0
     /// 1.25  -> 1.0
+    #[default]
     ClampToEdge = 0,
     /// Repeat the texture in a tiling fashion
     ///
@@ -3546,18 +4453,12 @@ pub enum AddressMode {
     ClampToBorder = 3,
 }
 
-impl Default for AddressMode {
-    fn default() -> Self {
-        Self::ClampToEdge
-    }
-}
-
 /// Texel mixing mode when sampling between texels.
 ///
 /// Corresponds to [WebGPU `GPUFilterMode`](
 /// https://gpuweb.github.io/gpuweb/#enumdef-gpufiltermode).
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Default, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
@@ -3565,17 +4466,12 @@ pub enum FilterMode {
     /// Nearest neighbor sampling.
     ///
     /// This creates a pixelated effect when used as a mag filter
+    #[default]
     Nearest = 0,
     /// Linear Interpolation
     ///
     /// This makes textures smooth but blurry when used as a mag filter.
     Linear = 1,
-}
-
-impl Default for FilterMode {
-    fn default() -> Self {
-        Self::Nearest
-    }
 }
 
 /// A range of push constant memory to pass to a shader stage.
@@ -3605,7 +4501,7 @@ pub struct CommandBufferDescriptor<L> {
 }
 
 impl<L> CommandBufferDescriptor<L> {
-    ///
+    /// Takes a closure and maps the label of the command buffer descriptor into another.
     pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> CommandBufferDescriptor<K> {
         CommandBufferDescriptor {
             label: fun(&self.label),
@@ -3644,7 +4540,7 @@ pub struct RenderBundleDescriptor<L> {
 }
 
 impl<L> RenderBundleDescriptor<L> {
-    ///
+    /// Takes a closure and maps the label of the render bundle descriptor into another.
     pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> RenderBundleDescriptor<K> {
         RenderBundleDescriptor {
             label: fun(&self.label),
@@ -3713,7 +4609,7 @@ pub struct ImageDataLayout {
 ///
 /// Corresponds to [WebGPU `GPUBufferBindingType`](
 /// https://gpuweb.github.io/gpuweb/#enumdef-gpubufferbindingtype).
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub enum BufferBindingType {
@@ -3737,6 +4633,7 @@ pub enum BufferBindingType {
     ///     vec2 anotherUniform;
     /// };
     /// ```
+    #[default]
     Uniform,
     /// A storage buffer.
     ///
@@ -3772,12 +4669,6 @@ pub enum BufferBindingType {
         /// ```
         read_only: bool,
     },
-}
-
-impl Default for BufferBindingType {
-    fn default() -> Self {
-        Self::Uniform
-    }
 }
 
 /// Specific type of a sample in a texture binding.
@@ -4139,6 +5030,61 @@ pub struct ImageSubresourceRange {
 }
 
 impl ImageSubresourceRange {
+    /// Returns if the given range represents a full resource, with a texture of the given
+    /// layer count and mip count.
+    ///
+    /// ```rust
+    /// # use wgpu_types as wgpu;
+    /// use std::num::NonZeroU32;
+    ///
+    /// let range_none = wgpu::ImageSubresourceRange {
+    ///     aspect: wgpu::TextureAspect::All,
+    ///     base_mip_level: 0,
+    ///     mip_level_count: None,
+    ///     base_array_layer: 0,
+    ///     array_layer_count: None,
+    /// };
+    /// assert_eq!(range_none.is_full_resource(5, 10), true);
+    ///
+    /// let range_some = wgpu::ImageSubresourceRange {
+    ///     aspect: wgpu::TextureAspect::All,
+    ///     base_mip_level: 0,
+    ///     mip_level_count: NonZeroU32::new(5),
+    ///     base_array_layer: 0,
+    ///     array_layer_count: NonZeroU32::new(10),
+    /// };
+    /// assert_eq!(range_some.is_full_resource(5, 10), true);
+    ///
+    /// let range_mixed = wgpu::ImageSubresourceRange {
+    ///     aspect: wgpu::TextureAspect::All,
+    ///     base_mip_level: 0,
+    ///     // Only partial resource
+    ///     mip_level_count: NonZeroU32::new(3),
+    ///     base_array_layer: 0,
+    ///     array_layer_count: None,
+    /// };
+    /// assert_eq!(range_mixed.is_full_resource(5, 10), false);
+    /// ```
+    pub fn is_full_resource(&self, mip_levels: u32, array_layers: u32) -> bool {
+        // Mip level count and array layer count need to deal with both the None and Some(count) case.
+        let mip_level_count = self.mip_level_count.map_or(mip_levels, NonZeroU32::get);
+        let array_layer_count = self.array_layer_count.map_or(array_layers, NonZeroU32::get);
+
+        let aspect_eq = self.aspect == TextureAspect::All;
+
+        let base_mip_level_eq = self.base_mip_level == 0;
+        let mip_level_count_eq = mip_level_count == mip_levels;
+
+        let base_array_layer_eq = self.base_array_layer == 0;
+        let array_layer_count_eq = array_layer_count == array_layers;
+
+        aspect_eq
+            && base_mip_level_eq
+            && mip_level_count_eq
+            && base_array_layer_eq
+            && array_layer_count_eq
+    }
+
     /// Returns the mip level range of a subresource range describes for a specific texture.
     pub fn mip_range<L>(&self, texture_desc: &TextureDescriptor<L>) -> Range<u32> {
         self.base_mip_level..match self.mip_level_count {
@@ -4201,7 +5147,7 @@ pub struct QuerySetDescriptor<L> {
 }
 
 impl<L> QuerySetDescriptor<L> {
-    ///
+    /// Takes a closure and maps the label of the query set descriptor into another.
     pub fn map_label<'a, K>(&'a self, fun: impl FnOnce(&'a L) -> K) -> QuerySetDescriptor<K> {
         QuerySetDescriptor {
             label: fun(&self.label),
@@ -4276,8 +5222,7 @@ bitflags::bitflags! {
     }
 }
 
-#[cfg(feature = "bitflags_serde_shim")]
-bitflags_serde_shim::impl_serde_for_bitflags!(PipelineStatisticsTypes);
+impl_bitflags!(PipelineStatisticsTypes);
 
 /// Argument buffer layout for draw_indirect commands.
 #[repr(C)]

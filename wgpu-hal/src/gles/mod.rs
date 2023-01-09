@@ -68,6 +68,8 @@ mod conv;
 mod device;
 mod queue;
 
+use crate::{CopyExtent, TextureDescriptor};
+
 #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
 pub use self::egl::{AdapterContext, AdapterContextLock};
 #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
@@ -82,7 +84,7 @@ use arrayvec::ArrayVec;
 
 use glow::HasContext;
 
-use std::{ops::Range, sync::Arc};
+use std::{fmt, ops::Range, sync::Arc};
 
 #[derive(Clone)]
 pub struct Api;
@@ -146,6 +148,8 @@ bitflags::bitflags! {
         const COLOR_BUFFER_HALF_FLOAT = 1 << 8;
         /// Supports `f11/f10` and `f32` color buffers
         const COLOR_BUFFER_FLOAT = 1 << 9;
+        /// Supports linear flitering `f32` textures.
+        const TEXTURE_FLOAT_LINEAR = 1 << 10;
     }
 }
 
@@ -265,12 +269,13 @@ impl TextureInner {
 #[derive(Debug)]
 pub struct Texture {
     inner: TextureInner,
+    drop_guard: Option<crate::DropGuard>,
     mip_level_count: u32,
     array_layer_count: u32,
     format: wgt::TextureFormat,
     #[allow(unused)]
     format_desc: TextureFormatDesc,
-    copy_size: crate::CopyExtent,
+    copy_size: CopyExtent,
     is_cubemap: bool,
 }
 
@@ -278,6 +283,7 @@ impl Texture {
     pub fn default_framebuffer(format: wgt::TextureFormat) -> Self {
         Self {
             inner: TextureInner::DefaultRenderbuffer,
+            drop_guard: None,
             mip_level_count: 1,
             array_layer_count: 1,
             format,
@@ -286,12 +292,45 @@ impl Texture {
                 external: 0,
                 data_type: 0,
             },
-            copy_size: crate::CopyExtent {
+            copy_size: CopyExtent {
                 width: 0,
                 height: 0,
                 depth: 0,
             },
             is_cubemap: false,
+        }
+    }
+
+    /// Returns the `target`, whether the image is 3d and whether the image is a cubemap.
+    fn get_info_from_desc(
+        copy_size: &mut CopyExtent,
+        desc: &TextureDescriptor,
+    ) -> (u32, bool, bool) {
+        match desc.dimension {
+            wgt::TextureDimension::D1 | wgt::TextureDimension::D2 => {
+                if desc.size.depth_or_array_layers > 1 {
+                    //HACK: detect a cube map
+                    let cube_count = if desc.size.width == desc.size.height
+                        && desc.size.depth_or_array_layers % 6 == 0
+                        && desc.sample_count == 1
+                    {
+                        Some(desc.size.depth_or_array_layers / 6)
+                    } else {
+                        None
+                    };
+                    match cube_count {
+                        None => (glow::TEXTURE_2D_ARRAY, true, false),
+                        Some(1) => (glow::TEXTURE_CUBE_MAP, false, true),
+                        Some(_) => (glow::TEXTURE_CUBE_MAP_ARRAY, true, true),
+                    }
+                } else {
+                    (glow::TEXTURE_2D, false, false)
+                }
+            }
+            wgt::TextureDimension::D3 => {
+                copy_size.depth = desc.size.depth_or_array_layers;
+                (glow::TEXTURE_3D, true, false)
+            }
         }
     }
 }
@@ -465,6 +504,7 @@ pub struct RenderPipeline {
     depth: Option<DepthState>,
     depth_bias: wgt::DepthBiasState,
     stencil: Option<StencilState>,
+    alpha_to_coverage_enabled: bool,
 }
 
 // SAFE: WASM doesn't have threads
@@ -705,6 +745,7 @@ enum Command {
     SetDepth(DepthState),
     SetDepthBias(wgt::DepthBiasState),
     ConfigureDepthStencil(crate::FormatAspects),
+    SetAlphaToCoverage(bool),
     SetVertexAttribute {
         buffer: Option<glow::Buffer>,
         buffer_desc: VertexBufferDesc,
@@ -758,6 +799,16 @@ pub struct CommandBuffer {
     queries: Vec<glow::Query>,
 }
 
+impl fmt::Debug for CommandBuffer {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut builder = f.debug_struct("CommandBuffer");
+        if let Some(ref label) = self.label {
+            builder.field("label", label);
+        }
+        builder.finish()
+    }
+}
+
 //TODO: we would have something like `Arc<typed_arena::Arena>`
 // here and in the command buffers. So that everything grows
 // inside the encoder and stays there until `reset_all`.
@@ -766,4 +817,12 @@ pub struct CommandEncoder {
     cmd_buffer: CommandBuffer,
     state: command::State,
     private_caps: PrivateCapabilities,
+}
+
+impl fmt::Debug for CommandEncoder {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("CommandEncoder")
+            .field("cmd_buffer", &self.cmd_buffer)
+            .finish()
+    }
 }

@@ -63,7 +63,9 @@ pub enum LoadOp {
 #[cfg_attr(any(feature = "serial-pass", feature = "replay"), derive(Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub enum StoreOp {
-    /// Discards the content of the render target. If you don't care about the contents of the target, this can be faster.
+    /// Discards the content of the render target.
+    ///
+    /// If you don't care about the contents of the target, this can be faster.
     Discard = 0,
     /// Store the result of the renderpass.
     Store = 1,
@@ -75,15 +77,20 @@ pub enum StoreOp {
 #[cfg_attr(any(feature = "serial-pass", feature = "trace"), derive(Serialize))]
 #[cfg_attr(any(feature = "serial-pass", feature = "replay"), derive(Deserialize))]
 pub struct PassChannel<V> {
-    /// Operation to perform to the output attachment at the start of a renderpass. This must be clear if it
-    /// is the first renderpass rendering to a swap chain image.
+    /// Operation to perform to the output attachment at the start of a
+    /// renderpass.
+    ///
+    /// This must be clear if it is the first renderpass rendering to a swap
+    /// chain image.
     pub load_op: LoadOp,
     /// Operation to perform to the output attachment at the end of a renderpass.
     pub store_op: StoreOp,
-    /// If load_op is [`LoadOp::Clear`], the attachment will be cleared to this color.
+    /// If load_op is [`LoadOp::Clear`], the attachment will be cleared to this
+    /// color.
     pub clear_value: V,
-    /// If true, the relevant channel is not changed by a renderpass, and the corresponding attachment
-    /// can be used inside the pass by other read-only usages.
+    /// If true, the relevant channel is not changed by a renderpass, and the
+    /// corresponding attachment can be used inside the pass by other read-only
+    /// usages.
     pub read_only: bool,
 }
 
@@ -236,16 +243,17 @@ impl RenderPass {
 
 impl fmt::Debug for RenderPass {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "RenderPass {{ encoder_id: {:?}, color_targets: {:?}, depth_stencil_target: {:?}, data: {:?} commands, {:?} dynamic offsets, and {:?} push constant u32s }}",
-            self.parent_id,
-            self.color_targets,
-            self.depth_stencil_target,
-            self.base.commands.len(),
-            self.base.dynamic_offsets.len(),
-            self.base.push_constant_data.len(),
-        )
+        f.debug_struct("RenderPass")
+            .field("encoder_id", &self.parent_id)
+            .field("color_targets", &self.color_targets)
+            .field("depth_stencil_target", &self.depth_stencil_target)
+            .field("command count", &self.base.commands.len())
+            .field("dynamic offset count", &self.base.dynamic_offsets.len())
+            .field(
+                "push constant u32 count",
+                &self.base.push_constant_data.len(),
+            )
+            .finish()
     }
 }
 
@@ -595,7 +603,8 @@ type AttachmentDataVec<T> = ArrayVec<T, MAX_TOTAL_ATTACHMENTS>;
 struct RenderPassInfo<'a, A: HalApi> {
     context: RenderPassContext,
     usage_scope: UsageScope<A>,
-    render_attachments: AttachmentDataVec<RenderAttachment<'a>>, // All render attachments, including depth/stencil
+    /// All render attachments, including depth/stencil
+    render_attachments: AttachmentDataVec<RenderAttachment<'a>>,
     is_depth_read_only: bool,
     is_stencil_read_only: bool,
     extent: wgt::Extent3d,
@@ -633,8 +642,9 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
             );
         }
         if channel.store_op == StoreOp::Discard {
-            // the discard happens at the *end* of a pass
-            // but recording the discard right away be alright since the texture can't be used during the pass anyways
+            // the discard happens at the *end* of a pass, but recording the
+            // discard right away be alright since the texture can't be used
+            // during the pass anyways
             texture_memory_actions.discard(TextureSurfaceDiscard {
                 texture: view.parent_id.value.0,
                 mip_level: view.selector.mips.start,
@@ -722,9 +732,6 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                     expected: sample_count,
                 });
             }
-            if sample_count != 1 && sample_count != 4 {
-                return Err(RenderPassErrorInner::InvalidSampleCount(sample_count));
-            }
             attachment_type_name = type_name;
             Ok(())
         };
@@ -769,15 +776,27 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                     &mut pending_discard_init_fixups,
                 );
             } else {
-                // This is the only place (anywhere in wgpu) where Stencil & Depth init state can diverge.
-                // To safe us the overhead of tracking init state of texture aspects everywhere,
-                // we're going to cheat a little bit in order to keep the init state of both Stencil and Depth aspects in sync.
-                // The expectation is that we hit this path extremely rarely!
-
+                // This is the only place (anywhere in wgpu) where Stencil &
+                // Depth init state can diverge.
+                //
+                // To safe us the overhead of tracking init state of texture
+                // aspects everywhere, we're going to cheat a little bit in
+                // order to keep the init state of both Stencil and Depth
+                // aspects in sync. The expectation is that we hit this path
+                // extremely rarely!
+                //
                 // Diverging LoadOp, i.e. Load + Clear:
-                // Record MemoryInitKind::NeedsInitializedMemory for the entire surface, a bit wasteful on unit but no negative effect!
-                // Rationale: If the loaded channel is uninitialized it needs clearing, the cleared channel doesn't care. (If everything is already initialized nothing special happens)
-                // (possible minor optimization: Clear caused by NeedsInitializedMemory should know that it doesn't need to clear the aspect that was set to C)
+                //
+                // Record MemoryInitKind::NeedsInitializedMemory for the entire
+                // surface, a bit wasteful on unit but no negative effect!
+                //
+                // Rationale: If the loaded channel is uninitialized it needs
+                // clearing, the cleared channel doesn't care. (If everything is
+                // already initialized nothing special happens)
+                //
+                // (possible minor optimization: Clear caused by
+                // NeedsInitializedMemory should know that it doesn't need to
+                // clear the aspect that was set to C)
                 let need_init_beforehand =
                     at.depth.load_op == LoadOp::Load || at.stencil.load_op == LoadOp::Load;
                 if need_init_beforehand {
@@ -794,8 +813,12 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                 }
 
                 // Diverging Store, i.e. Discard + Store:
-                // Immediately zero out channel that is set to discard after we're done with the render pass.
-                // This allows us to set the entire surface to MemoryInitKind::ImplicitlyInitialized (if it isn't already set to NeedsInitializedMemory).
+                //
+                // Immediately zero out channel that is set to discard after
+                // we're done with the render pass. This allows us to set the
+                // entire surface to MemoryInitKind::ImplicitlyInitialized (if
+                // it isn't already set to NeedsInitializedMemory).
+                //
                 // (possible optimization: Delay and potentially drop this zeroing)
                 if at.depth.store_op != at.stencil.store_op {
                     if !need_init_beforehand {
@@ -1025,10 +1048,15 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
             };
         }
 
-        // If either only stencil or depth was discarded, we put in a special clear pass to keep the init status of the aspects in sync.
-        // We do this so we don't need to track init state for depth/stencil aspects individually.
-        // Note that we don't go the usual route of "brute force" initializing the texture when need arises here,
-        // since this path is actually something a user may genuinely want (where as the other cases are more seen along the lines as gracefully handling a user error).
+        // If either only stencil or depth was discarded, we put in a special
+        // clear pass to keep the init status of the aspects in sync. We do this
+        // so we don't need to track init state for depth/stencil aspects
+        // individually.
+        //
+        // Note that we don't go the usual route of "brute force" initializing
+        // the texture when need arises here, since this path is actually
+        // something a user may genuinely want (where as the other cases are
+        // more seen along the lines as gracefully handling a user error).
         if let Some((aspect, view)) = self.divergent_discarded_depth_stencil_aspect {
             let (depth_ops, stencil_ops) = if aspect == wgt::TextureAspect::DepthOnly {
                 (
@@ -1210,7 +1238,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .ok_or(RenderCommandError::InvalidBindGroup(bind_group_id))
                             .map_pass_err(scope)?;
                         bind_group
-                            .validate_dynamic_bindings(&temp_offsets, &cmd_buf.limits)
+                            .validate_dynamic_bindings(index, &temp_offsets, &cmd_buf.limits)
                             .map_pass_err(scope)?;
 
                         // merge the resource tracker in
@@ -1630,7 +1658,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         };
                         state.is_ready(indexed).map_pass_err(scope)?;
 
-                        //TODO: validate that base_vertex + max_index() is within the provided range
+                        //TODO: validate that base_vertex + max_index() is
+                        // within the provided range
                         let last_index = first_index + index_count;
                         let index_limit = state.index.limit;
                         if last_index > index_limit {
@@ -2084,13 +2113,15 @@ pub mod render_ffi {
         offsets: *const DynamicOffset,
         offset_length: usize,
     ) {
-        let redundant = pass.current_bind_groups.set_and_check_redundant(
-            bind_group_id,
-            index,
-            &mut pass.base.dynamic_offsets,
-            offsets,
-            offset_length,
-        );
+        let redundant = unsafe {
+            pass.current_bind_groups.set_and_check_redundant(
+                bind_group_id,
+                index,
+                &mut pass.base.dynamic_offsets,
+                offsets,
+                offset_length,
+            )
+        };
 
         if redundant {
             return;
@@ -2210,7 +2241,7 @@ pub mod render_ffi {
             0,
             "Push constant size must be aligned to 4 bytes."
         );
-        let data_slice = slice::from_raw_parts(data, size_bytes as usize);
+        let data_slice = unsafe { slice::from_raw_parts(data, size_bytes as usize) };
         let value_offset = pass.base.push_constant_data.len().try_into().expect(
             "Ran out of push constant space. Don't set 4gb of push constants per RenderPass.",
         );
@@ -2373,7 +2404,7 @@ pub mod render_ffi {
         label: RawString,
         color: u32,
     ) {
-        let bytes = ffi::CStr::from_ptr(label).to_bytes();
+        let bytes = unsafe { ffi::CStr::from_ptr(label) }.to_bytes();
         pass.base.string_data.extend_from_slice(bytes);
 
         pass.base.commands.push(RenderCommand::PushDebugGroup {
@@ -2397,7 +2428,7 @@ pub mod render_ffi {
         label: RawString,
         color: u32,
     ) {
-        let bytes = ffi::CStr::from_ptr(label).to_bytes();
+        let bytes = unsafe { ffi::CStr::from_ptr(label) }.to_bytes();
         pass.base.string_data.extend_from_slice(bytes);
 
         pass.base.commands.push(RenderCommand::InsertDebugMarker {
@@ -2449,7 +2480,9 @@ pub mod render_ffi {
         render_bundle_ids: *const id::RenderBundleId,
         render_bundle_ids_length: usize,
     ) {
-        for &bundle_id in slice::from_raw_parts(render_bundle_ids, render_bundle_ids_length) {
+        for &bundle_id in
+            unsafe { slice::from_raw_parts(render_bundle_ids, render_bundle_ids_length) }
+        {
             pass.base
                 .commands
                 .push(RenderCommand::ExecuteBundle(bundle_id));

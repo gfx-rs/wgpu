@@ -1,5 +1,8 @@
 use std::iter;
-use winapi::um::{d3d12, d3dcommon};
+use winapi::{
+    shared::minwindef::BOOL,
+    um::{d3d12, d3dcommon},
+};
 
 pub fn map_buffer_usage_to_resource_flags(usage: crate::BufferUses) -> d3d12::D3D12_RESOURCE_FLAGS {
     let mut flags = 0;
@@ -329,14 +332,14 @@ fn map_stencil_face(face: &wgt::StencilFaceState) -> d3d12::D3D12_DEPTH_STENCILO
 
 pub fn map_depth_stencil(ds: &wgt::DepthStencilState) -> d3d12::D3D12_DEPTH_STENCIL_DESC {
     d3d12::D3D12_DEPTH_STENCIL_DESC {
-        DepthEnable: if ds.is_depth_enabled() { 1 } else { 0 },
+        DepthEnable: BOOL::from(ds.is_depth_enabled()),
         DepthWriteMask: if ds.depth_write_enabled {
             d3d12::D3D12_DEPTH_WRITE_MASK_ALL
         } else {
             d3d12::D3D12_DEPTH_WRITE_MASK_ZERO
         },
         DepthFunc: map_comparison(ds.depth_compare),
-        StencilEnable: if ds.stencil.is_enabled() { 1 } else { 0 },
+        StencilEnable: BOOL::from(ds.stencil.is_enabled()),
         StencilReadMask: ds.stencil.read_mask as u8,
         StencilWriteMask: ds.stencil.write_mask as u8,
         FrontFace: map_stencil_face(&ds.stencil.front),

@@ -1,17 +1,35 @@
-// WebGPU specification requires all texture & buffer memory to be zero initialized on first read.
-// To avoid unnecessary inits, we track the initialization status of every resource and perform inits lazily.
-//
-// The granularity is different for buffers and textures:
-// * Buffer: Byte granularity to support usecases with large, partially bound buffers well.
-// * Texture: Mip-level per layer. I.e. a 2D surface is either completely initialized or not, subrects are not tracked.
-//
-// Every use of a buffer/texture generates a InitTrackerAction which are recorded and later resolved at queue submit by merging them with the current state and each other in execution order.
-// It is important to note that from the point of view of the memory init system there are two kind of writes:
-// * Full writes:
-//      Any kind of memcpy operation. These cause a `MemoryInitKind.ImplicitlyInitialized` action.
-// * (Potentially) partial writes:
-//      E.g. write use in a Shader. The system is not able to determine if a resource is fully initialized afterwards but is no longer allowed to perform any clears,
-//      therefore this leads to a `MemoryInitKind.ImplicitlyInitialized` action, exactly like a read would.
+/*! Lazy initialization of texture and buffer memory.
+
+The WebGPU specification requires all texture & buffer memory to be
+zero initialized on first read. To avoid unnecessary inits, we track
+the initialization status of every resource and perform inits lazily.
+
+The granularity is different for buffers and textures:
+
+- Buffer: Byte granularity to support usecases with large, partially
+  bound buffers well.
+
+- Texture: Mip-level per layer. That is, a 2D surface is either
+  completely initialized or not, subrects are not tracked.
+
+Every use of a buffer/texture generates a InitTrackerAction which are
+recorded and later resolved at queue submit by merging them with the
+current state and each other in execution order.
+
+It is important to note that from the point of view of the memory init
+system there are two kind of writes:
+
+- **Full writes**: Any kind of memcpy operation. These cause a
+  `MemoryInitKind.ImplicitlyInitialized` action.
+
+- **(Potentially) partial writes**: For example, write use in a
+  Shader. The system is not able to determine if a resource is fully
+  initialized afterwards but is no longer allowed to perform any
+  clears, therefore this leads to a
+  `MemoryInitKind.ImplicitlyInitialized` action, exactly like a read
+  would.
+
+ */
 
 use smallvec::SmallVec;
 use std::{fmt, iter, ops::Range};
@@ -27,13 +45,16 @@ pub(crate) use texture::{
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum MemoryInitKind {
-    // The memory range is going to be written by an already initialized source, thus doesn't need extra attention other than marking as initialized.
+    // The memory range is going to be written by an already initialized source,
+    // thus doesn't need extra attention other than marking as initialized.
     ImplicitlyInitialized,
-    // The memory range is going to be read, therefore needs to ensure prior initialization.
+    // The memory range is going to be read, therefore needs to ensure prior
+    // initialization.
     NeedsInitializedMemory,
 }
 
-// Most of the time a resource is either fully uninitialized (one element) or initialized (zero elements).
+// Most of the time a resource is either fully uninitialized (one element) or
+// initialized (zero elements).
 type UninitializedRangeVec<Idx> = SmallVec<[Range<Idx>; 1]>;
 
 /// Tracks initialization status of a linear range from 0..size
@@ -134,8 +155,10 @@ where
     }
 
     // Checks if there's any uninitialized ranges within a query.
-    // If there are any, the range returned a the subrange of the query_range that contains all these uninitialized regions.
-    // Returned range may be larger than necessary (tradeoff for making this function O(log n))
+    //
+    // If there are any, the range returned a the subrange of the query_range
+    // that contains all these uninitialized regions. Returned range may be
+    // larger than necessary (tradeoff for making this function O(log n))
     pub(crate) fn check(&self, query_range: Range<Idx>) -> Option<Range<Idx>> {
         let index = self
             .uninitialized_ranges
@@ -148,7 +171,8 @@ where
                     match self.uninitialized_ranges.get(index + 1) {
                         Some(next_range) => {
                             if next_range.start < query_range.end {
-                                // Would need to keep iterating for more accurate upper bound. Don't do that here.
+                                // Would need to keep iterating for more
+                                // accurate upper bound. Don't do that here.
                                 Some(start..query_range.end)
                             } else {
                                 Some(start..start_range.end.min(query_range.end))
@@ -248,9 +272,12 @@ mod test {
         assert_eq!(tracker.check(3..8), Some(5..8)); // left overlapping region
         assert_eq!(tracker.check(3..17), Some(5..17)); // left overlapping region + contained region
 
-        assert_eq!(tracker.check(8..22), Some(8..22)); // right overlapping region + contained region (yes, doesn't fix range end!)
-        assert_eq!(tracker.check(17..22), Some(17..20)); // right overlapping region
-        assert_eq!(tracker.check(20..25), None); // right non-overlapping
+        // right overlapping region + contained region (yes, doesn't fix range end!)
+        assert_eq!(tracker.check(8..22), Some(8..22));
+        // right overlapping region
+        assert_eq!(tracker.check(17..22), Some(17..20));
+        // right non-overlapping
+        assert_eq!(tracker.check(20..25), None);
     }
 
     #[test]

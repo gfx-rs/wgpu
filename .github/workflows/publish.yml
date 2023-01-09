@@ -24,7 +24,7 @@ jobs:
           target: wasm32-unknown-unknown
 
       - name: Install wasm-bindgen-cli
-        run: cargo install wasm-bindgen-cli --version=0.2.81
+        run: cargo install wasm-bindgen-cli --version=0.2.83
 
       - name: Build WebGPU examples
         run: cargo build --release --target wasm32-unknown-unknown --examples

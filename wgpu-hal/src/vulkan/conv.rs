@@ -64,7 +64,16 @@ impl super::PrivateCapabilities {
                     F::D32_SFLOAT_S8_UINT
                 }
             }
-            Tf::Depth24UnormStencil8 => F::D24_UNORM_S8_UINT,
+            Tf::Stencil8 => {
+                if self.texture_s8 {
+                    F::S8_UINT
+                } else if self.texture_d24_s8 {
+                    F::D24_UNORM_S8_UINT
+                } else {
+                    F::D32_SFLOAT_S8_UINT
+                }
+            }
+            Tf::Depth16Unorm => F::D16_UNORM,
             Tf::Rgb9e5Ufloat => F::E5B9G9R9_UFLOAT_PACK32,
             Tf::Bc1RgbaUnorm => F::BC1_RGBA_UNORM_BLOCK,
             Tf::Bc1RgbaUnormSrgb => F::BC1_RGBA_SRGB_BLOCK,
@@ -148,16 +157,22 @@ pub fn map_vk_surface_formats(sf: vk::SurfaceFormatKHR) -> Option<wgt::TextureFo
     use ash::vk::Format as F;
     use wgt::TextureFormat as Tf;
     // List we care about pulled from https://vulkan.gpuinfo.org/listsurfaceformats.php
-    Some(match sf.format {
-        F::B8G8R8A8_UNORM => Tf::Bgra8Unorm,
-        F::B8G8R8A8_SRGB => Tf::Bgra8UnormSrgb,
-        F::R8G8B8A8_SNORM => Tf::Rgba8Snorm,
-        F::R8G8B8A8_UNORM => Tf::Rgba8Unorm,
-        F::R8G8B8A8_SRGB => Tf::Rgba8UnormSrgb,
-        F::R16G16B16A16_SFLOAT => Tf::Rgba16Float,
-        F::R16G16B16A16_SNORM => Tf::Rgba16Snorm,
-        F::R16G16B16A16_UNORM => Tf::Rgba16Unorm,
-        F::A2B10G10R10_UNORM_PACK32 => Tf::Rgb10a2Unorm,
+    Some(match sf.color_space {
+        vk::ColorSpaceKHR::SRGB_NONLINEAR => match sf.format {
+            F::B8G8R8A8_UNORM => Tf::Bgra8Unorm,
+            F::B8G8R8A8_SRGB => Tf::Bgra8UnormSrgb,
+            F::R8G8B8A8_SNORM => Tf::Rgba8Snorm,
+            F::R8G8B8A8_UNORM => Tf::Rgba8Unorm,
+            F::R8G8B8A8_SRGB => Tf::Rgba8UnormSrgb,
+            _ => return None,
+        },
+        vk::ColorSpaceKHR::EXTENDED_SRGB_LINEAR_EXT => match sf.format {
+            F::R16G16B16A16_SFLOAT => Tf::Rgba16Float,
+            F::R16G16B16A16_SNORM => Tf::Rgba16Snorm,
+            F::R16G16B16A16_UNORM => Tf::Rgba16Unorm,
+            F::A2B10G10R10_UNORM_PACK32 => Tf::Rgb10a2Unorm,
+            _ => return None,
+        },
         _ => return None,
     })
 }
@@ -446,24 +461,29 @@ pub fn map_vk_present_mode(mode: vk::PresentModeKHR) -> Option<wgt::PresentMode>
     }
 }
 
-pub fn map_composite_alpha_mode(mode: crate::CompositeAlphaMode) -> vk::CompositeAlphaFlagsKHR {
+pub fn map_composite_alpha_mode(mode: wgt::CompositeAlphaMode) -> vk::CompositeAlphaFlagsKHR {
     match mode {
-        crate::CompositeAlphaMode::Opaque => vk::CompositeAlphaFlagsKHR::OPAQUE,
-        crate::CompositeAlphaMode::PostMultiplied => vk::CompositeAlphaFlagsKHR::POST_MULTIPLIED,
-        crate::CompositeAlphaMode::PreMultiplied => vk::CompositeAlphaFlagsKHR::PRE_MULTIPLIED,
+        wgt::CompositeAlphaMode::Opaque => vk::CompositeAlphaFlagsKHR::OPAQUE,
+        wgt::CompositeAlphaMode::PreMultiplied => vk::CompositeAlphaFlagsKHR::PRE_MULTIPLIED,
+        wgt::CompositeAlphaMode::PostMultiplied => vk::CompositeAlphaFlagsKHR::POST_MULTIPLIED,
+        wgt::CompositeAlphaMode::Inherit => vk::CompositeAlphaFlagsKHR::INHERIT,
+        wgt::CompositeAlphaMode::Auto => unreachable!(),
     }
 }
 
-pub fn map_vk_composite_alpha(flags: vk::CompositeAlphaFlagsKHR) -> Vec<crate::CompositeAlphaMode> {
+pub fn map_vk_composite_alpha(flags: vk::CompositeAlphaFlagsKHR) -> Vec<wgt::CompositeAlphaMode> {
     let mut modes = Vec::new();
     if flags.contains(vk::CompositeAlphaFlagsKHR::OPAQUE) {
-        modes.push(crate::CompositeAlphaMode::Opaque);
-    }
-    if flags.contains(vk::CompositeAlphaFlagsKHR::POST_MULTIPLIED) {
-        modes.push(crate::CompositeAlphaMode::PostMultiplied);
+        modes.push(wgt::CompositeAlphaMode::Opaque);
     }
     if flags.contains(vk::CompositeAlphaFlagsKHR::PRE_MULTIPLIED) {
-        modes.push(crate::CompositeAlphaMode::PreMultiplied);
+        modes.push(wgt::CompositeAlphaMode::PreMultiplied);
+    }
+    if flags.contains(vk::CompositeAlphaFlagsKHR::POST_MULTIPLIED) {
+        modes.push(wgt::CompositeAlphaMode::PostMultiplied);
+    }
+    if flags.contains(vk::CompositeAlphaFlagsKHR::INHERIT) {
+        modes.push(wgt::CompositeAlphaMode::Inherit);
     }
     modes
 }

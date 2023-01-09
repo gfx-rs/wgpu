@@ -1,4 +1,5 @@
 use crate::common::{initialize_test, TestParameters, TestingContext};
+use wasm_bindgen_test::*;
 use wgpu::util::align_to;
 
 static TEXTURE_FORMATS_UNCOMPRESSED: &[wgpu::TextureFormat] = &[
@@ -41,7 +42,8 @@ static TEXTURE_FORMATS_UNCOMPRESSED: &[wgpu::TextureFormat] = &[
 ];
 
 static TEXTURE_FORMATS_DEPTH: &[wgpu::TextureFormat] = &[
-    wgpu::TextureFormat::Depth32Float,
+    wgpu::TextureFormat::Stencil8,
+    wgpu::TextureFormat::Depth16Unorm,
     wgpu::TextureFormat::Depth24Plus,
     wgpu::TextureFormat::Depth24PlusStencil8,
 ];
@@ -201,9 +203,11 @@ fn single_texture_clear_test(
     size: wgpu::Extent3d,
     dimension: wgpu::TextureDimension,
 ) {
-    println!(
+    log::info!(
         "clearing texture with {:?}, dimension {:?}, size {:?}",
-        format, dimension, size
+        format,
+        dimension,
+        size
     );
 
     let texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
@@ -303,9 +307,12 @@ fn clear_texture_tests(
 }
 
 #[test]
+#[wasm_bindgen_test]
 fn clear_texture_2d_uncompressed() {
     initialize_test(
-        TestParameters::default().features(wgpu::Features::CLEAR_TEXTURE),
+        TestParameters::default()
+            .webgl2_failure()
+            .features(wgpu::Features::CLEAR_TEXTURE),
         |ctx| {
             clear_texture_tests(&ctx, TEXTURE_FORMATS_UNCOMPRESSED, true, true);
             clear_texture_tests(&ctx, TEXTURE_FORMATS_DEPTH, false, false);
@@ -314,6 +321,7 @@ fn clear_texture_2d_uncompressed() {
 }
 
 #[test]
+#[wasm_bindgen_test]
 fn clear_texture_d32_s8() {
     initialize_test(
         TestParameters::default()
@@ -322,22 +330,6 @@ fn clear_texture_d32_s8() {
             clear_texture_tests(
                 &ctx,
                 &[wgpu::TextureFormat::Depth32FloatStencil8],
-                false,
-                false,
-            );
-        },
-    )
-}
-
-#[test]
-fn clear_texture_d24_s8() {
-    initialize_test(
-        TestParameters::default()
-            .features(wgpu::Features::CLEAR_TEXTURE | wgpu::Features::DEPTH24UNORM_STENCIL8),
-        |ctx| {
-            clear_texture_tests(
-                &ctx,
-                &[wgpu::TextureFormat::Depth24UnormStencil8],
                 false,
                 false,
             );

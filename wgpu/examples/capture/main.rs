@@ -225,7 +225,10 @@ mod tests {
     use super::*;
     use wgpu::BufferView;
 
+    wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
+
     #[test]
+    #[wasm_bindgen_test::wasm_bindgen_test]
     fn ensure_generated_data_matches_expected() {
         assert_generated_data_matches_expected();
     }

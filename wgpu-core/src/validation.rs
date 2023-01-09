@@ -212,10 +212,10 @@ pub enum BindingError {
 
 #[derive(Clone, Debug, Error)]
 pub enum FilteringError {
-    #[error("integer textures can't be sampled")]
+    #[error("integer textures can't be sampled with a filtering sampler")]
     Integer,
-    #[error("non-filterable float texture")]
-    NonFilterable,
+    #[error("non-filterable float textures can't be sampled with a filtering sampler")]
+    Float,
 }
 
 #[derive(Clone, Debug, Error)]
@@ -236,10 +236,11 @@ pub enum StageError {
     #[error("shader module is invalid")]
     InvalidModule,
     #[error(
-        "shader entry point current workgroup size {current:?} must be less or equal to {limit:?} of total {total}"
+        "shader entry point's workgroup size {current:?} ({current_total} total invocations) must be less or equal to the per-dimension limit {limit:?} and the total invocation limit {total}"
     )]
     InvalidWorkgroupSize {
         current: [u32; 3],
+        current_total: u32,
         limit: [u32; 3],
         total: u32,
     },
@@ -704,11 +705,12 @@ impl NumericType {
                 (NumericDimension::Vector(Vs::Quad), Sk::Sint)
             }
             Tf::Rg11b10Float => (NumericDimension::Vector(Vs::Tri), Sk::Float),
-            Tf::Depth32Float
+            Tf::Stencil8
+            | Tf::Depth16Unorm
+            | Tf::Depth32Float
             | Tf::Depth32FloatStencil8
             | Tf::Depth24Plus
-            | Tf::Depth24PlusStencil8
-            | Tf::Depth24UnormStencil8 => {
+            | Tf::Depth24PlusStencil8 => {
                 panic!("Unexpected depth format")
             }
             Tf::Rgb9e5Ufloat => (NumericDimension::Vector(Vs::Tri), Sk::Float),
@@ -1047,27 +1049,22 @@ impl Interface {
                 assert!(texture_layout.visibility.contains(stage_bit));
                 assert!(sampler_layout.visibility.contains(stage_bit));
 
-                let error = match texture_layout.ty {
-                    wgt::BindingType::Texture {
-                        sample_type: wgt::TextureSampleType::Float { filterable },
-                        ..
-                    } => match sampler_layout.ty {
-                        wgt::BindingType::Sampler(wgt::SamplerBindingType::Filtering)
-                            if !filterable =>
-                        {
-                            Some(FilteringError::NonFilterable)
-                        }
-                        _ => None,
-                    },
-                    wgt::BindingType::Texture {
-                        sample_type: wgt::TextureSampleType::Sint,
-                        ..
+                let sampler_filtering = matches!(
+                    sampler_layout.ty,
+                    wgt::BindingType::Sampler(wgt::SamplerBindingType::Filtering)
+                );
+                let texture_sample_type = match texture_layout.ty {
+                    BindingType::Texture { sample_type, .. } => sample_type,
+                    _ => unreachable!(),
+                };
+
+                let error = match (sampler_filtering, texture_sample_type) {
+                    (true, wgt::TextureSampleType::Float { filterable: false }) => {
+                        Some(FilteringError::Float)
                     }
-                    | wgt::BindingType::Texture {
-                        sample_type: wgt::TextureSampleType::Uint,
-                        ..
-                    } => Some(FilteringError::Integer),
-                    _ => None, // unreachable, really
+                    (true, wgt::TextureSampleType::Sint) => Some(FilteringError::Integer),
+                    (true, wgt::TextureSampleType::Uint) => Some(FilteringError::Integer),
+                    _ => None,
                 };
 
                 if let Some(error) = error {
@@ -1097,6 +1094,7 @@ impl Interface {
             {
                 return Err(StageError::InvalidWorkgroupSize {
                     current: entry_point.workgroup_size,
+                    current_total: total_invocations,
                     limit: max_workgroup_size_limits,
                     total: self.limits.max_compute_invocations_per_workgroup,
                 });
@@ -1165,7 +1163,8 @@ impl Interface {
         // Check all vertex outputs and make sure the fragment shader consumes them.
         if shader_stage == naga::ShaderStage::Fragment {
             for &index in inputs.keys() {
-                // This is a linear scan, but the count should be low enough that this should be fine.
+                // This is a linear scan, but the count should be low enough
+                // that this should be fine.
                 let found = entry_point.inputs.iter().any(|v| match *v {
                     Varying::Local { location, .. } => location == index,
                     Varying::BuiltIn(_) => false,

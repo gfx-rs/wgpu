@@ -72,7 +72,7 @@ impl PhysicalDeviceFeatures {
     ///
     /// `requested_features` should be the same as what was used to generate `enabled_extensions`.
     fn from_extensions_and_requested_features(
-        api_version: u32,
+        effective_api_version: u32,
         enabled_extensions: &[&'static CStr],
         requested_features: wgt::Features,
         downlevel_flags: wgt::DownlevelFlags,
@@ -172,9 +172,7 @@ impl PhysicalDeviceFeatures {
                 //.shader_resource_residency(requested_features.contains(wgt::Features::SHADER_RESOURCE_RESIDENCY))
                 .geometry_shader(requested_features.contains(wgt::Features::SHADER_PRIMITIVE_INDEX))
                 .build(),
-            descriptor_indexing: if enabled_extensions
-                .contains(&vk::ExtDescriptorIndexingFn::name())
-            {
+            descriptor_indexing: if requested_features.intersects(indexing_features()) {
                 Some(
                     vk::PhysicalDeviceDescriptorIndexingFeaturesEXT::builder()
                         .shader_sampled_image_array_non_uniform_indexing(
@@ -207,7 +205,7 @@ impl PhysicalDeviceFeatures {
             } else {
                 None
             },
-            imageless_framebuffer: if api_version >= vk::API_VERSION_1_2
+            imageless_framebuffer: if effective_api_version >= vk::API_VERSION_1_2
                 || enabled_extensions.contains(&vk::KhrImagelessFramebufferFn::name())
             {
                 Some(
@@ -218,7 +216,7 @@ impl PhysicalDeviceFeatures {
             } else {
                 None
             },
-            timeline_semaphore: if api_version >= vk::API_VERSION_1_2
+            timeline_semaphore: if effective_api_version >= vk::API_VERSION_1_2
                 || enabled_extensions.contains(&vk::KhrTimelineSemaphoreFn::name())
             {
                 Some(
@@ -229,7 +227,9 @@ impl PhysicalDeviceFeatures {
             } else {
                 None
             },
-            image_robustness: if enabled_extensions.contains(&vk::ExtImageRobustnessFn::name()) {
+            image_robustness: if effective_api_version >= vk::API_VERSION_1_3
+                || enabled_extensions.contains(&vk::ExtImageRobustnessFn::name())
+            {
                 Some(
                     vk::PhysicalDeviceImageRobustnessFeaturesEXT::builder()
                         .robust_image_access(private_caps.robust_image_access)
@@ -262,7 +262,7 @@ impl PhysicalDeviceFeatures {
             } else {
                 None
             },
-            multiview: if api_version >= vk::API_VERSION_1_1
+            multiview: if effective_api_version >= vk::API_VERSION_1_1
                 || enabled_extensions.contains(&vk::KhrMultiviewFn::name())
             {
                 Some(
@@ -316,7 +316,19 @@ impl PhysicalDeviceFeatures {
             | F::WRITE_TIMESTAMP_INSIDE_PASSES
             | F::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
             | F::CLEAR_TEXTURE;
-        let mut dl_flags = Df::all();
+
+        let mut dl_flags = Df::COMPUTE_SHADERS
+            | Df::BASE_VERTEX
+            | Df::READ_ONLY_DEPTH_STENCIL
+            | Df::NON_POWER_OF_TWO_MIPMAPPED_TEXTURES
+            | Df::COMPARISON_SAMPLERS
+            | Df::VERTEX_STORAGE
+            | Df::FRAGMENT_STORAGE
+            | Df::DEPTH_TEXTURE_AND_BUFFER_COPIES
+            | Df::WEBGPU_TEXTURE_FORMAT_SUPPORT
+            | Df::BUFFER_BINDINGS_NOT_16_BYTE_ALIGNED
+            | Df::UNRESTRICTED_INDEX_BUFFER
+            | Df::INDIRECT_EXECUTION;
 
         dl_flags.set(Df::CUBE_ARRAY_TEXTURES, self.core.image_cube_array != 0);
         dl_flags.set(Df::ANISOTROPIC_FILTERING, self.core.sampler_anisotropy != 0);
@@ -326,6 +338,11 @@ impl PhysicalDeviceFeatures {
         );
         dl_flags.set(Df::MULTISAMPLED_SHADING, self.core.sample_rate_shading != 0);
         dl_flags.set(Df::INDEPENDENT_BLEND, self.core.independent_blend != 0);
+        dl_flags.set(
+            Df::FULL_DRAW_INDEX_UINT32,
+            self.core.full_draw_index_uint32 != 0,
+        );
+        dl_flags.set(Df::DEPTH_BIAS_CLAMP, self.core.depth_bias_clamp != 0);
 
         features.set(
             F::INDIRECT_FIRST_INSTANCE,
@@ -395,7 +412,7 @@ impl PhysicalDeviceFeatures {
         //if caps.supports_extension(vk::ExtSamplerFilterMinmaxFn::name()) {
         features.set(
             F::MULTI_DRAW_INDIRECT_COUNT,
-            caps.supports_extension(khr::DrawIndirectCount::name()),
+            caps.supports_extension(vk::KhrDrawIndirectCountFn::name()),
         );
         features.set(
             F::CONSERVATIVE_RASTERIZATION,
@@ -481,17 +498,6 @@ impl PhysicalDeviceFeatures {
             ),
         );
 
-        features.set(
-            F::DEPTH24UNORM_STENCIL8,
-            supports_format(
-                instance,
-                phd,
-                vk::Format::D24_UNORM_S8_UINT,
-                vk::ImageTiling::OPTIMAL,
-                vk::FormatFeatureFlags::DEPTH_STENCIL_ATTACHMENT,
-            ),
-        );
-
         (features, dl_flags)
     }
 
@@ -511,6 +517,21 @@ pub struct PhysicalDeviceCapabilities {
     supported_extensions: Vec<vk::ExtensionProperties>,
     properties: vk::PhysicalDeviceProperties,
     descriptor_indexing: Option<vk::PhysicalDeviceDescriptorIndexingPropertiesEXT>,
+    driver: Option<vk::PhysicalDeviceDriverPropertiesKHR>,
+    /// The effective driver api version supported by the physical device.
+    ///
+    /// The Vulkan specification states the following in the documentation for VkPhysicalDeviceProperties:
+    /// > The value of apiVersion may be different than the version returned by vkEnumerateInstanceVersion;
+    /// > either higher or lower. In such cases, the application must not use functionality that exceeds
+    /// > the version of Vulkan associated with a given object.
+    ///
+    /// For example, a Vulkan 1.1 instance cannot use functionality added in Vulkan 1.2 even if the physical
+    /// device supports Vulkan 1.2.
+    ///
+    /// This means that assuming that the apiVersion provided by VkPhysicalDeviceProperties is the actual
+    /// version we can use is incorrect. Instead the effective version is the lower of the instance version
+    /// and physical device version.
+    effective_api_version: u32,
 }
 
 // This is safe because the structs have `p_next: *mut c_void`, which we null out/never read.
@@ -523,49 +544,83 @@ impl PhysicalDeviceCapabilities {
     }
 
     pub fn supports_extension(&self, extension: &CStr) -> bool {
+        use crate::auxil::cstr_from_bytes_until_nul;
         self.supported_extensions
             .iter()
-            .any(|ep| unsafe { CStr::from_ptr(ep.extension_name.as_ptr()) } == extension)
+            .any(|ep| cstr_from_bytes_until_nul(&ep.extension_name) == Some(extension))
     }
 
     /// Map `requested_features` to the list of Vulkan extension strings required to create the logical device.
     fn get_required_extensions(&self, requested_features: wgt::Features) -> Vec<&'static CStr> {
         let mut extensions = Vec::new();
 
-        extensions.push(khr::Swapchain::name());
+        // Note that quite a few extensions depend on the `VK_KHR_get_physical_device_properties2` instance extension.
+        // We enable `VK_KHR_get_physical_device_properties2` unconditionally (if available).
 
-        if self.properties.api_version < vk::API_VERSION_1_1 {
-            extensions.push(vk::KhrMaintenance1Fn::name());
-            extensions.push(vk::KhrMaintenance2Fn::name());
+        // Require `VK_KHR_swapchain`
+        extensions.push(vk::KhrSwapchainFn::name());
 
-            // `VK_KHR_storage_buffer_storage_class` required for Naga on Vulkan 1.0 devices
+        if self.effective_api_version < vk::API_VERSION_1_1 {
+            // Require either `VK_KHR_maintenance1` or `VK_AMD_negative_viewport_height`
+            if self.supports_extension(vk::KhrMaintenance1Fn::name()) {
+                extensions.push(vk::KhrMaintenance1Fn::name());
+            } else {
+                // `VK_AMD_negative_viewport_height` is obsoleted by `VK_KHR_maintenance1` and must not be enabled alongside it
+                extensions.push(vk::AmdNegativeViewportHeightFn::name());
+            }
+
+            // Optional `VK_KHR_maintenance2`
+            if self.supports_extension(vk::KhrMaintenance2Fn::name()) {
+                extensions.push(vk::KhrMaintenance2Fn::name());
+            }
+
+            // Require `VK_KHR_storage_buffer_storage_class`
             extensions.push(vk::KhrStorageBufferStorageClassFn::name());
 
-            // Below Vulkan 1.1 we can get multiview from an extension
+            // Require `VK_KHR_multiview` if the associated feature was requested
             if requested_features.contains(wgt::Features::MULTIVIEW) {
                 extensions.push(vk::KhrMultiviewFn::name());
             }
-
-            // `VK_AMD_negative_viewport_height` is obsoleted by `VK_KHR_maintenance1` and must not be enabled alongside `VK_KHR_maintenance1` or a 1.1+ device.
-            if !self.supports_extension(vk::KhrMaintenance1Fn::name()) {
-                extensions.push(vk::AmdNegativeViewportHeightFn::name());
-            }
         }
 
-        if self.properties.api_version < vk::API_VERSION_1_2 {
+        if self.effective_api_version < vk::API_VERSION_1_2 {
+            // Optional `VK_KHR_imageless_framebuffer`
             if self.supports_extension(vk::KhrImagelessFramebufferFn::name()) {
                 extensions.push(vk::KhrImagelessFramebufferFn::name());
-                extensions.push(vk::KhrImageFormatListFn::name()); // Required for `KhrImagelessFramebufferFn`
+                // Require `VK_KHR_image_format_list` due to it being a dependency
+                extensions.push(vk::KhrImageFormatListFn::name());
+                // Require `VK_KHR_maintenance2` due to it being a dependency
+                if self.effective_api_version < vk::API_VERSION_1_1 {
+                    extensions.push(vk::KhrMaintenance2Fn::name());
+                }
             }
 
-            extensions.push(vk::ExtSamplerFilterMinmaxFn::name());
-            extensions.push(vk::KhrTimelineSemaphoreFn::name());
+            // Optional `VK_KHR_driver_properties`
+            if self.supports_extension(vk::KhrDriverPropertiesFn::name()) {
+                extensions.push(vk::KhrDriverPropertiesFn::name());
+            }
 
+            // Optional `VK_KHR_timeline_semaphore`
+            if self.supports_extension(vk::KhrTimelineSemaphoreFn::name()) {
+                extensions.push(vk::KhrTimelineSemaphoreFn::name());
+            }
+
+            // Require `VK_EXT_descriptor_indexing` if one of the associated features was requested
             if requested_features.intersects(indexing_features()) {
                 extensions.push(vk::ExtDescriptorIndexingFn::name());
 
-                if self.properties.api_version < vk::API_VERSION_1_1 {
+                // Require `VK_KHR_maintenance3` due to it being a dependency
+                if self.effective_api_version < vk::API_VERSION_1_1 {
                     extensions.push(vk::KhrMaintenance3Fn::name());
+                }
+            }
+
+            // Require `VK_KHR_shader_float16_int8` and `VK_KHR_16bit_storage` if the associated feature was requested
+            if requested_features.contains(wgt::Features::SHADER_FLOAT16) {
+                extensions.push(vk::KhrShaderFloat16Int8Fn::name());
+                // `VK_KHR_16bit_storage` requires `VK_KHR_storage_buffer_storage_class`, however we require that one already
+                if self.effective_api_version < vk::API_VERSION_1_1 {
+                    extensions.push(vk::Khr16bitStorageFn::name());
                 }
             }
 
@@ -573,30 +628,42 @@ impl PhysicalDeviceCapabilities {
             //extensions.push(vk::ExtSamplerFilterMinmaxFn::name());
         }
 
+        if self.effective_api_version < vk::API_VERSION_1_3 {
+            // Optional `VK_EXT_image_robustness`
+            if self.supports_extension(vk::ExtImageRobustnessFn::name()) {
+                extensions.push(vk::ExtImageRobustnessFn::name());
+            }
+        }
+
+        // Optional `VK_EXT_robustness2`
+        if self.supports_extension(vk::ExtRobustness2Fn::name()) {
+            extensions.push(vk::ExtRobustness2Fn::name());
+        }
+
+        // Require `VK_KHR_draw_indirect_count` if the associated feature was requested
         // Even though Vulkan 1.2 has promoted the extension to core, we must require the extension to avoid
         // large amounts of spaghetti involved with using PhysicalDeviceVulkan12Features.
         if requested_features.contains(wgt::Features::MULTI_DRAW_INDIRECT_COUNT) {
             extensions.push(vk::KhrDrawIndirectCountFn::name());
         }
 
+        // Require `VK_EXT_conservative_rasterization` if the associated feature was requested
         if requested_features.contains(wgt::Features::CONSERVATIVE_RASTERIZATION) {
             extensions.push(vk::ExtConservativeRasterizationFn::name());
         }
 
+        // Require `VK_EXT_depth_clip_enable` if the associated feature was requested
         if requested_features.contains(wgt::Features::DEPTH_CLIP_CONTROL) {
             extensions.push(vk::ExtDepthClipEnableFn::name());
         }
 
+        // Require `VK_KHR_portability_subset` on macOS/iOS
         #[cfg(any(target_os = "macos", target_os = "ios"))]
         extensions.push(vk::KhrPortabilitySubsetFn::name());
 
+        // Require `VK_EXT_texture_compression_astc_hdr` if the associated feature was requested
         if requested_features.contains(wgt::Features::TEXTURE_COMPRESSION_ASTC_HDR) {
             extensions.push(vk::ExtTextureCompressionAstcHdrFn::name());
-        }
-
-        if requested_features.contains(wgt::Features::SHADER_FLOAT16) {
-            extensions.push(vk::KhrShaderFloat16Int8Fn::name());
-            extensions.push(vk::Khr16bitStorageFn::name());
         }
 
         extensions
@@ -673,6 +740,7 @@ impl PhysicalDeviceCapabilities {
             max_bind_groups: limits
                 .max_bound_descriptor_sets
                 .min(crate::MAX_BIND_GROUPS as u32),
+            max_bindings_per_bind_group: 640,
             max_dynamic_uniform_buffers_per_pipeline_layout: limits
                 .max_descriptor_set_uniform_buffers_dynamic,
             max_dynamic_storage_buffers_per_pipeline_layout: limits
@@ -733,16 +801,25 @@ impl super::InstanceShared {
             capabilities.properties = if let Some(ref get_device_properties) =
                 self.get_physical_device_properties
             {
-                // Get this now to avoid borrowing conflicts later
-                let supports_descriptor_indexing =
-                    capabilities.supports_extension(vk::ExtDescriptorIndexingFn::name());
+                // Get these now to avoid borrowing conflicts later
+                let supports_descriptor_indexing = self.driver_api_version >= vk::API_VERSION_1_2
+                    || capabilities.supports_extension(vk::ExtDescriptorIndexingFn::name());
+                let supports_driver_properties = self.driver_api_version >= vk::API_VERSION_1_2
+                    || capabilities.supports_extension(vk::KhrDriverPropertiesFn::name());
 
-                let mut builder = vk::PhysicalDeviceProperties2::builder();
+                let mut builder = vk::PhysicalDeviceProperties2KHR::builder();
 
                 if supports_descriptor_indexing {
                     let next = capabilities
                         .descriptor_indexing
                         .insert(vk::PhysicalDeviceDescriptorIndexingPropertiesEXT::default());
+                    builder = builder.push_next(next);
+                }
+
+                if supports_driver_properties {
+                    let next = capabilities
+                        .driver
+                        .insert(vk::PhysicalDeviceDriverPropertiesKHR::default());
                     builder = builder.push_next(next);
                 }
 
@@ -755,6 +832,10 @@ impl super::InstanceShared {
                 unsafe { self.raw.get_physical_device_properties(phd) }
             };
 
+            // Set the effective api version
+            capabilities.effective_api_version = self
+                .driver_api_version
+                .min(capabilities.properties.api_version);
             capabilities
         };
 
@@ -765,7 +846,7 @@ impl super::InstanceShared {
             let mut builder = vk::PhysicalDeviceFeatures2KHR::builder().features(core);
 
             // `VK_KHR_multiview` is promoted to 1.1
-            if capabilities.properties.api_version >= vk::API_VERSION_1_1
+            if capabilities.effective_api_version >= vk::API_VERSION_1_1
                 || capabilities.supports_extension(vk::KhrMultiviewFn::name())
             {
                 let next = features
@@ -850,14 +931,15 @@ impl super::Instance {
         &self,
         phd: vk::PhysicalDevice,
     ) -> Option<crate::ExposedAdapter<super::Api>> {
+        use crate::auxil::cstr_from_bytes_until_nul;
         use crate::auxil::db;
 
         let (phd_capabilities, phd_features) = self.shared.inspect(phd);
 
         let info = wgt::AdapterInfo {
-            name: unsafe {
-                CStr::from_ptr(phd_capabilities.properties.device_name.as_ptr())
-                    .to_str()
+            name: {
+                cstr_from_bytes_until_nul(&phd_capabilities.properties.device_name)
+                    .and_then(|info| info.to_str().ok())
                     .unwrap_or("?")
                     .to_owned()
             },
@@ -870,6 +952,24 @@ impl super::Instance {
                 ash::vk::PhysicalDeviceType::VIRTUAL_GPU => wgt::DeviceType::VirtualGpu,
                 ash::vk::PhysicalDeviceType::CPU => wgt::DeviceType::Cpu,
                 _ => wgt::DeviceType::Other,
+            },
+            driver: {
+                phd_capabilities
+                    .driver
+                    .as_ref()
+                    .and_then(|driver| cstr_from_bytes_until_nul(&driver.driver_name))
+                    .and_then(|name| name.to_str().ok())
+                    .unwrap_or("?")
+                    .to_owned()
+            },
+            driver_info: {
+                phd_capabilities
+                    .driver
+                    .as_ref()
+                    .and_then(|driver| cstr_from_bytes_until_nul(&driver.driver_info))
+                    .and_then(|name| name.to_str().ok())
+                    .unwrap_or("?")
+                    .to_owned()
             },
             backend: wgt::Backend::Vulkan,
         };
@@ -893,7 +993,7 @@ impl super::Instance {
             );
         };
 
-        if phd_capabilities.properties.api_version == vk::API_VERSION_1_0
+        if phd_capabilities.effective_api_version == vk::API_VERSION_1_0
             && !phd_capabilities.supports_extension(vk::KhrStorageBufferStorageClassFn::name())
         {
             log::warn!(
@@ -904,7 +1004,7 @@ impl super::Instance {
         }
         if !phd_capabilities.supports_extension(vk::AmdNegativeViewportHeightFn::name())
             && !phd_capabilities.supports_extension(vk::KhrMaintenance1Fn::name())
-            && phd_capabilities.properties.api_version < vk::API_VERSION_1_1
+            && phd_capabilities.effective_api_version < vk::API_VERSION_1_1
         {
             log::warn!(
                 "viewport Y-flip is not supported, hiding adapter: {}",
@@ -925,7 +1025,7 @@ impl super::Instance {
         }
 
         let private_caps = super::PrivateCapabilities {
-            flip_y_requires_shift: phd_capabilities.properties.api_version >= vk::API_VERSION_1_1
+            flip_y_requires_shift: phd_capabilities.effective_api_version >= vk::API_VERSION_1_1
                 || phd_capabilities.supports_extension(vk::KhrMaintenance1Fn::name()),
             imageless_framebuffers: match phd_features.imageless_framebuffer {
                 Some(features) => features.imageless_framebuffer == vk::TRUE,
@@ -933,7 +1033,7 @@ impl super::Instance {
                     .imageless_framebuffer
                     .map_or(false, |ext| ext.imageless_framebuffer != 0),
             },
-            image_view_usage: phd_capabilities.properties.api_version >= vk::API_VERSION_1_1
+            image_view_usage: phd_capabilities.effective_api_version >= vk::API_VERSION_1_1
                 || phd_capabilities.supports_extension(vk::KhrMaintenance2Fn::name()),
             timeline_semaphores: match phd_features.timeline_semaphore {
                 Some(features) => features.timeline_semaphore == vk::TRUE,
@@ -952,6 +1052,13 @@ impl super::Instance {
                 self.shared
                     .raw
                     .get_physical_device_format_properties(phd, vk::Format::D24_UNORM_S8_UINT)
+                    .optimal_tiling_features
+                    .contains(vk::FormatFeatureFlags::DEPTH_STENCIL_ATTACHMENT)
+            },
+            texture_s8: unsafe {
+                self.shared
+                    .raw
+                    .get_physical_device_format_properties(phd, vk::Format::S8_UINT)
                     .optimal_tiling_features
                     .contains(vk::FormatFeatureFlags::DEPTH_STENCIL_ATTACHMENT)
             },
@@ -1039,7 +1146,7 @@ impl super::Adapter {
         uab_types: super::UpdateAfterBindTypes,
     ) -> PhysicalDeviceFeatures {
         PhysicalDeviceFeatures::from_extensions_and_requested_features(
-            self.phd_capabilities.properties.api_version,
+            self.phd_capabilities.effective_api_version,
             enabled_extensions,
             features,
             self.downlevel_flags,
@@ -1066,9 +1173,11 @@ impl super::Adapter {
     ) -> Result<crate::OpenDevice<super::Api>, crate::DeviceError> {
         let mem_properties = {
             profiling::scope!("vkGetPhysicalDeviceMemoryProperties");
-            self.instance
-                .raw
-                .get_physical_device_memory_properties(self.raw)
+            unsafe {
+                self.instance
+                    .raw
+                    .get_physical_device_memory_properties(self.raw)
+            }
         };
         let memory_types =
             &mem_properties.memory_types[..mem_properties.memory_type_count as usize];
@@ -1093,7 +1202,7 @@ impl super::Adapter {
                 &self.instance.raw,
                 &raw_device,
             )))
-        } else if self.phd_capabilities.properties.api_version >= vk::API_VERSION_1_2 {
+        } else if self.phd_capabilities.effective_api_version >= vk::API_VERSION_1_2 {
             Some(super::ExtensionFn::Promoted)
         } else {
             None
@@ -1175,7 +1284,7 @@ impl super::Adapter {
 
         let raw_queue = {
             profiling::scope!("vkGetDeviceQueue");
-            raw_device.get_device_queue(family_index, queue_index)
+            unsafe { raw_device.get_device_queue(family_index, queue_index) }
         };
 
         let shared = Arc::new(super::DeviceShared {
@@ -1202,9 +1311,11 @@ impl super::Adapter {
         });
         let mut relay_semaphores = [vk::Semaphore::null(); 2];
         for sem in relay_semaphores.iter_mut() {
-            *sem = shared
-                .raw
-                .create_semaphore(&vk::SemaphoreCreateInfo::builder(), None)?;
+            unsafe {
+                *sem = shared
+                    .raw
+                    .create_semaphore(&vk::SemaphoreCreateInfo::builder(), None)?
+            };
         }
         let queue = super::Queue {
             raw: raw_queue,
@@ -1300,18 +1411,20 @@ impl crate::Adapter<super::Api> for super::Adapter {
             .build();
         let raw_device = {
             profiling::scope!("vkCreateDevice");
-            self.instance.raw.create_device(self.raw, &info, None)?
+            unsafe { self.instance.raw.create_device(self.raw, &info, None)? }
         };
 
-        self.device_from_raw(
-            raw_device,
-            true,
-            &enabled_extensions,
-            features,
-            uab_types,
-            family_info.queue_family_index,
-            0,
-        )
+        unsafe {
+            self.device_from_raw(
+                raw_device,
+                true,
+                &enabled_extensions,
+                features,
+                uab_types,
+                family_info.queue_family_index,
+                0,
+            )
+        }
     }
 
     unsafe fn texture_format_capabilities(
@@ -1321,10 +1434,11 @@ impl crate::Adapter<super::Api> for super::Adapter {
         use crate::TextureFormatCapabilities as Tfc;
 
         let vk_format = self.private_caps.map_texture_format(format);
-        let properties = self
-            .instance
-            .raw
-            .get_physical_device_format_properties(self.raw, vk_format);
+        let properties = unsafe {
+            self.instance
+                .raw
+                .get_physical_device_format_properties(self.raw, vk_format)
+        };
         let features = properties.optimal_tiling_features;
 
         let mut flags = Tfc::empty();
@@ -1336,10 +1450,10 @@ impl crate::Adapter<super::Api> for super::Adapter {
             Tfc::SAMPLED_LINEAR,
             features.contains(vk::FormatFeatureFlags::SAMPLED_IMAGE_FILTER_LINEAR),
         );
-        flags.set(
-            Tfc::SAMPLED_MINMAX,
-            features.contains(vk::FormatFeatureFlags::SAMPLED_IMAGE_FILTER_MINMAX),
-        );
+        // flags.set(
+        //     Tfc::SAMPLED_MINMAX,
+        //     features.contains(vk::FormatFeatureFlags::SAMPLED_IMAGE_FILTER_MINMAX),
+        // );
         flags.set(
             Tfc::STORAGE | Tfc::STORAGE_READ_WRITE,
             features.contains(vk::FormatFeatureFlags::STORAGE_IMAGE),
@@ -1373,10 +1487,42 @@ impl crate::Adapter<super::Api> for super::Adapter {
             ),
         );
         // Vulkan is very permissive about MSAA
+        flags.set(Tfc::MULTISAMPLE_RESOLVE, !format.describe().is_compressed());
+
+        // get the supported sample counts
+        let format_aspect = crate::FormatAspects::from(format);
+        let limits = self.phd_capabilities.properties.limits;
+
+        let sample_flags = if format_aspect.contains(crate::FormatAspects::DEPTH) {
+            limits
+                .framebuffer_depth_sample_counts
+                .min(limits.sampled_image_depth_sample_counts)
+        } else if format_aspect.contains(crate::FormatAspects::STENCIL) {
+            limits
+                .framebuffer_stencil_sample_counts
+                .min(limits.sampled_image_stencil_sample_counts)
+        } else {
+            limits
+                .framebuffer_color_sample_counts
+                .min(limits.sampled_image_color_sample_counts)
+                .min(limits.sampled_image_integer_sample_counts)
+                .min(limits.storage_image_sample_counts)
+        };
+
         flags.set(
-            Tfc::MULTISAMPLE | Tfc::MULTISAMPLE_RESOLVE,
-            !format.describe().is_compressed(),
+            Tfc::MULTISAMPLE_X2,
+            sample_flags.contains(vk::SampleCountFlags::TYPE_2),
         );
+        flags.set(
+            Tfc::MULTISAMPLE_X4,
+            sample_flags.contains(vk::SampleCountFlags::TYPE_4),
+        );
+
+        flags.set(
+            Tfc::MULTISAMPLE_X8,
+            sample_flags.contains(vk::SampleCountFlags::TYPE_8),
+        );
+
         flags
     }
 
@@ -1390,11 +1536,13 @@ impl crate::Adapter<super::Api> for super::Adapter {
         let queue_family_index = 0; //TODO
         {
             profiling::scope!("vkGetPhysicalDeviceSurfaceSupportKHR");
-            match surface.functor.get_physical_device_surface_support(
-                self.raw,
-                queue_family_index,
-                surface.raw,
-            ) {
+            match unsafe {
+                surface.functor.get_physical_device_surface_support(
+                    self.raw,
+                    queue_family_index,
+                    surface.raw,
+                )
+            } {
                 Ok(true) => (),
                 Ok(false) => return None,
                 Err(e) => {
@@ -1406,10 +1554,11 @@ impl crate::Adapter<super::Api> for super::Adapter {
 
         let caps = {
             profiling::scope!("vkGetPhysicalDeviceSurfaceCapabilitiesKHR");
-            match surface
-                .functor
-                .get_physical_device_surface_capabilities(self.raw, surface.raw)
-            {
+            match unsafe {
+                surface
+                    .functor
+                    .get_physical_device_surface_capabilities(self.raw, surface.raw)
+            } {
                 Ok(caps) => caps,
                 Err(e) => {
                     log::error!("get_physical_device_surface_capabilities: {}", e);
@@ -1451,10 +1600,11 @@ impl crate::Adapter<super::Api> for super::Adapter {
 
         let raw_present_modes = {
             profiling::scope!("vkGetPhysicalDeviceSurfacePresentModesKHR");
-            match surface
-                .functor
-                .get_physical_device_surface_present_modes(self.raw, surface.raw)
-            {
+            match unsafe {
+                surface
+                    .functor
+                    .get_physical_device_surface_present_modes(self.raw, surface.raw)
+            } {
                 Ok(present_modes) => present_modes,
                 Err(e) => {
                     log::error!("get_physical_device_surface_present_modes: {}", e);
@@ -1465,10 +1615,11 @@ impl crate::Adapter<super::Api> for super::Adapter {
 
         let raw_surface_formats = {
             profiling::scope!("vkGetPhysicalDeviceSurfaceFormatsKHR");
-            match surface
-                .functor
-                .get_physical_device_surface_formats(self.raw, surface.raw)
-            {
+            match unsafe {
+                surface
+                    .functor
+                    .get_physical_device_surface_formats(self.raw, surface.raw)
+            } {
                 Ok(formats) => formats,
                 Err(e) => {
                     log::error!("get_physical_device_surface_formats: {}", e);
@@ -1493,6 +1644,31 @@ impl crate::Adapter<super::Api> for super::Adapter {
                 .collect(),
             composite_alpha_modes: conv::map_vk_composite_alpha(caps.supported_composite_alpha),
         })
+    }
+
+    unsafe fn get_presentation_timestamp(&self) -> wgt::PresentationTimestamp {
+        // VK_GOOGLE_display_timing is the only way to get presentation
+        // timestamps on vulkan right now and it is only ever available
+        // on android and linux. This includes mac, but there's no alternative
+        // on mac, so this is fine.
+        #[cfg(unix)]
+        {
+            let mut timespec = libc::timespec {
+                tv_sec: 0,
+                tv_nsec: 0,
+            };
+            unsafe {
+                libc::clock_gettime(libc::CLOCK_MONOTONIC, &mut timespec);
+            }
+
+            wgt::PresentationTimestamp(
+                timespec.tv_sec as u128 * 1_000_000_000 + timespec.tv_nsec as u128,
+            )
+        }
+        #[cfg(not(unix))]
+        {
+            wgt::PresentationTimestamp::INVALID_TIMESTAMP
+        }
     }
 }
 

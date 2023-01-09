@@ -14,6 +14,7 @@
  *  - secondary backends (DX11/GLES): 0.5 each
  */
 
+#![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
 #![allow(
     // for `if_then_panic` until it reaches stable
     unknown_lints,
@@ -41,11 +42,21 @@
 #![warn(
     trivial_casts,
     trivial_numeric_casts,
+    unsafe_op_in_unsafe_fn,
     unused_extern_crates,
     unused_qualifications,
     // We don't match on a reference, unless required.
     clippy::pattern_type_mismatch,
 )]
+
+#[cfg(not(any(
+    feature = "dx11",
+    feature = "dx12",
+    feature = "gles",
+    feature = "metal",
+    feature = "vulkan"
+)))]
+compile_error!("No back ends enabled in `wgpu-hal`. Enable at least one backend feature.");
 
 #[cfg(all(feature = "metal", not(any(target_os = "macos", target_os = "ios"))))]
 compile_error!("Metal API enabled on non-Apple OS. If your project is not using resolver=\"2\" in Cargo.toml, it should.");
@@ -83,7 +94,7 @@ pub mod api {
 pub use vulkan::UpdateAfterBindTypes;
 
 use std::{
-    borrow::Borrow,
+    borrow::{Borrow, Cow},
     fmt,
     num::{NonZeroU32, NonZeroU8},
     ops::{Range, RangeInclusive},
@@ -106,7 +117,10 @@ pub type Label<'a> = Option<&'a str>;
 pub type MemoryRange = Range<wgt::BufferAddress>;
 pub type FenceValue = u64;
 
-#[derive(Clone, Debug, Eq, PartialEq, Error)]
+/// Drop guard to signal wgpu-hal is no longer using an externally created object.
+pub type DropGuard = Box<dyn std::any::Any + Send + Sync>;
+
+#[derive(Clone, Debug, PartialEq, Eq, Error)]
 pub enum DeviceError {
     #[error("out of memory")]
     OutOfMemory,
@@ -156,7 +170,7 @@ pub trait Api: Clone + Sized {
 
     type Queue: Queue<Self>;
     type CommandEncoder: CommandEncoder<Self>;
-    type CommandBuffer: Send + Sync;
+    type CommandBuffer: Send + Sync + fmt::Debug;
 
     type Buffer: fmt::Debug + Send + Sync + 'static;
     type Texture: fmt::Debug + Send + Sync + 'static;
@@ -178,7 +192,8 @@ pub trait Instance<A: Api>: Sized + Send + Sync {
     unsafe fn init(desc: &InstanceDescriptor) -> Result<Self, InstanceError>;
     unsafe fn create_surface(
         &self,
-        rwh: &(impl raw_window_handle::HasRawWindowHandle + raw_window_handle::HasRawDisplayHandle),
+        display_handle: raw_window_handle::RawDisplayHandle,
+        window_handle: raw_window_handle::RawWindowHandle,
     ) -> Result<A::Surface, InstanceError>;
     unsafe fn destroy_surface(&self, surface: A::Surface);
     unsafe fn enumerate_adapters(&self) -> Vec<ExposedAdapter<A>>;
@@ -227,6 +242,11 @@ pub trait Adapter<A: Api>: Send + Sync {
     ///
     /// `None` means presentation is not supported for it.
     unsafe fn surface_capabilities(&self, surface: &A::Surface) -> Option<SurfaceCapabilities>;
+
+    /// Creates a [`PresentationTimestamp`] using the adapter's WSI.
+    ///
+    /// [`PresentationTimestamp`]: wgt::PresentationTimestamp
+    unsafe fn get_presentation_timestamp(&self) -> wgt::PresentationTimestamp;
 }
 
 pub trait Device<A: Api>: Send + Sync {
@@ -349,7 +369,7 @@ pub trait Queue<A: Api>: Send + Sync {
 /// Serves as a parent for all the encoded command buffers.
 /// Works in bursts of action: one or more command buffers are recorded,
 /// then submitted to a queue, and then it needs to be `reset_all()`.
-pub trait CommandEncoder<A: Api>: Send + Sync {
+pub trait CommandEncoder<A: Api>: Send + Sync + fmt::Debug {
     /// Begin encoding a new command buffer.
     unsafe fn begin_encoding(&mut self, label: Label) -> Result<(), DeviceError>;
     /// Discard currently recorded list, if any.
@@ -577,15 +597,20 @@ bitflags!(
         /// Format can be used as depth-stencil and input attachment.
         const DEPTH_STENCIL_ATTACHMENT = 1 << 8;
 
-        /// Format can be multisampled.
-        const MULTISAMPLE = 1 << 9;
+        /// Format can be multisampled by x2.
+        const MULTISAMPLE_X2   = 1 << 9;
+        /// Format can be multisampled by x4.
+        const MULTISAMPLE_X4   = 1 << 10;
+        /// Format can be multisampled by x8.
+        const MULTISAMPLE_X8   = 1 << 11;
+
         /// Format can be used for render pass resolve targets.
-        const MULTISAMPLE_RESOLVE = 1 << 10;
+        const MULTISAMPLE_RESOLVE = 1 << 12;
 
         /// Format can be copied from.
-        const COPY_SRC = 1 << 11;
+        const COPY_SRC = 1 << 13;
         /// Format can be copied to.
-        const COPY_DST = 1 << 12;
+        const COPY_DST = 1 << 14;
     }
 );
 
@@ -611,10 +636,12 @@ impl From<wgt::TextureAspect> for FormatAspects {
 impl From<wgt::TextureFormat> for FormatAspects {
     fn from(format: wgt::TextureFormat) -> Self {
         match format {
+            wgt::TextureFormat::Stencil8 => Self::STENCIL,
+            wgt::TextureFormat::Depth16Unorm => Self::DEPTH,
             wgt::TextureFormat::Depth32Float | wgt::TextureFormat::Depth24Plus => Self::DEPTH,
-            wgt::TextureFormat::Depth32FloatStencil8
-            | wgt::TextureFormat::Depth24PlusStencil8
-            | wgt::TextureFormat::Depth24UnormStencil8 => Self::DEPTH | Self::STENCIL,
+            wgt::TextureFormat::Depth32FloatStencil8 | wgt::TextureFormat::Depth24PlusStencil8 => {
+                Self::DEPTH | Self::STENCIL
+            }
             _ => Self::COLOR,
         }
     }
@@ -778,7 +805,7 @@ pub struct SurfaceCapabilities {
     /// List of supported alpha composition modes.
     ///
     /// Must be at least one.
-    pub composite_alpha_modes: Vec<CompositeAlphaMode>,
+    pub composite_alpha_modes: Vec<wgt::CompositeAlphaMode>,
 }
 
 #[derive(Debug)]
@@ -872,8 +899,27 @@ pub struct PipelineLayoutDescriptor<'a, A: Api> {
 
 #[derive(Debug)]
 pub struct BufferBinding<'a, A: Api> {
+    /// The buffer being bound.
     pub buffer: &'a A::Buffer,
+
+    /// The offset at which the bound region starts.
+    ///
+    /// This must be less than the size of the buffer. Some back ends
+    /// cannot tolerate zero-length regions; for example, see
+    /// [VUID-VkDescriptorBufferInfo-offset-00340][340] and
+    /// [VUID-VkDescriptorBufferInfo-range-00341][341], or the
+    /// documentation for GLES's [glBindBufferRange][bbr].
+    ///
+    /// [340]: https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#VUID-VkDescriptorBufferInfo-offset-00340
+    /// [341]: https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#VUID-VkDescriptorBufferInfo-range-00341
+    /// [bbr]: https://registry.khronos.org/OpenGL-Refpages/es3.0/html/glBindBufferRange.xhtml
     pub offset: wgt::BufferAddress,
+
+    /// The size of the region bound, in bytes.
+    ///
+    /// If `None`, the region extends from `offset` to the end of the
+    /// buffer. Given the restrictions on `offset`, this means that
+    /// the size is always greater than zero.
     pub size: Option<wgt::BufferSize>,
 }
 
@@ -939,7 +985,7 @@ pub struct CommandEncoderDescriptor<'a, A: Api> {
 /// Naga shader module.
 pub struct NagaShader {
     /// Shader module IR.
-    pub module: naga::Module,
+    pub module: Cow<'static, naga::Module>,
     /// Analysis information of the module.
     pub info: naga::valid::ModuleInfo,
 }
@@ -1030,27 +1076,6 @@ pub struct RenderPipelineDescriptor<'a, A: Api> {
     pub multiview: Option<NonZeroU32>,
 }
 
-/// Specifies how the alpha channel of the textures should be handled during (martin mouv i step)
-/// compositing.
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub enum CompositeAlphaMode {
-    /// The alpha channel, if it exists, of the textures is ignored in the
-    /// compositing process. Instead, the textures is treated as if it has a
-    /// constant alpha of 1.0.
-    Opaque,
-    /// The alpha channel, if it exists, of the textures is respected in the
-    /// compositing process. The non-alpha channels of the textures are
-    /// expected to already be multiplied by the alpha channel by the
-    /// application.
-    PreMultiplied,
-    /// The alpha channel, if it exists, of the textures is respected in the
-    /// compositing process. The non-alpha channels of the textures are not
-    /// expected to already be multiplied by the alpha channel by the
-    /// application; instead, the compositor will multiply the non-alpha
-    /// channels of the texture by the alpha channel during compositing.
-    PostMultiplied,
-}
-
 #[derive(Debug, Clone)]
 pub struct SurfaceConfiguration {
     /// Number of textures in the swap chain. Must be in
@@ -1059,7 +1084,7 @@ pub struct SurfaceConfiguration {
     /// Vertical synchronization mode.
     pub present_mode: wgt::PresentMode,
     /// Alpha composition mode.
-    pub composite_alpha_mode: CompositeAlphaMode,
+    pub composite_alpha_mode: wgt::CompositeAlphaMode,
     /// Format of the surface textures.
     pub format: wgt::TextureFormat,
     /// Requested texture extent. Must be in

@@ -163,9 +163,9 @@ async fn setup<E: Example>(title: &str) -> Setup {
     let (size, surface) = unsafe {
         let size = window.inner_size();
 
-        #[cfg(not(target_arch = "wasm32"))]
-        let surface = instance.create_surface(&window);
-        #[cfg(target_arch = "wasm32")]
+        #[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))]
+        let surface = instance.create_surface(&window).unwrap();
+        #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
         let surface = {
             if let Some(offscreen_canvas_setup) = &offscreen_canvas_setup {
                 log::info!("Creating surface from OffscreenCanvas");
@@ -174,7 +174,8 @@ async fn setup<E: Example>(title: &str) -> Setup {
             } else {
                 instance.create_surface(&window)
             }
-        };
+        }
+        .unwrap();
 
         (size, surface)
     };
@@ -267,13 +268,9 @@ fn start<E: Example>(
     }: Setup,
 ) {
     let spawner = Spawner::new();
-    let mut config = wgpu::SurfaceConfiguration {
-        usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-        format: surface.get_supported_formats(&adapter)[0],
-        width: size.width,
-        height: size.height,
-        present_mode: wgpu::PresentMode::Fifo,
-    };
+    let mut config = surface
+        .get_default_config(&adapter, size.width, size.height)
+        .expect("Surface isn't supported by the adapter.");
     surface.configure(&device, &config);
 
     log::info!("Initializing the example...");
@@ -544,6 +541,7 @@ pub fn test<E: Example>(mut params: FrameworkRefTest) {
                     width: params.width,
                     height: params.height,
                     present_mode: wgpu::PresentMode::Fifo,
+                    alpha_mode: wgpu::CompositeAlphaMode::Auto,
                 },
                 &ctx.adapter,
                 &ctx.device,

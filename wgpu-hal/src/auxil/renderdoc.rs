@@ -44,12 +44,13 @@ impl RenderDoc {
         let renderdoc_filename = "libVkLayer_GLES_RenderDoc.so";
 
         #[cfg(unix)]
-        let renderdoc_result: Result<libloading::Library, libloading::Error> =
+        let renderdoc_result: Result<libloading::Library, libloading::Error> = unsafe {
             libloading::os::unix::Library::open(
                 Some(renderdoc_filename),
                 libloading::os::unix::RTLD_NOW | RTLD_NOLOAD,
             )
-            .map(|lib| lib.into());
+        }
+        .map(|lib| lib.into());
 
         #[cfg(windows)]
         let renderdoc_result: Result<libloading::Library, libloading::Error> =
@@ -68,22 +69,23 @@ impl RenderDoc {
             }
         };
 
-        let get_api: libloading::Symbol<GetApiFn> = match renderdoc_lib.get(b"RENDERDOC_GetAPI\0") {
-            Ok(api) => api,
-            Err(e) => {
-                return RenderDoc::NotAvailable {
-                    reason: format!(
-                        "Unable to get RENDERDOC_GetAPI from renderdoc library '{}': {:?}",
-                        renderdoc_filename, e
-                    ),
+        let get_api: libloading::Symbol<GetApiFn> =
+            match unsafe { renderdoc_lib.get(b"RENDERDOC_GetAPI\0") } {
+                Ok(api) => api,
+                Err(e) => {
+                    return RenderDoc::NotAvailable {
+                        reason: format!(
+                            "Unable to get RENDERDOC_GetAPI from renderdoc library '{}': {:?}",
+                            renderdoc_filename, e
+                        ),
+                    }
                 }
-            }
-        };
+            };
         let mut obj = ptr::null_mut();
-        match get_api(10401, &mut obj) {
+        match unsafe { get_api(10401, &mut obj) } {
             1 => RenderDoc::Available {
                 api: RenderDocApi {
-                    api: *(obj as *mut renderdoc_sys::RENDERDOC_API_1_4_1),
+                    api: unsafe { *(obj as *mut renderdoc_sys::RENDERDOC_API_1_4_1) },
                     lib: renderdoc_lib,
                 },
             },
@@ -115,7 +117,7 @@ impl RenderDoc {
     pub unsafe fn start_frame_capture(&self, device_handle: Handle, window_handle: Handle) -> bool {
         match *self {
             Self::Available { api: ref entry } => {
-                entry.api.StartFrameCapture.unwrap()(device_handle, window_handle);
+                unsafe { entry.api.StartFrameCapture.unwrap()(device_handle, window_handle) };
                 true
             }
             Self::NotAvailable { ref reason } => {
@@ -129,7 +131,7 @@ impl RenderDoc {
     pub unsafe fn end_frame_capture(&self, device_handle: Handle, window_handle: Handle) {
         match *self {
             Self::Available { api: ref entry } => {
-                entry.api.EndFrameCapture.unwrap()(device_handle, window_handle);
+                unsafe { entry.api.EndFrameCapture.unwrap()(device_handle, window_handle) };
             }
             Self::NotAvailable { ref reason } => {
                 log::warn!("Could not end RenderDoc frame capture: {}", reason)

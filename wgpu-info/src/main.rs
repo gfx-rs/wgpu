@@ -8,7 +8,7 @@ mod inner {
 
     // Lets keep these on one line
     #[rustfmt::skip]
-    const TEXTURE_FORMAT_LIST: [wgpu::TextureFormat; 113] = [
+    const TEXTURE_FORMAT_LIST: [wgpu::TextureFormat; 114] = [
         wgpu::TextureFormat::R8Unorm,
         wgpu::TextureFormat::R8Snorm,
         wgpu::TextureFormat::R8Uint,
@@ -50,11 +50,12 @@ mod inner {
         wgpu::TextureFormat::Rgba32Uint,
         wgpu::TextureFormat::Rgba32Sint,
         wgpu::TextureFormat::Rgba32Float,
+        wgpu::TextureFormat::Stencil8,
+        wgpu::TextureFormat::Depth16Unorm,
         wgpu::TextureFormat::Depth32Float,
         wgpu::TextureFormat::Depth32FloatStencil8,
         wgpu::TextureFormat::Depth24Plus,
         wgpu::TextureFormat::Depth24PlusStencil8,
-        wgpu::TextureFormat::Depth24UnormStencil8,
         wgpu::TextureFormat::Rgb9e5Ufloat,
         wgpu::TextureFormat::Bc1RgbaUnorm,
         wgpu::TextureFormat::Bc1RgbaUnormSrgb,
@@ -131,13 +132,15 @@ mod inner {
         let downlevel = adapter.get_downlevel_capabilities();
         let features = adapter.features();
         let limits = adapter.limits();
-    
+
         println!("Adapter {}:", idx);
         println!("\t   Backend: {:?}", info.backend);
         println!("\t      Name: {:?}", info.name);
         println!("\t  VendorID: {:?}", info.vendor);
         println!("\t  DeviceID: {:?}", info.device);
         println!("\t      Type: {:?}", info.device_type);
+        println!("\t    Driver: {:?}", info.driver);
+        println!("\tDriverInfo: {:?}", info.driver_info);
         println!("\t Compliant: {:?}", downlevel.is_webgpu_compliant());
         println!("\tFeatures:");
         for i in 0..(size_of::<wgpu::Features>() * 8) {
@@ -148,7 +151,7 @@ mod inner {
                 }
             }
         }
-    
+
         println!("\tLimits:");
         let wgpu::Limits {
             max_texture_dimension_1d,
@@ -156,6 +159,7 @@ mod inner {
             max_texture_dimension_3d,
             max_texture_array_layers,
             max_bind_groups,
+            max_bindings_per_bind_group,
             max_dynamic_uniform_buffers_per_pipeline_layout,
             max_dynamic_storage_buffers_per_pipeline_layout,
             max_sampled_textures_per_shader_stage,
@@ -185,6 +189,7 @@ mod inner {
         println!("\t\t                        Max Texture Dimension 3d: {}", max_texture_dimension_3d);
         println!("\t\t                        Max Texture Array Layers: {}", max_texture_array_layers);
         println!("\t\t                                 Max Bind Groups: {}", max_bind_groups);
+        println!("\t\t                     Max Bindings Per Bind Group: {}", max_bindings_per_bind_group);
         println!("\t\t Max Dynamic Uniform Buffers Per Pipeline Layout: {}", max_dynamic_uniform_buffers_per_pipeline_layout);
         println!("\t\t Max Dynamic Storage Buffers Per Pipeline Layout: {}", max_dynamic_storage_buffers_per_pipeline_layout);
         println!("\t\t           Max Sampled Textures Per Shader Stage: {}", max_sampled_textures_per_shader_stage);
@@ -208,7 +213,7 @@ mod inner {
         println!("\t\t                    Max Compute Workgroup Size Y: {}", max_compute_workgroup_size_y);
         println!("\t\t                    Max Compute Workgroup Size Z: {}", max_compute_workgroup_size_z);
         println!("\t\t            Max Compute Workgroups Per Dimension: {}", max_compute_workgroups_per_dimension);
-    
+
         println!("\tDownlevel Properties:");
         let wgpu::DownlevelCapabilities {
             shader_model,
@@ -225,7 +230,7 @@ mod inner {
             }
         }
 
-        println!("\tTexture Format Features:      ┌──────────┬──────────┬──────────Allowed┬Usages───────────┬───────────────────┐ ┌────────────┬─────────────┬──────────────Feature┬Flags───────────────┬─────────────────┐");
+        println!("\tTexture Format Features:      ┌──────────┬──────────┬──────────Allowed┬Usages───────────┬───────────────────┐ ┌────────────┬────────────────┬──────────────Feature┬Flags──────┬─────────────────────┬────────────────────┬─");
         for format in TEXTURE_FORMAT_LIST {
             let features = adapter.get_texture_format_features(format);
             let format_name = match format {
@@ -266,9 +271,10 @@ mod inner {
                     }
                 }
             }
+
             println!(" │");
         }
-        println!("\t                              └──────────┴──────────┴─────────────────┴─────────────────┴───────────────────┘ └────────────┴─────────────┴─────────────────────┴────────────────────┴─────────────────┘");
+        println!("\t                              └──────────┴──────────┴─────────────────┴─────────────────┴───────────────────┘ └────────────┴────────────────┴────────────────┴────────────────┴─────────────────────┘");
     }
 
     pub fn main() {

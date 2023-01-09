@@ -266,16 +266,22 @@ pub(crate) fn clear_texture<A: HalApi>(
         layers: range.layer_range.clone(),
     };
 
-    // If we're in a texture-init usecase, we know that the texture is already tracked since whatever caused the init requirement,
-    // will have caused the usage tracker to be aware of the texture. Meaning, that it is safe to call call change_replace_tracked if the life_guard is already gone
-    // (i.e. the user no longer holds on to this texture).
-    // On the other hand, when coming via command_encoder_clear_texture, the life_guard is still there since in order to call it a texture object is needed.
+    // If we're in a texture-init usecase, we know that the texture is already
+    // tracked since whatever caused the init requirement, will have caused the
+    // usage tracker to be aware of the texture. Meaning, that it is safe to
+    // call call change_replace_tracked if the life_guard is already gone (i.e.
+    // the user no longer holds on to this texture).
     //
-    // We could in theory distinguish these two scenarios in the internal clear_texture api in order to remove this check and call the cheaper change_replace_tracked whenever possible.
+    // On the other hand, when coming via command_encoder_clear_texture, the
+    // life_guard is still there since in order to call it a texture object is
+    // needed.
+    //
+    // We could in theory distinguish these two scenarios in the internal
+    // clear_texture api in order to remove this check and call the cheaper
+    // change_replace_tracked whenever possible.
     let dst_barrier = texture_tracker
-        .set_single(storage, dst_texture_id.0, selector, clear_usage)
+        .set_single(dst_texture, dst_texture_id.0, selector, clear_usage)
         .unwrap()
-        .1
         .map(|pending| pending.into_hal(dst_texture));
     unsafe {
         encoder.transition_textures(dst_barrier.into_iter());
@@ -332,8 +338,13 @@ fn clear_texture_via_buffer_copies<A: hal::Api>(
         // round down to a multiple of rows needed by the texture format
         let max_rows_per_copy = max_rows_per_copy / format_desc.block_dimensions.1 as u32
             * format_desc.block_dimensions.1 as u32;
-        assert!(max_rows_per_copy > 0, "Zero buffer size is too small to fill a single row of a texture with format {:?} and desc {:?}",
-                texture_desc.format, texture_desc.size);
+        assert!(
+            max_rows_per_copy > 0,
+            "Zero buffer size is too small to fill a single row \
+                 of a texture with format {:?} and desc {:?}",
+            texture_desc.format,
+            texture_desc.size
+        );
 
         let z_range = 0..(if texture_desc.dimension == wgt::TextureDimension::D3 {
             mip_size.depth_or_array_layers
@@ -344,7 +355,8 @@ fn clear_texture_via_buffer_copies<A: hal::Api>(
         for array_layer in range.layer_range.clone() {
             // TODO: Only doing one layer at a time for volume textures right now.
             for z in z_range.clone() {
-                // May need multiple copies for each subresource! However, we assume that we never need to split a row.
+                // May need multiple copies for each subresource! However, we
+                // assume that we never need to split a row.
                 let mut num_rows_left = mip_size.height;
                 while num_rows_left > 0 {
                     let num_rows = num_rows_left.min(max_rows_per_copy);
@@ -400,7 +412,8 @@ fn clear_texture_via_render_passes<A: hal::Api>(
     for mip_level in range.mip_range {
         let extent = extent_base.mip_level_size(mip_level, is_3d_texture);
         let layer_or_depth_range = if dst_texture.desc.dimension == wgt::TextureDimension::D3 {
-            // TODO: We assume that we're allowed to do clear operations on volume texture slices, this is not properly specified.
+            // TODO: We assume that we're allowed to do clear operations on
+            // volume texture slices, this is not properly specified.
             0..extent.depth_or_array_layers
         } else {
             range.layer_range.clone()
