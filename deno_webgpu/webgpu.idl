@@ -374,11 +374,6 @@ interface GPUExternalTexture {
 };
 GPUExternalTexture includes GPUObjectBase;
 
-dictionary GPUExternalTextureDescriptor : GPUObjectDescriptorBase {
-    required HTMLVideoElement source;
-    PredefinedColorSpace colorSpace = "srgb";
-};
-
 [Exposed=(Window, DedicatedWorker), SecureContext]
 interface GPUSampler {
 };
@@ -1066,6 +1061,26 @@ enum GPUPipelineStatisticName {
     "clipper-primitives-out",
     "fragment-shader-invocations",
     "compute-shader-invocations",
+};
+
+[Exposed=(Window, DedicatedWorker), SecureContext]
+interface GPUCanvasContext {
+    undefined configure(GPUCanvasConfiguration configuration);
+    undefined unconfigure();
+
+    GPUTexture getCurrentTexture();
+};
+
+enum GPUCanvasAlphaMode {
+    "opaque",
+    "premultiplied"
+};
+
+dictionary GPUCanvasConfiguration {
+    required GPUDevice device;
+    required GPUTextureFormat format;
+    GPUTextureUsageFlags usage = 0x10;  // GPUTextureUsage.RENDER_ATTACHMENT
+    GPUCanvasAlphaMode alphaMode = "opaque";
 };
 
 enum GPUDeviceLostReason {

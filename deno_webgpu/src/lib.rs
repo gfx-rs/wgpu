@@ -27,13 +27,22 @@ mod macros {
     macro_rules! gfx_select {
     ($id:expr => $global:ident.$method:ident( $($param:expr),* )) => {
       match $id.backend() {
-        #[cfg(not(target_os = "macos"))]
+        #[cfg(any(
+            all(not(target_arch = "wasm32"), not(target_os = "ios"), not(target_os = "macos")),
+            feature = "vulkan-portability"
+        ))]
         wgpu_types::Backend::Vulkan => $global.$method::<wgpu_core::api::Vulkan>( $($param),* ),
-        #[cfg(target_os = "macos")]
+        #[cfg(all(not(target_arch = "wasm32"), any(target_os = "ios", target_os = "macos")))]
         wgpu_types::Backend::Metal => $global.$method::<wgpu_core::api::Metal>( $($param),* ),
-        #[cfg(windows)]
+        #[cfg(all(not(target_arch = "wasm32"), windows))]
         wgpu_types::Backend::Dx12 => $global.$method::<wgpu_core::api::Dx12>( $($param),* ),
-        #[cfg(all(unix, not(target_os = "macos")))]
+        #[cfg(all(not(target_arch = "wasm32"), windows))]
+        wgpu_types::Backend::Dx11 => $global.$method::<wgpu_core::api::Dx11>( $($param),* ),
+        #[cfg(any(
+            all(unix, not(target_os = "macos"), not(target_os = "ios")),
+            feature = "angle",
+            target_arch = "wasm32"
+        ))]
         wgpu_types::Backend::Gl => $global.$method::<wgpu_core::api::Gles>( $($param),+ ),
         other => panic!("Unexpected backend {:?}", other),
       }
@@ -67,6 +76,8 @@ pub mod queue;
 pub mod render_pass;
 pub mod sampler;
 pub mod shader;
+#[cfg(feature = "surface")]
+pub mod surface;
 pub mod texture;
 
 pub struct Unstable(pub bool);
@@ -82,7 +93,7 @@ fn check_unstable(state: &OpState, api_name: &str) {
     }
 }
 
-type Instance = wgpu_core::hub::Global<wgpu_core::hub::IdentityManagerFactory>;
+pub type Instance = wgpu_core::hub::Global<wgpu_core::hub::IdentityManagerFactory>;
 
 struct WebGpuAdapter(wgpu_core::id::AdapterId);
 impl Resource for WebGpuAdapter {

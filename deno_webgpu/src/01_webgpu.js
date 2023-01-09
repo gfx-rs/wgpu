@@ -188,10 +188,13 @@
     }
   }
 
+  const illegalConstructorKey = Symbol("illegalConstructorKey");
   class GPUError extends Error {
-    constructor() {
+    constructor(key = null) {
       super();
-      webidl.illegalConstructor();
+      if (key !== illegalConstructorKey) {
+        webidl.illegalConstructor();
+      }
     }
 
     [_message];
@@ -212,7 +215,9 @@
         prefix,
         context: "Argument 1",
       });
-      super(message);
+      super(illegalConstructorKey);
+      this[webidl.brand] = webidl.brand;
+      this[_message] = message;
     }
   }
   const GPUValidationErrorPrototype = GPUValidationError.prototype;
@@ -226,7 +231,9 @@
         prefix,
         context: "Argument 1",
       });
-      super(message);
+      super(illegalConstructorKey);
+      this[webidl.brand] = webidl.brand;
+      this[_message] = message;
     }
   }
   const GPUOutOfMemoryErrorPrototype = GPUOutOfMemoryError.prototype;
@@ -347,7 +354,7 @@
         rid,
         adapter: this,
         features: createGPUSupportedFeatures(features),
-        limits: createGPUSupportedFeatures(limits),
+        limits: createGPUSupportedLimits(limits),
       });
       return createGPUDevice(
         descriptor.label,
@@ -5251,6 +5258,9 @@
   const GPUQuerySetPrototype = GPUQuerySet.prototype;
 
   window.__bootstrap.webgpu = {
+    _device,
+    assertDevice,
+    createGPUTexture,
     gpu: webidl.createBranded(GPU),
     GPU,
     GPUAdapter,

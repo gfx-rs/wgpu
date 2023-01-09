@@ -628,6 +628,7 @@ name = "deno_webgpu"
 version = "0.81.0"
 dependencies = [
  "deno_core",
+ "raw-window-handle 0.5.0",
  "serde",
  "tokio",
  "wgpu-core",

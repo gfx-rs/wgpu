@@ -10,11 +10,15 @@ readme = "README.md"
 repository.workspace = true
 description = "WebGPU implementation for Deno"
 
+[features]
+surface = ["wgpu-core/raw-window-handle", "dep:raw-window-handle"]
+
 [dependencies]
 deno_core.workspace = true
 serde = { workspace = true, features = ["derive"] }
 tokio = { workspace = true, features = ["full"] }
 wgpu-types = { workspace = true, features = ["trace", "replay", "serde"] }
+raw-window-handle = { workspace = true, optional = true }
 
 [dependencies.wgpu-core]
 workspace = true
