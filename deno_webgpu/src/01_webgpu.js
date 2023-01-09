@@ -188,10 +188,13 @@
     }
   }
 
+  const illegalConstructorKey = Symbol("illegalConstructorKey");
   class GPUError extends Error {
-    constructor() {
+    constructor(key = null) {
       super();
-      webidl.illegalConstructor();
+      if (key !== illegalConstructorKey) {
+        webidl.illegalConstructor();
+      }
     }
 
     [_message];
@@ -212,7 +215,9 @@
         prefix,
         context: "Argument 1",
       });
-      super(message);
+      super(illegalConstructorKey);
+      this[webidl.brand] = webidl.brand;
+      this[_message] = message;
     }
   }
   const GPUValidationErrorPrototype = GPUValidationError.prototype;
@@ -226,7 +231,9 @@
         prefix,
         context: "Argument 1",
       });
-      super(message);
+      super(illegalConstructorKey);
+      this[webidl.brand] = webidl.brand;
+      this[_message] = message;
     }
   }
   const GPUOutOfMemoryErrorPrototype = GPUOutOfMemoryError.prototype;
