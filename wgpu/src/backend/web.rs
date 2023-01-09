@@ -922,7 +922,9 @@ impl crate::context::Context for Context {
     ) -> wgt::Features {
         let features = adapter.0.features();
 
-        let features_set: js_sys::Set = features.unchecked_into();
+        let features_set: js_sys::Set = features
+            .dyn_into()
+            .expect("adapter.features() is not setlike");
 
         let mut features = wgt::Features::empty();
 
@@ -1095,7 +1097,9 @@ impl crate::context::Context for Context {
     ) -> wgt::Features {
         let features = device.0.features();
 
-        let features_set: js_sys::Set = features.unchecked_into();
+        let features_set: js_sys::Set = features
+            .dyn_into()
+            .expect("device.features() is not setlike");
 
         let mut features = wgt::Features::empty();
 
