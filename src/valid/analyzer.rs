@@ -6,7 +6,7 @@ Figures out the following properties:
   - expression reference counts
 !*/
 
-use super::{CallError, ExpressionError, FunctionError, ModuleInfo, ShaderStages, ValidationFlags};
+use super::{ExpressionError, FunctionError, ModuleInfo, ShaderStages, ValidationFlags};
 use crate::span::{AddSpan as _, WithSpan};
 use crate::{
     arena::{Arena, Handle},
@@ -308,10 +308,7 @@ impl FunctionInfo {
         handle: Handle<crate::Expression>,
         global_use: GlobalUse,
     ) -> NonUniformResult {
-        //Note: if the expression doesn't exist, this function
-        // will return `None`, but the later validation of
-        // expressions should detect this and error properly.
-        let info = self.expressions.get_mut(handle.index())?;
+        let info = &mut self.expressions[handle.index()];
         info.ref_count += 1;
         // mark the used global as read
         if let Some(global) = info.assignable_global {
@@ -335,8 +332,7 @@ impl FunctionInfo {
         handle: Handle<crate::Expression>,
         assignable_global: &mut Option<Handle<crate::GlobalVariable>>,
     ) -> NonUniformResult {
-        //Note: similarly to `add_ref_impl`, this ignores invalid expressions.
-        let info = self.expressions.get_mut(handle.index())?;
+        let info = &mut self.expressions[handle.index()];
         info.ref_count += 1;
         // propagate the assignable global up the chain, till it either hits
         // a value-type expression, or the assignment statement.
@@ -689,13 +685,7 @@ impl FunctionInfo {
                 non_uniform_result: self.add_ref(expr),
                 requirements: UniformityRequirements::empty(),
             },
-            E::CallResult(function) => {
-                let info = other_functions
-                    .get(function.index())
-                    .ok_or(ExpressionError::CallToUndeclaredFunction(function))?;
-
-                info.uniformity.clone()
-            }
+            E::CallResult(function) => other_functions[function.index()].uniformity.clone(),
             E::AtomicResult { .. } => Uniformity {
                 non_uniform_result: Some(handle),
                 requirements: UniformityRequirements::empty(),
@@ -736,15 +726,12 @@ impl FunctionInfo {
         use crate::Statement as S;
 
         let mut combined_uniformity = FunctionUniformity::new();
-        for (statement, &span) in statements.span_iter() {
+        for statement in statements {
             let uniformity = match *statement {
                 S::Emit(ref range) => {
                     let mut requirements = UniformityRequirements::empty();
                     for expr in range.clone() {
-                        let req = match self.expressions.get(expr.index()) {
-                            Some(expr) => expr.uniformity.requirements,
-                            None => UniformityRequirements::empty(),
-                        };
+                        let req = self.expressions[expr.index()].uniformity.requirements;
                         #[cfg(feature = "validate")]
                         if self
                             .flags
@@ -889,13 +876,7 @@ impl FunctionInfo {
                     for &argument in arguments {
                         let _ = self.add_ref(argument);
                     }
-                    let info = other_functions.get(function.index()).ok_or(
-                        FunctionError::InvalidCall {
-                            function,
-                            error: CallError::ForwardDeclaredFunction,
-                        }
-                        .with_span_static(span, "forward call"),
-                    )?;
+                    let info = &other_functions[function.index()];
                     //Note: the result is validated by the Validator, not here
                     self.process_call(info, arguments, expression_arena)?
                 }

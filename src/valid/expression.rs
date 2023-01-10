@@ -65,8 +65,6 @@ pub enum ExpressionError {
     ExpectedGlobalVariable,
     #[error("Not a global variable or a function argument")]
     ExpectedGlobalOrArgument,
-    #[error("Calling an undeclared function {0:?}")]
-    CallToUndeclaredFunction(Handle<crate::Function>),
     #[error("Needs to be an binding array instead of {0:?}")]
     ExpectedBindingArrayType(Handle<crate::Type>),
     #[error("Needs to be an image instead of {0:?}")]

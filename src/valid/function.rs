@@ -19,8 +19,6 @@ use bit_set::BitSet;
 #[derive(Clone, Debug, thiserror::Error)]
 #[cfg_attr(test, derive(PartialEq))]
 pub enum CallError {
-    #[error("The callee is declared after the caller")]
-    ForwardDeclaredFunction,
     #[error("Argument {index} expression is invalid")]
     Argument {
         index: usize,
