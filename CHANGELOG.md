@@ -134,6 +134,10 @@ Additionally `Surface::get_default_config` now returns an Option and returns Non
 
 - Browsers that support `OVR_multiview2` now report the `MULTIVIEW` feature by @expenses in [#3121](https://github.com/gfx-rs/wgpu/pull/3121).
 
+#### Vulkan
+
+- Set `COPY_SRC`/`COPY_DST` only based on Vulkan's `TRANSFER_SRC`/`TRANSFER_DST` by @teoxoy in [#3366](https://github.com/gfx-rs/wgpu/pull/3366).
+
 ### Added/New Features
 
 #### General
