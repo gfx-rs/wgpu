@@ -380,7 +380,7 @@ impl super::Device {
             let glow::ActiveUniform { utype, name, .. } =
                 unsafe { gl.get_active_uniform(program, uniform) }.unwrap();
 
-            if conv::is_sampler(utype) {
+            if conv::is_opaque_type(utype) {
                 continue;
             }
 
