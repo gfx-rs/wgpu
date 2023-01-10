@@ -63,17 +63,23 @@ compile_error!("Metal API enabled on non-Apple OS. If your project is not using 
 #[cfg(all(feature = "dx12", not(windows)))]
 compile_error!("DX12 API enabled on non-Windows OS. If your project is not using resolver=\"2\" in Cargo.toml, it should.");
 
+/// DirectX11 API internals.
 #[cfg(all(feature = "dx11", windows))]
-mod dx11;
+pub mod dx11;
+/// DirectX12 API internals.
 #[cfg(all(feature = "dx12", windows))]
-mod dx12;
-mod empty;
+pub mod dx12;
+/// A dummy API implementation.
+pub mod empty;
+/// GLES API internals.
 #[cfg(all(feature = "gles"))]
-mod gles;
+pub mod gles;
+/// Metal API internals.
 #[cfg(all(feature = "metal"))]
-mod metal;
+pub mod metal;
+/// Vulkan API internals.
 #[cfg(feature = "vulkan")]
-mod vulkan;
+pub mod vulkan;
 
 pub mod auxil;
 pub mod api {
