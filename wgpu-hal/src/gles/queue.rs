@@ -388,11 +388,12 @@ impl super::Queue {
                 const UNPACK_PREMULTIPLY_ALPHA_WEBGL: u32 = 0x9241;
 
                 unsafe {
-                    gl.pixel_store_i32(UNPACK_FLIP_Y_WEBGL, src.flip_y as i32);
-                    gl.pixel_store_i32(
-                        UNPACK_PREMULTIPLY_ALPHA_WEBGL,
-                        dst_premultiplication as i32,
-                    );
+                    if src.flip_y {
+                        gl.pixel_store_bool(UNPACK_FLIP_Y_WEBGL, true);
+                    }
+                    if dst_premultiplication {
+                        gl.pixel_store_bool(UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
+                    }
                 }
 
                 unsafe { gl.bind_texture(dst_target, Some(dst)) };
@@ -492,8 +493,12 @@ impl super::Queue {
                 }
 
                 unsafe {
-                    gl.pixel_store_i32(UNPACK_FLIP_Y_WEBGL, 0);
-                    gl.pixel_store_i32(UNPACK_PREMULTIPLY_ALPHA_WEBGL, 0);
+                    if src.flip_y {
+                        gl.pixel_store_bool(UNPACK_FLIP_Y_WEBGL, false);
+                    }
+                    if dst_premultiplication {
+                        gl.pixel_store_bool(UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+                    }
                 }
             }
             C::CopyTextureToTexture {

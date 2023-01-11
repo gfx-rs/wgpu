@@ -18,9 +18,24 @@ async fn image_bitmap_import() {
     let blob = web_sys::Blob::new_with_u8_array_sequence(&array).unwrap();
 
     // Parse the image from the blob
-    let image_bitmap_promise = web_sys::window()
+    let image_bitmap_function: js_sys::Function = web_sys::window()
         .unwrap()
-        .create_image_bitmap_with_blob(&blob)
+        .get("createImageBitmap")
+        .unwrap()
+        .dyn_into()
+        .unwrap();
+
+    let options_arg = js_sys::Object::new();
+    js_sys::Reflect::set(
+        &options_arg,
+        &wasm_bindgen::JsValue::from_str("premultiplyAlpha"),
+        &wasm_bindgen::JsValue::from_str("none"),
+    )
+    .unwrap();
+    let image_bitmap_promise: js_sys::Promise = image_bitmap_function
+        .call2(&wasm_bindgen::JsValue::UNDEFINED, &blob, &options_arg)
+        .unwrap()
+        .dyn_into()
         .unwrap();
 
     // Wait for the parsing to be done
