@@ -33,7 +33,7 @@ pub use wgt::{
     BindingType, BlendComponent, BlendFactor, BlendOperation, BlendState, BufferAddress,
     BufferBindingType, BufferSize, BufferUsages, Color, ColorTargetState, ColorWrites,
     CommandBufferDescriptor, CompareFunction, CompositeAlphaMode, DepthBiasState,
-    DepthStencilState, DeviceType, DownlevelCapabilities, DownlevelFlags, DynamicOffset, Extent3d,
+    DepthStencilState, DeviceType, DownlevelCapabilities, DownlevelFlags, Dx12Compiler, DynamicOffset, Extent3d,
     Face, Features, FilterMode, FrontFace, ImageDataLayout, ImageSubresourceRange, IndexFormat,
     Limits, MultisampleState, Origin3d, PipelineStatisticsTypes, PolygonMode, PowerPreference,
     PresentMode, PresentationTimestamp, PrimitiveState, PrimitiveTopology, PushConstantRange,
@@ -1284,9 +1284,9 @@ impl Instance {
     ///
     /// - `backends` - Controls from which [backends][Backends] wgpu will choose
     ///   during instantiation.
-    pub fn new(backends: Backends) -> Self {
+    pub fn new(backends: Backends, dxc_option: wgt::Dx12Compiler) -> Self {
         Self {
-            context: Arc::from(crate::backend::Context::init(backends)),
+            context: Arc::from(crate::backend::Context::init(backends, dxc_option)),
         }
     }
 

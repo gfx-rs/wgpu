@@ -67,8 +67,8 @@ pub struct Instance {
 }
 
 impl Instance {
-    pub fn new(name: &str, backends: Backends) -> Self {
-        fn init<A: HalApi>(_: A, mask: Backends) -> Option<A::Instance> {
+    pub fn new(name: &str, backends: Backends, dxc_option: wgt::Dx12Compiler) -> Self {
+        fn init<A: HalApi>(_: A, mask: Backends, dxc_option: Option<wgt::Dx12Compiler>) -> Option<A::Instance> {
             if mask.contains(A::VARIANT.into()) {
                 let mut flags = hal::InstanceFlags::empty();
                 if cfg!(debug_assertions) {
@@ -78,6 +78,7 @@ impl Instance {
                 let hal_desc = hal::InstanceDescriptor {
                     name: "wgpu",
                     flags,
+                    dxc_option
                 };
                 unsafe { hal::Instance::init(&hal_desc).ok() }
             } else {
@@ -88,15 +89,15 @@ impl Instance {
         Self {
             name: name.to_string(),
             #[cfg(feature = "vulkan")]
-            vulkan: init(hal::api::Vulkan, backends),
+            vulkan: init(hal::api::Vulkan, backends, None),
             #[cfg(feature = "metal")]
-            metal: init(hal::api::Metal, backends),
+            metal: init(hal::api::Metal, backends, None),
             #[cfg(feature = "dx12")]
-            dx12: init(hal::api::Dx12, backends),
+            dx12: init(hal::api::Dx12, backends, Some(dxc_option)),
             #[cfg(feature = "dx11")]
-            dx11: init(hal::api::Dx11, backends),
+            dx11: init(hal::api::Dx11, backends, None),
             #[cfg(feature = "gles")]
-            gl: init(hal::api::Gles, backends),
+            gl: init(hal::api::Gles, backends, None),
         }
     }
 

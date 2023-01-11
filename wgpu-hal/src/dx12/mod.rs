@@ -92,6 +92,7 @@ pub struct Instance {
     supports_allow_tearing: bool,
     _lib_dxgi: native::DxgiLib,
     flags: crate::InstanceFlags,
+    dxc_option: wgt::Dx12Compiler,
 }
 
 impl Instance {
@@ -173,6 +174,7 @@ pub struct Adapter {
     //Note: this isn't used right now, but we'll need it later.
     #[allow(unused)]
     workarounds: Workarounds,
+    dxc_option: wgt::Dx12Compiler,
 }
 
 unsafe impl Send for Adapter {}
@@ -562,8 +564,8 @@ unsafe impl Send for ComputePipeline {}
 unsafe impl Sync for ComputePipeline {}
 
 pub(crate) struct DxcContainer {
-    dxc_compiler: hassle_rs::DxcCompiler,
-    dxc_library: hassle_rs::DxcLibrary,
+    compiler: hassle_rs::DxcCompiler,
+    library: hassle_rs::DxcLibrary,
     // Has to be held onto for the lifetime of the device otherwise shaders will fail to compile
     _dxc: hassle_rs::Dxc,
 }

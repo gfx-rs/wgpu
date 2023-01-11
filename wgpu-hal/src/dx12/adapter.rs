@@ -52,6 +52,7 @@ impl super::Adapter {
         adapter: native::DxgiAdapter,
         library: &Arc<native::D3D12Lib>,
         instance_flags: crate::InstanceFlags,
+        dxc_option: &wgt::Dx12Compiler,
     ) -> Option<crate::ExposedAdapter<super::Api>> {
         // Create the device so that we can get the capabilities.
         let device = {
@@ -243,6 +244,7 @@ impl super::Adapter {
                 private_caps,
                 presentation_timer,
                 workarounds,
+                dxc_option: dxc_option.clone(),
             },
             info,
             features,
@@ -347,7 +349,13 @@ impl crate::Adapter<super::Api> for super::Adapter {
                 .into_device_result("Queue creation")?
         };
 
-        let device = super::Device::new(self.device, queue, self.private_caps, &self.library)?;
+        let device = super::Device::new(
+            self.device,
+            queue,
+            self.private_caps,
+            &self.library,
+            self.dxc_option.clone(), // TODO: Don't clone this
+        )?;
         Ok(crate::OpenDevice {
             device,
             queue: super::Queue {

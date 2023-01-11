@@ -5,12 +5,14 @@ use wasm_bindgen_test::*;
 fn initialize() {
     let _ = wgpu::Instance::new(
         wgpu::util::backend_bits_from_env().unwrap_or_else(wgpu::Backends::all),
+        wgpu::Dx12Compiler::default(),
     );
 }
 
 fn request_adapter_inner(power: wgt::PowerPreference) {
     let instance = wgpu::Instance::new(
         wgpu::util::backend_bits_from_env().unwrap_or_else(wgpu::Backends::all),
+        wgpu::Dx12Compiler::default(),
     );
 
     let _adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {

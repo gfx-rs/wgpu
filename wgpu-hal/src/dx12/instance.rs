@@ -57,6 +57,11 @@ impl crate::Instance<super::Api> for super::Instance {
             }
         }
 
+        let dxc_option = match &desc.dxc_option {
+            Some(opt) => opt.clone(),
+            None => wgt::Dx12Compiler::default(),
+        };
+
         Ok(Self {
             // The call to create_factory will only succeed if we get a factory4, so this is safe.
             factory,
@@ -64,6 +69,7 @@ impl crate::Instance<super::Api> for super::Instance {
             _lib_dxgi: lib_dxgi,
             supports_allow_tearing,
             flags: desc.flags,
+            dxc_option,
         })
     }
 
@@ -91,7 +97,9 @@ impl crate::Instance<super::Api> for super::Instance {
 
         adapters
             .into_iter()
-            .filter_map(|raw| super::Adapter::expose(raw, &self.library, self.flags))
+            .filter_map(|raw| {
+                super::Adapter::expose(raw, &self.library, self.flags, &self.dxc_option)
+            })
             .collect()
     }
 }

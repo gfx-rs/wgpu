@@ -241,6 +241,7 @@ pub async fn op_webgpu_request_adapter(
             "webgpu",
             wgpu_core::hub::IdentityManagerFactory,
             backends,
+            wgpu_types::Dx12Compiler::Fxc,
         ));
         state.borrow::<Instance>()
     };

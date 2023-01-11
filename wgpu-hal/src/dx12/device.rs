@@ -21,26 +21,34 @@ impl super::Device {
         present_queue: native::CommandQueue,
         private_caps: super::PrivateCapabilities,
         library: &Arc<native::D3D12Lib>,
+        dxc_option: wgt::Dx12Compiler,
     ) -> Result<Self, crate::DeviceError> {
         let mem_allocator = super::suballocation::create_allocator_wrapper(&raw)?;
 
         // TODO: path to dxcompiler.dll and dxil.dll should be configurable
         // TODO: handle this not existing
-        let dxc_container = if true {
-            let dxc = hassle_rs::Dxc::new(Some("./".into()))?;
-            let dxc_compiler = dxc.create_compiler()?;
-            let dxc_library = dxc.create_library()?;
-            // Make sure that dxil.dll exists.
-            let _ = hassle_rs::Dxil::new(Some("./".into()))?;
+        #[cfg(feature = "dxc_shader_compiler")]
+        let dxc_container = match dxc_option {
+            wgt::Dx12Compiler::Dxc {
+                dxil_path,
+                dxc_path,
+            } => {
+                let dxc = hassle_rs::Dxc::new(dxc_path)?;
+                let dxc_compiler = dxc.create_compiler()?;
+                let dxc_library = dxc.create_library()?;
+                // Make sure that dxil.dll exists.
+                let _ = hassle_rs::Dxil::new(dxil_path)?;
 
-            Some(super::DxcContainer {
-                _dxc: dxc,
-                dxc_compiler,
-                dxc_library,
-            })
-        } else {
-            None
+                Some(super::DxcContainer {
+                    _dxc: dxc,
+                    compiler: dxc_compiler,
+                    library: dxc_library,
+                })
+            }
+            wgt::Dx12Compiler::Fxc => None,
         };
+        #[cfg(not(feature = "dxc_shader_compiler"))]
+        let dxc_container = None;
 
         let mut idle_fence = native::Fence::null();
         let hr = unsafe {
@@ -264,13 +272,13 @@ impl super::Device {
             }
 
             let blob = dxc_container
-                .dxc_library
+                .library
                 .create_blob_with_encoding_from_str(&source)
                 .map_err(|e| {
                     crate::PipelineError::Linkage(stage_bit, format!("DXC blob error: {}", e))
                 })?;
 
-            let compiled = dxc_container.dxc_compiler.compile(
+            let compiled = dxc_container.compiler.compile(
                 &blob,
                 source_name,
                 raw_ep,

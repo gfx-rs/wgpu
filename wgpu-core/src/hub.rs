@@ -1108,10 +1108,10 @@ pub struct Global<G: GlobalIdentityHandlerFactory> {
 }
 
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
-    pub fn new(name: &str, factory: G, backends: wgt::Backends) -> Self {
+    pub fn new(name: &str, factory: G, backends: wgt::Backends, dxc_option: wgt::Dx12Compiler) -> Self {
         profiling::scope!("Global::new");
         Self {
-            instance: Instance::new(name, backends),
+            instance: Instance::new(name, backends, dxc_option),
             surfaces: Registry::without_backend(&factory, "Surface"),
             hubs: Hubs::new(&factory),
         }

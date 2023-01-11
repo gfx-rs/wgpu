@@ -62,7 +62,7 @@ impl Viewport {
 }
 
 async fn run(event_loop: EventLoop<()>, viewports: Vec<(Window, wgpu::Color)>) {
-    let instance = wgpu::Instance::new(wgpu::Backends::all());
+    let instance = wgpu::Instance::new(wgpu::Backends::all(), wgpu::Dx12Compiler::default());
     let viewports: Vec<_> = viewports
         .into_iter()
         .map(|(window, color)| ViewportDesc::new(window, color, &instance))

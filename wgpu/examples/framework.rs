@@ -159,7 +159,7 @@ async fn setup<E: Example>(title: &str) -> Setup {
 
     let backend = wgpu::util::backend_bits_from_env().unwrap_or_else(wgpu::Backends::all);
 
-    let instance = wgpu::Instance::new(backend);
+    let instance = wgpu::Instance::new(backend, wgpu::Dx12Compiler::default());
     let (size, surface) = unsafe {
         let size = window.inner_size();
 

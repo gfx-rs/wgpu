@@ -12,6 +12,7 @@
 #[cfg(any(feature = "serde", test))]
 use serde::{Deserialize, Serialize};
 use std::hash::{Hash, Hasher};
+use std::path::PathBuf;
 use std::{num::NonZeroU32, ops::Range};
 
 pub mod assertions;
@@ -5291,5 +5292,21 @@ impl ShaderBoundChecks {
 impl Default for ShaderBoundChecks {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+// TODO: What happens if the user selects dxc, but the dxc feature is disabled?
+#[derive(Clone, Debug)]
+pub enum Dx12Compiler {
+    Fxc,
+    Dxc {
+        dxil_path: Option<PathBuf>,
+        dxc_path: Option<PathBuf>,
+    },
+}
+
+impl Default for Dx12Compiler {
+    fn default() -> Self {
+        Self::Fxc
     }
 }
