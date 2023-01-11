@@ -1093,14 +1093,13 @@ impl<A: HalApi> Device<A> {
         }
         let format = desc.format.unwrap_or(texture.desc.format);
         if format != texture.desc.format {
-            if texture.desc.view_formats.contains(&format) {
-                self.require_downlevel_flags(wgt::DownlevelFlags::VIEW_FORMATS)?;
-            } else {
+            if !texture.desc.view_formats.contains(&format) {
                 return Err(resource::CreateTextureViewError::FormatReinterpretation {
                     texture: texture.desc.format,
                     view: format,
                 });
             }
+            self.require_downlevel_flags(wgt::DownlevelFlags::VIEW_FORMATS)?;
         }
 
         // filter the usages based on the other criteria
