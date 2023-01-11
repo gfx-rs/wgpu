@@ -996,7 +996,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         unsafe {
             encoder.transition_textures(transitions.map(|pending| pending.into_hal(dst)));
-            encoder.copy_external_image_to_texture(&source.source, dst_raw, iter::once(regions));
+            encoder.copy_external_image_to_texture(
+                source,
+                dst_raw,
+                destination.premultiplied_alpha,
+                iter::once(regions),
+            );
         }
 
         Ok(())

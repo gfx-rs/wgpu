@@ -381,12 +381,24 @@ impl super::Queue {
                 dst,
                 dst_target,
                 dst_format,
+                dst_premultiplication,
                 ref copy,
             } => {
+                const UNPACK_FLIP_Y_WEBGL: u32 = 0x9240;
+                const UNPACK_PREMULTIPLY_ALPHA_WEBGL: u32 = 0x9241;
+
+                unsafe {
+                    gl.pixel_store_i32(UNPACK_FLIP_Y_WEBGL, src.flip_y as i32);
+                    gl.pixel_store_i32(
+                        UNPACK_PREMULTIPLY_ALPHA_WEBGL,
+                        dst_premultiplication as i32,
+                    );
+                }
+
                 unsafe { gl.bind_texture(dst_target, Some(dst)) };
                 let format_desc = self.shared.describe_texture_format(dst_format);
                 if is_layered_target(dst_target) {
-                    match *src {
+                    match src.source {
                         wgt::ExternalImageSource::ImageBitmap(ref b) => unsafe {
                             gl.tex_sub_image_3d_with_image_bitmap(
                                 dst_target,
@@ -435,7 +447,7 @@ impl super::Queue {
                         wgt::ExternalImageSource::OffscreenCanvas(_) => unreachable!(),
                     }
                 } else {
-                    match *src {
+                    match src.source {
                         wgt::ExternalImageSource::ImageBitmap(ref b) => unsafe {
                             gl.tex_sub_image_2d_with_image_bitmap_and_width_and_height(
                                 dst_target,
@@ -477,6 +489,11 @@ impl super::Queue {
                         },
                         wgt::ExternalImageSource::OffscreenCanvas(_) => unreachable!(),
                     }
+                }
+
+                unsafe {
+                    gl.pixel_store_i32(UNPACK_FLIP_Y_WEBGL, 0);
+                    gl.pixel_store_i32(UNPACK_PREMULTIPLY_ALPHA_WEBGL, 0);
                 }
             }
             C::CopyTextureToTexture {

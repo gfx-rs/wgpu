@@ -267,8 +267,9 @@ impl crate::CommandEncoder<Api> for Encoder {
     #[cfg(all(target_arch = "wasm32", not(feature = "emscripten")))]
     unsafe fn copy_external_image_to_texture<T>(
         &mut self,
-        src: &wgt::ExternalImageSource,
+        src: &wgt::ImageCopyExternalImage,
         dst: &Resource,
+        dst_premultiplication: bool,
         regions: T,
     ) where
         T: Iterator<Item = crate::TextureCopy>,

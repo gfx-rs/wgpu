@@ -45,6 +45,10 @@ async fn image_bitmap_import() {
     enum TestCase {
         // Import the image as normal
         Normal,
+        // Sets the FlipY flag. Deals with global state on GLES, so run before other tests to ensure it's reset.
+        FlipY,
+        // Sets the premultiplied alpha flag. Deals with global state on GLES, so run before other tests to ensure it's reset.
+        Premultiplied,
         // Set both the input offset and output offset to 1 in x, so the first column is omitted.
         TrimLeft,
         // Set the size to 2 in x, so the last column is omitted
@@ -62,6 +66,8 @@ async fn image_bitmap_import() {
     }
     let cases = [
         TestCase::Normal,
+        TestCase::FlipY,
+        TestCase::Premultiplied,
         TestCase::TrimLeft,
         TestCase::TrimRight,
         TestCase::SlideRight,
@@ -77,10 +83,14 @@ async fn image_bitmap_import() {
             let mut raw_image = raw_image.clone();
             // The origin used for the external copy on the source side.
             let mut src_origin = wgpu::Origin2d::ZERO;
+            // If the source should be flipped in Y
+            let mut src_flip_y = false;
             // The origin used for the external copy on the destination side.
             let mut dest_origin = wgpu::Origin3d::ZERO;
             // The layer the external image's data should end up in.
             let mut dest_data_layer = 0;
+            // The layer the external image's data should end up in.
+            let mut dest_premultiplied = false;
             // Size of the external copy
             let mut copy_size = wgpu::Extent3d {
                 width: 3,
@@ -98,6 +108,25 @@ async fn image_bitmap_import() {
             let mut correct = true;
             match case {
                 TestCase::Normal => {}
+                TestCase::FlipY => {
+                    src_flip_y = true;
+                    for x in 0..3 {
+                        let top = raw_image[(x, 0)];
+                        let bottom = raw_image[(x, 2)];
+                        raw_image[(x, 0)] = bottom;
+                        raw_image[(x, 2)] = top;
+                    }
+                }
+                TestCase::Premultiplied => {
+                    dest_premultiplied = true;
+                    for pixel in raw_image.pixels_mut() {
+                        let mut float_pix = pixel.0.map(|v| v as f32 / 255.0);
+                        float_pix[0] *= float_pix[3];
+                        float_pix[1] *= float_pix[3];
+                        float_pix[2] *= float_pix[3];
+                        pixel.0 = float_pix.map(|v| (v * 255.0).round() as u8);
+                    }
+                }
                 TestCase::TrimLeft => {
                     valid = ctx
                         .adapter_downlevel_capabilities
@@ -173,7 +202,7 @@ async fn image_bitmap_import() {
                     &wgpu::ImageCopyExternalImage {
                         source: wgpu::ExternalImageSource::ImageBitmap(image_bitmap.clone()),
                         origin: src_origin,
-                        flip_y: false,
+                        flip_y: src_flip_y,
                     },
                     wgpu::ImageCopyTextureTagged {
                         texture: &texture,
@@ -181,7 +210,7 @@ async fn image_bitmap_import() {
                         origin: dest_origin,
                         aspect: wgpu::TextureAspect::All,
                         color_space: wgpu::PredefinedColorSpace::Srgb,
-                        premultiplied_alpha: false,
+                        premultiplied_alpha: dest_premultiplied,
                     },
                     copy_size,
                 );

@@ -663,10 +663,11 @@ enum Command {
     },
     #[cfg(all(target_arch = "wasm32", not(feature = "emscripten")))]
     CopyExternalImageToTexture {
-        src: wgt::ExternalImageSource,
+        src: wgt::ImageCopyExternalImage,
         dst: glow::Texture,
         dst_target: BindTarget,
         dst_format: wgt::TextureFormat,
+        dst_premultiplication: bool,
         copy: crate::TextureCopy,
     },
     CopyTextureToTexture {
