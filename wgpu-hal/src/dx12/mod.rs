@@ -39,6 +39,7 @@ mod conv;
 mod descriptor;
 mod device;
 mod instance;
+mod shader_compilation;
 mod suballocation;
 mod view;
 
@@ -243,7 +244,7 @@ pub struct Device {
     render_doc: crate::auxil::renderdoc::RenderDoc,
     null_rtv_handle: descriptor::Handle,
     mem_allocator: Option<Mutex<suballocation::GpuAllocatorWrapper>>,
-    dxc_container: Option<DxcContainer>,
+    dxc_container: Option<shader_compilation::DxcContainer>,
 }
 
 unsafe impl Send for Device {}
@@ -540,7 +541,8 @@ pub struct ShaderModule {
     raw_name: Option<ffi::CString>,
 }
 
-enum CompiledShader {
+pub(super) enum CompiledShader {
+    #[allow(unused)]
     Dxc(Vec<u8>),
     Fxc(native::Blob),
 }
@@ -562,13 +564,6 @@ pub struct ComputePipeline {
 
 unsafe impl Send for ComputePipeline {}
 unsafe impl Sync for ComputePipeline {}
-
-pub(crate) struct DxcContainer {
-    compiler: hassle_rs::DxcCompiler,
-    library: hassle_rs::DxcLibrary,
-    // Has to be held onto for the lifetime of the device otherwise shaders will fail to compile
-    _dxc: hassle_rs::Dxc,
-}
 
 impl SwapChain {
     unsafe fn release_resources(self) -> native::WeakPtr<dxgi1_4::IDXGISwapChain3> {
@@ -847,32 +842,5 @@ impl crate::Queue<Api> for Queue {
         let mut frequency = 0u64;
         unsafe { self.raw.GetTimestampFrequency(&mut frequency) };
         (1_000_000_000.0 / frequency as f64) as f32
-    }
-}
-
-impl From<hassle_rs::HassleError> for crate::DeviceError {
-    fn from(value: hassle_rs::HassleError) -> Self {
-        match value {
-            hassle_rs::HassleError::Win32Error(e) => {
-                // TODO: This returns an HRESULT, should we try and use the associated Windows error message?
-                log::error!("Win32 error: {e:?}");
-                crate::DeviceError::Lost
-            }
-            hassle_rs::HassleError::LoadLibraryError { filename, inner } => {
-                log::error!("Failed to load dxc library {filename:?}. Inner error: {inner:?}");
-                crate::DeviceError::Lost
-            }
-            hassle_rs::HassleError::LibLoadingError(e) => {
-                log::error!("Failed to load dxc library. {e:?}");
-                crate::DeviceError::Lost
-            }
-            hassle_rs::HassleError::WindowsOnly(e) => {
-                log::error!("Signing with dxil.dll is only supported on Windows. {e:?}");
-                crate::DeviceError::Lost
-            }
-            // `ValidationError` and `CompileError` should never happen in a context involving `DeviceError`
-            hassle_rs::HassleError::ValidationError(_e) => unimplemented!(),
-            hassle_rs::HassleError::CompileError(_e) => unimplemented!(),
-        }
     }
 }

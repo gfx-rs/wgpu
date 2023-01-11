@@ -5,10 +5,10 @@ use crate::{
 
 use super::{conv, descriptor, view};
 use parking_lot::Mutex;
-use std::{ffi, mem, num::NonZeroU32, ptr, slice, sync::Arc};
+use std::{ffi, mem, num::NonZeroU32, ptr, sync::Arc};
 use winapi::{
     shared::{dxgiformat, dxgitype, minwindef::BOOL, winerror},
-    um::{d3d12, d3dcompiler, synchapi, winbase},
+    um::{d3d12, synchapi, winbase},
     Interface,
 };
 
@@ -25,30 +25,13 @@ impl super::Device {
     ) -> Result<Self, crate::DeviceError> {
         let mem_allocator = super::suballocation::create_allocator_wrapper(&raw)?;
 
-        // TODO: path to dxcompiler.dll and dxil.dll should be configurable
-        // TODO: handle this not existing
-        #[cfg(feature = "dxc_shader_compiler")]
         let dxc_container = match dx12_shader_compiler {
             wgt::Dx12Compiler::Dxc {
                 dxil_path,
                 dxc_path,
-            } => {
-                let dxc = hassle_rs::Dxc::new(dxc_path)?;
-                let dxc_compiler = dxc.create_compiler()?;
-                let dxc_library = dxc.create_library()?;
-                // Make sure that dxil.dll exists.
-                let _ = hassle_rs::Dxil::new(dxil_path)?;
-
-                Some(super::DxcContainer {
-                    _dxc: dxc,
-                    compiler: dxc_compiler,
-                    library: dxc_library,
-                })
-            }
+            } => super::shader_compilation::get_dxc_container(dxc_path, dxil_path)?,
             wgt::Dx12Compiler::Fxc => None,
         };
-        #[cfg(not(feature = "dxc_shader_compiler"))]
-        let dxc_container = None;
 
         let mut idle_fence = native::Fence::null();
         let hr = unsafe {
@@ -259,69 +242,26 @@ impl super::Device {
 
         // Compile with DXC if available, otherwise fall back to FXC
         let (result, log_level) = if let Some(ref dxc_container) = self.dxc_container {
-            profiling::scope!("hassle_rs::compile_hlsl");
-            let mut compile_flags = arrayvec::ArrayVec::<&str, 3>::new_const();
-            compile_flags.push("-Ges"); // d3dcompiler::D3DCOMPILE_ENABLE_STRICTNESS
-            if self
-                .private_caps
-                .instance_flags
-                .contains(crate::InstanceFlags::DEBUG)
-            {
-                compile_flags.push("-Zi"); /* d3dcompiler::D3DCOMPILE_SKIP_OPTIMIZATION */
-                compile_flags.push("-Od"); /* d3dcompiler::D3DCOMPILE_DEBUG */
-            }
-
-            let blob = dxc_container
-                .library
-                .create_blob_with_encoding_from_str(&source)
-                .map_err(|e| {
-                    crate::PipelineError::Linkage(stage_bit, format!("DXC blob error: {}", e))
-                })?;
-
-            let compiled = dxc_container.compiler.compile(
-                &blob,
+            profiling::scope!("wgpu::backend::directx12::compile_dxc");
+            crate::dx12::shader_compilation::compile_dxc(
+                self,
+                &source,
                 source_name,
                 raw_ep,
-                &full_stage,
-                &compile_flags,
-                None, // TODO: idk what the include handler does
-                &[],
-            );
-
-            let (result, log_level) = match compiled {
-                Ok(dxc_result) => match dxc_result.get_result() {
-                    Ok(dxc_blob) => (
-                        Ok(super::CompiledShader::Dxc(dxc_blob.to_vec())),
-                        log::Level::Info,
-                    ),
-                    Err(e) => (
-                        Err(crate::PipelineError::Linkage(
-                            stage_bit,
-                            format!("DXC compile error: {}", e),
-                        )),
-                        log::Level::Warn,
-                    ),
-                },
-                Err(e) => (
-                    Err(crate::PipelineError::Linkage(
-                        stage_bit,
-                        format!("DXC compile error: {:?}", e),
-                    )),
-                    log::Level::Warn,
-                ),
-            };
-
-            (result, log_level)
+                stage_bit,
+                full_stage,
+                dxc_container,
+            )
         } else {
             profiling::scope!("wgpu::backend::directx12::compile_fxc");
-            let (fxc_result, log_level) = self.compile_fxc(
+            crate::dx12::shader_compilation::compile_fxc(
+                self,
                 &source,
                 source_name,
                 &ffi::CString::new(raw_ep.as_str()).unwrap(),
                 stage_bit,
                 full_stage,
-            );
-            (fxc_result, log_level)
+            )
         };
 
         log::log!(
@@ -332,74 +272,6 @@ impl super::Device {
             source
         );
         result
-    }
-
-    // This function gets called if `device::dxc_compiler` is None, or if TODO: flag is set that disables DXC.
-    fn compile_fxc(
-        &self,
-        source: &String,
-        source_name: &str,
-        raw_ep: &ffi::CString,
-        stage_bit: wgt::ShaderStages,
-        full_stage: String,
-    ) -> (
-        Result<super::CompiledShader, crate::PipelineError>,
-        log::Level,
-    ) {
-        let mut shader_data = native::Blob::null();
-        let mut compile_flags = d3dcompiler::D3DCOMPILE_ENABLE_STRICTNESS;
-        if self
-            .private_caps
-            .instance_flags
-            .contains(crate::InstanceFlags::DEBUG)
-        {
-            compile_flags |=
-                d3dcompiler::D3DCOMPILE_DEBUG | d3dcompiler::D3DCOMPILE_SKIP_OPTIMIZATION;
-        }
-        let mut error = native::Blob::null();
-        let hr = unsafe {
-            profiling::scope!("d3dcompiler::D3DCompile");
-            d3dcompiler::D3DCompile(
-                source.as_ptr().cast(),
-                source.len(),
-                source_name.as_ptr().cast(),
-                ptr::null(),
-                ptr::null_mut(),
-                raw_ep.as_ptr(),
-                full_stage.as_ptr().cast(),
-                compile_flags,
-                0,
-                shader_data.mut_void().cast(),
-                error.mut_void().cast(),
-            )
-        };
-
-        match hr.into_result() {
-            Ok(()) => (
-                Ok(super::CompiledShader::Fxc(shader_data)),
-                log::Level::Info,
-            ),
-            Err(e) => {
-                let mut full_msg = format!("FXC D3DCompile error ({})", e);
-                if !error.is_null() {
-                    use std::fmt::Write as _;
-                    let message = unsafe {
-                        slice::from_raw_parts(
-                            error.GetBufferPointer() as *const u8,
-                            error.GetBufferSize(),
-                        )
-                    };
-                    let _ = write!(full_msg, ": {}", String::from_utf8_lossy(message));
-                    unsafe {
-                        error.destroy();
-                    }
-                }
-                (
-                    Err(crate::PipelineError::Linkage(stage_bit, full_msg)),
-                    log::Level::Warn,
-                )
-            }
-        }
     }
 
     pub fn raw_device(&self) -> &native::Device {
