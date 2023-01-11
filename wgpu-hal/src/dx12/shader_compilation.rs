@@ -87,7 +87,7 @@ mod shader {
         dxil_path: Option<PathBuf>,
     ) -> Result<Option<DxcContainer>, crate::DeviceError> {
         // Make sure that dxil.dll exists.
-        let _ = match hassle_rs::Dxil::new(dxil_path) {
+        match hassle_rs::Dxil::new(dxil_path) {
             Ok(_) => (),
             Err(e) => {
                 log::warn!("Failed to load dxil.dll. Defaulting to Fxc instead: {}", e);
@@ -117,9 +117,9 @@ mod shader {
 
     pub(crate) fn compile_dxc(
         device: &crate::dx12::Device,
-        source: &String,
+        source: &str,
         source_name: &str,
-        raw_ep: &String,
+        raw_ep: &str,
         stage_bit: wgt::ShaderStages,
         full_stage: String,
         dxc_container: &DxcContainer,
@@ -140,7 +140,7 @@ mod shader {
 
         let blob = match dxc_container
             .library
-            .create_blob_with_encoding_from_str(&source)
+            .create_blob_with_encoding_from_str(source)
             .map_err(|e| crate::PipelineError::Linkage(stage_bit, format!("DXC blob error: {}", e)))
         {
             Ok(blob) => blob,
@@ -228,9 +228,9 @@ mod shader {
 
     pub(crate) fn compile_dxc(
         device: &crate::dx12::Device,
-        source: &String,
+        source: &str,
         source_name: &str,
-        raw_ep: &String,
+        raw_ep: &str,
         stage_bit: wgt::ShaderStages,
         full_stage: String,
         _dxc_container: &DxcContainer,
@@ -242,9 +242,9 @@ mod shader {
         log::warn!("Attempted to compile shader with DXC, but the DXC feature is disabled. Enable the `dxc_shader_compiler` feature on wgpu_hal to use DXC. Falling back to FXC.");
         super::compile_fxc(
             device,
-            source,
+            &source.to_string(),
             source_name,
-            &std::ffi::CString::new(raw_ep.as_str()).unwrap(),
+            &std::ffi::CString::new(raw_ep).unwrap(),
             stage_bit,
             full_stage,
         )

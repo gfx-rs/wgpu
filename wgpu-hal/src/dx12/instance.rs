@@ -57,8 +57,8 @@ impl crate::Instance<super::Api> for super::Instance {
             }
         }
 
-        let dx12_shader_compiler = match &desc.dx12_shader_compiler {
-            Some(compiler_option) => compiler_option.clone(),
+        let dx12_shader_compiler = match desc.dx12_shader_compiler {
+            Some(ref compiler_option) => compiler_option.clone(),
             None => wgt::Dx12Compiler::default(),
         };
 
