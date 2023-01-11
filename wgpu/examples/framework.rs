@@ -158,8 +158,10 @@ async fn setup<E: Example>(title: &str) -> Setup {
     log::info!("Initializing the surface...");
 
     let backend = wgpu::util::backend_bits_from_env().unwrap_or_else(wgpu::Backends::all);
+    let dx12_shader_compiler =
+        wgpu::util::dx12_shader_compiler_from_env().unwrap_or(wgpu::Dx12Compiler::default());
 
-    let instance = wgpu::Instance::new(backend, wgpu::Dx12Compiler::default());
+    let instance = wgpu::Instance::new(wgpu::InstanceOptions::new(backend, dx12_shader_compiler));
     let (size, surface) = unsafe {
         let size = window.inner_size();
 

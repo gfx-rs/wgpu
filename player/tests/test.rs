@@ -181,9 +181,7 @@ impl Corpus {
         let global = wgc::hub::Global::new(
             "test",
             IdentityPassThroughFactory,
-            corpus.backends,
-            // TODO: Allow this to be configurable
-            wgt::Dx12Compiler::Fxc,
+            wgt::InstanceOptions::new(corpus.backends, wgt::Dx12Compiler::Fxc),
         );
         for &backend in BACKENDS {
             if !corpus.backends.contains(backend.into()) {

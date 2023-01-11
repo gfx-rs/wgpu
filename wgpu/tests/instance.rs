@@ -3,17 +3,17 @@ use wasm_bindgen_test::*;
 #[test]
 #[wasm_bindgen_test]
 fn initialize() {
-    let _ = wgpu::Instance::new(
+    let _ = wgpu::Instance::new(wgpu::InstanceOptions::new(
         wgpu::util::backend_bits_from_env().unwrap_or_else(wgpu::Backends::all),
-        wgpu::Dx12Compiler::default(),
-    );
+        wgpu::util::dx12_shader_compiler_from_env().unwrap_or(wgpu::Dx12Compiler::default()),
+    ));
 }
 
 fn request_adapter_inner(power: wgt::PowerPreference) {
-    let instance = wgpu::Instance::new(
+    let instance = wgpu::Instance::new(wgpu::InstanceOptions::new(
         wgpu::util::backend_bits_from_env().unwrap_or_else(wgpu::Backends::all),
         wgpu::Dx12Compiler::default(),
-    );
+    ));
 
     let _adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
         power_preference: power,

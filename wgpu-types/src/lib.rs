@@ -5310,3 +5310,26 @@ impl Default for Dx12Compiler {
         Self::Fxc
     }
 }
+
+pub struct InstanceOptions {
+    pub backends: Backends,
+    pub dx12_shader_compiler: Dx12Compiler,
+}
+
+impl Default for InstanceOptions {
+    fn default() -> Self {
+        Self {
+            backends: Backends::all(),
+            dx12_shader_compiler: Dx12Compiler::default(),
+        }
+    }
+}
+
+impl InstanceOptions {
+    pub fn new(backends: Backends, dx12_shader_compiler: Dx12Compiler) -> Self {
+        Self {
+            backends,
+            dx12_shader_compiler,
+        }
+    }
+}

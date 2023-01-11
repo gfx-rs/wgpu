@@ -67,8 +67,12 @@ pub struct Instance {
 }
 
 impl Instance {
-    pub fn new(name: &str, backends: Backends, dxc_option: wgt::Dx12Compiler) -> Self {
-        fn init<A: HalApi>(_: A, mask: Backends, dxc_option: Option<wgt::Dx12Compiler>) -> Option<A::Instance> {
+    pub fn new(name: &str, instance_options: wgt::InstanceOptions) -> Self {
+        fn init<A: HalApi>(
+            _: A,
+            mask: Backends,
+            dx12_shader_compiler: Option<wgt::Dx12Compiler>,
+        ) -> Option<A::Instance> {
             if mask.contains(A::VARIANT.into()) {
                 let mut flags = hal::InstanceFlags::empty();
                 if cfg!(debug_assertions) {
@@ -78,7 +82,7 @@ impl Instance {
                 let hal_desc = hal::InstanceDescriptor {
                     name: "wgpu",
                     flags,
-                    dxc_option
+                    dx12_shader_compiler,
                 };
                 unsafe { hal::Instance::init(&hal_desc).ok() }
             } else {
@@ -89,15 +93,19 @@ impl Instance {
         Self {
             name: name.to_string(),
             #[cfg(feature = "vulkan")]
-            vulkan: init(hal::api::Vulkan, backends, None),
+            vulkan: init(hal::api::Vulkan, instance_options.backends, None),
             #[cfg(feature = "metal")]
-            metal: init(hal::api::Metal, backends, None),
+            metal: init(hal::api::Metal, instance_options.backends, None),
             #[cfg(feature = "dx12")]
-            dx12: init(hal::api::Dx12, backends, Some(dxc_option)),
+            dx12: init(
+                hal::api::Dx12,
+                instance_options.backends,
+                Some(instance_options.dx12_shader_compiler),
+            ),
             #[cfg(feature = "dx11")]
-            dx11: init(hal::api::Dx11, backends, None),
+            dx11: init(hal::api::Dx11, instance_options.backends, None),
             #[cfg(feature = "gles")]
-            gl: init(hal::api::Gles, backends, None),
+            gl: init(hal::api::Gles, instance_options.backends, None),
         }
     }
 

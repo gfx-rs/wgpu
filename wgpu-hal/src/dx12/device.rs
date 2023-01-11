@@ -21,14 +21,14 @@ impl super::Device {
         present_queue: native::CommandQueue,
         private_caps: super::PrivateCapabilities,
         library: &Arc<native::D3D12Lib>,
-        dxc_option: wgt::Dx12Compiler,
+        dx12_shader_compiler: wgt::Dx12Compiler,
     ) -> Result<Self, crate::DeviceError> {
         let mem_allocator = super::suballocation::create_allocator_wrapper(&raw)?;
 
         // TODO: path to dxcompiler.dll and dxil.dll should be configurable
         // TODO: handle this not existing
         #[cfg(feature = "dxc_shader_compiler")]
-        let dxc_container = match dxc_option {
+        let dxc_container = match dx12_shader_compiler {
             wgt::Dx12Compiler::Dxc {
                 dxil_path,
                 dxc_path,

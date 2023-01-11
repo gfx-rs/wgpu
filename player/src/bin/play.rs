@@ -46,8 +46,7 @@ fn main() {
     let global = wgc::hub::Global::new(
         "player",
         IdentityPassThroughFactory,
-        wgt::Backends::all(),
-        wgt::Dx12Compiler::Fxc,
+        wgt::InstanceOptions::new(wgt::Backends::all(), wgt::Dx12Compiler::Fxc),
     );
     let mut command_buffer_id_manager = wgc::hub::IdentityManager::default();
 

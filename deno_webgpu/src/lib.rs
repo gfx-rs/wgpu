@@ -240,8 +240,7 @@ pub async fn op_webgpu_request_adapter(
         state.put(wgpu_core::hub::Global::new(
             "webgpu",
             wgpu_core::hub::IdentityManagerFactory,
-            backends,
-            wgpu_types::Dx12Compiler::Fxc,
+            wgpu_types::InstanceOptions::new(backends, wgpu_types::Dx12Compiler::Fxc),
         ));
         state.borrow::<Instance>()
     };

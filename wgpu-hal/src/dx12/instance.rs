@@ -57,8 +57,8 @@ impl crate::Instance<super::Api> for super::Instance {
             }
         }
 
-        let dxc_option = match &desc.dxc_option {
-            Some(opt) => opt.clone(),
+        let dx12_shader_compiler = match &desc.dx12_shader_compiler {
+            Some(compiler_option) => compiler_option.clone(),
             None => wgt::Dx12Compiler::default(),
         };
 
@@ -69,7 +69,7 @@ impl crate::Instance<super::Api> for super::Instance {
             _lib_dxgi: lib_dxgi,
             supports_allow_tearing,
             flags: desc.flags,
-            dxc_option,
+            dx12_shader_compiler,
         })
     }
 
@@ -98,7 +98,7 @@ impl crate::Instance<super::Api> for super::Instance {
         adapters
             .into_iter()
             .filter_map(|raw| {
-                super::Adapter::expose(raw, &self.library, self.flags, &self.dxc_option)
+                super::Adapter::expose(raw, &self.library, self.flags, &self.dx12_shader_compiler)
             })
             .collect()
     }

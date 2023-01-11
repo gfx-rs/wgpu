@@ -2,7 +2,7 @@
 async fn run() {
     #[cfg_attr(target_arch = "wasm32", allow(unused_variables))]
     let adapter = {
-        let instance = wgpu::Instance::new(wgpu::Backends::all(), wgpu::Dx12Compiler::default());
+        let instance = wgpu::Instance::default();
         #[cfg(not(target_arch = "wasm32"))]
         {
             log::info!("Available adapters:");

@@ -281,7 +281,7 @@ mod inner {
         env_logger::init();
         let args: Vec<_> = std::env::args().skip(1).collect();
 
-        let instance = wgpu::Instance::new(wgpu::Backends::all(), wgpu::Dx12Compiler::default());
+        let instance = wgpu::Instance::new(wgpu::InstanceOptions::default());
         let adapters: Vec<_> = instance.enumerate_adapters(wgpu::Backends::all()).collect();
         let adapter_count = adapters.len();
 

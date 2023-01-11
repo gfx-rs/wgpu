@@ -92,7 +92,7 @@ pub struct Instance {
     supports_allow_tearing: bool,
     _lib_dxgi: native::DxgiLib,
     flags: crate::InstanceFlags,
-    dxc_option: wgt::Dx12Compiler,
+    dx12_shader_compiler: wgt::Dx12Compiler,
 }
 
 impl Instance {
@@ -174,7 +174,7 @@ pub struct Adapter {
     //Note: this isn't used right now, but we'll need it later.
     #[allow(unused)]
     workarounds: Workarounds,
-    dxc_option: wgt::Dx12Compiler,
+    dx12_shader_compiler: wgt::Dx12Compiler,
 }
 
 unsafe impl Send for Adapter {}
