@@ -775,25 +775,13 @@ impl FunctionInfo {
                         ExitFlags::empty()
                     },
                 },
-                S::Barrier(_) => {
-                    #[cfg(feature = "validate")]
-                    if self
-                        .flags
-                        .contains(super::ValidationFlags::CONTROL_FLOW_UNIFORMITY)
-                    {
-                        if let Some(cause) = disruptor {
-                            return Err(FunctionError::NonUniformBarrier(cause)
-                                .with_span_static(span, "Barrier creation"));
-                        }
-                    }
-                    FunctionUniformity {
-                        result: Uniformity {
-                            non_uniform_result: None,
-                            requirements: UniformityRequirements::WORK_GROUP_BARRIER,
-                        },
-                        exit: ExitFlags::empty(),
-                    }
-                }
+                S::Barrier(_) => FunctionUniformity {
+                    result: Uniformity {
+                        non_uniform_result: None,
+                        requirements: UniformityRequirements::WORK_GROUP_BARRIER,
+                    },
+                    exit: ExitFlags::empty(),
+                },
                 S::Block(ref b) => {
                     self.process_block(b, other_functions, disruptor, expression_arena)?
                 }
@@ -1166,7 +1154,7 @@ fn uniform_control_flow() {
     assert_eq!(info[derivative_expr].ref_count, 1);
     assert_eq!(info[non_uniform_global], GlobalUse::READ);
 
-    let stmt_emit3 = S::Emit(emit_range_globals.clone());
+    let stmt_emit3 = S::Emit(emit_range_globals);
     let stmt_return_non_uniform = S::Return {
         value: Some(non_uniform_global_expr),
     };
@@ -1213,25 +1201,4 @@ fn uniform_control_flow() {
         }),
     );
     assert_eq!(info[non_uniform_global], GlobalUse::READ | GlobalUse::WRITE);
-
-    let stmt_emit5 = S::Emit(emit_range_globals.clone());
-    let stmt_if_non_uniform = S::If {
-        condition: non_uniform_global_expr,
-        accept: vec![S::Barrier(crate::Barrier::empty())].into(),
-        reject: crate::Block::new(),
-    };
-    assert_eq!(
-        info.process_block(
-            &vec![stmt_emit5, stmt_if_non_uniform].into(),
-            &[],
-            None,
-            &expressions
-        ),
-        Err(
-            FunctionError::NonUniformBarrier(UniformityDisruptor::Expression(
-                non_uniform_global_expr
-            ))
-            .with_span()
-        ),
-    );
 }

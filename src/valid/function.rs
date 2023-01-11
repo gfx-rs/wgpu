@@ -139,8 +139,6 @@ pub enum FunctionError {
         Handle<crate::Expression>,
         UniformityDisruptor,
     ),
-    #[error("Required uniformity of barrier is not fulfilled because of {0:?}")]
-    NonUniformBarrier(UniformityDisruptor),
     #[error("Functions that are not entry points cannot have `@location` or `@builtin` attributes on their arguments: \"{name}\" has attributes")]
     PipelineInputRegularFunction { name: String },
     #[error("Functions that are not entry points cannot have `@location` or `@builtin` attributes on their return value types")]
