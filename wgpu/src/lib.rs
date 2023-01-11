@@ -2075,6 +2075,7 @@ impl Device {
             owned: true,
             descriptor: TextureDescriptor {
                 label: None,
+                view_formats: &[],
                 ..desc.clone()
             },
         }
@@ -2111,6 +2112,7 @@ impl Device {
             owned: true,
             descriptor: TextureDescriptor {
                 label: None,
+                view_formats: &[],
                 ..desc.clone()
             },
         }
@@ -4115,6 +4117,7 @@ impl Surface {
             mip_level_count: 1,
             sample_count: 1,
             dimension: TextureDimension::D2,
+            view_formats: &[],
         };
 
         texture_id
