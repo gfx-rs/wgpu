@@ -338,5 +338,6 @@ web-sys = { workspace = true, features = [
     "RequestMode",
     "Request",
     "Response",
-    "WebGl2RenderingContext"
+    "WebGl2RenderingContext",
+    "CanvasRenderingContext2d"
 ] }

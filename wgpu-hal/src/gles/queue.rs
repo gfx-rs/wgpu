@@ -384,8 +384,8 @@ impl super::Queue {
                 dst_premultiplication,
                 ref copy,
             } => {
-                const UNPACK_FLIP_Y_WEBGL: u32 = 0x9240;
-                const UNPACK_PREMULTIPLY_ALPHA_WEBGL: u32 = 0x9241;
+                const UNPACK_FLIP_Y_WEBGL: u32 = web_sys::WebGl2RenderingContext::UNPACK_FLIP_Y_WEBGL;
+                const UNPACK_PREMULTIPLY_ALPHA_WEBGL: u32 = web_sys::WebGl2RenderingContext::UNPACK_PREMULTIPLY_ALPHA_WEBGL;
 
                 unsafe {
                     if src.flip_y {

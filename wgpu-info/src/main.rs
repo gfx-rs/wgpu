@@ -225,7 +225,7 @@ mod inner {
             let bit = wgpu::DownlevelFlags::from_bits(1 << i as u64);
             if let Some(bit) = bit {
                 if wgpu::DownlevelFlags::all().contains(bit) {
-                    println!("\t\t{:>36} {}", format!("{:?}:", bit), flags.contains(bit));
+                    println!("\t\t{:>37} {}", format!("{:?}:", bit), flags.contains(bit));
                 }
             }
         }

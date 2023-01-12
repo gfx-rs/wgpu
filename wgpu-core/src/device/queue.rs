@@ -827,9 +827,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             return Ok(());
         }
 
-        if matches!(source.source, wgt::ExternalImageSource::OffscreenCanvas(_))
-            || source.origin != wgt::Origin2d::ZERO
-        {
+        let mut needs_flag = false;
+        needs_flag |= matches!(source.source, wgt::ExternalImageSource::OffscreenCanvas(_));
+        needs_flag |= source.origin != wgt::Origin2d::ZERO;
+        needs_flag |= destination.color_space != wgt::PredefinedColorSpace::Srgb;
+        if matches!(source.source, wgt::ExternalImageSource::ImageBitmap(_)) {
+            needs_flag |= source.flip_y != false;
+            needs_flag |= destination.premultiplied_alpha != false;
+        }
+
+        if needs_flag {
             device
                 .require_downlevel_flags(wgt::DownlevelFlags::UNRESTRICTED_EXTERNAL_TEXTURE_COPIES)
                 .map_err(TransferError::from)?;

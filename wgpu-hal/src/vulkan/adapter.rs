@@ -328,7 +328,8 @@ impl PhysicalDeviceFeatures {
             | Df::WEBGPU_TEXTURE_FORMAT_SUPPORT
             | Df::BUFFER_BINDINGS_NOT_16_BYTE_ALIGNED
             | Df::UNRESTRICTED_INDEX_BUFFER
-            | Df::INDIRECT_EXECUTION;
+            | Df::INDIRECT_EXECUTION
+            | Df::UNRESTRICTED_EXTERNAL_TEXTURE_COPIES;
 
         dl_flags.set(Df::CUBE_ARRAY_TEXTURES, self.core.image_cube_array != 0);
         dl_flags.set(Df::ANISOTROPIC_FILTERING, self.core.sampler_anisotropy != 0);

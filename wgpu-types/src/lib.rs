@@ -1140,11 +1140,15 @@ bitflags::bitflags! {
         /// Corresponds to Vulkan's `VkPhysicalDeviceFeatures.depthBiasClamp`
         const DEPTH_BIAS_CLAMP = 1 << 18;
 
-        /// Supports the following on `Queue::copy_external_image_to_texture`:
-        /// - Copying from an OffscreenCanvas
-        /// - Non-zero [`ImageCopyExternalImage::origin`].
+        /// With this feature not present, there are the following restrictions on `Queue::copy_external_image_to_texture`:
+        /// - The source must not be [`web_sys::OffscreenCanvas`]
+        /// - [`ImageCopyExternalImage::origin`] must be zero.
+        /// - [`ImageCopyTextureTagged::color_space`] must be srgb.
+        /// - If the source is an [`web_sys::ImageBitmap`]:
+        ///   - [`ImageCopyExternalImage::flip_y`] must be false.
+        ///   - [`ImageCopyTextureTagged::premultiplied_alpha`] must be false.
         ///
-        /// WebGL doesn't support this.
+        /// WebGL doesn't support this. WebGPU does.
         const UNRESTRICTED_EXTERNAL_TEXTURE_COPIES = 1 << 19;
     }
 }
@@ -5159,7 +5163,7 @@ unsafe impl Sync for ExternalImageSource {}
 ///
 /// Corresponds to [HTML Canvas `PredefinedColorSpace`](
 /// https://html.spec.whatwg.org/multipage/canvas.html#predefinedcolorspace).
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
