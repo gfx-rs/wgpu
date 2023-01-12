@@ -2297,6 +2297,9 @@ pub struct BufferView<'a> {
 }
 
 /// Write only view into mapped buffer.
+///
+/// It is possible to read the buffer using this view, but doing so is not
+/// recommended, as it is likely to be slow.
 #[derive(Debug)]
 pub struct BufferViewMut<'a> {
     slice: BufferSlice<'a>,
@@ -3831,10 +3834,7 @@ impl Queue {
     /// Schedule a data write into `buffer` starting at `offset` via the returned
     /// [`QueueWriteBufferView`].
     ///
-    /// The returned value can be converted into a `&mut [u8]` with the `as_mut` method.
-    /// However, `as_ref` is not implemented for [`QueueWriteBufferView`].
-    /// (It is not unsound to read through the `&mut [u8]` anyway, but doing so will not
-    /// yield the existing contents of `buffer` from the GPU, and it is likely to be slow.)
+    /// Reading from this buffer is slow and will not yield the actual contents of the buffer.
     ///
     /// This method is intended to have low performance costs.
     /// As such, the write is not immediately submitted, and instead enqueued
