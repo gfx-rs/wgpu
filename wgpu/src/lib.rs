@@ -3796,7 +3796,7 @@ impl DerefMut for QueueWriteBufferView<'_> {
     }
 }
 
-impl<'a> std::convert::AsMut<[u8]> for QueueWriteBufferView<'a> {
+impl<'a> AsMut<[u8]> for QueueWriteBufferView<'a> {
     fn as_mut(&mut self) -> &mut [u8] {
         self.inner.slice_mut()
     }
