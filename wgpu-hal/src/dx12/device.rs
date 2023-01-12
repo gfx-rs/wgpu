@@ -243,7 +243,7 @@ impl super::Device {
         // Compile with DXC if available, otherwise fall back to FXC
         let (result, log_level) = if let Some(ref dxc_container) = self.dxc_container {
             profiling::scope!("wgpu::backend::directx12::compile_dxc");
-            crate::dx12::shader_compilation::compile_dxc(
+            super::shader_compilation::compile_dxc(
                 self,
                 &source,
                 source_name,
@@ -254,7 +254,7 @@ impl super::Device {
             )
         } else {
             profiling::scope!("wgpu::backend::directx12::compile_fxc");
-            crate::dx12::shader_compilation::compile_fxc(
+            super::shader_compilation::compile_fxc(
                 self,
                 &source,
                 source_name,
@@ -1474,10 +1474,8 @@ impl crate::Device<super::Api> for super::Device {
             self.raw.create_compute_pipeline_state(
                 desc.layout.shared.signature,
                 match blob_cs {
-                    crate::dx12::CompiledShader::Dxc(ref blob_cs) => {
-                        native::Shader::from_raw(blob_cs)
-                    }
-                    crate::dx12::CompiledShader::Fxc(blob_cs) => native::Shader::from_blob(blob_cs),
+                    super::CompiledShader::Dxc(ref blob_cs) => native::Shader::from_raw(blob_cs),
+                    super::CompiledShader::Fxc(blob_cs) => native::Shader::from_blob(blob_cs),
                 },
                 0,
                 native::CachedPSO::null(),

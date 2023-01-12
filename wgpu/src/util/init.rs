@@ -95,7 +95,10 @@ pub fn dx12_shader_compiler_from_env() -> Option<wgt::Dx12Compiler> {
             .map(str::to_lowercase)
             .as_deref()
         {
-            Ok("dxc") => wgt::Dx12Compiler::Dxc { dxil_path: None, dxc_path: None },
+            Ok("dxc") => wgt::Dx12Compiler::Dxc {
+                dxil_path: None,
+                dxc_path: None,
+            },
             Ok("fxc") => wgt::Dx12Compiler::Fxc,
             _ => return None,
         },

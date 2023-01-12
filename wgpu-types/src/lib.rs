@@ -5295,12 +5295,18 @@ impl Default for ShaderBoundChecks {
     }
 }
 
-// TODO: What happens if the user selects dxc, but the dxc feature is disabled?
+/// Selects which DX12 shader compiler to use.
 #[derive(Clone, Debug)]
 pub enum Dx12Compiler {
+    /// The Fxc compiler (default) is old, slow and unmaintained. However, it doesn't require
+    /// any additional .dlls to be shipped with the application.
     Fxc,
+    /// The Dxc compiler is new, fast and maintained. However, it requires both `dxcompiler.dll` and `dxil.dll`
+    /// to be shipped with the application.
     Dxc {
+        /// Path to the `dxcompiler.dll` file. Passing `None` will check the local scope for the file.
         dxil_path: Option<PathBuf>,
+        /// Path to the `dxil.dll` file. Passing `None` will check the local scope for the file.
         dxc_path: Option<PathBuf>,
     },
 }
@@ -5311,8 +5317,11 @@ impl Default for Dx12Compiler {
     }
 }
 
+/// Options for creating an instance.
 pub struct InstanceOptions {
+    /// Which `Backends` to enable.
     pub backends: Backends,
+    /// Which DX12 shader compiler to use.
     pub dx12_shader_compiler: Dx12Compiler,
 }
 
@@ -5326,6 +5335,7 @@ impl Default for InstanceOptions {
 }
 
 impl InstanceOptions {
+    /// Creates a new `InstanceOptions` with the given `Backends` and `Dx12Compiler`.
     pub fn new(backends: Backends, dx12_shader_compiler: Dx12Compiler) -> Self {
         Self {
             backends,

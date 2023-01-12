@@ -5,6 +5,12 @@ use winapi::um::d3dcompiler;
 
 use crate::auxil::dxgi::result::HResult;
 
+// This exists so that users who don't want to use dxc can disable the dxc_shader_compiler feature
+// and not have to compile hassle_rs.
+// Currently this will use Dxc if it is chosen as the dx12 compiler at `Instance` creation time, and will
+// fallback to FXC if the Dxc libraries (dxil.dll and dxcompiler.dll) are not found, or if Fxc is chosen at'
+// `Instance` creation time.
+
 pub(super) fn compile_fxc(
     device: &super::Device,
     source: &String,
@@ -71,6 +77,7 @@ pub(super) fn compile_fxc(
     }
 }
 
+// The Dxc implementation is behind a feature flag so that users who don't want to use dxc can disable the feature.
 #[cfg(feature = "dxc_shader_compiler")]
 mod shader {
     use std::path::PathBuf;
@@ -211,7 +218,7 @@ mod shader {
     }
 }
 
-// Stub in case the feature is not enabled
+// These are stubs for when the `dxc_shader_compiler` feature is disabled.
 #[cfg(not(feature = "dxc_shader_compiler"))]
 mod shader {
     use std::path::PathBuf;
@@ -222,10 +229,12 @@ mod shader {
         _dxc_path: Option<PathBuf>,
         _dxil_path: Option<PathBuf>,
     ) -> Result<Option<DxcContainer>, crate::DeviceError> {
+        // Falls back to Fxc and logs an error.
         log::error!("DXC shader compiler was requested on Instance creation, but the DXC feature is disabled. Enable the `dxc_shader_compiler` feature on wgpu_hal to use DXC.");
         Ok(None)
     }
 
+    // It shouldn't be possible that this gets called with the `dxc_shader_compiler` feature disabled, but just in case...
     pub(crate) fn compile_dxc(
         device: &crate::dx12::Device,
         source: &str,
@@ -238,8 +247,7 @@ mod shader {
         Result<crate::dx12::CompiledShader, crate::PipelineError>,
         log::Level,
     ) {
-        // This should never be called unless something goes really wrong.
-        log::warn!("Attempted to compile shader with DXC, but the DXC feature is disabled. Enable the `dxc_shader_compiler` feature on wgpu_hal to use DXC. Falling back to FXC.");
+        log::error!("Something went really wrong, please report this. Attempted to compile shader with DXC, but the DXC feature is disabled. Enable the `dxc_shader_compiler` feature on wgpu_hal to use DXC. Falling back to FXC.");
         super::compile_fxc(
             device,
             &source.to_string(),
