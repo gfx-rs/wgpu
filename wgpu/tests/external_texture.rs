@@ -96,6 +96,11 @@ async fn image_bitmap_import() {
         //
         // Only works on canvases.
         Premultiplied,
+        // Sets the color space to P3.
+        //
+        // Only works on canvases.
+        ColorSpace,
+        // Sets the premultiplied alpha flag. Deals with global state on GLES, so run before other tests to ensure it's reset.
         // Set both the input offset and output offset to 1 in x, so the first column is omitted.
         TrimLeft,
         // Set the size to 2 in x, so the last column is omitted
@@ -119,6 +124,7 @@ async fn image_bitmap_import() {
         TestCase::Normal,
         TestCase::FlipY,
         TestCase::Premultiplied,
+        TestCase::ColorSpace,
         TestCase::TrimLeft,
         TestCase::TrimRight,
         TestCase::SlideRight,
@@ -141,7 +147,9 @@ async fn image_bitmap_import() {
                 let mut dest_origin = wgpu::Origin3d::ZERO;
                 // The layer the external image's data should end up in.
                 let mut dest_data_layer = 0;
-                // The layer the external image's data should end up in.
+                // Color space the destination is in.
+                let mut dest_color_space = wgt::PredefinedColorSpace::Srgb;
+                // If the destination image is premultiplied.
                 let mut dest_premultiplied = false;
                 // Size of the external copy
                 let mut copy_size = wgpu::Extent3d {
@@ -161,7 +169,7 @@ async fn image_bitmap_import() {
                 match case {
                     TestCase::Normal => {}
                     TestCase::FlipY => {
-                        valid = false;
+                        valid = !matches!(source, wgt::ExternalImageSource::ImageBitmap(_));
                         src_flip_y = true;
                         for x in 0..3 {
                             let top = raw_image[(x, 0)];
@@ -171,7 +179,7 @@ async fn image_bitmap_import() {
                         }
                     }
                     TestCase::Premultiplied => {
-                        valid = matches!(source, wgt::ExternalImageSource::HTMLCanvasElement(_));
+                        valid = !matches!(source, wgt::ExternalImageSource::ImageBitmap(_));
                         dest_premultiplied = true;
                         for pixel in raw_image.pixels_mut() {
                             let mut float_pix = pixel.0.map(|v| v as f32 / 255.0);
@@ -180,6 +188,16 @@ async fn image_bitmap_import() {
                             float_pix[2] *= float_pix[3];
                             pixel.0 = float_pix.map(|v| (v * 255.0).round() as u8);
                         }
+                    }
+                    TestCase::ColorSpace => {
+                        valid = ctx
+                            .adapter_downlevel_capabilities
+                            .flags
+                            .contains(wgt::DownlevelFlags::UNRESTRICTED_EXTERNAL_TEXTURE_COPIES);
+                        dest_color_space = wgt::PredefinedColorSpace::DisplayP3;
+
+                        // As we don't test, we don't bother converting the color spaces
+                        // in the image as that's relatively annoying.
                     }
                     TestCase::TrimLeft => {
                         valid = ctx
@@ -263,7 +281,7 @@ async fn image_bitmap_import() {
                             mip_level: 0,
                             origin: dest_origin,
                             aspect: wgpu::TextureAspect::All,
-                            color_space: wgpu::PredefinedColorSpace::Srgb,
+                            color_space: dest_color_space,
                             premultiplied_alpha: dest_premultiplied,
                         },
                         copy_size,
