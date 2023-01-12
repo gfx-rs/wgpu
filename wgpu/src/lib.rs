@@ -20,7 +20,7 @@ use std::{
     future::Future,
     marker::PhantomData,
     num::{NonZeroU32, NonZeroU8},
-    ops::{Bound, Range, RangeBounds},
+    ops::{Bound, Deref, DerefMut, Range, RangeBounds},
     sync::Arc,
     thread,
 };
@@ -2335,6 +2335,20 @@ impl AsMut<[u8]> for BufferViewMut<'_> {
     }
 }
 
+impl Deref for BufferViewMut<'_> {
+    type Target = [u8];
+
+    fn deref(&self) -> &Self::Target {
+        self.data.slice()
+    }
+}
+
+impl DerefMut for BufferViewMut<'_> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.data.slice_mut()
+    }
+}
+
 impl Drop for BufferView<'_> {
     fn drop(&mut self) {
         self.slice
@@ -3767,6 +3781,20 @@ pub struct QueueWriteBufferView<'a> {
     inner: Box<dyn context::QueueWriteBuffer>,
 }
 static_assertions::assert_impl_all!(QueueWriteBufferView: Send, Sync);
+
+impl Deref for QueueWriteBufferView<'_> {
+    type Target = [u8];
+
+    fn deref(&self) -> &Self::Target {
+        self.inner.slice()
+    }
+}
+
+impl DerefMut for QueueWriteBufferView<'_> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.inner.slice_mut()
+    }
+}
 
 impl<'a> std::convert::AsMut<[u8]> for QueueWriteBufferView<'a> {
     fn as_mut(&mut self) -> &mut [u8] {

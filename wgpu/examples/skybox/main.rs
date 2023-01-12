@@ -413,7 +413,6 @@ impl framework::Example for Skybox {
                 wgpu::BufferSize::new((raw_uniforms.len() * 4) as wgpu::BufferAddress).unwrap(),
                 device,
             )
-            .as_mut()
             .copy_from_slice(bytemuck::cast_slice(&raw_uniforms));
 
         self.staging_belt.finish();

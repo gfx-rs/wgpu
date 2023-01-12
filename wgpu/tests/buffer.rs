@@ -72,7 +72,7 @@ fn test_empty_buffer_range(ctx: &TestingContext, buffer_size: u64, label: &str) 
 
     {
         let view = b1.slice(0..0).get_mapped_range_mut();
-        assert!(view.read().expect("the buffer isn't readable").is_empty());
+        assert!(view.is_empty());
     }
 
     b1.unmap();
@@ -125,7 +125,7 @@ fn test_map_offset() {
         {
             let slice = write_buf.slice(32..48);
             let mut view = slice.get_mapped_range_mut();
-            for byte in &mut view.as_mut()[..] {
+            for byte in &mut view[..] {
                 *byte = 2;
             }
         }
