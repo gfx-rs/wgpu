@@ -2304,14 +2304,6 @@ pub struct BufferViewMut<'a> {
     readable: bool,
 }
 
-impl<'a> BufferViewMut<'a> {
-    /// Gives a read-only view into the buffer if this is a readable view.
-    /// Otherwise, this will return `None`.
-    pub fn read(&self) -> Option<&[u8]> {
-        self.readable.then(|| self.data.slice())
-    }
-}
-
 impl std::ops::Deref for BufferView<'_> {
     type Target = [u8];
 
