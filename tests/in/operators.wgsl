@@ -1,8 +1,8 @@
 //TODO: support splatting constructors for globals?
-let v_f32_one = vec4<f32>(1.0, 1.0, 1.0, 1.0);
-let v_f32_zero = vec4<f32>(0.0, 0.0, 0.0, 0.0);
-let v_f32_half = vec4<f32>(0.5, 0.5, 0.5, 0.5);
-let v_i32_one = vec4<i32>(1, 1, 1, 1);
+const v_f32_one = vec4<f32>(1.0, 1.0, 1.0, 1.0);
+const v_f32_zero = vec4<f32>(0.0, 0.0, 0.0, 0.0);
+const v_f32_half = vec4<f32>(0.5, 0.5, 0.5, 0.5);
+const v_i32_one = vec4<i32>(1, 1, 1, 1);
 
 fn builtins() -> vec4<f32> {
     // select()

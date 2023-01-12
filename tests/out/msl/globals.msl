@@ -8,11 +8,11 @@ struct _mslBufferSizes {
     uint size3;
 };
 
-constexpr constant bool Foo_2 = true;
+constexpr constant bool Foo_1 = true;
 struct type_2 {
     float inner[10u];
 };
-struct Foo {
+struct FooStruct {
     metal::packed_float3 v3_;
     float v1_;
 };
@@ -42,15 +42,16 @@ void test_msl_packed_vec3_as_arg(
 }
 
 void test_msl_packed_vec3_(
-    device Foo& alignment
+    device FooStruct& alignment
 ) {
-    int idx = 1;
+    int idx = {};
     alignment.v3_ = metal::float3(1.0);
+    idx = 1;
     alignment.v3_[0] = 1.0;
     alignment.v3_[0] = 2.0;
-    int _e23 = idx;
-    alignment.v3_[_e23] = 3.0;
-    Foo data = alignment;
+    int _e17 = idx;
+    alignment.v3_[_e17] = 3.0;
+    FooStruct data = alignment;
     metal::float3 unnamed = data.v3_;
     metal::float2 unnamed_1 = metal::float3(data.v3_).zx;
     test_msl_packed_vec3_as_arg(data.v3_);
@@ -63,7 +64,7 @@ void test_msl_packed_vec3_(
 kernel void main_(
   threadgroup type_2& wg
 , threadgroup metal::atomic_uint& at_1
-, device Foo& alignment [[user(fake0)]]
+, device FooStruct& alignment [[user(fake0)]]
 , device type_6 const& dummy [[user(fake0)]]
 , constant type_8& float_vecs [[user(fake0)]]
 , constant metal::float3& global_vec [[user(fake0)]]
@@ -72,25 +73,27 @@ kernel void main_(
 , constant type_15& global_nested_arrays_of_matrices_4x2_ [[user(fake0)]]
 , constant _mslBufferSizes& _buffer_sizes [[user(fake0)]]
 ) {
-    float Foo_1 = 1.0;
-    bool at = true;
+    float Foo = {};
+    bool at = {};
     test_msl_packed_vec3_(alignment);
-    metal::float4x2 _e16 = global_nested_arrays_of_matrices_4x2_.inner[0].inner[0];
-    metal::float4 _e23 = global_nested_arrays_of_matrices_2x4_.inner[0].inner[0][0];
-    wg.inner[7] = (_e16 * _e23).x;
-    metal::float3x2 _e28 = global_mat;
-    metal::float3 _e29 = global_vec;
-    wg.inner[6] = (_e28 * _e29).x;
-    float _e37 = dummy[1].y;
-    wg.inner[5] = _e37;
+    metal::float4x2 _e8 = global_nested_arrays_of_matrices_4x2_.inner[0].inner[0];
+    metal::float4 _e16 = global_nested_arrays_of_matrices_2x4_.inner[0].inner[0][0];
+    wg.inner[7] = (_e8 * _e16).x;
+    metal::float3x2 _e23 = global_mat;
+    metal::float3 _e25 = global_vec;
+    wg.inner[6] = (_e23 * _e25).x;
+    float _e35 = dummy[1].y;
+    wg.inner[5] = _e35;
     float _e43 = float_vecs.inner[0].w;
     wg.inner[4] = _e43;
-    float _e47 = alignment.v1_;
-    wg.inner[3] = _e47;
-    float _e52 = alignment.v3_[0];
-    wg.inner[2] = _e52;
+    float _e49 = alignment.v1_;
+    wg.inner[3] = _e49;
+    float _e56 = alignment.v3_[0];
+    wg.inner[2] = _e56;
     alignment.v1_ = 4.0;
     wg.inner[1] = static_cast<float>(1 + (_buffer_sizes.size3 - 0 - 8) / 8);
     metal::atomic_store_explicit(&at_1, 2u, metal::memory_order_relaxed);
+    Foo = 1.0;
+    at = true;
     return;
 }

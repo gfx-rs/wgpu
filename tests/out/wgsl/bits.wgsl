@@ -1,19 +1,21 @@
 @compute @workgroup_size(1, 1, 1) 
 fn main() {
-    var i: i32 = 0;
+    var i: i32;
     var i2_: vec2<i32>;
     var i3_: vec3<i32>;
     var i4_: vec4<i32>;
-    var u: u32 = 0u;
+    var u: u32;
     var u2_: vec2<u32>;
     var u3_: vec3<u32>;
     var u4_: vec4<u32>;
     var f2_: vec2<f32>;
     var f4_: vec4<f32>;
 
+    i = 0;
     i2_ = vec2<i32>(0);
     i3_ = vec3<i32>(0);
     i4_ = vec4<i32>(0);
+    u = 0u;
     u2_ = vec2<u32>(0u);
     u3_ = vec3<u32>(0u);
     u4_ = vec4<u32>(0u);

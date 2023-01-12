@@ -39,12 +39,12 @@ void main() {
     vec4 world_pos = (_e7 * vec4(position));
     out_.world_normal = (mat3x3(w[0].xyz, w[1].xyz, w[2].xyz) * vec3(normal.xyz));
     out_.world_position = world_pos;
-    mat4x4 _e25 = _group_0_binding_0_vs.view_proj;
-    out_.proj_position = (_e25 * world_pos);
-    VertexOutput _e27 = out_;
-    gl_Position = _e27.proj_position;
-    _vs2fs_location0 = _e27.world_normal;
-    _vs2fs_location1 = _e27.world_position;
+    mat4x4 _e26 = _group_0_binding_0_vs.view_proj;
+    out_.proj_position = (_e26 * world_pos);
+    VertexOutput _e28 = out_;
+    gl_Position = _e28.proj_position;
+    _vs2fs_location0 = _e28.world_normal;
+    _vs2fs_location1 = _e28.world_position;
     gl_Position.yz = vec2(-gl_Position.y, gl_Position.z * 2.0 - gl_Position.w);
     return;
 }

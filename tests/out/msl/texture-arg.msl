@@ -9,8 +9,8 @@ metal::float4 test(
     metal::texture2d<float, metal::access::sample> Passed_Texture,
     metal::sampler Passed_Sampler
 ) {
-    metal::float4 _e7 = Passed_Texture.sample(Passed_Sampler, metal::float2(0.0, 0.0));
-    return _e7;
+    metal::float4 _e5 = Passed_Texture.sample(Passed_Sampler, metal::float2(0.0, 0.0));
+    return _e5;
 }
 
 struct main_Output {

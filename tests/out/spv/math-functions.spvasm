@@ -5,7 +5,7 @@
 OpCapability Shader
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
-OpEntryPoint Vertex %13 "main"
+OpEntryPoint Vertex %14 "main"
 %2 = OpTypeVoid
 %4 = OpTypeFloat 32
 %3 = OpConstant  %4  1.0
@@ -14,29 +14,29 @@ OpEntryPoint Vertex %13 "main"
 %6 = OpConstant  %7  0
 %9 = OpTypeInt 32 0
 %8 = OpConstant  %9  0
-%10 = OpTypeVector %7 2
-%11 = OpConstantComposite  %10  %6 %6
-%14 = OpTypeFunction %2
-%16 = OpTypeVector %4 4
+%10 = OpTypeVector %4 4
+%11 = OpTypeVector %7 2
+%12 = OpConstantComposite  %11  %6 %6
+%15 = OpTypeFunction %2
 %26 = OpConstantNull  %7
-%13 = OpFunction  %2  None %14
-%12 = OpLabel
-OpBranch %15
-%15 = OpLabel
-%17 = OpCompositeConstruct  %16  %5 %5 %5 %5
+%14 = OpFunction  %2  None %15
+%13 = OpLabel
+OpBranch %16
+%16 = OpLabel
+%17 = OpCompositeConstruct  %10  %5 %5 %5 %5
 %18 = OpExtInst  %4  %1 Degrees %3
 %19 = OpExtInst  %4  %1 Radians %3
-%20 = OpExtInst  %16  %1 Degrees %17
-%21 = OpExtInst  %16  %1 Radians %17
-%23 = OpCompositeConstruct  %16  %5 %5 %5 %5
-%24 = OpCompositeConstruct  %16  %3 %3 %3 %3
-%22 = OpExtInst  %16  %1 FClamp %17 %23 %24
-%27 = OpCompositeExtract  %7  %11 0
-%28 = OpCompositeExtract  %7  %11 0
+%20 = OpExtInst  %10  %1 Degrees %17
+%21 = OpExtInst  %10  %1 Radians %17
+%23 = OpCompositeConstruct  %10  %5 %5 %5 %5
+%24 = OpCompositeConstruct  %10  %3 %3 %3 %3
+%22 = OpExtInst  %10  %1 FClamp %17 %23 %24
+%27 = OpCompositeExtract  %7  %12 0
+%28 = OpCompositeExtract  %7  %12 0
 %29 = OpIMul  %7  %27 %28
 %30 = OpIAdd  %7  %26 %29
-%31 = OpCompositeExtract  %7  %11 1
-%32 = OpCompositeExtract  %7  %11 1
+%31 = OpCompositeExtract  %7  %12 1
+%32 = OpCompositeExtract  %7  %12 1
 %33 = OpIMul  %7  %31 %32
 %25 = OpIAdd  %7  %30 %33
 %34 = OpCopyObject  %9  %8

@@ -23,8 +23,8 @@ shared uint val;
 
 
 float read_from_private(inout float foo_1) {
-    float _e6 = foo_1;
-    return _e6;
+    float _e1 = foo_1;
+    return _e1;
 }
 
 float test_arr_as_arg(float a[5][10]) {

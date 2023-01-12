@@ -20,8 +20,8 @@ struct Light {
     color: vec4<f32>,
 }
 
-let c_ambient: vec3<f32> = vec3<f32>(0.05000000074505806, 0.05000000074505806, 0.05000000074505806);
-let c_max_lights: u32 = 10u;
+const c_ambient: vec3<f32> = vec3<f32>(0.05000000074505806, 0.05000000074505806, 0.05000000074505806);
+const c_max_lights: u32 = 10u;
 
 @group(0) @binding(0) 
 var<uniform> u_globals: Globals;
@@ -43,8 +43,8 @@ fn fetch_shadow(light_id: u32, homogeneous_coords: vec4<f32>) -> f32 {
     let flip_correction = vec2<f32>(0.5, -0.5);
     let proj_correction = (1.0 / homogeneous_coords.w);
     let light_local = (((homogeneous_coords.xy * flip_correction) * proj_correction) + vec2<f32>(0.5, 0.5));
-    let _e28 = textureSampleCompareLevel(t_shadow, sampler_shadow, light_local, i32(light_id), (homogeneous_coords.z * proj_correction));
-    return _e28;
+    let _e24 = textureSampleCompareLevel(t_shadow, sampler_shadow, light_local, i32(light_id), (homogeneous_coords.z * proj_correction));
+    return _e24;
 }
 
 @vertex 
@@ -56,70 +56,78 @@ fn vs_main(@location(0) position: vec4<i32>, @location(1) normal: vec4<i32>) -> 
     let world_pos = (_e7 * vec4<f32>(position));
     out.world_normal = (mat3x3<f32>(w[0].xyz, w[1].xyz, w[2].xyz) * vec3<f32>(normal.xyz));
     out.world_position = world_pos;
-    let _e25 = u_globals.view_proj;
-    out.proj_position = (_e25 * world_pos);
-    let _e27 = out;
-    return _e27;
+    let _e26 = u_globals.view_proj;
+    out.proj_position = (_e26 * world_pos);
+    let _e28 = out;
+    return _e28;
 }
 
 @fragment 
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-    var color: vec3<f32> = vec3<f32>(0.05000000074505806, 0.05000000074505806, 0.05000000074505806);
-    var i: u32 = 0u;
+    var color: vec3<f32>;
+    var i: u32;
 
     let normal_1 = normalize(in.world_normal);
+    color = vec3<f32>(0.05000000074505806, 0.05000000074505806, 0.05000000074505806);
+    i = 0u;
     loop {
-        let _e14 = i;
-        let _e17 = u_globals.num_lights.x;
-        if (_e14 < min(_e17, c_max_lights)) {
+        let _e7 = i;
+        let _e11 = u_globals.num_lights.x;
+        if (_e7 < min(_e11, c_max_lights)) {
         } else {
             break;
         }
-        let _e23 = i;
-        let light = s_lights[_e23];
-        let _e26 = i;
-        let _e30 = fetch_shadow(_e26, (light.proj * in.world_position));
-        let light_dir = normalize((light.pos.xyz - in.world_position.xyz));
-        let diffuse = max(0.0, dot(normal_1, light_dir));
-        let _e40 = color;
-        color = (_e40 + ((_e30 * diffuse) * light.color.xyz));
+        {
+            let _e16 = i;
+            let light = s_lights[_e16];
+            let _e19 = i;
+            let _e23 = fetch_shadow(_e19, (light.proj * in.world_position));
+            let light_dir = normalize((light.pos.xyz - in.world_position.xyz));
+            let diffuse = max(0.0, dot(normal_1, light_dir));
+            let _e37 = color;
+            color = (_e37 + ((_e23 * diffuse) * light.color.xyz));
+        }
         continuing {
-            let _e20 = i;
-            i = (_e20 + 1u);
+            let _e39 = i;
+            i = (_e39 + 1u);
         }
     }
-    let _e46 = color;
-    let _e50 = u_entity.color;
-    return (vec4<f32>(_e46, 1.0) * _e50);
+    let _e42 = color;
+    let _e47 = u_entity.color;
+    return (vec4<f32>(_e42, 1.0) * _e47);
 }
 
 @fragment 
 fn fs_main_without_storage(in_1: VertexOutput) -> @location(0) vec4<f32> {
-    var color_1: vec3<f32> = vec3<f32>(0.05000000074505806, 0.05000000074505806, 0.05000000074505806);
-    var i_1: u32 = 0u;
+    var color_1: vec3<f32>;
+    var i_1: u32;
 
     let normal_2 = normalize(in_1.world_normal);
+    color_1 = vec3<f32>(0.05000000074505806, 0.05000000074505806, 0.05000000074505806);
+    i_1 = 0u;
     loop {
-        let _e14 = i_1;
-        let _e17 = u_globals.num_lights.x;
-        if (_e14 < min(_e17, c_max_lights)) {
+        let _e7 = i_1;
+        let _e11 = u_globals.num_lights.x;
+        if (_e7 < min(_e11, c_max_lights)) {
         } else {
             break;
         }
-        let _e23 = i_1;
-        let light_1 = u_lights[_e23];
-        let _e26 = i_1;
-        let _e30 = fetch_shadow(_e26, (light_1.proj * in_1.world_position));
-        let light_dir_1 = normalize((light_1.pos.xyz - in_1.world_position.xyz));
-        let diffuse_1 = max(0.0, dot(normal_2, light_dir_1));
-        let _e40 = color_1;
-        color_1 = (_e40 + ((_e30 * diffuse_1) * light_1.color.xyz));
+        {
+            let _e16 = i_1;
+            let light_1 = u_lights[_e16];
+            let _e19 = i_1;
+            let _e23 = fetch_shadow(_e19, (light_1.proj * in_1.world_position));
+            let light_dir_1 = normalize((light_1.pos.xyz - in_1.world_position.xyz));
+            let diffuse_1 = max(0.0, dot(normal_2, light_dir_1));
+            let _e37 = color_1;
+            color_1 = (_e37 + ((_e23 * diffuse_1) * light_1.color.xyz));
+        }
         continuing {
-            let _e20 = i_1;
-            i_1 = (_e20 + 1u);
+            let _e39 = i_1;
+            i_1 = (_e39 + 1u);
         }
     }
-    let _e46 = color_1;
-    let _e50 = u_entity.color;
-    return (vec4<f32>(_e46, 1.0) * _e50);
+    let _e42 = color_1;
+    let _e47 = u_entity.color;
+    return (vec4<f32>(_e42, 1.0) * _e47);
 }

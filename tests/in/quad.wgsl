@@ -1,5 +1,5 @@
 // vertex
-let c_scale: f32 = 1.2;
+const c_scale: f32 = 1.2;
 
 struct VertexOutput {
   @location(0) uv : vec2<f32>,
@@ -31,7 +31,7 @@ fn frag_main(@location(0) uv : vec2<f32>) -> @location(0) vec4<f32> {
 }
 
 
-// We need to make sure that backends are successfully handling multiple entry points for the same shader stage. 
+// We need to make sure that backends are successfully handling multiple entry points for the same shader stage.
 @fragment
 fn fs_extra() -> @location(0) vec4<f32> {
     return vec4<f32>(0.0, 0.5, 0.0, 0.5);

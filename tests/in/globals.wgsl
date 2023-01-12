@@ -1,17 +1,17 @@
 // Global variable & constant declarations
 
-let Foo: bool = true;
+const Foo: bool = true;
 
 var<workgroup> wg : array<f32, 10u>;
 var<workgroup> at: atomic<u32>;
 
-struct Foo {
+struct FooStruct {
     v3: vec3<f32>,
     // test packed vec3
     v1: f32,
 }
 @group(0) @binding(1)
-var<storage, read_write> alignment: Foo;
+var<storage, read_write> alignment: FooStruct;
 
 @group(0) @binding(2)
 var<storage> dummy: array<vec2<f32>>;

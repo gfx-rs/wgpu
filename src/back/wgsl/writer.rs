@@ -1850,7 +1850,7 @@ impl<W: Write> Writer<W> {
             } => {
                 let name = &self.names[&NameKey::Constant(handle)];
                 // First write only constant name
-                write!(self.out, "let {}: ", name)?;
+                write!(self.out, "const {}: ", name)?;
                 // Next write constant type and value
                 match *value {
                     crate::ScalarValue::Sint(value) => {
@@ -1874,7 +1874,7 @@ impl<W: Write> Writer<W> {
             crate::ConstantInner::Composite { ty, ref components } => {
                 let name = &self.names[&NameKey::Constant(handle)];
                 // First write only constant name
-                write!(self.out, "let {}: ", name)?;
+                write!(self.out, "const {}: ", name)?;
                 // Next write constant type
                 self.write_type(module, ty)?;
 

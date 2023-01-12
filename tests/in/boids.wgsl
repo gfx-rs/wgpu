@@ -1,4 +1,4 @@
-let NUM_PARTICLES: u32 = 1500u;
+const NUM_PARTICLES: u32 = 1500u;
 
 struct Particle {
   pos : vec2<f32>,

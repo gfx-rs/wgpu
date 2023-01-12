@@ -45,112 +45,115 @@ void main() {
     if ((index >= 1500u)) {
         return;
     }
-    vec2 _e10 = _group_0_binding_1_cs.particles[index].pos;
-    vPos = _e10;
-    vec2 _e15 = _group_0_binding_1_cs.particles[index].vel;
-    vVel = _e15;
+    vec2 _e8 = _group_0_binding_1_cs.particles[index].pos;
+    vPos = _e8;
+    vec2 _e14 = _group_0_binding_1_cs.particles[index].vel;
+    vVel = _e14;
     cMass = vec2(0.0, 0.0);
     cVel = vec2(0.0, 0.0);
     colVel = vec2(0.0, 0.0);
+    cMassCount = 0;
+    cVelCount = 0;
+    i = 0u;
     bool loop_init = true;
     while(true) {
         if (!loop_init) {
-            uint _e86 = i;
-            i = (_e86 + 1u);
+            uint _e91 = i;
+            i = (_e91 + 1u);
         }
         loop_init = false;
-        uint _e37 = i;
-        if ((_e37 >= 1500u)) {
+        uint _e36 = i;
+        if ((_e36 >= 1500u)) {
             break;
         }
         uint _e39 = i;
         if ((_e39 == index)) {
             continue;
         }
-        uint _e42 = i;
-        vec2 _e45 = _group_0_binding_1_cs.particles[_e42].pos;
-        pos = _e45;
-        uint _e47 = i;
-        vec2 _e50 = _group_0_binding_1_cs.particles[_e47].vel;
-        vel = _e50;
-        vec2 _e51 = pos;
-        vec2 _e52 = vPos;
-        float _e55 = _group_0_binding_0_cs.rule1Distance;
-        if ((distance(_e51, _e52) < _e55)) {
-            vec2 _e57 = cMass;
-            vec2 _e58 = pos;
-            cMass = (_e57 + _e58);
-            int _e60 = cMassCount;
-            cMassCount = (_e60 + 1);
+        uint _e43 = i;
+        vec2 _e46 = _group_0_binding_1_cs.particles[_e43].pos;
+        pos = _e46;
+        uint _e49 = i;
+        vec2 _e52 = _group_0_binding_1_cs.particles[_e49].vel;
+        vel = _e52;
+        vec2 _e53 = pos;
+        vec2 _e54 = vPos;
+        float _e58 = _group_0_binding_0_cs.rule1Distance;
+        if ((distance(_e53, _e54) < _e58)) {
+            vec2 _e60 = cMass;
+            vec2 _e61 = pos;
+            cMass = (_e60 + _e61);
+            int _e63 = cMassCount;
+            cMassCount = (_e63 + 1);
         }
-        vec2 _e63 = pos;
-        vec2 _e64 = vPos;
-        float _e67 = _group_0_binding_0_cs.rule2Distance;
-        if ((distance(_e63, _e64) < _e67)) {
-            vec2 _e69 = colVel;
-            vec2 _e70 = pos;
-            vec2 _e71 = vPos;
-            colVel = (_e69 - (_e70 - _e71));
+        vec2 _e66 = pos;
+        vec2 _e67 = vPos;
+        float _e71 = _group_0_binding_0_cs.rule2Distance;
+        if ((distance(_e66, _e67) < _e71)) {
+            vec2 _e73 = colVel;
+            vec2 _e74 = pos;
+            vec2 _e75 = vPos;
+            colVel = (_e73 - (_e74 - _e75));
         }
-        vec2 _e74 = pos;
-        vec2 _e75 = vPos;
-        float _e78 = _group_0_binding_0_cs.rule3Distance;
-        if ((distance(_e74, _e75) < _e78)) {
-            vec2 _e80 = cVel;
-            vec2 _e81 = vel;
-            cVel = (_e80 + _e81);
-            int _e83 = cVelCount;
-            cVelCount = (_e83 + 1);
+        vec2 _e78 = pos;
+        vec2 _e79 = vPos;
+        float _e83 = _group_0_binding_0_cs.rule3Distance;
+        if ((distance(_e78, _e79) < _e83)) {
+            vec2 _e85 = cVel;
+            vec2 _e86 = vel;
+            cVel = (_e85 + _e86);
+            int _e88 = cVelCount;
+            cVelCount = (_e88 + 1);
         }
     }
-    int _e89 = cMassCount;
-    if ((_e89 > 0)) {
-        vec2 _e92 = cMass;
-        int _e93 = cMassCount;
-        vec2 _e97 = vPos;
-        cMass = ((_e92 / vec2(float(_e93))) - _e97);
+    int _e94 = cMassCount;
+    if ((_e94 > 0)) {
+        vec2 _e97 = cMass;
+        int _e98 = cMassCount;
+        vec2 _e102 = vPos;
+        cMass = ((_e97 / vec2(float(_e98))) - _e102);
     }
-    int _e99 = cVelCount;
-    if ((_e99 > 0)) {
-        vec2 _e102 = cVel;
-        int _e103 = cVelCount;
-        cVel = (_e102 / vec2(float(_e103)));
+    int _e104 = cVelCount;
+    if ((_e104 > 0)) {
+        vec2 _e107 = cVel;
+        int _e108 = cVelCount;
+        cVel = (_e107 / vec2(float(_e108)));
     }
-    vec2 _e107 = vVel;
-    vec2 _e108 = cMass;
-    float _e110 = _group_0_binding_0_cs.rule1Scale;
-    vec2 _e113 = colVel;
-    float _e115 = _group_0_binding_0_cs.rule2Scale;
-    vec2 _e118 = cVel;
-    float _e120 = _group_0_binding_0_cs.rule3Scale;
-    vVel = (((_e107 + (_e108 * _e110)) + (_e113 * _e115)) + (_e118 * _e120));
-    vec2 _e123 = vVel;
-    vec2 _e125 = vVel;
-    vVel = (normalize(_e123) * clamp(length(_e125), 0.0, 0.10000000149011612));
-    vec2 _e131 = vPos;
-    vec2 _e132 = vVel;
-    float _e134 = _group_0_binding_0_cs.deltaT;
-    vPos = (_e131 + (_e132 * _e134));
-    float _e138 = vPos.x;
-    if ((_e138 < -1.0)) {
+    vec2 _e112 = vVel;
+    vec2 _e113 = cMass;
+    float _e116 = _group_0_binding_0_cs.rule1Scale;
+    vec2 _e119 = colVel;
+    float _e122 = _group_0_binding_0_cs.rule2Scale;
+    vec2 _e125 = cVel;
+    float _e128 = _group_0_binding_0_cs.rule3Scale;
+    vVel = (((_e112 + (_e113 * _e116)) + (_e119 * _e122)) + (_e125 * _e128));
+    vec2 _e131 = vVel;
+    vec2 _e133 = vVel;
+    vVel = (normalize(_e131) * clamp(length(_e133), 0.0, 0.10000000149011612));
+    vec2 _e139 = vPos;
+    vec2 _e140 = vVel;
+    float _e143 = _group_0_binding_0_cs.deltaT;
+    vPos = (_e139 + (_e140 * _e143));
+    float _e147 = vPos.x;
+    if ((_e147 < -1.0)) {
         vPos.x = 1.0;
     }
-    float _e144 = vPos.x;
-    if ((_e144 > 1.0)) {
+    float _e153 = vPos.x;
+    if ((_e153 > 1.0)) {
         vPos.x = -1.0;
     }
-    float _e150 = vPos.y;
-    if ((_e150 < -1.0)) {
+    float _e159 = vPos.y;
+    if ((_e159 < -1.0)) {
         vPos.y = 1.0;
     }
-    float _e156 = vPos.y;
-    if ((_e156 > 1.0)) {
+    float _e165 = vPos.y;
+    if ((_e165 > 1.0)) {
         vPos.y = -1.0;
     }
-    vec2 _e164 = vPos;
-    _group_0_binding_2_cs.particles[index].pos = _e164;
-    vec2 _e168 = vVel;
-    _group_0_binding_2_cs.particles[index].vel = _e168;
+    vec2 _e174 = vPos;
+    _group_0_binding_2_cs.particles[index].pos = _e174;
+    vec2 _e179 = vVel;
+    _group_0_binding_2_cs.particles[index].vel = _e179;
     return;
 }
 

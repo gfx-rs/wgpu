@@ -18,55 +18,55 @@ OpExecutionMode %74 LocalSize 1 1 1
 %10 = OpConstant  %7  4
 %11 = OpConstant  %7  2
 %12 = OpTypeVector %4 2
-%15 = OpTypeFunction %12
-%23 = OpTypeFunction %7
-%25 = OpTypeVector %7 2
-%37 = OpTypeVector %9 3
-%53 = OpTypeVector %7 4
+%13 = OpTypeVector %7 2
+%14 = OpTypeVector %9 3
+%15 = OpTypeVector %7 4
+%18 = OpTypeFunction %12
+%26 = OpTypeFunction %7
 %75 = OpTypeFunction %2
-%29 = OpConstantNull  %7
-%41 = OpConstantNull  %9
+%31 = OpConstantNull  %7
+%42 = OpConstantNull  %9
 %57 = OpConstantNull  %7
-%14 = OpFunction  %12  None %15
-%13 = OpLabel
-OpBranch %16
+%17 = OpFunction  %12  None %18
 %16 = OpLabel
-%17 = OpCompositeConstruct  %12  %3 %3
-%18 = OpCompositeConstruct  %12  %5 %5
-%19 = OpCompositeConstruct  %12  %5 %5
-%20 = OpExtInst  %12  %1 Fma %17 %18 %19
-OpReturnValue %20
+OpBranch %19
+%19 = OpLabel
+%20 = OpCompositeConstruct  %12  %3 %3
+%21 = OpCompositeConstruct  %12  %5 %5
+%22 = OpCompositeConstruct  %12  %5 %5
+%23 = OpExtInst  %12  %1 Fma %20 %21 %22
+OpReturnValue %23
 OpFunctionEnd
-%22 = OpFunction  %7  None %23
-%21 = OpLabel
-OpBranch %24
+%25 = OpFunction  %7  None %26
 %24 = OpLabel
-%26 = OpCompositeConstruct  %25  %6 %6
-%27 = OpCompositeConstruct  %25  %6 %6
-%30 = OpCompositeExtract  %7  %26 0
-%31 = OpCompositeExtract  %7  %27 0
-%32 = OpIMul  %7  %30 %31
-%33 = OpIAdd  %7  %29 %32
-%34 = OpCompositeExtract  %7  %26 1
-%35 = OpCompositeExtract  %7  %27 1
-%36 = OpIMul  %7  %34 %35
-%28 = OpIAdd  %7  %33 %36
-%38 = OpCompositeConstruct  %37  %8 %8 %8
-%39 = OpCompositeConstruct  %37  %8 %8 %8
-%42 = OpCompositeExtract  %9  %38 0
+OpBranch %27
+%27 = OpLabel
+%28 = OpCompositeConstruct  %13  %6 %6
+%29 = OpCompositeConstruct  %13  %6 %6
+%32 = OpCompositeExtract  %7  %28 0
+%33 = OpCompositeExtract  %7  %29 0
+%34 = OpIMul  %7  %32 %33
+%35 = OpIAdd  %7  %31 %34
+%36 = OpCompositeExtract  %7  %28 1
+%37 = OpCompositeExtract  %7  %29 1
+%38 = OpIMul  %7  %36 %37
+%30 = OpIAdd  %7  %35 %38
+%39 = OpCompositeConstruct  %14  %8 %8 %8
+%40 = OpCompositeConstruct  %14  %8 %8 %8
 %43 = OpCompositeExtract  %9  %39 0
-%44 = OpIMul  %9  %42 %43
-%45 = OpIAdd  %9  %41 %44
-%46 = OpCompositeExtract  %9  %38 1
+%44 = OpCompositeExtract  %9  %40 0
+%45 = OpIMul  %9  %43 %44
+%46 = OpIAdd  %9  %42 %45
 %47 = OpCompositeExtract  %9  %39 1
-%48 = OpIMul  %9  %46 %47
-%49 = OpIAdd  %9  %45 %48
-%50 = OpCompositeExtract  %9  %38 2
+%48 = OpCompositeExtract  %9  %40 1
+%49 = OpIMul  %9  %47 %48
+%50 = OpIAdd  %9  %46 %49
 %51 = OpCompositeExtract  %9  %39 2
-%52 = OpIMul  %9  %50 %51
-%40 = OpIAdd  %9  %49 %52
-%54 = OpCompositeConstruct  %53  %10 %10 %10 %10
-%55 = OpCompositeConstruct  %53  %11 %11 %11 %11
+%52 = OpCompositeExtract  %9  %40 2
+%53 = OpIMul  %9  %51 %52
+%41 = OpIAdd  %9  %50 %53
+%54 = OpCompositeConstruct  %15  %10 %10 %10 %10
+%55 = OpCompositeConstruct  %15  %11 %11 %11 %11
 %58 = OpCompositeExtract  %7  %54 0
 %59 = OpCompositeExtract  %7  %55 0
 %60 = OpIMul  %7  %58 %59
@@ -89,7 +89,7 @@ OpFunctionEnd
 %73 = OpLabel
 OpBranch %76
 %76 = OpLabel
-%77 = OpFunctionCall  %12  %14
-%78 = OpFunctionCall  %7  %22
+%77 = OpFunctionCall  %12  %17
+%78 = OpFunctionCall  %7  %25
 OpReturn
 OpFunctionEnd

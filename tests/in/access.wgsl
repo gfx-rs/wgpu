@@ -129,9 +129,9 @@ fn foo_vert(@builtin(vertex_index) vi: u32) -> @builtin(position) vec4<f32> {
 	let foo_value = read_from_private(&foo);
 
 	// test array indexing
-	var c = array<i32, 5>(a, i32(b), 3, 4, 5);
-	c[vi + 1u] = 42;
-	let value = c[vi];
+	var c2 = array<i32, 5>(a, i32(b), 3, 4, 5);
+	c2[vi + 1u] = 42;
+	let value = c2[vi];
 
 	_ = test_arr_as_arg(array<array<f32, 10>, 5>());
 

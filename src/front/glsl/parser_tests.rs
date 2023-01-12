@@ -796,7 +796,7 @@ fn expressions() {
         #  version 450
         void main() {
             uint index = 0;
-            
+
             --index;
             ++index;
         }

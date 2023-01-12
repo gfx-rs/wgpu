@@ -26,23 +26,23 @@ vec4 test_textureLoad_1d(int coords, int level) {
 }
 
 vec4 test_textureLoad_2d(ivec2 coords_1, int level_1) {
-    vec4 _e4 = (level_1 < textureQueryLevels(_group_0_binding_1_fs) && all(lessThan(coords_1, textureSize(_group_0_binding_1_fs, level_1))) ? texelFetch(_group_0_binding_1_fs, coords_1, level_1) : vec4(0.0));
-    return _e4;
+    vec4 _e3 = (level_1 < textureQueryLevels(_group_0_binding_1_fs) && all(lessThan(coords_1, textureSize(_group_0_binding_1_fs, level_1))) ? texelFetch(_group_0_binding_1_fs, coords_1, level_1) : vec4(0.0));
+    return _e3;
 }
 
 vec4 test_textureLoad_2d_array(ivec2 coords_2, int index, int level_2) {
-    vec4 _e6 = (level_2 < textureQueryLevels(_group_0_binding_2_fs) && all(lessThan(ivec3(coords_2, index), textureSize(_group_0_binding_2_fs, level_2))) ? texelFetch(_group_0_binding_2_fs, ivec3(coords_2, index), level_2) : vec4(0.0));
-    return _e6;
+    vec4 _e4 = (level_2 < textureQueryLevels(_group_0_binding_2_fs) && all(lessThan(ivec3(coords_2, index), textureSize(_group_0_binding_2_fs, level_2))) ? texelFetch(_group_0_binding_2_fs, ivec3(coords_2, index), level_2) : vec4(0.0));
+    return _e4;
 }
 
 vec4 test_textureLoad_3d(ivec3 coords_3, int level_3) {
-    vec4 _e6 = (level_3 < textureQueryLevels(_group_0_binding_3_fs) && all(lessThan(coords_3, textureSize(_group_0_binding_3_fs, level_3))) ? texelFetch(_group_0_binding_3_fs, coords_3, level_3) : vec4(0.0));
-    return _e6;
+    vec4 _e3 = (level_3 < textureQueryLevels(_group_0_binding_3_fs) && all(lessThan(coords_3, textureSize(_group_0_binding_3_fs, level_3))) ? texelFetch(_group_0_binding_3_fs, coords_3, level_3) : vec4(0.0));
+    return _e3;
 }
 
 vec4 test_textureLoad_multisampled_2d(ivec2 coords_4, int _sample) {
-    vec4 _e7 = (_sample < textureSamples(_group_0_binding_4_fs) && all(lessThan(coords_4, textureSize(_group_0_binding_4_fs))) ? texelFetch(_group_0_binding_4_fs, coords_4, _sample) : vec4(0.0));
-    return _e7;
+    vec4 _e3 = (_sample < textureSamples(_group_0_binding_4_fs) && all(lessThan(coords_4, textureSize(_group_0_binding_4_fs))) ? texelFetch(_group_0_binding_4_fs, coords_4, _sample) : vec4(0.0));
+    return _e3;
 }
 
 void test_textureStore_1d(int coords_8, vec4 value) {
@@ -66,11 +66,11 @@ void test_textureStore_3d(ivec3 coords_11, vec4 value_3) {
 }
 
 void main() {
-    vec4 _e14 = test_textureLoad_1d(0, 0);
-    vec4 _e17 = test_textureLoad_2d(ivec2(0, 0), 0);
-    vec4 _e21 = test_textureLoad_2d_array(ivec2(0, 0), 0, 0);
-    vec4 _e24 = test_textureLoad_3d(ivec3(0, 0, 0), 0);
-    vec4 _e27 = test_textureLoad_multisampled_2d(ivec2(0, 0), 0);
+    vec4 _e2 = test_textureLoad_1d(0, 0);
+    vec4 _e5 = test_textureLoad_2d(ivec2(0, 0), 0);
+    vec4 _e9 = test_textureLoad_2d_array(ivec2(0, 0), 0, 0);
+    vec4 _e12 = test_textureLoad_3d(ivec3(0, 0, 0), 0);
+    vec4 _e15 = test_textureLoad_multisampled_2d(ivec2(0, 0), 0);
     test_textureStore_1d(0, vec4(0.0, 0.0, 0.0, 0.0));
     test_textureStore_2d(ivec2(0, 0), vec4(0.0, 0.0, 0.0, 0.0));
     test_textureStore_2d_array(ivec2(0, 0), 0, vec4(0.0, 0.0, 0.0, 0.0));

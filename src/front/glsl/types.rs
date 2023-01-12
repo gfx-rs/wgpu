@@ -300,20 +300,7 @@ impl Parser {
         meta: Span,
     ) -> Result<Handle<Type>> {
         self.typifier_grow(ctx, expr, meta)?;
-        let resolution = &ctx.typifier[expr];
-        Ok(match *resolution {
-            // If the resolution is already a handle return early
-            crate::proc::TypeResolution::Handle(ty) => ty,
-            // If it's a value we need to clone it
-            crate::proc::TypeResolution::Value(_) => match resolution.clone() {
-                // This is unreachable
-                crate::proc::TypeResolution::Handle(ty) => ty,
-                // Add the value to the type arena and return the handle
-                crate::proc::TypeResolution::Value(inner) => {
-                    self.module.types.insert(Type { name: None, inner }, meta)
-                }
-            },
-        })
+        Ok(ctx.typifier.register_type(expr, &mut self.module.types))
     }
 
     /// Invalidates the cached type resolution for `expr` forcing a recomputation

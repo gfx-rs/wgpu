@@ -1,4 +1,4 @@
-static const bool Foo_2 = true;
+static const bool Foo_1 = true;
 
 typedef struct { float2 _0; float2 _1; float2 _2; } __mat3x2;
 float2 __get_col_of_mat3x2(__mat3x2 mat, uint idx) {
@@ -51,7 +51,7 @@ void __set_el_of_mat4x2(__mat4x2 mat, uint idx, uint vec_idx, float value) {
     }
 }
 
-struct Foo {
+struct FooStruct {
     float3 v3_;
     float v1_;
 };
@@ -71,8 +71,8 @@ void test_msl_packed_vec3_as_arg(float3 arg)
     return;
 }
 
-Foo ConstructFoo(float3 arg0, float arg1) {
-    Foo ret = (Foo)0;
+FooStruct ConstructFooStruct(float3 arg0, float arg1) {
+    FooStruct ret = (FooStruct)0;
     ret.v3_ = arg0;
     ret.v1_ = arg1;
     return ret;
@@ -80,14 +80,15 @@ Foo ConstructFoo(float3 arg0, float arg1) {
 
 void test_msl_packed_vec3_()
 {
-    int idx = 1;
+    int idx = (int)0;
 
     alignment.Store3(0, asuint((1.0).xxx));
+    idx = 1;
     alignment.Store(0+0, asuint(1.0));
     alignment.Store(0+0, asuint(2.0));
-    int _expr23 = idx;
-    alignment.Store(_expr23*4+0, asuint(3.0));
-    Foo data = ConstructFoo(asfloat(alignment.Load3(0)), asfloat(alignment.Load(12)));
+    int _expr17 = idx;
+    alignment.Store(_expr17*4+0, asuint(3.0));
+    FooStruct data = ConstructFooStruct(asfloat(alignment.Load3(0)), asfloat(alignment.Load(12)));
     float3 unnamed = data.v3_;
     float2 unnamed_1 = data.v3_.zx;
     test_msl_packed_vec3_as_arg(data.v3_);
@@ -107,26 +108,28 @@ uint NagaBufferLength(ByteAddressBuffer buffer)
 [numthreads(1, 1, 1)]
 void main()
 {
-    float Foo_1 = 1.0;
-    bool at = true;
+    float Foo = (float)0;
+    bool at = (bool)0;
 
     test_msl_packed_vec3_();
-    float4x2 _expr16 = ((float4x2)global_nested_arrays_of_matrices_4x2_[0][0]);
-    float4 _expr23 = global_nested_arrays_of_matrices_2x4_[0][0][0];
-    wg[7] = mul(_expr23, _expr16).x;
-    float3x2 _expr28 = ((float3x2)global_mat);
-    float3 _expr29 = global_vec;
-    wg[6] = mul(_expr29, _expr28).x;
-    float _expr37 = asfloat(dummy.Load(4+8));
-    wg[5] = _expr37;
+    float4x2 _expr8 = ((float4x2)global_nested_arrays_of_matrices_4x2_[0][0]);
+    float4 _expr16 = global_nested_arrays_of_matrices_2x4_[0][0][0];
+    wg[7] = mul(_expr16, _expr8).x;
+    float3x2 _expr23 = ((float3x2)global_mat);
+    float3 _expr25 = global_vec;
+    wg[6] = mul(_expr25, _expr23).x;
+    float _expr35 = asfloat(dummy.Load(4+8));
+    wg[5] = _expr35;
     float _expr43 = float_vecs[0].w;
     wg[4] = _expr43;
-    float _expr47 = asfloat(alignment.Load(12));
-    wg[3] = _expr47;
-    float _expr52 = asfloat(alignment.Load(0+0));
-    wg[2] = _expr52;
+    float _expr49 = asfloat(alignment.Load(12));
+    wg[3] = _expr49;
+    float _expr56 = asfloat(alignment.Load(0+0));
+    wg[2] = _expr56;
     alignment.Store(12, asuint(4.0));
     wg[1] = float(((NagaBufferLength(dummy) - 0) / 8));
     at_1 = 2u;
+    Foo = 1.0;
+    at = true;
     return;
 }

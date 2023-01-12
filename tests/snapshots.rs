@@ -548,6 +548,8 @@ fn convert_wgsl() {
             Targets::WGSL | Targets::GLSL | Targets::SPIRV | Targets::HLSL | Targets::METAL,
         ),
         ("lexical-scopes", Targets::WGSL),
+        ("type-alias", Targets::WGSL),
+        ("module-scope", Targets::WGSL),
     ];
 
     for &(name, targets) in inputs.iter() {

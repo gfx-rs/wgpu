@@ -18,8 +18,8 @@ layout(location = 0) out vec4 _fs2p_location0;
 
 void main() {
     VertexOutput in_ = VertexOutput(gl_FragCoord, _vs2fs_location0);
-    vec4 _e5 = texture(_group_0_binding_1_fs, vec3(in_.uv));
-    _fs2p_location0 = _e5;
+    vec4 _e4 = texture(_group_0_binding_1_fs, vec3(in_.uv));
+    _fs2p_location0 = _e4;
     return;
 }
 

@@ -44,11 +44,11 @@ metal::float4 mock_function(
 ) {
     type_9 in_function = {};
     for(int _i=0; _i<2; ++_i) in_function.inner[_i] = type_9 {metal::float4(0.7070000171661377, 0.0, 0.0, 1.0), metal::float4(0.0, 0.7070000171661377, 0.0, 1.0)}.inner[_i];
-    metal::float4 _e22 = in_storage.a.inner[i];
-    metal::float4 _e25 = in_uniform.a.inner[i];
-    metal::float4 _e27 = (uint(l) < image_2d_array.get_num_mip_levels() && uint(i) < image_2d_array.get_array_size() && metal::all(metal::uint2(c) < metal::uint2(image_2d_array.get_width(l), image_2d_array.get_height(l))) ? image_2d_array.read(metal::uint2(c), i, l): DefaultConstructible());
-    float _e30 = in_workgroup.inner[metal::min(unsigned(i), 29u)];
+    metal::float4 _e18 = in_storage.a.inner[i];
+    metal::float4 _e22 = in_uniform.a.inner[i];
+    metal::float4 _e25 = (uint(l) < image_2d_array.get_num_mip_levels() && uint(i) < image_2d_array.get_array_size() && metal::all(metal::uint2(c) < metal::uint2(image_2d_array.get_width(l), image_2d_array.get_height(l))) ? image_2d_array.read(metal::uint2(c), i, l): DefaultConstructible());
+    float _e29 = in_workgroup.inner[metal::min(unsigned(i), 29u)];
     float _e34 = in_private.inner[metal::min(unsigned(i), 39u)];
     metal::float4 _e38 = in_function.inner[metal::min(unsigned(i), 1u)];
-    return ((((_e22 + _e25) + _e27) + metal::float4(_e30)) + metal::float4(_e34)) + _e38;
+    return ((((_e18 + _e22) + _e25) + metal::float4(_e29)) + metal::float4(_e34)) + _e38;
 }

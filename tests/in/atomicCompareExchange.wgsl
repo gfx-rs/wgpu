@@ -1,4 +1,4 @@
-let SIZE: u32 = 128u;
+const SIZE: u32 = 128u;
 
 @group(0) @binding(0)
 var<storage,read_write> arr_i32: array<atomic<i32>, SIZE>;

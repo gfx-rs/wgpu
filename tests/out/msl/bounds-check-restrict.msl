@@ -87,9 +87,9 @@ float index_in_bounds(
     constant _mslBufferSizes& _buffer_sizes
 ) {
     float _e4 = globals.a.inner[9];
-    float _e8 = globals.v.w;
-    float _e15 = globals.m[2].w;
-    return (_e4 + _e8) + _e15;
+    float _e9 = globals.v.w;
+    float _e17 = globals.m[2].w;
+    return (_e4 + _e9) + _e17;
 }
 
 void set_array(

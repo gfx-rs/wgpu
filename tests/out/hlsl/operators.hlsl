@@ -49,14 +49,14 @@ float2 splat_assignment()
     float2 a = (float2)0;
 
     a = (2.0).xx;
-    float2 _expr7 = a;
-    a = (_expr7 + (1.0).xx);
-    float2 _expr11 = a;
-    a = (_expr11 - (3.0).xx);
+    float2 _expr4 = a;
+    a = (_expr4 + (1.0).xx);
+    float2 _expr8 = a;
+    a = (_expr8 - (3.0).xx);
+    float2 _expr12 = a;
+    a = (_expr12 / (4.0).xx);
     float2 _expr15 = a;
-    a = (_expr15 / (4.0).xx);
-    float2 _expr19 = a;
-    return _expr19;
+    return _expr15;
 }
 
 float3 bool_cast(float3 x)
@@ -89,8 +89,8 @@ float constructors()
     float2x3 unnamed_8 = float2x3(float2x3(float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0)));
     uint2 unnamed_9 = asuint(uint2(0u, 0u));
     float2x3 unnamed_10 = asfloat(float2x3(float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0)));
-    float _expr75 = foo.a.x;
-    return _expr75;
+    float _expr71 = foo.a.x;
+    return _expr71;
 }
 
 void logical()
@@ -248,39 +248,41 @@ void comparison()
 
 void assignment()
 {
-    int a_1 = 1;
-    int3 vec0_ = int3(0, 0, 0);
+    int a_1 = (int)0;
+    int3 vec0_ = (int3)0;
 
+    a_1 = 1;
+    int _expr3 = a_1;
+    a_1 = (_expr3 + 1);
     int _expr6 = a_1;
-    a_1 = (_expr6 + 1);
+    a_1 = (_expr6 - 1);
+    int _expr8 = a_1;
     int _expr9 = a_1;
-    a_1 = (_expr9 - 1);
+    a_1 = (_expr9 * _expr8);
+    int _expr11 = a_1;
     int _expr12 = a_1;
-    int _expr13 = a_1;
-    a_1 = (_expr12 * _expr13);
+    a_1 = (_expr12 / _expr11);
     int _expr15 = a_1;
-    int _expr16 = a_1;
-    a_1 = (_expr15 / _expr16);
+    a_1 = (_expr15 % 1);
     int _expr18 = a_1;
-    a_1 = (_expr18 % 1);
+    a_1 = (_expr18 & 0);
     int _expr21 = a_1;
-    a_1 = (_expr21 & 0);
+    a_1 = (_expr21 | 0);
     int _expr24 = a_1;
-    a_1 = (_expr24 | 0);
+    a_1 = (_expr24 ^ 0);
     int _expr27 = a_1;
-    a_1 = (_expr27 ^ 0);
+    a_1 = (_expr27 << 2u);
     int _expr30 = a_1;
-    a_1 = (_expr30 << 2u);
-    int _expr33 = a_1;
-    a_1 = (_expr33 >> 1u);
-    int _expr36 = a_1;
-    a_1 = (_expr36 + 1);
-    int _expr39 = a_1;
-    a_1 = (_expr39 - 1);
-    int _expr46 = vec0_.y;
-    vec0_.y = (_expr46 + 1);
-    int _expr51 = vec0_.y;
-    vec0_.y = (_expr51 - 1);
+    a_1 = (_expr30 >> 1u);
+    int _expr32 = a_1;
+    a_1 = (_expr32 + 1);
+    int _expr35 = a_1;
+    a_1 = (_expr35 - 1);
+    vec0_ = int3(0, 0, 0);
+    int _expr42 = vec0_.y;
+    vec0_.y = (_expr42 + 1);
+    int _expr47 = vec0_.y;
+    vec0_.y = (_expr47 - 1);
     return;
 }
 
@@ -298,10 +300,10 @@ void negation_avoids_prefix_decrement()
 [numthreads(1, 1, 1)]
 void main()
 {
-    const float4 _e4 = builtins();
-    const float4 _e5 = splat();
-    const float3 _e7 = bool_cast(float4(1.0, 1.0, 1.0, 1.0).xyz);
-    const float _e8 = constructors();
+    const float4 _e0 = builtins();
+    const float4 _e1 = splat();
+    const float3 _e4 = bool_cast(float4(1.0, 1.0, 1.0, 1.0).xyz);
+    const float _e5 = constructors();
     logical();
     arithmetic();
     bit();

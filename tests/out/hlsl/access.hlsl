@@ -138,38 +138,39 @@ Baz ConstructBaz(float3x2 arg0) {
 
 void test_matrix_within_struct_accesses()
 {
-    int idx = 1;
+    int idx = (int)0;
     Baz t = (Baz)0;
 
-    int _expr6 = idx;
-    idx = (_expr6 - 1);
+    idx = 1;
+    int _expr2 = idx;
+    idx = (_expr2 - 1);
     float3x2 unnamed = GetMatmOnBaz(baz);
     float2 unnamed_1 = GetMatmOnBaz(baz)[0];
-    int _expr16 = idx;
-    float2 unnamed_2 = GetMatmOnBaz(baz)[_expr16];
+    int _expr15 = idx;
+    float2 unnamed_2 = GetMatmOnBaz(baz)[_expr15];
     float unnamed_3 = GetMatmOnBaz(baz)[0].y;
-    int _expr28 = idx;
-    float unnamed_4 = GetMatmOnBaz(baz)[0][_expr28];
-    int _expr32 = idx;
-    float unnamed_5 = GetMatmOnBaz(baz)[_expr32].y;
-    int _expr38 = idx;
-    int _expr40 = idx;
-    float unnamed_6 = GetMatmOnBaz(baz)[_expr38][_expr40];
+    int _expr29 = idx;
+    float unnamed_4 = GetMatmOnBaz(baz)[0][_expr29];
+    int _expr34 = idx;
+    float unnamed_5 = GetMatmOnBaz(baz)[_expr34].y;
+    int _expr41 = idx;
+    int _expr43 = idx;
+    float unnamed_6 = GetMatmOnBaz(baz)[_expr41][_expr43];
     t = ConstructBaz(float3x2((1.0).xx, (2.0).xx, (3.0).xx));
-    int _expr52 = idx;
-    idx = (_expr52 + 1);
+    int _expr55 = idx;
+    idx = (_expr55 + 1);
     SetMatmOnBaz(t, float3x2((6.0).xx, (5.0).xx, (4.0).xx));
     t.m_0 = (9.0).xx;
-    int _expr69 = idx;
-    SetMatVecmOnBaz(t, (90.0).xx, _expr69);
+    int _expr72 = idx;
+    SetMatVecmOnBaz(t, (90.0).xx, _expr72);
     t.m_0[1] = 10.0;
-    int _expr82 = idx;
-    t.m_0[_expr82] = 20.0;
-    int _expr86 = idx;
-    SetMatScalarmOnBaz(t, 30.0, _expr86, 1);
-    int _expr92 = idx;
-    int _expr94 = idx;
-    SetMatScalarmOnBaz(t, 40.0, _expr92, _expr94);
+    int _expr85 = idx;
+    t.m_0[_expr85] = 20.0;
+    int _expr89 = idx;
+    SetMatScalarmOnBaz(t, 30.0, _expr89, 1);
+    int _expr95 = idx;
+    int _expr97 = idx;
+    SetMatScalarmOnBaz(t, 40.0, _expr95, _expr97);
     return;
 }
 
@@ -181,47 +182,48 @@ MatCx2InArray ConstructMatCx2InArray(float4x2 arg0[2]) {
 
 void test_matrix_within_array_within_struct_accesses()
 {
-    int idx_1 = 1;
+    int idx_1 = (int)0;
     MatCx2InArray t_1 = (MatCx2InArray)0;
 
-    int _expr7 = idx_1;
-    idx_1 = (_expr7 - 1);
+    idx_1 = 1;
+    int _expr2 = idx_1;
+    idx_1 = (_expr2 - 1);
     float4x2 unnamed_7[2] = ((float4x2[2])nested_mat_cx2_.am);
     float4x2 unnamed_8 = ((float4x2)nested_mat_cx2_.am[0]);
     float2 unnamed_9 = nested_mat_cx2_.am[0]._0;
-    int _expr25 = idx_1;
-    float2 unnamed_10 = __get_col_of_mat4x2(nested_mat_cx2_.am[0], _expr25);
+    int _expr24 = idx_1;
+    float2 unnamed_10 = __get_col_of_mat4x2(nested_mat_cx2_.am[0], _expr24);
     float unnamed_11 = nested_mat_cx2_.am[0]._0.y;
-    int _expr41 = idx_1;
-    float unnamed_12 = nested_mat_cx2_.am[0]._0[_expr41];
-    int _expr47 = idx_1;
-    float unnamed_13 = __get_col_of_mat4x2(nested_mat_cx2_.am[0], _expr47).y;
-    int _expr55 = idx_1;
-    int _expr57 = idx_1;
-    float unnamed_14 = __get_col_of_mat4x2(nested_mat_cx2_.am[0], _expr55)[_expr57];
+    int _expr42 = idx_1;
+    float unnamed_12 = nested_mat_cx2_.am[0]._0[_expr42];
+    int _expr49 = idx_1;
+    float unnamed_13 = __get_col_of_mat4x2(nested_mat_cx2_.am[0], _expr49).y;
+    int _expr58 = idx_1;
+    int _expr60 = idx_1;
+    float unnamed_14 = __get_col_of_mat4x2(nested_mat_cx2_.am[0], _expr58)[_expr60];
     t_1 = ConstructMatCx2InArray(Constructarray2_float4x2_(float4x2(float2(0.0, 0.0), float2(0.0, 0.0), float2(0.0, 0.0), float2(0.0, 0.0)), float4x2(float2(0.0, 0.0), float2(0.0, 0.0), float2(0.0, 0.0), float2(0.0, 0.0))));
-    int _expr63 = idx_1;
-    idx_1 = (_expr63 + 1);
+    int _expr66 = idx_1;
+    idx_1 = (_expr66 + 1);
     t_1.am = (__mat4x2[2])Constructarray2_float4x2_(float4x2(float2(0.0, 0.0), float2(0.0, 0.0), float2(0.0, 0.0), float2(0.0, 0.0)), float4x2(float2(0.0, 0.0), float2(0.0, 0.0), float2(0.0, 0.0), float2(0.0, 0.0)));
     t_1.am[0] = (__mat4x2)float4x2((8.0).xx, (7.0).xx, (6.0).xx, (5.0).xx);
     t_1.am[0]._0 = (9.0).xx;
-    int _expr90 = idx_1;
-    __set_col_of_mat4x2(t_1.am[0], _expr90, (90.0).xx);
+    int _expr93 = idx_1;
+    __set_col_of_mat4x2(t_1.am[0], _expr93, (90.0).xx);
     t_1.am[0]._0.y = 10.0;
-    int _expr107 = idx_1;
-    t_1.am[0]._0[_expr107] = 20.0;
-    int _expr113 = idx_1;
-    __set_el_of_mat4x2(t_1.am[0], _expr113, 1, 30.0);
-    int _expr121 = idx_1;
-    int _expr123 = idx_1;
-    __set_el_of_mat4x2(t_1.am[0], _expr121, _expr123, 40.0);
+    int _expr110 = idx_1;
+    t_1.am[0]._0[_expr110] = 20.0;
+    int _expr116 = idx_1;
+    __set_el_of_mat4x2(t_1.am[0], _expr116, 1, 30.0);
+    int _expr124 = idx_1;
+    int _expr126 = idx_1;
+    __set_el_of_mat4x2(t_1.am[0], _expr124, _expr126, 40.0);
     return;
 }
 
 float read_from_private(inout float foo_1)
 {
-    float _expr6 = foo_1;
-    return _expr6;
+    float _expr1 = foo_1;
+    return _expr1;
 }
 
 float test_arr_as_arg(float a[5][10])
@@ -250,9 +252,10 @@ ret_Constructarray5_int_ Constructarray5_int_(int arg0, int arg1, int arg2, int 
 
 float4 foo_vert(uint vi : SV_VertexID) : SV_Position
 {
-    float foo = 0.0;
-    int c[5] = {(int)0,(int)0,(int)0,(int)0,(int)0};
+    float foo = (float)0;
+    int c2_[5] = {(int)0,(int)0,(int)0,(int)0,(int)0};
 
+    foo = 0.0;
     float baz_1 = foo;
     foo = 1.0;
     test_matrix_within_struct_accesses();
@@ -261,12 +264,12 @@ float4 foo_vert(uint vi : SV_VertexID) : SV_Position
     uint2 arr[2] = {asuint(bar.Load2(104+0)), asuint(bar.Load2(104+8))};
     float b = asfloat(bar.Load(0+48+0));
     int a_1 = asint(bar.Load(0+(((NagaBufferLengthRW(bar) - 120) / 8) - 2u)*8+120));
-    int2 c_1 = asint(qux.Load2(0));
-    const float _e32 = read_from_private(foo);
-    c = Constructarray5_int_(a_1, int(b), 3, 4, 5);
-    c[(vi + 1u)] = 42;
-    int value = c[vi];
-    const float _e46 = test_arr_as_arg(Constructarray5_array10_float__(Constructarray10_float_(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), Constructarray10_float_(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), Constructarray10_float_(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), Constructarray10_float_(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), Constructarray10_float_(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)));
+    int2 c = asint(qux.Load2(0));
+    const float _e34 = read_from_private(foo);
+    c2_ = Constructarray5_int_(a_1, int(b), 3, 4, 5);
+    c2_[(vi + 1u)] = 42;
+    int value = c2_[vi];
+    const float _e48 = test_arr_as_arg(Constructarray5_array10_float__(Constructarray10_float_(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), Constructarray10_float_(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), Constructarray10_float_(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), Constructarray10_float_(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), Constructarray10_float_(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)));
     return float4(mul(float4((value).xxxx), _matrix), 2.0);
 }
 
@@ -302,22 +305,22 @@ void atomics()
     int tmp = (int)0;
 
     int value_1 = asint(bar.Load(96));
-    int _e10; bar.InterlockedAdd(96, 5, _e10);
-    tmp = _e10;
-    int _e13; bar.InterlockedAdd(96, -5, _e13);
-    tmp = _e13;
-    int _e16; bar.InterlockedAnd(96, 5, _e16);
-    tmp = _e16;
+    int _e7; bar.InterlockedAdd(96, 5, _e7);
+    tmp = _e7;
+    int _e11; bar.InterlockedAdd(96, -5, _e11);
+    tmp = _e11;
+    int _e15; bar.InterlockedAnd(96, 5, _e15);
+    tmp = _e15;
     int _e19; bar.InterlockedOr(96, 5, _e19);
     tmp = _e19;
-    int _e22; bar.InterlockedXor(96, 5, _e22);
-    tmp = _e22;
-    int _e25; bar.InterlockedMin(96, 5, _e25);
-    tmp = _e25;
-    int _e28; bar.InterlockedMax(96, 5, _e28);
-    tmp = _e28;
-    int _e31; bar.InterlockedExchange(96, 5, _e31);
+    int _e23; bar.InterlockedXor(96, 5, _e23);
+    tmp = _e23;
+    int _e27; bar.InterlockedMin(96, 5, _e27);
+    tmp = _e27;
+    int _e31; bar.InterlockedMax(96, 5, _e31);
     tmp = _e31;
+    int _e35; bar.InterlockedExchange(96, 5, _e35);
+    tmp = _e35;
     bar.Store(96, asuint(value_1));
     return;
 }
