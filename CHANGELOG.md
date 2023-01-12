@@ -107,10 +107,15 @@ Additionally `Surface::get_default_config` now returns an Option and returns Non
 
 `wgpu`'s DX12 backend can now suballocate buffers and textures when the `windows_rs` feature is enabled, which can give a significant increase in performance (in testing I've seen a 10000%+ improvement in a simple scene with 200 `write_buffer` calls per frame, and a 40%+ improvement in [Bistro using Bevy](https://github.com/vleue/bevy_bistro_playground)). Previously `wgpu-hal`'s DX12 backend created a new heap on the GPU every time you called write_buffer (by calling `CreateCommittedResource`), whereas now with the `windows_rs` feature enabled it uses [`gpu_allocator`](https://crates.io/crates/gpu-allocator) to manage GPU memory (and calls `CreatePlacedResource` with a suballocated heap). By @Elabajaba in [#3163](https://github.com/gfx-rs/wgpu/pull/3163)
 
+#### DXC Shader Compiler Support for DX12
+
+You can now choose to use the DXC compiler for DX12 instead of FXC. The DXC compiler is faster, less buggy, and allows for new features compared to the old, unmaintained FXC compiler. You can choose which compiler to use at `Instance` creation using the `Dx12Compiler` field in the `InstanceOptions` struct. Note that DXC requires both `dxcompiler.dll` and `dxil.dll`, which can be downloaded from https://github.com/microsoft/DirectXShaderCompiler/releases. Both .dlls need to be shipped with your application when targeting DX12 and using the `DXC` compiler. If the .dlls can't be loaded, then it will fall back to the FXC compiler. By @39ali and @Elabajaba in [#3356](https://github.com/gfx-rs/wgpu/pull/3356)
+
 ### Changes
 
 #### General
 
+- `Instance` creation now takes an `InstanceOptions` struct which cointains both the existing `Backends` selection as well as a new `Dx12Compiler` field for selecting which Dx12 shader compiler to use. By @Elabajaba in [#3356](https://github.com/gfx-rs/wgpu/pull/3356)
 - Convert all `Default` Implementations on Enums to `derive(Default)`
 - Implement `Default` for `CompositeAlphaMode`
 - Improve compute shader validation error message. By @haraldreingruber in [#3139](https://github.com/gfx-rs/wgpu/pull/3139)
