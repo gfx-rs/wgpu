@@ -5296,10 +5296,11 @@ impl Default for ShaderBoundChecks {
 }
 
 /// Selects which DX12 shader compiler to use.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub enum Dx12Compiler {
     /// The Fxc compiler (default) is old, slow and unmaintained. However, it doesn't require
     /// any additional .dlls to be shipped with the application.
+    #[default]
     Fxc,
     /// The Dxc compiler is new, fast and maintained. However, it requires both `dxcompiler.dll` and `dxil.dll`
     /// to be shipped with the application. These files can be downloaded from https://github.com/microsoft/DirectXShaderCompiler/releases
@@ -5309,12 +5310,6 @@ pub enum Dx12Compiler {
         /// Path to the `dxil.dll` file. Passing `None` will check the local scope for the file.
         dxc_path: Option<PathBuf>,
     },
-}
-
-impl Default for Dx12Compiler {
-    fn default() -> Self {
-        Self::Fxc
-    }
 }
 
 /// Options for creating an instance.
