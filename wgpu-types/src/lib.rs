@@ -5302,7 +5302,7 @@ pub enum Dx12Compiler {
     /// any additional .dlls to be shipped with the application.
     Fxc,
     /// The Dxc compiler is new, fast and maintained. However, it requires both `dxcompiler.dll` and `dxil.dll`
-    /// to be shipped with the application.
+    /// to be shipped with the application. These files can be downloaded from https://github.com/microsoft/DirectXShaderCompiler/releases
     Dxc {
         /// Path to the `dxcompiler.dll` file. Passing `None` will check the local scope for the file.
         dxil_path: Option<PathBuf>,
