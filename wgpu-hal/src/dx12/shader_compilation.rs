@@ -235,27 +235,19 @@ mod shader {
         Ok(None)
     }
 
-    // It shouldn't be possible that this gets called with the `dxc_shader_compiler` feature disabled, but just in case...
+    // It shouldn't be possible that this gets called with the `dxc_shader_compiler` feature disabled.
     pub(crate) fn compile_dxc(
-        device: &crate::dx12::Device,
-        source: &str,
-        source_name: &str,
-        raw_ep: &str,
-        stage_bit: wgt::ShaderStages,
-        full_stage: String,
+        _device: &crate::dx12::Device,
+        _source: &str,
+        _source_name: &str,
+        _raw_ep: &str,
+        _stage_bit: wgt::ShaderStages,
+        _full_stage: String,
         _dxc_container: &DxcContainer,
     ) -> (
         Result<crate::dx12::CompiledShader, crate::PipelineError>,
         log::Level,
     ) {
-        log::error!("Something went really wrong, please report this. Attempted to compile shader with DXC, but the DXC feature is disabled. Enable the `dxc_shader_compiler` feature on wgpu_hal to use DXC. Falling back to FXC.");
-        super::compile_fxc(
-            device,
-            &source.to_string(),
-            source_name,
-            &std::ffi::CString::new(raw_ep).unwrap(),
-            stage_bit,
-            full_stage,
-        )
+        unimplemented!("Something went really wrong, please report this. Attempted to compile shader with DXC, but the DXC feature is disabled. Enable the `dxc_shader_compiler` feature on wgpu_hal to use DXC.");
     }
 }
