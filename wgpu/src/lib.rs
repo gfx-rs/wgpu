@@ -896,28 +896,7 @@ static_assertions::assert_impl_all!(RenderBundleDescriptor: Send, Sync);
 ///
 /// Corresponds to [WebGPU `GPUTextureDescriptor`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gputexturedescriptor).
-#[derive(Clone, Debug)]
-pub struct TextureDescriptor<'a> {
-    /// Debug label of the texture. This will show up in graphics debuggers for easy identification.
-    pub label: Label<'a>,
-    /// Size of the texture. All components must be greater than zero. For a
-    /// regular 1D/2D texture, the unused sizes will be 1. For 2DArray textures,
-    /// Z is the number of 2D textures in that array.
-    pub size: Extent3d,
-    /// Mip count of texture. For a texture with no extra mips, this must be 1.
-    pub mip_level_count: u32,
-    /// Sample count of texture. If this is not 1, texture must have [`BindingType::Texture::multisampled`] set to true.
-    pub sample_count: u32,
-    /// Dimensions of the texture.
-    pub dimension: TextureDimension,
-    /// Format of the texture.
-    pub format: TextureFormat,
-    /// Allowed usages of the texture. If used in other ways, the operation will panic.
-    pub usage: TextureUsages,
-    /// Specifies what view format values will be allowed when calling create_view() on this texture.
-    /// Note: currenly, only srgb-ness is allowed.
-    pub view_formats: &'a [TextureFormat],
-}
+pub type TextureDescriptor<'a> = wgt::TextureDescriptor<Label<'a>, &'a [TextureFormat]>;
 static_assertions::assert_impl_all!(TextureDescriptor: Send, Sync);
 /// Describes a [`QuerySet`].
 ///

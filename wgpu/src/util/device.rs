@@ -82,16 +82,17 @@ impl DeviceExt for crate::Device {
         desc: &crate::TextureDescriptor,
         data: &[u8],
     ) -> crate::Texture {
-        let wgt_desc = wgt::TextureDescriptor {
-            label: Some(""),
-            size: desc.size,
-            mip_level_count: desc.mip_level_count,
-            sample_count: desc.sample_count,
-            format: desc.format,
-            dimension: desc.dimension,
-            usage: desc.usage,
-            view_formats: vec![],
-        };
+        let wgt_desc: wgt::TextureDescriptor<Option<&str>, Vec<wgt::TextureFormat>> =
+            wgt::TextureDescriptor {
+                label: Some(""),
+                size: desc.size,
+                mip_level_count: desc.mip_level_count,
+                sample_count: desc.sample_count,
+                format: desc.format,
+                dimension: desc.dimension,
+                usage: desc.usage,
+                view_formats: desc.view_formats.to_vec(),
+            };
         // Implicitly add the COPY_DST usage
         let mut desc = desc.to_owned();
         desc.usage |= crate::TextureUsages::COPY_DST;

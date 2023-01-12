@@ -4347,7 +4347,7 @@ fn test_max_mips() {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
-pub struct TextureDescriptor<L> {
+pub struct TextureDescriptor<L, V> {
     /// Debug label of the texture. This will show up in graphics debuggers for easy identification.
     pub label: L,
     /// Size of the texture. All components must be greater than zero. For a
@@ -4366,12 +4366,12 @@ pub struct TextureDescriptor<L> {
     pub usage: TextureUsages,
     /// Specifies what view format values will be allowed when calling create_view() on this texture.
     /// Note: currenly, only srgb-ness is allowed.
-    pub view_formats: Vec<TextureFormat>,
+    pub view_formats: V,
 }
 
-impl<L> TextureDescriptor<L> {
+impl<L, V: Clone> TextureDescriptor<L, V> {
     /// Takes a closure and maps the label of the texture descriptor into another.
-    pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> TextureDescriptor<K> {
+    pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> TextureDescriptor<K, V> {
         TextureDescriptor {
             label: fun(&self.label),
             size: self.size,
@@ -5119,7 +5119,7 @@ impl ImageSubresourceRange {
     }
 
     /// Returns the mip level range of a subresource range describes for a specific texture.
-    pub fn mip_range<L>(&self, texture_desc: &TextureDescriptor<L>) -> Range<u32> {
+    pub fn mip_range<L, V>(&self, texture_desc: &TextureDescriptor<L, V>) -> Range<u32> {
         self.base_mip_level..match self.mip_level_count {
             Some(mip_level_count) => self.base_mip_level + mip_level_count.get(),
             None => texture_desc.mip_level_count,
@@ -5127,7 +5127,7 @@ impl ImageSubresourceRange {
     }
 
     /// Returns the layer range of a subresource range describes for a specific texture.
-    pub fn layer_range<L>(&self, texture_desc: &TextureDescriptor<L>) -> Range<u32> {
+    pub fn layer_range<L, V>(&self, texture_desc: &TextureDescriptor<L, V>) -> Range<u32> {
         self.base_array_layer..match self.array_layer_count {
             Some(array_layer_count) => self.base_array_layer + array_layer_count.get(),
             None => {

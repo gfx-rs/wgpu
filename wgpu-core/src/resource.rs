@@ -297,7 +297,7 @@ impl<A: hal::Api> Resource for StagingBuffer<A> {
     }
 }
 
-pub type TextureDescriptor<'a> = wgt::TextureDescriptor<Label<'a>>;
+pub type TextureDescriptor<'a> = wgt::TextureDescriptor<Label<'a>, Vec<wgt::TextureFormat>>;
 
 #[derive(Debug)]
 pub(crate) enum TextureInner<A: hal::Api> {
@@ -338,7 +338,7 @@ pub enum TextureClearMode<A: hal::Api> {
 pub struct Texture<A: hal::Api> {
     pub(crate) inner: TextureInner<A>,
     pub(crate) device_id: Stored<DeviceId>,
-    pub(crate) desc: wgt::TextureDescriptor<()>,
+    pub(crate) desc: wgt::TextureDescriptor<(), Vec<wgt::TextureFormat>>,
     pub(crate) hal_usage: hal::TextureUses,
     pub(crate) format_features: wgt::TextureFormatFeatures,
     pub(crate) initialization_status: TextureInitTracker,
