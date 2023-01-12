@@ -133,6 +133,7 @@ Additionally `Surface::get_default_config` now returns an Option and returns Non
 #### GLES
 
 - Browsers that support `OVR_multiview2` now report the `MULTIVIEW` feature by @expenses in [#3121](https://github.com/gfx-rs/wgpu/pull/3121).
+- `Limits::max_push_constant_size` on GLES is now 256 by @Dinnerbone in [#3374](https://github.com/gfx-rs/wgpu/pull/3374).
 
 #### Vulkan
 

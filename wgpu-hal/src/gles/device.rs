@@ -372,7 +372,8 @@ impl super::Device {
             }
         }
 
-        let mut uniforms: [super::UniformDesc; super::MAX_PUSH_CONSTANTS] = Default::default();
+        let mut uniforms: [super::UniformDesc; super::MAX_PUSH_CONSTANTS] =
+            [None; super::MAX_PUSH_CONSTANTS].map(|_: Option<()>| Default::default());
         let count = unsafe { gl.get_active_uniforms(program) };
         let mut offset = 0;
 
