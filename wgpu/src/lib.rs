@@ -2334,6 +2334,10 @@ impl Deref for BufferViewMut<'_> {
     type Target = [u8];
 
     fn deref(&self) -> &Self::Target {
+        if !self.readable {
+            warn!("Reading from a BufferViewMut is slow and not recommended.");
+        }
+
         self.data.slice()
     }
 }
@@ -3781,6 +3785,7 @@ impl Deref for QueueWriteBufferView<'_> {
     type Target = [u8];
 
     fn deref(&self) -> &Self::Target {
+        warn!("Reading from a QueueWriteBufferView won't yield the contents of the buffer and may be slow.");
         self.inner.slice()
     }
 }
