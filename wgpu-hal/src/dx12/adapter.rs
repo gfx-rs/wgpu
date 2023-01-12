@@ -354,7 +354,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
             queue,
             self.private_caps,
             &self.library,
-            self.dx12_shader_compiler.clone(), // TODO: Don't clone this
+            self.dx12_shader_compiler.clone(),
         )?;
         Ok(crate::OpenDevice {
             device,

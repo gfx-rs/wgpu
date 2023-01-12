@@ -141,8 +141,8 @@ mod shader {
             .instance_flags
             .contains(crate::InstanceFlags::DEBUG)
         {
-            compile_flags.push("-Zi"); /* d3dcompiler::D3DCOMPILE_SKIP_OPTIMIZATION */
-            compile_flags.push("-Od"); /* d3dcompiler::D3DCOMPILE_DEBUG */
+            compile_flags.push("-Zi"); // d3dcompiler::D3DCOMPILE_SKIP_OPTIMIZATION
+            compile_flags.push("-Od"); // d3dcompiler::D3DCOMPILE_DEBUG
         }
 
         let blob = match dxc_container
@@ -154,6 +154,7 @@ mod shader {
             Err(e) => return (Err(e), log::Level::Error),
         };
 
+        // DXC will automatically validate the shaders during compilation as long as dxil.dll is available, so we don't need to do it ourselves.
         let compiled = dxc_container.compiler.compile(
             &blob,
             source_name,
