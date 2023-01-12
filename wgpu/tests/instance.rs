@@ -5,7 +5,7 @@ use wasm_bindgen_test::*;
 fn initialize() {
     let _ = wgpu::Instance::new(wgpu::InstanceOptions::new(
         wgpu::util::backend_bits_from_env().unwrap_or_else(wgpu::Backends::all),
-        wgpu::util::dx12_shader_compiler_from_env().unwrap_or(wgpu::Dx12Compiler::default()),
+        wgpu::util::dx12_shader_compiler_from_env().unwrap_or_default(),
     ));
 }
 

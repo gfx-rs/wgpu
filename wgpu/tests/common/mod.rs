@@ -333,7 +333,7 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
 fn initialize_adapter() -> (Adapter, SurfaceGuard) {
     let backend_bits = wgpu::util::backend_bits_from_env().unwrap_or_else(Backends::all);
     let dx12_shader_compiler =
-        wgpu::util::dx12_shader_compiler_from_env().unwrap_or(wgpu::Dx12Compiler::default());
+        wgpu::util::dx12_shader_compiler_from_env().unwrap_or_default();
     let instance = Instance::new(wgpu::InstanceOptions::new(
         backend_bits,
         dx12_shader_compiler,
