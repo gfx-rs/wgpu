@@ -831,6 +831,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         needs_flag |= matches!(source.source, wgt::ExternalImageSource::OffscreenCanvas(_));
         needs_flag |= source.origin != wgt::Origin2d::ZERO;
         needs_flag |= destination.color_space != wgt::PredefinedColorSpace::Srgb;
+        #[allow(clippy::bool_comparison)]
         if matches!(source.source, wgt::ExternalImageSource::ImageBitmap(_)) {
             needs_flag |= source.flip_y != false;
             needs_flag |= destination.premultiplied_alpha != false;
