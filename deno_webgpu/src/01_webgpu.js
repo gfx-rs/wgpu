@@ -513,6 +513,10 @@
       webidl.assertBranded(this, GPUSupportedLimitsPrototype);
       return this[_limits].maxBindGroups;
     }
+    get maxBindingsPerBindGroup() {
+      webidl.assertBranded(this, GPUSupportedLimitsPrototype);
+      return this[_limits].maxBindingsPerBindGroup;
+    }
     get maxBufferSize() {
       webidl.assertBranded(this, GPUSupportedLimitsPrototype);
       return this[_limits].maxBufferSize;
