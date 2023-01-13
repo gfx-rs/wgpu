@@ -2499,23 +2499,23 @@ impl Drop for Buffer {
 
 impl Texture {
     /// Returns the inner hal Texture using a callback. The hal texture will be `None` if the
-    /// backend type argument does not match with this wgpu Texture
+    /// backend type argument does not match with this wgpu Texture.
     ///
     /// # Safety
     ///
     /// - The raw handle obtained from the hal Texture must not be manually destroyed
     #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
-    pub unsafe fn as_hal<A: wgc::hub::HalApi, F: FnOnce(Option<&A::Texture>)>(
+    pub unsafe fn as_hal<A: wgc::hub::HalApi, F: FnOnce(Option<&A::Texture>) -> R, R>(
         &self,
         hal_texture_callback: F,
-    ) {
+    ) -> R {
         let texture = self.data.as_ref().downcast_ref().unwrap();
         unsafe {
             self.context
                 .as_any()
                 .downcast_ref::<crate::backend::Context>()
                 .unwrap()
-                .texture_as_hal::<A, F>(texture, hal_texture_callback)
+                .texture_as_hal::<A, F, R>(texture, hal_texture_callback)
         }
     }
 
@@ -2613,6 +2613,29 @@ impl Drop for Texture {
     fn drop(&mut self) {
         if self.owned && !thread::panicking() {
             self.context.texture_drop(&self.id, self.data.as_ref());
+        }
+    }
+}
+
+impl TextureView {
+    /// Returns the inner hal TextureView using a callback. The hal texture view will be `None` if the
+    /// backend type argument does not match with this wgpu TextureView.
+    ///
+    /// # Safety
+    ///
+    /// - The raw handle obtained from the hal TextureView must not be manually destroyed
+    #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
+    pub unsafe fn as_hal<A: wgc::hub::HalApi, F: FnOnce(Option<&A::TextureView>) -> R, R>(
+        &self,
+        hal_texture_view_callback: F,
+    ) -> R {
+        let texture_view = self.data.as_ref().downcast_ref().unwrap();
+        unsafe {
+            self.context
+                .as_any()
+                .downcast_ref::<crate::backend::Context>()
+                .unwrap()
+                .texture_view_as_hal::<A, F, R>(texture_view, hal_texture_view_callback)
         }
     }
 }
@@ -2843,6 +2866,34 @@ impl CommandEncoder {
     pub fn pop_debug_group(&mut self) {
         let id = self.id.as_ref().unwrap();
         DynContext::command_encoder_pop_debug_group(&*self.context, id, self.data.as_ref());
+    }
+
+    /// Returns the inner hal CommandEncoder using a callback. The hal command encoder will be `None` if the
+    /// backend type argument does not match with this wgpu CommandEncoder.
+    ///
+    /// # Safety
+    ///
+    /// - The raw handle obtained from the hal CommandEncoder must not be manually destroyed
+    #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
+    pub unsafe fn as_hal_mut<
+        A: wgc::hub::HalApi,
+        F: FnOnce(Option<&mut A::CommandEncoder>) -> R,
+        R,
+    >(
+        &mut self,
+        hal_command_encoder_callback: F,
+    ) -> R {
+        let command_encoder = self.data.downcast_ref().unwrap();
+        unsafe {
+            self.context
+                .as_any()
+                .downcast_ref::<crate::backend::Context>()
+                .unwrap()
+                .command_encoder_as_hal_mut::<A, F, R>(
+                    command_encoder,
+                    hal_command_encoder_callback,
+                )
+        }
     }
 }
 

@@ -5,7 +5,7 @@ use crate::{
     DownlevelCapabilities, Features, Label, Limits, LoadOp, MapMode, Operations,
     PipelineLayoutDescriptor, RenderBundleEncoderDescriptor, RenderPipelineDescriptor,
     SamplerDescriptor, ShaderModuleDescriptor, ShaderModuleDescriptorSpirV, ShaderSource,
-    SurfaceStatus, TextureDescriptor, TextureViewDescriptor, UncapturedErrorHandler,
+    SurfaceStatus, TextureDescriptor, TextureView, TextureViewDescriptor, UncapturedErrorHandler,
 };
 
 use arrayvec::ArrayVec;
@@ -188,14 +188,50 @@ impl Context {
     }
 
     #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
-    pub unsafe fn texture_as_hal<A: wgc::hub::HalApi, F: FnOnce(Option<&A::Texture>)>(
+    pub unsafe fn command_encoder_as_hal_mut<
+        A: wgc::hub::HalApi,
+        F: FnOnce(Option<&mut A::CommandEncoder>) -> R,
+        R,
+    >(
+        &self,
+        command_encoder: &crate::CommandEncoder,
+        hal_command_encoder_callback: F,
+    ) -> R {
+        unsafe {
+            self.0.command_encoder_as_hal_mut::<A, F, R>(
+                wgc::id::CommandEncoderId::from(command_encoder.id),
+                hal_command_encoder_callback,
+            )
+        }
+    }
+
+    #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
+    pub unsafe fn texture_as_hal<A: wgc::hub::HalApi, F: FnOnce(Option<&A::Texture>) -> R, R>(
         &self,
         texture: &Texture,
         hal_texture_callback: F,
-    ) {
+    ) -> R {
         unsafe {
             self.0
-                .texture_as_hal::<A, F>(texture.id, hal_texture_callback)
+                .texture_as_hal::<A, F, R>(texture.id, hal_texture_callback)
+        }
+    }
+
+    #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
+    pub unsafe fn texture_view_as_hal<
+        A: wgc::hub::HalApi,
+        F: FnOnce(Option<&A::TextureView>) -> R,
+        R,
+    >(
+        &self,
+        texture_view: &TextureView,
+        hal_texture_view_callback: F,
+    ) -> R {
+        unsafe {
+            self.0.texture_view_as_hal::<A, F, R>(
+                wgc::id::TextureViewId::from(texture_view.id),
+                hal_texture_view_callback,
+            )
         }
     }
 
