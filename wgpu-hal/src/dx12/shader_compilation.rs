@@ -22,6 +22,7 @@ pub(super) fn compile_fxc(
     Result<super::CompiledShader, crate::PipelineError>,
     log::Level,
 ) {
+    profiling::scope!("compile_fxc");
     let mut shader_data = native::Blob::null();
     let mut compile_flags = d3dcompiler::D3DCOMPILE_ENABLE_STRICTNESS;
     if device
@@ -134,6 +135,7 @@ mod shader {
         Result<crate::dx12::CompiledShader, crate::PipelineError>,
         log::Level,
     ) {
+        profiling::scope!("compile_dxc");
         let mut compile_flags = arrayvec::ArrayVec::<&str, 3>::new_const();
         compile_flags.push("-Ges"); // d3dcompiler::D3DCOMPILE_ENABLE_STRICTNESS
         if device

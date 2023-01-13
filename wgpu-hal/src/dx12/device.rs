@@ -242,7 +242,6 @@ impl super::Device {
 
         // Compile with DXC if available, otherwise fall back to FXC
         let (result, log_level) = if let Some(ref dxc_container) = self.dxc_container {
-            profiling::scope!("wgpu::backend::directx12::compile_dxc");
             super::shader_compilation::compile_dxc(
                 self,
                 &source,
@@ -253,7 +252,6 @@ impl super::Device {
                 dxc_container,
             )
         } else {
-            profiling::scope!("wgpu::backend::directx12::compile_fxc");
             super::shader_compilation::compile_fxc(
                 self,
                 &source,
