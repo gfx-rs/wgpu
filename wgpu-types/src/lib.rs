@@ -4364,8 +4364,11 @@ pub struct TextureDescriptor<L, V> {
     pub format: TextureFormat,
     /// Allowed usages of the texture. If used in other ways, the operation will panic.
     pub usage: TextureUsages,
-    /// Specifies what view format values will be allowed when calling create_view() on this texture.
-    /// Note: currenly, only srgb-ness is allowed.
+    /// Specifies what view formats will be allowed when calling create_view() on this texture.
+    ///
+    /// View formats of the same format as the texture are always allowed.
+    ///
+    /// Note: currently, only the srgb-ness is allowed to change. (ex: Rgba8Unorm texture + Rgba8UnormSrgb view)
     pub view_formats: V,
 }
 
