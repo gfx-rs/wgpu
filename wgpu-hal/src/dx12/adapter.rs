@@ -1,5 +1,5 @@
 use crate::{
-    auxil::{self, dxgi::result::HResult as _},
+    auxil::{self, dxgi::map_texture_format, dxgi::result::HResult as _},
     dx12::SurfaceTarget,
 };
 use std::{mem, ptr, sync::Arc, thread};
@@ -553,7 +553,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
     fn texture_format_as_hal(
         &self,
         texture_format: wgt::TextureFormat,
-    ) -> <Api as crate::Api>::TextureFormat {
-        auxil::dxgi::map_texture_format(texture_format)
+    ) -> <crate::dx12::Api as crate::Api>::TextureFormat {
+        map_texture_format(texture_format)
     }
 }

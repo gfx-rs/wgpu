@@ -32,7 +32,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
     fn texture_format_as_hal(
         &self,
         texture_format: wgt::TextureFormat,
-    ) -> <Api as crate::Api>::TextureFormat {
+    ) -> <crate::dx11::Api as crate::Api>::TextureFormat {
         todo!()
     }
 }

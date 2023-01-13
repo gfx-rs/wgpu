@@ -48,7 +48,7 @@ use arrayvec::ArrayVec;
 use parking_lot::Mutex;
 use std::{ffi, fmt, mem, num::NonZeroU32, sync::Arc};
 use winapi::{
-    shared::{dxgi, dxgi1_4, dxgitype, windef, winerror},
+    shared::{dxgi, dxgi1_4, dxgiformat, dxgitype, windef, winerror},
     um::{d3d12, dcomp, synchapi, winbase, winnt},
     Interface as _,
 };
