@@ -1,4 +1,4 @@
-// Copyright 2018-2022 the Deno authors. All rights reserved. MIT license.
+// Copyright 2018-2023 the Deno authors. All rights reserved. MIT license.
 
 #![warn(unsafe_op_in_unsafe_fn)]
 
@@ -117,7 +117,8 @@ impl Resource for WebGpuQuerySet {
 }
 
 pub fn init(unstable: bool) -> Extension {
-    Extension::builder()
+    Extension::builder(env!("CARGO_PKG_NAME"))
+        .dependencies(vec!["deno_webidl", "deno_web"])
         .js(include_js_files!(
           prefix "deno:deno_webgpu",
           "01_webgpu.js",
