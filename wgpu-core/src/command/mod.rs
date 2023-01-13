@@ -42,8 +42,8 @@ enum CommandEncoderStatus {
     Error,
 }
 
-struct CommandEncoder<A: hal::Api> {
-    raw: A::CommandEncoder,
+pub(crate) struct CommandEncoder<A: hal::Api> {
+    pub(crate) raw: A::CommandEncoder,
     list: Vec<A::CommandBuffer>,
     is_open: bool,
     label: Option<String>,
@@ -93,7 +93,7 @@ pub(crate) struct DestroyedBufferError(pub id::BufferId);
 pub(crate) struct DestroyedTextureError(pub id::TextureId);
 
 pub struct CommandBuffer<A: HalApi> {
-    encoder: CommandEncoder<A>,
+    pub(crate) encoder: CommandEncoder<A>,
     status: CommandEncoderStatus,
     pub(crate) device_id: Stored<id::DeviceId>,
     pub(crate) trackers: Tracker<A>,

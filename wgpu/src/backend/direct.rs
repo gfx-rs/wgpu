@@ -199,7 +199,7 @@ impl Context {
     ) -> R {
         unsafe {
             self.0.command_encoder_as_hal_mut::<A, F, R>(
-                wgc::id::CommandEncoderId::from(command_encoder.id),
+                <<Self as crate::Context>::CommandEncoderId>::from(command_encoder.id.unwrap()),
                 hal_command_encoder_callback,
             )
         }

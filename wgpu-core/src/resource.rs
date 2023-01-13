@@ -482,16 +482,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     ) -> R {
         profiling::scope!("CommandEncoder::as_hal_mut");
 
-        todo!()
+        let hub = A::hub(self);
+        let mut token = Token::root();
+        let (mut guard, _) = hub.command_buffers.write(&mut token);
+        let command_encoder = guard.get_mut(id).ok();
+        let hal_command_encoder = command_encoder.map(|encoder| &mut encoder.encoder.raw);
 
-        // let mut token = Token::root();
-        // let (mut guard, _) = self.command_encoders.write(&mut token);
-        // let command_encoder = guard.get_mut(id).ok();
-        // let hal_command_encoder = command_encoder
-        //     .and_then(|command_encoder| A::get_command_encoder_mut(command_encoder))
-        //     .map(|command_encoder| &mut command_encoder.raw);
-
-        // hal_command_encoder_callback(hal_command_encoder)
+        hal_command_encoder_callback(hal_command_encoder)
     }
 }
 
