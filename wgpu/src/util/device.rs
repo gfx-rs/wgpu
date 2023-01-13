@@ -82,29 +82,18 @@ impl DeviceExt for crate::Device {
         desc: &crate::TextureDescriptor,
         data: &[u8],
     ) -> crate::Texture {
-        let wgt_desc: wgt::TextureDescriptor<Option<&str>, Vec<wgt::TextureFormat>> =
-            wgt::TextureDescriptor {
-                label: Some(""),
-                size: desc.size,
-                mip_level_count: desc.mip_level_count,
-                sample_count: desc.sample_count,
-                format: desc.format,
-                dimension: desc.dimension,
-                usage: desc.usage,
-                view_formats: desc.view_formats.to_vec(),
-            };
         // Implicitly add the COPY_DST usage
         let mut desc = desc.to_owned();
         desc.usage |= crate::TextureUsages::COPY_DST;
         let texture = self.create_texture(&desc);
 
         let format_info = desc.format.describe();
-        let layer_iterations = wgt_desc.array_layer_count();
+        let layer_iterations = desc.array_layer_count();
 
         let mut binary_offset = 0;
         for layer in 0..layer_iterations {
             for mip in 0..desc.mip_level_count {
-                let mut mip_size = wgt_desc.mip_level_size(mip).unwrap();
+                let mut mip_size = desc.mip_level_size(mip).unwrap();
                 // copying layers separately
                 if desc.dimension != wgt::TextureDimension::D3 {
                     mip_size.depth_or_array_layers = 1;

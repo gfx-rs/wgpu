@@ -135,16 +135,7 @@ impl Context {
         device: &Device,
         desc: &TextureDescriptor,
     ) -> Texture {
-        let descriptor = wgt::TextureDescriptor {
-            label: desc.label.map(Borrowed),
-            size: desc.size,
-            mip_level_count: desc.mip_level_count,
-            sample_count: desc.sample_count,
-            format: desc.format,
-            dimension: desc.dimension,
-            usage: desc.usage,
-            view_formats: desc.view_formats.to_vec(),
-        };
+        let descriptor = desc.map_label_and_view_formats(|l| l.map(Borrowed), |v| v.to_vec());
         let global = &self.0;
         let (id, error) =
             unsafe { global.create_texture_from_hal::<A>(hal_texture, device.id, &descriptor, ()) };
@@ -1253,16 +1244,7 @@ impl crate::Context for Context {
         device_data: &Self::DeviceData,
         desc: &TextureDescriptor,
     ) -> (Self::TextureId, Self::TextureData) {
-        let wgt_desc = wgt::TextureDescriptor {
-            label: desc.label.map(Borrowed),
-            size: desc.size,
-            mip_level_count: desc.mip_level_count,
-            sample_count: desc.sample_count,
-            format: desc.format,
-            dimension: desc.dimension,
-            usage: desc.usage,
-            view_formats: desc.view_formats.to_vec(),
-        };
+        let wgt_desc = desc.map_label_and_view_formats(|l| l.map(Borrowed), |v| v.to_vec());
         let global = &self.0;
         let (id, error) = wgc::gfx_select!(device => global.device_create_texture(
             *device,

@@ -4387,6 +4387,24 @@ impl<L, V: Clone> TextureDescriptor<L, V> {
         }
     }
 
+    /// Maps the label and view_formats of the texture descriptor into another.
+    pub fn map_label_and_view_formats<K, M>(
+        &self,
+        l_fun: impl FnOnce(&L) -> K,
+        v_fun: impl FnOnce(V) -> M,
+    ) -> TextureDescriptor<K, M> {
+        TextureDescriptor {
+            label: l_fun(&self.label),
+            size: self.size,
+            mip_level_count: self.mip_level_count,
+            sample_count: self.sample_count,
+            dimension: self.dimension,
+            format: self.format,
+            usage: self.usage,
+            view_formats: v_fun(self.view_formats.clone()),
+        }
+    }
+
     /// Calculates the extent at a given mip level.
     ///
     /// If the given mip level is larger than possible, returns None.
