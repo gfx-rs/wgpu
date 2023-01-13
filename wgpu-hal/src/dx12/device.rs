@@ -1356,13 +1356,9 @@ impl crate::Device<super::Api> for super::Device {
 
         let raw_desc = d3d12::D3D12_GRAPHICS_PIPELINE_STATE_DESC {
             pRootSignature: desc.layout.shared.signature.as_mut_ptr(),
-            VS: match blob_vs {
-                super::CompiledShader::Dxc(ref blob_vs) => *native::Shader::from_raw(blob_vs),
-                super::CompiledShader::Fxc(blob_vs) => *native::Shader::from_blob(blob_vs),
-            },
+            VS: *blob_vs.create_native_shader(),
             PS: match blob_fs {
-                Some(super::CompiledShader::Dxc(ref blob_fs)) => *native::Shader::from_raw(blob_fs),
-                Some(super::CompiledShader::Fxc(blob_fs)) => *native::Shader::from_blob(blob_fs),
+                Some(ref shader) => *shader.create_native_shader(),
                 None => *native::Shader::null(),
             },
             GS: *native::Shader::null(),
@@ -1434,13 +1430,10 @@ impl crate::Device<super::Api> for super::Device {
             }
         };
 
-        if let super::CompiledShader::Fxc(ref vs_fxc) = blob_vs {
-            unsafe { vs_fxc.destroy() };
-        }
-
-        if let Some(super::CompiledShader::Fxc(ref fs_fxc)) = blob_fs {
-            unsafe { fs_fxc.destroy() };
-        }
+        unsafe { blob_vs.destroy() };
+        if let Some(blob_fs) = blob_fs {
+            unsafe { blob_fs.destroy() };
+        };
 
         hr.into_result()
             .map_err(|err| crate::PipelineError::Linkage(shader_stages, err.into_owned()))?;
@@ -1471,19 +1464,14 @@ impl crate::Device<super::Api> for super::Device {
             profiling::scope!("ID3D12Device::CreateComputePipelineState");
             self.raw.create_compute_pipeline_state(
                 desc.layout.shared.signature,
-                match blob_cs {
-                    super::CompiledShader::Dxc(ref blob_cs) => native::Shader::from_raw(blob_cs),
-                    super::CompiledShader::Fxc(blob_cs) => native::Shader::from_blob(blob_cs),
-                },
+                blob_cs.create_native_shader(),
                 0,
                 native::CachedPSO::null(),
                 native::PipelineStateFlags::empty(),
             )
         };
 
-        if let super::CompiledShader::Fxc(cs_fxc) = blob_cs {
-            unsafe { cs_fxc.destroy() };
-        }
+        unsafe { blob_cs.destroy() };
 
         let raw = pair.into_result().map_err(|err| {
             crate::PipelineError::Linkage(wgt::ShaderStages::COMPUTE, err.into_owned())

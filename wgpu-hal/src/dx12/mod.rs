@@ -547,6 +547,24 @@ pub(super) enum CompiledShader {
     Fxc(native::Blob),
 }
 
+impl CompiledShader {
+    fn create_native_shader(&self) -> native::Shader {
+        match *self {
+            CompiledShader::Dxc(ref shader) => native::Shader::from_raw(shader),
+            CompiledShader::Fxc(shader) => native::Shader::from_blob(shader),
+        }
+    }
+
+    unsafe fn destroy(self) {
+        match self {
+            CompiledShader::Dxc(_) => {}
+            CompiledShader::Fxc(shader) => unsafe {
+                shader.destroy();
+            },
+        }
+    }
+}
+
 pub struct RenderPipeline {
     raw: native::PipelineState,
     layout: PipelineLayoutShared,
