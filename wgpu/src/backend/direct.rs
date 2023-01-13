@@ -5,7 +5,7 @@ use crate::{
     DownlevelCapabilities, Features, Label, Limits, LoadOp, MapMode, Operations,
     PipelineLayoutDescriptor, RenderBundleEncoderDescriptor, RenderPipelineDescriptor,
     SamplerDescriptor, ShaderModuleDescriptor, ShaderModuleDescriptorSpirV, ShaderSource,
-    SurfaceStatus, TextureDescriptor, TextureView, TextureViewDescriptor, UncapturedErrorHandler,
+    SurfaceStatus, TextureDescriptor, TextureViewDescriptor, UncapturedErrorHandler,
 };
 
 use arrayvec::ArrayVec;
@@ -233,7 +233,7 @@ impl Context {
         R,
     >(
         &self,
-        texture_view: &TextureView,
+        texture_view: &crate::TextureView,
         hal_texture_view_callback: F,
     ) -> R {
         unsafe {
