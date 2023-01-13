@@ -1,6 +1,6 @@
 use std::ptr;
 
-pub(super) use shader::{compile_dxc, get_dxc_container, DxcContainer};
+pub(super) use dxc::{compile_dxc, get_dxc_container, DxcContainer};
 use winapi::um::d3dcompiler;
 
 use crate::auxil::dxgi::result::HResult;
@@ -80,7 +80,7 @@ pub(super) fn compile_fxc(
 
 // The Dxc implementation is behind a feature flag so that users who don't want to use dxc can disable the feature.
 #[cfg(feature = "dxc_shader_compiler")]
-mod shader {
+mod dxc {
     use std::path::PathBuf;
 
     pub(crate) struct DxcContainer {
@@ -223,7 +223,7 @@ mod shader {
 
 // These are stubs for when the `dxc_shader_compiler` feature is disabled.
 #[cfg(not(feature = "dxc_shader_compiler"))]
-mod shader {
+mod dxc {
     use std::path::PathBuf;
 
     pub(crate) struct DxcContainer {}
