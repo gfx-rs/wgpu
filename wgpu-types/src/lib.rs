@@ -5296,26 +5296,31 @@ impl Default for ShaderBoundChecks {
 }
 
 /// Selects which DX12 shader compiler to use.
-/// If the `wgpu-hal/dx12-shader-compiler` isn't enabled,
+///
+/// If the `wgpu-hal/dx12-shader-compiler` feature isn't enabled then this will fall back
+/// to the Fxc compiler at runtime and log an error.
+/// This feature is always enabled when using `wgpu`.
+///
+/// If the `Dxc` option is selected, but `dxcompiler.dll` and `dxil.dll` files aren't found,
 /// then this will fall back to the Fxc compiler at runtime and log an error.
-/// If the `Dxc` option is selected, but the `dxcompiler.dll` and `dxil.dll` files aren't found,
-/// then this will fall back to the Fxc compiler at runtime and log an error.
+///
 /// `wgpu::utils::init::dx12_shader_compiler_from_env` can be used to set the compiler
-/// from the `WGPU_DX12_SHADER_COMPILER` environment variable,
-/// but this should only be used for testing.
+/// from the `WGPU_DX12_SHADER_COMPILER` environment variable, but this should only be used for testing.
 #[derive(Clone, Debug, Default)]
 pub enum Dx12Compiler {
-    /// The Fxc compiler (default) is old, slow and unmaintained. However, it doesn't require
-    /// any additional .dlls to be shipped with the application.
+    /// The Fxc compiler (default) is old, slow and unmaintained.
+    ///
+    /// However, it doesn't require any additional .dlls to be shipped with the application.
     #[default]
     Fxc,
     /// The Dxc compiler is new, fast and maintained.
+    ///
     /// However, it requires both `dxcompiler.dll` and `dxil.dll` to be shipped with the application.
     /// These files can be downloaded from https://github.com/microsoft/DirectXShaderCompiler/releases
     Dxc {
-        /// Path to the `dxcompiler.dll` file. Passing `None` will check the local scope for the file.
+        /// Path to the `dxcompiler.dll` file. Passing `None` will use standard platform specific dll loading rules.
         dxil_path: Option<PathBuf>,
-        /// Path to the `dxil.dll` file. Passing `None` will check the local scope for the file.
+        /// Path to the `dxil.dll` file. Passing `None` will use standard platform specific dll loading rules.
         dxc_path: Option<PathBuf>,
     },
 }

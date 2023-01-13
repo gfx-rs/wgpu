@@ -163,7 +163,7 @@ mod dxc {
             raw_ep,
             &full_stage,
             &compile_flags,
-            None, // TODO: idk what the include handler does
+            None,
             &[],
         );
 

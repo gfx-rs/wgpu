@@ -1279,6 +1279,7 @@ impl error::Error for SurfaceError {}
 
 impl Default for Instance {
     /// Creates a new instance of wgpu with default options.
+    ///
     /// Backends are set to `Backends::all()`, and FXC is chosen as the `dx12_shader_compiler`.
     fn default() -> Self {
         Self::new(InstanceOptions::default())
