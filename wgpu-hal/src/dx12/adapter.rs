@@ -1,5 +1,5 @@
 use crate::{
-    auxil::{self, dxgi::map_texture_format, dxgi::result::HResult as _},
+    auxil::{self, dxgi::conv::map_texture_format, dxgi::result::HResult as _},
     dx12::SurfaceTarget,
 };
 use std::{mem, ptr, sync::Arc, thread};
