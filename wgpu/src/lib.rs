@@ -1736,6 +1736,20 @@ impl Adapter {
         }
     }
 
+    /// Returns the inner hal TextureFormat. The hal texture format will be `None` if the
+    /// backend type argument does not match with this wgpu TextureFormat.
+    #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
+    pub fn texture_format_as_hal<A: wgc::hub::HalApi>(
+        &self,
+        texture_format: TextureFormat,
+    ) -> Option<A::TextureFormat> {
+        self.context
+            .as_any()
+            .downcast_ref::<crate::backend::Context>()
+            .unwrap()
+            .texture_format_as_hal::<A>(self.id.into(), texture_format)
+    }
+
     /// Returns whether this adapter may present to the passed surface.
     pub fn is_surface_supported(&self, surface: &Surface) -> bool {
         DynContext::adapter_is_surface_supported(

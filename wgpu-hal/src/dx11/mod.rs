@@ -36,6 +36,8 @@ impl crate::Api for Api {
     type ShaderModule = ShaderModule;
     type RenderPipeline = RenderPipeline;
     type ComputePipeline = ComputePipeline;
+
+    type TextureFormat = ();
 }
 
 pub struct Instance {

@@ -95,6 +95,15 @@ impl Context {
     }
 
     #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
+    pub fn texture_format_as_hal<A: wgc::hub::HalApi>(
+        &self,
+        adapter: wgc::id::AdapterId,
+        texture_format: wgt::TextureFormat,
+    ) -> Option<A::TextureFormat> {
+        self.0.texture_format_as_hal::<A>(adapter, texture_format)
+    }
+
+    #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
     pub unsafe fn create_device_from_hal<A: wgc::hub::HalApi>(
         &self,
         adapter: &wgc::id::AdapterId,

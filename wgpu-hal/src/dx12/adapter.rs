@@ -549,4 +549,11 @@ impl crate::Adapter<super::Api> for super::Adapter {
     unsafe fn get_presentation_timestamp(&self) -> wgt::PresentationTimestamp {
         wgt::PresentationTimestamp(self.presentation_timer.get_timestamp_ns())
     }
+
+    fn texture_format_as_hal(
+        &self,
+        texture_format: wgt::TextureFormat,
+    ) -> <Api as crate::Api>::TextureFormat {
+        auxil::dxgi::map_texture_format(texture_format)
+    }
 }

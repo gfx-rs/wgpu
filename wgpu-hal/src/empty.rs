@@ -36,6 +36,8 @@ impl crate::Api for Api {
     type ShaderModule = Resource;
     type RenderPipeline = Resource;
     type ComputePipeline = Resource;
+
+    type TextureFormat = Resource;
 }
 
 impl crate::Instance<Api> for Context {
@@ -96,6 +98,13 @@ impl crate::Adapter<Api> for Context {
 
     unsafe fn get_presentation_timestamp(&self) -> wgt::PresentationTimestamp {
         wgt::PresentationTimestamp::INVALID_TIMESTAMP
+    }
+
+    fn texture_format_as_hal(
+        &self,
+        texture_format: wgt::TextureFormat,
+    ) -> <Api as crate::Api>::TextureFormat {
+        Resource
     }
 }
 

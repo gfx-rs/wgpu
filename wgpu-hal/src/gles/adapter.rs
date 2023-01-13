@@ -878,6 +878,13 @@ impl crate::Adapter<super::Api> for super::Adapter {
     unsafe fn get_presentation_timestamp(&self) -> wgt::PresentationTimestamp {
         wgt::PresentationTimestamp::INVALID_TIMESTAMP
     }
+
+    fn texture_format_as_hal(
+        &self,
+        _texture_format: wgt::TextureFormat,
+    ) -> <super::Api as crate::Api>::TextureFormat {
+        todo!()
+    }
 }
 
 impl super::AdapterShared {

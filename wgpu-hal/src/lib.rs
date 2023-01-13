@@ -186,6 +186,8 @@ pub trait Api: Clone + Sized {
     type ShaderModule: fmt::Debug + Send + Sync;
     type RenderPipeline: Send + Sync;
     type ComputePipeline: Send + Sync;
+
+    type TextureFormat;
 }
 
 pub trait Instance<A: Api>: Sized + Send + Sync {
@@ -247,6 +249,9 @@ pub trait Adapter<A: Api>: Send + Sync {
     ///
     /// [`PresentationTimestamp`]: wgt::PresentationTimestamp
     unsafe fn get_presentation_timestamp(&self) -> wgt::PresentationTimestamp;
+
+    // Returns the hal texture format.
+    fn texture_format_as_hal(&self, texture_format: wgt::TextureFormat) -> A::TextureFormat;
 }
 
 pub trait Device<A: Api>: Send + Sync {

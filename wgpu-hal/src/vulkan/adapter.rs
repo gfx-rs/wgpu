@@ -1683,6 +1683,13 @@ impl crate::Adapter<super::Api> for super::Adapter {
             wgt::PresentationTimestamp::INVALID_TIMESTAMP
         }
     }
+
+    fn texture_format_as_hal(
+        &self,
+        texture_format: wgt::TextureFormat,
+    ) -> <super::Api as crate::Api>::TextureFormat {
+        self.private_caps.map_texture_format(texture_format)
+    }
 }
 
 fn is_format_16bit_norm_supported(instance: &ash::Instance, phd: vk::PhysicalDevice) -> bool {

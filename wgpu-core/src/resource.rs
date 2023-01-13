@@ -431,6 +431,26 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         hal_adapter_callback(hal_adapter)
     }
 
+    #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
+    pub fn texture_format_as_hal<A: HalApi>(
+        &self,
+        adapter: AdapterId,
+        texture_format: wgt::TextureFormat,
+    ) -> Option<A::TextureFormat> {
+        use hal::Adapter;
+
+        profiling::scope!("TextureFormat::as_hal");
+
+        let hub = A::hub(self);
+        let mut token = Token::root();
+
+        let (guard, _) = hub.adapters.read(&mut token);
+        let adapter = guard.try_get(adapter).ok().flatten();
+        let hal_adapter = adapter.map(|adapter| &adapter.raw.adapter);
+
+        hal_adapter.and_then(|hal_adapter| Some(hal_adapter.texture_format_as_hal(texture_format)))
+    }
+
     /// # Safety
     ///
     /// - The raw device handle must not be manually destroyed
