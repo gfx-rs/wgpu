@@ -109,26 +109,35 @@ Additionally `Surface::get_default_config` now returns an Option and returns Non
 
 ```diff
 - let instance = Instance::new(wgpu::Backends::all());
-+ let instance = Instance::new(wgt::InstanceOptions::new(wgt::Backends::all(), wgt::Dx12Compiler::Fxc));
++ let instance = Instance::new(wgpu::InstanceOptions {
++     backends: wgpu::Backends::all(),
++     dx12_shader_compiler: wgpu::Dx12Compiler::Fxc,
++ });
 ```
 
 ```diff
 - let global = wgc::hub::Global::new(
 -     "player",
 -     IdentityPassThroughFactory,
--     wgt::Backends::all(),
+-     wgpu::Backends::all(),
 - );
 + let global = wgc::hub::Global::new(
 +     "player",
 +     IdentityPassThroughFactory,
-+     wgt::InstanceOptions::new(wgt::Backends::all(), wgt::Dx12Compiler::Fxc),
++     wgpu::InstanceOptions {
++       backends: wgpu::Backends::all(),
++       dx12_shader_compiler: wgpu::Dx12Compiler::Fxc,
++     },
 + );
 ```
 
-`Instance` now also also implements `Default`, which is equivalent to `wgt::InstanceOptions::new(wgt::Backends::all(), wgt::Dx12Compiler::Fxc)`
+`Instance` now also also implements `Default`, which uses `wgpu::Backends::all()` and `wgpu::Dx12Compiler::Fxc` for `InstanceOptions`
 
 ```diff
-- let instance = Instance::new(wgt::InstanceOptions::new(wgt::Backends::all(), wgt::Dx12Compiler::Fxc));
+- let instance = Instance::new(wgpu::InstanceOptions {
+-     backends: wgpu::Backends::all(),
+-     dx12_shader_compiler: wgpu::Dx12Compiler::Fxc,
+- });
 + let instance = Instance::default();
 ```
 

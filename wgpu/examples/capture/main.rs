@@ -36,11 +36,11 @@ async fn create_red_image_with_dimensions(
     width: usize,
     height: usize,
 ) -> (Device, Buffer, BufferDimensions, SubmissionIndex) {
-    let backend = wgpu::util::backend_bits_from_env().unwrap_or_else(wgpu::Backends::all);
-    let instance = wgpu::Instance::new(wgpu::InstanceOptions::new(
-        backend,
-        wgpu::Dx12Compiler::default(),
-    ));
+    let backends = wgpu::util::backend_bits_from_env().unwrap_or_else(wgpu::Backends::all);
+    let instance = wgpu::Instance::new(wgpu::InstanceOptions {
+        backends,
+        dx12_shader_compiler: wgpu::Dx12Compiler::default(),
+    });
     let adapter = instance
         .request_adapter(&wgpu::RequestAdapterOptions::default())
         .await

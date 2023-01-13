@@ -5336,13 +5336,3 @@ impl Default for InstanceOptions {
         }
     }
 }
-
-impl InstanceOptions {
-    /// Creates a new `InstanceOptions` with the given `Backends` and `Dx12Compiler`.
-    pub fn new(backends: Backends, dx12_shader_compiler: Dx12Compiler) -> Self {
-        Self {
-            backends,
-            dx12_shader_compiler,
-        }
-    }
-}
