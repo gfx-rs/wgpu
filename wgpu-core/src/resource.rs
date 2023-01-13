@@ -448,7 +448,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let adapter = guard.try_get(adapter).ok().flatten();
         let hal_adapter = adapter.map(|adapter| &adapter.raw.adapter);
 
-        hal_adapter.and_then(|hal_adapter| Some(hal_adapter.texture_format_as_hal(texture_format)))
+        hal_adapter.map(|hal_adapter| hal_adapter.texture_format_as_hal(texture_format))
     }
 
     /// # Safety

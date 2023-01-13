@@ -125,6 +125,7 @@ Additionally `Surface::get_default_config` now returns an Option and returns Non
 - Make `ObjectId` structure and invariants idiomatic. By @teoxoy in [#3347](https://github.com/gfx-rs/wgpu/pull/3347)
 - Add validation in accordance with WebGPU `GPUSamplerDescriptor` valid usage for `lodMinClamp` and `lodMaxClamp`. By @James2022-rgb in [#3353](https://github.com/gfx-rs/wgpu/pull/3353)
 - Remove panics in `Deref` implementations for `QueueWriteBufferView` and `BufferViewMut`. Instead, warnings are logged, since reading from these types is not recommended. By @botahamec in [#3336]
+- Change Texture::as_hal() callback to return a value, matching other as_hal callbacks. By @JMS55 in [#3376](https://github.com/gfx-rs/wgpu/pull/3376).
 
 #### WebGPU
 
@@ -153,6 +154,7 @@ Additionally `Surface::get_default_config` now returns an Option and returns Non
 - Implemented correleation between user timestamps and platform specific presentation timestamps via [`Adapter::get_presentation_timestamp`]. By @cwfitzgerald in [#3240](https://github.com/gfx-rs/wgpu/pull/3240)
 - Added support for `Features::SHADER_PRIMITIVE_INDEX` on all backends. By @cwfitzgerald in [#3272](https://github.com/gfx-rs/wgpu/pull/3272)
 - Implemented `TextureFormat::Stencil8`, allowing for stencil testing without depth components. By @Dinnerbone in [#3343](https://github.com/gfx-rs/wgpu/pull/3343)
+- Add TextureView::as_hal(), CommandEncoder::as_hal_mut(), and Adapter::texture_format_as_hal(). By @JMS55 in [#3376](https://github.com/gfx-rs/wgpu/pull/3376).
 
 #### GLES
 
