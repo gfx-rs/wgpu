@@ -4396,7 +4396,8 @@ impl<L, V: Clone> TextureDescriptor<L, V> {
     ///
     /// ```rust
     /// # use wgpu_types as wgpu;
-    /// let desc: wgpu::TextureDescriptor<(), Vec<wgpu::TextureFormat>> = wgpu::TextureDescriptor {
+    /// # type TextureDescriptor = wgpu::TextureDescriptor<(), &[wgpu::TextureFormat]>
+    /// let desc  = TextureDescriptor {
     ///   label: (),
     ///   size: wgpu::Extent3d { width: 100, height: 60, depth_or_array_layers: 1 },
     ///   mip_level_count: 7,
