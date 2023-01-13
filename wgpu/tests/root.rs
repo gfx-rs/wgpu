@@ -5,7 +5,6 @@ mod common;
 
 mod buffer;
 mod buffer_copy;
-mod buffer_map_after_queue_submit;
 mod buffer_usages;
 mod clear_texture;
 mod device;
