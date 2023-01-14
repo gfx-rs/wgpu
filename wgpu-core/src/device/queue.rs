@@ -595,7 +595,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         let (mut texture_guard, _) = hub.textures.write(&mut token); // For clear we need write access to the texture. TODO: Can we acquire write lock later?
-        let dst = texture_guard.get_mut(destination.texture).unwrap();
+        let dst = texture_guard
+            .get_mut(destination.texture)
+            .map_err(|_| TransferError::InvalidTexture(destination.texture))?;
 
         let (selector, dst_base, texture_format) =
             extract_texture_selector(destination, size, dst)?;
@@ -707,6 +709,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
         }
 
+        // Re-get `dst` immutably here, so that the mutable borrow of the
+        // `texture_guard.get_mut` above ends in time for the `clear_texture`
+        // call above. Since we've held `texture_guard` the whole time, we know
+        // the texture hasn't gone away in the mean time, so we can unwrap.
         let dst = texture_guard.get(destination.texture).unwrap();
         let transition = trackers
             .textures
