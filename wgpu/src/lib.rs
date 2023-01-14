@@ -3316,7 +3316,7 @@ impl<'a> RenderPass<'a> {
     ///
     /// - Bytes `4..8` are accessed by both the fragment shader and the vertex shader.
     ///
-    /// - Bytes `8..12 are accessed only by the vertex shader.
+    /// - Bytes `8..12` are accessed only by the vertex shader.
     ///
     /// To write all twelve bytes requires three `set_push_constants` calls, one
     /// for each range, each passing the matching `stages` mask.
