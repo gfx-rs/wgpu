@@ -307,6 +307,8 @@ pub enum QueueSubmitError {
     DestroyedTexture(id::TextureId),
     #[error(transparent)]
     Unmap(#[from] BufferAccessError),
+    #[error("Buffer {0:?} is still mapped")]
+    BufferStillMapped(id::BufferId),
     #[error("surface output was dropped before the command buffer got submitted")]
     SurfaceOutputDropped,
     #[error("surface was unconfigured before the command buffer got submitted")]
@@ -910,7 +912,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             } else {
                                 match buffer.map_state {
                                     BufferMapState::Idle => (),
-                                    _ => panic!("Buffer {:?} is still mapped", id),
+                                    _ => return Err(QueueSubmitError::BufferStillMapped(id.0)),
                                 }
                             }
                         }
