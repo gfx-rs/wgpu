@@ -3853,6 +3853,7 @@ impl Queue {
         offset: BufferAddress,
         size: BufferSize,
     ) -> Option<QueueWriteBufferView<'a>> {
+        profiling::scope!("Queue::write_buffer_with");
         DynContext::queue_validate_write_buffer(
             &*self.context,
             &self.id,
