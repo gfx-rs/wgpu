@@ -2913,6 +2913,7 @@ dependencies = [
  "parking_lot 0.12.1",
  "png",
  "pollster",
+ "profiling",
  "raw-window-handle 0.5.0",
  "serde",
  "smallvec",

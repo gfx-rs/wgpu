@@ -389,6 +389,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         buffer_size: wgt::BufferSize,
         id_in: Input<G, id::StagingBufferId>,
     ) -> Result<(id::StagingBufferId, *mut u8), QueueWriteError> {
+        profiling::scope!("Queue::create_staging_buffer");
         let hub = A::hub(self);
         let root_token = &mut Token::root();
 
@@ -413,8 +414,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         buffer_offset: wgt::BufferAddress,
         staging_buffer_id: id::StagingBufferId,
     ) -> Result<(), QueueWriteError> {
-        profiling::scope!("Queue::write_buffer_with");
-
+        profiling::scope!("Queue::write_staging_buffer");
         let hub = A::hub(self);
         let root_token = &mut Token::root();
 
@@ -457,6 +457,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         buffer_offset: u64,
         buffer_size: u64,
     ) -> Result<(), QueueWriteError> {
+        profiling::scope!("Queue::validate_write_buffer");
         let hub = A::hub(self);
         let root_token = &mut Token::root();
 

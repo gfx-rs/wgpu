@@ -151,6 +151,7 @@ optional = true
 arrayvec.workspace = true
 log.workspace = true
 parking_lot.workspace = true
+profiling.workspace = true
 raw-window-handle.workspace = true
 serde = { workspace = true, features = ["derive"], optional = true }
 smallvec.workspace = true
