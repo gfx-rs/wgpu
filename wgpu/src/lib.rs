@@ -20,7 +20,7 @@ use std::{
     future::Future,
     marker::PhantomData,
     num::{NonZeroU32, NonZeroU8},
-    ops::{Bound, Range, RangeBounds},
+    ops::{Bound, Deref, DerefMut, Range, RangeBounds},
     sync::Arc,
     thread,
 };
@@ -2297,6 +2297,9 @@ pub struct BufferView<'a> {
 }
 
 /// Write only view into mapped buffer.
+///
+/// It is possible to read the buffer using this view, but doing so is not
+/// recommended, as it is likely to be slow.
 #[derive(Debug)]
 pub struct BufferViewMut<'a> {
     slice: BufferSlice<'a>,
@@ -2313,27 +2316,6 @@ impl std::ops::Deref for BufferView<'_> {
     }
 }
 
-impl std::ops::Deref for BufferViewMut<'_> {
-    type Target = [u8];
-
-    #[inline]
-    fn deref(&self) -> &[u8] {
-        assert!(
-            self.readable,
-            "Attempting to read a write-only mapping for buffer {:?}",
-            self.slice.buffer.id
-        );
-        self.data.slice()
-    }
-}
-
-impl std::ops::DerefMut for BufferViewMut<'_> {
-    #[inline]
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        self.data.slice_mut()
-    }
-}
-
 impl AsRef<[u8]> for BufferView<'_> {
     #[inline]
     fn as_ref(&self) -> &[u8] {
@@ -2344,6 +2326,24 @@ impl AsRef<[u8]> for BufferView<'_> {
 impl AsMut<[u8]> for BufferViewMut<'_> {
     #[inline]
     fn as_mut(&mut self) -> &mut [u8] {
+        self.data.slice_mut()
+    }
+}
+
+impl Deref for BufferViewMut<'_> {
+    type Target = [u8];
+
+    fn deref(&self) -> &Self::Target {
+        if !self.readable {
+            log::warn!("Reading from a BufferViewMut is slow and not recommended.");
+        }
+
+        self.data.slice()
+    }
+}
+
+impl DerefMut for BufferViewMut<'_> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
         self.data.slice_mut()
     }
 }
@@ -3316,7 +3316,7 @@ impl<'a> RenderPass<'a> {
     ///
     /// - Bytes `4..8` are accessed by both the fragment shader and the vertex shader.
     ///
-    /// - Bytes `8..12 are accessed only by the vertex shader.
+    /// - Bytes `8..12` are accessed only by the vertex shader.
     ///
     /// To write all twelve bytes requires three `set_push_constants` calls, one
     /// for each range, each passing the matching `stages` mask.
@@ -3768,7 +3768,11 @@ impl<'a> RenderBundleEncoder<'a> {
     }
 }
 
-/// A write-only view into a staging buffer
+/// A read-only view into a staging buffer.
+///
+/// Reading into this buffer won't yield the contents of the buffer from the
+/// GPU and is likely to be slow. Because of this, although [`AsMut`] is
+/// implemented for this type, [`AsRef`] is not.
 pub struct QueueWriteBufferView<'a> {
     queue: &'a Queue,
     buffer: &'a Buffer,
@@ -3777,17 +3781,23 @@ pub struct QueueWriteBufferView<'a> {
 }
 static_assertions::assert_impl_all!(QueueWriteBufferView: Send, Sync);
 
-impl<'a> std::ops::Deref for QueueWriteBufferView<'a> {
+impl Deref for QueueWriteBufferView<'_> {
     type Target = [u8];
 
     fn deref(&self) -> &Self::Target {
-        panic!("QueueWriteBufferView is write-only!");
+        log::warn!("Reading from a QueueWriteBufferView won't yield the contents of the buffer and may be slow.");
+        self.inner.slice()
     }
 }
 
-impl<'a> std::ops::DerefMut for QueueWriteBufferView<'a> {
-    #[inline]
+impl DerefMut for QueueWriteBufferView<'_> {
     fn deref_mut(&mut self) -> &mut Self::Target {
+        self.inner.slice_mut()
+    }
+}
+
+impl<'a> AsMut<[u8]> for QueueWriteBufferView<'a> {
+    fn as_mut(&mut self) -> &mut [u8] {
         self.inner.slice_mut()
     }
 }
@@ -3827,12 +3837,9 @@ impl Queue {
     }
 
     /// Schedule a data write into `buffer` starting at `offset` via the returned
-    /// [QueueWriteBufferView].
+    /// [`QueueWriteBufferView`].
     ///
-    /// The returned value can be dereferenced to a `&mut [u8]`; dereferencing it to a
-    /// `&[u8]` panics!
-    /// (It is not unsound to read through the `&mut [u8]` anyway, but doing so will not
-    /// yield the existing contents of `buffer` from the GPU, and it is likely to be slow.)
+    /// Reading from this buffer is slow and will not yield the actual contents of the buffer.
     ///
     /// This method is intended to have low performance costs.
     /// As such, the write is not immediately submitted, and instead enqueued

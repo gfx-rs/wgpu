@@ -5,6 +5,10 @@ use parking_lot::Mutex;
 
 use std::{collections::BTreeMap, ffi::CStr, sync::Arc};
 
+fn depth_stencil_required_flags() -> vk::FormatFeatureFlags {
+    vk::FormatFeatureFlags::SAMPLED_IMAGE | vk::FormatFeatureFlags::DEPTH_STENCIL_ATTACHMENT
+}
+
 //TODO: const fn?
 fn indexing_features() -> wgt::Features {
     wgt::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING
@@ -325,7 +329,6 @@ impl PhysicalDeviceFeatures {
             | Df::VERTEX_STORAGE
             | Df::FRAGMENT_STORAGE
             | Df::DEPTH_TEXTURE_AND_BUFFER_COPIES
-            | Df::WEBGPU_TEXTURE_FORMAT_SUPPORT
             | Df::BUFFER_BINDINGS_NOT_16_BYTE_ALIGNED
             | Df::UNRESTRICTED_INDEX_BUFFER
             | Df::INDIRECT_EXECUTION;
@@ -487,16 +490,30 @@ impl PhysicalDeviceFeatures {
             );
         }
 
-        features.set(
-            F::DEPTH32FLOAT_STENCIL8,
+        let supports_depth_format = |format| {
             supports_format(
                 instance,
                 phd,
-                vk::Format::D32_SFLOAT_S8_UINT,
+                format,
                 vk::ImageTiling::OPTIMAL,
-                vk::FormatFeatureFlags::DEPTH_STENCIL_ATTACHMENT,
-            ),
+                depth_stencil_required_flags(),
+            )
+        };
+
+        let texture_s8 = supports_depth_format(vk::Format::S8_UINT);
+        let texture_d32 = supports_depth_format(vk::Format::D32_SFLOAT);
+        let texture_d24_s8 = supports_depth_format(vk::Format::D24_UNORM_S8_UINT);
+        let texture_d32_s8 = supports_depth_format(vk::Format::D32_SFLOAT_S8_UINT);
+
+        let stencil8 = texture_s8 || texture_d24_s8;
+        let depth24_plus_stencil8 = texture_d24_s8 || texture_d32_s8;
+
+        dl_flags.set(
+            Df::WEBGPU_TEXTURE_FORMAT_SUPPORT,
+            stencil8 && depth24_plus_stencil8 && texture_d32,
         );
+
+        features.set(F::DEPTH32FLOAT_STENCIL8, texture_d32_s8);
 
         (features, dl_flags)
     }
@@ -1041,27 +1058,27 @@ impl super::Instance {
                     .timeline_semaphore
                     .map_or(false, |ext| ext.timeline_semaphore != 0),
             },
-            texture_d24: unsafe {
-                self.shared
-                    .raw
-                    .get_physical_device_format_properties(phd, vk::Format::X8_D24_UNORM_PACK32)
-                    .optimal_tiling_features
-                    .contains(vk::FormatFeatureFlags::DEPTH_STENCIL_ATTACHMENT)
-            },
-            texture_d24_s8: unsafe {
-                self.shared
-                    .raw
-                    .get_physical_device_format_properties(phd, vk::Format::D24_UNORM_S8_UINT)
-                    .optimal_tiling_features
-                    .contains(vk::FormatFeatureFlags::DEPTH_STENCIL_ATTACHMENT)
-            },
-            texture_s8: unsafe {
-                self.shared
-                    .raw
-                    .get_physical_device_format_properties(phd, vk::Format::S8_UINT)
-                    .optimal_tiling_features
-                    .contains(vk::FormatFeatureFlags::DEPTH_STENCIL_ATTACHMENT)
-            },
+            texture_d24: supports_format(
+                &self.shared.raw,
+                phd,
+                vk::Format::X8_D24_UNORM_PACK32,
+                vk::ImageTiling::OPTIMAL,
+                depth_stencil_required_flags(),
+            ),
+            texture_d24_s8: supports_format(
+                &self.shared.raw,
+                phd,
+                vk::Format::D24_UNORM_S8_UINT,
+                vk::ImageTiling::OPTIMAL,
+                depth_stencil_required_flags(),
+            ),
+            texture_s8: supports_format(
+                &self.shared.raw,
+                phd,
+                vk::Format::S8_UINT,
+                vk::ImageTiling::OPTIMAL,
+                depth_stencil_required_flags(),
+            ),
             non_coherent_map_mask: phd_capabilities.properties.limits.non_coherent_atom_size - 1,
             can_present: true,
             //TODO: make configurable
@@ -1476,15 +1493,11 @@ impl crate::Adapter<super::Api> for super::Adapter {
         );
         flags.set(
             Tfc::COPY_SRC,
-            features.intersects(
-                vk::FormatFeatureFlags::TRANSFER_SRC | vk::FormatFeatureFlags::BLIT_SRC,
-            ),
+            features.intersects(vk::FormatFeatureFlags::TRANSFER_SRC),
         );
         flags.set(
             Tfc::COPY_DST,
-            features.intersects(
-                vk::FormatFeatureFlags::TRANSFER_DST | vk::FormatFeatureFlags::BLIT_DST,
-            ),
+            features.intersects(vk::FormatFeatureFlags::TRANSFER_DST),
         );
         // Vulkan is very permissive about MSAA
         flags.set(Tfc::MULTISAMPLE_RESOLVE, !format.describe().is_compressed());
