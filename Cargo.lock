@@ -549,8 +549,6 @@ dependencies = [
 [[package]]
 name = "deno_console"
 version = "0.84.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b1fcedec1b382f40fd1ab38d18edb5715d5cd5f65bd949c83387c43152fd34a8"
 dependencies = [
  "deno_core",
 ]
@@ -558,8 +556,6 @@ dependencies = [
 [[package]]
 name = "deno_core"
 version = "0.166.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c5db7d38c223a683b23b7ff4967572ec863f40397fa1bb792383273629e1e39f"
 dependencies = [
  "anyhow",
  "bytes",
@@ -583,8 +579,6 @@ dependencies = [
 [[package]]
 name = "deno_ops"
 version = "0.44.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "27e85062a5f1a79194e7dd1bb8c664f0979bf5c869a8f2208192cbcb6e18e6e7"
 dependencies = [
  "once_cell",
  "pmutil",
@@ -598,8 +592,6 @@ dependencies = [
 [[package]]
 name = "deno_url"
 version = "0.84.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "26886a84668c9420acbec6ca83b33a51c68310efdf3cdc7ec797c2f2bc873af8"
 dependencies = [
  "deno_core",
  "serde",
@@ -610,8 +602,6 @@ dependencies = [
 [[package]]
 name = "deno_web"
 version = "0.115.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bacd1dda9935fdc8727057b26b3bdfdb8f72a7dd0b168a2eeb3537c99c5bf1e6"
 dependencies = [
  "async-trait",
  "base64-simd",
@@ -638,8 +628,6 @@ dependencies = [
 [[package]]
 name = "deno_webidl"
 version = "0.84.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1cfddf618b405e0399cf923f3ce7d3d7e2b472f817d2fb7f70a12e0cafd849a5"
 dependencies = [
  "deno_core",
 ]
@@ -2140,8 +2128,6 @@ dependencies = [
 [[package]]
 name = "serde_v8"
 version = "0.77.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "36203a818a80f973b4b487bfc32d173b2bf78821869513af2f6e8c93938fa0e3"
 dependencies = [
  "bytes",
  "derive_more",
@@ -2542,9 +2528,9 @@ dependencies = [
 
 [[package]]
 name = "v8"
-version = "0.60.0"
+version = "0.60.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5867543c19b87c45ed3f2bc49eb6135474ed6a1803cac40c278620b53e9865ef"
+checksum = "07fd5b3ed559897ff02c0f62bc0a5f300bfe79bb4c77a50031b8df771701c628"
 dependencies = [
  "bitflags",
  "fslock",
