@@ -2643,13 +2643,12 @@ impl TextureView {
         &self,
         hal_texture_view_callback: F,
     ) -> R {
-        let texture_view = self.data.as_ref().downcast_ref().unwrap();
         unsafe {
             self.context
                 .as_any()
                 .downcast_ref::<crate::backend::Context>()
                 .unwrap()
-                .texture_view_as_hal::<A, F, R>(texture_view, hal_texture_view_callback)
+                .texture_view_as_hal::<A, F, R>(self, hal_texture_view_callback)
         }
     }
 }
@@ -2897,16 +2896,12 @@ impl CommandEncoder {
         &mut self,
         hal_command_encoder_callback: F,
     ) -> R {
-        let command_encoder = self.data.downcast_ref().unwrap();
         unsafe {
             self.context
                 .as_any()
                 .downcast_ref::<crate::backend::Context>()
                 .unwrap()
-                .command_encoder_as_hal_mut::<A, F, R>(
-                    command_encoder,
-                    hal_command_encoder_callback,
-                )
+                .command_encoder_as_hal_mut::<A, F, R>(self, hal_command_encoder_callback)
         }
     }
 }
