@@ -330,19 +330,17 @@
         const feature = requiredFeatures[i];
         if (!SetPrototypeHas(this[_adapter].features[webidl.setlikeInner], feature)) {
           throw new TypeError(
-            `${prefix}: nonGuaranteedFeatures must be a subset of the adapter features.`,
+            `${prefix}: requiredFeatures must be a subset of the adapter features.`,
           );
         }
       }
-      const requiredLimits = descriptor.requiredLimits;
-      // TODO(lucacasonato): validate requiredLimits
 
       const { rid, features, limits } = await core.opAsync(
         "op_webgpu_request_device",
         this[_adapter].rid,
         descriptor.label,
         requiredFeatures,
-        requiredLimits,
+        descriptor.requiredLimits,
       );
 
       const inner = new InnerGPUDevice({
@@ -5226,9 +5224,11 @@
     gpu: webidl.createBranded(GPU),
     GPU,
     GPUAdapter,
+    GPUAdapterInfo,
     GPUSupportedLimits,
     GPUSupportedFeatures,
     GPUDevice,
+    GPUDeviceLostInfo,
     GPUQueue,
     GPUBuffer,
     GPUBufferUsage,

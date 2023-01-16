@@ -141,10 +141,14 @@
   webidl.converters["GPUSize32"] = (V, opts) =>
     webidl.converters["unsigned long"](V, { ...opts, enforceRange: true });
 
+  // TYPEDEF: GPUSize64
+  webidl.converters["GPUSize64"] = (V, opts) =>
+    webidl.converters["unsigned long long"](V, { ...opts, enforceRange: true });
+
   // DICTIONARY: GPUDeviceDescriptor
   const dictMembersGPUDeviceDescriptor = [
     {
-      key: "nonGuaranteedFeatures",
+      key: "requiredFeatures",
       converter: webidl.createSequenceConverter(
         webidl.converters["GPUFeatureName"],
       ),
@@ -153,14 +157,11 @@
       },
     },
     {
-      key: "nonGuaranteedLimits",
+      key: "requiredLimits",
       converter: webidl.createRecordConverter(
         webidl.converters["DOMString"],
-        webidl.converters["GPUSize32"],
+        webidl.converters["GPUSize64"],
       ),
-      get defaultValue() {
-        return {};
-      },
     },
   ];
   webidl.converters["GPUDeviceDescriptor"] = webidl.createDictionaryConverter(
@@ -180,10 +181,6 @@
     "GPUBuffer",
     GPUBuffer.prototype,
   );
-
-  // TYPEDEF: GPUSize64
-  webidl.converters["GPUSize64"] = (V, opts) =>
-    webidl.converters["unsigned long long"](V, { ...opts, enforceRange: true });
 
   // TYPEDEF: GPUBufferUsageFlags
   webidl.converters["GPUBufferUsageFlags"] = (V, opts) =>
