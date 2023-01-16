@@ -35,7 +35,7 @@ pub use wgt::{
     CommandBufferDescriptor, CompareFunction, CompositeAlphaMode, DepthBiasState,
     DepthStencilState, DeviceType, DownlevelCapabilities, DownlevelFlags, Dx12Compiler,
     DynamicOffset, Extent3d, Face, Features, FilterMode, FrontFace, ImageDataLayout,
-    ImageSubresourceRange, IndexFormat, InstanceOptions, Limits, MultisampleState, Origin3d,
+    ImageSubresourceRange, IndexFormat, InstanceDescriptor, Limits, MultisampleState, Origin3d,
     PipelineStatisticsTypes, PolygonMode, PowerPreference, PresentMode, PresentationTimestamp,
     PrimitiveState, PrimitiveTopology, PushConstantRange, QueryType, RenderBundleDepthStencil,
     SamplerBindingType, SamplerBorderColor, ShaderLocation, ShaderModel, ShaderStages,
@@ -1282,7 +1282,7 @@ impl Default for Instance {
     ///
     /// Backends are set to `Backends::all()`, and FXC is chosen as the `dx12_shader_compiler`.
     fn default() -> Self {
-        Self::new(InstanceOptions::default())
+        Self::new(InstanceDescriptor::default())
     }
 }
 
@@ -1291,11 +1291,11 @@ impl Instance {
     ///
     /// # Arguments
     ///
-    /// - `backends` - Controls from which [backends][Backends] wgpu will choose
-    ///   during instantiation.
-    pub fn new(instance_options: InstanceOptions) -> Self {
+    /// - `instance_desc` - Has fields for which [backends][Backends] wgpu will choose
+    ///   during instantiation, and which [DX12 shader compiler][Dx12Compiler] wgpu will use.
+    pub fn new(instance_desc: InstanceDescriptor) -> Self {
         Self {
-            context: Arc::from(crate::backend::Context::init(instance_options)),
+            context: Arc::from(crate::backend::Context::init(instance_desc)),
         }
     }
 

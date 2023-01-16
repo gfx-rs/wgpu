@@ -764,7 +764,7 @@ impl crate::context::Context for Context {
     type PopErrorScopeFuture =
         MakeSendFuture<wasm_bindgen_futures::JsFuture, fn(JsFutureResult) -> Option<crate::Error>>;
 
-    fn init(_instance_options: wgt::InstanceOptions) -> Self {
+    fn init(_instance_desc: wgt::InstanceDescriptor) -> Self {
         let global: Global = js_sys::global().unchecked_into();
         let gpu = if !global.window().is_undefined() {
             global.unchecked_into::<web_sys::Window>().navigator().gpu()

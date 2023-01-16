@@ -57,11 +57,6 @@ impl crate::Instance<super::Api> for super::Instance {
             }
         }
 
-        let dx12_shader_compiler = match desc.dx12_shader_compiler {
-            Some(ref compiler_option) => compiler_option.clone(),
-            None => wgt::Dx12Compiler::default(),
-        };
-
         Ok(Self {
             // The call to create_factory will only succeed if we get a factory4, so this is safe.
             factory,
@@ -69,7 +64,7 @@ impl crate::Instance<super::Api> for super::Instance {
             _lib_dxgi: lib_dxgi,
             supports_allow_tearing,
             flags: desc.flags,
-            dx12_shader_compiler,
+            dx12_shader_compiler: desc.dx12_shader_compiler.clone(),
         })
     }
 

@@ -5326,14 +5326,14 @@ pub enum Dx12Compiler {
 }
 
 /// Options for creating an instance.
-pub struct InstanceOptions {
+pub struct InstanceDescriptor {
     /// Which `Backends` to enable.
     pub backends: Backends,
     /// Which DX12 shader compiler to use.
     pub dx12_shader_compiler: Dx12Compiler,
 }
 
-impl Default for InstanceOptions {
+impl Default for InstanceDescriptor {
     fn default() -> Self {
         Self {
             backends: Backends::all(),

@@ -160,7 +160,7 @@ async fn setup<E: Example>(title: &str) -> Setup {
     let backends = wgpu::util::backend_bits_from_env().unwrap_or_else(wgpu::Backends::all);
     let dx12_shader_compiler = wgpu::util::dx12_shader_compiler_from_env().unwrap_or_default();
 
-    let instance = wgpu::Instance::new(wgpu::InstanceOptions {
+    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
         backends,
         dx12_shader_compiler,
     });

@@ -103,13 +103,13 @@ Additionally `Surface::get_default_config` now returns an Option and returns Non
 
 `Instance::create_surface()` now returns `Result<Surface, CreateSurfaceError>` instead of `Surface`. This allows an error to be returned instead of panicking if the given window is a HTML canvas and obtaining a WebGPU or WebGL 2 context fails. (No other platforms currently report any errors through this path.) By @kpreid in [#3052](https://github.com/gfx-rs/wgpu/pull/3052/)
 
-#### Instance creation now takes `InstanceOptions` instead of `Backends`
+#### Instance creation now takes `InstanceDescriptor` instead of `Backends`
 
-`Instance::new()` and `hub::Global::new()` now take an `InstanceOptions` struct which cointains both the existing `Backends` selection as well as a new `Dx12Compiler` field for selecting which Dx12 shader compiler to use.
+`Instance::new()` and `hub::Global::new()` now take an `InstanceDescriptor` struct which cointains both the existing `Backends` selection as well as a new `Dx12Compiler` field for selecting which Dx12 shader compiler to use.
 
 ```diff
 - let instance = Instance::new(wgpu::Backends::all());
-+ let instance = Instance::new(wgpu::InstanceOptions {
++ let instance = Instance::new(wgpu::InstanceDescriptor {
 +     backends: wgpu::Backends::all(),
 +     dx12_shader_compiler: wgpu::Dx12Compiler::Fxc,
 + });
@@ -124,17 +124,17 @@ Additionally `Surface::get_default_config` now returns an Option and returns Non
 + let global = wgc::hub::Global::new(
 +     "player",
 +     IdentityPassThroughFactory,
-+     wgpu::InstanceOptions {
++     wgpu::InstanceDescriptor {
 +       backends: wgpu::Backends::all(),
 +       dx12_shader_compiler: wgpu::Dx12Compiler::Fxc,
 +     },
 + );
 ```
 
-`Instance` now also also implements `Default`, which uses `wgpu::Backends::all()` and `wgpu::Dx12Compiler::Fxc` for `InstanceOptions`
+`Instance` now also also implements `Default`, which uses `wgpu::Backends::all()` and `wgpu::Dx12Compiler::Fxc` for `InstanceDescriptor`
 
 ```diff
-- let instance = Instance::new(wgpu::InstanceOptions {
+- let instance = Instance::new(wgpu::InstanceDescriptor {
 -     backends: wgpu::Backends::all(),
 -     dx12_shader_compiler: wgpu::Dx12Compiler::Fxc,
 - });
@@ -149,7 +149,7 @@ By @Elabajaba in [#3356](https://github.com/gfx-rs/wgpu/pull/3356)
 
 #### DXC Shader Compiler Support for DX12
 
-You can now choose to use the DXC compiler for DX12 instead of FXC. The DXC compiler is faster, less buggy, and allows for new features compared to the old, unmaintained FXC compiler. You can choose which compiler to use at `Instance` creation using the `Dx12Compiler` field in the `InstanceOptions` struct. Note that DXC requires both `dxcompiler.dll` and `dxil.dll`, which can be downloaded from https://github.com/microsoft/DirectXShaderCompiler/releases. Both .dlls need to be shipped with your application when targeting DX12 and using the `DXC` compiler. If the .dlls can't be loaded, then it will fall back to the FXC compiler. By @39ali and @Elabajaba in [#3356](https://github.com/gfx-rs/wgpu/pull/3356)
+You can now choose to use the DXC compiler for DX12 instead of FXC. The DXC compiler is faster, less buggy, and allows for new features compared to the old, unmaintained FXC compiler. You can choose which compiler to use at `Instance` creation using the `Dx12Compiler` field in the `InstanceDescriptor` struct. Note that DXC requires both `dxcompiler.dll` and `dxil.dll`, which can be downloaded from https://github.com/microsoft/DirectXShaderCompiler/releases. Both .dlls need to be shipped with your application when targeting DX12 and using the `DXC` compiler. If the .dlls can't be loaded, then it will fall back to the FXC compiler. By @39ali and @Elabajaba in [#3356](https://github.com/gfx-rs/wgpu/pull/3356)
 
 ### Changes
 

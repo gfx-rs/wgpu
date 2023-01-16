@@ -97,7 +97,7 @@ pub trait Context: Debug + Send + Sized + Sync {
         + 'static;
     type PopErrorScopeFuture: Future<Output = Option<Error>> + Send + 'static;
 
-    fn init(instance_options: wgt::InstanceOptions) -> Self;
+    fn init(instance_desc: wgt::InstanceDescriptor) -> Self;
     fn instance_create_surface(
         &self,
         display_handle: raw_window_handle::RawDisplayHandle,

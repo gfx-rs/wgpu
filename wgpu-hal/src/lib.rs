@@ -743,7 +743,7 @@ bitflags::bitflags! {
 pub struct InstanceDescriptor<'a> {
     pub name: &'a str,
     pub flags: InstanceFlags,
-    pub dx12_shader_compiler: Option<wgt::Dx12Compiler>,
+    pub dx12_shader_compiler: wgt::Dx12Compiler,
 }
 
 #[derive(Clone, Debug)]

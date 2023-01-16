@@ -181,7 +181,7 @@ impl Corpus {
         let global = wgc::hub::Global::new(
             "test",
             IdentityPassThroughFactory,
-            wgt::InstanceOptions {
+            wgt::InstanceDescriptor {
                 backends: corpus.backends,
                 dx12_shader_compiler: wgt::Dx12Compiler::Fxc,
             },

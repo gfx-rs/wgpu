@@ -67,13 +67,9 @@ pub struct Instance {
 }
 
 impl Instance {
-    pub fn new(name: &str, instance_options: wgt::InstanceOptions) -> Self {
-        fn init<A: HalApi>(
-            _: A,
-            mask: Backends,
-            dx12_shader_compiler: Option<wgt::Dx12Compiler>,
-        ) -> Option<A::Instance> {
-            if mask.contains(A::VARIANT.into()) {
+    pub fn new(name: &str, instance_desc: wgt::InstanceDescriptor) -> Self {
+        fn init<A: HalApi>(_: A, instance_desc: &wgt::InstanceDescriptor) -> Option<A::Instance> {
+            if instance_desc.backends.contains(A::VARIANT.into()) {
                 let mut flags = hal::InstanceFlags::empty();
                 if cfg!(debug_assertions) {
                     flags |= hal::InstanceFlags::VALIDATION;
@@ -82,7 +78,7 @@ impl Instance {
                 let hal_desc = hal::InstanceDescriptor {
                     name: "wgpu",
                     flags,
-                    dx12_shader_compiler,
+                    dx12_shader_compiler: instance_desc.dx12_shader_compiler.clone(),
                 };
                 unsafe { hal::Instance::init(&hal_desc).ok() }
             } else {
@@ -93,19 +89,15 @@ impl Instance {
         Self {
             name: name.to_string(),
             #[cfg(feature = "vulkan")]
-            vulkan: init(hal::api::Vulkan, instance_options.backends, None),
+            vulkan: init(hal::api::Vulkan, &instance_desc),
             #[cfg(feature = "metal")]
-            metal: init(hal::api::Metal, instance_options.backends, None),
+            metal: init(hal::api::Metal, &instance_desc),
             #[cfg(feature = "dx12")]
-            dx12: init(
-                hal::api::Dx12,
-                instance_options.backends,
-                Some(instance_options.dx12_shader_compiler),
-            ),
+            dx12: init(hal::api::Dx12, &instance_desc),
             #[cfg(feature = "dx11")]
-            dx11: init(hal::api::Dx11, instance_options.backends, None),
+            dx11: init(hal::api::Dx11, &instance_desc),
             #[cfg(feature = "gles")]
-            gl: init(hal::api::Gles, instance_options.backends, None),
+            gl: init(hal::api::Gles, &instance_desc),
         }
     }
 
