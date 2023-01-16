@@ -145,161 +145,6 @@
   webidl.converters["GPUSize64"] = (V, opts) =>
     webidl.converters["unsigned long long"](V, { ...opts, enforceRange: true });
 
-  // keep aligned to the wgpu_types::Limits struct
-  const GPUDeviceDescriptorRequiredLimits = [
-    {
-      key: "maxTextureDimension1D",
-      converter: webidl.converters["GPUSize32"],
-      defaultValue: 8192,
-    },
-    {
-      key: "maxTextureDimension2D",
-      converter: webidl.converters["GPUSize32"],
-      defaultValue: 8192,
-    },
-    {
-      key: "maxTextureDimension3D",
-      converter: webidl.converters["GPUSize32"],
-      defaultValue: 2048,
-    },
-    {
-      key: "maxTextureArrayLayers",
-      converter: webidl.converters["GPUSize32"],
-      defaultValue: 256,
-    },
-    {
-      key: "maxBindGroups",
-      converter: webidl.converters["GPUSize32"],
-      defaultValue: 4,
-    },
-    {
-      key: "maxBindingsPerBindGroup",
-      converter: webidl.converters["GPUSize32"],
-      defaultValue: 640,
-    },
-    {
-      key: "maxDynamicUniformBuffersPerPipelineLayout",
-      converter: webidl.converters["GPUSize32"],
-      defaultValue: 8,
-    },
-    {
-      key: "maxDynamicStorageBuffersPerPipelineLayout",
-      converter: webidl.converters["GPUSize32"],
-      defaultValue: 4,
-    },
-    {
-      key: "maxSampledTexturesPerShaderStage",
-      converter: webidl.converters["GPUSize32"],
-      defaultValue: 16,
-    },
-    {
-      key: "maxSamplersPerShaderStage",
-      converter: webidl.converters["GPUSize32"],
-      defaultValue: 16,
-    },
-    {
-      key: "maxStorageBuffersPerShaderStage",
-      converter: webidl.converters["GPUSize32"],
-      defaultValue: 8,
-    },
-    {
-      key: "maxStorageTexturesPerShaderStage",
-      converter: webidl.converters["GPUSize32"],
-      defaultValue: 4,
-    },
-    {
-      key: "maxUniformBuffersPerShaderStage",
-      converter: webidl.converters["GPUSize32"],
-      defaultValue: 12,
-    },
-    {
-      key: "maxUniformBufferBindingSize",
-      converter: webidl.converters["GPUSize64"],
-      defaultValue: 65536,
-    },
-    {
-      key: "maxStorageBufferBindingSize",
-      converter: webidl.converters["GPUSize64"],
-      defaultValue: 134217728,
-    },
-    {
-      key: "maxVertexBuffers",
-      converter: webidl.converters["GPUSize32"],
-      defaultValue: 8,
-    },
-    {
-      key: "maxBufferSize",
-      converter: webidl.converters["GPUSize64"],
-      defaultValue: 268435456,
-    },
-    {
-      key: "maxVertexAttributes",
-      converter: webidl.converters["GPUSize32"],
-      defaultValue: 16,
-    },
-    {
-      key: "maxVertexBufferArrayStride",
-      converter: webidl.converters["GPUSize32"],
-      defaultValue: 2048,
-    },
-    {
-      key: "minUniformBufferOffsetAlignment",
-      converter: webidl.converters["GPUSize32"],
-      defaultValue: 256,
-    },
-    {
-      key: "minStorageBufferOffsetAlignment",
-      converter: webidl.converters["GPUSize32"],
-      defaultValue: 256,
-    },
-    {
-      key: "maxInterStageShaderComponents",
-      converter: webidl.converters["GPUSize32"],
-      defaultValue: 60,
-    },
-    {
-      key: "maxComputeWorkgroupStorageSize",
-      converter: webidl.converters["GPUSize32"],
-      defaultValue: 16384,
-    },
-    {
-      key: "maxComputeInvocationsPerWorkgroup",
-      converter: webidl.converters["GPUSize32"],
-      defaultValue: 256,
-    },
-    {
-      key: "maxComputeWorkgroupSizeX",
-      converter: webidl.converters["GPUSize32"],
-      defaultValue: 256,
-    },
-    {
-      key: "maxComputeWorkgroupSizeY",
-      converter: webidl.converters["GPUSize32"],
-      defaultValue: 256,
-    },
-    {
-      key: "maxComputeWorkgroupSizeZ",
-      converter: webidl.converters["GPUSize32"],
-      defaultValue: 64,
-    },
-    {
-      key: "maxComputeWorkgroupsPerDimension",
-      converter: webidl.converters["GPUSize32"],
-      defaultValue: 65535,
-    },
-
-    // extended from spec
-    {
-      key: "maxPushConstantSize",
-      converter: webidl.converters["GPUSize32"],
-      defaultValue: 0,
-    },
-  ];
-  webidl.converters["GPUDeviceDescriptorRequiredLimits"] = webidl.createDictionaryConverter(
-    "GPUDeviceDescriptorRequiredLimits",
-    GPUDeviceDescriptorRequiredLimits,
-  );
-
   // DICTIONARY: GPUDeviceDescriptor
   const dictMembersGPUDeviceDescriptor = [
     {
@@ -313,7 +158,10 @@
     },
     {
       key: "requiredLimits",
-      converter: webidl.converters["GPUDeviceDescriptorRequiredLimits"],
+      converter: webidl.createRecordConverter(
+        webidl.converters["DOMString"],
+        webidl.converters["GPUSize64"],
+      ),
     },
   ];
   webidl.converters["GPUDeviceDescriptor"] = webidl.createDictionaryConverter(
