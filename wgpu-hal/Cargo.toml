@@ -63,7 +63,7 @@ block = { version = "0.1", optional = true }
 foreign-types = { version = "0.3", optional = true }
 
 # backend: Vulkan
-ash = { version = "0.37.1", optional = true }
+ash = { version = "0.37.2", optional = true }
 gpu-alloc = { version = "0.5", optional = true }
 gpu-descriptor = { version = "0.2", optional = true }
 smallvec = { version = "1", optional = true, features = ["union"] }
@@ -111,14 +111,14 @@ android_system_properties = "0.1.1"
 
 [dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-rev = "e7fc8e6"
+rev = "e98bd92"
 version = "0.10"
 features = ["clone"]
 
 # DEV dependencies
 [dev-dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-rev = "e7fc8e6"
+rev = "e98bd92"
 version = "0.10"
 features = ["wgsl-in"]
 
