@@ -16,7 +16,6 @@ use wasm_bindgen::{
     prelude::*,
     JsCast,
 };
-use web_sys::GpuFeatureName as Gfn;
 
 use crate::{
     context::{ObjectId, QueueWriteBuffer, Unused},
@@ -531,31 +530,40 @@ fn map_map_mode(mode: crate::MapMode) -> u32 {
     }
 }
 
-const FEATURES_MAPPING: [(wgt::Features, Gfn); 8] = [
+const FEATURES_MAPPING: [(wgt::Features, web_sys::GpuFeatureName); 8] = [
     //TODO: update the name
-    (wgt::Features::DEPTH_CLIP_CONTROL, Gfn::DepthClipControl),
+    (
+        wgt::Features::DEPTH_CLIP_CONTROL,
+        web_sys::GpuFeatureName::DepthClipControl,
+    ),
     (
         wgt::Features::DEPTH32FLOAT_STENCIL8,
-        Gfn::Depth32floatStencil8,
+        web_sys::GpuFeatureName::Depth32floatStencil8,
     ),
     (
         wgt::Features::TEXTURE_COMPRESSION_BC,
-        Gfn::TextureCompressionBc,
+        web_sys::GpuFeatureName::TextureCompressionBc,
     ),
     (
         wgt::Features::TEXTURE_COMPRESSION_ETC2,
-        Gfn::TextureCompressionEtc2,
+        web_sys::GpuFeatureName::TextureCompressionEtc2,
     ),
     (
         wgt::Features::TEXTURE_COMPRESSION_ASTC_LDR,
-        Gfn::TextureCompressionAstc,
+        web_sys::GpuFeatureName::TextureCompressionAstc,
     ),
-    (wgt::Features::TIMESTAMP_QUERY, Gfn::TimestampQuery),
+    (
+        wgt::Features::TIMESTAMP_QUERY,
+        web_sys::GpuFeatureName::TimestampQuery,
+    ),
     (
         wgt::Features::INDIRECT_FIRST_INSTANCE,
-        Gfn::IndirectFirstInstance,
+        web_sys::GpuFeatureName::IndirectFirstInstance,
     ),
-    (wgt::Features::SHADER_FLOAT16, Gfn::ShaderF16),
+    (
+        wgt::Features::SHADER_FLOAT16,
+        web_sys::GpuFeatureName::ShaderF16,
+    ),
 ];
 
 type JsFutureResult = Result<wasm_bindgen::JsValue, wasm_bindgen::JsValue>;
