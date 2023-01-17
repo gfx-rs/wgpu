@@ -10,7 +10,7 @@ use std::{
 use arrayvec::ArrayVec;
 #[cfg(not(target_arch = "wasm32"))]
 use std::mem;
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::Ordering;
 
 type ShaderStage<'a> = (
     naga::ShaderStage,
@@ -306,7 +306,6 @@ impl super::Device {
                 )
             })
             .to_owned()?;
-        program.ref_count.fetch_add(1, Ordering::Relaxed);
         drop(guard);
 
         Ok(program)
@@ -447,7 +446,6 @@ impl super::Device {
             program,
             sampler_map,
             uniforms,
-            ref_count: AtomicU32::new(0),
         }))
     }
 }
@@ -1176,7 +1174,8 @@ impl crate::Device<super::Api> for super::Device {
     }
     unsafe fn destroy_render_pipeline(&self, pipeline: super::RenderPipeline) {
         let mut program_cache = self.shared.program_cache.lock();
-        if pipeline.inner.ref_count.fetch_sub(1, Ordering::Relaxed) == 1 {
+        // 1 means we're the last thing holding this, so we can safely clean it up
+        if Arc::strong_count(&pipeline.inner) == 1 {
             program_cache.retain(|_, v| match *v {
                 Ok(ref p) => p.program != pipeline.inner.program,
                 Err(_) => false,
@@ -1199,7 +1198,8 @@ impl crate::Device<super::Api> for super::Device {
     }
     unsafe fn destroy_compute_pipeline(&self, pipeline: super::ComputePipeline) {
         let mut program_cache = self.shared.program_cache.lock();
-        if pipeline.inner.ref_count.fetch_sub(1, Ordering::Relaxed) == 1 {
+        // 1 means we're the last thing holding this, so we can safely clean it up
+        if Arc::strong_count(&pipeline.inner) == 1 {
             program_cache.retain(|_, v| match *v {
                 Ok(ref p) => p.program != pipeline.inner.program,
                 Err(_) => false,

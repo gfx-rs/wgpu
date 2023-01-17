@@ -476,7 +476,6 @@ struct PipelineInner {
     program: glow::Program,
     sampler_map: SamplerBindMap,
     uniforms: [UniformDesc; MAX_PUSH_CONSTANTS],
-    ref_count: AtomicU32,
 }
 
 #[derive(Clone, Debug)]
