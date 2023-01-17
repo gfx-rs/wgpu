@@ -500,7 +500,10 @@ impl crate::Device<super::Api> for super::Device {
                     glow::DYNAMIC_DRAW
                 }
             } else {
-                glow::STATIC_DRAW
+                // Even if the usage doesn't contain SRC_READ, we update it internally at least once
+                // Some vendors take usage very literally and STATIC_DRAW will freeze us with an empty buffer
+                // https://github.com/gfx-rs/wgpu/issues/3371
+                glow::DYNAMIC_DRAW
             };
             unsafe { gl.buffer_data_size(target, raw_size, usage) };
         }
