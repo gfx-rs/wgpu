@@ -27,7 +27,7 @@ Otherwise, we manage a pool of `VkFence` objects behind each `hal::Fence`.
 
 mod adapter;
 mod command;
-mod conv;
+pub mod conv;
 mod device;
 mod instance;
 
@@ -350,8 +350,8 @@ pub struct Texture {
     raw: vk::Image,
     drop_guard: Option<crate::DropGuard>,
     block: Option<gpu_alloc::MemoryBlock<vk::DeviceMemory>>,
-    usage: crate::TextureUses,
-    aspects: crate::FormatAspects,
+    pub usage: crate::TextureUses,
+    pub aspects: crate::FormatAspects,
     format_info: wgt::TextureFormatInfo,
     raw_flags: vk::ImageCreateFlags,
     copy_size: crate::CopyExtent,
