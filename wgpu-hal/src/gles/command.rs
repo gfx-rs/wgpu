@@ -525,7 +525,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                             color: [c.r as f32, c.g as f32, c.b as f32, c.a as f32],
                             is_srgb: cat.target.view.format.describe().srgb,
                         },
-                        wgt::TextureSampleType::Depth => unimplemented!(),
+                        wgt::TextureSampleType::Depth => unreachable!(),
                         wgt::TextureSampleType::Uint => C::ClearColorU(
                             i as u32,
                             [c.r as u32, c.g as u32, c.b as u32, c.a as u32],

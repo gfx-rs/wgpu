@@ -203,17 +203,16 @@ impl crate::ColorAttachment<'_, super::Api> {
             .describe()
             .sample_type
         {
-            wgt::TextureSampleType::Float { .. } | wgt::TextureSampleType::Depth => {
-                vk::ClearColorValue {
-                    float32: [cv.r as f32, cv.g as f32, cv.b as f32, cv.a as f32],
-                }
-            }
+            wgt::TextureSampleType::Float { .. } => vk::ClearColorValue {
+                float32: [cv.r as f32, cv.g as f32, cv.b as f32, cv.a as f32],
+            },
             wgt::TextureSampleType::Sint => vk::ClearColorValue {
                 int32: [cv.r as i32, cv.g as i32, cv.b as i32, cv.a as i32],
             },
             wgt::TextureSampleType::Uint => vk::ClearColorValue {
                 uint32: [cv.r as u32, cv.g as u32, cv.b as u32, cv.a as u32],
             },
+            wgt::TextureSampleType::Depth => unreachable!(),
         }
     }
 }
