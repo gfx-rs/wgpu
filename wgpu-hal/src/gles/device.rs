@@ -293,7 +293,10 @@ impl super::Device {
         };
         let mut guard = self.shared.program_cache.lock();
         let program = guard
-            .entry((program_stages, group_to_binding_to_slot.into_boxed_slice()))
+            .entry(super::ProgramCacheKey {
+                stages: program_stages,
+                group_to_binding_to_slot: group_to_binding_to_slot.into_boxed_slice(),
+            })
             .or_insert_with(|| unsafe {
                 Self::create_program(
                     gl,

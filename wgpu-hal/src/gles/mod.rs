@@ -510,10 +510,13 @@ struct ProgramStage {
     entry_point: String,
 }
 
-type ProgramCache = FastHashMap<
-    (ArrayVec<ProgramStage, 3>, Box<[Box<[u8]>]>),
-    Result<Arc<PipelineInner>, crate::PipelineError>,
->;
+#[derive(PartialEq, Eq, Hash)]
+struct ProgramCacheKey {
+    stages: ArrayVec<ProgramStage, 3>,
+    group_to_binding_to_slot: Box<[Box<[u8]>]>,
+}
+
+type ProgramCache = FastHashMap<ProgramCacheKey, Result<Arc<PipelineInner>, crate::PipelineError>>;
 
 pub struct RenderPipeline {
     inner: Arc<PipelineInner>,
