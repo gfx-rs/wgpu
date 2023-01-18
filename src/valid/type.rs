@@ -380,14 +380,6 @@ impl super::Validator {
                 }
 
                 let base_layout = self.layouter[base];
-                let expected_stride = base_layout.to_stride();
-                if stride != expected_stride {
-                    return Err(TypeError::InvalidArrayStride {
-                        stride,
-                        expected: expected_stride,
-                    });
-                }
-
                 let general_alignment = base_layout.alignment;
                 let uniform_layout = match base_info.uniform_layout {
                     Ok(base_alignment) => {
