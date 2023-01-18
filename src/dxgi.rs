@@ -5,7 +5,7 @@ use winapi::{
         dxgi, dxgi1_2, dxgi1_3, dxgi1_4, dxgi1_5, dxgi1_6, dxgiformat, dxgitype, minwindef::TRUE,
         windef::HWND,
     },
-    um::{d3d12, dxgidebug, unknwnbase::IUnknown},
+    um::{d3d12, dxgidebug, unknwnbase::IUnknown, winnt::HANDLE},
     Interface,
 };
 
@@ -76,6 +76,8 @@ crate::weak_com_inheritance_chain! {
     }
 }
 
+pub type FactoryMedia = WeakPtr<dxgi1_3::IDXGIFactoryMedia>;
+
 pub type SwapChain = WeakPtr<dxgi::IDXGISwapChain>;
 pub type SwapChain1 = WeakPtr<dxgi1_2::IDXGISwapChain1>;
 pub type SwapChain2 = WeakPtr<dxgi1_3::IDXGISwapChain2>;
@@ -135,6 +137,22 @@ impl DxgiLib {
         let hr = unsafe {
             let func: libloading::Symbol<Fun> = self.lib.get(b"CreateDXGIFactory1")?;
             func(&dxgi::IDXGIFactory1::uuidof(), factory.mut_void())
+        };
+
+        Ok((factory, hr))
+    }
+
+    pub fn create_factory_media(&self) -> Result<D3DResult<FactoryMedia>, libloading::Error> {
+        type Fun = extern "system" fn(
+            winapi::shared::guiddef::REFIID,
+            *mut *mut winapi::ctypes::c_void,
+        ) -> HRESULT;
+
+        let mut factory = FactoryMedia::null();
+        let hr = unsafe {
+            // https://learn.microsoft.com/en-us/windows/win32/api/dxgi1_3/nn-dxgi1_3-idxgifactorymedia
+            let func: libloading::Symbol<Fun> = self.lib.get(b"CreateDXGIFactory1")?;
+            func(&dxgi1_3::IDXGIFactoryMedia::uuidof(), factory.mut_void())
         };
 
         Ok((factory, hr))
@@ -292,6 +310,28 @@ impl Factory4 {
         let hr = unsafe { self.EnumAdapters1(id, adapter.mut_void() as *mut *mut _) };
 
         (adapter, hr)
+    }
+}
+
+impl FactoryMedia {
+    pub fn create_swapchain_for_composition_surface_handle(
+        &self,
+        queue: *mut IUnknown,
+        surface_handle: HANDLE,
+        desc: &SwapchainDesc,
+    ) -> D3DResult<SwapChain1> {
+        let mut swap_chain = SwapChain1::null();
+        let hr = unsafe {
+            self.CreateSwapChainForCompositionSurfaceHandle(
+                queue,
+                surface_handle,
+                &desc.to_desc1(),
+                ptr::null_mut(),
+                swap_chain.mut_void() as *mut *mut _,
+            )
+        };
+
+        (swap_chain, hr)
     }
 }
 
