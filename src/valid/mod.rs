@@ -87,7 +87,7 @@ bitflags::bitflags! {
     #[derive(Default)]
     #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
     #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
-    pub struct Capabilities: u8 {
+    pub struct Capabilities: u16 {
         /// Support for [`AddressSpace:PushConstant`].
         const PUSH_CONSTANT = 0x1;
         /// Float values with width = 8.
@@ -104,6 +104,8 @@ bitflags::bitflags! {
         const CLIP_DISTANCE = 0x40;
         /// Support for [`Builtin::CullDistance`].
         const CULL_DISTANCE = 0x80;
+        /// Support for 16-bit normalized storage texture formats.
+        const STORAGE_TEXTURE_16BIT_NORM_FORMATS = 0x100;
     }
 }
 

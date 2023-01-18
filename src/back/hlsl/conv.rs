@@ -115,14 +115,14 @@ impl crate::StorageFormat {
     pub(super) const fn to_hlsl_str(self) -> &'static str {
         match self {
             Self::R16Float => "float",
-            Self::R8Unorm => "unorm float",
-            Self::R8Snorm => "snorm float",
+            Self::R8Unorm | Self::R16Unorm => "unorm float",
+            Self::R8Snorm | Self::R16Snorm => "snorm float",
             Self::R8Uint | Self::R16Uint => "uint",
             Self::R8Sint | Self::R16Sint => "int",
 
             Self::Rg16Float => "float2",
-            Self::Rg8Unorm => "unorm float2",
-            Self::Rg8Snorm => "snorm float2",
+            Self::Rg8Unorm | Self::Rg16Unorm => "unorm float2",
+            Self::Rg8Snorm | Self::Rg16Snorm => "snorm float2",
 
             Self::Rg8Sint | Self::Rg16Sint => "int2",
             Self::Rg8Uint | Self::Rg16Uint => "uint2",
@@ -130,8 +130,8 @@ impl crate::StorageFormat {
             Self::Rg11b10Float => "float3",
 
             Self::Rgba16Float | Self::R32Float | Self::Rg32Float | Self::Rgba32Float => "float4",
-            Self::Rgba8Unorm | Self::Rgb10a2Unorm => "unorm float4",
-            Self::Rgba8Snorm => "snorm float4",
+            Self::Rgba8Unorm | Self::Rgba16Unorm | Self::Rgb10a2Unorm => "unorm float4",
+            Self::Rgba8Snorm | Self::Rgba16Snorm => "snorm float4",
 
             Self::Rgba8Uint
             | Self::Rgba16Uint

@@ -979,6 +979,12 @@ impl From<crate::StorageFormat> for spirv::ImageFormat {
             Sf::Rgba32Uint => Self::Rgba32ui,
             Sf::Rgba32Sint => Self::Rgba32i,
             Sf::Rgba32Float => Self::Rgba32f,
+            Sf::R16Unorm => Self::R16,
+            Sf::R16Snorm => Self::R16Snorm,
+            Sf::Rg16Unorm => Self::Rg16,
+            Sf::Rg16Snorm => Self::Rg16Snorm,
+            Sf::Rgba16Unorm => Self::Rgba16,
+            Sf::Rgba16Snorm => Self::Rgba16Snorm,
         }
     }
 }

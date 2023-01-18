@@ -1987,6 +1987,12 @@ const fn storage_format_str(format: crate::StorageFormat) -> &'static str {
         Sf::Rgba32Uint => "rgba32uint",
         Sf::Rgba32Sint => "rgba32sint",
         Sf::Rgba32Float => "rgba32float",
+        Sf::R16Unorm => "r16unorm",
+        Sf::R16Snorm => "r16snorm",
+        Sf::Rg16Unorm => "rg16unorm",
+        Sf::Rg16Snorm => "rg16snorm",
+        Sf::Rgba16Unorm => "rgba16unorm",
+        Sf::Rgba16Snorm => "rgba16snorm",
     }
 }
 
