@@ -25,6 +25,7 @@ fn write_texture_subset() {
                 | wgpu::TextureUsages::TEXTURE_BINDING,
             mip_level_count: 1,
             sample_count: 1,
+            view_formats: &[],
         });
         let data = vec![1u8; size as usize * 2];
         // Write the first two rows

@@ -896,7 +896,7 @@ static_assertions::assert_impl_all!(RenderBundleDescriptor: Send, Sync);
 ///
 /// Corresponds to [WebGPU `GPUTextureDescriptor`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gputexturedescriptor).
-pub type TextureDescriptor<'a> = wgt::TextureDescriptor<Label<'a>>;
+pub type TextureDescriptor<'a> = wgt::TextureDescriptor<Label<'a>, &'a [TextureFormat]>;
 static_assertions::assert_impl_all!(TextureDescriptor: Send, Sync);
 /// Describes a [`QuerySet`].
 ///
@@ -2054,6 +2054,7 @@ impl Device {
             owned: true,
             descriptor: TextureDescriptor {
                 label: None,
+                view_formats: &[],
                 ..desc.clone()
             },
         }
@@ -2090,6 +2091,7 @@ impl Device {
             owned: true,
             descriptor: TextureDescriptor {
                 label: None,
+                view_formats: &[],
                 ..desc.clone()
             },
         }
@@ -4095,6 +4097,7 @@ impl Surface {
             mip_level_count: 1,
             sample_count: 1,
             dimension: TextureDimension::D2,
+            view_formats: &[],
         };
 
         texture_id

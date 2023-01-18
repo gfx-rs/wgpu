@@ -308,7 +308,7 @@ pub(crate) fn clear_texture<A: HalApi>(
 }
 
 fn clear_texture_via_buffer_copies<A: hal::Api>(
-    texture_desc: &wgt::TextureDescriptor<()>,
+    texture_desc: &wgt::TextureDescriptor<(), Vec<wgt::TextureFormat>>,
     alignments: &hal::Alignments,
     zero_buffer: &A::Buffer, // Buffer of size device::ZERO_BUFFER_SIZE
     range: TextureInitRange,

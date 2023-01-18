@@ -1142,6 +1142,11 @@ bitflags::bitflags! {
         ///
         /// Corresponds to Vulkan's `VkPhysicalDeviceFeatures.depthBiasClamp`
         const DEPTH_BIAS_CLAMP = 1 << 18;
+
+        /// Supports specifying which view format values are allowed when create_view() is called on a texture.
+        ///
+        /// The WebGL and GLES backends doesn't support this.
+        const VIEW_FORMATS = 1 << 19;
     }
 }
 
@@ -2538,6 +2543,29 @@ impl TextureFormat {
                 allowed_usages,
                 flags,
             },
+        }
+    }
+
+    /// Strips the `Srgb` suffix from the given texture format.
+    pub fn remove_srgb_suffix(&self) -> TextureFormat {
+        match *self {
+            Self::Rgba8UnormSrgb => Self::Rgba8Unorm,
+            Self::Bgra8UnormSrgb => Self::Bgra8Unorm,
+            Self::Bc1RgbaUnormSrgb => Self::Bc1RgbaUnorm,
+            Self::Bc2RgbaUnormSrgb => Self::Bc2RgbaUnorm,
+            Self::Bc3RgbaUnormSrgb => Self::Bc3RgbaUnorm,
+            Self::Bc7RgbaUnormSrgb => Self::Bc7RgbaUnorm,
+            Self::Etc2Rgb8UnormSrgb => Self::Etc2Rgb8Unorm,
+            Self::Etc2Rgb8A1UnormSrgb => Self::Etc2Rgb8A1Unorm,
+            Self::Etc2Rgba8UnormSrgb => Self::Etc2Rgba8Unorm,
+            Self::Astc {
+                block,
+                channel: AstcChannel::UnormSrgb,
+            } => Self::Astc {
+                block,
+                channel: AstcChannel::Unorm,
+            },
+            _ => *self,
         }
     }
 }
@@ -4322,7 +4350,7 @@ fn test_max_mips() {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
-pub struct TextureDescriptor<L> {
+pub struct TextureDescriptor<L, V> {
     /// Debug label of the texture. This will show up in graphics debuggers for easy identification.
     pub label: L,
     /// Size of the texture. All components must be greater than zero. For a
@@ -4339,12 +4367,17 @@ pub struct TextureDescriptor<L> {
     pub format: TextureFormat,
     /// Allowed usages of the texture. If used in other ways, the operation will panic.
     pub usage: TextureUsages,
-    // TODO: missing view_formats https://www.w3.org/TR/webgpu/#dom-gputexturedescriptor-viewformats
+    /// Specifies what view formats will be allowed when calling create_view() on this texture.
+    ///
+    /// View formats of the same format as the texture are always allowed.
+    ///
+    /// Note: currently, only the srgb-ness is allowed to change. (ex: Rgba8Unorm texture + Rgba8UnormSrgb view)
+    pub view_formats: V,
 }
 
-impl<L> TextureDescriptor<L> {
+impl<L, V: Clone> TextureDescriptor<L, V> {
     /// Takes a closure and maps the label of the texture descriptor into another.
-    pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> TextureDescriptor<K> {
+    pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> TextureDescriptor<K, V> {
         TextureDescriptor {
             label: fun(&self.label),
             size: self.size,
@@ -4353,6 +4386,25 @@ impl<L> TextureDescriptor<L> {
             dimension: self.dimension,
             format: self.format,
             usage: self.usage,
+            view_formats: self.view_formats.clone(),
+        }
+    }
+
+    /// Maps the label and view_formats of the texture descriptor into another.
+    pub fn map_label_and_view_formats<K, M>(
+        &self,
+        l_fun: impl FnOnce(&L) -> K,
+        v_fun: impl FnOnce(V) -> M,
+    ) -> TextureDescriptor<K, M> {
+        TextureDescriptor {
+            label: l_fun(&self.label),
+            size: self.size,
+            mip_level_count: self.mip_level_count,
+            sample_count: self.sample_count,
+            dimension: self.dimension,
+            format: self.format,
+            usage: self.usage,
+            view_formats: v_fun(self.view_formats.clone()),
         }
     }
 
@@ -4365,7 +4417,8 @@ impl<L> TextureDescriptor<L> {
     ///
     /// ```rust
     /// # use wgpu_types as wgpu;
-    /// let desc = wgpu::TextureDescriptor {
+    /// # type TextureDescriptor<'a> = wgpu::TextureDescriptor<(), &'a [wgpu::TextureFormat]>;
+    /// let desc  = TextureDescriptor {
     ///   label: (),
     ///   size: wgpu::Extent3d { width: 100, height: 60, depth_or_array_layers: 1 },
     ///   mip_level_count: 7,
@@ -4373,6 +4426,7 @@ impl<L> TextureDescriptor<L> {
     ///   dimension: wgpu::TextureDimension::D3,
     ///   format: wgpu::TextureFormat::Rgba8Sint,
     ///   usage: wgpu::TextureUsages::empty(),
+    ///   view_formats: &[],
     /// };
     ///
     /// assert_eq!(desc.mip_level_size(0), Some(wgpu::Extent3d { width: 100, height: 60, depth_or_array_layers: 1 }));
@@ -5090,7 +5144,7 @@ impl ImageSubresourceRange {
     }
 
     /// Returns the mip level range of a subresource range describes for a specific texture.
-    pub fn mip_range<L>(&self, texture_desc: &TextureDescriptor<L>) -> Range<u32> {
+    pub fn mip_range<L, V>(&self, texture_desc: &TextureDescriptor<L, V>) -> Range<u32> {
         self.base_mip_level..match self.mip_level_count {
             Some(mip_level_count) => self.base_mip_level + mip_level_count.get(),
             None => texture_desc.mip_level_count,
@@ -5098,7 +5152,7 @@ impl ImageSubresourceRange {
     }
 
     /// Returns the layer range of a subresource range describes for a specific texture.
-    pub fn layer_range<L>(&self, texture_desc: &TextureDescriptor<L>) -> Range<u32> {
+    pub fn layer_range<L, V>(&self, texture_desc: &TextureDescriptor<L, V>) -> Range<u32> {
         self.base_array_layer..match self.array_layer_count {
             Some(array_layer_count) => self.base_array_layer + array_layer_count.get(),
             None => {

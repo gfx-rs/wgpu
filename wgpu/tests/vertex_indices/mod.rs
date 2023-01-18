@@ -97,6 +97,7 @@ fn pulling_common(
                 dimension: wgpu::TextureDimension::D2,
                 format: wgpu::TextureFormat::Rgba8Unorm,
                 usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_DST,
+                view_formats: &[],
             },
             &[0, 0, 0, 1],
         )

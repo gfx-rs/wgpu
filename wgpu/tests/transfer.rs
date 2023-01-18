@@ -21,6 +21,7 @@ fn copy_overflow_z() {
             usage: wgpu::TextureUsages::COPY_DST,
             mip_level_count: 1,
             sample_count: 1,
+            view_formats: &[],
         });
         let t2 = ctx.device.create_texture(&wgpu::TextureDescriptor {
             label: None,
@@ -34,6 +35,7 @@ fn copy_overflow_z() {
             usage: wgpu::TextureUsages::COPY_DST,
             mip_level_count: 1,
             sample_count: 1,
+            view_formats: &[],
         });
 
         fail(&ctx.device, || {

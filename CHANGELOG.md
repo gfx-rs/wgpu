@@ -107,6 +107,18 @@ Additionally `Surface::get_default_config` now returns an Option and returns Non
 
 `wgpu`'s DX12 backend can now suballocate buffers and textures when the `windows_rs` feature is enabled, which can give a significant increase in performance (in testing I've seen a 10000%+ improvement in a simple scene with 200 `write_buffer` calls per frame, and a 40%+ improvement in [Bistro using Bevy](https://github.com/vleue/bevy_bistro_playground)). Previously `wgpu-hal`'s DX12 backend created a new heap on the GPU every time you called write_buffer (by calling `CreateCommittedResource`), whereas now with the `windows_rs` feature enabled it uses [`gpu_allocator`](https://crates.io/crates/gpu-allocator) to manage GPU memory (and calls `CreatePlacedResource` with a suballocated heap). By @Elabajaba in [#3163](https://github.com/gfx-rs/wgpu/pull/3163)
 
+#### Texture Format Reinterpretation
+
+The `view_formats` field is used to specify formats that are compatible with the texture format to allow the creation of views with different formats, currently, only changing srgb-ness is allowed.
+
+```diff
+let texture = device.create_texture(&wgpu::TextureDescriptor {
+  // ...
+  format: TextureFormat::Rgba8UnormSrgb,
++ view_formats: &[TextureFormat::Rgba8Unorm],
+});
+```
+
 ### Changes
 
 #### General
@@ -125,6 +137,7 @@ Additionally `Surface::get_default_config` now returns an Option and returns Non
 - Make `ObjectId` structure and invariants idiomatic. By @teoxoy in [#3347](https://github.com/gfx-rs/wgpu/pull/3347)
 - Add validation in accordance with WebGPU `GPUSamplerDescriptor` valid usage for `lodMinClamp` and `lodMaxClamp`. By @James2022-rgb in [#3353](https://github.com/gfx-rs/wgpu/pull/3353)
 - Remove panics in `Deref` implementations for `QueueWriteBufferView` and `BufferViewMut`. Instead, warnings are logged, since reading from these types is not recommended. By @botahamec in [#3336]
+- Implement `view_formats` in TextureDescriptor to match the WebGPU spec. By @jinleili in [#3237](https://github.com/gfx-rs/wgpu/pull/3237)
 
 #### WebGPU
 

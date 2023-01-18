@@ -297,7 +297,7 @@ impl<A: hal::Api> Resource for StagingBuffer<A> {
     }
 }
 
-pub type TextureDescriptor<'a> = wgt::TextureDescriptor<Label<'a>>;
+pub type TextureDescriptor<'a> = wgt::TextureDescriptor<Label<'a>, Vec<wgt::TextureFormat>>;
 
 #[derive(Debug)]
 pub(crate) enum TextureInner<A: hal::Api> {
@@ -338,7 +338,7 @@ pub enum TextureClearMode<A: hal::Api> {
 pub struct Texture<A: hal::Api> {
     pub(crate) inner: TextureInner<A>,
     pub(crate) device_id: Stored<DeviceId>,
-    pub(crate) desc: wgt::TextureDescriptor<()>,
+    pub(crate) desc: wgt::TextureDescriptor<(), Vec<wgt::TextureFormat>>,
     pub(crate) hal_usage: hal::TextureUses,
     pub(crate) format_features: wgt::TextureFormatFeatures,
     pub(crate) initialization_status: TextureInitTracker,
@@ -507,6 +507,8 @@ pub enum CreateTextureError {
         if *.2 { " due to downlevel restrictions" } else { "" }
     )]
     InvalidFormatUsages(wgt::TextureUsages, wgt::TextureFormat, bool),
+    #[error("The view format {0:?} is not compatible with texture format {1:?}, only changing srgb-ness is allowed.")]
+    InvalidViewFormat(wgt::TextureFormat, wgt::TextureFormat),
     #[error("Texture usages {0:?} are not allowed on a texture of dimensions {1:?}")]
     InvalidDimensionUsages(wgt::TextureUsages, wgt::TextureDimension),
     #[error("Texture usage STORAGE_BINDING is not allowed for multisampled textures")]
@@ -626,6 +628,8 @@ pub enum CreateTextureViewError {
         texture: wgt::TextureFormat,
         view: wgt::TextureFormat,
     },
+    #[error(transparent)]
+    MissingDownlevelFlags(#[from] MissingDownlevelFlags),
 }
 
 #[derive(Clone, Debug, Error)]
