@@ -291,7 +291,11 @@ impl super::Device {
             naga::back::glsl::Version::Embedded { version, .. } => version,
             naga::back::glsl::Version::Desktop(_) => unreachable!(),
         };
-        let mut guard = self.shared.program_cache.lock();
+        let mut guard = self
+            .shared
+            .program_cache
+            .try_lock()
+            .expect("Couldn't acquire program_cache lock");
         let program = guard
             .entry(super::ProgramCacheKey {
                 stages: program_stages,
