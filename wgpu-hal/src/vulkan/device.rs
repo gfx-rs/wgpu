@@ -895,6 +895,10 @@ impl crate::Device<super::Api> for super::Device {
             raw_flags |= vk::ImageCreateFlags::CUBE_COMPATIBLE;
         }
 
+        if desc.allow_different_view_format {
+            raw_flags |= vk::ImageCreateFlags::MUTABLE_FORMAT;
+        }
+
         let vk_info = vk::ImageCreateInfo::builder()
             .flags(raw_flags)
             .image_type(conv::map_texture_dimension(desc.dimension))

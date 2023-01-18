@@ -331,7 +331,8 @@ impl PhysicalDeviceFeatures {
             | Df::DEPTH_TEXTURE_AND_BUFFER_COPIES
             | Df::BUFFER_BINDINGS_NOT_16_BYTE_ALIGNED
             | Df::UNRESTRICTED_INDEX_BUFFER
-            | Df::INDIRECT_EXECUTION;
+            | Df::INDIRECT_EXECUTION
+            | Df::VIEW_FORMATS;
 
         dl_flags.set(Df::CUBE_ARRAY_TEXTURES, self.core.image_cube_array != 0);
         dl_flags.set(Df::ANISOTROPIC_FILTERING, self.core.sampler_anisotropy != 0);
