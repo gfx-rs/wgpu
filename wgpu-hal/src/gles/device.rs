@@ -372,7 +372,8 @@ impl super::Device {
             }
         }
 
-        let mut uniforms: [super::UniformDesc; super::MAX_PUSH_CONSTANTS] = Default::default();
+        let mut uniforms: [super::UniformDesc; super::MAX_PUSH_CONSTANTS] =
+            [None; super::MAX_PUSH_CONSTANTS].map(|_: Option<()>| Default::default());
         let count = unsafe { gl.get_active_uniforms(program) };
         let mut offset = 0;
 
@@ -380,7 +381,7 @@ impl super::Device {
             let glow::ActiveUniform { utype, name, .. } =
                 unsafe { gl.get_active_uniform(program, uniform) }.unwrap();
 
-            if conv::is_sampler(utype) {
+            if conv::is_opaque_type(utype) {
                 continue;
             }
 
@@ -499,7 +500,10 @@ impl crate::Device<super::Api> for super::Device {
                     glow::DYNAMIC_DRAW
                 }
             } else {
-                glow::STATIC_DRAW
+                // Even if the usage doesn't contain SRC_READ, we update it internally at least once
+                // Some vendors take usage very literally and STATIC_DRAW will freeze us with an empty buffer
+                // https://github.com/gfx-rs/wgpu/issues/3371
+                glow::DYNAMIC_DRAW
             };
             unsafe { gl.buffer_data_size(target, raw_size, usage) };
         }

@@ -86,6 +86,7 @@ async fn create_red_image_with_dimensions(
         format: wgpu::TextureFormat::Rgba8UnormSrgb,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
         label: None,
+        view_formats: &[],
     });
 
     // Set the background to be red

@@ -5,6 +5,10 @@ use parking_lot::Mutex;
 
 use std::{collections::BTreeMap, ffi::CStr, sync::Arc};
 
+fn depth_stencil_required_flags() -> vk::FormatFeatureFlags {
+    vk::FormatFeatureFlags::SAMPLED_IMAGE | vk::FormatFeatureFlags::DEPTH_STENCIL_ATTACHMENT
+}
+
 //TODO: const fn?
 fn indexing_features() -> wgt::Features {
     wgt::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING
@@ -172,9 +176,7 @@ impl PhysicalDeviceFeatures {
                 //.shader_resource_residency(requested_features.contains(wgt::Features::SHADER_RESOURCE_RESIDENCY))
                 .geometry_shader(requested_features.contains(wgt::Features::SHADER_PRIMITIVE_INDEX))
                 .build(),
-            descriptor_indexing: if enabled_extensions
-                .contains(&vk::ExtDescriptorIndexingFn::name())
-            {
+            descriptor_indexing: if requested_features.intersects(indexing_features()) {
                 Some(
                     vk::PhysicalDeviceDescriptorIndexingFeaturesEXT::builder()
                         .shader_sampled_image_array_non_uniform_indexing(
@@ -229,7 +231,9 @@ impl PhysicalDeviceFeatures {
             } else {
                 None
             },
-            image_robustness: if enabled_extensions.contains(&vk::ExtImageRobustnessFn::name()) {
+            image_robustness: if effective_api_version >= vk::API_VERSION_1_3
+                || enabled_extensions.contains(&vk::ExtImageRobustnessFn::name())
+            {
                 Some(
                     vk::PhysicalDeviceImageRobustnessFeaturesEXT::builder()
                         .robust_image_access(private_caps.robust_image_access)
@@ -325,7 +329,6 @@ impl PhysicalDeviceFeatures {
             | Df::VERTEX_STORAGE
             | Df::FRAGMENT_STORAGE
             | Df::DEPTH_TEXTURE_AND_BUFFER_COPIES
-            | Df::WEBGPU_TEXTURE_FORMAT_SUPPORT
             | Df::BUFFER_BINDINGS_NOT_16_BYTE_ALIGNED
             | Df::UNRESTRICTED_INDEX_BUFFER
             | Df::INDIRECT_EXECUTION;
@@ -412,7 +415,7 @@ impl PhysicalDeviceFeatures {
         //if caps.supports_extension(vk::ExtSamplerFilterMinmaxFn::name()) {
         features.set(
             F::MULTI_DRAW_INDIRECT_COUNT,
-            caps.supports_extension(khr::DrawIndirectCount::name()),
+            caps.supports_extension(vk::KhrDrawIndirectCountFn::name()),
         );
         features.set(
             F::CONSERVATIVE_RASTERIZATION,
@@ -487,16 +490,30 @@ impl PhysicalDeviceFeatures {
             );
         }
 
-        features.set(
-            F::DEPTH32FLOAT_STENCIL8,
+        let supports_depth_format = |format| {
             supports_format(
                 instance,
                 phd,
-                vk::Format::D32_SFLOAT_S8_UINT,
+                format,
                 vk::ImageTiling::OPTIMAL,
-                vk::FormatFeatureFlags::DEPTH_STENCIL_ATTACHMENT,
-            ),
+                depth_stencil_required_flags(),
+            )
+        };
+
+        let texture_s8 = supports_depth_format(vk::Format::S8_UINT);
+        let texture_d32 = supports_depth_format(vk::Format::D32_SFLOAT);
+        let texture_d24_s8 = supports_depth_format(vk::Format::D24_UNORM_S8_UINT);
+        let texture_d32_s8 = supports_depth_format(vk::Format::D32_SFLOAT_S8_UINT);
+
+        let stencil8 = texture_s8 || texture_d24_s8;
+        let depth24_plus_stencil8 = texture_d24_s8 || texture_d32_s8;
+
+        dl_flags.set(
+            Df::WEBGPU_TEXTURE_FORMAT_SUPPORT,
+            stencil8 && depth24_plus_stencil8 && texture_d32,
         );
+
+        features.set(F::DEPTH32FLOAT_STENCIL8, texture_d32_s8);
 
         (features, dl_flags)
     }
@@ -554,45 +571,73 @@ impl PhysicalDeviceCapabilities {
     fn get_required_extensions(&self, requested_features: wgt::Features) -> Vec<&'static CStr> {
         let mut extensions = Vec::new();
 
-        extensions.push(khr::Swapchain::name());
+        // Note that quite a few extensions depend on the `VK_KHR_get_physical_device_properties2` instance extension.
+        // We enable `VK_KHR_get_physical_device_properties2` unconditionally (if available).
+
+        // Require `VK_KHR_swapchain`
+        extensions.push(vk::KhrSwapchainFn::name());
 
         if self.effective_api_version < vk::API_VERSION_1_1 {
-            extensions.push(vk::KhrMaintenance1Fn::name());
-            extensions.push(vk::KhrMaintenance2Fn::name());
-
-            // `VK_KHR_storage_buffer_storage_class` required for Naga on Vulkan 1.0 devices
-            extensions.push(vk::KhrStorageBufferStorageClassFn::name());
-
-            // Below Vulkan 1.1 we can get multiview from an extension
-            if requested_features.contains(wgt::Features::MULTIVIEW) {
-                extensions.push(vk::KhrMultiviewFn::name());
+            // Require either `VK_KHR_maintenance1` or `VK_AMD_negative_viewport_height`
+            if self.supports_extension(vk::KhrMaintenance1Fn::name()) {
+                extensions.push(vk::KhrMaintenance1Fn::name());
+            } else {
+                // `VK_AMD_negative_viewport_height` is obsoleted by `VK_KHR_maintenance1` and must not be enabled alongside it
+                extensions.push(vk::AmdNegativeViewportHeightFn::name());
             }
 
-            // `VK_AMD_negative_viewport_height` is obsoleted by `VK_KHR_maintenance1` and must not be enabled alongside `VK_KHR_maintenance1` or a 1.1+ device.
-            if !self.supports_extension(vk::KhrMaintenance1Fn::name()) {
-                extensions.push(vk::AmdNegativeViewportHeightFn::name());
+            // Optional `VK_KHR_maintenance2`
+            if self.supports_extension(vk::KhrMaintenance2Fn::name()) {
+                extensions.push(vk::KhrMaintenance2Fn::name());
+            }
+
+            // Require `VK_KHR_storage_buffer_storage_class`
+            extensions.push(vk::KhrStorageBufferStorageClassFn::name());
+
+            // Require `VK_KHR_multiview` if the associated feature was requested
+            if requested_features.contains(wgt::Features::MULTIVIEW) {
+                extensions.push(vk::KhrMultiviewFn::name());
             }
         }
 
         if self.effective_api_version < vk::API_VERSION_1_2 {
+            // Optional `VK_KHR_imageless_framebuffer`
             if self.supports_extension(vk::KhrImagelessFramebufferFn::name()) {
                 extensions.push(vk::KhrImagelessFramebufferFn::name());
-                extensions.push(vk::KhrImageFormatListFn::name()); // Required for `KhrImagelessFramebufferFn`
+                // Require `VK_KHR_image_format_list` due to it being a dependency
+                extensions.push(vk::KhrImageFormatListFn::name());
+                // Require `VK_KHR_maintenance2` due to it being a dependency
+                if self.effective_api_version < vk::API_VERSION_1_1 {
+                    extensions.push(vk::KhrMaintenance2Fn::name());
+                }
             }
 
-            // This extension is core in Vulkan 1.2
+            // Optional `VK_KHR_driver_properties`
             if self.supports_extension(vk::KhrDriverPropertiesFn::name()) {
                 extensions.push(vk::KhrDriverPropertiesFn::name());
             }
 
-            extensions.push(vk::ExtSamplerFilterMinmaxFn::name());
-            extensions.push(vk::KhrTimelineSemaphoreFn::name());
+            // Optional `VK_KHR_timeline_semaphore`
+            if self.supports_extension(vk::KhrTimelineSemaphoreFn::name()) {
+                extensions.push(vk::KhrTimelineSemaphoreFn::name());
+            }
 
+            // Require `VK_EXT_descriptor_indexing` if one of the associated features was requested
             if requested_features.intersects(indexing_features()) {
                 extensions.push(vk::ExtDescriptorIndexingFn::name());
 
+                // Require `VK_KHR_maintenance3` due to it being a dependency
                 if self.effective_api_version < vk::API_VERSION_1_1 {
                     extensions.push(vk::KhrMaintenance3Fn::name());
+                }
+            }
+
+            // Require `VK_KHR_shader_float16_int8` and `VK_KHR_16bit_storage` if the associated feature was requested
+            if requested_features.contains(wgt::Features::SHADER_FLOAT16) {
+                extensions.push(vk::KhrShaderFloat16Int8Fn::name());
+                // `VK_KHR_16bit_storage` requires `VK_KHR_storage_buffer_storage_class`, however we require that one already
+                if self.effective_api_version < vk::API_VERSION_1_1 {
+                    extensions.push(vk::Khr16bitStorageFn::name());
                 }
             }
 
@@ -600,30 +645,42 @@ impl PhysicalDeviceCapabilities {
             //extensions.push(vk::ExtSamplerFilterMinmaxFn::name());
         }
 
+        if self.effective_api_version < vk::API_VERSION_1_3 {
+            // Optional `VK_EXT_image_robustness`
+            if self.supports_extension(vk::ExtImageRobustnessFn::name()) {
+                extensions.push(vk::ExtImageRobustnessFn::name());
+            }
+        }
+
+        // Optional `VK_EXT_robustness2`
+        if self.supports_extension(vk::ExtRobustness2Fn::name()) {
+            extensions.push(vk::ExtRobustness2Fn::name());
+        }
+
+        // Require `VK_KHR_draw_indirect_count` if the associated feature was requested
         // Even though Vulkan 1.2 has promoted the extension to core, we must require the extension to avoid
         // large amounts of spaghetti involved with using PhysicalDeviceVulkan12Features.
         if requested_features.contains(wgt::Features::MULTI_DRAW_INDIRECT_COUNT) {
             extensions.push(vk::KhrDrawIndirectCountFn::name());
         }
 
+        // Require `VK_EXT_conservative_rasterization` if the associated feature was requested
         if requested_features.contains(wgt::Features::CONSERVATIVE_RASTERIZATION) {
             extensions.push(vk::ExtConservativeRasterizationFn::name());
         }
 
+        // Require `VK_EXT_depth_clip_enable` if the associated feature was requested
         if requested_features.contains(wgt::Features::DEPTH_CLIP_CONTROL) {
             extensions.push(vk::ExtDepthClipEnableFn::name());
         }
 
+        // Require `VK_KHR_portability_subset` on macOS/iOS
         #[cfg(any(target_os = "macos", target_os = "ios"))]
         extensions.push(vk::KhrPortabilitySubsetFn::name());
 
+        // Require `VK_EXT_texture_compression_astc_hdr` if the associated feature was requested
         if requested_features.contains(wgt::Features::TEXTURE_COMPRESSION_ASTC_HDR) {
             extensions.push(vk::ExtTextureCompressionAstcHdrFn::name());
-        }
-
-        if requested_features.contains(wgt::Features::SHADER_FLOAT16) {
-            extensions.push(vk::KhrShaderFloat16Int8Fn::name());
-            extensions.push(vk::Khr16bitStorageFn::name());
         }
 
         extensions
@@ -762,13 +819,12 @@ impl super::InstanceShared {
                 self.get_physical_device_properties
             {
                 // Get these now to avoid borrowing conflicts later
-                let supports_descriptor_indexing =
-                    capabilities.supports_extension(vk::ExtDescriptorIndexingFn::name());
-                let supports_driver_properties = capabilities.properties.api_version
-                    >= vk::API_VERSION_1_2
+                let supports_descriptor_indexing = self.driver_api_version >= vk::API_VERSION_1_2
+                    || capabilities.supports_extension(vk::ExtDescriptorIndexingFn::name());
+                let supports_driver_properties = self.driver_api_version >= vk::API_VERSION_1_2
                     || capabilities.supports_extension(vk::KhrDriverPropertiesFn::name());
 
-                let mut builder = vk::PhysicalDeviceProperties2::builder();
+                let mut builder = vk::PhysicalDeviceProperties2KHR::builder();
 
                 if supports_descriptor_indexing {
                     let next = capabilities
@@ -1002,20 +1058,27 @@ impl super::Instance {
                     .timeline_semaphore
                     .map_or(false, |ext| ext.timeline_semaphore != 0),
             },
-            texture_d24: unsafe {
-                self.shared
-                    .raw
-                    .get_physical_device_format_properties(phd, vk::Format::X8_D24_UNORM_PACK32)
-                    .optimal_tiling_features
-                    .contains(vk::FormatFeatureFlags::DEPTH_STENCIL_ATTACHMENT)
-            },
-            texture_d24_s8: unsafe {
-                self.shared
-                    .raw
-                    .get_physical_device_format_properties(phd, vk::Format::D24_UNORM_S8_UINT)
-                    .optimal_tiling_features
-                    .contains(vk::FormatFeatureFlags::DEPTH_STENCIL_ATTACHMENT)
-            },
+            texture_d24: supports_format(
+                &self.shared.raw,
+                phd,
+                vk::Format::X8_D24_UNORM_PACK32,
+                vk::ImageTiling::OPTIMAL,
+                depth_stencil_required_flags(),
+            ),
+            texture_d24_s8: supports_format(
+                &self.shared.raw,
+                phd,
+                vk::Format::D24_UNORM_S8_UINT,
+                vk::ImageTiling::OPTIMAL,
+                depth_stencil_required_flags(),
+            ),
+            texture_s8: supports_format(
+                &self.shared.raw,
+                phd,
+                vk::Format::S8_UINT,
+                vk::ImageTiling::OPTIMAL,
+                depth_stencil_required_flags(),
+            ),
             non_coherent_map_mask: phd_capabilities.properties.limits.non_coherent_atom_size - 1,
             can_present: true,
             //TODO: make configurable
@@ -1404,10 +1467,10 @@ impl crate::Adapter<super::Api> for super::Adapter {
             Tfc::SAMPLED_LINEAR,
             features.contains(vk::FormatFeatureFlags::SAMPLED_IMAGE_FILTER_LINEAR),
         );
-        flags.set(
-            Tfc::SAMPLED_MINMAX,
-            features.contains(vk::FormatFeatureFlags::SAMPLED_IMAGE_FILTER_MINMAX),
-        );
+        // flags.set(
+        //     Tfc::SAMPLED_MINMAX,
+        //     features.contains(vk::FormatFeatureFlags::SAMPLED_IMAGE_FILTER_MINMAX),
+        // );
         flags.set(
             Tfc::STORAGE | Tfc::STORAGE_READ_WRITE,
             features.contains(vk::FormatFeatureFlags::STORAGE_IMAGE),
@@ -1430,15 +1493,11 @@ impl crate::Adapter<super::Api> for super::Adapter {
         );
         flags.set(
             Tfc::COPY_SRC,
-            features.intersects(
-                vk::FormatFeatureFlags::TRANSFER_SRC | vk::FormatFeatureFlags::BLIT_SRC,
-            ),
+            features.intersects(vk::FormatFeatureFlags::TRANSFER_SRC),
         );
         flags.set(
             Tfc::COPY_DST,
-            features.intersects(
-                vk::FormatFeatureFlags::TRANSFER_DST | vk::FormatFeatureFlags::BLIT_DST,
-            ),
+            features.intersects(vk::FormatFeatureFlags::TRANSFER_DST),
         );
         // Vulkan is very permissive about MSAA
         flags.set(Tfc::MULTISAMPLE_RESOLVE, !format.describe().is_compressed());

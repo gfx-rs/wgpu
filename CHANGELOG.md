@@ -151,6 +151,18 @@ By @Elabajaba in [#3356](https://github.com/gfx-rs/wgpu/pull/3356)
 
 You can now choose to use the DXC compiler for DX12 instead of FXC. The DXC compiler is faster, less buggy, and allows for new features compared to the old, unmaintained FXC compiler. You can choose which compiler to use at `Instance` creation using the `Dx12Compiler` field in the `InstanceDescriptor` struct. Note that DXC requires both `dxcompiler.dll` and `dxil.dll`, which can be downloaded from https://github.com/microsoft/DirectXShaderCompiler/releases. Both .dlls need to be shipped with your application when targeting DX12 and using the `DXC` compiler. If the .dlls can't be loaded, then it will fall back to the FXC compiler. By @39ali and @Elabajaba in [#3356](https://github.com/gfx-rs/wgpu/pull/3356)
 
+#### Texture Format Reinterpretation
+
+The `view_formats` field is used to specify formats that are compatible with the texture format to allow the creation of views with different formats, currently, only changing srgb-ness is allowed.
+
+```diff
+let texture = device.create_texture(&wgpu::TextureDescriptor {
+  // ...
+  format: TextureFormat::Rgba8UnormSrgb,
++ view_formats: &[TextureFormat::Rgba8Unorm],
+});
+```
+
 ### Changes
 
 #### General
@@ -166,6 +178,10 @@ You can now choose to use the DXC compiler for DX12 instead of FXC. The DXC comp
 - Dereferencing a buffer view is now marked inline. By @Wumpf in [#3307](https://github.com/gfx-rs/wgpu/pull/3307)
 - The `strict_assert` family of macros was moved to `wgpu-types`. By @i509VCB in [#3051](https://github.com/gfx-rs/wgpu/pull/3051)
 - Add missing `DEPTH_BIAS_CLAMP` and `FULL_DRAW_INDEX_UINT32` downlevel flags. By @teoxoy in [#3316](https://github.com/gfx-rs/wgpu/pull/3316)
+- Make `ObjectId` structure and invariants idiomatic. By @teoxoy in [#3347](https://github.com/gfx-rs/wgpu/pull/3347)
+- Add validation in accordance with WebGPU `GPUSamplerDescriptor` valid usage for `lodMinClamp` and `lodMaxClamp`. By @James2022-rgb in [#3353](https://github.com/gfx-rs/wgpu/pull/3353)
+- Remove panics in `Deref` implementations for `QueueWriteBufferView` and `BufferViewMut`. Instead, warnings are logged, since reading from these types is not recommended. By @botahamec in [#3336]
+- Implement `view_formats` in TextureDescriptor to match the WebGPU spec. By @jinleili in [#3237](https://github.com/gfx-rs/wgpu/pull/3237)
 
 #### WebGPU
 
@@ -175,6 +191,12 @@ You can now choose to use the DXC compiler for DX12 instead of FXC. The DXC comp
 #### GLES
 
 - Browsers that support `OVR_multiview2` now report the `MULTIVIEW` feature by @expenses in [#3121](https://github.com/gfx-rs/wgpu/pull/3121).
+- `Limits::max_push_constant_size` on GLES is now 256 by @Dinnerbone in [#3374](https://github.com/gfx-rs/wgpu/pull/3374).
+
+#### Vulkan
+
+- Set `WEBGPU_TEXTURE_FORMAT_SUPPORT` downlevel flag depending on the proper format support by @teoxoy in [#3367](https://github.com/gfx-rs/wgpu/pull/3367).
+- Set `COPY_SRC`/`COPY_DST` only based on Vulkan's `TRANSFER_SRC`/`TRANSFER_DST` by @teoxoy in [#3366](https://github.com/gfx-rs/wgpu/pull/3366).
 
 ### Added/New Features
 
@@ -187,6 +209,7 @@ You can now choose to use the DXC compiler for DX12 instead of FXC. The DXC comp
 - Native adapters can now use MSAA x2 and x8 if it's supported , previously only x1 and x4 were supported . By @39ali in [3140](https://github.com/gfx-rs/wgpu/pull/3140)
 - Implemented correleation between user timestamps and platform specific presentation timestamps via [`Adapter::get_presentation_timestamp`]. By @cwfitzgerald in [#3240](https://github.com/gfx-rs/wgpu/pull/3240)
 - Added support for `Features::SHADER_PRIMITIVE_INDEX` on all backends. By @cwfitzgerald in [#3272](https://github.com/gfx-rs/wgpu/pull/3272)
+- Implemented `TextureFormat::Stencil8`, allowing for stencil testing without depth components. By @Dinnerbone in [#3343](https://github.com/gfx-rs/wgpu/pull/3343)
 
 #### GLES
 
@@ -214,6 +237,10 @@ You can now choose to use the DXC compiler for DX12 instead of FXC. The DXC comp
 - Check for invalid bitflag bits in wgpu-core and allow them to be captured/replayed by @nical in (#3229)[https://github.com/gfx-rs/wgpu/pull/3229]
 - Evaluate `gfx_select!`'s `#[cfg]` conditions at the right time. By @jimblandy in [#3253](https://github.com/gfx-rs/wgpu/pull/3253)
 - Improve error messages when binding bind group with dynamic offsets. By @cwfitzgerald in [#3294](https://github.com/gfx-rs/wgpu/pull/3294)
+- Allow non-filtering sampling of integer textures. By @JMS55 in [#3362](https://github.com/gfx-rs/wgpu/pull/3362).
+- Validate texture ids in `Global::queue_texture_write`. By @jimblandy in [#3378](https://github.com/gfx-rs/wgpu/pull/3378).
+- Don't panic on mapped buffer in queue_submit. By @crowlKats in [#3364](https://github.com/gfx-rs/wgpu/pull/3364).
+- Fix being able to sample a depth texture with a filtering sampler. By @teoxoy in [#3394](https://github.com/gfx-rs/wgpu/pull/3394).
 
 #### Metal
 - Fix texture view creation with full-resource views when using an explicit `mip_level_count` or `array_layer_count`. By @cwfitzgerald in [#3323](https://github.com/gfx-rs/wgpu/pull/3323)
@@ -226,6 +253,12 @@ You can now choose to use the DXC compiler for DX12 instead of FXC. The DXC comp
 
 - Fixed WebGL not displaying srgb targets correctly if a non-screen filling viewport was previously set. By @Wumpf in [#3093](https://github.com/gfx-rs/wgpu/pull/3093)
 - Fix disallowing multisampling for float textures if otherwise supported. By @Wumpf in [#3183](https://github.com/gfx-rs/wgpu/pull/3183)
+- Fix a panic when creating a pipeline with opaque types other than samplers (images and atomic counters). By @James2022-rgb in [#3361](https://github.com/gfx-rs/wgpu/pull/3361)
+- Fix uniform buffers being empty on some vendors. By @Dinnerbone in [#3391](https://github.com/gfx-rs/wgpu/pull/3391)
+
+#### Vulkan
+
+- Document and improve extension detection. By @teoxoy in [#3327](https://github.com/gfx-rs/wgpu/pull/3327)
 
 #### deno-webgpu
 
@@ -245,10 +278,12 @@ You can now choose to use the DXC compiler for DX12 instead of FXC. The DXC comp
 #### DX12
 
 - Fix `depth16Unorm` formats by @teoxoy in [#3313](https://github.com/gfx-rs/wgpu/pull/3313)
+- Don't re-use `GraphicsCommandList` when `close` or `reset` fails. By @xiaopengli89 in [#3204](https://github.com/gfx-rs/wgpu/pull/3204)
 
 ### Examples
 
 - Log adapter info in hello example on wasm target by @JolifantoBambla in [#2858](https://github.com/gfx-rs/wgpu/pull/2858)
+- Added new example `stencil-triangles` to show basic use of stencil testing. By @Dinnerbone in [#3343](https://github.com/gfx-rs/wgpu/pull/3343)
 
 ### Testing/Internal
 

@@ -6,7 +6,6 @@ use std::{
     cell::RefCell,
     fmt,
     future::Future,
-    num::NonZeroU128,
     ops::Range,
     pin::Pin,
     rc::Rc,
@@ -26,10 +25,11 @@ use crate::{
 fn create_identified<T>(value: T) -> Identified<T> {
     cfg_if::cfg_if! {
         if #[cfg(feature = "expose-ids")] {
-            static NEXT_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-            Identified(value, NEXT_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed))
+            static NEXT_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+            let id = NEXT_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            Identified(value, crate::Id(core::num::NonZeroU64::new(id).unwrap()))
         } else {
-            Identified(value, 0)
+            Identified(value)
         }
     }
 }
@@ -44,25 +44,30 @@ fn create_identified<T>(value: T) -> Identified<T> {
 
 impl<T: FromWasmAbi<Abi = u32> + JsCast> From<ObjectId> for Identified<T> {
     fn from(id: ObjectId) -> Self {
-        let raw = std::num::NonZeroU128::from(id);
-        let global_id = (raw.get() >> 64) as u64;
-
+        let id = id.id().get() as u32;
         // SAFETY: wasm_bindgen says an ABI representation may only be cast to a wrapper type if it was created
         // using into_abi.
         //
         // This assumption we sadly have to assume to prevent littering the code with unsafe blocks.
-        let wasm = unsafe { JsValue::from_abi(raw.get() as u32) };
+        let wasm = unsafe { JsValue::from_abi(id) };
         wgt::strict_assert!(wasm.is_instance_of::<T>());
         // SAFETY: The ABI of the type must be a u32, and strict asserts ensure the right type is used.
-        Self(wasm.unchecked_into(), global_id)
+        Self(
+            wasm.unchecked_into(),
+            #[cfg(feature = "expose-ids")]
+            id.global_id(),
+        )
     }
 }
 
 impl<T: IntoWasmAbi<Abi = u32>> From<Identified<T>> for ObjectId {
     fn from(id: Identified<T>) -> Self {
-        let abi = id.0.into_abi();
-        let id = abi as u128 | ((id.1 as u128) << 64);
-        Self::from(NonZeroU128::new(id).unwrap())
+        let id = core::num::NonZeroU64::new(id.0.into_abi() as u64).unwrap();
+        Self::new(
+            id,
+            #[cfg(feature = "expose-ids")]
+            id.1,
+        )
     }
 }
 
@@ -72,7 +77,7 @@ unsafe impl<T> Send for Sendable<T> {}
 unsafe impl<T> Sync for Sendable<T> {}
 
 #[derive(Clone, Debug)]
-pub(crate) struct Identified<T>(T, #[cfg(feature = "expose-ids")] u64);
+pub(crate) struct Identified<T>(T, #[cfg(feature = "expose-ids")] crate::Id);
 unsafe impl<T> Send for Identified<T> {}
 unsafe impl<T> Sync for Identified<T> {}
 
@@ -183,7 +188,7 @@ fn map_texture_format(texture_format: wgt::TextureFormat) -> web_sys::GpuTexture
         TextureFormat::Rgba32Sint => tf::Rgba32sint,
         TextureFormat::Rgba32Float => tf::Rgba32float,
         // Depth/stencil formats
-        //TextureFormat::Stencil8 => tf::Stencil8,
+        TextureFormat::Stencil8 => tf::Stencil8,
         TextureFormat::Depth16Unorm => tf::Depth16unorm,
         TextureFormat::Depth24Plus => tf::Depth24plus,
         TextureFormat::Depth24PlusStencil8 => tf::Depth24plusStencil8,
@@ -525,6 +530,42 @@ fn map_map_mode(mode: crate::MapMode) -> u32 {
     }
 }
 
+const FEATURES_MAPPING: [(wgt::Features, web_sys::GpuFeatureName); 8] = [
+    //TODO: update the name
+    (
+        wgt::Features::DEPTH_CLIP_CONTROL,
+        web_sys::GpuFeatureName::DepthClipControl,
+    ),
+    (
+        wgt::Features::DEPTH32FLOAT_STENCIL8,
+        web_sys::GpuFeatureName::Depth32floatStencil8,
+    ),
+    (
+        wgt::Features::TEXTURE_COMPRESSION_BC,
+        web_sys::GpuFeatureName::TextureCompressionBc,
+    ),
+    (
+        wgt::Features::TEXTURE_COMPRESSION_ETC2,
+        web_sys::GpuFeatureName::TextureCompressionEtc2,
+    ),
+    (
+        wgt::Features::TEXTURE_COMPRESSION_ASTC_LDR,
+        web_sys::GpuFeatureName::TextureCompressionAstc,
+    ),
+    (
+        wgt::Features::TIMESTAMP_QUERY,
+        web_sys::GpuFeatureName::TimestampQuery,
+    ),
+    (
+        wgt::Features::INDIRECT_FIRST_INSTANCE,
+        web_sys::GpuFeatureName::IndirectFirstInstance,
+    ),
+    (
+        wgt::Features::SHADER_FLOAT16,
+        web_sys::GpuFeatureName::ShaderF16,
+    ),
+];
+
 type JsFutureResult = Result<wasm_bindgen::JsValue, wasm_bindgen::JsValue>;
 
 fn future_request_adapter(result: JsFutureResult) -> Option<(Identified<web_sys::GpuAdapter>, ())> {
@@ -835,8 +876,6 @@ impl crate::context::Context for Context {
         desc: &crate::DeviceDescriptor,
         trace_dir: Option<&std::path::Path>,
     ) -> Self::RequestDeviceFuture {
-        use web_sys::GpuFeatureName as Gfn;
-
         if trace_dir.is_some() {
             //Error: Tracing isn't supported on the Web target
         }
@@ -844,33 +883,7 @@ impl crate::context::Context for Context {
         // TODO: non-guaranteed limits
         let mut mapped_desc = web_sys::GpuDeviceDescriptor::new();
 
-        let possible_features = [
-            //TODO: update the name
-            (wgt::Features::DEPTH_CLIP_CONTROL, Gfn::DepthClipControl),
-            (
-                wgt::Features::DEPTH32FLOAT_STENCIL8,
-                Gfn::Depth32floatStencil8,
-            ),
-            (
-                wgt::Features::TEXTURE_COMPRESSION_BC,
-                Gfn::TextureCompressionBc,
-            ),
-            (
-                wgt::Features::TEXTURE_COMPRESSION_ETC2,
-                Gfn::TextureCompressionEtc2,
-            ),
-            (
-                wgt::Features::TEXTURE_COMPRESSION_ASTC_LDR,
-                Gfn::TextureCompressionAstc,
-            ),
-            (wgt::Features::TIMESTAMP_QUERY, Gfn::TimestampQuery),
-            (
-                wgt::Features::INDIRECT_FIRST_INSTANCE,
-                Gfn::IndirectFirstInstance,
-            ),
-            (wgt::Features::SHADER_FLOAT16, Gfn::ShaderF16),
-        ];
-        let required_features = possible_features
+        let required_features = FEATURES_MAPPING
             .iter()
             .copied()
             .flat_map(|(flag, value)| {
@@ -915,9 +928,23 @@ impl crate::context::Context for Context {
         adapter: &Self::AdapterId,
         _adapter_data: &Self::AdapterData,
     ) -> wgt::Features {
-        // TODO
-        let _features = adapter.0.features();
-        wgt::Features::empty()
+        let features = adapter.0.features();
+
+        let features_set: js_sys::Set = features
+            .dyn_into()
+            .expect("adapter.features() is not setlike");
+
+        let mut features = wgt::Features::empty();
+
+        for (wgpu_feat, web_feat) in FEATURES_MAPPING {
+            let value = wasm_bindgen::JsValue::from(web_feat);
+
+            if features_set.has(&value) {
+                features |= wgpu_feat;
+            }
+        }
+
+        features
     }
 
     fn adapter_limits(
@@ -1073,11 +1100,26 @@ impl crate::context::Context for Context {
 
     fn device_features(
         &self,
-        _device: &Self::DeviceId,
+        device: &Self::DeviceId,
         _device_data: &Self::DeviceData,
     ) -> wgt::Features {
-        // TODO
-        wgt::Features::empty()
+        let features = device.0.features();
+
+        let features_set: js_sys::Set = features
+            .dyn_into()
+            .expect("device.features() is not setlike");
+
+        let mut features = wgt::Features::empty();
+
+        for (wgpu_feat, web_feat) in FEATURES_MAPPING {
+            let value = wasm_bindgen::JsValue::from(web_feat);
+
+            if features_set.has(&value) {
+                features |= wgpu_feat;
+            }
+        }
+
+        features
     }
 
     fn device_limits(
@@ -1541,6 +1583,12 @@ impl crate::context::Context for Context {
         mapped_desc.dimension(map_texture_dimension(desc.dimension));
         mapped_desc.mip_level_count(desc.mip_level_count);
         mapped_desc.sample_count(desc.sample_count);
+        let mapped_view_formats = desc
+            .view_formats
+            .iter()
+            .map(|format| JsValue::from(map_texture_format(*format)))
+            .collect::<js_sys::Array>();
+        mapped_desc.view_formats(&mapped_view_formats);
         (create_identified(device.0.create_texture(&mapped_desc)), ())
     }
 

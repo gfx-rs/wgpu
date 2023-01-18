@@ -8,7 +8,7 @@ mod inner {
 
     // Lets keep these on one line
     #[rustfmt::skip]
-    const TEXTURE_FORMAT_LIST: [wgpu::TextureFormat; 113] = [
+    const TEXTURE_FORMAT_LIST: [wgpu::TextureFormat; 114] = [
         wgpu::TextureFormat::R8Unorm,
         wgpu::TextureFormat::R8Snorm,
         wgpu::TextureFormat::R8Uint,
@@ -50,7 +50,7 @@ mod inner {
         wgpu::TextureFormat::Rgba32Uint,
         wgpu::TextureFormat::Rgba32Sint,
         wgpu::TextureFormat::Rgba32Float,
-        //wgpu::TextureFormat::Stencil8,
+        wgpu::TextureFormat::Stencil8,
         wgpu::TextureFormat::Depth16Unorm,
         wgpu::TextureFormat::Depth32Float,
         wgpu::TextureFormat::Depth32FloatStencil8,

@@ -42,7 +42,7 @@ static TEXTURE_FORMATS_UNCOMPRESSED: &[wgpu::TextureFormat] = &[
 ];
 
 static TEXTURE_FORMATS_DEPTH: &[wgpu::TextureFormat] = &[
-    //wgpu::TextureFormat::Stencil8,
+    wgpu::TextureFormat::Stencil8,
     wgpu::TextureFormat::Depth16Unorm,
     wgpu::TextureFormat::Depth24Plus,
     wgpu::TextureFormat::Depth24PlusStencil8,
@@ -225,6 +225,7 @@ fn single_texture_clear_test(
         // Forces internally the required usages to be able to clear it.
         // This is not visible on the API level.
         usage: wgpu::TextureUsages::TEXTURE_BINDING,
+        view_formats: &[],
     });
     let mut encoder = ctx
         .device

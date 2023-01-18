@@ -75,8 +75,12 @@ test = true
 name = "water"
 test = true
 
+[[example]]
+name = "stencil-triangles"
+test = true
+
 [features]
-default = ["wgsl", "expose-ids"]
+default = ["wgsl"]
 # Apply run-time checks, even in release builds. These are in addition
 # to the validation carried out at public APIs in all builds.
 strict_asserts = ["wgc?/strict_asserts", "wgt/strict_asserts"]
@@ -88,7 +92,7 @@ replay = ["serde", "wgc/replay"]
 angle = ["wgc/angle"]
 webgl = ["hal", "wgc"]
 emscripten = ["webgl"]
-vulkan-portability = ["wgc/vulkan-portability"]
+vulkan-portability = ["wgc/vulkan"]
 expose-ids = []
 
 # wgpu-core is always available as an optional dependency, "wgc".
@@ -118,7 +122,7 @@ workspace = true
 features = ["dx11", "dx12"]
 
 # We want the wgpu-core Vulkan backend on Unix (but not Emscripten) and Windows.
-[target.'cfg(any(windows, all(unix, not(target_arch = "emscripten"))))'.dependencies.wgc]
+[target.'cfg(any(windows, all(unix, not(target_arch = "emscripten"), not(target_os = "ios"), not(target_os = "macos"))))'.dependencies.wgc]
 workspace = true
 features = ["vulkan"]
 
@@ -147,6 +151,7 @@ optional = true
 arrayvec.workspace = true
 log.workspace = true
 parking_lot.workspace = true
+profiling.workspace = true
 raw-window-handle.workspace = true
 serde = { workspace = true, features = ["derive"], optional = true }
 smallvec.workspace = true

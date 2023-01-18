@@ -45,7 +45,6 @@ serial-pass = ["serde", "wgt/serde", "arrayvec/serde"]
 id32 = []
 # Enable `ShaderModuleSource::Wgsl`
 wgsl = ["naga/wgsl-in"]
-vulkan-portability = ["hal/vulkan"]
 
 # Features that are intended to work on all platforms.
 portable_features = ["gles", "strict_asserts", "trace", "replay", "serial-pass", "id32", "wgsl"]
@@ -68,7 +67,7 @@ thiserror = "1"
 
 [dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-rev = "e7fc8e6"
+rev = "e98bd92"
 version = "0.10"
 features = ["clone", "span", "validate"]
 

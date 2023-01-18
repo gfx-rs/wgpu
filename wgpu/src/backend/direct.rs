@@ -135,15 +135,10 @@ impl Context {
         device: &Device,
         desc: &TextureDescriptor,
     ) -> Texture {
+        let descriptor = desc.map_label_and_view_formats(|l| l.map(Borrowed), |v| v.to_vec());
         let global = &self.0;
-        let (id, error) = unsafe {
-            global.create_texture_from_hal::<A>(
-                hal_texture,
-                device.id,
-                &desc.map_label(|l| l.map(Borrowed)),
-                (),
-            )
-        };
+        let (id, error) =
+            unsafe { global.create_texture_from_hal::<A>(hal_texture, device.id, &descriptor, ()) };
         if let Some(cause) = error {
             self.handle_error(
                 &device.error_sink,
@@ -1249,10 +1244,11 @@ impl crate::Context for Context {
         device_data: &Self::DeviceData,
         desc: &TextureDescriptor,
     ) -> (Self::TextureId, Self::TextureData) {
+        let wgt_desc = desc.map_label_and_view_formats(|l| l.map(Borrowed), |v| v.to_vec());
         let global = &self.0;
         let (id, error) = wgc::gfx_select!(device => global.device_create_texture(
             *device,
-            &desc.map_label(|l| l.map(Borrowed)),
+            &wgt_desc,
             ()
         ));
         if let Some(cause) = error {
@@ -2885,22 +2881,21 @@ impl crate::Context for Context {
 }
 
 impl<T> From<ObjectId> for wgc::id::Id<T> {
-    // If the id32 feature is enabled, this conversion is not useless.
-    #[allow(clippy::useless_conversion)]
     fn from(id: ObjectId) -> Self {
-        let raw = std::num::NonZeroU128::from(id);
-        // If the id32 feature is enabled, this will truncate the id to a NonZeroU32.
-        let id = raw.try_into().expect("Id exceeded 32-bits");
-        // FIXME: This is not safe
+        // If the id32 feature is enabled in wgpu-core, this will make sure that the id fits in a NonZeroU32.
+        #[allow(clippy::useless_conversion)]
+        let id = id.id().try_into().expect("Id exceeded 32-bits");
+        // SAFETY: The id was created via the impl below
         unsafe { Self::from_raw(id) }
     }
 }
 
 impl<T> From<wgc::id::Id<T>> for ObjectId {
-    // If the id32 feature is enabled, this conversion is not useless.
-    #[allow(clippy::useless_conversion)]
     fn from(id: wgc::id::Id<T>) -> Self {
-        ObjectId::from(std::num::NonZeroU128::from(id.as_raw()))
+        // If the id32 feature is enabled in wgpu-core, the conversion is not useless
+        #[allow(clippy::useless_conversion)]
+        let id = id.into_raw().into();
+        Self::from_global_id(id)
     }
 }
 

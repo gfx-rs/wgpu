@@ -12,7 +12,7 @@ publish = false
 
 [features]
 angle = ["wgc/angle"]
-vulkan-portability = ["wgc/vulkan-portability"]
+vulkan-portability = ["wgc/vulkan"]
 
 [dependencies]
 env_logger.workspace = true
@@ -28,6 +28,18 @@ features = ["replay"]
 [dependencies.wgc]
 workspace = true
 features = ["replay", "raw-window-handle", "strict_asserts", "wgsl"]
+
+[target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies.wgc]
+workspace = true
+features = ["metal"]
+
+[target.'cfg(windows)'.dependencies.wgc]
+workspace = true
+features = ["dx11", "dx12"]
+
+[target.'cfg(any(windows, all(unix, not(target_arch = "emscripten"), not(target_os = "ios"), not(target_os = "macos"))))'.dependencies.wgc]
+workspace = true
+features = ["vulkan"]
 
 [dev-dependencies]
 serde.workspace = true

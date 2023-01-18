@@ -16,7 +16,7 @@ pub(crate) struct TextureInitRange {
 pub(crate) fn has_copy_partial_init_tracker_coverage(
     copy_size: &wgt::Extent3d,
     mip_level: u32,
-    desc: &wgt::TextureDescriptor<()>,
+    desc: &wgt::TextureDescriptor<(), Vec<wgt::TextureFormat>>,
 ) -> bool {
     let target_size = desc.mip_level_size(mip_level).unwrap();
     copy_size.width != target_size.width

@@ -64,7 +64,15 @@ impl super::PrivateCapabilities {
                     F::D32_SFLOAT_S8_UINT
                 }
             }
-            //Tf::Stencil8 => F::R8_UNORM,
+            Tf::Stencil8 => {
+                if self.texture_s8 {
+                    F::S8_UINT
+                } else if self.texture_d24_s8 {
+                    F::D24_UNORM_S8_UINT
+                } else {
+                    F::D32_SFLOAT_S8_UINT
+                }
+            }
             Tf::Depth16Unorm => F::D16_UNORM,
             Tf::Rgb9e5Ufloat => F::E5B9G9R9_UFLOAT_PACK32,
             Tf::Bc1RgbaUnorm => F::BC1_RGBA_UNORM_BLOCK,
@@ -195,17 +203,16 @@ impl crate::ColorAttachment<'_, super::Api> {
             .describe()
             .sample_type
         {
-            wgt::TextureSampleType::Float { .. } | wgt::TextureSampleType::Depth => {
-                vk::ClearColorValue {
-                    float32: [cv.r as f32, cv.g as f32, cv.b as f32, cv.a as f32],
-                }
-            }
+            wgt::TextureSampleType::Float { .. } => vk::ClearColorValue {
+                float32: [cv.r as f32, cv.g as f32, cv.b as f32, cv.a as f32],
+            },
             wgt::TextureSampleType::Sint => vk::ClearColorValue {
                 int32: [cv.r as i32, cv.g as i32, cv.b as i32, cv.a as i32],
             },
             wgt::TextureSampleType::Uint => vk::ClearColorValue {
                 uint32: [cv.r as u32, cv.g as u32, cv.b as u32, cv.a as u32],
             },
+            wgt::TextureSampleType::Depth => unreachable!(),
         }
     }
 }

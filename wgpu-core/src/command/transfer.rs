@@ -313,7 +313,7 @@ pub(crate) fn validate_linear_texture_data(
 /// [vtcr]: https://gpuweb.github.io/gpuweb/#valid-texture-copy-range
 pub(crate) fn validate_texture_copy_range(
     texture_copy_view: &ImageCopyTexture,
-    desc: &wgt::TextureDescriptor<()>,
+    desc: &wgt::TextureDescriptor<(), Vec<wgt::TextureFormat>>,
     texture_side: CopySide,
     copy_size: &Extent3d,
 ) -> Result<(hal::CopyExtent, u32), TransferError> {
@@ -331,8 +331,8 @@ pub(crate) fn validate_texture_copy_range(
     let extent = extent_virtual.physical_size(desc.format);
 
     match desc.format {
-        //wgt::TextureFormat::Stencil8 |
-        wgt::TextureFormat::Depth16Unorm
+        wgt::TextureFormat::Stencil8
+        | wgt::TextureFormat::Depth16Unorm
         | wgt::TextureFormat::Depth32Float
         | wgt::TextureFormat::Depth32FloatStencil8
         | wgt::TextureFormat::Depth24Plus

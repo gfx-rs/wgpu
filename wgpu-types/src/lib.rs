@@ -727,17 +727,20 @@ impl Features {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
-#[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
+#[cfg_attr(feature = "serde", serde(rename_all = "camelCase", default))]
 pub struct Limits {
     /// Maximum allowed value for the `size.width` of a texture created with `TextureDimension::D1`.
     /// Defaults to 8192. Higher is "better".
+    #[cfg_attr(feature = "serde", serde(rename = "maxTextureDimension1D"))]
     pub max_texture_dimension_1d: u32,
     /// Maximum allowed value for the `size.width` and `size.height` of a texture created with `TextureDimension::D2`.
     /// Defaults to 8192. Higher is "better".
+    #[cfg_attr(feature = "serde", serde(rename = "maxTextureDimension2D"))]
     pub max_texture_dimension_2d: u32,
     /// Maximum allowed value for the `size.width`, `size.height`, and `size.depth_or_array_layers`
     /// of a texture created with `TextureDimension::D3`.
     /// Defaults to 2048. Higher is "better".
+    #[cfg_attr(feature = "serde", serde(rename = "maxTextureDimension3D"))]
     pub max_texture_dimension_3d: u32,
     /// Maximum allowed value for the `size.depth_or_array_layers` of a texture created with
     /// `TextureDimension::D1` or `TextureDimension::D2`.
@@ -768,6 +771,11 @@ pub struct Limits {
     /// Maximum length of `VertexState::buffers` when creating a `RenderPipeline`.
     /// Defaults to 8. Higher is "better".
     pub max_vertex_buffers: u32,
+    /// A limit above which buffer allocations are guaranteed to fail.
+    ///
+    /// Buffer allocations below the maximum buffer size may not succeed depending on available memory,
+    /// fragmentation and other factors.
+    pub max_buffer_size: u64,
     /// Maximum length of `VertexBufferLayout::attributes`, summed over all `VertexState::buffers`,
     /// when creating a `RenderPipeline`.
     /// Defaults to 16. Higher is "better".
@@ -775,16 +783,6 @@ pub struct Limits {
     /// Maximum value for `VertexBufferLayout::array_stride` when creating a `RenderPipeline`.
     /// Defaults to 2048. Higher is "better".
     pub max_vertex_buffer_array_stride: u32,
-    /// Amount of storage available for push constants in bytes. Defaults to 0. Higher is "better".
-    /// Requesting more than 0 during device creation requires [`Features::PUSH_CONSTANTS`] to be enabled.
-    ///
-    /// Expect the size to be:
-    /// - Vulkan: 128-256 bytes
-    /// - DX12: 256 bytes
-    /// - Metal: 4096 bytes
-    /// - DX11 & OpenGL don't natively support push constants, and are emulated with uniforms,
-    ///   so this number is less useful but likely 256.
-    pub max_push_constant_size: u32,
     /// Required `BufferBindingType::Uniform` alignment for `BufferBinding::offset`
     /// when creating a `BindGroup`, or for `set_bind_group` `dynamicOffsets`.
     /// Defaults to 256. Lower is "better".
@@ -814,11 +812,16 @@ pub struct Limits {
     /// The maximum value for each dimension of a `ComputePass::dispatch(x, y, z)` operation.
     /// Defaults to 65535.
     pub max_compute_workgroups_per_dimension: u32,
-    /// A limit above which buffer allocations are guaranteed to fail.
+    /// Amount of storage available for push constants in bytes. Defaults to 0. Higher is "better".
+    /// Requesting more than 0 during device creation requires [`Features::PUSH_CONSTANTS`] to be enabled.
     ///
-    /// Buffer allocations below the maximum buffer size may not succeed depending on available memory,
-    /// fragmentation and other factors.
-    pub max_buffer_size: u64,
+    /// Expect the size to be:
+    /// - Vulkan: 128-256 bytes
+    /// - DX12: 256 bytes
+    /// - Metal: 4096 bytes
+    /// - DX11 & OpenGL don't natively support push constants, and are emulated with uniforms,
+    ///   so this number is less useful but likely 256.
+    pub max_push_constant_size: u32,
 }
 
 impl Default for Limits {
@@ -835,24 +838,24 @@ impl Default for Limits {
             max_sampled_textures_per_shader_stage: 16,
             max_samplers_per_shader_stage: 16,
             max_storage_buffers_per_shader_stage: 8,
-            max_storage_textures_per_shader_stage: 8,
+            max_storage_textures_per_shader_stage: 4,
             max_uniform_buffers_per_shader_stage: 12,
             max_uniform_buffer_binding_size: 64 << 10,
             max_storage_buffer_binding_size: 128 << 20,
             max_vertex_buffers: 8,
+            max_buffer_size: 1 << 28,
             max_vertex_attributes: 16,
             max_vertex_buffer_array_stride: 2048,
-            max_push_constant_size: 0,
             min_uniform_buffer_offset_alignment: 256,
             min_storage_buffer_offset_alignment: 256,
             max_inter_stage_shader_components: 60,
-            max_compute_workgroup_storage_size: 16352,
+            max_compute_workgroup_storage_size: 16384,
             max_compute_invocations_per_workgroup: 256,
             max_compute_workgroup_size_x: 256,
             max_compute_workgroup_size_y: 256,
             max_compute_workgroup_size_z: 64,
             max_compute_workgroups_per_dimension: 65535,
-            max_buffer_size: 1 << 28,
+            max_push_constant_size: 0,
         }
     }
 }
@@ -1140,6 +1143,11 @@ bitflags::bitflags! {
         ///
         /// Corresponds to Vulkan's `VkPhysicalDeviceFeatures.depthBiasClamp`
         const DEPTH_BIAS_CLAMP = 1 << 18;
+
+        /// Supports specifying which view format values are allowed when create_view() is called on a texture.
+        ///
+        /// The WebGL and GLES backends doesn't support this.
+        const VIEW_FORMATS = 1 << 19;
     }
 }
 
@@ -1930,7 +1938,7 @@ pub enum TextureFormat {
 
     // Depth and stencil formats
     /// Stencil format with 8 bit integer stencil.
-    //Stencil8,
+    Stencil8,
     /// Special depth format with 16 bit integer depth.
     Depth16Unorm,
     /// Special depth format with at least 24 bit integer depth.
@@ -2164,6 +2172,7 @@ impl<'de> Deserialize<'de> for TextureFormat {
                     "rgba32uint" => TextureFormat::Rgba32Uint,
                     "rgba32sint" => TextureFormat::Rgba32Sint,
                     "rgba32float" => TextureFormat::Rgba32Float,
+                    "stencil8" => TextureFormat::Stencil8,
                     "depth32float" => TextureFormat::Depth32Float,
                     "depth32float-stencil8" => TextureFormat::Depth32FloatStencil8,
                     "depth16unorm" => TextureFormat::Depth16Unorm,
@@ -2289,6 +2298,7 @@ impl Serialize for TextureFormat {
             TextureFormat::Rgba32Uint => "rgba32uint",
             TextureFormat::Rgba32Sint => "rgba32sint",
             TextureFormat::Rgba32Float => "rgba32float",
+            TextureFormat::Stencil8 => "stencil8",
             TextureFormat::Depth32Float => "depth32float",
             TextureFormat::Depth16Unorm => "depth16unorm",
             TextureFormat::Depth32FloatStencil8 => "depth32float-stencil8",
@@ -2432,18 +2442,19 @@ impl TextureFormat {
             // Packed 32 bit textures
             Self::Rgb10a2Unorm =>        (   native,   float,    linear, msaa_resolve, (1, 1),  4, attachment, 4),
             Self::Rg11b10Float =>        (   native,   float,    linear,         msaa, (1, 1),  4,      basic, 3),
-            // Packed 32 bit textures
+            // Normal 64 bit textures
             Self::Rg32Uint =>            (   native,    uint,    linear,         noaa, (1, 1),  8,  all_flags, 2),
             Self::Rg32Sint =>            (   native,    sint,    linear,         noaa, (1, 1),  8,  all_flags, 2),
             Self::Rg32Float =>           (   native, nearest,    linear,         noaa, (1, 1),  8,  all_flags, 2),
             Self::Rgba16Uint =>          (   native,    uint,    linear,         msaa, (1, 1),  8,  all_flags, 4),
             Self::Rgba16Sint =>          (   native,    sint,    linear,         msaa, (1, 1),  8,  all_flags, 4),
             Self::Rgba16Float =>         (   native,   float,    linear, msaa_resolve, (1, 1),  8,  all_flags, 4),
-            // Packed 32 bit textures
+            // Normal 128 bit textures
             Self::Rgba32Uint =>          (   native,    uint,    linear,         noaa, (1, 1), 16,  all_flags, 4),
             Self::Rgba32Sint =>          (   native,    sint,    linear,         noaa, (1, 1), 16,  all_flags, 4),
             Self::Rgba32Float =>         (   native, nearest,    linear,         noaa, (1, 1), 16,  all_flags, 4),
             // Depth-stencil textures
+            Self::Stencil8 =>            (   native,   depth,    linear,         msaa, (1, 1),  2, attachment, 1),
             Self::Depth16Unorm =>        (   native,   depth,    linear,         msaa, (1, 1),  2, attachment, 1),
             Self::Depth24Plus =>         (   native,   depth,    linear,         msaa, (1, 1),  4, attachment, 1),
             Self::Depth24PlusStencil8 => (   native,   depth,    linear,         msaa, (1, 1),  4, attachment, 2),
@@ -2533,6 +2544,29 @@ impl TextureFormat {
                 allowed_usages,
                 flags,
             },
+        }
+    }
+
+    /// Strips the `Srgb` suffix from the given texture format.
+    pub fn remove_srgb_suffix(&self) -> TextureFormat {
+        match *self {
+            Self::Rgba8UnormSrgb => Self::Rgba8Unorm,
+            Self::Bgra8UnormSrgb => Self::Bgra8Unorm,
+            Self::Bc1RgbaUnormSrgb => Self::Bc1RgbaUnorm,
+            Self::Bc2RgbaUnormSrgb => Self::Bc2RgbaUnorm,
+            Self::Bc3RgbaUnormSrgb => Self::Bc3RgbaUnorm,
+            Self::Bc7RgbaUnormSrgb => Self::Bc7RgbaUnorm,
+            Self::Etc2Rgb8UnormSrgb => Self::Etc2Rgb8Unorm,
+            Self::Etc2Rgb8A1UnormSrgb => Self::Etc2Rgb8A1Unorm,
+            Self::Etc2Rgba8UnormSrgb => Self::Etc2Rgba8Unorm,
+            Self::Astc {
+                block,
+                channel: AstcChannel::UnormSrgb,
+            } => Self::Astc {
+                block,
+                channel: AstcChannel::Unorm,
+            },
+            _ => *self,
         }
     }
 }
@@ -2702,6 +2736,10 @@ fn texture_format_serialize() {
     assert_eq!(
         serde_json::to_string(&TextureFormat::Rgba32Float).unwrap(),
         "\"rgba32float\"".to_string()
+    );
+    assert_eq!(
+        serde_json::to_string(&TextureFormat::Stencil8).unwrap(),
+        "\"stencil8\"".to_string()
     );
     assert_eq!(
         serde_json::to_string(&TextureFormat::Depth32Float).unwrap(),
@@ -2990,6 +3028,10 @@ fn texture_format_deserialize() {
     assert_eq!(
         serde_json::from_str::<TextureFormat>("\"rgba32float\"").unwrap(),
         TextureFormat::Rgba32Float
+    );
+    assert_eq!(
+        serde_json::from_str::<TextureFormat>("\"stencil8\"").unwrap(),
+        TextureFormat::Stencil8
     );
     assert_eq!(
         serde_json::from_str::<TextureFormat>("\"depth32float\"").unwrap(),
@@ -3837,6 +3879,7 @@ pub enum PresentMode {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub enum CompositeAlphaMode {
     /// Chooses either `Opaque` or `Inherit` automatically，depending on the
     /// `alpha_mode` that the current surface can support.
@@ -4308,7 +4351,7 @@ fn test_max_mips() {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
-pub struct TextureDescriptor<L> {
+pub struct TextureDescriptor<L, V> {
     /// Debug label of the texture. This will show up in graphics debuggers for easy identification.
     pub label: L,
     /// Size of the texture. All components must be greater than zero. For a
@@ -4325,12 +4368,17 @@ pub struct TextureDescriptor<L> {
     pub format: TextureFormat,
     /// Allowed usages of the texture. If used in other ways, the operation will panic.
     pub usage: TextureUsages,
-    // TODO: missing view_formats https://www.w3.org/TR/webgpu/#dom-gputexturedescriptor-viewformats
+    /// Specifies what view formats will be allowed when calling create_view() on this texture.
+    ///
+    /// View formats of the same format as the texture are always allowed.
+    ///
+    /// Note: currently, only the srgb-ness is allowed to change. (ex: Rgba8Unorm texture + Rgba8UnormSrgb view)
+    pub view_formats: V,
 }
 
-impl<L> TextureDescriptor<L> {
+impl<L, V: Clone> TextureDescriptor<L, V> {
     /// Takes a closure and maps the label of the texture descriptor into another.
-    pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> TextureDescriptor<K> {
+    pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> TextureDescriptor<K, V> {
         TextureDescriptor {
             label: fun(&self.label),
             size: self.size,
@@ -4339,6 +4387,25 @@ impl<L> TextureDescriptor<L> {
             dimension: self.dimension,
             format: self.format,
             usage: self.usage,
+            view_formats: self.view_formats.clone(),
+        }
+    }
+
+    /// Maps the label and view_formats of the texture descriptor into another.
+    pub fn map_label_and_view_formats<K, M>(
+        &self,
+        l_fun: impl FnOnce(&L) -> K,
+        v_fun: impl FnOnce(V) -> M,
+    ) -> TextureDescriptor<K, M> {
+        TextureDescriptor {
+            label: l_fun(&self.label),
+            size: self.size,
+            mip_level_count: self.mip_level_count,
+            sample_count: self.sample_count,
+            dimension: self.dimension,
+            format: self.format,
+            usage: self.usage,
+            view_formats: v_fun(self.view_formats.clone()),
         }
     }
 
@@ -4351,7 +4418,8 @@ impl<L> TextureDescriptor<L> {
     ///
     /// ```rust
     /// # use wgpu_types as wgpu;
-    /// let desc = wgpu::TextureDescriptor {
+    /// # type TextureDescriptor<'a> = wgpu::TextureDescriptor<(), &'a [wgpu::TextureFormat]>;
+    /// let desc  = TextureDescriptor {
     ///   label: (),
     ///   size: wgpu::Extent3d { width: 100, height: 60, depth_or_array_layers: 1 },
     ///   mip_level_count: 7,
@@ -4359,6 +4427,7 @@ impl<L> TextureDescriptor<L> {
     ///   dimension: wgpu::TextureDimension::D3,
     ///   format: wgpu::TextureFormat::Rgba8Sint,
     ///   usage: wgpu::TextureUsages::empty(),
+    ///   view_formats: &[],
     /// };
     ///
     /// assert_eq!(desc.mip_level_size(0), Some(wgpu::Extent3d { width: 100, height: 60, depth_or_array_layers: 1 }));
@@ -5076,7 +5145,7 @@ impl ImageSubresourceRange {
     }
 
     /// Returns the mip level range of a subresource range describes for a specific texture.
-    pub fn mip_range<L>(&self, texture_desc: &TextureDescriptor<L>) -> Range<u32> {
+    pub fn mip_range<L, V>(&self, texture_desc: &TextureDescriptor<L, V>) -> Range<u32> {
         self.base_mip_level..match self.mip_level_count {
             Some(mip_level_count) => self.base_mip_level + mip_level_count.get(),
             None => texture_desc.mip_level_count,
@@ -5084,7 +5153,7 @@ impl ImageSubresourceRange {
     }
 
     /// Returns the layer range of a subresource range describes for a specific texture.
-    pub fn layer_range<L>(&self, texture_desc: &TextureDescriptor<L>) -> Range<u32> {
+    pub fn layer_range<L, V>(&self, texture_desc: &TextureDescriptor<L, V>) -> Range<u32> {
         self.base_array_layer..match self.array_layer_count {
             Some(array_layer_count) => self.base_array_layer + array_layer_count.get(),
             None => {
