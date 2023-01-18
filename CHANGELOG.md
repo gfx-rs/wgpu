@@ -183,6 +183,7 @@ Additionally `Surface::get_default_config` now returns an Option and returns Non
 - Allow non-filtering sampling of integer textures. By @JMS55 in [#3362](https://github.com/gfx-rs/wgpu/pull/3362).
 - Validate texture ids in `Global::queue_texture_write`. By @jimblandy in [#3378](https://github.com/gfx-rs/wgpu/pull/3378).
 - Don't panic on mapped buffer in queue_submit. By @crowlKats in [#3364](https://github.com/gfx-rs/wgpu/pull/3364).
+- Fix being able to sample a depth texture with a filtering sampler. By @teoxoy in [#3394](https://github.com/gfx-rs/wgpu/pull/3394).
 
 #### Metal
 - Fix texture view creation with full-resource views when using an explicit `mip_level_count` or `array_layer_count`. By @cwfitzgerald in [#3323](https://github.com/gfx-rs/wgpu/pull/3323)
