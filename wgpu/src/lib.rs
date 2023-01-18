@@ -33,18 +33,18 @@ pub use wgt::{
     BindingType, BlendComponent, BlendFactor, BlendOperation, BlendState, BufferAddress,
     BufferBindingType, BufferSize, BufferUsages, Color, ColorTargetState, ColorWrites,
     CommandBufferDescriptor, CompareFunction, CompositeAlphaMode, DepthBiasState,
-    DepthStencilState, DeviceType, DownlevelCapabilities, DownlevelFlags, DynamicOffset, Extent3d,
-    Face, Features, FilterMode, FrontFace, ImageDataLayout, ImageSubresourceRange, IndexFormat,
-    Limits, MultisampleState, Origin3d, PipelineStatisticsTypes, PolygonMode, PowerPreference,
-    PresentMode, PresentationTimestamp, PrimitiveState, PrimitiveTopology, PushConstantRange,
-    QueryType, RenderBundleDepthStencil, SamplerBindingType, SamplerBorderColor, ShaderLocation,
-    ShaderModel, ShaderStages, StencilFaceState, StencilOperation, StencilState,
-    StorageTextureAccess, SurfaceCapabilities, SurfaceConfiguration, SurfaceStatus, TextureAspect,
-    TextureDimension, TextureFormat, TextureFormatFeatureFlags, TextureFormatFeatures,
-    TextureSampleType, TextureUsages, TextureViewDimension, VertexAttribute, VertexFormat,
-    VertexStepMode, COPY_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT, MAP_ALIGNMENT,
-    PUSH_CONSTANT_ALIGNMENT, QUERY_RESOLVE_BUFFER_ALIGNMENT, QUERY_SET_MAX_QUERIES, QUERY_SIZE,
-    VERTEX_STRIDE_ALIGNMENT,
+    DepthStencilState, DeviceType, DownlevelCapabilities, DownlevelFlags, Dx12Compiler,
+    DynamicOffset, Extent3d, Face, Features, FilterMode, FrontFace, ImageDataLayout,
+    ImageSubresourceRange, IndexFormat, InstanceDescriptor, Limits, MultisampleState, Origin3d,
+    PipelineStatisticsTypes, PolygonMode, PowerPreference, PresentMode, PresentationTimestamp,
+    PrimitiveState, PrimitiveTopology, PushConstantRange, QueryType, RenderBundleDepthStencil,
+    SamplerBindingType, SamplerBorderColor, ShaderLocation, ShaderModel, ShaderStages,
+    StencilFaceState, StencilOperation, StencilState, StorageTextureAccess, SurfaceCapabilities,
+    SurfaceConfiguration, SurfaceStatus, TextureAspect, TextureDimension, TextureFormat,
+    TextureFormatFeatureFlags, TextureFormatFeatures, TextureSampleType, TextureUsages,
+    TextureViewDimension, VertexAttribute, VertexFormat, VertexStepMode, COPY_BUFFER_ALIGNMENT,
+    COPY_BYTES_PER_ROW_ALIGNMENT, MAP_ALIGNMENT, PUSH_CONSTANT_ALIGNMENT,
+    QUERY_RESOLVE_BUFFER_ALIGNMENT, QUERY_SET_MAX_QUERIES, QUERY_SIZE, VERTEX_STRIDE_ALIGNMENT,
 };
 
 /// Filter for error scopes.
@@ -1286,16 +1286,25 @@ impl Display for SurfaceError {
 
 impl error::Error for SurfaceError {}
 
+impl Default for Instance {
+    /// Creates a new instance of wgpu with default options.
+    ///
+    /// Backends are set to `Backends::all()`, and FXC is chosen as the `dx12_shader_compiler`.
+    fn default() -> Self {
+        Self::new(InstanceDescriptor::default())
+    }
+}
+
 impl Instance {
     /// Create an new instance of wgpu.
     ///
     /// # Arguments
     ///
-    /// - `backends` - Controls from which [backends][Backends] wgpu will choose
-    ///   during instantiation.
-    pub fn new(backends: Backends) -> Self {
+    /// - `instance_desc` - Has fields for which [backends][Backends] wgpu will choose
+    ///   during instantiation, and which [DX12 shader compiler][Dx12Compiler] wgpu will use.
+    pub fn new(instance_desc: InstanceDescriptor) -> Self {
         Self {
-            context: Arc::from(crate::backend::Context::init(backends)),
+            context: Arc::from(crate::backend::Context::init(instance_desc)),
         }
     }
 

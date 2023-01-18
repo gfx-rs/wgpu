@@ -157,9 +157,13 @@ async fn setup<E: Example>(title: &str) -> Setup {
 
     log::info!("Initializing the surface...");
 
-    let backend = wgpu::util::backend_bits_from_env().unwrap_or_else(wgpu::Backends::all);
+    let backends = wgpu::util::backend_bits_from_env().unwrap_or_else(wgpu::Backends::all);
+    let dx12_shader_compiler = wgpu::util::dx12_shader_compiler_from_env().unwrap_or_default();
 
-    let instance = wgpu::Instance::new(backend);
+    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+        backends,
+        dx12_shader_compiler,
+    });
     let (size, surface) = unsafe {
         let size = window.inner_size();
 
@@ -180,7 +184,7 @@ async fn setup<E: Example>(title: &str) -> Setup {
         (size, surface)
     };
     let adapter =
-        wgpu::util::initialize_adapter_from_env_or_default(&instance, backend, Some(&surface))
+        wgpu::util::initialize_adapter_from_env_or_default(&instance, backends, Some(&surface))
             .await
             .expect("No suitable GPU adapters found on the system!");
 

@@ -511,11 +511,11 @@ impl crate::Context for Context {
 
     type PopErrorScopeFuture = Ready<Option<crate::Error>>;
 
-    fn init(backends: wgt::Backends) -> Self {
+    fn init(instance_desc: wgt::InstanceDescriptor) -> Self {
         Self(wgc::hub::Global::new(
             "wgpu",
             wgc::hub::IdentityManagerFactory,
-            backends,
+            instance_desc,
         ))
     }
 

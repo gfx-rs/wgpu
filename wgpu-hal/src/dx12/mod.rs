@@ -39,6 +39,7 @@ mod conv;
 mod descriptor;
 mod device;
 mod instance;
+mod shader_compilation;
 mod suballocation;
 mod view;
 
@@ -92,6 +93,7 @@ pub struct Instance {
     supports_allow_tearing: bool,
     _lib_dxgi: native::DxgiLib,
     flags: crate::InstanceFlags,
+    dx12_shader_compiler: wgt::Dx12Compiler,
 }
 
 impl Instance {
@@ -173,6 +175,7 @@ pub struct Adapter {
     //Note: this isn't used right now, but we'll need it later.
     #[allow(unused)]
     workarounds: Workarounds,
+    dx12_shader_compiler: wgt::Dx12Compiler,
 }
 
 unsafe impl Send for Adapter {}
@@ -241,6 +244,7 @@ pub struct Device {
     render_doc: crate::auxil::renderdoc::RenderDoc,
     null_rtv_handle: descriptor::Handle,
     mem_allocator: Option<Mutex<suballocation::GpuAllocatorWrapper>>,
+    dxc_container: Option<shader_compilation::DxcContainer>,
 }
 
 unsafe impl Send for Device {}
@@ -536,6 +540,30 @@ pub struct PipelineLayout {
 pub struct ShaderModule {
     naga: crate::NagaShader,
     raw_name: Option<ffi::CString>,
+}
+
+pub(super) enum CompiledShader {
+    #[allow(unused)]
+    Dxc(Vec<u8>),
+    Fxc(native::Blob),
+}
+
+impl CompiledShader {
+    fn create_native_shader(&self) -> native::Shader {
+        match *self {
+            CompiledShader::Dxc(ref shader) => native::Shader::from_raw(shader),
+            CompiledShader::Fxc(shader) => native::Shader::from_blob(shader),
+        }
+    }
+
+    unsafe fn destroy(self) {
+        match self {
+            CompiledShader::Dxc(_) => {}
+            CompiledShader::Fxc(shader) => unsafe {
+                shader.destroy();
+            },
+        }
+    }
 }
 
 pub struct RenderPipeline {

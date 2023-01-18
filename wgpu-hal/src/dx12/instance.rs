@@ -64,6 +64,7 @@ impl crate::Instance<super::Api> for super::Instance {
             _lib_dxgi: lib_dxgi,
             supports_allow_tearing,
             flags: desc.flags,
+            dx12_shader_compiler: desc.dx12_shader_compiler.clone(),
         })
     }
 
@@ -91,7 +92,9 @@ impl crate::Instance<super::Api> for super::Instance {
 
         adapters
             .into_iter()
-            .filter_map(|raw| super::Adapter::expose(raw, &self.library, self.flags))
+            .filter_map(|raw| {
+                super::Adapter::expose(raw, &self.library, self.flags, &self.dx12_shader_compiler)
+            })
             .collect()
     }
 }

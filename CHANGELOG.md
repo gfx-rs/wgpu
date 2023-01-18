@@ -103,9 +103,53 @@ Additionally `Surface::get_default_config` now returns an Option and returns Non
 
 `Instance::create_surface()` now returns `Result<Surface, CreateSurfaceError>` instead of `Surface`. This allows an error to be returned instead of panicking if the given window is a HTML canvas and obtaining a WebGPU or WebGL 2 context fails. (No other platforms currently report any errors through this path.) By @kpreid in [#3052](https://github.com/gfx-rs/wgpu/pull/3052/)
 
+#### Instance creation now takes `InstanceDescriptor` instead of `Backends`
+
+`Instance::new()` and `hub::Global::new()` now take an `InstanceDescriptor` struct which cointains both the existing `Backends` selection as well as a new `Dx12Compiler` field for selecting which Dx12 shader compiler to use.
+
+```diff
+- let instance = Instance::new(wgpu::Backends::all());
++ let instance = Instance::new(wgpu::InstanceDescriptor {
++     backends: wgpu::Backends::all(),
++     dx12_shader_compiler: wgpu::Dx12Compiler::Fxc,
++ });
+```
+
+```diff
+- let global = wgc::hub::Global::new(
+-     "player",
+-     IdentityPassThroughFactory,
+-     wgpu::Backends::all(),
+- );
++ let global = wgc::hub::Global::new(
++     "player",
++     IdentityPassThroughFactory,
++     wgpu::InstanceDescriptor {
++       backends: wgpu::Backends::all(),
++       dx12_shader_compiler: wgpu::Dx12Compiler::Fxc,
++     },
++ );
+```
+
+`Instance` now also also implements `Default`, which uses `wgpu::Backends::all()` and `wgpu::Dx12Compiler::Fxc` for `InstanceDescriptor`
+
+```diff
+- let instance = Instance::new(wgpu::InstanceDescriptor {
+-     backends: wgpu::Backends::all(),
+-     dx12_shader_compiler: wgpu::Dx12Compiler::Fxc,
+- });
++ let instance = Instance::default();
+```
+
+By @Elabajaba in [#3356](https://github.com/gfx-rs/wgpu/pull/3356)
+
 #### Suballocate DX12 buffers and textures
 
 `wgpu`'s DX12 backend can now suballocate buffers and textures when the `windows_rs` feature is enabled, which can give a significant increase in performance (in testing I've seen a 10000%+ improvement in a simple scene with 200 `write_buffer` calls per frame, and a 40%+ improvement in [Bistro using Bevy](https://github.com/vleue/bevy_bistro_playground)). Previously `wgpu-hal`'s DX12 backend created a new heap on the GPU every time you called write_buffer (by calling `CreateCommittedResource`), whereas now with the `windows_rs` feature enabled it uses [`gpu_allocator`](https://crates.io/crates/gpu-allocator) to manage GPU memory (and calls `CreatePlacedResource` with a suballocated heap). By @Elabajaba in [#3163](https://github.com/gfx-rs/wgpu/pull/3163)
+
+#### DXC Shader Compiler Support for DX12
+
+You can now choose to use the DXC compiler for DX12 instead of FXC. The DXC compiler is faster, less buggy, and allows for new features compared to the old, unmaintained FXC compiler. You can choose which compiler to use at `Instance` creation using the `Dx12Compiler` field in the `InstanceDescriptor` struct. Note that DXC requires both `dxcompiler.dll` and `dxil.dll`, which can be downloaded from https://github.com/microsoft/DirectXShaderCompiler/releases. Both .dlls need to be shipped with your application when targeting DX12 and using the `DXC` compiler. If the .dlls can't be loaded, then it will fall back to the FXC compiler. By @39ali and @Elabajaba in [#3356](https://github.com/gfx-rs/wgpu/pull/3356)
 
 #### Texture Format Reinterpretation
 
