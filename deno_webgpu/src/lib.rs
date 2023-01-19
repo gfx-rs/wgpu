@@ -381,6 +381,10 @@ impl From<GpuRequiredFeatures> for wgpu_types::Features {
             required_features.0.contains("shader-float64"),
         );
         features.set(
+            wgpu_types::Features::SHADER_INT16,
+            required_features.0.contains("shader-int16"),
+        );
+        features.set(
             wgpu_types::Features::VERTEX_ATTRIBUTE_64BIT,
             required_features.0.contains("vertex-attribute-64bit"),
         );

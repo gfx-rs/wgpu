@@ -674,6 +674,13 @@ bitflags::bitflags! {
         /// - DX12
         /// - Metal (Intel and AMD GPUs)
         const WRITE_TIMESTAMP_INSIDE_PASSES = 1 << 41;
+        /// Allows shaders to acquire the INT16 ability
+        ///
+        /// Supported platforms:
+        /// - Vulkan
+        ///
+        /// This is a native-only feature.
+        const SHADER_INT16 = 1 << 42;
     }
 }
 
