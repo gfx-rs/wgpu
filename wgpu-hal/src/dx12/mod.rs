@@ -697,15 +697,19 @@ impl crate::Surface<Api> for Surface {
                             )
                             .into_result()
                     }
-                    SurfaceTarget::SurfaceHandle(handle) => self
-                        .factory_media
-                        .unwrap()
-                        .create_swapchain_for_composition_surface_handle(
-                            device.present_queue.as_mut_ptr() as *mut _,
-                            handle,
-                            &desc,
-                        )
-                        .into_result(),
+                    SurfaceTarget::SurfaceHandle(handle) => {
+                        profiling::scope!(
+                            "IDXGIFactoryMedia::CreateSwapChainForCompositionSurfaceHandle"
+                        );
+                        self.factory_media
+                            .unwrap()
+                            .create_swapchain_for_composition_surface_handle(
+                                device.present_queue.as_mut_ptr() as *mut _,
+                                handle,
+                                &desc,
+                            )
+                            .into_result()
+                    }
                     SurfaceTarget::WndHandle(hwnd) => {
                         profiling::scope!("IDXGIFactory4::CreateSwapChainForHwnd");
                         self.factory
