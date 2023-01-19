@@ -1,5 +1,4 @@
 use crate::{
-    command::CommandEncoder,
     device::{DeviceError, HostMap, MissingDownlevelFlags, MissingFeatures},
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Resource, Token},
     id::{AdapterId, CommandEncoderId, DeviceId, SurfaceId, TextureId, TextureViewId, Valid},
@@ -494,7 +493,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     /// - The raw command encoder handle must not be manually destroyed
     pub unsafe fn command_encoder_as_hal_mut<
         A: HalApi,
-        F: FnOnce(Option<&mut CommandEncoder<A>>) -> R,
+        F: FnOnce(Option<&mut A::CommandEncoder>) -> R,
         R,
     >(
         &self,
@@ -507,7 +506,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut token = Token::root();
         let (mut guard, _) = hub.command_buffers.write(&mut token);
         let command_encoder = guard.get_mut(id).ok();
-        let hal_command_encoder = command_encoder.map(|encoder| &mut encoder.encoder);
+        let hal_command_encoder = command_encoder.map(|encoder| &mut encoder.encoder.raw);
 
         hal_command_encoder_callback(hal_command_encoder)
     }

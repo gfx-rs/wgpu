@@ -2890,7 +2890,7 @@ impl CommandEncoder {
     #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
     pub unsafe fn as_hal_mut<
         A: wgc::hub::HalApi,
-        F: FnOnce(Option<&mut wgc::command::CommandEncoder<A>>) -> R,
+        F: FnOnce(Option<&mut A::CommandEncoder>) -> R,
         R,
     >(
         &mut self,
