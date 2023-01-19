@@ -470,7 +470,7 @@ impl fmt::Debug for CommandEncoder {
 
 #[derive(Debug)]
 pub struct CommandBuffer {
-    raw: vk::CommandBuffer,
+    pub raw: vk::CommandBuffer,
 }
 
 #[derive(Debug)]
