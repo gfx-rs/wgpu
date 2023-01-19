@@ -296,6 +296,8 @@ impl super::Device {
             .program_cache
             .try_lock()
             .expect("Couldn't acquire program_cache lock");
+        // This guard ensures that we can't accidentally destroy a program whilst we're about to reuse it
+        // The only place that destroys a pipeline is also locking on `program_cache`
         let program = guard
             .entry(super::ProgramCacheKey {
                 stages: program_stages,
@@ -1181,8 +1183,11 @@ impl crate::Device<super::Api> for super::Device {
     }
     unsafe fn destroy_render_pipeline(&self, pipeline: super::RenderPipeline) {
         let mut program_cache = self.shared.program_cache.lock();
-        // 1 means we're the last thing holding this, so we can safely clean it up
-        if Arc::strong_count(&pipeline.inner) == 1 {
+        // If the pipeline only has 2 strong references remaining, they're `pipeline` and `program_cache`
+        // This is safe to assume as long as:
+        // - `RenderPipeline` can't be cloned
+        // - The only place that we can get a new reference is during `program_cache.lock()`
+        if Arc::strong_count(&pipeline.inner) == 2 {
             program_cache.retain(|_, v| match *v {
                 Ok(ref p) => p.program != pipeline.inner.program,
                 Err(_) => false,
@@ -1205,8 +1210,11 @@ impl crate::Device<super::Api> for super::Device {
     }
     unsafe fn destroy_compute_pipeline(&self, pipeline: super::ComputePipeline) {
         let mut program_cache = self.shared.program_cache.lock();
-        // 1 means we're the last thing holding this, so we can safely clean it up
-        if Arc::strong_count(&pipeline.inner) == 1 {
+        // If the pipeline only has 2 strong references remaining, they're `pipeline` and `program_cache``
+        // This is safe to assume as long as:
+        // - `ComputePipeline` can't be cloned
+        // - The only place that we can get a new reference is during `program_cache.lock()`
+        if Arc::strong_count(&pipeline.inner) == 2 {
             program_cache.retain(|_, v| match *v {
                 Ok(ref p) => p.program != pipeline.inner.program,
                 Err(_) => false,
