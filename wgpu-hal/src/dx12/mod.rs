@@ -89,6 +89,7 @@ const ZERO_BUFFER_SIZE: wgt::BufferAddress = 256 << 10;
 
 pub struct Instance {
     factory: native::DxgiFactory,
+    factory_media: Option<native::FactoryMedia>,
     library: Arc<native::D3D12Lib>,
     supports_allow_tearing: bool,
     _lib_dxgi: native::DxgiLib,
@@ -103,7 +104,21 @@ impl Instance {
     ) -> Surface {
         Surface {
             factory: self.factory,
+            factory_media: self.factory_media,
             target: SurfaceTarget::Visual(unsafe { native::WeakPtr::from_raw(visual) }),
+            supports_allow_tearing: self.supports_allow_tearing,
+            swap_chain: None,
+        }
+    }
+
+    pub unsafe fn create_surface_from_surface_handle(
+        &self,
+        surface_handle: winnt::HANDLE,
+    ) -> Surface {
+        Surface {
+            factory: self.factory,
+            factory_media: self.factory_media,
+            target: SurfaceTarget::SurfaceHandle(surface_handle),
             supports_allow_tearing: self.supports_allow_tearing,
             swap_chain: None,
         }
@@ -128,10 +143,12 @@ struct SwapChain {
 enum SurfaceTarget {
     WndHandle(windef::HWND),
     Visual(native::WeakPtr<dcomp::IDCompositionVisual>),
+    SurfaceHandle(winnt::HANDLE),
 }
 
 pub struct Surface {
     factory: native::DxgiFactory,
+    factory_media: Option<native::FactoryMedia>,
     target: SurfaceTarget,
     supports_allow_tearing: bool,
     swap_chain: Option<SwapChain>,
@@ -680,6 +697,19 @@ impl crate::Surface<Api> for Surface {
                             )
                             .into_result()
                     }
+                    SurfaceTarget::SurfaceHandle(handle) => {
+                        profiling::scope!(
+                            "IDXGIFactoryMedia::CreateSwapChainForCompositionSurfaceHandle"
+                        );
+                        self.factory_media
+                            .ok_or(crate::SurfaceError::Other("IDXGIFactoryMedia not found"))?
+                            .create_swapchain_for_composition_surface_handle(
+                                device.present_queue.as_mut_ptr() as *mut _,
+                                handle,
+                                &desc,
+                            )
+                            .into_result()
+                    }
                     SurfaceTarget::WndHandle(hwnd) => {
                         profiling::scope!("IDXGIFactory4::CreateSwapChainForHwnd");
                         self.factory
@@ -703,7 +733,7 @@ impl crate::Surface<Api> for Surface {
                 };
 
                 match self.target {
-                    SurfaceTarget::WndHandle(_) => {}
+                    SurfaceTarget::WndHandle(_) | SurfaceTarget::SurfaceHandle(_) => {}
                     SurfaceTarget::Visual(visual) => {
                         if let Err(err) =
                             unsafe { visual.SetContent(swap_chain1.as_unknown()) }.into_result()
@@ -741,7 +771,7 @@ impl crate::Surface<Api> for Surface {
                     )
                 };
             }
-            SurfaceTarget::Visual(_) => {}
+            SurfaceTarget::Visual(_) | SurfaceTarget::SurfaceHandle(_) => {}
         }
 
         unsafe { swap_chain.SetMaximumFrameLatency(config.swap_chain_size) };

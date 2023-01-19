@@ -39,6 +39,21 @@ impl crate::Instance<super::Api> for super::Instance {
             desc.flags,
         )?;
 
+        // Create IDXGIFactoryMedia
+        let factory_media = match lib_dxgi.create_factory_media() {
+            Ok(pair) => match pair.into_result() {
+                Ok(factory_media) => Some(factory_media),
+                Err(err) => {
+                    log::error!("Failed to create IDXGIFactoryMedia: {}", err);
+                    None
+                }
+            },
+            Err(err) => {
+                log::info!("IDXGIFactory1 creation function not found: {:?}", err);
+                None
+            }
+        };
+
         let mut supports_allow_tearing = false;
         #[allow(trivial_casts)]
         if let Some(factory5) = factory.as_factory5() {
@@ -60,6 +75,7 @@ impl crate::Instance<super::Api> for super::Instance {
         Ok(Self {
             // The call to create_factory will only succeed if we get a factory4, so this is safe.
             factory,
+            factory_media,
             library: Arc::new(lib_main),
             _lib_dxgi: lib_dxgi,
             supports_allow_tearing,
@@ -76,6 +92,7 @@ impl crate::Instance<super::Api> for super::Instance {
         match window_handle {
             raw_window_handle::RawWindowHandle::Win32(handle) => Ok(super::Surface {
                 factory: self.factory,
+                factory_media: self.factory_media,
                 target: SurfaceTarget::WndHandle(handle.hwnd as *mut _),
                 supports_allow_tearing: self.supports_allow_tearing,
                 swap_chain: None,

@@ -250,6 +250,21 @@ impl Context {
         }
     }
 
+    #[cfg(target_os = "windows")]
+    pub unsafe fn create_surface_from_surface_handle(
+        &self,
+        surface_handle: *mut std::ffi::c_void,
+    ) -> Surface {
+        let id = unsafe {
+            self.0
+                .instance_create_surface_from_surface_handle(surface_handle, ())
+        };
+        Surface {
+            id,
+            configured_device: Mutex::default(),
+        }
+    }
+
     fn handle_error(
         &self,
         sink_mutex: &Mutex<ErrorSinkRaw>,
