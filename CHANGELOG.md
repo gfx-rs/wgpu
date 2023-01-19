@@ -217,6 +217,10 @@ let texture = device.create_texture(&wgpu::TextureDescriptor {
 - Support alpha to coverage. By @Wumpf in [#3156](https://github.com/gfx-rs/wgpu/pull/3156)
 - Support filtering f32 textures. By @expenses in [#3261](https://github.com/gfx-rs/wgpu/pull/3261)
 
+#### Vulkan
+
+- Add `SHADER_INT16` feature to enable the `shaderInt16` VkPhysicalDeviceFeature. By @Elabajaba in [#3401](https://github.com/gfx-rs/wgpu/pull/3401)
+
 #### WebGPU
 
 - Add `MULTISAMPLE_X2`, `MULTISAMPLE_X4` and `MULTISAMPLE_X8` to `TextureFormatFeatureFlags`. By @39ali in [3140](https://github.com/gfx-rs/wgpu/pull/3140)
