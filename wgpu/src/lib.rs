@@ -1527,9 +1527,18 @@ impl Instance {
         &self,
         surface_handle: *mut std::ffi::c_void,
     ) -> Surface {
-        unsafe {
+        let surface = unsafe {
             self.context
+                .as_any()
+                .downcast_ref::<crate::backend::Context>()
+                .unwrap()
                 .create_surface_from_surface_handle(surface_handle)
+        };
+        Surface {
+            context: Arc::clone(&self.context),
+            id: ObjectId::from(surface.id()),
+            data: Box::new(surface),
+            config: Mutex::new(None),
         }
     }
 

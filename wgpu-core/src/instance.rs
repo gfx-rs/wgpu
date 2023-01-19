@@ -592,7 +592,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         id.0
     }
 
-    #[cfg(dx12)]
+    #[cfg(feature = "dx12")]
     /// # Safety
     ///
     /// The surface_handle must be valid and able to be used to make a swapchain with.
@@ -605,13 +605,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let surface = Surface {
             presentation: None,
-            #[cfg(vulkan)]
+            #[cfg(feature = "vulkan")]
             vulkan: None,
             dx12: self.instance.dx12.as_ref().map(|inst| HalSurface {
                 raw: unsafe { inst.create_surface_from_surface_handle(surface_handle) },
             }),
             dx11: None,
-            #[cfg(gl)]
+            #[cfg(feature = "gles")]
             gl: None,
         };
 

@@ -89,6 +89,7 @@ const ZERO_BUFFER_SIZE: wgt::BufferAddress = 256 << 10;
 
 pub struct Instance {
     factory: native::DxgiFactory,
+    factory_media: Option<native::FactoryMedia>,
     library: Arc<native::D3D12Lib>,
     supports_allow_tearing: bool,
     _lib_dxgi: native::DxgiLib,
@@ -103,6 +104,7 @@ impl Instance {
     ) -> Surface {
         Surface {
             factory: self.factory,
+            factory_media: self.factory_media,
             target: SurfaceTarget::Visual(unsafe { native::WeakPtr::from_raw(visual) }),
             supports_allow_tearing: self.supports_allow_tearing,
             swap_chain: None,
@@ -115,6 +117,7 @@ impl Instance {
     ) -> Surface {
         Surface {
             factory: self.factory,
+            factory_media: self.factory_media,
             target: SurfaceTarget::SurfaceHandle(surface_handle),
             supports_allow_tearing: self.supports_allow_tearing,
             swap_chain: None,
@@ -145,6 +148,7 @@ enum SurfaceTarget {
 
 pub struct Surface {
     factory: native::DxgiFactory,
+    factory_media: Option<native::FactoryMedia>,
     target: SurfaceTarget,
     supports_allow_tearing: bool,
     swap_chain: Option<SwapChain>,
@@ -694,8 +698,8 @@ impl crate::Surface<Api> for Surface {
                             .into_result()
                     }
                     SurfaceTarget::SurfaceHandle(handle) => self
-                        .factory
-                        .unwrap_factory_media()
+                        .factory_media
+                        .unwrap()
                         .create_swapchain_for_composition_surface_handle(
                             device.present_queue.as_mut_ptr() as *mut _,
                             handle,
