@@ -67,7 +67,7 @@ thiserror = "1"
 
 [dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-rev = "e98bd92"
+rev = "1be8024"
 version = "0.10"
 features = ["clone", "span", "validate"]
 
