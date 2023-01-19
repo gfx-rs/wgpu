@@ -702,7 +702,7 @@ impl crate::Surface<Api> for Surface {
                             "IDXGIFactoryMedia::CreateSwapChainForCompositionSurfaceHandle"
                         );
                         self.factory_media
-                            .unwrap()
+                            .ok_or(crate::SurfaceError::Other("IDXGIFactoryMedia not found"))?
                             .create_swapchain_for_composition_surface_handle(
                                 device.present_queue.as_mut_ptr() as *mut _,
                                 handle,
