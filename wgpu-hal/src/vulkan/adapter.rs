@@ -338,7 +338,8 @@ impl PhysicalDeviceFeatures {
             | Df::UNRESTRICTED_INDEX_BUFFER
             | Df::INDIRECT_EXECUTION
             | Df::VIEW_FORMATS
-            | Df::UNRESTRICTED_EXTERNAL_TEXTURE_COPIES;
+            | Df::UNRESTRICTED_EXTERNAL_TEXTURE_COPIES
+            | Df::OCCLUSION_QUERY;
 
         dl_flags.set(
             Df::SURFACE_VIEW_FORMATS,

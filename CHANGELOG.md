@@ -255,6 +255,19 @@ option.
 
 By @jimblandy in [#3254](https://github.com/gfx-rs/wgpu/pull/3254).
 
+#### Occlusion Query Support
+
+The `occlusion_query_set` value defines where the occlusion query results will be stored for this pass.
+
+```diff
+let render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+  // ...
++ occlusion_query_set: None,
+});
+```
+
+By @Valaphee in [#3402](https://github.com/gfx-rs/wgpu/pull/3402)
+
 ### Changes
 
 #### General

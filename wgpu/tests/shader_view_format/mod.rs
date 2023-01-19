@@ -131,13 +131,14 @@ fn reinterpret(
         .device
         .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
     let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+        label: None,
         color_attachments: &[Some(wgpu::RenderPassColorAttachment {
             ops: wgpu::Operations::default(),
             resolve_target: None,
             view: &target_view,
         })],
         depth_stencil_attachment: None,
-        label: None,
+        occlusion_query_set: None,
     });
     rpass.set_pipeline(&pipeline);
     rpass.set_bind_group(0, &bind_group, &[]);

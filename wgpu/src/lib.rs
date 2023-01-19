@@ -27,6 +27,7 @@ use std::{
 
 use context::{Context, DeviceRequest, DynContext, ObjectId};
 use parking_lot::Mutex;
+use wgc::id::QuerySetId;
 
 pub use wgt::{
     AdapterInfo, AddressMode, AstcBlock, AstcChannel, Backend, Backends, BindGroupLayoutEntry,
@@ -1083,6 +1084,8 @@ pub struct RenderPassDescriptor<'tex, 'desc> {
     pub color_attachments: &'desc [Option<RenderPassColorAttachment<'tex>>],
     /// The depth and stencil attachment of the render pass, if any.
     pub depth_stencil_attachment: Option<RenderPassDepthStencilAttachment<'tex>>,
+    /// Defines where the occlusion query results will be stored for this pass.
+    pub occlusion_query_set: Option<QuerySetId>,
 }
 static_assertions::assert_impl_all!(RenderPassDescriptor: Send, Sync);
 
@@ -2959,7 +2962,8 @@ impl CommandEncoder {
     }
 }
 
-/// [`Features::TIMESTAMP_QUERY`] or [`Features::PIPELINE_STATISTICS_QUERY`] must be enabled on the device in order to call these functions.
+/// [`Features::TIMESTAMP_QUERY`], [`Features::OCCLUSION_QUERY`] or [`Features::PIPELINE_STATISTICS_QUERY`] must be enabled
+/// on the device in order to call these functions.
 impl CommandEncoder {
     /// Resolve a query set, writing the results into the supplied destination buffer.
     ///
@@ -3444,6 +3448,30 @@ impl<'a> RenderPass<'a> {
             query_set.data.as_ref(),
             query_index,
         )
+    }
+}
+
+/// [`Features::OCCLUSION_QUERY`] must be enabled on the device in order to call these functions.
+impl<'a> RenderPass<'a> {
+    /// Start a occlusion query on this render pass. It can be ended with
+    /// `end_occlusion_query`. Occlusion queries may not be nested.
+    pub fn begin_occlusion_query(&mut self, query_index: u32) {
+        DynContext::render_pass_begin_occlusion_query(
+            &*self.parent.context,
+            &mut self.id,
+            self.data.as_mut(),
+            query_index,
+        );
+    }
+
+    /// End the occlusion query on this render pass. It can be started with
+    /// `begin_occlusion_query`. Occlusion queries may not be nested.
+    pub fn end_occlusion_query(&mut self) {
+        DynContext::render_pass_end_occlusion_query(
+            &*self.parent.context,
+            &mut self.id,
+            self.data.as_mut(),
+        );
     }
 }
 

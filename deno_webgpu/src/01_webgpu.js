@@ -3599,12 +3599,52 @@
       );
     }
 
-    beginOcclusionQuery(_queryIndex) {
-      throw new Error("Not yet implemented");
+    /**
+     * @param {number} queryIndex
+     */
+    beginOcclusionQuery(queryIndex) {
+      webidl.assertBranded(this, GPURenderPassEncoderPrototype);
+      const prefix =
+        "Failed to execute 'beginOcclusionQuery' on 'GPURenderPassEncoder'";
+      webidl.requiredArguments(arguments.length, 2, { prefix });
+      queryIndex = webidl.converters.GPUSize32(queryIndex, {
+        prefix,
+        context: "Argument 2",
+      });
+      const device = assertDevice(this[_encoder], {
+        prefix,
+        context: "encoder referenced by this",
+      });
+      assertResource(this[_encoder], {
+        prefix,
+        context: "encoder referenced by this",
+      });
+      const renderPassRid = assertResource(this, { prefix, context: "this" });
+      assertDeviceMatch(device, querySet, {
+        prefix,
+        resourceContext: "Argument 1",
+        selfContext: "this",
+      });
+      ops.op_webgpu_render_pass_begin_occlusion_query(
+          renderPassRid,
+          queryIndex,
+      );
     }
 
     endOcclusionQuery() {
-      throw new Error("Not yet implemented");
+      webidl.assertBranded(this, GPURenderPassEncoderPrototype);
+      const prefix =
+        "Failed to execute 'endOcclusionQuery' on 'GPURenderPassEncoder'";
+      assertDevice(this[_encoder], {
+        prefix,
+        context: "encoder referenced by this",
+      });
+      assertResource(this[_encoder], {
+        prefix,
+        context: "encoder referenced by this",
+      });
+      const renderPassRid = assertResource(this, { prefix, context: "this" });
+      ops.op_webgpu_render_pass_end_occlusion_query(renderPassRid);
     }
 
     /**

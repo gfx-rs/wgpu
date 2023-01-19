@@ -117,6 +117,7 @@ impl super::Adapter {
             downlevel |= wgt::DownlevelFlags::ANISOTROPIC_FILTERING;
             // this is actually the first FL that supports u32 at all
             downlevel |= wgt::DownlevelFlags::FULL_DRAW_INDEX_UINT32;
+            downlevel |= wgt::DownlevelFlags::OCCLUSION_QUERY
         }
 
         if feature_level >= FL9_3 {

@@ -1889,6 +1889,7 @@ impl crate::Context for Context {
                     label: desc.label.map(Borrowed),
                     color_attachments: Borrowed(&colors),
                     depth_stencil_attachment: depth_stencil.as_ref(),
+                    occlusion_query_set: desc.occlusion_query_set
                 },
             ),
         )
@@ -2899,6 +2900,23 @@ impl crate::Context for Context {
         query_index: u32,
     ) {
         wgpu_render_pass_write_timestamp(pass_data, *query_set, query_index)
+    }
+
+    fn render_pass_begin_occlusion_query(
+        &self,
+        _pass: &mut Self::RenderPassId,
+        pass_data: &mut Self::RenderPassData,
+        query_index: u32,
+    ) {
+        wgpu_render_pass_begin_occlusion_query(pass_data, query_index)
+    }
+
+    fn render_pass_end_occlusion_query(
+        &self,
+        _pass: &mut Self::RenderPassId,
+        pass_data: &mut Self::RenderPassData,
+    ) {
+        wgpu_render_pass_end_occlusion_query(pass_data)
     }
 
     fn render_pass_begin_pipeline_statistics_query(

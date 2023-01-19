@@ -970,6 +970,17 @@ pub trait Context: Debug + Send + Sized + Sync {
         query_set_data: &Self::QuerySetData,
         query_index: u32,
     );
+    fn render_pass_begin_occlusion_query(
+        &self,
+        pass: &mut Self::RenderPassId,
+        pass_data: &mut Self::RenderPassData,
+        query_index: u32,
+    );
+    fn render_pass_end_occlusion_query(
+        &self,
+        pass: &mut Self::RenderPassId,
+        pass_data: &mut Self::RenderPassData,
+    );
     fn render_pass_begin_pipeline_statistics_query(
         &self,
         pass: &mut Self::RenderPassId,
@@ -1885,6 +1896,13 @@ pub(crate) trait DynContext: Debug + Send + Sync {
         query_set_data: &crate::Data,
         query_index: u32,
     );
+    fn render_pass_begin_occlusion_query(
+        &self,
+        pass: &mut ObjectId,
+        pass_data: &mut crate::Data,
+        query_index: u32,
+    );
+    fn render_pass_end_occlusion_query(&self, pass: &mut ObjectId, pass_data: &mut crate::Data);
     fn render_pass_begin_pipeline_statistics_query(
         &self,
         pass: &mut ObjectId,
@@ -3805,6 +3823,28 @@ where
             query_set_data,
             query_index,
         )
+    }
+
+    fn render_pass_begin_occlusion_query(
+        &self,
+        pass: &mut ObjectId,
+        pass_data: &mut crate::Data,
+        query_index: u32,
+    ) {
+        let mut pass = <T::RenderPassId>::from(*pass);
+        let pass_data = downcast_mut::<T::RenderPassData>(pass_data);
+        Context::render_pass_begin_occlusion_query(
+            self,
+            &mut pass,
+            pass_data,
+            query_index,
+        )
+    }
+
+    fn render_pass_end_occlusion_query(&self, pass: &mut ObjectId, pass_data: &mut crate::Data) {
+        let mut pass = <T::RenderPassId>::from(*pass);
+        let pass_data = downcast_mut::<T::RenderPassData>(pass_data);
+        Context::render_pass_end_occlusion_query(self, &mut pass, pass_data)
     }
 
     fn render_pass_begin_pipeline_statistics_query(

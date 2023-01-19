@@ -276,6 +276,7 @@ impl framework::Example for Example {
                     },
                 })],
                 depth_stencil_attachment: None,
+                occlusion_query_set: None,
             });
 
             rpass.set_pipeline(&self.pipeline_triangle_conservative);
@@ -295,6 +296,7 @@ impl framework::Example for Example {
                     },
                 })],
                 depth_stencil_attachment: None,
+                occlusion_query_set: None,
             });
 
             rpass.set_pipeline(&self.pipeline_upscale);

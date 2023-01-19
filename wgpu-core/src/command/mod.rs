@@ -578,6 +578,10 @@ pub enum PassErrorScope {
     QueryReset,
     #[error("In a write_timestamp command")]
     WriteTimestamp,
+    #[error("In a begin_occlusion_query command")]
+    BeginOcclusionQuery,
+    #[error("In a end_occlusion_query command")]
+    EndOcclusionQuery,
     #[error("In a begin_pipeline_statistics_query command")]
     BeginPipelineStatisticsQuery,
     #[error("In a end_pipeline_statistics_query command")]

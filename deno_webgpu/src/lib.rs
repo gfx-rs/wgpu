@@ -614,6 +614,8 @@ fn declare_webgpu_ops() -> Vec<deno_core::OpDecl> {
         render_pass::op_webgpu_render_pass_set_scissor_rect::decl(),
         render_pass::op_webgpu_render_pass_set_blend_constant::decl(),
         render_pass::op_webgpu_render_pass_set_stencil_reference::decl(),
+        render_pass::op_webgpu_render_pass_begin_occlusion_query::decl(),
+        render_pass::op_webgpu_render_pass_end_occlusion_query::decl(),
         render_pass::op_webgpu_render_pass_begin_pipeline_statistics_query::decl(),
         render_pass::op_webgpu_render_pass_end_pipeline_statistics_query::decl(),
         render_pass::op_webgpu_render_pass_write_timestamp::decl(),

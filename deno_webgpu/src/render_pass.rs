@@ -115,6 +115,40 @@ pub fn op_webgpu_render_pass_set_stencil_reference(
 }
 
 #[op]
+pub fn op_webgpu_render_pass_begin_occlusion_query(
+    state: &mut OpState,
+    render_pass_rid: ResourceId,
+    query_index: u32,
+) -> Result<WebGpuResult, AnyError> {
+    let render_pass_resource = state
+        .resource_table
+        .get::<WebGpuRenderPass>(render_pass_rid)?;
+
+    wgpu_core::command::render_ffi::wgpu_render_pass_begin_occlusion_query(
+        &mut render_pass_resource.0.borrow_mut(),
+        query_index,
+    );
+
+    Ok(WebGpuResult::empty())
+}
+
+#[op]
+pub fn op_webgpu_render_pass_end_occlusion_query(
+    state: &mut OpState,
+    render_pass_rid: ResourceId,
+) -> Result<WebGpuResult, AnyError> {
+    let render_pass_resource = state
+        .resource_table
+        .get::<WebGpuRenderPass>(render_pass_rid)?;
+
+    wgpu_core::command::render_ffi::wgpu_render_pass_end_occlusion_query(
+        &mut render_pass_resource.0.borrow_mut(),
+    );
+
+    Ok(WebGpuResult::empty())
+}
+
+#[op]
 pub fn op_webgpu_render_pass_begin_pipeline_statistics_query(
     state: &mut OpState,
     render_pass_rid: ResourceId,

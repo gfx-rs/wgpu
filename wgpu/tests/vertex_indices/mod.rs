@@ -108,13 +108,14 @@ fn pulling_common(
         .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
 
     let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+        label: None,
         color_attachments: &[Some(wgpu::RenderPassColorAttachment {
             ops: wgpu::Operations::default(),
             resolve_target: None,
             view: &dummy,
         })],
         depth_stencil_attachment: None,
-        label: None,
+        occlusion_query_set: None,
     });
 
     rpass.set_pipeline(&pipeline);

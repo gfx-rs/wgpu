@@ -286,6 +286,7 @@ impl framework::Example for Example {
             label: None,
             color_attachments: &color_attachments,
             depth_stencil_attachment: None,
+            occlusion_query_set: None,
         };
 
         // get command encoder

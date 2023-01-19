@@ -301,6 +301,7 @@ impl framework::Example for Example {
                     label: None,
                     color_attachments: &[Some(rpass_color_attachment)],
                     depth_stencil_attachment: None,
+                    occlusion_query_set: None,
                 })
                 .execute_bundles(iter::once(&self.bundle));
         }
