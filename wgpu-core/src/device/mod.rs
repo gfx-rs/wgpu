@@ -1315,6 +1315,12 @@ impl<A: HalApi> Device<A> {
                 wgt::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
             ),
         );
+        caps.set(
+            Caps::STORAGE_TEXTURE_16BIT_NORM_FORMATS,
+            self.features
+                .contains(wgt::Features::TEXTURE_FORMAT_16BIT_NORM),
+        );
+
         let info = naga::valid::Validator::new(naga::valid::ValidationFlags::all(), caps)
             .validate(&module)
             .map_err(|inner| {

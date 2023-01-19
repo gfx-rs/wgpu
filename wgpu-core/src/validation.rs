@@ -311,6 +311,13 @@ fn map_storage_format_to_naga(format: wgt::TextureFormat) -> Option<naga::Storag
         Tf::Rgba32Sint => Sf::Rgba32Sint,
         Tf::Rgba32Float => Sf::Rgba32Float,
 
+        Tf::R16Unorm => Sf::R16Unorm,
+        Tf::R16Snorm => Sf::R16Snorm,
+        Tf::Rg16Unorm => Sf::Rg16Unorm,
+        Tf::Rg16Snorm => Sf::Rg16Snorm,
+        Tf::Rgba16Unorm => Sf::Rgba16Unorm,
+        Tf::Rgba16Snorm => Sf::Rgba16Snorm,
+
         _ => return None,
     })
 }
@@ -357,6 +364,13 @@ fn map_storage_format_from_naga(format: naga::StorageFormat) -> wgt::TextureForm
         Sf::Rgba32Uint => Tf::Rgba32Uint,
         Sf::Rgba32Sint => Tf::Rgba32Sint,
         Sf::Rgba32Float => Tf::Rgba32Float,
+
+        Sf::R16Unorm => Tf::R16Unorm,
+        Sf::R16Snorm => Tf::R16Snorm,
+        Sf::Rg16Unorm => Tf::Rg16Unorm,
+        Sf::Rg16Snorm => Tf::Rg16Snorm,
+        Sf::Rgba16Unorm => Tf::Rgba16Unorm,
+        Sf::Rgba16Snorm => Tf::Rgba16Snorm,
     }
 }
 
