@@ -848,6 +848,9 @@ pub struct TextureDescriptor<'a> {
     pub format: wgt::TextureFormat,
     pub usage: TextureUses,
     pub memory_flags: MemoryFlags,
+    /// Allows views of this texture to have a different format
+    /// than the this texture does.
+    pub allow_different_view_format: bool,
 }
 
 /// TextureView descriptor.
