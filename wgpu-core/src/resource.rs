@@ -506,7 +506,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut token = Token::root();
         let (mut guard, _) = hub.command_buffers.write(&mut token);
         let command_encoder = guard.get_mut(id).ok();
-        let hal_command_encoder = command_encoder.map(|encoder| &mut encoder.encoder.raw);
+        let hal_command_encoder = command_encoder.map(|encoder| encoder.encoder.open());
 
         hal_command_encoder_callback(hal_command_encoder)
     }
