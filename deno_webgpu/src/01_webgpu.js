@@ -1,4 +1,4 @@
-// Copyright 2018-2022 the Deno authors. All rights reserved. MIT license.
+// Copyright 2018-2023 the Deno authors. All rights reserved. MIT license.
 
 // @ts-check
 /// <reference path="../../core/lib.deno_core.d.ts" />
@@ -34,14 +34,9 @@
     SafeArrayIterator,
     SafePromiseAll,
     Set,
-    SetPrototypeEntries,
-    SetPrototypeForEach,
     SetPrototypeHas,
-    SetPrototypeKeys,
-    SetPrototypeValues,
     Symbol,
     SymbolFor,
-    SymbolIterator,
     TypeError,
     Uint32Array,
     Uint32ArrayPrototype,
@@ -61,7 +56,6 @@
   const _architecture = Symbol("[[architecture]]");
   const _description = Symbol("[[description]]");
   const _limits = Symbol("[[limits]]");
-  const _features = Symbol("[[features]]");
   const _reason = Symbol("[[reason]]");
   const _message = Symbol("[[message]]");
   const _label = Symbol("[[label]]");
@@ -332,22 +326,21 @@
         context: "Argument 1",
       });
       const requiredFeatures = descriptor.requiredFeatures ?? [];
-      for (const feature of requiredFeatures) {
-        if (!SetPrototypeHas(this[_adapter].features[_features], feature)) {
+      for (let i = 0; i < requiredFeatures.length; ++i) {
+        const feature = requiredFeatures[i];
+        if (!SetPrototypeHas(this[_adapter].features[webidl.setlikeInner], feature)) {
           throw new TypeError(
-            `${prefix}: nonGuaranteedFeatures must be a subset of the adapter features.`,
+            `${prefix}: requiredFeatures must be a subset of the adapter features.`,
           );
         }
       }
-      const requiredLimits = descriptor.requiredLimits;
-      // TODO(lucacasonato): validate requiredLimits
 
       const { rid, features, limits } = await core.opAsync(
         "op_webgpu_request_device",
         this[_adapter].rid,
         descriptor.label,
         requiredFeatures,
-        requiredLimits,
+        descriptor.requiredLimits,
       );
 
       const inner = new InnerGPUDevice({
@@ -518,6 +511,10 @@
       webidl.assertBranded(this, GPUSupportedLimitsPrototype);
       return this[_limits].maxBindGroups;
     }
+    get maxBindingsPerBindGroup() {
+      webidl.assertBranded(this, GPUSupportedLimitsPrototype);
+      return this[_limits].maxBindingsPerBindGroup;
+    }
     get maxBufferSize() {
       webidl.assertBranded(this, GPUSupportedLimitsPrototype);
       return this[_limits].maxBufferSize;
@@ -615,60 +612,19 @@
 
   function createGPUSupportedFeatures(features) {
     /** @type {GPUSupportedFeatures} */
-    const adapterFeatures = webidl.createBranded(GPUSupportedFeatures);
-    adapterFeatures[_features] = new Set(features);
-    return adapterFeatures;
+    const supportedFeatures = webidl.createBranded(GPUSupportedFeatures);
+    supportedFeatures[webidl.setlikeInner] = new Set(features);
+    return webidl.setlike(
+      supportedFeatures,
+      GPUSupportedFeaturesPrototype,
+      true,
+    );
   }
 
   class GPUSupportedFeatures {
-    /** @type {Set<string>} */
-    [_features];
-
     constructor() {
       webidl.illegalConstructor();
     }
-
-    /** @return {IterableIterator<[string, string]>} */
-    entries() {
-      webidl.assertBranded(this, GPUSupportedFeaturesPrototype);
-      return SetPrototypeEntries(this[_features]);
-    }
-
-    /** @return {void} */
-    forEach(callbackfn, thisArg) {
-      webidl.assertBranded(this, GPUSupportedFeaturesPrototype);
-      SetPrototypeForEach(this[_features], callbackfn, thisArg);
-    }
-
-    /** @return {boolean} */
-    has(value) {
-      webidl.assertBranded(this, GPUSupportedFeaturesPrototype);
-      return SetPrototypeHas(this[_features], value);
-    }
-
-    /** @return {IterableIterator<string>} */
-    keys() {
-      webidl.assertBranded(this, GPUSupportedFeaturesPrototype);
-      return SetPrototypeKeys(this[_features]);
-    }
-
-    /** @return {IterableIterator<string>} */
-    values() {
-      webidl.assertBranded(this, GPUSupportedFeaturesPrototype);
-      return SetPrototypeValues(this[_features]);
-    }
-
-    /** @return {number} */
-    get size() {
-      webidl.assertBranded(this, GPUSupportedFeaturesPrototype);
-      return this[_features].size;
-    }
-
-    [SymbolIterator]() {
-      webidl.assertBranded(this, GPUSupportedFeaturesPrototype);
-      return this[_features][SymbolIterator]();
-    }
-
     [SymbolFor("Deno.privateCustomInspect")](inspect) {
       return `${this.constructor.name} ${
         inspect([...new SafeArrayIterator(this.values())])
@@ -1060,7 +1016,9 @@
         context: "Argument 1",
       });
       const device = assertDevice(this, { prefix, context: "this" });
-      for (const entry of descriptor.entries) {
+      for (let i = 0; i < descriptor.entries.length; ++i) {
+        const entry = descriptor.entries[i];
+
         let i = 0;
         if (entry.buffer) i++;
         if (entry.sampler) i++;
@@ -1599,8 +1557,8 @@
         },
       );
       const { err } = ops.op_webgpu_queue_submit(device.rid, commandBufferRids);
-      for (const commandBuffer of commandBuffers) {
-        commandBuffer[_rid] = undefined;
+      for (let i = 0; i < commandBuffers.length; ++i) {
+        commandBuffers[i][_rid] = undefined;
       }
       device.pushError(err);
     }
@@ -1956,7 +1914,8 @@
       if (!mappedRanges) {
         throw new DOMException(`${prefix}: invalid state.`, "OperationError");
       }
-      for (const [buffer, _rid, start] of mappedRanges) {
+      for (let i = 0; i < mappedRanges.length; ++i) {
+        const [buffer, _rid, start] = mappedRanges[i];
         // TODO(lucacasonato): is this logic correct?
         const end = start + buffer.byteLength;
         if (
@@ -2024,7 +1983,8 @@
         if (!mappedRanges) {
           throw new DOMException(`${prefix}: invalid state.`, "OperationError");
         }
-        for (const [buffer, mappedRid] of mappedRanges) {
+        for (let i = 0; i < mappedRanges.length; ++i) {
+          const [buffer, mappedRid] = mappedRanges[i];
           const { err } = ops.op_webgpu_buffer_unmap(
             bufferRid,
             mappedRid,
@@ -5264,9 +5224,11 @@
     gpu: webidl.createBranded(GPU),
     GPU,
     GPUAdapter,
+    GPUAdapterInfo,
     GPUSupportedLimits,
     GPUSupportedFeatures,
     GPUDevice,
+    GPUDeviceLostInfo,
     GPUQueue,
     GPUBuffer,
     GPUBufferUsage,

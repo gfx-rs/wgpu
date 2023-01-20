@@ -3,12 +3,14 @@ use crate::auxil::map_naga_stage;
 use glow::HasContext;
 use std::{
     convert::TryInto,
-    iter, ptr,
+    ptr,
     sync::{Arc, Mutex},
 };
 
+use arrayvec::ArrayVec;
 #[cfg(not(target_arch = "wasm32"))]
 use std::mem;
+use std::sync::atomic::Ordering;
 
 type ShaderStage<'a> = (
     naga::ShaderStage,
@@ -265,14 +267,68 @@ impl super::Device {
         unsafe { Self::compile_shader(gl, &output, naga_stage, stage.module.label.as_deref()) }
     }
 
-    unsafe fn create_pipeline<'a, I: Iterator<Item = ShaderStage<'a>>>(
+    unsafe fn create_pipeline<'a>(
         &self,
         gl: &glow::Context,
-        shaders: I,
+        shaders: ArrayVec<ShaderStage<'a>, 3>,
         layout: &super::PipelineLayout,
         #[cfg_attr(target_arch = "wasm32", allow(unused))] label: Option<&str>,
         multiview: Option<std::num::NonZeroU32>,
-    ) -> Result<super::PipelineInner, crate::PipelineError> {
+    ) -> Result<Arc<super::PipelineInner>, crate::PipelineError> {
+        let mut program_stages = ArrayVec::new();
+        let mut group_to_binding_to_slot = Vec::with_capacity(layout.group_infos.len());
+        for group in &*layout.group_infos {
+            group_to_binding_to_slot.push(group.binding_to_slot.clone());
+        }
+        for &(naga_stage, stage) in &shaders {
+            program_stages.push(super::ProgramStage {
+                naga_stage: naga_stage.to_owned(),
+                shader_id: stage.module.id,
+                entry_point: stage.entry_point.to_owned(),
+            });
+        }
+        let glsl_version = match self.shared.shading_language_version {
+            naga::back::glsl::Version::Embedded { version, .. } => version,
+            naga::back::glsl::Version::Desktop(_) => unreachable!(),
+        };
+        let mut guard = self
+            .shared
+            .program_cache
+            .try_lock()
+            .expect("Couldn't acquire program_cache lock");
+        // This guard ensures that we can't accidentally destroy a program whilst we're about to reuse it
+        // The only place that destroys a pipeline is also locking on `program_cache`
+        let program = guard
+            .entry(super::ProgramCacheKey {
+                stages: program_stages,
+                group_to_binding_to_slot: group_to_binding_to_slot.into_boxed_slice(),
+            })
+            .or_insert_with(|| unsafe {
+                Self::create_program(
+                    gl,
+                    shaders,
+                    layout,
+                    label,
+                    multiview,
+                    glsl_version,
+                    self.shared.private_caps,
+                )
+            })
+            .to_owned()?;
+        drop(guard);
+
+        Ok(program)
+    }
+
+    unsafe fn create_program<'a>(
+        gl: &glow::Context,
+        shaders: ArrayVec<ShaderStage<'a>, 3>,
+        layout: &super::PipelineLayout,
+        #[cfg_attr(target_arch = "wasm32", allow(unused))] label: Option<&str>,
+        multiview: Option<std::num::NonZeroU32>,
+        glsl_version: u16,
+        private_caps: super::PrivateCapabilities,
+    ) -> Result<Arc<super::PipelineInner>, crate::PipelineError> {
         let program = unsafe { gl.create_program() }.unwrap();
         #[cfg(not(target_arch = "wasm32"))]
         if let Some(label) = label {
@@ -302,11 +358,7 @@ impl super::Device {
 
         // Create empty fragment shader if only vertex shader is present
         if has_stages == wgt::ShaderStages::VERTEX {
-            let version = match self.shared.shading_language_version {
-                naga::back::glsl::Version::Embedded { version, .. } => version,
-                naga::back::glsl::Version::Desktop(_) => unreachable!(),
-            };
-            let shader_src = format!("#version {} es \n void main(void) {{}}", version,);
+            let shader_src = format!("#version {} es \n void main(void) {{}}", glsl_version,);
             log::info!("Only vertex shader is present. Creating an empty fragment shader",);
             let shader = unsafe {
                 Self::compile_shader(
@@ -339,11 +391,7 @@ impl super::Device {
             log::warn!("\tLink: {}", msg);
         }
 
-        if !self
-            .shared
-            .private_caps
-            .contains(super::PrivateCapabilities::SHADER_BINDING_LAYOUT)
-        {
+        if !private_caps.contains(super::PrivateCapabilities::SHADER_BINDING_LAYOUT) {
             // This remapping is only needed if we aren't able to put the binding layout
             // in the shader. We can't remap storage buffers this way.
             unsafe { gl.use_program(Some(program)) };
@@ -403,11 +451,11 @@ impl super::Device {
             }
         }
 
-        Ok(super::PipelineInner {
+        Ok(Arc::new(super::PipelineInner {
             program,
             sampler_map,
             uniforms,
-        })
+        }))
     }
 }
 
@@ -472,7 +520,7 @@ impl crate::Device<super::Api> for super::Device {
             map_flags |= glow::MAP_WRITE_BIT;
         }
 
-        let raw = Some(unsafe { gl.create_buffer() }.unwrap());
+        let raw = Some(unsafe { gl.create_buffer() }.map_err(|_| crate::DeviceError::OutOfMemory)?);
         unsafe { gl.bind_buffer(target, raw) };
         let raw_size = desc
             .size
@@ -500,7 +548,10 @@ impl crate::Device<super::Api> for super::Device {
                     glow::DYNAMIC_DRAW
                 }
             } else {
-                glow::STATIC_DRAW
+                // Even if the usage doesn't contain SRC_READ, we update it internally at least once
+                // Some vendors take usage very literally and STATIC_DRAW will freeze us with an empty buffer
+                // https://github.com/gfx-rs/wgpu/issues/3371
+                glow::DYNAMIC_DRAW
             };
             unsafe { gl.buffer_data_size(target, raw_size, usage) };
         }
@@ -1059,6 +1110,7 @@ impl crate::Device<super::Api> for super::Device {
                 crate::ShaderInput::Naga(naga) => naga,
             },
             label: desc.label.map(|str| str.to_string()),
+            id: self.shared.next_shader_id.fetch_add(1, Ordering::Relaxed),
         })
     }
     unsafe fn destroy_shader_module(&self, _module: super::ShaderModule) {}
@@ -1068,11 +1120,11 @@ impl crate::Device<super::Api> for super::Device {
         desc: &crate::RenderPipelineDescriptor<super::Api>,
     ) -> Result<super::RenderPipeline, crate::PipelineError> {
         let gl = &self.shared.context.lock();
-        let shaders = iter::once((naga::ShaderStage::Vertex, &desc.vertex_stage)).chain(
-            desc.fragment_stage
-                .as_ref()
-                .map(|fs| (naga::ShaderStage::Fragment, fs)),
-        );
+        let mut shaders = ArrayVec::new();
+        shaders.push((naga::ShaderStage::Vertex, &desc.vertex_stage));
+        if let Some(ref fs) = desc.fragment_stage {
+            shaders.push((naga::ShaderStage::Fragment, fs));
+        }
         let inner =
             unsafe { self.create_pipeline(gl, shaders, desc.layout, desc.label, desc.multiview) }?;
 
@@ -1133,8 +1185,19 @@ impl crate::Device<super::Api> for super::Device {
         })
     }
     unsafe fn destroy_render_pipeline(&self, pipeline: super::RenderPipeline) {
-        let gl = &self.shared.context.lock();
-        unsafe { gl.delete_program(pipeline.inner.program) };
+        let mut program_cache = self.shared.program_cache.lock();
+        // If the pipeline only has 2 strong references remaining, they're `pipeline` and `program_cache`
+        // This is safe to assume as long as:
+        // - `RenderPipeline` can't be cloned
+        // - The only place that we can get a new reference is during `program_cache.lock()`
+        if Arc::strong_count(&pipeline.inner) == 2 {
+            program_cache.retain(|_, v| match *v {
+                Ok(ref p) => p.program != pipeline.inner.program,
+                Err(_) => false,
+            });
+            let gl = &self.shared.context.lock();
+            unsafe { gl.delete_program(pipeline.inner.program) };
+        }
     }
 
     unsafe fn create_compute_pipeline(
@@ -1142,14 +1205,26 @@ impl crate::Device<super::Api> for super::Device {
         desc: &crate::ComputePipelineDescriptor<super::Api>,
     ) -> Result<super::ComputePipeline, crate::PipelineError> {
         let gl = &self.shared.context.lock();
-        let shaders = iter::once((naga::ShaderStage::Compute, &desc.stage));
+        let mut shaders = ArrayVec::new();
+        shaders.push((naga::ShaderStage::Compute, &desc.stage));
         let inner = unsafe { self.create_pipeline(gl, shaders, desc.layout, desc.label, None) }?;
 
         Ok(super::ComputePipeline { inner })
     }
     unsafe fn destroy_compute_pipeline(&self, pipeline: super::ComputePipeline) {
-        let gl = &self.shared.context.lock();
-        unsafe { gl.delete_program(pipeline.inner.program) };
+        let mut program_cache = self.shared.program_cache.lock();
+        // If the pipeline only has 2 strong references remaining, they're `pipeline` and `program_cache``
+        // This is safe to assume as long as:
+        // - `ComputePipeline` can't be cloned
+        // - The only place that we can get a new reference is during `program_cache.lock()`
+        if Arc::strong_count(&pipeline.inner) == 2 {
+            program_cache.retain(|_, v| match *v {
+                Ok(ref p) => p.program != pipeline.inner.program,
+                Err(_) => false,
+            });
+            let gl = &self.shared.context.lock();
+            unsafe { gl.delete_program(pipeline.inner.program) };
+        }
     }
 
     #[cfg_attr(target_arch = "wasm32", allow(unused))]

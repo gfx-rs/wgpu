@@ -1,4 +1,4 @@
-// Copyright 2018-2022 the Deno authors. All rights reserved. MIT license.
+// Copyright 2018-2023 the Deno authors. All rights reserved. MIT license.
 
 #![warn(unsafe_op_in_unsafe_fn)]
 
@@ -117,7 +117,8 @@ impl Resource for WebGpuQuerySet {
 }
 
 pub fn init(unstable: bool) -> Extension {
-    Extension::builder()
+    Extension::builder(env!("CARGO_PKG_NAME"))
+        .dependencies(vec!["deno_webidl", "deno_web"])
         .js(include_js_files!(
           prefix "deno:deno_webgpu",
           "01_webgpu.js",
@@ -251,7 +252,10 @@ pub async fn op_webgpu_request_adapter(
         state.put(wgpu_core::hub::Global::new(
             "webgpu",
             wgpu_core::hub::IdentityManagerFactory,
-            backends,
+            wgpu_types::InstanceDescriptor {
+                backends,
+                dx12_shader_compiler: wgpu_types::Dx12Compiler::Fxc,
+            },
         ));
         state.borrow::<Instance>()
     };
@@ -408,7 +412,7 @@ pub async fn op_webgpu_request_device(
     state: Rc<RefCell<OpState>>,
     adapter_rid: ResourceId,
     label: Option<String>,
-    required_features: Option<GpuRequiredFeatures>,
+    required_features: GpuRequiredFeatures,
     required_limits: Option<wgpu_types::Limits>,
 ) -> Result<GpuAdapterDevice, AnyError> {
     let mut state = state.borrow_mut();
@@ -418,8 +422,8 @@ pub async fn op_webgpu_request_device(
 
     let descriptor = wgpu_types::DeviceDescriptor {
         label: label.map(Cow::from),
-        features: required_features.map(Into::into).unwrap_or_default(),
-        limits: required_limits.map(Into::into).unwrap_or_default(),
+        features: required_features.into(),
+        limits: required_limits.unwrap_or_default(),
     };
 
     let (device, maybe_err) = gfx_select!(adapter => instance.adapter_request_device(

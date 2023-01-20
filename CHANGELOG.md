@@ -103,9 +103,65 @@ Additionally `Surface::get_default_config` now returns an Option and returns Non
 
 `Instance::create_surface()` now returns `Result<Surface, CreateSurfaceError>` instead of `Surface`. This allows an error to be returned instead of panicking if the given window is a HTML canvas and obtaining a WebGPU or WebGL 2 context fails. (No other platforms currently report any errors through this path.) By @kpreid in [#3052](https://github.com/gfx-rs/wgpu/pull/3052/)
 
+#### Instance creation now takes `InstanceDescriptor` instead of `Backends`
+
+`Instance::new()` and `hub::Global::new()` now take an `InstanceDescriptor` struct which cointains both the existing `Backends` selection as well as a new `Dx12Compiler` field for selecting which Dx12 shader compiler to use.
+
+```diff
+- let instance = Instance::new(wgpu::Backends::all());
++ let instance = Instance::new(wgpu::InstanceDescriptor {
++     backends: wgpu::Backends::all(),
++     dx12_shader_compiler: wgpu::Dx12Compiler::Fxc,
++ });
+```
+
+```diff
+- let global = wgc::hub::Global::new(
+-     "player",
+-     IdentityPassThroughFactory,
+-     wgpu::Backends::all(),
+- );
++ let global = wgc::hub::Global::new(
++     "player",
++     IdentityPassThroughFactory,
++     wgpu::InstanceDescriptor {
++       backends: wgpu::Backends::all(),
++       dx12_shader_compiler: wgpu::Dx12Compiler::Fxc,
++     },
++ );
+```
+
+`Instance` now also also implements `Default`, which uses `wgpu::Backends::all()` and `wgpu::Dx12Compiler::Fxc` for `InstanceDescriptor`
+
+```diff
+- let instance = Instance::new(wgpu::InstanceDescriptor {
+-     backends: wgpu::Backends::all(),
+-     dx12_shader_compiler: wgpu::Dx12Compiler::Fxc,
+- });
++ let instance = Instance::default();
+```
+
+By @Elabajaba in [#3356](https://github.com/gfx-rs/wgpu/pull/3356)
+
 #### Suballocate DX12 buffers and textures
 
 `wgpu`'s DX12 backend can now suballocate buffers and textures when the `windows_rs` feature is enabled, which can give a significant increase in performance (in testing I've seen a 10000%+ improvement in a simple scene with 200 `write_buffer` calls per frame, and a 40%+ improvement in [Bistro using Bevy](https://github.com/vleue/bevy_bistro_playground)). Previously `wgpu-hal`'s DX12 backend created a new heap on the GPU every time you called write_buffer (by calling `CreateCommittedResource`), whereas now with the `windows_rs` feature enabled it uses [`gpu_allocator`](https://crates.io/crates/gpu-allocator) to manage GPU memory (and calls `CreatePlacedResource` with a suballocated heap). By @Elabajaba in [#3163](https://github.com/gfx-rs/wgpu/pull/3163)
+
+#### DXC Shader Compiler Support for DX12
+
+You can now choose to use the DXC compiler for DX12 instead of FXC. The DXC compiler is faster, less buggy, and allows for new features compared to the old, unmaintained FXC compiler. You can choose which compiler to use at `Instance` creation using the `Dx12Compiler` field in the `InstanceDescriptor` struct. Note that DXC requires both `dxcompiler.dll` and `dxil.dll`, which can be downloaded from https://github.com/microsoft/DirectXShaderCompiler/releases. Both .dlls need to be shipped with your application when targeting DX12 and using the `DXC` compiler. If the .dlls can't be loaded, then it will fall back to the FXC compiler. By @39ali and @Elabajaba in [#3356](https://github.com/gfx-rs/wgpu/pull/3356)
+
+#### Texture Format Reinterpretation
+
+The `view_formats` field is used to specify formats that are compatible with the texture format to allow the creation of views with different formats, currently, only changing srgb-ness is allowed.
+
+```diff
+let texture = device.create_texture(&wgpu::TextureDescriptor {
+  // ...
+  format: TextureFormat::Rgba8UnormSrgb,
++ view_formats: &[TextureFormat::Rgba8Unorm],
+});
+```
 
 ### Changes
 
@@ -125,6 +181,7 @@ Additionally `Surface::get_default_config` now returns an Option and returns Non
 - Make `ObjectId` structure and invariants idiomatic. By @teoxoy in [#3347](https://github.com/gfx-rs/wgpu/pull/3347)
 - Add validation in accordance with WebGPU `GPUSamplerDescriptor` valid usage for `lodMinClamp` and `lodMaxClamp`. By @James2022-rgb in [#3353](https://github.com/gfx-rs/wgpu/pull/3353)
 - Remove panics in `Deref` implementations for `QueueWriteBufferView` and `BufferViewMut`. Instead, warnings are logged, since reading from these types is not recommended. By @botahamec in [#3336]
+- Implement `view_formats` in TextureDescriptor to match the WebGPU spec. By @jinleili in [#3237](https://github.com/gfx-rs/wgpu/pull/3237)
 - Change Texture::as_hal() callback to return a value, matching other as_hal callbacks. By @JMS55 in [#3376](https://github.com/gfx-rs/wgpu/pull/3376).
 
 #### WebGPU
@@ -136,6 +193,7 @@ Additionally `Surface::get_default_config` now returns an Option and returns Non
 
 - Browsers that support `OVR_multiview2` now report the `MULTIVIEW` feature by @expenses in [#3121](https://github.com/gfx-rs/wgpu/pull/3121).
 - `Limits::max_push_constant_size` on GLES is now 256 by @Dinnerbone in [#3374](https://github.com/gfx-rs/wgpu/pull/3374).
+- Creating multiple pipelines with the same shaders will now be faster, by @Dinnerbone in [#3380](https://github.com/gfx-rs/wgpu/pull/3380).
 
 #### Vulkan
 
@@ -183,6 +241,9 @@ Additionally `Surface::get_default_config` now returns an Option and returns Non
 - Evaluate `gfx_select!`'s `#[cfg]` conditions at the right time. By @jimblandy in [#3253](https://github.com/gfx-rs/wgpu/pull/3253)
 - Improve error messages when binding bind group with dynamic offsets. By @cwfitzgerald in [#3294](https://github.com/gfx-rs/wgpu/pull/3294)
 - Allow non-filtering sampling of integer textures. By @JMS55 in [#3362](https://github.com/gfx-rs/wgpu/pull/3362).
+- Validate texture ids in `Global::queue_texture_write`. By @jimblandy in [#3378](https://github.com/gfx-rs/wgpu/pull/3378).
+- Don't panic on mapped buffer in queue_submit. By @crowlKats in [#3364](https://github.com/gfx-rs/wgpu/pull/3364).
+- Fix being able to sample a depth texture with a filtering sampler. By @teoxoy in [#3394](https://github.com/gfx-rs/wgpu/pull/3394).
 
 #### Metal
 - Fix texture view creation with full-resource views when using an explicit `mip_level_count` or `array_layer_count`. By @cwfitzgerald in [#3323](https://github.com/gfx-rs/wgpu/pull/3323)
@@ -196,6 +257,8 @@ Additionally `Surface::get_default_config` now returns an Option and returns Non
 - Fixed WebGL not displaying srgb targets correctly if a non-screen filling viewport was previously set. By @Wumpf in [#3093](https://github.com/gfx-rs/wgpu/pull/3093)
 - Fix disallowing multisampling for float textures if otherwise supported. By @Wumpf in [#3183](https://github.com/gfx-rs/wgpu/pull/3183)
 - Fix a panic when creating a pipeline with opaque types other than samplers (images and atomic counters). By @James2022-rgb in [#3361](https://github.com/gfx-rs/wgpu/pull/3361)
+- Fix uniform buffers being empty on some vendors. By @Dinnerbone in [#3391](https://github.com/gfx-rs/wgpu/pull/3391)
+- Fix a panic allocating a new buffer on webgl. By @Dinnerbone in [#3396](https://github.com/gfx-rs/wgpu/pull/3396)
 
 #### Vulkan
 

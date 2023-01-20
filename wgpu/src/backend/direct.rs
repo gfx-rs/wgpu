@@ -144,15 +144,10 @@ impl Context {
         device: &Device,
         desc: &TextureDescriptor,
     ) -> Texture {
+        let descriptor = desc.map_label_and_view_formats(|l| l.map(Borrowed), |v| v.to_vec());
         let global = &self.0;
-        let (id, error) = unsafe {
-            global.create_texture_from_hal::<A>(
-                hal_texture,
-                device.id,
-                &desc.map_label(|l| l.map(Borrowed)),
-                (),
-            )
-        };
+        let (id, error) =
+            unsafe { global.create_texture_from_hal::<A>(hal_texture, device.id, &descriptor, ()) };
         if let Some(cause) = error {
             self.handle_error(
                 &device.error_sink,
@@ -294,6 +289,21 @@ impl Context {
     #[cfg(target_os = "windows")]
     pub unsafe fn create_surface_from_visual(&self, visual: *mut std::ffi::c_void) -> Surface {
         let id = unsafe { self.0.instance_create_surface_from_visual(visual, ()) };
+        Surface {
+            id,
+            configured_device: Mutex::default(),
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    pub unsafe fn create_surface_from_surface_handle(
+        &self,
+        surface_handle: *mut std::ffi::c_void,
+    ) -> Surface {
+        let id = unsafe {
+            self.0
+                .instance_create_surface_from_surface_handle(surface_handle, ())
+        };
         Surface {
             id,
             configured_device: Mutex::default(),
@@ -561,11 +571,11 @@ impl crate::Context for Context {
 
     type PopErrorScopeFuture = Ready<Option<crate::Error>>;
 
-    fn init(backends: wgt::Backends) -> Self {
+    fn init(instance_desc: wgt::InstanceDescriptor) -> Self {
         Self(wgc::hub::Global::new(
             "wgpu",
             wgc::hub::IdentityManagerFactory,
-            backends,
+            instance_desc,
         ))
     }
 
@@ -1294,10 +1304,11 @@ impl crate::Context for Context {
         device_data: &Self::DeviceData,
         desc: &TextureDescriptor,
     ) -> (Self::TextureId, Self::TextureData) {
+        let wgt_desc = desc.map_label_and_view_formats(|l| l.map(Borrowed), |v| v.to_vec());
         let global = &self.0;
         let (id, error) = wgc::gfx_select!(device => global.device_create_texture(
             *device,
-            &desc.map_label(|l| l.map(Borrowed)),
+            &wgt_desc,
             ()
         ));
         if let Some(cause) = error {

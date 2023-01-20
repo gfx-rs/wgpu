@@ -178,7 +178,14 @@ impl Corpus {
         let dir = path.parent().unwrap();
         let corpus: Corpus = ron::de::from_reader(File::open(&path).unwrap()).unwrap();
 
-        let global = wgc::hub::Global::new("test", IdentityPassThroughFactory, corpus.backends);
+        let global = wgc::hub::Global::new(
+            "test",
+            IdentityPassThroughFactory,
+            wgt::InstanceDescriptor {
+                backends: corpus.backends,
+                dx12_shader_compiler: wgt::Dx12Compiler::Fxc,
+            },
+        );
         for &backend in BACKENDS {
             if !corpus.backends.contains(backend.into()) {
                 continue;

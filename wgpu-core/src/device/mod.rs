@@ -852,7 +852,16 @@ impl<A: HalApi> Device<A> {
             ));
         }
 
-        // TODO: validate missing TextureDescriptor::view_formats.
+        let mut allow_different_view_format = false;
+        for format in desc.view_formats.iter() {
+            if desc.format == *format {
+                continue;
+            }
+            if desc.format.remove_srgb_suffix() != format.remove_srgb_suffix() {
+                return Err(CreateTextureError::InvalidViewFormat(*format, desc.format));
+            }
+            allow_different_view_format = true;
+        }
 
         // Enforce having COPY_DST/DEPTH_STENCIL_WRIT/COLOR_TARGET otherwise we
         // wouldn't be able to initialize the texture.
@@ -884,6 +893,7 @@ impl<A: HalApi> Device<A> {
             format: desc.format,
             usage: hal_usage,
             memory_flags: hal::MemoryFlags::empty(),
+            allow_different_view_format,
         };
 
         let raw_texture = unsafe {
@@ -1086,10 +1096,13 @@ impl<A: HalApi> Device<A> {
         }
         let format = desc.format.unwrap_or(texture.desc.format);
         if format != texture.desc.format {
-            return Err(resource::CreateTextureViewError::FormatReinterpretation {
-                texture: texture.desc.format,
-                view: format,
-            });
+            if !texture.desc.view_formats.contains(&format) {
+                return Err(resource::CreateTextureViewError::FormatReinterpretation {
+                    texture: texture.desc.format,
+                    view: format,
+                });
+            }
+            self.require_downlevel_flags(wgt::DownlevelFlags::VIEW_FORMATS)?;
         }
 
         // filter the usages based on the other criteria
@@ -1305,6 +1318,12 @@ impl<A: HalApi> Device<A> {
                 wgt::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
             ),
         );
+        caps.set(
+            Caps::STORAGE_TEXTURE_16BIT_NORM_FORMATS,
+            self.features
+                .contains(wgt::Features::TEXTURE_FORMAT_16BIT_NORM),
+        );
+
         let info = naga::valid::Validator::new(naga::valid::ValidationFlags::all(), caps)
             .validate(&module)
             .map_err(|inner| {
@@ -2139,8 +2158,8 @@ impl<A: HalApi> Device<A> {
                     (Tst::Float { filterable: false }, Tst::Float { .. }) |
                     // if we expect filterable, require it
                     (Tst::Float { filterable: true }, Tst::Float { filterable: true }) |
-                    // if we expect float, also accept depth
-                    (Tst::Float { .. }, Tst::Depth, ..) => {}
+                    // if we expect non-filterable, also accept depth
+                    (Tst::Float { filterable: false }, Tst::Depth) => {}
                     // if we expect filterable, also accept Float that is defined as
                     // unfilterable if filterable feature is explicitly enabled (only hit
                     // if wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES is

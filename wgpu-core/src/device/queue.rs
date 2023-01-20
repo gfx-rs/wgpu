@@ -307,6 +307,8 @@ pub enum QueueSubmitError {
     DestroyedTexture(id::TextureId),
     #[error(transparent)]
     Unmap(#[from] BufferAccessError),
+    #[error("Buffer {0:?} is still mapped")]
+    BufferStillMapped(id::BufferId),
     #[error("surface output was dropped before the command buffer got submitted")]
     SurfaceOutputDropped,
     #[error("surface was unconfigured before the command buffer got submitted")]
@@ -387,6 +389,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         buffer_size: wgt::BufferSize,
         id_in: Input<G, id::StagingBufferId>,
     ) -> Result<(id::StagingBufferId, *mut u8), QueueWriteError> {
+        profiling::scope!("Queue::create_staging_buffer");
         let hub = A::hub(self);
         let root_token = &mut Token::root();
 
@@ -411,8 +414,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         buffer_offset: wgt::BufferAddress,
         staging_buffer_id: id::StagingBufferId,
     ) -> Result<(), QueueWriteError> {
-        profiling::scope!("Queue::write_buffer_with");
-
+        profiling::scope!("Queue::write_staging_buffer");
         let hub = A::hub(self);
         let root_token = &mut Token::root();
 
@@ -455,6 +457,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         buffer_offset: u64,
         buffer_size: u64,
     ) -> Result<(), QueueWriteError> {
+        profiling::scope!("Queue::validate_write_buffer");
         let hub = A::hub(self);
         let root_token = &mut Token::root();
 
@@ -595,7 +598,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         let (mut texture_guard, _) = hub.textures.write(&mut token); // For clear we need write access to the texture. TODO: Can we acquire write lock later?
-        let dst = texture_guard.get_mut(destination.texture).unwrap();
+        let dst = texture_guard
+            .get_mut(destination.texture)
+            .map_err(|_| TransferError::InvalidTexture(destination.texture))?;
 
         let (selector, dst_base, texture_format) =
             extract_texture_selector(destination, size, dst)?;
@@ -707,6 +712,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
         }
 
+        // Re-get `dst` immutably here, so that the mutable borrow of the
+        // `texture_guard.get_mut` above ends in time for the `clear_texture`
+        // call above. Since we've held `texture_guard` the whole time, we know
+        // the texture hasn't gone away in the mean time, so we can unwrap.
         let dst = texture_guard.get(destination.texture).unwrap();
         let transition = trackers
             .textures
@@ -904,7 +913,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             } else {
                                 match buffer.map_state {
                                     BufferMapState::Idle => (),
-                                    _ => panic!("Buffer {:?} is still mapped", id),
+                                    _ => return Err(QueueSubmitError::BufferStillMapped(id.0)),
                                 }
                             }
                         }

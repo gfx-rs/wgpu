@@ -331,8 +331,12 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
 }
 
 fn initialize_adapter() -> (Adapter, SurfaceGuard) {
-    let backend_bits = wgpu::util::backend_bits_from_env().unwrap_or_else(Backends::all);
-    let instance = Instance::new(backend_bits);
+    let backends = wgpu::util::backend_bits_from_env().unwrap_or_else(Backends::all);
+    let dx12_shader_compiler = wgpu::util::dx12_shader_compiler_from_env().unwrap_or_default();
+    let instance = Instance::new(wgpu::InstanceDescriptor {
+        backends,
+        dx12_shader_compiler,
+    });
     let surface_guard;
     let compatible_surface;
 
@@ -358,7 +362,7 @@ fn initialize_adapter() -> (Adapter, SurfaceGuard) {
     let compatible_surface: Option<&Surface> = compatible_surface.as_ref();
     let adapter = pollster::block_on(wgpu::util::initialize_adapter_from_env_or_default(
         &instance,
-        backend_bits,
+        backends,
         compatible_surface,
     ))
     .expect("could not find suitable adapter on the system");

@@ -180,6 +180,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         format: config.format,
                         dimension: wgt::TextureDimension::D2,
                         usage: config.usage,
+                        view_formats: vec![],
                     },
                     hal_usage: conv::map_texture_usage(config.usage, config.format.into()),
                     format_features: wgt::TextureFormatFeatures {
