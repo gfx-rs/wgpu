@@ -48,10 +48,11 @@ pub fn make_spirv_raw(data: &[u8]) -> Cow<[u32]> {
         0,
         "data size is not a multiple of 4"
     );
+    assert_ne!(data.len(), 0, "data size must be larger than zero");
 
     //If the data happens to be aligned, directly use the byte array,
     // otherwise copy the byte array in an owned vector and use that instead.
-    let words = if data.as_ptr().align_offset(align_of::<u32>()) == 0 {
+    let mut words = if data.as_ptr().align_offset(align_of::<u32>()) == 0 {
         let (pre, words, post) = unsafe { data.align_to::<u32>() };
         debug_assert!(pre.is_empty());
         debug_assert!(post.is_empty());
@@ -63,6 +64,13 @@ pub fn make_spirv_raw(data: &[u8]) -> Cow<[u32]> {
         }
         Cow::from(words)
     };
+
+    // swap if that corrects the magic
+    if words[0] == MAGIC_NUMBER.swap_bytes() {
+        for word in Cow::to_mut(&mut words) {
+            *word = word.swap_bytes();
+        }
+    }
 
     assert_eq!(
         words[0], MAGIC_NUMBER,
