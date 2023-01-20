@@ -165,7 +165,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         if let Some(ref mut list) = cmd_buf.commands {
             list.push(TraceCommand::ClearTexture {
                 dst,
-                subresource_range: subresource_range.clone(),
+                subresource_range,
             });
         }
 
