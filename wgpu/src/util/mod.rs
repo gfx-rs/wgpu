@@ -31,6 +31,7 @@ pub use init::*;
 ///
 /// - Input length isn't multiple of 4
 /// - Input is longer than [`usize::max_value`]
+/// - Input is empty
 /// - SPIR-V magic number is missing from beginning of stream
 #[cfg(feature = "spirv")]
 pub fn make_spirv(data: &[u8]) -> super::ShaderSource {
