@@ -1050,7 +1050,7 @@ impl crate::context::Context for Context {
         _surface_data: &Self::SurfaceData,
         device: &Self::DeviceId,
         _device_data: &Self::DeviceData,
-        config: &wgt::SurfaceConfiguration,
+        config: &crate::SurfaceConfiguration,
     ) {
         if let wgt::PresentMode::Mailbox | wgt::PresentMode::Immediate = config.present_mode {
             panic!("Only FIFO/Auto* is supported on web");
@@ -1068,7 +1068,7 @@ impl crate::context::Context for Context {
             web_sys::GpuCanvasConfiguration::new(&device.0, map_texture_format(config.format));
         mapped.usage(config.usage.bits());
         mapped.alpha_mode(alpha_mode);
-        let mapped_view_formats = desc
+        let mapped_view_formats = config
             .view_formats
             .iter()
             .map(|format| JsValue::from(map_texture_format(*format)))

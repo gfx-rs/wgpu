@@ -54,6 +54,7 @@ pub struct SurfaceConfigureArgs {
     height: u32,
     present_mode: Option<wgpu_types::PresentMode>,
     alpha_mode: wgpu_types::CompositeAlphaMode,
+    view_formats: Vec<wgpu_types::TextureFormat>,
 }
 
 #[op]
@@ -71,13 +72,14 @@ pub fn op_webgpu_surface_configure(
         .get::<WebGpuSurface>(args.surface_rid)?;
     let surface = surface_resource.0;
 
-    let conf = wgpu_types::SurfaceConfiguration {
+    let conf = wgpu_types::SurfaceConfiguration::<Vec<wgpu_types::TextureFormat>> {
         usage: wgpu_types::TextureUsages::from_bits_truncate(args.usage),
         format: args.format,
         width: args.width,
         height: args.height,
         present_mode: args.present_mode.unwrap_or_default(),
         alpha_mode: args.alpha_mode,
+        view_formats: args.view_formats,
     };
 
     let err = gfx_select!(device => instance.surface_configure(surface, device, &conf));
