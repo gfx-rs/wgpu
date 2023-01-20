@@ -84,6 +84,9 @@ use arrayvec::ArrayVec;
 
 use glow::HasContext;
 
+use naga::FastHashMap;
+use parking_lot::Mutex;
+use std::sync::atomic::AtomicU32;
 use std::{fmt, ops::Range, sync::Arc};
 
 #[derive(Clone)]
@@ -197,6 +200,8 @@ struct AdapterShared {
     workarounds: Workarounds,
     shading_language_version: naga::back::glsl::Version,
     max_texture_size: u32,
+    next_shader_id: AtomicU32,
+    program_cache: Mutex<ProgramCache>,
 }
 
 pub struct Adapter {
@@ -405,10 +410,13 @@ pub struct BindGroup {
     contents: Box<[RawBinding]>,
 }
 
+type ShaderId = u32;
+
 #[derive(Debug)]
 pub struct ShaderModule {
     naga: crate::NagaShader,
     label: Option<String>,
+    id: ShaderId,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -495,8 +503,23 @@ struct ColorTargetDesc {
     blend: Option<BlendDesc>,
 }
 
+#[derive(PartialEq, Eq, Hash)]
+struct ProgramStage {
+    naga_stage: naga::ShaderStage,
+    shader_id: ShaderId,
+    entry_point: String,
+}
+
+#[derive(PartialEq, Eq, Hash)]
+struct ProgramCacheKey {
+    stages: ArrayVec<ProgramStage, 3>,
+    group_to_binding_to_slot: Box<[Box<[u8]>]>,
+}
+
+type ProgramCache = FastHashMap<ProgramCacheKey, Result<Arc<PipelineInner>, crate::PipelineError>>;
+
 pub struct RenderPipeline {
-    inner: PipelineInner,
+    inner: Arc<PipelineInner>,
     primitive: wgt::PrimitiveState,
     vertex_buffers: Box<[VertexBufferDesc]>,
     vertex_attributes: Box<[AttributeDesc]>,
@@ -514,7 +537,7 @@ unsafe impl Send for RenderPipeline {}
 unsafe impl Sync for RenderPipeline {}
 
 pub struct ComputePipeline {
-    inner: PipelineInner,
+    inner: Arc<PipelineInner>,
 }
 
 // SAFE: WASM doesn't have threads
