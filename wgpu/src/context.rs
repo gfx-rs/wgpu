@@ -3,8 +3,8 @@ use std::{any::Any, fmt::Debug, future::Future, num::NonZeroU64, ops::Range, pin
 use wgt::{
     strict_assert, strict_assert_eq, AdapterInfo, BufferAddress, BufferSize, Color,
     DownlevelCapabilities, DynamicOffset, Extent3d, Features, ImageDataLayout,
-    ImageSubresourceRange, IndexFormat, Limits, ShaderStages, SurfaceConfiguration, SurfaceStatus,
-    TextureFormat, TextureFormatFeatures,
+    ImageSubresourceRange, IndexFormat, Limits, ShaderStages, SurfaceStatus, TextureFormat,
+    TextureFormatFeatures,
 };
 
 use crate::{
@@ -162,7 +162,7 @@ pub trait Context: Debug + Send + Sized + Sync {
         surface_data: &Self::SurfaceData,
         device: &Self::DeviceId,
         device_data: &Self::DeviceData,
-        config: &SurfaceConfiguration,
+        config: &crate::SurfaceConfiguration<'_>,
     );
     #[allow(clippy::type_complexity)]
     fn surface_get_current_texture(
@@ -1139,7 +1139,7 @@ pub(crate) trait DynContext: Debug + Send + Sync {
         surface_data: &crate::Data,
         device: &ObjectId,
         device_data: &crate::Data,
-        config: &SurfaceConfiguration,
+        config: &crate::SurfaceConfiguration<'_>,
     );
     fn surface_get_current_texture(
         &self,
@@ -2044,7 +2044,7 @@ where
         surface_data: &crate::Data,
         device: &ObjectId,
         device_data: &crate::Data,
-        config: &SurfaceConfiguration,
+        config: &crate::SurfaceConfiguration<'_>,
     ) {
         let surface = <T::SurfaceId>::from(*surface);
         let surface_data = downcast_ref(surface_data);

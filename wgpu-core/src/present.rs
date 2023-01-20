@@ -32,7 +32,7 @@ pub const DESIRED_NUM_FRAMES: u32 = 3;
 #[derive(Debug)]
 pub(crate) struct Presentation {
     pub(crate) device_id: Stored<DeviceId>,
-    pub(crate) config: wgt::SurfaceConfiguration,
+    pub(crate) config: wgt::SurfaceConfiguration<Vec<wgt::TextureFormat>>,
     #[allow(unused)]
     pub(crate) num_frames: u32,
     pub(crate) acquired_texture: Option<Stored<TextureId>>,
@@ -180,7 +180,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         format: config.format,
                         dimension: wgt::TextureDimension::D2,
                         usage: config.usage,
-                        view_formats: vec![],
+                        view_formats: config.view_formats,
                     },
                     hal_usage: conv::map_texture_usage(config.usage, config.format.into()),
                     format_features: wgt::TextureFormatFeatures {

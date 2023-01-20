@@ -4007,7 +4007,7 @@ impl Default for SurfaceCapabilities {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
-pub struct SurfaceConfiguration {
+pub struct SurfaceConfiguration<V> {
     /// The usage of the swap chain. The only supported usage is `RENDER_ATTACHMENT`.
     pub usage: TextureUsages,
     /// The texture format of the swap chain. The only formats that are guaranteed are
@@ -4024,6 +4024,27 @@ pub struct SurfaceConfiguration {
     pub present_mode: PresentMode,
     /// Specifies how the alpha channel of the textures should be handled during compositing.
     pub alpha_mode: CompositeAlphaMode,
+    /// Specifies what view formats will be allowed when calling create_view() on texture returned by get_current_texture().
+    ///
+    /// View formats of the same format as the texture are always allowed.
+    ///
+    /// Note: currently, only the srgb-ness is allowed to change. (ex: Rgba8Unorm texture + Rgba8UnormSrgb view)
+    pub view_formats: V,
+}
+
+impl<V: Clone> SurfaceConfiguration<V> {
+    /// Map view_formats of the texture descriptor into another.
+    pub fn map_view_formats<M>(&self, fun: impl FnOnce(V) -> M) -> SurfaceConfiguration<M> {
+        SurfaceConfiguration {
+            usage: self.usage,
+            format: self.format,
+            width: self.width,
+            height: self.height,
+            present_mode: self.present_mode,
+            alpha_mode: self.alpha_mode,
+            view_formats: fun(self.view_formats.clone()),
+        }
+    }
 }
 
 /// Status of the recieved surface image.

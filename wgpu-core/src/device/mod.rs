@@ -5188,7 +5188,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         surface_id: id::SurfaceId,
         device_id: id::DeviceId,
-        config: &wgt::SurfaceConfiguration,
+        config: &wgt::SurfaceConfiguration<Vec<TextureFormat>>,
     ) -> Option<present::ConfigureSurfaceError> {
         use hal::{Adapter as _, Surface as _};
         use present::ConfigureSurfaceError as E;
