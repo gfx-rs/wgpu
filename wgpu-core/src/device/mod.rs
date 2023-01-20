@@ -5311,7 +5311,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (adapter_guard, mut token) = hub.adapters.read(&mut token);
         let (device_guard, _token) = hub.devices.read(&mut token);
 
-        let error = loop {
+        let error = 'outter: loop {
             let device = match device_guard.get(device_id) {
                 Ok(device) => device,
                 Err(_) => break DeviceError::Invalid.into(),
@@ -5327,6 +5327,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(surface) => surface,
                 Err(_) => break E::InvalidSurface,
             };
+
+            for format in config.view_formats.iter() {
+                if config.format.remove_srgb_suffix() != format.remove_srgb_suffix() {
+                    break 'outter E::InvalidViewFormat(*format, config.format);
+                }
+            }
 
             let caps = unsafe {
                 let suf = A::get_surface(surface);

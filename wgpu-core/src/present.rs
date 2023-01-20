@@ -64,6 +64,8 @@ pub enum ConfigureSurfaceError {
     Device(#[from] DeviceError),
     #[error("invalid surface")]
     InvalidSurface,
+    #[error("The view format {0:?} is not compatible with texture format {1:?}, only changing srgb-ness is allowed.")]
+    InvalidViewFormat(wgt::TextureFormat, wgt::TextureFormat),
     #[error("`SurfaceOutput` must be dropped before a new `Surface` is made")]
     PreviousOutputExists,
     #[error("Both `Surface` width and height must be non-zero. Wait to recreate the `Surface` until the window has non-zero area.")]
