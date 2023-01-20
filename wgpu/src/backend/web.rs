@@ -1068,6 +1068,12 @@ impl crate::context::Context for Context {
             web_sys::GpuCanvasConfiguration::new(&device.0, map_texture_format(config.format));
         mapped.usage(config.usage.bits());
         mapped.alpha_mode(alpha_mode);
+        let mapped_view_formats = desc
+            .view_formats
+            .iter()
+            .map(|format| JsValue::from(map_texture_format(*format)))
+            .collect::<js_sys::Array>();
+        mapped.view_formats(&mapped_view_formats);
         surface.0.configure(&mapped);
     }
 
