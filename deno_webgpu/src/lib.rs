@@ -164,7 +164,7 @@ fn deserialize_features(features: &wgpu_types::Features) -> Vec<&'static str> {
         return_features.push("indirect-first-instance");
     }
     if features.contains(wgpu_types::Features::SHADER_FLOAT16) {
-        return_features.push("shader-f16")
+        return_features.push("shader-f16");
     }
 
     // extended from spec
@@ -213,6 +213,9 @@ fn deserialize_features(features: &wgpu_types::Features) -> Vec<&'static str> {
     }
     if features.contains(wgpu_types::Features::PARTIALLY_BOUND_BINDING_ARRAY) {
         return_features.push("shader-primitive-index");
+    }
+    if features.contains(wgpu_types::Features::SHADER_INT16) {
+        return_features.push("shader-i16");
     }
 
     return_features
@@ -382,7 +385,7 @@ impl From<GpuRequiredFeatures> for wgpu_types::Features {
         );
         features.set(
             wgpu_types::Features::SHADER_INT16,
-            required_features.0.contains("shader-int16"),
+            required_features.0.contains("shader-i16"),
         );
         features.set(
             wgpu_types::Features::VERTEX_ATTRIBUTE_64BIT,
