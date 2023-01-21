@@ -896,7 +896,7 @@ impl crate::Device<super::Api> for super::Device {
         }
 
         let mut hal_view_formats: Vec<vk::Format> = vec![];
-        if desc.view_formats.len() > 1 {
+        if !desc.view_formats.is_empty() {
             raw_flags |= vk::ImageCreateFlags::MUTABLE_FORMAT;
             if self.shared_instance().driver_api_version >= vk::API_VERSION_1_2
                 || self
