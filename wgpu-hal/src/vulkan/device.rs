@@ -896,7 +896,7 @@ impl crate::Device<super::Api> for super::Device {
         }
 
         let mut hal_view_formats: Vec<vk::Format> = vec![];
-        if !desc.view_formats.is_empty() {
+        if !desc.view_formats.len() > 1 {
             raw_flags |= vk::ImageCreateFlags::MUTABLE_FORMAT;
             if self.shared_instance().driver_api_version >= vk::API_VERSION_1_2
                 || self
@@ -928,13 +928,10 @@ impl crate::Device<super::Api> for super::Device {
             .sharing_mode(vk::SharingMode::EXCLUSIVE)
             .initial_layout(vk::ImageLayout::UNDEFINED);
 
-        let mut format_list_info = if !hal_view_formats.is_empty() {
-            Some(vk::ImageFormatListCreateInfo::builder().view_formats(&hal_view_formats))
-        } else {
-            None
-        };
-        if let Some(list_info) = format_list_info.as_mut() {
-            vk_info = vk_info.push_next(list_info);
+        let mut format_list_info = vk::ImageFormatListCreateInfo::builder();
+        if !hal_view_formats.is_empty() {
+            format_list_info = format_list_info.view_formats(&hal_view_formats);
+            vk_info = vk_info.push_next(&mut format_list_info);
         }
 
         let raw = unsafe { self.shared.raw.create_image(&vk_info, None)? };
