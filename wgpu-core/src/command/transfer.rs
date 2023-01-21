@@ -1129,4 +1129,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
         Ok(())
     }
+
+    pub fn command_encoder_transition_textures<
+        A: HalApi,
+        T: Iterator<Item = (TextureId, hal::TextureUses)>,
+    >(
+        &self,
+        command_encoder_id: &CommandEncoderId,
+        texture_uses: T,
+    ) {
+        profiling::scope!("CommandEncoder::transition_textures");
+    }
 }

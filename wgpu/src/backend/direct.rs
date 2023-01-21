@@ -2107,6 +2107,20 @@ impl crate::Context for Context {
         }
     }
 
+    fn command_encoder_transition_textures<
+        T: Iterator<Item = (Self::TextureId, hal::TextureUses)>,
+    >(
+        &self,
+        command_encoder_id: &Self::CommandEncoderId,
+        texture_uses: T,
+    ) {
+        self.0
+            .command_encoder_transition_textures::<wgc::api::Vulkan, _>(
+                command_encoder_id,
+                texture_uses,
+            );
+    }
+
     fn render_bundle_encoder_finish(
         &self,
         _encoder: Self::RenderBundleEncoderId,
