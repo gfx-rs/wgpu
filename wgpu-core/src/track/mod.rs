@@ -111,9 +111,8 @@ use thiserror::Error;
 pub(crate) use buffer::{BufferBindGroupState, BufferTracker, BufferUsageScope};
 use metadata::{ResourceMetadata, ResourceMetadataProvider};
 pub(crate) use stateless::{StatelessBindGroupSate, StatelessTracker};
-pub(crate) use texture::{
-    TextureBindGroupState, TextureSelector, TextureTracker, TextureUsageScope,
-};
+pub use texture::TextureSelector;
+pub(crate) use texture::{TextureBindGroupState, TextureTracker, TextureUsageScope};
 use wgt::strict_assert_ne;
 
 /// A structure containing all the information about a particular resource

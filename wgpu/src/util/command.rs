@@ -1,19 +1,22 @@
 use crate::{context::Context, CommandEncoder, Texture};
 use hal::TextureUses;
-use wgc::id::{CommandEncoderId, TextureId};
+use wgc::{
+    id::{CommandEncoderId, TextureId},
+    track::TextureSelector,
+};
 
 #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
 pub trait CommandEncoderExt {
-    fn transition_textures(&mut self, textures: &[(&Texture, TextureUses)]);
+    fn transition_textures(&mut self, textures: &[(&Texture, TextureUses, TextureSelector)]);
 }
 
 #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
 impl CommandEncoderExt for CommandEncoder {
-    fn transition_textures(&mut self, texture_uses: &[(&Texture, TextureUses)]) {
+    fn transition_textures(&mut self, texture_uses: &[(&Texture, TextureUses, TextureSelector)]) {
         let encoder_id = CommandEncoderId::from(*self.id.as_ref().unwrap());
         let texture_uses = texture_uses
             .iter()
-            .map(|(texture, usage)| (TextureId::from(texture.id), *usage));
+            .map(|(texture, usage, selector)| (TextureId::from(texture.id), *usage, *selector));
 
         unsafe {
             self.context

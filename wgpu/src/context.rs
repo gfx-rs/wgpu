@@ -1,5 +1,6 @@
 use std::{any::Any, fmt::Debug, future::Future, num::NonZeroU64, ops::Range, pin::Pin, sync::Arc};
 
+use wgc::track::TextureSelector;
 use wgt::{
     strict_assert, strict_assert_eq, AdapterInfo, BufferAddress, BufferSize, Color,
     DownlevelCapabilities, DynamicOffset, Extent3d, Features, ImageDataLayout,
@@ -358,13 +359,13 @@ pub trait Context: Debug + Send + Sized + Sync {
         command_buffer: &Self::CommandBufferId,
         command_buffer_data: &Self::CommandBufferData,
     );
-    fn command_encoder_transition_textures<
-        T: Iterator<Item = (Self::TextureId, hal::TextureUses)>,
-    >(
+    fn command_encoder_transition_textures<T>(
         &self,
         command_encoder_id: &Self::CommandEncoderId,
         texture_uses: T,
-    );
+    ) where
+        T: Iterator<Item = (Self::TextureId, hal::TextureUses, TextureSelector)>
+            + ExactSizeIterator;
     fn render_bundle_drop(
         &self,
         render_bundle: &Self::RenderBundleId,
