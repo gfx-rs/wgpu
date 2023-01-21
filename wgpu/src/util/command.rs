@@ -14,16 +14,14 @@ pub trait CommandEncoderExt {
 impl CommandEncoderExt for CommandEncoder {
     fn transition_textures(&mut self, texture_uses: &[(&Texture, TextureUses, TextureSelector)]) {
         let encoder_id = CommandEncoderId::from(*self.id.as_ref().unwrap());
-        let texture_uses = texture_uses
-            .iter()
-            .map(|(texture, usage, selector)| (TextureId::from(texture.id), *usage, *selector));
+        let texture_uses = texture_uses.iter().map(|(texture, usage, selector)| {
+            (TextureId::from(texture.id), *usage, selector.clone())
+        });
 
-        unsafe {
-            self.context
-                .as_any()
-                .downcast_ref::<crate::backend::Context>()
-                .unwrap()
-                .command_encoder_transition_textures(&encoder_id, texture_uses);
-        }
+        self.context
+            .as_any()
+            .downcast_ref::<crate::backend::Context>()
+            .unwrap()
+            .command_encoder_transition_textures(&encoder_id, texture_uses);
     }
 }

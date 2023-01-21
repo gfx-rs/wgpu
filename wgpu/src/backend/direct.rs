@@ -2113,12 +2113,12 @@ impl crate::Context for Context {
         texture_uses: T,
     ) where
         T: Iterator<
-            Item = (
-                Self::TextureId,
-                hal::TextureUses,
-                wgc::track::TextureSelector,
-            ),
-        >,
+                Item = (
+                    Self::TextureId,
+                    hal::TextureUses,
+                    wgc::track::TextureSelector,
+                ),
+            > + ExactSizeIterator,
     {
         self.0
             .command_encoder_transition_textures::<wgc::api::Vulkan, _>(
