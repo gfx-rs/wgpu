@@ -66,7 +66,8 @@ pub fn make_spirv_raw(data: &[u8]) -> Cow<[u32]> {
         Cow::from(words)
     };
 
-    // swap if that corrects the magic
+    // Before checking if the data starts with the magic, check if it starts
+    // with the magic in non-native endianness, own & swap the data if so.
     if words[0] == MAGIC_NUMBER.swap_bytes() {
         for word in Cow::to_mut(&mut words) {
             *word = word.swap_bytes();
