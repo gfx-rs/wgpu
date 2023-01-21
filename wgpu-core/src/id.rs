@@ -93,6 +93,13 @@ impl<T> From<SerialId> for Id<T> {
 }
 
 impl<T> Id<T> {
+    /// # Safety
+    ///
+    /// The raw id must be valid for the type.
+    pub unsafe fn from_raw(raw: NonZeroId) -> Self {
+        Self(raw, PhantomData)
+    }
+
     #[allow(dead_code)]
     pub(crate) fn dummy(index: u32) -> Valid<Self> {
         Valid(Id::zip(index, 1, Backend::Empty))
@@ -167,6 +174,7 @@ pub(crate) struct Valid<I>(pub I);
 pub trait TypedId: Copy {
     fn zip(index: Index, epoch: Epoch, backend: Backend) -> Self;
     fn unzip(self) -> (Index, Epoch, Backend);
+    fn into_raw(self) -> NonZeroId;
 }
 
 #[allow(trivial_numeric_casts)]
@@ -186,6 +194,10 @@ impl<T> TypedId for Id<T> {
             (((self.0.get() >> INDEX_BITS) as ZippedIndex) & (EPOCH_MASK as ZippedIndex)) as Index,
             self.backend(),
         )
+    }
+
+    fn into_raw(self) -> NonZeroId {
+        self.0
     }
 }
 

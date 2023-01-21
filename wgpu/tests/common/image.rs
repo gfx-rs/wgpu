@@ -1,7 +1,6 @@
 use std::{
     ffi::{OsStr, OsString},
-    fs::File,
-    io::{BufWriter, Cursor},
+    io,
     path::Path,
     str::FromStr,
 };
@@ -18,7 +17,7 @@ fn read_png(path: impl AsRef<Path>, width: u32, height: u32) -> Option<Vec<u8>> 
             return None;
         }
     };
-    let decoder = png::Decoder::new(Cursor::new(data));
+    let decoder = png::Decoder::new(io::Cursor::new(data));
     let mut reader = decoder.read_info().ok()?;
 
     let mut buffer = vec![0; reader.output_buffer_size()];
@@ -43,6 +42,7 @@ fn read_png(path: impl AsRef<Path>, width: u32, height: u32) -> Option<Vec<u8>> 
     Some(buffer)
 }
 
+#[allow(unused_variables)]
 fn write_png(
     path: impl AsRef<Path>,
     width: u32,
@@ -50,18 +50,21 @@ fn write_png(
     data: &[u8],
     compression: png::Compression,
 ) {
-    let file = BufWriter::new(File::create(path).unwrap());
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let file = io::BufWriter::new(std::fs::File::create(path).unwrap());
 
-    let mut encoder = png::Encoder::new(file, width, height);
-    encoder.set_color(png::ColorType::Rgba);
-    encoder.set_depth(png::BitDepth::Eight);
-    encoder.set_compression(compression);
-    let mut writer = encoder.write_header().unwrap();
+        let mut encoder = png::Encoder::new(file, width, height);
+        encoder.set_color(png::ColorType::Rgba);
+        encoder.set_depth(png::BitDepth::Eight);
+        encoder.set_compression(compression);
+        let mut writer = encoder.write_header().unwrap();
 
-    writer.write_image_data(data).unwrap();
+        writer.write_image_data(data).unwrap();
+    }
 }
 
-fn calc_difference(lhs: u8, rhs: u8) -> u8 {
+pub fn calc_difference(lhs: u8, rhs: u8) -> u8 {
     (lhs as i16 - rhs as i16).unsigned_abs() as u8
 }
 
@@ -124,7 +127,7 @@ pub fn compare_image_output(
 
             write_png(actual_path, width, height, data, png::Compression::Fast);
             write_png(
-                &difference_path,
+                difference_path,
                 width,
                 height,
                 &difference_data,

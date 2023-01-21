@@ -24,6 +24,10 @@ impl crate::Adapter<super::Api> for super::Adapter {
     ) -> Option<crate::SurfaceCapabilities> {
         todo!()
     }
+
+    unsafe fn get_presentation_timestamp(&self) -> wgt::PresentationTimestamp {
+        todo!()
+    }
 }
 
 impl super::Adapter {
@@ -91,8 +95,9 @@ impl super::Adapter {
             | wgt::Features::CLEAR_TEXTURE
             | wgt::Features::TEXTURE_FORMAT_16BIT_NORM
             | wgt::Features::ADDRESS_MODE_CLAMP_TO_ZERO;
-        let mut downlevel =
-            wgt::DownlevelFlags::BASE_VERTEX | wgt::DownlevelFlags::READ_ONLY_DEPTH_STENCIL;
+        let mut downlevel = wgt::DownlevelFlags::BASE_VERTEX
+            | wgt::DownlevelFlags::READ_ONLY_DEPTH_STENCIL
+            | wgt::DownlevelFlags::UNRESTRICTED_INDEX_BUFFER;
 
         // Features from queries
         downlevel.set(
@@ -109,6 +114,8 @@ impl super::Adapter {
             downlevel |= wgt::DownlevelFlags::INDEPENDENT_BLEND;
             // formally FL9_1 supports aniso 2, but we don't support that level of distinction
             downlevel |= wgt::DownlevelFlags::ANISOTROPIC_FILTERING;
+            // this is actually the first FL that supports u32 at all
+            downlevel |= wgt::DownlevelFlags::FULL_DRAW_INDEX_UINT32;
         }
 
         if feature_level >= FL9_3 {
@@ -119,9 +126,11 @@ impl super::Adapter {
             downlevel |= wgt::DownlevelFlags::INDEPENDENT_BLEND;
             downlevel |= wgt::DownlevelFlags::FRAGMENT_STORAGE;
             downlevel |= wgt::DownlevelFlags::FRAGMENT_WRITABLE_STORAGE;
+            downlevel |= wgt::DownlevelFlags::DEPTH_BIAS_CLAMP;
             features |= wgt::Features::DEPTH_CLIP_CONTROL;
             features |= wgt::Features::TIMESTAMP_QUERY;
             features |= wgt::Features::PIPELINE_STATISTICS_QUERY;
+            features |= wgt::Features::SHADER_PRIMITIVE_INDEX;
         }
 
         if feature_level >= FL10_1 {

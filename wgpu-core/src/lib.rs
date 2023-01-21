@@ -3,6 +3,7 @@
  *  into other language-specific user-friendly libraries.
  */
 
+#![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
 #![allow(
     // It is much clearer to assert negative conditions with eq! false
     clippy::bool_assert_comparison,
@@ -27,14 +28,12 @@
 #![warn(
     trivial_casts,
     trivial_numeric_casts,
+    unsafe_op_in_unsafe_fn,
     unused_extern_crates,
     unused_qualifications,
     // We don't match on a reference, unless required.
     clippy::pattern_type_mismatch,
 )]
-
-#[macro_use]
-mod assertions;
 
 pub mod binding_model;
 pub mod command;
@@ -241,6 +240,91 @@ If you are running this program on native and not in a browser and wish to work 
 Adapter::downlevel_properties or Device::downlevel_properties to get a listing of the features the current \
 platform supports.";
 
+// #[cfg] attributes in exported macros are interesting!
+//
+// The #[cfg] conditions in a macro's expansion are evaluated using the
+// configuration options (features, target architecture and os, etc.) in force
+// where the macro is *used*, not where it is *defined*. That is, if crate A
+// defines a macro like this:
+//
+//     #[macro_export]
+//     macro_rules! if_bleep {
+//         { } => {
+//             #[cfg(feature = "bleep")]
+//             bleep();
+//         }
+//     }
+//
+// and then crate B uses it like this:
+//
+//     fn f() {
+//         if_bleep! { }
+//     }
+//
+// then it is crate B's `"bleep"` feature, not crate A's, that determines
+// whether the macro expands to a function call or an empty statement. The
+// entire configuration predicate is evaluated in the use's context, not the
+// definition's.
+//
+// Since `wgpu-core` selects back ends using features, we need to make sure the
+// arms of the `gfx_select!` macro are pruned according to `wgpu-core`'s
+// features, not those of whatever crate happens to be using `gfx_select!`. This
+// means we can't use `#[cfg]` attributes in `gfx_select!`s definition itself.
+// Instead, for each backend, `gfx_select!` must use a macro whose definition is
+// selected by `#[cfg]` in `wgpu-core`. The configuration predicate is still
+// evaluated when the macro is used; we've just moved the `#[cfg]` into a macro
+// used by `wgpu-core` itself.
+
+/// Define an exported macro named `$public` that expands to an expression if
+/// the feature `$feature` is enabled, or to a panic otherwise.
+///
+/// For a call like this:
+///
+///    define_backend_caller! { name, hidden_name, feature }
+///
+/// define a macro `name`, used like this:
+///
+///    name!(expr)
+///
+/// that expands to `expr` if `feature` is enabled, or a panic otherwise.
+///
+/// Because of odd technical limitations on exporting macros expanded by other
+/// macros, you must supply both a public-facing name for the macro and a
+/// private name, which is never used outside this macro. For details:
+/// <https://github.com/rust-lang/rust/pull/52234#issuecomment-976702997>
+macro_rules! define_backend_caller {
+    { $public:ident, $private:ident if $feature:literal } => {
+        #[cfg(feature = $feature )]
+        #[macro_export]
+        macro_rules! $private {
+            ( $call:expr ) => ( $call )
+        }
+
+        #[cfg(not(feature = $feature ))]
+        #[macro_export]
+        macro_rules! $private {
+            ( $call:expr ) => (
+                panic!("Identifier refers to disabled backend feature {:?}", $feature)
+            )
+        }
+
+        // See note about rust-lang#52234 above.
+        #[doc(hidden)] pub use $private as $public;
+    }
+}
+
+// Define a macro for each `gfx_select!` match arm. For example,
+//
+//     gfx_if_vulkan!(expr)
+//
+// expands to `expr` if the `"vulkan"` feature is enabled, or to a panic
+// otherwise.
+define_backend_caller! { gfx_if_vulkan, gfx_if_vulkan_hidden if "vulkan" }
+define_backend_caller! { gfx_if_metal, gfx_if_metal_hidden if "metal" }
+define_backend_caller! { gfx_if_dx12, gfx_if_dx12_hidden if "dx12" }
+define_backend_caller! { gfx_if_dx11, gfx_if_dx11_hidden if "dx11" }
+define_backend_caller! { gfx_if_gles, gfx_if_gles_hidden if "gles" }
+
 /// Dispatch on an [`Id`]'s backend to a backend-generic method.
 ///
 /// Uses of this macro have the form:
@@ -289,28 +373,13 @@ platform supports.";
 #[macro_export]
 macro_rules! gfx_select {
     ($id:expr => $global:ident.$method:ident( $($param:expr),* )) => {
-        // Note: For some reason the cfg aliases defined in build.rs don't succesfully apply in this
-        // macro so we must specify their equivalents manually
         match $id.backend() {
-            #[cfg(any(
-                all(not(target_arch = "wasm32"), not(target_os = "ios"), not(target_os = "macos")),
-                feature = "vulkan-portability"
-            ))]
-            wgt::Backend::Vulkan => $global.$method::<$crate::api::Vulkan>( $($param),* ),
-            #[cfg(all(not(target_arch = "wasm32"), any(target_os = "ios", target_os = "macos")))]
-            wgt::Backend::Metal => $global.$method::<$crate::api::Metal>( $($param),* ),
-            #[cfg(all(not(target_arch = "wasm32"), windows))]
-            wgt::Backend::Dx12 => $global.$method::<$crate::api::Dx12>( $($param),* ),
-            #[cfg(all(not(target_arch = "wasm32"), windows))]
-            wgt::Backend::Dx11 => $global.$method::<$crate::api::Dx11>( $($param),* ),
-            #[cfg(any(
-                all(unix, not(target_os = "macos"), not(target_os = "ios")),
-                feature = "angle",
-                target_arch = "wasm32"
-            ))]
-            wgt::Backend::Gl => $global.$method::<$crate::api::Gles>( $($param),+ ),
+            wgt::Backend::Vulkan => $crate::gfx_if_vulkan!($global.$method::<$crate::api::Vulkan>( $($param),* )),
+            wgt::Backend::Metal => $crate::gfx_if_metal!($global.$method::<$crate::api::Metal>( $($param),* )),
+            wgt::Backend::Dx12 => $crate::gfx_if_dx12!($global.$method::<$crate::api::Dx12>( $($param),* )),
+            wgt::Backend::Dx11 => $crate::gfx_if_dx11!($global.$method::<$crate::api::Dx11>( $($param),* )),
+            wgt::Backend::Gl => $crate::gfx_if_gles!($global.$method::<$crate::api::Gles>( $($param),+ )),
             other => panic!("Unexpected backend {:?}", other),
-
         }
     };
 }

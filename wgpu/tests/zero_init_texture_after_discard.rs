@@ -1,11 +1,13 @@
 use std::num::NonZeroU32;
 
 use crate::common::{initialize_test, TestParameters};
+use wasm_bindgen_test::*;
 
 // Checks if discarding a color target resets its init state, causing a zero read of this texture when copied in after submit of the encoder.
 #[test]
+#[wasm_bindgen_test]
 fn discarding_color_target_resets_texture_init_state_check_visible_on_copy_after_submit() {
-    initialize_test(TestParameters::default(), |ctx| {
+    initialize_test(TestParameters::default().webgl2_failure(), |ctx| {
         let (texture, readback_buffer) =
             create_white_texture_and_readback_buffer(&ctx, wgpu::TextureFormat::Rgba8UnormSrgb);
         {
@@ -39,8 +41,9 @@ fn discarding_color_target_resets_texture_init_state_check_visible_on_copy_after
 
 // Checks if discarding a color target resets its init state, causing a zero read of this texture when copied in the same encoder to a buffer.
 #[test]
+#[wasm_bindgen_test]
 fn discarding_color_target_resets_texture_init_state_check_visible_on_copy_in_same_encoder() {
-    initialize_test(TestParameters::default(), |ctx| {
+    initialize_test(TestParameters::default().webgl2_failure(), |ctx| {
         let (texture, readback_buffer) =
             create_white_texture_and_readback_buffer(&ctx, wgpu::TextureFormat::Rgba8UnormSrgb);
         {
@@ -67,6 +70,7 @@ fn discarding_color_target_resets_texture_init_state_check_visible_on_copy_in_sa
 }
 
 #[test]
+#[wasm_bindgen_test]
 #[allow(clippy::single_element_loop)]
 fn discarding_depth_target_resets_texture_init_state_check_visible_on_copy_in_same_encoder() {
     initialize_test(
@@ -109,59 +113,57 @@ fn discarding_depth_target_resets_texture_init_state_check_visible_on_copy_in_sa
 }
 
 #[test]
+#[wasm_bindgen_test]
 fn discarding_either_depth_or_stencil_aspect() {
-    initialize_test(
-        TestParameters::default().features(wgpu::Features::DEPTH24PLUS_STENCIL8),
-        |ctx| {
-            let (texture, _) = create_white_texture_and_readback_buffer(
-                &ctx,
-                wgpu::TextureFormat::Depth24PlusStencil8,
-            );
-            // TODO: How do we test this other than "doesn't crash"? We can't copy the texture to/from buffers, so we would need to do a copy in a shader
-            {
-                let mut encoder = ctx
-                    .device
-                    .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
-                encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                    label: Some("Depth Discard, Stencil Load"),
-                    color_attachments: &[],
-                    depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                        view: &texture.create_view(&wgpu::TextureViewDescriptor::default()),
-                        depth_ops: Some(wgpu::Operations {
-                            load: wgpu::LoadOp::Load,
-                            store: false, // discard!
-                        }),
-                        stencil_ops: Some(wgpu::Operations {
-                            load: wgpu::LoadOp::Clear(0),
-                            store: true,
-                        }),
+    initialize_test(TestParameters::default(), |ctx| {
+        let (texture, _) = create_white_texture_and_readback_buffer(
+            &ctx,
+            wgpu::TextureFormat::Depth24PlusStencil8,
+        );
+        // TODO: How do we test this other than "doesn't crash"? We can't copy the texture to/from buffers, so we would need to do a copy in a shader
+        {
+            let mut encoder = ctx
+                .device
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+            encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("Depth Discard, Stencil Load"),
+                color_attachments: &[],
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: &texture.create_view(&wgpu::TextureViewDescriptor::default()),
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Load,
+                        store: false, // discard!
                     }),
-                });
-                ctx.queue.submit([encoder.finish()]);
-            }
-            {
-                let mut encoder = ctx
-                    .device
-                    .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
-                encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                    label: Some("Depth Load, Stencil Discard"),
-                    color_attachments: &[],
-                    depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                        view: &texture.create_view(&wgpu::TextureViewDescriptor::default()),
-                        depth_ops: Some(wgpu::Operations {
-                            load: wgpu::LoadOp::Clear(0.0),
-                            store: true,
-                        }),
-                        stencil_ops: Some(wgpu::Operations {
-                            load: wgpu::LoadOp::Load,
-                            store: false, // discard!
-                        }),
+                    stencil_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(0),
+                        store: true,
                     }),
-                });
-                ctx.queue.submit([encoder.finish()]);
-            }
-        },
-    );
+                }),
+            });
+            ctx.queue.submit([encoder.finish()]);
+        }
+        {
+            let mut encoder = ctx
+                .device
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+            encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("Depth Load, Stencil Discard"),
+                color_attachments: &[],
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: &texture.create_view(&wgpu::TextureViewDescriptor::default()),
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(0.0),
+                        store: true,
+                    }),
+                    stencil_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Load,
+                        store: false, // discard!
+                    }),
+                }),
+            });
+            ctx.queue.submit([encoder.finish()]);
+        }
+    });
 }
 
 const TEXTURE_SIZE: wgpu::Extent3d = wgpu::Extent3d {
@@ -206,6 +208,7 @@ fn create_white_texture_and_readback_buffer(
                 | wgpu::TextureUsages::COPY_SRC
                 | wgpu::TextureUsages::RENDER_ATTACHMENT
         },
+        view_formats: &[],
     });
 
     // Clear using a write_texture operation. We could also clear using a render_pass clear.

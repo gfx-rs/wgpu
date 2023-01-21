@@ -232,6 +232,7 @@ impl framework::Example for Example {
                 | wgpu::TextureUsages::RENDER_ATTACHMENT
                 | wgpu::TextureUsages::COPY_DST,
             label: None,
+            view_formats: &[],
         });
         let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
         //Note: we could use queue.write_texture instead, and this is what other
@@ -400,9 +401,9 @@ impl framework::Example for Example {
                 .slice(pipeline_statistics_offset()..)
                 .get_mapped_range();
             // Convert the raw data into a useful structure
-            let timestamp_data: &TimestampQueries = bytemuck::from_bytes(&*timestamp_view);
+            let timestamp_data: &TimestampQueries = bytemuck::from_bytes(&timestamp_view);
             let pipeline_stats_data: &PipelineStatisticsQueries =
-                bytemuck::from_bytes(&*pipeline_stats_view);
+                bytemuck::from_bytes(&pipeline_stats_view);
             // Iterate over the data
             for (idx, (timestamp, pipeline)) in timestamp_data
                 .iter()
@@ -487,7 +488,10 @@ fn main() {
     framework::run::<Example>("mipmap");
 }
 
+wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
+
 #[test]
+#[wasm_bindgen_test::wasm_bindgen_test]
 fn mipmap() {
     framework::test::<Example>(framework::FrameworkRefTest {
         image_path: "/examples/mipmap/screenshot.png",

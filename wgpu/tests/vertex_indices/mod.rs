@@ -1,5 +1,6 @@
 use std::num::NonZeroU64;
 
+use wasm_bindgen_test::*;
 use wgpu::util::DeviceExt;
 
 use crate::common::{initialize_test, TestParameters, TestingContext};
@@ -96,6 +97,7 @@ fn pulling_common(
                 dimension: wgpu::TextureDimension::D2,
                 format: wgpu::TextureFormat::Rgba8Unorm,
                 usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_DST,
+                view_formats: &[],
             },
             &[0, 0, 0, 1],
         )
@@ -125,12 +127,13 @@ fn pulling_common(
     let slice = buffer.slice(..);
     slice.map_async(wgpu::MapMode::Read, |_| ());
     ctx.device.poll(wgpu::Maintain::Wait);
-    let data: Vec<u32> = bytemuck::cast_slice(&*slice.get_mapped_range()).to_vec();
+    let data: Vec<u32> = bytemuck::cast_slice(&slice.get_mapped_range()).to_vec();
 
     assert_eq!(data, expected);
 }
 
 #[test]
+#[wasm_bindgen_test]
 fn draw() {
     initialize_test(TestParameters::default().test_features_limits(), |ctx| {
         pulling_common(ctx, &[0, 1, 2, 3, 4, 5], |cmb| {
@@ -140,6 +143,7 @@ fn draw() {
 }
 
 #[test]
+#[wasm_bindgen_test]
 fn draw_vertex_offset() {
     initialize_test(
         TestParameters::default()
@@ -155,6 +159,7 @@ fn draw_vertex_offset() {
 }
 
 #[test]
+#[wasm_bindgen_test]
 fn draw_instanced() {
     initialize_test(TestParameters::default().test_features_limits(), |ctx| {
         pulling_common(ctx, &[0, 1, 2, 3, 4, 5], |cmb| {
@@ -164,6 +169,7 @@ fn draw_instanced() {
 }
 
 #[test]
+#[wasm_bindgen_test]
 fn draw_instanced_offset() {
     initialize_test(
         TestParameters::default()

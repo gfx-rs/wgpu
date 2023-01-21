@@ -30,49 +30,51 @@ fn is_layered_target(target: super::BindTarget) -> bool {
 impl super::Queue {
     /// Performs a manual shader clear, used as a workaround for a clearing bug on mesa
     unsafe fn perform_shader_clear(&self, gl: &glow::Context, draw_buffer: u32, color: [f32; 4]) {
-        gl.use_program(Some(self.shader_clear_program));
-        gl.uniform_4_f32(
-            Some(&self.shader_clear_program_color_uniform_location),
-            color[0],
-            color[1],
-            color[2],
-            color[3],
-        );
-        gl.disable(glow::DEPTH_TEST);
-        gl.disable(glow::STENCIL_TEST);
-        gl.disable(glow::SCISSOR_TEST);
-        gl.disable(glow::BLEND);
-        gl.disable(glow::CULL_FACE);
-        gl.draw_buffers(&[glow::COLOR_ATTACHMENT0 + draw_buffer]);
-        gl.draw_arrays(glow::TRIANGLES, 0, 3);
+        unsafe { gl.use_program(Some(self.shader_clear_program)) };
+        unsafe {
+            gl.uniform_4_f32(
+                Some(&self.shader_clear_program_color_uniform_location),
+                color[0],
+                color[1],
+                color[2],
+                color[3],
+            )
+        };
+        unsafe { gl.disable(glow::DEPTH_TEST) };
+        unsafe { gl.disable(glow::STENCIL_TEST) };
+        unsafe { gl.disable(glow::SCISSOR_TEST) };
+        unsafe { gl.disable(glow::BLEND) };
+        unsafe { gl.disable(glow::CULL_FACE) };
+        unsafe { gl.draw_buffers(&[glow::COLOR_ATTACHMENT0 + draw_buffer]) };
+        unsafe { gl.draw_arrays(glow::TRIANGLES, 0, 3) };
 
         if self.draw_buffer_count != 0 {
             // Reset the draw buffers to what they were before the clear
             let indices = (0..self.draw_buffer_count as u32)
                 .map(|i| glow::COLOR_ATTACHMENT0 + i)
                 .collect::<ArrayVec<_, { crate::MAX_COLOR_ATTACHMENTS }>>();
-            gl.draw_buffers(&indices);
+            unsafe { gl.draw_buffers(&indices) };
         }
         #[cfg(not(target_arch = "wasm32"))]
         for draw_buffer in 0..self.draw_buffer_count as u32 {
-            gl.disable_draw_buffer(glow::BLEND, draw_buffer);
+            unsafe { gl.disable_draw_buffer(glow::BLEND, draw_buffer) };
         }
     }
 
     unsafe fn reset_state(&mut self, gl: &glow::Context) {
-        gl.use_program(None);
-        gl.bind_framebuffer(glow::FRAMEBUFFER, None);
-        gl.disable(glow::DEPTH_TEST);
-        gl.disable(glow::STENCIL_TEST);
-        gl.disable(glow::SCISSOR_TEST);
-        gl.disable(glow::BLEND);
-        gl.disable(glow::CULL_FACE);
-        gl.disable(glow::POLYGON_OFFSET_FILL);
+        unsafe { gl.use_program(None) };
+        unsafe { gl.bind_framebuffer(glow::FRAMEBUFFER, None) };
+        unsafe { gl.disable(glow::DEPTH_TEST) };
+        unsafe { gl.disable(glow::STENCIL_TEST) };
+        unsafe { gl.disable(glow::SCISSOR_TEST) };
+        unsafe { gl.disable(glow::BLEND) };
+        unsafe { gl.disable(glow::CULL_FACE) };
+        unsafe { gl.disable(glow::POLYGON_OFFSET_FILL) };
         if self.features.contains(wgt::Features::DEPTH_CLIP_CONTROL) {
-            gl.disable(glow::DEPTH_CLAMP);
+            unsafe { gl.disable(glow::DEPTH_CLAMP) };
         }
 
-        gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, None);
+        unsafe { gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, None) };
         self.current_index_buffer = None;
     }
 
@@ -85,34 +87,60 @@ impl super::Queue {
     ) {
         match view.inner {
             super::TextureInner::Renderbuffer { raw } => {
-                gl.framebuffer_renderbuffer(fbo_target, attachment, glow::RENDERBUFFER, Some(raw));
+                unsafe {
+                    gl.framebuffer_renderbuffer(
+                        fbo_target,
+                        attachment,
+                        glow::RENDERBUFFER,
+                        Some(raw),
+                    )
+                };
             }
             super::TextureInner::DefaultRenderbuffer => panic!("Unexpected default RBO"),
             super::TextureInner::Texture { raw, target } => {
-                if is_layered_target(target) {
-                    gl.framebuffer_texture_layer(
-                        fbo_target,
-                        attachment,
-                        Some(raw),
-                        view.mip_levels.start as i32,
-                        view.array_layers.start as i32,
-                    );
+                let num_layers = view.array_layers.end - view.array_layers.start;
+                if num_layers > 1 {
+                    #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+                    unsafe {
+                        gl.framebuffer_texture_multiview_ovr(
+                            fbo_target,
+                            attachment,
+                            Some(raw),
+                            view.mip_levels.start as i32,
+                            view.array_layers.start as i32,
+                            num_layers as i32,
+                        )
+                    };
+                } else if is_layered_target(target) {
+                    unsafe {
+                        gl.framebuffer_texture_layer(
+                            fbo_target,
+                            attachment,
+                            Some(raw),
+                            view.mip_levels.start as i32,
+                            view.array_layers.start as i32,
+                        )
+                    };
                 } else if target == glow::TEXTURE_CUBE_MAP {
-                    gl.framebuffer_texture_2d(
-                        fbo_target,
-                        attachment,
-                        CUBEMAP_FACES[view.array_layers.start as usize],
-                        Some(raw),
-                        view.mip_levels.start as i32,
-                    );
+                    unsafe {
+                        gl.framebuffer_texture_2d(
+                            fbo_target,
+                            attachment,
+                            CUBEMAP_FACES[view.array_layers.start as usize],
+                            Some(raw),
+                            view.mip_levels.start as i32,
+                        )
+                    };
                 } else {
-                    gl.framebuffer_texture_2d(
-                        fbo_target,
-                        attachment,
-                        target,
-                        Some(raw),
-                        view.mip_levels.start as i32,
-                    );
+                    unsafe {
+                        gl.framebuffer_texture_2d(
+                            fbo_target,
+                            attachment,
+                            target,
+                            Some(raw),
+                            view.mip_levels.start as i32,
+                        )
+                    };
                 }
             }
         }
@@ -133,14 +161,16 @@ impl super::Queue {
                 instance_count,
             } => {
                 if instance_count == 1 {
-                    gl.draw_arrays(topology, start_vertex as i32, vertex_count as i32);
+                    unsafe { gl.draw_arrays(topology, start_vertex as i32, vertex_count as i32) };
                 } else {
-                    gl.draw_arrays_instanced(
-                        topology,
-                        start_vertex as i32,
-                        vertex_count as i32,
-                        instance_count as i32,
-                    );
+                    unsafe {
+                        gl.draw_arrays_instanced(
+                            topology,
+                            start_vertex as i32,
+                            vertex_count as i32,
+                            instance_count as i32,
+                        )
+                    };
                 }
             }
             C::DrawIndexed {
@@ -151,42 +181,50 @@ impl super::Queue {
                 base_vertex,
                 instance_count,
             } => match (base_vertex, instance_count) {
-                (0, 1) => gl.draw_elements(
-                    topology,
-                    index_count as i32,
-                    index_type,
-                    index_offset as i32,
-                ),
-                (0, _) => gl.draw_elements_instanced(
-                    topology,
-                    index_count as i32,
-                    index_type,
-                    index_offset as i32,
-                    instance_count as i32,
-                ),
-                (_, 1) => gl.draw_elements_base_vertex(
-                    topology,
-                    index_count as i32,
-                    index_type,
-                    index_offset as i32,
-                    base_vertex,
-                ),
-                (_, _) => gl.draw_elements_instanced_base_vertex(
-                    topology,
-                    index_count as _,
-                    index_type,
-                    index_offset as i32,
-                    instance_count as i32,
-                    base_vertex,
-                ),
+                (0, 1) => unsafe {
+                    gl.draw_elements(
+                        topology,
+                        index_count as i32,
+                        index_type,
+                        index_offset as i32,
+                    )
+                },
+                (0, _) => unsafe {
+                    gl.draw_elements_instanced(
+                        topology,
+                        index_count as i32,
+                        index_type,
+                        index_offset as i32,
+                        instance_count as i32,
+                    )
+                },
+                (_, 1) => unsafe {
+                    gl.draw_elements_base_vertex(
+                        topology,
+                        index_count as i32,
+                        index_type,
+                        index_offset as i32,
+                        base_vertex,
+                    )
+                },
+                (_, _) => unsafe {
+                    gl.draw_elements_instanced_base_vertex(
+                        topology,
+                        index_count as _,
+                        index_type,
+                        index_offset as i32,
+                        instance_count as i32,
+                        base_vertex,
+                    )
+                },
             },
             C::DrawIndirect {
                 topology,
                 indirect_buf,
                 indirect_offset,
             } => {
-                gl.bind_buffer(glow::DRAW_INDIRECT_BUFFER, Some(indirect_buf));
-                gl.draw_arrays_indirect_offset(topology, indirect_offset as i32);
+                unsafe { gl.bind_buffer(glow::DRAW_INDIRECT_BUFFER, Some(indirect_buf)) };
+                unsafe { gl.draw_arrays_indirect_offset(topology, indirect_offset as i32) };
             }
             C::DrawIndexedIndirect {
                 topology,
@@ -194,18 +232,20 @@ impl super::Queue {
                 indirect_buf,
                 indirect_offset,
             } => {
-                gl.bind_buffer(glow::DRAW_INDIRECT_BUFFER, Some(indirect_buf));
-                gl.draw_elements_indirect_offset(topology, index_type, indirect_offset as i32);
+                unsafe { gl.bind_buffer(glow::DRAW_INDIRECT_BUFFER, Some(indirect_buf)) };
+                unsafe {
+                    gl.draw_elements_indirect_offset(topology, index_type, indirect_offset as i32)
+                };
             }
             C::Dispatch(group_counts) => {
-                gl.dispatch_compute(group_counts[0], group_counts[1], group_counts[2]);
+                unsafe { gl.dispatch_compute(group_counts[0], group_counts[1], group_counts[2]) };
             }
             C::DispatchIndirect {
                 indirect_buf,
                 indirect_offset,
             } => {
-                gl.bind_buffer(glow::DISPATCH_INDIRECT_BUFFER, Some(indirect_buf));
-                gl.dispatch_compute_indirect(indirect_offset as i32);
+                unsafe { gl.bind_buffer(glow::DISPATCH_INDIRECT_BUFFER, Some(indirect_buf)) };
+                unsafe { gl.dispatch_compute_indirect(indirect_offset as i32) };
             }
             C::ClearBuffer {
                 ref dst,
@@ -228,24 +268,28 @@ impl super::Queue {
                         || dst_target != glow::ELEMENT_ARRAY_BUFFER;
 
                     if can_use_zero_buffer {
-                        gl.bind_buffer(glow::COPY_READ_BUFFER, Some(self.zero_buffer));
-                        gl.bind_buffer(dst_target, Some(buffer));
+                        unsafe { gl.bind_buffer(glow::COPY_READ_BUFFER, Some(self.zero_buffer)) };
+                        unsafe { gl.bind_buffer(dst_target, Some(buffer)) };
                         let mut dst_offset = range.start;
                         while dst_offset < range.end {
                             let size = (range.end - dst_offset).min(super::ZERO_BUFFER_SIZE as u64);
-                            gl.copy_buffer_sub_data(
-                                glow::COPY_READ_BUFFER,
-                                dst_target,
-                                0,
-                                dst_offset as i32,
-                                size as i32,
-                            );
+                            unsafe {
+                                gl.copy_buffer_sub_data(
+                                    glow::COPY_READ_BUFFER,
+                                    dst_target,
+                                    0,
+                                    dst_offset as i32,
+                                    size as i32,
+                                )
+                            };
                             dst_offset += size;
                         }
                     } else {
-                        gl.bind_buffer(dst_target, Some(buffer));
+                        unsafe { gl.bind_buffer(dst_target, Some(buffer)) };
                         let zeroes = vec![0u8; (range.end - range.start) as usize];
-                        gl.buffer_sub_data_u8_slice(dst_target, range.start as i32, &zeroes);
+                        unsafe {
+                            gl.buffer_sub_data_u8_slice(dst_target, range.start as i32, &zeroes)
+                        };
                     }
                 }
                 None => {
@@ -278,49 +322,57 @@ impl super::Queue {
                 let size = copy.size.get() as usize;
                 match (src.raw, dst.raw) {
                     (Some(ref src), Some(ref dst)) => {
-                        gl.bind_buffer(copy_src_target, Some(*src));
-                        gl.bind_buffer(copy_dst_target, Some(*dst));
-                        gl.copy_buffer_sub_data(
-                            copy_src_target,
-                            copy_dst_target,
-                            copy.src_offset as _,
-                            copy.dst_offset as _,
-                            copy.size.get() as _,
-                        );
+                        unsafe { gl.bind_buffer(copy_src_target, Some(*src)) };
+                        unsafe { gl.bind_buffer(copy_dst_target, Some(*dst)) };
+                        unsafe {
+                            gl.copy_buffer_sub_data(
+                                copy_src_target,
+                                copy_dst_target,
+                                copy.src_offset as _,
+                                copy.dst_offset as _,
+                                copy.size.get() as _,
+                            )
+                        };
                     }
                     (Some(src), None) => {
                         let mut data = dst.data.as_ref().unwrap().lock().unwrap();
                         let dst_data = &mut data.as_mut_slice()
                             [copy.dst_offset as usize..copy.dst_offset as usize + size];
 
-                        gl.bind_buffer(copy_src_target, Some(src));
-                        self.shared.get_buffer_sub_data(
-                            gl,
-                            copy_src_target,
-                            copy.src_offset as i32,
-                            dst_data,
-                        );
+                        unsafe { gl.bind_buffer(copy_src_target, Some(src)) };
+                        unsafe {
+                            self.shared.get_buffer_sub_data(
+                                gl,
+                                copy_src_target,
+                                copy.src_offset as i32,
+                                dst_data,
+                            )
+                        };
                     }
                     (None, Some(dst)) => {
                         let data = src.data.as_ref().unwrap().lock().unwrap();
                         let src_data = &data.as_slice()
                             [copy.src_offset as usize..copy.src_offset as usize + size];
-                        gl.bind_buffer(copy_dst_target, Some(dst));
-                        gl.buffer_sub_data_u8_slice(
-                            copy_dst_target,
-                            copy.dst_offset as i32,
-                            src_data,
-                        );
+                        unsafe { gl.bind_buffer(copy_dst_target, Some(dst)) };
+                        unsafe {
+                            gl.buffer_sub_data_u8_slice(
+                                copy_dst_target,
+                                copy.dst_offset as i32,
+                                src_data,
+                            )
+                        };
                     }
                     (None, None) => {
                         todo!()
                     }
                 }
-                gl.bind_buffer(copy_src_target, None);
+                unsafe { gl.bind_buffer(copy_src_target, None) };
                 if is_index_buffer_only_element_dst {
-                    gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, self.current_index_buffer);
+                    unsafe {
+                        gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, self.current_index_buffer)
+                    };
                 } else {
-                    gl.bind_buffer(copy_dst_target, None);
+                    unsafe { gl.bind_buffer(copy_dst_target, None) };
                 }
             }
             C::CopyTextureToTexture {
@@ -332,61 +384,71 @@ impl super::Queue {
                 ref copy,
             } => {
                 //TODO: handle 3D copies
-                gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(self.copy_fbo));
+                unsafe { gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(self.copy_fbo)) };
                 if is_layered_target(src_target) {
                     //TODO: handle GLES without framebuffer_texture_3d
-                    gl.framebuffer_texture_layer(
-                        glow::READ_FRAMEBUFFER,
-                        glow::COLOR_ATTACHMENT0,
-                        Some(src),
-                        copy.src_base.mip_level as i32,
-                        copy.src_base.array_layer as i32,
-                    );
+                    unsafe {
+                        gl.framebuffer_texture_layer(
+                            glow::READ_FRAMEBUFFER,
+                            glow::COLOR_ATTACHMENT0,
+                            Some(src),
+                            copy.src_base.mip_level as i32,
+                            copy.src_base.array_layer as i32,
+                        )
+                    };
                 } else {
-                    gl.framebuffer_texture_2d(
-                        glow::READ_FRAMEBUFFER,
-                        glow::COLOR_ATTACHMENT0,
-                        src_target,
-                        Some(src),
-                        copy.src_base.mip_level as i32,
-                    );
+                    unsafe {
+                        gl.framebuffer_texture_2d(
+                            glow::READ_FRAMEBUFFER,
+                            glow::COLOR_ATTACHMENT0,
+                            src_target,
+                            Some(src),
+                            copy.src_base.mip_level as i32,
+                        )
+                    };
                 }
 
-                gl.bind_texture(dst_target, Some(dst));
+                unsafe { gl.bind_texture(dst_target, Some(dst)) };
                 if dst_is_cubemap {
-                    gl.copy_tex_sub_image_2d(
-                        CUBEMAP_FACES[copy.dst_base.array_layer as usize],
-                        copy.dst_base.mip_level as i32,
-                        copy.dst_base.origin.x as i32,
-                        copy.dst_base.origin.y as i32,
-                        copy.src_base.origin.x as i32,
-                        copy.src_base.origin.y as i32,
-                        copy.size.width as i32,
-                        copy.size.height as i32,
-                    );
+                    unsafe {
+                        gl.copy_tex_sub_image_2d(
+                            CUBEMAP_FACES[copy.dst_base.array_layer as usize],
+                            copy.dst_base.mip_level as i32,
+                            copy.dst_base.origin.x as i32,
+                            copy.dst_base.origin.y as i32,
+                            copy.src_base.origin.x as i32,
+                            copy.src_base.origin.y as i32,
+                            copy.size.width as i32,
+                            copy.size.height as i32,
+                        )
+                    };
                 } else if is_layered_target(dst_target) {
-                    gl.copy_tex_sub_image_3d(
-                        dst_target,
-                        copy.dst_base.mip_level as i32,
-                        copy.dst_base.origin.x as i32,
-                        copy.dst_base.origin.y as i32,
-                        copy.dst_base.origin.z as i32,
-                        copy.src_base.origin.x as i32,
-                        copy.src_base.origin.y as i32,
-                        copy.size.width as i32,
-                        copy.size.height as i32,
-                    );
+                    unsafe {
+                        gl.copy_tex_sub_image_3d(
+                            dst_target,
+                            copy.dst_base.mip_level as i32,
+                            copy.dst_base.origin.x as i32,
+                            copy.dst_base.origin.y as i32,
+                            copy.dst_base.origin.z as i32,
+                            copy.src_base.origin.x as i32,
+                            copy.src_base.origin.y as i32,
+                            copy.size.width as i32,
+                            copy.size.height as i32,
+                        )
+                    };
                 } else {
-                    gl.copy_tex_sub_image_2d(
-                        dst_target,
-                        copy.dst_base.mip_level as i32,
-                        copy.dst_base.origin.x as i32,
-                        copy.dst_base.origin.y as i32,
-                        copy.src_base.origin.x as i32,
-                        copy.src_base.origin.y as i32,
-                        copy.size.width as i32,
-                        copy.size.height as i32,
-                    );
+                    unsafe {
+                        gl.copy_tex_sub_image_2d(
+                            dst_target,
+                            copy.dst_base.mip_level as i32,
+                            copy.dst_base.origin.x as i32,
+                            copy.dst_base.origin.y as i32,
+                            copy.src_base.origin.x as i32,
+                            copy.src_base.origin.y as i32,
+                            copy.size.width as i32,
+                            copy.size.height as i32,
+                        )
+                    };
                 }
             }
             C::CopyBufferToTexture {
@@ -408,15 +470,15 @@ impl super::Queue {
                     .rows_per_image
                     .map_or(0, |rpi| format_info.block_dimensions.1 as u32 * rpi.get());
 
-                gl.bind_texture(dst_target, Some(dst));
-                gl.pixel_store_i32(glow::UNPACK_ROW_LENGTH, row_texels as i32);
-                gl.pixel_store_i32(glow::UNPACK_IMAGE_HEIGHT, column_texels as i32);
+                unsafe { gl.bind_texture(dst_target, Some(dst)) };
+                unsafe { gl.pixel_store_i32(glow::UNPACK_ROW_LENGTH, row_texels as i32) };
+                unsafe { gl.pixel_store_i32(glow::UNPACK_IMAGE_HEIGHT, column_texels as i32) };
                 let mut unbind_unpack_buffer = false;
                 if !format_info.is_compressed() {
                     let buffer_data;
                     let unpack_data = match src.raw {
                         Some(buffer) => {
-                            gl.bind_buffer(glow::PIXEL_UNPACK_BUFFER, Some(buffer));
+                            unsafe { gl.bind_buffer(glow::PIXEL_UNPACK_BUFFER, Some(buffer)) };
                             unbind_unpack_buffer = true;
                             glow::PixelUnpackData::BufferOffset(copy.buffer_layout.offset as u32)
                         }
@@ -429,76 +491,86 @@ impl super::Queue {
                     };
                     match dst_target {
                         glow::TEXTURE_3D => {
-                            gl.tex_sub_image_3d(
-                                dst_target,
-                                copy.texture_base.mip_level as i32,
-                                copy.texture_base.origin.x as i32,
-                                copy.texture_base.origin.y as i32,
-                                copy.texture_base.origin.z as i32,
-                                copy.size.width as i32,
-                                copy.size.height as i32,
-                                copy.size.depth as i32,
-                                format_desc.external,
-                                format_desc.data_type,
-                                unpack_data,
-                            );
+                            unsafe {
+                                gl.tex_sub_image_3d(
+                                    dst_target,
+                                    copy.texture_base.mip_level as i32,
+                                    copy.texture_base.origin.x as i32,
+                                    copy.texture_base.origin.y as i32,
+                                    copy.texture_base.origin.z as i32,
+                                    copy.size.width as i32,
+                                    copy.size.height as i32,
+                                    copy.size.depth as i32,
+                                    format_desc.external,
+                                    format_desc.data_type,
+                                    unpack_data,
+                                )
+                            };
                         }
                         glow::TEXTURE_2D_ARRAY => {
-                            gl.tex_sub_image_3d(
-                                dst_target,
-                                copy.texture_base.mip_level as i32,
-                                copy.texture_base.origin.x as i32,
-                                copy.texture_base.origin.y as i32,
-                                copy.texture_base.array_layer as i32,
-                                copy.size.width as i32,
-                                copy.size.height as i32,
-                                copy.size.depth as i32,
-                                format_desc.external,
-                                format_desc.data_type,
-                                unpack_data,
-                            );
+                            unsafe {
+                                gl.tex_sub_image_3d(
+                                    dst_target,
+                                    copy.texture_base.mip_level as i32,
+                                    copy.texture_base.origin.x as i32,
+                                    copy.texture_base.origin.y as i32,
+                                    copy.texture_base.array_layer as i32,
+                                    copy.size.width as i32,
+                                    copy.size.height as i32,
+                                    copy.size.depth as i32,
+                                    format_desc.external,
+                                    format_desc.data_type,
+                                    unpack_data,
+                                )
+                            };
                         }
                         glow::TEXTURE_2D => {
-                            gl.tex_sub_image_2d(
-                                dst_target,
-                                copy.texture_base.mip_level as i32,
-                                copy.texture_base.origin.x as i32,
-                                copy.texture_base.origin.y as i32,
-                                copy.size.width as i32,
-                                copy.size.height as i32,
-                                format_desc.external,
-                                format_desc.data_type,
-                                unpack_data,
-                            );
+                            unsafe {
+                                gl.tex_sub_image_2d(
+                                    dst_target,
+                                    copy.texture_base.mip_level as i32,
+                                    copy.texture_base.origin.x as i32,
+                                    copy.texture_base.origin.y as i32,
+                                    copy.size.width as i32,
+                                    copy.size.height as i32,
+                                    format_desc.external,
+                                    format_desc.data_type,
+                                    unpack_data,
+                                )
+                            };
                         }
                         glow::TEXTURE_CUBE_MAP => {
-                            gl.tex_sub_image_2d(
-                                CUBEMAP_FACES[copy.texture_base.array_layer as usize],
-                                copy.texture_base.mip_level as i32,
-                                copy.texture_base.origin.x as i32,
-                                copy.texture_base.origin.y as i32,
-                                copy.size.width as i32,
-                                copy.size.height as i32,
-                                format_desc.external,
-                                format_desc.data_type,
-                                unpack_data,
-                            );
+                            unsafe {
+                                gl.tex_sub_image_2d(
+                                    CUBEMAP_FACES[copy.texture_base.array_layer as usize],
+                                    copy.texture_base.mip_level as i32,
+                                    copy.texture_base.origin.x as i32,
+                                    copy.texture_base.origin.y as i32,
+                                    copy.size.width as i32,
+                                    copy.size.height as i32,
+                                    format_desc.external,
+                                    format_desc.data_type,
+                                    unpack_data,
+                                )
+                            };
                         }
                         glow::TEXTURE_CUBE_MAP_ARRAY => {
                             //Note: not sure if this is correct!
-                            gl.tex_sub_image_3d(
-                                dst_target,
-                                copy.texture_base.mip_level as i32,
-                                copy.texture_base.origin.x as i32,
-                                copy.texture_base.origin.y as i32,
-                                copy.texture_base.origin.z as i32,
-                                copy.size.width as i32,
-                                copy.size.height as i32,
-                                copy.size.depth as i32,
-                                format_desc.external,
-                                format_desc.data_type,
-                                unpack_data,
-                            );
+                            unsafe {
+                                gl.tex_sub_image_3d(
+                                    dst_target,
+                                    copy.texture_base.mip_level as i32,
+                                    copy.texture_base.origin.x as i32,
+                                    copy.texture_base.origin.y as i32,
+                                    copy.texture_base.origin.z as i32,
+                                    copy.size.width as i32,
+                                    copy.size.height as i32,
+                                    copy.size.depth as i32,
+                                    format_desc.external,
+                                    format_desc.data_type,
+                                    unpack_data,
+                                )
+                            };
                         }
                         _ => unreachable!(),
                     }
@@ -526,7 +598,7 @@ impl super::Queue {
                     let buffer_data;
                     let unpack_data = match src.raw {
                         Some(buffer) => {
-                            gl.bind_buffer(glow::PIXEL_UNPACK_BUFFER, Some(buffer));
+                            unsafe { gl.bind_buffer(glow::PIXEL_UNPACK_BUFFER, Some(buffer)) };
                             unbind_unpack_buffer = true;
                             glow::CompressedPixelUnpackData::BufferRange(
                                 offset..offset + bytes_in_upload,
@@ -544,48 +616,54 @@ impl super::Queue {
                         glow::TEXTURE_3D
                         | glow::TEXTURE_CUBE_MAP_ARRAY
                         | glow::TEXTURE_2D_ARRAY => {
-                            gl.compressed_tex_sub_image_3d(
-                                dst_target,
-                                copy.texture_base.mip_level as i32,
-                                copy.texture_base.origin.x as i32,
-                                copy.texture_base.origin.y as i32,
-                                copy.texture_base.origin.z as i32,
-                                copy.size.width as i32,
-                                copy.size.height as i32,
-                                copy.size.depth as i32,
-                                format_desc.internal,
-                                unpack_data,
-                            );
+                            unsafe {
+                                gl.compressed_tex_sub_image_3d(
+                                    dst_target,
+                                    copy.texture_base.mip_level as i32,
+                                    copy.texture_base.origin.x as i32,
+                                    copy.texture_base.origin.y as i32,
+                                    copy.texture_base.origin.z as i32,
+                                    copy.size.width as i32,
+                                    copy.size.height as i32,
+                                    copy.size.depth as i32,
+                                    format_desc.internal,
+                                    unpack_data,
+                                )
+                            };
                         }
                         glow::TEXTURE_2D => {
-                            gl.compressed_tex_sub_image_2d(
-                                dst_target,
-                                copy.texture_base.mip_level as i32,
-                                copy.texture_base.origin.x as i32,
-                                copy.texture_base.origin.y as i32,
-                                copy.size.width as i32,
-                                copy.size.height as i32,
-                                format_desc.internal,
-                                unpack_data,
-                            );
+                            unsafe {
+                                gl.compressed_tex_sub_image_2d(
+                                    dst_target,
+                                    copy.texture_base.mip_level as i32,
+                                    copy.texture_base.origin.x as i32,
+                                    copy.texture_base.origin.y as i32,
+                                    copy.size.width as i32,
+                                    copy.size.height as i32,
+                                    format_desc.internal,
+                                    unpack_data,
+                                )
+                            };
                         }
                         glow::TEXTURE_CUBE_MAP => {
-                            gl.compressed_tex_sub_image_2d(
-                                CUBEMAP_FACES[copy.texture_base.array_layer as usize],
-                                copy.texture_base.mip_level as i32,
-                                copy.texture_base.origin.x as i32,
-                                copy.texture_base.origin.y as i32,
-                                copy.size.width as i32,
-                                copy.size.height as i32,
-                                format_desc.internal,
-                                unpack_data,
-                            );
+                            unsafe {
+                                gl.compressed_tex_sub_image_2d(
+                                    CUBEMAP_FACES[copy.texture_base.array_layer as usize],
+                                    copy.texture_base.mip_level as i32,
+                                    copy.texture_base.origin.x as i32,
+                                    copy.texture_base.origin.y as i32,
+                                    copy.size.width as i32,
+                                    copy.size.height as i32,
+                                    format_desc.internal,
+                                    unpack_data,
+                                )
+                            };
                         }
                         _ => unreachable!(),
                     }
                 }
                 if unbind_unpack_buffer {
-                    gl.bind_buffer(glow::PIXEL_UNPACK_BUFFER, None);
+                    unsafe { gl.bind_buffer(glow::PIXEL_UNPACK_BUFFER, None) };
                 }
             }
             C::CopyTextureToBuffer {
@@ -615,31 +693,35 @@ impl super::Queue {
                         bpr.get() / format_info.block_size as u32
                     });
 
-                gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(self.copy_fbo));
+                unsafe { gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(self.copy_fbo)) };
                 //TODO: handle cubemap copies
                 if is_layered_target(src_target) {
                     //TODO: handle GLES without framebuffer_texture_3d
-                    gl.framebuffer_texture_layer(
-                        glow::READ_FRAMEBUFFER,
-                        glow::COLOR_ATTACHMENT0,
-                        Some(src),
-                        copy.texture_base.mip_level as i32,
-                        copy.texture_base.array_layer as i32,
-                    );
+                    unsafe {
+                        gl.framebuffer_texture_layer(
+                            glow::READ_FRAMEBUFFER,
+                            glow::COLOR_ATTACHMENT0,
+                            Some(src),
+                            copy.texture_base.mip_level as i32,
+                            copy.texture_base.array_layer as i32,
+                        )
+                    };
                 } else {
-                    gl.framebuffer_texture_2d(
-                        glow::READ_FRAMEBUFFER,
-                        glow::COLOR_ATTACHMENT0,
-                        src_target,
-                        Some(src),
-                        copy.texture_base.mip_level as i32,
-                    );
+                    unsafe {
+                        gl.framebuffer_texture_2d(
+                            glow::READ_FRAMEBUFFER,
+                            glow::COLOR_ATTACHMENT0,
+                            src_target,
+                            Some(src),
+                            copy.texture_base.mip_level as i32,
+                        )
+                    };
                 }
                 let mut buffer_data;
                 let unpack_data = match dst.raw {
                     Some(buffer) => {
-                        gl.pixel_store_i32(glow::PACK_ROW_LENGTH, row_texels as i32);
-                        gl.bind_buffer(glow::PIXEL_PACK_BUFFER, Some(buffer));
+                        unsafe { gl.pixel_store_i32(glow::PACK_ROW_LENGTH, row_texels as i32) };
+                        unsafe { gl.bind_buffer(glow::PIXEL_PACK_BUFFER, Some(buffer)) };
                         glow::PixelPackData::BufferOffset(copy.buffer_layout.offset as u32)
                     }
                     None => {
@@ -649,25 +731,27 @@ impl super::Queue {
                         glow::PixelPackData::Slice(dst_data)
                     }
                 };
-                gl.read_pixels(
-                    copy.texture_base.origin.x as i32,
-                    copy.texture_base.origin.y as i32,
-                    copy.size.width as i32,
-                    copy.size.height as i32,
-                    format_desc.external,
-                    format_desc.data_type,
-                    unpack_data,
-                );
+                unsafe {
+                    gl.read_pixels(
+                        copy.texture_base.origin.x as i32,
+                        copy.texture_base.origin.y as i32,
+                        copy.size.width as i32,
+                        copy.size.height as i32,
+                        format_desc.external,
+                        format_desc.data_type,
+                        unpack_data,
+                    )
+                };
             }
             C::SetIndexBuffer(buffer) => {
-                gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(buffer));
+                unsafe { gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(buffer)) };
                 self.current_index_buffer = Some(buffer);
             }
             C::BeginQuery(query, target) => {
-                gl.begin_query(target, query);
+                unsafe { gl.begin_query(target, query) };
             }
             C::EndQuery(target) => {
-                gl.end_query(target);
+                unsafe { gl.end_query(target) };
             }
             C::CopyQueryResults {
                 ref query_range,
@@ -677,17 +761,21 @@ impl super::Queue {
             } => {
                 self.temp_query_results.clear();
                 for &query in queries[query_range.start as usize..query_range.end as usize].iter() {
-                    let result = gl.get_query_parameter_u32(query, glow::QUERY_RESULT);
+                    let result = unsafe { gl.get_query_parameter_u32(query, glow::QUERY_RESULT) };
                     self.temp_query_results.push(result as u64);
                 }
-                let query_data = slice::from_raw_parts(
-                    self.temp_query_results.as_ptr() as *const u8,
-                    self.temp_query_results.len() * mem::size_of::<u64>(),
-                );
+                let query_data = unsafe {
+                    slice::from_raw_parts(
+                        self.temp_query_results.as_ptr() as *const u8,
+                        self.temp_query_results.len() * mem::size_of::<u64>(),
+                    )
+                };
                 match dst.raw {
                     Some(buffer) => {
-                        gl.bind_buffer(dst_target, Some(buffer));
-                        gl.buffer_sub_data_u8_slice(dst_target, dst_offset as i32, query_data);
+                        unsafe { gl.bind_buffer(dst_target, Some(buffer)) };
+                        unsafe {
+                            gl.buffer_sub_data_u8_slice(dst_target, dst_offset as i32, query_data)
+                        };
                     }
                     None => {
                         let data = &mut dst.data.as_ref().unwrap().lock().unwrap();
@@ -698,73 +786,81 @@ impl super::Queue {
             }
             C::ResetFramebuffer { is_default } => {
                 if is_default {
-                    gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, None);
+                    unsafe { gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, None) };
                 } else {
-                    gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, Some(self.draw_fbo));
-                    gl.framebuffer_texture_2d(
-                        glow::DRAW_FRAMEBUFFER,
-                        glow::DEPTH_STENCIL_ATTACHMENT,
-                        glow::TEXTURE_2D,
-                        None,
-                        0,
-                    );
-                    for i in 0..crate::MAX_COLOR_ATTACHMENTS {
-                        let target = glow::COLOR_ATTACHMENT0 + i as u32;
+                    unsafe { gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, Some(self.draw_fbo)) };
+                    unsafe {
                         gl.framebuffer_texture_2d(
                             glow::DRAW_FRAMEBUFFER,
-                            target,
+                            glow::DEPTH_STENCIL_ATTACHMENT,
                             glow::TEXTURE_2D,
                             None,
                             0,
-                        );
+                        )
+                    };
+                    for i in 0..crate::MAX_COLOR_ATTACHMENTS {
+                        let target = glow::COLOR_ATTACHMENT0 + i as u32;
+                        unsafe {
+                            gl.framebuffer_texture_2d(
+                                glow::DRAW_FRAMEBUFFER,
+                                target,
+                                glow::TEXTURE_2D,
+                                None,
+                                0,
+                            )
+                        };
                     }
                 }
-                gl.color_mask(true, true, true, true);
-                gl.depth_mask(true);
-                gl.stencil_mask(!0);
-                gl.disable(glow::DEPTH_TEST);
-                gl.disable(glow::STENCIL_TEST);
-                gl.disable(glow::SCISSOR_TEST);
+                unsafe { gl.color_mask(true, true, true, true) };
+                unsafe { gl.depth_mask(true) };
+                unsafe { gl.stencil_mask(!0) };
+                unsafe { gl.disable(glow::DEPTH_TEST) };
+                unsafe { gl.disable(glow::STENCIL_TEST) };
+                unsafe { gl.disable(glow::SCISSOR_TEST) };
             }
             C::BindAttachment {
                 attachment,
                 ref view,
             } => {
-                self.set_attachment(gl, glow::DRAW_FRAMEBUFFER, attachment, view);
+                unsafe { self.set_attachment(gl, glow::DRAW_FRAMEBUFFER, attachment, view) };
             }
             C::ResolveAttachment {
                 attachment,
                 ref dst,
                 ref size,
             } => {
-                gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(self.draw_fbo));
-                gl.read_buffer(attachment);
-                gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, Some(self.copy_fbo));
-                self.set_attachment(gl, glow::DRAW_FRAMEBUFFER, glow::COLOR_ATTACHMENT0, dst);
-                gl.blit_framebuffer(
-                    0,
-                    0,
-                    size.width as i32,
-                    size.height as i32,
-                    0,
-                    0,
-                    size.width as i32,
-                    size.height as i32,
-                    glow::COLOR_BUFFER_BIT,
-                    glow::NEAREST,
-                );
-                gl.bind_framebuffer(glow::READ_FRAMEBUFFER, None);
-                gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, Some(self.draw_fbo));
+                unsafe { gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(self.draw_fbo)) };
+                unsafe { gl.read_buffer(attachment) };
+                unsafe { gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, Some(self.copy_fbo)) };
+                unsafe {
+                    self.set_attachment(gl, glow::DRAW_FRAMEBUFFER, glow::COLOR_ATTACHMENT0, dst)
+                };
+                unsafe {
+                    gl.blit_framebuffer(
+                        0,
+                        0,
+                        size.width as i32,
+                        size.height as i32,
+                        0,
+                        0,
+                        size.width as i32,
+                        size.height as i32,
+                        glow::COLOR_BUFFER_BIT,
+                        glow::NEAREST,
+                    )
+                };
+                unsafe { gl.bind_framebuffer(glow::READ_FRAMEBUFFER, None) };
+                unsafe { gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, Some(self.draw_fbo)) };
             }
             C::InvalidateAttachments(ref list) => {
-                gl.invalidate_framebuffer(glow::DRAW_FRAMEBUFFER, list);
+                unsafe { gl.invalidate_framebuffer(glow::DRAW_FRAMEBUFFER, list) };
             }
             C::SetDrawColorBuffers(count) => {
                 self.draw_buffer_count = count;
                 let indices = (0..count as u32)
                     .map(|i| glow::COLOR_ATTACHMENT0 + i)
                     .collect::<ArrayVec<_, { crate::MAX_COLOR_ATTACHMENTS }>>();
-                gl.draw_buffers(&indices);
+                unsafe { gl.draw_buffers(&indices) };
 
                 if self
                     .shared
@@ -772,7 +868,7 @@ impl super::Queue {
                     .contains(super::PrivateCapabilities::CAN_DISABLE_DRAW_BUFFER)
                 {
                     for draw_buffer in 0..count as u32 {
-                        gl.disable_draw_buffer(glow::BLEND, draw_buffer);
+                        unsafe { gl.disable_draw_buffer(glow::BLEND, draw_buffer) };
                     }
                 }
             }
@@ -787,51 +883,58 @@ impl super::Queue {
                     .contains(super::Workarounds::MESA_I915_SRGB_SHADER_CLEAR)
                     && is_srgb
                 {
-                    self.perform_shader_clear(gl, draw_buffer, *color);
+                    unsafe { self.perform_shader_clear(gl, draw_buffer, *color) };
                 } else {
-                    gl.clear_buffer_f32_slice(glow::COLOR, draw_buffer, color);
+                    unsafe { gl.clear_buffer_f32_slice(glow::COLOR, draw_buffer, color) };
                 }
             }
             C::ClearColorU(draw_buffer, ref color) => {
-                gl.clear_buffer_u32_slice(glow::COLOR, draw_buffer, color);
+                unsafe { gl.clear_buffer_u32_slice(glow::COLOR, draw_buffer, color) };
             }
             C::ClearColorI(draw_buffer, ref color) => {
-                gl.clear_buffer_i32_slice(glow::COLOR, draw_buffer, color);
+                unsafe { gl.clear_buffer_i32_slice(glow::COLOR, draw_buffer, color) };
             }
             C::ClearDepth(depth) => {
-                gl.clear_buffer_f32_slice(glow::DEPTH, 0, &[depth]);
+                unsafe { gl.clear_buffer_f32_slice(glow::DEPTH, 0, &[depth]) };
             }
             C::ClearStencil(value) => {
-                gl.clear_buffer_i32_slice(glow::STENCIL, 0, &[value as i32]);
+                unsafe { gl.clear_buffer_i32_slice(glow::STENCIL, 0, &[value as i32]) };
             }
             C::ClearDepthAndStencil(depth, stencil_value) => {
-                gl.clear_buffer_depth_stencil(glow::DEPTH_STENCIL, 0, depth, stencil_value as i32);
+                unsafe {
+                    gl.clear_buffer_depth_stencil(
+                        glow::DEPTH_STENCIL,
+                        0,
+                        depth,
+                        stencil_value as i32,
+                    )
+                };
             }
             C::BufferBarrier(raw, usage) => {
                 let mut flags = 0;
                 if usage.contains(crate::BufferUses::VERTEX) {
                     flags |= glow::VERTEX_ATTRIB_ARRAY_BARRIER_BIT;
-                    gl.bind_buffer(glow::ARRAY_BUFFER, Some(raw));
-                    gl.vertex_attrib_pointer_f32(0, 1, glow::BYTE, true, 0, 0);
+                    unsafe { gl.bind_buffer(glow::ARRAY_BUFFER, Some(raw)) };
+                    unsafe { gl.vertex_attrib_pointer_f32(0, 1, glow::BYTE, true, 0, 0) };
                 }
                 if usage.contains(crate::BufferUses::INDEX) {
                     flags |= glow::ELEMENT_ARRAY_BARRIER_BIT;
-                    gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(raw));
+                    unsafe { gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(raw)) };
                 }
                 if usage.contains(crate::BufferUses::UNIFORM) {
                     flags |= glow::UNIFORM_BARRIER_BIT;
                 }
                 if usage.contains(crate::BufferUses::INDIRECT) {
                     flags |= glow::COMMAND_BARRIER_BIT;
-                    gl.bind_buffer(glow::DRAW_INDIRECT_BUFFER, Some(raw));
+                    unsafe { gl.bind_buffer(glow::DRAW_INDIRECT_BUFFER, Some(raw)) };
                 }
                 if usage.contains(crate::BufferUses::COPY_SRC) {
                     flags |= glow::PIXEL_BUFFER_BARRIER_BIT;
-                    gl.bind_buffer(glow::PIXEL_UNPACK_BUFFER, Some(raw));
+                    unsafe { gl.bind_buffer(glow::PIXEL_UNPACK_BUFFER, Some(raw)) };
                 }
                 if usage.contains(crate::BufferUses::COPY_DST) {
                     flags |= glow::PIXEL_BUFFER_BARRIER_BIT;
-                    gl.bind_buffer(glow::PIXEL_PACK_BUFFER, Some(raw));
+                    unsafe { gl.bind_buffer(glow::PIXEL_PACK_BUFFER, Some(raw)) };
                 }
                 if usage.intersects(crate::BufferUses::MAP_READ | crate::BufferUses::MAP_WRITE) {
                     flags |= glow::BUFFER_UPDATE_BARRIER_BIT;
@@ -841,7 +944,7 @@ impl super::Queue {
                 ) {
                     flags |= glow::SHADER_STORAGE_BARRIER_BIT;
                 }
-                gl.memory_barrier(flags);
+                unsafe { gl.memory_barrier(flags) };
             }
             C::TextureBarrier(usage) => {
                 let mut flags = 0;
@@ -863,18 +966,18 @@ impl super::Queue {
                 ) {
                     flags |= glow::FRAMEBUFFER_BARRIER_BIT;
                 }
-                gl.memory_barrier(flags);
+                unsafe { gl.memory_barrier(flags) };
             }
             C::SetViewport {
                 ref rect,
                 ref depth,
             } => {
-                gl.viewport(rect.x, rect.y, rect.w, rect.h);
-                gl.depth_range_f32(depth.start, depth.end);
+                unsafe { gl.viewport(rect.x, rect.y, rect.w, rect.h) };
+                unsafe { gl.depth_range_f32(depth.start, depth.end) };
             }
             C::SetScissor(ref rect) => {
-                gl.scissor(rect.x, rect.y, rect.w, rect.h);
-                gl.enable(glow::SCISSOR_TEST);
+                unsafe { gl.scissor(rect.x, rect.y, rect.w, rect.h) };
+                unsafe { gl.enable(glow::SCISSOR_TEST) };
             }
             C::SetStencilFunc {
                 face,
@@ -882,127 +985,144 @@ impl super::Queue {
                 reference,
                 read_mask,
             } => {
-                gl.stencil_func_separate(face, function, reference as i32, read_mask);
+                unsafe { gl.stencil_func_separate(face, function, reference as i32, read_mask) };
             }
             C::SetStencilOps {
                 face,
                 write_mask,
                 ref ops,
             } => {
-                gl.stencil_mask_separate(face, write_mask);
-                gl.stencil_op_separate(face, ops.fail, ops.depth_fail, ops.pass);
+                unsafe { gl.stencil_mask_separate(face, write_mask) };
+                unsafe { gl.stencil_op_separate(face, ops.fail, ops.depth_fail, ops.pass) };
             }
             C::SetVertexAttribute {
                 buffer,
                 ref buffer_desc,
                 attribute_desc: ref vat,
             } => {
-                gl.bind_buffer(glow::ARRAY_BUFFER, buffer);
-                gl.enable_vertex_attrib_array(vat.location);
+                unsafe { gl.bind_buffer(glow::ARRAY_BUFFER, buffer) };
+                unsafe { gl.enable_vertex_attrib_array(vat.location) };
 
                 if buffer.is_none() {
                     match vat.format_desc.attrib_kind {
-                        super::VertexAttribKind::Float => gl.vertex_attrib_format_f32(
-                            vat.location,
-                            vat.format_desc.element_count,
-                            vat.format_desc.element_format,
-                            true, // always normalized
-                            vat.offset,
-                        ),
-                        super::VertexAttribKind::Integer => gl.vertex_attrib_format_i32(
-                            vat.location,
-                            vat.format_desc.element_count,
-                            vat.format_desc.element_format,
-                            vat.offset,
-                        ),
+                        super::VertexAttribKind::Float => unsafe {
+                            gl.vertex_attrib_format_f32(
+                                vat.location,
+                                vat.format_desc.element_count,
+                                vat.format_desc.element_format,
+                                true, // always normalized
+                                vat.offset,
+                            )
+                        },
+                        super::VertexAttribKind::Integer => unsafe {
+                            gl.vertex_attrib_format_i32(
+                                vat.location,
+                                vat.format_desc.element_count,
+                                vat.format_desc.element_format,
+                                vat.offset,
+                            )
+                        },
                     }
 
                     //Note: there is apparently a bug on AMD 3500U:
                     // this call is ignored if the current array is disabled.
-                    gl.vertex_attrib_binding(vat.location, vat.buffer_index);
+                    unsafe { gl.vertex_attrib_binding(vat.location, vat.buffer_index) };
                 } else {
                     match vat.format_desc.attrib_kind {
-                        super::VertexAttribKind::Float => gl.vertex_attrib_pointer_f32(
-                            vat.location,
-                            vat.format_desc.element_count,
-                            vat.format_desc.element_format,
-                            true, // always normalized
-                            buffer_desc.stride as i32,
-                            vat.offset as i32,
-                        ),
-                        super::VertexAttribKind::Integer => gl.vertex_attrib_pointer_i32(
-                            vat.location,
-                            vat.format_desc.element_count,
-                            vat.format_desc.element_format,
-                            buffer_desc.stride as i32,
-                            vat.offset as i32,
-                        ),
+                        super::VertexAttribKind::Float => unsafe {
+                            gl.vertex_attrib_pointer_f32(
+                                vat.location,
+                                vat.format_desc.element_count,
+                                vat.format_desc.element_format,
+                                true, // always normalized
+                                buffer_desc.stride as i32,
+                                vat.offset as i32,
+                            )
+                        },
+                        super::VertexAttribKind::Integer => unsafe {
+                            gl.vertex_attrib_pointer_i32(
+                                vat.location,
+                                vat.format_desc.element_count,
+                                vat.format_desc.element_format,
+                                buffer_desc.stride as i32,
+                                vat.offset as i32,
+                            )
+                        },
                     }
-                    gl.vertex_attrib_divisor(vat.location, buffer_desc.step as u32);
+                    unsafe { gl.vertex_attrib_divisor(vat.location, buffer_desc.step as u32) };
                 }
             }
             C::UnsetVertexAttribute(location) => {
-                gl.disable_vertex_attrib_array(location);
+                unsafe { gl.disable_vertex_attrib_array(location) };
             }
             C::SetVertexBuffer {
                 index,
                 ref buffer,
                 ref buffer_desc,
             } => {
-                gl.vertex_binding_divisor(index, buffer_desc.step as u32);
-                gl.bind_vertex_buffer(
-                    index,
-                    Some(buffer.raw),
-                    buffer.offset as i32,
-                    buffer_desc.stride as i32,
-                );
+                unsafe { gl.vertex_binding_divisor(index, buffer_desc.step as u32) };
+                unsafe {
+                    gl.bind_vertex_buffer(
+                        index,
+                        Some(buffer.raw),
+                        buffer.offset as i32,
+                        buffer_desc.stride as i32,
+                    )
+                };
             }
             C::SetDepth(ref depth) => {
-                gl.depth_func(depth.function);
-                gl.depth_mask(depth.mask);
+                unsafe { gl.depth_func(depth.function) };
+                unsafe { gl.depth_mask(depth.mask) };
             }
             C::SetDepthBias(bias) => {
                 if bias.is_enabled() {
-                    gl.enable(glow::POLYGON_OFFSET_FILL);
-                    gl.polygon_offset(bias.constant as f32, bias.slope_scale);
+                    unsafe { gl.enable(glow::POLYGON_OFFSET_FILL) };
+                    unsafe { gl.polygon_offset(bias.constant as f32, bias.slope_scale) };
                 } else {
-                    gl.disable(glow::POLYGON_OFFSET_FILL);
+                    unsafe { gl.disable(glow::POLYGON_OFFSET_FILL) };
                 }
             }
             C::ConfigureDepthStencil(aspects) => {
                 if aspects.contains(crate::FormatAspects::DEPTH) {
-                    gl.enable(glow::DEPTH_TEST);
+                    unsafe { gl.enable(glow::DEPTH_TEST) };
                 } else {
-                    gl.disable(glow::DEPTH_TEST);
+                    unsafe { gl.disable(glow::DEPTH_TEST) };
                 }
                 if aspects.contains(crate::FormatAspects::STENCIL) {
-                    gl.enable(glow::STENCIL_TEST);
+                    unsafe { gl.enable(glow::STENCIL_TEST) };
                 } else {
-                    gl.disable(glow::STENCIL_TEST);
+                    unsafe { gl.disable(glow::STENCIL_TEST) };
+                }
+            }
+            C::SetAlphaToCoverage(enabled) => {
+                if enabled {
+                    unsafe { gl.enable(glow::SAMPLE_ALPHA_TO_COVERAGE) };
+                } else {
+                    unsafe { gl.disable(glow::SAMPLE_ALPHA_TO_COVERAGE) };
                 }
             }
             C::SetProgram(program) => {
-                gl.use_program(Some(program));
+                unsafe { gl.use_program(Some(program)) };
             }
             C::SetPrimitive(ref state) => {
-                gl.front_face(state.front_face);
+                unsafe { gl.front_face(state.front_face) };
                 if state.cull_face != 0 {
-                    gl.enable(glow::CULL_FACE);
-                    gl.cull_face(state.cull_face);
+                    unsafe { gl.enable(glow::CULL_FACE) };
+                    unsafe { gl.cull_face(state.cull_face) };
                 } else {
-                    gl.disable(glow::CULL_FACE);
+                    unsafe { gl.disable(glow::CULL_FACE) };
                 }
                 if self.features.contains(wgt::Features::DEPTH_CLIP_CONTROL) {
                     //Note: this is a bit tricky, since we are controlling the clip, not the clamp.
                     if state.unclipped_depth {
-                        gl.enable(glow::DEPTH_CLAMP);
+                        unsafe { gl.enable(glow::DEPTH_CLAMP) };
                     } else {
-                        gl.disable(glow::DEPTH_CLAMP);
+                        unsafe { gl.disable(glow::DEPTH_CLAMP) };
                     }
                 }
             }
             C::SetBlendConstant(c) => {
-                gl.blend_color(c[0], c[1], c[2], c[3]);
+                unsafe { gl.blend_color(c[0], c[1], c[2], c[3]) };
             }
             C::SetColorTarget {
                 draw_buffer_index,
@@ -1010,62 +1130,79 @@ impl super::Queue {
             } => {
                 use wgt::ColorWrites as Cw;
                 if let Some(index) = draw_buffer_index {
-                    gl.color_mask_draw_buffer(
-                        index,
-                        mask.contains(Cw::RED),
-                        mask.contains(Cw::GREEN),
-                        mask.contains(Cw::BLUE),
-                        mask.contains(Cw::ALPHA),
-                    );
+                    unsafe {
+                        gl.color_mask_draw_buffer(
+                            index,
+                            mask.contains(Cw::RED),
+                            mask.contains(Cw::GREEN),
+                            mask.contains(Cw::BLUE),
+                            mask.contains(Cw::ALPHA),
+                        )
+                    };
                     if let Some(ref blend) = *blend {
-                        gl.enable_draw_buffer(index, glow::BLEND);
+                        unsafe { gl.enable_draw_buffer(index, glow::BLEND) };
                         if blend.color != blend.alpha {
-                            gl.blend_equation_separate_draw_buffer(
-                                index,
-                                blend.color.equation,
-                                blend.alpha.equation,
-                            );
-                            gl.blend_func_separate_draw_buffer(
-                                index,
-                                blend.color.src,
-                                blend.color.dst,
-                                blend.alpha.src,
-                                blend.alpha.dst,
-                            );
+                            unsafe {
+                                gl.blend_equation_separate_draw_buffer(
+                                    index,
+                                    blend.color.equation,
+                                    blend.alpha.equation,
+                                )
+                            };
+                            unsafe {
+                                gl.blend_func_separate_draw_buffer(
+                                    index,
+                                    blend.color.src,
+                                    blend.color.dst,
+                                    blend.alpha.src,
+                                    blend.alpha.dst,
+                                )
+                            };
                         } else {
-                            gl.blend_equation_draw_buffer(index, blend.color.equation);
-                            gl.blend_func_draw_buffer(index, blend.color.src, blend.color.dst);
+                            unsafe { gl.blend_equation_draw_buffer(index, blend.color.equation) };
+                            unsafe {
+                                gl.blend_func_draw_buffer(index, blend.color.src, blend.color.dst)
+                            };
                         }
                     } else if self
                         .shared
                         .private_caps
                         .contains(super::PrivateCapabilities::CAN_DISABLE_DRAW_BUFFER)
                     {
-                        gl.disable_draw_buffer(index, glow::BLEND);
+                        unsafe { gl.disable_draw_buffer(index, glow::BLEND) };
                     }
                 } else {
-                    gl.color_mask(
-                        mask.contains(Cw::RED),
-                        mask.contains(Cw::GREEN),
-                        mask.contains(Cw::BLUE),
-                        mask.contains(Cw::ALPHA),
-                    );
+                    unsafe {
+                        gl.color_mask(
+                            mask.contains(Cw::RED),
+                            mask.contains(Cw::GREEN),
+                            mask.contains(Cw::BLUE),
+                            mask.contains(Cw::ALPHA),
+                        )
+                    };
                     if let Some(ref blend) = *blend {
-                        gl.enable(glow::BLEND);
+                        unsafe { gl.enable(glow::BLEND) };
                         if blend.color != blend.alpha {
-                            gl.blend_equation_separate(blend.color.equation, blend.alpha.equation);
-                            gl.blend_func_separate(
-                                blend.color.src,
-                                blend.color.dst,
-                                blend.alpha.src,
-                                blend.alpha.dst,
-                            );
+                            unsafe {
+                                gl.blend_equation_separate(
+                                    blend.color.equation,
+                                    blend.alpha.equation,
+                                )
+                            };
+                            unsafe {
+                                gl.blend_func_separate(
+                                    blend.color.src,
+                                    blend.color.dst,
+                                    blend.alpha.src,
+                                    blend.alpha.dst,
+                                )
+                            };
                         } else {
-                            gl.blend_equation(blend.color.equation);
-                            gl.blend_func(blend.color.src, blend.color.dst);
+                            unsafe { gl.blend_equation(blend.color.equation) };
+                            unsafe { gl.blend_func(blend.color.src, blend.color.dst) };
                         }
                     } else {
-                        gl.disable(glow::BLEND);
+                        unsafe { gl.disable(glow::BLEND) };
                     }
                 }
             }
@@ -1076,40 +1213,44 @@ impl super::Queue {
                 offset,
                 size,
             } => {
-                gl.bind_buffer_range(target, slot, Some(buffer), offset, size);
+                unsafe { gl.bind_buffer_range(target, slot, Some(buffer), offset, size) };
             }
             C::BindSampler(texture_index, sampler) => {
-                gl.bind_sampler(texture_index, sampler);
+                unsafe { gl.bind_sampler(texture_index, sampler) };
             }
             C::BindTexture {
                 slot,
                 texture,
                 target,
             } => {
-                gl.active_texture(glow::TEXTURE0 + slot);
-                gl.bind_texture(target, Some(texture));
+                unsafe { gl.active_texture(glow::TEXTURE0 + slot) };
+                unsafe { gl.bind_texture(target, Some(texture)) };
             }
             C::BindImage { slot, ref binding } => {
-                gl.bind_image_texture(
-                    slot,
-                    binding.raw,
-                    binding.mip_level as i32,
-                    binding.array_layer.is_none(),
-                    binding.array_layer.unwrap_or_default() as i32,
-                    binding.access,
-                    binding.format,
-                );
+                unsafe {
+                    gl.bind_image_texture(
+                        slot,
+                        binding.raw,
+                        binding.mip_level as i32,
+                        binding.array_layer.is_none(),
+                        binding.array_layer.unwrap_or_default() as i32,
+                        binding.access,
+                        binding.format,
+                    )
+                };
             }
             #[cfg(not(target_arch = "wasm32"))]
             C::InsertDebugMarker(ref range) => {
                 let marker = extract_marker(data_bytes, range);
-                gl.debug_message_insert(
-                    glow::DEBUG_SOURCE_APPLICATION,
-                    glow::DEBUG_TYPE_MARKER,
-                    DEBUG_ID,
-                    glow::DEBUG_SEVERITY_NOTIFICATION,
-                    marker,
-                );
+                unsafe {
+                    gl.debug_message_insert(
+                        glow::DEBUG_SOURCE_APPLICATION,
+                        glow::DEBUG_TYPE_MARKER,
+                        DEBUG_ID,
+                        glow::DEBUG_SEVERITY_NOTIFICATION,
+                        marker,
+                    )
+                };
             }
             #[cfg(target_arch = "wasm32")]
             C::InsertDebugMarker(_) => (),
@@ -1118,11 +1259,15 @@ impl super::Queue {
                 #[cfg(not(target_arch = "wasm32"))]
                 let marker = extract_marker(data_bytes, range);
                 #[cfg(not(target_arch = "wasm32"))]
-                gl.push_debug_group(glow::DEBUG_SOURCE_APPLICATION, DEBUG_ID, marker);
+                unsafe {
+                    gl.push_debug_group(glow::DEBUG_SOURCE_APPLICATION, DEBUG_ID, marker)
+                };
             }
             C::PopDebugGroup => {
                 #[cfg(not(target_arch = "wasm32"))]
-                gl.pop_debug_group();
+                unsafe {
+                    gl.pop_debug_group()
+                };
             }
             C::SetPushConstants {
                 ref uniform,
@@ -1143,47 +1288,47 @@ impl super::Queue {
                 match uniform.utype {
                     glow::FLOAT => {
                         let data = get_data::<f32>(data_bytes, offset)[0];
-                        gl.uniform_1_f32(location, data);
+                        unsafe { gl.uniform_1_f32(location, data) };
                     }
                     glow::FLOAT_VEC2 => {
                         let data = get_data::<[f32; 2]>(data_bytes, offset)[0];
-                        gl.uniform_2_f32_slice(location, &data);
+                        unsafe { gl.uniform_2_f32_slice(location, &data) };
                     }
                     glow::FLOAT_VEC3 => {
                         let data = get_data::<[f32; 3]>(data_bytes, offset)[0];
-                        gl.uniform_3_f32_slice(location, &data);
+                        unsafe { gl.uniform_3_f32_slice(location, &data) };
                     }
                     glow::FLOAT_VEC4 => {
                         let data = get_data::<[f32; 4]>(data_bytes, offset)[0];
-                        gl.uniform_4_f32_slice(location, &data);
+                        unsafe { gl.uniform_4_f32_slice(location, &data) };
                     }
                     glow::INT => {
                         let data = get_data::<i32>(data_bytes, offset)[0];
-                        gl.uniform_1_i32(location, data);
+                        unsafe { gl.uniform_1_i32(location, data) };
                     }
                     glow::INT_VEC2 => {
                         let data = get_data::<[i32; 2]>(data_bytes, offset)[0];
-                        gl.uniform_2_i32_slice(location, &data);
+                        unsafe { gl.uniform_2_i32_slice(location, &data) };
                     }
                     glow::INT_VEC3 => {
                         let data = get_data::<[i32; 3]>(data_bytes, offset)[0];
-                        gl.uniform_3_i32_slice(location, &data);
+                        unsafe { gl.uniform_3_i32_slice(location, &data) };
                     }
                     glow::INT_VEC4 => {
                         let data = get_data::<[i32; 4]>(data_bytes, offset)[0];
-                        gl.uniform_4_i32_slice(location, &data);
+                        unsafe { gl.uniform_4_i32_slice(location, &data) };
                     }
                     glow::FLOAT_MAT2 => {
                         let data = get_data::<[f32; 4]>(data_bytes, offset)[0];
-                        gl.uniform_matrix_2_f32_slice(location, false, &data);
+                        unsafe { gl.uniform_matrix_2_f32_slice(location, false, &data) };
                     }
                     glow::FLOAT_MAT3 => {
                         let data = get_data::<[f32; 9]>(data_bytes, offset)[0];
-                        gl.uniform_matrix_3_f32_slice(location, false, &data);
+                        unsafe { gl.uniform_matrix_3_f32_slice(location, false, &data) };
                     }
                     glow::FLOAT_MAT4 => {
                         let data = get_data::<[f32; 16]>(data_bytes, offset)[0];
-                        gl.uniform_matrix_4_f32_slice(location, false, &data);
+                        unsafe { gl.uniform_matrix_4_f32_slice(location, false, &data) };
                     }
                     _ => panic!("Unsupported uniform datatype!"),
                 }
@@ -1200,27 +1345,26 @@ impl crate::Queue<super::Api> for super::Queue {
     ) -> Result<(), crate::DeviceError> {
         let shared = Arc::clone(&self.shared);
         let gl = &shared.context.lock();
-        self.reset_state(gl);
+        unsafe { self.reset_state(gl) };
         for cmd_buf in command_buffers.iter() {
             #[cfg(not(target_arch = "wasm32"))]
             if let Some(ref label) = cmd_buf.label {
-                gl.push_debug_group(glow::DEBUG_SOURCE_APPLICATION, DEBUG_ID, label);
+                unsafe { gl.push_debug_group(glow::DEBUG_SOURCE_APPLICATION, DEBUG_ID, label) };
             }
 
             for command in cmd_buf.commands.iter() {
-                self.process(gl, command, &cmd_buf.data_bytes, &cmd_buf.queries);
+                unsafe { self.process(gl, command, &cmd_buf.data_bytes, &cmd_buf.queries) };
             }
 
             #[cfg(not(target_arch = "wasm32"))]
             if cmd_buf.label.is_some() {
-                gl.pop_debug_group();
+                unsafe { gl.pop_debug_group() };
             }
         }
 
         if let Some((fence, value)) = signal_fence {
             fence.maintain(gl);
-            let sync = gl
-                .fence_sync(glow::SYNC_GPU_COMMANDS_COMPLETE, 0)
+            let sync = unsafe { gl.fence_sync(glow::SYNC_GPU_COMMANDS_COMPLETE, 0) }
                 .map_err(|_| crate::DeviceError::OutOfMemory)?;
             fence.pending.push((value, sync));
         }
@@ -1234,12 +1378,12 @@ impl crate::Queue<super::Api> for super::Queue {
         texture: super::Texture,
     ) -> Result<(), crate::SurfaceError> {
         #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
-        let gl = &self.shared.context.get_without_egl_lock();
+        let gl = unsafe { &self.shared.context.get_without_egl_lock() };
 
         #[cfg(all(target_arch = "wasm32", not(feature = "emscripten")))]
         let gl = &self.shared.context.glow_context;
 
-        surface.present(texture, gl)
+        unsafe { surface.present(texture, gl) }
     }
 
     unsafe fn get_timestamp_period(&self) -> f32 {

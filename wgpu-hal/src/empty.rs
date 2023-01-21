@@ -89,8 +89,13 @@ impl crate::Adapter<Api> for Context {
     ) -> crate::TextureFormatCapabilities {
         crate::TextureFormatCapabilities::empty()
     }
+
     unsafe fn surface_capabilities(&self, surface: &Context) -> Option<crate::SurfaceCapabilities> {
         None
+    }
+
+    unsafe fn get_presentation_timestamp(&self) -> wgt::PresentationTimestamp {
+        wgt::PresentationTimestamp::INVALID_TIMESTAMP
     }
 }
 

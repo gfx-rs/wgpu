@@ -96,6 +96,8 @@ impl<A: hal::Api> Example<A> {
             } else {
                 hal::InstanceFlags::empty()
             },
+            // Can't rely on having DXC available, so use FXC instead
+            dx12_shader_compiler: wgt::Dx12Compiler::Fxc,
         };
         let instance = unsafe { A::Instance::init(&instance_desc)? };
         let mut surface = unsafe {
@@ -124,9 +126,10 @@ impl<A: hal::Api> Example<A> {
 
         let window_size: (u32, u32) = window.inner_size().into();
         let surface_config = hal::SurfaceConfiguration {
-            swap_chain_size: DESIRED_FRAMES
-                .max(*surface_caps.swap_chain_sizes.start())
-                .min(*surface_caps.swap_chain_sizes.end()),
+            swap_chain_size: DESIRED_FRAMES.clamp(
+                *surface_caps.swap_chain_sizes.start(),
+                *surface_caps.swap_chain_sizes.end(),
+            ),
             present_mode: wgt::PresentMode::Fifo,
             composite_alpha_mode: wgt::CompositeAlphaMode::Opaque,
             format: wgt::TextureFormat::Bgra8UnormSrgb,
@@ -296,6 +299,7 @@ impl<A: hal::Api> Example<A> {
             format: wgt::TextureFormat::Rgba8UnormSrgb,
             usage: hal::TextureUses::COPY_DST | hal::TextureUses::RESOURCE,
             memory_flags: hal::MemoryFlags::empty(),
+            allow_different_view_format: false,
         };
         let texture = unsafe { device.create_texture(&texture_desc).unwrap() };
 

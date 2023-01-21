@@ -152,6 +152,7 @@ impl framework::Example for Example {
                 dimension: wgpu::TextureDimension::D2,
                 format: wgpu::TextureFormat::Rgba8UnormSrgb,
                 usage: wgpu::TextureUsages::COPY_DST | wgpu::TextureUsages::TEXTURE_BINDING,
+                view_formats: &[],
             });
             queue.write_texture(
                 texture.as_image_copy(),
@@ -357,7 +358,10 @@ fn main() {
     framework::run::<Example>("bunnymark");
 }
 
+wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
+
 #[test]
+#[wasm_bindgen_test::wasm_bindgen_test]
 fn bunnymark() {
     framework::test::<Example>(framework::FrameworkRefTest {
         image_path: "/examples/bunnymark/screenshot.png",

@@ -1,6 +1,8 @@
 use crate::common::{fail, initialize_test, valid, TestParameters};
+use wasm_bindgen_test::*;
 
 #[test]
+#[wasm_bindgen_test]
 fn bad_buffer() {
     // Create a buffer with bad parameters and call a few methods.
     // Validation should fail but there should be not panic.
@@ -24,6 +26,7 @@ fn bad_buffer() {
 }
 
 #[test]
+#[wasm_bindgen_test]
 fn bad_texture() {
     // Create a texture with bad parameters and call a few methods.
     // Validation should fail but there should be not panic.
@@ -41,6 +44,7 @@ fn bad_texture() {
                 dimension: wgpu::TextureDimension::D2,
                 format: wgpu::TextureFormat::Rgba8UnormSrgb,
                 usage: wgpu::TextureUsages::all(),
+                view_formats: &[],
             })
         });
 

@@ -197,6 +197,7 @@ impl Example {
             format: Self::DEPTH_FORMAT,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             label: None,
+            view_formats: &[],
         });
 
         depth_texture.create_view(&wgpu::TextureViewDescriptor::default())
@@ -385,6 +386,7 @@ impl framework::Example for Example {
             format: Self::SHADOW_FORMAT,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
             label: None,
+            view_formats: &[],
         });
         let shadow_view = shadow_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
@@ -841,7 +843,10 @@ fn main() {
     framework::run::<Example>("shadow");
 }
 
+wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
+
 #[test]
+#[wasm_bindgen_test::wasm_bindgen_test]
 fn shadow() {
     framework::test::<Example>(framework::FrameworkRefTest {
         image_path: "/examples/shadow/screenshot.png",
@@ -855,6 +860,6 @@ fn shadow() {
             // llvmpipe versions in CI are flaky: https://github.com/gfx-rs/wgpu/issues/2594
             .specific_failure(Some(wgpu::Backends::VULKAN), None, Some("llvmpipe"), true),
         tolerance: 2,
-        max_outliers: 500, // bounded by rpi4
+        max_outliers: 1075, // bounded by swiftshader
     });
 }

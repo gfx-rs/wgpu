@@ -39,6 +39,8 @@ mod conv;
 mod descriptor;
 mod device;
 mod instance;
+mod shader_compilation;
+mod suballocation;
 mod view;
 
 use crate::auxil::{self, dxgi::result::HResult as _};
@@ -87,10 +89,12 @@ const ZERO_BUFFER_SIZE: wgt::BufferAddress = 256 << 10;
 
 pub struct Instance {
     factory: native::DxgiFactory,
+    factory_media: Option<native::FactoryMedia>,
     library: Arc<native::D3D12Lib>,
     supports_allow_tearing: bool,
     _lib_dxgi: native::DxgiLib,
     flags: crate::InstanceFlags,
+    dx12_shader_compiler: wgt::Dx12Compiler,
 }
 
 impl Instance {
@@ -100,7 +104,21 @@ impl Instance {
     ) -> Surface {
         Surface {
             factory: self.factory,
-            target: SurfaceTarget::Visual(native::WeakPtr::from_raw(visual)),
+            factory_media: self.factory_media,
+            target: SurfaceTarget::Visual(unsafe { native::WeakPtr::from_raw(visual) }),
+            supports_allow_tearing: self.supports_allow_tearing,
+            swap_chain: None,
+        }
+    }
+
+    pub unsafe fn create_surface_from_surface_handle(
+        &self,
+        surface_handle: winnt::HANDLE,
+    ) -> Surface {
+        Surface {
+            factory: self.factory,
+            factory_media: self.factory_media,
+            target: SurfaceTarget::SurfaceHandle(surface_handle),
             supports_allow_tearing: self.supports_allow_tearing,
             swap_chain: None,
         }
@@ -125,10 +143,12 @@ struct SwapChain {
 enum SurfaceTarget {
     WndHandle(windef::HWND),
     Visual(native::WeakPtr<dcomp::IDCompositionVisual>),
+    SurfaceHandle(winnt::HANDLE),
 }
 
 pub struct Surface {
     factory: native::DxgiFactory,
+    factory_media: Option<native::FactoryMedia>,
     target: SurfaceTarget,
     supports_allow_tearing: bool,
     swap_chain: Option<SwapChain>,
@@ -152,6 +172,7 @@ struct PrivateCapabilities {
     #[allow(unused)]
     heterogeneous_resource_heaps: bool,
     memory_architecture: MemoryArchitecture,
+    #[allow(unused)] // TODO: Exists until windows-rs is standard, then it can probably be removed?
     heap_create_not_zeroed: bool,
 }
 
@@ -167,9 +188,11 @@ pub struct Adapter {
     device: native::Device,
     library: Arc<native::D3D12Lib>,
     private_caps: PrivateCapabilities,
+    presentation_timer: auxil::dxgi::time::PresentationTimer,
     //Note: this isn't used right now, but we'll need it later.
     #[allow(unused)]
     workarounds: Workarounds,
+    dx12_shader_compiler: wgt::Dx12Compiler,
 }
 
 unsafe impl Send for Adapter {}
@@ -183,7 +206,7 @@ struct Idler {
 
 impl Idler {
     unsafe fn destroy(self) {
-        self.fence.destroy();
+        unsafe { self.fence.destroy() };
     }
 }
 
@@ -195,9 +218,11 @@ struct CommandSignatures {
 
 impl CommandSignatures {
     unsafe fn destroy(&self) {
-        self.draw.destroy();
-        self.draw_indexed.destroy();
-        self.dispatch.destroy();
+        unsafe {
+            self.draw.destroy();
+            self.draw_indexed.destroy();
+            self.dispatch.destroy();
+        }
     }
 }
 
@@ -210,10 +235,12 @@ struct DeviceShared {
 
 impl DeviceShared {
     unsafe fn destroy(&self) {
-        self.zero_buffer.destroy();
-        self.cmd_signatures.destroy();
-        self.heap_views.raw.destroy();
-        self.heap_samplers.raw.destroy();
+        unsafe {
+            self.zero_buffer.destroy();
+            self.cmd_signatures.destroy();
+            self.heap_views.raw.destroy();
+            self.heap_samplers.raw.destroy();
+        }
     }
 }
 
@@ -233,6 +260,8 @@ pub struct Device {
     #[cfg(feature = "renderdoc")]
     render_doc: crate::auxil::renderdoc::RenderDoc,
     null_rtv_handle: descriptor::Handle,
+    mem_allocator: Option<Mutex<suballocation::GpuAllocatorWrapper>>,
+    dxc_container: Option<shader_compilation::DxcContainer>,
 }
 
 unsafe impl Send for Device {}
@@ -359,6 +388,7 @@ impl fmt::Debug for CommandEncoder {
 #[derive(Debug)]
 pub struct CommandBuffer {
     raw: native::GraphicsCommandList,
+    closed: bool,
 }
 
 unsafe impl Send for CommandBuffer {}
@@ -368,6 +398,7 @@ unsafe impl Sync for CommandBuffer {}
 pub struct Buffer {
     resource: native::Resource,
     size: wgt::BufferAddress,
+    allocation: Option<suballocation::AllocationWrapper>,
 }
 
 unsafe impl Send for Buffer {}
@@ -394,6 +425,7 @@ pub struct Texture {
     size: wgt::Extent3d,
     mip_level_count: u32,
     sample_count: u32,
+    allocation: Option<suballocation::AllocationWrapper>,
 }
 
 unsafe impl Send for Texture {}
@@ -527,6 +559,30 @@ pub struct ShaderModule {
     raw_name: Option<ffi::CString>,
 }
 
+pub(super) enum CompiledShader {
+    #[allow(unused)]
+    Dxc(Vec<u8>),
+    Fxc(native::Blob),
+}
+
+impl CompiledShader {
+    fn create_native_shader(&self) -> native::Shader {
+        match *self {
+            CompiledShader::Dxc(ref shader) => native::Shader::from_raw(shader),
+            CompiledShader::Fxc(shader) => native::Shader::from_blob(shader),
+        }
+    }
+
+    unsafe fn destroy(self) {
+        match self {
+            CompiledShader::Dxc(_) => {}
+            CompiledShader::Fxc(shader) => unsafe {
+                shader.destroy();
+            },
+        }
+    }
+}
+
 pub struct RenderPipeline {
     raw: native::PipelineState,
     layout: PipelineLayoutShared,
@@ -548,7 +604,7 @@ unsafe impl Sync for ComputePipeline {}
 impl SwapChain {
     unsafe fn release_resources(self) -> native::WeakPtr<dxgi1_4::IDXGISwapChain3> {
         for resource in self.resources {
-            resource.destroy();
+            unsafe { resource.destroy() };
         }
         self.raw
     }
@@ -561,7 +617,7 @@ impl SwapChain {
             Some(duration) => duration.as_millis() as u32,
             None => winbase::INFINITE,
         };
-        match synchapi::WaitForSingleObject(self.waitable, timeout_ms) {
+        match unsafe { synchapi::WaitForSingleObject(self.waitable, timeout_ms) } {
             winbase::WAIT_ABANDONED | winbase::WAIT_FAILED => Err(crate::SurfaceError::Lost),
             winbase::WAIT_OBJECT_0 => Ok(true),
             winerror::WAIT_TIMEOUT => Ok(false),
@@ -593,16 +649,18 @@ impl crate::Surface<Api> for Surface {
             //Note: this path doesn't properly re-initialize all of the things
             Some(sc) => {
                 // can't have image resources in flight used by GPU
-                let _ = device.wait_idle();
+                let _ = unsafe { device.wait_idle() };
 
-                let raw = sc.release_resources();
-                let result = raw.ResizeBuffers(
-                    config.swap_chain_size,
-                    config.extent.width,
-                    config.extent.height,
-                    non_srgb_format,
-                    flags,
-                );
+                let raw = unsafe { sc.release_resources() };
+                let result = unsafe {
+                    raw.ResizeBuffers(
+                        config.swap_chain_size,
+                        config.extent.width,
+                        config.extent.height,
+                        non_srgb_format,
+                        flags,
+                    )
+                };
                 if let Err(err) = result.into_result() {
                     log::error!("ResizeBuffers failed: {}", err);
                     return Err(crate::SurfaceError::Other("window is in use"));
@@ -639,6 +697,19 @@ impl crate::Surface<Api> for Surface {
                             )
                             .into_result()
                     }
+                    SurfaceTarget::SurfaceHandle(handle) => {
+                        profiling::scope!(
+                            "IDXGIFactoryMedia::CreateSwapChainForCompositionSurfaceHandle"
+                        );
+                        self.factory_media
+                            .ok_or(crate::SurfaceError::Other("IDXGIFactoryMedia not found"))?
+                            .create_swapchain_for_composition_surface_handle(
+                                device.present_queue.as_mut_ptr() as *mut _,
+                                handle,
+                                &desc,
+                            )
+                            .into_result()
+                    }
                     SurfaceTarget::WndHandle(hwnd) => {
                         profiling::scope!("IDXGIFactory4::CreateSwapChainForHwnd");
                         self.factory
@@ -662,9 +733,10 @@ impl crate::Surface<Api> for Surface {
                 };
 
                 match self.target {
-                    SurfaceTarget::WndHandle(_) => {}
+                    SurfaceTarget::WndHandle(_) | SurfaceTarget::SurfaceHandle(_) => {}
                     SurfaceTarget::Visual(visual) => {
-                        if let Err(err) = visual.SetContent(swap_chain1.as_unknown()).into_result()
+                        if let Err(err) =
+                            unsafe { visual.SetContent(swap_chain1.as_unknown()) }.into_result()
                         {
                             log::error!("Unable to SetContent: {}", err);
                             return Err(crate::SurfaceError::Other(
@@ -674,9 +746,9 @@ impl crate::Surface<Api> for Surface {
                     }
                 }
 
-                match swap_chain1.cast::<dxgi1_4::IDXGISwapChain3>().into_result() {
+                match unsafe { swap_chain1.cast::<dxgi1_4::IDXGISwapChain3>() }.into_result() {
                     Ok(swap_chain3) => {
-                        swap_chain1.destroy();
+                        unsafe { swap_chain1.destroy() };
                         swap_chain3
                     }
                     Err(err) => {
@@ -692,20 +764,24 @@ impl crate::Surface<Api> for Surface {
                 // Disable automatic Alt+Enter handling by DXGI.
                 const DXGI_MWA_NO_WINDOW_CHANGES: u32 = 1;
                 const DXGI_MWA_NO_ALT_ENTER: u32 = 2;
-                self.factory.MakeWindowAssociation(
-                    wnd_handle,
-                    DXGI_MWA_NO_WINDOW_CHANGES | DXGI_MWA_NO_ALT_ENTER,
-                );
+                unsafe {
+                    self.factory.MakeWindowAssociation(
+                        wnd_handle,
+                        DXGI_MWA_NO_WINDOW_CHANGES | DXGI_MWA_NO_ALT_ENTER,
+                    )
+                };
             }
-            SurfaceTarget::Visual(_) => {}
+            SurfaceTarget::Visual(_) | SurfaceTarget::SurfaceHandle(_) => {}
         }
 
-        swap_chain.SetMaximumFrameLatency(config.swap_chain_size);
-        let waitable = swap_chain.GetFrameLatencyWaitableObject();
+        unsafe { swap_chain.SetMaximumFrameLatency(config.swap_chain_size) };
+        let waitable = unsafe { swap_chain.GetFrameLatencyWaitableObject() };
 
         let mut resources = vec![native::Resource::null(); config.swap_chain_size as usize];
         for (i, res) in resources.iter_mut().enumerate() {
-            swap_chain.GetBuffer(i as _, &d3d12::ID3D12Resource::uuidof(), res.mut_void());
+            unsafe {
+                swap_chain.GetBuffer(i as _, &d3d12::ID3D12Resource::uuidof(), res.mut_void())
+            };
         }
 
         self.swap_chain = Some(SwapChain {
@@ -723,12 +799,14 @@ impl crate::Surface<Api> for Surface {
 
     unsafe fn unconfigure(&mut self, device: &Device) {
         if let Some(mut sc) = self.swap_chain.take() {
-            let _ = sc.wait(None);
-            //TODO: this shouldn't be needed,
-            // but it complains that the queue is still used otherwise
-            let _ = device.wait_idle();
-            let raw = sc.release_resources();
-            raw.destroy();
+            unsafe {
+                let _ = sc.wait(None);
+                //TODO: this shouldn't be needed,
+                // but it complains that the queue is still used otherwise
+                let _ = device.wait_idle();
+                let raw = sc.release_resources();
+                raw.destroy();
+            }
         }
     }
 
@@ -738,9 +816,9 @@ impl crate::Surface<Api> for Surface {
     ) -> Result<Option<crate::AcquiredSurfaceTexture<Api>>, crate::SurfaceError> {
         let sc = self.swap_chain.as_mut().unwrap();
 
-        sc.wait(timeout)?;
+        unsafe { sc.wait(timeout) }?;
 
-        let base_index = sc.raw.GetCurrentBackBufferIndex() as usize;
+        let base_index = unsafe { sc.raw.GetCurrentBackBufferIndex() } as usize;
         let index = (base_index + sc.acquired_count) % sc.resources.len();
         sc.acquired_count += 1;
 
@@ -751,6 +829,7 @@ impl crate::Surface<Api> for Surface {
             size: sc.size,
             mip_level_count: 1,
             sample_count: 1,
+            allocation: None,
         };
         Ok(Some(crate::AcquiredSurfaceTexture {
             texture,
@@ -803,14 +882,14 @@ impl crate::Queue<Api> for Queue {
         };
 
         profiling::scope!("IDXGISwapchain3::Present");
-        sc.raw.Present(interval, flags);
+        unsafe { sc.raw.Present(interval, flags) };
 
         Ok(())
     }
 
     unsafe fn get_timestamp_period(&self) -> f32 {
         let mut frequency = 0u64;
-        self.raw.GetTimestampFrequency(&mut frequency);
+        unsafe { self.raw.GetTimestampFrequency(&mut frequency) };
         (1_000_000_000.0 / frequency as f64) as f32
     }
 }

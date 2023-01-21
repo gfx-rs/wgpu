@@ -316,8 +316,9 @@ impl<T, I: id::TypedId> Storage<T, I> {
     ///
     /// Returns [`None`] if there is an epoch mismatch, or the entry is empty.
     ///
-    /// This function is primarily intended for the `as_hal` family of functions where you may need to
-    /// fallibly get a object backed by an id that could be in a different hub.
+    /// This function is primarily intended for the `as_hal` family of functions
+    /// where you may need to fallibly get a object backed by an id that could
+    /// be in a different hub.
     pub(crate) fn try_get(&self, id: I) -> Result<Option<&T>, InvalidId> {
         let (index, epoch, _) = id.unzip();
         let (result, storage_epoch) = match self.map.get(index as usize) {
@@ -1056,30 +1057,30 @@ impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<A, F> {
 }
 
 pub struct Hubs<F: GlobalIdentityHandlerFactory> {
-    #[cfg(vulkan)]
+    #[cfg(feature = "vulkan")]
     vulkan: Hub<hal::api::Vulkan, F>,
-    #[cfg(metal)]
+    #[cfg(feature = "metal")]
     metal: Hub<hal::api::Metal, F>,
-    #[cfg(dx12)]
+    #[cfg(feature = "dx12")]
     dx12: Hub<hal::api::Dx12, F>,
-    #[cfg(dx11)]
+    #[cfg(feature = "dx11")]
     dx11: Hub<hal::api::Dx11, F>,
-    #[cfg(gl)]
+    #[cfg(feature = "gles")]
     gl: Hub<hal::api::Gles, F>,
 }
 
 impl<F: GlobalIdentityHandlerFactory> Hubs<F> {
     fn new(factory: &F) -> Self {
         Self {
-            #[cfg(vulkan)]
+            #[cfg(feature = "vulkan")]
             vulkan: Hub::new(factory),
-            #[cfg(metal)]
+            #[cfg(feature = "metal")]
             metal: Hub::new(factory),
-            #[cfg(dx12)]
+            #[cfg(feature = "dx12")]
             dx12: Hub::new(factory),
-            #[cfg(dx11)]
+            #[cfg(feature = "dx11")]
             dx11: Hub::new(factory),
-            #[cfg(gl)]
+            #[cfg(feature = "gles")]
             gl: Hub::new(factory),
         }
     }
@@ -1088,15 +1089,15 @@ impl<F: GlobalIdentityHandlerFactory> Hubs<F> {
 #[derive(Debug)]
 pub struct GlobalReport {
     pub surfaces: StorageReport,
-    #[cfg(vulkan)]
+    #[cfg(feature = "vulkan")]
     pub vulkan: Option<HubReport>,
-    #[cfg(metal)]
+    #[cfg(feature = "metal")]
     pub metal: Option<HubReport>,
-    #[cfg(dx12)]
+    #[cfg(feature = "dx12")]
     pub dx12: Option<HubReport>,
-    #[cfg(dx11)]
+    #[cfg(feature = "dx11")]
     pub dx11: Option<HubReport>,
-    #[cfg(gl)]
+    #[cfg(feature = "gles")]
     pub gl: Option<HubReport>,
 }
 
@@ -1107,10 +1108,10 @@ pub struct Global<G: GlobalIdentityHandlerFactory> {
 }
 
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
-    pub fn new(name: &str, factory: G, backends: wgt::Backends) -> Self {
+    pub fn new(name: &str, factory: G, instance_desc: wgt::InstanceDescriptor) -> Self {
         profiling::scope!("Global::new");
         Self {
-            instance: Instance::new(name, backends),
+            instance: Instance::new(name, instance_desc),
             surfaces: Registry::without_backend(&factory, "Surface"),
             hubs: Hubs::new(&factory),
         }
@@ -1155,37 +1156,37 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut surface_guard = self.surfaces.data.write();
         let hub = A::hub(self);
         // this is used for tests, which keep the adapter
-        hub.clear(&mut *surface_guard, false);
+        hub.clear(&mut surface_guard, false);
     }
 
     pub fn generate_report(&self) -> GlobalReport {
         GlobalReport {
             surfaces: self.surfaces.data.read().generate_report(),
-            #[cfg(vulkan)]
+            #[cfg(feature = "vulkan")]
             vulkan: if self.instance.vulkan.is_some() {
                 Some(self.hubs.vulkan.generate_report())
             } else {
                 None
             },
-            #[cfg(metal)]
+            #[cfg(feature = "metal")]
             metal: if self.instance.metal.is_some() {
                 Some(self.hubs.metal.generate_report())
             } else {
                 None
             },
-            #[cfg(dx12)]
+            #[cfg(feature = "dx12")]
             dx12: if self.instance.dx12.is_some() {
                 Some(self.hubs.dx12.generate_report())
             } else {
                 None
             },
-            #[cfg(dx11)]
+            #[cfg(feature = "dx11")]
             dx11: if self.instance.dx11.is_some() {
                 Some(self.hubs.dx11.generate_report())
             } else {
                 None
             },
-            #[cfg(gl)]
+            #[cfg(feature = "gles")]
             gl: if self.instance.gl.is_some() {
                 Some(self.hubs.gl.generate_report())
             } else {
@@ -1202,25 +1203,25 @@ impl<G: GlobalIdentityHandlerFactory> Drop for Global<G> {
         let mut surface_guard = self.surfaces.data.write();
 
         // destroy hubs before the instance gets dropped
-        #[cfg(vulkan)]
+        #[cfg(feature = "vulkan")]
         {
-            self.hubs.vulkan.clear(&mut *surface_guard, true);
+            self.hubs.vulkan.clear(&mut surface_guard, true);
         }
-        #[cfg(metal)]
+        #[cfg(feature = "metal")]
         {
-            self.hubs.metal.clear(&mut *surface_guard, true);
+            self.hubs.metal.clear(&mut surface_guard, true);
         }
-        #[cfg(dx12)]
+        #[cfg(feature = "dx12")]
         {
-            self.hubs.dx12.clear(&mut *surface_guard, true);
+            self.hubs.dx12.clear(&mut surface_guard, true);
         }
-        #[cfg(dx11)]
+        #[cfg(feature = "dx11")]
         {
-            self.hubs.dx11.clear(&mut *surface_guard, true);
+            self.hubs.dx11.clear(&mut surface_guard, true);
         }
-        #[cfg(gl)]
+        #[cfg(feature = "gles")]
         {
-            self.hubs.gl.clear(&mut *surface_guard, true);
+            self.hubs.gl.clear(&mut surface_guard, true);
         }
 
         // destroy surfaces
@@ -1260,7 +1261,7 @@ impl HalApi for hal::api::Empty {
     }
 }
 
-#[cfg(vulkan)]
+#[cfg(feature = "vulkan")]
 impl HalApi for hal::api::Vulkan {
     const VARIANT: Backend = Backend::Vulkan;
     fn create_instance_from_hal(name: &str, hal_instance: Self::Instance) -> Instance {
@@ -1284,7 +1285,7 @@ impl HalApi for hal::api::Vulkan {
     }
 }
 
-#[cfg(metal)]
+#[cfg(feature = "metal")]
 impl HalApi for hal::api::Metal {
     const VARIANT: Backend = Backend::Metal;
     fn create_instance_from_hal(name: &str, hal_instance: Self::Instance) -> Instance {
@@ -1308,7 +1309,7 @@ impl HalApi for hal::api::Metal {
     }
 }
 
-#[cfg(dx12)]
+#[cfg(feature = "dx12")]
 impl HalApi for hal::api::Dx12 {
     const VARIANT: Backend = Backend::Dx12;
     fn create_instance_from_hal(name: &str, hal_instance: Self::Instance) -> Instance {
@@ -1332,7 +1333,7 @@ impl HalApi for hal::api::Dx12 {
     }
 }
 
-#[cfg(dx11)]
+#[cfg(feature = "dx11")]
 impl HalApi for hal::api::Dx11 {
     const VARIANT: Backend = Backend::Dx11;
     fn create_instance_from_hal(name: &str, hal_instance: Self::Instance) -> Instance {
@@ -1356,7 +1357,7 @@ impl HalApi for hal::api::Dx11 {
     }
 }
 
-#[cfg(gl)]
+#[cfg(feature = "gles")]
 impl HalApi for hal::api::Gles {
     const VARIANT: Backend = Backend::Gl;
     fn create_instance_from_hal(name: &str, hal_instance: Self::Instance) -> Instance {
