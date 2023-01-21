@@ -589,11 +589,14 @@ impl PhysicalDeviceCapabilities {
         }
 
         if self.effective_api_version < vk::API_VERSION_1_2 {
+            // Optional `VK_KHR_image_format_list`
+            if self.supports_extension(vk::KhrImageFormatListFn::name()) {
+                extensions.push(vk::KhrImageFormatListFn::name());
+            }
+
             // Optional `VK_KHR_imageless_framebuffer`
             if self.supports_extension(vk::KhrImagelessFramebufferFn::name()) {
                 extensions.push(vk::KhrImagelessFramebufferFn::name());
-                // Require `VK_KHR_image_format_list` due to it being a dependency
-                extensions.push(vk::KhrImageFormatListFn::name());
                 // Require `VK_KHR_maintenance2` due to it being a dependency
                 if self.effective_api_version < vk::API_VERSION_1_1 {
                     extensions.push(vk::KhrMaintenance2Fn::name());
