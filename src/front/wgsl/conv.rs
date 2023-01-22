@@ -178,6 +178,7 @@ pub fn map_standard_fun(word: &str) -> Option<crate::MathFunction> {
         "normalize" => Mf::Normalize,
         "faceForward" => Mf::FaceForward,
         "reflect" => Mf::Reflect,
+        "refract" => Mf::Refract,
         // computational
         "sign" => Mf::Sign,
         "fma" => Mf::Fma,

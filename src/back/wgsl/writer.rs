@@ -1582,6 +1582,7 @@ impl<W: Write> Writer<W> {
                     Mf::Normalize => Function::Regular("normalize"),
                     Mf::FaceForward => Function::Regular("faceForward"),
                     Mf::Reflect => Function::Regular("reflect"),
+                    Mf::Refract => Function::Regular("refract"),
                     // computational
                     Mf::Sign => Function::Regular("sign"),
                     Mf::Fma => Function::Regular("fma"),

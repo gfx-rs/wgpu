@@ -1,7 +1,7 @@
 ; SPIR-V
 ; Version: 1.1
 ; Generator: rspirv
-; Bound: 36
+; Bound: 37
 OpCapability Shader
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
@@ -18,7 +18,7 @@ OpEntryPoint Vertex %14 "main"
 %11 = OpTypeVector %7 2
 %12 = OpConstantComposite  %11  %6 %6
 %15 = OpTypeFunction %2
-%26 = OpConstantNull  %7
+%27 = OpConstantNull  %7
 %14 = OpFunction  %2  None %15
 %13 = OpLabel
 OpBranch %16
@@ -31,15 +31,16 @@ OpBranch %16
 %23 = OpCompositeConstruct  %10  %5 %5 %5 %5
 %24 = OpCompositeConstruct  %10  %3 %3 %3 %3
 %22 = OpExtInst  %10  %1 FClamp %17 %23 %24
-%27 = OpCompositeExtract  %7  %12 0
+%25 = OpExtInst  %10  %1 Refract %17 %17 %3
 %28 = OpCompositeExtract  %7  %12 0
-%29 = OpIMul  %7  %27 %28
-%30 = OpIAdd  %7  %26 %29
-%31 = OpCompositeExtract  %7  %12 1
+%29 = OpCompositeExtract  %7  %12 0
+%30 = OpIMul  %7  %28 %29
+%31 = OpIAdd  %7  %27 %30
 %32 = OpCompositeExtract  %7  %12 1
-%33 = OpIMul  %7  %31 %32
-%25 = OpIAdd  %7  %30 %33
-%34 = OpCopyObject  %9  %8
-%35 = OpExtInst  %9  %1 FindUMsb %34
+%33 = OpCompositeExtract  %7  %12 1
+%34 = OpIMul  %7  %32 %33
+%26 = OpIAdd  %7  %31 %34
+%35 = OpCopyObject  %9  %8
+%36 = OpExtInst  %9  %1 FindUMsb %35
 OpReturn
 OpFunctionEnd

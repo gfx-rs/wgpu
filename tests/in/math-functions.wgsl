@@ -7,6 +7,7 @@ fn main() {
     let c = degrees(v);
     let d = radians(v);
     let e = saturate(v);
+    let g = refract(v, v, f);
     let const_dot = dot(vec2<i32>(), vec2<i32>());
     let first_leading_bit_abs = firstLeadingBit(abs(0u));
 }
