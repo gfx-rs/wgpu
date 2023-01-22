@@ -5328,12 +5328,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Err(_) => break E::InvalidSurface,
             };
 
-            for format in config.view_formats.iter() {
-                if config.format.remove_srgb_suffix() != format.remove_srgb_suffix() {
-                    break 'outter E::InvalidViewFormat(*format, config.format);
-                }
-            }
-
             let caps = unsafe {
                 let suf = A::get_surface(surface);
                 let adapter = &adapter_guard[device.adapter_id.value];
@@ -5342,6 +5336,23 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     None => break E::UnsupportedQueueFamily,
                 }
             };
+
+            let mut hal_view_formats = vec![config.format];
+            for format in config.view_formats.iter() {
+                if *format == config.format {
+                    continue;
+                }
+                if !caps.formats.contains(&config.format) {
+                    break 'outter E::UnsupportedFormat {
+                        requested: config.format,
+                        available: caps.formats.clone(),
+                    };
+                }
+                if config.format.remove_srgb_suffix() != format.remove_srgb_suffix() {
+                    break 'outter E::InvalidViewFormat(*format, config.format);
+                }
+                hal_view_formats.push(*format);
+            }
 
             let num_frames = present::DESIRED_NUM_FRAMES
                 .clamp(*caps.swap_chain_sizes.start(), *caps.swap_chain_sizes.end());
@@ -5356,6 +5367,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     depth_or_array_layers: 1,
                 },
                 usage: conv::map_texture_usage(config.usage, hal::FormatAspects::COLOR),
+                view_formats: hal_view_formats,
             };
 
             if let Err(error) = validate_surface_configuration(&mut hal_config, &caps) {

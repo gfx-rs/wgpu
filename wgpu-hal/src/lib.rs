@@ -1113,6 +1113,9 @@ pub struct SurfaceConfiguration {
     pub extent: wgt::Extent3d,
     /// Allowed usage of surface textures,
     pub usage: TextureUses,
+    /// Allows views of swapchain texture to have a different format
+    /// than the texture does.
+    pub view_formats: Vec<wgt::TextureFormat>,
 }
 
 #[derive(Debug, Clone)]

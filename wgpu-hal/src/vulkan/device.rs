@@ -546,8 +546,25 @@ impl super::Device {
         } else {
             vk::ColorSpaceKHR::SRGB_NONLINEAR
         };
-        let info = vk::SwapchainCreateInfoKHR::builder()
-            .flags(vk::SwapchainCreateFlagsKHR::empty())
+
+        let mut raw_flags = vk::SwapchainCreateFlagsKHR::empty();
+        let mut raw_view_formats: Vec<vk::Format> = vec![];
+        if config.view_formats.len() > 1
+            && (self.shared_instance().driver_api_version >= vk::API_VERSION_1_2
+                || self
+                    .enabled_device_extensions()
+                    .contains(&vk::KhrImageFormatListFn::name()))
+        {
+            raw_flags |= vk::SwapchainCreateFlagsKHR::MUTABLE_FORMAT;
+            raw_view_formats = config
+                .view_formats
+                .iter()
+                .map(|f| self.shared.private_caps.map_texture_format(*f))
+                .collect();
+        }
+
+        let mut info = vk::SwapchainCreateInfoKHR::builder()
+            .flags(raw_flags)
             .surface(surface.raw)
             .min_image_count(config.swap_chain_size)
             .image_format(self.shared.private_caps.map_texture_format(config.format))
@@ -564,6 +581,12 @@ impl super::Device {
             .present_mode(conv::map_present_mode(config.present_mode))
             .clipped(true)
             .old_swapchain(old_swapchain);
+
+        let mut format_list_info = vk::ImageFormatListCreateInfo::builder();
+        if !raw_view_formats.is_empty() {
+            format_list_info = format_list_info.view_formats(&raw_view_formats);
+            info = info.push_next(&mut format_list_info);
+        }
 
         let result = {
             profiling::scope!("vkCreateSwapchainKHR");

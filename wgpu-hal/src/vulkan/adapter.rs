@@ -565,6 +565,9 @@ impl PhysicalDeviceCapabilities {
 
         // Require `VK_KHR_swapchain`
         extensions.push(vk::KhrSwapchainFn::name());
+        // `KhrSwapchainMutableFormatFn` extension is requires support for Vulkan 1.0:
+        // https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VK_KHR_swapchain_mutable_format.html
+        extensions.push(vk::KhrSwapchainMutableFormatFn::name());
 
         if self.effective_api_version < vk::API_VERSION_1_1 {
             // Require either `VK_KHR_maintenance1` or `VK_AMD_negative_viewport_height`
