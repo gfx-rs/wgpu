@@ -846,7 +846,7 @@ pub struct TextureDescriptor<'a> {
     pub usage: TextureUses,
     pub memory_flags: MemoryFlags,
     /// Allows views of this texture to have a different format
-    /// than the this texture does.
+    /// than the texture does.
     pub view_formats: Vec<wgt::TextureFormat>,
 }
 
