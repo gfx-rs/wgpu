@@ -1529,13 +1529,9 @@ impl<W: Write> Writer<W> {
                 use crate::MathFunction as Mf;
 
                 enum Function {
-                    Asincosh { is_sin: bool },
-                    Atanh,
                     Regular(&'static str),
                 }
 
-                // NOTE: If https://github.com/gpuweb/gpuweb/issues/1622 ever is
-                // accepted, replace this with the builtin functions
                 let function = match fun {
                     Mf::Abs => Function::Regular("abs"),
                     Mf::Min => Function::Regular("min"),
@@ -1553,9 +1549,9 @@ impl<W: Write> Writer<W> {
                     Mf::Asin => Function::Regular("asin"),
                     Mf::Atan => Function::Regular("atan"),
                     Mf::Atan2 => Function::Regular("atan2"),
-                    Mf::Asinh => Function::Asincosh { is_sin: true },
-                    Mf::Acosh => Function::Asincosh { is_sin: false },
-                    Mf::Atanh => Function::Atanh,
+                    Mf::Asinh => Function::Regular("asinh"),
+                    Mf::Acosh => Function::Regular("acosh"),
+                    Mf::Atanh => Function::Regular("atanh"),
                     Mf::Radians => Function::Regular("radians"),
                     Mf::Degrees => Function::Regular("degrees"),
                     // decomposition
@@ -1618,25 +1614,6 @@ impl<W: Write> Writer<W> {
                 };
 
                 match function {
-                    Function::Asincosh { is_sin } => {
-                        write!(self.out, "log(")?;
-                        self.write_expr(module, arg, func_ctx)?;
-                        write!(self.out, " + sqrt(")?;
-                        self.write_expr(module, arg, func_ctx)?;
-                        write!(self.out, " * ")?;
-                        self.write_expr(module, arg, func_ctx)?;
-                        match is_sin {
-                            true => write!(self.out, " + 1.0))")?,
-                            false => write!(self.out, " - 1.0))")?,
-                        }
-                    }
-                    Function::Atanh => {
-                        write!(self.out, "0.5 * log((1.0 + ")?;
-                        self.write_expr(module, arg, func_ctx)?;
-                        write!(self.out, ") / (1.0 - ")?;
-                        self.write_expr(module, arg, func_ctx)?;
-                        write!(self.out, "))")?;
-                    }
                     Function::Regular(fun_name) => {
                         write!(self.out, "{}(", fun_name)?;
                         self.write_expr(module, arg, func_ctx)?;

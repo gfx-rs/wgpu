@@ -6,11 +6,11 @@ fn main_1() {
     var d: f32;
 
     let _e8 = a;
-    b = log(_e8 + sqrt(_e8 * _e8 + 1.0));
+    b = asinh(_e8);
     let _e10 = a;
-    c = log(_e10 + sqrt(_e10 * _e10 - 1.0));
+    c = acosh(_e10);
     let _e12 = a;
-    d = 0.5 * log((1.0 + _e12) / (1.0 - _e12));
+    d = atanh(_e12);
     return;
 }
 
