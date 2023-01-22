@@ -1685,8 +1685,6 @@ impl<W: Write> Writer<W> {
                 use crate::RelationalFunction as Rf;
 
                 let fun_name = match fun {
-                    Rf::IsFinite => "isFinite",
-                    Rf::IsNormal => "isNormal",
                     Rf::All => "all",
                     Rf::Any => "any",
                     _ => return Err(Error::UnsupportedRelationalFunction(fun)),

@@ -126,8 +126,6 @@ pub fn map_relational_fun(word: &str) -> Option<crate::RelationalFunction> {
     match word {
         "any" => Some(crate::RelationalFunction::Any),
         "all" => Some(crate::RelationalFunction::All),
-        "isFinite" => Some(crate::RelationalFunction::IsFinite),
-        "isNormal" => Some(crate::RelationalFunction::IsNormal),
         _ => None,
     }
 }
