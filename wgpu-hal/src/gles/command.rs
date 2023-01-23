@@ -321,7 +321,6 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     {
         let (dst_raw, dst_target) = dst.inner.as_native();
         for copy in regions {
-            // TODO: Clamp size?
             self.cmd_buffer
                 .commands
                 .push(C::CopyExternalImageToTexture {

@@ -412,16 +412,17 @@ fn map_vertex_step_mode(mode: wgt::VertexStepMode) -> web_sys::GpuVertexStepMode
     }
 }
 
-// fn map_extent_2d(extent: wgt::Extent2d) -> web_sys::GpuExtent2dDict {
-//     let mut mapped = web_sys::GpuExtent2dDict::new(extent.width);
-//     mapped.height(extent.height);
-//     mapped
-// }
-
 fn map_extent_3d(extent: wgt::Extent3d) -> web_sys::GpuExtent3dDict {
     let mut mapped = web_sys::GpuExtent3dDict::new(extent.width);
     mapped.height(extent.height);
     mapped.depth_or_array_layers(extent.depth_or_array_layers);
+    mapped
+}
+
+fn map_origin_2d(extent: wgt::Origin2d) -> web_sys::GpuOrigin2dDict {
+    let mut mapped = web_sys::GpuOrigin2dDict::new();
+    mapped.x(extent.x);
+    mapped.y(extent.y);
     mapped
 }
 
@@ -493,7 +494,7 @@ fn map_external_texture_copy_view(
     view: &crate::ImageCopyExternalImage,
 ) -> web_sys::GpuImageCopyExternalImage {
     let mut mapped = web_sys::GpuImageCopyExternalImage::new(&view.source);
-    // mapped.origin(&map_extent_2d(view.extent));
+    mapped.origin(&map_origin_2d(view.origin));
     mapped.flip_y(view.flip_y);
     mapped
 }

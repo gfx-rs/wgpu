@@ -1049,7 +1049,7 @@ checksum = "518faa5064866338b013ff9b2350dc318e14cc4fcd6cb8206d7e7c9886c98815"
 [[package]]
 name = "glow"
 version = "0.11.2"
-source = "git+https://github.com/cwfitzgerald/glow?rev=0ab1b126aed6f6dacc9b3e11fb58bdc8d1b40b9a#0ab1b126aed6f6dacc9b3e11fb58bdc8d1b40b9a"
+source = "git+https://github.com/grovesNL/glow?rev=d7037ef557e70ade837ae9e3c25122069bf88474#d7037ef557e70ade837ae9e3c25122069bf88474"
 dependencies = [
  "js-sys",
  "slotmap",

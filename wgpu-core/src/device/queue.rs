@@ -849,7 +849,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (mut texture_guard, _) = hub.textures.write(&mut token); // For clear we need write access to the texture. TODO: Can we acquire write lock later?
         let dst = texture_guard.get_mut(destination.texture).unwrap();
 
-        let (selector, dst_base, texture_format) =
+        let (selector, dst_base, _) =
             extract_texture_selector(&destination.to_untagged(), &size, dst)?;
 
         if !conv::is_valid_external_image_copy_dst_texture_format(dst.desc.format) {
@@ -920,14 +920,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             CopySide::Destination,
             &size,
         )?;
-
-        if !conv::is_valid_copy_dst_texture_format(texture_format, destination.aspect) {
-            return Err(TransferError::CopyToForbiddenTextureFormat {
-                format: texture_format,
-                aspect: destination.aspect,
-            }
-            .into());
-        }
 
         let mut trackers = device.trackers.lock();
         let encoder = device.pending_writes.activate();
