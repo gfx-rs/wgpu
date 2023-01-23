@@ -895,10 +895,28 @@ impl crate::Device<super::Api> for super::Device {
             raw_flags |= vk::ImageCreateFlags::CUBE_COMPATIBLE;
         }
 
-        let vk_info = vk::ImageCreateInfo::builder()
+        let original_format = self.shared.private_caps.map_texture_format(desc.format);
+        let mut hal_view_formats: Vec<vk::Format> = vec![];
+        if !desc.view_formats.is_empty() {
+            raw_flags |= vk::ImageCreateFlags::MUTABLE_FORMAT;
+            if self.shared_instance().driver_api_version >= vk::API_VERSION_1_2
+                || self
+                    .enabled_device_extensions()
+                    .contains(&vk::KhrImageFormatListFn::name())
+            {
+                hal_view_formats = desc
+                    .view_formats
+                    .iter()
+                    .map(|f| self.shared.private_caps.map_texture_format(*f))
+                    .collect();
+                hal_view_formats.push(original_format)
+            }
+        }
+
+        let mut vk_info = vk::ImageCreateInfo::builder()
             .flags(raw_flags)
             .image_type(conv::map_texture_dimension(desc.dimension))
-            .format(self.shared.private_caps.map_texture_format(desc.format))
+            .format(original_format)
             .extent(vk::Extent3D {
                 width: copy_size.width,
                 height: copy_size.height,
@@ -911,6 +929,12 @@ impl crate::Device<super::Api> for super::Device {
             .usage(conv::map_texture_usage(desc.usage))
             .sharing_mode(vk::SharingMode::EXCLUSIVE)
             .initial_layout(vk::ImageLayout::UNDEFINED);
+
+        let mut format_list_info = vk::ImageFormatListCreateInfo::builder();
+        if !hal_view_formats.is_empty() {
+            format_list_info = format_list_info.view_formats(&hal_view_formats);
+            vk_info = vk_info.push_next(&mut format_list_info);
+        }
 
         let raw = unsafe { self.shared.raw.create_image(&vk_info, None)? };
         let req = unsafe { self.shared.raw.get_image_memory_requirements(raw) };
@@ -1192,13 +1216,12 @@ impl crate::Device<super::Api> for super::Device {
 
         let mut binding_flag_info;
         let binding_flag_vec;
-        let mut requires_update_after_bind = false;
 
         let partially_bound = desc
             .flags
             .contains(crate::BindGroupLayoutFlags::PARTIALLY_BOUND);
 
-        let vk_info = if !self.shared.uab_types.is_empty() || partially_bound {
+        let vk_info = if partially_bound {
             binding_flag_vec = desc
                 .entries
                 .iter()
@@ -1207,29 +1230,6 @@ impl crate::Device<super::Api> for super::Device {
 
                     if partially_bound && entry.count.is_some() {
                         flags |= vk::DescriptorBindingFlags::PARTIALLY_BOUND;
-                    }
-
-                    let uab_type = match entry.ty {
-                        wgt::BindingType::Buffer {
-                            ty: wgt::BufferBindingType::Uniform,
-                            ..
-                        } => super::UpdateAfterBindTypes::UNIFORM_BUFFER,
-                        wgt::BindingType::Buffer {
-                            ty: wgt::BufferBindingType::Storage { .. },
-                            ..
-                        } => super::UpdateAfterBindTypes::STORAGE_BUFFER,
-                        wgt::BindingType::Texture { .. } => {
-                            super::UpdateAfterBindTypes::SAMPLED_TEXTURE
-                        }
-                        wgt::BindingType::StorageTexture { .. } => {
-                            super::UpdateAfterBindTypes::STORAGE_TEXTURE
-                        }
-                        _ => super::UpdateAfterBindTypes::empty(),
-                    };
-
-                    if !uab_type.is_empty() && self.shared.uab_types.contains(uab_type) {
-                        flags |= vk::DescriptorBindingFlags::UPDATE_AFTER_BIND;
-                        requires_update_after_bind = true;
                     }
 
                     flags
@@ -1243,14 +1243,6 @@ impl crate::Device<super::Api> for super::Device {
         } else {
             vk_info
         };
-
-        let dsl_create_flags = if requires_update_after_bind {
-            vk::DescriptorSetLayoutCreateFlags::UPDATE_AFTER_BIND_POOL
-        } else {
-            vk::DescriptorSetLayoutCreateFlags::empty()
-        };
-
-        let vk_info = vk_info.flags(dsl_create_flags);
 
         let raw = unsafe {
             self.shared
@@ -1270,7 +1262,6 @@ impl crate::Device<super::Api> for super::Device {
             desc_count,
             types: types.into_boxed_slice(),
             binding_arrays,
-            requires_update_after_bind,
         })
     }
     unsafe fn destroy_bind_group_layout(&self, bg_layout: super::BindGroupLayout) {
@@ -1354,11 +1345,7 @@ impl crate::Device<super::Api> for super::Device {
             self.desc_allocator.lock().allocate(
                 &*self.shared,
                 &desc.layout.raw,
-                if desc.layout.requires_update_after_bind {
-                    gpu_descriptor::DescriptorSetLayoutCreateFlags::UPDATE_AFTER_BIND
-                } else {
-                    gpu_descriptor::DescriptorSetLayoutCreateFlags::empty()
-                },
+                gpu_descriptor::DescriptorSetLayoutCreateFlags::empty(),
                 &desc.layout.desc_count,
                 1,
             )?

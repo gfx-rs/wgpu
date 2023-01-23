@@ -5,6 +5,10 @@ use parking_lot::Mutex;
 
 use std::{collections::BTreeMap, ffi::CStr, sync::Arc};
 
+fn depth_stencil_required_flags() -> vk::FormatFeatureFlags {
+    vk::FormatFeatureFlags::SAMPLED_IMAGE | vk::FormatFeatureFlags::DEPTH_STENCIL_ATTACHMENT
+}
+
 //TODO: const fn?
 fn indexing_features() -> wgt::Features {
     wgt::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING
@@ -77,7 +81,6 @@ impl PhysicalDeviceFeatures {
         requested_features: wgt::Features,
         downlevel_flags: wgt::DownlevelFlags,
         private_caps: &super::PrivateCapabilities,
-        uab_types: super::UpdateAfterBindTypes,
     ) -> Self {
         let needs_sampled_image_non_uniform = requested_features.contains(
             wgt::Features::TEXTURE_BINDING_ARRAY
@@ -186,18 +189,6 @@ impl PhysicalDeviceFeatures {
                         )
                         .shader_storage_buffer_array_non_uniform_indexing(
                             needs_storage_buffer_non_uniform,
-                        )
-                        .descriptor_binding_sampled_image_update_after_bind(
-                            uab_types.contains(super::UpdateAfterBindTypes::SAMPLED_TEXTURE),
-                        )
-                        .descriptor_binding_storage_image_update_after_bind(
-                            uab_types.contains(super::UpdateAfterBindTypes::STORAGE_TEXTURE),
-                        )
-                        .descriptor_binding_uniform_buffer_update_after_bind(
-                            uab_types.contains(super::UpdateAfterBindTypes::UNIFORM_BUFFER),
-                        )
-                        .descriptor_binding_storage_buffer_update_after_bind(
-                            uab_types.contains(super::UpdateAfterBindTypes::STORAGE_BUFFER),
                         )
                         .descriptor_binding_partially_bound(needs_partially_bound)
                         .build(),
@@ -325,10 +316,10 @@ impl PhysicalDeviceFeatures {
             | Df::VERTEX_STORAGE
             | Df::FRAGMENT_STORAGE
             | Df::DEPTH_TEXTURE_AND_BUFFER_COPIES
-            | Df::WEBGPU_TEXTURE_FORMAT_SUPPORT
             | Df::BUFFER_BINDINGS_NOT_16_BYTE_ALIGNED
             | Df::UNRESTRICTED_INDEX_BUFFER
             | Df::INDIRECT_EXECUTION
+            | Df::VIEW_FORMATS
             | Df::UNRESTRICTED_EXTERNAL_TEXTURE_COPIES;
 
         dl_flags.set(Df::CUBE_ARRAY_TEXTURES, self.core.image_cube_array != 0);
@@ -488,16 +479,30 @@ impl PhysicalDeviceFeatures {
             );
         }
 
-        features.set(
-            F::DEPTH32FLOAT_STENCIL8,
+        let supports_depth_format = |format| {
             supports_format(
                 instance,
                 phd,
-                vk::Format::D32_SFLOAT_S8_UINT,
+                format,
                 vk::ImageTiling::OPTIMAL,
-                vk::FormatFeatureFlags::DEPTH_STENCIL_ATTACHMENT,
-            ),
+                depth_stencil_required_flags(),
+            )
+        };
+
+        let texture_s8 = supports_depth_format(vk::Format::S8_UINT);
+        let texture_d32 = supports_depth_format(vk::Format::D32_SFLOAT);
+        let texture_d24_s8 = supports_depth_format(vk::Format::D24_UNORM_S8_UINT);
+        let texture_d32_s8 = supports_depth_format(vk::Format::D32_SFLOAT_S8_UINT);
+
+        let stencil8 = texture_s8 || texture_d24_s8;
+        let depth24_plus_stencil8 = texture_d24_s8 || texture_d32_s8;
+
+        dl_flags.set(
+            Df::WEBGPU_TEXTURE_FORMAT_SUPPORT,
+            stencil8 && depth24_plus_stencil8 && texture_d32,
         );
+
+        features.set(F::DEPTH32FLOAT_STENCIL8, texture_d32_s8);
 
         (features, dl_flags)
     }
@@ -585,11 +590,14 @@ impl PhysicalDeviceCapabilities {
         }
 
         if self.effective_api_version < vk::API_VERSION_1_2 {
+            // Optional `VK_KHR_image_format_list`
+            if self.supports_extension(vk::KhrImageFormatListFn::name()) {
+                extensions.push(vk::KhrImageFormatListFn::name());
+            }
+
             // Optional `VK_KHR_imageless_framebuffer`
             if self.supports_extension(vk::KhrImagelessFramebufferFn::name()) {
                 extensions.push(vk::KhrImagelessFramebufferFn::name());
-                // Require `VK_KHR_image_format_list` due to it being a dependency
-                extensions.push(vk::KhrImageFormatListFn::name());
                 // Require `VK_KHR_maintenance2` due to it being a dependency
                 if self.effective_api_version < vk::API_VERSION_1_1 {
                     extensions.push(vk::KhrMaintenance2Fn::name());
@@ -670,54 +678,8 @@ impl PhysicalDeviceCapabilities {
         extensions
     }
 
-    fn to_wgpu_limits(&self, features: &PhysicalDeviceFeatures) -> wgt::Limits {
+    fn to_wgpu_limits(&self) -> wgt::Limits {
         let limits = &self.properties.limits;
-
-        let uab_types = super::UpdateAfterBindTypes::from_features(features);
-
-        let max_sampled_textures =
-            if uab_types.contains(super::UpdateAfterBindTypes::SAMPLED_TEXTURE) {
-                if let Some(di) = self.descriptor_indexing {
-                    di.max_per_stage_descriptor_update_after_bind_sampled_images
-                } else {
-                    limits.max_per_stage_descriptor_sampled_images
-                }
-            } else {
-                limits.max_per_stage_descriptor_sampled_images
-            };
-
-        let max_storage_textures =
-            if uab_types.contains(super::UpdateAfterBindTypes::STORAGE_TEXTURE) {
-                if let Some(di) = self.descriptor_indexing {
-                    di.max_per_stage_descriptor_update_after_bind_storage_images
-                } else {
-                    limits.max_per_stage_descriptor_storage_images
-                }
-            } else {
-                limits.max_per_stage_descriptor_storage_images
-            };
-
-        let max_uniform_buffers = if uab_types.contains(super::UpdateAfterBindTypes::UNIFORM_BUFFER)
-        {
-            if let Some(di) = self.descriptor_indexing {
-                di.max_per_stage_descriptor_update_after_bind_uniform_buffers
-            } else {
-                limits.max_per_stage_descriptor_uniform_buffers
-            }
-        } else {
-            limits.max_per_stage_descriptor_uniform_buffers
-        };
-
-        let max_storage_buffers = if uab_types.contains(super::UpdateAfterBindTypes::STORAGE_BUFFER)
-        {
-            if let Some(di) = self.descriptor_indexing {
-                di.max_per_stage_descriptor_update_after_bind_storage_buffers
-            } else {
-                limits.max_per_stage_descriptor_storage_buffers
-            }
-        } else {
-            limits.max_per_stage_descriptor_storage_buffers
-        };
 
         let max_compute_workgroup_sizes = limits.max_compute_work_group_size;
         let max_compute_workgroups_per_dimension = limits.max_compute_work_group_count[0]
@@ -746,11 +708,11 @@ impl PhysicalDeviceCapabilities {
                 .max_descriptor_set_uniform_buffers_dynamic,
             max_dynamic_storage_buffers_per_pipeline_layout: limits
                 .max_descriptor_set_storage_buffers_dynamic,
-            max_sampled_textures_per_shader_stage: max_sampled_textures,
+            max_sampled_textures_per_shader_stage: limits.max_per_stage_descriptor_sampled_images,
             max_samplers_per_shader_stage: limits.max_per_stage_descriptor_samplers,
-            max_storage_buffers_per_shader_stage: max_storage_buffers,
-            max_storage_textures_per_shader_stage: max_storage_textures,
-            max_uniform_buffers_per_shader_stage: max_uniform_buffers,
+            max_storage_buffers_per_shader_stage: limits.max_per_stage_descriptor_storage_buffers,
+            max_storage_textures_per_shader_stage: limits.max_per_stage_descriptor_storage_images,
+            max_uniform_buffers_per_shader_stage: limits.max_per_stage_descriptor_uniform_buffers,
             max_uniform_buffer_binding_size: limits
                 .max_uniform_buffer_range
                 .min(crate::auxil::MAX_I32_BINDING_SIZE),
@@ -1042,27 +1004,27 @@ impl super::Instance {
                     .timeline_semaphore
                     .map_or(false, |ext| ext.timeline_semaphore != 0),
             },
-            texture_d24: unsafe {
-                self.shared
-                    .raw
-                    .get_physical_device_format_properties(phd, vk::Format::X8_D24_UNORM_PACK32)
-                    .optimal_tiling_features
-                    .contains(vk::FormatFeatureFlags::DEPTH_STENCIL_ATTACHMENT)
-            },
-            texture_d24_s8: unsafe {
-                self.shared
-                    .raw
-                    .get_physical_device_format_properties(phd, vk::Format::D24_UNORM_S8_UINT)
-                    .optimal_tiling_features
-                    .contains(vk::FormatFeatureFlags::DEPTH_STENCIL_ATTACHMENT)
-            },
-            texture_s8: unsafe {
-                self.shared
-                    .raw
-                    .get_physical_device_format_properties(phd, vk::Format::S8_UINT)
-                    .optimal_tiling_features
-                    .contains(vk::FormatFeatureFlags::DEPTH_STENCIL_ATTACHMENT)
-            },
+            texture_d24: supports_format(
+                &self.shared.raw,
+                phd,
+                vk::Format::X8_D24_UNORM_PACK32,
+                vk::ImageTiling::OPTIMAL,
+                depth_stencil_required_flags(),
+            ),
+            texture_d24_s8: supports_format(
+                &self.shared.raw,
+                phd,
+                vk::Format::D24_UNORM_S8_UINT,
+                vk::ImageTiling::OPTIMAL,
+                depth_stencil_required_flags(),
+            ),
+            texture_s8: supports_format(
+                &self.shared.raw,
+                phd,
+                vk::Format::S8_UINT,
+                vk::ImageTiling::OPTIMAL,
+                depth_stencil_required_flags(),
+            ),
             non_coherent_map_mask: phd_capabilities.properties.limits.non_coherent_atom_size - 1,
             can_present: true,
             //TODO: make configurable
@@ -1075,7 +1037,7 @@ impl super::Instance {
             },
         };
         let capabilities = crate::Capabilities {
-            limits: phd_capabilities.to_wgpu_limits(&phd_features),
+            limits: phd_capabilities.to_wgpu_limits(),
             alignments: phd_capabilities.to_hal_alignments(),
             downlevel: wgt::DownlevelCapabilities {
                 flags: downlevel_flags,
@@ -1144,7 +1106,6 @@ impl super::Adapter {
         &self,
         enabled_extensions: &[&'static CStr],
         features: wgt::Features,
-        uab_types: super::UpdateAfterBindTypes,
     ) -> PhysicalDeviceFeatures {
         PhysicalDeviceFeatures::from_extensions_and_requested_features(
             self.phd_capabilities.effective_api_version,
@@ -1152,7 +1113,6 @@ impl super::Adapter {
             features,
             self.downlevel_flags,
             &self.private_caps,
-            uab_types,
         )
     }
 
@@ -1168,7 +1128,6 @@ impl super::Adapter {
         handle_is_owned: bool,
         enabled_extensions: &[&'static CStr],
         features: wgt::Features,
-        uab_types: super::UpdateAfterBindTypes,
         family_index: u32,
         queue_index: u32,
     ) -> Result<crate::OpenDevice<super::Api>, crate::DeviceError> {
@@ -1303,7 +1262,6 @@ impl super::Adapter {
             },
             vendor_id: self.phd_capabilities.properties.vendor_id,
             timestamp_period: self.phd_capabilities.properties.limits.timestamp_period,
-            uab_types,
             downlevel_flags: self.downlevel_flags,
             private_caps: self.private_caps.clone(),
             workarounds: self.workarounds,
@@ -1380,14 +1338,10 @@ impl crate::Adapter<super::Api> for super::Adapter {
     unsafe fn open(
         &self,
         features: wgt::Features,
-        limits: &wgt::Limits,
+        _limits: &wgt::Limits,
     ) -> Result<crate::OpenDevice<super::Api>, crate::DeviceError> {
-        let phd_limits = &self.phd_capabilities.properties.limits;
-        let uab_types = super::UpdateAfterBindTypes::from_limits(limits, phd_limits);
-
         let enabled_extensions = self.required_device_extensions(features);
-        let mut enabled_phd_features =
-            self.physical_device_features(&enabled_extensions, features, uab_types);
+        let mut enabled_phd_features = self.physical_device_features(&enabled_extensions, features);
 
         let family_index = 0; //TODO
         let family_info = vk::DeviceQueueCreateInfo::builder()
@@ -1421,7 +1375,6 @@ impl crate::Adapter<super::Api> for super::Adapter {
                 true,
                 &enabled_extensions,
                 features,
-                uab_types,
                 family_info.queue_family_index,
                 0,
             )
@@ -1477,15 +1430,11 @@ impl crate::Adapter<super::Api> for super::Adapter {
         );
         flags.set(
             Tfc::COPY_SRC,
-            features.intersects(
-                vk::FormatFeatureFlags::TRANSFER_SRC | vk::FormatFeatureFlags::BLIT_SRC,
-            ),
+            features.intersects(vk::FormatFeatureFlags::TRANSFER_SRC),
         );
         flags.set(
             Tfc::COPY_DST,
-            features.intersects(
-                vk::FormatFeatureFlags::TRANSFER_DST | vk::FormatFeatureFlags::BLIT_DST,
-            ),
+            features.intersects(vk::FormatFeatureFlags::TRANSFER_DST),
         );
         // Vulkan is very permissive about MSAA
         flags.set(Tfc::MULTISAMPLE_RESOLVE, !format.describe().is_compressed());

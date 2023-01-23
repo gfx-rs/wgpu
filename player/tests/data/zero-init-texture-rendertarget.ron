@@ -21,6 +21,7 @@
             dimension: r#2d,
             format: "rgba8unorm",
             usage: 17, // RENDER_ATTACHMENT + COPY_SRC
+            view_formats: [],
         )),
         CreateTextureView(
             id: Id(0, 1, Empty),

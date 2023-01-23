@@ -5,10 +5,10 @@ use crate::{
 
 use super::{conv, descriptor, view};
 use parking_lot::Mutex;
-use std::{ffi, mem, num::NonZeroU32, ptr, slice, sync::Arc};
+use std::{ffi, mem, num::NonZeroU32, ptr, sync::Arc};
 use winapi::{
     shared::{dxgiformat, dxgitype, minwindef::BOOL, winerror},
-    um::{d3d12, d3dcompiler, synchapi, winbase},
+    um::{d3d12, synchapi, winbase},
     Interface,
 };
 
@@ -21,8 +21,17 @@ impl super::Device {
         present_queue: native::CommandQueue,
         private_caps: super::PrivateCapabilities,
         library: &Arc<native::D3D12Lib>,
+        dx12_shader_compiler: wgt::Dx12Compiler,
     ) -> Result<Self, crate::DeviceError> {
         let mem_allocator = super::suballocation::create_allocator_wrapper(&raw)?;
+
+        let dxc_container = match dx12_shader_compiler {
+            wgt::Dx12Compiler::Dxc {
+                dxil_path,
+                dxc_path,
+            } => super::shader_compilation::get_dxc_container(dxc_path, dxil_path)?,
+            wgt::Dx12Compiler::Fxc => None,
+        };
 
         let mut idle_fence = native::Fence::null();
         let hr = unsafe {
@@ -166,6 +175,7 @@ impl super::Device {
             render_doc: Default::default(),
             null_rtv_handle,
             mem_allocator,
+            dxc_container,
         })
     }
 
@@ -192,7 +202,7 @@ impl super::Device {
         stage: &crate::ProgrammableStage<super::Api>,
         layout: &super::PipelineLayout,
         naga_stage: naga::ShaderStage,
-    ) -> Result<native::Blob, crate::PipelineError> {
+    ) -> Result<super::CompiledShader, crate::PipelineError> {
         use naga::back::hlsl;
 
         let stage_bit = crate::auxil::map_naga_stage(naga_stage);
@@ -212,72 +222,44 @@ impl super::Device {
             naga_stage.to_hlsl_str(),
             layout.naga_options.shader_model.to_str()
         );
+
         let ep_index = module
             .entry_points
             .iter()
             .position(|ep| ep.stage == naga_stage && ep.name == stage.entry_point)
             .ok_or(crate::PipelineError::EntryPoint(naga_stage))?;
+
         let raw_ep = reflection_info.entry_point_names[ep_index]
             .as_ref()
-            .map(|name| ffi::CString::new(name.as_str()).unwrap())
             .map_err(|e| crate::PipelineError::Linkage(stage_bit, format!("{}", e)))?;
 
-        let mut shader_data = native::Blob::null();
-        let mut error = native::Blob::null();
-        let mut compile_flags = d3dcompiler::D3DCOMPILE_ENABLE_STRICTNESS;
-        if self
-            .private_caps
-            .instance_flags
-            .contains(crate::InstanceFlags::DEBUG)
-        {
-            compile_flags |=
-                d3dcompiler::D3DCOMPILE_DEBUG | d3dcompiler::D3DCOMPILE_SKIP_OPTIMIZATION;
-        }
+        let source_name = stage
+            .module
+            .raw_name
+            .as_ref()
+            .and_then(|cstr| cstr.to_str().ok())
+            .unwrap_or_default();
 
-        let source_name = match stage.module.raw_name {
-            Some(ref cstr) => cstr.as_c_str().as_ptr(),
-            None => ptr::null(),
-        };
-
-        let hr = unsafe {
-            profiling::scope!("d3dcompiler::D3DCompile");
-            d3dcompiler::D3DCompile(
-                source.as_ptr() as *const _,
-                source.len(),
+        // Compile with DXC if available, otherwise fall back to FXC
+        let (result, log_level) = if let Some(ref dxc_container) = self.dxc_container {
+            super::shader_compilation::compile_dxc(
+                self,
+                &source,
                 source_name,
-                ptr::null(),
-                ptr::null_mut(),
-                raw_ep.as_ptr(),
-                full_stage.as_ptr() as *const i8,
-                compile_flags,
-                0,
-                shader_data.mut_void() as *mut *mut _,
-                error.mut_void() as *mut *mut _,
+                raw_ep,
+                stage_bit,
+                full_stage,
+                dxc_container,
             )
-        };
-
-        let (result, log_level) = match hr.into_result() {
-            Ok(()) => (Ok(shader_data), log::Level::Info),
-            Err(e) => {
-                let mut full_msg = format!("D3DCompile error ({})", e);
-                if !error.is_null() {
-                    use std::fmt::Write as _;
-                    let message = unsafe {
-                        slice::from_raw_parts(
-                            error.GetBufferPointer() as *const u8,
-                            error.GetBufferSize(),
-                        )
-                    };
-                    let _ = write!(full_msg, ": {}", String::from_utf8_lossy(message));
-                    unsafe {
-                        error.destroy();
-                    }
-                }
-                (
-                    Err(crate::PipelineError::Linkage(stage_bit, full_msg)),
-                    log::Level::Warn,
-                )
-            }
+        } else {
+            super::shader_compilation::compile_fxc(
+                self,
+                &source,
+                source_name,
+                &ffi::CString::new(raw_ep.as_str()).unwrap(),
+                stage_bit,
+                full_stage,
+            )
         };
 
         log::log!(
@@ -1078,7 +1060,12 @@ impl crate::Device<super::Api> for super::Device {
             },
             bind_group_infos,
             naga_options: hlsl::Options {
-                shader_model: hlsl::ShaderModel::V5_1,
+                shader_model: match self.dxc_container {
+                    // DXC
+                    Some(_) => hlsl::ShaderModel::V6_0,
+                    // FXC doesn't support SM 6.0
+                    None => hlsl::ShaderModel::V5_1,
+                },
                 binding_map,
                 fake_missing_bindings: false,
                 special_constants_binding,
@@ -1294,9 +1281,9 @@ impl crate::Device<super::Api> for super::Device {
         let blob_fs = match desc.fragment_stage {
             Some(ref stage) => {
                 shader_stages |= wgt::ShaderStages::FRAGMENT;
-                self.load_shader(stage, desc.layout, naga::ShaderStage::Fragment)?
+                Some(self.load_shader(stage, desc.layout, naga::ShaderStage::Fragment)?)
             }
-            None => native::Blob::null(),
+            None => None,
         };
 
         let mut vertex_strides = [None; crate::MAX_VERTEX_BUFFERS];
@@ -1369,11 +1356,10 @@ impl crate::Device<super::Api> for super::Device {
 
         let raw_desc = d3d12::D3D12_GRAPHICS_PIPELINE_STATE_DESC {
             pRootSignature: desc.layout.shared.signature.as_mut_ptr(),
-            VS: *native::Shader::from_blob(blob_vs),
-            PS: if blob_fs.is_null() {
-                *native::Shader::null()
-            } else {
-                *native::Shader::from_blob(blob_fs)
+            VS: *blob_vs.create_native_shader(),
+            PS: match blob_fs {
+                Some(ref shader) => *shader.create_native_shader(),
+                None => *native::Shader::null(),
             },
             GS: *native::Shader::null(),
             DS: *native::Shader::null(),
@@ -1445,9 +1431,9 @@ impl crate::Device<super::Api> for super::Device {
         };
 
         unsafe { blob_vs.destroy() };
-        if !blob_fs.is_null() {
+        if let Some(blob_fs) = blob_fs {
             unsafe { blob_fs.destroy() };
-        }
+        };
 
         hr.into_result()
             .map_err(|err| crate::PipelineError::Linkage(shader_stages, err.into_owned()))?;
@@ -1478,7 +1464,7 @@ impl crate::Device<super::Api> for super::Device {
             profiling::scope!("ID3D12Device::CreateComputePipelineState");
             self.raw.create_compute_pipeline_state(
                 desc.layout.shared.signature,
-                native::Shader::from_blob(blob_cs),
+                blob_cs.create_native_shader(),
                 0,
                 native::CachedPSO::null(),
                 native::PipelineStateFlags::empty(),

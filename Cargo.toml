@@ -39,7 +39,7 @@ path = "./wgpu-hal"
 
 [workspace.dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-rev = "e7fc8e6"
+rev = "1be8024"
 version = "0.10"
 
 [workspace.dependencies]
@@ -90,7 +90,7 @@ objc = "0.2.5"
 core-graphics-types = "0.1"
 
 # Vulkan dependencies
-ash = "0.37.1"
+ash = "0.37.2"
 gpu-alloc = "0.5"
 gpu-descriptor = "0.2"
 android_system_properties = "0.1.1"
@@ -101,6 +101,7 @@ gpu-allocator = { version = "0.21", default_features = false, features = ["d3d12
 native = { package = "d3d12", version = "0.5.0" }
 range-alloc = "0.1"
 winapi = "0.3"
+hassle-rs = "0.9.0"
 
 # Gles dependencies
 egl = { package = "khronos-egl", version = "4.1" }
@@ -119,11 +120,11 @@ wasm-bindgen-test = "0.3"
 web-sys = "0.3.60"
 
 # deno dependencies
-deno_console = "0.80.0"
-deno_core = "0.162.0"
-deno_url = "0.80.0"
-deno_web = "0.111.0"
-deno_webidl = "0.80.0"
+deno_console = "0.84.0"
+deno_core = "0.166.0"
+deno_url = "0.84.0"
+deno_web = "0.115.0"
+deno_webidl = "0.84.0"
 deno_webgpu = { path = "./deno_webgpu" }
 tokio = "1.19.0"
 termcolor = "1.1.2"

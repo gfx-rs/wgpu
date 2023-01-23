@@ -18,6 +18,7 @@ mod resource_descriptor_accessor;
 mod resource_error;
 mod shader;
 mod shader_primitive_index;
+mod shader_view_format;
 mod texture_bounds;
 mod transfer;
 mod vertex_indices;

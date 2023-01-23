@@ -71,7 +71,7 @@ async fn run() -> Result<(), AnyError> {
 }
 
 fn extension() -> deno_core::Extension {
-    deno_core::Extension::builder()
+    deno_core::Extension::builder("bootstrap")
         .ops(vec![
             op_exit::decl(),
             op_read_file_sync::decl(),
