@@ -1,4 +1,4 @@
-let constant: i32 = 10;
+const constant: i32 = 10;
 
 fn function() -> f32 {
     return 0.0;

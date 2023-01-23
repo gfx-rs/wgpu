@@ -2,7 +2,7 @@ struct Data {
     vecs: array<vec4<f32>,42u>,
 }
 
-let NUM_VECS: i32 = 42;
+const NUM_VECS: i32 = 42;
 
 @group(1) @binding(0) 
 var<uniform> global: Data;

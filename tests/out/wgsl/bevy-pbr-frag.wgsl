@@ -48,11 +48,11 @@ struct FragmentOutput {
     @location(0) o_Target: vec4<f32>,
 }
 
-let MAX_POINT_LIGHTS: i32 = 10;
+const MAX_POINT_LIGHTS: i32 = 10;
 
-let MAX_DIRECTIONAL_LIGHTS: i32 = 1;
+const MAX_DIRECTIONAL_LIGHTS: i32 = 1;
 
-let PI: f32 = 3.1415927410125732;
+const PI: f32 = 3.1415927410125732;
 
 var<private> v_WorldPosition_1: vec3<f32>;
 var<private> v_WorldNormal_1: vec3<f32>;
