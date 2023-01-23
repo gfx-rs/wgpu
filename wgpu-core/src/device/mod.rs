@@ -852,7 +852,7 @@ impl<A: HalApi> Device<A> {
             ));
         }
 
-        let mut allow_different_view_format = false;
+        let mut hal_view_formats = vec![];
         for format in desc.view_formats.iter() {
             if desc.format == *format {
                 continue;
@@ -860,7 +860,7 @@ impl<A: HalApi> Device<A> {
             if desc.format.remove_srgb_suffix() != format.remove_srgb_suffix() {
                 return Err(CreateTextureError::InvalidViewFormat(*format, desc.format));
             }
-            allow_different_view_format = true;
+            hal_view_formats.push(*format);
         }
 
         // Enforce having COPY_DST/DEPTH_STENCIL_WRIT/COLOR_TARGET otherwise we
@@ -893,7 +893,7 @@ impl<A: HalApi> Device<A> {
             format: desc.format,
             usage: hal_usage,
             memory_flags: hal::MemoryFlags::empty(),
-            allow_different_view_format,
+            view_formats: hal_view_formats,
         };
 
         let raw_texture = unsafe {
