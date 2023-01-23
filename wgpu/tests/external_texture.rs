@@ -267,6 +267,7 @@ async fn image_bitmap_import() {
                     usage: wgpu::TextureUsages::RENDER_ATTACHMENT
                         | wgpu::TextureUsages::COPY_DST
                         | wgpu::TextureUsages::COPY_SRC,
+                    view_formats: &[],
                 });
 
                 fail_if(&ctx.device, !valid, || {
