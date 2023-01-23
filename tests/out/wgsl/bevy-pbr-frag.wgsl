@@ -48,6 +48,12 @@ struct FragmentOutput {
     @location(0) o_Target: vec4<f32>,
 }
 
+let MAX_POINT_LIGHTS: i32 = 10;
+
+let MAX_DIRECTIONAL_LIGHTS: i32 = 1;
+
+let PI: f32 = 3.1415927410125732;
+
 var<private> v_WorldPosition_1: vec3<f32>;
 var<private> v_WorldNormal_1: vec3<f32>;
 var<private> v_Uv_1: vec2<f32>;
@@ -188,7 +194,7 @@ fn D_GGX(roughness: f32, NoH: f32, h: vec3<f32>) -> f32 {
     k = (_e55 / (_e56 + (_e57 * _e58)));
     let _e63 = k;
     let _e64 = k;
-    d = ((_e63 * _e64) * (1.0 / 3.1415927410125732));
+    d = ((_e63 * _e64) * (1.0 / PI));
     let _e70 = d;
     return _e70;
 }
@@ -441,7 +447,7 @@ fn Fd_Burley(roughness_6: f32, NoV_4: f32, NoL_4: f32, LoH_4: f32) -> f32 {
     viewScatter = _e72;
     let _e74 = lightScatter;
     let _e75 = viewScatter;
-    return ((_e74 * _e75) * (1.0 / 3.1415927410125732));
+    return ((_e74 * _e75) * (1.0 / PI));
 }
 
 fn EnvBRDFApprox(f0_7: vec3<f32>, perceptual_roughness: f32, NoV_6: f32) -> vec3<f32> {
@@ -1193,7 +1199,7 @@ fn main_1() {
         let _e227 = i;
         let _e228 = global_2.NumLights;
         let _e232 = i;
-        if !(((_e227 < i32(_e228.x)) && (_e232 < 10))) {
+        if !(((_e227 < i32(_e228.x)) && (_e232 < MAX_POINT_LIGHTS))) {
             break;
         }
         {
@@ -1229,7 +1235,7 @@ fn main_1() {
         let _e264 = i_1;
         let _e265 = global_2.NumLights;
         let _e269 = i_1;
-        if !(((_e264 < i32(_e265.y)) && (_e269 < 1))) {
+        if !(((_e264 < i32(_e265.y)) && (_e269 < MAX_DIRECTIONAL_LIGHTS))) {
             break;
         }
         {

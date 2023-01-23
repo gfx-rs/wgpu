@@ -214,6 +214,10 @@ bitflags::bitflags! {
         /// Supports GL_EXT_texture_shadow_lod on the host, which provides
         /// additional functions on shadows and arrays of shadows.
         const TEXTURE_SHADOW_LOD = 0x2;
+        /// Include unused global variables, constants and functions. By default the output will exclude
+        /// global variables that are not used in the specified entrypoint (including indirect use),
+        /// all constant declarations, and functions that use excluded global variables.
+        const INCLUDE_UNUSED_ITEMS = 0x4;
     }
 }
 
@@ -599,11 +603,17 @@ impl<'a, W: Write> Writer<'a, W> {
 
         // Write the globals
         //
-        // We filter all globals that aren't used by the selected entry point as they might be
+        // Unless explicitly disabled with WriterFlags::INCLUDE_UNUSED_ITEMS,
+        // we filter all globals that aren't used by the selected entry point as they might be
         // interfere with each other (i.e. two globals with the same location but different with
         // different classes)
+        let include_unused = self
+            .options
+            .writer_flags
+            .contains(WriterFlags::INCLUDE_UNUSED_ITEMS);
         for (handle, global) in self.module.global_variables.iter() {
-            if ep_info[handle].is_empty() {
+            let is_unused = ep_info[handle].is_empty();
+            if !include_unused && is_unused {
                 continue;
             }
 
@@ -679,11 +689,34 @@ impl<'a, W: Write> Writer<'a, W> {
                 TypeInner::Sampler { .. } => continue,
                 // All other globals are written by `write_global`
                 _ => {
-                    if !ep_info[handle].is_empty() {
-                        self.write_global(handle, global)?;
-                        // Add a newline (only for readability)
-                        writeln!(self.out)?;
-                    }
+                    self.write_global(handle, global)?;
+                    // Add a newline (only for readability)
+                    writeln!(self.out)?;
+                }
+            }
+        }
+
+        if include_unused {
+            // write named constants
+            for (handle, constant) in self.module.constants.iter() {
+                if let Some(name) = constant.name.as_ref() {
+                    write!(self.out, "const ")?;
+                    match constant.inner {
+                        crate::ConstantInner::Scalar { width, value } => {
+                            // create a TypeInner to write
+                            let inner = TypeInner::Scalar {
+                                width,
+                                kind: value.scalar_kind(),
+                            };
+                            self.write_value_type(&inner)?;
+                        }
+                        crate::ConstantInner::Composite { ty, .. } => {
+                            self.write_type(ty)?;
+                        }
+                    };
+                    write!(self.out, " {} = ", name)?;
+                    self.write_constant(handle)?;
+                    writeln!(self.out, ";")?;
                 }
             }
         }
@@ -700,7 +733,7 @@ impl<'a, W: Write> Writer<'a, W> {
         for (handle, function) in self.module.functions.iter() {
             // Check that the function doesn't use globals that aren't supported
             // by the current entry point
-            if !ep_info.dominates_global_use(&self.info[handle]) {
+            if !include_unused && !ep_info.dominates_global_use(&self.info[handle]) {
                 continue;
             }
 

@@ -2,6 +2,8 @@ struct Data {
     vecs: array<vec4<f32>,42u>,
 }
 
+let NUM_VECS: i32 = 42;
+
 @group(1) @binding(0) 
 var<uniform> global: Data;
 
@@ -13,7 +15,7 @@ fn function() -> vec4<f32> {
     i = 0;
     loop {
         let _e9 = i;
-        if !((_e9 < 42)) {
+        if !((_e9 < NUM_VECS)) {
             break;
         }
         {

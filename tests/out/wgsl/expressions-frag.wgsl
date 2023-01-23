@@ -14,6 +14,7 @@ struct FragmentOutput {
     @location(0) o_color: vec4<f32>,
 }
 
+let strct: TestStruct = TestStruct(array<vec4<u32>,2u>(vec4<u32>(0u, 0u, 0u, 0u), vec4<u32>(1u, 1u, 1u, 1u)));
 var<private> global: f32;
 @group(0) @binding(0) 
 var<storage, read_write> global_1: a_buf;
