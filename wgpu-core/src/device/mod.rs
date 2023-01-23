@@ -5337,7 +5337,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 }
             };
 
-            let mut hal_view_formats = vec![config.format];
+            let mut hal_view_formats = vec![];
             for format in config.view_formats.iter() {
                 if *format == config.format {
                     continue;

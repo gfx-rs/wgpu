@@ -547,13 +547,13 @@ impl super::Device {
             vk::ColorSpaceKHR::SRGB_NONLINEAR
         };
 
+        let original_format = self.shared.private_caps.map_texture_format(config.format);
         let mut raw_flags = vk::SwapchainCreateFlagsKHR::empty();
         let mut raw_view_formats: Vec<vk::Format> = vec![];
-        if config.view_formats.len() > 1
-            && (self.shared_instance().driver_api_version >= vk::API_VERSION_1_2
-                || self
-                    .enabled_device_extensions()
-                    .contains(&vk::KhrImageFormatListFn::name()))
+        if !config.view_formats.is_empty()
+            && self
+                .enabled_device_extensions()
+                .contains(&vk::KhrSwapchainMutableFormatFn::name())
         {
             raw_flags |= vk::SwapchainCreateFlagsKHR::MUTABLE_FORMAT;
             raw_view_formats = config
@@ -561,13 +561,14 @@ impl super::Device {
                 .iter()
                 .map(|f| self.shared.private_caps.map_texture_format(*f))
                 .collect();
+            raw_view_formats.push(original_format);
         }
 
         let mut info = vk::SwapchainCreateInfoKHR::builder()
             .flags(raw_flags)
             .surface(surface.raw)
             .min_image_count(config.swap_chain_size)
-            .image_format(self.shared.private_caps.map_texture_format(config.format))
+            .image_format(original_format)
             .image_color_space(color_space)
             .image_extent(vk::Extent2D {
                 width: config.extent.width,
