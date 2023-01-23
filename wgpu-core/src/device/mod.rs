@@ -852,7 +852,7 @@ impl<A: HalApi> Device<A> {
             ));
         }
 
-        let mut hal_view_formats = vec![desc.format];
+        let mut hal_view_formats = vec![];
         for format in desc.view_formats.iter() {
             if desc.format == *format {
                 continue;

@@ -895,8 +895,9 @@ impl crate::Device<super::Api> for super::Device {
             raw_flags |= vk::ImageCreateFlags::CUBE_COMPATIBLE;
         }
 
+        let original_format = self.shared.private_caps.map_texture_format(desc.format);
         let mut hal_view_formats: Vec<vk::Format> = vec![];
-        if !desc.view_formats.len() > 1 {
+        if !desc.view_formats.is_empty() {
             raw_flags |= vk::ImageCreateFlags::MUTABLE_FORMAT;
             if self.shared_instance().driver_api_version >= vk::API_VERSION_1_2
                 || self
@@ -908,13 +909,14 @@ impl crate::Device<super::Api> for super::Device {
                     .iter()
                     .map(|f| self.shared.private_caps.map_texture_format(*f))
                     .collect();
+                hal_view_formats.push(original_format)
             }
         }
 
         let mut vk_info = vk::ImageCreateInfo::builder()
             .flags(raw_flags)
             .image_type(conv::map_texture_dimension(desc.dimension))
-            .format(self.shared.private_caps.map_texture_format(desc.format))
+            .format(original_format)
             .extent(vk::Extent3D {
                 width: copy_size.width,
                 height: copy_size.height,
