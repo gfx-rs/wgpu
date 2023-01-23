@@ -398,7 +398,7 @@ pub trait CommandEncoder<A: Api>: Send + Sync + fmt::Debug {
     where
         T: Iterator<Item = BufferCopy>;
 
-    /// Copy from an external image to an internal textureanother.
+    /// Copy from an external image to an internal texture.
     /// Works with a single array layer.
     /// Note: `dst` current usage has to be `TextureUses::COPY_DST`.
     /// Note: the copy extent is in physical size (rounded to the block size)
