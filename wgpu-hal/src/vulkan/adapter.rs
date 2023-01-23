@@ -644,13 +644,9 @@ impl PhysicalDeviceCapabilities {
             }
         }
 
-        if self.effective_api_version >= vk::API_VERSION_1_2
-            || self.supports_extension(vk::KhrImageFormatListFn::name())
-        {
-            // Optional `VK_KHR_swapchain_mutable_format`
-            if self.supports_extension(vk::KhrSwapchainMutableFormatFn::name()) {
-                extensions.push(vk::KhrSwapchainMutableFormatFn::name());
-            }
+        // Optional `VK_KHR_swapchain_mutable_format`
+        if self.supports_extension(vk::KhrSwapchainMutableFormatFn::name()) {
+            extensions.push(vk::KhrSwapchainMutableFormatFn::name());
         }
 
         // Optional `VK_EXT_robustness2`
