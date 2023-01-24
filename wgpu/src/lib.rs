@@ -35,17 +35,25 @@ pub use wgt::{
     CommandBufferDescriptor, CompareFunction, CompositeAlphaMode, DepthBiasState,
     DepthStencilState, DeviceType, DownlevelCapabilities, DownlevelFlags, Dx12Compiler,
     DynamicOffset, Extent3d, Face, Features, FilterMode, FrontFace, ImageDataLayout,
-    ImageSubresourceRange, IndexFormat, InstanceDescriptor, Limits, MultisampleState, Origin3d,
-    PipelineStatisticsTypes, PolygonMode, PowerPreference, PresentMode, PresentationTimestamp,
-    PrimitiveState, PrimitiveTopology, PushConstantRange, QueryType, RenderBundleDepthStencil,
-    SamplerBindingType, SamplerBorderColor, ShaderLocation, ShaderModel, ShaderStages,
-    StencilFaceState, StencilOperation, StencilState, StorageTextureAccess, SurfaceCapabilities,
-    SurfaceConfiguration, SurfaceStatus, TextureAspect, TextureDimension, TextureFormat,
-    TextureFormatFeatureFlags, TextureFormatFeatures, TextureSampleType, TextureUsages,
-    TextureViewDimension, VertexAttribute, VertexFormat, VertexStepMode, COPY_BUFFER_ALIGNMENT,
-    COPY_BYTES_PER_ROW_ALIGNMENT, MAP_ALIGNMENT, PUSH_CONSTANT_ALIGNMENT,
-    QUERY_RESOLVE_BUFFER_ALIGNMENT, QUERY_SET_MAX_QUERIES, QUERY_SIZE, VERTEX_STRIDE_ALIGNMENT,
+    ImageSubresourceRange, IndexFormat, InstanceDescriptor, Limits, MultisampleState, Origin2d,
+    Origin3d, PipelineStatisticsTypes, PolygonMode, PowerPreference, PredefinedColorSpace,
+    PresentMode, PresentationTimestamp, PrimitiveState, PrimitiveTopology, PushConstantRange,
+    QueryType, RenderBundleDepthStencil, SamplerBindingType, SamplerBorderColor, ShaderLocation,
+    ShaderModel, ShaderStages, StencilFaceState, StencilOperation, StencilState,
+    StorageTextureAccess, SurfaceCapabilities, SurfaceConfiguration, SurfaceStatus, TextureAspect,
+    TextureDimension, TextureFormat, TextureFormatFeatureFlags, TextureFormatFeatures,
+    TextureSampleType, TextureUsages, TextureViewDimension, VertexAttribute, VertexFormat,
+    VertexStepMode, COPY_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT, MAP_ALIGNMENT,
+    PUSH_CONSTANT_ALIGNMENT, QUERY_RESOLVE_BUFFER_ALIGNMENT, QUERY_SET_MAX_QUERIES, QUERY_SIZE,
+    VERTEX_STRIDE_ALIGNMENT,
 };
+
+// wasm-only types, we try to keep as many types non-platform
+// specific, but these need to depend on web-sys.
+#[cfg(all(target_arch = "wasm32", not(feature = "emscripten")))]
+pub use wgt::{ExternalImageSource, ImageCopyExternalImage};
+#[cfg(all(target_arch = "wasm32", not(feature = "emscripten")))]
+static_assertions::assert_impl_all!(ExternalImageSource: Send, Sync);
 
 /// Filter for error scopes.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd)]
@@ -60,7 +68,7 @@ static_assertions::assert_impl_all!(ErrorFilter: Send, Sync);
 type C = dyn DynContext;
 type Data = dyn Any + Send + Sync;
 
-/// Context for all other wgpu objects. Instan ce of wgpu.
+/// Context for all other wgpu objects. Instance of wgpu.
 ///
 /// This is the first thing you create when using wgpu.
 /// Its primary use is to create [`Adapter`]s and [`Surface`]s.
@@ -1199,6 +1207,15 @@ pub use wgt::ImageCopyTexture as ImageCopyTextureBase;
 /// Corresponds to [WebGPU `GPUImageCopyTexture`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpuimagecopytexture).
 pub type ImageCopyTexture<'a> = ImageCopyTextureBase<&'a Texture>;
+static_assertions::assert_impl_all!(ImageCopyTexture: Send, Sync);
+
+pub use wgt::ImageCopyTextureTagged as ImageCopyTextureTaggedBase;
+/// View of a texture which can be used to copy to a texture, including
+/// color space and alpha premultiplication information.
+///
+/// Corresponds to [WebGPU `GPUImageCopyTextureTagged`](
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpuimagecopytexturetagged).
+pub type ImageCopyTextureTagged<'a> = ImageCopyTextureTaggedBase<&'a Texture>;
 static_assertions::assert_impl_all!(ImageCopyTexture: Send, Sync);
 
 /// Describes a [`BindGroupLayout`].
@@ -3949,18 +3966,21 @@ impl Queue {
     }
 
     /// Schedule a copy of data from `image` into `texture`.
-    #[cfg(all(target_arch = "wasm32", not(feature = "webgl")))]
+    #[cfg(all(target_arch = "wasm32", not(feature = "emscripten")))]
     pub fn copy_external_image_to_texture(
         &self,
-        image: &web_sys::ImageBitmap,
-        texture: ImageCopyTexture,
+        source: &wgt::ImageCopyExternalImage,
+        dest: ImageCopyTextureTagged,
         size: Extent3d,
     ) {
-        self.context
-            .as_any()
-            .downcast_ref::<crate::backend::Context>()
-            .unwrap()
-            .queue_copy_external_image_to_texture(&self.id.into(), image, texture, size)
+        DynContext::queue_copy_external_image_to_texture(
+            &*self.context,
+            &self.id,
+            self.data.as_ref(),
+            source,
+            dest,
+            size,
+        )
     }
 
     /// Submits a series of finished command buffers for execution.

@@ -97,7 +97,8 @@ impl super::Adapter {
             | wgt::Features::ADDRESS_MODE_CLAMP_TO_ZERO;
         let mut downlevel = wgt::DownlevelFlags::BASE_VERTEX
             | wgt::DownlevelFlags::READ_ONLY_DEPTH_STENCIL
-            | wgt::DownlevelFlags::UNRESTRICTED_INDEX_BUFFER;
+            | wgt::DownlevelFlags::UNRESTRICTED_INDEX_BUFFER
+            | wgt::DownlevelFlags::UNRESTRICTED_EXTERNAL_TEXTURE_COPIES;
 
         // Features from queries
         downlevel.set(

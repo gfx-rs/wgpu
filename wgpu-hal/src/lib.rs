@@ -395,6 +395,20 @@ pub trait CommandEncoder<A: Api>: Send + Sync + fmt::Debug {
     where
         T: Iterator<Item = BufferCopy>;
 
+    /// Copy from an external image to an internal texture.
+    /// Works with a single array layer.
+    /// Note: `dst` current usage has to be `TextureUses::COPY_DST`.
+    /// Note: the copy extent is in physical size (rounded to the block size)
+    #[cfg(all(target_arch = "wasm32", not(feature = "emscripten")))]
+    unsafe fn copy_external_image_to_texture<T>(
+        &mut self,
+        src: &wgt::ImageCopyExternalImage,
+        dst: &A::Texture,
+        dst_premultiplication: bool,
+        regions: T,
+    ) where
+        T: Iterator<Item = TextureCopy>;
+
     /// Copy from one texture to another.
     /// Works with a single array layer.
     /// Note: `dst` current usage has to be `TextureUses::COPY_DST`.

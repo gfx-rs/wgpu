@@ -561,6 +561,15 @@ pub trait Context: Debug + Send + Sized + Sync {
         data_layout: ImageDataLayout,
         size: Extent3d,
     );
+    #[cfg(all(target_arch = "wasm32", not(feature = "emscripten")))]
+    fn queue_copy_external_image_to_texture(
+        &self,
+        queue: &Self::QueueId,
+        queue_data: &Self::QueueData,
+        source: &wgt::ImageCopyExternalImage,
+        dest: crate::ImageCopyTextureTagged,
+        size: wgt::Extent3d,
+    );
     fn queue_submit<I: Iterator<Item = Self::CommandBufferId>>(
         &self,
         queue: &Self::QueueId,
@@ -1478,6 +1487,15 @@ pub(crate) trait DynContext: Debug + Send + Sync {
         data: &[u8],
         data_layout: ImageDataLayout,
         size: Extent3d,
+    );
+    #[cfg(all(target_arch = "wasm32", not(feature = "emscripten")))]
+    fn queue_copy_external_image_to_texture(
+        &self,
+        queue: &ObjectId,
+        queue_data: &crate::Data,
+        source: &wgt::ImageCopyExternalImage,
+        dest: crate::ImageCopyTextureTagged,
+        size: wgt::Extent3d,
     );
     fn queue_submit<'a>(
         &self,
@@ -2864,6 +2882,20 @@ where
         let queue = <T::QueueId>::from(*queue);
         let queue_data = downcast_ref(queue_data);
         Context::queue_write_texture(self, &queue, queue_data, texture, data, data_layout, size)
+    }
+
+    #[cfg(all(target_arch = "wasm32", not(feature = "emscripten")))]
+    fn queue_copy_external_image_to_texture(
+        &self,
+        queue: &ObjectId,
+        queue_data: &crate::Data,
+        source: &wgt::ImageCopyExternalImage,
+        dest: crate::ImageCopyTextureTagged,
+        size: wgt::Extent3d,
+    ) {
+        let queue = <T::QueueId>::from(*queue);
+        let queue_data = downcast_ref(queue_data);
+        Context::queue_copy_external_image_to_texture(self, &queue, queue_data, source, dest, size)
     }
 
     fn queue_submit<'a>(
