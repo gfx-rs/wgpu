@@ -105,7 +105,6 @@ fn write_texture_subset_2d() {
 fn write_texture_subset_3d() {
     let size = 256;
     let depth = 4;
-    let parameters = TestParameters::default().backend_failure(wgpu::Backends::DX12);
     initialize_test(parameters, |ctx| {
         let tex = ctx.device.create_texture(&wgpu::TextureDescriptor {
             label: None,
