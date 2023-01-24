@@ -104,9 +104,7 @@ hassle-rs = "0.9.0"
 
 # Gles dependencies
 egl = { package = "khronos-egl", version = "4.1" }
-# glow = { version = "0.11.2", optional = true }
-# TODO: New glow release
-glow = { git = "https://github.com/grovesNL/glow", rev = "c8a011fcd57a5c68cc917ed394baa484bdefc909" }
+glow = "0.12.0"
 glutin = "0.29.1"
 
 # wasm32 dependencies
