@@ -15,7 +15,7 @@ use std::borrow::Borrow;
 use crate::device::trace::Action;
 use crate::{
     conv,
-    device::DeviceError,
+    device::{DeviceError, MissingDownlevelFlags},
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Input, Token},
     id::{DeviceId, SurfaceId, TextureId, Valid},
     init_tracker::TextureInitTracker,
@@ -66,6 +66,8 @@ pub enum ConfigureSurfaceError {
     InvalidSurface,
     #[error("The view format {0:?} is not compatible with texture format {1:?}, only changing srgb-ness is allowed.")]
     InvalidViewFormat(wgt::TextureFormat, wgt::TextureFormat),
+    #[error(transparent)]
+    MissingDownlevelFlags(#[from] MissingDownlevelFlags),
     #[error("`SurfaceOutput` must be dropped before a new `Surface` is made")]
     PreviousOutputExists,
     #[error("Both `Surface` width and height must be non-zero. Wait to recreate the `Surface` until the window has non-zero area.")]

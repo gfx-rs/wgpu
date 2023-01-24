@@ -5354,6 +5354,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 hal_view_formats.push(*format);
             }
 
+            if !hal_view_formats.is_empty() {
+                if let Err(missing_flag) = device
+                    .require_downlevel_flags(wgt::DownlevelFlags::SURFACE_CONFIGURE_VIEW_FORMATS)
+                {
+                    break 'outter E::MissingDownlevelFlags(missing_flag);
+                }
+            }
+
             let num_frames = present::DESIRED_NUM_FRAMES
                 .clamp(*caps.swap_chain_sizes.start(), *caps.swap_chain_sizes.end());
             let mut hal_config = hal::SurfaceConfiguration {
