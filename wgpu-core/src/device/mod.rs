@@ -2997,11 +2997,19 @@ impl<A: HalApi> Device<A> {
             self.require_features(wgt::Features::MULTIVIEW)?;
         }
 
-        for size in shader_binding_sizes.values() {
-            if size.get() % 16 != 0 {
-                self.require_downlevel_flags(
-                    wgt::DownlevelFlags::BUFFER_BINDINGS_NOT_16_BYTE_ALIGNED,
-                )?;
+        if !self
+            .downlevel
+            .flags
+            .contains(wgt::DownlevelFlags::BUFFER_BINDINGS_NOT_16_BYTE_ALIGNED)
+        {
+            for (binding, size) in shader_binding_sizes.iter() {
+                if size.get() % 16 != 0 {
+                    return Err(pipeline::CreateRenderPipelineError::UnalignedShader {
+                        binding: binding.binding,
+                        group: binding.group,
+                        size: size.get(),
+                    });
+                }
             }
         }
 
