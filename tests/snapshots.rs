@@ -490,7 +490,13 @@ fn convert_wgsl() {
         ),
         (
             "access",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
+            Targets::SPIRV
+                | Targets::METAL
+                | Targets::GLSL
+                | Targets::HLSL
+                | Targets::WGSL
+                | Targets::IR
+                | Targets::ANALYSIS,
         ),
         ("atomicCompareExchange", Targets::SPIRV | Targets::WGSL),
         (

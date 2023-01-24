@@ -408,7 +408,7 @@ impl super::Validator {
                     Err(e) => Err(e),
                 };
 
-                let sized_flag = match size {
+                let type_info_mask = match size {
                     crate::ArraySize::Constant(const_handle) => {
                         let constant = &constants[const_handle];
                         let length_is_positive = match *constant {
@@ -455,19 +455,23 @@ impl super::Validator {
                             return Err(TypeError::NonPositiveArrayLength(const_handle));
                         }
 
-                        TypeFlags::SIZED | TypeFlags::ARGUMENT | TypeFlags::CONSTRUCTIBLE
+                        TypeFlags::DATA
+                            | TypeFlags::SIZED
+                            | TypeFlags::COPY
+                            | TypeFlags::HOST_SHAREABLE
+                            | TypeFlags::ARGUMENT
+                            | TypeFlags::CONSTRUCTIBLE
                     }
                     crate::ArraySize::Dynamic => {
                         // Non-SIZED types may only appear as the last element of a structure.
                         // This is enforced by checks for SIZED-ness for all compound types,
                         // and a special case for structs.
-                        TypeFlags::empty()
+                        TypeFlags::DATA | TypeFlags::COPY | TypeFlags::HOST_SHAREABLE
                     }
                 };
 
-                let base_mask = TypeFlags::COPY | TypeFlags::HOST_SHAREABLE;
                 TypeInfo {
-                    flags: TypeFlags::DATA | (base_info.flags & base_mask) | sized_flag,
+                    flags: base_info.flags & type_info_mask,
                     uniform_layout,
                     storage_layout,
                 }

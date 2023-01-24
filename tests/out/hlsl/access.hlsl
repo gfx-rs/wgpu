@@ -261,9 +261,9 @@ float4 foo_vert(uint vi : SV_VertexID) : SV_Position
     test_matrix_within_struct_accesses();
     test_matrix_within_array_within_struct_accesses();
     float4x3 _matrix = float4x3(asfloat(bar.Load3(0+0)), asfloat(bar.Load3(0+16)), asfloat(bar.Load3(0+32)), asfloat(bar.Load3(0+48)));
-    uint2 arr[2] = {asuint(bar.Load2(104+0)), asuint(bar.Load2(104+8))};
+    uint2 arr[2] = {asuint(bar.Load2(144+0)), asuint(bar.Load2(144+8))};
     float b = asfloat(bar.Load(0+48+0));
-    int a_1 = asint(bar.Load(0+(((NagaBufferLengthRW(bar) - 120) / 8) - 2u)*8+120));
+    int a_1 = asint(bar.Load(0+(((NagaBufferLengthRW(bar) - 160) / 8) - 2u)*8+160));
     int2 c = asint(qux.Load2(0));
     const float _e34 = read_from_private(foo);
     c2_ = Constructarray5_int_(a_1, int(b), 3, 4, 5);
@@ -291,10 +291,10 @@ float4 foo_frag() : SV_Target0
     }
     {
         uint2 _value2[2] = Constructarray2_uint2_((0u).xx, (1u).xx);
-        bar.Store2(104+0, asuint(_value2[0]));
-        bar.Store2(104+8, asuint(_value2[1]));
+        bar.Store2(144+0, asuint(_value2[0]));
+        bar.Store2(144+8, asuint(_value2[1]));
     }
-    bar.Store(0+8+120, asuint(1));
+    bar.Store(0+8+160, asuint(1));
     qux.Store2(0, asuint(int2(0, 0)));
     return (0.0).xxxx;
 }

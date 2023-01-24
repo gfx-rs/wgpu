@@ -23,6 +23,7 @@ layout(std430) buffer Bar_block_0Compute {
     mat4x3 _matrix;
     mat2x2 matrix_array[2];
     int atom;
+    int atom_arr[10];
     uvec2 arr[2];
     AlignedWrapper data[];
 } _group_0_binding_0_cs;

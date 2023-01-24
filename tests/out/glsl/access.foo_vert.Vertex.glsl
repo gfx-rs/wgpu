@@ -21,13 +21,14 @@ layout(std430) buffer Bar_block_0Vertex {
     mat4x3 _matrix;
     mat2x2 matrix_array[2];
     int atom;
+    int atom_arr[10];
     uvec2 arr[2];
     AlignedWrapper data[];
 } _group_0_binding_0_vs;
 
 uniform Baz_block_1Vertex { Baz _group_0_binding_1_vs; };
 
-layout(std430) buffer type_11_block_2Vertex { ivec2 _group_0_binding_2_vs; };
+layout(std430) buffer type_12_block_2Vertex { ivec2 _group_0_binding_2_vs; };
 
 uniform MatCx2InArray_block_3Vertex { MatCx2InArray _group_0_binding_3_vs; };
 

@@ -16,6 +16,7 @@ struct Bar {
 	_matrix: mat4x3<f32>,
 	matrix_array: array<mat2x2<f32>, 2>,
 	atom: atomic<i32>,
+	atom_arr: array<atomic<i32>, 10>,
 	arr: array<vec2<u32>, 2>,
 	data: array<AlignedWrapper>,
 }

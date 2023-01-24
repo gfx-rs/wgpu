@@ -21,11 +21,12 @@ layout(std430) buffer Bar_block_0Fragment {
     mat4x3 _matrix;
     mat2x2 matrix_array[2];
     int atom;
+    int atom_arr[10];
     uvec2 arr[2];
     AlignedWrapper data[];
 } _group_0_binding_0_fs;
 
-layout(std430) buffer type_11_block_1Fragment { ivec2 _group_0_binding_2_fs; };
+layout(std430) buffer type_12_block_1Fragment { ivec2 _group_0_binding_2_fs; };
 
 layout(location = 0) out vec4 _fs2p_location0;
 
