@@ -2580,6 +2580,29 @@ impl TextureFormat {
             _ => *self,
         }
     }
+
+    /// Adds an `Srgb` suffix to the given texture format, if the format supports it.
+    pub fn add_srgb_suffix(&self) -> TextureFormat {
+        match *self {
+            Self::Rgba8Unorm => Self::Rgba8UnormSrgb,
+            Self::Bgra8Unorm => Self::Bgra8UnormSrgb,
+            Self::Bc1RgbaUnorm => Self::Bc1RgbaUnormSrgb,
+            Self::Bc2RgbaUnorm => Self::Bc2RgbaUnormSrgb,
+            Self::Bc3RgbaUnorm => Self::Bc3RgbaUnormSrgb,
+            Self::Bc7RgbaUnorm => Self::Bc7RgbaUnormSrgb,
+            Self::Etc2Rgb8Unorm => Self::Etc2Rgb8UnormSrgb,
+            Self::Etc2Rgb8A1Unorm => Self::Etc2Rgb8A1UnormSrgb,
+            Self::Etc2Rgba8Unorm => Self::Etc2Rgba8UnormSrgb,
+            Self::Astc {
+                block,
+                channel: AstcChannel::Unorm,
+            } => Self::Astc {
+                block,
+                channel: AstcChannel::UnormSrgb,
+            },
+            _ => *self,
+        }
+    }
 }
 
 #[test]
