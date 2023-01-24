@@ -100,7 +100,6 @@ fn write_texture_subset_2d() {
     });
 }
 
-
 #[test]
 #[wasm_bindgen_test]
 fn write_texture_subset_3d() {
@@ -124,7 +123,7 @@ fn write_texture_subset_3d() {
             sample_count: 1,
             view_formats: &[],
         });
-        let data = vec![1u8; (size*size) as usize * 2];
+        let data = vec![1u8; (size * size) as usize * 2];
         // Write the first two slices
         ctx.queue.write_texture(
             wgpu::ImageCopyTexture {
@@ -188,10 +187,10 @@ fn write_texture_subset_3d() {
         ctx.device.poll(wgpu::Maintain::Wait);
         let data: Vec<u8> = slice.get_mapped_range().to_vec();
 
-        for byte in &data[..((size*size) as usize * 2)] {
+        for byte in &data[..((size * size) as usize * 2)] {
             assert_eq!(*byte, 1);
         }
-        for byte in &data[((size*size) as usize * 2)..] {
+        for byte in &data[((size * size) as usize * 2)..] {
             assert_eq!(*byte, 0);
         }
     });
