@@ -373,7 +373,7 @@ pub enum CreateRenderPipelineError {
         stage: wgt::ShaderStages,
         error: String,
     },
-    #[error("shader group {group} binding {binding} must be 16 bytes aligned as device does not support DownlevelFlags `BUFFER_BINDINGS_NOT_16_BYTE_ALIGNED`")]
+    #[error("In the provided shader, the type given for group {group} binding {binding} has an alignment of {alignment}. As the device does not support `DownlevelFlags::BUFFER_BINDINGS_NOT_16_BYTE_ALIGNED`, the type must have an alignment of at least 16.")]
     UnalignedShader { group: u32, binding: u32 },
 }
 
