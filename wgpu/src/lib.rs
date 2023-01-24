@@ -33,18 +33,18 @@ pub use wgt::{
     BindingType, BlendComponent, BlendFactor, BlendOperation, BlendState, BufferAddress,
     BufferBindingType, BufferSize, BufferUsages, Color, ColorTargetState, ColorWrites,
     CommandBufferDescriptor, CompareFunction, CompositeAlphaMode, DepthBiasState,
-    DepthStencilState, DeviceType, DownlevelCapabilities, DownlevelFlags, DynamicOffset, Extent3d,
-    Face, Features, FilterMode, FrontFace, ImageDataLayout, ImageSubresourceRange, IndexFormat,
-    Limits, MultisampleState, Origin3d, PipelineStatisticsTypes, PolygonMode, PowerPreference,
-    PresentMode, PresentationTimestamp, PrimitiveState, PrimitiveTopology, PushConstantRange,
-    QueryType, RenderBundleDepthStencil, SamplerBindingType, SamplerBorderColor, ShaderLocation,
-    ShaderModel, ShaderStages, StencilFaceState, StencilOperation, StencilState,
-    StorageTextureAccess, SurfaceCapabilities, SurfaceConfiguration, SurfaceStatus, TextureAspect,
-    TextureDimension, TextureFormat, TextureFormatFeatureFlags, TextureFormatFeatures,
-    TextureSampleType, TextureUsages, TextureViewDimension, VertexAttribute, VertexFormat,
-    VertexStepMode, COPY_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT, MAP_ALIGNMENT,
-    PUSH_CONSTANT_ALIGNMENT, QUERY_RESOLVE_BUFFER_ALIGNMENT, QUERY_SET_MAX_QUERIES, QUERY_SIZE,
-    VERTEX_STRIDE_ALIGNMENT,
+    DepthStencilState, DeviceType, DownlevelCapabilities, DownlevelFlags, Dx12Compiler,
+    DynamicOffset, Extent3d, Face, Features, FilterMode, FrontFace, ImageDataLayout,
+    ImageSubresourceRange, IndexFormat, InstanceDescriptor, Limits, MultisampleState, Origin3d,
+    PipelineStatisticsTypes, PolygonMode, PowerPreference, PresentMode, PresentationTimestamp,
+    PrimitiveState, PrimitiveTopology, PushConstantRange, QueryType, RenderBundleDepthStencil,
+    SamplerBindingType, SamplerBorderColor, ShaderLocation, ShaderModel, ShaderStages,
+    StencilFaceState, StencilOperation, StencilState, StorageTextureAccess, SurfaceCapabilities,
+    SurfaceConfiguration, SurfaceStatus, TextureAspect, TextureDimension, TextureFormat,
+    TextureFormatFeatureFlags, TextureFormatFeatures, TextureSampleType, TextureUsages,
+    TextureViewDimension, VertexAttribute, VertexFormat, VertexStepMode, COPY_BUFFER_ALIGNMENT,
+    COPY_BYTES_PER_ROW_ALIGNMENT, MAP_ALIGNMENT, PUSH_CONSTANT_ALIGNMENT,
+    QUERY_RESOLVE_BUFFER_ALIGNMENT, QUERY_SET_MAX_QUERIES, QUERY_SIZE, VERTEX_STRIDE_ALIGNMENT,
 };
 
 /// Filter for error scopes.
@@ -896,7 +896,7 @@ static_assertions::assert_impl_all!(RenderBundleDescriptor: Send, Sync);
 ///
 /// Corresponds to [WebGPU `GPUTextureDescriptor`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gputexturedescriptor).
-pub type TextureDescriptor<'a> = wgt::TextureDescriptor<Label<'a>>;
+pub type TextureDescriptor<'a> = wgt::TextureDescriptor<Label<'a>, &'a [TextureFormat]>;
 static_assertions::assert_impl_all!(TextureDescriptor: Send, Sync);
 /// Describes a [`QuerySet`].
 ///
@@ -1286,16 +1286,25 @@ impl Display for SurfaceError {
 
 impl error::Error for SurfaceError {}
 
+impl Default for Instance {
+    /// Creates a new instance of wgpu with default options.
+    ///
+    /// Backends are set to `Backends::all()`, and FXC is chosen as the `dx12_shader_compiler`.
+    fn default() -> Self {
+        Self::new(InstanceDescriptor::default())
+    }
+}
+
 impl Instance {
     /// Create an new instance of wgpu.
     ///
     /// # Arguments
     ///
-    /// - `backends` - Controls from which [backends][Backends] wgpu will choose
-    ///   during instantiation.
-    pub fn new(backends: Backends) -> Self {
+    /// - `instance_desc` - Has fields for which [backends][Backends] wgpu will choose
+    ///   during instantiation, and which [DX12 shader compiler][Dx12Compiler] wgpu will use.
+    pub fn new(instance_desc: InstanceDescriptor) -> Self {
         Self {
-            context: Arc::from(crate::backend::Context::init(backends)),
+            context: Arc::from(crate::backend::Context::init(instance_desc)),
         }
     }
 
@@ -1499,6 +1508,31 @@ impl Instance {
                 .downcast_ref::<crate::backend::Context>()
                 .unwrap()
                 .create_surface_from_visual(visual)
+        };
+        Surface {
+            context: Arc::clone(&self.context),
+            id: ObjectId::from(surface.id()),
+            data: Box::new(surface),
+            config: Mutex::new(None),
+        }
+    }
+
+    /// Creates a surface from `SurfaceHandle`.
+    ///
+    /// # Safety
+    ///
+    /// - surface_handle must be a valid SurfaceHandle to create a surface upon.
+    #[cfg(target_os = "windows")]
+    pub unsafe fn create_surface_from_surface_handle(
+        &self,
+        surface_handle: *mut std::ffi::c_void,
+    ) -> Surface {
+        let surface = unsafe {
+            self.context
+                .as_any()
+                .downcast_ref::<crate::backend::Context>()
+                .unwrap()
+                .create_surface_from_surface_handle(surface_handle)
         };
         Surface {
             context: Arc::clone(&self.context),
@@ -2054,6 +2088,7 @@ impl Device {
             owned: true,
             descriptor: TextureDescriptor {
                 label: None,
+                view_formats: &[],
                 ..desc.clone()
             },
         }
@@ -2090,6 +2125,7 @@ impl Device {
             owned: true,
             descriptor: TextureDescriptor {
                 label: None,
+                view_formats: &[],
                 ..desc.clone()
             },
         }
@@ -4095,6 +4131,7 @@ impl Surface {
             mip_level_count: 1,
             sample_count: 1,
             dimension: TextureDimension::D2,
+            view_formats: &[],
         };
 
         texture_id

@@ -103,6 +103,7 @@ const TEXTURE_DESCRIPTOR: wgpu::TextureDescriptor = wgpu::TextureDescriptor {
     dimension: wgpu::TextureDimension::D2,
     format: wgpu::TextureFormat::Rgba8UnormSrgb,
     usage: wgpu::TextureUsages::COPY_DST.union(wgpu::TextureUsages::COPY_SRC),
+    view_formats: &[],
 };
 
 const BYTES_PER_PIXEL: u32 = 4;

@@ -39,7 +39,7 @@ path = "./wgpu-hal"
 
 [workspace.dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-rev = "e98bd92"
+rev = "1be8024"
 version = "0.10"
 
 [workspace.dependencies]
@@ -100,12 +100,11 @@ gpu-allocator = { version = "0.21", default_features = false, features = ["d3d12
 native = { package = "d3d12", version = "0.5.0" }
 range-alloc = "0.1"
 winapi = "0.3"
+hassle-rs = "0.9.0"
 
 # Gles dependencies
 egl = { package = "khronos-egl", version = "4.1" }
-# glow = { version = "0.11.2", optional = true }
-# TODO: New glow release
-glow = { git = "https://github.com/grovesNL/glow", rev = "c8a011fcd57a5c68cc917ed394baa484bdefc909" }
+glow = "0.12.0"
 glutin = "0.29.1"
 
 # wasm32 dependencies

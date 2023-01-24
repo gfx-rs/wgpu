@@ -233,65 +233,6 @@ struct FramebufferKey {
     sample_count: u32,
 }
 
-bitflags::bitflags! {
-    pub struct UpdateAfterBindTypes: u8 {
-        const UNIFORM_BUFFER = 0x1;
-        const STORAGE_BUFFER = 0x2;
-        const SAMPLED_TEXTURE = 0x4;
-        const STORAGE_TEXTURE = 0x8;
-    }
-}
-
-impl UpdateAfterBindTypes {
-    pub fn from_limits(limits: &wgt::Limits, phd_limits: &vk::PhysicalDeviceLimits) -> Self {
-        let mut uab_types = UpdateAfterBindTypes::empty();
-        uab_types.set(
-            UpdateAfterBindTypes::UNIFORM_BUFFER,
-            limits.max_uniform_buffers_per_shader_stage
-                > phd_limits.max_per_stage_descriptor_uniform_buffers,
-        );
-        uab_types.set(
-            UpdateAfterBindTypes::STORAGE_BUFFER,
-            limits.max_storage_buffers_per_shader_stage
-                > phd_limits.max_per_stage_descriptor_storage_buffers,
-        );
-        uab_types.set(
-            UpdateAfterBindTypes::SAMPLED_TEXTURE,
-            limits.max_sampled_textures_per_shader_stage
-                > phd_limits.max_per_stage_descriptor_sampled_images,
-        );
-        uab_types.set(
-            UpdateAfterBindTypes::STORAGE_TEXTURE,
-            limits.max_storage_textures_per_shader_stage
-                > phd_limits.max_per_stage_descriptor_storage_images,
-        );
-        uab_types
-    }
-
-    fn from_features(features: &adapter::PhysicalDeviceFeatures) -> Self {
-        let mut uab_types = UpdateAfterBindTypes::empty();
-        if let Some(di) = features.descriptor_indexing {
-            uab_types.set(
-                UpdateAfterBindTypes::UNIFORM_BUFFER,
-                di.descriptor_binding_uniform_buffer_update_after_bind != 0,
-            );
-            uab_types.set(
-                UpdateAfterBindTypes::STORAGE_BUFFER,
-                di.descriptor_binding_storage_buffer_update_after_bind != 0,
-            );
-            uab_types.set(
-                UpdateAfterBindTypes::SAMPLED_TEXTURE,
-                di.descriptor_binding_sampled_image_update_after_bind != 0,
-            );
-            uab_types.set(
-                UpdateAfterBindTypes::STORAGE_TEXTURE,
-                di.descriptor_binding_storage_image_update_after_bind != 0,
-            );
-        }
-        uab_types
-    }
-}
-
 struct DeviceShared {
     raw: ash::Device,
     family_index: u32,
@@ -304,7 +245,6 @@ struct DeviceShared {
     extension_fns: DeviceExtensionFunctions,
     vendor_id: u32,
     timestamp_period: f32,
-    uab_types: UpdateAfterBindTypes,
     downlevel_flags: wgt::DownlevelFlags,
     private_caps: PrivateCapabilities,
     workarounds: Workarounds,
@@ -389,7 +329,6 @@ pub struct BindGroupLayout {
     types: Box<[(vk::DescriptorType, u32)]>,
     /// Map of binding index to size,
     binding_arrays: Vec<(u32, NonZeroU32)>,
-    requires_update_after_bind: bool,
 }
 
 #[derive(Debug)]
