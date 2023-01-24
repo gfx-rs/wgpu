@@ -1163,7 +1163,7 @@ bitflags::bitflags! {
         /// Supports specifying which view formats are allowed when calling create_view on the texture returned by get_current_texture.
         ///
         /// The GLES/WebGL and Vulkan on Android doesn't support this.
-        const SURFACE_CONFIGURE_VIEW_FORMATS = 1 << 21;
+        const SURFACE_VIEW_FORMATS = 1 << 21;
     }
 }
 

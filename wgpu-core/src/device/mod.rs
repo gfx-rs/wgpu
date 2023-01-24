@@ -5355,8 +5355,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
 
             if !hal_view_formats.is_empty() {
-                if let Err(missing_flag) = device
-                    .require_downlevel_flags(wgt::DownlevelFlags::SURFACE_CONFIGURE_VIEW_FORMATS)
+                if let Err(missing_flag) =
+                    device.require_downlevel_flags(wgt::DownlevelFlags::SURFACE_VIEW_FORMATS)
                 {
                     break 'outter E::MissingDownlevelFlags(missing_flag);
                 }
