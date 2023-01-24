@@ -4279,13 +4279,18 @@ impl Extent3d {
 
     /// Calculates the extent at a given mip level.
     /// Does *not* account for memory size being a multiple of block size.
-    pub fn mip_level_size(&self, level: u32, is_3d_texture: bool) -> Extent3d {
-        Extent3d {
+    ///
+    /// https://gpuweb.github.io/gpuweb/#logical-miplevel-specific-texture-extent
+    pub fn mip_level_size(&self, level: u32, dim: TextureDimension) -> Self {
+        Self {
             width: u32::max(1, self.width >> level),
-            height: u32::max(1, self.height >> level),
-            depth_or_array_layers: match is_3d_texture {
-                false => self.depth_or_array_layers,
-                true => u32::max(1, self.depth_or_array_layers >> level),
+            height: match dim {
+                TextureDimension::D1 => 1,
+                _ => u32::max(1, self.height >> level),
+            },
+            depth_or_array_layers: match dim {
+                TextureDimension::D3 => u32::max(1, self.depth_or_array_layers >> level),
+                _ => self.depth_or_array_layers,
             },
         }
     }
@@ -4493,13 +4498,23 @@ impl<L, V: Clone> TextureDescriptor<L, V> {
             return None;
         }
 
-        Some(
-            self.size
-                .mip_level_size(level, self.dimension == TextureDimension::D3),
-        )
+        Some(self.size.mip_level_size(level, self.dimension))
+    }
+
+    /// Computes the render extent of this texture.
+    ///
+    /// https://gpuweb.github.io/gpuweb/#abstract-opdef-compute-render-extent
+    pub fn compute_render_extent(&self, mip_level: u32) -> Extent3d {
+        Extent3d {
+            width: u32::max(1, self.size.width >> mip_level),
+            height: u32::max(1, self.size.height >> mip_level),
+            depth_or_array_layers: 1,
+        }
     }
 
     /// Returns the number of array layers.
+    ///
+    /// https://gpuweb.github.io/gpuweb/#abstract-opdef-array-layer-count
     pub fn array_layer_count(&self) -> u32 {
         match self.dimension {
             TextureDimension::D1 | TextureDimension::D3 => 1,
@@ -5270,7 +5285,7 @@ impl<T: Copy> ImageCopyTextureTagged<T> {
 
 /// Subresource range within an image
 #[repr(C)]
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub struct ImageSubresourceRange {
