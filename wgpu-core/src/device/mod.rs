@@ -3007,6 +3007,7 @@ impl<A: HalApi> Device<A> {
                     return Err(pipeline::CreateRenderPipelineError::UnalignedShader {
                         binding: binding.binding,
                         group: binding.group,
+                        size: size.get(),
                     });
                 }
             }
