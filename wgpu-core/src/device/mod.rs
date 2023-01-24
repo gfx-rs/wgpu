@@ -5311,7 +5311,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (adapter_guard, mut token) = hub.adapters.read(&mut token);
         let (device_guard, _token) = hub.devices.read(&mut token);
 
-        let error = 'outter: loop {
+        let error = 'outer: loop {
             let device = match device_guard.get(device_id) {
                 Ok(device) => device,
                 Err(_) => break DeviceError::Invalid.into(),
@@ -5343,13 +5343,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     continue;
                 }
                 if !caps.formats.contains(&config.format) {
-                    break 'outter E::UnsupportedFormat {
+                    break 'outer E::UnsupportedFormat {
                         requested: config.format,
                         available: caps.formats.clone(),
                     };
                 }
                 if config.format.remove_srgb_suffix() != format.remove_srgb_suffix() {
-                    break 'outter E::InvalidViewFormat(*format, config.format);
+                    break 'outer E::InvalidViewFormat(*format, config.format);
                 }
                 hal_view_formats.push(*format);
             }
@@ -5358,7 +5358,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 if let Err(missing_flag) =
                     device.require_downlevel_flags(wgt::DownlevelFlags::SURFACE_VIEW_FORMATS)
                 {
-                    break 'outter E::MissingDownlevelFlags(missing_flag);
+                    break 'outer E::MissingDownlevelFlags(missing_flag);
                 }
             }
 
