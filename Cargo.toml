@@ -57,6 +57,7 @@ env_logger = "0.9"
 futures-intrusive = "0.4"
 fxhash = "0.2.1"
 glam = "0.21.3"
+image = { version = "0.24", default-features = false, features = ["png"] }
 libloading = "0.7"
 libc = "0.2"
 log = "0.4"
@@ -104,9 +105,7 @@ hassle-rs = "0.9.0"
 
 # Gles dependencies
 egl = { package = "khronos-egl", version = "4.1" }
-# glow = { version = "0.11.2", optional = true }
-# TODO: New glow release
-glow = { git = "https://github.com/grovesNL/glow", rev = "c8a011fcd57a5c68cc917ed394baa484bdefc909" }
+glow = "0.12.0"
 glutin = "0.29.1"
 
 # wasm32 dependencies

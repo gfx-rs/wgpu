@@ -63,17 +63,23 @@ compile_error!("Metal API enabled on non-Apple OS. If your project is not using 
 #[cfg(all(feature = "dx12", not(windows)))]
 compile_error!("DX12 API enabled on non-Windows OS. If your project is not using resolver=\"2\" in Cargo.toml, it should.");
 
+/// DirectX11 API internals.
 #[cfg(all(feature = "dx11", windows))]
-mod dx11;
+pub mod dx11;
+/// DirectX12 API internals.
 #[cfg(all(feature = "dx12", windows))]
-mod dx12;
-mod empty;
+pub mod dx12;
+/// A dummy API implementation.
+pub mod empty;
+/// GLES API internals.
 #[cfg(all(feature = "gles"))]
-mod gles;
+pub mod gles;
+/// Metal API internals.
 #[cfg(all(feature = "metal"))]
-mod metal;
+pub mod metal;
+/// Vulkan API internals.
 #[cfg(feature = "vulkan")]
-mod vulkan;
+pub mod vulkan;
 
 pub mod auxil;
 pub mod api {
@@ -394,6 +400,20 @@ pub trait CommandEncoder<A: Api>: Send + Sync + fmt::Debug {
     unsafe fn copy_buffer_to_buffer<T>(&mut self, src: &A::Buffer, dst: &A::Buffer, regions: T)
     where
         T: Iterator<Item = BufferCopy>;
+
+    /// Copy from an external image to an internal texture.
+    /// Works with a single array layer.
+    /// Note: `dst` current usage has to be `TextureUses::COPY_DST`.
+    /// Note: the copy extent is in physical size (rounded to the block size)
+    #[cfg(all(target_arch = "wasm32", not(feature = "emscripten")))]
+    unsafe fn copy_external_image_to_texture<T>(
+        &mut self,
+        src: &wgt::ImageCopyExternalImage,
+        dst: &A::Texture,
+        dst_premultiplication: bool,
+        regions: T,
+    ) where
+        T: Iterator<Item = TextureCopy>;
 
     /// Copy from one texture to another.
     /// Works with a single array layer.
@@ -846,8 +866,8 @@ pub struct TextureDescriptor<'a> {
     pub usage: TextureUses,
     pub memory_flags: MemoryFlags,
     /// Allows views of this texture to have a different format
-    /// than the this texture does.
-    pub allow_different_view_format: bool,
+    /// than the texture does.
+    pub view_formats: Vec<wgt::TextureFormat>,
 }
 
 /// TextureView descriptor.

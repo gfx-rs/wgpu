@@ -165,7 +165,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         if let Some(ref mut list) = cmd_buf.commands {
             list.push(TraceCommand::ClearTexture {
                 dst,
-                subresource_range: subresource_range.clone(),
+                subresource_range: *subresource_range,
             });
         }
 
@@ -408,9 +408,8 @@ fn clear_texture_via_render_passes<A: hal::Api>(
     };
 
     let sample_count = dst_texture.desc.sample_count;
-    let is_3d_texture = dst_texture.desc.dimension == wgt::TextureDimension::D3;
     for mip_level in range.mip_range {
-        let extent = extent_base.mip_level_size(mip_level, is_3d_texture);
+        let extent = extent_base.mip_level_size(mip_level, dst_texture.desc.dimension);
         let layer_or_depth_range = if dst_texture.desc.dimension == wgt::TextureDimension::D3 {
             // TODO: We assume that we're allowed to do clear operations on
             // volume texture slices, this is not properly specified.

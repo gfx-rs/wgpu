@@ -101,6 +101,10 @@ Additionally `Surface::get_default_config` now returns an Option and returns Non
 
 `Instance::create_surface()` now returns `Result<Surface, CreateSurfaceError>` instead of `Surface`. This allows an error to be returned instead of panicking if the given window is a HTML canvas and obtaining a WebGPU or WebGL 2 context fails. (No other platforms currently report any errors through this path.) By @kpreid in [#3052](https://github.com/gfx-rs/wgpu/pull/3052/)
 
+#### `Queue::copy_external_image_to_texture` on WebAssembly
+
+There's a new api `Queue::copy_external_image_to_texture` which allows you to create wgpu textures from various web image primitives. Specificically from HtmlVideoElement, HtmlCanvasElement, OffscreenCanvas, and ImageBitmap. This provides multiple low-copy ways of interacting with the browser. WebGL is also supported, though WebGL has some additional restrictions, represented by the UNRESTRICTED_EXTERNAL_IMAGE_COPIES downlevel flag. By @cwfitzgerald in [#3288](https://github.com/gfx-rs/wgpu/pull/3288)
+
 #### Instance creation now takes `InstanceDescriptor` instead of `Backends`
 
 `Instance::new()` and `hub::Global::new()` now take an `InstanceDescriptor` struct which cointains both the existing `Backends` selection as well as a new `Dx12Compiler` field for selecting which Dx12 shader compiler to use.
@@ -181,6 +185,7 @@ let texture = device.create_texture(&wgpu::TextureDescriptor {
 - Remove panics in `Deref` implementations for `QueueWriteBufferView` and `BufferViewMut`. Instead, warnings are logged, since reading from these types is not recommended. By @botahamec in [#3336]
 - Implement `view_formats` in TextureDescriptor to match the WebGPU spec. By @jinleili in [#3237](https://github.com/gfx-rs/wgpu/pull/3237)
 - Show more information in error message for non-aligned buffer bindings in WebGL [#3414](https://github.com/gfx-rs/wgpu/pull/3414)
+- Update `TextureView` validation according to the WebGPU spec. By @teoxoy in [#3410](https://github.com/gfx-rs/wgpu/pull/3410)
 
 #### WebGPU
 
@@ -210,6 +215,7 @@ let texture = device.create_texture(&wgpu::TextureDescriptor {
 - Implemented correleation between user timestamps and platform specific presentation timestamps via [`Adapter::get_presentation_timestamp`]. By @cwfitzgerald in [#3240](https://github.com/gfx-rs/wgpu/pull/3240)
 - Added support for `Features::SHADER_PRIMITIVE_INDEX` on all backends. By @cwfitzgerald in [#3272](https://github.com/gfx-rs/wgpu/pull/3272)
 - Implemented `TextureFormat::Stencil8`, allowing for stencil testing without depth components. By @Dinnerbone in [#3343](https://github.com/gfx-rs/wgpu/pull/3343)
+- Implemented `add_srgb_suffix()` for `TextureFormat` for converting linear formats to sRGB. By @Elabajaba in [#3419](https://github.com/gfx-rs/wgpu/pull/3419) 
 
 #### GLES
 
@@ -298,13 +304,11 @@ let texture = device.create_texture(&wgpu::TextureDescriptor {
 
 - Don't use a pointer to a local copy of a `PhysicalDeviceDriverProperties` struct after it has gone out of scope. In fact, don't make a local copy at all. Introduce a helper function for building `CStr`s from C character arrays, and remove some `unsafe` blocks. By @jimblandy in [#3076](https://github.com/gfx-rs/wgpu/pull/3076).
 
-
 ## wgpu-0.14.2 (2022-11-28)
 
 ### Bug Fixes
 
 - Fix incorrect offset in `get_mapped_range` by @nical in [#3233](https://github.com/gfx-rs/wgpu/pull/3233)
-
 
 ## wgpu-0.14.1 (2022-11-02)
 

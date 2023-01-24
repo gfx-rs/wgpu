@@ -143,6 +143,10 @@ impl super::Queue {
                     };
                 }
             }
+            #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
+            super::TextureInner::ExternalFramebuffer { ref inner } => unsafe {
+                gl.bind_external_framebuffer(glow::FRAMEBUFFER, inner);
+            },
         }
     }
 
@@ -373,6 +377,134 @@ impl super::Queue {
                     };
                 } else {
                     unsafe { gl.bind_buffer(copy_dst_target, None) };
+                }
+            }
+            #[cfg(all(target_arch = "wasm32", not(feature = "emscripten")))]
+            C::CopyExternalImageToTexture {
+                ref src,
+                dst,
+                dst_target,
+                dst_format,
+                dst_premultiplication,
+                ref copy,
+            } => {
+                const UNPACK_FLIP_Y_WEBGL: u32 =
+                    web_sys::WebGl2RenderingContext::UNPACK_FLIP_Y_WEBGL;
+                const UNPACK_PREMULTIPLY_ALPHA_WEBGL: u32 =
+                    web_sys::WebGl2RenderingContext::UNPACK_PREMULTIPLY_ALPHA_WEBGL;
+
+                unsafe {
+                    if src.flip_y {
+                        gl.pixel_store_bool(UNPACK_FLIP_Y_WEBGL, true);
+                    }
+                    if dst_premultiplication {
+                        gl.pixel_store_bool(UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
+                    }
+                }
+
+                unsafe { gl.bind_texture(dst_target, Some(dst)) };
+                let format_desc = self.shared.describe_texture_format(dst_format);
+                if is_layered_target(dst_target) {
+                    match src.source {
+                        wgt::ExternalImageSource::ImageBitmap(ref b) => unsafe {
+                            gl.tex_sub_image_3d_with_image_bitmap(
+                                dst_target,
+                                copy.dst_base.mip_level as i32,
+                                copy.dst_base.origin.x as i32,
+                                copy.dst_base.origin.y as i32,
+                                copy.dst_base.origin.z as i32,
+                                copy.size.width as i32,
+                                copy.size.height as i32,
+                                copy.size.depth as i32,
+                                format_desc.external,
+                                format_desc.data_type,
+                                b,
+                            );
+                        },
+                        wgt::ExternalImageSource::HTMLVideoElement(ref v) => unsafe {
+                            gl.tex_sub_image_3d_with_html_video_element(
+                                dst_target,
+                                copy.dst_base.mip_level as i32,
+                                copy.dst_base.origin.x as i32,
+                                copy.dst_base.origin.y as i32,
+                                copy.dst_base.origin.z as i32,
+                                copy.size.width as i32,
+                                copy.size.height as i32,
+                                copy.size.depth as i32,
+                                format_desc.external,
+                                format_desc.data_type,
+                                v,
+                            );
+                        },
+                        wgt::ExternalImageSource::HTMLCanvasElement(ref c) => unsafe {
+                            gl.tex_sub_image_3d_with_html_canvas_element(
+                                dst_target,
+                                copy.dst_base.mip_level as i32,
+                                copy.dst_base.origin.x as i32,
+                                copy.dst_base.origin.y as i32,
+                                copy.dst_base.origin.z as i32,
+                                copy.size.width as i32,
+                                copy.size.height as i32,
+                                copy.size.depth as i32,
+                                format_desc.external,
+                                format_desc.data_type,
+                                c,
+                            );
+                        },
+                        wgt::ExternalImageSource::OffscreenCanvas(_) => unreachable!(),
+                    }
+                } else {
+                    match src.source {
+                        wgt::ExternalImageSource::ImageBitmap(ref b) => unsafe {
+                            gl.tex_sub_image_2d_with_image_bitmap_and_width_and_height(
+                                dst_target,
+                                copy.dst_base.mip_level as i32,
+                                copy.dst_base.origin.x as i32,
+                                copy.dst_base.origin.y as i32,
+                                copy.size.width as i32,
+                                copy.size.height as i32,
+                                format_desc.external,
+                                format_desc.data_type,
+                                b,
+                            );
+                        },
+                        wgt::ExternalImageSource::HTMLVideoElement(ref v) => unsafe {
+                            gl.tex_sub_image_2d_with_html_video_and_width_and_height(
+                                dst_target,
+                                copy.dst_base.mip_level as i32,
+                                copy.dst_base.origin.x as i32,
+                                copy.dst_base.origin.y as i32,
+                                copy.size.width as i32,
+                                copy.size.height as i32,
+                                format_desc.external,
+                                format_desc.data_type,
+                                v,
+                            )
+                        },
+                        wgt::ExternalImageSource::HTMLCanvasElement(ref c) => unsafe {
+                            gl.tex_sub_image_2d_with_html_canvas_and_width_and_height(
+                                dst_target,
+                                copy.dst_base.mip_level as i32,
+                                copy.dst_base.origin.x as i32,
+                                copy.dst_base.origin.y as i32,
+                                copy.size.width as i32,
+                                copy.size.height as i32,
+                                format_desc.external,
+                                format_desc.data_type,
+                                c,
+                            )
+                        },
+                        wgt::ExternalImageSource::OffscreenCanvas(_) => unreachable!(),
+                    }
+                }
+
+                unsafe {
+                    if src.flip_y {
+                        gl.pixel_store_bool(UNPACK_FLIP_Y_WEBGL, false);
+                    }
+                    if dst_premultiplication {
+                        gl.pixel_store_bool(UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+                    }
                 }
             }
             C::CopyTextureToTexture {

@@ -319,7 +319,8 @@ impl PhysicalDeviceFeatures {
             | Df::BUFFER_BINDINGS_NOT_16_BYTE_ALIGNED
             | Df::UNRESTRICTED_INDEX_BUFFER
             | Df::INDIRECT_EXECUTION
-            | Df::VIEW_FORMATS;
+            | Df::VIEW_FORMATS
+            | Df::UNRESTRICTED_EXTERNAL_TEXTURE_COPIES;
 
         dl_flags.set(Df::CUBE_ARRAY_TEXTURES, self.core.image_cube_array != 0);
         dl_flags.set(Df::ANISOTROPIC_FILTERING, self.core.sampler_anisotropy != 0);
@@ -589,11 +590,14 @@ impl PhysicalDeviceCapabilities {
         }
 
         if self.effective_api_version < vk::API_VERSION_1_2 {
+            // Optional `VK_KHR_image_format_list`
+            if self.supports_extension(vk::KhrImageFormatListFn::name()) {
+                extensions.push(vk::KhrImageFormatListFn::name());
+            }
+
             // Optional `VK_KHR_imageless_framebuffer`
             if self.supports_extension(vk::KhrImagelessFramebufferFn::name()) {
                 extensions.push(vk::KhrImagelessFramebufferFn::name());
-                // Require `VK_KHR_image_format_list` due to it being a dependency
-                extensions.push(vk::KhrImageFormatListFn::name());
                 // Require `VK_KHR_maintenance2` due to it being a dependency
                 if self.effective_api_version < vk::API_VERSION_1_1 {
                     extensions.push(vk::KhrMaintenance2Fn::name());

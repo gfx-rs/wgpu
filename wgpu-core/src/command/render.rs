@@ -451,6 +451,8 @@ pub enum RenderPassErrorInner {
     UnsupportedResolveTargetFormat(wgt::TextureFormat),
     #[error("missing color or depth_stencil attachments, at least one is required.")]
     MissingAttachments,
+    #[error("attachment texture view is not renderable")]
+    TextureViewIsNotRenderable,
     #[error("attachments have differing sizes: {previous:?} is followed by {mismatch:?}")]
     AttachmentsDimensionMismatch {
         previous: (&'static str, wgt::Extent3d),
@@ -714,15 +716,18 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
             Ok(())
         };
         let mut add_view = |view: &TextureView<A>, type_name| {
+            let render_extent = view
+                .render_extent
+                .ok_or(RenderPassErrorInner::TextureViewIsNotRenderable)?;
             if let Some(ex) = extent {
-                if ex != view.extent {
+                if ex != render_extent {
                     return Err(RenderPassErrorInner::AttachmentsDimensionMismatch {
                         previous: (attachment_type_name, ex),
-                        mismatch: (type_name, view.extent),
+                        mismatch: (type_name, render_extent),
                     });
                 }
             } else {
-                extent = Some(view.extent);
+                extent = Some(render_extent);
             }
             if sample_count == 0 {
                 sample_count = view.samples;
@@ -910,10 +915,14 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                     .ok_or(RenderPassErrorInner::InvalidAttachment(resolve_target))?;
 
                 check_multiview(resolve_view)?;
-                if color_view.extent != resolve_view.extent {
+
+                let render_extent = resolve_view
+                    .render_extent
+                    .ok_or(RenderPassErrorInner::TextureViewIsNotRenderable)?;
+                if color_view.render_extent.unwrap() != render_extent {
                     return Err(RenderPassErrorInner::AttachmentsDimensionMismatch {
                         previous: (attachment_type_name, extent.unwrap_or_default()),
-                        mismatch: ("resolve", resolve_view.extent),
+                        mismatch: ("resolve", render_extent),
                     });
                 }
                 if color_view.samples == 1 || resolve_view.samples != 1 {
@@ -1071,7 +1080,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
             };
             let desc = hal::RenderPassDescriptor {
                 label: Some("(wgpu internal) Zero init discarded depth/stencil aspect"),
-                extent: view.extent,
+                extent: view.render_extent.unwrap(),
                 sample_count: view.samples,
                 color_attachments: &[],
                 depth_stencil_attachment: Some(hal::DepthStencilAttachment {

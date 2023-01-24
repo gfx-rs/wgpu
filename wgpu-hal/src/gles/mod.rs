@@ -187,10 +187,10 @@ impl Default for VertexAttribKind {
 }
 
 #[derive(Clone, Debug)]
-struct TextureFormatDesc {
-    internal: u32,
-    external: u32,
-    data_type: u32,
+pub struct TextureFormatDesc {
+    pub internal: u32,
+    pub external: u32,
+    pub data_type: u32,
 }
 
 struct AdapterShared {
@@ -249,7 +249,7 @@ unsafe impl Sync for Buffer {}
 unsafe impl Send for Buffer {}
 
 #[derive(Clone, Debug)]
-enum TextureInner {
+pub enum TextureInner {
     Renderbuffer {
         raw: glow::Renderbuffer,
     },
@@ -258,7 +258,17 @@ enum TextureInner {
         raw: glow::Texture,
         target: BindTarget,
     },
+    #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
+    ExternalFramebuffer {
+        inner: web_sys::WebGlFramebuffer,
+    },
 }
+
+// SAFE: WASM doesn't have threads
+#[cfg(target_arch = "wasm32")]
+unsafe impl Send for TextureInner {}
+#[cfg(target_arch = "wasm32")]
+unsafe impl Sync for TextureInner {}
 
 impl TextureInner {
     fn as_native(&self) -> (glow::Texture, BindTarget) {
@@ -267,21 +277,23 @@ impl TextureInner {
                 panic!("Unexpected renderbuffer");
             }
             Self::Texture { raw, target } => (raw, target),
+            #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
+            Self::ExternalFramebuffer { .. } => panic!("Unexpected external framebuffer"),
         }
     }
 }
 
 #[derive(Debug)]
 pub struct Texture {
-    inner: TextureInner,
-    drop_guard: Option<crate::DropGuard>,
-    mip_level_count: u32,
-    array_layer_count: u32,
-    format: wgt::TextureFormat,
+    pub inner: TextureInner,
+    pub drop_guard: Option<crate::DropGuard>,
+    pub mip_level_count: u32,
+    pub array_layer_count: u32,
+    pub format: wgt::TextureFormat,
     #[allow(unused)]
-    format_desc: TextureFormatDesc,
-    copy_size: CopyExtent,
-    is_cubemap: bool,
+    pub format_desc: TextureFormatDesc,
+    pub copy_size: CopyExtent,
+    pub is_cubemap: bool,
 }
 
 impl Texture {
@@ -683,6 +695,15 @@ enum Command {
         dst: Buffer,
         dst_target: BindTarget,
         copy: crate::BufferCopy,
+    },
+    #[cfg(all(target_arch = "wasm32", not(feature = "emscripten")))]
+    CopyExternalImageToTexture {
+        src: wgt::ImageCopyExternalImage,
+        dst: glow::Texture,
+        dst_target: BindTarget,
+        dst_format: wgt::TextureFormat,
+        dst_premultiplication: bool,
+        copy: crate::TextureCopy,
     },
     CopyTextureToTexture {
         src: glow::Texture,
