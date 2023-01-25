@@ -118,5 +118,10 @@ pub enum Error {
     InvalidBarrierScope(spirv::Word),
     #[error("invalid barrier memory semantics %{0}")]
     InvalidBarrierMemorySemantics(spirv::Word),
-    // incomplete implementation errors
+    #[error(
+        "arrays of images / samplers are supported only through bindings for \
+         now (i.e. you can't create an array of images or samplers that doesn't \
+         come from a binding)"
+    )]
+    NonBindingArrayOfImageOrSamplers,
 }

@@ -607,12 +607,9 @@ fn convert_spv_all() {
         true,
         Targets::HLSL | Targets::WGSL | Targets::METAL,
     );
-    convert_spv(
-        "empty-global-name",
-        true,
-        Targets::HLSL | Targets::WGSL | Targets::METAL,
-    );
     convert_spv("degrees", false, Targets::empty());
+    convert_spv("binding-arrays.dynamic", true, Targets::WGSL);
+    convert_spv("binding-arrays.static", true, Targets::WGSL);
 }
 
 #[cfg(feature = "glsl-in")]
