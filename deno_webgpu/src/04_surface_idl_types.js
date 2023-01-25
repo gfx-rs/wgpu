@@ -68,6 +68,15 @@
       converter: webidl.converters["long"],
       required: true,
     },
+    {
+      key: "viewFormats",
+      converter: webidl.createSequenceConverter(
+        webidl.converters["GPUTextureFormat"],
+      ),
+      get defaultValue() {
+        return [];
+      },
+    },
   ];
   webidl.converters["GPUCanvasConfiguration"] = webidl
     .createDictionaryConverter(

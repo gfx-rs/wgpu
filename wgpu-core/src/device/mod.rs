@@ -5186,7 +5186,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         surface_id: id::SurfaceId,
         device_id: id::DeviceId,
-        config: &wgt::SurfaceConfiguration,
+        config: &wgt::SurfaceConfiguration<Vec<TextureFormat>>,
     ) -> Option<present::ConfigureSurfaceError> {
         use hal::{Adapter as _, Surface as _};
         use present::ConfigureSurfaceError as E;
@@ -5309,7 +5309,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (adapter_guard, mut token) = hub.adapters.read(&mut token);
         let (device_guard, _token) = hub.devices.read(&mut token);
 
-        let error = loop {
+        let error = 'outer: loop {
             let device = match device_guard.get(device_id) {
                 Ok(device) => device,
                 Err(_) => break DeviceError::Invalid.into(),
@@ -5335,6 +5335,31 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 }
             };
 
+            let mut hal_view_formats = vec![];
+            for format in config.view_formats.iter() {
+                if *format == config.format {
+                    continue;
+                }
+                if !caps.formats.contains(&config.format) {
+                    break 'outer E::UnsupportedFormat {
+                        requested: config.format,
+                        available: caps.formats.clone(),
+                    };
+                }
+                if config.format.remove_srgb_suffix() != format.remove_srgb_suffix() {
+                    break 'outer E::InvalidViewFormat(*format, config.format);
+                }
+                hal_view_formats.push(*format);
+            }
+
+            if !hal_view_formats.is_empty() {
+                if let Err(missing_flag) =
+                    device.require_downlevel_flags(wgt::DownlevelFlags::SURFACE_VIEW_FORMATS)
+                {
+                    break 'outer E::MissingDownlevelFlags(missing_flag);
+                }
+            }
+
             let num_frames = present::DESIRED_NUM_FRAMES
                 .clamp(*caps.swap_chain_sizes.start(), *caps.swap_chain_sizes.end());
             let mut hal_config = hal::SurfaceConfiguration {
@@ -5348,6 +5373,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     depth_or_array_layers: 1,
                 },
                 usage: conv::map_texture_usage(config.usage, hal::FormatAspects::COLOR),
+                view_formats: hal_view_formats,
             };
 
             if let Err(error) = validate_surface_configuration(&mut hal_config, &caps) {

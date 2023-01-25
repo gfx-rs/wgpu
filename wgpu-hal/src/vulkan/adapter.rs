@@ -322,6 +322,10 @@ impl PhysicalDeviceFeatures {
             | Df::VIEW_FORMATS
             | Df::UNRESTRICTED_EXTERNAL_TEXTURE_COPIES;
 
+        dl_flags.set(
+            Df::SURFACE_VIEW_FORMATS,
+            caps.supports_extension(vk::KhrSwapchainMutableFormatFn::name()),
+        );
         dl_flags.set(Df::CUBE_ARRAY_TEXTURES, self.core.image_cube_array != 0);
         dl_flags.set(Df::ANISOTROPIC_FILTERING, self.core.sampler_anisotropy != 0);
         dl_flags.set(
@@ -642,6 +646,11 @@ impl PhysicalDeviceCapabilities {
             if self.supports_extension(vk::ExtImageRobustnessFn::name()) {
                 extensions.push(vk::ExtImageRobustnessFn::name());
             }
+        }
+
+        // Optional `VK_KHR_swapchain_mutable_format`
+        if self.supports_extension(vk::KhrSwapchainMutableFormatFn::name()) {
+            extensions.push(vk::KhrSwapchainMutableFormatFn::name());
         }
 
         // Optional `VK_EXT_robustness2`

@@ -40,7 +40,10 @@ pub enum Action<'a> {
         desc: crate::device::DeviceDescriptor<'a>,
         backend: wgt::Backend,
     },
-    ConfigureSurface(id::SurfaceId, wgt::SurfaceConfiguration),
+    ConfigureSurface(
+        id::SurfaceId,
+        wgt::SurfaceConfiguration<Vec<wgt::TextureFormat>>,
+    ),
     CreateBuffer(id::BufferId, crate::resource::BufferDescriptor<'a>),
     FreeBuffer(id::BufferId),
     DestroyBuffer(id::BufferId),

@@ -165,6 +165,15 @@ let texture = device.create_texture(&wgpu::TextureDescriptor {
 });
 ```
 
+```diff
+let config = wgpu::SurfaceConfiguration {
+  // ...
+  format: TextureFormat::Rgba8Unorm,
++ view_formats: &[wgpu::TextureFormat::Rgba8UnormSrgb],
+};
+surface.configure(&device, &config);
+```
+
 ### Changes
 
 #### General
@@ -183,9 +192,10 @@ let texture = device.create_texture(&wgpu::TextureDescriptor {
 - Make `ObjectId` structure and invariants idiomatic. By @teoxoy in [#3347](https://github.com/gfx-rs/wgpu/pull/3347)
 - Add validation in accordance with WebGPU `GPUSamplerDescriptor` valid usage for `lodMinClamp` and `lodMaxClamp`. By @James2022-rgb in [#3353](https://github.com/gfx-rs/wgpu/pull/3353)
 - Remove panics in `Deref` implementations for `QueueWriteBufferView` and `BufferViewMut`. Instead, warnings are logged, since reading from these types is not recommended. By @botahamec in [#3336]
-- Implement `view_formats` in TextureDescriptor to match the WebGPU spec. By @jinleili in [#3237](https://github.com/gfx-rs/wgpu/pull/3237)
+- Implement `view_formats` in the TextureDescriptor to match the WebGPU spec. By @jinleili in [#3237](https://github.com/gfx-rs/wgpu/pull/3237)
 - Show more information in error message for non-aligned buffer bindings in WebGL [#3414](https://github.com/gfx-rs/wgpu/pull/3414)
 - Update `TextureView` validation according to the WebGPU spec. By @teoxoy in [#3410](https://github.com/gfx-rs/wgpu/pull/3410)
+- Implement `view_formats` in the SurfaceConfiguration to match the WebGPU spec. By @jinleili in [#3409](https://github.com/gfx-rs/wgpu/pull/3409)
 
 #### WebGPU
 

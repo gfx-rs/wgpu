@@ -40,12 +40,11 @@ pub use wgt::{
     PresentMode, PresentationTimestamp, PrimitiveState, PrimitiveTopology, PushConstantRange,
     QueryType, RenderBundleDepthStencil, SamplerBindingType, SamplerBorderColor, ShaderLocation,
     ShaderModel, ShaderStages, StencilFaceState, StencilOperation, StencilState,
-    StorageTextureAccess, SurfaceCapabilities, SurfaceConfiguration, SurfaceStatus, TextureAspect,
-    TextureDimension, TextureFormat, TextureFormatFeatureFlags, TextureFormatFeatures,
-    TextureSampleType, TextureUsages, TextureViewDimension, VertexAttribute, VertexFormat,
-    VertexStepMode, COPY_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT, MAP_ALIGNMENT,
-    PUSH_CONSTANT_ALIGNMENT, QUERY_RESOLVE_BUFFER_ALIGNMENT, QUERY_SET_MAX_QUERIES, QUERY_SIZE,
-    VERTEX_STRIDE_ALIGNMENT,
+    StorageTextureAccess, SurfaceCapabilities, SurfaceStatus, TextureAspect, TextureDimension,
+    TextureFormat, TextureFormatFeatureFlags, TextureFormatFeatures, TextureSampleType,
+    TextureUsages, TextureViewDimension, VertexAttribute, VertexFormat, VertexStepMode,
+    COPY_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT, MAP_ALIGNMENT, PUSH_CONSTANT_ALIGNMENT,
+    QUERY_RESOLVE_BUFFER_ALIGNMENT, QUERY_SET_MAX_QUERIES, QUERY_SIZE, VERTEX_STRIDE_ALIGNMENT,
 };
 
 // wasm-only types, we try to keep as many types non-platform
@@ -279,6 +278,15 @@ impl Drop for Sampler {
     }
 }
 
+/// Describes a [`Surface`].
+///
+/// For use with [`Surface::configure`].
+///
+/// Corresponds to [WebGPU `GPUCanvasConfiguration`](
+/// https://gpuweb.github.io/gpuweb/#canvas-configuration).
+pub type SurfaceConfiguration<'a> = wgt::SurfaceConfiguration<&'a [TextureFormat]>;
+static_assertions::assert_impl_all!(SurfaceConfiguration: Send, Sync);
+
 /// Handle to a presentable surface.
 ///
 /// A `Surface` represents a platform-specific surface (e.g. a window) onto which rendered images may
@@ -298,7 +306,7 @@ pub struct Surface {
     // Because the `Surface::configure` method operates on an immutable reference this type has to
     // be wrapped in a mutex and since the configuration is only supplied after the surface has
     // been created is is additionally wrapped in an option.
-    config: Mutex<Option<SurfaceConfiguration>>,
+    config: Mutex<Option<SurfaceConfiguration<'static>>>,
 }
 static_assertions::assert_impl_all!(Surface: Send, Sync);
 
@@ -4082,15 +4090,16 @@ impl Surface {
         adapter: &Adapter,
         width: u32,
         height: u32,
-    ) -> Option<wgt::SurfaceConfiguration> {
+    ) -> Option<SurfaceConfiguration<'static>> {
         let caps = self.get_capabilities(adapter);
-        Some(wgt::SurfaceConfiguration {
+        Some(SurfaceConfiguration {
             usage: wgt::TextureUsages::RENDER_ATTACHMENT,
             format: *caps.formats.get(0)?,
             width,
             height,
             present_mode: *caps.present_modes.get(0)?,
             alpha_mode: wgt::CompositeAlphaMode::Auto,
+            view_formats: &[],
         })
     }
 
@@ -4100,7 +4109,7 @@ impl Surface {
     ///
     /// - A old [`SurfaceTexture`] is still alive referencing an old surface.
     /// - Texture format requested is unsupported on the surface.
-    pub fn configure(&self, device: &Device, config: &SurfaceConfiguration) {
+    pub fn configure(&self, device: &Device, config: &SurfaceConfiguration<'static>) {
         DynContext::surface_configure(
             &*self.context,
             &self.id,
