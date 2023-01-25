@@ -699,6 +699,7 @@ impl crate::Device<super::Api> for super::Device {
                     // TODO: support bounds checks on binding arrays
                     binding_array: naga::proc::BoundsCheckPolicy::Unchecked,
                 },
+                zero_initialize_workgroup_memory: true,
             },
             total_push_constants,
         })
