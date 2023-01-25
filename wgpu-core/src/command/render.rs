@@ -436,15 +436,23 @@ impl State {
     }
 }
 
+#[derive(Clone, Debug, Error)]
+pub enum ColorAttachmentError {
+    #[error("attachment format {0:?} is not a color format")]
+    InvalidFormat(wgt::TextureFormat),
+    #[error("the number of color attachments {given} exceeds the limit {limit}")]
+    TooMany { given: usize, limit: usize },
+}
+
 /// Error encountered when performing a render pass.
 #[derive(Clone, Debug, Error)]
 pub enum RenderPassErrorInner {
     #[error(transparent)]
+    ColorAttachment(#[from] ColorAttachmentError),
+    #[error(transparent)]
     Encoder(#[from] CommandEncoderError),
     #[error("attachment texture view {0:?} is invalid")]
     InvalidAttachment(id::TextureViewId),
-    #[error("attachment format {0:?} is not a color format")]
-    InvalidColorAttachmentFormat(wgt::TextureFormat),
     #[error("attachment format {0:?} is not a depth-stencil format")]
     InvalidDepthStencilAttachmentFormat(wgt::TextureFormat),
     #[error("attachment format {0:?} can not be resolved")]
@@ -891,8 +899,8 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                 .aspects()
                 .contains(hal::FormatAspects::COLOR)
             {
-                return Err(RenderPassErrorInner::InvalidColorAttachmentFormat(
-                    color_view.desc.format,
+                return Err(RenderPassErrorInner::ColorAttachment(
+                    ColorAttachmentError::InvalidFormat(color_view.desc.format),
                 ));
             }
 

@@ -1860,6 +1860,15 @@ impl crate::Context for Context {
         _encoder_data: &Self::CommandEncoderData,
         desc: &crate::RenderPassDescriptor<'a, '_>,
     ) -> (Self::RenderPassId, Self::RenderPassData) {
+        if desc.color_attachments.len() > wgc::MAX_COLOR_ATTACHMENTS {
+            self.handle_error_fatal(
+                wgc::command::ColorAttachmentError::TooMany {
+                    given: desc.color_attachments.len(),
+                    limit: wgc::MAX_COLOR_ATTACHMENTS,
+                },
+                "CommandEncoder::begin_render_pass",
+            );
+        }
         let colors = desc
             .color_attachments
             .iter()
