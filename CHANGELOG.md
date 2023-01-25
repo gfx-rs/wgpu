@@ -38,6 +38,8 @@ Bottom level categories:
 - Hal
 -->
 
+## wgpu-0.15.0 (2023-01-25)
+
 ### Major Changes
 
 #### Surface Capabilities API
