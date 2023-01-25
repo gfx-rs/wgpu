@@ -31,6 +31,8 @@ pub struct PhysicalDeviceFeatures {
         vk::PhysicalDeviceShaderFloat16Int8Features,
         vk::PhysicalDevice16BitStorageFeatures,
     )>,
+    zero_initialize_workgroup_memory:
+        Option<vk::PhysicalDeviceZeroInitializeWorkgroupMemoryFeatures>,
 }
 
 // This is safe because the structs have `p_next: *mut c_void`, which we null out/never read.
@@ -68,6 +70,9 @@ impl PhysicalDeviceFeatures {
         if let Some((ref mut f16_i8_feature, ref mut _16bit_feature)) = self.shader_float16 {
             info = info.push_next(f16_i8_feature);
             info = info.push_next(_16bit_feature);
+        }
+        if let Some(ref mut feature) = self.zero_initialize_workgroup_memory {
+            info = info.push_next(feature);
         }
         info
     }
@@ -283,6 +288,19 @@ impl PhysicalDeviceFeatures {
                         .uniform_and_storage_buffer16_bit_access(true)
                         .build(),
                 ))
+            } else {
+                None
+            },
+            zero_initialize_workgroup_memory: if effective_api_version >= vk::API_VERSION_1_3
+                || enabled_extensions.contains(&vk::KhrZeroInitializeWorkgroupMemoryFn::name())
+            {
+                Some(
+                    vk::PhysicalDeviceZeroInitializeWorkgroupMemoryFeatures::builder()
+                        .shader_zero_initialize_workgroup_memory(
+                            private_caps.zero_initialize_workgroup_memory,
+                        )
+                        .build(),
+                )
             } else {
                 None
             },
@@ -876,6 +894,16 @@ impl super::InstanceShared {
                 builder = builder.push_next(&mut next.1);
             }
 
+            // `VK_KHR_zero_initialize_workgroup_memory` is promoted to 1.3
+            if capabilities.effective_api_version >= vk::API_VERSION_1_3
+                || capabilities.supports_extension(vk::KhrZeroInitializeWorkgroupMemoryFn::name())
+            {
+                let next = features
+                    .zero_initialize_workgroup_memory
+                    .insert(vk::PhysicalDeviceZeroInitializeWorkgroupMemoryFeatures::default());
+                builder = builder.push_next(next);
+            }
+
             let mut features2 = builder.build();
             unsafe {
                 get_device_properties.get_physical_device_features2(phd, &mut features2);
@@ -1035,6 +1063,11 @@ impl super::Instance {
                     .image_robustness
                     .map_or(false, |ext| ext.robust_image_access != 0),
             },
+            zero_initialize_workgroup_memory: phd_features
+                .zero_initialize_workgroup_memory
+                .map_or(false, |ext| {
+                    ext.shader_zero_initialize_workgroup_memory == vk::TRUE
+                }),
         };
         let capabilities = crate::Capabilities {
             limits: phd_capabilities.to_wgpu_limits(),
@@ -1236,6 +1269,14 @@ impl super::Adapter {
                     },
                     // TODO: support bounds checks on binding arrays
                     binding_array: naga::proc::BoundsCheckPolicy::Unchecked,
+                },
+                zero_initialize_workgroup_memory: if self
+                    .private_caps
+                    .zero_initialize_workgroup_memory
+                {
+                    spv::ZeroInitializeWorkgroupMemoryMode::Native
+                } else {
+                    spv::ZeroInitializeWorkgroupMemoryMode::Polyfill
                 },
                 // We need to build this separately for each invocation, so just default it out here
                 binding_map: BTreeMap::default(),

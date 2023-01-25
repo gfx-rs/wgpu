@@ -1032,6 +1032,7 @@ impl crate::Device<super::Api> for super::Device {
                 version: self.shared.shading_language_version,
                 writer_flags,
                 binding_map,
+                zero_initialize_workgroup_memory: true,
             },
         })
     }

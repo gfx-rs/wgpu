@@ -215,7 +215,8 @@ let texture = device.create_texture(&wgpu::TextureDescriptor {
 - Implemented correleation between user timestamps and platform specific presentation timestamps via [`Adapter::get_presentation_timestamp`]. By @cwfitzgerald in [#3240](https://github.com/gfx-rs/wgpu/pull/3240)
 - Added support for `Features::SHADER_PRIMITIVE_INDEX` on all backends. By @cwfitzgerald in [#3272](https://github.com/gfx-rs/wgpu/pull/3272)
 - Implemented `TextureFormat::Stencil8`, allowing for stencil testing without depth components. By @Dinnerbone in [#3343](https://github.com/gfx-rs/wgpu/pull/3343)
-- Implemented `add_srgb_suffix()` for `TextureFormat` for converting linear formats to sRGB. By @Elabajaba in [#3419](https://github.com/gfx-rs/wgpu/pull/3419) 
+- Implemented `add_srgb_suffix()` for `TextureFormat` for converting linear formats to sRGB. By @Elabajaba in [#3419](https://github.com/gfx-rs/wgpu/pull/3419)
+- Zero-initialize workgroup memory. By @teoxoy in [#3174](https://github.com/gfx-rs/wgpu/pull/3174)
 
 #### GLES
 
