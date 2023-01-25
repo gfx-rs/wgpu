@@ -862,6 +862,9 @@ impl<A: HalApi> Device<A> {
             }
             hal_view_formats.push(*format);
         }
+        if !hal_view_formats.is_empty() {
+            self.require_downlevel_flags(wgt::DownlevelFlags::VIEW_FORMATS)?;
+        }
 
         // Enforce having COPY_DST/DEPTH_STENCIL_WRIT/COLOR_TARGET otherwise we
         // wouldn't be able to initialize the texture.
@@ -1028,14 +1031,9 @@ impl<A: HalApi> Device<A> {
             });
         }
 
-        let format_is_good = resolved_format == texture.desc.format || {
-            let is_view_format = texture.desc.view_formats.contains(&resolved_format);
-            if is_view_format {
-                self.require_downlevel_flags(wgt::DownlevelFlags::VIEW_FORMATS)?;
-            }
-            is_view_format
-        };
-        if !format_is_good {
+        if resolved_format != texture.desc.format
+            && !texture.desc.view_formats.contains(&resolved_format)
+        {
             return Err(resource::CreateTextureViewError::FormatReinterpretation {
                 texture: texture.desc.format,
                 view: resolved_format,
