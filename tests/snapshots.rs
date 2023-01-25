@@ -227,6 +227,7 @@ fn write_output_spv(
         },
         bounds_check_policies,
         binding_map: params.binding_map.clone(),
+        zero_initialize_workgroup_memory: spv::ZeroInitializeWorkgroupMemoryMode::Polyfill,
     };
 
     if params.separate_entry_points {
@@ -556,6 +557,10 @@ fn convert_wgsl() {
         ("lexical-scopes", Targets::WGSL),
         ("type-alias", Targets::WGSL),
         ("module-scope", Targets::WGSL),
+        (
+            "workgroup-var-init",
+            Targets::WGSL | Targets::GLSL | Targets::SPIRV | Targets::HLSL | Targets::METAL,
+        ),
     ];
 
     for &(name, targets) in inputs.iter() {

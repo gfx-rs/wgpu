@@ -47,6 +47,17 @@ enum FunctionType {
     EntryPoint(crate::proc::EntryPointIndex),
 }
 
+impl FunctionType {
+    fn is_compute_entry_point(&self, module: &crate::Module) -> bool {
+        match *self {
+            FunctionType::EntryPoint(index) => {
+                module.entry_points[index as usize].stage == crate::ShaderStage::Compute
+            }
+            _ => false,
+        }
+    }
+}
+
 /// Helper structure that stores data needed when writing the function
 struct FunctionCtx<'a> {
     /// The current function being written

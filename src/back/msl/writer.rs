@@ -3618,6 +3618,8 @@ impl<W: Write> Writer<W> {
                 is_first_argument = false;
             }
 
+            let mut global_invocation_id = None;
+
             // Then pass the remaining arguments not included in the varyings
             // struct.
             //
@@ -3629,7 +3631,7 @@ impl<W: Write> Writer<W> {
             let mut flattened_member_names = FastHashMap::default();
             for &(ref name_key, ty, binding) in flattened_arguments.iter() {
                 let binding = match binding {
-                    Some(ref binding @ &crate::Binding::BuiltIn { .. }) => binding,
+                    Some(binding @ &crate::Binding::BuiltIn { .. }) => binding,
                     _ => continue,
                 };
                 let name = if let NameKey::StructMember(ty, index) = *name_key {
@@ -3642,6 +3644,11 @@ impl<W: Write> Writer<W> {
                 } else {
                     &self.names[name_key]
                 };
+
+                if binding == &crate::Binding::BuiltIn(crate::BuiltIn::GlobalInvocationId) {
+                    global_invocation_id = Some(name_key);
+                }
+
                 let ty_name = TypeContext {
                     handle: ty,
                     module,
@@ -3660,6 +3667,23 @@ impl<W: Write> Writer<W> {
                 write!(self.out, "{} {} {}", separator, ty_name, name)?;
                 resolved.try_fmt(&mut self.out)?;
                 writeln!(self.out)?;
+            }
+
+            let need_workgroup_variables_initialization =
+                self.need_workgroup_variables_initialization(options, ep, module, fun_info);
+
+            if need_workgroup_variables_initialization && global_invocation_id.is_none() {
+                let separator = if is_first_argument {
+                    is_first_argument = false;
+                    ' '
+                } else {
+                    ','
+                };
+                writeln!(
+                    self.out,
+                    "{} {}::uint3 __global_invocation_id [[thread_position_in_grid]]",
+                    separator, NAMESPACE
+                )?;
             }
 
             // Those global variables used by this entry point and its callees
@@ -3743,6 +3767,15 @@ impl<W: Write> Writer<W> {
 
             // end of the entry point argument list
             writeln!(self.out, ") {{")?;
+
+            if need_workgroup_variables_initialization {
+                self.write_workgroup_variables_initialization(
+                    module,
+                    mod_info,
+                    fun_info,
+                    global_invocation_id,
+                )?;
+            }
 
             // Metal doesn't support private mutable variables outside of functions,
             // so we put them here, just like the locals.
@@ -3936,6 +3969,208 @@ impl<W: Write> Writer<W> {
             )?;
         }
         Ok(())
+    }
+}
+
+/// Initializing workgroup variables is more tricky for Metal because we have to deal
+/// with atomics at the type-level (which don't have a copy constructor).
+mod workgroup_mem_init {
+    use crate::EntryPoint;
+
+    use super::*;
+
+    enum Access {
+        GlobalVariable(Handle<crate::GlobalVariable>),
+        StructMember(Handle<crate::Type>, u32),
+        Array(usize),
+    }
+
+    impl Access {
+        fn write<W: Write>(
+            &self,
+            writer: &mut W,
+            names: &FastHashMap<NameKey, String>,
+        ) -> Result<(), core::fmt::Error> {
+            match *self {
+                Access::GlobalVariable(handle) => {
+                    write!(writer, "{}", &names[&NameKey::GlobalVariable(handle)])
+                }
+                Access::StructMember(handle, index) => {
+                    write!(writer, ".{}", &names[&NameKey::StructMember(handle, index)])
+                }
+                Access::Array(depth) => write!(writer, ".{}[__i{}]", WRAPPED_ARRAY_FIELD, depth),
+            }
+        }
+    }
+
+    struct AccessStack {
+        stack: Vec<Access>,
+        array_depth: usize,
+    }
+
+    impl AccessStack {
+        const fn new() -> Self {
+            Self {
+                stack: Vec::new(),
+                array_depth: 0,
+            }
+        }
+
+        fn enter_array<R>(&mut self, cb: impl FnOnce(&mut Self, usize) -> R) -> R {
+            let array_depth = self.array_depth;
+            self.stack.push(Access::Array(array_depth));
+            self.array_depth += 1;
+            let res = cb(self, array_depth);
+            self.stack.pop();
+            self.array_depth -= 1;
+            res
+        }
+
+        fn enter<R>(&mut self, new: Access, cb: impl FnOnce(&mut Self) -> R) -> R {
+            self.stack.push(new);
+            let res = cb(self);
+            self.stack.pop();
+            res
+        }
+
+        fn write<W: Write>(
+            &self,
+            writer: &mut W,
+            names: &FastHashMap<NameKey, String>,
+        ) -> Result<(), core::fmt::Error> {
+            for next in self.stack.iter() {
+                next.write(writer, names)?;
+            }
+            Ok(())
+        }
+    }
+
+    impl<W: Write> Writer<W> {
+        pub(super) fn need_workgroup_variables_initialization(
+            &mut self,
+            options: &Options,
+            ep: &EntryPoint,
+            module: &crate::Module,
+            fun_info: &valid::FunctionInfo,
+        ) -> bool {
+            options.zero_initialize_workgroup_memory
+                && ep.stage == crate::ShaderStage::Compute
+                && module.global_variables.iter().any(|(handle, var)| {
+                    !fun_info[handle].is_empty() && var.space == crate::AddressSpace::WorkGroup
+                })
+        }
+
+        pub(super) fn write_workgroup_variables_initialization(
+            &mut self,
+            module: &crate::Module,
+            module_info: &valid::ModuleInfo,
+            fun_info: &valid::FunctionInfo,
+            global_invocation_id: Option<&NameKey>,
+        ) -> BackendResult {
+            let level = back::Level(1);
+
+            writeln!(
+                self.out,
+                "{}if ({}::all({} == {}::uint3(0u))) {{",
+                level,
+                NAMESPACE,
+                global_invocation_id
+                    .map(|name_key| self.names[name_key].as_str())
+                    .unwrap_or("__global_invocation_id"),
+                NAMESPACE,
+            )?;
+
+            let mut access_stack = AccessStack::new();
+
+            let vars = module.global_variables.iter().filter(|&(handle, var)| {
+                !fun_info[handle].is_empty() && var.space == crate::AddressSpace::WorkGroup
+            });
+
+            for (handle, var) in vars {
+                access_stack.enter(Access::GlobalVariable(handle), |access_stack| {
+                    self.write_workgroup_variable_initialization(
+                        module,
+                        module_info,
+                        var.ty,
+                        access_stack,
+                        level.next(),
+                    )
+                })?;
+            }
+
+            writeln!(self.out, "{}}}", level)?;
+            self.write_barrier(crate::Barrier::WORK_GROUP, level)
+        }
+
+        fn write_workgroup_variable_initialization(
+            &mut self,
+            module: &crate::Module,
+            module_info: &valid::ModuleInfo,
+            ty: Handle<crate::Type>,
+            access_stack: &mut AccessStack,
+            level: back::Level,
+        ) -> BackendResult {
+            if module_info[ty].contains(valid::TypeFlags::CONSTRUCTIBLE) {
+                write!(self.out, "{}", level)?;
+                access_stack.write(&mut self.out, &self.names)?;
+                writeln!(self.out, " = {{}};")?;
+            } else {
+                match module.types[ty].inner {
+                    crate::TypeInner::Atomic { .. } => {
+                        write!(
+                            self.out,
+                            "{}{}::atomic_store_explicit({}",
+                            level, NAMESPACE, ATOMIC_REFERENCE
+                        )?;
+                        access_stack.write(&mut self.out, &self.names)?;
+                        writeln!(self.out, ", 0, {}::memory_order_relaxed);", NAMESPACE)?;
+                    }
+                    crate::TypeInner::Array { base, size, .. } => {
+                        let count = match size.to_indexable_length(module).expect("Bad array size")
+                        {
+                            proc::IndexableLength::Known(count) => count,
+                            proc::IndexableLength::Dynamic => unreachable!(),
+                        };
+
+                        access_stack.enter_array(|access_stack, array_depth| {
+                            writeln!(
+                                self.out,
+                                "{}for (int __i{} = 0; __i{} < {}; __i{}++) {{",
+                                level, array_depth, array_depth, count, array_depth
+                            )?;
+                            self.write_workgroup_variable_initialization(
+                                module,
+                                module_info,
+                                base,
+                                access_stack,
+                                level.next(),
+                            )?;
+                            writeln!(self.out, "{}}}", level)?;
+                            BackendResult::Ok(())
+                        })?;
+                    }
+                    crate::TypeInner::Struct { ref members, .. } => {
+                        for (index, member) in members.iter().enumerate() {
+                            access_stack.enter(
+                                Access::StructMember(ty, index as u32),
+                                |access_stack| {
+                                    self.write_workgroup_variable_initialization(
+                                        module,
+                                        module_info,
+                                        member.ty,
+                                        access_stack,
+                                        level,
+                                    )
+                                },
+                            )?;
+                        }
+                    }
+                    _ => unreachable!(),
+                }
+            }
+
+            Ok(())
+        }
     }
 }
 

@@ -12,6 +12,7 @@
 		binding_map: {},
 		fake_missing_bindings: false,
 		special_constants_binding: Some((space: 1, register: 0)),
+		zero_initialize_workgroup_memory: true,
 	),
 	wgsl: (
 		explicit_types: true,
@@ -22,6 +23,7 @@
 		inline_samplers: [],
 		spirv_cross_compatibility: false,
 		fake_missing_bindings: false,
+		zero_initialize_workgroup_memory: true,
 	),
 	msl_pipeline: (
 		allow_point_size: true,

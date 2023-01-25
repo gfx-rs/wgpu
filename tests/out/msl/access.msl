@@ -240,8 +240,13 @@ kernel void atomics(
 
 
 kernel void assign_through_ptr(
-  threadgroup uint& val
+  metal::uint3 __global_invocation_id [[thread_position_in_grid]]
+, threadgroup uint& val
 ) {
+    if (metal::all(__global_invocation_id == metal::uint3(0u))) {
+        val = {};
+    }
+    metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);
     assign_through_ptr_fn(val);
     return;
 }

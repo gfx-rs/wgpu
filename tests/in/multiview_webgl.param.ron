@@ -6,6 +6,7 @@
 		),
 		writer_flags: (bits: 0),
 		binding_map: {},
+		zero_initialize_workgroup_memory: true,
 	),
 	glsl_multiview: Some(2),
 )

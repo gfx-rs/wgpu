@@ -191,6 +191,8 @@ pub struct Options {
     pub special_constants_binding: Option<BindTarget>,
     /// Bind target of the push constant buffer
     pub push_constants_target: Option<BindTarget>,
+    /// Should workgroup variables be zero initialized (by polyfilling)?
+    pub zero_initialize_workgroup_memory: bool,
 }
 
 impl Default for Options {
@@ -201,6 +203,7 @@ impl Default for Options {
             fake_missing_bindings: true,
             special_constants_binding: None,
             push_constants_target: None,
+            zero_initialize_workgroup_memory: true,
         }
     }
 }

@@ -51,6 +51,12 @@ void test_msl_packed_vec3_() {
 }
 
 void main() {
+    if (gl_GlobalInvocationID == uvec3(0u)) {
+        wg = float[10](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
+        at_1 = 0u;
+    }
+    memoryBarrierShared();
+    barrier();
     float Foo = 0.0;
     bool at = false;
     test_msl_packed_vec3_();

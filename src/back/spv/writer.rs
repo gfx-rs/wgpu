@@ -65,6 +65,7 @@ impl Writer {
             annotations: vec![],
             flags: options.flags,
             bounds_check_policies: options.bounds_check_policies,
+            zero_initialize_workgroup_memory: options.zero_initialize_workgroup_memory,
             void_type,
             lookup_type: crate::FastHashMap::default(),
             lookup_function: crate::FastHashMap::default(),
@@ -102,6 +103,7 @@ impl Writer {
             // Copied from the old Writer:
             flags: self.flags,
             bounds_check_policies: self.bounds_check_policies,
+            zero_initialize_workgroup_memory: self.zero_initialize_workgroup_memory,
             capabilities_available: take(&mut self.capabilities_available),
             binding_map: take(&mut self.binding_map),
 
@@ -248,6 +250,16 @@ impl Writer {
         self.get_type_id(local_type.into())
     }
 
+    pub(super) fn get_uint3_type_id(&mut self) -> Word {
+        let local_type = LocalType::Value {
+            vector_size: Some(crate::VectorSize::Tri),
+            kind: crate::ScalarKind::Uint,
+            width: 4,
+            pointer_space: None,
+        };
+        self.get_type_id(local_type.into())
+    }
+
     pub(super) fn get_float_pointer_type_id(&mut self, class: spirv::StorageClass) -> Word {
         let lookup_type = LookupType::Local(LocalType::Value {
             vector_size: None,
@@ -267,9 +279,38 @@ impl Writer {
         }
     }
 
+    pub(super) fn get_uint3_pointer_type_id(&mut self, class: spirv::StorageClass) -> Word {
+        let lookup_type = LookupType::Local(LocalType::Value {
+            vector_size: Some(crate::VectorSize::Tri),
+            kind: crate::ScalarKind::Uint,
+            width: 4,
+            pointer_space: Some(class),
+        });
+        if let Some(&id) = self.lookup_type.get(&lookup_type) {
+            id
+        } else {
+            let id = self.id_gen.next();
+            let ty_id = self.get_uint3_type_id();
+            let instruction = Instruction::type_pointer(id, class, ty_id);
+            instruction.to_words(&mut self.logical_layout.declarations);
+            self.lookup_type.insert(lookup_type, id);
+            id
+        }
+    }
+
     pub(super) fn get_bool_type_id(&mut self) -> Word {
         let local_type = LocalType::Value {
             vector_size: None,
+            kind: crate::ScalarKind::Bool,
+            width: 1,
+            pointer_space: None,
+        };
+        self.get_type_id(local_type.into())
+    }
+
+    pub(super) fn get_bool3_type_id(&mut self) -> Word {
+        let local_type = LocalType::Value {
+            vector_size: Some(crate::VectorSize::Tri),
             kind: crate::ScalarKind::Bool,
             width: 1,
             pointer_space: None,
@@ -326,6 +367,8 @@ impl Writer {
             results: Vec::new(),
         };
 
+        let mut global_invocation_id = None;
+
         let mut parameter_type_ids = Vec::with_capacity(ir_function.arguments.len());
         for argument in ir_function.arguments.iter() {
             let class = spirv::StorageClass::Input;
@@ -356,6 +399,11 @@ impl Writer {
                     prelude
                         .body
                         .push(Instruction::load(argument_type_id, id, varying_id, None));
+
+                    if binding == &crate::Binding::BuiltIn(crate::BuiltIn::GlobalInvocationId) {
+                        global_invocation_id = Some(id);
+                    }
+
                     id
                 } else if let crate::TypeInner::Struct { ref members, .. } =
                     ir_module.types[argument.ty].inner
@@ -380,6 +428,10 @@ impl Writer {
                             .body
                             .push(Instruction::load(type_id, id, varying_id, None));
                         constituent_ids.push(id);
+
+                        if binding == &crate::Binding::BuiltIn(crate::BuiltIn::GlobalInvocationId) {
+                            global_invocation_id = Some(id);
+                        }
                     }
                     prelude.body.push(Instruction::composite_construct(
                         argument_type_id,
@@ -595,10 +647,39 @@ impl Writer {
             }
         }
 
-        let main_id = context.gen_id();
+        let next_id = context.gen_id();
+
         context
             .function
-            .consume(prelude, Instruction::branch(main_id));
+            .consume(prelude, Instruction::branch(next_id));
+
+        let workgroup_vars_init_exit_block_id =
+            match (context.writer.zero_initialize_workgroup_memory, interface) {
+                (
+                    super::ZeroInitializeWorkgroupMemoryMode::Polyfill,
+                    Some(
+                        ref mut interface @ FunctionInterface {
+                            stage: crate::ShaderStage::Compute,
+                            ..
+                        },
+                    ),
+                ) => context.writer.generate_workgroup_vars_init_block(
+                    next_id,
+                    ir_module,
+                    info,
+                    global_invocation_id,
+                    interface,
+                    context.function,
+                ),
+                _ => None,
+            };
+
+        let main_id = if let Some(exit_id) = workgroup_vars_init_exit_block_id {
+            exit_id
+        } else {
+            next_id
+        };
+
         context.write_block(
             main_id,
             &ir_function.body,
@@ -1143,6 +1224,113 @@ impl Writer {
         ));
     }
 
+    fn generate_workgroup_vars_init_block(
+        &mut self,
+        entry_id: Word,
+        ir_module: &crate::Module,
+        info: &FunctionInfo,
+        global_invocation_id: Option<Word>,
+        interface: &mut FunctionInterface,
+        function: &mut Function,
+    ) -> Option<Word> {
+        let body = ir_module
+            .global_variables
+            .iter()
+            .filter(|&(handle, var)| {
+                !info[handle].is_empty() && var.space == crate::AddressSpace::WorkGroup
+            })
+            .map(|(handle, var)| {
+                // It's safe to use `var_id` here, not `access_id`, because only
+                // variables in the `Uniform` and `StorageBuffer` address spaces
+                // get wrapped, and we're initializing `WorkGroup` variables.
+                let var_id = self.global_variables[handle.index()].var_id;
+                let var_type_id = self.get_type_id(LookupType::Handle(var.ty));
+                let init_word = self.write_constant_null(var_type_id);
+                Instruction::store(var_id, init_word, None)
+            })
+            .collect::<Vec<_>>();
+
+        if body.is_empty() {
+            return None;
+        }
+
+        let uint3_type_id = self.get_uint3_type_id();
+
+        let mut pre_if_block = Block::new(entry_id);
+
+        let global_invocation_id = if let Some(global_invocation_id) = global_invocation_id {
+            global_invocation_id
+        } else {
+            let varying_id = self.id_gen.next();
+            let class = spirv::StorageClass::Input;
+            let pointer_type_id = self.get_uint3_pointer_type_id(class);
+
+            Instruction::variable(pointer_type_id, varying_id, class, None)
+                .to_words(&mut self.logical_layout.declarations);
+
+            self.decorate(
+                varying_id,
+                spirv::Decoration::BuiltIn,
+                &[spirv::BuiltIn::GlobalInvocationId as u32],
+            );
+
+            interface.varying_ids.push(varying_id);
+            let id = self.id_gen.next();
+            pre_if_block
+                .body
+                .push(Instruction::load(uint3_type_id, id, varying_id, None));
+
+            id
+        };
+
+        let zero_id = self.write_constant_null(uint3_type_id);
+        let bool3_type_id = self.get_bool3_type_id();
+
+        let eq_id = self.id_gen.next();
+        pre_if_block.body.push(Instruction::binary(
+            spirv::Op::IEqual,
+            bool3_type_id,
+            eq_id,
+            global_invocation_id,
+            zero_id,
+        ));
+
+        let condition_id = self.id_gen.next();
+        let bool_type_id = self.get_bool_type_id();
+        pre_if_block.body.push(Instruction::relational(
+            spirv::Op::All,
+            bool_type_id,
+            condition_id,
+            eq_id,
+        ));
+
+        let merge_id = self.id_gen.next();
+        pre_if_block.body.push(Instruction::selection_merge(
+            merge_id,
+            spirv::SelectionControl::NONE,
+        ));
+
+        let accept_id = self.id_gen.next();
+        function.consume(
+            pre_if_block,
+            Instruction::branch_conditional(condition_id, accept_id, merge_id),
+        );
+
+        let accept_block = Block {
+            label_id: accept_id,
+            body,
+        };
+        function.consume(accept_block, Instruction::branch(merge_id));
+
+        let mut post_if_block = Block::new(merge_id);
+
+        self.write_barrier(crate::Barrier::WORK_GROUP, &mut post_if_block);
+
+        let next_id = self.id_gen.next();
+        function.consume(post_if_block, Instruction::branch(next_id));
+        Some(next_id)
+    }
+
     /// Generate an `OpVariable` for one value in an [`EntryPoint`]'s IO interface.
     ///
     /// The [`Binding`]s of the arguments and result of an [`EntryPoint`]'s
@@ -1414,8 +1602,9 @@ impl Writer {
             }
         };
 
-        let init_word = match global_variable.space {
-            crate::AddressSpace::Private => {
+        let init_word = match (global_variable.space, self.zero_initialize_workgroup_memory) {
+            (crate::AddressSpace::Private, _)
+            | (crate::AddressSpace::WorkGroup, super::ZeroInitializeWorkgroupMemoryMode::Native) => {
                 init_word.or_else(|| Some(self.write_constant_null(inner_type_id)))
             }
             _ => init_word,

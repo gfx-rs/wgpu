@@ -232,6 +232,8 @@ pub struct Options {
     pub writer_flags: WriterFlags,
     /// Map of resources association to binding locations.
     pub binding_map: BindingMap,
+    /// Should workgroup variables be zero initialized (by polyfilling)?
+    pub zero_initialize_workgroup_memory: bool,
 }
 
 impl Default for Options {
@@ -240,6 +242,7 @@ impl Default for Options {
             version: Version::new_gles(310),
             writer_flags: WriterFlags::ADJUST_COORDINATE_SPACE,
             binding_map: BindingMap::default(),
+            zero_initialize_workgroup_memory: true,
         }
     }
 }
@@ -1432,6 +1435,12 @@ impl<'a, W: Write> Writer<'a, W> {
         // Close the parentheses and open braces to start the function body
         writeln!(self.out, ") {{")?;
 
+        if self.options.zero_initialize_workgroup_memory
+            && ctx.ty.is_compute_entry_point(self.module)
+        {
+            self.write_workgroup_variables_initialization(&ctx)?;
+        }
+
         // Compose the function arguments from globals, in case of an entry point.
         if let back::FunctionType::EntryPoint(ep_index) = ctx.ty {
             let stage = self.module.entry_points[ep_index as usize].stage;
@@ -1516,6 +1525,42 @@ impl<'a, W: Write> Writer<'a, W> {
 
         // Close braces and add a newline
         writeln!(self.out, "}}")?;
+
+        Ok(())
+    }
+
+    fn write_workgroup_variables_initialization(
+        &mut self,
+        ctx: &back::FunctionCtx,
+    ) -> BackendResult {
+        let mut vars = self
+            .module
+            .global_variables
+            .iter()
+            .filter(|&(handle, var)| {
+                !ctx.info[handle].is_empty() && var.space == crate::AddressSpace::WorkGroup
+            })
+            .peekable();
+
+        if vars.peek().is_some() {
+            let level = back::Level(1);
+
+            writeln!(
+                self.out,
+                "{}if (gl_GlobalInvocationID == uvec3(0u)) {{",
+                level
+            )?;
+
+            for (handle, var) in vars {
+                let name = &self.names[&NameKey::GlobalVariable(handle)];
+                write!(self.out, "{}{} = ", level.next(), name)?;
+                self.write_zero_init_value(var.ty)?;
+                writeln!(self.out, ";")?;
+            }
+
+            writeln!(self.out, "{}}}", level)?;
+            self.write_barrier(crate::Barrier::WORK_GROUP, level)?;
+        }
 
         Ok(())
     }
@@ -3548,7 +3593,7 @@ impl<'a, W: Write> Writer<'a, W> {
     fn write_zero_init_value(&mut self, ty: Handle<crate::Type>) -> BackendResult {
         let inner = &self.module.types[ty].inner;
         match *inner {
-            TypeInner::Scalar { kind, .. } => {
+            TypeInner::Scalar { kind, .. } | TypeInner::Atomic { kind, .. } => {
                 self.write_zero_init_scalar(kind)?;
             }
             TypeInner::Vector { kind, .. } => {
@@ -3593,7 +3638,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 }
                 write!(self.out, ")")?;
             }
-            _ => {} // TODO:
+            _ => unreachable!(),
         }
 
         Ok(())

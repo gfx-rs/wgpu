@@ -1,12 +1,18 @@
 (
+	spv: (
+		version: (1, 1),
+		debug: true,
+		adjust_coordinate_space: false,
+	),
 	msl: (
-		lang_version: (1, 2),
+		lang_version: (2, 0),
 		per_stage_map: (
 			cs: (
 				resources: {
+					(group: 0, binding: 0): (buffer: Some(0), mutable: true),
 				},
-				sizes_buffer: Some(0),
-			)
+				sizes_buffer: None,
+			),
 		),
 		inline_samplers: [],
 		spirv_cross_compatibility: false,

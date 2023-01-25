@@ -37,6 +37,11 @@ void assign_through_ptr_fn(inout uint p) {
 }
 
 void main() {
+    if (gl_GlobalInvocationID == uvec3(0u)) {
+        val = 0u;
+    }
+    memoryBarrierShared();
+    barrier();
     assign_through_ptr_fn(val);
     return;
 }

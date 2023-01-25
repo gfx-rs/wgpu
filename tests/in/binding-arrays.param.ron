@@ -15,6 +15,7 @@
 		},
 		fake_missing_bindings: true,
 		special_constants_binding: None,
+		zero_initialize_workgroup_memory: true,
 	),
 	msl: (
 		lang_version: (2, 0),
@@ -29,6 +30,7 @@
 		inline_samplers: [],
 		spirv_cross_compatibility: false,
 		fake_missing_bindings: true,
+		zero_initialize_workgroup_memory: true,
 	),
 	spv: (
 		version: (1, 1),

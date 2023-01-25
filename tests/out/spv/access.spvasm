@@ -1,7 +1,7 @@
 ; SPIR-V
 ; Version: 1.1
 ; Generator: rspirv
-; Bound: 325
+; Bound: 338
 OpCapability Shader
 OpExtension "SPV_KHR_storage_buffer_storage_class"
 %1 = OpExtInstImport "GLSL.std.450"
@@ -9,7 +9,7 @@ OpMemoryModel Logical GLSL450
 OpEntryPoint Vertex %237 "foo_vert" %232 %235
 OpEntryPoint Fragment %279 "foo_frag" %278
 OpEntryPoint GLCompute %298 "atomics"
-OpEntryPoint GLCompute %322 "assign_through_ptr"
+OpEntryPoint GLCompute %322 "assign_through_ptr" %325
 OpExecutionMode %279 OriginUpperLeft
 OpExecutionMode %298 LocalSize 1 1 1
 OpExecutionMode %322 LocalSize 1 1 1
@@ -103,6 +103,7 @@ OpMemberDecorate %81 0 Offset 0
 OpDecorate %232 BuiltIn VertexIndex
 OpDecorate %235 BuiltIn Position
 OpDecorate %278 Location 0
+OpDecorate %325 BuiltIn GlobalInvocationId
 %2 = OpTypeVoid
 %4 = OpTypeInt 32 0
 %3 = OpConstant  %4  0
@@ -228,6 +229,13 @@ OpDecorate %278 Location 0
 %296 = OpConstantNull  %6
 %300 = OpTypePointer StorageBuffer %6
 %303 = OpConstant  %4  64
+%324 = OpConstantNull  %4
+%326 = OpTypePointer Input %35
+%325 = OpVariable  %326  Input
+%328 = OpConstantNull  %35
+%330 = OpTypeBool
+%329 = OpTypeVector %330 3
+%335 = OpConstant  %4  264
 %91 = OpFunction  %2  None %92
 %90 = OpLabel
 %84 = OpVariable  %85  Function %86
@@ -494,6 +502,18 @@ OpFunctionEnd
 %321 = OpLabel
 OpBranch %323
 %323 = OpLabel
-%324 = OpFunctionCall  %2  %223 %83
+%327 = OpLoad  %35  %325
+%331 = OpIEqual  %329  %327 %328
+%332 = OpAll  %330  %331
+OpSelectionMerge %333 None
+OpBranchConditional %332 %334 %333
+%334 = OpLabel
+OpStore %83 %324
+OpBranch %333
+%333 = OpLabel
+OpControlBarrier %30 %30 %335
+OpBranch %336
+%336 = OpLabel
+%337 = OpFunctionCall  %2  %223 %83
 OpReturn
 OpFunctionEnd

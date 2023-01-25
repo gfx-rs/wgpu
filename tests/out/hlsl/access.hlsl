@@ -326,8 +326,12 @@ void atomics()
 }
 
 [numthreads(1, 1, 1)]
-void assign_through_ptr()
+void assign_through_ptr(uint3 __global_invocation_id : SV_DispatchThreadID)
 {
+    if (all(__global_invocation_id == uint3(0u, 0u, 0u))) {
+        val = (uint)0;
+    }
+    GroupMemoryBarrierWithGroupSync();
     assign_through_ptr_fn(val);
     return;
 }

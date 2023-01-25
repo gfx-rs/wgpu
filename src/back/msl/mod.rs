@@ -209,6 +209,8 @@ pub struct Options {
     /// Bounds checking policies.
     #[cfg_attr(feature = "deserialize", serde(default))]
     pub bounds_check_policies: index::BoundsCheckPolicies,
+    /// Should workgroup variables be zero initialized (by polyfilling)?
+    pub zero_initialize_workgroup_memory: bool,
 }
 
 impl Default for Options {
@@ -220,6 +222,7 @@ impl Default for Options {
             spirv_cross_compatibility: false,
             fake_missing_bindings: true,
             bounds_check_policies: index::BoundsCheckPolicies::default(),
+            zero_initialize_workgroup_memory: true,
         }
     }
 }

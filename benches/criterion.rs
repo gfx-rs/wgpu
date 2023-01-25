@@ -242,6 +242,7 @@ fn backends(c: &mut Criterion) {
                 version: naga::back::glsl::Version::new_gles(320),
                 writer_flags: naga::back::glsl::WriterFlags::empty(),
                 binding_map: Default::default(),
+                zero_initialize_workgroup_memory: true,
             };
             for &(ref module, ref info) in inputs.iter() {
                 for ep in module.entry_points.iter() {

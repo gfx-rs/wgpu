@@ -106,8 +106,13 @@ uint NagaBufferLength(ByteAddressBuffer buffer)
 }
 
 [numthreads(1, 1, 1)]
-void main()
+void main(uint3 __global_invocation_id : SV_DispatchThreadID)
 {
+    if (all(__global_invocation_id == uint3(0u, 0u, 0u))) {
+        wg = (float[10])0;
+        at_1 = (uint)0;
+    }
+    GroupMemoryBarrierWithGroupSync();
     float Foo = (float)0;
     bool at = (bool)0;
 

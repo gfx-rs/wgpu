@@ -62,7 +62,8 @@ void test_msl_packed_vec3_(
 }
 
 kernel void main_(
-  threadgroup type_2& wg
+  metal::uint3 __global_invocation_id [[thread_position_in_grid]]
+, threadgroup type_2& wg
 , threadgroup metal::atomic_uint& at_1
 , device FooStruct& alignment [[user(fake0)]]
 , device type_6 const& dummy [[user(fake0)]]
@@ -73,6 +74,11 @@ kernel void main_(
 , constant type_15& global_nested_arrays_of_matrices_4x2_ [[user(fake0)]]
 , constant _mslBufferSizes& _buffer_sizes [[user(fake0)]]
 ) {
+    if (metal::all(__global_invocation_id == metal::uint3(0u))) {
+        wg = {};
+        metal::atomic_store_explicit(&at_1, 0, metal::memory_order_relaxed);
+    }
+    metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);
     float Foo = {};
     bool at = {};
     test_msl_packed_vec3_(alignment);

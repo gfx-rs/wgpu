@@ -18,5 +18,6 @@
 		inline_samplers: [],
 		spirv_cross_compatibility: false,
 		fake_missing_bindings: false,
+		zero_initialize_workgroup_memory: true,
 	),
 )

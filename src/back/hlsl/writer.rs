@@ -1077,6 +1077,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         // Write function name
         write!(self.out, " {}(", name)?;
 
+        let need_workgroup_variables_initialization =
+            self.need_workgroup_variables_initialization(func_ctx, module);
+
         // Write function arguments for non entry point functions
         match func_ctx.ty {
             back::FunctionType::Function(handle) => {
@@ -1129,6 +1132,16 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                             self.write_semantic(binding, Some((stage, Io::Input)))?;
                         }
                     }
+
+                    if need_workgroup_variables_initialization {
+                        if !func.arguments.is_empty() {
+                            write!(self.out, ", ")?;
+                        }
+                        write!(
+                            self.out,
+                            "uint3 __global_invocation_id : SV_DispatchThreadID"
+                        )?;
+                    }
                 }
             }
         }
@@ -1150,6 +1163,10 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         // Function body start
         writeln!(self.out)?;
         writeln!(self.out, "{{")?;
+
+        if need_workgroup_variables_initialization {
+            self.write_workgroup_variables_initialization(func_ctx, module)?;
+        }
 
         if let back::FunctionType::EntryPoint(index) = func_ctx.ty {
             self.write_ep_arguments_initialization(module, func, index)?;
@@ -1202,6 +1219,46 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         self.named_expressions.clear();
 
         Ok(())
+    }
+
+    fn need_workgroup_variables_initialization(
+        &mut self,
+        func_ctx: &back::FunctionCtx,
+        module: &Module,
+    ) -> bool {
+        self.options.zero_initialize_workgroup_memory
+            && func_ctx.ty.is_compute_entry_point(module)
+            && module.global_variables.iter().any(|(handle, var)| {
+                !func_ctx.info[handle].is_empty() && var.space == crate::AddressSpace::WorkGroup
+            })
+    }
+
+    fn write_workgroup_variables_initialization(
+        &mut self,
+        func_ctx: &back::FunctionCtx,
+        module: &Module,
+    ) -> BackendResult {
+        let level = back::Level(1);
+
+        writeln!(
+            self.out,
+            "{}if (all(__global_invocation_id == uint3(0u, 0u, 0u))) {{",
+            level
+        )?;
+
+        let vars = module.global_variables.iter().filter(|&(handle, var)| {
+            !func_ctx.info[handle].is_empty() && var.space == crate::AddressSpace::WorkGroup
+        });
+
+        for (handle, var) in vars {
+            let name = &self.names[&NameKey::GlobalVariable(handle)];
+            write!(self.out, "{}{} = ", level.next(), name)?;
+            self.write_default_init(module, var.ty)?;
+            writeln!(self.out, ";")?;
+        }
+
+        writeln!(self.out, "{}}}", level)?;
+        self.write_barrier(crate::Barrier::WORK_GROUP, level)
     }
 
     /// Helper method used to write statements

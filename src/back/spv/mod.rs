@@ -582,6 +582,7 @@ pub struct Writer {
     annotations: Vec<Instruction>,
     flags: WriterFlags,
     bounds_check_policies: BoundsCheckPolicies,
+    zero_initialize_workgroup_memory: ZeroInitializeWorkgroupMemoryMode,
     void_type: Word,
     //TODO: convert most of these into vectors, addressable by handle indices
     lookup_type: crate::FastHashMap<LookupType, Word>,
@@ -630,6 +631,15 @@ pub struct BindingInfo {
 // Using `BTreeMap` instead of `HashMap` so that we can hash itself.
 pub type BindingMap = std::collections::BTreeMap<crate::ResourceBinding, BindingInfo>;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ZeroInitializeWorkgroupMemoryMode {
+    /// Via `VK_KHR_zero_initialize_workgroup_memory` or Vulkan 1.3
+    Native,
+    /// Via assignments + barrier
+    Polyfill,
+    None,
+}
+
 #[derive(Debug, Clone)]
 pub struct Options {
     /// (Major, Minor) target version of the SPIR-V.
@@ -650,6 +660,9 @@ pub struct Options {
     /// How should generate code handle array, vector, matrix, or image texel
     /// indices that are out of range?
     pub bounds_check_policies: BoundsCheckPolicies,
+
+    /// Dictates the way workgroup variables should be zero initialized
+    pub zero_initialize_workgroup_memory: ZeroInitializeWorkgroupMemoryMode,
 }
 
 impl Default for Options {
@@ -666,6 +679,7 @@ impl Default for Options {
             binding_map: BindingMap::default(),
             capabilities: None,
             bounds_check_policies: crate::proc::BoundsCheckPolicies::default(),
+            zero_initialize_workgroup_memory: ZeroInitializeWorkgroupMemoryMode::Polyfill,
         }
     }
 }
