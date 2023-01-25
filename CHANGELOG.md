@@ -1,5 +1,97 @@
 # Change Log
 
+## v0.11 (2023-01-25)
+
+- Move to the Rust 2021 edition ([#2085](https://github.com/gfx-rs/naga/pull/2085)) **@ErichDonGubler**
+- Bump MSRV to 1.63 ([#2129](https://github.com/gfx-rs/naga/pull/2129)) **@teoxoy**
+
+#### API
+
+- Add handle validation pass to `Validator` ([#2090](https://github.com/gfx-rs/naga/pull/2090)) **@ErichDonGubler**
+- Add `Range::new_from_bounds` ([#2148](https://github.com/gfx-rs/naga/pull/2148)) **@robtfm**
+
+#### DOCS
+
+- Fix docs for `Emit` statements ([#2208](https://github.com/gfx-rs/naga/pull/2208)) **@jimblandy**
+- Fix invalid `<...>` URLs with code spans ([#2176](https://github.com/gfx-rs/naga/pull/2176)) **@ErichDonGubler**
+- Explain how case clauses with multiple selectors are supported ([#2126](https://github.com/gfx-rs/naga/pull/2126)) **@teoxoy**
+- Document `EarlyDepthTest` and `ConservativeDepth` syntax ([#2132](https://github.com/gfx-rs/naga/pull/2132)) **@coreh**
+
+#### VALIDATOR
+
+- Allow `u32` coordinates for `textureStore`/`textureLoad` ([#2172](https://github.com/gfx-rs/naga/pull/2172)) **@PENGUINLIONG**
+- Fix array being flagged as constructible when its base isn't ([#2111](https://github.com/gfx-rs/naga/pull/2111)) **@teoxoy**
+- Add `type_flags` to `ModuleInfo` ([#2111](https://github.com/gfx-rs/naga/pull/2111)) **@teoxoy**
+- Remove overly restrictive array stride check ([#2215](https://github.com/gfx-rs/naga/pull/2215)) **@fintelia**
+- Let the uniformity analysis trust the handle validation pass ([#2200](https://github.com/gfx-rs/naga/pull/2200)) **@jimblandy**
+- Fix warnings when building tests without validation ([#2177](https://github.com/gfx-rs/naga/pull/2177)) **@jimblandy**
+- Add `ValidationFlags::BINDINGS` ([#2156](https://github.com/gfx-rs/naga/pull/2156)) **@kvark**
+- Fix `textureGather` on `texture_2d<u32/i32>` ([#2138](https://github.com/gfx-rs/naga/pull/2138)) **@JMS55**
+
+#### ALL (FRONTENDS/BACKENDS)
+
+- Support 16-bit unorm/snorm formats ([#2210](https://github.com/gfx-rs/naga/pull/2210)) **@fintelia**
+- Support `gl_PointCoord` ([#2180](https://github.com/gfx-rs/naga/pull/2180)) **@Neo-Zhixing**
+
+#### ALL BACKENDS
+
+- Add support for zero-initializing workgroup memory ([#2111](https://github.com/gfx-rs/naga/pull/2111)) **@teoxoy**
+
+#### WGSL-IN
+
+- Implement module-level scoping ([#2075](https://github.com/gfx-rs/naga/pull/2075)) **@SparkyPotato**
+- Remove `isFinite` and `isNormal` ([#2218](https://github.com/gfx-rs/naga/pull/2218)) **@evahop**
+- Update inverse hyperbolic built-ins ([#2218](https://github.com/gfx-rs/naga/pull/2218)) **@evahop**
+- Add `refract` built-in ([#2218](https://github.com/gfx-rs/naga/pull/2218)) **@evahop**
+- Update reserved keywords ([#2130](https://github.com/gfx-rs/naga/pull/2130)) **@teoxoy**
+- Remove non-32bit integers ([#2146](https://github.com/gfx-rs/naga/pull/2146)) **@teoxoy**
+- Remove `workgroup_size` builtin ([#2147](https://github.com/gfx-rs/naga/pull/2147)) **@teoxoy**
+- Remove fallthrough statement ([#2126](https://github.com/gfx-rs/naga/pull/2126)) **@teoxoy**
+
+#### SPV-IN
+
+- Support binding arrays ([#2199](https://github.com/gfx-rs/naga/pull/2199)) **@Patryk27**
+
+#### GLSL-IN
+
+- Fix position propagation in lowering ([#2079](https://github.com/gfx-rs/naga/pull/2079)) **@JCapucho**
+- Update initializer list type when parsing ([#2066](https://github.com/gfx-rs/naga/pull/2066)) **@JCapucho**
+- Parenthesize unary negations to avoid `--` ([#2087](https://github.com/gfx-rs/naga/pull/2087)) **@ErichDonGubler**
+
+#### SPV-OUT
+
+- Add support for `atomicCompareExchangeWeak` ([#2165](https://github.com/gfx-rs/naga/pull/2165)) **@aweinstock314**
+- Omit extra switch case blocks where possible ([#2126](https://github.com/gfx-rs/naga/pull/2126)) **@teoxoy**
+- Fix switch cases after default not being output ([#2126](https://github.com/gfx-rs/naga/pull/2126)) **@teoxoy**
+
+#### MSL-OUT
+
+- Don't panic on missing bindings ([#2175](https://github.com/gfx-rs/naga/pull/2175)) **@kvark**
+- Omit extra switch case blocks where possible ([#2126](https://github.com/gfx-rs/naga/pull/2126)) **@teoxoy**
+- Fix `textureGather` compatibility on macOS 10.13 ([#2104](https://github.com/gfx-rs/naga/pull/2104)) **@xiaopengli89**
+- Fix incorrect atomic bounds check on metal back-end ([#2099](https://github.com/gfx-rs/naga/pull/2099)) **@raphlinus**
+- Parenthesize unary negations to avoid `--` ([#2087](https://github.com/gfx-rs/naga/pull/2087)) **@ErichDonGubler**
+
+#### HLSL-OUT
+
+- Simplify `write_default_init` ([#2111](https://github.com/gfx-rs/naga/pull/2111)) **@teoxoy**
+- Omit extra switch case blocks where possible ([#2126](https://github.com/gfx-rs/naga/pull/2126)) **@teoxoy**
+- Properly implement bitcast ([#2097](https://github.com/gfx-rs/naga/pull/2097)) **@cwfitzgerald**
+- Fix storage access chain through a matrix ([#2097](https://github.com/gfx-rs/naga/pull/2097)) **@cwfitzgerald**
+- Workaround FXC Bug in Matrix Indexing ([#2096](https://github.com/gfx-rs/naga/pull/2096)) **@cwfitzgerald**
+- Parenthesize unary negations to avoid `--` ([#2087](https://github.com/gfx-rs/naga/pull/2087)) **@ErichDonGubler**
+
+#### GLSL-OUT
+
+- Introduce a flag to include unused items ([#2205](https://github.com/gfx-rs/naga/pull/2205)) **@robtfm**
+- Use `fma` polyfill for versions below gles 320 ([#2197](https://github.com/gfx-rs/naga/pull/2197)) **@teoxoy**
+- Emit reflection info for non-struct uniforms ([#2189](https://github.com/gfx-rs/naga/pull/2189)) **@Rainb0wCodes**
+- Introduce a new block for switch cases ([#2126](https://github.com/gfx-rs/naga/pull/2126)) **@teoxoy**
+
+#### WGSL-OUT
+
+- Write correct scalar kind when `width != 4` ([#1514](https://github.com/gfx-rs/naga/pull/1514)) **@fintelia**
+
 ## v0.10 (2022-10-05)
 
 - Make termcolor dependency optional by @AldaronLau in https://github.com/gfx-rs/naga/pull/2014
