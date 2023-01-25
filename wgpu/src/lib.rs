@@ -284,7 +284,7 @@ impl Drop for Sampler {
 ///
 /// Corresponds to [WebGPU `GPUCanvasConfiguration`](
 /// https://gpuweb.github.io/gpuweb/#canvas-configuration).
-pub type SurfaceConfiguration<'a> = wgt::SurfaceConfiguration<&'a [TextureFormat]>;
+pub type SurfaceConfiguration = wgt::SurfaceConfiguration<Vec<TextureFormat>>;
 static_assertions::assert_impl_all!(SurfaceConfiguration: Send, Sync);
 
 /// Handle to a presentable surface.
@@ -306,7 +306,7 @@ pub struct Surface {
     // Because the `Surface::configure` method operates on an immutable reference this type has to
     // be wrapped in a mutex and since the configuration is only supplied after the surface has
     // been created is is additionally wrapped in an option.
-    config: Mutex<Option<SurfaceConfiguration<'static>>>,
+    config: Mutex<Option<SurfaceConfiguration>>,
 }
 static_assertions::assert_impl_all!(Surface: Send, Sync);
 
@@ -4090,7 +4090,7 @@ impl Surface {
         adapter: &Adapter,
         width: u32,
         height: u32,
-    ) -> Option<SurfaceConfiguration<'static>> {
+    ) -> Option<SurfaceConfiguration> {
         let caps = self.get_capabilities(adapter);
         Some(SurfaceConfiguration {
             usage: wgt::TextureUsages::RENDER_ATTACHMENT,
@@ -4099,7 +4099,7 @@ impl Surface {
             height,
             present_mode: *caps.present_modes.get(0)?,
             alpha_mode: wgt::CompositeAlphaMode::Auto,
-            view_formats: &[],
+            view_formats: vec![],
         })
     }
 
@@ -4109,7 +4109,7 @@ impl Surface {
     ///
     /// - A old [`SurfaceTexture`] is still alive referencing an old surface.
     /// - Texture format requested is unsupported on the surface.
-    pub fn configure(&self, device: &Device, config: &SurfaceConfiguration<'static>) {
+    pub fn configure(&self, device: &Device, config: &SurfaceConfiguration) {
         DynContext::surface_configure(
             &*self.context,
             &self.id,
