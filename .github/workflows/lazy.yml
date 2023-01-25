@@ -13,10 +13,14 @@ jobs:
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
-      - name: Generate report
-        uses: actions-rs/tarpaulin@v0.1
+      - name: Install binstall
+        uses: taiki-e/install-action@v2
         with:
-          args: '--tests --all-features --workspace'
+          tool: cargo-binstall
+      - name: Install cargo-tarpaulin
+        run: cargo binstall --no-confirm cargo-tarpaulin
+      - name: Generate report
+        run: cargo tarpaulin --tests --all-features --workspace --out Xml
       - name: Upload to codecov.io
         uses: codecov/codecov-action@v1
         with:
