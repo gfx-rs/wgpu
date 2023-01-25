@@ -737,7 +737,7 @@ impl crate::Context for Context {
         config: &crate::SurfaceConfiguration,
     ) {
         let global = &self.0;
-        let error = wgc::gfx_select!(device => global.surface_configure(*surface, *device, &config.map_view_formats(|v| v.to_vec())));
+        let error = wgc::gfx_select!(device => global.surface_configure(*surface, *device, config));
         if let Some(e) = error {
             self.handle_error_fatal(e, "Surface::configure");
         } else {

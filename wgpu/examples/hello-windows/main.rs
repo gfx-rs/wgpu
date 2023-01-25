@@ -15,7 +15,7 @@ struct ViewportDesc {
 
 struct Viewport {
     desc: ViewportDesc,
-    config: wgpu::SurfaceConfiguration<'static>,
+    config: wgpu::SurfaceConfiguration,
 }
 
 impl ViewportDesc {
@@ -39,7 +39,7 @@ impl ViewportDesc {
             height: size.height,
             present_mode: wgpu::PresentMode::Fifo,
             alpha_mode: caps.alpha_modes[0],
-            view_formats: &[],
+            view_formats: vec![],
         };
 
         self.surface.configure(device, &config);

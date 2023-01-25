@@ -162,7 +162,7 @@ pub trait Context: Debug + Send + Sized + Sync {
         surface_data: &Self::SurfaceData,
         device: &Self::DeviceId,
         device_data: &Self::DeviceData,
-        config: &crate::SurfaceConfiguration<'_>,
+        config: &crate::SurfaceConfiguration,
     );
     #[allow(clippy::type_complexity)]
     fn surface_get_current_texture(
@@ -1139,7 +1139,7 @@ pub(crate) trait DynContext: Debug + Send + Sync {
         surface_data: &crate::Data,
         device: &ObjectId,
         device_data: &crate::Data,
-        config: &crate::SurfaceConfiguration<'_>,
+        config: &crate::SurfaceConfiguration,
     );
     fn surface_get_current_texture(
         &self,
@@ -2044,7 +2044,7 @@ where
         surface_data: &crate::Data,
         device: &ObjectId,
         device_data: &crate::Data,
-        config: &crate::SurfaceConfiguration<'_>,
+        config: &crate::SurfaceConfiguration,
     ) {
         let surface = <T::SurfaceId>::from(*surface);
         let surface_data = downcast_ref(surface_data);
