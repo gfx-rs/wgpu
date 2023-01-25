@@ -31,7 +31,7 @@ struct Example {
     vertex_count: u32,
     sample_count: u32,
     rebuild_bundle: bool,
-    config: wgpu::SurfaceConfiguration<'static>,
+    config: wgpu::SurfaceConfiguration,
     max_sample_count: u32,
 }
 
@@ -204,10 +204,7 @@ impl framework::Example for Example {
             sample_count,
             max_sample_count,
             rebuild_bundle: false,
-            config: wgpu::SurfaceConfiguration {
-                view_formats: &[],
-                ..config.clone()
-            },
+            config: config.clone(),
         }
     }
 
@@ -245,10 +242,7 @@ impl framework::Example for Example {
         device: &wgpu::Device,
         _queue: &wgpu::Queue,
     ) {
-        self.config = wgpu::SurfaceConfiguration {
-            view_formats: &[],
-            ..config.clone()
-        };
+        self.config = config.clone();
         self.multisampled_framebuffer =
             Example::create_multisampled_framebuffer(device, config, self.sample_count);
     }
