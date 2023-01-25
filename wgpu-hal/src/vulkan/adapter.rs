@@ -320,9 +320,12 @@ impl PhysicalDeviceFeatures {
             | Df::UNRESTRICTED_INDEX_BUFFER
             | Df::INDIRECT_EXECUTION
             | Df::VIEW_FORMATS
-            | Df::UNRESTRICTED_EXTERNAL_TEXTURE_COPIES
-            | Df::SURFACE_VIEW_FORMATS;
+            | Df::UNRESTRICTED_EXTERNAL_TEXTURE_COPIES;
 
+        dl_flags.set(
+            Df::SURFACE_VIEW_FORMATS,
+            caps.supports_extension(vk::KhrSwapchainMutableFormatFn::name()),
+        );
         dl_flags.set(Df::CUBE_ARRAY_TEXTURES, self.core.image_cube_array != 0);
         dl_flags.set(Df::ANISOTROPIC_FILTERING, self.core.sampler_anisotropy != 0);
         dl_flags.set(

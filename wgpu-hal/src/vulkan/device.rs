@@ -550,11 +550,7 @@ impl super::Device {
         let original_format = self.shared.private_caps.map_texture_format(config.format);
         let mut raw_flags = vk::SwapchainCreateFlagsKHR::empty();
         let mut raw_view_formats: Vec<vk::Format> = vec![];
-        if !config.view_formats.is_empty()
-            && self
-                .enabled_device_extensions()
-                .contains(&vk::KhrSwapchainMutableFormatFn::name())
-        {
+        if !config.view_formats.is_empty() {
             raw_flags |= vk::SwapchainCreateFlagsKHR::MUTABLE_FORMAT;
             raw_view_formats = config
                 .view_formats
