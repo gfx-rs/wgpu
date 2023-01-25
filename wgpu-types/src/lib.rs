@@ -360,15 +360,15 @@ bitflags::bitflags! {
         /// Allows the user to create uniform arrays of textures in shaders:
         ///
         /// ex.
-        /// `var textures: binding_array<texture_2d<f32>, 10>` (WGSL)  
-        /// `uniform texture2D textures[10]` (GLSL)
+        /// - `var textures: binding_array<texture_2d<f32>, 10>` (WGSL)
+        /// - `uniform texture2D textures[10]` (GLSL)
         ///
         /// If [`Features::STORAGE_RESOURCE_BINDING_ARRAY`] is supported as well as this, the user
         /// may also create uniform arrays of storage textures.
         ///
         /// ex.
-        /// `var textures: array<texture_storage_2d<f32, write>, 10>` (WGSL)  
-        /// `uniform image2D textures[10]` (GLSL)
+        /// - `var textures: array<texture_storage_2d<f32, write>, 10>` (WGSL)
+        /// - `uniform image2D textures[10]` (GLSL)
         ///
         /// This capability allows them to exist and to be indexed by dynamically uniform
         /// values.
@@ -383,8 +383,8 @@ bitflags::bitflags! {
         /// Allows the user to create arrays of buffers in shaders:
         ///
         /// ex.
-        /// `var<uniform> buffer_array: array<MyBuffer, 10>` (WGSL)  
-        /// `uniform myBuffer { ... } buffer_array[10]` (GLSL)
+        /// - `var<uniform> buffer_array: array<MyBuffer, 10>` (WGSL)
+        /// - `uniform myBuffer { ... } buffer_array[10]` (GLSL)
         ///
         /// This capability allows them to exist and to be indexed by dynamically uniform
         /// values.
@@ -393,8 +393,8 @@ bitflags::bitflags! {
         /// may also create arrays of storage buffers.
         ///
         /// ex.
-        /// `var<storage> buffer_array: array<MyBuffer, 10>` (WGSL)  
-        /// `buffer myBuffer { ... } buffer_array[10]` (GLSL)
+        /// - `var<storage> buffer_array: array<MyBuffer, 10>` (WGSL)
+        /// - `buffer myBuffer { ... } buffer_array[10]` (GLSL)
         ///
         /// Supported platforms:
         /// - DX12
