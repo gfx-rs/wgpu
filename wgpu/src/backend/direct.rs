@@ -128,22 +128,17 @@ impl Context {
         Ok((device, queue))
     }
 
-    #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
+    #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten", feature = "webgl"))]
     pub unsafe fn create_texture_from_hal<A: wgc::hub::HalApi>(
         &self,
         hal_texture: A::Texture,
         device: &Device,
         desc: &TextureDescriptor,
     ) -> Texture {
+        let descriptor = desc.map_label_and_view_formats(|l| l.map(Borrowed), |v| v.to_vec());
         let global = &self.0;
-        let (id, error) = unsafe {
-            global.create_texture_from_hal::<A>(
-                hal_texture,
-                device.id,
-                &desc.map_label(|l| l.map(Borrowed)),
-                (),
-            )
-        };
+        let (id, error) =
+            unsafe { global.create_texture_from_hal::<A>(hal_texture, device.id, &descriptor, ()) };
         if let Some(cause) = error {
             self.handle_error(
                 &device.error_sink,
@@ -288,6 +283,21 @@ impl Context {
         }
     }
 
+    #[cfg(target_os = "windows")]
+    pub unsafe fn create_surface_from_surface_handle(
+        &self,
+        surface_handle: *mut std::ffi::c_void,
+    ) -> Surface {
+        let id = unsafe {
+            self.0
+                .instance_create_surface_from_surface_handle(surface_handle, ())
+        };
+        Surface {
+            id,
+            configured_device: Mutex::default(),
+        }
+    }
+
     fn handle_error(
         &self,
         sink_mutex: &Mutex<ErrorSinkRaw>,
@@ -372,6 +382,23 @@ fn map_texture_copy_view(view: crate::ImageCopyTexture) -> wgc::command::ImageCo
         mip_level: view.mip_level,
         origin: view.origin,
         aspect: view.aspect,
+    }
+}
+
+#[cfg_attr(
+    any(not(target_arch = "wasm32"), feature = "emscripten"),
+    allow(unused)
+)]
+fn map_texture_tagged_copy_view(
+    view: crate::ImageCopyTextureTagged,
+) -> wgc::command::ImageCopyTextureTagged {
+    wgc::command::ImageCopyTextureTagged {
+        texture: view.texture.id.into(),
+        mip_level: view.mip_level,
+        origin: view.origin,
+        aspect: view.aspect,
+        color_space: view.color_space,
+        premultiplied_alpha: view.premultiplied_alpha,
     }
 }
 
@@ -549,11 +576,11 @@ impl crate::Context for Context {
 
     type PopErrorScopeFuture = Ready<Option<crate::Error>>;
 
-    fn init(backends: wgt::Backends) -> Self {
+    fn init(instance_desc: wgt::InstanceDescriptor) -> Self {
         Self(wgc::hub::Global::new(
             "wgpu",
             wgc::hub::IdentityManagerFactory,
-            backends,
+            instance_desc,
         ))
     }
 
@@ -740,7 +767,7 @@ impl crate::Context for Context {
         surface_data: &Self::SurfaceData,
         device: &Self::DeviceId,
         _device_data: &Self::DeviceData,
-        config: &wgt::SurfaceConfiguration,
+        config: &crate::SurfaceConfiguration,
     ) {
         let global = &self.0;
         let error = wgc::gfx_select!(device => global.surface_configure(*surface, *device, config));
@@ -1282,10 +1309,11 @@ impl crate::Context for Context {
         device_data: &Self::DeviceData,
         desc: &TextureDescriptor,
     ) -> (Self::TextureId, Self::TextureData) {
+        let wgt_desc = desc.map_label_and_view_formats(|l| l.map(Borrowed), |v| v.to_vec());
         let global = &self.0;
         let (id, error) = wgc::gfx_select!(device => global.device_create_texture(
             *device,
-            &desc.map_label(|l| l.map(Borrowed)),
+            &wgt_desc,
             ()
         ));
         if let Some(cause) = error {
@@ -1865,6 +1893,15 @@ impl crate::Context for Context {
         _encoder_data: &Self::CommandEncoderData,
         desc: &crate::RenderPassDescriptor<'a, '_>,
     ) -> (Self::RenderPassId, Self::RenderPassData) {
+        if desc.color_attachments.len() > wgc::MAX_COLOR_ATTACHMENTS {
+            self.handle_error_fatal(
+                wgc::command::ColorAttachmentError::TooMany {
+                    given: desc.color_attachments.len(),
+                    limit: wgc::MAX_COLOR_ATTACHMENTS,
+                },
+                "CommandEncoder::begin_render_pass",
+            );
+        }
         let colors = desc
             .color_attachments
             .iter()
@@ -2212,6 +2249,31 @@ impl crate::Context for Context {
             Err(err) => {
                 self.handle_error_nolabel(&queue_data.error_sink, err, "Queue::write_texture")
             }
+        }
+    }
+
+    #[cfg(all(target_arch = "wasm32", not(feature = "emscripten")))]
+    fn queue_copy_external_image_to_texture(
+        &self,
+        queue: &Self::QueueId,
+        queue_data: &Self::QueueData,
+        source: &wgt::ImageCopyExternalImage,
+        dest: crate::ImageCopyTextureTagged,
+        size: wgt::Extent3d,
+    ) {
+        let global = &self.0;
+        match wgc::gfx_select!(*queue => global.queue_copy_external_image_to_texture(
+            *queue,
+            source,
+            map_texture_tagged_copy_view(dest),
+            size
+        )) {
+            Ok(()) => (),
+            Err(err) => self.handle_error_nolabel(
+                &queue_data.error_sink,
+                err,
+                "Queue::copy_external_image_to_texture",
+            ),
         }
     }
 

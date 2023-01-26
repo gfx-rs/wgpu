@@ -31,6 +31,7 @@
             dimension: r#2d,
             format: "rgba8unorm",
             usage: 27,
+            view_formats: [],
         )),
         // First fill the texture to ensure it wasn't just zero initialized or "happened" to be zero.
         WriteTexture(

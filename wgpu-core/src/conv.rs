@@ -33,6 +33,30 @@ pub fn is_valid_copy_dst_texture_format(
     }
 }
 
+#[cfg_attr(
+    any(not(target_arch = "wasm32"), feature = "emscripten"),
+    allow(unused)
+)]
+pub fn is_valid_external_image_copy_dst_texture_format(format: wgt::TextureFormat) -> bool {
+    use wgt::TextureFormat as Tf;
+    match format {
+        Tf::R8Unorm
+        | Tf::R16Float
+        | Tf::R32Float
+        | Tf::Rg8Unorm
+        | Tf::Rg16Float
+        | Tf::Rg32Float
+        | Tf::Rgba8Unorm
+        | Tf::Rgba8UnormSrgb
+        | Tf::Bgra8Unorm
+        | Tf::Bgra8UnormSrgb
+        | Tf::Rgb10a2Unorm
+        | Tf::Rgba16Float
+        | Tf::Rgba32Float => true,
+        _ => false,
+    }
+}
+
 pub fn map_buffer_usage(usage: wgt::BufferUsages) -> hal::BufferUses {
     let mut u = hal::BufferUses::empty();
     u.set(

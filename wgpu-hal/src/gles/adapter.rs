@@ -318,6 +318,10 @@ impl super::Adapter {
             !cfg!(target_arch = "wasm32"),
         );
         downlevel_flags.set(
+            wgt::DownlevelFlags::UNRESTRICTED_EXTERNAL_TEXTURE_COPIES,
+            !cfg!(target_arch = "wasm32"),
+        );
+        downlevel_flags.set(
             wgt::DownlevelFlags::FULL_DRAW_INDEX_UINT32,
             max_element_index == u32::MAX,
         );
@@ -578,6 +582,8 @@ impl super::Adapter {
                     features,
                     shading_language_version,
                     max_texture_size,
+                    next_shader_id: Default::default(),
+                    program_cache: Default::default(),
                 }),
             },
             info: Self::make_info(vendor, renderer),

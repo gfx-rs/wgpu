@@ -7,9 +7,9 @@ struct Uniforms {
 @binding(0)
 var<uniform> uniforms: Uniforms;
 
-let light = vec3<f32>(150.0, 70.0, 0.0);
-let light_colour = vec3<f32>(1.0, 0.98, 0.82);
-let ambient = 0.2;
+const light = vec3<f32>(150.0, 70.0, 0.0);
+const light_colour = vec3<f32>(1.0, 0.98, 0.82);
+const ambient = 0.2;
 
 struct VertexOutput {
     @builtin(position) position: vec4<f32>,

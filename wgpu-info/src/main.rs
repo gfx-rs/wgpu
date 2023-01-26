@@ -225,12 +225,12 @@ mod inner {
             let bit = wgpu::DownlevelFlags::from_bits(1 << i as u64);
             if let Some(bit) = bit {
                 if wgpu::DownlevelFlags::all().contains(bit) {
-                    println!("\t\t{:>36} {}", format!("{:?}:", bit), flags.contains(bit));
+                    println!("\t\t{:>37} {}", format!("{:?}:", bit), flags.contains(bit));
                 }
             }
         }
 
-        println!("\tTexture Format Features:      ┌──────────┬──────────┬──────────Allowed┬Usages───────────┬───────────────────┐ ┌────────────┬────────────────┬──────────────Feature┬Flags──────┬─────────────────────┬────────────────────┬─");
+        println!("\tTexture Format Features:      ┌──────────┬──────────┬──────────Allowed┬Usages───────────┬───────────────────┐ ┌────────────┬────────────────┬────────────────┬─────────Feature┬Flags────────────────┬────────────────────┬─────────────────┬───────────┐");
         for format in TEXTURE_FORMAT_LIST {
             let features = adapter.get_texture_format_features(format);
             let format_name = match format {
@@ -274,14 +274,14 @@ mod inner {
 
             println!(" │");
         }
-        println!("\t                              └──────────┴──────────┴─────────────────┴─────────────────┴───────────────────┘ └────────────┴────────────────┴────────────────┴────────────────┴─────────────────────┘");
+        println!("\t                              └──────────┴──────────┴─────────────────┴─────────────────┴───────────────────┘ └────────────┴────────────────┴────────────────┴────────────────┴─────────────────────┴────────────────────┴─────────────────┴───────────┘");
     }
 
     pub fn main() {
         env_logger::init();
         let args: Vec<_> = std::env::args().skip(1).collect();
 
-        let instance = wgpu::Instance::new(wgpu::Backends::all());
+        let instance = wgpu::Instance::default();
         let adapters: Vec<_> = instance.enumerate_adapters(wgpu::Backends::all()).collect();
         let adapter_count = adapters.len();
 

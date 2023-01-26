@@ -75,8 +75,8 @@ fn fetch_shadow(light_id: u32, homogeneous_coords: vec4<f32>) -> f32 {
     return textureSampleCompareLevel(t_shadow, sampler_shadow, light_local, i32(light_id), homogeneous_coords.z * proj_correction);
 }
 
-let c_ambient: vec3<f32> = vec3<f32>(0.05, 0.05, 0.05);
-let c_max_lights: u32 = 10u;
+const c_ambient: vec3<f32> = vec3<f32>(0.05, 0.05, 0.05);
+const c_max_lights: u32 = 10u;
 
 @fragment
 fn fs_main(vertex: VertexOutput) -> @location(0) vec4<f32> {

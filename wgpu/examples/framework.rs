@@ -157,9 +157,13 @@ async fn setup<E: Example>(title: &str) -> Setup {
 
     log::info!("Initializing the surface...");
 
-    let backend = wgpu::util::backend_bits_from_env().unwrap_or_else(wgpu::Backends::all);
+    let backends = wgpu::util::backend_bits_from_env().unwrap_or_else(wgpu::Backends::all);
+    let dx12_shader_compiler = wgpu::util::dx12_shader_compiler_from_env().unwrap_or_default();
 
-    let instance = wgpu::Instance::new(backend);
+    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+        backends,
+        dx12_shader_compiler,
+    });
     let (size, surface) = unsafe {
         let size = window.inner_size();
 
@@ -180,7 +184,7 @@ async fn setup<E: Example>(title: &str) -> Setup {
         (size, surface)
     };
     let adapter =
-        wgpu::util::initialize_adapter_from_env_or_default(&instance, backend, Some(&surface))
+        wgpu::util::initialize_adapter_from_env_or_default(&instance, backends, Some(&surface))
             .await
             .expect("No suitable GPU adapters found on the system!");
 
@@ -523,6 +527,7 @@ pub fn test<E: Example>(mut params: FrameworkRefTest) {
                 dimension: wgpu::TextureDimension::D2,
                 format: wgpu::TextureFormat::Rgba8UnormSrgb,
                 usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+                view_formats: &[],
             });
 
             let dst_view = dst_texture.create_view(&wgpu::TextureViewDescriptor::default());
@@ -542,6 +547,7 @@ pub fn test<E: Example>(mut params: FrameworkRefTest) {
                     height: params.height,
                     present_mode: wgpu::PresentMode::Fifo,
                     alpha_mode: wgpu::CompositeAlphaMode::Auto,
+                    view_formats: vec![wgpu::TextureFormat::Rgba8Unorm],
                 },
                 &ctx.adapter,
                 &ctx.device,
