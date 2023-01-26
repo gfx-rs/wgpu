@@ -38,6 +38,14 @@ Bottom level categories:
 - Hal
 -->
 
+## Unreleased
+
+### Changes
+
+#### WebGPU
+
+- Implement `CommandEncoder::clear_buffer`. By @raphlinus in [#3426](https://github.com/gfx-rs/wgpu/pull/3426)
+
 ## wgpu-0.15.0 (2023-01-25)
 
 ### Major Changes
