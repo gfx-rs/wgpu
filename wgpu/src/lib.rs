@@ -20,7 +20,7 @@ use std::{
     future::Future,
     marker::PhantomData,
     num::{NonZeroU32, NonZeroU8},
-    ops::{Bound, Range, RangeBounds},
+    ops::{Bound, Deref, DerefMut, Range, RangeBounds},
     sync::Arc,
     thread,
 };
@@ -33,19 +33,26 @@ pub use wgt::{
     BindingType, BlendComponent, BlendFactor, BlendOperation, BlendState, BufferAddress,
     BufferBindingType, BufferSize, BufferUsages, Color, ColorTargetState, ColorWrites,
     CommandBufferDescriptor, CompareFunction, CompositeAlphaMode, DepthBiasState,
-    DepthStencilState, DeviceType, DownlevelCapabilities, DownlevelFlags, DynamicOffset, Extent3d,
-    Face, Features, FilterMode, FrontFace, ImageDataLayout, ImageSubresourceRange, IndexFormat,
-    Limits, MultisampleState, Origin3d, PipelineStatisticsTypes, PolygonMode, PowerPreference,
+    DepthStencilState, DeviceType, DownlevelCapabilities, DownlevelFlags, Dx12Compiler,
+    DynamicOffset, Extent3d, Face, Features, FilterMode, FrontFace, ImageDataLayout,
+    ImageSubresourceRange, IndexFormat, InstanceDescriptor, Limits, MultisampleState, Origin2d,
+    Origin3d, PipelineStatisticsTypes, PolygonMode, PowerPreference, PredefinedColorSpace,
     PresentMode, PresentationTimestamp, PrimitiveState, PrimitiveTopology, PushConstantRange,
     QueryType, RenderBundleDepthStencil, SamplerBindingType, SamplerBorderColor, ShaderLocation,
     ShaderModel, ShaderStages, StencilFaceState, StencilOperation, StencilState,
-    StorageTextureAccess, SurfaceCapabilities, SurfaceConfiguration, SurfaceStatus, TextureAspect,
-    TextureDimension, TextureFormat, TextureFormatFeatureFlags, TextureFormatFeatures,
-    TextureSampleType, TextureUsages, TextureViewDimension, VertexAttribute, VertexFormat,
-    VertexStepMode, COPY_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT, MAP_ALIGNMENT,
-    PUSH_CONSTANT_ALIGNMENT, QUERY_RESOLVE_BUFFER_ALIGNMENT, QUERY_SET_MAX_QUERIES, QUERY_SIZE,
-    VERTEX_STRIDE_ALIGNMENT,
+    StorageTextureAccess, SurfaceCapabilities, SurfaceStatus, TextureAspect, TextureDimension,
+    TextureFormat, TextureFormatFeatureFlags, TextureFormatFeatures, TextureSampleType,
+    TextureUsages, TextureViewDimension, VertexAttribute, VertexFormat, VertexStepMode,
+    COPY_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT, MAP_ALIGNMENT, PUSH_CONSTANT_ALIGNMENT,
+    QUERY_RESOLVE_BUFFER_ALIGNMENT, QUERY_SET_MAX_QUERIES, QUERY_SIZE, VERTEX_STRIDE_ALIGNMENT,
 };
+
+// wasm-only types, we try to keep as many types non-platform
+// specific, but these need to depend on web-sys.
+#[cfg(all(target_arch = "wasm32", not(feature = "emscripten")))]
+pub use wgt::{ExternalImageSource, ImageCopyExternalImage};
+#[cfg(all(target_arch = "wasm32", not(feature = "emscripten")))]
+static_assertions::assert_impl_all!(ExternalImageSource: Send, Sync);
 
 /// Filter for error scopes.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd)]
@@ -60,7 +67,7 @@ static_assertions::assert_impl_all!(ErrorFilter: Send, Sync);
 type C = dyn DynContext;
 type Data = dyn Any + Send + Sync;
 
-/// Context for all other wgpu objects. Instan ce of wgpu.
+/// Context for all other wgpu objects. Instance of wgpu.
 ///
 /// This is the first thing you create when using wgpu.
 /// Its primary use is to create [`Adapter`]s and [`Surface`]s.
@@ -270,6 +277,15 @@ impl Drop for Sampler {
         }
     }
 }
+
+/// Describes a [`Surface`].
+///
+/// For use with [`Surface::configure`].
+///
+/// Corresponds to [WebGPU `GPUCanvasConfiguration`](
+/// https://gpuweb.github.io/gpuweb/#canvas-configuration).
+pub type SurfaceConfiguration = wgt::SurfaceConfiguration<Vec<TextureFormat>>;
+static_assertions::assert_impl_all!(SurfaceConfiguration: Send, Sync);
 
 /// Handle to a presentable surface.
 ///
@@ -896,7 +912,7 @@ static_assertions::assert_impl_all!(RenderBundleDescriptor: Send, Sync);
 ///
 /// Corresponds to [WebGPU `GPUTextureDescriptor`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gputexturedescriptor).
-pub type TextureDescriptor<'a> = wgt::TextureDescriptor<Label<'a>>;
+pub type TextureDescriptor<'a> = wgt::TextureDescriptor<Label<'a>, &'a [TextureFormat]>;
 static_assertions::assert_impl_all!(TextureDescriptor: Send, Sync);
 /// Describes a [`QuerySet`].
 ///
@@ -1201,6 +1217,15 @@ pub use wgt::ImageCopyTexture as ImageCopyTextureBase;
 pub type ImageCopyTexture<'a> = ImageCopyTextureBase<&'a Texture>;
 static_assertions::assert_impl_all!(ImageCopyTexture: Send, Sync);
 
+pub use wgt::ImageCopyTextureTagged as ImageCopyTextureTaggedBase;
+/// View of a texture which can be used to copy to a texture, including
+/// color space and alpha premultiplication information.
+///
+/// Corresponds to [WebGPU `GPUImageCopyTextureTagged`](
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpuimagecopytexturetagged).
+pub type ImageCopyTextureTagged<'a> = ImageCopyTextureTaggedBase<&'a Texture>;
+static_assertions::assert_impl_all!(ImageCopyTexture: Send, Sync);
+
 /// Describes a [`BindGroupLayout`].
 ///
 /// For use with [`Device::create_bind_group_layout`].
@@ -1286,16 +1311,25 @@ impl Display for SurfaceError {
 
 impl error::Error for SurfaceError {}
 
+impl Default for Instance {
+    /// Creates a new instance of wgpu with default options.
+    ///
+    /// Backends are set to `Backends::all()`, and FXC is chosen as the `dx12_shader_compiler`.
+    fn default() -> Self {
+        Self::new(InstanceDescriptor::default())
+    }
+}
+
 impl Instance {
     /// Create an new instance of wgpu.
     ///
     /// # Arguments
     ///
-    /// - `backends` - Controls from which [backends][Backends] wgpu will choose
-    ///   during instantiation.
-    pub fn new(backends: Backends) -> Self {
+    /// - `instance_desc` - Has fields for which [backends][Backends] wgpu will choose
+    ///   during instantiation, and which [DX12 shader compiler][Dx12Compiler] wgpu will use.
+    pub fn new(instance_desc: InstanceDescriptor) -> Self {
         Self {
-            context: Arc::from(crate::backend::Context::init(backends)),
+            context: Arc::from(crate::backend::Context::init(instance_desc)),
         }
     }
 
@@ -1499,6 +1533,31 @@ impl Instance {
                 .downcast_ref::<crate::backend::Context>()
                 .unwrap()
                 .create_surface_from_visual(visual)
+        };
+        Surface {
+            context: Arc::clone(&self.context),
+            id: ObjectId::from(surface.id()),
+            data: Box::new(surface),
+            config: Mutex::new(None),
+        }
+    }
+
+    /// Creates a surface from `SurfaceHandle`.
+    ///
+    /// # Safety
+    ///
+    /// - surface_handle must be a valid SurfaceHandle to create a surface upon.
+    #[cfg(target_os = "windows")]
+    pub unsafe fn create_surface_from_surface_handle(
+        &self,
+        surface_handle: *mut std::ffi::c_void,
+    ) -> Surface {
+        let surface = unsafe {
+            self.context
+                .as_any()
+                .downcast_ref::<crate::backend::Context>()
+                .unwrap()
+                .create_surface_from_surface_handle(surface_handle)
         };
         Surface {
             context: Arc::clone(&self.context),
@@ -2054,6 +2113,7 @@ impl Device {
             owned: true,
             descriptor: TextureDescriptor {
                 label: None,
+                view_formats: &[],
                 ..desc.clone()
             },
         }
@@ -2066,7 +2126,7 @@ impl Device {
     /// - `hal_texture` must be created from this device internal handle
     /// - `hal_texture` must be created respecting `desc`
     /// - `hal_texture` must be initialized
-    #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
+    #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten", feature = "webgl"))]
     pub unsafe fn create_texture_from_hal<A: wgc::hub::HalApi>(
         &self,
         hal_texture: A::Texture,
@@ -2090,6 +2150,7 @@ impl Device {
             owned: true,
             descriptor: TextureDescriptor {
                 label: None,
+                view_formats: &[],
                 ..desc.clone()
             },
         }
@@ -2337,6 +2398,9 @@ pub struct BufferView<'a> {
 }
 
 /// Write only view into mapped buffer.
+///
+/// It is possible to read the buffer using this view, but doing so is not
+/// recommended, as it is likely to be slow.
 #[derive(Debug)]
 pub struct BufferViewMut<'a> {
     slice: BufferSlice<'a>,
@@ -2353,27 +2417,6 @@ impl std::ops::Deref for BufferView<'_> {
     }
 }
 
-impl std::ops::Deref for BufferViewMut<'_> {
-    type Target = [u8];
-
-    #[inline]
-    fn deref(&self) -> &[u8] {
-        assert!(
-            self.readable,
-            "Attempting to read a write-only mapping for buffer {:?}",
-            self.slice.buffer.id
-        );
-        self.data.slice()
-    }
-}
-
-impl std::ops::DerefMut for BufferViewMut<'_> {
-    #[inline]
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        self.data.slice_mut()
-    }
-}
-
 impl AsRef<[u8]> for BufferView<'_> {
     #[inline]
     fn as_ref(&self) -> &[u8] {
@@ -2384,6 +2427,24 @@ impl AsRef<[u8]> for BufferView<'_> {
 impl AsMut<[u8]> for BufferViewMut<'_> {
     #[inline]
     fn as_mut(&mut self) -> &mut [u8] {
+        self.data.slice_mut()
+    }
+}
+
+impl Deref for BufferViewMut<'_> {
+    type Target = [u8];
+
+    fn deref(&self) -> &Self::Target {
+        if !self.readable {
+            log::warn!("Reading from a BufferViewMut is slow and not recommended.");
+        }
+
+        self.data.slice()
+    }
+}
+
+impl DerefMut for BufferViewMut<'_> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
         self.data.slice_mut()
     }
 }
@@ -3356,7 +3417,7 @@ impl<'a> RenderPass<'a> {
     ///
     /// - Bytes `4..8` are accessed by both the fragment shader and the vertex shader.
     ///
-    /// - Bytes `8..12 are accessed only by the vertex shader.
+    /// - Bytes `8..12` are accessed only by the vertex shader.
     ///
     /// To write all twelve bytes requires three `set_push_constants` calls, one
     /// for each range, each passing the matching `stages` mask.
@@ -3808,7 +3869,11 @@ impl<'a> RenderBundleEncoder<'a> {
     }
 }
 
-/// A write-only view into a staging buffer
+/// A read-only view into a staging buffer.
+///
+/// Reading into this buffer won't yield the contents of the buffer from the
+/// GPU and is likely to be slow. Because of this, although [`AsMut`] is
+/// implemented for this type, [`AsRef`] is not.
 pub struct QueueWriteBufferView<'a> {
     queue: &'a Queue,
     buffer: &'a Buffer,
@@ -3817,17 +3882,23 @@ pub struct QueueWriteBufferView<'a> {
 }
 static_assertions::assert_impl_all!(QueueWriteBufferView: Send, Sync);
 
-impl<'a> std::ops::Deref for QueueWriteBufferView<'a> {
+impl Deref for QueueWriteBufferView<'_> {
     type Target = [u8];
 
     fn deref(&self) -> &Self::Target {
-        panic!("QueueWriteBufferView is write-only!");
+        log::warn!("Reading from a QueueWriteBufferView won't yield the contents of the buffer and may be slow.");
+        self.inner.slice()
     }
 }
 
-impl<'a> std::ops::DerefMut for QueueWriteBufferView<'a> {
-    #[inline]
+impl DerefMut for QueueWriteBufferView<'_> {
     fn deref_mut(&mut self) -> &mut Self::Target {
+        self.inner.slice_mut()
+    }
+}
+
+impl<'a> AsMut<[u8]> for QueueWriteBufferView<'a> {
+    fn as_mut(&mut self) -> &mut [u8] {
         self.inner.slice_mut()
     }
 }
@@ -3867,12 +3938,9 @@ impl Queue {
     }
 
     /// Schedule a data write into `buffer` starting at `offset` via the returned
-    /// [QueueWriteBufferView].
+    /// [`QueueWriteBufferView`].
     ///
-    /// The returned value can be dereferenced to a `&mut [u8]`; dereferencing it to a
-    /// `&[u8]` panics!
-    /// (It is not unsound to read through the `&mut [u8]` anyway, but doing so will not
-    /// yield the existing contents of `buffer` from the GPU, and it is likely to be slow.)
+    /// Reading from this buffer is slow and will not yield the actual contents of the buffer.
     ///
     /// This method is intended to have low performance costs.
     /// As such, the write is not immediately submitted, and instead enqueued
@@ -3886,6 +3954,7 @@ impl Queue {
         offset: BufferAddress,
         size: BufferSize,
     ) -> Option<QueueWriteBufferView<'a>> {
+        profiling::scope!("Queue::write_buffer_with");
         DynContext::queue_validate_write_buffer(
             &*self.context,
             &self.id,
@@ -3945,18 +4014,21 @@ impl Queue {
     }
 
     /// Schedule a copy of data from `image` into `texture`.
-    #[cfg(all(target_arch = "wasm32", not(feature = "webgl")))]
+    #[cfg(all(target_arch = "wasm32", not(feature = "emscripten")))]
     pub fn copy_external_image_to_texture(
         &self,
-        image: &web_sys::ImageBitmap,
-        texture: ImageCopyTexture,
+        source: &wgt::ImageCopyExternalImage,
+        dest: ImageCopyTextureTagged,
         size: Extent3d,
     ) {
-        self.context
-            .as_any()
-            .downcast_ref::<crate::backend::Context>()
-            .unwrap()
-            .queue_copy_external_image_to_texture(&self.id.into(), image, texture, size)
+        DynContext::queue_copy_external_image_to_texture(
+            &*self.context,
+            &self.id,
+            self.data.as_ref(),
+            source,
+            dest,
+            size,
+        )
     }
 
     /// Submits a series of finished command buffers for execution.
@@ -4058,15 +4130,16 @@ impl Surface {
         adapter: &Adapter,
         width: u32,
         height: u32,
-    ) -> Option<wgt::SurfaceConfiguration> {
+    ) -> Option<SurfaceConfiguration> {
         let caps = self.get_capabilities(adapter);
-        Some(wgt::SurfaceConfiguration {
+        Some(SurfaceConfiguration {
             usage: wgt::TextureUsages::RENDER_ATTACHMENT,
             format: *caps.formats.get(0)?,
             width,
             height,
             present_mode: *caps.present_modes.get(0)?,
             alpha_mode: wgt::CompositeAlphaMode::Auto,
+            view_formats: vec![],
         })
     }
 
@@ -4127,6 +4200,7 @@ impl Surface {
             mip_level_count: 1,
             sample_count: 1,
             dimension: TextureDimension::D2,
+            view_formats: &[],
         };
 
         texture_id

@@ -24,6 +24,7 @@ use std::iter;
 
 pub type ImageCopyBuffer = wgt::ImageCopyBuffer<BufferId>;
 pub type ImageCopyTexture = wgt::ImageCopyTexture<TextureId>;
+pub type ImageCopyTextureTagged = wgt::ImageCopyTextureTagged<TextureId>;
 
 #[derive(Clone, Copy, Debug)]
 pub enum CopySide {
@@ -44,6 +45,8 @@ pub enum TransferError {
     MissingCopySrcUsageFlag,
     #[error("destination buffer/texture is missing the `COPY_DST` usage flag")]
     MissingCopyDstUsageFlag(Option<BufferId>, Option<TextureId>),
+    #[error("destination texture is missing the `RENDER_ATTACHMENT` usage flag")]
+    MissingRenderAttachmentUsageFlag(TextureId),
     #[error("copy of {start_offset}..{end_offset} would end up overrunning the bounds of the {side:?} buffer of size {buffer_size}")]
     BufferOverrun {
         start_offset: BufferAddress,
@@ -66,6 +69,8 @@ pub enum TransferError {
     },
     #[error("unable to select texture mip level {level} out of {total}")]
     InvalidTextureMipLevel { level: u32, total: u32 },
+    #[error("texture dimension must be 2D when copying from an external texture")]
+    InvalidDimensionExternal(TextureId),
     #[error("buffer offset {0} is not aligned to block size or `COPY_BUFFER_ALIGNMENT`")]
     UnalignedBufferOffset(BufferAddress),
     #[error("copy size {0} does not respect `COPY_BUFFER_ALIGNMENT`")]
@@ -102,6 +107,10 @@ pub enum TransferError {
         format: wgt::TextureFormat,
         aspect: wgt::TextureAspect,
     },
+    #[error(
+        "copying to textures with format {0:?} is forbidden when copying from external texture"
+    )]
+    ExternalCopyToForbiddenTextureFormat(wgt::TextureFormat),
     #[error("the entire texture must be copied when copying from depth texture")]
     InvalidDepthTextureExtent,
     #[error(
@@ -313,7 +322,7 @@ pub(crate) fn validate_linear_texture_data(
 /// [vtcr]: https://gpuweb.github.io/gpuweb/#valid-texture-copy-range
 pub(crate) fn validate_texture_copy_range(
     texture_copy_view: &ImageCopyTexture,
-    desc: &wgt::TextureDescriptor<()>,
+    desc: &wgt::TextureDescriptor<(), Vec<wgt::TextureFormat>>,
     texture_side: CopySide,
     copy_size: &Extent3d,
 ) -> Result<(hal::CopyExtent, u32), TransferError> {
@@ -701,8 +710,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         #[cfg(feature = "trace")]
         if let Some(ref mut list) = cmd_buf.commands {
             list.push(TraceCommand::CopyBufferToTexture {
-                src: source.clone(),
-                dst: destination.clone(),
+                src: *source,
+                dst: *destination,
                 size: *copy_size,
             });
         }
@@ -837,8 +846,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         #[cfg(feature = "trace")]
         if let Some(ref mut list) = cmd_buf.commands {
             list.push(TraceCommand::CopyTextureToBuffer {
-                src: source.clone(),
-                dst: destination.clone(),
+                src: *source,
+                dst: *destination,
                 size: *copy_size,
             });
         }
@@ -1002,8 +1011,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         #[cfg(feature = "trace")]
         if let Some(ref mut list) = cmd_buf.commands {
             list.push(TraceCommand::CopyTextureToTexture {
-                src: source.clone(),
-                dst: destination.clone(),
+                src: *source,
+                dst: *destination,
                 size: *copy_size,
             });
         }

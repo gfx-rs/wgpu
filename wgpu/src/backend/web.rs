@@ -419,6 +419,13 @@ fn map_extent_3d(extent: wgt::Extent3d) -> web_sys::GpuExtent3dDict {
     mapped
 }
 
+fn map_origin_2d(extent: wgt::Origin2d) -> web_sys::GpuOrigin2dDict {
+    let mut mapped = web_sys::GpuOrigin2dDict::new();
+    mapped.x(extent.x);
+    mapped.y(extent.y);
+    mapped
+}
+
 fn map_origin_3d(origin: wgt::Origin3d) -> web_sys::GpuOrigin3dDict {
     let mut mapped = web_sys::GpuOrigin3dDict::new();
     mapped.x(origin.x);
@@ -471,12 +478,24 @@ fn map_texture_copy_view(view: crate::ImageCopyTexture) -> web_sys::GpuImageCopy
 }
 
 fn map_tagged_texture_copy_view(
-    view: crate::ImageCopyTexture,
+    view: crate::ImageCopyTextureTagged,
 ) -> web_sys::GpuImageCopyTextureTagged {
     let texture = &<<Context as crate::Context>::TextureId>::from(view.texture.id).0;
     let mut mapped = web_sys::GpuImageCopyTextureTagged::new(texture);
     mapped.mip_level(view.mip_level);
     mapped.origin(&map_origin_3d(view.origin));
+    mapped.aspect(map_texture_aspect(view.aspect));
+    // mapped.color_space(map_color_space(view.color_space));
+    mapped.premultiplied_alpha(view.premultiplied_alpha);
+    mapped
+}
+
+fn map_external_texture_copy_view(
+    view: &crate::ImageCopyExternalImage,
+) -> web_sys::GpuImageCopyExternalImage {
+    let mut mapped = web_sys::GpuImageCopyExternalImage::new(&view.source);
+    mapped.origin(&map_origin_2d(view.origin));
+    mapped.flip_y(view.flip_y);
     mapped
 }
 
@@ -529,6 +548,42 @@ fn map_map_mode(mode: crate::MapMode) -> u32 {
         crate::MapMode::Write => web_sys::gpu_map_mode::WRITE,
     }
 }
+
+const FEATURES_MAPPING: [(wgt::Features, web_sys::GpuFeatureName); 8] = [
+    //TODO: update the name
+    (
+        wgt::Features::DEPTH_CLIP_CONTROL,
+        web_sys::GpuFeatureName::DepthClipControl,
+    ),
+    (
+        wgt::Features::DEPTH32FLOAT_STENCIL8,
+        web_sys::GpuFeatureName::Depth32floatStencil8,
+    ),
+    (
+        wgt::Features::TEXTURE_COMPRESSION_BC,
+        web_sys::GpuFeatureName::TextureCompressionBc,
+    ),
+    (
+        wgt::Features::TEXTURE_COMPRESSION_ETC2,
+        web_sys::GpuFeatureName::TextureCompressionEtc2,
+    ),
+    (
+        wgt::Features::TEXTURE_COMPRESSION_ASTC_LDR,
+        web_sys::GpuFeatureName::TextureCompressionAstc,
+    ),
+    (
+        wgt::Features::TIMESTAMP_QUERY,
+        web_sys::GpuFeatureName::TimestampQuery,
+    ),
+    (
+        wgt::Features::INDIRECT_FIRST_INSTANCE,
+        web_sys::GpuFeatureName::IndirectFirstInstance,
+    ),
+    (
+        wgt::Features::SHADER_FLOAT16,
+        web_sys::GpuFeatureName::ShaderF16,
+    ),
+];
 
 type JsFutureResult = Result<wasm_bindgen::JsValue, wasm_bindgen::JsValue>;
 
@@ -667,22 +722,6 @@ impl Context {
 
         Ok(create_identified(context))
     }
-
-    pub fn queue_copy_external_image_to_texture(
-        &self,
-        queue: &Identified<web_sys::GpuQueue>,
-        image: &web_sys::ImageBitmap,
-        texture: crate::ImageCopyTexture,
-        size: wgt::Extent3d,
-    ) {
-        queue
-            .0
-            .copy_external_image_to_texture_with_gpu_extent_3d_dict(
-                &web_sys::GpuImageCopyExternalImage::new(image),
-                &map_tagged_texture_copy_view(texture),
-                &map_extent_3d(size),
-            );
-    }
 }
 
 // Represents the global object in the JavaScript context.
@@ -769,7 +808,7 @@ impl crate::context::Context for Context {
     type PopErrorScopeFuture =
         MakeSendFuture<wasm_bindgen_futures::JsFuture, fn(JsFutureResult) -> Option<crate::Error>>;
 
-    fn init(_backends: wgt::Backends) -> Self {
+    fn init(_instance_desc: wgt::InstanceDescriptor) -> Self {
         let global: Global = js_sys::global().unchecked_into();
         let gpu = if !global.window().is_undefined() {
             global.unchecked_into::<web_sys::Window>().navigator().gpu()
@@ -840,8 +879,6 @@ impl crate::context::Context for Context {
         desc: &crate::DeviceDescriptor,
         trace_dir: Option<&std::path::Path>,
     ) -> Self::RequestDeviceFuture {
-        use web_sys::GpuFeatureName as Gfn;
-
         if trace_dir.is_some() {
             //Error: Tracing isn't supported on the Web target
         }
@@ -849,33 +886,7 @@ impl crate::context::Context for Context {
         // TODO: non-guaranteed limits
         let mut mapped_desc = web_sys::GpuDeviceDescriptor::new();
 
-        let possible_features = [
-            //TODO: update the name
-            (wgt::Features::DEPTH_CLIP_CONTROL, Gfn::DepthClipControl),
-            (
-                wgt::Features::DEPTH32FLOAT_STENCIL8,
-                Gfn::Depth32floatStencil8,
-            ),
-            (
-                wgt::Features::TEXTURE_COMPRESSION_BC,
-                Gfn::TextureCompressionBc,
-            ),
-            (
-                wgt::Features::TEXTURE_COMPRESSION_ETC2,
-                Gfn::TextureCompressionEtc2,
-            ),
-            (
-                wgt::Features::TEXTURE_COMPRESSION_ASTC_LDR,
-                Gfn::TextureCompressionAstc,
-            ),
-            (wgt::Features::TIMESTAMP_QUERY, Gfn::TimestampQuery),
-            (
-                wgt::Features::INDIRECT_FIRST_INSTANCE,
-                Gfn::IndirectFirstInstance,
-            ),
-            (wgt::Features::SHADER_FLOAT16, Gfn::ShaderF16),
-        ];
-        let required_features = possible_features
+        let required_features = FEATURES_MAPPING
             .iter()
             .copied()
             .flat_map(|(flag, value)| {
@@ -920,9 +931,23 @@ impl crate::context::Context for Context {
         adapter: &Self::AdapterId,
         _adapter_data: &Self::AdapterData,
     ) -> wgt::Features {
-        // TODO
-        let _features = adapter.0.features();
-        wgt::Features::empty()
+        let features = adapter.0.features();
+
+        let features_set: js_sys::Set = features
+            .dyn_into()
+            .expect("adapter.features() is not setlike");
+
+        let mut features = wgt::Features::empty();
+
+        for (wgpu_feat, web_feat) in FEATURES_MAPPING {
+            let value = wasm_bindgen::JsValue::from(web_feat);
+
+            if features_set.has(&value) {
+                features |= wgpu_feat;
+            }
+        }
+
+        features
     }
 
     fn adapter_limits(
@@ -1025,7 +1050,7 @@ impl crate::context::Context for Context {
         _surface_data: &Self::SurfaceData,
         device: &Self::DeviceId,
         _device_data: &Self::DeviceData,
-        config: &wgt::SurfaceConfiguration,
+        config: &crate::SurfaceConfiguration,
     ) {
         if let wgt::PresentMode::Mailbox | wgt::PresentMode::Immediate = config.present_mode {
             panic!("Only FIFO/Auto* is supported on web");
@@ -1043,6 +1068,12 @@ impl crate::context::Context for Context {
             web_sys::GpuCanvasConfiguration::new(&device.0, map_texture_format(config.format));
         mapped.usage(config.usage.bits());
         mapped.alpha_mode(alpha_mode);
+        let mapped_view_formats = config
+            .view_formats
+            .iter()
+            .map(|format| JsValue::from(map_texture_format(*format)))
+            .collect::<js_sys::Array>();
+        mapped.view_formats(&mapped_view_formats);
         surface.0.configure(&mapped);
     }
 
@@ -1078,11 +1109,26 @@ impl crate::context::Context for Context {
 
     fn device_features(
         &self,
-        _device: &Self::DeviceId,
+        device: &Self::DeviceId,
         _device_data: &Self::DeviceData,
     ) -> wgt::Features {
-        // TODO
-        wgt::Features::empty()
+        let features = device.0.features();
+
+        let features_set: js_sys::Set = features
+            .dyn_into()
+            .expect("device.features() is not setlike");
+
+        let mut features = wgt::Features::empty();
+
+        for (wgpu_feat, web_feat) in FEATURES_MAPPING {
+            let value = wasm_bindgen::JsValue::from(web_feat);
+
+            if features_set.has(&value) {
+                features |= wgpu_feat;
+            }
+        }
+
+        features
     }
 
     fn device_limits(
@@ -1546,6 +1592,12 @@ impl crate::context::Context for Context {
         mapped_desc.dimension(map_texture_dimension(desc.dimension));
         mapped_desc.mip_level_count(desc.mip_level_count);
         mapped_desc.sample_count(desc.sample_count);
+        let mapped_view_formats = desc
+            .view_formats
+            .iter()
+            .map(|format| JsValue::from(map_texture_format(*format)))
+            .collect::<js_sys::Array>();
+        mapped_desc.view_formats(&mapped_view_formats);
         (create_identified(device.0.create_texture(&mapped_desc)), ())
     }
 
@@ -2135,13 +2187,21 @@ impl crate::context::Context for Context {
 
     fn command_encoder_clear_buffer(
         &self,
-        _encoder: &Self::CommandEncoderId,
+        encoder: &Self::CommandEncoderId,
         _encoder_data: &Self::CommandEncoderData,
-        _buffer: &crate::Buffer,
-        _offset: wgt::BufferAddress,
-        _size: Option<wgt::BufferSize>,
+        buffer: &crate::Buffer,
+        offset: wgt::BufferAddress,
+        size: Option<wgt::BufferSize>,
     ) {
-        //TODO
+        let buffer_id = &<<Context as crate::Context>::BufferId>::from(buffer.id).0;
+        match size {
+            Some(size) => {
+                encoder
+                    .0
+                    .clear_buffer_with_f64_and_f64(buffer_id, offset as f64, size.get() as f64)
+            }
+            None => encoder.0.clear_buffer_with_f64(buffer_id, offset as f64),
+        }
     }
 
     fn command_encoder_insert_debug_marker(
@@ -2351,6 +2411,24 @@ impl crate::context::Context for Context {
                 &map_texture_copy_view(texture),
                 &js_sys::Uint8Array::from(data).buffer(),
                 &mapped_data_layout,
+                &map_extent_3d(size),
+            );
+    }
+
+    #[cfg(all(target_arch = "wasm32", not(feature = "emscripten")))]
+    fn queue_copy_external_image_to_texture(
+        &self,
+        queue: &Self::QueueId,
+        _queue_data: &Self::QueueData,
+        source: &wgt::ImageCopyExternalImage,
+        dest: crate::ImageCopyTextureTagged,
+        size: wgt::Extent3d,
+    ) {
+        queue
+            .0
+            .copy_external_image_to_texture_with_gpu_extent_3d_dict(
+                &map_external_texture_copy_view(source),
+                &map_tagged_texture_copy_view(dest),
                 &map_extent_3d(size),
             );
     }

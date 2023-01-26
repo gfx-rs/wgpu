@@ -12,6 +12,7 @@
 #[cfg(any(feature = "serde", test))]
 use serde::{Deserialize, Serialize};
 use std::hash::{Hash, Hasher};
+use std::path::PathBuf;
 use std::{num::NonZeroU32, ops::Range};
 
 pub mod assertions;
@@ -360,15 +361,15 @@ bitflags::bitflags! {
         /// Allows the user to create uniform arrays of textures in shaders:
         ///
         /// ex.
-        /// `var textures: binding_array<texture_2d<f32>, 10>` (WGSL)\
-        /// `uniform texture2D textures[10]` (GLSL)
+        /// - `var textures: binding_array<texture_2d<f32>, 10>` (WGSL)
+        /// - `uniform texture2D textures[10]` (GLSL)
         ///
         /// If [`Features::STORAGE_RESOURCE_BINDING_ARRAY`] is supported as well as this, the user
         /// may also create uniform arrays of storage textures.
         ///
         /// ex.
-        /// `var textures: array<texture_storage_2d<f32, write>, 10>` (WGSL)\
-        /// `uniform image2D textures[10]` (GLSL)
+        /// - `var textures: array<texture_storage_2d<f32, write>, 10>` (WGSL)
+        /// - `uniform image2D textures[10]` (GLSL)
         ///
         /// This capability allows them to exist and to be indexed by dynamically uniform
         /// values.
@@ -383,8 +384,8 @@ bitflags::bitflags! {
         /// Allows the user to create arrays of buffers in shaders:
         ///
         /// ex.
-        /// `var<uniform> buffer_array: array<MyBuffer, 10>` (WGSL)\
-        /// `uniform myBuffer { ... } buffer_array[10]` (GLSL)
+        /// - `var<uniform> buffer_array: array<MyBuffer, 10>` (WGSL)
+        /// - `uniform myBuffer { ... } buffer_array[10]` (GLSL)
         ///
         /// This capability allows them to exist and to be indexed by dynamically uniform
         /// values.
@@ -393,8 +394,8 @@ bitflags::bitflags! {
         /// may also create arrays of storage buffers.
         ///
         /// ex.
-        /// `var<storage> buffer_array: array<MyBuffer, 10>` (WGSL)\
-        /// `buffer myBuffer { ... } buffer_array[10]` (GLSL)
+        /// - `var<storage> buffer_array: array<MyBuffer, 10>` (WGSL)
+        /// - `buffer myBuffer { ... } buffer_array[10]` (GLSL)
         ///
         /// Supported platforms:
         /// - DX12
@@ -726,17 +727,20 @@ impl Features {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
-#[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
+#[cfg_attr(feature = "serde", serde(rename_all = "camelCase", default))]
 pub struct Limits {
     /// Maximum allowed value for the `size.width` of a texture created with `TextureDimension::D1`.
     /// Defaults to 8192. Higher is "better".
+    #[cfg_attr(feature = "serde", serde(rename = "maxTextureDimension1D"))]
     pub max_texture_dimension_1d: u32,
     /// Maximum allowed value for the `size.width` and `size.height` of a texture created with `TextureDimension::D2`.
     /// Defaults to 8192. Higher is "better".
+    #[cfg_attr(feature = "serde", serde(rename = "maxTextureDimension2D"))]
     pub max_texture_dimension_2d: u32,
     /// Maximum allowed value for the `size.width`, `size.height`, and `size.depth_or_array_layers`
     /// of a texture created with `TextureDimension::D3`.
     /// Defaults to 2048. Higher is "better".
+    #[cfg_attr(feature = "serde", serde(rename = "maxTextureDimension3D"))]
     pub max_texture_dimension_3d: u32,
     /// Maximum allowed value for the `size.depth_or_array_layers` of a texture created with
     /// `TextureDimension::D1` or `TextureDimension::D2`.
@@ -767,6 +771,11 @@ pub struct Limits {
     /// Maximum length of `VertexState::buffers` when creating a `RenderPipeline`.
     /// Defaults to 8. Higher is "better".
     pub max_vertex_buffers: u32,
+    /// A limit above which buffer allocations are guaranteed to fail.
+    ///
+    /// Buffer allocations below the maximum buffer size may not succeed depending on available memory,
+    /// fragmentation and other factors.
+    pub max_buffer_size: u64,
     /// Maximum length of `VertexBufferLayout::attributes`, summed over all `VertexState::buffers`,
     /// when creating a `RenderPipeline`.
     /// Defaults to 16. Higher is "better".
@@ -774,16 +783,6 @@ pub struct Limits {
     /// Maximum value for `VertexBufferLayout::array_stride` when creating a `RenderPipeline`.
     /// Defaults to 2048. Higher is "better".
     pub max_vertex_buffer_array_stride: u32,
-    /// Amount of storage available for push constants in bytes. Defaults to 0. Higher is "better".
-    /// Requesting more than 0 during device creation requires [`Features::PUSH_CONSTANTS`] to be enabled.
-    ///
-    /// Expect the size to be:
-    /// - Vulkan: 128-256 bytes
-    /// - DX12: 256 bytes
-    /// - Metal: 4096 bytes
-    /// - DX11 & OpenGL don't natively support push constants, and are emulated with uniforms,
-    ///   so this number is less useful but likely 256.
-    pub max_push_constant_size: u32,
     /// Required `BufferBindingType::Uniform` alignment for `BufferBinding::offset`
     /// when creating a `BindGroup`, or for `set_bind_group` `dynamicOffsets`.
     /// Defaults to 256. Lower is "better".
@@ -813,11 +812,16 @@ pub struct Limits {
     /// The maximum value for each dimension of a `ComputePass::dispatch(x, y, z)` operation.
     /// Defaults to 65535.
     pub max_compute_workgroups_per_dimension: u32,
-    /// A limit above which buffer allocations are guaranteed to fail.
+    /// Amount of storage available for push constants in bytes. Defaults to 0. Higher is "better".
+    /// Requesting more than 0 during device creation requires [`Features::PUSH_CONSTANTS`] to be enabled.
     ///
-    /// Buffer allocations below the maximum buffer size may not succeed depending on available memory,
-    /// fragmentation and other factors.
-    pub max_buffer_size: u64,
+    /// Expect the size to be:
+    /// - Vulkan: 128-256 bytes
+    /// - DX12: 256 bytes
+    /// - Metal: 4096 bytes
+    /// - DX11 & OpenGL don't natively support push constants, and are emulated with uniforms,
+    ///   so this number is less useful but likely 256.
+    pub max_push_constant_size: u32,
 }
 
 impl Default for Limits {
@@ -834,24 +838,24 @@ impl Default for Limits {
             max_sampled_textures_per_shader_stage: 16,
             max_samplers_per_shader_stage: 16,
             max_storage_buffers_per_shader_stage: 8,
-            max_storage_textures_per_shader_stage: 8,
+            max_storage_textures_per_shader_stage: 4,
             max_uniform_buffers_per_shader_stage: 12,
             max_uniform_buffer_binding_size: 64 << 10,
             max_storage_buffer_binding_size: 128 << 20,
             max_vertex_buffers: 8,
+            max_buffer_size: 1 << 28,
             max_vertex_attributes: 16,
             max_vertex_buffer_array_stride: 2048,
-            max_push_constant_size: 0,
             min_uniform_buffer_offset_alignment: 256,
             min_storage_buffer_offset_alignment: 256,
             max_inter_stage_shader_components: 60,
-            max_compute_workgroup_storage_size: 16352,
+            max_compute_workgroup_storage_size: 16384,
             max_compute_invocations_per_workgroup: 256,
             max_compute_workgroup_size_x: 256,
             max_compute_workgroup_size_y: 256,
             max_compute_workgroup_size_z: 64,
             max_compute_workgroups_per_dimension: 65535,
-            max_buffer_size: 1 << 28,
+            max_push_constant_size: 0,
         }
     }
 }
@@ -1125,7 +1129,7 @@ bitflags::bitflags! {
 
         /// Supports buffers to combine [`BufferUsages::INDEX`] with usages other than [`BufferUsages::COPY_DST`] and [`BufferUsages::COPY_SRC`].
         /// Furthermore, in absence of this feature it is not allowed to copy index buffers from/to buffers with a set of usage flags containing
-         /// [`BufferUsages::VERTEX`]/[`BufferUsages::UNIFORM`]/[`BufferUsages::STORAGE`] or [`BufferUsages::INDIRECT`].
+        /// [`BufferUsages::VERTEX`]/[`BufferUsages::UNIFORM`]/[`BufferUsages::STORAGE`] or [`BufferUsages::INDIRECT`].
         ///
         /// WebGL doesn't support this.
         const UNRESTRICTED_INDEX_BUFFER = 1 << 16;
@@ -1139,6 +1143,27 @@ bitflags::bitflags! {
         ///
         /// Corresponds to Vulkan's `VkPhysicalDeviceFeatures.depthBiasClamp`
         const DEPTH_BIAS_CLAMP = 1 << 18;
+
+        /// Supports specifying which view format values are allowed when create_view() is called on a texture.
+        ///
+        /// The WebGL and GLES backends doesn't support this.
+        const VIEW_FORMATS = 1 << 19;
+
+        /// With this feature not present, there are the following restrictions on `Queue::copy_external_image_to_texture`:
+        /// - The source must not be [`web_sys::OffscreenCanvas`]
+        /// - [`ImageCopyExternalImage::origin`] must be zero.
+        /// - [`ImageCopyTextureTagged::color_space`] must be srgb.
+        /// - If the source is an [`web_sys::ImageBitmap`]:
+        ///   - [`ImageCopyExternalImage::flip_y`] must be false.
+        ///   - [`ImageCopyTextureTagged::premultiplied_alpha`] must be false.
+        ///
+        /// WebGL doesn't support this. WebGPU does.
+        const UNRESTRICTED_EXTERNAL_TEXTURE_COPIES = 1 << 20;
+
+        /// Supports specifying which view formats are allowed when calling create_view on the texture returned by get_current_texture.
+        ///
+        /// The GLES/WebGL and Vulkan on Android doesn't support this.
+        const SURFACE_VIEW_FORMATS = 1 << 21;
     }
 }
 
@@ -2433,14 +2458,14 @@ impl TextureFormat {
             // Packed 32 bit textures
             Self::Rgb10a2Unorm =>        (   native,   float,    linear, msaa_resolve, (1, 1),  4, attachment, 4),
             Self::Rg11b10Float =>        (   native,   float,    linear,         msaa, (1, 1),  4,      basic, 3),
-            // Packed 32 bit textures
+            // Normal 64 bit textures
             Self::Rg32Uint =>            (   native,    uint,    linear,         noaa, (1, 1),  8,  all_flags, 2),
             Self::Rg32Sint =>            (   native,    sint,    linear,         noaa, (1, 1),  8,  all_flags, 2),
             Self::Rg32Float =>           (   native, nearest,    linear,         noaa, (1, 1),  8,  all_flags, 2),
             Self::Rgba16Uint =>          (   native,    uint,    linear,         msaa, (1, 1),  8,  all_flags, 4),
             Self::Rgba16Sint =>          (   native,    sint,    linear,         msaa, (1, 1),  8,  all_flags, 4),
             Self::Rgba16Float =>         (   native,   float,    linear, msaa_resolve, (1, 1),  8,  all_flags, 4),
-            // Packed 32 bit textures
+            // Normal 128 bit textures
             Self::Rgba32Uint =>          (   native,    uint,    linear,         noaa, (1, 1), 16,  all_flags, 4),
             Self::Rgba32Sint =>          (   native,    sint,    linear,         noaa, (1, 1), 16,  all_flags, 4),
             Self::Rgba32Float =>         (   native, nearest,    linear,         noaa, (1, 1), 16,  all_flags, 4),
@@ -2535,6 +2560,52 @@ impl TextureFormat {
                 allowed_usages,
                 flags,
             },
+        }
+    }
+
+    /// Strips the `Srgb` suffix from the given texture format.
+    pub fn remove_srgb_suffix(&self) -> TextureFormat {
+        match *self {
+            Self::Rgba8UnormSrgb => Self::Rgba8Unorm,
+            Self::Bgra8UnormSrgb => Self::Bgra8Unorm,
+            Self::Bc1RgbaUnormSrgb => Self::Bc1RgbaUnorm,
+            Self::Bc2RgbaUnormSrgb => Self::Bc2RgbaUnorm,
+            Self::Bc3RgbaUnormSrgb => Self::Bc3RgbaUnorm,
+            Self::Bc7RgbaUnormSrgb => Self::Bc7RgbaUnorm,
+            Self::Etc2Rgb8UnormSrgb => Self::Etc2Rgb8Unorm,
+            Self::Etc2Rgb8A1UnormSrgb => Self::Etc2Rgb8A1Unorm,
+            Self::Etc2Rgba8UnormSrgb => Self::Etc2Rgba8Unorm,
+            Self::Astc {
+                block,
+                channel: AstcChannel::UnormSrgb,
+            } => Self::Astc {
+                block,
+                channel: AstcChannel::Unorm,
+            },
+            _ => *self,
+        }
+    }
+
+    /// Adds an `Srgb` suffix to the given texture format, if the format supports it.
+    pub fn add_srgb_suffix(&self) -> TextureFormat {
+        match *self {
+            Self::Rgba8Unorm => Self::Rgba8UnormSrgb,
+            Self::Bgra8Unorm => Self::Bgra8UnormSrgb,
+            Self::Bc1RgbaUnorm => Self::Bc1RgbaUnormSrgb,
+            Self::Bc2RgbaUnorm => Self::Bc2RgbaUnormSrgb,
+            Self::Bc3RgbaUnorm => Self::Bc3RgbaUnormSrgb,
+            Self::Bc7RgbaUnorm => Self::Bc7RgbaUnormSrgb,
+            Self::Etc2Rgb8Unorm => Self::Etc2Rgb8UnormSrgb,
+            Self::Etc2Rgb8A1Unorm => Self::Etc2Rgb8A1UnormSrgb,
+            Self::Etc2Rgba8Unorm => Self::Etc2Rgba8UnormSrgb,
+            Self::Astc {
+                block,
+                channel: AstcChannel::Unorm,
+            } => Self::Astc {
+                block,
+                channel: AstcChannel::UnormSrgb,
+            },
+            _ => *self,
         }
     }
 }
@@ -3847,6 +3918,7 @@ pub enum PresentMode {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub enum CompositeAlphaMode {
     /// Chooses either `Opaque` or `Inherit` automatically，depending on the
     /// `alpha_mode` that the current surface can support.
@@ -3940,7 +4012,7 @@ impl Default for SurfaceCapabilities {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
-pub struct SurfaceConfiguration {
+pub struct SurfaceConfiguration<V> {
     /// The usage of the swap chain. The only supported usage is `RENDER_ATTACHMENT`.
     pub usage: TextureUsages,
     /// The texture format of the swap chain. The only formats that are guaranteed are
@@ -3957,6 +4029,27 @@ pub struct SurfaceConfiguration {
     pub present_mode: PresentMode,
     /// Specifies how the alpha channel of the textures should be handled during compositing.
     pub alpha_mode: CompositeAlphaMode,
+    /// Specifies what view formats will be allowed when calling create_view() on texture returned by get_current_texture().
+    ///
+    /// View formats of the same format as the texture are always allowed.
+    ///
+    /// Note: currently, only the srgb-ness is allowed to change. (ex: Rgba8Unorm texture + Rgba8UnormSrgb view)
+    pub view_formats: V,
+}
+
+impl<V: Clone> SurfaceConfiguration<V> {
+    /// Map view_formats of the texture descriptor into another.
+    pub fn map_view_formats<M>(&self, fun: impl FnOnce(V) -> M) -> SurfaceConfiguration<M> {
+        SurfaceConfiguration {
+            usage: self.usage,
+            format: self.format,
+            width: self.width,
+            height: self.height,
+            present_mode: self.present_mode,
+            alpha_mode: self.alpha_mode,
+            view_formats: fun(self.view_formats.clone()),
+        }
+    }
 }
 
 /// Status of the recieved surface image.
@@ -4091,10 +4184,40 @@ pub enum TextureDimension {
     D3,
 }
 
+/// Origin of a copy from a 2D image.
+///
+/// Corresponds to [WebGPU `GPUOrigin2D`](
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpuorigin2ddict).
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "trace", derive(Serialize))]
+#[cfg_attr(feature = "replay", derive(Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
+pub struct Origin2d {
+    ///
+    pub x: u32,
+    ///
+    pub y: u32,
+}
+
+impl Origin2d {
+    /// Zero origin.
+    pub const ZERO: Self = Self { x: 0, y: 0 };
+
+    /// Adds the third dimension to this origin
+    pub fn to_3d(self, z: u32) -> Origin3d {
+        Origin3d {
+            x: self.x,
+            y: self.y,
+            z,
+        }
+    }
+}
+
 /// Origin of a copy to/from a texture.
 ///
 /// Corresponds to [WebGPU `GPUOrigin3D`](
-/// https://gpuweb.github.io/gpuweb/#typedefdef-gpuorigin3d).
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpuorigin3ddict).
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
@@ -4112,6 +4235,14 @@ pub struct Origin3d {
 impl Origin3d {
     /// Zero origin.
     pub const ZERO: Self = Self { x: 0, y: 0, z: 0 };
+
+    /// Removes the third dimension from this origin
+    pub fn to_2d(self) -> Origin2d {
+        Origin2d {
+            x: self.x,
+            y: self.y,
+        }
+    }
 }
 
 impl Default for Origin3d {
@@ -4123,7 +4254,7 @@ impl Default for Origin3d {
 /// Extent of a texture related operation.
 ///
 /// Corresponds to [WebGPU `GPUExtent3D`](
-/// https://gpuweb.github.io/gpuweb/#typedefdef-gpuextent3d).
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpuextent3ddict).
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
@@ -4197,13 +4328,18 @@ impl Extent3d {
 
     /// Calculates the extent at a given mip level.
     /// Does *not* account for memory size being a multiple of block size.
-    pub fn mip_level_size(&self, level: u32, is_3d_texture: bool) -> Extent3d {
-        Extent3d {
+    ///
+    /// https://gpuweb.github.io/gpuweb/#logical-miplevel-specific-texture-extent
+    pub fn mip_level_size(&self, level: u32, dim: TextureDimension) -> Self {
+        Self {
             width: u32::max(1, self.width >> level),
-            height: u32::max(1, self.height >> level),
-            depth_or_array_layers: match is_3d_texture {
-                false => self.depth_or_array_layers,
-                true => u32::max(1, self.depth_or_array_layers >> level),
+            height: match dim {
+                TextureDimension::D1 => 1,
+                _ => u32::max(1, self.height >> level),
+            },
+            depth_or_array_layers: match dim {
+                TextureDimension::D3 => u32::max(1, self.depth_or_array_layers >> level),
+                _ => self.depth_or_array_layers,
             },
         }
     }
@@ -4318,7 +4454,7 @@ fn test_max_mips() {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
-pub struct TextureDescriptor<L> {
+pub struct TextureDescriptor<L, V> {
     /// Debug label of the texture. This will show up in graphics debuggers for easy identification.
     pub label: L,
     /// Size of the texture. All components must be greater than zero. For a
@@ -4335,12 +4471,17 @@ pub struct TextureDescriptor<L> {
     pub format: TextureFormat,
     /// Allowed usages of the texture. If used in other ways, the operation will panic.
     pub usage: TextureUsages,
-    // TODO: missing view_formats https://www.w3.org/TR/webgpu/#dom-gputexturedescriptor-viewformats
+    /// Specifies what view formats will be allowed when calling create_view() on this texture.
+    ///
+    /// View formats of the same format as the texture are always allowed.
+    ///
+    /// Note: currently, only the srgb-ness is allowed to change. (ex: Rgba8Unorm texture + Rgba8UnormSrgb view)
+    pub view_formats: V,
 }
 
-impl<L> TextureDescriptor<L> {
+impl<L, V: Clone> TextureDescriptor<L, V> {
     /// Takes a closure and maps the label of the texture descriptor into another.
-    pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> TextureDescriptor<K> {
+    pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> TextureDescriptor<K, V> {
         TextureDescriptor {
             label: fun(&self.label),
             size: self.size,
@@ -4349,6 +4490,25 @@ impl<L> TextureDescriptor<L> {
             dimension: self.dimension,
             format: self.format,
             usage: self.usage,
+            view_formats: self.view_formats.clone(),
+        }
+    }
+
+    /// Maps the label and view_formats of the texture descriptor into another.
+    pub fn map_label_and_view_formats<K, M>(
+        &self,
+        l_fun: impl FnOnce(&L) -> K,
+        v_fun: impl FnOnce(V) -> M,
+    ) -> TextureDescriptor<K, M> {
+        TextureDescriptor {
+            label: l_fun(&self.label),
+            size: self.size,
+            mip_level_count: self.mip_level_count,
+            sample_count: self.sample_count,
+            dimension: self.dimension,
+            format: self.format,
+            usage: self.usage,
+            view_formats: v_fun(self.view_formats.clone()),
         }
     }
 
@@ -4361,7 +4521,8 @@ impl<L> TextureDescriptor<L> {
     ///
     /// ```rust
     /// # use wgpu_types as wgpu;
-    /// let desc = wgpu::TextureDescriptor {
+    /// # type TextureDescriptor<'a> = wgpu::TextureDescriptor<(), &'a [wgpu::TextureFormat]>;
+    /// let desc  = TextureDescriptor {
     ///   label: (),
     ///   size: wgpu::Extent3d { width: 100, height: 60, depth_or_array_layers: 1 },
     ///   mip_level_count: 7,
@@ -4369,6 +4530,7 @@ impl<L> TextureDescriptor<L> {
     ///   dimension: wgpu::TextureDimension::D3,
     ///   format: wgpu::TextureFormat::Rgba8Sint,
     ///   usage: wgpu::TextureUsages::empty(),
+    ///   view_formats: &[],
     /// };
     ///
     /// assert_eq!(desc.mip_level_size(0), Some(wgpu::Extent3d { width: 100, height: 60, depth_or_array_layers: 1 }));
@@ -4385,13 +4547,23 @@ impl<L> TextureDescriptor<L> {
             return None;
         }
 
-        Some(
-            self.size
-                .mip_level_size(level, self.dimension == TextureDimension::D3),
-        )
+        Some(self.size.mip_level_size(level, self.dimension))
+    }
+
+    /// Computes the render extent of this texture.
+    ///
+    /// https://gpuweb.github.io/gpuweb/#abstract-opdef-compute-render-extent
+    pub fn compute_render_extent(&self, mip_level: u32) -> Extent3d {
+        Extent3d {
+            width: u32::max(1, self.size.width >> mip_level),
+            height: u32::max(1, self.size.height >> mip_level),
+            depth_or_array_layers: 1,
+        }
     }
 
     /// Returns the number of array layers.
+    ///
+    /// https://gpuweb.github.io/gpuweb/#abstract-opdef-array-layer-count
     pub fn array_layer_count(&self) -> u32 {
         match self.dimension {
             TextureDimension::D1 | TextureDimension::D3 => 1,
@@ -4974,7 +5146,7 @@ pub struct BindGroupLayoutEntry {
 /// Corresponds to [WebGPU `GPUImageCopyBuffer`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpuimagecopybuffer).
 #[repr(C)]
-#[derive(Clone, Debug)]
+#[derive(Copy, Clone, Debug)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub struct ImageCopyBuffer<B> {
@@ -4989,7 +5161,7 @@ pub struct ImageCopyBuffer<B> {
 /// Corresponds to [WebGPU `GPUImageCopyTexture`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpuimagecopytexture).
 #[repr(C)]
-#[derive(Clone, Debug)]
+#[derive(Copy, Clone, Debug)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub struct ImageCopyTexture<T> {
@@ -4997,7 +5169,9 @@ pub struct ImageCopyTexture<T> {
     pub texture: T,
     /// The target mip level of the texture.
     pub mip_level: u32,
-    /// The base texel of the texture in the selected `mip_level`.
+    /// The base texel of the texture in the selected `mip_level`. Together
+    /// with the `copy_size` argument to copy functions, defines the
+    /// sub-region of the texture to copy.
     #[cfg_attr(any(feature = "trace", feature = "replay"), serde(default))]
     pub origin: Origin3d,
     /// The copy aspect.
@@ -5005,9 +5179,162 @@ pub struct ImageCopyTexture<T> {
     pub aspect: TextureAspect,
 }
 
+impl<T> ImageCopyTexture<T> {
+    /// Adds color space and premultiplied alpha information to make this
+    /// descriptor tagged.
+    pub fn to_tagged(
+        self,
+        color_space: PredefinedColorSpace,
+        premultiplied_alpha: bool,
+    ) -> ImageCopyTextureTagged<T> {
+        ImageCopyTextureTagged {
+            texture: self.texture,
+            mip_level: self.mip_level,
+            origin: self.origin,
+            aspect: self.aspect,
+            color_space,
+            premultiplied_alpha,
+        }
+    }
+}
+
+/// View of an external texture that cna be used to copy to a texture.
+///
+/// Corresponds to [WebGPU `GPUImageCopyExternalImage`](
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpuimagecopyexternalimage).
+#[cfg(target_arch = "wasm32")]
+#[derive(Clone, Debug)]
+pub struct ImageCopyExternalImage {
+    /// The texture to be copied from. The copy source data is captured at the moment
+    /// the copy is issued.
+    pub source: ExternalImageSource,
+    /// The base texel used for copying from the external image. Together
+    /// with the `copy_size` argument to copy functions, defines the
+    /// sub-region of the image to copy.
+    ///
+    /// Relative to the top left of the image.
+    ///
+    /// Must be [`Origin2d::ZERO`] if [`DownlevelFlags::UNRESTRICTED_EXTERNAL_TEXTURE_COPIES`] is not supported.
+    pub origin: Origin2d,
+    /// If the Y coordinate of the image should be flipped. Even if this is
+    /// true, `origin` is still relative to the top left.
+    pub flip_y: bool,
+}
+
+/// Source of an external texture copy.
+///
+/// Corresponds to the [implicit union type on WebGPU `GPUImageCopyExternalImage.source`](
+/// https://gpuweb.github.io/gpuweb/#dom-gpuimagecopyexternalimage-source).
+#[cfg(target_arch = "wasm32")]
+#[derive(Clone, Debug)]
+pub enum ExternalImageSource {
+    /// Copy from a previously-decoded image bitmap.
+    ImageBitmap(web_sys::ImageBitmap),
+    /// Copy from a current frame of a video element.
+    HTMLVideoElement(web_sys::HtmlVideoElement),
+    /// Copy from a on-screen canvas.
+    HTMLCanvasElement(web_sys::HtmlCanvasElement),
+    /// Copy from a off-screen canvas.
+    ///
+    /// Requies [`DownlevelFlags::EXTERNAL_TEXTURE_OFFSCREEN_CANVAS`]
+    OffscreenCanvas(web_sys::OffscreenCanvas),
+}
+
+#[cfg(target_arch = "wasm32")]
+impl ExternalImageSource {
+    /// Gets the pixel, not css, width of the source.
+    pub fn width(&self) -> u32 {
+        match self {
+            ExternalImageSource::ImageBitmap(b) => b.width(),
+            ExternalImageSource::HTMLVideoElement(v) => v.video_width(),
+            ExternalImageSource::HTMLCanvasElement(c) => c.width(),
+            ExternalImageSource::OffscreenCanvas(c) => c.width(),
+        }
+    }
+
+    /// Gets the pixel, not css, height of the source.
+    pub fn height(&self) -> u32 {
+        match self {
+            ExternalImageSource::ImageBitmap(b) => b.height(),
+            ExternalImageSource::HTMLVideoElement(v) => v.video_height(),
+            ExternalImageSource::HTMLCanvasElement(c) => c.height(),
+            ExternalImageSource::OffscreenCanvas(c) => c.height(),
+        }
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+impl std::ops::Deref for ExternalImageSource {
+    type Target = js_sys::Object;
+
+    fn deref(&self) -> &Self::Target {
+        match self {
+            Self::ImageBitmap(b) => b,
+            Self::HTMLVideoElement(v) => v,
+            Self::HTMLCanvasElement(c) => c,
+            Self::OffscreenCanvas(c) => c,
+        }
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+unsafe impl Send for ExternalImageSource {}
+#[cfg(target_arch = "wasm32")]
+unsafe impl Sync for ExternalImageSource {}
+
+/// Color spaces supported on the web.
+///
+/// Corresponds to [HTML Canvas `PredefinedColorSpace`](
+/// https://html.spec.whatwg.org/multipage/canvas.html#predefinedcolorspace).
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "trace", derive(serde::Serialize))]
+#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
+pub enum PredefinedColorSpace {
+    /// sRGB color space
+    Srgb,
+    /// Display-P3 color space
+    DisplayP3,
+}
+
+/// View of a texture which can be used to copy to a texture, including
+/// color space and alpha premultiplication information.
+///
+/// Corresponds to [WebGPU `GPUImageCopyTextureTagged`](
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpuimagecopytexturetagged).
+#[derive(Copy, Clone, Debug)]
+#[cfg_attr(feature = "trace", derive(serde::Serialize))]
+#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
+pub struct ImageCopyTextureTagged<T> {
+    /// The texture to be copied to/from.
+    pub texture: T,
+    /// The target mip level of the texture.
+    pub mip_level: u32,
+    /// The base texel of the texture in the selected `mip_level`.
+    pub origin: Origin3d,
+    /// The copy aspect.
+    pub aspect: TextureAspect,
+    /// The color space of this texture.
+    pub color_space: PredefinedColorSpace,
+    /// The premultiplication of this texture
+    pub premultiplied_alpha: bool,
+}
+
+impl<T: Copy> ImageCopyTextureTagged<T> {
+    /// Removes the colorspace information from the type.
+    pub fn to_untagged(self) -> ImageCopyTexture<T> {
+        ImageCopyTexture {
+            texture: self.texture,
+            mip_level: self.mip_level,
+            origin: self.origin,
+            aspect: self.aspect,
+        }
+    }
+}
+
 /// Subresource range within an image
 #[repr(C)]
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub struct ImageSubresourceRange {
@@ -5086,7 +5413,7 @@ impl ImageSubresourceRange {
     }
 
     /// Returns the mip level range of a subresource range describes for a specific texture.
-    pub fn mip_range<L>(&self, texture_desc: &TextureDescriptor<L>) -> Range<u32> {
+    pub fn mip_range<L, V>(&self, texture_desc: &TextureDescriptor<L, V>) -> Range<u32> {
         self.base_mip_level..match self.mip_level_count {
             Some(mip_level_count) => self.base_mip_level + mip_level_count.get(),
             None => texture_desc.mip_level_count,
@@ -5094,7 +5421,7 @@ impl ImageSubresourceRange {
     }
 
     /// Returns the layer range of a subresource range describes for a specific texture.
-    pub fn layer_range<L>(&self, texture_desc: &TextureDescriptor<L>) -> Range<u32> {
+    pub fn layer_range<L, V>(&self, texture_desc: &TextureDescriptor<L, V>) -> Range<u32> {
         self.base_array_layer..match self.array_layer_count {
             Some(array_layer_count) => self.base_array_layer + array_layer_count.get(),
             None => {
@@ -5302,5 +5629,52 @@ impl ShaderBoundChecks {
 impl Default for ShaderBoundChecks {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+/// Selects which DX12 shader compiler to use.
+///
+/// If the `wgpu-hal/dx12-shader-compiler` feature isn't enabled then this will fall back
+/// to the Fxc compiler at runtime and log an error.
+/// This feature is always enabled when using `wgpu`.
+///
+/// If the `Dxc` option is selected, but `dxcompiler.dll` and `dxil.dll` files aren't found,
+/// then this will fall back to the Fxc compiler at runtime and log an error.
+///
+/// `wgpu::utils::init::dx12_shader_compiler_from_env` can be used to set the compiler
+/// from the `WGPU_DX12_SHADER_COMPILER` environment variable, but this should only be used for testing.
+#[derive(Clone, Debug, Default)]
+pub enum Dx12Compiler {
+    /// The Fxc compiler (default) is old, slow and unmaintained.
+    ///
+    /// However, it doesn't require any additional .dlls to be shipped with the application.
+    #[default]
+    Fxc,
+    /// The Dxc compiler is new, fast and maintained.
+    ///
+    /// However, it requires both `dxcompiler.dll` and `dxil.dll` to be shipped with the application.
+    /// These files can be downloaded from https://github.com/microsoft/DirectXShaderCompiler/releases
+    Dxc {
+        /// Path to the `dxcompiler.dll` file. Passing `None` will use standard platform specific dll loading rules.
+        dxil_path: Option<PathBuf>,
+        /// Path to the `dxil.dll` file. Passing `None` will use standard platform specific dll loading rules.
+        dxc_path: Option<PathBuf>,
+    },
+}
+
+/// Options for creating an instance.
+pub struct InstanceDescriptor {
+    /// Which `Backends` to enable.
+    pub backends: Backends,
+    /// Which DX12 shader compiler to use.
+    pub dx12_shader_compiler: Dx12Compiler,
+}
+
+impl Default for InstanceDescriptor {
+    fn default() -> Self {
+        Self {
+            backends: Backends::all(),
+            dx12_shader_compiler: Dx12Compiler::default(),
+        }
     }
 }
