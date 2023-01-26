@@ -42,6 +42,20 @@ Bottom level categories:
 
 ### Major Changes
 
+
+#### WGSL Top-Level `let` is now `const`
+
+All top level constants are now declared with `const`, catching up with the wgsl spec.
+
+`let` is no longer allowed at the global scope, only within functions.
+
+```diff
+-let SOME_CONSTANT = 12.0;
++const SOME_CONSTANT = 12.0;
+```
+
+See https://github.com/gfx-rs/naga/blob/master/CHANGELOG.md#v011-2023-01-25 for smaller shader improvements.
+
 #### Surface Capabilities API
 
 The various surface capability functions were combined into a single call that gives you all the capabilities.
