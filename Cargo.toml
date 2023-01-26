@@ -28,14 +28,17 @@ authors = ["wgpu developers"]
 [workspace.dependencies.wgc]
 package = "wgpu-core"
 path = "./wgpu-core"
+version = "0.15"
 
 [workspace.dependencies.wgt]
 package = "wgpu-types"
 path = "./wgpu-types"
+version = "0.15"
 
 [workspace.dependencies.hal]
 package = "wgpu-hal"
 path = "./wgpu-hal"
+version = "0.15"
 
 [workspace.dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
