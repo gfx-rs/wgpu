@@ -74,10 +74,12 @@ features = ["clone", "span", "validate"]
 [dependencies.wgt]
 package = "wgpu-types"
 path = "../wgpu-types"
+version = "0.15"
 
 [dependencies.hal]
 package = "wgpu-hal"
 path = "../wgpu-hal"
+version = "0.15"
 
 [target.'cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))'.dependencies]
 web-sys = { version = "0.3.60", features = ["HtmlCanvasElement", "OffscreenCanvas"] }
