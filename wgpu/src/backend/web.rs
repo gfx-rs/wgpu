@@ -2187,13 +2187,21 @@ impl crate::context::Context for Context {
 
     fn command_encoder_clear_buffer(
         &self,
-        _encoder: &Self::CommandEncoderId,
+        encoder: &Self::CommandEncoderId,
         _encoder_data: &Self::CommandEncoderData,
-        _buffer: &crate::Buffer,
-        _offset: wgt::BufferAddress,
-        _size: Option<wgt::BufferSize>,
+        buffer: &crate::Buffer,
+        offset: wgt::BufferAddress,
+        size: Option<wgt::BufferSize>,
     ) {
-        //TODO
+        let buffer_id = &<<Context as crate::Context>::BufferId>::from(buffer.id).0;
+        match size {
+            Some(size) => {
+                encoder
+                    .0
+                    .clear_buffer_with_f64_and_f64(buffer_id, offset as f64, size.get() as f64)
+            }
+            None => encoder.0.clear_buffer_with_f64(buffer_id, offset as f64),
+        }
     }
 
     fn command_encoder_insert_debug_marker(
