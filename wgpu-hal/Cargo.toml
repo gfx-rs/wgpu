@@ -81,6 +81,7 @@ hassle-rs = { version = "0.9", optional = true }
 [dependencies.wgt]
 package = "wgpu-types"
 path = "../wgpu-types"
+version = "0.15"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 egl = { package = "khronos-egl", version = "4.1", features = ["dynamic"], optional = true }
