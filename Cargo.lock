@@ -503,8 +503,8 @@ checksum = "b365fabc795046672053e29c954733ec3b05e4be654ab130fe8f1f94d7051f35"
 
 [[package]]
 name = "d3d12"
-version = "0.5.0"
-source = "git+https://github.com/gfx-rs/d3d12-rs?rev=a990c93#a990c93ec64eeab78f2292763d0715da9dba1d59"
+version = "0.6.0"
+source = "git+https://github.com/gfx-rs/d3d12-rs?rev=b940b1d71#b940b1d71ab7083ae80eec697872672dc1f2bd32"
 dependencies = [
  "bitflags",
  "libloading",
@@ -3016,7 +3016,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-hal"
-version = "0.15.0"
+version = "0.15.1"
 dependencies = [
  "android_system_properties",
  "arrayvec 0.7.2",
