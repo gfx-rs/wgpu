@@ -1,6 +1,6 @@
 [package]
 name = "wgpu-hal"
-version = "0.14.0"
+version = "0.15.0"
 authors = ["wgpu developers"]
 edition = "2021"
 description = "WebGPU hardware abstraction layer"
@@ -113,15 +113,15 @@ android_system_properties = "0.1.1"
 
 [dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-rev = "c7d02151f08d6285683795289b5725b827d836d1"
-version = "0.10"
+rev = "f0edae8"
+version = "0.11"
 features = ["clone"]
 
 # DEV dependencies
 [dev-dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-rev = "c7d02151f08d6285683795289b5725b827d836d1"
-version = "0.10"
+rev = "f0edae8"
+version = "0.11"
 features = ["wgsl-in"]
 
 [dev-dependencies]
