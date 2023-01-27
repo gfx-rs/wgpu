@@ -1493,23 +1493,26 @@ impl crate::Adapter<super::Api> for super::Adapter {
         let format_aspect = crate::FormatAspects::from(format);
         let limits = self.phd_capabilities.properties.limits;
 
-        let limits_counts = if format_aspect.contains(crate::FormatAspects::DEPTH) {
-            limits.sampled_image_depth_sample_counts
+        let sample_flags = if format_aspect.contains(crate::FormatAspects::DEPTH) {
+            limits
+                .framebuffer_depth_sample_counts
+                .min(limits.sampled_image_depth_sample_counts)
         } else if format_aspect.contains(crate::FormatAspects::STENCIL) {
-            limits.sampled_image_stencil_sample_counts
+            limits
+                .framebuffer_stencil_sample_counts
+                .min(limits.sampled_image_stencil_sample_counts)
         } else {
             match format.describe().sample_type {
-                wgt::TextureSampleType::Float { filterable: _ } => {
-                    limits.sampled_image_color_sample_counts
-                }
+                wgt::TextureSampleType::Float { filterable: _ } => limits
+                    .framebuffer_color_sample_counts
+                    .min(limits.sampled_image_color_sample_counts),
                 wgt::TextureSampleType::Sint | wgt::TextureSampleType::Uint => {
                     limits.sampled_image_integer_sample_counts
                 }
-                _ => limits.storage_image_sample_counts,
+                _ => unimplemented!(),
             }
         };
 
-        let sample_flags = limits.framebuffer_color_sample_counts.min(limits_counts);
         flags.set(
             Tfc::MULTISAMPLE_X2,
             sample_flags.contains(vk::SampleCountFlags::TYPE_2),
