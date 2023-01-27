@@ -46,6 +46,10 @@ Bottom level categories:
 
 - Implement `CommandEncoder::clear_buffer`. By @raphlinus in [#3426](https://github.com/gfx-rs/wgpu/pull/3426)
 
+#### Vulkan
+
+- Improve format MSAA capabilities detection. By @jinleili in [#3429](https://github.com/gfx-rs/wgpu/pull/3429)
+
 ## wgpu-0.15.0 (2023-01-25)
 
 ### Major Changes
