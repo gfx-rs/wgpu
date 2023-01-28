@@ -1854,11 +1854,11 @@ impl crate::Context for Context {
         }
     }
 
-    fn command_encoder_begin_render_pass<'a>(
+    fn command_encoder_begin_render_pass(
         &self,
         encoder: &Self::CommandEncoderId,
         _encoder_data: &Self::CommandEncoderData,
-        desc: &crate::RenderPassDescriptor<'a, '_>,
+        desc: &crate::RenderPassDescriptor<'_, '_>,
     ) -> (Self::RenderPassId, Self::RenderPassData) {
         if desc.color_attachments.len() > wgc::MAX_COLOR_ATTACHMENTS {
             self.handle_error_fatal(
