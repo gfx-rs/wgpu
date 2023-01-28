@@ -1502,11 +1502,15 @@ impl crate::Adapter<super::Api> for super::Adapter {
                 .framebuffer_stencil_sample_counts
                 .min(limits.sampled_image_stencil_sample_counts)
         } else {
-            limits
-                .framebuffer_color_sample_counts
-                .min(limits.sampled_image_color_sample_counts)
-                .min(limits.sampled_image_integer_sample_counts)
-                .min(limits.storage_image_sample_counts)
+            match format.describe().sample_type {
+                wgt::TextureSampleType::Float { filterable: _ } => limits
+                    .framebuffer_color_sample_counts
+                    .min(limits.sampled_image_color_sample_counts),
+                wgt::TextureSampleType::Sint | wgt::TextureSampleType::Uint => {
+                    limits.sampled_image_integer_sample_counts
+                }
+                _ => unreachable!(),
+            }
         };
 
         flags.set(
@@ -1517,7 +1521,6 @@ impl crate::Adapter<super::Api> for super::Adapter {
             Tfc::MULTISAMPLE_X4,
             sample_flags.contains(vk::SampleCountFlags::TYPE_4),
         );
-
         flags.set(
             Tfc::MULTISAMPLE_X8,
             sample_flags.contains(vk::SampleCountFlags::TYPE_8),
