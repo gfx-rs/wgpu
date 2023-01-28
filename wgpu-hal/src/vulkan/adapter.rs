@@ -1509,7 +1509,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
                 wgt::TextureSampleType::Sint | wgt::TextureSampleType::Uint => {
                     limits.sampled_image_integer_sample_counts
                 }
-                _ => unimplemented!(),
+                _ => unreachable!(),
             }
         };
 
