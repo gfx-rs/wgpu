@@ -135,13 +135,11 @@ pub fn compare_image_output(
             );
 
             panic!(
-                "Image data mismatch! Outlier count {} over limit {}. Max difference {}",
-                outliers, max_outliers, max_difference
+                "Image data mismatch! Outlier count {outliers} over limit {max_outliers}. Max difference {max_difference}"
             )
         } else {
             println!(
-                "{} outliers over max difference {}",
-                outliers, max_difference
+                "{outliers} outliers over max difference {max_difference}"
             );
         }
     } else {

@@ -29,7 +29,7 @@ async fn initialize_device(
 
     match bundle {
         Ok(b) => b,
-        Err(e) => panic!("Failed to initialize device: {}", e),
+        Err(e) => panic!("Failed to initialize device: {e}"),
     }
 }
 
@@ -324,9 +324,9 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
         }
     } else if let Some((reason, _)) = expected_failure_reason {
         // We expected to fail, but things passed
-        panic!("UNEXPECTED TEST PASS: {:?}", reason);
+        panic!("UNEXPECTED TEST PASS: {reason:?}");
     } else {
-        panic!("UNEXPECTED TEST FAILURE DUE TO {}", failure_cause)
+        panic!("UNEXPECTED TEST FAILURE DUE TO {failure_cause}")
     }
 }
 

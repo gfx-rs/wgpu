@@ -56,7 +56,7 @@ pub(super) fn compile_fxc(
             log::Level::Info,
         ),
         Err(e) => {
-            let mut full_msg = format!("FXC D3DCompile error ({})", e);
+            let mut full_msg = format!("FXC D3DCompile error ({e})");
             if !error.is_null() {
                 use std::fmt::Write as _;
                 let message = unsafe {
@@ -150,7 +150,7 @@ mod dxc {
         let blob = match dxc_container
             .library
             .create_blob_with_encoding_from_str(source)
-            .map_err(|e| crate::PipelineError::Linkage(stage_bit, format!("DXC blob error: {}", e)))
+            .map_err(|e| crate::PipelineError::Linkage(stage_bit, format!("DXC blob error: {e}")))
         {
             Ok(blob) => blob,
             Err(e) => return (Err(e), log::Level::Error),
@@ -176,7 +176,7 @@ mod dxc {
                 Err(e) => (
                     Err(crate::PipelineError::Linkage(
                         stage_bit,
-                        format!("DXC compile error: {}", e),
+                        format!("DXC compile error: {e}"),
                     )),
                     log::Level::Error,
                 ),
@@ -184,7 +184,7 @@ mod dxc {
             Err(e) => (
                 Err(crate::PipelineError::Linkage(
                     stage_bit,
-                    format!("DXC compile error: {:?}", e),
+                    format!("DXC compile error: {e:?}"),
                 )),
                 log::Level::Error,
             ),

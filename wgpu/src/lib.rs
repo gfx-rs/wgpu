@@ -167,8 +167,7 @@ impl MapContext {
         for sub in self.sub_ranges.iter() {
             assert!(
                 end <= sub.start || offset >= sub.end,
-                "Intersecting map range with {:?}",
-                sub
+                "Intersecting map range with {sub:?}"
             );
         }
         self.sub_ranges.push(offset..end);
