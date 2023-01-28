@@ -115,7 +115,7 @@ mod dxc {
         // We need to disable implicit validation and do explicit validation if the user is using
         // a custom path for `dxil.dll`, otherwise it will silently fail to do validation when
         // calling compile because dxcompiler is looking for `dxil.dll` in the local scope.
-        let validator = if let Some(dxil) = &dxil {
+        let validator = if let Some(ref dxil) = dxil {
             match dxil.create_validator() {
                 Ok(validator) => Some(validator),
                 Err(e) => {
@@ -206,7 +206,7 @@ mod dxc {
                 Ok(dxc_blob) => {
                     // We have a blob, now check if we need to manually validate it or if it
                     // was automatically validated.
-                    if let Some(validator) = &dxc_container.validator {
+                    if let Some(ref validator) = dxc_container.validator {
                         match validator.validate(dxc_blob) {
                             Ok(validated_blob) => (
                                 Ok(crate::dx12::CompiledShader::Dxc(validated_blob.to_vec())),
