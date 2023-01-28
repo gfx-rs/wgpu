@@ -49,6 +49,7 @@ Bottom level categories:
 #### Vulkan
 
 - Improve format MSAA capabilities detection. By @jinleili in [#3429](https://github.com/gfx-rs/wgpu/pull/3429)
+- Fix surface view formats validation error. By @jinleili in [#3432](https://github.com/gfx-rs/wgpu/pull/3432)
 
 ## wgpu-0.15.0 (2023-01-25)
 
