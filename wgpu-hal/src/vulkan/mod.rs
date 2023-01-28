@@ -96,11 +96,13 @@ pub struct Instance {
 
 struct Swapchain {
     raw: vk::SwapchainKHR,
+    raw_flags: vk::SwapchainCreateFlagsKHR,
     functor: khr::Swapchain,
     device: Arc<DeviceShared>,
     fence: vk::Fence,
     images: Vec<vk::Image>,
     config: crate::SurfaceConfiguration,
+    view_formats: Vec<wgt::TextureFormat>,
 }
 
 pub struct Surface {
@@ -225,6 +227,7 @@ struct FramebufferAttachment {
     raw_image_flags: vk::ImageCreateFlags,
     view_usage: crate::TextureUses,
     view_format: wgt::TextureFormat,
+    raw_view_formats: Vec<vk::Format>,
 }
 
 #[derive(Clone, Eq, Hash, PartialEq)]
@@ -294,6 +297,7 @@ pub struct Texture {
     format_info: wgt::TextureFormatInfo,
     raw_flags: vk::ImageCreateFlags,
     copy_size: crate::CopyExtent,
+    view_formats: Vec<wgt::TextureFormat>,
 }
 
 impl Texture {
