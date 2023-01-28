@@ -338,9 +338,7 @@ mod inner {
 
             let all_time = all_start.elapsed().as_secs_f32();
 
-            println!(
-                "=========== {adapter_count} adapters PASSED in {all_time:.3}s ==========="
-            );
+            println!("=========== {adapter_count} adapters PASSED in {all_time:.3}s ===========");
         }
     }
 }

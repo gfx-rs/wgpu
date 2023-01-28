@@ -138,9 +138,7 @@ pub fn compare_image_output(
                 "Image data mismatch! Outlier count {outliers} over limit {max_outliers}. Max difference {max_difference}"
             )
         } else {
-            println!(
-                "{outliers} outliers over max difference {max_difference}"
-            );
+            println!("{outliers} outliers over max difference {max_difference}");
         }
     } else {
         write_png(&path, width, height, data, png::Compression::Best);
