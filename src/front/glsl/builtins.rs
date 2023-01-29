@@ -1189,6 +1189,31 @@ fn inject_double_builtin(declaration: &mut FunctionDeclaration, module: &mut Mod
                     .push(module.add_builtin(args, MacroCall::Clamp(size)))
             }
         }
+        "lessThan" | "greaterThan" | "lessThanEqual" | "greaterThanEqual" | "equal"
+        | "notEqual" => {
+            for bits in 0..0b11 {
+                let (size, kind) = match bits {
+                    0b00 => (VectorSize::Bi, Sk::Float),
+                    0b01 => (VectorSize::Tri, Sk::Float),
+                    _ => (VectorSize::Quad, Sk::Float),
+                };
+
+                let ty = || TypeInner::Vector { size, kind, width };
+                let args = vec![ty(), ty()];
+
+                let fun = MacroCall::Binary(match name {
+                    "lessThan" => BinaryOperator::Less,
+                    "greaterThan" => BinaryOperator::Greater,
+                    "lessThanEqual" => BinaryOperator::LessEqual,
+                    "greaterThanEqual" => BinaryOperator::GreaterEqual,
+                    "equal" => BinaryOperator::Equal,
+                    "notEqual" => BinaryOperator::NotEqual,
+                    _ => unreachable!(),
+                });
+
+                declaration.overloads.push(module.add_builtin(args, fun))
+            }
+        }
         // Add common builtins with doubles
         _ => inject_common_builtin(declaration, module, name, 8),
     }
