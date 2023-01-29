@@ -185,6 +185,7 @@ fn btest(a_8: vec4<bool>, b_8: vec4<bool>) {
     var d_4: vec4<bool>;
     var e_4: bool;
     var f_4: bool;
+    var g_4: vec4<bool>;
 
     a_9 = a_8;
     b_9 = b_8;
@@ -204,6 +205,9 @@ fn btest(a_8: vec4<bool>, b_8: vec4<bool>) {
     _ = a_9;
     let _e21 = a_9;
     f_4 = all(_e21);
+    _ = a_9;
+    let _e25 = a_9;
+    g_4 = !(_e25);
     return;
 }
 

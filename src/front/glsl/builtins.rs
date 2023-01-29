@@ -9,7 +9,7 @@ use super::{
 use crate::{
     BinaryOperator, Block, Constant, DerivativeAxis, Expression, Handle, ImageClass,
     ImageDimension as Dim, ImageQuery, MathFunction, Module, RelationalFunction, SampleLevel,
-    ScalarKind as Sk, Span, Type, TypeInner, VectorSize,
+    ScalarKind as Sk, Span, Type, TypeInner, UnaryOperator, VectorSize,
 };
 
 impl crate::ScalarKind {
@@ -825,7 +825,7 @@ fn inject_standard_builtins(
                     .push(module.add_builtin(args, MacroCall::MathFunction(fun)))
             }
         }
-        "all" | "any" => {
+        "all" | "any" | "not" => {
             // bits layout
             // bit 0 trough 1 - dims
             for bits in 0..0b11 {
@@ -841,11 +841,12 @@ fn inject_standard_builtins(
                     width: crate::BOOL_WIDTH,
                 }];
 
-                let fun = MacroCall::Relational(match name {
-                    "all" => RelationalFunction::All,
-                    "any" => RelationalFunction::Any,
+                let fun = match name {
+                    "all" => MacroCall::Relational(RelationalFunction::All),
+                    "any" => MacroCall::Relational(RelationalFunction::Any),
+                    "not" => MacroCall::Unary(UnaryOperator::Not),
                     _ => unreachable!(),
-                });
+                };
 
                 declaration.overloads.push(module.add_builtin(args, fun))
             }
@@ -1653,6 +1654,7 @@ pub enum MacroCall {
     BitfieldExtract,
     BitfieldInsert,
     Relational(RelationalFunction),
+    Unary(UnaryOperator),
     Binary(BinaryOperator),
     Mod(Option<VectorSize>),
     Splatted(MathFunction, Option<VectorSize>, usize),
@@ -2017,6 +2019,11 @@ impl MacroCall {
                     fun,
                     argument: args[0],
                 },
+                Span::default(),
+                body,
+            ),
+            MacroCall::Unary(op) => ctx.add_expression(
+                Expression::Unary { op, expr: args[0] },
                 Span::default(),
                 body,
             ),

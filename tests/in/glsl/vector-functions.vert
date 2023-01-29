@@ -41,6 +41,7 @@ void btest(bvec4 a, bvec4 b) {
 	bvec4 d = notEqual(a, b);
 	bool e = any(a);
 	bool f = all(a);
+	bvec4 g = not(a);
 }
 
 void main() {}
