@@ -850,8 +850,7 @@ fn inject_standard_builtins(
                 declaration.overloads.push(module.add_builtin(args, fun))
             }
         }
-        "lessThan" | "greaterThan" | "lessThanEqual" | "greaterThanEqual" | "equal"
-        | "notEqual" => {
+        "lessThan" | "greaterThan" | "lessThanEqual" | "greaterThanEqual" => {
             for bits in 0..0b1001 {
                 let (size, kind) = match bits {
                     0b0000 => (VectorSize::Bi, Sk::Float),
@@ -873,6 +872,39 @@ fn inject_standard_builtins(
                     "greaterThan" => BinaryOperator::Greater,
                     "lessThanEqual" => BinaryOperator::LessEqual,
                     "greaterThanEqual" => BinaryOperator::GreaterEqual,
+                    _ => unreachable!(),
+                });
+
+                declaration.overloads.push(module.add_builtin(args, fun))
+            }
+        }
+        "equal" | "notEqual" => {
+            for bits in 0..0b1100 {
+                let (size, kind) = match bits {
+                    0b0000 => (VectorSize::Bi, Sk::Float),
+                    0b0001 => (VectorSize::Tri, Sk::Float),
+                    0b0010 => (VectorSize::Quad, Sk::Float),
+                    0b0011 => (VectorSize::Bi, Sk::Sint),
+                    0b0100 => (VectorSize::Tri, Sk::Sint),
+                    0b0101 => (VectorSize::Quad, Sk::Sint),
+                    0b0110 => (VectorSize::Bi, Sk::Uint),
+                    0b0111 => (VectorSize::Tri, Sk::Uint),
+                    0b1000 => (VectorSize::Quad, Sk::Uint),
+                    0b1001 => (VectorSize::Bi, Sk::Bool),
+                    0b1010 => (VectorSize::Tri, Sk::Bool),
+                    _ => (VectorSize::Quad, Sk::Bool),
+                };
+
+                let width = if let Sk::Bool = kind {
+                    crate::BOOL_WIDTH
+                } else {
+                    width
+                };
+
+                let ty = || TypeInner::Vector { size, kind, width };
+                let args = vec![ty(), ty()];
+
+                let fun = MacroCall::Binary(match name {
                     "equal" => BinaryOperator::Equal,
                     "notEqual" => BinaryOperator::NotEqual,
                     _ => unreachable!(),
