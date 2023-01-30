@@ -1,6 +1,6 @@
 [package]
 name = "wgpu-core"
-version = "0.14.0"
+version = "0.15.0"
 authors = ["wgpu developers"]
 edition = "2021"
 description = "WebGPU core logic on wgpu-hal"
@@ -67,17 +67,19 @@ thiserror = "1"
 
 [dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-rev = "1be8024"
-version = "0.10"
+rev = "f0edae8"
+version = "0.11"
 features = ["clone", "span", "validate"]
 
 [dependencies.wgt]
 package = "wgpu-types"
 path = "../wgpu-types"
+version = "0.15"
 
 [dependencies.hal]
 package = "wgpu-hal"
 path = "../wgpu-hal"
+version = "0.15"
 
 [target.'cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))'.dependencies]
 web-sys = { version = "0.3.60", features = ["HtmlCanvasElement", "OffscreenCanvas"] }

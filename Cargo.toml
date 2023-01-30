@@ -22,25 +22,28 @@ keywords = ["graphics"]
 license = "MIT OR Apache-2.0"
 homepage = "https://wgpu.rs/"
 repository = "https://github.com/gfx-rs/wgpu"
-version = "0.14.0"
+version = "0.15.0"
 authors = ["wgpu developers"]
 
 [workspace.dependencies.wgc]
 package = "wgpu-core"
 path = "./wgpu-core"
+version = "0.15"
 
 [workspace.dependencies.wgt]
 package = "wgpu-types"
 path = "./wgpu-types"
+version = "0.15"
 
 [workspace.dependencies.hal]
 package = "wgpu-hal"
 path = "./wgpu-hal"
+version = "0.15"
 
 [workspace.dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-rev = "1be8024"
-version = "0.10"
+rev = "f0edae8"
+version = "0.11"
 
 [workspace.dependencies]
 arrayvec = "0.7"
@@ -57,6 +60,7 @@ env_logger = "0.9"
 futures-intrusive = "0.4"
 fxhash = "0.2.1"
 glam = "0.21.3"
+image = { version = "0.24", default-features = false, features = ["png"] }
 libloading = "0.7"
 libc = "0.2"
 log = "0.4"
@@ -78,7 +82,7 @@ serde_json = "1.0.85"
 smallvec = "1"
 static_assertions = "1.1.0"
 thiserror = "1"
-wgpu = { version = "0.14", path = "./wgpu" }
+wgpu = { version = "0.15", path = "./wgpu" }
 winit = "0.27.1"
 
 # Metal dependencies
@@ -104,9 +108,7 @@ hassle-rs = "0.9.0"
 
 # Gles dependencies
 egl = { package = "khronos-egl", version = "4.1" }
-# glow = { version = "0.11.2", optional = true }
-# TODO: New glow release
-glow = { git = "https://github.com/grovesNL/glow", rev = "c8a011fcd57a5c68cc917ed394baa484bdefc909" }
+glow = "0.12.0"
 glutin = "0.29.1"
 
 # wasm32 dependencies

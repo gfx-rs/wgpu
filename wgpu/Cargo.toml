@@ -165,6 +165,7 @@ glam.workspace = true
 ddsfile.workspace = true
 futures-intrusive.workspace = true
 env_logger.workspace = true
+image.workspace = true
 log.workspace = true
 noise = { workspace = true }
 obj.workspace = true
@@ -241,6 +242,7 @@ web-sys = { workspace = true, features = [
     "GpuDeviceLostReason",
     "GpuError",
     "GpuErrorFilter",
+    # "GpuExtent2dDict", Not yet implemented in web_sys
     "GpuExtent3dDict",
     "GpuFeatureName",
     "GpuFilterMode",
@@ -337,5 +339,6 @@ web-sys = { workspace = true, features = [
     "RequestMode",
     "Request",
     "Response",
-    "WebGl2RenderingContext"
+    "WebGl2RenderingContext",
+    "CanvasRenderingContext2d"
 ] }

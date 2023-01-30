@@ -31,6 +31,8 @@ pub struct PhysicalDeviceFeatures {
         vk::PhysicalDeviceShaderFloat16Int8Features,
         vk::PhysicalDevice16BitStorageFeatures,
     )>,
+    zero_initialize_workgroup_memory:
+        Option<vk::PhysicalDeviceZeroInitializeWorkgroupMemoryFeatures>,
 }
 
 // This is safe because the structs have `p_next: *mut c_void`, which we null out/never read.
@@ -68,6 +70,9 @@ impl PhysicalDeviceFeatures {
         if let Some((ref mut f16_i8_feature, ref mut _16bit_feature)) = self.shader_float16 {
             info = info.push_next(f16_i8_feature);
             info = info.push_next(_16bit_feature);
+        }
+        if let Some(ref mut feature) = self.zero_initialize_workgroup_memory {
+            info = info.push_next(feature);
         }
         info
     }
@@ -286,6 +291,19 @@ impl PhysicalDeviceFeatures {
             } else {
                 None
             },
+            zero_initialize_workgroup_memory: if effective_api_version >= vk::API_VERSION_1_3
+                || enabled_extensions.contains(&vk::KhrZeroInitializeWorkgroupMemoryFn::name())
+            {
+                Some(
+                    vk::PhysicalDeviceZeroInitializeWorkgroupMemoryFeatures::builder()
+                        .shader_zero_initialize_workgroup_memory(
+                            private_caps.zero_initialize_workgroup_memory,
+                        )
+                        .build(),
+                )
+            } else {
+                None
+            },
         }
     }
 
@@ -319,8 +337,13 @@ impl PhysicalDeviceFeatures {
             | Df::BUFFER_BINDINGS_NOT_16_BYTE_ALIGNED
             | Df::UNRESTRICTED_INDEX_BUFFER
             | Df::INDIRECT_EXECUTION
-            | Df::VIEW_FORMATS;
+            | Df::VIEW_FORMATS
+            | Df::UNRESTRICTED_EXTERNAL_TEXTURE_COPIES;
 
+        dl_flags.set(
+            Df::SURFACE_VIEW_FORMATS,
+            caps.supports_extension(vk::KhrSwapchainMutableFormatFn::name()),
+        );
         dl_flags.set(Df::CUBE_ARRAY_TEXTURES, self.core.image_cube_array != 0);
         dl_flags.set(Df::ANISOTROPIC_FILTERING, self.core.sampler_anisotropy != 0);
         dl_flags.set(
@@ -589,11 +612,14 @@ impl PhysicalDeviceCapabilities {
         }
 
         if self.effective_api_version < vk::API_VERSION_1_2 {
+            // Optional `VK_KHR_image_format_list`
+            if self.supports_extension(vk::KhrImageFormatListFn::name()) {
+                extensions.push(vk::KhrImageFormatListFn::name());
+            }
+
             // Optional `VK_KHR_imageless_framebuffer`
             if self.supports_extension(vk::KhrImagelessFramebufferFn::name()) {
                 extensions.push(vk::KhrImagelessFramebufferFn::name());
-                // Require `VK_KHR_image_format_list` due to it being a dependency
-                extensions.push(vk::KhrImageFormatListFn::name());
                 // Require `VK_KHR_maintenance2` due to it being a dependency
                 if self.effective_api_version < vk::API_VERSION_1_1 {
                     extensions.push(vk::KhrMaintenance2Fn::name());
@@ -638,6 +664,11 @@ impl PhysicalDeviceCapabilities {
             if self.supports_extension(vk::ExtImageRobustnessFn::name()) {
                 extensions.push(vk::ExtImageRobustnessFn::name());
             }
+        }
+
+        // Optional `VK_KHR_swapchain_mutable_format`
+        if self.supports_extension(vk::KhrSwapchainMutableFormatFn::name()) {
+            extensions.push(vk::KhrSwapchainMutableFormatFn::name());
         }
 
         // Optional `VK_EXT_robustness2`
@@ -872,6 +903,16 @@ impl super::InstanceShared {
                 builder = builder.push_next(&mut next.1);
             }
 
+            // `VK_KHR_zero_initialize_workgroup_memory` is promoted to 1.3
+            if capabilities.effective_api_version >= vk::API_VERSION_1_3
+                || capabilities.supports_extension(vk::KhrZeroInitializeWorkgroupMemoryFn::name())
+            {
+                let next = features
+                    .zero_initialize_workgroup_memory
+                    .insert(vk::PhysicalDeviceZeroInitializeWorkgroupMemoryFeatures::default());
+                builder = builder.push_next(next);
+            }
+
             let mut features2 = builder.build();
             unsafe {
                 get_device_properties.get_physical_device_features2(phd, &mut features2);
@@ -1031,6 +1072,11 @@ impl super::Instance {
                     .image_robustness
                     .map_or(false, |ext| ext.robust_image_access != 0),
             },
+            zero_initialize_workgroup_memory: phd_features
+                .zero_initialize_workgroup_memory
+                .map_or(false, |ext| {
+                    ext.shader_zero_initialize_workgroup_memory == vk::TRUE
+                }),
         };
         let capabilities = crate::Capabilities {
             limits: phd_capabilities.to_wgpu_limits(),
@@ -1232,6 +1278,14 @@ impl super::Adapter {
                     },
                     // TODO: support bounds checks on binding arrays
                     binding_array: naga::proc::BoundsCheckPolicy::Unchecked,
+                },
+                zero_initialize_workgroup_memory: if self
+                    .private_caps
+                    .zero_initialize_workgroup_memory
+                {
+                    spv::ZeroInitializeWorkgroupMemoryMode::Native
+                } else {
+                    spv::ZeroInitializeWorkgroupMemoryMode::Polyfill
                 },
                 // We need to build this separately for each invocation, so just default it out here
                 binding_map: BTreeMap::default(),
@@ -1448,11 +1502,15 @@ impl crate::Adapter<super::Api> for super::Adapter {
                 .framebuffer_stencil_sample_counts
                 .min(limits.sampled_image_stencil_sample_counts)
         } else {
-            limits
-                .framebuffer_color_sample_counts
-                .min(limits.sampled_image_color_sample_counts)
-                .min(limits.sampled_image_integer_sample_counts)
-                .min(limits.storage_image_sample_counts)
+            match format.describe().sample_type {
+                wgt::TextureSampleType::Float { filterable: _ } => limits
+                    .framebuffer_color_sample_counts
+                    .min(limits.sampled_image_color_sample_counts),
+                wgt::TextureSampleType::Sint | wgt::TextureSampleType::Uint => {
+                    limits.sampled_image_integer_sample_counts
+                }
+                _ => unreachable!(),
+            }
         };
 
         flags.set(
@@ -1463,7 +1521,6 @@ impl crate::Adapter<super::Api> for super::Adapter {
             Tfc::MULTISAMPLE_X4,
             sample_flags.contains(vk::SampleCountFlags::TYPE_4),
         );
-
         flags.set(
             Tfc::MULTISAMPLE_X8,
             sample_flags.contains(vk::SampleCountFlags::TYPE_8),

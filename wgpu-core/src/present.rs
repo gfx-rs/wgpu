@@ -15,7 +15,7 @@ use std::borrow::Borrow;
 use crate::device::trace::Action;
 use crate::{
     conv,
-    device::DeviceError,
+    device::{DeviceError, MissingDownlevelFlags},
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Input, Token},
     id::{DeviceId, SurfaceId, TextureId, Valid},
     init_tracker::TextureInitTracker,
@@ -32,7 +32,7 @@ pub const DESIRED_NUM_FRAMES: u32 = 3;
 #[derive(Debug)]
 pub(crate) struct Presentation {
     pub(crate) device_id: Stored<DeviceId>,
-    pub(crate) config: wgt::SurfaceConfiguration,
+    pub(crate) config: wgt::SurfaceConfiguration<Vec<wgt::TextureFormat>>,
     #[allow(unused)]
     pub(crate) num_frames: u32,
     pub(crate) acquired_texture: Option<Stored<TextureId>>,
@@ -64,6 +64,10 @@ pub enum ConfigureSurfaceError {
     Device(#[from] DeviceError),
     #[error("invalid surface")]
     InvalidSurface,
+    #[error("The view format {0:?} is not compatible with texture format {1:?}, only changing srgb-ness is allowed.")]
+    InvalidViewFormat(wgt::TextureFormat, wgt::TextureFormat),
+    #[error(transparent)]
+    MissingDownlevelFlags(#[from] MissingDownlevelFlags),
     #[error("`SurfaceOutput` must be dropped before a new `Surface` is made")]
     PreviousOutputExists,
     #[error("Both `Surface` width and height must be non-zero. Wait to recreate the `Surface` until the window has non-zero area.")]
@@ -180,7 +184,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         format: config.format,
                         dimension: wgt::TextureDimension::D2,
                         usage: config.usage,
-                        view_formats: vec![],
+                        view_formats: config.view_formats,
                     },
                     hal_usage: conv::map_texture_usage(config.usage, config.format.into()),
                     format_features: wgt::TextureFormatFeatures {

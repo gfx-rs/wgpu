@@ -1,5 +1,6 @@
 use crate::{
     binding_model::{CreateBindGroupLayoutError, CreatePipelineLayoutError},
+    command::ColorAttachmentError,
     device::{DeviceError, MissingDownlevelFlags, MissingFeatures, RenderPassContext},
     hub::Resource,
     id::{DeviceId, PipelineLayoutId, ShaderModuleId},
@@ -322,6 +323,8 @@ pub enum DepthStencilStateError {
 #[derive(Clone, Debug, Error)]
 pub enum CreateRenderPipelineError {
     #[error(transparent)]
+    ColorAttachment(#[from] ColorAttachmentError),
+    #[error(transparent)]
     Device(#[from] DeviceError),
     #[error("pipeline layout is invalid")]
     InvalidLayout,
@@ -333,8 +336,6 @@ pub enum CreateRenderPipelineError {
     DepthStencilState(#[from] DepthStencilStateError),
     #[error("invalid sample count {0}")]
     InvalidSampleCount(u32),
-    #[error("the number of color attachments {given} exceeds the limit {limit}")]
-    TooManyColorAttachments { given: u32, limit: u32 },
     #[error("the number of vertex buffers {given} exceeds the limit {limit}")]
     TooManyVertexBuffers { given: u32, limit: u32 },
     #[error("the total number of vertex attributes {given} exceeds the limit {limit}")]
@@ -373,6 +374,8 @@ pub enum CreateRenderPipelineError {
         stage: wgt::ShaderStages,
         error: String,
     },
+    #[error("In the provided shader, the type given for group {group} binding {binding} has a size of {size}. As the device does not support `DownlevelFlags::BUFFER_BINDINGS_NOT_16_BYTE_ALIGNED`, the type must have a size that is a multiple of 16 bytes.")]
+    UnalignedShader { group: u32, binding: u32, size: u64 },
 }
 
 bitflags::bitflags! {

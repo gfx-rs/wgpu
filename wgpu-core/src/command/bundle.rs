@@ -81,8 +81,8 @@ index format changes.
 use crate::{
     binding_model::{self, buffer_binding_type_alignment},
     command::{
-        BasePass, BindGroupStateChange, DrawError, MapPassErr, PassErrorScope, RenderCommand,
-        RenderCommandError, StateChange,
+        BasePass, BindGroupStateChange, ColorAttachmentError, DrawError, MapPassErr,
+        PassErrorScope, RenderCommand, RenderCommandError, StateChange,
     },
     conv,
     device::{
@@ -179,7 +179,12 @@ impl RenderBundleEncoder {
             context: RenderPassContext {
                 attachments: AttachmentData {
                     colors: if desc.color_formats.len() > hal::MAX_COLOR_ATTACHMENTS {
-                        return Err(CreateRenderBundleError::TooManyColorAttachments);
+                        return Err(CreateRenderBundleError::ColorAttachment(
+                            ColorAttachmentError::TooMany {
+                                given: desc.color_formats.len(),
+                                limit: hal::MAX_COLOR_ATTACHMENTS,
+                            },
+                        ));
                     } else {
                         desc.color_formats.iter().cloned().collect()
                     },
@@ -691,10 +696,10 @@ impl RenderBundleEncoder {
 /// Error type returned from `RenderBundleEncoder::new` if the sample count is invalid.
 #[derive(Clone, Debug, Error)]
 pub enum CreateRenderBundleError {
+    #[error(transparent)]
+    ColorAttachment(#[from] ColorAttachmentError),
     #[error("invalid number of samples {0}")]
     InvalidSampleCount(u32),
-    #[error("number of color attachments exceeds the limit")]
-    TooManyColorAttachments,
 }
 
 /// Error type returned from `RenderBundleEncoder::new` if the sample count is invalid.

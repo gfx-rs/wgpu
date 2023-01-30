@@ -309,6 +309,31 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         }
     }
 
+    #[cfg(all(target_arch = "wasm32", not(feature = "emscripten")))]
+    unsafe fn copy_external_image_to_texture<T>(
+        &mut self,
+        src: &wgt::ImageCopyExternalImage,
+        dst: &super::Texture,
+        dst_premultiplication: bool,
+        regions: T,
+    ) where
+        T: Iterator<Item = crate::TextureCopy>,
+    {
+        let (dst_raw, dst_target) = dst.inner.as_native();
+        for copy in regions {
+            self.cmd_buffer
+                .commands
+                .push(C::CopyExternalImageToTexture {
+                    src: src.clone(),
+                    dst: dst_raw,
+                    dst_target,
+                    dst_format: dst.format,
+                    dst_premultiplication,
+                    copy,
+                })
+        }
+    }
+
     unsafe fn copy_texture_to_texture<T>(
         &mut self,
         src: &super::Texture,
@@ -427,6 +452,20 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             self.state.has_pass_label = true;
         }
 
+        let rendering_to_external_framebuffer = desc
+            .color_attachments
+            .iter()
+            .filter_map(|at| at.as_ref())
+            .any(|at| match at.target.view.inner {
+                #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
+                super::TextureInner::ExternalFramebuffer { .. } => true,
+                _ => false,
+            });
+
+        if rendering_to_external_framebuffer && desc.color_attachments.len() != 1 {
+            panic!("Multiple render attachments with external framebuffers are not supported.");
+        }
+
         match desc
             .color_attachments
             .first()
@@ -489,10 +528,12 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                     }
                 }
 
-                // set the draw buffers and states
-                self.cmd_buffer
-                    .commands
-                    .push(C::SetDrawColorBuffers(desc.color_attachments.len() as u8));
+                if !rendering_to_external_framebuffer {
+                    // set the draw buffers and states
+                    self.cmd_buffer
+                        .commands
+                        .push(C::SetDrawColorBuffers(desc.color_attachments.len() as u8));
+                }
             }
         }
 

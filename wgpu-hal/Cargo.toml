@@ -1,6 +1,6 @@
 [package]
 name = "wgpu-hal"
-version = "0.14.0"
+version = "0.15.1"
 authors = ["wgpu developers"]
 edition = "2021"
 description = "WebGPU hardware abstraction layer"
@@ -31,8 +31,8 @@ default = []
 metal = ["naga/msl-out", "block", "foreign-types"]
 vulkan = ["naga/spv-out", "ash", "gpu-alloc", "gpu-descriptor", "libloading", "smallvec"]
 gles = ["naga/glsl-out", "glow", "egl", "libloading"]
-dx11 = ["naga/hlsl-out", "native", "libloading", "winapi/d3d11", "winapi/d3d11_1", "winapi/d3d11_2", "winapi/d3d11sdklayers", "winapi/dxgi1_6"]
-dx12 = ["naga/hlsl-out", "native", "bit-set", "range-alloc", "winapi/d3d12", "winapi/d3d12shader", "winapi/d3d12sdklayers", "winapi/dxgi1_6"]
+dx11 = ["naga/hlsl-out", "native", "libloading", "winapi/d3d11", "winapi/std", "winapi/d3d11_1", "winapi/d3d11_2", "winapi/d3d11sdklayers", "winapi/dxgi1_6"]
+dx12 = ["naga/hlsl-out", "native", "bit-set", "range-alloc", "winapi/std", "winapi/winbase", "winapi/d3d12", "winapi/d3d12shader", "winapi/d3d12sdklayers", "winapi/dxgi1_6"]
 # TODO: This is a separate feature until Mozilla okays windows-rs, see https://github.com/gfx-rs/wgpu/issues/3207 for the tracking issue.
 windows_rs = ["gpu-allocator"]
 dxc_shader_compiler = ["hassle-rs"]
@@ -70,17 +70,18 @@ gpu-descriptor = { version = "0.2", optional = true }
 smallvec = { version = "1", optional = true, features = ["union"] }
 
 # backend: Gles
-glow = { git = "https://github.com/grovesNL/glow", rev = "c8a011fcd57a5c68cc917ed394baa484bdefc909", optional = true }
+glow = { version = "0.12.0", optional = true }
 
 # backend: Dx12
 bit-set = { version = "0.5", optional = true }
 range-alloc = { version = "0.1", optional = true }
 gpu-allocator = { version = "0.21", default_features = false, features = ["d3d12", "windows", "public-winapi"], optional = true }
-hassle-rs = { version = "0.9", optional = true } 
+hassle-rs = { version = "0.9", optional = true }
 
 [dependencies.wgt]
 package = "wgpu-types"
 path = "../wgpu-types"
+version = "0.15"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 egl = { package = "khronos-egl", version = "4.1", features = ["dynamic"], optional = true }
@@ -93,7 +94,7 @@ libloading = { version = "0.7", optional = true }
 
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3", features = ["profileapi", "libloaderapi", "windef", "winuser", "dcomp"] }
-native = { package = "d3d12", version = "0.5.0", git = "https://github.com/gfx-rs/d3d12-rs", rev = "a990c93", features = ["libloading"], optional = true }
+native = { package = "d3d12", version = "0.6.0", git = "https://github.com/gfx-rs/d3d12-rs", rev = "b940b1d71", features = ["libloading"], optional = true }
 
 [target.'cfg(any(target_os="macos", target_os="ios"))'.dependencies]
 mtl = { package = "metal", version = "0.24.0" }
@@ -113,15 +114,15 @@ android_system_properties = "0.1.1"
 
 [dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-rev = "1be8024"
-version = "0.10"
+rev = "f0edae8"
+version = "0.11"
 features = ["clone"]
 
 # DEV dependencies
 [dev-dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-rev = "1be8024"
-version = "0.10"
+rev = "f0edae8"
+version = "0.11"
 features = ["wgsl-in"]
 
 [dev-dependencies]

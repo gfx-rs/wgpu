@@ -4,8 +4,8 @@ use wgc::track::TextureSelector;
 use wgt::{
     strict_assert, strict_assert_eq, AdapterInfo, BufferAddress, BufferSize, Color,
     DownlevelCapabilities, DynamicOffset, Extent3d, Features, ImageDataLayout,
-    ImageSubresourceRange, IndexFormat, Limits, ShaderStages, SurfaceConfiguration, SurfaceStatus,
-    TextureFormat, TextureFormatFeatures,
+    ImageSubresourceRange, IndexFormat, Limits, ShaderStages, SurfaceStatus, TextureFormat,
+    TextureFormatFeatures,
 };
 
 use crate::{
@@ -163,7 +163,7 @@ pub trait Context: Debug + Send + Sized + Sync {
         surface_data: &Self::SurfaceData,
         device: &Self::DeviceId,
         device_data: &Self::DeviceData,
-        config: &SurfaceConfiguration,
+        config: &crate::SurfaceConfiguration,
     );
     #[allow(clippy::type_complexity)]
     fn surface_get_current_texture(
@@ -568,6 +568,15 @@ pub trait Context: Debug + Send + Sized + Sync {
         data: &[u8],
         data_layout: ImageDataLayout,
         size: Extent3d,
+    );
+    #[cfg(all(target_arch = "wasm32", not(feature = "emscripten")))]
+    fn queue_copy_external_image_to_texture(
+        &self,
+        queue: &Self::QueueId,
+        queue_data: &Self::QueueData,
+        source: &wgt::ImageCopyExternalImage,
+        dest: crate::ImageCopyTextureTagged,
+        size: wgt::Extent3d,
     );
     fn queue_submit<I: Iterator<Item = Self::CommandBufferId>>(
         &self,
@@ -1138,7 +1147,7 @@ pub(crate) trait DynContext: Debug + Send + Sync {
         surface_data: &crate::Data,
         device: &ObjectId,
         device_data: &crate::Data,
-        config: &SurfaceConfiguration,
+        config: &crate::SurfaceConfiguration,
     );
     fn surface_get_current_texture(
         &self,
@@ -1486,6 +1495,15 @@ pub(crate) trait DynContext: Debug + Send + Sync {
         data: &[u8],
         data_layout: ImageDataLayout,
         size: Extent3d,
+    );
+    #[cfg(all(target_arch = "wasm32", not(feature = "emscripten")))]
+    fn queue_copy_external_image_to_texture(
+        &self,
+        queue: &ObjectId,
+        queue_data: &crate::Data,
+        source: &wgt::ImageCopyExternalImage,
+        dest: crate::ImageCopyTextureTagged,
+        size: wgt::Extent3d,
     );
     fn queue_submit<'a>(
         &self,
@@ -2034,7 +2052,7 @@ where
         surface_data: &crate::Data,
         device: &ObjectId,
         device_data: &crate::Data,
-        config: &SurfaceConfiguration,
+        config: &crate::SurfaceConfiguration,
     ) {
         let surface = <T::SurfaceId>::from(*surface);
         let surface_data = downcast_ref(surface_data);
@@ -2872,6 +2890,20 @@ where
         let queue = <T::QueueId>::from(*queue);
         let queue_data = downcast_ref(queue_data);
         Context::queue_write_texture(self, &queue, queue_data, texture, data, data_layout, size)
+    }
+
+    #[cfg(all(target_arch = "wasm32", not(feature = "emscripten")))]
+    fn queue_copy_external_image_to_texture(
+        &self,
+        queue: &ObjectId,
+        queue_data: &crate::Data,
+        source: &wgt::ImageCopyExternalImage,
+        dest: crate::ImageCopyTextureTagged,
+        size: wgt::Extent3d,
+    ) {
+        let queue = <T::QueueId>::from(*queue);
+        let queue_data = downcast_ref(queue_data);
+        Context::queue_copy_external_image_to_texture(self, &queue, queue_data, source, dest, size)
     }
 
     fn queue_submit<'a>(

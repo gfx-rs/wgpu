@@ -1085,6 +1085,7 @@ dictionary GPUCanvasConfiguration {
     required GPUTextureFormat format;
     GPUTextureUsageFlags usage = 0x10;  // GPUTextureUsage.RENDER_ATTACHMENT
     GPUCanvasAlphaMode alphaMode = "opaque";
+    sequence<GPUTextureFormat> viewFormats = [];
 };
 
 enum GPUDeviceLostReason {
