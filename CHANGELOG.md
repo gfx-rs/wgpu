@@ -46,6 +46,16 @@ Bottom level categories:
 
 - Implement `CommandEncoder::clear_buffer`. By @raphlinus in [#3426](https://github.com/gfx-rs/wgpu/pull/3426)
 
+#### Vulkan
+
+- Improve format MSAA capabilities detection. By @jinleili in [#3429](https://github.com/gfx-rs/wgpu/pull/3429)
+
+### Bug Fixes
+
+#### General
+
+- `copyTextureToTexture` src/dst aspects must both refer to all aspects of src/dst format. By @teoxoy in [#3431](https://github.com/gfx-rs/wgpu/pull/3431)
+
 ## wgpu-0.15.0 (2023-01-25)
 
 ### Major Changes
@@ -152,7 +162,7 @@ You can choose which compiler to use at `Instance` creation using the `dx12_shad
 
 #### Suballocate DX12 buffers and textures
 
-The DX12 backend can now suballocate buffers and textures from larger chunks of memory, which can give a significant increase in performance (in testing a 100x improvement has been seen in a simple scene with 200 `write_buffer` calls per frame, and a 1.4x improvement in [Bistro using Bevy](https://github.com/vleue/bevy_bistro_playground)). 
+The DX12 backend can now suballocate buffers and textures from larger chunks of memory, which can give a significant increase in performance (in testing a 100x improvement has been seen in a simple scene with 200 `write_buffer` calls per frame, and a 1.4x improvement in [Bistro using Bevy](https://github.com/vleue/bevy_bistro_playground)).
 
 Previously `wgpu-hal`'s DX12 backend created a new heap on the GPU every time you called `write_buffer` (by calling `CreateCommittedResource`), whereas now it uses [`gpu_allocator`](https://crates.io/crates/gpu-allocator) to manage GPU memory (and calls `CreatePlacedResource` with a suballocated heap). By @Elabajaba in [#3163](https://github.com/gfx-rs/wgpu/pull/3163)
 

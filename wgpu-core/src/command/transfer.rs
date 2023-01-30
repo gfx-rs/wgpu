@@ -95,8 +95,12 @@ pub enum TransferError {
     InvalidCopySize,
     #[error("number of rows per image is invalid")]
     InvalidRowsPerImage,
-    #[error("source and destination layers have different aspects")]
-    MismatchedAspects,
+    #[error("copy source aspects must refer to all aspects of the source texture format")]
+    CopySrcMissingAspects,
+    #[error(
+        "copy destination aspects must refer to all aspects of the destination texture format"
+    )]
+    CopyDstMissingAspects,
     #[error("copying from textures with format {format:?} and aspect {aspect:?} is forbidden")]
     CopyFromForbiddenTextureFormat {
         format: wgt::TextureFormat,
@@ -1053,8 +1057,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             extract_texture_selector(source, copy_size, src_texture)?;
         let (dst_range, dst_tex_base, _) =
             extract_texture_selector(destination, copy_size, dst_texture)?;
-        if src_tex_base.aspect != dst_tex_base.aspect {
-            return Err(TransferError::MismatchedAspects.into());
+        let src_texture_aspects = hal::FormatAspects::from(src_texture.desc.format);
+        let dst_texture_aspects = hal::FormatAspects::from(dst_texture.desc.format);
+        if src_tex_base.aspect != src_texture_aspects {
+            return Err(TransferError::CopySrcMissingAspects.into());
+        }
+        if dst_tex_base.aspect != dst_texture_aspects {
+            return Err(TransferError::CopyDstMissingAspects.into());
         }
 
         // Handle texture init *before* dealing with barrier transitions so we
