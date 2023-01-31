@@ -793,6 +793,7 @@ impl<'a> ResolveContext<'a> {
                         )),
                     },
                     // bits
+                    Mf::CountLeadingZeros |
                     Mf::CountOneBits |
                     Mf::ReverseBits |
                     Mf::ExtractBits |

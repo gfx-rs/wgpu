@@ -1689,6 +1689,7 @@ impl<W: Write> Writer<W> {
                     Mf::Transpose => "transpose",
                     Mf::Determinant => "determinant",
                     // bits
+                    Mf::CountLeadingZeros => "clz",
                     Mf::CountOneBits => "popcount",
                     Mf::ReverseBits => "reverse_bits",
                     Mf::ExtractBits => "extract_bits",

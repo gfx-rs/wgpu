@@ -1,11 +1,11 @@
 ; SPIR-V
 ; Version: 1.1
 ; Generator: rspirv
-; Bound: 37
+; Bound: 55
 OpCapability Shader
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
-OpEntryPoint Vertex %14 "main"
+OpEntryPoint Vertex %16 "main"
 %2 = OpTypeVoid
 %4 = OpTypeFloat 32
 %3 = OpConstant  %4  1.0
@@ -14,33 +14,51 @@ OpEntryPoint Vertex %14 "main"
 %6 = OpConstant  %7  0
 %9 = OpTypeInt 32 0
 %8 = OpConstant  %9  0
-%10 = OpTypeVector %4 4
-%11 = OpTypeVector %7 2
-%12 = OpConstantComposite  %11  %6 %6
-%15 = OpTypeFunction %2
-%27 = OpConstantNull  %7
-%14 = OpFunction  %2  None %15
-%13 = OpLabel
-OpBranch %16
-%16 = OpLabel
-%17 = OpCompositeConstruct  %10  %5 %5 %5 %5
-%18 = OpExtInst  %4  %1 Degrees %3
-%19 = OpExtInst  %4  %1 Radians %3
-%20 = OpExtInst  %10  %1 Degrees %17
-%21 = OpExtInst  %10  %1 Radians %17
-%23 = OpCompositeConstruct  %10  %5 %5 %5 %5
-%24 = OpCompositeConstruct  %10  %3 %3 %3 %3
-%22 = OpExtInst  %10  %1 FClamp %17 %23 %24
-%25 = OpExtInst  %10  %1 Refract %17 %17 %3
-%28 = OpCompositeExtract  %7  %12 0
-%29 = OpCompositeExtract  %7  %12 0
-%30 = OpIMul  %7  %28 %29
-%31 = OpIAdd  %7  %27 %30
-%32 = OpCompositeExtract  %7  %12 1
-%33 = OpCompositeExtract  %7  %12 1
-%34 = OpIMul  %7  %32 %33
-%26 = OpIAdd  %7  %31 %34
-%35 = OpCopyObject  %9  %8
-%36 = OpExtInst  %9  %1 FindUMsb %35
+%10 = OpConstant  %7  -1
+%11 = OpConstant  %9  1
+%12 = OpTypeVector %4 4
+%13 = OpTypeVector %7 2
+%14 = OpConstantComposite  %13  %6 %6
+%17 = OpTypeFunction %2
+%40 = OpConstant  %7  31
+%49 = OpTypeVector %9 2
+%25 = OpConstantComposite  %12  %5 %5 %5 %5
+%26 = OpConstantComposite  %12  %3 %3 %3 %3
+%29 = OpConstantNull  %7
+%47 = OpConstantComposite  %13  %40 %40
+%52 = OpConstantComposite  %13  %40 %40
+%16 = OpFunction  %2  None %17
+%15 = OpLabel
+OpBranch %18
+%18 = OpLabel
+%19 = OpCompositeConstruct  %12  %5 %5 %5 %5
+%20 = OpExtInst  %4  %1 Degrees %3
+%21 = OpExtInst  %4  %1 Radians %3
+%22 = OpExtInst  %12  %1 Degrees %19
+%23 = OpExtInst  %12  %1 Radians %19
+%24 = OpExtInst  %12  %1 FClamp %19 %25 %26
+%27 = OpExtInst  %12  %1 Refract %19 %19 %3
+%30 = OpCompositeExtract  %7  %14 0
+%31 = OpCompositeExtract  %7  %14 0
+%32 = OpIMul  %7  %30 %31
+%33 = OpIAdd  %7  %29 %32
+%34 = OpCompositeExtract  %7  %14 1
+%35 = OpCompositeExtract  %7  %14 1
+%36 = OpIMul  %7  %34 %35
+%28 = OpIAdd  %7  %33 %36
+%37 = OpCopyObject  %9  %8
+%38 = OpExtInst  %9  %1 FindUMsb %37
+%39 = OpExtInst  %7  %1 FindUMsb %10
+%41 = OpISub  %7  %40 %39
+%42 = OpExtInst  %7  %1 FindUMsb %11
+%43 = OpISub  %7  %40 %42
+%44 = OpBitcast  %9  %43
+%45 = OpCompositeConstruct  %13  %10 %10
+%46 = OpExtInst  %13  %1 FindUMsb %45
+%48 = OpISub  %13  %47 %46
+%50 = OpCompositeConstruct  %49  %11 %11
+%51 = OpExtInst  %13  %1 FindUMsb %50
+%53 = OpISub  %13  %52 %51
+%54 = OpBitcast  %49  %53
 OpReturn
 OpFunctionEnd

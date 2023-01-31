@@ -1114,33 +1114,33 @@ impl<'a, W: Write> Writer<'a, W> {
     fn update_expressions_to_bake(&mut self, func: &crate::Function, info: &valid::FunctionInfo) {
         use crate::Expression;
         self.need_bake_expressions.clear();
-        for expr in func.expressions.iter() {
-            let expr_info = &info[expr.0];
-            let min_ref_count = func.expressions[expr.0].bake_ref_count();
+        for (fun_handle, expr) in func.expressions.iter() {
+            let expr_info = &info[fun_handle];
+            let min_ref_count = func.expressions[fun_handle].bake_ref_count();
             if min_ref_count <= expr_info.ref_count {
-                self.need_bake_expressions.insert(expr.0);
+                self.need_bake_expressions.insert(fun_handle);
             }
-            // if the expression is a Dot product with integer arguments,
-            // then the args needs baking as well
-            if let (
-                fun_handle,
-                &Expression::Math {
-                    fun: crate::MathFunction::Dot,
-                    arg,
-                    arg1,
-                    ..
-                },
-            ) = expr
-            {
-                let inner = info[fun_handle].ty.inner_with(&self.module.types);
-                if let TypeInner::Scalar { kind, .. } = *inner {
-                    match kind {
-                        crate::ScalarKind::Sint | crate::ScalarKind::Uint => {
-                            self.need_bake_expressions.insert(arg);
-                            self.need_bake_expressions.insert(arg1.unwrap());
+
+            if let Expression::Math { fun, arg, arg1, .. } = *expr {
+                match fun {
+                    crate::MathFunction::Dot => {
+                        // if the expression is a Dot product with integer arguments,
+                        // then the args needs baking as well
+                        let inner = info[fun_handle].ty.inner_with(&self.module.types);
+                        if let TypeInner::Scalar { kind, .. } = *inner {
+                            match kind {
+                                crate::ScalarKind::Sint | crate::ScalarKind::Uint => {
+                                    self.need_bake_expressions.insert(arg);
+                                    self.need_bake_expressions.insert(arg1.unwrap());
+                                }
+                                _ => {}
+                            }
                         }
-                        _ => {}
                     }
+                    crate::MathFunction::CountLeadingZeros => {
+                        self.need_bake_expressions.insert(arg);
+                    }
+                    _ => {}
                 }
             }
         }
@@ -2928,6 +2928,54 @@ impl<'a, W: Write> Writer<'a, W> {
                     Mf::Transpose => "transpose",
                     Mf::Determinant => "determinant",
                     // bits
+                    Mf::CountLeadingZeros => {
+                        match *ctx.info[arg].ty.inner_with(&self.module.types) {
+                            crate::TypeInner::Vector { size, kind, .. } => {
+                                let s = back::vector_size_str(size);
+
+                                if let crate::ScalarKind::Uint = kind {
+                                    write!(self.out, "uvec{s}(")?;
+                                } else {
+                                    write!(self.out, "ivec{s}(")?;
+                                }
+
+                                write!(self.out, "mix(vec{s}(31.0) - floor(log2(vec{s}(")?;
+                                self.write_expr(arg, ctx)?;
+                                write!(self.out, ") + 0.5)), ")?;
+
+                                if let crate::ScalarKind::Uint = kind {
+                                    write!(self.out, "vec{s}(32.0), lessThanEqual(")?;
+                                    self.write_expr(arg, ctx)?;
+                                    write!(self.out, ", uvec{s}(0u))))")?;
+                                } else {
+                                    write!(self.out, "mix(vec{s}(0.0), vec{s}(32.0), equal(")?;
+                                    self.write_expr(arg, ctx)?;
+                                    write!(self.out, ", ivec{s}(0))), lessThanEqual(")?;
+                                    self.write_expr(arg, ctx)?;
+                                    write!(self.out, ", ivec{s}(0))))")?;
+                                }
+                            }
+                            crate::TypeInner::Scalar { kind, .. } => {
+                                write!(self.out, "(")?;
+                                self.write_expr(arg, ctx)?;
+
+                                if let crate::ScalarKind::Uint = kind {
+                                    write!(self.out, " == 0u ? 32u : uint(")?;
+                                } else {
+                                    write!(self.out, " <= 0 ? (")?;
+                                    self.write_expr(arg, ctx)?;
+                                    write!(self.out, " == 0 ? 32 : 0) : int(")?;
+                                }
+
+                                write!(self.out, "31.0 - floor(log2(float(")?;
+                                self.write_expr(arg, ctx)?;
+                                write!(self.out, ") + 0.5))))")?;
+                            }
+                            _ => unreachable!(),
+                        };
+
+                        return Ok(());
+                    }
                     Mf::CountOneBits => "bitCount",
                     Mf::ReverseBits => "bitfieldReverse",
                     Mf::ExtractBits => "bitfieldExtract",

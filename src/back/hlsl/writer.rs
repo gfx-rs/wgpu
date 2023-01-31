@@ -83,6 +83,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             named_expressions: crate::NamedExpressions::default(),
             wrapped: super::Wrapped::default(),
             temp_access_chain: Vec::new(),
+            need_bake_expressions: Default::default(),
         }
     }
 
@@ -93,6 +94,46 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         self.entry_point_io.clear();
         self.named_expressions.clear();
         self.wrapped.clear();
+        self.need_bake_expressions.clear();
+    }
+
+    /// Helper method used to find which expressions of a given function require baking
+    ///
+    /// # Notes
+    /// Clears `need_bake_expressions` set before adding to it
+    fn update_expressions_to_bake(
+        &mut self,
+        module: &Module,
+        func: &crate::Function,
+        info: &valid::FunctionInfo,
+    ) {
+        use crate::Expression;
+        self.need_bake_expressions.clear();
+        for (fun_handle, expr) in func.expressions.iter() {
+            let expr_info = &info[fun_handle];
+            let min_ref_count = func.expressions[fun_handle].bake_ref_count();
+            if min_ref_count <= expr_info.ref_count {
+                self.need_bake_expressions.insert(fun_handle);
+            }
+
+            if let Expression::Math { fun, arg, .. } = *expr {
+                match fun {
+                    crate::MathFunction::Asinh
+                    | crate::MathFunction::Acosh
+                    | crate::MathFunction::Atanh
+                    | crate::MathFunction::Unpack2x16float => {
+                        self.need_bake_expressions.insert(arg);
+                    }
+                    crate::MathFunction::CountLeadingZeros => {
+                        let inner = info[fun_handle].ty.inner_with(&module.types);
+                        if let Some(crate::ScalarKind::Sint) = inner.scalar_kind() {
+                            self.need_bake_expressions.insert(arg);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
     }
 
     pub fn write(
@@ -244,7 +285,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             // before writing all statements and expressions.
             self.write_wrapped_functions(module, &ctx)?;
 
-            self.write_function(module, name.as_str(), function, &ctx)?;
+            self.write_function(module, name.as_str(), function, &ctx, info)?;
 
             writeln!(self.out)?;
         }
@@ -296,7 +337,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             }
 
             let name = self.names[&NameKey::EntryPoint(index as u16)].clone();
-            self.write_function(module, &name, &ep.function, &ctx)?;
+            self.write_function(module, &name, &ep.function, &ctx, info)?;
 
             if index < module.entry_points.len() - 1 {
                 writeln!(self.out)?;
@@ -1034,8 +1075,11 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         name: &str,
         func: &crate::Function,
         func_ctx: &back::FunctionCtx<'_>,
+        info: &valid::FunctionInfo,
     ) -> BackendResult {
         // Function Declaration Syntax - https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-function-syntax
+
+        self.update_expressions_to_bake(module, func, info);
 
         // Write modifier
         if let Some(crate::FunctionResult {
@@ -1284,15 +1328,12 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         // Otherwise, we could accidentally write variable name instead of full expression.
                         // Also, we use sanitized names! It defense backend from generating variable with name from reserved keywords.
                         Some(self.namer.call(name))
+                    } else if self.need_bake_expressions.contains(&handle) {
+                        Some(format!("_expr{}", handle.index()))
                     } else if info.ref_count == 0 {
                         Some(self.namer.call(""))
                     } else {
-                        let min_ref_count = func_ctx.expressions[handle].bake_ref_count();
-                        if min_ref_count <= info.ref_count {
-                            Some(format!("_expr{}", handle.index()))
-                        } else {
-                            None
-                        }
+                        None
                     };
 
                     if let Some(name) = expr_name {
@@ -2510,6 +2551,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     Unpack2x16float,
                     Regular(&'static str),
                     MissingIntOverload(&'static str),
+                    CountLeadingZeros,
                 }
 
                 let fun = match fun {
@@ -2572,6 +2614,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     Mf::Transpose => Function::Regular("transpose"),
                     Mf::Determinant => Function::Regular("determinant"),
                     // bits
+                    Mf::CountLeadingZeros => Function::CountLeadingZeros,
                     Mf::CountOneBits => Function::MissingIntOverload("countbits"),
                     Mf::ReverseBits => Function::MissingIntOverload("reversebits"),
                     Mf::FindLsb => Function::Regular("firstbitlow"),
@@ -2638,6 +2681,43 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                             self.write_expr(module, arg, func_ctx)?;
                             write!(self.out, ")")?;
                         }
+                    }
+                    Function::CountLeadingZeros => {
+                        match *func_ctx.info[arg].ty.inner_with(&module.types) {
+                            TypeInner::Vector { size, kind, .. } => {
+                                let s = match size {
+                                    crate::VectorSize::Bi => ".xx",
+                                    crate::VectorSize::Tri => ".xxx",
+                                    crate::VectorSize::Quad => ".xxxx",
+                                };
+
+                                if let ScalarKind::Uint = kind {
+                                    write!(self.out, "asuint((31){s} - firstbithigh(")?;
+                                } else {
+                                    write!(self.out, "(")?;
+                                    self.write_expr(module, arg, func_ctx)?;
+                                    write!(
+                                        self.out,
+                                        " < (0){s} ? (0){s} : (31){s} - firstbithigh("
+                                    )?;
+                                }
+                            }
+                            TypeInner::Scalar { kind, .. } => {
+                                if let ScalarKind::Uint = kind {
+                                    write!(self.out, "asuint(31 - firstbithigh(")?;
+                                } else {
+                                    write!(self.out, "(")?;
+                                    self.write_expr(module, arg, func_ctx)?;
+                                    write!(self.out, " < 0 ? 0 : 31 - firstbithigh(")?;
+                                }
+                            }
+                            _ => unreachable!(),
+                        }
+
+                        self.write_expr(module, arg, func_ctx)?;
+                        write!(self.out, "))")?;
+
+                        return Ok(());
                     }
                 }
             }
