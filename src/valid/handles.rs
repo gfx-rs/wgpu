@@ -131,7 +131,7 @@ impl super::Validator {
             }
         }
 
-        let validate_function = |function: &_| -> Result<_, InvalidHandleError> {
+        let validate_function = |function_handle, function: &_| -> Result<_, InvalidHandleError> {
             let &crate::Function {
                 name: _,
                 ref arguments,
@@ -175,6 +175,7 @@ impl super::Validator {
                     local_variables,
                     global_variables,
                     functions,
+                    function_handle,
                 )?;
             }
 
@@ -184,11 +185,11 @@ impl super::Validator {
         };
 
         for entry_point in entry_points.iter() {
-            validate_function(&entry_point.function)?;
+            validate_function(None, &entry_point.function)?;
         }
 
-        for (_function_handle, function) in functions.iter() {
-            validate_function(function)?;
+        for (function_handle, function) in functions.iter() {
+            validate_function(Some(function_handle), function)?;
         }
 
         Ok(())
@@ -229,6 +230,8 @@ impl super::Validator {
         local_variables: &Arena<crate::LocalVariable>,
         global_variables: &Arena<crate::GlobalVariable>,
         functions: &Arena<crate::Function>,
+        // The handle of the current function or `None` if it's an entry point
+        current_function: Option<Handle<crate::Function>>,
     ) -> Result<(), InvalidHandleError> {
         let validate_constant = |handle| Self::validate_constant_handle(handle, constants);
         let validate_type = |handle| Self::validate_type_handle(handle, types);
@@ -373,6 +376,9 @@ impl super::Validator {
             }
             crate::Expression::CallResult(function) => {
                 Self::validate_function_handle(function, functions)?;
+                if let Some(handle) = current_function {
+                    handle.check_dep(function)?;
+                }
             }
             crate::Expression::AtomicResult { .. } => (),
             crate::Expression::ArrayLength(array) => {
