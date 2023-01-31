@@ -256,7 +256,7 @@ impl Parser {
         ctx.typifier
             .grow(expr, &ctx.expressions, &resolve_ctx)
             .map_err(|error| Error {
-                kind: ErrorKind::SemanticError(format!("Can't resolve type: {:?}", error).into()),
+                kind: ErrorKind::SemanticError(format!("Can't resolve type: {error:?}").into()),
                 meta,
             })
     }
@@ -322,7 +322,7 @@ impl Parser {
         ctx.typifier
             .invalidate(expr, &ctx.expressions, &resolve_ctx)
             .map_err(|error| Error {
-                kind: ErrorKind::SemanticError(format!("Can't resolve type: {:?}", error).into()),
+                kind: ErrorKind::SemanticError(format!("Can't resolve type: {error:?}").into()),
                 meta,
             })
     }

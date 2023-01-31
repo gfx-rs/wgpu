@@ -591,8 +591,7 @@ impl Context {
                             parser.errors.push(Error {
                                 kind: ErrorKind::SemanticError(
                                     format!(
-                                        "Cannot apply operation to {:?} and {:?}",
-                                        left_inner, right_inner
+                                        "Cannot apply operation to {left_inner:?} and {right_inner:?}"
                                     )
                                     .into(),
                                 ),
@@ -823,8 +822,7 @@ impl Context {
                             parser.errors.push(Error {
                                 kind: ErrorKind::SemanticError(
                                     format!(
-                                        "Cannot apply operation to {:?} and {:?}",
-                                        left_inner, right_inner
+                                        "Cannot apply operation to {left_inner:?} and {right_inner:?}"
                                     )
                                     .into(),
                                 ),
@@ -914,8 +912,7 @@ impl Context {
                             parser.errors.push(Error {
                                 kind: ErrorKind::SemanticError(
                                     format!(
-                                        "Cannot apply operation to {:?} and {:?}",
-                                        left_inner, right_inner
+                                        "Cannot apply operation to {left_inner:?} and {right_inner:?}"
                                     )
                                     .into(),
                                 ),
@@ -1383,7 +1380,7 @@ impl Context {
                     _ => {
                         return Err(Error {
                             kind: ErrorKind::SemanticError(
-                                format!("unknown method '{}'", name).into(),
+                                format!("unknown method '{name}'").into(),
                             ),
                             meta,
                         });

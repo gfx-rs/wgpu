@@ -170,7 +170,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                 None => format!("block_ctx.Fun-{}.txt", module.functions.len()),
             };
             let dest = prefix.join(dump_suffix);
-            let dump = format!("{:#?}", block_ctx);
+            let dump = format!("{block_ctx:#?}");
             if let Err(e) = std::fs::write(&dest, dump) {
                 log::error!("Unable to dump the block context into {:?}: {}", dest, e);
             }

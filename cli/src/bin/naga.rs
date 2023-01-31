@@ -99,8 +99,7 @@ impl FromStr for BoundsCheckPolicyArg {
             "unchecked" => BoundsCheckPolicy::Unchecked,
             _ => {
                 return Err(format!(
-                    "Invalid value for --index-bounds-check-policy: {}",
-                    s
+                    "Invalid value for --index-bounds-check-policy: {s}"
                 ))
             }
         }))
@@ -120,7 +119,7 @@ impl FromStr for ShaderModelArg {
             "50" => ShaderModel::V5_0,
             "51" => ShaderModel::V5_1,
             "60" => ShaderModel::V6_0,
-            _ => return Err(format!("Invalid value for --shader-model: {}", s)),
+            _ => return Err(format!("Invalid value for --shader-model: {s}")),
         }))
     }
 }
@@ -139,7 +138,7 @@ impl FromStr for GlslProfileArg {
         } else if s.starts_with("es") {
             Version::new_gles(s[2..].parse().unwrap_or(310))
         } else {
-            return Err(format!("Unknown profile: {}", s));
+            return Err(format!("Unknown profile: {s}"));
         }))
     }
 }
@@ -163,7 +162,7 @@ trait PrettyResult {
 }
 
 fn print_err(error: &dyn Error) {
-    eprint!("{}", error);
+    eprint!("{error}");
 
     let mut e = error.source();
     if e.is_some() {
@@ -173,7 +172,7 @@ fn print_err(error: &dyn Error) {
     }
 
     while let Some(source) = e {
-        eprintln!("\t{}", source);
+        eprintln!("\t{source}");
         e = source.source();
     }
 }
@@ -366,10 +365,10 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 use std::io::Write;
 
                 let mut file = fs::File::create(output_path)?;
-                writeln!(file, "{:#?}", module)?;
+                writeln!(file, "{module:#?}")?;
                 if let Some(ref info) = info {
                     writeln!(file)?;
-                    writeln!(file, "{:#?}", info)?;
+                    writeln!(file, "{info:#?}")?;
                 }
             }
             "bin" => {
@@ -515,7 +514,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 fs::write(output_path, wgsl)?;
             }
             other => {
-                println!("Unknown output extension: {}", other);
+                println!("Unknown output extension: {other}");
             }
         }
     }

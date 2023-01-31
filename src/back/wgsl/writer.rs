@@ -187,12 +187,12 @@ impl<W: Write> Writer<W> {
         use crate::ScalarValue as Sv;
 
         match value {
-            Sv::Sint(value) => write!(self.out, "{}", value)?,
-            Sv::Uint(value) => write!(self.out, "{}u", value)?,
+            Sv::Sint(value) => write!(self.out, "{value}")?,
+            Sv::Uint(value) => write!(self.out, "{value}u")?,
             // Floats are written using `Debug` instead of `Display` because it always appends the
             // decimal part even it's zero
-            Sv::Float(value) => write!(self.out, "{:?}", value)?,
-            Sv::Bool(value) => write!(self.out, "{}", value)?,
+            Sv::Float(value) => write!(self.out, "{value:?}")?,
+            Sv::Bool(value) => write!(self.out, "{value}")?,
         }
 
         Ok(())
@@ -211,7 +211,7 @@ impl<W: Write> Writer<W> {
                     ShaderStage::Vertex => "VertexOutput",
                 };
 
-                write!(self.out, "{}", name)?;
+                write!(self.out, "{name}")?;
                 return Ok(());
             }
         }
@@ -238,7 +238,7 @@ impl<W: Write> Writer<W> {
         };
 
         // Write function name
-        write!(self.out, "fn {}(", func_name)?;
+        write!(self.out, "fn {func_name}(")?;
 
         // Write function arguments
         for (index, arg) in func.arguments.iter().enumerate() {
@@ -259,7 +259,7 @@ impl<W: Write> Writer<W> {
                 }
             };
 
-            write!(self.out, "{}: ", argument_name)?;
+            write!(self.out, "{argument_name}: ")?;
             // Write argument type
             self.write_type(module, arg.ty)?;
             if index < func.arguments.len() - 1 {
@@ -333,10 +333,10 @@ impl<W: Write> Writer<W> {
     fn write_attributes(&mut self, attributes: &[Attribute]) -> BackendResult {
         for attribute in attributes {
             match *attribute {
-                Attribute::Location(id) => write!(self.out, "@location({}) ", id)?,
+                Attribute::Location(id) => write!(self.out, "@location({id}) ")?,
                 Attribute::BuiltIn(builtin_attrib) => {
                     if let Some(builtin) = builtin_str(builtin_attrib) {
-                        write!(self.out, "@builtin({}) ", builtin)?;
+                        write!(self.out, "@builtin({builtin}) ")?;
                     } else {
                         log::warn!("Unsupported builtin attribute: {:?}", builtin_attrib);
                     }
@@ -347,7 +347,7 @@ impl<W: Write> Writer<W> {
                         ShaderStage::Fragment => "fragment",
                         ShaderStage::Compute => "compute",
                     };
-                    write!(self.out, "@{} ", stage_str)?;
+                    write!(self.out, "@{stage_str} ")?;
                 }
                 Attribute::WorkGroupSize(size) => {
                     write!(
@@ -356,8 +356,8 @@ impl<W: Write> Writer<W> {
                         size[0], size[1], size[2]
                     )?;
                 }
-                Attribute::Binding(id) => write!(self.out, "@binding({}) ", id)?,
-                Attribute::Group(id) => write!(self.out, "@group({}) ", id)?,
+                Attribute::Binding(id) => write!(self.out, "@binding({id}) ")?,
+                Attribute::Group(id) => write!(self.out, "@group({id}) ")?,
                 Attribute::Invariant => write!(self.out, "@invariant ")?,
                 Attribute::Interpolate(interpolation, sampling) => {
                     if sampling.is_some() && sampling != Some(crate::Sampling::Center) {
@@ -419,7 +419,7 @@ impl<W: Write> Writer<W> {
             }
             // Write struct member name and type
             let member_name = &self.names[&NameKey::StructMember(handle, index as u32)];
-            write!(self.out, "{}: ", member_name)?;
+            write!(self.out, "{member_name}: ")?;
             self.write_type(module, member.ty)?;
             write!(self.out, ",")?;
             writeln!(self.out)?;
@@ -500,12 +500,11 @@ impl<W: Write> Writer<W> {
                 };
                 write!(
                     self.out,
-                    "texture_{}{}{}{}",
-                    class_str, multisampled_str, dim_str, arrayed_str
+                    "texture_{class_str}{multisampled_str}{dim_str}{arrayed_str}"
                 )?;
 
                 if !format_str.is_empty() {
-                    write!(self.out, "<{}{}>", format_str, storage_str)?;
+                    write!(self.out, "<{format_str}{storage_str}>")?;
                 }
             }
             TypeInner::Scalar { kind, width } => {
@@ -569,12 +568,12 @@ impl<W: Write> Writer<W> {
                 // Naga IR never produces pointers to handles, so it doesn't matter much
                 // how we write such a type. Just write it as the base type alone.
                 if let Some(space) = address {
-                    write!(self.out, "ptr<{}, ", space)?;
+                    write!(self.out, "ptr<{space}, ")?;
                 }
                 self.write_type(module, base)?;
                 if address.is_some() {
                     if let Some(access) = maybe_access {
-                        write!(self.out, ", {}", access)?;
+                        write!(self.out, ", {access}")?;
                     }
                     write!(self.out, ">")?;
                 }
@@ -589,13 +588,12 @@ impl<W: Write> Writer<W> {
                 if let Some(space) = address {
                     write!(self.out, "ptr<{}, {}", space, scalar_kind_str(kind, width))?;
                     if let Some(access) = maybe_access {
-                        write!(self.out, ", {}", access)?;
+                        write!(self.out, ", {access}")?;
                     }
                     write!(self.out, ">")?;
                 } else {
                     return Err(Error::Unimplemented(format!(
-                        "ValuePointer to AddressSpace::Handle {:?}",
-                        inner
+                        "ValuePointer to AddressSpace::Handle {inner:?}"
                     )));
                 }
             }
@@ -615,22 +613,18 @@ impl<W: Write> Writer<W> {
                         scalar_kind_str(kind, width)
                     )?;
                     if let Some(access) = maybe_access {
-                        write!(self.out, ", {}", access)?;
+                        write!(self.out, ", {access}")?;
                     }
                     write!(self.out, ">")?;
                 } else {
                     return Err(Error::Unimplemented(format!(
-                        "ValuePointer to AddressSpace::Handle {:?}",
-                        inner
+                        "ValuePointer to AddressSpace::Handle {inner:?}"
                     )));
                 }
                 write!(self.out, ">")?;
             }
             _ => {
-                return Err(Error::Unimplemented(format!(
-                    "write_value_type {:?}",
-                    inner
-                )));
+                return Err(Error::Unimplemented(format!("write_value_type {inner:?}")));
             }
         }
 
@@ -660,7 +654,7 @@ impl<W: Write> Writer<W> {
                         // Also, we use sanitized names! It defense backend from generating variable with name from reserved keywords.
                         Some(self.namer.call(name))
                     } else if info.ref_count == 0 {
-                        write!(self.out, "{}_ = ", level)?;
+                        write!(self.out, "{level}_ = ")?;
                         self.write_expr(module, handle, func_ctx)?;
                         writeln!(self.out, ";")?;
                         continue;
@@ -698,7 +692,7 @@ impl<W: Write> Writer<W> {
                     };
 
                     if let Some(name) = expr_name {
-                        write!(self.out, "{}", level)?;
+                        write!(self.out, "{level}")?;
                         self.start_named_expr(module, handle, func_ctx, &name)?;
                         self.write_expr(module, handle, func_ctx)?;
                         self.named_expressions.insert(handle, name);
@@ -712,7 +706,7 @@ impl<W: Write> Writer<W> {
                 ref accept,
                 ref reject,
             } => {
-                write!(self.out, "{}", level)?;
+                write!(self.out, "{level}")?;
                 write!(self.out, "if ")?;
                 self.write_expr(module, condition, func_ctx)?;
                 writeln!(self.out, " {{")?;
@@ -726,7 +720,7 @@ impl<W: Write> Writer<W> {
                 // If there are no statements in the reject block we skip writing it
                 // This is only for readability
                 if !reject.is_empty() {
-                    writeln!(self.out, "{}}} else {{", level)?;
+                    writeln!(self.out, "{level}}} else {{")?;
 
                     for sta in reject {
                         // Increase indentation to help with readability
@@ -734,10 +728,10 @@ impl<W: Write> Writer<W> {
                     }
                 }
 
-                writeln!(self.out, "{}}}", level)?
+                writeln!(self.out, "{level}}}")?
             }
             Statement::Return { value } => {
-                write!(self.out, "{}", level)?;
+                write!(self.out, "{level}")?;
                 write!(self.out, "return")?;
                 if let Some(return_value) = value {
                     // The leading space is important
@@ -748,7 +742,7 @@ impl<W: Write> Writer<W> {
             }
             // TODO: copy-paste from glsl-out
             Statement::Kill => {
-                write!(self.out, "{}", level)?;
+                write!(self.out, "{level}")?;
                 writeln!(self.out, "discard;")?
             }
             Statement::Store { pointer, value } => {
@@ -760,7 +754,7 @@ impl<W: Write> Writer<W> {
                         return Ok(());
                     }
                 }
-                write!(self.out, "{}", level)?;
+                write!(self.out, "{level}")?;
 
                 let is_atomic = match *func_ctx.info[pointer].ty.inner_with(&module.types) {
                     crate::TypeInner::Pointer { base, .. } => match module.types[base].inner {
@@ -792,14 +786,14 @@ impl<W: Write> Writer<W> {
                 ref arguments,
                 result,
             } => {
-                write!(self.out, "{}", level)?;
+                write!(self.out, "{level}")?;
                 if let Some(expr) = result {
                     let name = format!("{}{}", back::BAKE_PREFIX, expr.index());
                     self.start_named_expr(module, expr, func_ctx, &name)?;
                     self.named_expressions.insert(expr, name);
                 }
                 let func_name = &self.names[&NameKey::Function(function)];
-                write!(self.out, "{}(", func_name)?;
+                write!(self.out, "{func_name}(")?;
                 for (index, &argument) in arguments.iter().enumerate() {
                     self.write_expr(module, argument, func_ctx)?;
                     // Only write a comma if isn't the last element
@@ -816,13 +810,13 @@ impl<W: Write> Writer<W> {
                 value,
                 result,
             } => {
-                write!(self.out, "{}", level)?;
+                write!(self.out, "{level}")?;
                 let res_name = format!("{}{}", back::BAKE_PREFIX, result.index());
                 self.start_named_expr(module, result, func_ctx, &res_name)?;
                 self.named_expressions.insert(result, res_name);
 
                 let fun_str = fun.to_wgsl();
-                write!(self.out, "atomic{}(", fun_str)?;
+                write!(self.out, "atomic{fun_str}(")?;
                 self.write_expr(module, pointer, func_ctx)?;
                 if let crate::AtomicFunction::Exchange { compare: Some(cmp) } = *fun {
                     write!(self.out, ", ")?;
@@ -838,7 +832,7 @@ impl<W: Write> Writer<W> {
                 array_index,
                 value,
             } => {
-                write!(self.out, "{}", level)?;
+                write!(self.out, "{level}")?;
                 write!(self.out, "textureStore(")?;
                 self.write_expr(module, image, func_ctx)?;
                 write!(self.out, ", ")?;
@@ -853,20 +847,20 @@ impl<W: Write> Writer<W> {
             }
             // TODO: copy-paste from glsl-out
             Statement::Block(ref block) => {
-                write!(self.out, "{}", level)?;
+                write!(self.out, "{level}")?;
                 writeln!(self.out, "{{")?;
                 for sta in block.iter() {
                     // Increase the indentation to help with readability
                     self.write_stmt(module, sta, func_ctx, level.next())?
                 }
-                writeln!(self.out, "{}}}", level)?
+                writeln!(self.out, "{level}}}")?
             }
             Statement::Switch {
                 selector,
                 ref cases,
             } => {
                 // Start the switch
-                write!(self.out, "{}", level)?;
+                write!(self.out, "{level}")?;
                 write!(self.out, "switch ")?;
                 self.write_expr(module, selector, func_ctx)?;
                 writeln!(self.out, " {{")?;
@@ -892,16 +886,16 @@ impl<W: Write> Writer<W> {
                     match case.value {
                         crate::SwitchValue::Integer(value) => {
                             if new_case {
-                                write!(self.out, "{}case ", l2)?;
+                                write!(self.out, "{l2}case ")?;
                             }
-                            write!(self.out, "{}{}", value, type_postfix)?;
+                            write!(self.out, "{value}{type_postfix}")?;
                         }
                         crate::SwitchValue::Default => {
                             if new_case {
                                 if case.fall_through {
-                                    write!(self.out, "{}case ", l2)?;
+                                    write!(self.out, "{l2}case ")?;
                                 } else {
-                                    write!(self.out, "{}", l2)?;
+                                    write!(self.out, "{l2}")?;
                                 }
                             }
                             write!(self.out, "default")?;
@@ -921,18 +915,18 @@ impl<W: Write> Writer<W> {
                     }
 
                     if !case.fall_through {
-                        writeln!(self.out, "{}}}", l2)?;
+                        writeln!(self.out, "{l2}}}")?;
                     }
                 }
 
-                writeln!(self.out, "{}}}", level)?
+                writeln!(self.out, "{level}}}")?
             }
             Statement::Loop {
                 ref body,
                 ref continuing,
                 break_if,
             } => {
-                write!(self.out, "{}", level)?;
+                write!(self.out, "{level}")?;
                 writeln!(self.out, "loop {{")?;
 
                 let l2 = level.next();
@@ -945,7 +939,7 @@ impl<W: Write> Writer<W> {
                 // so even if `continuing` is empty we must generate it if a
                 // `break if` exists
                 if !continuing.is_empty() || break_if.is_some() {
-                    writeln!(self.out, "{}continuing {{", l2)?;
+                    writeln!(self.out, "{l2}continuing {{")?;
                     for sta in continuing.iter() {
                         self.write_stmt(module, sta, func_ctx, l2.next())?;
                     }
@@ -960,24 +954,24 @@ impl<W: Write> Writer<W> {
                         writeln!(self.out, ";")?;
                     }
 
-                    writeln!(self.out, "{}}}", l2)?;
+                    writeln!(self.out, "{l2}}}")?;
                 }
 
-                writeln!(self.out, "{}}}", level)?
+                writeln!(self.out, "{level}}}")?
             }
             Statement::Break => {
-                writeln!(self.out, "{}break;", level)?;
+                writeln!(self.out, "{level}break;")?;
             }
             Statement::Continue => {
-                writeln!(self.out, "{}continue;", level)?;
+                writeln!(self.out, "{level}continue;")?;
             }
             Statement::Barrier(barrier) => {
                 if barrier.contains(crate::Barrier::STORAGE) {
-                    writeln!(self.out, "{}storageBarrier();", level)?;
+                    writeln!(self.out, "{level}storageBarrier();")?;
                 }
 
                 if barrier.contains(crate::Barrier::WORK_GROUP) {
-                    writeln!(self.out, "{}workgroupBarrier();", level)?;
+                    writeln!(self.out, "{level}workgroupBarrier();")?;
                 }
             }
         }
@@ -1052,7 +1046,7 @@ impl<W: Write> Writer<W> {
         name: &str,
     ) -> BackendResult {
         // Write variable name
-        write!(self.out, "let {}", name)?;
+        write!(self.out, "let {name}")?;
         if self.flags.contains(WriterFlags::EXPLICIT_TYPES) {
             write!(self.out, ": ")?;
             let ty = &func_ctx.info[handle].ty;
@@ -1139,7 +1133,7 @@ impl<W: Write> Writer<W> {
         use crate::Expression;
 
         if let Some(name) = self.named_expressions.get(&expr) {
-            write!(self.out, "{}", name)?;
+            write!(self.out, "{name}")?;
             return Ok(());
         }
 
@@ -1203,7 +1197,7 @@ impl<W: Write> Writer<W> {
             Expression::FunctionArgument(pos) => {
                 let name_key = func_ctx.argument_key(pos);
                 let name = &self.names[&name_key];
-                write!(self.out, "{}", name)?;
+                write!(self.out, "{name}")?;
             }
             Expression::Binary { op, left, right } => {
                 write!(self.out, "(")?;
@@ -1240,7 +1234,7 @@ impl<W: Write> Writer<W> {
                     TypeInner::Matrix { .. }
                     | TypeInner::Array { .. }
                     | TypeInner::BindingArray { .. }
-                    | TypeInner::ValuePointer { .. } => write!(self.out, "[{}]", index)?,
+                    | TypeInner::ValuePointer { .. } => write!(self.out, "[{index}]")?,
                     TypeInner::Struct { .. } => {
                         // This will never panic in case the type is a `Struct`, this is not true
                         // for other types so we can only check while inside this match arm
@@ -1252,7 +1246,7 @@ impl<W: Write> Writer<W> {
                             &self.names[&NameKey::StructMember(ty, index)]
                         )?
                     }
-                    ref other => return Err(Error::Custom(format!("Cannot index {:?}", other))),
+                    ref other => return Err(Error::Custom(format!("Cannot index {other:?}"))),
                 }
             }
             Expression::ImageSample {
@@ -1278,7 +1272,7 @@ impl<W: Write> Writer<W> {
                     Sl::Gradient { .. } => "Grad",
                 };
 
-                write!(self.out, "textureSample{}{}(", suffix_cmp, suffix_level)?;
+                write!(self.out, "textureSample{suffix_cmp}{suffix_level}(")?;
                 self.write_expr(module, image, func_ctx)?;
                 write!(self.out, ", ")?;
                 self.write_expr(module, sampler, func_ctx)?;
@@ -1341,7 +1335,7 @@ impl<W: Write> Writer<W> {
                     None => "",
                 };
 
-                write!(self.out, "textureGather{}(", suffix_cmp)?;
+                write!(self.out, "textureGather{suffix_cmp}(")?;
                 match *func_ctx.info[image].ty.inner_with(&module.types) {
                     TypeInner::Image {
                         class: crate::ImageClass::Depth { multi: _ },
@@ -1384,7 +1378,7 @@ impl<W: Write> Writer<W> {
                     Iq::NumSamples => "textureNumSamples",
                 };
 
-                write!(self.out, "{}(", texture_function)?;
+                write!(self.out, "{texture_function}(")?;
                 self.write_expr(module, image, func_ctx)?;
                 if let Iq::Size { level: Some(level) } = query {
                     write!(self.out, ", ")?;
@@ -1415,7 +1409,7 @@ impl<W: Write> Writer<W> {
             }
             Expression::GlobalVariable(handle) => {
                 let name = &self.names[&NameKey::GlobalVariable(handle)];
-                write!(self.out, "{}", name)?;
+                write!(self.out, "{name}")?;
             }
             Expression::As {
                 expr,
@@ -1443,27 +1437,22 @@ impl<W: Write> Writer<W> {
                         let vector_size_str = back::vector_size_str(size);
                         let scalar_kind_str = scalar_kind_str(kind, convert.unwrap_or(width));
                         if convert.is_some() {
-                            write!(self.out, "vec{}<{}>", vector_size_str, scalar_kind_str)?;
+                            write!(self.out, "vec{vector_size_str}<{scalar_kind_str}>")?;
                         } else {
-                            write!(
-                                self.out,
-                                "bitcast<vec{}<{}>>",
-                                vector_size_str, scalar_kind_str
-                            )?;
+                            write!(self.out, "bitcast<vec{vector_size_str}<{scalar_kind_str}>>")?;
                         }
                     }
                     TypeInner::Scalar { width, .. } => {
                         let scalar_kind_str = scalar_kind_str(kind, convert.unwrap_or(width));
                         if convert.is_some() {
-                            write!(self.out, "{}", scalar_kind_str)?
+                            write!(self.out, "{scalar_kind_str}")?
                         } else {
-                            write!(self.out, "bitcast<{}>", scalar_kind_str)?
+                            write!(self.out, "bitcast<{scalar_kind_str}>")?
                         }
                     }
                     _ => {
                         return Err(Error::Unimplemented(format!(
-                            "write_expr expression::as {:?}",
-                            inner
+                            "write_expr expression::as {inner:?}"
                         )));
                     }
                 };
@@ -1477,15 +1466,14 @@ impl<W: Write> Writer<W> {
                     crate::TypeInner::Scalar { kind, width } => (kind, width),
                     _ => {
                         return Err(Error::Unimplemented(format!(
-                            "write_expr expression::splat {:?}",
-                            inner
+                            "write_expr expression::splat {inner:?}"
                         )));
                     }
                 };
                 let scalar = scalar_kind_str(scalar_kind, scalar_width);
                 let size = back::vector_size_str(size);
 
-                write!(self.out, "vec{}<{}>(", size, scalar)?;
+                write!(self.out, "vec{size}<{scalar}>(")?;
                 self.write_expr(module, value, func_ctx)?;
                 write!(self.out, ")")?;
             }
@@ -1615,7 +1603,7 @@ impl<W: Write> Writer<W> {
 
                 match function {
                     Function::Regular(fun_name) => {
-                        write!(self.out, "{}(", fun_name)?;
+                        write!(self.out, "{fun_name}(")?;
                         self.write_expr(module, arg, func_ctx)?;
                         for arg in IntoIterator::into_iter([arg1, arg2, arg3]).flatten() {
                             write!(self.out, ", ")?;
@@ -1651,7 +1639,7 @@ impl<W: Write> Writer<W> {
                     }
                 };
 
-                write!(self.out, "{}(", unary)?;
+                write!(self.out, "{unary}(")?;
                 self.write_expr(module, expr, func_ctx)?;
 
                 write!(self.out, ")")?
@@ -1677,7 +1665,7 @@ impl<W: Write> Writer<W> {
                     Da::Y => "dpdy",
                     Da::Width => "fwidth",
                 };
-                write!(self.out, "{}(", op)?;
+                write!(self.out, "{op}(")?;
                 self.write_expr(module, expr, func_ctx)?;
                 write!(self.out, ")")?
             }
@@ -1689,7 +1677,7 @@ impl<W: Write> Writer<W> {
                     Rf::Any => "any",
                     _ => return Err(Error::UnsupportedRelationalFunction(fun)),
                 };
-                write!(self.out, "{}(", fun_name)?;
+                write!(self.out, "{fun_name}(")?;
 
                 self.write_expr(module, argument, func_ctx)?;
 
@@ -1724,9 +1712,9 @@ impl<W: Write> Writer<W> {
         write!(self.out, "var")?;
         let (address, maybe_access) = address_space_str(global.space);
         if let Some(space) = address {
-            write!(self.out, "<{}", space)?;
+            write!(self.out, "<{space}")?;
             if let Some(access) = maybe_access {
-                write!(self.out, ", {}", access)?;
+                write!(self.out, ", {access}")?;
             }
             write!(self.out, ">")?;
         }
@@ -1826,22 +1814,22 @@ impl<W: Write> Writer<W> {
             } => {
                 let name = &self.names[&NameKey::Constant(handle)];
                 // First write only constant name
-                write!(self.out, "const {}: ", name)?;
+                write!(self.out, "const {name}: ")?;
                 // Next write constant type and value
                 match *value {
                     crate::ScalarValue::Sint(value) => {
-                        write!(self.out, "i32 = {}", value)?;
+                        write!(self.out, "i32 = {value}")?;
                     }
                     crate::ScalarValue::Uint(value) => {
-                        write!(self.out, "u32 = {}u", value)?;
+                        write!(self.out, "u32 = {value}u")?;
                     }
                     crate::ScalarValue::Float(value) => {
                         // Floats are written using `Debug` instead of `Display` because it always appends the
                         // decimal part even it's zero
-                        write!(self.out, "f32 = {:?}", value)?;
+                        write!(self.out, "f32 = {value:?}")?;
                     }
                     crate::ScalarValue::Bool(value) => {
-                        write!(self.out, "bool = {}", value)?;
+                        write!(self.out, "bool = {value}")?;
                     }
                 };
                 // End with semicolon
@@ -1850,7 +1838,7 @@ impl<W: Write> Writer<W> {
             crate::ConstantInner::Composite { ty, ref components } => {
                 let name = &self.names[&NameKey::Constant(handle)];
                 // First write only constant name
-                write!(self.out, "const {}: ", name)?;
+                write!(self.out, "const {name}: ")?;
                 // Next write constant type
                 self.write_type(module, ty)?;
 

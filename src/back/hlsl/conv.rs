@@ -175,10 +175,10 @@ impl crate::BuiltIn {
             // in `Writer::write_expr`.
             Self::NumWorkGroups => "SV_GroupID",
             Self::BaseInstance | Self::BaseVertex | Self::WorkGroupSize => {
-                return Err(Error::Unimplemented(format!("builtin {:?}", self)))
+                return Err(Error::Unimplemented(format!("builtin {self:?}")))
             }
             Self::ViewIndex | Self::PointCoord => {
-                return Err(Error::Custom(format!("Unsupported builtin {:?}", self)))
+                return Err(Error::Custom(format!("Unsupported builtin {self:?}")))
             }
         })
     }

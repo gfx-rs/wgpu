@@ -317,7 +317,7 @@ fn parse_hex_float_missing_period(
     exponent: &str,
     kind: Option<FloatKind>,
 ) -> Result<Number, NumberError> {
-    let hexf_input = format!("{}.{}", significand, exponent);
+    let hexf_input = format!("{significand}.{exponent}");
     parse_hex_float(&hexf_input, kind)
 }
 
@@ -328,7 +328,7 @@ fn parse_hex_int(
     kind: Option<IntKind>,
 ) -> Result<Number, NumberError> {
     let digits_with_sign = if is_negative {
-        Cow::Owned(format!("-{}", digits))
+        Cow::Owned(format!("-{digits}"))
     } else {
         Cow::Borrowed(digits)
     };

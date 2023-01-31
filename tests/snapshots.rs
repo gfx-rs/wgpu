@@ -90,7 +90,7 @@ struct Parameters {
 #[allow(unused_variables)]
 fn check_targets(module: &naga::Module, name: &str, targets: Targets) {
     let root = env!("CARGO_MANIFEST_DIR");
-    let params = match fs::read_to_string(format!("{}/{}/{}.param.ron", root, BASE_DIR_IN, name)) {
+    let params = match fs::read_to_string(format!("{root}/{BASE_DIR_IN}/{name}.param.ron")) {
         Ok(string) => ron::de::from_str(&string).expect("Couldn't parse param file"),
         Err(_) => Parameters::default(),
     };
@@ -108,7 +108,7 @@ fn check_targets(module: &naga::Module, name: &str, targets: Targets) {
         if targets.contains(Targets::IR) {
             let config = ron::ser::PrettyConfig::default().new_line("\n".to_string());
             let string = ron::ser::to_string_pretty(module, config).unwrap();
-            fs::write(dest.join(format!("ir/{}.ron", name)), string).unwrap();
+            fs::write(dest.join(format!("ir/{name}.ron")), string).unwrap();
         }
     }
 
@@ -121,7 +121,7 @@ fn check_targets(module: &naga::Module, name: &str, targets: Targets) {
         if targets.contains(Targets::ANALYSIS) {
             let config = ron::ser::PrettyConfig::default().new_line("\n".to_string());
             let string = ron::ser::to_string_pretty(&info, config).unwrap();
-            fs::write(dest.join(format!("analysis/{}.info.ron", name)), string).unwrap();
+            fs::write(dest.join(format!("analysis/{name}.info.ron")), string).unwrap();
         }
     }
 
@@ -177,7 +177,7 @@ fn check_targets(module: &naga::Module, name: &str, targets: Targets) {
     {
         if targets.contains(Targets::DOT) {
             let string = naga::back::dot::write(module, Some(&info), Default::default()).unwrap();
-            fs::write(dest.join(format!("dot/{}.dot", name)), string).unwrap();
+            fs::write(dest.join(format!("dot/{name}.dot")), string).unwrap();
         }
     }
     #[cfg(all(feature = "deserialize", feature = "hlsl-out"))]
@@ -248,7 +248,7 @@ fn write_output_spv(
         let dis = rspirv::dr::load_words(spv)
             .expect("Produced invalid SPIR-V")
             .disassemble();
-        fs::write(destination.join(format!("spv/{}.spvasm", file_name)), dis).unwrap();
+        fs::write(destination.join(format!("spv/{file_name}.spvasm")), dis).unwrap();
     }
 }
 
@@ -269,7 +269,7 @@ fn write_output_msl(
     let mut options = options.clone();
     options.bounds_check_policies = bounds_check_policies;
     let (string, tr_info) = msl::write_string(module, info, &options, pipeline_options)
-        .unwrap_or_else(|err| panic!("Metal write failed: {}", err));
+        .unwrap_or_else(|err| panic!("Metal write failed: {err}"));
 
     for (ep, result) in module.entry_points.iter().zip(tr_info.entry_point_names) {
         if let Err(error) = result {
@@ -277,7 +277,7 @@ fn write_output_msl(
         }
     }
 
-    fs::write(destination.join(format!("msl/{}.msl", file_name)), string).unwrap();
+    fs::write(destination.join(format!("msl/{file_name}.msl")), string).unwrap();
 }
 
 #[cfg(feature = "glsl-out")]
@@ -316,7 +316,7 @@ fn write_output_glsl(
     writer.write().expect("GLSL write failed");
 
     fs::write(
-        destination.join(format!("glsl/{}.{}.{:?}.glsl", file_name, ep_name, stage)),
+        destination.join(format!("glsl/{file_name}.{ep_name}.{stage:?}.glsl")),
         buffer,
     )
     .unwrap();
@@ -339,7 +339,7 @@ fn write_output_hlsl(
     let mut writer = hlsl::Writer::new(&mut buffer, options);
     let reflection_info = writer.write(module, info).expect("HLSL write failed");
 
-    fs::write(destination.join(format!("hlsl/{}.hlsl", file_name)), buffer).unwrap();
+    fs::write(destination.join(format!("hlsl/{file_name}.hlsl")), buffer).unwrap();
 
     // We need a config file for validation script
     // This file contains an info about profiles (shader stages) contains inside generated shader
@@ -387,15 +387,10 @@ fn write_output_hlsl(
         }
     }
 
-    writeln!(
-        config_str,
-        "{})\n{})\n{})",
-        vertex_str, fragment_str, compute_str
-    )
-    .unwrap();
+    writeln!(config_str, "{vertex_str})\n{fragment_str})\n{compute_str})").unwrap();
 
     fs::write(
-        destination.join(format!("hlsl/{}.hlsl.config", file_name)),
+        destination.join(format!("hlsl/{file_name}.hlsl.config")),
         config_str,
     )
     .unwrap();
@@ -418,7 +413,7 @@ fn write_output_wgsl(
 
     let string = wgsl::write_string(module, info, flags).expect("WGSL write failed");
 
-    fs::write(destination.join(format!("wgsl/{}.wgsl", file_name)), string).unwrap();
+    fs::write(destination.join(format!("wgsl/{file_name}.wgsl")), string).unwrap();
 }
 
 #[cfg(feature = "wgsl-in")]
@@ -564,9 +559,9 @@ fn convert_wgsl() {
     ];
 
     for &(name, targets) in inputs.iter() {
-        println!("Processing '{}'", name);
+        println!("Processing '{name}'");
         // WGSL shaders lives in root dir as a privileged.
-        let file = fs::read_to_string(format!("{}/{}/{}.wgsl", root, BASE_DIR_IN, name))
+        let file = fs::read_to_string(format!("{root}/{BASE_DIR_IN}/{name}.wgsl"))
             .expect("Couldn't find wgsl file");
         match naga::front::wgsl::parse_str(&file) {
             Ok(module) => check_targets(&module, name, targets),
@@ -581,8 +576,7 @@ fn convert_spv(name: &str, adjust_coordinate_space: bool, targets: Targets) {
 
     let root = env!("CARGO_MANIFEST_DIR");
     let module = naga::front::spv::parse_u8_slice(
-        &fs::read(format!("{}/{}/spv/{}.spv", root, BASE_DIR_IN, name))
-            .expect("Couldn't find spv file"),
+        &fs::read(format!("{root}/{BASE_DIR_IN}/spv/{name}.spv")).expect("Couldn't find spv file"),
         &naga::front::spv::Options {
             adjust_coordinate_space,
             strict_capabilities: false,
@@ -627,7 +621,7 @@ fn convert_spv_all() {
 #[test]
 fn convert_glsl_variations_check() {
     let root = env!("CARGO_MANIFEST_DIR");
-    let file = fs::read_to_string(format!("{}/{}/variations.glsl", root, BASE_DIR_IN))
+    let file = fs::read_to_string(format!("{root}/{BASE_DIR_IN}/variations.glsl"))
         .expect("Couldn't find glsl file");
     let mut parser = naga::front::glsl::Parser::default();
     let module = parser
@@ -650,7 +644,7 @@ fn convert_glsl_folder() {
 
     let root = env!("CARGO_MANIFEST_DIR");
 
-    for entry in std::fs::read_dir(format!("{}/{}/glsl", root, BASE_DIR_IN)).unwrap() {
+    for entry in std::fs::read_dir(format!("{root}/{BASE_DIR_IN}/glsl")).unwrap() {
         let entry = entry.unwrap();
         let file_name = entry.file_name().into_string().unwrap();
 
@@ -658,7 +652,7 @@ fn convert_glsl_folder() {
             // No needed to validate ron files
             continue;
         }
-        println!("Processing {}", file_name);
+        println!("Processing {file_name}");
 
         let mut parser = naga::front::glsl::Parser::default();
         let module = parser
@@ -668,7 +662,7 @@ fn convert_glsl_folder() {
                         "vert" => naga::ShaderStage::Vertex,
                         "frag" => naga::ShaderStage::Fragment,
                         "comp" => naga::ShaderStage::Compute,
-                        ext => panic!("Unknown extension for glsl file {}", ext),
+                        ext => panic!("Unknown extension for glsl file {ext}"),
                     },
                     defines: Default::default(),
                 },

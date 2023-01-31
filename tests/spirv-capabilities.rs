@@ -40,10 +40,7 @@ fn require_and_forbid(required: &[Ca], forbidden: &[Ca], source: &str) {
         .cloned()
         .collect();
     if !missing_caps.is_empty() {
-        panic!(
-            "shader code should have requested these caps: {:?}\n\n{}",
-            missing_caps, source
-        );
+        panic!("shader code should have requested these caps: {missing_caps:?}\n\n{source}");
     }
 
     let forbidden_caps: Vec<_> = forbidden
@@ -52,10 +49,7 @@ fn require_and_forbid(required: &[Ca], forbidden: &[Ca], source: &str) {
         .cloned()
         .collect();
     if !forbidden_caps.is_empty() {
-        panic!(
-            "shader code should not have requested these caps: {:?}\n\n{}",
-            forbidden_caps, source
-        );
+        panic!("shader code should not have requested these caps: {forbidden_caps:?}\n\n{source}");
     }
 }
 

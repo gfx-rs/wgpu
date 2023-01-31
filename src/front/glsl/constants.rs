@@ -241,8 +241,7 @@ impl<'a> ConstantSolver<'a> {
                             ),
                             _ => {
                                 return Err(ConstantSolvingError::NotImplemented(format!(
-                                    "{:?} applied to vector values",
-                                    fun
+                                    "{fun:?} applied to vector values"
                                 )))
                             }
                         };
@@ -250,7 +249,7 @@ impl<'a> ConstantSolver<'a> {
                         let inner = ConstantInner::Scalar { width, value };
                         Ok(self.register_constant(inner, span))
                     }
-                    _ => Err(ConstantSolvingError::NotImplemented(format!("{:?}", fun))),
+                    _ => Err(ConstantSolvingError::NotImplemented(format!("{fun:?}"))),
                 }
             }
             Expression::As {

@@ -721,8 +721,7 @@ impl Parser {
                         self.errors.push(Error {
                             kind: ErrorKind::SemanticError(
                                 format!(
-                                    "'{}': image needs {:?} access but only {:?} was provided",
-                                    name, overload_access, call_access
+                                    "'{name}': image needs {overload_access:?} access but only {call_access:?} was provided"
                                 )
                                 .into(),
                             ),
@@ -829,14 +828,14 @@ impl Parser {
         if ambiguous {
             self.errors.push(Error {
                 kind: ErrorKind::SemanticError(
-                    format!("Ambiguous best function for '{}'", name).into(),
+                    format!("Ambiguous best function for '{name}'").into(),
                 ),
                 meta,
             })
         }
 
         let overload = maybe_overload.ok_or_else(|| Error {
-            kind: ErrorKind::SemanticError(format!("Unknown function '{}'", name).into()),
+            kind: ErrorKind::SemanticError(format!("Unknown function '{name}'").into()),
             meta,
         })?;
 

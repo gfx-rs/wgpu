@@ -412,16 +412,16 @@ impl ResolvedBinding {
                         return Err(Error::UnsupportedBuiltIn(built_in))
                     }
                 };
-                write!(out, "{}", name)?;
+                write!(out, "{name}")?;
             }
-            Self::Attribute(index) => write!(out, "attribute({})", index)?,
-            Self::Color(index) => write!(out, "color({})", index)?,
+            Self::Attribute(index) => write!(out, "attribute({index})")?,
+            Self::Color(index) => write!(out, "color({index})")?,
             Self::User {
                 prefix,
                 index,
                 interpolation,
             } => {
-                write!(out, "user({}{})", prefix, index)?;
+                write!(out, "user({prefix}{index})")?;
                 if let Some(interpolation) = interpolation {
                     write!(out, ", ")?;
                     interpolation.try_fmt(out)?;
@@ -429,11 +429,11 @@ impl ResolvedBinding {
             }
             Self::Resource(ref target) => {
                 if let Some(id) = target.buffer {
-                    write!(out, "buffer({})", id)?;
+                    write!(out, "buffer({id})")?;
                 } else if let Some(id) = target.texture {
-                    write!(out, "texture({})", id)?;
+                    write!(out, "texture({id})")?;
                 } else if let Some(BindSamplerTarget::Resource(id)) = target.sampler {
-                    write!(out, "sampler({})", id)?;
+                    write!(out, "sampler({id})")?;
                 } else {
                     return Err(Error::UnimplementedBindTarget(target.clone()));
                 }

@@ -10,9 +10,9 @@ fn check(input: &str, snapshot: &str) {
     if output != snapshot {
         for diff in diff::lines(&output, snapshot) {
             match diff {
-                diff::Result::Left(l) => println!("-{}", l),
-                diff::Result::Both(l, _) => println!(" {}", l),
-                diff::Result::Right(r) => println!("+{}", r),
+                diff::Result::Left(l) => println!("-{l}"),
+                diff::Result::Both(l, _) => println!(" {l}"),
+                diff::Result::Right(r) => println!("+{r}"),
             }
         }
         panic!("Error snapshot failed");
@@ -1419,16 +1419,12 @@ fn wrong_access_mode() {
 #[test]
 fn io_shareable_types() {
     for numeric in "i32 u32 f32".split_whitespace() {
-        let types = format!(
-            "{} vec2<{}> vec3<{}> vec4<{}>",
-            numeric, numeric, numeric, numeric
-        );
+        let types = format!("{numeric} vec2<{numeric}> vec3<{numeric}> vec4<{numeric}>");
         for ty in types.split_whitespace() {
             check_one_validation! {
                 &format!("@vertex
-                          fn f(@location(0) arg: {}) -> @builtin(position) vec4<f32>
-                          {{ return vec4<f32>(0.0); }}",
-                         ty),
+                          fn f(@location(0) arg: {ty}) -> @builtin(position) vec4<f32>
+                          {{ return vec4<f32>(0.0); }}"),
                 Ok(_module)
             }
         }
@@ -1443,9 +1439,8 @@ fn io_shareable_types() {
     {
         check_one_validation! {
             &format!("@vertex
-                          fn f(@location(0) arg: {}) -> @builtin(position) vec4<f32>
-                          {{ return vec4<f32>(0.0); }}",
-                     ty),
+                          fn f(@location(0) arg: {ty}) -> @builtin(position) vec4<f32>
+                          {{ return vec4<f32>(0.0); }}"),
             Err(
                 naga::valid::ValidationError::EntryPoint {
                     stage: naga::ShaderStage::Vertex,
@@ -1474,9 +1469,8 @@ fn host_shareable_types() {
     for ty in types.split_whitespace() {
         check_one_validation! {
             &format!("struct AStruct {{ member: array<mat4x4<f32>, 8> }};
-                      @group(0) @binding(0) var<uniform> ubuf: {};
-                      @group(0) @binding(1) var<storage> sbuf: {};",
-                     ty, ty),
+                      @group(0) @binding(0) var<uniform> ubuf: {ty};
+                      @group(0) @binding(1) var<storage> sbuf: {ty};"),
             Ok(_module)
         }
     }
@@ -1489,8 +1483,7 @@ fn host_shareable_types() {
     for ty in types.split_whitespace() {
         check_one_validation! {
             &format!("struct AStruct {{ member: array<atomic<u32>, 8> }};
-                      @group(0) @binding(1) var<storage> sbuf: {};",
-                     ty),
+                      @group(0) @binding(1) var<storage> sbuf: {ty};"),
             Ok(_module)
         }
     }
@@ -1498,7 +1491,7 @@ fn host_shareable_types() {
     // Types that are neither host-shareable nor constructible.
     for ty in "bool ptr<storage,i32>".split_whitespace() {
         check_one_validation! {
-            &format!("@group(0) @binding(0) var<storage> sbuf: {};", ty),
+            &format!("@group(0) @binding(0) var<storage> sbuf: {ty};"),
             Err(
                 naga::valid::ValidationError::GlobalVariable {
                     name,
@@ -1510,7 +1503,7 @@ fn host_shareable_types() {
         }
 
         check_one_validation! {
-            &format!("@group(0) @binding(0) var<uniform> ubuf: {};", ty),
+            &format!("@group(0) @binding(0) var<uniform> ubuf: {ty};"),
             Err(naga::valid::ValidationError::GlobalVariable {
                     name,
                     handle: _,

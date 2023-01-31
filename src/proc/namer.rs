@@ -64,7 +64,7 @@ impl Namer {
 
         for prefix in &self.reserved_prefixes {
             if base.starts_with(prefix) {
-                return format!("gen_{}", base).into();
+                return format!("gen_{base}").into();
             }
         }
 
@@ -210,11 +210,11 @@ impl Namer {
                         crate::ConstantInner::Scalar {
                             width: _,
                             value: crate::ScalarValue::Sint(v),
-                        } => write!(temp, "const_{}i", v),
+                        } => write!(temp, "const_{v}i"),
                         crate::ConstantInner::Scalar {
                             width: _,
                             value: crate::ScalarValue::Uint(v),
-                        } => write!(temp, "const_{}u", v),
+                        } => write!(temp, "const_{v}u"),
                         crate::ConstantInner::Scalar {
                             width: _,
                             value: crate::ScalarValue::Float(v),
@@ -237,7 +237,7 @@ impl Namer {
                         crate::ConstantInner::Scalar {
                             width: _,
                             value: crate::ScalarValue::Bool(v),
-                        } => write!(temp, "const_{}", v),
+                        } => write!(temp, "const_{v}"),
                         crate::ConstantInner::Composite { ty, components: _ } => {
                             write!(temp, "const_{}", output[&NameKey::Type(ty)])
                         }

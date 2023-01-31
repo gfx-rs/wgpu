@@ -53,11 +53,11 @@ impl<W: fmt::Write> super::Writer<'_, W> {
             }
             match *access {
                 SubAccess::Offset(offset) => {
-                    write!(self.out, "{}", offset)?;
+                    write!(self.out, "{offset}")?;
                 }
                 SubAccess::Index { value, stride } => {
                     self.write_expr(module, value, func_ctx)?;
-                    write!(self.out, "*{}", stride)?;
+                    write!(self.out, "*{stride}")?;
                 }
             }
         }
@@ -97,7 +97,7 @@ impl<W: fmt::Write> super::Writer<'_, W> {
                 let chain = mem::take(&mut self.temp_access_chain);
                 let var_name = &self.names[&NameKey::GlobalVariable(var_handle)];
                 let cast = kind.to_hlsl_cast();
-                write!(self.out, "{}({}.Load(", cast, var_name)?;
+                write!(self.out, "{cast}({var_name}.Load(")?;
                 self.write_storage_address(module, &chain, func_ctx)?;
                 write!(self.out, "))")?;
                 self.temp_access_chain = chain;
@@ -183,14 +183,14 @@ impl<W: fmt::Write> super::Writer<'_, W> {
                 depth,
                 index,
                 ty: _,
-            } => write!(self.out, "{}{}[{}]", STORE_TEMP_NAME, depth, index)?,
+            } => write!(self.out, "{STORE_TEMP_NAME}{depth}[{index}]")?,
             StoreValue::TempAccess {
                 depth,
                 base,
                 member_index,
             } => {
                 let name = &self.names[&NameKey::StructMember(base, member_index)];
-                write!(self.out, "{}{}.{}", STORE_TEMP_NAME, depth, name)?
+                write!(self.out, "{STORE_TEMP_NAME}{depth}.{name}")?
             }
         }
         Ok(())
@@ -233,7 +233,7 @@ impl<W: fmt::Write> super::Writer<'_, W> {
                 // working around the borrow checker in `self.write_expr`
                 let chain = mem::take(&mut self.temp_access_chain);
                 let var_name = &self.names[&NameKey::GlobalVariable(var_handle)];
-                write!(self.out, "{}{}.Store(", level, var_name)?;
+                write!(self.out, "{level}{var_name}.Store(")?;
                 self.write_storage_address(module, &chain, func_ctx)?;
                 write!(self.out, ", asuint(")?;
                 self.write_store_value(module, &value, func_ctx)?;
@@ -257,7 +257,7 @@ impl<W: fmt::Write> super::Writer<'_, W> {
                 width,
             } => {
                 // first, assign the value to a temporary
-                writeln!(self.out, "{}{{", level)?;
+                writeln!(self.out, "{level}{{")?;
                 let depth = level.0 + 1;
                 write!(
                     self.out,
@@ -293,7 +293,7 @@ impl<W: fmt::Write> super::Writer<'_, W> {
                     self.temp_access_chain.pop();
                 }
                 // done
-                writeln!(self.out, "{}}}", level)?;
+                writeln!(self.out, "{level}}}")?;
             }
             crate::TypeInner::Array {
                 base,
@@ -301,11 +301,11 @@ impl<W: fmt::Write> super::Writer<'_, W> {
                 ..
             } => {
                 // first, assign the value to a temporary
-                writeln!(self.out, "{}{{", level)?;
+                writeln!(self.out, "{level}{{")?;
                 write!(self.out, "{}", level.next())?;
                 self.write_value_type(module, &module.types[base].inner)?;
                 let depth = level.next().0;
-                write!(self.out, " {}{}", STORE_TEMP_NAME, depth)?;
+                write!(self.out, " {STORE_TEMP_NAME}{depth}")?;
                 self.write_array_size(module, base, crate::ArraySize::Constant(const_handle))?;
                 write!(self.out, " = ")?;
                 self.write_store_value(module, &value, func_ctx)?;
@@ -324,11 +324,11 @@ impl<W: fmt::Write> super::Writer<'_, W> {
                     self.temp_access_chain.pop();
                 }
                 // done
-                writeln!(self.out, "{}}}", level)?;
+                writeln!(self.out, "{level}}}")?;
             }
             crate::TypeInner::Struct { ref members, .. } => {
                 // first, assign the value to a temporary
-                writeln!(self.out, "{}{{", level)?;
+                writeln!(self.out, "{level}{{")?;
                 let depth = level.next().0;
                 let struct_ty = ty_resolution.handle().unwrap();
                 let struct_name = &self.names[&NameKey::Type(struct_ty)];
@@ -355,7 +355,7 @@ impl<W: fmt::Write> super::Writer<'_, W> {
                     self.temp_access_chain.pop();
                 }
                 // done
-                writeln!(self.out, "{}}}", level)?;
+                writeln!(self.out, "{level}}}")?;
             }
             _ => unreachable!(),
         }
@@ -386,10 +386,7 @@ impl<W: fmt::Write> super::Writer<'_, W> {
                     (base, AccessIndex::Constant(index))
                 }
                 ref other => {
-                    return Err(Error::Unimplemented(format!(
-                        "Pointer access of {:?}",
-                        other
-                    )))
+                    return Err(Error::Unimplemented(format!("Pointer access of {other:?}")))
                 }
             };
 

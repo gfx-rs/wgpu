@@ -43,7 +43,7 @@ impl From<TokenValue> for ExpectedToken {
 impl std::fmt::Display for ExpectedToken {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match *self {
-            ExpectedToken::Token(ref token) => write!(f, "{:?}", token),
+            ExpectedToken::Token(ref token) => write!(f, "{token:?}"),
             ExpectedToken::TypeName => write!(f, "a type"),
             ExpectedToken::Identifier => write!(f, "identifier"),
             ExpectedToken::IntLiteral => write!(f, "integer literal"),

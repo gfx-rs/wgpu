@@ -1378,7 +1378,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     let result_type_id = self.next()?;
                     let result_id = self.next()?;
 
-                    let name = format!("phi_{}", result_id);
+                    let name = format!("phi_{result_id}");
                     let local = ctx.local_arena.append(
                         crate::LocalVariable {
                             name: Some(name),

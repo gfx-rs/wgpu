@@ -125,20 +125,20 @@ impl<'a, W: Write> super::Writer<'a, W> {
         };
         let dim_str = dim.to_hlsl_str();
         let arrayed_str = if arrayed { "Array" } else { "" };
-        write!(self.out, "{}Texture{}{}", access_str, dim_str, arrayed_str)?;
+        write!(self.out, "{access_str}Texture{dim_str}{arrayed_str}")?;
         match class {
             crate::ImageClass::Depth { multi } => {
                 let multi_str = if multi { "MS" } else { "" };
-                write!(self.out, "{}<float>", multi_str)?
+                write!(self.out, "{multi_str}<float>")?
             }
             crate::ImageClass::Sampled { kind, multi } => {
                 let multi_str = if multi { "MS" } else { "" };
                 let scalar_kind_str = kind.to_hlsl_str(4)?;
-                write!(self.out, "{}<{}4>", multi_str, scalar_kind_str)?
+                write!(self.out, "{multi_str}<{scalar_kind_str}4>")?
             }
             crate::ImageClass::Storage { format, .. } => {
                 let storage_format_str = format.to_hlsl_str();
-                write!(self.out, "<{}>", storage_format_str)?
+                write!(self.out, "<{storage_format_str}>")?
             }
         }
         Ok(())
@@ -149,7 +149,7 @@ impl<'a, W: Write> super::Writer<'a, W> {
         query: WrappedArrayLength,
     ) -> BackendResult {
         let access_str = if query.writable { "RW" } else { "" };
-        write!(self.out, "NagaBufferLength{}", access_str,)?;
+        write!(self.out, "NagaBufferLength{access_str}",)?;
 
         Ok(())
     }
@@ -180,22 +180,20 @@ impl<'a, W: Write> super::Writer<'a, W> {
         let access_str = if wal.writable { "RW" } else { "" };
         writeln!(
             self.out,
-            "{}ByteAddressBuffer {})",
-            access_str, ARGUMENT_VARIABLE_NAME
+            "{access_str}ByteAddressBuffer {ARGUMENT_VARIABLE_NAME})"
         )?;
         // Write function body
         writeln!(self.out, "{{")?;
 
         // Write `GetDimensions` function.
-        writeln!(self.out, "{}uint {};", INDENT, RETURN_VARIABLE_NAME)?;
+        writeln!(self.out, "{INDENT}uint {RETURN_VARIABLE_NAME};")?;
         writeln!(
             self.out,
-            "{}{}.GetDimensions({});",
-            INDENT, ARGUMENT_VARIABLE_NAME, RETURN_VARIABLE_NAME
+            "{INDENT}{ARGUMENT_VARIABLE_NAME}.GetDimensions({RETURN_VARIABLE_NAME});"
         )?;
 
         // Write return value
-        writeln!(self.out, "{}return {};", INDENT, RETURN_VARIABLE_NAME)?;
+        writeln!(self.out, "{INDENT}return {RETURN_VARIABLE_NAME};")?;
 
         // End of function body
         writeln!(self.out, "}}")?;
@@ -226,11 +224,7 @@ impl<'a, W: Write> super::Writer<'a, W> {
             ImageQuery::NumSamples => "NumSamples",
         };
 
-        write!(
-            self.out,
-            "Naga{}{}{}{}",
-            class_str, query_str, dim_str, arrayed_str
-        )?;
+        write!(self.out, "Naga{class_str}{query_str}{dim_str}{arrayed_str}")?;
 
         Ok(())
     }
@@ -264,10 +258,10 @@ impl<'a, W: Write> super::Writer<'a, W> {
         write!(self.out, "(")?;
         // Texture always first parameter
         self.write_image_type(wiq.dim, wiq.arrayed, wiq.class)?;
-        write!(self.out, " {}", ARGUMENT_VARIABLE_NAME)?;
+        write!(self.out, " {ARGUMENT_VARIABLE_NAME}")?;
         // Mipmap is a second parameter if exists
         if let ImageQuery::SizeLevel = wiq.query {
-            write!(self.out, ", uint {}", MIP_LEVEL_PARAM)?;
+            write!(self.out, ", uint {MIP_LEVEL_PARAM}")?;
         }
         writeln!(self.out, ")")?;
 
@@ -303,15 +297,11 @@ impl<'a, W: Write> super::Writer<'a, W> {
         };
 
         // Write `GetDimensions` function.
-        writeln!(self.out, "{}uint4 {};", INDENT, RETURN_VARIABLE_NAME)?;
-        write!(
-            self.out,
-            "{}{}.GetDimensions(",
-            INDENT, ARGUMENT_VARIABLE_NAME
-        )?;
+        writeln!(self.out, "{INDENT}uint4 {RETURN_VARIABLE_NAME};")?;
+        write!(self.out, "{INDENT}{ARGUMENT_VARIABLE_NAME}.GetDimensions(")?;
         match wiq.query {
             ImageQuery::SizeLevel => {
-                write!(self.out, "{}, ", MIP_LEVEL_PARAM)?;
+                write!(self.out, "{MIP_LEVEL_PARAM}, ")?;
             }
             _ => match wiq.class {
                 crate::ImageClass::Sampled { multi: true, .. }
@@ -325,7 +315,7 @@ impl<'a, W: Write> super::Writer<'a, W> {
         }
 
         for component in COMPONENTS[..number_of_params - 1].iter() {
-            write!(self.out, "{}.{}, ", RETURN_VARIABLE_NAME, component)?;
+            write!(self.out, "{RETURN_VARIABLE_NAME}.{component}, ")?;
         }
 
         // write last parameter without comma and space for last parameter
@@ -341,8 +331,7 @@ impl<'a, W: Write> super::Writer<'a, W> {
         // Write return value
         writeln!(
             self.out,
-            "{}return {}.{};",
-            INDENT, RETURN_VARIABLE_NAME, ret_swizzle
+            "{INDENT}return {RETURN_VARIABLE_NAME}.{ret_swizzle};"
         )?;
 
         // End of function body
@@ -364,7 +353,7 @@ impl<'a, W: Write> super::Writer<'a, W> {
             &module.constants,
             &self.names,
         )?;
-        write!(self.out, "Construct{}", name)?;
+        write!(self.out, "Construct{name}")?;
         Ok(())
     }
 
@@ -404,7 +393,7 @@ impl<'a, W: Write> super::Writer<'a, W> {
                 write!(self.out, ", ")?;
             }
             self.write_type(module, ty)?;
-            write!(self.out, " {}{}", ARGUMENT_VARIABLE_NAME, i)?;
+            write!(self.out, " {ARGUMENT_VARIABLE_NAME}{i}")?;
             if let crate::TypeInner::Array { base, size, .. } = module.types[ty].inner {
                 self.write_array_size(module, base, size)?;
             }
@@ -440,8 +429,7 @@ impl<'a, W: Write> super::Writer<'a, W> {
                 let struct_name = &self.names[&NameKey::Type(constructor.ty)];
                 writeln!(
                     self.out,
-                    "{}{} {} = ({})0;",
-                    INDENT, struct_name, RETURN_VARIABLE_NAME, struct_name
+                    "{INDENT}{struct_name} {RETURN_VARIABLE_NAME} = ({struct_name})0;"
                 )?;
                 for (i, member) in members.iter().enumerate() {
                     let field_name = &self.names[&NameKey::StructMember(constructor.ty, i as u32)];
@@ -455,14 +443,7 @@ impl<'a, W: Write> super::Writer<'a, W> {
                             for j in 0..columns as u8 {
                                 writeln!(
                                     self.out,
-                                    "{}{}.{}_{} = {}{}[{}];",
-                                    INDENT,
-                                    RETURN_VARIABLE_NAME,
-                                    field_name,
-                                    j,
-                                    ARGUMENT_VARIABLE_NAME,
-                                    i,
-                                    j
+                                    "{INDENT}{RETURN_VARIABLE_NAME}.{field_name}_{j} = {ARGUMENT_VARIABLE_NAME}{i}[{j}];"
                                 )?;
                             }
                         }
@@ -484,16 +465,11 @@ impl<'a, W: Write> super::Writer<'a, W> {
                                 if let crate::TypeInner::Array { base, size, .. } = *other {
                                     self.write_array_size(module, base, size)?;
                                 }
-                                writeln!(self.out, "){}{};", ARGUMENT_VARIABLE_NAME, i,)?;
+                                writeln!(self.out, "){ARGUMENT_VARIABLE_NAME}{i};",)?;
                             } else {
                                 writeln!(
                                     self.out,
-                                    "{}{}.{} = {}{};",
-                                    INDENT,
-                                    RETURN_VARIABLE_NAME,
-                                    field_name,
-                                    ARGUMENT_VARIABLE_NAME,
-                                    i,
+                                    "{INDENT}{RETURN_VARIABLE_NAME}.{field_name} = {ARGUMENT_VARIABLE_NAME}{i};",
                                 )?;
                             }
                         }
@@ -505,9 +481,9 @@ impl<'a, W: Write> super::Writer<'a, W> {
                 size: crate::ArraySize::Constant(size),
                 ..
             } => {
-                write!(self.out, "{}", INDENT)?;
+                write!(self.out, "{INDENT}")?;
                 self.write_type(module, base)?;
-                write!(self.out, " {}", RETURN_VARIABLE_NAME)?;
+                write!(self.out, " {RETURN_VARIABLE_NAME}")?;
                 self.write_array_size(module, base, crate::ArraySize::Constant(size))?;
                 write!(self.out, " = {{ ")?;
                 let count = module.constants[size].to_array_length().unwrap();
@@ -515,7 +491,7 @@ impl<'a, W: Write> super::Writer<'a, W> {
                     if i != 0 {
                         write!(self.out, ", ")?;
                     }
-                    write!(self.out, "{}{}", ARGUMENT_VARIABLE_NAME, i)?;
+                    write!(self.out, "{ARGUMENT_VARIABLE_NAME}{i}")?;
                 }
                 writeln!(self.out, " }};",)?;
             }
@@ -523,7 +499,7 @@ impl<'a, W: Write> super::Writer<'a, W> {
         }
 
         // Write return value
-        writeln!(self.out, "{}return {};", INDENT, RETURN_VARIABLE_NAME)?;
+        writeln!(self.out, "{INDENT}return {RETURN_VARIABLE_NAME};")?;
 
         // End of function body
         writeln!(self.out, "}}")?;
@@ -539,7 +515,7 @@ impl<'a, W: Write> super::Writer<'a, W> {
     ) -> BackendResult {
         let name = &self.names[&NameKey::Type(access.ty)];
         let field_name = &self.names[&NameKey::StructMember(access.ty, access.index)];
-        write!(self.out, "GetMat{}On{}", field_name, name)?;
+        write!(self.out, "GetMat{field_name}On{name}")?;
         Ok(())
     }
 
@@ -566,17 +542,13 @@ impl<'a, W: Write> super::Writer<'a, W> {
         // Write function parameters
         write!(self.out, "(")?;
         let struct_name = &self.names[&NameKey::Type(access.ty)];
-        write!(
-            self.out,
-            "{} {}",
-            struct_name, STRUCT_ARGUMENT_VARIABLE_NAME
-        )?;
+        write!(self.out, "{struct_name} {STRUCT_ARGUMENT_VARIABLE_NAME}")?;
 
         // Write function body
         writeln!(self.out, ") {{")?;
 
         // Write return value
-        write!(self.out, "{}return ", INDENT)?;
+        write!(self.out, "{INDENT}return ")?;
         self.write_value_type(module, ret_ty)?;
         write!(self.out, "(")?;
         let field_name = &self.names[&NameKey::StructMember(access.ty, access.index)];
@@ -586,11 +558,7 @@ impl<'a, W: Write> super::Writer<'a, W> {
                     if i != 0 {
                         write!(self.out, ", ")?;
                     }
-                    write!(
-                        self.out,
-                        "{}.{}_{}",
-                        STRUCT_ARGUMENT_VARIABLE_NAME, field_name, i
-                    )?;
+                    write!(self.out, "{STRUCT_ARGUMENT_VARIABLE_NAME}.{field_name}_{i}")?;
                 }
             }
             _ => unreachable!(),
@@ -611,7 +579,7 @@ impl<'a, W: Write> super::Writer<'a, W> {
     ) -> BackendResult {
         let name = &self.names[&NameKey::Type(access.ty)];
         let field_name = &self.names[&NameKey::StructMember(access.ty, access.index)];
-        write!(self.out, "SetMat{}On{}", field_name, name)?;
+        write!(self.out, "SetMat{field_name}On{name}")?;
         Ok(())
     }
 
@@ -633,17 +601,13 @@ impl<'a, W: Write> super::Writer<'a, W> {
         // Write function parameters
         write!(self.out, "(")?;
         let struct_name = &self.names[&NameKey::Type(access.ty)];
-        write!(
-            self.out,
-            "{} {}, ",
-            struct_name, STRUCT_ARGUMENT_VARIABLE_NAME
-        )?;
+        write!(self.out, "{struct_name} {STRUCT_ARGUMENT_VARIABLE_NAME}, ")?;
         let member = match module.types[access.ty].inner {
             crate::TypeInner::Struct { ref members, .. } => &members[access.index as usize],
             _ => unreachable!(),
         };
         self.write_type(module, member.ty)?;
-        write!(self.out, " {}", MATRIX_ARGUMENT_VARIABLE_NAME)?;
+        write!(self.out, " {MATRIX_ARGUMENT_VARIABLE_NAME}")?;
         // Write function body
         writeln!(self.out, ") {{")?;
 
@@ -654,13 +618,7 @@ impl<'a, W: Write> super::Writer<'a, W> {
                 for i in 0..columns as u8 {
                     writeln!(
                         self.out,
-                        "{}{}.{}_{} = {}[{}];",
-                        INDENT,
-                        STRUCT_ARGUMENT_VARIABLE_NAME,
-                        field_name,
-                        i,
-                        MATRIX_ARGUMENT_VARIABLE_NAME,
-                        i
+                        "{INDENT}{STRUCT_ARGUMENT_VARIABLE_NAME}.{field_name}_{i} = {MATRIX_ARGUMENT_VARIABLE_NAME}[{i}];"
                     )?;
                 }
             }
@@ -681,7 +639,7 @@ impl<'a, W: Write> super::Writer<'a, W> {
     ) -> BackendResult {
         let name = &self.names[&NameKey::Type(access.ty)];
         let field_name = &self.names[&NameKey::StructMember(access.ty, access.index)];
-        write!(self.out, "SetMatVec{}On{}", field_name, name)?;
+        write!(self.out, "SetMatVec{field_name}On{name}")?;
         Ok(())
     }
 
@@ -704,11 +662,7 @@ impl<'a, W: Write> super::Writer<'a, W> {
         // Write function parameters
         write!(self.out, "(")?;
         let struct_name = &self.names[&NameKey::Type(access.ty)];
-        write!(
-            self.out,
-            "{} {}, ",
-            struct_name, STRUCT_ARGUMENT_VARIABLE_NAME
-        )?;
+        write!(self.out, "{struct_name} {STRUCT_ARGUMENT_VARIABLE_NAME}, ")?;
         let member = match module.types[access.ty].inner {
             crate::TypeInner::Struct { ref members, .. } => &members[access.index as usize],
             _ => unreachable!(),
@@ -724,8 +678,7 @@ impl<'a, W: Write> super::Writer<'a, W> {
         self.write_value_type(module, &vec_ty)?;
         write!(
             self.out,
-            " {}, uint {}",
-            VECTOR_ARGUMENT_VARIABLE_NAME, MATRIX_INDEX_ARGUMENT_VARIABLE_NAME
+            " {VECTOR_ARGUMENT_VARIABLE_NAME}, uint {MATRIX_INDEX_ARGUMENT_VARIABLE_NAME}"
         )?;
 
         // Write function body
@@ -733,8 +686,7 @@ impl<'a, W: Write> super::Writer<'a, W> {
 
         writeln!(
             self.out,
-            "{}switch({}) {{",
-            INDENT, MATRIX_INDEX_ARGUMENT_VARIABLE_NAME
+            "{INDENT}switch({MATRIX_INDEX_ARGUMENT_VARIABLE_NAME}) {{"
         )?;
 
         let field_name = &self.names[&NameKey::StructMember(access.ty, access.index)];
@@ -744,20 +696,14 @@ impl<'a, W: Write> super::Writer<'a, W> {
                 for i in 0..columns as u8 {
                     writeln!(
                         self.out,
-                        "{}case {}: {{ {}.{}_{} = {}; break; }}",
-                        INDENT,
-                        i,
-                        STRUCT_ARGUMENT_VARIABLE_NAME,
-                        field_name,
-                        i,
-                        VECTOR_ARGUMENT_VARIABLE_NAME
+                        "{INDENT}case {i}: {{ {STRUCT_ARGUMENT_VARIABLE_NAME}.{field_name}_{i} = {VECTOR_ARGUMENT_VARIABLE_NAME}; break; }}"
                     )?;
                 }
             }
             _ => unreachable!(),
         }
 
-        writeln!(self.out, "{}}}", INDENT)?;
+        writeln!(self.out, "{INDENT}}}")?;
 
         // End of function body
         writeln!(self.out, "}}")?;
@@ -773,7 +719,7 @@ impl<'a, W: Write> super::Writer<'a, W> {
     ) -> BackendResult {
         let name = &self.names[&NameKey::Type(access.ty)];
         let field_name = &self.names[&NameKey::StructMember(access.ty, access.index)];
-        write!(self.out, "SetMatScalar{}On{}", field_name, name)?;
+        write!(self.out, "SetMatScalar{field_name}On{name}")?;
         Ok(())
     }
 
@@ -797,11 +743,7 @@ impl<'a, W: Write> super::Writer<'a, W> {
         // Write function parameters
         write!(self.out, "(")?;
         let struct_name = &self.names[&NameKey::Type(access.ty)];
-        write!(
-            self.out,
-            "{} {}, ",
-            struct_name, STRUCT_ARGUMENT_VARIABLE_NAME
-        )?;
+        write!(self.out, "{struct_name} {STRUCT_ARGUMENT_VARIABLE_NAME}, ")?;
         let member = match module.types[access.ty].inner {
             crate::TypeInner::Struct { ref members, .. } => &members[access.index as usize],
             _ => unreachable!(),
@@ -816,10 +758,7 @@ impl<'a, W: Write> super::Writer<'a, W> {
         self.write_value_type(module, &scalar_ty)?;
         write!(
             self.out,
-            " {}, uint {}, uint {}",
-            SCALAR_ARGUMENT_VARIABLE_NAME,
-            MATRIX_INDEX_ARGUMENT_VARIABLE_NAME,
-            VECTOR_INDEX_ARGUMENT_VARIABLE_NAME
+            " {SCALAR_ARGUMENT_VARIABLE_NAME}, uint {MATRIX_INDEX_ARGUMENT_VARIABLE_NAME}, uint {VECTOR_INDEX_ARGUMENT_VARIABLE_NAME}"
         )?;
 
         // Write function body
@@ -827,8 +766,7 @@ impl<'a, W: Write> super::Writer<'a, W> {
 
         writeln!(
             self.out,
-            "{}switch({}) {{",
-            INDENT, MATRIX_INDEX_ARGUMENT_VARIABLE_NAME
+            "{INDENT}switch({MATRIX_INDEX_ARGUMENT_VARIABLE_NAME}) {{"
         )?;
 
         let field_name = &self.names[&NameKey::StructMember(access.ty, access.index)];
@@ -838,21 +776,14 @@ impl<'a, W: Write> super::Writer<'a, W> {
                 for i in 0..columns as u8 {
                     writeln!(
                         self.out,
-                        "{}case {}: {{ {}.{}_{}[{}] = {}; break; }}",
-                        INDENT,
-                        i,
-                        STRUCT_ARGUMENT_VARIABLE_NAME,
-                        field_name,
-                        i,
-                        VECTOR_INDEX_ARGUMENT_VARIABLE_NAME,
-                        SCALAR_ARGUMENT_VARIABLE_NAME
+                        "{INDENT}case {i}: {{ {STRUCT_ARGUMENT_VARIABLE_NAME}.{field_name}_{i}[{VECTOR_INDEX_ARGUMENT_VARIABLE_NAME}] = {SCALAR_ARGUMENT_VARIABLE_NAME}; break; }}"
                     )?;
                 }
             }
             _ => unreachable!(),
         }
 
-        writeln!(self.out, "{}}}", INDENT)?;
+        writeln!(self.out, "{INDENT}}}")?;
 
         // End of function body
         writeln!(self.out, "}}")?;
@@ -1088,7 +1019,7 @@ impl<'a, W: Write> super::Writer<'a, W> {
         // typedef
         write!(self.out, "typedef struct {{ ")?;
         for i in 0..columns as u8 {
-            write!(self.out, "float2 _{}; ", i)?;
+            write!(self.out, "float2 _{i}; ")?;
         }
         writeln!(self.out, "}} __mat{}x2;", columns as u8)?;
 
@@ -1098,12 +1029,12 @@ impl<'a, W: Write> super::Writer<'a, W> {
             "float2 __get_col_of_mat{}x2(__mat{}x2 mat, uint idx) {{",
             columns as u8, columns as u8
         )?;
-        writeln!(self.out, "{}switch(idx) {{", INDENT)?;
+        writeln!(self.out, "{INDENT}switch(idx) {{")?;
         for i in 0..columns as u8 {
-            writeln!(self.out, "{}case {}: {{ return mat._{}; }}", INDENT, i, i)?;
+            writeln!(self.out, "{INDENT}case {i}: {{ return mat._{i}; }}")?;
         }
-        writeln!(self.out, "{}default: {{ return (float2)0; }}", INDENT)?;
-        writeln!(self.out, "{}}}", INDENT)?;
+        writeln!(self.out, "{INDENT}default: {{ return (float2)0; }}")?;
+        writeln!(self.out, "{INDENT}}}")?;
         writeln!(self.out, "}}")?;
 
         // __set_col_of_mat
@@ -1112,15 +1043,11 @@ impl<'a, W: Write> super::Writer<'a, W> {
             "void __set_col_of_mat{}x2(__mat{}x2 mat, uint idx, float2 value) {{",
             columns as u8, columns as u8
         )?;
-        writeln!(self.out, "{}switch(idx) {{", INDENT)?;
+        writeln!(self.out, "{INDENT}switch(idx) {{")?;
         for i in 0..columns as u8 {
-            writeln!(
-                self.out,
-                "{}case {}: {{ mat._{} = value; break; }}",
-                INDENT, i, i
-            )?;
+            writeln!(self.out, "{INDENT}case {i}: {{ mat._{i} = value; break; }}")?;
         }
-        writeln!(self.out, "{}}}", INDENT)?;
+        writeln!(self.out, "{INDENT}}}")?;
         writeln!(self.out, "}}")?;
 
         // __set_el_of_mat
@@ -1129,15 +1056,14 @@ impl<'a, W: Write> super::Writer<'a, W> {
             "void __set_el_of_mat{}x2(__mat{}x2 mat, uint idx, uint vec_idx, float value) {{",
             columns as u8, columns as u8
         )?;
-        writeln!(self.out, "{}switch(idx) {{", INDENT)?;
+        writeln!(self.out, "{INDENT}switch(idx) {{")?;
         for i in 0..columns as u8 {
             writeln!(
                 self.out,
-                "{}case {}: {{ mat._{}[vec_idx] = value; break; }}",
-                INDENT, i, i
+                "{INDENT}case {i}: {{ mat._{i}[vec_idx] = value; break; }}"
             )?;
         }
-        writeln!(self.out, "{}}}", INDENT)?;
+        writeln!(self.out, "{INDENT}}}")?;
         writeln!(self.out, "}}")?;
 
         writeln!(self.out)?;

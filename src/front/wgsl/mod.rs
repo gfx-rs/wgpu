@@ -218,20 +218,20 @@ impl<'a> Error<'a> {
                 let expected_str = match expected {
                         ExpectedToken::Token(token) => {
                             match token {
-                                Token::Separator(c) => format!("'{}'", c),
-                                Token::Paren(c) => format!("'{}'", c),
+                                Token::Separator(c) => format!("'{c}'"),
+                                Token::Paren(c) => format!("'{c}'"),
                                 Token::Attribute => "@".to_string(),
                                 Token::Number(_) => "number".to_string(),
                                 Token::Word(s) => s.to_string(),
-                                Token::Operation(c) => format!("operation ('{}')", c),
-                                Token::LogicalOperation(c) => format!("logical operation ('{}')", c),
-                                Token::ShiftOperation(c) => format!("bitshift ('{}{}')", c, c),
-                                Token::AssignmentOperation(c) if c=='<' || c=='>' => format!("bitshift ('{}{}=')", c, c),
-                                Token::AssignmentOperation(c) => format!("operation ('{}=')", c),
+                                Token::Operation(c) => format!("operation ('{c}')"),
+                                Token::LogicalOperation(c) => format!("logical operation ('{c}')"),
+                                Token::ShiftOperation(c) => format!("bitshift ('{c}{c}')"),
+                                Token::AssignmentOperation(c) if c=='<' || c=='>' => format!("bitshift ('{c}{c}=')"),
+                                Token::AssignmentOperation(c) => format!("operation ('{c}=')"),
                                 Token::IncrementOperation => "increment operation".to_string(),
                                 Token::DecrementOperation => "decrement operation".to_string(),
                                 Token::Arrow => "->".to_string(),
-                                Token::Unknown(c) => format!("unknown ('{}')", c),
+                                Token::Unknown(c) => format!("unknown ('{c}')"),
                                 Token::Trivia => "trivia".to_string(),
                                 Token::End => "end".to_string(),
                             }
@@ -261,7 +261,7 @@ impl<'a> Error<'a> {
                         "expected {}, found '{}'",
                         expected_str, &source[unexpected_span],
                     ),
-                    labels: vec![(unexpected_span, format!("expected {}", expected_str).into())],
+                    labels: vec![(unexpected_span, format!("expected {expected_str}").into())],
                     notes: vec![],
                 }
             }
@@ -305,7 +305,7 @@ impl<'a> Error<'a> {
                 notes: vec![],
             },
             Error::UnknownIdent(ident_span, ident) => ParseError {
-                message: format!("no definition in scope for identifier: '{}'", ident),
+                message: format!("no definition in scope for identifier: '{ident}'"),
                 labels: vec![(ident_span, "unknown identifier".into())],
                 notes: vec![],
             },
@@ -342,7 +342,7 @@ impl<'a> Error<'a> {
                 ref from_type,
                 ref to_type,
             } => {
-                let msg = format!("cannot cast a {} to a {}", from_type, to_type);
+                let msg = format!("cannot cast a {from_type} to a {to_type}");
                 ParseError {
                     message: msg.clone(),
                     labels: vec![(span, msg.into())],
@@ -376,10 +376,7 @@ impl<'a> Error<'a> {
                 notes: vec![],
             },
             Error::InvalidConstructorComponentType(bad_span, component) => ParseError {
-                message: format!(
-                    "invalid type for constructor component at index [{}]",
-                    component
-                ),
+                message: format!("invalid type for constructor component at index [{component}]"),
                 labels: vec![(bad_span, "invalid component type".into())],
                 notes: vec![],
             },
@@ -435,13 +432,13 @@ impl<'a> Error<'a> {
                 notes: vec![],
             },
             Error::SizeAttributeTooLow(bad_span, min_size) => ParseError {
-                message: format!("struct member size must be at least {}", min_size),
-                labels: vec![(bad_span, format!("must be at least {}", min_size).into())],
+                message: format!("struct member size must be at least {min_size}"),
+                labels: vec![(bad_span, format!("must be at least {min_size}").into())],
                 notes: vec![],
             },
             Error::AlignAttributeTooLow(bad_span, min_align) => ParseError {
-                message: format!("struct member alignment must be at least {}", min_align),
-                labels: vec![(bad_span, format!("must be at least {}", min_align).into())],
+                message: format!("struct member alignment must be at least {min_align}"),
+                labels: vec![(bad_span, format!("must be at least {min_align}").into())],
                 notes: vec![],
             },
             Error::NonPowerOfTwoAlignAttribute(bad_span) => ParseError {
@@ -512,7 +509,7 @@ impl<'a> Error<'a> {
                 notes: vec![],
             },
             Error::NotReference(what, span) => ParseError {
-                message: format!("{} must be a reference", what),
+                message: format!("{what} must be a reference"),
                 labels: vec![(span, "expression is not a reference".into())],
                 notes: vec![],
             },
@@ -532,7 +529,7 @@ impl<'a> Error<'a> {
                 },
             },
             Error::Pointer(what, span) => ParseError {
-                message: format!("{} must not be a pointer", what),
+                message: format!("{what} must not be a pointer"),
                 labels: vec![(span, "expression is a pointer".into())],
                 notes: vec![],
             },
@@ -733,7 +730,7 @@ impl crate::TypeInner {
             Ti::Pointer { base, .. } => {
                 let base = &types[base];
                 let name = base.name.as_deref().unwrap_or("unknown");
-                format!("ptr<{}>", name)
+                format!("ptr<{name}>")
             }
             Ti::ValuePointer { kind, width, .. } => {
                 format!("ptr<{}>", kind.to_wgsl(width))
@@ -758,9 +755,9 @@ impl crate::TypeInner {
                                 } => size.to_string(),
                                 _ => "?".to_string(),
                             });
-                        format!("array<{}, {}>", base, size)
+                        format!("array<{base}, {size}>")
                     }
-                    crate::ArraySize::Dynamic => format!("array<{}>", base),
+                    crate::ArraySize::Dynamic => format!("array<{base}>"),
                 }
             }
             Ti::Struct { .. } => {
@@ -794,7 +791,7 @@ impl crate::TypeInner {
                         // The lexer has already verified this, so we can safely assume it here.
                         // https://gpuweb.github.io/gpuweb/wgsl/#sampled-texture-type
                         let element_type = kind.to_wgsl(4);
-                        format!("<{}>", element_type)
+                        format!("<{element_type}>")
                     }
                     crate::ImageClass::Depth { multi: _ } => String::new(),
                     crate::ImageClass::Storage { format, access } => {
@@ -806,10 +803,7 @@ impl crate::TypeInner {
                     }
                 };
 
-                format!(
-                    "texture{}{}{}{}",
-                    class_suffix, dim_suffix, array_suffix, type_in_brackets
-                )
+                format!("texture{class_suffix}{dim_suffix}{array_suffix}{type_in_brackets}")
             }
             Ti::Sampler { .. } => "sampler".to_string(),
             Ti::BindingArray { base, size, .. } => {
@@ -818,9 +812,9 @@ impl crate::TypeInner {
                 match size {
                     crate::ArraySize::Constant(size) => {
                         let size = constants[size].name.as_deref().unwrap_or("unknown");
-                        format!("binding_array<{}, {}>", base, size)
+                        format!("binding_array<{base}, {size}>")
                     }
-                    crate::ArraySize::Dynamic => format!("binding_array<{}>", base),
+                    crate::ArraySize::Dynamic => format!("binding_array<{base}>"),
                 }
             }
         }
@@ -1681,7 +1675,7 @@ impl ParseError {
             .with_notes(
                 self.notes
                     .iter()
-                    .map(|note| format!("note: {}", note))
+                    .map(|note| format!("note: {note}"))
                     .collect(),
             );
         diagnostic

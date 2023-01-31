@@ -304,15 +304,13 @@ fn write_fun(
     for (index, label) in sg.nodes.into_iter().enumerate() {
         writeln!(
             output,
-            "\t\t{}_s{} [ shape=square label=\"{}\" ]",
-            prefix, index, label,
+            "\t\t{prefix}_s{index} [ shape=square label=\"{label}\" ]",
         )?;
     }
     for (from, to, label) in sg.flow {
         writeln!(
             output,
-            "\t\t{}_s{} -> {}_s{} [ arrowhead=tee label=\"{}\" ]",
-            prefix, from, prefix, to, label,
+            "\t\t{prefix}_s{from} -> {prefix}_s{to} [ arrowhead=tee label=\"{label}\" ]",
         )?;
     }
     for (from, to, label, color_id) in sg.jumps {
@@ -384,12 +382,12 @@ fn write_function_expressions(
             }
             E::AccessIndex { base, index } => {
                 edges.insert("base", base);
-                (format!("AccessIndex[{}]", index).into(), 1)
+                (format!("AccessIndex[{index}]").into(), 1)
             }
             E::Constant(_) => ("Constant".into(), 2),
             E::Splat { size, value } => {
                 edges.insert("value", value);
-                (format!("Splat{:?}", size).into(), 3)
+                (format!("Splat{size:?}").into(), 3)
             }
             E::Swizzle {
                 size,
@@ -403,7 +401,7 @@ fn write_function_expressions(
                 payload = Some(Payload::Arguments(components));
                 ("Compose".into(), 3)
             }
-            E::FunctionArgument(index) => (format!("Argument[{}]", index).into(), 1),
+            E::FunctionArgument(index) => (format!("Argument[{index}]").into(), 1),
             E::GlobalVariable(h) => {
                 payload = Some(Payload::Global(h));
                 ("Global".into(), 2)
@@ -450,7 +448,7 @@ fn write_function_expressions(
                     edges.insert("depth_ref", expr);
                 }
                 let string = match gather {
-                    Some(component) => Cow::Owned(format!("ImageGather{:?}", component)),
+                    Some(component) => Cow::Owned(format!("ImageGather{component:?}")),
                     _ => Cow::Borrowed("ImageSample"),
                 };
                 (string, 5)
@@ -484,18 +482,18 @@ fn write_function_expressions(
                         }
                         Cow::from("ImageSize")
                     }
-                    _ => Cow::Owned(format!("{:?}", query)),
+                    _ => Cow::Owned(format!("{query:?}")),
                 };
                 (args, 7)
             }
             E::Unary { op, expr } => {
                 edges.insert("expr", expr);
-                (format!("{:?}", op).into(), 6)
+                (format!("{op:?}").into(), 6)
             }
             E::Binary { op, left, right } => {
                 edges.insert("left", left);
                 edges.insert("right", right);
-                (format!("{:?}", op).into(), 6)
+                (format!("{op:?}").into(), 6)
             }
             E::Select {
                 condition,
@@ -509,11 +507,11 @@ fn write_function_expressions(
             }
             E::Derivative { axis, expr } => {
                 edges.insert("", expr);
-                (format!("d{:?}", axis).into(), 8)
+                (format!("d{axis:?}").into(), 8)
             }
             E::Relational { fun, argument } => {
                 edges.insert("arg", argument);
-                (format!("{:?}", fun).into(), 6)
+                (format!("{fun:?}").into(), 6)
             }
             E::Math {
                 fun,
@@ -532,7 +530,7 @@ fn write_function_expressions(
                 if let Some(expr) = arg3 {
                     edges.insert("arg3", expr);
                 }
-                (format!("{:?}", fun).into(), 7)
+                (format!("{fun:?}").into(), 7)
             }
             E::As {
                 kind,
@@ -541,8 +539,8 @@ fn write_function_expressions(
             } => {
                 edges.insert("", expr);
                 let string = match convert {
-                    Some(width) => format!("Convert<{:?},{}>", kind, width),
-                    None => format!("Bitcast<{:?}>", kind),
+                    Some(width) => format!("Convert<{kind:?},{width}>"),
+                    None => format!("Bitcast<{kind:?}>"),
                 };
                 (string.into(), 3)
             }
@@ -644,7 +642,7 @@ pub fn write(
 
     for (handle, fun) in module.functions.iter() {
         let prefix = format!("f{}", handle.index());
-        writeln!(output, "\tsubgraph cluster_{} {{", prefix)?;
+        writeln!(output, "\tsubgraph cluster_{prefix} {{")?;
         writeln!(
             output,
             "\t\tlabel=\"Function{:?}/'{}'\"",
@@ -656,8 +654,8 @@ pub fn write(
         writeln!(output, "\t}}")?;
     }
     for (ep_index, ep) in module.entry_points.iter().enumerate() {
-        let prefix = format!("ep{}", ep_index);
-        writeln!(output, "\tsubgraph cluster_{} {{", prefix)?;
+        let prefix = format!("ep{ep_index}");
+        writeln!(output, "\tsubgraph cluster_{prefix} {{")?;
         writeln!(output, "\t\tlabel=\"{:?}/'{}'\"", ep.stage, ep.name)?;
         let info = mod_info.map(|a| a.get_entry_point(ep_index));
         write_fun(&mut output, prefix, &ep.function, info, &options)?;
