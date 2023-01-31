@@ -1,3 +1,5 @@
+#![allow(clippy::needless_borrowed_reference)]
+
 use criterion::*;
 use std::{fs, path::PathBuf, slice};
 
