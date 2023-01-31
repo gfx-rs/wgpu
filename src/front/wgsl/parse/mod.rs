@@ -1776,7 +1776,7 @@ impl Parser {
 
         ctx.local_table.push_scope();
 
-        let _ = lexer.next();
+        lexer.expect(Token::Paren('{'))?;
         let mut statements = ast::Block::default();
         while !lexer.skip(Token::Paren('}')) {
             self.statement(lexer, ctx.reborrow(), &mut statements)?;
