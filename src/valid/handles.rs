@@ -532,8 +532,8 @@ pub enum InvalidHandleError {
 
 #[derive(Clone, Debug, thiserror::Error)]
 #[error(
-    "{subject:?} of kind depends on {depends_on:?} of kind {depends_on_kind}, which has not been \
-    processed yet"
+    "{subject:?} of kind {subject_kind:?} depends on {depends_on:?} of kind {depends_on_kind}, \
+    which has not been processed yet"
 )]
 pub struct FwdDepError {
     // This error is used for many `Handle` types, but there's no point in making this generic, so
@@ -580,7 +580,7 @@ impl<T> Handle<T> {
             Ok(self)
         } else {
             let erase_handle_type = |handle: Handle<_>| {
-                Handle::new(NonZeroU32::new(handle.index().try_into().unwrap()).unwrap())
+                Handle::new(NonZeroU32::new((handle.index() + 1).try_into().unwrap()).unwrap())
             };
             Err(FwdDepError {
                 subject: erase_handle_type(self),
