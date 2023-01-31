@@ -4,7 +4,7 @@ use super::{
     context::{Context, ExprPos, StmtContext},
     error::{Error, ErrorKind},
     types::scalar_components,
-    Parser, Result,
+    Frontend, Result,
 };
 use crate::{
     front::glsl::types::type_power, proc::ensure_block_returns, AddressSpace, Arena, Block,
@@ -14,7 +14,7 @@ use crate::{
 };
 use std::iter;
 
-impl Parser {
+impl Frontend {
     fn add_constant_value(
         &mut self,
         scalar_kind: ScalarKind,
@@ -1032,7 +1032,7 @@ impl Parser {
 
         let void = result.is_none();
 
-        let &mut Parser {
+        let &mut Frontend {
             ref mut lookup_function,
             ref mut module,
             ..
@@ -1121,7 +1121,7 @@ impl Parser {
     ) {
         let void = result.is_none();
 
-        let &mut Parser {
+        let &mut Frontend {
             ref mut lookup_function,
             ref mut module,
             ..

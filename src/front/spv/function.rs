@@ -14,7 +14,7 @@ pub struct MergeInstruction {
     pub continue_block_id: Option<BlockId>,
 }
 
-impl<I: Iterator<Item = u32>> super::Parser<I> {
+impl<I: Iterator<Item = u32>> super::Frontend<I> {
     // Registers a function call. It will generate a dummy handle to call, which
     // gets resolved after all the functions are processed.
     pub(super) fn add_call(

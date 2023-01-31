@@ -289,7 +289,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         }
         ext @ ("vert" | "frag" | "comp") => {
             let input = String::from_utf8(input)?;
-            let mut parser = naga::front::glsl::Parser::default();
+            let mut parser = naga::front::glsl::Frontend::default();
 
             (
                 parser

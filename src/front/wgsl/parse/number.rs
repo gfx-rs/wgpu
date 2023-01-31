@@ -1,6 +1,7 @@
 use std::borrow::Cow;
 
-use super::{NumberError, Token};
+use crate::front::wgsl::error::NumberError;
+use crate::front::wgsl::parse::lexer::Token;
 
 /// When using this type assume no Abstract Int/Float for now
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -42,7 +43,7 @@ impl Number {
 
 // TODO: when implementing Creation-Time Expressions, remove the ability to match the minus sign
 
-pub(super) fn consume_number(input: &str) -> (Token<'_>, &str) {
+pub(in crate::front::wgsl) fn consume_number(input: &str) -> (Token<'_>, &str) {
     let (result, rest) = parse(input);
     (
         Token::Number(result.and_then(Number::abstract_to_concrete)),
@@ -146,7 +147,7 @@ fn parse(input: &str) -> (Result<Number, NumberError>, &str) {
 
     impl<'a> ExtractSubStr<'a> {
         /// given an `input` and a `start` (tail of the `input`)
-        /// creates a new [ExtractSubStr]
+        /// creates a new [`ExtractSubStr`](`Self`)
         fn start(input: &'a str, start: &'a [u8]) -> Self {
             let start = input.len() - start.len();
             Self(&input[start..])

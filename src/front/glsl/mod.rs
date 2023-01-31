@@ -1,7 +1,7 @@
 /*!
 Frontend for [GLSL][glsl] (OpenGL Shading Language).
 
-To begin, take a look at the documentation for the [`Parser`](Parser).
+To begin, take a look at the documentation for the [`Frontend`].
 
 # Supported versions
 ## Vulkan
@@ -37,7 +37,7 @@ mod variables;
 
 type Result<T> = std::result::Result<T, Error>;
 
-/// Per-shader options passed to [`parse`](Parser::parse).
+/// Per-shader options passed to [`parse`](Frontend::parse).
 ///
 /// The [`From`](From) trait is implemented for [`ShaderStage`](ShaderStage) to
 /// provide a quick way to create a Options instance.
@@ -79,7 +79,7 @@ pub struct ShaderMetadata {
     /// The GLSL profile specified in the shader trough the use of the
     /// `#version` preprocessor directive.
     pub profile: Profile,
-    /// The shader stage in the pipeline, passed to the [`parse`](Parser::parse)
+    /// The shader stage in the pipeline, passed to the [`parse`](Frontend::parse)
     /// method via the [`Options`](Options) struct.
     pub stage: ShaderStage,
 
@@ -124,16 +124,16 @@ impl Default for ShaderMetadata {
     }
 }
 
-/// The `Parser` is the central structure of the GLSL frontend.
+/// The `Frontend` is the central structure of the GLSL frontend.
 ///
-/// To instantiate a new `Parser` the [`Default`](Default) trait is used, so a
-/// call to the associated function [`Parser::default`](Parser::default) will
-/// return a new `Parser` instance.
+/// To instantiate a new `Frontend` the [`Default`](Default) trait is used, so a
+/// call to the associated function [`Frontend::default`](Frontend::default) will
+/// return a new `Frontend` instance.
 ///
-/// To parse a shader simply call the [`parse`](Parser::parse) method with a
+/// To parse a shader simply call the [`parse`](Frontend::parse) method with a
 /// [`Options`](Options) struct and a [`&str`](str) holding the glsl code.
 ///
-/// The `Parser` also provides the [`metadata`](Parser::metadata) to get some
+/// The `Frontend` also provides the [`metadata`](Frontend::metadata) to get some
 /// further information about the previously parsed shader, like version and
 /// extensions used (see the documentation for
 /// [`ShaderMetadata`](ShaderMetadata) to see all the returned information)
@@ -141,7 +141,7 @@ impl Default for ShaderMetadata {
 /// # Example usage
 /// ```rust
 /// use naga::ShaderStage;
-/// use naga::front::glsl::{Parser, Options};
+/// use naga::front::glsl::{Frontend, Options};
 ///
 /// let glsl = r#"
 ///     #version 450 core
@@ -149,20 +149,20 @@ impl Default for ShaderMetadata {
 ///     void main() {}
 /// "#;
 ///
-/// let mut parser = Parser::default();
+/// let mut frontend = Frontend::default();
 /// let options = Options::from(ShaderStage::Vertex);
-/// parser.parse(&options, glsl);
+/// frontend.parse(&options, glsl);
 /// ```
 ///
 /// # Reusability
 ///
-/// If there's a need to parse more than one shader reusing the same `Parser`
+/// If there's a need to parse more than one shader reusing the same `Frontend`
 /// instance may be beneficial since internal allocations will be reused.
 ///
-/// Calling the [`parse`](Parser::parse) method multiple times will reset the
-/// `Parser` so no extra care is needed when reusing.
+/// Calling the [`parse`](Frontend::parse) method multiple times will reset the
+/// `Frontend` so no extra care is needed when reusing.
 #[derive(Debug, Default)]
-pub struct Parser {
+pub struct Frontend {
     meta: ShaderMetadata,
 
     lookup_function: FastHashMap<String, FunctionDeclaration>,
@@ -179,7 +179,7 @@ pub struct Parser {
     module: Module,
 }
 
-impl Parser {
+impl Frontend {
     fn reset(&mut self, stage: ShaderStage) {
         self.meta.reset(stage);
 
@@ -197,7 +197,7 @@ impl Parser {
     /// Parses a shader either outputting a shader [`Module`](Module) or a list
     /// of [`Error`](Error)s.
     ///
-    /// Multiple calls using the same `Parser` and different shaders are supported.
+    /// Multiple calls using the same `Frontend` and different shaders are supported.
     pub fn parse(
         &mut self,
         options: &Options,

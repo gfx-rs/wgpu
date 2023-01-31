@@ -1,5 +1,28 @@
-use super::{conv, number::consume_number, Error, ExpectedToken, Token, TokenSpan};
+use super::{number::consume_number, Error, ExpectedToken};
+use crate::front::wgsl::error::NumberError;
+use crate::front::wgsl::parse::{conv, Number};
 use crate::Span;
+
+type TokenSpan<'a> = (Token<'a>, Span);
+
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum Token<'a> {
+    Separator(char),
+    Paren(char),
+    Attribute,
+    Number(Result<Number, NumberError>),
+    Word(&'a str),
+    Operation(char),
+    LogicalOperation(char),
+    ShiftOperation(char),
+    AssignmentOperation(char),
+    IncrementOperation,
+    DecrementOperation,
+    Arrow,
+    Unknown(char),
+    Trivia,
+    End,
+}
 
 fn consume_any(input: &str, what: impl Fn(char) -> bool) -> (&str, &str) {
     let pos = input.find(|c| !what(c)).unwrap_or(input.len());
@@ -176,15 +199,15 @@ fn is_word_part(c: char) -> bool {
 }
 
 #[derive(Clone)]
-pub(super) struct Lexer<'a> {
+pub(in crate::front::wgsl) struct Lexer<'a> {
     input: &'a str,
-    pub(super) source: &'a str,
+    pub(in crate::front::wgsl) source: &'a str,
     // The byte offset of the end of the last non-trivia token.
     last_end_offset: usize,
 }
 
 impl<'a> Lexer<'a> {
-    pub(super) const fn new(input: &'a str) -> Self {
+    pub(in crate::front::wgsl) const fn new(input: &'a str) -> Self {
         Lexer {
             input,
             source: input,
@@ -211,7 +234,7 @@ impl<'a> Lexer<'a> {
         Ok((res, Span::from(start..end)))
     }
 
-    pub(super) fn start_byte_offset(&mut self) -> usize {
+    pub(in crate::front::wgsl) fn start_byte_offset(&mut self) -> usize {
         loop {
             // Eat all trivia because `next` doesn't eat trailing trivia.
             let (token, rest) = consume_token(self.input, false);
@@ -234,7 +257,7 @@ impl<'a> Lexer<'a> {
         self.source.len() - self.input.len()
     }
 
-    pub(super) fn span_from(&self, offset: usize) -> Span {
+    pub(in crate::front::wgsl) fn span_from(&self, offset: usize) -> Span {
         Span::from(offset..self.last_end_offset)
     }
 
@@ -243,7 +266,7 @@ impl<'a> Lexer<'a> {
     /// Assume we are a parse state where bit shift operators may
     /// occur, but not angle brackets.
     #[must_use]
-    pub(super) fn next(&mut self) -> TokenSpan<'a> {
+    pub(in crate::front::wgsl) fn next(&mut self) -> TokenSpan<'a> {
         self.next_impl(false)
     }
 
@@ -252,7 +275,7 @@ impl<'a> Lexer<'a> {
     /// Assume we are in a parse state where angle brackets may occur,
     /// but not bit shift operators.
     #[must_use]
-    pub(super) fn next_generic(&mut self) -> TokenSpan<'a> {
+    pub(in crate::front::wgsl) fn next_generic(&mut self) -> TokenSpan<'a> {
         self.next_impl(true)
     }
 
@@ -275,12 +298,15 @@ impl<'a> Lexer<'a> {
     }
 
     #[must_use]
-    pub(super) fn peek(&mut self) -> TokenSpan<'a> {
+    pub(in crate::front::wgsl) fn peek(&mut self) -> TokenSpan<'a> {
         let (token, _) = self.peek_token_and_rest();
         token
     }
 
-    pub(super) fn expect_span(&mut self, expected: Token<'a>) -> Result<Span, Error<'a>> {
+    pub(in crate::front::wgsl) fn expect_span(
+        &mut self,
+        expected: Token<'a>,
+    ) -> Result<Span, Error<'a>> {
         let next = self.next();
         if next.0 == expected {
             Ok(next.1)
@@ -289,12 +315,15 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    pub(super) fn expect(&mut self, expected: Token<'a>) -> Result<(), Error<'a>> {
+    pub(in crate::front::wgsl) fn expect(&mut self, expected: Token<'a>) -> Result<(), Error<'a>> {
         self.expect_span(expected)?;
         Ok(())
     }
 
-    pub(super) fn expect_generic_paren(&mut self, expected: char) -> Result<(), Error<'a>> {
+    pub(in crate::front::wgsl) fn expect_generic_paren(
+        &mut self,
+        expected: char,
+    ) -> Result<(), Error<'a>> {
         let next = self.next_generic();
         if next.0 == Token::Paren(expected) {
             Ok(())
@@ -307,7 +336,7 @@ impl<'a> Lexer<'a> {
     }
 
     /// If the next token matches it is skipped and true is returned
-    pub(super) fn skip(&mut self, what: Token<'_>) -> bool {
+    pub(in crate::front::wgsl) fn skip(&mut self, what: Token<'_>) -> bool {
         let (peeked_token, rest) = self.peek_token_and_rest();
         if peeked_token.0 == what {
             self.input = rest;
@@ -317,7 +346,9 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    pub(super) fn next_ident_with_span(&mut self) -> Result<(&'a str, Span), Error<'a>> {
+    pub(in crate::front::wgsl) fn next_ident_with_span(
+        &mut self,
+    ) -> Result<(&'a str, Span), Error<'a>> {
         match self.next() {
             (Token::Word(word), span) if word == "_" => {
                 Err(Error::InvalidIdentifierUnderscore(span))
@@ -330,7 +361,9 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    pub(super) fn next_ident(&mut self) -> Result<super::ast::Ident<'a>, Error<'a>> {
+    pub(in crate::front::wgsl) fn next_ident(
+        &mut self,
+    ) -> Result<super::ast::Ident<'a>, Error<'a>> {
         let ident = self
             .next_ident_with_span()
             .map(|(name, span)| super::ast::Ident { name, span })?;
@@ -343,7 +376,7 @@ impl<'a> Lexer<'a> {
     }
 
     /// Parses a generic scalar type, for example `<f32>`.
-    pub(super) fn next_scalar_generic(
+    pub(in crate::front::wgsl) fn next_scalar_generic(
         &mut self,
     ) -> Result<(crate::ScalarKind, crate::Bytes), Error<'a>> {
         self.expect_generic_paren('<')?;
@@ -360,7 +393,7 @@ impl<'a> Lexer<'a> {
     /// Parses a generic scalar type, for example `<f32>`.
     ///
     /// Returns the span covering the inner type, excluding the brackets.
-    pub(super) fn next_scalar_generic_with_span(
+    pub(in crate::front::wgsl) fn next_scalar_generic_with_span(
         &mut self,
     ) -> Result<(crate::ScalarKind, crate::Bytes, Span), Error<'a>> {
         self.expect_generic_paren('<')?;
@@ -374,7 +407,9 @@ impl<'a> Lexer<'a> {
         Ok(pair)
     }
 
-    pub(super) fn next_storage_access(&mut self) -> Result<crate::StorageAccess, Error<'a>> {
+    pub(in crate::front::wgsl) fn next_storage_access(
+        &mut self,
+    ) -> Result<crate::StorageAccess, Error<'a>> {
         let (ident, span) = self.next_ident_with_span()?;
         match ident {
             "read" => Ok(crate::StorageAccess::LOAD),
@@ -384,7 +419,7 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    pub(super) fn next_format_generic(
+    pub(in crate::front::wgsl) fn next_format_generic(
         &mut self,
     ) -> Result<(crate::StorageFormat, crate::StorageAccess), Error<'a>> {
         self.expect(Token::Paren('<'))?;
@@ -396,16 +431,16 @@ impl<'a> Lexer<'a> {
         Ok((format, access))
     }
 
-    pub(super) fn open_arguments(&mut self) -> Result<(), Error<'a>> {
+    pub(in crate::front::wgsl) fn open_arguments(&mut self) -> Result<(), Error<'a>> {
         self.expect(Token::Paren('('))
     }
 
-    pub(super) fn close_arguments(&mut self) -> Result<(), Error<'a>> {
+    pub(in crate::front::wgsl) fn close_arguments(&mut self) -> Result<(), Error<'a>> {
         let _ = self.skip(Token::Separator(','));
         self.expect(Token::Paren(')'))
     }
 
-    pub(super) fn next_argument(&mut self) -> Result<bool, Error<'a>> {
+    pub(in crate::front::wgsl) fn next_argument(&mut self) -> Result<bool, Error<'a>> {
         let paren = Token::Paren(')');
         if self.skip(Token::Separator(',')) {
             Ok(!self.skip(paren))
@@ -414,9 +449,6 @@ impl<'a> Lexer<'a> {
         }
     }
 }
-
-#[cfg(test)]
-use super::{number::Number, NumberError};
 
 #[cfg(test)]
 fn sub_test(source: &str, expected_tokens: &[Token]) {

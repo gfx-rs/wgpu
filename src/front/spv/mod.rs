@@ -514,7 +514,7 @@ enum SignAnchor {
     Operand,
 }
 
-pub struct Parser<I> {
+pub struct Frontend<I> {
     data: I,
     data_offset: usize,
     state: ModuleState,
@@ -565,9 +565,9 @@ pub struct Parser<I> {
     builtin_usage: FastHashSet<crate::BuiltIn>,
 }
 
-impl<I: Iterator<Item = u32>> Parser<I> {
+impl<I: Iterator<Item = u32>> Frontend<I> {
     pub fn new(data: I, options: &Options) -> Self {
-        Parser {
+        Frontend {
             data,
             data_offset: 0,
             state: ModuleState::Empty,
@@ -5095,7 +5095,7 @@ pub fn parse_u8_slice(data: &[u8], options: &Options) -> Result<crate::Module, E
     let words = data
         .chunks(4)
         .map(|c| u32::from_le_bytes(c.try_into().unwrap()));
-    Parser::new(words, options).parse()
+    Frontend::new(words, options).parse()
 }
 
 #[cfg(test)]

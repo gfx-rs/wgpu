@@ -218,7 +218,7 @@ pub(super) fn patch_comparison_type(
     true
 }
 
-impl<I: Iterator<Item = u32>> super::Parser<I> {
+impl<I: Iterator<Item = u32>> super::Frontend<I> {
     pub(super) fn parse_image_couple(&mut self) -> Result<(), Error> {
         let _result_type_id = self.next()?;
         let result_id = self.next()?;

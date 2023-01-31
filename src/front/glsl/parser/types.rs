@@ -4,7 +4,7 @@ use crate::{
         error::ExpectedToken,
         parser::ParsingContext,
         token::{Token, TokenValue},
-        Error, ErrorKind, Parser, Result,
+        Error, ErrorKind, Frontend, Result,
     },
     AddressSpace, ArraySize, Handle, Span, Type, TypeInner,
 };
@@ -14,50 +14,51 @@ impl<'source> ParsingContext<'source> {
     /// and modifying the type handle if it exists
     pub fn parse_array_specifier(
         &mut self,
-        parser: &mut Parser,
+        frontend: &mut Frontend,
         span: &mut Span,
         ty: &mut Handle<Type>,
     ) -> Result<()> {
-        while self.parse_array_specifier_single(parser, span, ty)? {}
+        while self.parse_array_specifier_single(frontend, span, ty)? {}
         Ok(())
     }
 
     /// Implementation of [`Self::parse_array_specifier`] for a single array_specifier
     fn parse_array_specifier_single(
         &mut self,
-        parser: &mut Parser,
+        frontend: &mut Frontend,
         span: &mut Span,
         ty: &mut Handle<Type>,
     ) -> Result<bool> {
-        if self.bump_if(parser, TokenValue::LeftBracket).is_some() {
-            let size =
-                if let Some(Token { meta, .. }) = self.bump_if(parser, TokenValue::RightBracket) {
-                    span.subsume(meta);
-                    ArraySize::Dynamic
-                } else {
-                    let (value, constant_span) = self.parse_uint_constant(parser)?;
-                    let constant = parser.module.constants.fetch_or_append(
-                        crate::Constant {
-                            name: None,
-                            specialization: None,
-                            inner: crate::ConstantInner::Scalar {
-                                width: 4,
-                                value: crate::ScalarValue::Uint(value as u64),
-                            },
+        if self.bump_if(frontend, TokenValue::LeftBracket).is_some() {
+            let size = if let Some(Token { meta, .. }) =
+                self.bump_if(frontend, TokenValue::RightBracket)
+            {
+                span.subsume(meta);
+                ArraySize::Dynamic
+            } else {
+                let (value, constant_span) = self.parse_uint_constant(frontend)?;
+                let constant = frontend.module.constants.fetch_or_append(
+                    crate::Constant {
+                        name: None,
+                        specialization: None,
+                        inner: crate::ConstantInner::Scalar {
+                            width: 4,
+                            value: crate::ScalarValue::Uint(value as u64),
                         },
-                        constant_span,
-                    );
-                    let end_span = self.expect(parser, TokenValue::RightBracket)?.meta;
-                    span.subsume(end_span);
-                    ArraySize::Constant(constant)
-                };
+                    },
+                    constant_span,
+                );
+                let end_span = self.expect(frontend, TokenValue::RightBracket)?.meta;
+                span.subsume(end_span);
+                ArraySize::Constant(constant)
+            };
 
-            parser
+            frontend
                 .layouter
-                .update(&parser.module.types, &parser.module.constants)
+                .update(&frontend.module.types, &frontend.module.constants)
                 .unwrap();
-            let stride = parser.layouter[*ty].to_stride();
-            *ty = parser.module.types.insert(
+            let stride = frontend.layouter[*ty].to_stride();
+            *ty = frontend.module.types.insert(
                 Type {
                     name: None,
                     inner: TypeInner::Array {
@@ -75,31 +76,34 @@ impl<'source> ParsingContext<'source> {
         }
     }
 
-    pub fn parse_type(&mut self, parser: &mut Parser) -> Result<(Option<Handle<Type>>, Span)> {
-        let token = self.bump(parser)?;
+    pub fn parse_type(&mut self, frontend: &mut Frontend) -> Result<(Option<Handle<Type>>, Span)> {
+        let token = self.bump(frontend)?;
         let mut handle = match token.value {
             TokenValue::Void => return Ok((None, token.meta)),
-            TokenValue::TypeName(ty) => parser.module.types.insert(ty, token.meta),
+            TokenValue::TypeName(ty) => frontend.module.types.insert(ty, token.meta),
             TokenValue::Struct => {
                 let mut meta = token.meta;
-                let ty_name = self.expect_ident(parser)?.0;
-                self.expect(parser, TokenValue::LeftBrace)?;
+                let ty_name = self.expect_ident(frontend)?.0;
+                self.expect(frontend, TokenValue::LeftBrace)?;
                 let mut members = Vec::new();
-                let span =
-                    self.parse_struct_declaration_list(parser, &mut members, StructLayout::Std140)?;
-                let end_meta = self.expect(parser, TokenValue::RightBrace)?.meta;
+                let span = self.parse_struct_declaration_list(
+                    frontend,
+                    &mut members,
+                    StructLayout::Std140,
+                )?;
+                let end_meta = self.expect(frontend, TokenValue::RightBrace)?.meta;
                 meta.subsume(end_meta);
-                let ty = parser.module.types.insert(
+                let ty = frontend.module.types.insert(
                     Type {
                         name: Some(ty_name.clone()),
                         inner: TypeInner::Struct { members, span },
                     },
                     meta,
                 );
-                parser.lookup_type.insert(ty_name, ty);
+                frontend.lookup_type.insert(ty_name, ty);
                 ty
             }
-            TokenValue::Identifier(ident) => match parser.lookup_type.get(&ident) {
+            TokenValue::Identifier(ident) => match frontend.lookup_type.get(&ident) {
                 Some(ty) => *ty,
                 None => {
                     return Err(Error {
@@ -124,12 +128,12 @@ impl<'source> ParsingContext<'source> {
         };
 
         let mut span = token.meta;
-        self.parse_array_specifier(parser, &mut span, &mut handle)?;
+        self.parse_array_specifier(frontend, &mut span, &mut handle)?;
         Ok((Some(handle), span))
     }
 
-    pub fn parse_type_non_void(&mut self, parser: &mut Parser) -> Result<(Handle<Type>, Span)> {
-        let (maybe_ty, meta) = self.parse_type(parser)?;
+    pub fn parse_type_non_void(&mut self, frontend: &mut Frontend) -> Result<(Handle<Type>, Span)> {
+        let (maybe_ty, meta) = self.parse_type(frontend)?;
         let ty = maybe_ty.ok_or_else(|| Error {
             kind: ErrorKind::SemanticError("Type can't be void".into()),
             meta,
@@ -138,8 +142,8 @@ impl<'source> ParsingContext<'source> {
         Ok((ty, meta))
     }
 
-    pub fn peek_type_qualifier(&mut self, parser: &mut Parser) -> bool {
-        self.peek(parser).map_or(false, |t| match t.value {
+    pub fn peek_type_qualifier(&mut self, frontend: &mut Frontend) -> bool {
+        self.peek(frontend).map_or(false, |t| match t.value {
             TokenValue::Invariant
             | TokenValue::Interpolation(_)
             | TokenValue::Sampling(_)
@@ -157,15 +161,18 @@ impl<'source> ParsingContext<'source> {
         })
     }
 
-    pub fn parse_type_qualifiers<'a>(&mut self, parser: &mut Parser) -> Result<TypeQualifiers<'a>> {
+    pub fn parse_type_qualifiers<'a>(
+        &mut self,
+        frontend: &mut Frontend,
+    ) -> Result<TypeQualifiers<'a>> {
         let mut qualifiers = TypeQualifiers::default();
 
-        while self.peek_type_qualifier(parser) {
-            let token = self.bump(parser)?;
+        while self.peek_type_qualifier(frontend) {
+            let token = self.bump(frontend)?;
 
             // Handle layout qualifiers outside the match since this can push multiple values
             if token.value == TokenValue::Layout {
-                self.parse_layout_qualifier_id_list(parser, &mut qualifiers)?;
+                self.parse_layout_qualifier_id_list(frontend, &mut qualifiers)?;
                 continue;
             }
 
@@ -174,7 +181,7 @@ impl<'source> ParsingContext<'source> {
             match token.value {
                 TokenValue::Invariant => {
                     if qualifiers.invariant.is_some() {
-                        parser.errors.push(Error {
+                        frontend.errors.push(Error {
                             kind: ErrorKind::SemanticError(
                                 "Cannot use more than one invariant qualifier per declaration"
                                     .into(),
@@ -187,7 +194,7 @@ impl<'source> ParsingContext<'source> {
                 }
                 TokenValue::Interpolation(i) => {
                     if qualifiers.interpolation.is_some() {
-                        parser.errors.push(Error {
+                        frontend.errors.push(Error {
                             kind: ErrorKind::SemanticError(
                                 "Cannot use more than one interpolation qualifier per declaration"
                                     .into(),
@@ -225,7 +232,7 @@ impl<'source> ParsingContext<'source> {
                     if StorageQualifier::AddressSpace(AddressSpace::Function)
                         != qualifiers.storage.0
                     {
-                        parser.errors.push(Error {
+                        frontend.errors.push(Error {
                             kind: ErrorKind::SemanticError(
                                 "Cannot use more than one storage qualifier per declaration".into(),
                             ),
@@ -237,7 +244,7 @@ impl<'source> ParsingContext<'source> {
                 }
                 TokenValue::Sampling(s) => {
                     if qualifiers.sampling.is_some() {
-                        parser.errors.push(Error {
+                        frontend.errors.push(Error {
                             kind: ErrorKind::SemanticError(
                                 "Cannot use more than one sampling qualifier per declaration"
                                     .into(),
@@ -250,7 +257,7 @@ impl<'source> ParsingContext<'source> {
                 }
                 TokenValue::PrecisionQualifier(p) => {
                     if qualifiers.precision.is_some() {
-                        parser.errors.push(Error {
+                        frontend.errors.push(Error {
                             kind: ErrorKind::SemanticError(
                                 "Cannot use more than one precision qualifier per declaration"
                                     .into(),
@@ -266,7 +273,7 @@ impl<'source> ParsingContext<'source> {
                         .storage_access
                         .get_or_insert((crate::StorageAccess::all(), Span::default()));
                     if !storage_access.0.contains(!access) {
-                        parser.errors.push(Error {
+                        frontend.errors.push(Error {
                             kind: ErrorKind::SemanticError(
                                 "The same memory qualifier can only be used once".into(),
                             ),
@@ -287,20 +294,20 @@ impl<'source> ParsingContext<'source> {
 
     pub fn parse_layout_qualifier_id_list(
         &mut self,
-        parser: &mut Parser,
+        frontend: &mut Frontend,
         qualifiers: &mut TypeQualifiers,
     ) -> Result<()> {
-        self.expect(parser, TokenValue::LeftParen)?;
+        self.expect(frontend, TokenValue::LeftParen)?;
         loop {
-            self.parse_layout_qualifier_id(parser, &mut qualifiers.layout_qualifiers)?;
+            self.parse_layout_qualifier_id(frontend, &mut qualifiers.layout_qualifiers)?;
 
-            if self.bump_if(parser, TokenValue::Comma).is_some() {
+            if self.bump_if(frontend, TokenValue::Comma).is_some() {
                 continue;
             }
 
             break;
         }
-        let token = self.expect(parser, TokenValue::RightParen)?;
+        let token = self.expect(frontend, TokenValue::RightParen)?;
         qualifiers.span.subsume(token.meta);
 
         Ok(())
@@ -308,14 +315,14 @@ impl<'source> ParsingContext<'source> {
 
     pub fn parse_layout_qualifier_id(
         &mut self,
-        parser: &mut Parser,
+        frontend: &mut Frontend,
         qualifiers: &mut crate::FastHashMap<QualifierKey, (QualifierValue, Span)>,
     ) -> Result<()> {
         // layout_qualifier_id:
         //     IDENTIFIER
         //     IDENTIFIER EQUAL constant_expression
         //     SHARED
-        let mut token = self.bump(parser)?;
+        let mut token = self.bump(frontend)?;
         match token.value {
             TokenValue::Identifier(name) => {
                 let (key, value) = match name.as_str() {
@@ -332,11 +339,11 @@ impl<'source> ParsingContext<'source> {
                             (QualifierKey::Format, QualifierValue::Format(format))
                         } else {
                             let key = QualifierKey::String(name.into());
-                            let value = if self.bump_if(parser, TokenValue::Assign).is_some() {
-                                let (value, end_meta) = match self.parse_uint_constant(parser) {
+                            let value = if self.bump_if(frontend, TokenValue::Assign).is_some() {
+                                let (value, end_meta) = match self.parse_uint_constant(frontend) {
                                     Ok(v) => v,
                                     Err(e) => {
-                                        parser.errors.push(e);
+                                        frontend.errors.push(e);
                                         (0, Span::default())
                                     }
                                 };
@@ -354,7 +361,7 @@ impl<'source> ParsingContext<'source> {
 
                 qualifiers.insert(key, (value, token.meta));
             }
-            _ => parser.errors.push(Error {
+            _ => frontend.errors.push(Error {
                 kind: ErrorKind::InvalidToken(token.value, vec![ExpectedToken::Identifier]),
                 meta: token.meta,
             }),
@@ -363,11 +370,11 @@ impl<'source> ParsingContext<'source> {
         Ok(())
     }
 
-    pub fn peek_type_name(&mut self, parser: &mut Parser) -> bool {
-        self.peek(parser).map_or(false, |t| match t.value {
+    pub fn peek_type_name(&mut self, frontend: &mut Frontend) -> bool {
+        self.peek(frontend).map_or(false, |t| match t.value {
             TokenValue::TypeName(_) | TokenValue::Void => true,
             TokenValue::Struct => true,
-            TokenValue::Identifier(ref ident) => parser.lookup_type.contains_key(ident),
+            TokenValue::Identifier(ref ident) => frontend.lookup_type.contains_key(ident),
             _ => false,
         })
     }

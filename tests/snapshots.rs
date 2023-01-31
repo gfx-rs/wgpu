@@ -623,7 +623,7 @@ fn convert_glsl_variations_check() {
     let root = env!("CARGO_MANIFEST_DIR");
     let file = fs::read_to_string(format!("{root}/{BASE_DIR_IN}/variations.glsl"))
         .expect("Couldn't find glsl file");
-    let mut parser = naga::front::glsl::Parser::default();
+    let mut parser = naga::front::glsl::Frontend::default();
     let module = parser
         .parse(
             &naga::front::glsl::Options {
@@ -654,7 +654,7 @@ fn convert_glsl_folder() {
         }
         println!("Processing {file_name}");
 
-        let mut parser = naga::front::glsl::Parser::default();
+        let mut parser = naga::front::glsl::Frontend::default();
         let module = parser
             .parse(
                 &naga::front::glsl::Options {

@@ -2,7 +2,7 @@ use super::{
     ast::*,
     context::{Context, ExprPos},
     error::{Error, ErrorKind},
-    Parser, Result, Span,
+    Frontend, Result, Span,
 };
 use crate::{
     AddressSpace, Binding, Block, BuiltIn, Constant, Expression, GlobalVariable, Handle,
@@ -18,7 +18,7 @@ pub struct VarDeclaration<'a, 'key> {
     pub meta: Span,
 }
 
-/// Information about a builtin used in [`add_builtin`](Parser::add_builtin).
+/// Information about a builtin used in [`add_builtin`](Frontend::add_builtin).
 struct BuiltInData {
     /// The type of the builtin.
     inner: TypeInner,
@@ -35,7 +35,7 @@ pub enum GlobalOrConstant {
     Constant(Handle<Constant>),
 }
 
-impl Parser {
+impl Frontend {
     /// Adds a builtin and returns a variable reference to it
     fn add_builtin(
         &mut self,

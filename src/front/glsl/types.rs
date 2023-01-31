@@ -1,4 +1,6 @@
-use super::{constants::ConstantSolver, context::Context, Error, ErrorKind, Parser, Result, Span};
+use super::{
+    constants::ConstantSolver, context::Context, Error, ErrorKind, Frontend, Result, Span,
+};
 use crate::{
     proc::ResolveContext, Bytes, Constant, Expression, Handle, ImageClass, ImageDimension,
     ScalarKind, Type, TypeInner, VectorSize,
@@ -224,7 +226,7 @@ pub const fn type_power(kind: ScalarKind, width: Bytes) -> Option<u32> {
     })
 }
 
-impl Parser {
+impl Frontend {
     /// Resolves the types of the expressions until `expr` (inclusive)
     ///
     /// This needs to be done before the [`typifier`] can be queried for

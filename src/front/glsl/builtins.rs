@@ -4,7 +4,7 @@ use super::{
         ParameterQualifier,
     },
     context::Context,
-    Error, ErrorKind, Parser, Result,
+    Error, ErrorKind, Frontend, Result,
 };
 use crate::{
     BinaryOperator, Block, Constant, DerivativeAxis, Expression, Handle, ImageClass,
@@ -1676,7 +1676,7 @@ impl MacroCall {
     /// finally returns the final expression with the correct result
     pub fn call(
         &self,
-        parser: &mut Parser,
+        frontend: &mut Frontend,
         ctx: &mut Context,
         body: &mut Block,
         args: &mut [Handle<Expression>],
@@ -1688,8 +1688,14 @@ impl MacroCall {
                 args[0]
             }
             MacroCall::SamplerShadow => {
-                sampled_to_depth(&mut parser.module, ctx, args[0], meta, &mut parser.errors);
-                parser.invalidate_expression(ctx, args[0], meta)?;
+                sampled_to_depth(
+                    &mut frontend.module,
+                    ctx,
+                    args[0],
+                    meta,
+                    &mut frontend.errors,
+                );
+                frontend.invalidate_expression(ctx, args[0], meta)?;
                 ctx.samplers.insert(args[0], args[1]);
                 args[0]
             }
@@ -1702,7 +1708,7 @@ impl MacroCall {
                 let mut coords = args[1];
 
                 if proj {
-                    let size = match *parser.resolve_type(ctx, coords, meta)? {
+                    let size = match *frontend.resolve_type(ctx, coords, meta)? {
                         TypeInner::Vector { size, .. } => size,
                         _ => unreachable!(),
                     };
@@ -1748,7 +1754,7 @@ impl MacroCall {
 
                 let extra = args.get(2).copied();
                 let comps =
-                    parser.coordinate_components(ctx, args[0], coords, extra, meta, body)?;
+                    frontend.coordinate_components(ctx, args[0], coords, extra, meta, body)?;
 
                 let mut num_args = 2;
 
@@ -1795,10 +1801,10 @@ impl MacroCall {
                     true => {
                         let offset_arg = args[num_args];
                         num_args += 1;
-                        match parser.solve_constant(ctx, offset_arg, meta) {
+                        match frontend.solve_constant(ctx, offset_arg, meta) {
                             Ok(v) => Some(v),
                             Err(e) => {
-                                parser.errors.push(e);
+                                frontend.errors.push(e);
                                 None
                             }
                         }
@@ -1832,7 +1838,7 @@ impl MacroCall {
                 if arrayed {
                     let mut components = Vec::with_capacity(4);
 
-                    let size = match *parser.resolve_type(ctx, expr, meta)? {
+                    let size = match *frontend.resolve_type(ctx, expr, meta)? {
                         TypeInner::Vector { size: ori_size, .. } => {
                             for index in 0..(ori_size as u32) {
                                 components.push(ctx.add_expression(
@@ -1862,7 +1868,7 @@ impl MacroCall {
                         body,
                     ));
 
-                    let ty = parser.module.types.insert(
+                    let ty = frontend.module.types.insert(
                         Type {
                             name: None,
                             inner: TypeInner::Vector {
@@ -1881,7 +1887,7 @@ impl MacroCall {
             }
             MacroCall::ImageLoad { multi } => {
                 let comps =
-                    parser.coordinate_components(ctx, args[0], args[1], None, meta, body)?;
+                    frontend.coordinate_components(ctx, args[0], args[1], None, meta, body)?;
                 let (sample, level) = match (multi, args.get(2)) {
                     (_, None) => (None, None),
                     (true, Some(&arg)) => (Some(arg), None),
@@ -1901,7 +1907,7 @@ impl MacroCall {
             }
             MacroCall::ImageStore => {
                 let comps =
-                    parser.coordinate_components(ctx, args[0], args[1], None, meta, body)?;
+                    frontend.coordinate_components(ctx, args[0], args[1], None, meta, body)?;
                 ctx.emit_restart(body);
                 body.push(
                     crate::Statement::ImageStore {
@@ -2037,7 +2043,7 @@ impl MacroCall {
                 body,
             ),
             MacroCall::Mod(size) => {
-                ctx.implicit_splat(parser, &mut args[1], meta, size)?;
+                ctx.implicit_splat(frontend, &mut args[1], meta, size)?;
 
                 // x - y * floor(x / y)
 
@@ -2081,7 +2087,7 @@ impl MacroCall {
                 )
             }
             MacroCall::Splatted(fun, size, i) => {
-                ctx.implicit_splat(parser, &mut args[i], meta, size)?;
+                ctx.implicit_splat(frontend, &mut args[i], meta, size)?;
 
                 ctx.add_expression(
                     Expression::Math {
@@ -2105,8 +2111,8 @@ impl MacroCall {
                 body,
             ),
             MacroCall::Clamp(size) => {
-                ctx.implicit_splat(parser, &mut args[1], meta, size)?;
-                ctx.implicit_splat(parser, &mut args[2], meta, size)?;
+                ctx.implicit_splat(frontend, &mut args[1], meta, size)?;
+                ctx.implicit_splat(frontend, &mut args[2], meta, size)?;
 
                 ctx.add_expression(
                     Expression::Math {
@@ -2143,8 +2149,8 @@ impl MacroCall {
                 return Ok(None);
             }
             MacroCall::SmoothStep { splatted } => {
-                ctx.implicit_splat(parser, &mut args[0], meta, splatted)?;
-                ctx.implicit_splat(parser, &mut args[1], meta, splatted)?;
+                ctx.implicit_splat(frontend, &mut args[0], meta, splatted)?;
+                ctx.implicit_splat(frontend, &mut args[1], meta, splatted)?;
 
                 ctx.add_expression(
                     Expression::Math {
@@ -2202,7 +2208,7 @@ fn texture_call(
 
 /// Helper struct for texture calls with the separate components from the vector argument
 ///
-/// Obtained by calling [`coordinate_components`](Parser::coordinate_components)
+/// Obtained by calling [`coordinate_components`](Frontend::coordinate_components)
 #[derive(Debug)]
 struct CoordComponents {
     coordinate: Handle<Expression>,
@@ -2211,7 +2217,7 @@ struct CoordComponents {
     used_extra: bool,
 }
 
-impl Parser {
+impl Frontend {
     /// Helper function for texture calls, splits the vector argument into it's components
     fn coordinate_components(
         &mut self,
