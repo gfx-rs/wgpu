@@ -1661,14 +1661,17 @@ impl Parser {
                             let span = span.until(&peeked_span);
                             return Err(Error::InvalidBreakIf(span));
                         }
+                        lexer.expect(Token::Separator(';'))?;
                         ast::StatementKind::Break
                     }
                     "continue" => {
                         let _ = lexer.next();
+                        lexer.expect(Token::Separator(';'))?;
                         ast::StatementKind::Continue
                     }
                     "discard" => {
                         let _ = lexer.next();
+                        lexer.expect(Token::Separator(';'))?;
                         ast::StatementKind::Kill
                     }
                     // assignment or a function call
@@ -1685,6 +1688,7 @@ impl Parser {
             }
             _ => {
                 self.assignment_statement(lexer, ctx.reborrow(), block)?;
+                lexer.expect(Token::Separator(';'))?;
                 self.pop_rule_span(lexer);
             }
         }
