@@ -74,7 +74,7 @@ pub struct StatementContext<'source, 'temp, 'out> {
     typifier: &'temp mut Typifier,
     variables: &'out mut Arena<crate::LocalVariable>,
     naga_expressions: &'out mut Arena<crate::Expression>,
-    named_expressions: &'out mut FastHashMap<Handle<crate::Expression>, String>,
+    named_expressions: &'out mut crate::NamedExpressions,
     arguments: &'out [crate::FunctionArgument],
     module: &'out mut crate::Module,
 }

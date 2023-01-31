@@ -61,7 +61,7 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
                 local_variables: Arena::new(),
                 expressions: self
                     .make_expression_storage(&module.global_variables, &module.constants),
-                named_expressions: crate::FastHashMap::default(),
+                named_expressions: crate::NamedExpressions::default(),
                 body: crate::Block::new(),
             }
         };
@@ -298,7 +298,7 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
                 result: None,
                 local_variables: Arena::new(),
                 expressions: Arena::new(),
-                named_expressions: crate::FastHashMap::default(),
+                named_expressions: crate::NamedExpressions::default(),
                 body: crate::Block::new(),
             };
 

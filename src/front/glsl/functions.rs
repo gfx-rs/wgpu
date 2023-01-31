@@ -8,9 +8,8 @@ use super::{
 };
 use crate::{
     front::glsl::types::type_power, proc::ensure_block_returns, AddressSpace, Arena, Block,
-    Constant, ConstantInner, EntryPoint, Expression, FastHashMap, Function, FunctionArgument,
-    FunctionResult, Handle, LocalVariable, ScalarKind, ScalarValue, Span, Statement, StructMember,
-    Type, TypeInner,
+    Constant, ConstantInner, EntryPoint, Expression, Function, FunctionArgument, FunctionResult,
+    Handle, LocalVariable, ScalarKind, ScalarValue, Span, Statement, StructMember, Type, TypeInner,
 };
 use std::iter;
 
@@ -1064,7 +1063,7 @@ impl Frontend {
             result,
             local_variables: locals,
             expressions,
-            named_expressions: FastHashMap::default(),
+            named_expressions: crate::NamedExpressions::default(),
             body,
         };
 

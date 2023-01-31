@@ -2149,17 +2149,17 @@
                     ),
                 ],
                 named_expressions: {
-                    29: "c",
-                    4: "baz",
-                    17: "b",
                     1: "vi",
-                    27: "a",
+                    4: "baz",
                     8: "_matrix",
                     11: "arr",
-                    34: "data_pointer",
-                    47: "value",
                     12: "index",
+                    17: "b",
+                    27: "a",
+                    29: "c",
+                    34: "data_pointer",
                     35: "foo_value",
+                    47: "value",
                 },
                 body: [
                     Store(

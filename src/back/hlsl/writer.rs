@@ -1908,9 +1908,12 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         let indent_level_3 = indent_level_2.next();
                         for case in &cases[i..=end_case_idx] {
                             writeln!(self.out, "{indent_level_2}{{")?;
+                            let prev_len = self.named_expressions.len();
                             for sta in case.body.iter() {
                                 self.write_stmt(module, sta, func_ctx, indent_level_3)?;
                             }
+                            // Clear all named expressions that were previously inserted by the statements in the block
+                            self.named_expressions.truncate(prev_len);
                             writeln!(self.out, "{indent_level_2}}}")?;
                         }
 
