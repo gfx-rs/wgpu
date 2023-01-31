@@ -3289,8 +3289,19 @@ impl StencilState {
             && (self.read_mask != 0 || self.write_mask != 0)
     }
     /// Returns true if the state doesn't mutate the target values.
-    pub fn is_read_only(&self) -> bool {
-        self.write_mask == 0
+    pub fn is_read_only(&self, cull_mode: Option<Face>) -> bool {
+        // The rules are defined in step 7 of the "Device timeline initialization steps"
+        // subsection of the "Render Pipeline Creation" section of WebGPU
+        // (link to the section: https://gpuweb.github.io/gpuweb/#render-pipeline-creation)
+
+        if self.write_mask == 0 {
+            return true;
+        }
+
+        let front_ro = cull_mode == Some(Face::Front) || self.front.is_read_only();
+        let back_ro = cull_mode == Some(Face::Back) || self.back.is_read_only();
+
+        front_ro && back_ro
     }
     /// Returns true if the stencil state uses the reference value for testing.
     pub fn needs_ref_value(&self) -> bool {
@@ -3380,13 +3391,13 @@ impl DepthStencilState {
     }
 
     /// Returns true if the state doesn't mutate the stencil.
-    pub fn is_stencil_read_only(&self) -> bool {
-        self.stencil.is_read_only()
+    pub fn is_stencil_read_only(&self, cull_mode: Option<Face>) -> bool {
+        self.stencil.is_read_only(cull_mode)
     }
 
     /// Returns true if the state doesn't mutate either depth or stencil of the target.
-    pub fn is_read_only(&self) -> bool {
-        self.is_depth_read_only() && self.is_stencil_read_only()
+    pub fn is_read_only(&self, cull_mode: Option<Face>) -> bool {
+        self.is_depth_read_only() && self.is_stencil_read_only(cull_mode)
     }
 }
 
@@ -3475,6 +3486,13 @@ impl StencilFaceState {
             || self.fail_op == StencilOperation::Replace
             || self.depth_fail_op == StencilOperation::Replace
             || self.pass_op == StencilOperation::Replace
+    }
+
+    /// Returns true if the face state doesn't mutate the target values.
+    pub fn is_read_only(&self) -> bool {
+        self.pass_op == StencilOperation::Keep
+            && self.depth_fail_op == StencilOperation::Keep
+            && self.fail_op == StencilOperation::Keep
     }
 }
 

@@ -1607,7 +1607,7 @@ impl crate::Device<super::Api> for super::Device {
         let mut vk_depth_stencil = vk::PipelineDepthStencilStateCreateInfo::builder();
         if let Some(ref ds) = desc.depth_stencil {
             let vk_format = self.shared.private_caps.map_texture_format(ds.format);
-            let vk_layout = if ds.is_read_only() {
+            let vk_layout = if ds.is_read_only(desc.primitive.cull_mode) {
                 vk::ImageLayout::DEPTH_STENCIL_READ_ONLY_OPTIMAL
             } else {
                 vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL

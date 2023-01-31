@@ -45,6 +45,7 @@ Bottom level categories:
 #### WebGPU
 
 - Implement `CommandEncoder::clear_buffer`. By @raphlinus in [#3426](https://github.com/gfx-rs/wgpu/pull/3426)
+- Implement the new checks for readonly stencils. By @JCapucho in [#3443](https://github.com/gfx-rs/wgpu/pull/3443)
 
 #### Vulkan
 
