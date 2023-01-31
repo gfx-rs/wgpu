@@ -134,7 +134,7 @@ pub enum NumberError {
 pub enum InvalidAssignmentType {
     Other,
     Swizzle,
-    ImmutableBinding,
+    ImmutableBinding(Span),
 }
 
 #[derive(Clone, Debug)]
@@ -536,21 +536,33 @@ impl<'a> Error<'a> {
                 labels: vec![(span, "expression is not a reference".into())],
                 notes: vec![],
             },
-            Error::InvalidAssignment { span, ty } => ParseError {
-                message: "invalid left-hand side of assignment".into(),
-                labels: vec![(span, "cannot assign to this expression".into())],
-                notes: match ty {
-                    InvalidAssignmentType::Swizzle => vec![
-                        "WGSL does not support assignments to swizzles".into(),
-                        "consider assigning each component individually".into(),
-                    ],
-                    InvalidAssignmentType::ImmutableBinding => vec![
-                        format!("'{}' is an immutable binding", &source[span]),
-                        "consider declaring it with `var` instead of `let`".into(),
-                    ],
-                    InvalidAssignmentType::Other => vec![],
-                },
-            },
+            Error::InvalidAssignment { span, ty } => {
+                let (extra_label, notes) = match ty {
+                    InvalidAssignmentType::Swizzle => (
+                        None,
+                        vec![
+                            "WGSL does not support assignments to swizzles".into(),
+                            "consider assigning each component individually".into(),
+                        ],
+                    ),
+                    InvalidAssignmentType::ImmutableBinding(binding_span) => (
+                        Some((binding_span, "this is an immutable binding".into())),
+                        vec![format!(
+                            "consider declaring '{}' with `var` instead of `let`",
+                            &source[binding_span]
+                        )],
+                    ),
+                    InvalidAssignmentType::Other => (None, vec![]),
+                };
+
+                ParseError {
+                    message: "invalid left-hand side of assignment".into(),
+                    labels: std::iter::once((span, "cannot assign to this expression".into()))
+                        .chain(extra_label)
+                        .collect(),
+                    notes,
+                }
+            }
             Error::Pointer(what, span) => ParseError {
                 message: format!("{what} must not be a pointer"),
                 labels: vec![(span, "expression is a pointer".into())],

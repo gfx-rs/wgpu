@@ -5,6 +5,7 @@ use crate::front::wgsl::parse::{ast, conv};
 use crate::front::{Emitter, Typifier};
 use crate::proc::{ensure_block_returns, Alignment, Layouter, ResolveContext, TypeResolution};
 use crate::{Arena, FastHashMap, Handle, Span};
+use indexmap::IndexMap;
 
 mod construction;
 
@@ -74,7 +75,9 @@ pub struct StatementContext<'source, 'temp, 'out> {
     typifier: &'temp mut Typifier,
     variables: &'out mut Arena<crate::LocalVariable>,
     naga_expressions: &'out mut Arena<crate::Expression>,
-    named_expressions: &'out mut crate::NamedExpressions,
+    /// Stores the names of expressions that are assigned in `let` statement
+    /// Also stores the spans of the names, for use in errors.
+    named_expressions: &'out mut IndexMap<Handle<crate::Expression>, (String, Span)>,
     arguments: &'out [crate::FunctionArgument],
     module: &'out mut crate::Module,
 }
@@ -124,6 +127,19 @@ impl<'a, 'temp> StatementContext<'a, 'temp, '_> {
             globals: self.globals,
             types: self.types,
             module: self.module,
+        }
+    }
+
+    fn invalid_assignment_type(&self, expr: Handle<crate::Expression>) -> InvalidAssignmentType {
+        if let Some(&(_, span)) = self.named_expressions.get(&expr) {
+            InvalidAssignmentType::ImmutableBinding(span)
+        } else {
+            match self.naga_expressions[expr] {
+                crate::Expression::Swizzle { .. } => InvalidAssignmentType::Swizzle,
+                crate::Expression::Access { base, .. } => self.invalid_assignment_type(base),
+                crate::Expression::AccessIndex { base, .. } => self.invalid_assignment_type(base),
+                _ => InvalidAssignmentType::Other,
+            }
         }
     }
 }
@@ -737,7 +753,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         let mut local_table = FastHashMap::default();
         let mut local_variables = Arena::new();
         let mut expressions = Arena::new();
-        let mut named_expressions = crate::NamedExpressions::default();
+        let mut named_expressions = IndexMap::default();
 
         let arguments = f
             .arguments
@@ -748,7 +764,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 let expr = expressions
                     .append(crate::Expression::FunctionArgument(i as u32), arg.name.span);
                 local_table.insert(arg.handle, TypedExpression::non_reference(expr));
-                named_expressions.insert(expr, arg.name.name.to_string());
+                named_expressions.insert(expr, (arg.name.name.to_string(), arg.name.span));
 
                 Ok(crate::FunctionArgument {
                     name: Some(arg.name.name.to_string()),
@@ -794,7 +810,10 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             result,
             local_variables,
             expressions,
-            named_expressions,
+            named_expressions: named_expressions
+                .into_iter()
+                .map(|(key, (name, _))| (key, name))
+                .collect(),
             body,
         };
 
@@ -867,7 +886,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     block.extend(emitter.finish(ctx.naga_expressions));
                     ctx.local_table
                         .insert(l.handle, TypedExpression::non_reference(value));
-                    ctx.named_expressions.insert(value, l.name.name.to_string());
+                    ctx.named_expressions
+                        .insert(value, (l.name.name.to_string(), l.name.span));
 
                     return Ok(());
                 }
@@ -1068,14 +1088,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 let mut value = self.expression(value, ctx.as_expression(block, &mut emitter))?;
 
                 if !expr.is_reference {
-                    let ty = if ctx.named_expressions.contains_key(&expr.handle) {
-                        InvalidAssignmentType::ImmutableBinding
-                    } else {
-                        match ctx.naga_expressions[expr.handle] {
-                            crate::Expression::Swizzle { .. } => InvalidAssignmentType::Swizzle,
-                            _ => InvalidAssignmentType::Other,
-                        }
-                    };
+                    let ty = ctx.invalid_assignment_type(expr.handle);
 
                     return Err(Error::InvalidAssignment {
                         span: ctx.ast_expressions.get_span(target),
