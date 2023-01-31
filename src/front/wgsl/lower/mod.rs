@@ -352,10 +352,10 @@ impl<'a> ExpressionContext<'a, '_, '_> {
             }
             crate::TypeInner::Vector { size, kind, width } => {
                 let scalar_ty = self.ensure_type_exists(crate::TypeInner::Scalar { width, kind });
-                let component = self.create_zero_value_constant(scalar_ty);
+                let component = self.create_zero_value_constant(scalar_ty)?;
                 crate::ConstantInner::Composite {
                     ty,
-                    components: (0..size as u8).map(|_| component).collect::<Option<_>>()?,
+                    components: (0..size as u8).map(|_| component).collect(),
                 }
             }
             crate::TypeInner::Matrix {
@@ -368,12 +368,10 @@ impl<'a> ExpressionContext<'a, '_, '_> {
                     kind: crate::ScalarKind::Float,
                     size: rows,
                 });
-                let component = self.create_zero_value_constant(vec_ty);
+                let component = self.create_zero_value_constant(vec_ty)?;
                 crate::ConstantInner::Composite {
                     ty,
-                    components: (0..columns as u8)
-                        .map(|_| component)
-                        .collect::<Option<_>>()?,
+                    components: (0..columns as u8).map(|_| component).collect(),
                 }
             }
             crate::TypeInner::Array {
@@ -381,12 +379,11 @@ impl<'a> ExpressionContext<'a, '_, '_> {
                 size: crate::ArraySize::Constant(size),
                 ..
             } => {
-                let component = self.create_zero_value_constant(base);
+                let size = self.module.constants[size].to_array_length()?;
+                let component = self.create_zero_value_constant(base)?;
                 crate::ConstantInner::Composite {
                     ty,
-                    components: (0..self.module.constants[size].to_array_length().unwrap())
-                        .map(|_| component)
-                        .collect::<Option<_>>()?,
+                    components: (0..size).map(|_| component).collect(),
                 }
             }
             crate::TypeInner::Struct { ref members, .. } => {
