@@ -837,7 +837,7 @@ impl crate::context::Context for Context {
         let canvas_node: wasm_bindgen::JsValue = web_sys::window()
             .and_then(|win| win.document())
             .and_then(|doc| {
-                doc.query_selector_all(&format!("[data-raw-handle=\"{}\"]", canvas_attribute))
+                doc.query_selector_all(&format!("[data-raw-handle=\"{canvas_attribute}\"]"))
                     .ok()
             })
             .and_then(|nodes| nodes.get(0))
@@ -2052,11 +2052,11 @@ impl crate::context::Context for Context {
         pass.0.end();
     }
 
-    fn command_encoder_begin_render_pass<'a>(
+    fn command_encoder_begin_render_pass(
         &self,
         encoder: &Self::CommandEncoderId,
         _encoder_data: &Self::CommandEncoderData,
-        desc: &crate::RenderPassDescriptor<'a, '_>,
+        desc: &crate::RenderPassDescriptor<'_, '_>,
     ) -> (Self::RenderPassId, Self::RenderPassData) {
         let mapped_color_attachments = desc
             .color_attachments
