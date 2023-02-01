@@ -3095,7 +3095,7 @@ impl<A: HalApi> Device<A> {
             if !ds.is_depth_read_only() {
                 flags |= pipeline::PipelineFlags::WRITES_DEPTH;
             }
-            if !ds.is_stencil_read_only() {
+            if !ds.is_stencil_read_only(desc.primitive.cull_mode) {
                 flags |= pipeline::PipelineFlags::WRITES_STENCIL;
             }
         }

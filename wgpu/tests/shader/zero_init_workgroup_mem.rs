@@ -165,7 +165,7 @@ fn zero_init_workgroup_mem_impl(ctx: TestingContext) {
 
     let mapped = mapping_buffer.slice(..).get_mapped_range();
 
-    let typed: &[u32] = bytemuck::cast_slice(&*mapped);
+    let typed: &[u32] = bytemuck::cast_slice(&mapped);
 
     // -- Check results --
 
@@ -174,8 +174,7 @@ fn zero_init_workgroup_mem_impl(ctx: TestingContext) {
 
     assert!(
         num_disptaches_failed == 0,
-        "Zero-initialization of workgroup memory failed ({:.0}% of disptaches failed).",
-        ratio
+        "Zero-initialization of workgroup memory failed ({ratio:.0}% of disptaches failed)."
     );
 
     drop(mapped);

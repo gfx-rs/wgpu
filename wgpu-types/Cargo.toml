@@ -25,8 +25,8 @@ bitflags = "1"
 serde = { version = "1", features = ["serde_derive"], optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-js-sys.workspace = true
-web-sys = { workspace = true, features = [
+js-sys = "0.3.60"
+web-sys = { version = "0.3.60", features = [
     "ImageBitmap",
     "HtmlVideoElement",
     "HtmlCanvasElement",

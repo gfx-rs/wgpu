@@ -438,11 +438,11 @@ pub trait Context: Debug + Send + Sized + Sync {
         pass: &mut Self::ComputePassId,
         pass_data: &mut Self::ComputePassData,
     );
-    fn command_encoder_begin_render_pass<'a>(
+    fn command_encoder_begin_render_pass(
         &self,
         encoder: &Self::CommandEncoderId,
         encoder_data: &Self::CommandEncoderData,
-        desc: &RenderPassDescriptor<'a, '_>,
+        desc: &RenderPassDescriptor<'_, '_>,
     ) -> (Self::RenderPassId, Self::RenderPassData);
     fn command_encoder_end_render_pass(
         &self,
@@ -1369,11 +1369,11 @@ pub(crate) trait DynContext: Debug + Send + Sync {
         pass: &mut ObjectId,
         pass_data: &mut crate::Data,
     );
-    fn command_encoder_begin_render_pass<'a>(
+    fn command_encoder_begin_render_pass(
         &self,
         encoder: &ObjectId,
         encoder_data: &crate::Data,
-        desc: &RenderPassDescriptor<'a, '_>,
+        desc: &RenderPassDescriptor<'_, '_>,
     ) -> (ObjectId, Box<crate::Data>);
     fn command_encoder_end_render_pass(
         &self,
@@ -2633,11 +2633,11 @@ where
         )
     }
 
-    fn command_encoder_begin_render_pass<'a>(
+    fn command_encoder_begin_render_pass(
         &self,
         encoder: &ObjectId,
         encoder_data: &crate::Data,
-        desc: &RenderPassDescriptor<'a, '_>,
+        desc: &RenderPassDescriptor<'_, '_>,
     ) -> (ObjectId, Box<crate::Data>) {
         let encoder = <T::CommandEncoderId>::from(*encoder);
         let encoder_data = downcast_ref(encoder_data);

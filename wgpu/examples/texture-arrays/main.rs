@@ -125,7 +125,7 @@ impl framework::Example for Example {
             &base_shader_module
         };
 
-        println!("Using fragment entry point '{}'", fragment_entry_point);
+        println!("Using fragment entry point '{fragment_entry_point}'");
 
         let vertex_size = std::mem::size_of::<Vertex>();
         let vertex_data = create_vertices();
