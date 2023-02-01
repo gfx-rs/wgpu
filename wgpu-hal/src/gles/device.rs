@@ -247,12 +247,12 @@ impl super::Device {
             policies,
         )
         .map_err(|e| {
-            let msg = format!("{}", e);
+            let msg = format!("{e}");
             crate::PipelineError::Linkage(map_naga_stage(naga_stage), msg)
         })?;
 
         let reflection_info = writer.write().map_err(|e| {
-            let msg = format!("{}", e);
+            let msg = format!("{e}");
             crate::PipelineError::Linkage(map_naga_stage(naga_stage), msg)
         })?;
 
@@ -358,7 +358,7 @@ impl super::Device {
 
         // Create empty fragment shader if only vertex shader is present
         if has_stages == wgt::ShaderStages::VERTEX {
-            let shader_src = format!("#version {} es \n void main(void) {{}}", glsl_version,);
+            let shader_src = format!("#version {glsl_version} es \n void main(void) {{}}",);
             log::info!("Only vertex shader is present. Creating an empty fragment shader",);
             let shader = unsafe {
                 Self::compile_shader(
@@ -1248,7 +1248,7 @@ impl crate::Device<super::Api> for super::Device {
 
                 if let Some(label) = desc.label {
                     temp_string.clear();
-                    let _ = write!(temp_string, "{}[{}]", label, i);
+                    let _ = write!(temp_string, "{label}[{i}]");
                     let name = unsafe { mem::transmute(query) };
                     unsafe { gl.object_label(glow::QUERY, name, Some(&temp_string)) };
                 }

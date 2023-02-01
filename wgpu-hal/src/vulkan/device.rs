@@ -321,7 +321,7 @@ impl gpu_alloc::MemoryDevice<vk::DeviceMemory> for super::DeviceShared {
                 Err(gpu_alloc::OutOfMemory::OutOfHostMemory)
             }
             Err(vk::Result::ERROR_TOO_MANY_OBJECTS) => panic!("Too many objects"),
-            Err(err) => panic!("Unexpected Vulkan error: `{}`", err),
+            Err(err) => panic!("Unexpected Vulkan error: `{err}`"),
         }
     }
 
@@ -348,7 +348,7 @@ impl gpu_alloc::MemoryDevice<vk::DeviceMemory> for super::DeviceShared {
                 Err(gpu_alloc::DeviceMapError::OutOfHostMemory)
             }
             Err(vk::Result::ERROR_MEMORY_MAP_FAILED) => Err(gpu_alloc::DeviceMapError::MapFailed),
-            Err(err) => panic!("Unexpected Vulkan error: `{}`", err),
+            Err(err) => panic!("Unexpected Vulkan error: `{err}`"),
         }
     }
 
@@ -707,7 +707,7 @@ impl super::Device {
                         Some(&pipeline_options),
                     )
                 }
-                .map_err(|e| crate::PipelineError::Linkage(stage_flags, format!("{}", e)))?;
+                .map_err(|e| crate::PipelineError::Linkage(stage_flags, format!("{e}")))?;
                 self.create_shader_module_impl(&spv)?
             }
         };
@@ -1489,7 +1489,7 @@ impl crate::Device<super::Api> for super::Device {
                         &naga_options,
                         None,
                     )
-                    .map_err(|e| crate::ShaderError::Compilation(format!("{}", e)))?,
+                    .map_err(|e| crate::ShaderError::Compilation(format!("{e}")))?,
                 )
             }
             crate::ShaderInput::SpirV(spv) => Cow::Borrowed(spv),

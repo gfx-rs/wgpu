@@ -211,7 +211,7 @@ fn single_texture_clear_test(
     );
 
     let texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
-        label: Some(&format!("texture {:?}", format)),
+        label: Some(&format!("texture {format:?}")),
         size,
         mip_level_count: if dimension == wgpu::TextureDimension::D1 {
             1

@@ -38,6 +38,8 @@
     clippy::non_send_fields_in_send_ty,
     // TODO!
     clippy::missing_safety_doc,
+    // Clashes with clippy::pattern_type_mismatch
+    clippy::needless_borrowed_reference,
 )]
 #![warn(
     trivial_casts,
