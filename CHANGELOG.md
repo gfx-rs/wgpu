@@ -257,7 +257,6 @@ By @jimblandy in [#3254](https://github.com/gfx-rs/wgpu/pull/3254).
 - Implemented `TextureFormat::Stencil8`, allowing for stencil testing without depth components. By @Dinnerbone in [#3343](https://github.com/gfx-rs/wgpu/pull/3343)
 - Implemented `add_srgb_suffix()` for `TextureFormat` for converting linear formats to sRGB. By @Elabajaba in [#3419](https://github.com/gfx-rs/wgpu/pull/3419)
 - Zero-initialize workgroup memory. By @teoxoy in [#3174](https://github.com/gfx-rs/wgpu/pull/3174)
-- Added support for importing external buffers using `buffer_from_raw` (Dx12, Metal) and `create_buffer_from_hal`. By @AdrianEddy in [#3355](https://github.com/gfx-rs/wgpu/pull/3355)
 
 #### GLES
 
@@ -271,7 +270,7 @@ By @jimblandy in [#3254](https://github.com/gfx-rs/wgpu/pull/3254).
 - Sync `TextureFormat.describe` with the spec. By @teoxoy in [3312](https://github.com/gfx-rs/wgpu/pull/3312)
 
 #### Metal
-- Add a way to create `Device` and `Queue` from raw Metal resources in wgpu-hal
+- Add a way to create `Device` and `Queue` from raw Metal resources in wgpu-hal. By @AdrianEddy in [#3338](https://github.com/gfx-rs/wgpu/pull/3338)
 
 ### Bug Fixes
 

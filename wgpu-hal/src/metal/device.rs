@@ -219,10 +219,6 @@ impl super::Device {
         }
     }
 
-    pub unsafe fn buffer_from_raw(raw: mtl::Buffer, size: wgt::BufferAddress) -> super::Buffer {
-        super::Buffer { raw, size }
-    }
-    
     pub unsafe fn device_from_raw(raw: mtl::Device, features: wgt::Features) -> super::Device {
         super::Device {
             shared: Arc::new(super::AdapterShared::new(raw)),
