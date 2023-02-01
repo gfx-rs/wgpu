@@ -219,6 +219,13 @@ impl super::Device {
         }
     }
 
+    pub unsafe fn device_from_raw(raw: mtl::Device, features: wgt::Features) -> super::Device {
+        super::Device {
+            shared: Arc::new(super::AdapterShared::new(raw)),
+            features,
+        }
+    }
+
     pub fn raw_device(&self) -> &Mutex<mtl::Device> {
         &self.shared.device
     }

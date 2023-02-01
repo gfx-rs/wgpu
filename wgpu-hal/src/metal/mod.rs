@@ -286,6 +286,13 @@ pub struct Queue {
 unsafe impl Send for Queue {}
 unsafe impl Sync for Queue {}
 
+impl Queue {
+    pub unsafe fn queue_from_raw(raw: mtl::CommandQueue) -> Self {
+        Self {
+            raw: Arc::new(Mutex::new(raw)),
+        }
+    }
+}
 pub struct Device {
     shared: Arc<AdapterShared>,
     features: wgt::Features,
