@@ -556,6 +556,7 @@ fn convert_wgsl() {
             "workgroup-var-init",
             Targets::WGSL | Targets::GLSL | Targets::SPIRV | Targets::HLSL | Targets::METAL,
         ),
+        ("sprite", Targets::SPIRV),
     ];
 
     for &(name, targets) in inputs.iter() {

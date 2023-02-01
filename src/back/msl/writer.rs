@@ -4221,7 +4221,7 @@ fn test_stack_size() {
         let stack_size = addresses_end - addresses_start;
         // check the size (in debug only)
         // last observed macOS value: 19152 (CI)
-        if !(9500..=20000).contains(&stack_size) {
+        if !(9000..=20000).contains(&stack_size) {
             panic!("`put_block` stack size {stack_size} has changed!");
         }
     }

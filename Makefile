@@ -33,7 +33,9 @@ bench:
 validate-spv: $(SNAPSHOTS_BASE_OUT)/spv/*.spvasm
 	@set -e && for file in $^ ; do \
 		echo "Validating" $${file#"$(SNAPSHOTS_BASE_OUT)/"};	\
-		cat $${file} | spirv-as --target-env vulkan1.0 -o - | spirv-val; \
+		version_line=$$(head -2 $${file} | tail -1);	\
+		version=$${version_line#"; Version: "};\
+		cat $${file} | spirv-as --target-env spv$${version} -o - | spirv-val; \
 	done
 
 validate-msl: $(SNAPSHOTS_BASE_OUT)/msl/*.msl

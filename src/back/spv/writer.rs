@@ -585,6 +585,12 @@ impl Writer {
             }
 
             let mut gv = self.global_variables[handle.index()].clone();
+            if let Some(ref mut iface) = interface {
+                // Have to include global variables in the interface
+                if self.physical_layout.version >= 0x10400 {
+                    iface.varying_ids.push(gv.var_id);
+                }
+            }
 
             // Handle globals are pre-emitted and should be loaded automatically.
             //
