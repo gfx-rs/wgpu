@@ -83,12 +83,14 @@ pub(super) fn compile_fxc(
 mod dxc {
     use std::path::PathBuf;
 
+    // Destructor order should be fine since _dxil and _dxc don't rely on each other.
     pub(crate) struct DxcContainer {
         compiler: hassle_rs::DxcCompiler,
         library: hassle_rs::DxcLibrary,
-        // Has to be held onto for the lifetime of the device otherwise shaders will fail to compile
-        _dxc: hassle_rs::Dxc,
         validator: hassle_rs::DxcValidator,
+        // Has to be held onto for the lifetime of the device otherwise shaders will fail to compile.
+        _dxc: hassle_rs::Dxc,
+        // Also Has to be held onto for the lifetime of the device otherwise shaders will fail to validate.
         _dxil: hassle_rs::Dxil,
     }
 
