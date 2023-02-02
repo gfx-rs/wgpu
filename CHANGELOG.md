@@ -50,6 +50,12 @@ Bottom level categories:
 
 - Improve format MSAA capabilities detection. By @jinleili in [#3429](https://github.com/gfx-rs/wgpu/pull/3429)
 
+### Bug Fixes
+
+#### DX12
+
+- Fix DXC validation issues when using a custom `dxil_path`. By @Elabajaba in [#3434](https://github.com/gfx-rs/wgpu/pull/3434)
+
 ## wgpu-0.15.0 (2023-01-25)
 
 ### Major Changes
