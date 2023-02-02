@@ -557,6 +557,7 @@ fn convert_wgsl() {
             Targets::WGSL | Targets::GLSL | Targets::SPIRV | Targets::HLSL | Targets::METAL,
         ),
         ("sprite", Targets::SPIRV),
+        ("force_point_size_vertex_shader_webgl", Targets::GLSL),
     ];
 
     for &(name, targets) in inputs.iter() {

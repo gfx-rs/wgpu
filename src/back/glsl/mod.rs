@@ -218,6 +218,13 @@ bitflags::bitflags! {
         /// global variables that are not used in the specified entrypoint (including indirect use),
         /// all constant declarations, and functions that use excluded global variables.
         const INCLUDE_UNUSED_ITEMS = 0x4;
+        /// Emit `PointSize` output builtin to vertex shaders, which is
+        /// required for drawing with `PointList` topology.
+        ///
+        /// https://registry.khronos.org/OpenGL/specs/es/3.2/GLSL_ES_Specification_3.20.html#built-in-language-variables
+        /// The variable gl_PointSize is intended for a shader to write the size of the point to be rasterized. It is measured in pixels.
+        /// If gl_PointSize is not written to, its value is undefined in subsequent pipe stages.
+        const FORCE_POINT_SIZE = 0x10;
     }
 }
 
@@ -1978,6 +1985,7 @@ impl<'a, W: Write> Writer<'a, W> {
                         writeln!(self.out, ";")?;
                     }
                     back::FunctionType::EntryPoint(ep_index) => {
+                        let mut has_point_size = false;
                         let ep = &self.module.entry_points[ep_index as usize];
                         if let Some(ref result) = ep.function.result {
                             let value = value.unwrap();
@@ -2005,11 +2013,18 @@ impl<'a, W: Write> Writer<'a, W> {
                                         if let Some(crate::Binding::BuiltIn(builtin)) =
                                             member.binding
                                         {
+                                            has_point_size |= builtin == crate::BuiltIn::PointSize;
+
                                             match builtin {
                                                 crate::BuiltIn::ClipDistance
-                                                | crate::BuiltIn::CullDistance
-                                                | crate::BuiltIn::PointSize => {
+                                                | crate::BuiltIn::CullDistance => {
                                                     if self.options.version.is_es() {
+                                                        // Note that gl_ClipDistance and gl_CullDistance are listed in the GLSL ES 3.2 spec but shouldn't
+                                                        // See https://github.com/KhronosGroup/GLSL/issues/132#issuecomment-685818465
+                                                        log::warn!(
+                                                            "{:?} is not part of GLSL ES",
+                                                            builtin
+                                                        );
                                                         continue;
                                                     }
                                                 }
@@ -2056,20 +2071,30 @@ impl<'a, W: Write> Writer<'a, W> {
                             }
                         }
 
-                        if let back::FunctionType::EntryPoint(ep_index) = ctx.ty {
-                            if self.module.entry_points[ep_index as usize].stage
-                                == crate::ShaderStage::Vertex
-                                && self
-                                    .options
-                                    .writer_flags
-                                    .contains(WriterFlags::ADJUST_COORDINATE_SPACE)
-                            {
-                                writeln!(
-                                    self.out,
-                                    "gl_Position.yz = vec2(-gl_Position.y, gl_Position.z * 2.0 - gl_Position.w);",
-                                )?;
-                                write!(self.out, "{level}")?;
-                            }
+                        let is_vertex_stage = self.module.entry_points[ep_index as usize].stage
+                            == ShaderStage::Vertex;
+                        if is_vertex_stage
+                            && self
+                                .options
+                                .writer_flags
+                                .contains(WriterFlags::ADJUST_COORDINATE_SPACE)
+                        {
+                            writeln!(
+                                self.out,
+                                "gl_Position.yz = vec2(-gl_Position.y, gl_Position.z * 2.0 - gl_Position.w);",
+                            )?;
+                            write!(self.out, "{level}")?;
+                        }
+
+                        if is_vertex_stage
+                            && self
+                                .options
+                                .writer_flags
+                                .contains(WriterFlags::FORCE_POINT_SIZE)
+                            && !has_point_size
+                        {
+                            writeln!(self.out, "gl_PointSize = 1.0;")?;
+                            write!(self.out, "{level}")?;
                         }
                         writeln!(self.out, "return;")?;
                     }
