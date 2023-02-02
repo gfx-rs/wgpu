@@ -1,7 +1,7 @@
 ; SPIR-V
 ; Version: 1.1
 ; Generator: rspirv
-; Bound: 161
+; Bound: 165
 OpCapability Shader
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
@@ -172,56 +172,62 @@ OpStore %34 %124
 %125 = OpLoad  %12  %25
 %126 = OpExtInst  %12  %1 FindSMsb %125
 OpStore %25 %126
-%127 = OpLoad  %6  %31
-%128 = OpExtInst  %6  %1 FindUMsb %127
-OpStore %31 %128
+%127 = OpLoad  %15  %37
+%128 = OpExtInst  %15  %1 FindUMsb %127
+OpStore %37 %128
 %129 = OpLoad  %4  %19
-%130 = OpBitCount  %4  %129
+%130 = OpExtInst  %4  %1 FindSMsb %129
 OpStore %19 %130
-%131 = OpLoad  %11  %22
-%132 = OpBitCount  %11  %131
-OpStore %22 %132
-%133 = OpLoad  %12  %25
-%134 = OpBitCount  %12  %133
-OpStore %25 %134
-%135 = OpLoad  %13  %28
-%136 = OpBitCount  %13  %135
-OpStore %28 %136
-%137 = OpLoad  %6  %31
-%138 = OpBitCount  %6  %137
-OpStore %31 %138
-%139 = OpLoad  %14  %34
-%140 = OpBitCount  %14  %139
-OpStore %34 %140
-%141 = OpLoad  %15  %37
-%142 = OpBitCount  %15  %141
-OpStore %37 %142
-%143 = OpLoad  %16  %40
-%144 = OpBitCount  %16  %143
-OpStore %40 %144
-%145 = OpLoad  %4  %19
-%146 = OpBitReverse  %4  %145
-OpStore %19 %146
-%147 = OpLoad  %11  %22
-%148 = OpBitReverse  %11  %147
-OpStore %22 %148
-%149 = OpLoad  %12  %25
-%150 = OpBitReverse  %12  %149
-OpStore %25 %150
-%151 = OpLoad  %13  %28
-%152 = OpBitReverse  %13  %151
-OpStore %28 %152
-%153 = OpLoad  %6  %31
-%154 = OpBitReverse  %6  %153
-OpStore %31 %154
-%155 = OpLoad  %14  %34
-%156 = OpBitReverse  %14  %155
-OpStore %34 %156
-%157 = OpLoad  %15  %37
-%158 = OpBitReverse  %15  %157
-OpStore %37 %158
-%159 = OpLoad  %16  %40
-%160 = OpBitReverse  %16  %159
-OpStore %40 %160
+%131 = OpLoad  %6  %31
+%132 = OpExtInst  %6  %1 FindUMsb %131
+OpStore %31 %132
+%133 = OpLoad  %4  %19
+%134 = OpBitCount  %4  %133
+OpStore %19 %134
+%135 = OpLoad  %11  %22
+%136 = OpBitCount  %11  %135
+OpStore %22 %136
+%137 = OpLoad  %12  %25
+%138 = OpBitCount  %12  %137
+OpStore %25 %138
+%139 = OpLoad  %13  %28
+%140 = OpBitCount  %13  %139
+OpStore %28 %140
+%141 = OpLoad  %6  %31
+%142 = OpBitCount  %6  %141
+OpStore %31 %142
+%143 = OpLoad  %14  %34
+%144 = OpBitCount  %14  %143
+OpStore %34 %144
+%145 = OpLoad  %15  %37
+%146 = OpBitCount  %15  %145
+OpStore %37 %146
+%147 = OpLoad  %16  %40
+%148 = OpBitCount  %16  %147
+OpStore %40 %148
+%149 = OpLoad  %4  %19
+%150 = OpBitReverse  %4  %149
+OpStore %19 %150
+%151 = OpLoad  %11  %22
+%152 = OpBitReverse  %11  %151
+OpStore %22 %152
+%153 = OpLoad  %12  %25
+%154 = OpBitReverse  %12  %153
+OpStore %25 %154
+%155 = OpLoad  %13  %28
+%156 = OpBitReverse  %13  %155
+OpStore %28 %156
+%157 = OpLoad  %6  %31
+%158 = OpBitReverse  %6  %157
+OpStore %31 %158
+%159 = OpLoad  %14  %34
+%160 = OpBitReverse  %14  %159
+OpStore %34 %160
+%161 = OpLoad  %15  %37
+%162 = OpBitReverse  %15  %161
+OpStore %37 %162
+%163 = OpLoad  %16  %40
+%164 = OpBitReverse  %16  %163
+OpStore %40 %164
 OpReturn
 OpFunctionEnd

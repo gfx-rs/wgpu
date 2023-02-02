@@ -1721,9 +1721,49 @@ impl<W: Write> Writer<W> {
                     self.put_expression(arg, context, true)?;
                     write!(self.out, ") + 1) % 33) - 1)")?;
                 } else if fun == Mf::FindMsb {
-                    write!(self.out, "((({NAMESPACE}::clz(")?;
+                    let inner = context.resolve_type(arg);
+
+                    write!(self.out, "{NAMESPACE}::select(31 - {NAMESPACE}::clz(")?;
+
+                    if let Some(crate::ScalarKind::Sint) = inner.scalar_kind() {
+                        write!(self.out, "{NAMESPACE}::select(")?;
+                        self.put_expression(arg, context, true)?;
+                        write!(self.out, ", ~")?;
+                        self.put_expression(arg, context, true)?;
+                        write!(self.out, ", ")?;
+                        self.put_expression(arg, context, true)?;
+                        write!(self.out, " < 0)")?;
+                    } else {
+                        self.put_expression(arg, context, true)?;
+                    }
+
+                    write!(self.out, "), ")?;
+
+                    // or metal will complain that select is ambiguous
+                    match *inner {
+                        crate::TypeInner::Vector { size, kind, .. } => {
+                            let size = back::vector_size_str(size);
+                            if let crate::ScalarKind::Sint = kind {
+                                write!(self.out, "int{size}")?;
+                            } else {
+                                write!(self.out, "uint{size}")?;
+                            }
+                        }
+                        crate::TypeInner::Scalar { kind, .. } => {
+                            if let crate::ScalarKind::Sint = kind {
+                                write!(self.out, "int")?;
+                            } else {
+                                write!(self.out, "uint")?;
+                            }
+                        }
+                        _ => (),
+                    }
+
+                    write!(self.out, "(-1), ")?;
                     self.put_expression(arg, context, true)?;
-                    write!(self.out, ") + 1) % 33) - 1)")?
+                    write!(self.out, " == 0 || ")?;
+                    self.put_expression(arg, context, true)?;
+                    write!(self.out, " == -1)")?;
                 } else if fun == Mf::Unpack2x16float {
                     write!(self.out, "float2(as_type<half2>(")?;
                     self.put_expression(arg, context, false)?;
@@ -2275,42 +2315,42 @@ impl<W: Write> Writer<W> {
     ) {
         use crate::Expression;
         self.need_bake_expressions.clear();
-        for expr in func.expressions.iter() {
+        for (expr_handle, expr) in func.expressions.iter() {
             // Expressions whose reference count is above the
             // threshold should always be stored in temporaries.
-            let expr_info = &info[expr.0];
-            let min_ref_count = func.expressions[expr.0].bake_ref_count();
+            let expr_info = &info[expr_handle];
+            let min_ref_count = func.expressions[expr_handle].bake_ref_count();
             if min_ref_count <= expr_info.ref_count {
-                self.need_bake_expressions.insert(expr.0);
+                self.need_bake_expressions.insert(expr_handle);
             }
 
-            // WGSL's `dot` function works on any `vecN` type, but Metal's only
-            // works on floating-point vectors, so we emit inline code for
-            // integer vector `dot` calls. But that code uses each argument `N`
-            // times, once for each component (see `put_dot_product`), so to
-            // avoid duplicated evaluation, we must bake integer operands.
-            if let (
-                fun_handle,
-                &Expression::Math {
-                    fun: crate::MathFunction::Dot,
-                    arg,
-                    arg1,
-                    ..
-                },
-            ) = expr
-            {
-                use crate::TypeInner;
-                // check what kind of product this is depending
-                // on the resolve type of the Dot function itself
-                let inner = context.resolve_type(fun_handle);
-                if let TypeInner::Scalar { kind, .. } = *inner {
-                    match kind {
-                        crate::ScalarKind::Sint | crate::ScalarKind::Uint => {
-                            self.need_bake_expressions.insert(arg);
-                            self.need_bake_expressions.insert(arg1.unwrap());
+            if let Expression::Math { fun, arg, arg1, .. } = *expr {
+                match fun {
+                    crate::MathFunction::Dot => {
+                        // WGSL's `dot` function works on any `vecN` type, but Metal's only
+                        // works on floating-point vectors, so we emit inline code for
+                        // integer vector `dot` calls. But that code uses each argument `N`
+                        // times, once for each component (see `put_dot_product`), so to
+                        // avoid duplicated evaluation, we must bake integer operands.
+
+                        use crate::TypeInner;
+                        // check what kind of product this is depending
+                        // on the resolve type of the Dot function itself
+                        let inner = context.resolve_type(expr_handle);
+                        if let TypeInner::Scalar { kind, .. } = *inner {
+                            match kind {
+                                crate::ScalarKind::Sint | crate::ScalarKind::Uint => {
+                                    self.need_bake_expressions.insert(arg);
+                                    self.need_bake_expressions.insert(arg1.unwrap());
+                                }
+                                _ => {}
+                            }
                         }
-                        _ => {}
                     }
+                    crate::MathFunction::FindMsb => {
+                        self.need_bake_expressions.insert(arg);
+                    }
+                    _ => {}
                 }
             }
         }

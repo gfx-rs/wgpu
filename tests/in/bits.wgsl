@@ -39,6 +39,8 @@ fn main() {
     i = firstTrailingBit(i);
     u2 = firstTrailingBit(u2);
     i3 = firstLeadingBit(i3);
+    u3 = firstLeadingBit(u3);
+    i = firstLeadingBit(i);
     u = firstLeadingBit(u);
     i = countOneBits(i);
     i2 = countOneBits(i2);
