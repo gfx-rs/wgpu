@@ -176,7 +176,7 @@ impl PhysicalDeviceFeatures {
                 //.shader_cull_distance(requested_features.contains(wgt::Features::SHADER_CULL_DISTANCE))
                 .shader_float64(requested_features.contains(wgt::Features::SHADER_FLOAT64))
                 //.shader_int64(requested_features.contains(wgt::Features::SHADER_INT64))
-                //.shader_int16(requested_features.contains(wgt::Features::SHADER_INT16))
+                .shader_int16(requested_features.contains(wgt::Features::SHADER_INT16))
                 //.shader_resource_residency(requested_features.contains(wgt::Features::SHADER_RESOURCE_RESIDENCY))
                 .geometry_shader(requested_features.contains(wgt::Features::SHADER_PRIMITIVE_INDEX))
                 .build(),
@@ -420,7 +420,7 @@ impl PhysicalDeviceFeatures {
         //if self.core.shader_cull_distance != 0 {
         features.set(F::SHADER_FLOAT64, self.core.shader_float64 != 0);
         //if self.core.shader_int64 != 0 {
-        //if self.core.shader_int16 != 0 {
+        features.set(F::SHADER_INT16, self.core.shader_int16 != 0);
 
         //if caps.supports_extension(vk::KhrSamplerMirrorClampToEdgeFn::name()) {
         //if caps.supports_extension(vk::ExtSamplerFilterMinmaxFn::name()) {

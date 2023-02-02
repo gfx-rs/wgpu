@@ -134,6 +134,7 @@
       "clear-commands",
       "spirv-shader-passthrough",
       "shader-primitive-index",
+      "shader-i16",
     ],
   );
 
