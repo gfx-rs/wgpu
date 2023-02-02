@@ -181,6 +181,10 @@ impl Version {
     fn supports_fma_function(&self) -> bool {
         *self >= Version::Desktop(400) || *self >= Version::new_gles(320)
     }
+
+    fn supports_integer_functions(&self) -> bool {
+        *self >= Version::Desktop(400) || *self >= Version::new_gles(310)
+    }
 }
 
 impl PartialOrd for Version {
@@ -1128,12 +1132,13 @@ impl<'a, W: Write> Writer<'a, W> {
                 self.need_bake_expressions.insert(fun_handle);
             }
 
+            let inner = expr_info.ty.inner_with(&self.module.types);
+
             if let Expression::Math { fun, arg, arg1, .. } = *expr {
                 match fun {
                     crate::MathFunction::Dot => {
                         // if the expression is a Dot product with integer arguments,
                         // then the args needs baking as well
-                        let inner = info[fun_handle].ty.inner_with(&self.module.types);
                         if let TypeInner::Scalar { kind, .. } = *inner {
                             match kind {
                                 crate::ScalarKind::Sint | crate::ScalarKind::Uint => {
@@ -1145,7 +1150,9 @@ impl<'a, W: Write> Writer<'a, W> {
                         }
                     }
                     crate::MathFunction::CountLeadingZeros => {
-                        self.need_bake_expressions.insert(arg);
+                        if let Some(crate::ScalarKind::Sint) = inner.scalar_kind() {
+                            self.need_bake_expressions.insert(arg);
+                        }
                     }
                     _ => {}
                 }
@@ -2954,50 +2961,74 @@ impl<'a, W: Write> Writer<'a, W> {
                     Mf::Determinant => "determinant",
                     // bits
                     Mf::CountLeadingZeros => {
-                        match *ctx.info[arg].ty.inner_with(&self.module.types) {
-                            crate::TypeInner::Vector { size, kind, .. } => {
-                                let s = back::vector_size_str(size);
+                        if self.options.version.supports_integer_functions() {
+                            match *ctx.info[arg].ty.inner_with(&self.module.types) {
+                                crate::TypeInner::Vector { size, kind, .. } => {
+                                    let s = back::vector_size_str(size);
 
-                                if let crate::ScalarKind::Uint = kind {
-                                    write!(self.out, "uvec{s}(")?;
-                                } else {
-                                    write!(self.out, "ivec{s}(")?;
+                                    if let crate::ScalarKind::Uint = kind {
+                                        write!(self.out, "uvec{s}(ivec{s}(31) - findMSB(")?;
+                                        self.write_expr(arg, ctx)?;
+                                        write!(self.out, "))")?;
+                                    } else {
+                                        write!(self.out, "mix(ivec{s}(31) - findMSB(")?;
+                                        self.write_expr(arg, ctx)?;
+                                        write!(self.out, "), ivec{s}(0), lessThan(")?;
+                                        self.write_expr(arg, ctx)?;
+                                        write!(self.out, ", ivec{s}(0)))")?;
+                                    }
                                 }
+                                crate::TypeInner::Scalar { kind, .. } => {
+                                    if let crate::ScalarKind::Uint = kind {
+                                        write!(self.out, "uint(31 - findMSB(")?;
+                                    } else {
+                                        write!(self.out, "(")?;
+                                        self.write_expr(arg, ctx)?;
+                                        write!(self.out, " < 0 ? 0 : 31 - findMSB(")?;
+                                    }
 
-                                write!(self.out, "mix(vec{s}(31.0) - floor(log2(vec{s}(")?;
-                                self.write_expr(arg, ctx)?;
-                                write!(self.out, ") + 0.5)), ")?;
-
-                                if let crate::ScalarKind::Uint = kind {
-                                    write!(self.out, "vec{s}(32.0), lessThanEqual(")?;
                                     self.write_expr(arg, ctx)?;
-                                    write!(self.out, ", uvec{s}(0u))))")?;
-                                } else {
-                                    write!(self.out, "mix(vec{s}(0.0), vec{s}(32.0), equal(")?;
-                                    self.write_expr(arg, ctx)?;
-                                    write!(self.out, ", ivec{s}(0))), lessThanEqual(")?;
-                                    self.write_expr(arg, ctx)?;
-                                    write!(self.out, ", ivec{s}(0))))")?;
+                                    write!(self.out, "))")?;
                                 }
-                            }
-                            crate::TypeInner::Scalar { kind, .. } => {
-                                write!(self.out, "(")?;
-                                self.write_expr(arg, ctx)?;
+                                _ => unreachable!(),
+                            };
+                        } else {
+                            match *ctx.info[arg].ty.inner_with(&self.module.types) {
+                                crate::TypeInner::Vector { size, kind, .. } => {
+                                    let s = back::vector_size_str(size);
 
-                                if let crate::ScalarKind::Uint = kind {
-                                    write!(self.out, " == 0u ? 32u : uint(")?;
-                                } else {
-                                    write!(self.out, " <= 0 ? (")?;
-                                    self.write_expr(arg, ctx)?;
-                                    write!(self.out, " == 0 ? 32 : 0) : int(")?;
+                                    if let crate::ScalarKind::Uint = kind {
+                                        write!(self.out, "uvec{s}(")?;
+                                        write!(self.out, "vec{s}(31.0) - floor(log2(vec{s}(")?;
+                                        self.write_expr(arg, ctx)?;
+                                        write!(self.out, ") + 0.5)))")?;
+                                    } else {
+                                        write!(self.out, "ivec{s}(")?;
+                                        write!(self.out, "mix(vec{s}(31.0) - floor(log2(vec{s}(")?;
+                                        self.write_expr(arg, ctx)?;
+                                        write!(self.out, ") + 0.5)), ")?;
+                                        write!(self.out, "vec{s}(0.0), lessThan(")?;
+                                        self.write_expr(arg, ctx)?;
+                                        write!(self.out, ", ivec{s}(0u))))")?;
+                                    }
                                 }
-
-                                write!(self.out, "31.0 - floor(log2(float(")?;
-                                self.write_expr(arg, ctx)?;
-                                write!(self.out, ") + 0.5))))")?;
-                            }
-                            _ => unreachable!(),
-                        };
+                                crate::TypeInner::Scalar { kind, .. } => {
+                                    if let crate::ScalarKind::Uint = kind {
+                                        write!(self.out, "uint(31.0 - floor(log2(float(")?;
+                                        self.write_expr(arg, ctx)?;
+                                        write!(self.out, ") + 0.5)))")?;
+                                    } else {
+                                        write!(self.out, "(")?;
+                                        self.write_expr(arg, ctx)?;
+                                        write!(self.out, " < 0 ? 0 : int(")?;
+                                        write!(self.out, "31.0 - floor(log2(float(")?;
+                                        self.write_expr(arg, ctx)?;
+                                        write!(self.out, ") + 0.5))))")?;
+                                    }
+                                }
+                                _ => unreachable!(),
+                            };
+                        }
 
                         return Ok(());
                     }
