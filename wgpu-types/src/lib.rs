@@ -674,7 +674,7 @@ bitflags::bitflags! {
         /// - DX12
         /// - Metal (Intel and AMD GPUs)
         const WRITE_TIMESTAMP_INSIDE_PASSES = 1 << 41;
-        /// Allows shaders to use i16. Not currently supported in naga, only available through spirv-passthrough.```
+        /// Allows shaders to use i16. Not currently supported in naga, only available through `spirv-passthrough`.
         ///
         /// Supported platforms:
         /// - Vulkan
