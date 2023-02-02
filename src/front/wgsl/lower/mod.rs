@@ -2245,6 +2245,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 class,
             },
             ast::Type::Sampler { comparison } => crate::TypeInner::Sampler { comparison },
+            ast::Type::AccelerationStructure => crate::TypeInner::AccelerationStructure,
+            ast::Type::RayQuery => crate::TypeInner::RayQuery,
             ast::Type::BindingArray { base, size } => {
                 let base = self.resolve_ast_type(base, ctx.reborrow())?;
 

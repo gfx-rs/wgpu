@@ -1367,6 +1367,8 @@ impl Parser {
                     class: crate::ImageClass::Storage { format, access },
                 }
             }
+            "acceleration_structure" => ast::Type::AccelerationStructure,
+            "ray_query" => ast::Type::RayQuery,
             _ => return Ok(None),
         }))
     }

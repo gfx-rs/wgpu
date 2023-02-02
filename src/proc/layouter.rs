@@ -238,7 +238,11 @@ impl Layouter {
                         alignment,
                     }
                 }
-                Ti::Image { .. } | Ti::Sampler { .. } | Ti::BindingArray { .. } => TypeLayout {
+                Ti::Image { .. }
+                | Ti::Sampler { .. }
+                | Ti::AccelerationStructure
+                | Ti::RayQuery
+                | Ti::BindingArray { .. } => TypeLayout {
                     size,
                     alignment: Alignment::ONE,
                 },

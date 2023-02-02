@@ -134,7 +134,11 @@ impl super::TypeInner {
                 count * stride
             }
             Self::Struct { span, .. } => span,
-            Self::Image { .. } | Self::Sampler { .. } | Self::BindingArray { .. } => 0,
+            Self::Image { .. }
+            | Self::Sampler { .. }
+            | Self::AccelerationStructure
+            | Self::RayQuery
+            | Self::BindingArray { .. } => 0,
         }
     }
 

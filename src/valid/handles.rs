@@ -76,7 +76,9 @@ impl super::Validator {
                 | crate::TypeInner::ValuePointer { .. }
                 | crate::TypeInner::Atomic { .. }
                 | crate::TypeInner::Image { .. }
-                | crate::TypeInner::Sampler { .. } => (),
+                | crate::TypeInner::Sampler { .. }
+                | crate::TypeInner::AccelerationStructure
+                | crate::TypeInner::RayQuery => (),
                 crate::TypeInner::Pointer { base, space: _ } => {
                     this_handle.check_dep(base)?;
                 }

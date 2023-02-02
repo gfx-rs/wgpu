@@ -721,6 +721,11 @@ pub enum TypeInner {
     /// Can be used to sample values from images.
     Sampler { comparison: bool },
 
+    /// Opaque object representing an acceleration structure of geometry.
+    AccelerationStructure,
+    /// Locally used handle for ray queries.
+    RayQuery,
+
     /// Array of bindings.
     ///
     /// A `BindingArray` represents an array where each element draws its value

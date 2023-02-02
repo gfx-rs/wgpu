@@ -1379,7 +1379,7 @@ impl super::Validator {
                     _ => return Err(ExpressionError::InvalidCastArgument),
                 };
                 let width = convert.unwrap_or(base_width);
-                if !self.check_width(kind, width) {
+                if self.check_width(kind, width).is_err() {
                     return Err(ExpressionError::InvalidCastArgument);
                 }
                 ShaderStages::all()
@@ -1390,7 +1390,7 @@ impl super::Validator {
                     &crate::TypeInner::Scalar {
                         kind: kind @ (crate::ScalarKind::Uint | crate::ScalarKind::Sint),
                         width,
-                    } => self.check_width(kind, width),
+                    } => self.check_width(kind, width).is_ok(),
                     _ => false,
                 };
                 let good = match &module.types[ty].inner {

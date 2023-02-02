@@ -571,6 +571,7 @@ fn convert_wgsl() {
         ("sprite", Targets::SPIRV),
         ("force_point_size_vertex_shader_webgl", Targets::GLSL),
         ("invariant", Targets::GLSL),
+        ("ray-query", Targets::SPIRV),
     ];
 
     for &(name, targets) in inputs.iter() {

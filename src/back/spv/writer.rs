@@ -1017,7 +1017,9 @@ impl Writer {
                 | crate::TypeInner::Pointer { .. }
                 | crate::TypeInner::ValuePointer { .. }
                 | crate::TypeInner::Image { .. }
-                | crate::TypeInner::Sampler { .. } => unreachable!(),
+                | crate::TypeInner::Sampler { .. }
+                | crate::TypeInner::AccelerationStructure
+                | crate::TypeInner::RayQuery => unreachable!(),
             };
 
             instruction.to_words(&mut self.logical_layout.declarations);

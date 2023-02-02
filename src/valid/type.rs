@@ -90,6 +90,8 @@ pub enum Disalignment {
 
 #[derive(Clone, Debug, thiserror::Error)]
 pub enum TypeError {
+    #[error("Capability {0:?} is required")]
+    MissingCapability(Capabilities),
     #[error("The {0:?} scalar width {1} is not supported")]
     InvalidWidth(crate::ScalarKind, crate::Bytes),
     #[error("The {0:?} scalar width {1} is not supported for an atomic")]
@@ -203,13 +205,35 @@ impl TypeInfo {
 }
 
 impl super::Validator {
-    pub(super) const fn check_width(&self, kind: crate::ScalarKind, width: crate::Bytes) -> bool {
-        match kind {
+    fn require_type_capability(&self, capability: Capabilities) -> Result<(), TypeError> {
+        if self.capabilities.contains(capability) {
+            Ok(())
+        } else {
+            Err(TypeError::MissingCapability(capability))
+        }
+    }
+
+    pub(super) fn check_width(
+        &self,
+        kind: crate::ScalarKind,
+        width: crate::Bytes,
+    ) -> Result<(), TypeError> {
+        let good = match kind {
             crate::ScalarKind::Bool => width == crate::BOOL_WIDTH,
             crate::ScalarKind::Float => {
-                width == 4 || (width == 8 && self.capabilities.contains(Capabilities::FLOAT64))
+                if width == 8 {
+                    self.require_type_capability(Capabilities::FLOAT64)?;
+                    true
+                } else {
+                    width == 4
+                }
             }
             crate::ScalarKind::Sint | crate::ScalarKind::Uint => width == 4,
+        };
+        if good {
+            Ok(())
+        } else {
+            Err(TypeError::InvalidWidth(kind, width))
         }
     }
 
@@ -228,9 +252,7 @@ impl super::Validator {
         use crate::TypeInner as Ti;
         Ok(match types[handle].inner {
             Ti::Scalar { kind, width } => {
-                if !self.check_width(kind, width) {
-                    return Err(TypeError::InvalidWidth(kind, width));
-                }
+                self.check_width(kind, width)?;
                 let shareable = if kind.is_numeric() {
                     TypeFlags::IO_SHAREABLE | TypeFlags::HOST_SHAREABLE
                 } else {
@@ -247,9 +269,7 @@ impl super::Validator {
                 )
             }
             Ti::Vector { size, kind, width } => {
-                if !self.check_width(kind, width) {
-                    return Err(TypeError::InvalidWidth(kind, width));
-                }
+                self.check_width(kind, width)?;
                 let shareable = if kind.is_numeric() {
                     TypeFlags::IO_SHAREABLE | TypeFlags::HOST_SHAREABLE
                 } else {
@@ -271,9 +291,7 @@ impl super::Validator {
                 rows,
                 width,
             } => {
-                if !self.check_width(crate::ScalarKind::Float, width) {
-                    return Err(TypeError::InvalidWidth(crate::ScalarKind::Float, width));
-                }
+                self.check_width(crate::ScalarKind::Float, width)?;
                 TypeInfo::new(
                     TypeFlags::DATA
                         | TypeFlags::SIZED
@@ -355,9 +373,7 @@ impl super::Validator {
                 // However, some cases are trivial: All our implicit base types
                 // are DATA and SIZED, so we can never return
                 // `InvalidPointerBase` or `InvalidPointerToUnsized`.
-                if !self.check_width(kind, width) {
-                    return Err(TypeError::InvalidWidth(kind, width));
-                }
+                self.check_width(kind, width)?;
 
                 // `Validator::validate_function` actually checks the storage
                 // space of pointer arguments explicitly before checking the
@@ -605,6 +621,10 @@ impl super::Validator {
             }
             Ti::Image { .. } | Ti::Sampler { .. } => {
                 TypeInfo::new(TypeFlags::ARGUMENT, Alignment::ONE)
+            }
+            Ti::AccelerationStructure | Ti::RayQuery => {
+                self.require_type_capability(Capabilities::RAY_QUERY)?;
+                TypeInfo::new(TypeFlags::empty(), Alignment::ONE)
             }
             Ti::BindingArray { .. } => TypeInfo::new(TypeFlags::empty(), Alignment::ONE),
         })

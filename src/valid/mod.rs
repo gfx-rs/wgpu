@@ -111,6 +111,8 @@ bitflags::bitflags! {
         const EARLY_DEPTH_TEST = 0x400;
         /// Support for [`Builtin::SampleIndex`] and [`Sampling::Sample`].
         const MULTISAMPLED_SHADING = 0x800;
+        /// Support for ray queries and acceleration structures.
+        const RAY_QUERY = 0x1000;
     }
 }
 
@@ -238,6 +240,8 @@ impl crate::TypeInner {
             Self::Array { .. }
             | Self::Image { .. }
             | Self::Sampler { .. }
+            | Self::AccelerationStructure
+            | Self::RayQuery
             | Self::BindingArray { .. } => false,
         }
     }
@@ -302,7 +306,7 @@ impl Validator {
         let con = &constants[handle];
         match con.inner {
             crate::ConstantInner::Scalar { width, ref value } => {
-                if !self.check_width(value.scalar_kind(), width) {
+                if self.check_width(value.scalar_kind(), width).is_err() {
                     return Err(ConstantError::InvalidType);
                 }
             }

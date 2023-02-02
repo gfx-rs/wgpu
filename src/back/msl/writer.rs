@@ -194,6 +194,9 @@ impl<'a> Display for TypeContext<'a> {
             crate::TypeInner::Sampler { comparison: _ } => {
                 write!(out, "{NAMESPACE}::sampler")
             }
+            crate::TypeInner::AccelerationStructure | crate::TypeInner::RayQuery => {
+                unreachable!("Ray queries are not supported yet");
+            }
             crate::TypeInner::BindingArray { base, size } => {
                 let base_tyname = Self {
                     handle: base,
@@ -485,7 +488,11 @@ impl crate::Type {
             // composite types are better to be aliased, regardless of the name
             Ti::Struct { .. } | Ti::Array { .. } => true,
             // handle types may be different, depending on the global var access, so we always inline them
-            Ti::Image { .. } | Ti::Sampler { .. } | Ti::BindingArray { .. } => false,
+            Ti::Image { .. }
+            | Ti::Sampler { .. }
+            | Ti::AccelerationStructure
+            | Ti::RayQuery
+            | Ti::BindingArray { .. } => false,
         }
     }
 }
