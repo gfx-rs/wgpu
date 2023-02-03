@@ -387,7 +387,18 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
                                     None => continue,
                                     _ => {}
                                 }
-                                members.push(sm.clone());
+                                let mut sm = sm.clone();
+
+                                if let Some(ref mut binding) = sm.binding {
+                                    if ep.stage == crate::ShaderStage::Vertex {
+                                        binding.apply_default_interpolation(
+                                            &module.types[sm.ty].inner,
+                                        );
+                                    }
+                                }
+
+                                members.push(sm);
+
                                 components.push(function.expressions.append(
                                     crate::Expression::AccessIndex {
                                         base: expr_handle,
@@ -397,11 +408,18 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
                                 ));
                             }
                         }
-                        _ => {
+                        ref inner => {
+                            let mut binding = result.binding.clone();
+                            if let Some(ref mut binding) = binding {
+                                if ep.stage == crate::ShaderStage::Vertex {
+                                    binding.apply_default_interpolation(inner);
+                                }
+                            }
+
                             members.push(crate::StructMember {
                                 name: None,
                                 ty: result.ty,
-                                binding: result.binding.clone(),
+                                binding,
                                 offset: 0,
                             });
                             // populate just the globals first, then do `Load` in a

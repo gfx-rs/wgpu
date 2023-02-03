@@ -4479,7 +4479,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             span = member_alignment.round_up(span);
             alignment = member_alignment.max(alignment);
 
-            let mut binding = decor.io_binding().ok();
+            let binding = decor.io_binding().ok();
             if let Some(offset) = decor.offset {
                 span = offset;
             }
@@ -4507,9 +4507,6 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                 }
             }
 
-            if let Some(ref mut binding) = binding {
-                binding.apply_default_interpolation(inner);
-            }
             members.push(crate::StructMember {
                 name: decor.name,
                 ty,
@@ -4943,7 +4940,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                 (Variable::Global, var)
             }
             ExtendedClass::Input => {
-                let mut binding = dec.io_binding()?;
+                let binding = dec.io_binding()?;
                 let mut unsigned_ty = ty;
                 if let crate::Binding::BuiltIn(built_in) = binding {
                     let needs_inner_uint = match built_in {
@@ -4984,8 +4981,6 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     init: None,
                 };
 
-                binding.apply_default_interpolation(&module.types[unsigned_ty].inner);
-
                 let inner = Variable::Input(crate::FunctionArgument {
                     name: dec.name,
                     ty: unsigned_ty,
@@ -4995,7 +4990,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             }
             ExtendedClass::Output => {
                 // For output interface blocks, this would be a structure.
-                let mut binding = dec.io_binding().ok();
+                let binding = dec.io_binding().ok();
                 let init = match binding {
                     Some(crate::Binding::BuiltIn(built_in)) => {
                         match null::generate_default_built_in(
@@ -5058,9 +5053,6 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     ty,
                     init,
                 };
-                if let Some(ref mut binding) = binding {
-                    binding.apply_default_interpolation(&module.types[ty].inner);
-                }
                 let inner = Variable::Output(crate::FunctionResult { ty, binding });
                 (inner, var)
             }
