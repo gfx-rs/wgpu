@@ -5,6 +5,11 @@ on:
     branches:
       - master
 
+env:
+  CARGO_INCREMENTAL: false
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: full
+
 jobs:
   build:
     runs-on: ubuntu-latest

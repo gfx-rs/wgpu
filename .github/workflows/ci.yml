@@ -7,8 +7,10 @@ on:
   pull_request:
 
 env:
-  RUST_BACKTRACE: 1
-  RUST_VERSION: 1.64
+  CARGO_INCREMENTAL: false
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: full
+  MSRV: 1.64
   PKG_CONFIG_ALLOW_CROSS: 1 # allow android to work
   RUSTFLAGS: --cfg=web_sys_unstable_apis -D warnings
   RUSTDOCFLAGS: -Dwarnings
@@ -93,9 +95,9 @@ jobs:
 
       - name: Install MSRV toolchain
         run: |
-          rustup toolchain install ${{ env.RUST_VERSION }} --no-self-update --profile=minimal \
+          rustup toolchain install ${{ env.MSRV }} --no-self-update --profile=minimal \
             --component clippy --target ${{ matrix.target }}
-          rustup default ${{ env.RUST_VERSION }}
+          rustup default ${{ env.MSRV }}
 
       - name: disable debug
         shell: bash
@@ -103,7 +105,6 @@ jobs:
           mkdir -p .cargo
           echo """
           [profile.dev]
-          incremental = false
           debug = false" >> .cargo/config.toml
 
       - name: caching
@@ -249,7 +250,6 @@ jobs:
           mkdir -p .cargo
           echo """
           [profile.dev]
-          incremental = false
           debug = 1" >> .cargo/config.toml
 
       - name: caching
@@ -300,7 +300,6 @@ jobs:
           mkdir -p .cargo
           echo """
           [profile.dev]
-          incremental = false
           debug = 1" >> .cargo/config.toml
 
       - name: caching
@@ -335,9 +334,9 @@ jobs:
 
       - name: Install MSRV toolchain
         run: |
-          rustup toolchain install ${{ env.RUST_VERSION }} --no-self-update --profile=minimal \
+          rustup toolchain install ${{ env.MSRV }} --no-self-update --profile=minimal \
             --component clippy --target ${{ matrix.target }}
-          rustup default ${{ env.RUST_VERSION }}
+          rustup default ${{ env.MSRV }}
 
       - name: disable debug
         shell: bash
@@ -345,7 +344,6 @@ jobs:
           mkdir -p .cargo
           echo """
           [profile.dev]
-          incremental = false
           debug = 1" >> .cargo/config.toml
 
       - name: caching
@@ -369,7 +367,7 @@ jobs:
         with:
           command: check advisories
           arguments: --all-features --workspace
-          rust-version: ${{ env.RUST_VERSION }}
+          rust-version: ${{ env.MSRV }}
 
   cargo-deny-check-rest:
     name: "Run `cargo deny check`"
@@ -383,4 +381,4 @@ jobs:
         with:
           command: check bans licenses sources
           arguments: --all-features --workspace
-          rust-version: ${{ env.RUST_VERSION }}
+          rust-version: ${{ env.MSRV }}

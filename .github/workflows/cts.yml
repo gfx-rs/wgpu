@@ -8,8 +8,10 @@ on:
     types: [labeled, opened, synchronize]
 
 env:
-  RUST_BACKTRACE: 1
-  RUST_VERSION: 1.64
+  CARGO_INCREMENTAL: false
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: full
+  MSRV: 1.64
 
 jobs:
   cts:
@@ -49,9 +51,9 @@ jobs:
 
       - name: Install MSRV toolchain
         run: |
-          rustup toolchain install ${{ env.RUST_VERSION }} --no-self-update --profile=minimal \
+          rustup toolchain install ${{ env.MSRV }} --no-self-update --profile=minimal \
             --target ${{ matrix.target }}
-          rustup default ${{ env.RUST_VERSION }}
+          rustup default ${{ env.MSRV }}
 
       - name: caching
         uses: Swatinem/rust-cache@v2
