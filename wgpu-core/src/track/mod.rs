@@ -105,7 +105,7 @@ use crate::{
     pipeline, resource,
 };
 
-use std::{fmt, num::NonZeroU32, ops};
+use std::{fmt, ops};
 use thiserror::Error;
 
 pub(crate) use buffer::{BufferBindGroupState, BufferTracker, BufferUsageScope};
@@ -162,9 +162,9 @@ impl PendingTransition<hal::TextureUses> {
             range: wgt::ImageSubresourceRange {
                 aspect: wgt::TextureAspect::All,
                 base_mip_level: self.selector.mips.start,
-                mip_level_count: unsafe { Some(NonZeroU32::new_unchecked(mip_count)) },
+                mip_level_count: Some(mip_count),
                 base_array_layer: self.selector.layers.start,
-                array_layer_count: unsafe { Some(NonZeroU32::new_unchecked(layer_count)) },
+                array_layer_count: Some(layer_count),
             },
             usage: self.usage,
         }

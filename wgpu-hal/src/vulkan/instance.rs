@@ -10,8 +10,6 @@ use ash::{
     vk,
 };
 
-use super::conv;
-
 unsafe extern "system" fn debug_utils_messenger_callback(
     message_severity: vk::DebugUtilsMessageSeverityFlagsEXT,
     message_type: vk::DebugUtilsMessageTypeFlagsEXT,
@@ -794,10 +792,11 @@ impl crate::Surface<super::Api> for super::Surface {
                 aspects: crate::FormatAspects::COLOR,
                 format_info: sc.config.format.describe(),
                 raw_flags: vk::ImageCreateFlags::empty(),
-                copy_size: conv::map_extent_to_copy_size(
-                    &sc.config.extent,
-                    wgt::TextureDimension::D2,
-                ),
+                copy_size: crate::CopyExtent {
+                    width: sc.config.extent.width,
+                    height: sc.config.extent.height,
+                    depth: 1,
+                },
             },
         };
         Ok(Some(crate::AcquiredSurfaceTexture {

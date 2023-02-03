@@ -23,15 +23,9 @@ impl crate::TextureViewDescriptor<'_> {
             format_nodepth: auxil::dxgi::conv::map_texture_format_nodepth(self.format),
             multisampled: texture.sample_count > 1,
             mip_level_base: self.range.base_mip_level,
-            mip_level_count: match self.range.mip_level_count {
-                Some(count) => count.get(),
-                None => !0,
-            },
+            mip_level_count: self.range.mip_level_count.unwrap_or(!0),
             array_layer_base: self.range.base_array_layer,
-            array_layer_count: match self.range.array_layer_count {
-                Some(count) => count.get(),
-                None => !0,
-            },
+            array_layer_count: self.range.array_layer_count.unwrap_or(!0),
         }
     }
 }
