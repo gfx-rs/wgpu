@@ -2,7 +2,7 @@
 use arbitrary::Arbitrary;
 use libfuzzer_sys::fuzz_target;
 use naga::{
-    front::glsl::{Options, Parser},
+    front::glsl::{Frontend, Options},
     FastHashMap, ShaderStage,
 };
 
@@ -41,6 +41,6 @@ impl From<OptionsProxy> for Options {
 fuzz_target!(|data: (OptionsProxy, String)| {
     let (options, source) = data;
     // Ensure the parser can handle potentially malformed strings without crashing.
-    let mut parser = Parser::default();
+    let mut parser = Frontend::default();
     let _result = parser.parse(&options.into(), &source);
 });
