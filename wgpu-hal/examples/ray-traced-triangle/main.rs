@@ -125,13 +125,19 @@ impl<A: hal::Api> Example<A> {
             unsafe { adapter.open(features, &wgt::Limits::default()).unwrap() };
 
         let window_size: (u32, u32) = window.inner_size().into();
+        dbg!(&surface_caps.formats);
+        let surface_format = if surface_caps.formats.contains(&wgt::TextureFormat::Rgba8Snorm) {
+            wgt::TextureFormat::Rgba8Unorm
+        }else{
+            *surface_caps.formats.first().unwrap()
+        };
         let surface_config = hal::SurfaceConfiguration {
             swap_chain_size: DESIRED_FRAMES
                 .max(*surface_caps.swap_chain_sizes.start())
                 .min(*surface_caps.swap_chain_sizes.end()),
             present_mode: wgt::PresentMode::Fifo,
             composite_alpha_mode: hal::CompositeAlphaMode::Opaque,
-            format: wgt::TextureFormat::Rgba8Unorm,
+            format: surface_format,
             extent: wgt::Extent3d {
                 width: window_size.0,
                 height: window_size.1,
