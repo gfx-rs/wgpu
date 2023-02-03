@@ -91,14 +91,11 @@ jobs:
       - name: checkout repo
         uses: actions/checkout@v3
 
-      - name: install rust ${{ env.RUST_VERSION }}
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: ${{ env.RUST_VERSION }}
-          target: ${{ matrix.target }}
-          profile: minimal
-          override: true
-          components: clippy
+      - name: Install MSRV toolchain
+        run: |
+          rustup toolchain install ${{ env.RUST_VERSION }} --no-self-update --profile=minimal \
+            --component clippy --target ${{ matrix.target }}
+          rustup default ${{ env.RUST_VERSION }}
 
       - name: disable debug
         shell: bash
@@ -179,13 +176,6 @@ jobs:
       - name: checkout repo
         uses: actions/checkout@v3
 
-      - name: install rust stable
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          profile: minimal
-          override: true
-
       - name: install wasm-pack  # install from fork until this is merged: https://github.com/rustwasm/wasm-pack/pull/1185
         run: |
           # replace with "install wasm-pack action", which doesn't work for this project because of https://github.com/rustwasm/wasm-pack/issues/1180
@@ -220,18 +210,10 @@ jobs:
       - name: checkout repo
         uses: actions/checkout@v3
 
-      - name: install rust stable
-        uses: actions-rs/toolchain@v1
+      - name: Install cargo-nextest and cargo-llvm-cov
+        uses: taiki-e/install-action@v2
         with:
-          toolchain: nightly
-          profile: minimal
-          override: true
-          components: llvm-tools-preview
-
-      - name: latest cargo-nextest
-        uses: taiki-e/install-action@nextest
-      - name: install cargo-llvm-cov
-        uses: taiki-e/install-action@cargo-llvm-cov
+          tool: cargo-nextest,cargo-llvm-cov
 
       - name: install swiftshader
         if: matrix.os == 'ubuntu-22.04'
@@ -310,13 +292,6 @@ jobs:
       - name: checkout repo
         uses: actions/checkout@v3
 
-      - name: install rust stable
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          profile: minimal
-          override: true
-
       - name: disable debug
         shell: bash
         run: |
@@ -345,14 +320,6 @@ jobs:
       - name: checkout repo
         uses: actions/checkout@v3
 
-      - name: install rust
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
-          components: rustfmt
-
       - name: run rustfmt
         run: |
           cargo fmt -- --check
@@ -364,13 +331,11 @@ jobs:
       - name: checkout repo
         uses: actions/checkout@v3
 
-      - name: install rust ${{ env.RUST_VERSION }}
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: ${{ env.RUST_VERSION }}
-          override: true
-          components: clippy
+      - name: Install MSRV toolchain
+        run: |
+          rustup toolchain install ${{ env.RUST_VERSION }} --no-self-update --profile=minimal \
+            --component clippy --target ${{ matrix.target }}
+          rustup default ${{ env.RUST_VERSION }}
 
       - name: disable debug
         shell: bash

@@ -47,13 +47,11 @@ jobs:
           cd cts
           git checkout $(cat ../wgpu/cts_runner/revision.txt)
 
-      - name: install rust ${{ env.RUST_VERSION }}
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: ${{ env.RUST_VERSION }}
-          target: ${{ matrix.target }}
-          profile: minimal
-          override: true
+      - name: Install MSRV toolchain
+        run: |
+          rustup toolchain install ${{ env.RUST_VERSION }} --no-self-update --profile=minimal \
+            --target ${{ matrix.target }}
+          rustup default ${{ env.RUST_VERSION }}
 
       - name: caching
         uses: Swatinem/rust-cache@v2

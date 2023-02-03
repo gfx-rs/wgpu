@@ -15,12 +15,8 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Install latest nightly
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: nightly
-          override: true
-        continue-on-error: true
+      - name: Install nightly toolchain
+        run: rustup toolchain install nightly --no-self-update --profile=minimal
 
       - name: Add EGL for OpenGL
         run: |
