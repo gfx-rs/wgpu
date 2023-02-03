@@ -1809,11 +1809,11 @@ impl crate::context::Context for Context {
         mapped.aspect(map_texture_aspect(desc.aspect));
         mapped.base_array_layer(desc.base_array_layer);
         if let Some(count) = desc.array_layer_count {
-            mapped.array_layer_count(count.get());
+            mapped.array_layer_count(count);
         }
         mapped.base_mip_level(desc.base_mip_level);
         if let Some(count) = desc.mip_level_count {
-            mapped.mip_level_count(count.get());
+            mapped.mip_level_count(count);
         }
         if let Some(label) = desc.label {
             mapped.label(label);

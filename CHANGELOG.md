@@ -40,6 +40,12 @@ Bottom level categories:
 
 ## Unreleased
 
+### Major changes
+
+#### General
+
+- Change type of `mip_level_count` and `array_layer_count` (members of `TextureViewDescriptor` and `ImageSubresourceRange`) from `Option<NonZeroU32>` to `Option<u32>`. By @teoxoy in [#3445](https://github.com/gfx-rs/wgpu/pull/3445)
+
 ### Changes
 
 #### WebGPU
