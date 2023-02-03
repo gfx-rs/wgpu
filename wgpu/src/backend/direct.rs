@@ -358,7 +358,7 @@ impl Context {
         cause: impl Error + Send + Sync + 'static,
         string: &'static str,
     ) -> ! {
-        panic!("Error in {}: {}", string, cause);
+        panic!("Error in {string}: {cause}");
     }
 
     fn format_error(&self, err: &(impl Error + 'static)) -> String {
@@ -1446,7 +1446,7 @@ impl crate::Context for Context {
         };
         match wgc::command::RenderBundleEncoder::new(&descriptor, *device, None) {
             Ok(encoder) => (Unused, encoder),
-            Err(e) => panic!("Error in Device::create_render_bundle_encoder: {}", e),
+            Err(e) => panic!("Error in Device::create_render_bundle_encoder: {e}"),
         }
     }
     #[cfg_attr(target_arch = "wasm32", allow(unused))]
@@ -1743,7 +1743,7 @@ impl crate::Context for Context {
         let global = &self.0;
         let (id, error) = wgc::gfx_select!(*pipeline => global.compute_pipeline_get_bind_group_layout(*pipeline, index, ()));
         if let Some(err) = error {
-            panic!("Error reflecting bind group {}: {}", index, err);
+            panic!("Error reflecting bind group {index}: {err}");
         }
         (id, ())
     }
@@ -1757,7 +1757,7 @@ impl crate::Context for Context {
         let global = &self.0;
         let (id, error) = wgc::gfx_select!(*pipeline => global.render_pipeline_get_bind_group_layout(*pipeline, index, ()));
         if let Some(err) = error {
-            panic!("Error reflecting bind group {}: {}", index, err);
+            panic!("Error reflecting bind group {index}: {err}");
         }
         (id, ())
     }
@@ -1899,11 +1899,11 @@ impl crate::Context for Context {
         }
     }
 
-    fn command_encoder_begin_render_pass<'a>(
+    fn command_encoder_begin_render_pass(
         &self,
         encoder: &Self::CommandEncoderId,
         _encoder_data: &Self::CommandEncoderData,
-        desc: &crate::RenderPassDescriptor<'a, '_>,
+        desc: &crate::RenderPassDescriptor<'_, '_>,
     ) -> (Self::RenderPassId, Self::RenderPassData) {
         if desc.color_attachments.len() > wgc::MAX_COLOR_ATTACHMENTS {
             self.handle_error_fatal(
@@ -3086,7 +3086,7 @@ impl fmt::Debug for ErrorSinkRaw {
 
 fn default_error_handler(err: crate::Error) {
     log::error!("Handling wgpu errors as fatal by default");
-    panic!("wgpu error: {}\n", err);
+    panic!("wgpu error: {err}\n");
 }
 
 #[derive(Debug)]

@@ -3072,7 +3072,7 @@ impl<A: HalApi> Device<A> {
             if !ds.is_depth_read_only() {
                 flags |= pipeline::PipelineFlags::WRITES_DEPTH;
             }
-            if !ds.is_stencil_read_only() {
+            if !ds.is_stencil_read_only(desc.primitive.cull_mode) {
                 flags |= pipeline::PipelineFlags::WRITES_STENCIL;
             }
         }
@@ -3329,7 +3329,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     ) -> Result<wgt::SurfaceCapabilities, instance::GetSurfaceSupportError> {
         profiling::scope!("Surface::get_capabilities");
         self.fetch_adapter_and_surface::<A, _, _>(surface_id, adapter_id, |adapter, surface| {
-            let hal_caps = surface.get_capabilities(adapter)?;
+            let mut hal_caps = surface.get_capabilities(adapter)?;
+
+            hal_caps.formats.sort_by_key(|f| !f.describe().srgb);
 
             Ok(wgt::SurfaceCapabilities {
                 formats: hal_caps.formats,

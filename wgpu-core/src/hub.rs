@@ -392,7 +392,7 @@ impl<T, I: id::TypedId> Storage<T, I> {
         }
         match std::mem::replace(&mut self.map[index], element) {
             Element::Vacant => {}
-            _ => panic!("Index {:?} is already occupied", index),
+            _ => panic!("Index {index:?} is already occupied"),
         }
     }
 

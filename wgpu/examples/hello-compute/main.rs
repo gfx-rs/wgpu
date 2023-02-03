@@ -7,7 +7,7 @@ const OVERFLOW: u32 = 0xffffffff;
 async fn run() {
     let numbers = if std::env::args().len() <= 1 {
         let default = vec![1, 2, 3, 4];
-        println!("No numbers were provided, defaulting to {:?}", default);
+        println!("No numbers were provided, defaulting to {default:?}");
         default
     } else {
         std::env::args()
