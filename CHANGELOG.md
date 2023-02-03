@@ -40,6 +40,12 @@ Bottom level categories:
 
 ## Unreleased
 
+### Bug Fixes
+
+#### GLES
+
+- [gles] fix: Set FORCE_POINT_SIZE if it is vertex shader with mesh consist of point list. By @REASY in [3440](https://github.com/gfx-rs/wgpu/pull/3440)
+
 ## wgpu-0.15.2 (2023-03-08)
 
 ### Bug Fixes
