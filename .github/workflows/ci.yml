@@ -262,7 +262,7 @@ jobs:
         run: |
           set -e
 
-          cargo llvm-cov run --bin wgpu-info --no-report
+          cargo llvm-cov --no-cfg-coverage run --bin wgpu-info --no-report
 
       - name: run tests
         shell: bash
@@ -271,7 +271,7 @@ jobs:
 
           for backend in ${{ matrix.backends }}; do
             echo "======= NATIVE TESTS $backend ======";
-            WGPU_BACKEND=$backend cargo llvm-cov nextest -p wgpu -p wgpu-types -p wgpu-hal -p wgpu-core -p player --no-fail-fast --no-report
+            WGPU_BACKEND=$backend cargo llvm-cov --no-cfg-coverage nextest -p wgpu -p wgpu-types -p wgpu-hal -p wgpu-core -p player --no-fail-fast --no-report
           done
 
       - name: generate coverage report
