@@ -784,18 +784,18 @@ impl crate::Device<super::Api> for super::Device {
             desc.memory_flags.contains(crate::MemoryFlags::TRANSIENT),
         );
 
+        let alignment_mask = if desc.usage
+            .contains(crate::BufferUses::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT){
+            16
+        } else {
+            req.alignment
+        } - 1;
+
         let block = self.mem_allocator.lock().alloc(
             &*self.shared,
             gpu_alloc::Request {
                 size: req.size,
-                align_mask: if desc
-                    .usage
-                    .contains(crate::BufferUses::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT)
-                {
-                    16
-                } else {
-                    req.alignment
-                } - 1,
+                align_mask: alignment_mask,
                 usage: alloc_usage,
                 memory_types: req.memory_type_bits & self.valid_ash_memory_types,
             },
@@ -1429,6 +1429,7 @@ impl crate::Device<super::Api> for super::Device {
                     // `raw_acceleration_structures`.
                     let acceleration_structure_info: vk::WriteDescriptorSetAccelerationStructureKHR = *acceleration_structure_info;
 
+                    assert!(index < desc.acceleration_structures.len(), "Encountered more acceleration structures then expected");
                     acceleration_structure_infos.push(acceleration_structure_info);
 
                     extra_descriptor_count += 1;

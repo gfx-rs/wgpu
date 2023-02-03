@@ -441,13 +441,13 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
 
         let geometry_info = geometry_info.build();
 
-        let range = &[range][..];
-        let range = &[range][..];
-        let geometry_info = &[geometry_info];
+        //each geometry has multiple ranges; building requires a vector of geometry_infos and a vector of vectors of ranges
+        let ranges : &[&[vk::AccelerationStructureBuildRangeInfoKHR]] = &[&[range]];
+        let geometry_infos = &[geometry_info];
 
         ray_tracing_functions
             .acceleration_structure
-            .cmd_build_acceleration_structures(self.active, geometry_info, range);
+            .cmd_build_acceleration_structures(self.active, geometry_infos, ranges);
     }
 
     // render

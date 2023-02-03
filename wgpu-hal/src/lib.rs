@@ -690,9 +690,11 @@ bitflags::bitflags! {
         /// The combination of states that a buffer may be in _at the same time_.
         const INCLUSIVE = Self::MAP_READ.bits | Self::COPY_SRC.bits |
             Self::INDEX.bits | Self::VERTEX.bits | Self::UNIFORM.bits |
-            Self::STORAGE_READ.bits | Self::INDIRECT.bits;
+            Self::STORAGE_READ.bits | Self::INDIRECT.bits |
+            Self::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT.bits | Self::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT.bits;
         /// The combination of states that a buffer must exclusively be in.
-        const EXCLUSIVE = Self::MAP_WRITE.bits | Self::COPY_DST.bits | Self::STORAGE_READ_WRITE.bits;
+        const EXCLUSIVE = Self::MAP_WRITE.bits | Self::COPY_DST.bits |
+            Self::STORAGE_READ_WRITE.bits | Self::ACCELERATION_STRUCTURE_SCRATCH.bits;
         /// The combination of all usages that the are guaranteed to be be ordered by the hardware.
         /// If a usage is ordered, then if the buffer state doesn't change between draw calls, there
         /// are no barriers needed for synchronization.
