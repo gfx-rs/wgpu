@@ -37,7 +37,7 @@ jobs:
 
     steps:
       - name: checkout repo
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           path: wgpu
 
@@ -56,7 +56,7 @@ jobs:
           override: true
 
       - name: caching
-        uses: Swatinem/rust-cache@v1
+        uses: Swatinem/rust-cache@v2
         with:
           key: cts-a # suffix for cache busting
           working-directory: wgpu/cts_runner

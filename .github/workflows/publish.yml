@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout the code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           persist-credentials: false
 
@@ -37,13 +37,13 @@ jobs:
           done
 
       - name: Deploy WebGPU examples
-        uses: JamesIves/github-pages-deploy-action@releases/v3
+        uses: JamesIves/github-pages-deploy-action@v4.4.1
         with:
-          ACCESS_TOKEN: ${{ secrets.WEB_DEPLOY }}
-          FOLDER: target/generated-gpu
-          REPOSITORY_NAME: gfx-rs/wgpu-rs.github.io
-          BRANCH: master
-          TARGET_FOLDER: examples-gpu/wasm
+          token: ${{ secrets.WEB_DEPLOY }}
+          folder: target/generated-gpu
+          repository-name: gfx-rs/wgpu-rs.github.io
+          branch: master
+          target-folder: examples-gpu/wasm
 
       - name: Clean the build
         run: cargo clean
@@ -59,10 +59,10 @@ jobs:
           done
 
       - name: Deploy WebGL examples
-        uses: JamesIves/github-pages-deploy-action@releases/v3
+        uses: JamesIves/github-pages-deploy-action@v4.4.1
         with:
-          ACCESS_TOKEN: ${{ secrets.WEB_DEPLOY }}
-          FOLDER: target/generated-gl
-          REPOSITORY_NAME: gfx-rs/wgpu-rs.github.io
-          BRANCH: master
-          TARGET_FOLDER: examples-gl/wasm
+          token: ${{ secrets.WEB_DEPLOY }}
+          folder: target/generated-gl
+          repository-name: gfx-rs/wgpu-rs.github.io
+          branch: master
+          target-folder: examples-gl/wasm
