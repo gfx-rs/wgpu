@@ -176,12 +176,14 @@ jobs:
       - name: checkout repo
         uses: actions/checkout@v3
 
-      - name: install wasm-pack  # install from fork until this is merged: https://github.com/rustwasm/wasm-pack/pull/1185
-        run: |
-          # replace with "install wasm-pack action", which doesn't work for this project because of https://github.com/rustwasm/wasm-pack/issues/1180
-          #      - name: install wasm-pack
-          #        uses: jetli/wasm-pack-action@v0.4.0
-          cargo install --git https://github.com/haraldreingruber/wasm-pack wasm-pack
+      # TODO: replace with this once there is a release containing this PR:
+      # https://github.com/rustwasm/wasm-pack/pull/1185
+      # - name: Install wasm-pack
+      #   uses: taiki-e/install-action@v2
+      #   with:
+      #     tool: wasm-pack
+      - name: install wasm-pack
+        run: cargo install --git https://github.com/rustwasm/wasm-pack --rev e1010233b0ce304f42cda59962254bf30ae97c3e wasm-pack
 
       - name: execute tests
         run: |
