@@ -151,7 +151,7 @@ impl<A: hal::Api> Example<A> {
                 .join("halmark")
                 .join("shader.wgsl");
             let source = std::fs::read_to_string(shader_file).unwrap();
-            let module = naga::front::wgsl::Parser::new().parse(&source).unwrap();
+            let module = naga::front::wgsl::Frontend::new().parse(&source).unwrap();
             let info = naga::valid::Validator::new(
                 naga::valid::ValidationFlags::all(),
                 naga::valid::Capabilities::empty(),
