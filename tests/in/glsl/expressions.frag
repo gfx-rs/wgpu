@@ -151,6 +151,12 @@ void indexConstantNonConstantIndex(int i) {
     const uvec4 a = strct.array[i];
 }
 
+void testSwizzleWrites(vec3 a) {
+    a.zxy.xy = vec2(3.0, 4.0);
+    a.rg *= 5.0;
+    a.zy++;
+}
+
 out vec4 o_color;
 void main() {
     privatePointer(global);

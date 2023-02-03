@@ -414,6 +414,30 @@ fn indexConstantNonConstantIndex(i: i32) {
     return;
 }
 
+fn testSwizzleWrites(a_27: vec3<f32>) {
+    var a_28: vec3<f32>;
+
+    _ = (&global_1.a);
+    a_28 = a_27;
+    let _e6 = a_28;
+    _ = _e6.zxy;
+    _ = _e6.zx;
+    let _e11 = vec2<f32>(3.0, 4.0);
+    a_28.z = _e11.x;
+    a_28.x = _e11.y;
+    let _e16 = a_28;
+    _ = _e16.xy;
+    let _e18 = a_28;
+    let _e21 = (_e18.xy * 5.0);
+    a_28.x = _e21.x;
+    a_28.y = _e21.y;
+    let _e26 = a_28;
+    let _e30 = (_e26.zy + vec2<f32>(1.0));
+    a_28.z = _e30.x;
+    a_28.y = _e30.y;
+    return;
+}
+
 fn main_1() {
     var local_6: f32;
 
