@@ -1175,7 +1175,7 @@ impl crate::context::Context for Context {
                     strict_capabilities: true,
                     block_ctx_dump_prefix: None,
                 };
-                let spv_parser = front::spv::Parser::new(spv.iter().cloned(), &options);
+                let spv_parser = front::spv::Frontend::new(spv.iter().cloned(), &options);
                 let spv_module = spv_parser.parse().unwrap();
 
                 let mut validator = valid::Validator::new(
@@ -1202,7 +1202,7 @@ impl crate::context::Context for Context {
                     stage,
                     defines: defines.clone(),
                 };
-                let mut parser = front::glsl::Parser::default();
+                let mut parser = front::glsl::Frontend::default();
                 let glsl_module = parser.parse(&options, shader).unwrap();
 
                 let mut validator = valid::Validator::new(

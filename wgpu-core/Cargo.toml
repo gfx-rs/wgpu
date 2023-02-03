@@ -67,8 +67,8 @@ thiserror = "1"
 
 [dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-rev = "f0edae8"
-version = "0.11"
+rev = "4b796b157cb2b67b0ab166a2238fe4e9473bfd52"
+version = "0.11.0"
 features = ["clone", "span", "validate"]
 
 [dependencies.wgt]
