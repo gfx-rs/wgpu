@@ -622,14 +622,16 @@ bitflags!(
         const MULTISAMPLE_X4   = 1 << 10;
         /// Format can be multisampled by x8.
         const MULTISAMPLE_X8   = 1 << 11;
+        /// Format can be multisampled by x16.
+        const MULTISAMPLE_X16  = 1 << 12;
 
         /// Format can be used for render pass resolve targets.
-        const MULTISAMPLE_RESOLVE = 1 << 12;
+        const MULTISAMPLE_RESOLVE = 1 << 13;
 
         /// Format can be copied from.
-        const COPY_SRC = 1 << 13;
+        const COPY_SRC = 1 << 14;
         /// Format can be copied to.
-        const COPY_DST = 1 << 14;
+        const COPY_DST = 1 << 15;
     }
 );
 

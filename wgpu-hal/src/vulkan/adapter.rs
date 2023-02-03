@@ -1525,6 +1525,10 @@ impl crate::Adapter<super::Api> for super::Adapter {
             Tfc::MULTISAMPLE_X8,
             sample_flags.contains(vk::SampleCountFlags::TYPE_8),
         );
+        flags.set(
+            Tfc::MULTISAMPLE_X16,
+            sample_flags.contains(vk::SampleCountFlags::TYPE_16),
+        );
 
         flags
     }
