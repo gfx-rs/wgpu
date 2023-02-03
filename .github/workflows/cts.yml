@@ -51,8 +51,7 @@ jobs:
 
       - name: Install MSRV toolchain
         run: |
-          rustup toolchain install ${{ env.MSRV }} --no-self-update --profile=minimal \
-            --target ${{ matrix.target }}
+          rustup toolchain install ${{ env.MSRV }} --no-self-update --profile=minimal --target ${{ matrix.target }}
           rustup default ${{ env.MSRV }}
 
       - name: caching

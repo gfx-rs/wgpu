@@ -95,8 +95,7 @@ jobs:
 
       - name: Install MSRV toolchain
         run: |
-          rustup toolchain install ${{ env.MSRV }} --no-self-update --profile=minimal \
-            --component clippy --target ${{ matrix.target }}
+          rustup toolchain install ${{ env.MSRV }} --no-self-update --profile=minimal --component clippy --target ${{ matrix.target }}
           rustup default ${{ env.MSRV }}
 
       - name: disable debug
@@ -139,8 +138,7 @@ jobs:
           set -e
 
           # build for Emscripten/WebGL
-          cargo clippy --target ${{ matrix.target }} -p wgpu -p wgpu-hal \
-                       --no-default-features --features webgl,emscripten
+          cargo clippy --target ${{ matrix.target }} -p wgpu -p wgpu-hal --no-default-features --features webgl,emscripten
 
           # build cube example
           cargo clippy --target ${{ matrix.target }} --example cube --features webgl,emscripten
@@ -161,8 +159,7 @@ jobs:
           # (But watch out for backend-selection features in wgpu-core; some of
           # those only build on the right platforms.)
           cargo clippy --target ${{ matrix.target }} -p wgpu -p wgpu-info -p player --tests --all-features
-          cargo clippy --target ${{ matrix.target }} -p wgpu-core --tests \
-              --features="portable_features"
+          cargo clippy --target ${{ matrix.target }} -p wgpu-core --tests --features="portable_features"
 
           # build docs
           # (Watch out for backend-selection features in wgpu-core; some of
@@ -334,8 +331,7 @@ jobs:
 
       - name: Install MSRV toolchain
         run: |
-          rustup toolchain install ${{ env.MSRV }} --no-self-update --profile=minimal \
-            --component clippy --target ${{ matrix.target }}
+          rustup toolchain install ${{ env.MSRV }} --no-self-update --profile=minimal --component clippy
           rustup default ${{ env.MSRV }}
 
       - name: disable debug
