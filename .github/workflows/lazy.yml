@@ -4,49 +4,29 @@ on:
   push:
     branches: [master]
 
-jobs:
-  coverage:
-    name: Coverage
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-      - name: Install binstall
-        uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-binstall
-      - name: Install cargo-tarpaulin
-        run: cargo binstall --no-confirm cargo-tarpaulin
-      - name: Generate report
-        run: cargo tarpaulin --tests --all-features --workspace --out Xml
-      - name: Upload to codecov.io
-        uses: codecov/codecov-action@v1
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-      - name: Archive code coverage results
-        uses: actions/upload-artifact@v1
-        with:
-          name: code-coverage-report
-          path: cobertura.xml
+env:
+  CARGO_INCREMENTAL: false
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: full
 
+jobs:
   parse-dota2:
     name: Parse Dota2 shaders
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
+      - uses: actions/checkout@v3
+
       - run: mkdir data
+
       - name: Download shaders
         run: curl https://user.fm/files/v2-5573e18b9f03f42c6ae53c392083da35/dota2-shaders.zip -o data/all.zip
+
       - name: Unpack shaders
         run: cd data && unzip all.zip
+
       - name: Build Naga
         run: cargo build --release --bin naga
+
       - name: Convert shaders
         run: for file in data/*.spv ; do echo "Translating" ${file} && target/release/naga --validate 27 ${file} ${file}.metal; done
 
@@ -54,15 +34,14 @@ jobs:
     name: Parse Sascha Willems Vulkan tutorial shaders
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
+      - uses: actions/checkout@v3
+
       - name: Download shaders
         run: git clone https://github.com/SaschaWillems/Vulkan.git
+
       - name: Build Naga
         run: cargo build --release --bin naga
+
       - name: Convert metal shaders
         run: |
           # No needed to stop workflow if we can't validate one file
@@ -87,20 +66,20 @@ jobs:
     name: Parse dneto0 spirv-samples
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
+      - uses: actions/checkout@v3
+
       - name: Download shaders
         run: git clone https://github.com/dneto0/spirv-samples.git
+
       - name: Build Naga
         run: cargo build --release --bin naga
+
       - name: Install spirv-tools
         run: |
            wget -q https://storage.googleapis.com/spirv-tools/artifacts/prod/graphics_shader_compiler/spirv-tools/linux-clang-release/continuous/1489/20210629-121459/install.tgz
            tar zxf install.tgz
            ./install/bin/spirv-as --version
+
       - name: Compile spv from spvasm
         run: |
            cd spirv-samples
@@ -111,6 +90,7 @@ jobs:
                echo "Convert to spv with spirv-as: $fname"
                ../install/bin/spirv-as --target-env spv1.3 $(realpath ${fname}) -o ./spv/$(basename ${fname}).spv
            done;
+
       - name: Validate spv and generate wgsl
         run: |
            set +e
@@ -135,6 +115,7 @@ jobs:
                echo "Result: $(expr $FILE_COUNT - $SUCCESS_RESULT_COUNT) / $FILE_COUNT" > counter
            done
            cat counter
+
       - name: Validate output wgsl
         run: |
            set +e
@@ -161,20 +142,18 @@ jobs:
     name: Check snapshots (validated or not)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
+      - uses: actions/checkout@v3
+
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@v2
         with:
-          profile: minimal
-          toolchain: stable
-      - uses: actions-rs/cargo@v1
-        name: Test minimal (without span)
-        with:
-          command: test
-          args: --features validate -p naga
-      - uses: actions-rs/cargo@v1
-        name: Test all (without validation)
-        with:
-          command: test
-          args: --features wgsl-in,wgsl-out,glsl-in,glsl-out,spv-in,spv-out,msl-out,hlsl-out,dot-out --workspace
+          tool: cargo-nextest
+
+      - name: Test minimal (without span)
+        run: cargo nextest run --features validate -p naga
+
+      - name: Test all (without validation)
+        run: cargo nextest run --features wgsl-in,wgsl-out,glsl-in,glsl-out,spv-in,spv-out,msl-out,hlsl-out,dot-out --workspace
+
       - name: Check snapshots (without validation)
         run: git diff --exit-code -- tests/out
