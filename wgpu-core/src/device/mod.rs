@@ -811,7 +811,8 @@ impl<A: HalApi> Device<A> {
             if !format_features.flags.intersects(
                 wgt::TextureFormatFeatureFlags::MULTISAMPLE_X4
                     | wgt::TextureFormatFeatureFlags::MULTISAMPLE_X2
-                    | wgt::TextureFormatFeatureFlags::MULTISAMPLE_X8,
+                    | wgt::TextureFormatFeatureFlags::MULTISAMPLE_X8
+                    | wgt::TextureFormatFeatureFlags::MULTISAMPLE_X16,
             ) {
                 return Err(CreateTextureError::InvalidMultisampledFormat(desc.format));
             }

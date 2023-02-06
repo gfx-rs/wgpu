@@ -689,7 +689,12 @@ impl crate::Adapter<super::Api> for super::Adapter {
                     .lock()
                     .get_parameter_i32(glow::MAX_SAMPLES)
             };
-            if max_samples >= 8 {
+            if max_samples >= 16 {
+                Tfc::MULTISAMPLE_X2
+                    | Tfc::MULTISAMPLE_X4
+                    | Tfc::MULTISAMPLE_X8
+                    | Tfc::MULTISAMPLE_X16
+            } else if max_samples >= 8 {
                 Tfc::MULTISAMPLE_X2 | Tfc::MULTISAMPLE_X4 | Tfc::MULTISAMPLE_X8
             } else if max_samples >= 4 {
                 Tfc::MULTISAMPLE_X2 | Tfc::MULTISAMPLE_X4
