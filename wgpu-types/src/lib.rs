@@ -304,11 +304,9 @@ bitflags::bitflags! {
         /// to get the timestamp in nanoseconds. Multiple timestamps can then be diffed to get the
         /// time for operations between them to finish.
         ///
-        /// Due to wgpu-hal limitations, this is only supported on vulkan for now.
-        ///
         /// Supported Platforms:
-        /// - Vulkan (works)
-        /// - DX12 (works)
+        /// - Vulkan
+        /// - DX12
         ///
         /// This is a web and native feature.
         const TIMESTAMP_QUERY = 1 << 7;
@@ -319,11 +317,9 @@ bitflags::bitflags! {
         /// They must be resolved using [`CommandEncoder::resolve_query_sets`] into a buffer.
         /// The rules on how these resolve into buffers are detailed in the documentation for [`PipelineStatisticsTypes`].
         ///
-        /// Due to wgpu-hal limitations, this is only supported on vulkan for now.
-        ///
         /// Supported Platforms:
-        /// - Vulkan (works)
-        /// - DX12 (works)
+        /// - Vulkan
+        /// - DX12
         ///
         /// This is a web and native feature.
         const PIPELINE_STATISTICS_QUERY = 1 << 8;
@@ -617,6 +613,10 @@ bitflags::bitflags! {
         ///
         /// Supported platforms:
         /// - Vulkan
+        /// - DX11 (feature level 10+)
+        /// - DX12
+        /// - Metal (some)
+        /// - OpenGL (some)
         ///
         /// This is a native only feature.
         const SHADER_PRIMITIVE_INDEX = 1 << 36;
