@@ -2508,9 +2508,9 @@ pub mod render_ffi {
         pass: &mut RenderPass,
         query_index: u32,
     ) {
-        pass.base.commands.push(RenderCommand::BeginOcclusionQuery {
-            query_index,
-        });
+        pass.base
+            .commands
+            .push(RenderCommand::BeginOcclusionQuery { query_index });
     }
 
     #[no_mangle]

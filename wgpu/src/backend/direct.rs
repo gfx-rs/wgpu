@@ -1889,7 +1889,9 @@ impl crate::Context for Context {
                     label: desc.label.map(Borrowed),
                     color_attachments: Borrowed(&colors),
                     depth_stencil_attachment: depth_stencil.as_ref(),
-                    occlusion_query_set: desc.occlusion_query_set
+                    occlusion_query_set: desc
+                        .occlusion_query_set
+                        .map(|query_set| query_set.id.into()),
                 },
             ),
         )

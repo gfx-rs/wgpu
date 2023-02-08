@@ -27,7 +27,6 @@ use std::{
 
 use context::{Context, DeviceRequest, DynContext, ObjectId};
 use parking_lot::Mutex;
-use wgc::id::QuerySetId;
 
 pub use wgt::{
     AdapterInfo, AddressMode, AstcBlock, AstcChannel, Backend, Backends, BindGroupLayoutEntry,
@@ -689,6 +688,7 @@ impl Drop for RenderBundle {
 /// It can be created with [`Device::create_query_set`].
 ///
 /// Corresponds to [WebGPU `GPUQuerySet`](https://gpuweb.github.io/gpuweb/#queryset).
+#[derive(Debug)]
 pub struct QuerySet {
     context: Arc<C>,
     id: ObjectId,
@@ -1085,7 +1085,7 @@ pub struct RenderPassDescriptor<'tex, 'desc> {
     /// The depth and stencil attachment of the render pass, if any.
     pub depth_stencil_attachment: Option<RenderPassDepthStencilAttachment<'tex>>,
     /// Defines where the occlusion query results will be stored for this pass.
-    pub occlusion_query_set: Option<QuerySetId>,
+    pub occlusion_query_set: Option<&'tex QuerySet>,
 }
 static_assertions::assert_impl_all!(RenderPassDescriptor: Send, Sync);
 

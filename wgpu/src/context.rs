@@ -3833,12 +3833,7 @@ where
     ) {
         let mut pass = <T::RenderPassId>::from(*pass);
         let pass_data = downcast_mut::<T::RenderPassData>(pass_data);
-        Context::render_pass_begin_occlusion_query(
-            self,
-            &mut pass,
-            pass_data,
-            query_index,
-        )
+        Context::render_pass_begin_occlusion_query(self, &mut pass, pass_data, query_index)
     }
 
     fn render_pass_end_occlusion_query(&self, pass: &mut ObjectId, pass_data: &mut crate::Data) {
