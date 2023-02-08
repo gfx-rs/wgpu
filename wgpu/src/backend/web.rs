@@ -587,16 +587,12 @@ const FEATURES_MAPPING: [(wgt::Features, web_sys::GpuFeatureName); 8] = [
 
 fn map_wgt_features(supported_features: web_sys::GpuSupportedFeatures) -> wgt::Features {
     let mut features = wgt::Features::empty();
-    if let Ok(features_set) = supported_features.dyn_into::<js_sys::Set>() {
-        for (wgpu_feat, web_feat) in FEATURES_MAPPING {
-            let value = wasm_bindgen::JsValue::from(web_feat);
-
-            if features_set.has(&value) {
-                features |= wgpu_feat;
-            }
+    for (wgpu_feat, web_feat) in FEATURES_MAPPING {
+        match wasm_bindgen::JsValue::from(web_feat).as_string() {
+            Some(value) if supported_features.has(&value) => features |= wgpu_feat,
+            _ => {}
         }
-    };
-
+    }
     features
 }
 
