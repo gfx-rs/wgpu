@@ -620,6 +620,11 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         self.state.dirty_vbuf_mask = 0;
         self.state.active_first_instance = 0;
         self.state.color_targets.clear();
+        for index in 0..self.state.vertex_attributes.len() {
+            self.cmd_buffer
+                .commands
+                .push(C::UnsetVertexAttribute(index as u32));
+        }
         self.state.vertex_attributes.clear();
         self.state.primitive = super::PrimitiveState::default();
     }
