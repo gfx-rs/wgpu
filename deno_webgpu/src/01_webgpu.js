@@ -3609,7 +3609,7 @@
       webidl.requiredArguments(arguments.length, 2, { prefix });
       queryIndex = webidl.converters.GPUSize32(queryIndex, {
         prefix,
-        context: "Argument 2",
+        context: "Argument 1",
       });
       const device = assertDevice(this[_encoder], {
         prefix,
