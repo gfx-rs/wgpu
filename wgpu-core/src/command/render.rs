@@ -226,6 +226,7 @@ impl RenderPass {
             base: self.base,
             target_colors: self.color_targets.into_iter().collect(),
             target_depth_stencil: self.depth_stencil_target,
+            occlusion_query_set_id: self.occlusion_query_set_id
         }
     }
 
@@ -1170,6 +1171,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     base: BasePass::from_ref(base),
                     target_colors: color_attachments.to_vec(),
                     target_depth_stencil: depth_stencil_attachment.cloned(),
+                    occlusion_query_set_id
                 });
             }
 

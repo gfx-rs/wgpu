@@ -3079,8 +3079,8 @@ impl crate::context::Context for Context {
     fn render_pass_begin_occlusion_query(
         &self,
         _pass: &mut Self::RenderPassId,
-        pass_data: &mut Self::RenderPassData,
-        query_index: u32,
+        _pass_data: &mut Self::RenderPassData,
+        _query_index: u32,
     ) {
         // Not available in gecko yet
     }
@@ -3088,7 +3088,7 @@ impl crate::context::Context for Context {
     fn render_pass_end_occlusion_query(
         &self,
         _pass: &mut Self::RenderPassId,
-        pass_data: &mut Self::RenderPassData,
+        _pass_data: &mut Self::RenderPassData,
     ) {
         // Not available in gecko yet
     }
