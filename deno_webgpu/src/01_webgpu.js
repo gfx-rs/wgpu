@@ -3620,11 +3620,6 @@
         context: "encoder referenced by this",
       });
       const renderPassRid = assertResource(this, { prefix, context: "this" });
-      assertDeviceMatch(device, querySet, {
-        prefix,
-        resourceContext: "Argument 1",
-        selfContext: "this",
-      });
       ops.op_webgpu_render_pass_begin_occlusion_query(
           renderPassRid,
           queryIndex,
