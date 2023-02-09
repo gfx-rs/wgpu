@@ -40,23 +40,52 @@ Bottom level categories:
 
 ## Unreleased
 
+## wgpu-0.15.1 (2023-02-09)
+
 ### Changes
 
-#### WebGPU
+#### General
 
-- Implement `CommandEncoder::clear_buffer`. By @raphlinus in [#3426](https://github.com/gfx-rs/wgpu/pull/3426)
-- Reimplement `adapter|device_features`. By @jinleili in [#3428](https://github.com/gfx-rs/wgpu/pull/3428)
+- Fix for some minor issues in comments on some features. By @Wumpf in [#3455](https://github.com/gfx-rs/wgpu/pull/3455)
 
 #### Vulkan
 
 - Improve format MSAA capabilities detection. By @jinleili in [#3429](https://github.com/gfx-rs/wgpu/pull/3429)
-- Fix surface view formats validation error. By @jinleili in [#3432](https://github.com/gfx-rs/wgpu/pull/3432)
+
+#### DX12
+
+- Update gpu allocator to 0.22. By @Elabajaba in [#3447](https://github.com/gfx-rs/wgpu/pull/3447)
+
+#### WebGPU
+
+- Implement `CommandEncoder::clear_buffer`. By @raphlinus in [#3426](https://github.com/gfx-rs/wgpu/pull/3426)
 
 ### Bug Fixes
+
+#### General
+
+- Re-sort supported surface formats based on srgb-ness. By @cwfitzgerald in [#3444](https://github.com/gfx-rs/wgpu/pull/3444)
+
+#### Vulkan
+
+- Fix surface view formats validation error. By @jinleili in [#3432](https://github.com/gfx-rs/wgpu/pull/3432)
 
 #### DX12
 
 - Fix DXC validation issues when using a custom `dxil_path`. By @Elabajaba in [#3434](https://github.com/gfx-rs/wgpu/pull/3434)
+
+#### GLES
+- Unbind vertex buffers at end of renderpass. By @cwfitzgerald in [#3459](https://github.com/gfx-rs/wgpu/pull/3459)
+
+#### WebGPU
+
+- Reimplement `{adapter|device}_features`. By @jinleili in [#3428](https://github.com/gfx-rs/wgpu/pull/3428)
+
+### Documentation
+
+#### General
+
+- Build for WASM on docs.rs. By @daxpedda in [#3462](https://github.com/gfx-rs/wgpu/pull/3428)
 
 ## wgpu-0.15.0 (2023-01-25)
 
