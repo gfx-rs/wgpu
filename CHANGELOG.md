@@ -45,6 +45,7 @@ Bottom level categories:
 #### WebGPU
 
 - Implement `CommandEncoder::clear_buffer`. By @raphlinus in [#3426](https://github.com/gfx-rs/wgpu/pull/3426)
+- Reimplement `adapter|device_features`. By @jinleili in [#3428](https://github.com/gfx-rs/wgpu/pull/3428)
 
 #### Vulkan
 

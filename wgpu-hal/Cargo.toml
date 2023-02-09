@@ -102,9 +102,9 @@ objc = "0.2.5"
 core-graphics-types = "0.1"
 
 [target.'cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))'.dependencies]
-wasm-bindgen = "0.2.83"
-web-sys = { version = "0.3.60", features = ["Window", "HtmlCanvasElement", "WebGl2RenderingContext", "OffscreenCanvas"] }
-js-sys = "0.3.60"
+wasm-bindgen = "0.2.84"
+web-sys = { version = "0.3.61", features = ["Window", "HtmlCanvasElement", "WebGl2RenderingContext", "OffscreenCanvas"] }
+js-sys = "0.3.61"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
@@ -127,7 +127,7 @@ features = ["wgsl-in"]
 
 [dev-dependencies]
 env_logger = "0.9"
-winit = "0.27.1"      # for "halmark" example
+winit = "0.27.1"   # for "halmark" example
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 glutin = "0.29.1" # for "gles" example
