@@ -28,6 +28,6 @@ fn single_buffer_vert(v_in: SingleVertexIn) -> @builtin(position) vec4<f32> {
 }
 
 @fragment
-fn single_buffer_vert() -> @location(0) vec4<f32> {
+fn single_buffer_frag() -> @location(0) vec4<f32> {
     return vec4<f32>(0.0);
 }

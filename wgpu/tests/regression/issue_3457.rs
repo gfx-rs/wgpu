@@ -23,14 +23,14 @@ fn pass_reset_vertex_buffer() {
         // We use two separate vertex buffers so we can delete one in between submisions
         let vertex_buffer1 = ctx.device.create_buffer(&BufferDescriptor {
             label: Some("vertex buffer 1"),
-            size: 6 * 16,
+            size: 3 * 16,
             usage: BufferUsages::VERTEX,
             mapped_at_creation: false,
         });
 
         let vertex_buffer2 = ctx.device.create_buffer(&BufferDescriptor {
             label: Some("vertex buffer 2"),
-            size: 6 * 4,
+            size: 3 * 4,
             usage: BufferUsages::VERTEX,
             mapped_at_creation: false,
         });
@@ -178,7 +178,7 @@ fn pass_reset_vertex_buffer() {
 
         single_rpass.set_pipeline(&single_pipeline);
         single_rpass.set_vertex_buffer(0, vertex_buffer1.slice(..));
-        single_rpass.draw(0..6, 0..1);
+        single_rpass.draw(0..3, 0..1);
 
         drop(single_rpass);
 
