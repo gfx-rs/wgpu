@@ -5,6 +5,7 @@ on:
     branches: ["*"]
     tags: [v0.*]
   pull_request:
+  merge_group:
 
 env:
   RUST_BACKTRACE: 1
