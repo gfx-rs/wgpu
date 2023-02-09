@@ -585,6 +585,17 @@ const FEATURES_MAPPING: [(wgt::Features, web_sys::GpuFeatureName); 8] = [
     ),
 ];
 
+fn map_wgt_features(supported_features: web_sys::GpuSupportedFeatures) -> wgt::Features {
+    let mut features = wgt::Features::empty();
+    for (wgpu_feat, web_feat) in FEATURES_MAPPING {
+        match wasm_bindgen::JsValue::from(web_feat).as_string() {
+            Some(value) if supported_features.has(&value) => features |= wgpu_feat,
+            _ => {}
+        }
+    }
+    features
+}
+
 type JsFutureResult = Result<wasm_bindgen::JsValue, wasm_bindgen::JsValue>;
 
 fn future_request_adapter(result: JsFutureResult) -> Option<(Identified<web_sys::GpuAdapter>, ())> {
@@ -931,23 +942,7 @@ impl crate::context::Context for Context {
         adapter: &Self::AdapterId,
         _adapter_data: &Self::AdapterData,
     ) -> wgt::Features {
-        let features = adapter.0.features();
-
-        let features_set: js_sys::Set = features
-            .dyn_into()
-            .expect("adapter.features() is not setlike");
-
-        let mut features = wgt::Features::empty();
-
-        for (wgpu_feat, web_feat) in FEATURES_MAPPING {
-            let value = wasm_bindgen::JsValue::from(web_feat);
-
-            if features_set.has(&value) {
-                features |= wgpu_feat;
-            }
-        }
-
-        features
+        map_wgt_features(adapter.0.features())
     }
 
     fn adapter_limits(
@@ -1112,23 +1107,7 @@ impl crate::context::Context for Context {
         device: &Self::DeviceId,
         _device_data: &Self::DeviceData,
     ) -> wgt::Features {
-        let features = device.0.features();
-
-        let features_set: js_sys::Set = features
-            .dyn_into()
-            .expect("device.features() is not setlike");
-
-        let mut features = wgt::Features::empty();
-
-        for (wgpu_feat, web_feat) in FEATURES_MAPPING {
-            let value = wasm_bindgen::JsValue::from(web_feat);
-
-            if features_set.has(&value) {
-                features |= wgpu_feat;
-            }
-        }
-
-        features
+        map_wgt_features(device.0.features())
     }
 
     fn device_limits(
