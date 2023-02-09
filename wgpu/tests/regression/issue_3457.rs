@@ -3,6 +3,15 @@ use crate::common::{initialize_test, TestParameters};
 use wasm_bindgen_test::wasm_bindgen_test;
 use wgpu::*;
 
+/// The core issue here was that we weren't properly disabling vertex attributes on GL
+/// when a renderpass ends. This ended up being rather tricky to test for as GL is remarkably
+/// tolerant of errors. This test, with the fix not-applied, only fails on WebGL.
+///
+/// We need to setup a situation where it's invalid to issue a draw call without the fix.
+/// To do this we first make a renderpass using two vertex buffers and draw on it. Then we
+/// submit, delete the second vertex buffer and `poll(Wait)`. Because we maintained the device,
+/// the actual underlying buffer for the second vertex buffer is deleted, causing a draw call
+/// that is invalid if the second attribute is still enabled.
 #[wasm_bindgen_test]
 #[test]
 fn pass_reset_vertex_buffer() {
@@ -11,6 +20,7 @@ fn pass_reset_vertex_buffer() {
             .device
             .create_shader_module(include_wgsl!("issue_3457.wgsl"));
 
+        // We use two separate vertex buffers so we can delete one in between submisions
         let vertex_buffer1 = ctx.device.create_buffer(&BufferDescriptor {
             label: Some("vertex buffer 1"),
             size: 6 * 16,
@@ -84,15 +94,17 @@ fn pass_reset_vertex_buffer() {
                     }],
                 },
                 primitive: PrimitiveState::default(),
-                depth_stencil: Some(DepthStencilState {
-                    format: TextureFormat::Depth32Float,
-                    depth_write_enabled: false,
-                    depth_compare: CompareFunction::Always,
-                    stencil: StencilState::default(),
-                    bias: DepthBiasState::default(),
-                }),
+                depth_stencil: None,
                 multisample: MultisampleState::default(),
-                fragment: None,
+                fragment: Some(FragmentState {
+                    module: &module,
+                    entry_point: "single_buffer_frag",
+                    targets: &[Some(ColorTargetState {
+                        format: TextureFormat::Rgba8Unorm,
+                        blend: None,
+                        write_mask: ColorWrites::all(),
+                    })],
+                }),
                 multiview: None,
             });
 
@@ -138,45 +150,30 @@ fn pass_reset_vertex_buffer() {
 
         drop(double_rpass);
 
+        // Submit the first pass using both buffers
         ctx.queue.submit(Some(encoder1.finish()));
+        // Drop the second buffer, meaning it's invalid to use draw
+        // unless it's unbound.
+        drop(vertex_buffer2);
 
-        drop((vertex_buffer2, view));
-
+        // Make sure the buffers are actually deleted.
         ctx.device.poll(Maintain::Wait);
 
         let mut encoder2 = ctx
             .device
             .create_command_encoder(&CommandEncoderDescriptor::default());
 
-        let depth_view = ctx
-            .device
-            .create_texture(&TextureDescriptor {
-                label: Some("Depth texture"),
-                size: Extent3d {
-                    width: 4,
-                    height: 4,
-                    depth_or_array_layers: 1,
-                },
-                mip_level_count: 1,
-                sample_count: 1,
-                dimension: TextureDimension::D2,
-                format: TextureFormat::Depth32Float,
-                usage: TextureUsages::RENDER_ATTACHMENT,
-                view_formats: &[],
-            })
-            .create_view(&TextureViewDescriptor::default());
-
         let mut single_rpass = encoder2.begin_render_pass(&RenderPassDescriptor {
             label: Some("single renderpass"),
-            color_attachments: &[],
-            depth_stencil_attachment: Some(RenderPassDepthStencilAttachment {
-                view: &depth_view,
-                depth_ops: Some(Operations {
-                    load: LoadOp::Clear(0.0),
+            color_attachments: &[Some(RenderPassColorAttachment {
+                view: &view,
+                resolve_target: None,
+                ops: Operations {
+                    load: LoadOp::Clear(Color::BLACK),
                     store: false,
-                }),
-                stencil_ops: None,
-            }),
+                },
+            })],
+            depth_stencil_attachment: None,
         });
 
         single_rpass.set_pipeline(&single_pipeline);
