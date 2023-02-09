@@ -3606,7 +3606,7 @@
       webidl.assertBranded(this, GPURenderPassEncoderPrototype);
       const prefix =
         "Failed to execute 'beginOcclusionQuery' on 'GPURenderPassEncoder'";
-      webidl.requiredArguments(arguments.length, 2, { prefix });
+      webidl.requiredArguments(arguments.length, 1, { prefix });
       queryIndex = webidl.converters.GPUSize32(queryIndex, {
         prefix,
         context: "Argument 1",
