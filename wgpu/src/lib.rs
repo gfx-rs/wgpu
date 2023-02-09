@@ -2962,8 +2962,7 @@ impl CommandEncoder {
     }
 }
 
-/// [`Features::TIMESTAMP_QUERY`], [`Features::OCCLUSION_QUERY`] or [`Features::PIPELINE_STATISTICS_QUERY`] must be enabled
-/// on the device in order to call these functions.
+/// [`Features::TIMESTAMP_QUERY`] or [`Features::PIPELINE_STATISTICS_QUERY`] must be enabled on the device in order to call these functions.
 impl CommandEncoder {
     /// Resolve a query set, writing the results into the supplied destination buffer.
     ///
@@ -3451,7 +3450,6 @@ impl<'a> RenderPass<'a> {
     }
 }
 
-/// [`Features::OCCLUSION_QUERY`] must be enabled on the device in order to call these functions.
 impl<'a> RenderPass<'a> {
     /// Start a occlusion query on this render pass. It can be ended with
     /// `end_occlusion_query`. Occlusion queries may not be nested.
