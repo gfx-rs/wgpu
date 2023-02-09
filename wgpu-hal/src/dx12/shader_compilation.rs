@@ -56,7 +56,7 @@ pub(super) fn compile_fxc(
             log::Level::Info,
         ),
         Err(e) => {
-            let mut full_msg = format!("FXC D3DCompile error ({})", e);
+            let mut full_msg = format!("FXC D3DCompile error ({e})");
             if !error.is_null() {
                 use std::fmt::Write as _;
                 let message = unsafe {
@@ -83,11 +83,15 @@ pub(super) fn compile_fxc(
 mod dxc {
     use std::path::PathBuf;
 
+    // Destructor order should be fine since _dxil and _dxc don't rely on each other.
     pub(crate) struct DxcContainer {
-        pub compiler: hassle_rs::DxcCompiler,
-        pub library: hassle_rs::DxcLibrary,
-        // Has to be held onto for the lifetime of the device otherwise shaders will fail to compile
+        compiler: hassle_rs::DxcCompiler,
+        library: hassle_rs::DxcLibrary,
+        validator: hassle_rs::DxcValidator,
+        // Has to be held onto for the lifetime of the device otherwise shaders will fail to compile.
         _dxc: hassle_rs::Dxc,
+        // Also Has to be held onto for the lifetime of the device otherwise shaders will fail to validate.
+        _dxil: hassle_rs::Dxil,
     }
 
     pub(crate) fn get_dxc_container(
@@ -95,13 +99,16 @@ mod dxc {
         dxil_path: Option<PathBuf>,
     ) -> Result<Option<DxcContainer>, crate::DeviceError> {
         // Make sure that dxil.dll exists.
-        match hassle_rs::Dxil::new(dxil_path) {
-            Ok(_) => (),
+        let dxil = match hassle_rs::Dxil::new(dxil_path) {
+            Ok(dxil) => dxil,
             Err(e) => {
                 log::warn!("Failed to load dxil.dll. Defaulting to Fxc instead: {}", e);
                 return Ok(None);
             }
         };
+
+        // Needed for explicit validation.
+        let validator = dxil.create_validator()?;
 
         let dxc = match hassle_rs::Dxc::new(dxc_path) {
             Ok(dxc) => dxc,
@@ -113,13 +120,15 @@ mod dxc {
                 return Ok(None);
             }
         };
-        let dxc_compiler = dxc.create_compiler()?;
-        let dxc_library = dxc.create_library()?;
+        let compiler = dxc.create_compiler()?;
+        let library = dxc.create_library()?;
 
         Ok(Some(DxcContainer {
             _dxc: dxc,
-            compiler: dxc_compiler,
-            library: dxc_library,
+            compiler,
+            library,
+            _dxil: dxil,
+            validator,
         }))
     }
 
@@ -136,8 +145,9 @@ mod dxc {
         log::Level,
     ) {
         profiling::scope!("compile_dxc");
-        let mut compile_flags = arrayvec::ArrayVec::<&str, 3>::new_const();
+        let mut compile_flags = arrayvec::ArrayVec::<&str, 4>::new_const();
         compile_flags.push("-Ges"); // d3dcompiler::D3DCOMPILE_ENABLE_STRICTNESS
+        compile_flags.push("-Vd"); // Disable implicit validation to work around bugs when dxil.dll isn't in the local directory.
         if device
             .private_caps
             .instance_flags
@@ -150,13 +160,12 @@ mod dxc {
         let blob = match dxc_container
             .library
             .create_blob_with_encoding_from_str(source)
-            .map_err(|e| crate::PipelineError::Linkage(stage_bit, format!("DXC blob error: {}", e)))
+            .map_err(|e| crate::PipelineError::Linkage(stage_bit, format!("DXC blob error: {e}")))
         {
             Ok(blob) => blob,
             Err(e) => return (Err(e), log::Level::Error),
         };
 
-        // DXC will automatically validate the shaders during compilation as long as dxil.dll is available, so we don't need to do it ourselves.
         let compiled = dxc_container.compiler.compile(
             &blob,
             source_name,
@@ -169,14 +178,26 @@ mod dxc {
 
         let (result, log_level) = match compiled {
             Ok(dxc_result) => match dxc_result.get_result() {
-                Ok(dxc_blob) => (
-                    Ok(crate::dx12::CompiledShader::Dxc(dxc_blob.to_vec())),
-                    log::Level::Info,
-                ),
+                Ok(dxc_blob) => {
+                    // Validate the shader.
+                    match dxc_container.validator.validate(dxc_blob) {
+                        Ok(validated_blob) => (
+                            Ok(crate::dx12::CompiledShader::Dxc(validated_blob.to_vec())),
+                            log::Level::Info,
+                        ),
+                        Err(e) => (
+                            Err(crate::PipelineError::Linkage(
+                                stage_bit,
+                                format!("DXC validation error: {:?}\n{:?}", e.0, e.1),
+                            )),
+                            log::Level::Error,
+                        ),
+                    }
+                }
                 Err(e) => (
                     Err(crate::PipelineError::Linkage(
                         stage_bit,
-                        format!("DXC compile error: {}", e),
+                        format!("DXC compile error: {e}"),
                     )),
                     log::Level::Error,
                 ),
@@ -184,7 +205,7 @@ mod dxc {
             Err(e) => (
                 Err(crate::PipelineError::Linkage(
                     stage_bit,
-                    format!("DXC compile error: {:?}", e),
+                    format!("DXC compile error: {e:?}"),
                 )),
                 log::Level::Error,
             ),

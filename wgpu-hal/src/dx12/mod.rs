@@ -434,10 +434,8 @@ unsafe impl Sync for Texture {}
 impl Texture {
     fn array_layer_count(&self) -> u32 {
         match self.dimension {
-            wgt::TextureDimension::D1 | wgt::TextureDimension::D2 => {
-                self.size.depth_or_array_layers
-            }
-            wgt::TextureDimension::D3 => 1,
+            wgt::TextureDimension::D1 | wgt::TextureDimension::D3 => 1,
+            wgt::TextureDimension::D2 => self.size.depth_or_array_layers,
         }
     }
 

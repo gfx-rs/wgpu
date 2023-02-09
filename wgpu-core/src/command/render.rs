@@ -494,7 +494,7 @@ pub enum RenderPassErrorInner {
     #[error(transparent)]
     MissingDownlevelFlags(#[from] MissingDownlevelFlags),
     #[error("indirect draw uses bytes {offset}..{end_offset} {} which overruns indirect buffer of size {buffer_size}",
-        count.map_or_else(String::new, |v| format!("(using count {})", v)))]
+        count.map_or_else(String::new, |v| format!("(using count {v})")))]
     IndirectBufferOverrun {
         count: Option<NonZeroU32>,
         offset: u64,

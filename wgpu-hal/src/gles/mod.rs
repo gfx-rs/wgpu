@@ -319,35 +319,19 @@ impl Texture {
     }
 
     /// Returns the `target`, whether the image is 3d and whether the image is a cubemap.
-    fn get_info_from_desc(
-        copy_size: &mut CopyExtent,
-        desc: &TextureDescriptor,
-    ) -> (u32, bool, bool) {
+    fn get_info_from_desc(desc: &TextureDescriptor) -> (u32, bool, bool) {
         match desc.dimension {
-            wgt::TextureDimension::D1 | wgt::TextureDimension::D2 => {
-                if desc.size.depth_or_array_layers > 1 {
-                    //HACK: detect a cube map
-                    let cube_count = if desc.size.width == desc.size.height
-                        && desc.size.depth_or_array_layers % 6 == 0
-                        && desc.sample_count == 1
-                    {
-                        Some(desc.size.depth_or_array_layers / 6)
-                    } else {
-                        None
-                    };
-                    match cube_count {
-                        None => (glow::TEXTURE_2D_ARRAY, true, false),
-                        Some(1) => (glow::TEXTURE_CUBE_MAP, false, true),
-                        Some(_) => (glow::TEXTURE_CUBE_MAP_ARRAY, true, true),
-                    }
-                } else {
-                    (glow::TEXTURE_2D, false, false)
+            wgt::TextureDimension::D1 => (glow::TEXTURE_2D, false, false),
+            wgt::TextureDimension::D2 => {
+                // HACK: detect a cube map; forces cube compatible textures to be cube textures
+                match (desc.is_cube_compatible(), desc.size.depth_or_array_layers) {
+                    (false, 1) => (glow::TEXTURE_2D, false, false),
+                    (false, _) => (glow::TEXTURE_2D_ARRAY, true, false),
+                    (true, 6) => (glow::TEXTURE_CUBE_MAP, false, true),
+                    (true, _) => (glow::TEXTURE_CUBE_MAP_ARRAY, true, true),
                 }
             }
-            wgt::TextureDimension::D3 => {
-                copy_size.depth = desc.size.depth_or_array_layers;
-                (glow::TEXTURE_3D, true, false)
-            }
+            wgt::TextureDimension::D3 => (glow::TEXTURE_3D, true, false),
         }
     }
 }

@@ -484,6 +484,9 @@ impl super::PrivateCapabilities {
         if device.supports_texture_sample_count(8) {
             sample_count_mask |= crate::TextureFormatCapabilities::MULTISAMPLE_X8;
         }
+        if device.supports_texture_sample_count(16) {
+            sample_count_mask |= crate::TextureFormatCapabilities::MULTISAMPLE_X16;
+        }
 
         let rw_texture_tier = if version.at_least((10, 13), (11, 0)) {
             device.read_write_texture_support()

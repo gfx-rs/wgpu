@@ -585,6 +585,17 @@ const FEATURES_MAPPING: [(wgt::Features, web_sys::GpuFeatureName); 8] = [
     ),
 ];
 
+fn map_wgt_features(supported_features: web_sys::GpuSupportedFeatures) -> wgt::Features {
+    let mut features = wgt::Features::empty();
+    for (wgpu_feat, web_feat) in FEATURES_MAPPING {
+        match wasm_bindgen::JsValue::from(web_feat).as_string() {
+            Some(value) if supported_features.has(&value) => features |= wgpu_feat,
+            _ => {}
+        }
+    }
+    features
+}
+
 type JsFutureResult = Result<wasm_bindgen::JsValue, wasm_bindgen::JsValue>;
 
 fn future_request_adapter(result: JsFutureResult) -> Option<(Identified<web_sys::GpuAdapter>, ())> {
@@ -837,7 +848,7 @@ impl crate::context::Context for Context {
         let canvas_node: wasm_bindgen::JsValue = web_sys::window()
             .and_then(|win| win.document())
             .and_then(|doc| {
-                doc.query_selector_all(&format!("[data-raw-handle=\"{}\"]", canvas_attribute))
+                doc.query_selector_all(&format!("[data-raw-handle=\"{canvas_attribute}\"]"))
                     .ok()
             })
             .and_then(|nodes| nodes.get(0))
@@ -931,23 +942,7 @@ impl crate::context::Context for Context {
         adapter: &Self::AdapterId,
         _adapter_data: &Self::AdapterData,
     ) -> wgt::Features {
-        let features = adapter.0.features();
-
-        let features_set: js_sys::Set = features
-            .dyn_into()
-            .expect("adapter.features() is not setlike");
-
-        let mut features = wgt::Features::empty();
-
-        for (wgpu_feat, web_feat) in FEATURES_MAPPING {
-            let value = wasm_bindgen::JsValue::from(web_feat);
-
-            if features_set.has(&value) {
-                features |= wgpu_feat;
-            }
-        }
-
-        features
+        map_wgt_features(adapter.0.features())
     }
 
     fn adapter_limits(
@@ -1112,23 +1107,7 @@ impl crate::context::Context for Context {
         device: &Self::DeviceId,
         _device_data: &Self::DeviceData,
     ) -> wgt::Features {
-        let features = device.0.features();
-
-        let features_set: js_sys::Set = features
-            .dyn_into()
-            .expect("device.features() is not setlike");
-
-        let mut features = wgt::Features::empty();
-
-        for (wgpu_feat, web_feat) in FEATURES_MAPPING {
-            let value = wasm_bindgen::JsValue::from(web_feat);
-
-            if features_set.has(&value) {
-                features |= wgpu_feat;
-            }
-        }
-
-        features
+        map_wgt_features(device.0.features())
     }
 
     fn device_limits(
@@ -1175,7 +1154,7 @@ impl crate::context::Context for Context {
                     strict_capabilities: true,
                     block_ctx_dump_prefix: None,
                 };
-                let spv_parser = front::spv::Parser::new(spv.iter().cloned(), &options);
+                let spv_parser = front::spv::Frontend::new(spv.iter().cloned(), &options);
                 let spv_module = spv_parser.parse().unwrap();
 
                 let mut validator = valid::Validator::new(
@@ -1202,7 +1181,7 @@ impl crate::context::Context for Context {
                     stage,
                     defines: defines.clone(),
                 };
-                let mut parser = front::glsl::Parser::default();
+                let mut parser = front::glsl::Frontend::default();
                 let glsl_module = parser.parse(&options, shader).unwrap();
 
                 let mut validator = valid::Validator::new(
@@ -1809,11 +1788,11 @@ impl crate::context::Context for Context {
         mapped.aspect(map_texture_aspect(desc.aspect));
         mapped.base_array_layer(desc.base_array_layer);
         if let Some(count) = desc.array_layer_count {
-            mapped.array_layer_count(count.get());
+            mapped.array_layer_count(count);
         }
         mapped.base_mip_level(desc.base_mip_level);
         if let Some(count) = desc.mip_level_count {
-            mapped.mip_level_count(count.get());
+            mapped.mip_level_count(count);
         }
         if let Some(label) = desc.label {
             mapped.label(label);
@@ -2052,11 +2031,11 @@ impl crate::context::Context for Context {
         pass.0.end();
     }
 
-    fn command_encoder_begin_render_pass<'a>(
+    fn command_encoder_begin_render_pass(
         &self,
         encoder: &Self::CommandEncoderId,
         _encoder_data: &Self::CommandEncoderData,
-        desc: &crate::RenderPassDescriptor<'a, '_>,
+        desc: &crate::RenderPassDescriptor<'_, '_>,
     ) -> (Self::RenderPassId, Self::RenderPassData) {
         let mapped_color_attachments = desc
             .color_attachments

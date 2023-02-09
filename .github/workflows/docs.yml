@@ -5,22 +5,23 @@ on:
     branches:
       - master
 
+env:
+  CARGO_INCREMENTAL: false
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: full
+
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout the code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           persist-credentials: false
 
-      - name: Install latest nightly
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: nightly
-          override: true
-        continue-on-error: true
+      - name: Install nightly toolchain
+        run: rustup toolchain install nightly --no-self-update --profile=minimal
 
       - name: Add EGL for OpenGL
         run: |
@@ -38,10 +39,10 @@ jobs:
         if: ${{ failure() }}
 
       - name: Deploy the docs
-        uses: JamesIves/github-pages-deploy-action@releases/v3
+        uses: JamesIves/github-pages-deploy-action@v4.4.1
         with:
-          ACCESS_TOKEN: ${{ secrets.WEB_DEPLOY }}
-          FOLDER: target/doc
-          REPOSITORY_NAME: gfx-rs/wgpu-rs.github.io
-          BRANCH: master
-          TARGET_FOLDER: doc
+          token: ${{ secrets.WEB_DEPLOY }}
+          folder: target/doc
+          repository-name: gfx-rs/wgpu-rs.github.io
+          branch: master
+          target-folder: doc

@@ -101,9 +101,7 @@ impl super::Device {
         desc: &crate::TextureDescriptor,
         drop_guard: Option<crate::DropGuard>,
     ) -> super::Texture {
-        let mut copy_size = crate::CopyExtent::map_extent_to_copy_size(&desc.size, desc.dimension);
-
-        let (target, _, is_cubemap) = super::Texture::get_info_from_desc(&mut copy_size, desc);
+        let (target, _, is_cubemap) = super::Texture::get_info_from_desc(desc);
 
         super::Texture {
             inner: super::TextureInner::Texture {
@@ -112,14 +110,10 @@ impl super::Device {
             },
             drop_guard,
             mip_level_count: desc.mip_level_count,
-            array_layer_count: if desc.dimension == wgt::TextureDimension::D2 {
-                desc.size.depth_or_array_layers
-            } else {
-                1
-            },
+            array_layer_count: desc.array_layer_count(),
             format: desc.format,
             format_desc: self.shared.describe_texture_format(desc.format),
-            copy_size,
+            copy_size: desc.copy_extent(),
             is_cubemap,
         }
     }
@@ -138,22 +132,16 @@ impl super::Device {
         desc: &crate::TextureDescriptor,
         drop_guard: Option<crate::DropGuard>,
     ) -> super::Texture {
-        let copy_size = crate::CopyExtent::map_extent_to_copy_size(&desc.size, desc.dimension);
-
         super::Texture {
             inner: super::TextureInner::Renderbuffer {
                 raw: glow::NativeRenderbuffer(name),
             },
             drop_guard,
             mip_level_count: desc.mip_level_count,
-            array_layer_count: if desc.dimension == wgt::TextureDimension::D2 {
-                desc.size.depth_or_array_layers
-            } else {
-                1
-            },
+            array_layer_count: desc.array_layer_count(),
             format: desc.format,
             format_desc: self.shared.describe_texture_format(desc.format),
-            copy_size,
+            copy_size: desc.copy_extent(),
             is_cubemap: false,
         }
     }
@@ -247,12 +235,12 @@ impl super::Device {
             policies,
         )
         .map_err(|e| {
-            let msg = format!("{}", e);
+            let msg = format!("{e}");
             crate::PipelineError::Linkage(map_naga_stage(naga_stage), msg)
         })?;
 
         let reflection_info = writer.write().map_err(|e| {
-            let msg = format!("{}", e);
+            let msg = format!("{e}");
             crate::PipelineError::Linkage(map_naga_stage(naga_stage), msg)
         })?;
 
@@ -358,7 +346,7 @@ impl super::Device {
 
         // Create empty fragment shader if only vertex shader is present
         if has_stages == wgt::ShaderStages::VERTEX {
-            let shader_src = format!("#version {} es \n void main(void) {{}}", glsl_version,);
+            let shader_src = format!("#version {glsl_version} es \n void main(void) {{}}",);
             log::info!("Only vertex shader is present. Creating an empty fragment shader",);
             let shader = unsafe {
                 Self::compile_shader(
@@ -675,12 +663,6 @@ impl crate::Device<super::Api> for super::Device {
             | crate::TextureUses::DEPTH_STENCIL_READ;
         let format_desc = self.shared.describe_texture_format(desc.format);
 
-        let mut copy_size = crate::CopyExtent {
-            width: desc.size.width,
-            height: desc.size.height,
-            depth: 1,
-        };
-
         let (inner, is_cubemap) = if render_usage.contains(desc.usage)
             && desc.dimension == wgt::TextureDimension::D2
             && desc.size.depth_or_array_layers == 1
@@ -720,8 +702,7 @@ impl crate::Device<super::Api> for super::Device {
             (super::TextureInner::Renderbuffer { raw }, false)
         } else {
             let raw = unsafe { gl.create_texture().unwrap() };
-            let (target, is_3d, is_cubemap) =
-                super::Texture::get_info_from_desc(&mut copy_size, desc);
+            let (target, is_3d, is_cubemap) = super::Texture::get_info_from_desc(desc);
 
             unsafe { gl.bind_texture(target, Some(raw)) };
             //Note: this has to be done before defining the storage!
@@ -791,14 +772,10 @@ impl crate::Device<super::Api> for super::Device {
             inner,
             drop_guard: None,
             mip_level_count: desc.mip_level_count,
-            array_layer_count: if desc.dimension == wgt::TextureDimension::D2 {
-                desc.size.depth_or_array_layers
-            } else {
-                1
-            },
+            array_layer_count: desc.array_layer_count(),
             format: desc.format,
             format_desc,
-            copy_size,
+            copy_size: desc.copy_extent(),
             is_cubemap,
         })
     }
@@ -828,22 +805,14 @@ impl crate::Device<super::Api> for super::Device {
         texture: &super::Texture,
         desc: &crate::TextureViewDescriptor,
     ) -> Result<super::TextureView, crate::DeviceError> {
-        let end_array_layer = match desc.range.array_layer_count {
-            Some(count) => desc.range.base_array_layer + count.get(),
-            None => texture.array_layer_count,
-        };
-        let end_mip_level = match desc.range.mip_level_count {
-            Some(count) => desc.range.base_mip_level + count.get(),
-            None => texture.mip_level_count,
-        };
         Ok(super::TextureView {
             //TODO: use `conv::map_view_dimension(desc.dimension)`?
             inner: texture.inner.clone(),
             sample_type: texture.format.describe().sample_type,
             aspects: crate::FormatAspects::from(texture.format)
                 & crate::FormatAspects::from(desc.range.aspect),
-            mip_levels: desc.range.base_mip_level..end_mip_level,
-            array_layers: desc.range.base_array_layer..end_array_layer,
+            mip_levels: desc.range.mip_range(texture.mip_level_count),
+            array_layers: desc.range.layer_range(texture.array_layer_count),
             format: texture.format,
         })
     }
@@ -1248,7 +1217,7 @@ impl crate::Device<super::Api> for super::Device {
 
                 if let Some(label) = desc.label {
                     temp_string.clear();
-                    let _ = write!(temp_string, "{}[{}]", label, i);
+                    let _ = write!(temp_string, "{label}[{i}]");
                     let name = unsafe { mem::transmute(query) };
                     unsafe { gl.object_label(glow::QUERY, name, Some(&temp_string)) };
                 }

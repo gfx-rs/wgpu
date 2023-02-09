@@ -333,7 +333,7 @@ impl gpu_alloc::MemoryDevice<vk::DeviceMemory> for super::DeviceShared {
                 Err(gpu_alloc::OutOfMemory::OutOfHostMemory)
             }
             Err(vk::Result::ERROR_TOO_MANY_OBJECTS) => panic!("Too many objects"),
-            Err(err) => panic!("Unexpected Vulkan error: `{}`", err),
+            Err(err) => panic!("Unexpected Vulkan error: `{err}`"),
         }
     }
 
@@ -360,7 +360,7 @@ impl gpu_alloc::MemoryDevice<vk::DeviceMemory> for super::DeviceShared {
                 Err(gpu_alloc::DeviceMapError::OutOfHostMemory)
             }
             Err(vk::Result::ERROR_MEMORY_MAP_FAILED) => Err(gpu_alloc::DeviceMapError::MapFailed),
-            Err(err) => panic!("Unexpected Vulkan error: `{}`", err),
+            Err(err) => panic!("Unexpected Vulkan error: `{err}`"),
         }
     }
 
@@ -676,7 +676,7 @@ impl super::Device {
             aspects: crate::FormatAspects::from(desc.format),
             format_info: desc.format.describe(),
             raw_flags: vk::ImageCreateFlags::empty(),
-            copy_size: crate::CopyExtent::map_extent_to_copy_size(&desc.size, desc.dimension),
+            copy_size: desc.copy_extent(),
             view_formats,
         }
     }
@@ -741,7 +741,7 @@ impl super::Device {
                         Some(&pipeline_options),
                     )
                 }
-                .map_err(|e| crate::PipelineError::Linkage(stage_flags, format!("{}", e)))?;
+                .map_err(|e| crate::PipelineError::Linkage(stage_flags, format!("{e}")))?;
                 self.create_shader_module_impl(&spv)?
             }
         };
@@ -934,18 +934,10 @@ impl crate::Device<super::Api> for super::Device {
         &self,
         desc: &crate::TextureDescriptor,
     ) -> Result<super::Texture, crate::DeviceError> {
-        let array_layer_count = match desc.dimension {
-            wgt::TextureDimension::D3 => 1,
-            _ => desc.size.depth_or_array_layers,
-        };
-        let copy_size = conv::map_extent_to_copy_size(&desc.size, desc.dimension);
+        let copy_size = desc.copy_extent();
 
         let mut raw_flags = vk::ImageCreateFlags::empty();
-        if desc.dimension == wgt::TextureDimension::D2
-            && desc.size.depth_or_array_layers % 6 == 0
-            && desc.sample_count == 1
-            && desc.size.width == desc.size.height
-        {
+        if desc.is_cube_compatible() {
             raw_flags |= vk::ImageCreateFlags::CUBE_COMPATIBLE;
         }
 
@@ -975,13 +967,9 @@ impl crate::Device<super::Api> for super::Device {
             .flags(raw_flags)
             .image_type(conv::map_texture_dimension(desc.dimension))
             .format(original_format)
-            .extent(vk::Extent3D {
-                width: copy_size.width,
-                height: copy_size.height,
-                depth: copy_size.depth,
-            })
+            .extent(conv::map_copy_extent(&copy_size))
             .mip_levels(desc.mip_level_count)
-            .array_layers(array_layer_count)
+            .array_layers(desc.array_layer_count())
             .samples(vk::SampleCountFlags::from_raw(desc.sample_count))
             .tiling(vk::ImageTiling::OPTIMAL)
             .usage(conv::map_texture_usage(desc.usage))
@@ -1533,7 +1521,7 @@ impl crate::Device<super::Api> for super::Device {
                         &naga_options,
                         None,
                     )
-                    .map_err(|e| crate::ShaderError::Compilation(format!("{}", e)))?,
+                    .map_err(|e| crate::ShaderError::Compilation(format!("{e}")))?,
                 )
             }
             crate::ShaderInput::SpirV(spv) => Cow::Borrowed(spv),
@@ -1651,7 +1639,7 @@ impl crate::Device<super::Api> for super::Device {
         let mut vk_depth_stencil = vk::PipelineDepthStencilStateCreateInfo::builder();
         if let Some(ref ds) = desc.depth_stencil {
             let vk_format = self.shared.private_caps.map_texture_format(ds.format);
-            let vk_layout = if ds.is_read_only() {
+            let vk_layout = if ds.is_read_only(desc.primitive.cull_mode) {
                 vk::ImageLayout::DEPTH_STENCIL_READ_ONLY_OPTIMAL
             } else {
                 vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL

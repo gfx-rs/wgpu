@@ -95,8 +95,12 @@ pub enum TransferError {
     InvalidCopySize,
     #[error("number of rows per image is invalid")]
     InvalidRowsPerImage,
-    #[error("source and destination layers have different aspects")]
-    MismatchedAspects,
+    #[error("copy source aspects must refer to all aspects of the source texture format")]
+    CopySrcMissingAspects,
+    #[error(
+        "copy destination aspects must refer to all aspects of the destination texture format"
+    )]
+    CopyDstMissingAspects,
     #[error("copying from textures with format {format:?} and aspect {aspect:?} is forbidden")]
     CopyFromForbiddenTextureFormat {
         format: wgt::TextureFormat,
@@ -187,7 +191,8 @@ pub(crate) fn extract_texture_selector<A: hal::Api>(
     }
 
     let (layers, origin_z) = match texture.desc.dimension {
-        wgt::TextureDimension::D1 | wgt::TextureDimension::D2 => (
+        wgt::TextureDimension::D1 => (0..1, 0),
+        wgt::TextureDimension::D2 => (
             copy_texture.origin.z..copy_texture.origin.z + copy_size.depth_or_array_layers,
             0,
         ),
@@ -319,7 +324,7 @@ pub(crate) fn validate_linear_texture_data(
 ///
 /// Returns the HAL copy extent and the layer count.
 ///
-/// [vtcr]: https://gpuweb.github.io/gpuweb/#valid-texture-copy-range
+/// [vtcr]: https://gpuweb.github.io/gpuweb/#validating-texture-copy-range
 pub(crate) fn validate_texture_copy_range(
     texture_copy_view: &ImageCopyTexture,
     desc: &wgt::TextureDescriptor<(), Vec<wgt::TextureFormat>>,
@@ -413,9 +418,8 @@ pub(crate) fn validate_texture_copy_range(
     }
 
     let (depth, array_layer_count) = match desc.dimension {
-        wgt::TextureDimension::D1 | wgt::TextureDimension::D2 => {
-            (1, copy_size.depth_or_array_layers)
-        }
+        wgt::TextureDimension::D1 => (1, 1),
+        wgt::TextureDimension::D2 => (1, copy_size.depth_or_array_layers),
         wgt::TextureDimension::D3 => (copy_size.depth_or_array_layers, 1),
     };
 
@@ -1053,8 +1057,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             extract_texture_selector(source, copy_size, src_texture)?;
         let (dst_range, dst_tex_base, _) =
             extract_texture_selector(destination, copy_size, dst_texture)?;
-        if src_tex_base.aspect != dst_tex_base.aspect {
-            return Err(TransferError::MismatchedAspects.into());
+        let src_texture_aspects = hal::FormatAspects::from(src_texture.desc.format);
+        let dst_texture_aspects = hal::FormatAspects::from(dst_texture.desc.format);
+        if src_tex_base.aspect != src_texture_aspects {
+            return Err(TransferError::CopySrcMissingAspects.into());
+        }
+        if dst_tex_base.aspect != dst_texture_aspects {
+            return Err(TransferError::CopyDstMissingAspects.into());
         }
 
         // Handle texture init *before* dealing with barrier transitions so we

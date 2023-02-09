@@ -1,5 +1,4 @@
 use ash::vk;
-use std::num::NonZeroU32;
 
 impl super::PrivateCapabilities {
     pub fn map_texture_format(&self, format: wgt::TextureFormat) -> vk::Format {
@@ -585,20 +584,6 @@ pub fn map_copy_extent(extent: &crate::CopyExtent) -> vk::Extent3D {
     }
 }
 
-pub fn map_extent_to_copy_size(
-    extent: &wgt::Extent3d,
-    dim: wgt::TextureDimension,
-) -> crate::CopyExtent {
-    crate::CopyExtent {
-        width: extent.width,
-        height: extent.height,
-        depth: match dim {
-            wgt::TextureDimension::D1 | wgt::TextureDimension::D2 => 1,
-            wgt::TextureDimension::D3 => extent.depth_or_array_layers,
-        },
-    }
-}
-
 pub fn map_subresource_range(
     range: &wgt::ImageSubresourceRange,
     texture_aspect: crate::FormatAspects,
@@ -606,13 +591,11 @@ pub fn map_subresource_range(
     vk::ImageSubresourceRange {
         aspect_mask: map_aspects(crate::FormatAspects::from(range.aspect) & texture_aspect),
         base_mip_level: range.base_mip_level,
-        level_count: range
-            .mip_level_count
-            .map_or(vk::REMAINING_MIP_LEVELS, NonZeroU32::get),
+        level_count: range.mip_level_count.unwrap_or(vk::REMAINING_MIP_LEVELS),
         base_array_layer: range.base_array_layer,
         layer_count: range
             .array_layer_count
-            .map_or(vk::REMAINING_ARRAY_LAYERS, NonZeroU32::get),
+            .unwrap_or(vk::REMAINING_ARRAY_LAYERS),
     }
 }
 

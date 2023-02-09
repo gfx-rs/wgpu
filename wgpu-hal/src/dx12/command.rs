@@ -384,20 +384,12 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                     }
                 };
 
-                let mip_level_count = match barrier.range.mip_level_count {
-                    Some(count) => count.get(),
-                    None => barrier.texture.mip_level_count - barrier.range.base_mip_level,
-                };
-                let array_layer_count = match barrier.range.array_layer_count {
-                    Some(count) => count.get(),
-                    None => barrier.texture.array_layer_count() - barrier.range.base_array_layer,
-                };
+                let tex_mip_level_count = barrier.texture.mip_level_count;
+                let tex_array_layer_count = barrier.texture.array_layer_count();
 
-                if barrier.range.aspect == wgt::TextureAspect::All
-                    && barrier.range.base_mip_level == 0
-                    && mip_level_count == barrier.texture.mip_level_count
-                    && barrier.range.base_array_layer == 0
-                    && array_layer_count == barrier.texture.array_layer_count()
+                if barrier
+                    .range
+                    .is_full_resource(tex_mip_level_count, tex_array_layer_count)
                 {
                     // Only one barrier if it affects the whole image.
                     self.temp.barriers.push(raw);
@@ -415,16 +407,13 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                         0..1
                     };
 
-                    for rel_mip_level in 0..mip_level_count {
-                        for rel_array_layer in 0..array_layer_count {
+                    for mip_level in barrier.range.mip_range(tex_mip_level_count) {
+                        for array_layer in barrier.range.layer_range(tex_array_layer_count) {
                             for plane in planes.clone() {
                                 unsafe {
-                                    raw.u.Transition_mut().Subresource =
-                                        barrier.texture.calc_subresource(
-                                            barrier.range.base_mip_level + rel_mip_level,
-                                            barrier.range.base_array_layer + rel_array_layer,
-                                            plane,
-                                        );
+                                    raw.u.Transition_mut().Subresource = barrier
+                                        .texture
+                                        .calc_subresource(mip_level, array_layer, plane);
                                 };
                                 self.temp.barriers.push(raw);
                             }

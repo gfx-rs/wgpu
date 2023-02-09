@@ -492,6 +492,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
         set_sample_count(2, Tfc::MULTISAMPLE_X2);
         set_sample_count(4, Tfc::MULTISAMPLE_X4);
         set_sample_count(8, Tfc::MULTISAMPLE_X8);
+        set_sample_count(16, Tfc::MULTISAMPLE_X16);
 
         caps
     }

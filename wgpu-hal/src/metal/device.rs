@@ -219,6 +219,13 @@ impl super::Device {
         }
     }
 
+    pub unsafe fn device_from_raw(raw: mtl::Device, features: wgt::Features) -> super::Device {
+        super::Device {
+            shared: Arc::new(super::AdapterShared::new(raw)),
+            features,
+        }
+    }
+
     pub fn raw_device(&self) -> &Mutex<mtl::Device> {
         &self.shared.device
     }
@@ -285,21 +292,9 @@ impl crate::Device<super::Api> for super::Device {
 
         objc::rc::autoreleasepool(|| {
             let descriptor = mtl::TextureDescriptor::new();
-            let mut array_layers = desc.size.depth_or_array_layers;
-            let mut copy_size = crate::CopyExtent {
-                width: desc.size.width,
-                height: desc.size.height,
-                depth: 1,
-            };
+
             let mtl_type = match desc.dimension {
-                wgt::TextureDimension::D1 => {
-                    if desc.size.depth_or_array_layers > 1 {
-                        descriptor.set_array_length(desc.size.depth_or_array_layers as u64);
-                        mtl::MTLTextureType::D1Array
-                    } else {
-                        mtl::MTLTextureType::D1
-                    }
-                }
+                wgt::TextureDimension::D1 => mtl::MTLTextureType::D1,
                 wgt::TextureDimension::D2 => {
                     if desc.sample_count > 1 {
                         descriptor.set_sample_count(desc.sample_count as u64);
@@ -313,8 +308,6 @@ impl crate::Device<super::Api> for super::Device {
                 }
                 wgt::TextureDimension::D3 => {
                     descriptor.set_depth(desc.size.depth_or_array_layers as u64);
-                    array_layers = 1;
-                    copy_size.depth = desc.size.depth_or_array_layers;
                     mtl::MTLTextureType::D3
                 }
             };
@@ -337,8 +330,8 @@ impl crate::Device<super::Api> for super::Device {
                 raw_format: mtl_format,
                 raw_type: mtl_type,
                 mip_levels: desc.mip_level_count,
-                array_layers,
-                copy_size,
+                array_layers: desc.array_layer_count(),
+                copy_size: desc.copy_extent(),
             })
         })
     }
@@ -369,14 +362,14 @@ impl crate::Device<super::Api> for super::Device {
             // Also helps working around Metal bugs with aliased array textures.
             texture.raw.to_owned()
         } else {
-            let mip_level_count = match desc.range.mip_level_count {
-                Some(count) => count.get(),
-                None => texture.mip_levels - desc.range.base_mip_level,
-            };
-            let array_layer_count = match desc.range.array_layer_count {
-                Some(count) => count.get(),
-                None => texture.array_layers - desc.range.base_array_layer,
-            };
+            let mip_level_count = desc
+                .range
+                .mip_level_count
+                .unwrap_or(texture.mip_levels - desc.range.base_mip_level);
+            let array_layer_count = desc
+                .range
+                .array_layer_count
+                .unwrap_or(texture.array_layers - desc.range.base_array_layer);
 
             objc::rc::autoreleasepool(|| {
                 let raw = texture.raw.new_texture_view_from_slice(
