@@ -217,20 +217,32 @@ impl super::DeviceShared {
                     .iter()
                     .map(|at| self.private_caps.map_texture_format(at.view_format))
                     .collect::<ArrayVec<_, { super::MAX_TOTAL_ATTACHMENTS }>>();
+                let vk_view_formats_list = e
+                    .key()
+                    .attachments
+                    .iter()
+                    .map(|at| at.raw_view_formats.clone())
+                    .collect::<ArrayVec<_, { super::MAX_TOTAL_ATTACHMENTS }>>();
+
                 let vk_image_infos = e
                     .key()
                     .attachments
                     .iter()
                     .enumerate()
                     .map(|(i, at)| {
-                        vk::FramebufferAttachmentImageInfo::builder()
+                        let mut info = vk::FramebufferAttachmentImageInfo::builder()
                             .usage(conv::map_texture_usage(at.view_usage))
                             .flags(at.raw_image_flags)
                             .width(e.key().extent.width)
                             .height(e.key().extent.height)
-                            .layer_count(e.key().extent.depth_or_array_layers)
-                            .view_formats(&vk_view_formats[i..i + 1])
-                            .build()
+                            .layer_count(e.key().extent.depth_or_array_layers);
+                        // https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VkRenderPassBeginInfo.html#VUID-VkRenderPassBeginInfo-framebuffer-03214
+                        if vk_view_formats_list[i].is_empty() {
+                            info = info.view_formats(&vk_view_formats[i..i + 1]);
+                        } else {
+                            info = info.view_formats(&vk_view_formats_list[i]);
+                        };
+                        info.build()
                     })
                     .collect::<ArrayVec<_, { super::MAX_TOTAL_ATTACHMENTS }>>();
 
@@ -550,6 +562,7 @@ impl super::Device {
         let original_format = self.shared.private_caps.map_texture_format(config.format);
         let mut raw_flags = vk::SwapchainCreateFlagsKHR::empty();
         let mut raw_view_formats: Vec<vk::Format> = vec![];
+        let mut wgt_view_formats = vec![];
         if !config.view_formats.is_empty() {
             raw_flags |= vk::SwapchainCreateFlagsKHR::MUTABLE_FORMAT;
             raw_view_formats = config
@@ -558,6 +571,9 @@ impl super::Device {
                 .map(|f| self.shared.private_caps.map_texture_format(*f))
                 .collect();
             raw_view_formats.push(original_format);
+
+            wgt_view_formats = config.view_formats.clone();
+            wgt_view_formats.push(config.format);
         }
 
         let mut info = vk::SwapchainCreateInfoKHR::builder()
@@ -617,11 +633,13 @@ impl super::Device {
 
         Ok(super::Swapchain {
             raw,
+            raw_flags,
             functor,
             device: Arc::clone(&self.shared),
             fence,
             images,
             config: config.clone(),
+            view_formats: wgt_view_formats,
         })
     }
 
@@ -630,11 +648,26 @@ impl super::Device {
     /// - `vk_image` must be created respecting `desc`
     /// - If `drop_guard` is `Some`, the application must manually destroy the image handle. This
     ///   can be done inside the `Drop` impl of `drop_guard`.
+    /// - If the `ImageCreateFlags` does not contain `MUTABLE_FORMAT`, the `view_formats` of `desc` must be empty.
     pub unsafe fn texture_from_raw(
         vk_image: vk::Image,
         desc: &crate::TextureDescriptor,
         drop_guard: Option<crate::DropGuard>,
     ) -> super::Texture {
+        let mut raw_flags = vk::ImageCreateFlags::empty();
+        let mut view_formats = vec![];
+        for tf in desc.view_formats.iter() {
+            if *tf == desc.format {
+                continue;
+            }
+            view_formats.push(*tf);
+        }
+        if !view_formats.is_empty() {
+            raw_flags |=
+                vk::ImageCreateFlags::MUTABLE_FORMAT | vk::ImageCreateFlags::EXTENDED_USAGE;
+            view_formats.push(desc.format)
+        }
+
         super::Texture {
             raw: vk_image,
             drop_guard,
@@ -644,6 +677,7 @@ impl super::Device {
             format_info: desc.format.describe(),
             raw_flags: vk::ImageCreateFlags::empty(),
             copy_size: desc.copy_extent(),
+            view_formats,
         }
     }
 
@@ -908,20 +942,24 @@ impl crate::Device<super::Api> for super::Device {
         }
 
         let original_format = self.shared.private_caps.map_texture_format(desc.format);
-        let mut hal_view_formats: Vec<vk::Format> = vec![];
+        let mut vk_view_formats = vec![];
+        let mut wgt_view_formats = vec![];
         if !desc.view_formats.is_empty() {
             raw_flags |= vk::ImageCreateFlags::MUTABLE_FORMAT;
+            wgt_view_formats = desc.view_formats.clone();
+            wgt_view_formats.push(desc.format);
+
             if self.shared_instance().driver_api_version >= vk::API_VERSION_1_2
                 || self
                     .enabled_device_extensions()
                     .contains(&vk::KhrImageFormatListFn::name())
             {
-                hal_view_formats = desc
+                vk_view_formats = desc
                     .view_formats
                     .iter()
                     .map(|f| self.shared.private_caps.map_texture_format(*f))
                     .collect();
-                hal_view_formats.push(original_format)
+                vk_view_formats.push(original_format)
             }
         }
 
@@ -939,8 +977,8 @@ impl crate::Device<super::Api> for super::Device {
             .initial_layout(vk::ImageLayout::UNDEFINED);
 
         let mut format_list_info = vk::ImageFormatListCreateInfo::builder();
-        if !hal_view_formats.is_empty() {
-            format_list_info = format_list_info.view_formats(&hal_view_formats);
+        if !vk_view_formats.is_empty() {
+            format_list_info = format_list_info.view_formats(&vk_view_formats);
             vk_info = vk_info.push_next(&mut format_list_info);
         }
 
@@ -981,6 +1019,7 @@ impl crate::Device<super::Api> for super::Device {
             format_info: desc.format.describe(),
             raw_flags,
             copy_size,
+            view_formats: wgt_view_formats,
         })
     }
     unsafe fn destroy_texture(&self, texture: super::Texture) {
@@ -1036,6 +1075,11 @@ impl crate::Device<super::Api> for super::Device {
             raw_image_flags: texture.raw_flags,
             view_usage,
             view_format: desc.format,
+            raw_view_formats: texture
+                .view_formats
+                .iter()
+                .map(|tf| self.shared.private_caps.map_texture_format(*tf))
+                .collect(),
         };
 
         Ok(super::TextureView {
