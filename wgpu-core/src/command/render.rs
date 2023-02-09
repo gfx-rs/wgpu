@@ -1171,7 +1171,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     base: BasePass::from_ref(base),
                     target_colors: color_attachments.to_vec(),
                     target_depth_stencil: depth_stencil_attachment.cloned(),
-                    occlusion_query_set_id
                 });
             }
 
