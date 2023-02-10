@@ -128,7 +128,7 @@ deno_web = "0.115.0"
 deno_webidl = "0.84.0"
 deno_webgpu = { path = "./deno_webgpu" }
 tokio = "1.19.0"
-termcolor = "1.1.2"
+termcolor = "1.2.0"
 wgpu-core = { path = "./wgpu-core" }
 wgpu-types = { path = "./wgpu-types" }
 
