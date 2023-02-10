@@ -41,7 +41,7 @@ impl fmt::Debug for Context {
 }
 
 impl Context {
-    #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
+    #[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))]
     pub unsafe fn from_hal_instance<A: wgc::hub::HalApi>(hal_instance: A::Instance) -> Self {
         Self(unsafe {
             wgc::hub::Global::from_hal_instance::<A>(
@@ -69,13 +69,13 @@ impl Context {
         &self.0
     }
 
-    #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
+    #[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))]
     pub fn enumerate_adapters(&self, backends: wgt::Backends) -> Vec<wgc::id::AdapterId> {
         self.0
             .enumerate_adapters(wgc::instance::AdapterInputs::Mask(backends, |_| ()))
     }
 
-    #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
+    #[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))]
     pub unsafe fn create_adapter_from_hal<A: wgc::hub::HalApi>(
         &self,
         hal_adapter: hal::ExposedAdapter<A>,
@@ -94,7 +94,7 @@ impl Context {
         }
     }
 
-    #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
+    #[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))]
     pub unsafe fn create_device_from_hal<A: wgc::hub::HalApi>(
         &self,
         adapter: &wgc::id::AdapterId,
@@ -128,7 +128,11 @@ impl Context {
         Ok((device, queue))
     }
 
-    #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten", feature = "webgl"))]
+    #[cfg(any(
+        not(target_arch = "wasm32"),
+        target_os = "emscripten",
+        feature = "webgl"
+    ))]
     pub unsafe fn create_texture_from_hal<A: wgc::hub::HalApi>(
         &self,
         hal_texture: A::Texture,
@@ -154,7 +158,7 @@ impl Context {
         }
     }
 
-    #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
+    #[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))]
     pub unsafe fn device_as_hal<A: wgc::hub::HalApi, F: FnOnce(Option<&A::Device>) -> R, R>(
         &self,
         device: &Device,
@@ -166,7 +170,7 @@ impl Context {
         }
     }
 
-    #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
+    #[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))]
     pub unsafe fn surface_as_hal_mut<
         A: wgc::hub::HalApi,
         F: FnOnce(Option<&mut A::Surface>) -> R,
@@ -182,7 +186,7 @@ impl Context {
         }
     }
 
-    #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
+    #[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))]
     pub unsafe fn texture_as_hal<A: wgc::hub::HalApi, F: FnOnce(Option<&A::Texture>)>(
         &self,
         texture: &Texture,
@@ -194,7 +198,7 @@ impl Context {
         }
     }
 
-    #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
+    #[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))]
     pub fn generate_report(&self) -> wgc::hub::GlobalReport {
         self.0.generate_report()
     }
@@ -211,7 +215,11 @@ impl Context {
         }
     }
 
-    #[cfg(all(target_arch = "wasm32", feature = "webgl", not(feature = "emscripten")))]
+    #[cfg(all(
+        target_arch = "wasm32",
+        feature = "webgl",
+        not(target_os = "emscripten")
+    ))]
     pub fn instance_create_surface_from_canvas(
         &self,
         canvas: &web_sys::HtmlCanvasElement,
@@ -226,7 +234,11 @@ impl Context {
         })
     }
 
-    #[cfg(all(target_arch = "wasm32", feature = "webgl", not(feature = "emscripten")))]
+    #[cfg(all(
+        target_arch = "wasm32",
+        feature = "webgl",
+        not(target_os = "emscripten")
+    ))]
     pub fn instance_create_surface_from_offscreen_canvas(
         &self,
         canvas: &web_sys::OffscreenCanvas,
@@ -353,7 +365,7 @@ fn map_texture_copy_view(view: crate::ImageCopyTexture) -> wgc::command::ImageCo
 }
 
 #[cfg_attr(
-    any(not(target_arch = "wasm32"), feature = "emscripten"),
+    any(not(target_arch = "wasm32"), target_os = "emscripten"),
     allow(unused)
 )]
 fn map_texture_tagged_copy_view(
@@ -1408,7 +1420,7 @@ impl crate::Context for Context {
     fn device_drop(&self, device: &Self::DeviceId, _device_data: &Self::DeviceData) {
         let global = &self.0;
 
-        #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
+        #[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))]
         {
             match wgc::gfx_select!(device => global.device_poll(*device, wgt::Maintain::Wait)) {
                 Ok(_) => (),
@@ -2219,7 +2231,7 @@ impl crate::Context for Context {
         }
     }
 
-    #[cfg(all(target_arch = "wasm32", not(feature = "emscripten")))]
+    #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
     fn queue_copy_external_image_to_texture(
         &self,
         queue: &Self::QueueId,

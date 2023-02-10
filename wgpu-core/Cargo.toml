@@ -35,9 +35,6 @@ dx12 = ["hal/dx12"]
 # https://renderdoc.org/
 renderdoc = ["hal/renderdoc"]
 
-# Compile for the Emscripten POSIX-in-a-web-page emulation environment.
-emscripten = ["hal/emscripten"]
-
 # Apply run-time checks, even in release builds. These are in addition
 # to the validation carried out at public APIs in all builds.
 strict_asserts = ["wgt/strict_asserts"]

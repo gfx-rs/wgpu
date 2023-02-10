@@ -43,7 +43,6 @@ dx12 = ["naga/hlsl-out", "native", "bit-set", "range-alloc", "winapi/std", "wina
 windows_rs = ["gpu-allocator"]
 dxc_shader_compiler = ["hassle-rs"]
 renderdoc = ["libloading", "renderdoc-sys"]
-emscripten = ["gles"]
 
 [[example]]
 name = "halmark"

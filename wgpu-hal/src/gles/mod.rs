@@ -57,9 +57,9 @@ To address this, we invalidate the vertex buffers based on:
 */
 
 ///cbindgen:ignore
-#[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
+#[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))]
 mod egl;
-#[cfg(all(target_arch = "wasm32", not(feature = "emscripten")))]
+#[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
 mod web;
 
 mod adapter;
@@ -70,14 +70,14 @@ mod queue;
 
 use crate::{CopyExtent, TextureDescriptor};
 
-#[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
+#[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))]
 pub use self::egl::{AdapterContext, AdapterContextLock};
-#[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
+#[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))]
 use self::egl::{Instance, Surface};
 
-#[cfg(all(target_arch = "wasm32", not(feature = "emscripten")))]
+#[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
 pub use self::web::AdapterContext;
-#[cfg(all(target_arch = "wasm32", not(feature = "emscripten")))]
+#[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
 use self::web::{Instance, Surface};
 
 use arrayvec::ArrayVec;
@@ -680,7 +680,7 @@ enum Command {
         dst_target: BindTarget,
         copy: crate::BufferCopy,
     },
-    #[cfg(all(target_arch = "wasm32", not(feature = "emscripten")))]
+    #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
     CopyExternalImageToTexture {
         src: wgt::ImageCopyExternalImage,
         dst: glow::Texture,

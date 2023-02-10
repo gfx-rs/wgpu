@@ -35,6 +35,6 @@ workspace = true
 features = ["dx11", "dx12"]
 
 # We want the wgpu-core Vulkan backend on Unix (but not Emscripten) and Windows.
-[target.'cfg(any(windows, all(unix, not(target_arch = "emscripten"))))'.dependencies.wgpu-core]
+[target.'cfg(any(windows, all(unix, not(target_os = "emscripten"))))'.dependencies.wgpu-core]
 workspace = true
 features = ["vulkan"]

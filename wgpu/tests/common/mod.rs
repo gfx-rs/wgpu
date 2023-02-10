@@ -340,12 +340,18 @@ fn initialize_adapter() -> (Adapter, SurfaceGuard) {
     let surface_guard;
     let compatible_surface;
 
-    #[cfg(not(all(target_arch = "wasm32", feature = "webgl")))]
+    #[cfg(not(all(
+        target_arch = "wasm32",
+        any(target_os = "emscripten", feature = "webgl")
+    )))]
     {
         surface_guard = SurfaceGuard {};
         compatible_surface = None;
     }
-    #[cfg(all(target_arch = "wasm32", feature = "webgl"))]
+    #[cfg(all(
+        target_arch = "wasm32",
+        any(target_os = "emscripten", feature = "webgl")
+    ))]
     {
         // On wasm, append a canvas to the document body for initializing the adapter
         let canvas = create_html_canvas();
@@ -371,14 +377,17 @@ fn initialize_adapter() -> (Adapter, SurfaceGuard) {
 }
 
 struct SurfaceGuard {
-    #[cfg(all(target_arch = "wasm32", feature = "webgl"))]
+    #[cfg(all(
+        target_arch = "wasm32",
+        any(target_os = "emscripten", feature = "webgl")
+    ))]
     canvas: web_sys::HtmlCanvasElement,
 }
 
 impl SurfaceGuard {
     fn check_for_unreported_errors(&self) -> bool {
         cfg_if::cfg_if! {
-            if #[cfg(all(target_arch = "wasm32", feature = "webgl"))] {
+            if #[cfg(all(target_arch = "wasm32", any(target_os = "emscripten", feature = "webgl")))] {
                 use wasm_bindgen::JsCast;
 
                 self.canvas
@@ -396,14 +405,20 @@ impl SurfaceGuard {
     }
 }
 
-#[cfg(all(target_arch = "wasm32", feature = "webgl"))]
+#[cfg(all(
+    target_arch = "wasm32",
+    any(target_os = "emscripten", feature = "webgl")
+))]
 impl Drop for SurfaceGuard {
     fn drop(&mut self) {
         delete_html_canvas();
     }
 }
 
-#[cfg(all(target_arch = "wasm32", feature = "webgl"))]
+#[cfg(all(
+    target_arch = "wasm32",
+    any(target_os = "emscripten", feature = "webgl")
+))]
 fn create_html_canvas() -> web_sys::HtmlCanvasElement {
     use wasm_bindgen::JsCast;
 
@@ -419,7 +434,10 @@ fn create_html_canvas() -> web_sys::HtmlCanvasElement {
         .expect("couldn't append canvas to document body")
 }
 
-#[cfg(all(target_arch = "wasm32", feature = "webgl"))]
+#[cfg(all(
+    target_arch = "wasm32",
+    any(target_os = "emscripten", feature = "webgl")
+))]
 fn delete_html_canvas() {
     if let Some(document) = web_sys::window().and_then(|win| win.document()) {
         if let Some(element) = document.get_element_by_id(CANVAS_ID) {
