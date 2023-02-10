@@ -2,6 +2,7 @@ name: validation-windows
 on:
   pull_request:
     paths:
+      - '.github/workflows/validation-windows.yml'
       - 'tests/out/hlsl/*.hlsl'
 
 jobs:
@@ -12,7 +13,7 @@ jobs:
       - uses: actions/checkout@v3
 
       - name: Add DirectXShaderCompiler
-        uses: napokue/setup-dxc@v1.1
+        uses: napokue/setup-dxc@v1.1.0
 
       - run: make validate-hlsl-dxc
         shell: sh

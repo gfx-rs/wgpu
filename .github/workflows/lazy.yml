@@ -3,6 +3,9 @@ name: lazy
 on:
   push:
     branches: [master]
+  pull_request:
+    paths:
+      - '.github/workflows/lazy.yml'
 
 env:
   CARGO_INCREMENTAL: false

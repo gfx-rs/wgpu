@@ -2,11 +2,12 @@ name: validation-linux
 on:
   pull_request:
     paths:
-    - 'tests/out/spv/*.spvasm'
-    - 'tests/out/glsl/*.glsl'
-    - 'tests/out/dot/*.dot'
-    - 'tests/out/wgsl/*.wgsl'
-    - 'src/front/wgsl/*'
+      - '.github/workflows/validation-linux.yml'
+      - 'tests/out/spv/*.spvasm'
+      - 'tests/out/glsl/*.glsl'
+      - 'tests/out/dot/*.dot'
+      - 'tests/out/wgsl/*.wgsl'
+      - 'src/front/wgsl/*'
 
 jobs:
   validate-linux:

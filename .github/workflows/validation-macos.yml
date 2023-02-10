@@ -2,7 +2,8 @@ name: validation-macos
 on:
   pull_request:
     paths:
-    - 'tests/out/msl/*.msl'
+      - '.github/workflows/validation-macos.yml'
+      - 'tests/out/msl/*.msl'
 
 jobs:
   validate-macos:
