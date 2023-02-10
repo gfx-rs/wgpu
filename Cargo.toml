@@ -104,7 +104,7 @@ gpu-allocator = { version = "0.21", default_features = false, features = ["d3d12
 native = { package = "d3d12", version = "0.5.0" }
 range-alloc = "0.1"
 winapi = "0.3"
-hassle-rs = "0.9.0"
+hassle-rs = "0.10.0"
 
 # Gles dependencies
 egl = { package = "khronos-egl", version = "4.1" }
