@@ -295,14 +295,14 @@ platform supports.";
 /// private name, which is never used outside this macro. For details:
 /// <https://github.com/rust-lang/rust/pull/52234#issuecomment-976702997>
 macro_rules! define_backend_caller {
-    { $public:ident, $private:ident if $feature:literal } => {
-        #[cfg(feature = $feature )]
+    { $public:ident, $private:ident, $feature:literal if $cfg:meta } => {
+        #[cfg($cfg)]
         #[macro_export]
         macro_rules! $private {
             ( $call:expr ) => ( $call )
         }
 
-        #[cfg(not(feature = $feature ))]
+        #[cfg(not($cfg))]
         #[macro_export]
         macro_rules! $private {
             ( $call:expr ) => (
@@ -321,11 +321,11 @@ macro_rules! define_backend_caller {
 //
 // expands to `expr` if the `"vulkan"` feature is enabled, or to a panic
 // otherwise.
-define_backend_caller! { gfx_if_vulkan, gfx_if_vulkan_hidden if "vulkan" }
-define_backend_caller! { gfx_if_metal, gfx_if_metal_hidden if "metal" }
-define_backend_caller! { gfx_if_dx12, gfx_if_dx12_hidden if "dx12" }
-define_backend_caller! { gfx_if_dx11, gfx_if_dx11_hidden if "dx11" }
-define_backend_caller! { gfx_if_gles, gfx_if_gles_hidden if "gles" }
+define_backend_caller! { gfx_if_vulkan, gfx_if_vulkan_hidden, "vulkan" if all(feature = "vulkan", not(target_arch = "wasm32")) }
+define_backend_caller! { gfx_if_metal, gfx_if_metal_hidden, "metal" if all(feature = "metal", any(target_os = "macos", target_os = "ios")) }
+define_backend_caller! { gfx_if_dx12, gfx_if_dx12_hidden, "dx12" if all(feature = "dx12", windows) }
+define_backend_caller! { gfx_if_dx11, gfx_if_dx11_hidden, "dx11" if all(feature = "dx11", windows) }
+define_backend_caller! { gfx_if_gles, gfx_if_gles_hidden, "gles" if feature = "gles" }
 
 /// Dispatch on an [`Id`]'s backend to a backend-generic method.
 ///
