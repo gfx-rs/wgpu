@@ -20,26 +20,30 @@ impl crate::BufferTextureCopy {
         &self,
         format: wgt::TextureFormat,
     ) -> d3d12::D3D12_PLACED_SUBRESOURCE_FOOTPRINT {
-        let desc = format.describe();
+        let (block_width, block_height) = format.block_dimensions();
         d3d12::D3D12_PLACED_SUBRESOURCE_FOOTPRINT {
             Offset: self.buffer_layout.offset,
             Footprint: d3d12::D3D12_SUBRESOURCE_FOOTPRINT {
-                Format: auxil::dxgi::conv::map_texture_format(format),
+                Format: auxil::dxgi::conv::map_texture_format_for_copy(
+                    format,
+                    self.texture_base.aspect,
+                )
+                .unwrap(),
                 Width: self.size.width,
                 Height: self
                     .buffer_layout
                     .rows_per_image
-                    .map_or(self.size.height, |count| {
-                        count.get() * desc.block_dimensions.1 as u32
-                    }),
+                    .map_or(self.size.height, |count| count.get() * block_height),
                 Depth: self.size.depth,
                 RowPitch: {
                     let actual = match self.buffer_layout.bytes_per_row {
                         Some(count) => count.get(),
                         // this may happen for single-line updates
                         None => {
-                            (self.size.width / desc.block_dimensions.0 as u32)
-                                * desc.block_size as u32
+                            let block_size = format
+                                .block_size(Some(self.texture_base.aspect.map()))
+                                .unwrap();
+                            (self.size.width / block_width) * block_size
                         }
                     };
                     crate::auxil::align_to(actual, d3d12::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT)
@@ -387,24 +391,27 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 let tex_mip_level_count = barrier.texture.mip_level_count;
                 let tex_array_layer_count = barrier.texture.array_layer_count();
 
-                if barrier
-                    .range
-                    .is_full_resource(tex_mip_level_count, tex_array_layer_count)
-                {
+                if barrier.range.is_full_resource(
+                    barrier.texture.format,
+                    tex_mip_level_count,
+                    tex_array_layer_count,
+                ) {
                     // Only one barrier if it affects the whole image.
                     self.temp.barriers.push(raw);
                 } else {
                     // Selected texture aspect is relevant if the texture format has both depth _and_ stencil aspects.
-                    let planes = if crate::FormatAspects::from(barrier.texture.format)
-                        .contains(crate::FormatAspects::DEPTH | crate::FormatAspects::STENCIL)
-                    {
+                    let planes = if barrier.texture.format.is_combined_depth_stencil_format() {
                         match barrier.range.aspect {
                             wgt::TextureAspect::All => 0..2,
-                            wgt::TextureAspect::StencilOnly => 1..2,
                             wgt::TextureAspect::DepthOnly => 0..1,
+                            wgt::TextureAspect::StencilOnly => 1..2,
                         }
                     } else {
-                        0..1
+                        match barrier.texture.format {
+                            wgt::TextureFormat::Stencil8 => 1..2,
+                            wgt::TextureFormat::Depth24Plus => 0..2, // TODO: investigate why tests fail if we set this to 0..1
+                            _ => 0..1,
+                        }
                     };
 
                     for mip_level in barrier.range.mip_range(tex_mip_level_count) {
@@ -705,7 +712,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
 
         if let Some(ref ds) = desc.depth_stencil_attachment {
             let mut flags = native::ClearFlags::empty();
-            let aspects = ds.target.view.format_aspects;
+            let aspects = ds.target.view.aspects;
             if !ds.depth_ops.contains(crate::AttachmentOps::LOAD)
                 && aspects.contains(crate::FormatAspects::DEPTH)
             {

@@ -1,9 +1,13 @@
 use std::{
+    borrow::Cow,
     ffi::{OsStr, OsString},
     io,
+    num::NonZeroU32,
     path::Path,
     str::FromStr,
 };
+use wgpu::util::DeviceExt;
+use wgpu::*;
 
 fn read_png(path: impl AsRef<Path>, width: u32, height: u32) -> Option<Vec<u8>> {
     let data = match std::fs::read(&path) {
@@ -142,5 +146,281 @@ pub fn compare_image_output(
         }
     } else {
         write_png(&path, width, height, data, png::Compression::Best);
+    }
+}
+
+fn copy_via_compute(
+    device: &Device,
+    encoder: &mut CommandEncoder,
+    texture: &Texture,
+    buffer: &Buffer,
+    aspect: TextureAspect,
+) {
+    let bgl = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
+        label: None,
+        entries: &[
+            BindGroupLayoutEntry {
+                binding: 0,
+                visibility: ShaderStages::COMPUTE,
+                ty: BindingType::Texture {
+                    sample_type: match aspect {
+                        TextureAspect::DepthOnly => TextureSampleType::Float { filterable: false },
+                        TextureAspect::StencilOnly => TextureSampleType::Uint,
+                        _ => unreachable!(),
+                    },
+                    view_dimension: TextureViewDimension::D2Array,
+                    multisampled: false,
+                },
+                count: None,
+            },
+            BindGroupLayoutEntry {
+                binding: 1,
+                visibility: ShaderStages::COMPUTE,
+                ty: BindingType::Buffer {
+                    ty: BufferBindingType::Storage { read_only: false },
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+        ],
+    });
+
+    let view = texture.create_view(&TextureViewDescriptor {
+        aspect,
+        dimension: Some(TextureViewDimension::D2Array),
+        ..Default::default()
+    });
+
+    let output_buffer = device.create_buffer(&BufferDescriptor {
+        label: Some("output buffer"),
+        size: buffer.size(),
+        usage: BufferUsages::COPY_SRC | BufferUsages::STORAGE,
+        mapped_at_creation: false,
+    });
+
+    let bg = device.create_bind_group(&BindGroupDescriptor {
+        label: None,
+        layout: &bgl,
+        entries: &[
+            BindGroupEntry {
+                binding: 0,
+                resource: BindingResource::TextureView(&view),
+            },
+            BindGroupEntry {
+                binding: 1,
+                resource: BindingResource::Buffer(BufferBinding {
+                    buffer: &output_buffer,
+                    offset: 0,
+                    size: None,
+                }),
+            },
+        ],
+    });
+
+    let pll = device.create_pipeline_layout(&PipelineLayoutDescriptor {
+        label: None,
+        bind_group_layouts: &[&bgl],
+        push_constant_ranges: &[],
+    });
+
+    let source = String::from(include_str!("copy_texture_to_buffer.wgsl"));
+
+    let processed_source = source.replace(
+        "{{type}}",
+        match aspect {
+            TextureAspect::DepthOnly => "f32",
+            TextureAspect::StencilOnly => "u32",
+            _ => unreachable!(),
+        },
+    );
+
+    let sm = device.create_shader_module(ShaderModuleDescriptor {
+        label: Some("shader copy_texture_to_buffer.wgsl"),
+        source: ShaderSource::Wgsl(Cow::Borrowed(&processed_source)),
+    });
+
+    let pipeline_copy = device.create_compute_pipeline(&ComputePipelineDescriptor {
+        label: Some("pipeline read"),
+        layout: Some(&pll),
+        module: &sm,
+        entry_point: "copy_texture_to_buffer",
+    });
+
+    {
+        let mut pass = encoder.begin_compute_pass(&ComputePassDescriptor::default());
+
+        pass.set_pipeline(&pipeline_copy);
+        pass.set_bind_group(0, &bg, &[]);
+        pass.dispatch_workgroups(1, 1, 1);
+    }
+
+    encoder.copy_buffer_to_buffer(&output_buffer, 0, buffer, 0, buffer.size());
+}
+
+fn copy_texture_to_buffer_with_aspect(
+    encoder: &mut CommandEncoder,
+    texture: &Texture,
+    buffer: &Buffer,
+    buffer_stencil: &Option<Buffer>,
+    aspect: TextureAspect,
+) {
+    let (block_width, block_height) = texture.format().block_dimensions();
+    let block_size = texture.format().block_size(Some(aspect)).unwrap();
+    encoder.copy_texture_to_buffer(
+        ImageCopyTexture {
+            texture,
+            mip_level: 0,
+            origin: Origin3d::ZERO,
+            aspect,
+        },
+        ImageCopyBuffer {
+            buffer: match aspect {
+                TextureAspect::StencilOnly => buffer_stencil.as_ref().unwrap(),
+                _ => buffer,
+            },
+            layout: ImageDataLayout {
+                offset: 0,
+                bytes_per_row: Some(
+                    NonZeroU32::new((texture.width() / block_width) * block_size).unwrap(),
+                ),
+                rows_per_image: Some(NonZeroU32::new(texture.height() / block_height).unwrap()),
+            },
+        },
+        texture.size(),
+    );
+}
+
+fn copy_texture_to_buffer(
+    device: &Device,
+    encoder: &mut CommandEncoder,
+    texture: &Texture,
+    buffer: &Buffer,
+    buffer_stencil: &Option<Buffer>,
+) {
+    match texture.format() {
+        TextureFormat::Depth24Plus => {
+            copy_via_compute(device, encoder, texture, buffer, TextureAspect::DepthOnly);
+        }
+        TextureFormat::Depth24PlusStencil8 => {
+            copy_via_compute(device, encoder, texture, buffer, TextureAspect::DepthOnly);
+            // copy_via_compute(
+            //     device,
+            //     encoder,
+            //     texture,
+            //     buffer_stencil.as_ref().unwrap(),
+            //     TextureAspect::StencilOnly,
+            // );
+            copy_texture_to_buffer_with_aspect(
+                encoder,
+                texture,
+                buffer,
+                buffer_stencil,
+                TextureAspect::StencilOnly,
+            );
+        }
+        TextureFormat::Depth32FloatStencil8 => {
+            copy_texture_to_buffer_with_aspect(
+                encoder,
+                texture,
+                buffer,
+                buffer_stencil,
+                TextureAspect::DepthOnly,
+            );
+            copy_texture_to_buffer_with_aspect(
+                encoder,
+                texture,
+                buffer,
+                buffer_stencil,
+                TextureAspect::StencilOnly,
+            );
+        }
+        _ => {
+            copy_texture_to_buffer_with_aspect(
+                encoder,
+                texture,
+                buffer,
+                buffer_stencil,
+                TextureAspect::All,
+            );
+        }
+    }
+}
+
+pub struct ReadbackBuffers {
+    /// buffer for color or depth aspects
+    buffer: Buffer,
+    /// buffer for stencil aspect
+    buffer_stencil: Option<Buffer>,
+}
+
+impl ReadbackBuffers {
+    pub fn new(device: &Device, texture: &Texture) -> Self {
+        let (block_width, block_height) = texture.format().block_dimensions();
+        let base_size = (texture.width() / block_width)
+            * (texture.height() / block_height)
+            * texture.depth_or_array_layers();
+        if texture.format().is_combined_depth_stencil_format() {
+            let buffer_size = base_size
+                * texture
+                    .format()
+                    .block_size(Some(TextureAspect::DepthOnly))
+                    .unwrap_or(4);
+            let buffer_stencil_size = base_size
+                * texture
+                    .format()
+                    .block_size(Some(TextureAspect::StencilOnly))
+                    .unwrap();
+            let buffer = device.create_buffer_init(&util::BufferInitDescriptor {
+                label: Some("Texture Readback"),
+                usage: BufferUsages::MAP_READ | BufferUsages::COPY_DST,
+                contents: &vec![255; buffer_size as usize],
+            });
+            let buffer_stencil = device.create_buffer_init(&util::BufferInitDescriptor {
+                label: Some("Texture Stencil-Aspect Readback"),
+                usage: BufferUsages::MAP_READ | BufferUsages::COPY_DST,
+                contents: &vec![255; buffer_stencil_size as usize],
+            });
+            ReadbackBuffers {
+                buffer,
+                buffer_stencil: Some(buffer_stencil),
+            }
+        } else {
+            let buffer_size = base_size * texture.format().block_size(None).unwrap_or(4);
+            let buffer = device.create_buffer_init(&util::BufferInitDescriptor {
+                label: Some("Texture Readback"),
+                usage: BufferUsages::MAP_READ | BufferUsages::COPY_DST,
+                contents: &vec![255; buffer_size as usize],
+            });
+            ReadbackBuffers {
+                buffer,
+                buffer_stencil: None,
+            }
+        }
+    }
+
+    pub fn copy_from(&self, device: &Device, encoder: &mut CommandEncoder, texture: &Texture) {
+        copy_texture_to_buffer(device, encoder, texture, &self.buffer, &self.buffer_stencil);
+    }
+
+    pub fn are_zero(&self, device: &Device) -> bool {
+        fn is_zero(device: &Device, buffer: &Buffer) -> bool {
+            let is_zero = {
+                let buffer_slice = buffer.slice(..);
+                buffer_slice.map_async(MapMode::Read, |_| ());
+                device.poll(Maintain::Wait);
+                let buffer_view = buffer_slice.get_mapped_range();
+                buffer_view.iter().all(|b| *b == 0)
+            };
+            buffer.unmap();
+            is_zero
+        }
+
+        is_zero(device, &self.buffer)
+            && self
+                .buffer_stencil
+                .as_ref()
+                .map(|buffer_stencil| is_zero(device, buffer_stencil))
+                .unwrap_or(true)
     }
 }

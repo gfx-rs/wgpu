@@ -2769,12 +2769,6 @@ impl CommandEncoder {
     }
 
     /// Copy data from a buffer to a texture.
-    ///
-    /// # Panics
-    ///
-    /// - Copy would overrun buffer.
-    /// - Copy would overrun texture.
-    /// - `source.layout.bytes_per_row` isn't divisible by [`COPY_BYTES_PER_ROW_ALIGNMENT`].
     pub fn copy_buffer_to_texture(
         &mut self,
         source: ImageCopyBuffer,
@@ -2792,12 +2786,6 @@ impl CommandEncoder {
     }
 
     /// Copy data from a texture to a buffer.
-    ///
-    /// # Panics
-    ///
-    /// - Copy would overrun buffer.
-    /// - Copy would overrun texture.
-    /// - `source.layout.bytes_per_row` isn't divisible by [`COPY_BYTES_PER_ROW_ALIGNMENT`].
     pub fn copy_texture_to_buffer(
         &mut self,
         source: ImageCopyTexture,

@@ -1487,7 +1487,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
             features.intersects(vk::FormatFeatureFlags::TRANSFER_DST),
         );
         // Vulkan is very permissive about MSAA
-        flags.set(Tfc::MULTISAMPLE_RESOLVE, !format.describe().is_compressed());
+        flags.set(Tfc::MULTISAMPLE_RESOLVE, !format.is_compressed());
 
         // get the supported sample counts
         let format_aspect = crate::FormatAspects::from(format);
@@ -1502,7 +1502,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
                 .framebuffer_stencil_sample_counts
                 .min(limits.sampled_image_stencil_sample_counts)
         } else {
-            match format.describe().sample_type {
+            match format.sample_type(None).unwrap() {
                 wgt::TextureSampleType::Float { filterable: _ } => limits
                     .framebuffer_color_sample_counts
                     .min(limits.sampled_image_color_sample_counts),

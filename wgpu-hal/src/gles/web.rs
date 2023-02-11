@@ -191,7 +191,7 @@ impl Surface {
             "need to configure surface before presenting",
         ))?;
 
-        if swapchain.format.describe().srgb {
+        if swapchain.format.is_srgb() {
             // Important to set the viewport since we don't know in what state the user left it.
             unsafe {
                 gl.viewport(
@@ -277,7 +277,7 @@ impl crate::Surface<super::Api> for Surface {
             unsafe { gl.delete_framebuffer(swapchain.framebuffer) };
         }
 
-        if self.srgb_present_program.is_none() && config.format.describe().srgb {
+        if self.srgb_present_program.is_none() && config.format.is_srgb() {
             self.srgb_present_program = Some(unsafe { Self::create_srgb_present_program(gl) });
         }
 

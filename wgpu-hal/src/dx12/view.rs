@@ -6,8 +6,9 @@ pub(crate) const D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING: u32 = 0x1688;
 
 pub(super) struct ViewDescriptor {
     dimension: wgt::TextureViewDimension,
-    pub format: native::Format,
-    format_nodepth: native::Format,
+    pub aspects: crate::FormatAspects,
+    pub rtv_dsv_format: native::Format,
+    srv_uav_format: Option<native::Format>,
     multisampled: bool,
     array_layer_base: u32,
     array_layer_count: u32,
@@ -17,10 +18,13 @@ pub(super) struct ViewDescriptor {
 
 impl crate::TextureViewDescriptor<'_> {
     pub(super) fn to_internal(&self, texture: &super::Texture) -> ViewDescriptor {
+        let aspects = crate::FormatAspects::new(self.format, self.range.aspect);
+
         ViewDescriptor {
             dimension: self.dimension,
-            format: auxil::dxgi::conv::map_texture_format(self.format),
-            format_nodepth: auxil::dxgi::conv::map_texture_format_nodepth(self.format),
+            aspects,
+            rtv_dsv_format: auxil::dxgi::conv::map_texture_format(self.format),
+            srv_uav_format: auxil::dxgi::conv::map_texture_format_for_srv_uav(self.format, aspects),
             multisampled: texture.sample_count > 1,
             mip_level_base: self.range.base_mip_level,
             mip_level_count: self.range.mip_level_count.unwrap_or(!0),
@@ -31,9 +35,9 @@ impl crate::TextureViewDescriptor<'_> {
 }
 
 impl ViewDescriptor {
-    pub(crate) unsafe fn to_srv(&self) -> d3d12::D3D12_SHADER_RESOURCE_VIEW_DESC {
+    pub(crate) unsafe fn to_srv(&self) -> Option<d3d12::D3D12_SHADER_RESOURCE_VIEW_DESC> {
         let mut desc = d3d12::D3D12_SHADER_RESOURCE_VIEW_DESC {
-            Format: self.format_nodepth,
+            Format: self.srv_uav_format?,
             ViewDimension: 0,
             Shader4ComponentMapping: D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
             u: unsafe { mem::zeroed() },
@@ -142,12 +146,12 @@ impl ViewDescriptor {
             }
         }
 
-        desc
+        Some(desc)
     }
 
-    pub(crate) unsafe fn to_uav(&self) -> d3d12::D3D12_UNORDERED_ACCESS_VIEW_DESC {
+    pub(crate) unsafe fn to_uav(&self) -> Option<d3d12::D3D12_UNORDERED_ACCESS_VIEW_DESC> {
         let mut desc = d3d12::D3D12_UNORDERED_ACCESS_VIEW_DESC {
-            Format: self.format_nodepth,
+            Format: self.srv_uav_format?,
             ViewDimension: 0,
             u: unsafe { mem::zeroed() },
         };
@@ -205,12 +209,12 @@ impl ViewDescriptor {
             }
         }
 
-        desc
+        Some(desc)
     }
 
     pub(crate) unsafe fn to_rtv(&self) -> d3d12::D3D12_RENDER_TARGET_VIEW_DESC {
         let mut desc = d3d12::D3D12_RENDER_TARGET_VIEW_DESC {
-            Format: self.format,
+            Format: self.rtv_dsv_format,
             ViewDimension: 0,
             u: unsafe { mem::zeroed() },
         };
@@ -290,20 +294,19 @@ impl ViewDescriptor {
         desc
     }
 
-    pub(crate) unsafe fn to_dsv(
-        &self,
-        ro_aspects: crate::FormatAspects,
-    ) -> d3d12::D3D12_DEPTH_STENCIL_VIEW_DESC {
+    pub(crate) unsafe fn to_dsv(&self, read_only: bool) -> d3d12::D3D12_DEPTH_STENCIL_VIEW_DESC {
         let mut desc = d3d12::D3D12_DEPTH_STENCIL_VIEW_DESC {
-            Format: self.format,
+            Format: self.rtv_dsv_format,
             ViewDimension: 0,
             Flags: {
                 let mut flags = d3d12::D3D12_DSV_FLAG_NONE;
-                if ro_aspects.contains(crate::FormatAspects::DEPTH) {
-                    flags |= d3d12::D3D12_DSV_FLAG_READ_ONLY_DEPTH;
-                }
-                if ro_aspects.contains(crate::FormatAspects::STENCIL) {
-                    flags |= d3d12::D3D12_DSV_FLAG_READ_ONLY_STENCIL;
+                if read_only {
+                    if self.aspects.contains(crate::FormatAspects::DEPTH) {
+                        flags |= d3d12::D3D12_DSV_FLAG_READ_ONLY_DEPTH;
+                    }
+                    if self.aspects.contains(crate::FormatAspects::STENCIL) {
+                        flags |= d3d12::D3D12_DSV_FLAG_READ_ONLY_STENCIL;
+                    }
                 }
                 flags
             },

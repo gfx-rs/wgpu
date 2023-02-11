@@ -706,10 +706,12 @@ impl crate::Device<super::Api> for super::Device {
 
             unsafe { gl.bind_texture(target, Some(raw)) };
             //Note: this has to be done before defining the storage!
-            match desc.format.describe().sample_type {
-                wgt::TextureSampleType::Float { filterable: false }
-                | wgt::TextureSampleType::Uint
-                | wgt::TextureSampleType::Sint => {
+            match desc.format.sample_type(None) {
+                Some(
+                    wgt::TextureSampleType::Float { filterable: false }
+                    | wgt::TextureSampleType::Uint
+                    | wgt::TextureSampleType::Sint,
+                ) => {
                     // reset default filtering mode
                     unsafe {
                         gl.tex_parameter_i32(target, glow::TEXTURE_MIN_FILTER, glow::NEAREST as i32)
@@ -718,8 +720,7 @@ impl crate::Device<super::Api> for super::Device {
                         gl.tex_parameter_i32(target, glow::TEXTURE_MAG_FILTER, glow::NEAREST as i32)
                     };
                 }
-                wgt::TextureSampleType::Float { filterable: true }
-                | wgt::TextureSampleType::Depth => {}
+                _ => {}
             }
 
             if is_3d {
@@ -808,9 +809,7 @@ impl crate::Device<super::Api> for super::Device {
         Ok(super::TextureView {
             //TODO: use `conv::map_view_dimension(desc.dimension)`?
             inner: texture.inner.clone(),
-            sample_type: texture.format.describe().sample_type,
-            aspects: crate::FormatAspects::from(texture.format)
-                & crate::FormatAspects::from(desc.range.aspect),
+            aspects: crate::FormatAspects::new(texture.format, desc.range.aspect),
             mip_levels: desc.range.mip_range(texture.mip_level_count),
             array_layers: desc.range.layer_range(texture.array_layer_count),
             format: texture.format,
@@ -1037,7 +1036,11 @@ impl crate::Device<super::Api> for super::Device {
                             "This is an implementation problem of wgpu-hal/gles backend.")
                     }
                     let (raw, target) = view.inner.as_native();
-                    super::RawBinding::Texture { raw, target }
+                    super::RawBinding::Texture {
+                        raw,
+                        target,
+                        aspects: view.aspects,
+                    }
                 }
                 wgt::BindingType::StorageTexture {
                     access,

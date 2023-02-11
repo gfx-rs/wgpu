@@ -644,12 +644,27 @@ bitflags!(
     }
 );
 
-impl From<wgt::TextureAspect> for FormatAspects {
-    fn from(aspect: wgt::TextureAspect) -> Self {
-        match aspect {
+impl FormatAspects {
+    pub fn new(format: wgt::TextureFormat, aspect: wgt::TextureAspect) -> Self {
+        let aspect_mask = match aspect {
             wgt::TextureAspect::All => Self::all(),
             wgt::TextureAspect::DepthOnly => Self::DEPTH,
             wgt::TextureAspect::StencilOnly => Self::STENCIL,
+        };
+        Self::from(format) & aspect_mask
+    }
+
+    /// Returns `true` if only one flag is set
+    pub fn is_one(&self) -> bool {
+        self.bits().count_ones() == 1
+    }
+
+    pub fn map(&self) -> wgt::TextureAspect {
+        match *self {
+            Self::COLOR => wgt::TextureAspect::All,
+            Self::DEPTH => wgt::TextureAspect::DepthOnly,
+            Self::STENCIL => wgt::TextureAspect::StencilOnly,
+            _ => unreachable!(),
         }
     }
 }
@@ -658,8 +673,9 @@ impl From<wgt::TextureFormat> for FormatAspects {
     fn from(format: wgt::TextureFormat) -> Self {
         match format {
             wgt::TextureFormat::Stencil8 => Self::STENCIL,
-            wgt::TextureFormat::Depth16Unorm => Self::DEPTH,
-            wgt::TextureFormat::Depth32Float | wgt::TextureFormat::Depth24Plus => Self::DEPTH,
+            wgt::TextureFormat::Depth16Unorm
+            | wgt::TextureFormat::Depth32Float
+            | wgt::TextureFormat::Depth24Plus => Self::DEPTH,
             wgt::TextureFormat::Depth32FloatStencil8 | wgt::TextureFormat::Depth24PlusStencil8 => {
                 Self::DEPTH | Self::STENCIL
             }

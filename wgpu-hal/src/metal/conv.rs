@@ -1,4 +1,7 @@
-pub fn map_texture_usage(usage: crate::TextureUses) -> mtl::MTLTextureUsage {
+pub fn map_texture_usage(
+    format: wgt::TextureFormat,
+    usage: crate::TextureUses,
+) -> mtl::MTLTextureUsage {
     use crate::TextureUses as Tu;
 
     let mut mtl_usage = mtl::MTLTextureUsage::Unknown;
@@ -16,6 +19,12 @@ pub fn map_texture_usage(usage: crate::TextureUses) -> mtl::MTLTextureUsage {
     mtl_usage.set(
         mtl::MTLTextureUsage::ShaderWrite,
         usage.intersects(Tu::STORAGE_READ_WRITE),
+    );
+    // needed for combined depth/stencil formats since we might
+    // create a stencil-only view from them
+    mtl_usage.set(
+        mtl::MTLTextureUsage::PixelFormatView,
+        format.is_combined_depth_stencil_format(),
     );
 
     mtl_usage
@@ -296,5 +305,20 @@ pub fn map_clear_color(color: &wgt::Color) -> mtl::MTLClearColor {
         green: color.g,
         blue: color.b,
         alpha: color.a,
+    }
+}
+
+pub fn get_blit_option(
+    format: wgt::TextureFormat,
+    aspect: crate::FormatAspects,
+) -> mtl::MTLBlitOption {
+    if format.is_combined_depth_stencil_format() {
+        match aspect {
+            crate::FormatAspects::DEPTH => mtl::MTLBlitOption::DepthFromDepthStencil,
+            crate::FormatAspects::STENCIL => mtl::MTLBlitOption::StencilFromDepthStencil,
+            _ => unreachable!(),
+        }
+    } else {
+        mtl::MTLBlitOption::None
     }
 }

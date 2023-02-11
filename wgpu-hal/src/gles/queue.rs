@@ -591,22 +591,23 @@ impl super::Queue {
                 dst_format,
                 ref copy,
             } => {
-                let format_info = dst_format.describe();
+                let (block_width, block_height) = dst_format.block_dimensions();
+                let block_size = dst_format.block_size(None).unwrap();
                 let format_desc = self.shared.describe_texture_format(dst_format);
-                let row_texels = copy.buffer_layout.bytes_per_row.map_or(0, |bpr| {
-                    format_info.block_dimensions.0 as u32 * bpr.get()
-                        / format_info.block_size as u32
-                });
+                let row_texels = copy
+                    .buffer_layout
+                    .bytes_per_row
+                    .map_or(0, |bpr| block_width * bpr.get() / block_size);
                 let column_texels = copy
                     .buffer_layout
                     .rows_per_image
-                    .map_or(0, |rpi| format_info.block_dimensions.1 as u32 * rpi.get());
+                    .map_or(0, |rpi| block_height * rpi.get());
 
                 unsafe { gl.bind_texture(dst_target, Some(dst)) };
                 unsafe { gl.pixel_store_i32(glow::UNPACK_ROW_LENGTH, row_texels as i32) };
                 unsafe { gl.pixel_store_i32(glow::UNPACK_IMAGE_HEIGHT, column_texels as i32) };
                 let mut unbind_unpack_buffer = false;
-                if !format_info.is_compressed() {
+                if !dst_format.is_compressed() {
                     let buffer_data;
                     let unpack_data = match src.raw {
                         Some(buffer) => {
@@ -710,12 +711,9 @@ impl super::Queue {
                     let bytes_per_row = copy
                         .buffer_layout
                         .bytes_per_row
-                        .map_or(copy.size.width * format_info.block_size as u32, |bpr| {
-                            bpr.get()
-                        });
-                    let block_height = format_info.block_dimensions.1 as u32;
-                    let minimum_rows_per_image = (copy.size.height + block_height - 1)
-                        / format_info.block_dimensions.1 as u32;
+                        .map_or(copy.size.width * block_size, |bpr| bpr.get());
+                    let minimum_rows_per_image =
+                        (copy.size.height + block_height - 1) / block_height;
                     let rows_per_image = copy
                         .buffer_layout
                         .rows_per_image
@@ -806,8 +804,8 @@ impl super::Queue {
                 dst_target: _,
                 ref copy,
             } => {
-                let format_info = src_format.describe();
-                if format_info.is_compressed() {
+                let block_size = src_format.block_size(None).unwrap();
+                if src_format.is_compressed() {
                     log::error!("Not implemented yet: compressed texture copy to buffer");
                     return;
                 }
@@ -821,9 +819,7 @@ impl super::Queue {
                 let row_texels = copy
                     .buffer_layout
                     .bytes_per_row
-                    .map_or(copy.size.width, |bpr| {
-                        bpr.get() / format_info.block_size as u32
-                    });
+                    .map_or(copy.size.width, |bpr| bpr.get() / block_size);
 
                 unsafe { gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(self.copy_fbo)) };
                 //TODO: handle cubemap copies
@@ -1354,9 +1350,30 @@ impl super::Queue {
                 slot,
                 texture,
                 target,
+                aspects,
             } => {
                 unsafe { gl.active_texture(glow::TEXTURE0 + slot) };
                 unsafe { gl.bind_texture(target, Some(texture)) };
+
+                let version = gl.version();
+                let is_min_es_3_1 = version.is_embedded && (version.major, version.minor) >= (3, 1);
+                let is_min_4_3 = !version.is_embedded && (version.major, version.minor) >= (4, 3);
+                if is_min_es_3_1 || is_min_4_3 {
+                    let mode = match aspects {
+                        crate::FormatAspects::DEPTH => Some(glow::DEPTH_COMPONENT),
+                        crate::FormatAspects::STENCIL => Some(glow::STENCIL_INDEX),
+                        _ => None,
+                    };
+                    if let Some(mode) = mode {
+                        unsafe {
+                            gl.tex_parameter_i32(
+                                target,
+                                glow::DEPTH_STENCIL_TEXTURE_MODE,
+                                mode as _,
+                            )
+                        };
+                    }
+                }
             }
             C::BindImage { slot, ref binding } => {
                 unsafe {
