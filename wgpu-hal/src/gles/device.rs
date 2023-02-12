@@ -343,6 +343,7 @@ impl super::Device {
         Ok(program)
     }
 
+    #[allow(clippy::too_many_arguments)]
     unsafe fn create_program<'a>(
         gl: &glow::Context,
         shaders: ArrayVec<ShaderStage<'a>, 3>,
