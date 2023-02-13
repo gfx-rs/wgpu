@@ -1032,21 +1032,19 @@ impl<'w> BlockContext<'w> {
                     Id::D2 | Id::Cube => 2,
                     Id::D3 => 3,
                 };
-                let extended_size_type_id = {
-                    let array_coords = usize::from(arrayed);
-                    let vector_size = match dim_coords + array_coords {
-                        2 => Some(crate::VectorSize::Bi),
-                        3 => Some(crate::VectorSize::Tri),
-                        4 => Some(crate::VectorSize::Quad),
-                        _ => None,
-                    };
-                    self.get_type_id(LookupType::Local(LocalType::Value {
-                        vector_size,
-                        kind: crate::ScalarKind::Sint,
-                        width: 4,
-                        pointer_space: None,
-                    }))
+                let array_coords = usize::from(arrayed);
+                let vector_size = match dim_coords + array_coords {
+                    2 => Some(crate::VectorSize::Bi),
+                    3 => Some(crate::VectorSize::Tri),
+                    4 => Some(crate::VectorSize::Quad),
+                    _ => None,
                 };
+                let extended_size_type_id = self.get_type_id(LookupType::Local(LocalType::Value {
+                    vector_size,
+                    kind: crate::ScalarKind::Sint,
+                    width: 4,
+                    pointer_space: None,
+                }));
 
                 let (query_op, level_id) = match class {
                     Ic::Sampled { multi: true, .. }
@@ -1075,7 +1073,24 @@ impl<'w> BlockContext<'w> {
                 }
                 block.body.push(inst);
 
-                if result_type_id != extended_size_type_id {
+                let bitcast_type_id = self.get_type_id(
+                    LocalType::Value {
+                        vector_size,
+                        kind: crate::ScalarKind::Uint,
+                        width: 4,
+                        pointer_space: None,
+                    }
+                    .into(),
+                );
+                let bitcast_id = self.gen_id();
+                block.body.push(Instruction::unary(
+                    spirv::Op::Bitcast,
+                    bitcast_type_id,
+                    bitcast_id,
+                    id_extended,
+                ));
+
+                if result_type_id != bitcast_type_id {
                     let id = self.gen_id();
                     let components = match dim {
                         // always pick the first component, and duplicate it for all 3 dimensions
@@ -1085,23 +1100,41 @@ impl<'w> BlockContext<'w> {
                     block.body.push(Instruction::vector_shuffle(
                         result_type_id,
                         id,
-                        id_extended,
-                        id_extended,
+                        bitcast_id,
+                        bitcast_id,
                         components,
                     ));
+
                     id
                 } else {
-                    id_extended
+                    bitcast_id
                 }
             }
             Iq::NumLevels => {
-                let id = self.gen_id();
+                let query_id = self.gen_id();
                 block.body.push(Instruction::image_query(
                     spirv::Op::ImageQueryLevels,
-                    result_type_id,
-                    id,
+                    self.get_type_id(
+                        LocalType::Value {
+                            vector_size: None,
+                            kind: crate::ScalarKind::Sint,
+                            width: 4,
+                            pointer_space: None,
+                        }
+                        .into(),
+                    ),
+                    query_id,
                     image_id,
                 ));
+
+                let id = self.gen_id();
+                block.body.push(Instruction::unary(
+                    spirv::Op::Bitcast,
+                    result_type_id,
+                    id,
+                    query_id,
+                ));
+
                 id
             }
             Iq::NumLayers => {
@@ -1125,23 +1158,58 @@ impl<'w> BlockContext<'w> {
                 );
                 inst.add_operand(self.get_index_constant(0));
                 block.body.push(inst);
-                let id = self.gen_id();
+
+                let extract_id = self.gen_id();
                 block.body.push(Instruction::composite_extract(
-                    result_type_id,
-                    id,
+                    self.get_type_id(
+                        LocalType::Value {
+                            vector_size: None,
+                            kind: crate::ScalarKind::Sint,
+                            width: 4,
+                            pointer_space: None,
+                        }
+                        .into(),
+                    ),
+                    extract_id,
                     id_extended,
                     &[vec_size as u32 - 1],
                 ));
+
+                let id = self.gen_id();
+                block.body.push(Instruction::unary(
+                    spirv::Op::Bitcast,
+                    result_type_id,
+                    id,
+                    extract_id,
+                ));
+
                 id
             }
             Iq::NumSamples => {
-                let id = self.gen_id();
+                let query_id = self.gen_id();
                 block.body.push(Instruction::image_query(
                     spirv::Op::ImageQuerySamples,
-                    result_type_id,
-                    id,
+                    self.get_type_id(
+                        LocalType::Value {
+                            vector_size: None,
+                            kind: crate::ScalarKind::Sint,
+                            width: 4,
+                            pointer_space: None,
+                        }
+                        .into(),
+                    ),
+                    query_id,
                     image_id,
                 ));
+
+                let id = self.gen_id();
+                block.body.push(Instruction::unary(
+                    spirv::Op::Bitcast,
+                    result_type_id,
+                    id,
+                    query_id,
+                ));
+
                 id
             }
         };

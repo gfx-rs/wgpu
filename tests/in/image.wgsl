@@ -18,7 +18,7 @@ var image_dst: texture_storage_1d<r32uint,write>;
 @compute @workgroup_size(16)
 fn main(@builtin(local_invocation_id) local_id: vec3<u32>) {
     let dim = textureDimensions(image_storage_src);
-    let itc = dim * vec2<i32>(local_id.xy) % vec2<i32>(10, 20);
+    let itc = vec2<i32>(dim * local_id.xy) % vec2<i32>(10, 20);
     // loads with ivec2 coords.
     let value1 = textureLoad(image_mipmapped_src, itc, i32(local_id.z));
     let value2 = textureLoad(image_multisampled_src, itc, i32(local_id.z));
@@ -39,8 +39,8 @@ fn main(@builtin(local_invocation_id) local_id: vec3<u32>) {
 
 @compute @workgroup_size(16, 1, 1)
 fn depth_load(@builtin(local_invocation_id) local_id: vec3<u32>) {
-    let dim: vec2<i32> = textureDimensions(image_storage_src);
-    let itc: vec2<i32> = ((dim * vec2<i32>(local_id.xy)) % vec2<i32>(10, 20));
+    let dim: vec2<u32> = textureDimensions(image_storage_src);
+    let itc: vec2<i32> = (vec2<i32>(dim * local_id.xy) % vec2<i32>(10, 20));
     let val: f32 = textureLoad(image_depth_multisampled_src, itc, i32(local_id.z));
     textureStore(image_dst, itc.x, vec4<u32>(u32(val)));
     return;

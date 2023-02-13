@@ -94,7 +94,7 @@ fn image_queries() {
     require(
         &[Ca::ImageQuery],
         r#"
-        fn f(i: texture_2d<f32>) -> vec2<i32> {
+        fn f(i: texture_2d<f32>) -> vec2<u32> {
             return textureDimensions(i);
         }
     "#,
@@ -102,7 +102,7 @@ fn image_queries() {
     require(
         &[Ca::ImageQuery],
         r#"
-        fn f(i: texture_2d_array<f32>) -> i32 {
+        fn f(i: texture_2d_array<f32>) -> u32 {
             return textureNumLayers(i);
         }
     "#,
@@ -110,7 +110,7 @@ fn image_queries() {
     require(
         &[Ca::ImageQuery],
         r#"
-        fn f(i: texture_2d<f32>) -> i32 {
+        fn f(i: texture_2d<f32>) -> u32 {
             return textureNumLevels(i);
         }
     "#,
@@ -118,7 +118,7 @@ fn image_queries() {
     require(
         &[Ca::ImageQuery],
         r#"
-        fn f(i: texture_multisampled_2d<f32>) -> i32 {
+        fn f(i: texture_multisampled_2d<f32>) -> u32 {
             return textureNumSamples(i);
         }
     "#,

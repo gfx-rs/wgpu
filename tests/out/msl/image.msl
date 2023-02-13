@@ -17,8 +17,8 @@ kernel void main_(
 , metal::texture1d<uint, metal::access::sample> image_1d_src [[user(fake0)]]
 , metal::texture1d<uint, metal::access::write> image_dst [[user(fake0)]]
 ) {
-    metal::int2 dim = metal::int2(image_storage_src.get_width(), image_storage_src.get_height());
-    metal::int2 itc = (dim * static_cast<metal::int2>(local_id.xy)) % metal::int2(10, 20);
+    metal::uint2 dim = metal::uint2(image_storage_src.get_width(), image_storage_src.get_height());
+    metal::int2 itc = static_cast<metal::int2>(dim * local_id.xy) % metal::int2(10, 20);
     metal::uint4 value1_ = image_mipmapped_src.read(metal::uint2(itc), static_cast<int>(local_id.z));
     metal::uint4 value2_ = image_multisampled_src.read(metal::uint2(itc), static_cast<int>(local_id.z));
     metal::uint4 value4_ = image_storage_src.read(metal::uint2(itc));
@@ -43,8 +43,8 @@ kernel void depth_load(
 , metal::texture2d<uint, metal::access::read> image_storage_src [[user(fake0)]]
 , metal::texture1d<uint, metal::access::write> image_dst [[user(fake0)]]
 ) {
-    metal::int2 dim_1 = metal::int2(image_storage_src.get_width(), image_storage_src.get_height());
-    metal::int2 itc_1 = (dim_1 * static_cast<metal::int2>(local_id_1.xy)) % metal::int2(10, 20);
+    metal::uint2 dim_1 = metal::uint2(image_storage_src.get_width(), image_storage_src.get_height());
+    metal::int2 itc_1 = static_cast<metal::int2>(dim_1 * local_id_1.xy) % metal::int2(10, 20);
     float val = image_depth_multisampled_src.read(metal::uint2(itc_1), static_cast<int>(local_id_1.z));
     image_dst.write(metal::uint4(static_cast<uint>(val)), uint(itc_1.x));
     return;
@@ -63,20 +63,20 @@ vertex queriesOutput queries(
 , metal::texture3d<float, metal::access::sample> image_3d [[user(fake0)]]
 , metal::texture2d_ms<float, metal::access::read> image_aa [[user(fake0)]]
 ) {
-    int dim_1d = int(image_1d.get_width());
-    int dim_1d_lod = int(image_1d.get_width());
-    metal::int2 dim_2d = metal::int2(image_2d.get_width(), image_2d.get_height());
-    metal::int2 dim_2d_lod = metal::int2(image_2d.get_width(1), image_2d.get_height(1));
-    metal::int2 dim_2d_array = metal::int2(image_2d_array.get_width(), image_2d_array.get_height());
-    metal::int2 dim_2d_array_lod = metal::int2(image_2d_array.get_width(1), image_2d_array.get_height(1));
-    metal::int2 dim_cube = metal::int2(image_cube.get_width());
-    metal::int2 dim_cube_lod = metal::int2(image_cube.get_width(1));
-    metal::int2 dim_cube_array = metal::int2(image_cube_array.get_width());
-    metal::int2 dim_cube_array_lod = metal::int2(image_cube_array.get_width(1));
-    metal::int3 dim_3d = metal::int3(image_3d.get_width(), image_3d.get_height(), image_3d.get_depth());
-    metal::int3 dim_3d_lod = metal::int3(image_3d.get_width(1), image_3d.get_height(1), image_3d.get_depth(1));
-    metal::int2 dim_2s_ms = metal::int2(image_aa.get_width(), image_aa.get_height());
-    int sum = (((((((((dim_1d + dim_2d.y) + dim_2d_lod.y) + dim_2d_array.y) + dim_2d_array_lod.y) + dim_cube.y) + dim_cube_lod.y) + dim_cube_array.y) + dim_cube_array_lod.y) + dim_3d.z) + dim_3d_lod.z;
+    uint dim_1d = image_1d.get_width();
+    uint dim_1d_lod = image_1d.get_width();
+    metal::uint2 dim_2d = metal::uint2(image_2d.get_width(), image_2d.get_height());
+    metal::uint2 dim_2d_lod = metal::uint2(image_2d.get_width(1), image_2d.get_height(1));
+    metal::uint2 dim_2d_array = metal::uint2(image_2d_array.get_width(), image_2d_array.get_height());
+    metal::uint2 dim_2d_array_lod = metal::uint2(image_2d_array.get_width(1), image_2d_array.get_height(1));
+    metal::uint2 dim_cube = metal::uint2(image_cube.get_width());
+    metal::uint2 dim_cube_lod = metal::uint2(image_cube.get_width(1));
+    metal::uint2 dim_cube_array = metal::uint2(image_cube_array.get_width());
+    metal::uint2 dim_cube_array_lod = metal::uint2(image_cube_array.get_width(1));
+    metal::uint3 dim_3d = metal::uint3(image_3d.get_width(), image_3d.get_height(), image_3d.get_depth());
+    metal::uint3 dim_3d_lod = metal::uint3(image_3d.get_width(1), image_3d.get_height(1), image_3d.get_depth(1));
+    metal::uint2 dim_2s_ms = metal::uint2(image_aa.get_width(), image_aa.get_height());
+    uint sum = (((((((((dim_1d + dim_2d.y) + dim_2d_lod.y) + dim_2d_array.y) + dim_2d_array_lod.y) + dim_cube.y) + dim_cube_lod.y) + dim_cube_array.y) + dim_cube_array_lod.y) + dim_3d.z) + dim_3d_lod.z;
     return queriesOutput { metal::float4(static_cast<float>(sum)) };
 }
 
@@ -92,15 +92,15 @@ vertex levels_queriesOutput levels_queries(
 , metal::texture3d<float, metal::access::sample> image_3d [[user(fake0)]]
 , metal::texture2d_ms<float, metal::access::read> image_aa [[user(fake0)]]
 ) {
-    int num_levels_2d = int(image_2d.get_num_mip_levels());
-    int num_levels_2d_array = int(image_2d_array.get_num_mip_levels());
-    int num_layers_2d = int(image_2d_array.get_array_size());
-    int num_levels_cube = int(image_cube.get_num_mip_levels());
-    int num_levels_cube_array = int(image_cube_array.get_num_mip_levels());
-    int num_layers_cube = int(image_cube_array.get_array_size());
-    int num_levels_3d = int(image_3d.get_num_mip_levels());
-    int num_samples_aa = int(image_aa.get_num_samples());
-    int sum_1 = ((((((num_layers_2d + num_layers_cube) + num_samples_aa) + num_levels_2d) + num_levels_2d_array) + num_levels_3d) + num_levels_cube) + num_levels_cube_array;
+    uint num_levels_2d = image_2d.get_num_mip_levels();
+    uint num_levels_2d_array = image_2d_array.get_num_mip_levels();
+    uint num_layers_2d = image_2d_array.get_array_size();
+    uint num_levels_cube = image_cube.get_num_mip_levels();
+    uint num_levels_cube_array = image_cube_array.get_num_mip_levels();
+    uint num_layers_cube = image_cube_array.get_array_size();
+    uint num_levels_3d = image_3d.get_num_mip_levels();
+    uint num_samples_aa = image_aa.get_num_samples();
+    uint sum_1 = ((((((num_layers_2d + num_layers_cube) + num_samples_aa) + num_levels_2d) + num_levels_2d_array) + num_levels_3d) + num_levels_cube) + num_levels_cube_array;
     return levels_queriesOutput { metal::float4(static_cast<float>(sum_1)) };
 }
 

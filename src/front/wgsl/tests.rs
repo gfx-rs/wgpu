@@ -357,10 +357,10 @@ fn parse_texture_query() {
         "
         var t: texture_multisampled_2d_array<f32>;
         fn foo() {
-            var dim: vec2<i32> = textureDimensions(t);
+            var dim: vec2<u32> = textureDimensions(t);
             dim = textureDimensions(t, 0);
-            let layers: i32 = textureNumLayers(t);
-            let samples: i32 = textureNumSamples(t);
+            let layers: u32 = textureNumLayers(t);
+            let samples: u32 = textureNumSamples(t);
         }
     ",
     )

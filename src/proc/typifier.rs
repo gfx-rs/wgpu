@@ -525,17 +525,17 @@ impl<'a> ResolveContext<'a> {
                 crate::ImageQuery::Size { level: _ } => match *past(image)?.inner_with(types) {
                     Ti::Image { dim, .. } => match dim {
                         crate::ImageDimension::D1 => Ti::Scalar {
-                            kind: crate::ScalarKind::Sint,
+                            kind: crate::ScalarKind::Uint,
                             width: 4,
                         },
                         crate::ImageDimension::D2 | crate::ImageDimension::Cube => Ti::Vector {
                             size: crate::VectorSize::Bi,
-                            kind: crate::ScalarKind::Sint,
+                            kind: crate::ScalarKind::Uint,
                             width: 4,
                         },
                         crate::ImageDimension::D3 => Ti::Vector {
                             size: crate::VectorSize::Tri,
-                            kind: crate::ScalarKind::Sint,
+                            kind: crate::ScalarKind::Uint,
                             width: 4,
                         },
                     },
@@ -547,7 +547,7 @@ impl<'a> ResolveContext<'a> {
                 crate::ImageQuery::NumLevels
                 | crate::ImageQuery::NumLayers
                 | crate::ImageQuery::NumSamples => Ti::Scalar {
-                    kind: crate::ScalarKind::Sint,
+                    kind: crate::ScalarKind::Uint,
                     width: 4,
                 },
             }),

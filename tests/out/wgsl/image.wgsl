@@ -44,7 +44,7 @@ var image_cube_depth: texture_depth_cube;
 @compute @workgroup_size(16, 1, 1) 
 fn main(@builtin(local_invocation_id) local_id: vec3<u32>) {
     let dim = textureDimensions(image_storage_src);
-    let itc = ((dim * vec2<i32>(local_id.xy)) % vec2<i32>(10, 20));
+    let itc = (vec2<i32>((dim * local_id.xy)) % vec2<i32>(10, 20));
     let value1_ = textureLoad(image_mipmapped_src, itc, i32(local_id.z));
     let value2_ = textureLoad(image_multisampled_src, itc, i32(local_id.z));
     let value4_ = textureLoad(image_storage_src, itc);
@@ -63,7 +63,7 @@ fn main(@builtin(local_invocation_id) local_id: vec3<u32>) {
 @compute @workgroup_size(16, 1, 1) 
 fn depth_load(@builtin(local_invocation_id) local_id_1: vec3<u32>) {
     let dim_1 = textureDimensions(image_storage_src);
-    let itc_1 = ((dim_1 * vec2<i32>(local_id_1.xy)) % vec2<i32>(10, 20));
+    let itc_1 = (vec2<i32>((dim_1 * local_id_1.xy)) % vec2<i32>(10, 20));
     let val = textureLoad(image_depth_multisampled_src, itc_1, i32(local_id_1.z));
     textureStore(image_dst, itc_1.x, vec4<u32>(u32(val)));
     return;

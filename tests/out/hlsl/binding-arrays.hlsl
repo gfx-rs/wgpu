@@ -21,28 +21,28 @@ struct FragmentInput_main {
     nointerpolation uint index : LOC0;
 };
 
-int2 NagaDimensions2D(Texture2D<float4> tex)
+uint2 NagaDimensions2D(Texture2D<float4> tex)
 {
     uint4 ret;
     tex.GetDimensions(0, ret.x, ret.y, ret.z);
     return ret.xy;
 }
 
-int NagaNumLayers2DArray(Texture2DArray<float4> tex)
+uint NagaNumLayers2DArray(Texture2DArray<float4> tex)
 {
     uint4 ret;
     tex.GetDimensions(0, ret.x, ret.y, ret.z, ret.w);
     return ret.w;
 }
 
-int NagaNumLevels2D(Texture2D<float4> tex)
+uint NagaNumLevels2D(Texture2D<float4> tex)
 {
     uint4 ret;
     tex.GetDimensions(0, ret.x, ret.y, ret.z);
     return ret.z;
 }
 
-int NagaMSNumSamples2D(Texture2DMS<float4> tex)
+uint NagaMSNumSamples2D(Texture2DMS<float4> tex)
 {
     uint4 ret;
     tex.GetDimensions(ret.x, ret.y, ret.z);
@@ -52,25 +52,25 @@ int NagaMSNumSamples2D(Texture2DMS<float4> tex)
 float4 main(FragmentInput_main fragmentinput_main) : SV_Target0
 {
     FragmentIn fragment_in = { fragmentinput_main.index };
-    int i1_ = (int)0;
-    int2 i2_ = (int2)0;
+    uint u1_ = (uint)0;
+    uint2 u2_ = (uint2)0;
     float v1_ = (float)0;
     float4 v4_ = (float4)0;
 
     uint uniform_index = uni.index;
     uint non_uniform_index = fragment_in.index;
-    i1_ = 0;
-    i2_ = (0).xx;
+    u1_ = 0u;
+    u2_ = (0u).xx;
     v1_ = 0.0;
     v4_ = (0.0).xxxx;
     float2 uv = (0.0).xx;
     int2 pix = (0).xx;
-    int2 _expr23 = i2_;
-    i2_ = (_expr23 + NagaDimensions2D(texture_array_unbounded[0]));
-    int2 _expr28 = i2_;
-    i2_ = (_expr28 + NagaDimensions2D(texture_array_unbounded[uniform_index]));
-    int2 _expr33 = i2_;
-    i2_ = (_expr33 + NagaDimensions2D(texture_array_unbounded[NonUniformResourceIndex(non_uniform_index)]));
+    uint2 _expr23 = u2_;
+    u2_ = (_expr23 + NagaDimensions2D(texture_array_unbounded[0]));
+    uint2 _expr28 = u2_;
+    u2_ = (_expr28 + NagaDimensions2D(texture_array_unbounded[uniform_index]));
+    uint2 _expr33 = u2_;
+    u2_ = (_expr33 + NagaDimensions2D(texture_array_unbounded[NonUniformResourceIndex(non_uniform_index)]));
     float4 _expr41 = texture_array_bounded[0].Gather(samp[0], uv);
     float4 _expr42 = v4_;
     v4_ = (_expr42 + _expr41);
@@ -98,24 +98,24 @@ float4 main(FragmentInput_main fragmentinput_main) : SV_Target0
     float4 _expr100 = texture_array_unbounded[NonUniformResourceIndex(non_uniform_index)].Load(int3(pix, 0));
     float4 _expr101 = v4_;
     v4_ = (_expr101 + _expr100);
-    int _expr107 = i1_;
-    i1_ = (_expr107 + NagaNumLayers2DArray(texture_array_2darray[0]));
-    int _expr112 = i1_;
-    i1_ = (_expr112 + NagaNumLayers2DArray(texture_array_2darray[uniform_index]));
-    int _expr117 = i1_;
-    i1_ = (_expr117 + NagaNumLayers2DArray(texture_array_2darray[NonUniformResourceIndex(non_uniform_index)]));
-    int _expr123 = i1_;
-    i1_ = (_expr123 + NagaNumLevels2D(texture_array_bounded[0]));
-    int _expr128 = i1_;
-    i1_ = (_expr128 + NagaNumLevels2D(texture_array_bounded[uniform_index]));
-    int _expr133 = i1_;
-    i1_ = (_expr133 + NagaNumLevels2D(texture_array_bounded[NonUniformResourceIndex(non_uniform_index)]));
-    int _expr139 = i1_;
-    i1_ = (_expr139 + NagaMSNumSamples2D(texture_array_multisampled[0]));
-    int _expr144 = i1_;
-    i1_ = (_expr144 + NagaMSNumSamples2D(texture_array_multisampled[uniform_index]));
-    int _expr149 = i1_;
-    i1_ = (_expr149 + NagaMSNumSamples2D(texture_array_multisampled[NonUniformResourceIndex(non_uniform_index)]));
+    uint _expr107 = u1_;
+    u1_ = (_expr107 + NagaNumLayers2DArray(texture_array_2darray[0]));
+    uint _expr112 = u1_;
+    u1_ = (_expr112 + NagaNumLayers2DArray(texture_array_2darray[uniform_index]));
+    uint _expr117 = u1_;
+    u1_ = (_expr117 + NagaNumLayers2DArray(texture_array_2darray[NonUniformResourceIndex(non_uniform_index)]));
+    uint _expr123 = u1_;
+    u1_ = (_expr123 + NagaNumLevels2D(texture_array_bounded[0]));
+    uint _expr128 = u1_;
+    u1_ = (_expr128 + NagaNumLevels2D(texture_array_bounded[uniform_index]));
+    uint _expr133 = u1_;
+    u1_ = (_expr133 + NagaNumLevels2D(texture_array_bounded[NonUniformResourceIndex(non_uniform_index)]));
+    uint _expr139 = u1_;
+    u1_ = (_expr139 + NagaMSNumSamples2D(texture_array_multisampled[0]));
+    uint _expr144 = u1_;
+    u1_ = (_expr144 + NagaMSNumSamples2D(texture_array_multisampled[uniform_index]));
+    uint _expr149 = u1_;
+    u1_ = (_expr149 + NagaMSNumSamples2D(texture_array_multisampled[NonUniformResourceIndex(non_uniform_index)]));
     float4 _expr157 = texture_array_bounded[0].Sample(samp[0], uv);
     float4 _expr158 = v4_;
     v4_ = (_expr158 + _expr157);
@@ -176,8 +176,8 @@ float4 main(FragmentInput_main fragmentinput_main) : SV_Target0
     texture_array_storage[uniform_index][pix] = _expr307;
     float4 _expr310 = v4_;
     texture_array_storage[NonUniformResourceIndex(non_uniform_index)][pix] = _expr310;
-    int2 _expr311 = i2_;
-    int _expr312 = i1_;
+    uint2 _expr311 = u2_;
+    uint _expr312 = u1_;
     float2 v2_ = float2((_expr311 + (_expr312).xx));
     float4 _expr316 = v4_;
     float _expr323 = v1_;

@@ -684,6 +684,11 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
             image: image_lexp.handle,
             query: crate::ImageQuery::Size { level },
         };
+        let expr = crate::Expression::As {
+            expr: ctx.expressions.append(expr, self.span_from_with_op(start)),
+            kind: crate::ScalarKind::Sint,
+            convert: Some(4),
+        };
         self.lookup_expression.insert(
             result_id,
             LookupExpression {
@@ -713,6 +718,11 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
         let expr = crate::Expression::ImageQuery {
             image: image_lexp.handle,
             query,
+        };
+        let expr = crate::Expression::As {
+            expr: expressions.append(expr, self.span_from_with_op(start)),
+            kind: crate::ScalarKind::Sint,
+            convert: Some(4),
         };
         self.lookup_expression.insert(
             result_id,

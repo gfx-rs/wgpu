@@ -30,8 +30,8 @@ fn main(fragment_in: FragmentIn) -> @location(0) vec4<f32> {
     let uniform_index = uni.index;
     let non_uniform_index = fragment_in.index;
 
-    var i1 = 0;
-    var i2 = vec2<i32>(0);
+    var u1 = 0u;
+    var u2 = vec2<u32>(0u);
     var v1 = 0.0;
     var v4 = vec4<f32>(0.0);
     
@@ -46,9 +46,9 @@ fn main(fragment_in: FragmentIn) -> @location(0) vec4<f32> {
     let uv = vec2<f32>(0.0);
     let pix = vec2<i32>(0);
 
-    i2 += textureDimensions(texture_array_unbounded[0]);
-    i2 += textureDimensions(texture_array_unbounded[uniform_index]);
-    i2 += textureDimensions(texture_array_unbounded[non_uniform_index]);
+    u2 += textureDimensions(texture_array_unbounded[0]);
+    u2 += textureDimensions(texture_array_unbounded[uniform_index]);
+    u2 += textureDimensions(texture_array_unbounded[non_uniform_index]);
 
     v4 += textureGather(0, texture_array_bounded[0], samp[0], uv);
     v4 += textureGather(0, texture_array_bounded[uniform_index], samp[uniform_index], uv);
@@ -62,17 +62,17 @@ fn main(fragment_in: FragmentIn) -> @location(0) vec4<f32> {
     v4 += textureLoad(texture_array_unbounded[uniform_index], pix, 0);
     v4 += textureLoad(texture_array_unbounded[non_uniform_index], pix, 0);
 
-    i1 += textureNumLayers(texture_array_2darray[0]);
-    i1 += textureNumLayers(texture_array_2darray[uniform_index]);
-    i1 += textureNumLayers(texture_array_2darray[non_uniform_index]);
+    u1 += textureNumLayers(texture_array_2darray[0]);
+    u1 += textureNumLayers(texture_array_2darray[uniform_index]);
+    u1 += textureNumLayers(texture_array_2darray[non_uniform_index]);
 
-    i1 += textureNumLevels(texture_array_bounded[0]);
-    i1 += textureNumLevels(texture_array_bounded[uniform_index]);
-    i1 += textureNumLevels(texture_array_bounded[non_uniform_index]);
+    u1 += textureNumLevels(texture_array_bounded[0]);
+    u1 += textureNumLevels(texture_array_bounded[uniform_index]);
+    u1 += textureNumLevels(texture_array_bounded[non_uniform_index]);
 
-    i1 += textureNumSamples(texture_array_multisampled[0]);
-    i1 += textureNumSamples(texture_array_multisampled[uniform_index]);
-    i1 += textureNumSamples(texture_array_multisampled[non_uniform_index]);
+    u1 += textureNumSamples(texture_array_multisampled[0]);
+    u1 += textureNumSamples(texture_array_multisampled[uniform_index]);
+    u1 += textureNumSamples(texture_array_multisampled[non_uniform_index]);
 
     v4 += textureSample(texture_array_bounded[0], samp[0], uv);
     v4 += textureSample(texture_array_bounded[uniform_index], samp[uniform_index], uv);
@@ -102,7 +102,7 @@ fn main(fragment_in: FragmentIn) -> @location(0) vec4<f32> {
     textureStore(texture_array_storage[uniform_index], pix, v4);
     textureStore(texture_array_storage[non_uniform_index], pix, v4);
 
-    let v2 = vec2<f32>(i2 + vec2<i32>(i1));
+    let v2 = vec2<f32>(u2 + vec2<u32>(u1));
 
     return v4 + vec4<f32>(v2.x, v2.y, v2.x, v2.y) + v1;
 }

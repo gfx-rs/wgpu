@@ -1873,7 +1873,7 @@ impl MacroCall {
                             name: None,
                             inner: TypeInner::Vector {
                                 size,
-                                kind: crate::ScalarKind::Sint,
+                                kind: crate::ScalarKind::Uint,
                                 width: 4,
                             },
                         },
@@ -1883,7 +1883,15 @@ impl MacroCall {
                     expr = ctx.add_expression(Expression::Compose { components, ty }, meta, body)
                 }
 
-                expr
+                ctx.add_expression(
+                    Expression::As {
+                        expr,
+                        kind: Sk::Sint,
+                        convert: Some(4),
+                    },
+                    Span::default(),
+                    body,
+                )
             }
             MacroCall::ImageLoad { multi } => {
                 let comps =

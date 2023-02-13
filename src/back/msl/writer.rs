@@ -1453,24 +1453,21 @@ impl<W: Write> Writer<W> {
                     self.put_image_size_query(
                         image,
                         level.map(LevelOfDetail::Direct),
-                        crate::ScalarKind::Sint,
+                        crate::ScalarKind::Uint,
                         context,
                     )?;
                 }
                 crate::ImageQuery::NumLevels => {
-                    write!(self.out, "int(")?;
                     self.put_expression(image, context, false)?;
-                    write!(self.out, ".get_num_mip_levels())")?;
+                    write!(self.out, ".get_num_mip_levels()")?;
                 }
                 crate::ImageQuery::NumLayers => {
-                    write!(self.out, "int(")?;
                     self.put_expression(image, context, false)?;
-                    write!(self.out, ".get_array_size())")?;
+                    write!(self.out, ".get_array_size()")?;
                 }
                 crate::ImageQuery::NumSamples => {
-                    write!(self.out, "int(")?;
                     self.put_expression(image, context, false)?;
-                    write!(self.out, ".get_num_samples())")?;
+                    write!(self.out, ".get_num_samples()")?;
                 }
             },
             crate::Expression::Unary { op, expr } => {
