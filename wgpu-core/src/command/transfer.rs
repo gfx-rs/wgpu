@@ -179,7 +179,7 @@ pub(crate) fn extract_texture_selector<A: hal::Api>(
     copy_texture: &ImageCopyTexture,
     copy_size: &Extent3d,
     texture: &Texture<A>,
-) -> Result<(TextureSelector, hal::TextureCopyBase, wgt::TextureFormat), TransferError> {
+) -> Result<(TextureSelector, hal::TextureCopyBase), TransferError> {
     let format = texture.desc.format;
     let copy_aspect =
         hal::FormatAspects::from(format) & hal::FormatAspects::from(copy_texture.aspect);
@@ -214,7 +214,7 @@ pub(crate) fn extract_texture_selector<A: hal::Api>(
         layers,
     };
 
-    Ok((selector, base, format))
+    Ok((selector, base))
 }
 
 /// WebGPU's [validating linear texture data][vltd] algorithm.
@@ -736,8 +736,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             copy_size,
         )?;
 
-        let (dst_range, dst_base, _) =
-            extract_texture_selector(destination, copy_size, dst_texture)?;
+        let (dst_range, dst_base) = extract_texture_selector(destination, copy_size, dst_texture)?;
 
         // Handle texture init *before* dealing with barrier transitions so we
         // have an easier time inserting "immediate-inits" that may be required
@@ -868,7 +867,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (hal_copy_size, array_layer_count) =
             validate_texture_copy_range(source, &src_texture.desc, CopySide::Source, copy_size)?;
 
-        let (src_range, src_base, _) = extract_texture_selector(source, copy_size, src_texture)?;
+        let (src_range, src_base) = extract_texture_selector(source, copy_size, src_texture)?;
 
         // Handle texture init *before* dealing with barrier transitions so we
         // have an easier time inserting "immediate-inits" that may be required
@@ -1053,9 +1052,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             copy_size,
         )?;
 
-        let (src_range, src_tex_base, _) =
-            extract_texture_selector(source, copy_size, src_texture)?;
-        let (dst_range, dst_tex_base, _) =
+        let (src_range, src_tex_base) = extract_texture_selector(source, copy_size, src_texture)?;
+        let (dst_range, dst_tex_base) =
             extract_texture_selector(destination, copy_size, dst_texture)?;
         let src_texture_aspects = hal::FormatAspects::from(src_texture.desc.format);
         let dst_texture_aspects = hal::FormatAspects::from(dst_texture.desc.format);

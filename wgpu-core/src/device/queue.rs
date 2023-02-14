@@ -602,9 +602,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .get_mut(destination.texture)
             .map_err(|_| TransferError::InvalidTexture(destination.texture))?;
 
-        let (selector, dst_base, texture_format) =
-            extract_texture_selector(destination, size, dst)?;
-        let format_desc = texture_format.describe();
+        let format_desc = dst.desc.format.describe();
 
         if !dst.desc.usage.contains(wgt::TextureUsages::COPY_DST) {
             return Err(
@@ -617,11 +615,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (hal_copy_size, array_layer_count) =
             validate_texture_copy_range(destination, &dst.desc, CopySide::Destination, size)?;
 
+        let (selector, dst_base) = extract_texture_selector(destination, size, dst)?;
+
         // Note: `_source_bytes_per_array_layer` is ignored since we
         // have a staging copy, and it can have a different value.
         let (_, _source_bytes_per_array_layer) = validate_linear_texture_data(
             data_layout,
-            texture_format,
+            dst.desc.format,
             data.len() as wgt::BufferAddress,
             CopySide::Source,
             format_desc.block_size as wgt::BufferAddress,
@@ -629,9 +629,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             false,
         )?;
 
-        if !conv::is_valid_copy_dst_texture_format(texture_format, destination.aspect) {
+        if !conv::is_valid_copy_dst_texture_format(dst.desc.format, destination.aspect) {
             return Err(TransferError::CopyToForbiddenTextureFormat {
-                format: texture_format,
+                format: dst.desc.format,
                 aspect: destination.aspect,
             }
             .into());
@@ -858,9 +858,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (mut texture_guard, _) = hub.textures.write(&mut token); // For clear we need write access to the texture. TODO: Can we acquire write lock later?
         let dst = texture_guard.get_mut(destination.texture).unwrap();
 
-        let (selector, dst_base, _) =
-            extract_texture_selector(&destination.to_untagged(), &size, dst)?;
-
         if !conv::is_valid_external_image_copy_dst_texture_format(dst.desc.format) {
             return Err(
                 TransferError::ExternalCopyToForbiddenTextureFormat(dst.desc.format).into(),
@@ -929,6 +926,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             CopySide::Destination,
             &size,
         )?;
+
+        let (selector, dst_base) =
+            extract_texture_selector(&destination.to_untagged(), &size, dst)?;
 
         let mut trackers = device.trackers.lock();
         let encoder = device.pending_writes.activate();
