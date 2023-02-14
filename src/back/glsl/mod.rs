@@ -2197,6 +2197,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 self.write_expr(value, ctx)?;
                 writeln!(self.out, ");")?;
             }
+            Statement::RayQuery { .. } => unreachable!(),
         }
 
         Ok(())

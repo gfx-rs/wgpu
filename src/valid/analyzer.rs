@@ -893,6 +893,18 @@ impl FunctionInfo {
                     }
                     FunctionUniformity::new()
                 }
+                S::RayQuery { query, ref fun } => {
+                    let _ = self.add_ref(query);
+                    if let crate::RayQueryFunction::Initialize {
+                        acceleration_structure,
+                        descriptor,
+                    } = *fun
+                    {
+                        let _ = self.add_ref(acceleration_structure);
+                        let _ = self.add_ref(descriptor);
+                    }
+                    FunctionUniformity::new()
+                }
             };
 
             disruptor = disruptor.or(uniformity.exit_disruptor());

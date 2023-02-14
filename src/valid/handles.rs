@@ -496,6 +496,20 @@ impl super::Validator {
                 validate_expr_opt(result)?;
                 Ok(())
             }
+            crate::Statement::RayQuery { query, ref fun } => {
+                validate_expr(query)?;
+                match *fun {
+                    crate::RayQueryFunction::Initialize {
+                        acceleration_structure,
+                        descriptor,
+                    } => {
+                        validate_expr(acceleration_structure)?;
+                        validate_expr(descriptor)?;
+                    }
+                    crate::RayQueryFunction::Proceed | crate::RayQueryFunction::Terminate => {}
+                }
+                Ok(())
+            }
             crate::Statement::Break
             | crate::Statement::Continue
             | crate::Statement::Kill

@@ -1473,6 +1473,19 @@ pub struct SwitchCase {
     pub fall_through: bool,
 }
 
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
+pub enum RayQueryFunction {
+    Initialize {
+        acceleration_structure: Handle<Expression>,
+        descriptor: Handle<Expression>,
+    },
+    Proceed,
+    Terminate,
+}
+
 //TODO: consider removing `Clone`. It's not valid to clone `Statement::Emit` anyway.
 /// Instructions which make up an executable block.
 // Clone is used only for error reporting and is not intended for end users
@@ -1645,6 +1658,10 @@ pub enum Statement {
         function: Handle<Function>,
         arguments: Vec<Handle<Expression>>,
         result: Option<Handle<Expression>>,
+    },
+    RayQuery {
+        query: Handle<Expression>,
+        fun: RayQueryFunction,
     },
 }
 

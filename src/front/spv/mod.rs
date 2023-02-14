@@ -3672,7 +3672,8 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                 | S::Barrier(_)
                 | S::Store { .. }
                 | S::ImageStore { .. }
-                | S::Atomic { .. } => {}
+                | S::Atomic { .. }
+                | S::RayQuery { .. } => {}
                 S::Call {
                     function: ref mut callee,
                     ref arguments,

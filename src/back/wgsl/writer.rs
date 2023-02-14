@@ -937,6 +937,7 @@ impl<W: Write> Writer<W> {
                     writeln!(self.out, "{level}workgroupBarrier();")?;
                 }
             }
+            Statement::RayQuery { .. } => unreachable!(),
         }
 
         Ok(())

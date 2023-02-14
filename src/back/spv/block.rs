@@ -2196,6 +2196,17 @@ impl<'w> BlockContext<'w> {
 
                     block.body.push(instruction);
                 }
+                crate::Statement::RayQuery { query, ref fun } => {
+                    let query_id = self.cached[query];
+                    match *fun {
+                        crate::RayQueryFunction::Initialize {
+                            acceleration_structure,
+                            descriptor,
+                        } => {}
+                        crate::RayQueryFunction::Proceed => {}
+                        crate::RayQueryFunction::Terminate => {}
+                    }
+                }
             }
         }
 

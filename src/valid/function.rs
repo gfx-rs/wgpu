@@ -807,6 +807,9 @@ impl super::Validator {
                 } => {
                     self.validate_atomic(pointer, fun, value, result, context)?;
                 }
+                S::RayQuery { query: _, fun: _ } => {
+                    //TODO
+                }
             }
         }
         Ok(BlockInfo { stages, finished })

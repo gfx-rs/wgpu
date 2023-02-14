@@ -252,6 +252,22 @@ impl StatementGraph {
                     }
                     "Atomic"
                 }
+                S::RayQuery { query, ref fun } => {
+                    self.dependencies.push((id, query, "query"));
+                    if let crate::RayQueryFunction::Initialize {
+                        acceleration_structure,
+                        descriptor,
+                    } = *fun
+                    {
+                        self.dependencies.push((
+                            id,
+                            acceleration_structure,
+                            "acceleration_structure",
+                        ));
+                        self.dependencies.push((id, descriptor, "descriptor"));
+                    }
+                    "RayQuery"
+                }
             };
             // Set the last node to the merge node
             last_node = merge_id;
