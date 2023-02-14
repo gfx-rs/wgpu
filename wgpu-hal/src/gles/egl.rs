@@ -803,18 +803,19 @@ impl crate::Instance<super::Api> for Instance {
             }
             #[cfg(not(feature = "emscripten"))]
             (Rwh::Wayland(_), raw_window_handle::RawDisplayHandle::Wayland(display_handle)) => {
-                /* Wayland displays are not sharable between surfaces so if the
-                 * surface we receive from this handle is from a different
-                 * display, we must re-initialize the context.
-                 *
-                 * See gfx-rs/gfx#3545
-                 */
-                log::warn!("Re-initializing Gles context due to Wayland window");
                 if inner
                     .wl_display
                     .map(|ptr| ptr != display_handle.display)
                     .unwrap_or(true)
                 {
+                    /* Wayland displays are not sharable between surfaces so if the
+                     * surface we receive from this handle is from a different
+                     * display, we must re-initialize the context.
+                     *
+                     * See gfx-rs/gfx#3545
+                     */
+                    log::warn!("Re-initializing Gles context due to Wayland window");
+
                     use std::ops::DerefMut;
                     let display_attributes = [egl::ATTRIB_NONE];
 
