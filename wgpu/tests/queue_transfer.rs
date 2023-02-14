@@ -31,7 +31,7 @@ fn queue_write_texture_overflow() {
                 wgpu::ImageCopyTexture {
                     texture: &texture,
                     mip_level: 0,
-                    origin: wgpu::Origin3d::ZERO,
+                    origin: wgpu::Origin3d { x: 0, y: 0, z: 1 },
                     aspect: wgpu::TextureAspect::All,
                 },
                 &data,
@@ -44,7 +44,7 @@ fn queue_write_texture_overflow() {
                 wgpu::Extent3d {
                     width: 3056263286,
                     height: 64,
-                    depth_or_array_layers: 1144576469,
+                    depth_or_array_layers: 4294967295,
                 },
             );
         });
