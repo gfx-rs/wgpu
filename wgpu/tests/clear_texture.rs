@@ -341,6 +341,7 @@ fn clear_texture_uncompressed_gles_compat() {
 fn clear_texture_uncompressed() {
     initialize_test(
         TestParameters::default()
+            .webgl2_failure()
             .backend_failure(wgpu::Backends::GL)
             .features(wgpu::Features::CLEAR_TEXTURE),
         |ctx| {
