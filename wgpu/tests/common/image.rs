@@ -267,10 +267,11 @@ fn copy_texture_to_buffer_with_aspect(
 ) {
     let (block_width, block_height) = texture.format().block_dimensions();
     let block_size = texture.format().block_size(Some(aspect)).unwrap();
+    let mip_level = 0;
     encoder.copy_texture_to_buffer(
         ImageCopyTexture {
             texture,
-            mip_level: 0,
+            mip_level,
             origin: Origin3d::ZERO,
             aspect,
         },
@@ -287,7 +288,9 @@ fn copy_texture_to_buffer_with_aspect(
                 rows_per_image: Some(NonZeroU32::new(texture.height() / block_height).unwrap()),
             },
         },
-        texture.size(),
+        texture
+            .size()
+            .mip_level_size(mip_level, texture.dimension()),
     );
 }
 
@@ -399,6 +402,7 @@ impl ReadbackBuffers {
         }
     }
 
+    // TODO: also copy and check mips
     pub fn copy_from(&self, device: &Device, encoder: &mut CommandEncoder, texture: &Texture) {
         copy_texture_to_buffer(device, encoder, texture, &self.buffer, &self.buffer_stencil);
     }

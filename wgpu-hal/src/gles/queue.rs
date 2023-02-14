@@ -820,56 +820,84 @@ impl super::Queue {
                     .buffer_layout
                     .bytes_per_row
                     .map_or(copy.size.width, |bpr| bpr.get() / block_size);
+                let column_texels = copy
+                    .buffer_layout
+                    .rows_per_image
+                    .map_or(copy.size.height, |bpr| bpr.get());
 
                 unsafe { gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(self.copy_fbo)) };
-                //TODO: handle cubemap copies
-                if is_layered_target(src_target) {
-                    //TODO: handle GLES without framebuffer_texture_3d
+
+                let read_pixels = |offset| {
+                    let mut buffer_data;
+                    let unpack_data = match dst.raw {
+                        Some(buffer) => {
+                            unsafe { gl.pixel_store_i32(glow::PACK_ROW_LENGTH, row_texels as i32) };
+                            unsafe { gl.bind_buffer(glow::PIXEL_PACK_BUFFER, Some(buffer)) };
+                            glow::PixelPackData::BufferOffset(offset as u32)
+                        }
+                        None => {
+                            buffer_data = dst.data.as_ref().unwrap().lock().unwrap();
+                            let dst_data = &mut buffer_data.as_mut_slice()[offset as usize..];
+                            glow::PixelPackData::Slice(dst_data)
+                        }
+                    };
                     unsafe {
-                        gl.framebuffer_texture_layer(
-                            glow::READ_FRAMEBUFFER,
-                            glow::COLOR_ATTACHMENT0,
-                            Some(src),
-                            copy.texture_base.mip_level as i32,
-                            copy.texture_base.array_layer as i32,
+                        gl.read_pixels(
+                            copy.texture_base.origin.x as i32,
+                            copy.texture_base.origin.y as i32,
+                            copy.size.width as i32,
+                            copy.size.height as i32,
+                            format_desc.external,
+                            format_desc.data_type,
+                            unpack_data,
                         )
                     };
-                } else {
-                    unsafe {
-                        gl.framebuffer_texture_2d(
-                            glow::READ_FRAMEBUFFER,
-                            glow::COLOR_ATTACHMENT0,
-                            src_target,
-                            Some(src),
-                            copy.texture_base.mip_level as i32,
-                        )
-                    };
+                };
+
+                match src_target {
+                    glow::TEXTURE_2D => {
+                        unsafe {
+                            gl.framebuffer_texture_2d(
+                                glow::READ_FRAMEBUFFER,
+                                glow::COLOR_ATTACHMENT0,
+                                src_target,
+                                Some(src),
+                                copy.texture_base.mip_level as i32,
+                            )
+                        };
+                        read_pixels(copy.buffer_layout.offset);
+                    }
+                    glow::TEXTURE_2D_ARRAY => {
+                        unsafe {
+                            gl.framebuffer_texture_layer(
+                                glow::READ_FRAMEBUFFER,
+                                glow::COLOR_ATTACHMENT0,
+                                Some(src),
+                                copy.texture_base.mip_level as i32,
+                                copy.texture_base.array_layer as i32,
+                            )
+                        };
+                        read_pixels(copy.buffer_layout.offset);
+                    }
+                    glow::TEXTURE_3D => {
+                        for z in copy.texture_base.origin.z..copy.size.depth {
+                            unsafe {
+                                gl.framebuffer_texture_layer(
+                                    glow::READ_FRAMEBUFFER,
+                                    glow::COLOR_ATTACHMENT0,
+                                    Some(src),
+                                    copy.texture_base.mip_level as i32,
+                                    z as i32,
+                                )
+                            };
+                            let offset = copy.buffer_layout.offset
+                                + (z * block_size * row_texels * column_texels) as u64;
+                            read_pixels(offset);
+                        }
+                    }
+                    glow::TEXTURE_CUBE_MAP | glow::TEXTURE_CUBE_MAP_ARRAY => unimplemented!(),
+                    _ => unreachable!(),
                 }
-                let mut buffer_data;
-                let unpack_data = match dst.raw {
-                    Some(buffer) => {
-                        unsafe { gl.pixel_store_i32(glow::PACK_ROW_LENGTH, row_texels as i32) };
-                        unsafe { gl.bind_buffer(glow::PIXEL_PACK_BUFFER, Some(buffer)) };
-                        glow::PixelPackData::BufferOffset(copy.buffer_layout.offset as u32)
-                    }
-                    None => {
-                        buffer_data = dst.data.as_ref().unwrap().lock().unwrap();
-                        let dst_data =
-                            &mut buffer_data.as_mut_slice()[copy.buffer_layout.offset as usize..];
-                        glow::PixelPackData::Slice(dst_data)
-                    }
-                };
-                unsafe {
-                    gl.read_pixels(
-                        copy.texture_base.origin.x as i32,
-                        copy.texture_base.origin.y as i32,
-                        copy.size.width as i32,
-                        copy.size.height as i32,
-                        format_desc.external,
-                        format_desc.data_type,
-                        unpack_data,
-                    )
-                };
             }
             C::SetIndexBuffer(buffer) => {
                 unsafe { gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(buffer)) };

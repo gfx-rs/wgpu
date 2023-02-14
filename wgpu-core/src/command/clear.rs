@@ -400,23 +400,17 @@ fn clear_texture_via_render_passes<A: hal::Api>(
     is_color: bool,
     encoder: &mut A::CommandEncoder,
 ) -> Result<(), ClearError> {
+    assert_eq!(dst_texture.desc.dimension, wgt::TextureDimension::D2);
+
     let extent_base = wgt::Extent3d {
         width: dst_texture.desc.size.width,
         height: dst_texture.desc.size.height,
-        depth_or_array_layers: 1, // Only one layer or slice is cleared at a time.
+        depth_or_array_layers: 1, // Only one layer is cleared at a time.
     };
 
-    let sample_count = dst_texture.desc.sample_count;
     for mip_level in range.mip_range {
         let extent = extent_base.mip_level_size(mip_level, dst_texture.desc.dimension);
-        let layer_or_depth_range = if dst_texture.desc.dimension == wgt::TextureDimension::D3 {
-            // TODO: We assume that we're allowed to do clear operations on
-            // volume texture slices, this is not properly specified.
-            0..extent.depth_or_array_layers
-        } else {
-            range.layer_range.clone()
-        };
-        for depth_or_layer in layer_or_depth_range {
+        for depth_or_layer in range.layer_range.clone() {
             let color_attachments_tmp;
             let (color_attachments, depth_stencil_attachment) = if is_color {
                 color_attachments_tmp = [Some(hal::ColorAttachment {
@@ -447,7 +441,7 @@ fn clear_texture_via_render_passes<A: hal::Api>(
                 encoder.begin_render_pass(&hal::RenderPassDescriptor {
                     label: Some("(wgpu internal) clear_texture clear pass"),
                     extent,
-                    sample_count,
+                    sample_count: dst_texture.desc.sample_count,
                     color_attachments,
                     depth_stencil_attachment,
                     multiview: None,

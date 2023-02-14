@@ -1,7 +1,7 @@
 use crate::common::{image::ReadbackBuffers, initialize_test, TestParameters, TestingContext};
 use wasm_bindgen_test::*;
 
-static TEXTURE_FORMATS_UNCOMPRESSED: &[wgpu::TextureFormat] = &[
+static TEXTURE_FORMATS_UNCOMPRESSED_GLES_COMPAT: &[wgpu::TextureFormat] = &[
     wgpu::TextureFormat::R8Unorm,
     wgpu::TextureFormat::R8Snorm,
     wgpu::TextureFormat::R8Uint,
@@ -9,10 +9,6 @@ static TEXTURE_FORMATS_UNCOMPRESSED: &[wgpu::TextureFormat] = &[
     wgpu::TextureFormat::R16Uint,
     wgpu::TextureFormat::R16Sint,
     wgpu::TextureFormat::R16Float,
-    wgpu::TextureFormat::Rg8Unorm,
-    wgpu::TextureFormat::Rg8Snorm,
-    wgpu::TextureFormat::Rg8Uint,
-    wgpu::TextureFormat::Rg8Sint,
     wgpu::TextureFormat::R32Uint,
     wgpu::TextureFormat::R32Sint,
     wgpu::TextureFormat::R32Float,
@@ -37,6 +33,13 @@ static TEXTURE_FORMATS_UNCOMPRESSED: &[wgpu::TextureFormat] = &[
     wgpu::TextureFormat::Rgba32Uint,
     wgpu::TextureFormat::Rgba32Sint,
     wgpu::TextureFormat::Rgba32Float,
+];
+
+static TEXTURE_FORMATS_UNCOMPRESSED: &[wgpu::TextureFormat] = &[
+    wgpu::TextureFormat::Rg8Unorm,
+    wgpu::TextureFormat::Rg8Snorm,
+    wgpu::TextureFormat::Rg8Uint,
+    wgpu::TextureFormat::Rg8Sint,
     wgpu::TextureFormat::Rgb9e5Ufloat,
 ];
 
@@ -254,7 +257,7 @@ fn single_texture_clear_test(
 
     assert!(
         readback_buffers.are_zero(&ctx.device),
-        "texture was not fully cleared"
+        "texture with format {format:?} was not fully cleared"
     );
 }
 
@@ -322,10 +325,23 @@ fn clear_texture_tests(ctx: &TestingContext, formats: &[wgpu::TextureFormat]) {
 
 #[test]
 #[wasm_bindgen_test]
-fn clear_texture_uncompressed() {
+fn clear_texture_uncompressed_gles_compat() {
     initialize_test(
         TestParameters::default()
             .webgl2_failure()
+            .features(wgpu::Features::CLEAR_TEXTURE),
+        |ctx| {
+            clear_texture_tests(&ctx, TEXTURE_FORMATS_UNCOMPRESSED_GLES_COMPAT);
+        },
+    )
+}
+
+#[test]
+#[wasm_bindgen_test]
+fn clear_texture_uncompressed() {
+    initialize_test(
+        TestParameters::default()
+            .backend_failure(wgpu::Backends::GL)
             .features(wgpu::Features::CLEAR_TEXTURE),
         |ctx| {
             clear_texture_tests(&ctx, TEXTURE_FORMATS_UNCOMPRESSED);
