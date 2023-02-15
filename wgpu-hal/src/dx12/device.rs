@@ -1,7 +1,4 @@
-use crate::{
-    auxil::{self, dxgi::result::HResult as _},
-    FormatAspects,
-};
+use crate::auxil::{self, dxgi::result::HResult as _};
 
 use super::{conv, descriptor, view};
 use parking_lot::Mutex;
@@ -421,7 +418,7 @@ impl crate::Device<super::Api> for super::Device {
                 // because then we'd create a non-depth format view of it.
                 // Note: we can skip this branch if
                 // `D3D12_FEATURE_D3D12_OPTIONS3::CastingFullyTypedFormatSupported`
-                auxil::dxgi::conv::map_texture_format_depth_typeless(desc.format)
+                auxil::dxgi::conv::map_texture_format_depth_stencil_typeless(desc.format)
             },
             SampleDesc: dxgitype::DXGI_SAMPLE_DESC {
                 Count: desc.sample_count,
@@ -469,23 +466,25 @@ impl crate::Device<super::Api> for super::Device {
         let view_desc = desc.to_internal(texture);
 
         Ok(super::TextureView {
-            raw_format: view_desc.format,
-            format_aspects: FormatAspects::from(desc.format),
+            raw_format: view_desc.rtv_dsv_format,
+            aspects: view_desc.aspects,
             target_base: (
                 texture.resource,
                 texture.calc_subresource(desc.range.base_mip_level, desc.range.base_array_layer, 0),
             ),
             handle_srv: if desc.usage.intersects(crate::TextureUses::RESOURCE) {
                 let raw_desc = unsafe { view_desc.to_srv() };
-                let handle = self.srv_uav_pool.lock().alloc_handle();
-                unsafe {
-                    self.raw.CreateShaderResourceView(
-                        texture.resource.as_mut_ptr(),
-                        &raw_desc,
-                        handle.raw,
-                    )
-                };
-                Some(handle)
+                raw_desc.map(|raw_desc| {
+                    let handle = self.srv_uav_pool.lock().alloc_handle();
+                    unsafe {
+                        self.raw.CreateShaderResourceView(
+                            texture.resource.as_mut_ptr(),
+                            &raw_desc,
+                            handle.raw,
+                        )
+                    };
+                    handle
+                })
             } else {
                 None
             },
@@ -493,16 +492,18 @@ impl crate::Device<super::Api> for super::Device {
                 crate::TextureUses::STORAGE_READ | crate::TextureUses::STORAGE_READ_WRITE,
             ) {
                 let raw_desc = unsafe { view_desc.to_uav() };
-                let handle = self.srv_uav_pool.lock().alloc_handle();
-                unsafe {
-                    self.raw.CreateUnorderedAccessView(
-                        texture.resource.as_mut_ptr(),
-                        ptr::null_mut(),
-                        &raw_desc,
-                        handle.raw,
-                    )
-                };
-                Some(handle)
+                raw_desc.map(|raw_desc| {
+                    let handle = self.srv_uav_pool.lock().alloc_handle();
+                    unsafe {
+                        self.raw.CreateUnorderedAccessView(
+                            texture.resource.as_mut_ptr(),
+                            ptr::null_mut(),
+                            &raw_desc,
+                            handle.raw,
+                        )
+                    };
+                    handle
+                })
             } else {
                 None
             },
@@ -524,7 +525,7 @@ impl crate::Device<super::Api> for super::Device {
                 .usage
                 .intersects(crate::TextureUses::DEPTH_STENCIL_READ)
             {
-                let raw_desc = unsafe { view_desc.to_dsv(desc.format.into()) };
+                let raw_desc = unsafe { view_desc.to_dsv(true) };
                 let handle = self.dsv_pool.lock().alloc_handle();
                 unsafe {
                     self.raw.CreateDepthStencilView(
@@ -541,7 +542,7 @@ impl crate::Device<super::Api> for super::Device {
                 .usage
                 .intersects(crate::TextureUses::DEPTH_STENCIL_WRITE)
             {
-                let raw_desc = unsafe { view_desc.to_dsv(FormatAspects::empty()) };
+                let raw_desc = unsafe { view_desc.to_dsv(false) };
                 let handle = self.dsv_pool.lock().alloc_handle();
                 unsafe {
                     self.raw.CreateDepthStencilView(

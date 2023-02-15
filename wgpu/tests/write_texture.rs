@@ -109,7 +109,7 @@ fn write_texture_subset_3d() {
     initialize_test(parameters, |ctx| {
         let tex = ctx.device.create_texture(&wgpu::TextureDescriptor {
             label: None,
-            dimension: wgpu::TextureDimension::D2,
+            dimension: wgpu::TextureDimension::D3,
             size: wgpu::Extent3d {
                 width: size,
                 height: size,

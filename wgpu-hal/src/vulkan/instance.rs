@@ -799,8 +799,7 @@ impl crate::Surface<super::Api> for super::Surface {
                 drop_guard: None,
                 block: None,
                 usage: sc.config.usage,
-                aspects: crate::FormatAspects::COLOR,
-                format_info: sc.config.format.describe(),
+                format: sc.config.format,
                 raw_flags,
                 copy_size: crate::CopyExtent {
                     width: sc.config.extent.width,
