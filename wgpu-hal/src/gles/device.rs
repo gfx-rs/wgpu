@@ -204,10 +204,8 @@ impl super::Device {
         naga_stage: naga::ShaderStage,
         stage: &crate::ProgrammableStage<super::Api>,
         context: CompilationContext,
-        primitive_topology: Option<wgt::PrimitiveTopology>,
     ) -> Result<glow::Shader, crate::PipelineError> {
         use naga::back::glsl;
-
         let pipeline_options = glsl::PipelineOptions {
             shader_stage: naga_stage,
             entry_point: stage.entry_point.to_string(),
@@ -239,31 +237,12 @@ impl super::Device {
             binding_array: BoundsCheckPolicy::Unchecked,
         };
 
-        let update_naga_options = primitive_topology == Some(wgt::PrimitiveTopology::PointList)
-            && naga_stage == naga::ShaderStage::Vertex;
-        // Update naga options if mesh consist of point list and it is vertex shader
-        let naga_options = if update_naga_options {
-            let mut wrt_flags = context.layout.naga_options.writer_flags;
-            wrt_flags.set(glsl::WriterFlags::FORCE_POINT_SIZE, true);
-            glsl::Options {
-                version: context.layout.naga_options.version,
-                writer_flags: wrt_flags,
-                binding_map: context.layout.naga_options.binding_map.clone(),
-                zero_initialize_workgroup_memory: context
-                    .layout
-                    .naga_options
-                    .zero_initialize_workgroup_memory,
-            }
-        } else {
-            context.layout.naga_options.clone()
-        };
-
         let mut output = String::new();
         let mut writer = glsl::Writer::new(
             &mut output,
             &shader.module,
             &shader.info,
-            &naga_options,
+            &context.layout.naga_options,
             &pipeline_options,
             policies,
         )
@@ -295,7 +274,6 @@ impl super::Device {
         layout: &super::PipelineLayout,
         #[cfg_attr(target_arch = "wasm32", allow(unused))] label: Option<&str>,
         multiview: Option<std::num::NonZeroU32>,
-        primitive_topology: Option<wgt::PrimitiveTopology>,
     ) -> Result<Arc<super::PipelineInner>, crate::PipelineError> {
         let mut program_stages = ArrayVec::new();
         let mut group_to_binding_to_slot = Vec::with_capacity(layout.group_infos.len());
@@ -334,7 +312,6 @@ impl super::Device {
                     multiview,
                     glsl_version,
                     self.shared.private_caps,
-                    primitive_topology,
                 )
             })
             .to_owned()?;
@@ -343,7 +320,6 @@ impl super::Device {
         Ok(program)
     }
 
-    #[allow(clippy::too_many_arguments)]
     unsafe fn create_program<'a>(
         gl: &glow::Context,
         shaders: ArrayVec<ShaderStage<'a>, 3>,
@@ -352,7 +328,6 @@ impl super::Device {
         multiview: Option<std::num::NonZeroU32>,
         glsl_version: u16,
         private_caps: super::PrivateCapabilities,
-        primitive_topology: Option<wgt::PrimitiveTopology>,
     ) -> Result<Arc<super::PipelineInner>, crate::PipelineError> {
         let program = unsafe { gl.create_program() }.unwrap();
         #[cfg(not(target_arch = "wasm32"))]
@@ -377,7 +352,7 @@ impl super::Device {
                 multiview,
             };
 
-            let shader = Self::create_shader(gl, naga_stage, stage, context, primitive_topology)?;
+            let shader = Self::create_shader(gl, naga_stage, stage, context)?;
             shaders_to_delete.push(shader);
         }
 
@@ -1008,6 +983,9 @@ impl crate::Device<super::Api> for super::Device {
                 .private_caps
                 .contains(super::PrivateCapabilities::SHADER_TEXTURE_SHADOW_LOD),
         );
+        // We always force point size to be written and it will be ignored by the driver if it's not a point list primitive.
+        // https://github.com/gfx-rs/wgpu/pull/3440/files#r1095726950
+        writer_flags.set(glsl::WriterFlags::FORCE_POINT_SIZE, true);
         let mut binding_map = glsl::BindingMap::default();
 
         for (group_index, bg_layout) in desc.bind_group_layouts.iter().enumerate() {
@@ -1153,16 +1131,8 @@ impl crate::Device<super::Api> for super::Device {
         if let Some(ref fs) = desc.fragment_stage {
             shaders.push((naga::ShaderStage::Fragment, fs));
         }
-        let inner = unsafe {
-            self.create_pipeline(
-                gl,
-                shaders,
-                desc.layout,
-                desc.label,
-                desc.multiview,
-                Some(desc.primitive.topology),
-            )
-        }?;
+        let inner =
+            unsafe { self.create_pipeline(gl, shaders, desc.layout, desc.label, desc.multiview) }?;
 
         let (vertex_buffers, vertex_attributes) = {
             let mut buffers = Vec::new();
@@ -1243,8 +1213,7 @@ impl crate::Device<super::Api> for super::Device {
         let gl = &self.shared.context.lock();
         let mut shaders = ArrayVec::new();
         shaders.push((naga::ShaderStage::Compute, &desc.stage));
-        let inner =
-            unsafe { self.create_pipeline(gl, shaders, desc.layout, desc.label, None, None) }?;
+        let inner = unsafe { self.create_pipeline(gl, shaders, desc.layout, desc.label, None) }?;
 
         Ok(super::ComputePipeline { inner })
     }
