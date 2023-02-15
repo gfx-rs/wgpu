@@ -41,7 +41,6 @@ impl fmt::Debug for Context {
 }
 
 impl Context {
-    #[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))]
     pub unsafe fn from_hal_instance<A: wgc::hub::HalApi>(hal_instance: A::Instance) -> Self {
         Self(unsafe {
             wgc::hub::Global::from_hal_instance::<A>(

@@ -1341,7 +1341,11 @@ impl Instance {
     /// # Safety
     ///
     /// Refer to the creation of wgpu-hal Instance for every backend.
-    #[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))]
+    #[cfg(any(
+        not(target_arch = "wasm32"),
+        target_os = "emscripten",
+        feature = "webgl"
+    ))]
     pub unsafe fn from_hal<A: wgc::hub::HalApi>(hal_instance: A::Instance) -> Self {
         Self {
             context: Arc::new(unsafe {
