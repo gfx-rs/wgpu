@@ -139,13 +139,13 @@ jobs:
           set -e
 
           # build for Emscripten/WebGL
-          cargo clippy --target ${{ matrix.target }} -p wgpu -p wgpu-hal --no-default-features --features webgl,emscripten
+          cargo clippy --target ${{ matrix.target }} -p wgpu -p wgpu-hal --no-default-features
 
           # build cube example
-          cargo clippy --target ${{ matrix.target }} --example cube --features webgl,emscripten
+          cargo clippy --target ${{ matrix.target }} --example cube
 
           # build raw-gles example
-          cargo clippy --target ${{ matrix.target }} --example raw-gles --features webgl,emscripten
+          cargo clippy --target ${{ matrix.target }} --example raw-gles
 
       - name: check native
         if: matrix.kind == 'native'

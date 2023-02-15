@@ -379,7 +379,7 @@ impl super::Queue {
                     unsafe { gl.bind_buffer(copy_dst_target, None) };
                 }
             }
-            #[cfg(all(target_arch = "wasm32", not(feature = "emscripten")))]
+            #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
             C::CopyExternalImageToTexture {
                 ref src,
                 dst,
@@ -1554,10 +1554,10 @@ impl crate::Queue<super::Api> for super::Queue {
         surface: &mut super::Surface,
         texture: super::Texture,
     ) -> Result<(), crate::SurfaceError> {
-        #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
+        #[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))]
         let gl = unsafe { &self.shared.context.get_without_egl_lock() };
 
-        #[cfg(all(target_arch = "wasm32", not(feature = "emscripten")))]
+        #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
         let gl = &self.shared.context.glow_context;
 
         unsafe { surface.present(texture, gl) }

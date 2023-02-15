@@ -4,7 +4,7 @@
 //! Emscripten build:
 //! 1. install emsdk
 //! 2. build this example with cargo:
-//!    EMCC_CFLAGS="-g -s ERROR_ON_UNDEFINED_SYMBOLS=0 --no-entry -s FULL_ES3=1" cargo build --example raw-gles --target wasm32-unknown-emscripten --features emscripten,webgl
+//!    EMCC_CFLAGS="-g -s ERROR_ON_UNDEFINED_SYMBOLS=0 --no-entry -s FULL_ES3=1" cargo build --example raw-gles --target wasm32-unknown-emscripten
 //! 3. copy raw-gles.em.html into target directory and open it in browser:
 //!    cp wgpu-hal/examples/raw-gles.em.html target/wasm32-unknown-emscripten/debug/examples
 
@@ -66,7 +66,7 @@ fn main() {
     });
 }
 
-#[cfg(feature = "emscripten")]
+#[cfg(target_os = "emscripten")]
 fn main() {
     env_logger::init();
 
@@ -116,7 +116,7 @@ fn main() {
     fill_screen(&exposed, 640, 400);
 }
 
-#[cfg(all(target_arch = "wasm32", not(feature = "emscripten")))]
+#[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
 fn main() {}
 
 fn fill_screen(exposed: &hal::ExposedAdapter<hal::api::Gles>, width: u32, height: u32) {
