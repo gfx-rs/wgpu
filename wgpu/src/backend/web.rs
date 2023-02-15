@@ -2225,17 +2225,23 @@ impl crate::context::Context for Context {
 
     fn command_encoder_resolve_query_set(
         &self,
-        _encoder: &Self::CommandEncoderId,
+        encoder: &Self::CommandEncoderId,
         _encoder_data: &Self::CommandEncoderData,
-        _query_set: &Self::QuerySetId,
+        query_set: &Self::QuerySetId,
         _query_set_data: &Self::QuerySetData,
-        _first_query: u32,
-        _query_count: u32,
-        _destination: &Self::BufferId,
+        first_query: u32,
+        query_count: u32,
+        destination: &Self::BufferId,
         _destination_data: &Self::BufferData,
-        _destination_offset: wgt::BufferAddress,
+        destination_offset: wgt::BufferAddress,
     ) {
-        unimplemented!();
+        encoder.0.resolve_query_set_with_u32(
+            &query_set,
+            first_query,
+            query_count,
+            destination,
+            destination_offset as u32,
+        );
     }
 
     fn render_bundle_encoder_finish(
