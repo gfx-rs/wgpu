@@ -2236,10 +2236,10 @@ impl crate::context::Context for Context {
         destination_offset: wgt::BufferAddress,
     ) {
         encoder.0.resolve_query_set_with_u32(
-            &query_set,
+            &query_set.0,
             first_query,
             query_count,
-            destination,
+            &destination.0,
             destination_offset as u32,
         );
     }
