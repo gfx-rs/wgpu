@@ -51,12 +51,14 @@ Bottom level categories:
 #### General
 
 - Added `TextureFormatFeatureFlags::MULTISAMPLE_X16`. By @Dinnerbone in [#3454](https://github.com/gfx-rs/wgpu/pull/3454)
+- Added `BufferUsages::QUERY_RESOLVE`. By @JolifantoBambla in [#2858](https://github.com/gfx-rs/wgpu/pull/3489)
 
 #### WebGPU
 
 - Implement `CommandEncoder::clear_buffer`. By @raphlinus in [#3426](https://github.com/gfx-rs/wgpu/pull/3426)
 - Implement the new checks for readonly stencils. By @JCapucho in [#3443](https://github.com/gfx-rs/wgpu/pull/3443)
 - Reimplement `adapter|device_features`. By @jinleili in [#3428](https://github.com/gfx-rs/wgpu/pull/3428)
+- Implement `command_encoder_resolve_query_set`. By @JolifantoBambla in [#2858](https://github.com/gfx-rs/wgpu/pull/3489)
 
 #### Vulkan
 
