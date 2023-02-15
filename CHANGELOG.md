@@ -69,6 +69,10 @@ Bottom level categories:
 
 - Fix DXC validation issues when using a custom `dxil_path`. By @Elabajaba in [#3434](https://github.com/gfx-rs/wgpu/pull/3434)
 
+#### GLES
+
+- [gles] fix: Set FORCE_POINT_SIZE if it is vertex shader with mesh consist of point list. By @REASY in [3440](https://github.com/gfx-rs/wgpu/pull/3440)
+
 #### General
 
 - `copyTextureToTexture` src/dst aspects must both refer to all aspects of src/dst format. By @teoxoy in [#3431](https://github.com/gfx-rs/wgpu/pull/3431)

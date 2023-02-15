@@ -952,6 +952,9 @@ impl crate::Device<super::Api> for super::Device {
                 .private_caps
                 .contains(super::PrivateCapabilities::SHADER_TEXTURE_SHADOW_LOD),
         );
+        // We always force point size to be written and it will be ignored by the driver if it's not a point list primitive.
+        // https://github.com/gfx-rs/wgpu/pull/3440/files#r1095726950
+        writer_flags.set(glsl::WriterFlags::FORCE_POINT_SIZE, true);
         let mut binding_map = glsl::BindingMap::default();
 
         for (group_index, bg_layout) in desc.bind_group_layouts.iter().enumerate() {
