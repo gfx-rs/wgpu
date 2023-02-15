@@ -2394,7 +2394,6 @@ impl crate::context::Context for Context {
             );
     }
 
-    #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
     fn queue_copy_external_image_to_texture(
         &self,
         queue: &Self::QueueId,

@@ -128,11 +128,6 @@ impl Context {
         Ok((device, queue))
     }
 
-    #[cfg(any(
-        not(target_arch = "wasm32"),
-        target_os = "emscripten",
-        feature = "webgl"
-    ))]
     pub unsafe fn create_texture_from_hal<A: wgc::hub::HalApi>(
         &self,
         hal_texture: A::Texture,
