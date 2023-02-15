@@ -68,13 +68,11 @@ impl Context {
         &self.0
     }
 
-    #[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))]
     pub fn enumerate_adapters(&self, backends: wgt::Backends) -> Vec<wgc::id::AdapterId> {
         self.0
             .enumerate_adapters(wgc::instance::AdapterInputs::Mask(backends, |_| ()))
     }
 
-    #[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))]
     pub unsafe fn create_adapter_from_hal<A: wgc::hub::HalApi>(
         &self,
         hal_adapter: hal::ExposedAdapter<A>,
@@ -93,7 +91,6 @@ impl Context {
         }
     }
 
-    #[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))]
     pub unsafe fn create_device_from_hal<A: wgc::hub::HalApi>(
         &self,
         adapter: &wgc::id::AdapterId,
@@ -152,7 +149,6 @@ impl Context {
         }
     }
 
-    #[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))]
     pub unsafe fn device_as_hal<A: wgc::hub::HalApi, F: FnOnce(Option<&A::Device>) -> R, R>(
         &self,
         device: &Device,
@@ -164,7 +160,6 @@ impl Context {
         }
     }
 
-    #[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))]
     pub unsafe fn surface_as_hal_mut<
         A: wgc::hub::HalApi,
         F: FnOnce(Option<&mut A::Surface>) -> R,
@@ -180,7 +175,6 @@ impl Context {
         }
     }
 
-    #[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))]
     pub unsafe fn texture_as_hal<A: wgc::hub::HalApi, F: FnOnce(Option<&A::Texture>)>(
         &self,
         texture: &Texture,
@@ -192,7 +186,6 @@ impl Context {
         }
     }
 
-    #[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))]
     pub fn generate_report(&self) -> wgc::hub::GlobalReport {
         self.0.generate_report()
     }
@@ -209,11 +202,7 @@ impl Context {
         }
     }
 
-    #[cfg(all(
-        target_arch = "wasm32",
-        feature = "webgl",
-        not(target_os = "emscripten")
-    ))]
+    #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
     pub fn instance_create_surface_from_canvas(
         &self,
         canvas: &web_sys::HtmlCanvasElement,
@@ -228,11 +217,7 @@ impl Context {
         })
     }
 
-    #[cfg(all(
-        target_arch = "wasm32",
-        feature = "webgl",
-        not(target_os = "emscripten")
-    ))]
+    #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
     pub fn instance_create_surface_from_offscreen_canvas(
         &self,
         canvas: &web_sys::OffscreenCanvas,

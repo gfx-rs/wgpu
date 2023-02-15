@@ -1406,7 +1406,11 @@ impl Instance {
     /// # Arguments
     ///
     /// - `backends` - Backends from which to enumerate adapters.
-    #[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))]
+    #[cfg(any(
+        not(target_arch = "wasm32"),
+        target_os = "emscripten",
+        feature = "webgl"
+    ))]
     pub fn enumerate_adapters(&self, backends: Backends) -> impl Iterator<Item = Adapter> {
         let context = Arc::clone(&self.context);
         self.context
@@ -1445,7 +1449,11 @@ impl Instance {
     /// # Safety
     ///
     /// `hal_adapter` must be created from this instance internal handle.
-    #[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))]
+    #[cfg(any(
+        not(target_arch = "wasm32"),
+        target_os = "emscripten",
+        feature = "webgl"
+    ))]
     pub unsafe fn create_adapter_from_hal<A: wgc::hub::HalApi>(
         &self,
         hal_adapter: hal::ExposedAdapter<A>,
@@ -1671,7 +1679,11 @@ impl Instance {
     }
 
     /// Generates memory report.
-    #[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))]
+    #[cfg(any(
+        not(target_arch = "wasm32"),
+        target_os = "emscripten",
+        feature = "webgl"
+    ))]
     pub fn generate_report(&self) -> wgc::hub::GlobalReport {
         self.context
             .as_any()
@@ -1742,7 +1754,11 @@ impl Adapter {
     ///
     /// - `hal_device` must be created from this adapter internal handle.
     /// - `desc.features` must be a subset of `hal_device` features.
-    #[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))]
+    #[cfg(any(
+        not(target_arch = "wasm32"),
+        target_os = "emscripten",
+        feature = "webgl"
+    ))]
     pub unsafe fn create_device_from_hal<A: wgc::hub::HalApi>(
         &self,
         hal_device: hal::OpenDevice<A>,
@@ -2246,7 +2262,11 @@ impl Device {
     /// - The raw handle passed to the callback must not be manually destroyed.
     ///
     /// [`A::Device`]: hal::Api::Device
-    #[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))]
+    #[cfg(any(
+        not(target_arch = "wasm32"),
+        target_os = "emscripten",
+        feature = "webgl"
+    ))]
     pub unsafe fn as_hal<A: wgc::hub::HalApi, F: FnOnce(Option<&A::Device>) -> R, R>(
         &self,
         hal_device_callback: F,
@@ -2584,7 +2604,11 @@ impl Texture {
     /// # Safety
     ///
     /// - The raw handle obtained from the hal Texture must not be manually destroyed
-    #[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))]
+    #[cfg(any(
+        not(target_arch = "wasm32"),
+        target_os = "emscripten",
+        feature = "webgl"
+    ))]
     pub unsafe fn as_hal<A: wgc::hub::HalApi, F: FnOnce(Option<&A::Texture>)>(
         &self,
         hal_texture_callback: F,
@@ -4193,7 +4217,11 @@ impl Surface {
     /// # Safety
     ///
     /// - The raw handle obtained from the hal Surface must not be manually destroyed
-    #[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))]
+    #[cfg(any(
+        not(target_arch = "wasm32"),
+        target_os = "emscripten",
+        feature = "webgl"
+    ))]
     pub unsafe fn as_hal_mut<A: wgc::hub::HalApi, F: FnOnce(Option<&mut A::Surface>) -> R, R>(
         &mut self,
         hal_surface_callback: F,
