@@ -49,9 +49,6 @@ id32 = []
 # Enable `ShaderModuleSource::Wgsl`
 wgsl = ["naga/wgsl-in"]
 
-# Features that are intended to work on all platforms.
-portable_features = ["gles", "strict_asserts", "trace", "replay", "serial-pass", "id32", "wgsl"]
-
 [dependencies]
 arrayvec = "0.7"
 bitflags = "1"
