@@ -1264,11 +1264,27 @@ impl<'a, W: Write> Writer<'a, W> {
             } => (location, interpolation, sampling),
             crate::Binding::BuiltIn(built_in) => {
                 if let crate::BuiltIn::Position { invariant: true } = built_in {
-                    writeln!(
-                        self.out,
-                        "invariant {};",
-                        glsl_built_in(built_in, output, self.options.version.is_webgl())
-                    )?;
+                    match (self.options.version, self.entry_point.stage) {
+                        (
+                            Version::Embedded {
+                                version: 300,
+                                is_webgl: true,
+                            },
+                            ShaderStage::Fragment,
+                        ) => {
+                            // `invariant gl_FragCoord` is not allowed in WebGL2 and possibly
+                            // OpenGL ES in general (waiting on confirmation).
+                            //
+                            // See https://github.com/KhronosGroup/WebGL/issues/3518
+                        }
+                        _ => {
+                            writeln!(
+                                self.out,
+                                "invariant {};",
+                                glsl_built_in(built_in, output, self.options.version.is_webgl())
+                            )?;
+                        }
+                    }
                 }
                 return Ok(());
             }
