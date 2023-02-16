@@ -141,6 +141,7 @@ impl VaryingContext<'_> {
                     Bi::CullDistance => Capabilities::CULL_DISTANCE,
                     Bi::PrimitiveIndex => Capabilities::PRIMITIVE_INDEX,
                     Bi::ViewIndex => Capabilities::MULTIVIEW,
+                    Bi::SampleIndex => Capabilities::MULTISAMPLED_SHADING,
                     _ => Capabilities::empty(),
                 };
                 if !self.capabilities.contains(required) {
@@ -311,6 +312,14 @@ impl VaryingContext<'_> {
                 // SPIR-V and GLSL both explicitly tolerate such combinations of decorators /
                 // qualifiers, so we won't complain about that here.
                 let _ = sampling;
+
+                let required = match sampling {
+                    Some(crate::Sampling::Sample) => Capabilities::MULTISAMPLED_SHADING,
+                    _ => Capabilities::empty(),
+                };
+                if !self.capabilities.contains(required) {
+                    return Err(VaryingError::UnsupportedCapability(required));
+                }
 
                 match ty_inner.scalar_kind() {
                     Some(crate::ScalarKind::Float) => {

@@ -84,7 +84,6 @@ impl Default for ValidationFlags {
 bitflags::bitflags! {
     /// Allowed IR capabilities.
     #[must_use]
-    #[derive(Default)]
     #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
     #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
     pub struct Capabilities: u16 {
@@ -110,6 +109,14 @@ bitflags::bitflags! {
         const MULTIVIEW = 0x200;
         /// Support for `early_depth_test`.
         const EARLY_DEPTH_TEST = 0x400;
+        /// Support for [`Builtin::SampleIndex`] and [`Sampling::Sample`].
+        const MULTISAMPLED_SHADING = 0x800;
+    }
+}
+
+impl Default for Capabilities {
+    fn default() -> Self {
+        Self::MULTISAMPLED_SHADING
     }
 }
 

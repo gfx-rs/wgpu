@@ -149,7 +149,7 @@ fn backends(c: &mut Criterion) {
     let inputs = {
         let mut validator = naga::valid::Validator::new(
             naga::valid::ValidationFlags::empty(),
-            naga::valid::Capabilities::empty(),
+            naga::valid::Capabilities::default(),
         );
         let input_modules = gather_modules();
         input_modules

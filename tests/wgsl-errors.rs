@@ -903,7 +903,7 @@ fn validation_error(source: &str) -> Result<naga::valid::ModuleInfo, naga::valid
     };
     naga::valid::Validator::new(
         naga::valid::ValidationFlags::all(),
-        naga::valid::Capabilities::empty(),
+        naga::valid::Capabilities::default(),
     )
     .validate(&module)
     .map_err(|e| e.into_inner()) // TODO: Add tests for spans, too?
