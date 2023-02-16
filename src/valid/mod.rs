@@ -108,6 +108,8 @@ bitflags::bitflags! {
         const STORAGE_TEXTURE_16BIT_NORM_FORMATS = 0x100;
         /// Support for [`BuiltIn::ViewIndex`].
         const MULTIVIEW = 0x200;
+        /// Support for `early_depth_test`.
+        const EARLY_DEPTH_TEST = 0x400;
     }
 }
 

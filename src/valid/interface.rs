@@ -509,8 +509,18 @@ impl super::Validator {
         mod_info: &ModuleInfo,
     ) -> Result<FunctionInfo, WithSpan<EntryPointError>> {
         #[cfg(feature = "validate")]
-        if ep.early_depth_test.is_some() && ep.stage != crate::ShaderStage::Fragment {
-            return Err(EntryPointError::UnexpectedEarlyDepthTest.with_span());
+        if ep.early_depth_test.is_some() {
+            let required = Capabilities::EARLY_DEPTH_TEST;
+            if !self.capabilities.contains(required) {
+                return Err(
+                    EntryPointError::Result(VaryingError::UnsupportedCapability(required))
+                        .with_span(),
+                );
+            }
+
+            if ep.stage != crate::ShaderStage::Fragment {
+                return Err(EntryPointError::UnexpectedEarlyDepthTest.with_span());
+            }
         }
 
         #[cfg(feature = "validate")]
