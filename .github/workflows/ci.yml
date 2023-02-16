@@ -125,12 +125,16 @@ jobs:
 
           # build for WebGPU
           cargo clippy --target ${{ matrix.target }} -p wgpu --tests --features glsl,spirv
+          cargo doc --target ${{ matrix.target }} -p wgpu --no-deps --features glsl,spirv
 
           # build for WebGL
           cargo clippy --target ${{ matrix.target }} -p wgpu --tests --features webgl,glsl,spirv
+          cargo doc --target ${{ matrix.target }} -p wgpu --no-deps --features webgl,glsl,spirv
 
-          # build docs
-          cargo doc --target ${{ matrix.target }} -p wgpu --no-deps --features glsl,spirv
+          # all features
+          cargo clippy --target ${{ matrix.target }} -p wgpu-hal --tests --all-features
+          cargo clippy --target ${{ matrix.target }} -p wgpu --tests --all-features
+          cargo doc --target ${{ matrix.target }} -p wgpu --no-deps --all-features
 
       - name: check em
         if: matrix.kind == 'em'
@@ -138,7 +142,7 @@ jobs:
         run: |
           set -e
 
-          # build for Emscripten/WebGL
+          # build for Emscripten
           cargo clippy --target ${{ matrix.target }} -p wgpu -p wgpu-hal --no-default-features
 
           # build cube example
@@ -146,6 +150,10 @@ jobs:
 
           # build raw-gles example
           cargo clippy --target ${{ matrix.target }} --example raw-gles
+
+          # all features
+          cargo clippy --target ${{ matrix.target }} -p wgpu-hal --all-features
+          cargo clippy --target ${{ matrix.target }} -p wgpu --all-features
 
       - name: check native
         if: matrix.kind == 'native'
@@ -159,8 +167,9 @@ jobs:
           # Check with all features.
           # (But watch out for backend-selection features in wgpu-core; some of
           # those only build on the right platforms.)
-          cargo clippy --target ${{ matrix.target }} -p wgpu -p wgpu-info -p player --tests --all-features
+          cargo clippy --target ${{ matrix.target }} -p wgpu-hal --tests --all-features
           cargo clippy --target ${{ matrix.target }} -p wgpu-core --tests --all-features
+          cargo clippy --target ${{ matrix.target }} -p wgpu -p wgpu-info -p player --tests --all-features
 
           # build docs
           # (Watch out for backend-selection features in wgpu-core; some of
