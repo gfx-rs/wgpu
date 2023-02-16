@@ -272,48 +272,174 @@ impl Parser {
             "vec2" => ast::ConstructorType::PartialVector {
                 size: crate::VectorSize::Bi,
             },
+            "vec2i" => {
+                return Ok(Some(ast::ConstructorType::Vector {
+                    size: crate::VectorSize::Bi,
+                    kind: crate::ScalarKind::Sint,
+                    width: 4,
+                }))
+            }
+            "vec2u" => {
+                return Ok(Some(ast::ConstructorType::Vector {
+                    size: crate::VectorSize::Bi,
+                    kind: crate::ScalarKind::Uint,
+                    width: 4,
+                }))
+            }
+            "vec2f" => {
+                return Ok(Some(ast::ConstructorType::Vector {
+                    size: crate::VectorSize::Bi,
+                    kind: crate::ScalarKind::Float,
+                    width: 4,
+                }))
+            }
             "vec3" => ast::ConstructorType::PartialVector {
                 size: crate::VectorSize::Tri,
             },
+            "vec3i" => {
+                return Ok(Some(ast::ConstructorType::Vector {
+                    size: crate::VectorSize::Tri,
+                    kind: crate::ScalarKind::Sint,
+                    width: 4,
+                }))
+            }
+            "vec3u" => {
+                return Ok(Some(ast::ConstructorType::Vector {
+                    size: crate::VectorSize::Tri,
+                    kind: crate::ScalarKind::Uint,
+                    width: 4,
+                }))
+            }
+            "vec3f" => {
+                return Ok(Some(ast::ConstructorType::Vector {
+                    size: crate::VectorSize::Tri,
+                    kind: crate::ScalarKind::Float,
+                    width: 4,
+                }))
+            }
             "vec4" => ast::ConstructorType::PartialVector {
                 size: crate::VectorSize::Quad,
             },
+            "vec4i" => {
+                return Ok(Some(ast::ConstructorType::Vector {
+                    size: crate::VectorSize::Quad,
+                    kind: crate::ScalarKind::Sint,
+                    width: 4,
+                }))
+            }
+            "vec4u" => {
+                return Ok(Some(ast::ConstructorType::Vector {
+                    size: crate::VectorSize::Quad,
+                    kind: crate::ScalarKind::Uint,
+                    width: 4,
+                }))
+            }
+            "vec4f" => {
+                return Ok(Some(ast::ConstructorType::Vector {
+                    size: crate::VectorSize::Quad,
+                    kind: crate::ScalarKind::Float,
+                    width: 4,
+                }))
+            }
             "mat2x2" => ast::ConstructorType::PartialMatrix {
                 columns: crate::VectorSize::Bi,
                 rows: crate::VectorSize::Bi,
             },
+            "mat2x2f" => {
+                return Ok(Some(ast::ConstructorType::Matrix {
+                    columns: crate::VectorSize::Bi,
+                    rows: crate::VectorSize::Bi,
+                    width: 4,
+                }))
+            }
             "mat2x3" => ast::ConstructorType::PartialMatrix {
                 columns: crate::VectorSize::Bi,
                 rows: crate::VectorSize::Tri,
             },
+            "mat2x3f" => {
+                return Ok(Some(ast::ConstructorType::Matrix {
+                    columns: crate::VectorSize::Bi,
+                    rows: crate::VectorSize::Tri,
+                    width: 4,
+                }))
+            }
             "mat2x4" => ast::ConstructorType::PartialMatrix {
                 columns: crate::VectorSize::Bi,
                 rows: crate::VectorSize::Quad,
             },
+            "mat2x4f" => {
+                return Ok(Some(ast::ConstructorType::Matrix {
+                    columns: crate::VectorSize::Bi,
+                    rows: crate::VectorSize::Quad,
+                    width: 4,
+                }))
+            }
             "mat3x2" => ast::ConstructorType::PartialMatrix {
                 columns: crate::VectorSize::Tri,
                 rows: crate::VectorSize::Bi,
             },
+            "mat3x2f" => {
+                return Ok(Some(ast::ConstructorType::Matrix {
+                    columns: crate::VectorSize::Tri,
+                    rows: crate::VectorSize::Bi,
+                    width: 4,
+                }))
+            }
             "mat3x3" => ast::ConstructorType::PartialMatrix {
                 columns: crate::VectorSize::Tri,
                 rows: crate::VectorSize::Tri,
             },
+            "mat3x3f" => {
+                return Ok(Some(ast::ConstructorType::Matrix {
+                    columns: crate::VectorSize::Tri,
+                    rows: crate::VectorSize::Tri,
+                    width: 4,
+                }))
+            }
             "mat3x4" => ast::ConstructorType::PartialMatrix {
                 columns: crate::VectorSize::Tri,
                 rows: crate::VectorSize::Quad,
             },
+            "mat3x4f" => {
+                return Ok(Some(ast::ConstructorType::Matrix {
+                    columns: crate::VectorSize::Tri,
+                    rows: crate::VectorSize::Quad,
+                    width: 4,
+                }))
+            }
             "mat4x2" => ast::ConstructorType::PartialMatrix {
                 columns: crate::VectorSize::Quad,
                 rows: crate::VectorSize::Bi,
             },
+            "mat4x2f" => {
+                return Ok(Some(ast::ConstructorType::Matrix {
+                    columns: crate::VectorSize::Quad,
+                    rows: crate::VectorSize::Bi,
+                    width: 4,
+                }))
+            }
             "mat4x3" => ast::ConstructorType::PartialMatrix {
                 columns: crate::VectorSize::Quad,
                 rows: crate::VectorSize::Tri,
             },
+            "mat4x3f" => {
+                return Ok(Some(ast::ConstructorType::Matrix {
+                    columns: crate::VectorSize::Quad,
+                    rows: crate::VectorSize::Tri,
+                    width: 4,
+                }))
+            }
             "mat4x4" => ast::ConstructorType::PartialMatrix {
                 columns: crate::VectorSize::Quad,
                 rows: crate::VectorSize::Quad,
             },
+            "mat4x4f" => {
+                return Ok(Some(ast::ConstructorType::Matrix {
+                    columns: crate::VectorSize::Quad,
+                    rows: crate::VectorSize::Quad,
+                    width: 4,
+                }))
+            }
             "array" => ast::ConstructorType::PartialArray,
             "atomic"
             | "binding_array"
@@ -914,6 +1040,21 @@ impl Parser {
                     width,
                 }
             }
+            "vec2i" => ast::Type::Vector {
+                size: crate::VectorSize::Bi,
+                kind: crate::ScalarKind::Sint,
+                width: 4,
+            },
+            "vec2u" => ast::Type::Vector {
+                size: crate::VectorSize::Bi,
+                kind: crate::ScalarKind::Uint,
+                width: 4,
+            },
+            "vec2f" => ast::Type::Vector {
+                size: crate::VectorSize::Bi,
+                kind: crate::ScalarKind::Float,
+                width: 4,
+            },
             "vec3" => {
                 let (kind, width) = lexer.next_scalar_generic()?;
                 ast::Type::Vector {
@@ -922,6 +1063,21 @@ impl Parser {
                     width,
                 }
             }
+            "vec3i" => ast::Type::Vector {
+                size: crate::VectorSize::Tri,
+                kind: crate::ScalarKind::Sint,
+                width: 4,
+            },
+            "vec3u" => ast::Type::Vector {
+                size: crate::VectorSize::Tri,
+                kind: crate::ScalarKind::Uint,
+                width: 4,
+            },
+            "vec3f" => ast::Type::Vector {
+                size: crate::VectorSize::Tri,
+                kind: crate::ScalarKind::Float,
+                width: 4,
+            },
             "vec4" => {
                 let (kind, width) = lexer.next_scalar_generic()?;
                 ast::Type::Vector {
@@ -930,33 +1086,93 @@ impl Parser {
                     width,
                 }
             }
+            "vec4i" => ast::Type::Vector {
+                size: crate::VectorSize::Quad,
+                kind: crate::ScalarKind::Sint,
+                width: 4,
+            },
+            "vec4u" => ast::Type::Vector {
+                size: crate::VectorSize::Quad,
+                kind: crate::ScalarKind::Uint,
+                width: 4,
+            },
+            "vec4f" => ast::Type::Vector {
+                size: crate::VectorSize::Quad,
+                kind: crate::ScalarKind::Float,
+                width: 4,
+            },
             "mat2x2" => {
                 self.matrix_scalar_type(lexer, crate::VectorSize::Bi, crate::VectorSize::Bi)?
             }
+            "mat2x2f" => ast::Type::Matrix {
+                columns: crate::VectorSize::Bi,
+                rows: crate::VectorSize::Bi,
+                width: 4,
+            },
             "mat2x3" => {
                 self.matrix_scalar_type(lexer, crate::VectorSize::Bi, crate::VectorSize::Tri)?
             }
+            "mat2x3f" => ast::Type::Matrix {
+                columns: crate::VectorSize::Bi,
+                rows: crate::VectorSize::Tri,
+                width: 4,
+            },
             "mat2x4" => {
                 self.matrix_scalar_type(lexer, crate::VectorSize::Bi, crate::VectorSize::Quad)?
             }
+            "mat2x4f" => ast::Type::Matrix {
+                columns: crate::VectorSize::Bi,
+                rows: crate::VectorSize::Quad,
+                width: 4,
+            },
             "mat3x2" => {
                 self.matrix_scalar_type(lexer, crate::VectorSize::Tri, crate::VectorSize::Bi)?
             }
+            "mat3x2f" => ast::Type::Matrix {
+                columns: crate::VectorSize::Tri,
+                rows: crate::VectorSize::Bi,
+                width: 4,
+            },
             "mat3x3" => {
                 self.matrix_scalar_type(lexer, crate::VectorSize::Tri, crate::VectorSize::Tri)?
             }
+            "mat3x3f" => ast::Type::Matrix {
+                columns: crate::VectorSize::Tri,
+                rows: crate::VectorSize::Tri,
+                width: 4,
+            },
             "mat3x4" => {
                 self.matrix_scalar_type(lexer, crate::VectorSize::Tri, crate::VectorSize::Quad)?
             }
+            "mat3x4f" => ast::Type::Matrix {
+                columns: crate::VectorSize::Tri,
+                rows: crate::VectorSize::Quad,
+                width: 4,
+            },
             "mat4x2" => {
                 self.matrix_scalar_type(lexer, crate::VectorSize::Quad, crate::VectorSize::Bi)?
             }
+            "mat4x2f" => ast::Type::Matrix {
+                columns: crate::VectorSize::Quad,
+                rows: crate::VectorSize::Bi,
+                width: 4,
+            },
             "mat4x3" => {
                 self.matrix_scalar_type(lexer, crate::VectorSize::Quad, crate::VectorSize::Tri)?
             }
+            "mat4x3f" => ast::Type::Matrix {
+                columns: crate::VectorSize::Quad,
+                rows: crate::VectorSize::Tri,
+                width: 4,
+            },
             "mat4x4" => {
                 self.matrix_scalar_type(lexer, crate::VectorSize::Quad, crate::VectorSize::Quad)?
             }
+            "mat4x4f" => ast::Type::Matrix {
+                columns: crate::VectorSize::Quad,
+                rows: crate::VectorSize::Quad,
+                width: 4,
+            },
             "atomic" => {
                 let (kind, width) = lexer.next_scalar_generic()?;
                 ast::Type::Atomic { kind, width }

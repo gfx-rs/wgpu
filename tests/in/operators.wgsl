@@ -194,7 +194,7 @@ fn arithmetic() {
     _ = 2.0 * mat3x3<f32>();
 
     _ = mat4x3<f32>() * vec4(1.0);
-    _ = vec3(2.0) * mat4x3<f32>();
+    _ = vec3f(2.0) * mat4x3f();
 
     _ = mat4x3<f32>() * mat3x4<f32>();
 }

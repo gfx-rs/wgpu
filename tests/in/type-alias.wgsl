@@ -1,6 +1,7 @@
 type FVec3 = vec3<f32>;
-type IVec3 = vec3<i32>;
+type IVec3 = vec3i;
 type Mat2 = mat2x2<f32>;
+type Mat3 = mat3x3f;
 
 fn main() {
     let a = FVec3(0.0, 0.0, 0.0);
@@ -10,4 +11,5 @@ fn main() {
     let e = IVec3(d);
 
     let f = Mat2(1.0, 2.0, 3.0, 4.0);
+    let g = Mat3(a, a, a);
 }
