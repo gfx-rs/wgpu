@@ -3280,13 +3280,17 @@ impl<'a, W: Write> Writer<'a, W> {
                 }
             }
             // These expressions never show up in `Emit`.
-            Expression::CallResult(_) | Expression::AtomicResult { .. } => unreachable!(),
+            Expression::CallResult(_)
+            | Expression::AtomicResult { .. }
+            | Expression::RayQueryProceedResult => unreachable!(),
             // `ArrayLength` is written as `expr.length()` and we convert it to a uint
             Expression::ArrayLength(expr) => {
                 write!(self.out, "uint(")?;
                 self.write_expr(expr, ctx)?;
                 write!(self.out, ".length())")?
             }
+            // not supported yet
+            Expression::RayQueryGetIntersection { .. } => unreachable!(),
         }
 
         Ok(())

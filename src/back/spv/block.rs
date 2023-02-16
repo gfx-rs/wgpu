@@ -1386,6 +1386,10 @@ impl<'w> BlockContext<'w> {
                 id
             }
             crate::Expression::ArrayLength(expr) => self.write_runtime_array_length(expr, block)?,
+            //TODO
+            crate::Expression::RayQueryProceedResult => unreachable!(),
+            //TODO
+            crate::Expression::RayQueryGetIntersection { .. } => unreachable!(),
         };
 
         self.cached[expr_handle] = id;

@@ -622,9 +622,13 @@ impl super::Validator {
             Ti::Image { .. } | Ti::Sampler { .. } => {
                 TypeInfo::new(TypeFlags::ARGUMENT, Alignment::ONE)
             }
-            Ti::AccelerationStructure | Ti::RayQuery => {
+            Ti::AccelerationStructure => {
                 self.require_type_capability(Capabilities::RAY_QUERY)?;
                 TypeInfo::new(TypeFlags::empty(), Alignment::ONE)
+            }
+            Ti::RayQuery => {
+                self.require_type_capability(Capabilities::RAY_QUERY)?;
+                TypeInfo::new(TypeFlags::DATA | TypeFlags::SIZED, Alignment::ONE)
             }
             Ti::BindingArray { .. } => TypeInfo::new(TypeFlags::empty(), Alignment::ONE),
         })

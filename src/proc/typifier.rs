@@ -193,11 +193,14 @@ pub enum ResolveError {
     IncompatibleOperands(String),
     #[error("Function argument {0} doesn't exist")]
     FunctionArgumentNotFound(u32),
+    #[error("Special type is not registered within the module")]
+    MissingSpecialType,
 }
 
 pub struct ResolveContext<'a> {
     pub constants: &'a Arena<crate::Constant>,
     pub types: &'a UniqueArena<crate::Type>,
+    pub special_types: &'a crate::SpecialTypes,
     pub global_vars: &'a Arena<crate::GlobalVariable>,
     pub local_vars: &'a Arena<crate::LocalVariable>,
     pub functions: &'a Arena<crate::Function>,
@@ -205,6 +208,23 @@ pub struct ResolveContext<'a> {
 }
 
 impl<'a> ResolveContext<'a> {
+    /// Initialize a resolve context from the module.
+    pub fn with_locals(
+        module: &'a crate::Module,
+        local_vars: &'a Arena<crate::LocalVariable>,
+        arguments: &'a [crate::FunctionArgument],
+    ) -> Self {
+        Self {
+            constants: &module.constants,
+            types: &module.types,
+            special_types: &module.special_types,
+            global_vars: &module.global_variables,
+            local_vars,
+            functions: &module.functions,
+            arguments,
+        }
+    }
+
     /// Determine the type of `expr`.
     ///
     /// The `past` argument must be a closure that can resolve the types of any
@@ -867,6 +887,17 @@ impl<'a> ResolveContext<'a> {
                 kind: crate::ScalarKind::Uint,
                 width: 4,
             }),
+            crate::Expression::RayQueryProceedResult => TypeResolution::Value(Ti::Scalar {
+                kind: crate::ScalarKind::Bool,
+                width: crate::BOOL_WIDTH,
+            }),
+            crate::Expression::RayQueryGetIntersection { .. } => {
+                let result = self
+                    .special_types
+                    .ray_intersection
+                    .ok_or(ResolveError::MissingSpecialType)?;
+                TypeResolution::Handle(result)
+            }
         })
     }
 }

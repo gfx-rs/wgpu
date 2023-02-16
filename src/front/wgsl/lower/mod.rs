@@ -234,14 +234,8 @@ impl<'a> ExpressionContext<'a, '_, '_> {
     /// [`self.resolved_inner(handle)`]: ExpressionContext::resolved_inner
     /// [`Typifier`]: Typifier
     fn grow_types(&mut self, handle: Handle<crate::Expression>) -> Result<&mut Self, Error<'a>> {
-        let resolve_ctx = ResolveContext {
-            constants: &self.module.constants,
-            types: &self.module.types,
-            global_vars: &self.module.global_variables,
-            local_vars: self.local_vars,
-            functions: &self.module.functions,
-            arguments: self.arguments,
-        };
+        let resolve_ctx =
+            ResolveContext::with_locals(&self.module, self.local_vars, self.arguments);
         self.typifier
             .grow(handle, self.naga_expressions, &resolve_ctx)
             .map_err(Error::InvalidResolve)?;
@@ -1917,6 +1911,54 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                             crate::Expression::ImageQuery {
                                 image,
                                 query: crate::ImageQuery::NumSamples,
+                            }
+                        }
+                        "rayQueryInitialize" => {
+                            let mut args = ctx.prepare_args(arguments, 3, span);
+                            let query = self.expression(args.next()?, ctx.reborrow())?;
+                            let acceleration_structure =
+                                self.expression(args.next()?, ctx.reborrow())?;
+                            let descriptor = self.expression(args.next()?, ctx.reborrow())?;
+                            args.finish()?;
+
+                            let _ = ctx.module.generate_ray_desc_type();
+                            let fun = crate::RayQueryFunction::Initialize {
+                                acceleration_structure,
+                                descriptor,
+                            };
+
+                            ctx.block.extend(ctx.emitter.finish(ctx.naga_expressions));
+                            ctx.emitter.start(ctx.naga_expressions);
+                            ctx.block
+                                .push(crate::Statement::RayQuery { query, fun }, span);
+                            return Ok(None);
+                        }
+                        "rayQueryProceed" => {
+                            let mut args = ctx.prepare_args(arguments, 1, span);
+                            let query = self.expression(args.next()?, ctx.reborrow())?;
+                            args.finish()?;
+
+                            let fun = crate::RayQueryFunction::Proceed;
+
+                            ctx.block.extend(ctx.emitter.finish(ctx.naga_expressions));
+                            let result = ctx
+                                .naga_expressions
+                                .append(crate::Expression::RayQueryProceedResult, span);
+                            ctx.emitter.start(ctx.naga_expressions);
+                            ctx.block
+                                .push(crate::Statement::RayQuery { query, fun }, span);
+                            return Ok(Some(result));
+                        }
+                        "rayQueryGetCommittedIntersection" => {
+                            let mut args = ctx.prepare_args(arguments, 1, span);
+                            let query = self.expression(args.next()?, ctx.reborrow())?;
+                            args.finish()?;
+
+                            let _ = ctx.module.generate_ray_intersection_type();
+
+                            crate::Expression::RayQueryGetIntersection {
+                                query,
+                                committed: true,
                             }
                         }
                         _ => return Err(Error::UnknownIdent(function.span, function.name)),

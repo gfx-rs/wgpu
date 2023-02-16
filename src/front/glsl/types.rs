@@ -246,14 +246,7 @@ impl Frontend {
         expr: Handle<Expression>,
         meta: Span,
     ) -> Result<()> {
-        let resolve_ctx = ResolveContext {
-            constants: &self.module.constants,
-            types: &self.module.types,
-            global_vars: &self.module.global_variables,
-            local_vars: &ctx.locals,
-            functions: &self.module.functions,
-            arguments: &ctx.arguments,
-        };
+        let resolve_ctx = ResolveContext::with_locals(&self.module, &ctx.locals, &ctx.arguments);
 
         ctx.typifier
             .grow(expr, &ctx.expressions, &resolve_ctx)
@@ -312,14 +305,7 @@ impl Frontend {
         expr: Handle<Expression>,
         meta: Span,
     ) -> Result<()> {
-        let resolve_ctx = ResolveContext {
-            constants: &self.module.constants,
-            types: &self.module.types,
-            global_vars: &self.module.global_variables,
-            local_vars: &ctx.locals,
-            functions: &self.module.functions,
-            arguments: &ctx.arguments,
-        };
+        let resolve_ctx = ResolveContext::with_locals(&self.module, &ctx.locals, &ctx.arguments);
 
         ctx.typifier
             .invalidate(expr, &ctx.expressions, &resolve_ctx)

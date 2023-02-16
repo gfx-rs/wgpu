@@ -37,6 +37,8 @@ pub enum ConstantSolvingError {
     Load,
     #[error("Constants don't support image expressions")]
     ImageExpression,
+    #[error("Constants don't support ray query expressions")]
+    RayQueryExpression,
     #[error("Cannot access the type")]
     InvalidAccessBase,
     #[error("Cannot access at the index")]
@@ -295,6 +297,9 @@ impl<'a> ConstantSolver<'a> {
             Expression::ImageSample { .. }
             | Expression::ImageLoad { .. }
             | Expression::ImageQuery { .. } => Err(ConstantSolvingError::ImageExpression),
+            Expression::RayQueryProceedResult | Expression::RayQueryGetIntersection { .. } => {
+                Err(ConstantSolvingError::RayQueryExpression)
+            }
         }
     }
 

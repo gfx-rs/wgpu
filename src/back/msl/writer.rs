@@ -1838,7 +1838,9 @@ impl<W: Write> Writer<W> {
                 _ => return Err(Error::Validation),
             },
             // has to be a named expression
-            crate::Expression::CallResult(_) | crate::Expression::AtomicResult { .. } => {
+            crate::Expression::CallResult(_)
+            | crate::Expression::AtomicResult { .. }
+            | crate::Expression::RayQueryProceedResult => {
                 unreachable!()
             }
             crate::Expression::ArrayLength(expr) => {
@@ -1863,6 +1865,8 @@ impl<W: Write> Writer<W> {
                     write!(self.out, ")")?;
                 }
             }
+            // hot supported yet
+            crate::Expression::RayQueryGetIntersection { .. } => unreachable!(),
         }
         Ok(())
     }

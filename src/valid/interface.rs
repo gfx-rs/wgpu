@@ -440,7 +440,9 @@ impl super::Validator {
                 match types[var.ty].inner {
                     crate::TypeInner::Image { .. }
                     | crate::TypeInner::Sampler { .. }
-                    | crate::TypeInner::BindingArray { .. } => {}
+                    | crate::TypeInner::BindingArray { .. }
+                    | crate::TypeInner::AccelerationStructure
+                    | crate::TypeInner::RayQuery => {}
                     _ => {
                         return Err(GlobalVariableError::InvalidType(var.space));
                     }

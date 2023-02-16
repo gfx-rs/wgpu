@@ -370,6 +370,9 @@ pub enum ConstructorType<'a> {
         size: ArraySize<'a>,
     },
 
+    /// Ray description.
+    RayDesc,
+
     /// Constructing a value of a known Naga IR type.
     ///
     /// This variant is produced only during lowering, when we have Naga types

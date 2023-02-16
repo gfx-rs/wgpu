@@ -2879,8 +2879,12 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 self.write_expr(module, reject, func_ctx)?;
                 write!(self.out, ")")?
             }
+            // Not supported yet
+            Expression::RayQueryGetIntersection { .. } => unreachable!(),
             // Nothing to do here, since call expression already cached
-            Expression::CallResult(_) | Expression::AtomicResult { .. } => {}
+            Expression::CallResult(_)
+            | Expression::AtomicResult { .. }
+            | Expression::RayQueryProceedResult => {}
         }
 
         if !closing_bracket.is_empty() {

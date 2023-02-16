@@ -39,6 +39,7 @@ impl super::Validator {
             ref functions,
             ref global_variables,
             ref types,
+            ref special_types,
         } = module;
 
         // NOTE: Types being first is important. All other forms of validation depend on this.
@@ -192,6 +193,13 @@ impl super::Validator {
 
         for (function_handle, function) in functions.iter() {
             validate_function(Some(function_handle), function)?;
+        }
+
+        if let Some(ty) = special_types.ray_desc {
+            validate_type(ty)?;
+        }
+        if let Some(ty) = special_types.ray_intersection {
+            validate_type(ty)?;
         }
 
         Ok(())
@@ -379,9 +387,15 @@ impl super::Validator {
                     handle.check_dep(function)?;
                 }
             }
-            crate::Expression::AtomicResult { .. } => (),
+            crate::Expression::AtomicResult { .. } | crate::Expression::RayQueryProceedResult => (),
             crate::Expression::ArrayLength(array) => {
                 handle.check_dep(array)?;
+            }
+            crate::Expression::RayQueryGetIntersection {
+                query,
+                committed: _,
+            } => {
+                handle.check_dep(query)?;
             }
         }
         Ok(())

@@ -441,6 +441,7 @@ impl Parser {
                 }))
             }
             "array" => ast::ConstructorType::PartialArray,
+            "RayDesc" => ast::ConstructorType::RayDesc,
             "atomic"
             | "binding_array"
             | "sampler"
@@ -621,6 +622,18 @@ impl Parser {
                 let _ = lexer.next();
                 let num = res.map_err(|err| Error::BadNumber(span, err))?;
                 ast::Expression::Literal(ast::Literal::Number(num))
+            }
+            (Token::Word("RAY_FLAG_NONE"), _) => {
+                let _ = lexer.next();
+                ast::Expression::Literal(ast::Literal::Number(Number::U32(0)))
+            }
+            (Token::Word("RAY_FLAG_TERMINATE_ON_FIRST_HIT"), _) => {
+                let _ = lexer.next();
+                ast::Expression::Literal(ast::Literal::Number(Number::U32(4)))
+            }
+            (Token::Word("RAY_QUERY_INTERSECTION_NONE"), _) => {
+                let _ = lexer.next();
+                ast::Expression::Literal(ast::Literal::Number(Number::U32(0)))
             }
             (Token::Word(word), span) => {
                 let start = lexer.start_byte_offset();

@@ -1427,6 +1427,7 @@ impl super::Validator {
                     return Err(ExpressionError::InvalidArrayType(expr));
                 }
             },
+            E::RayQueryProceedResult | E::RayQueryGetIntersection { .. } => ShaderStages::all(),
         };
         Ok(stages)
     }

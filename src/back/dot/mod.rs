@@ -566,6 +566,12 @@ fn write_function_expressions(
                 edges.insert("", expr);
                 ("ArrayLength".into(), 7)
             }
+            E::RayQueryProceedResult => ("rayQueryProceedResult".into(), 4),
+            E::RayQueryGetIntersection { query, committed } => {
+                edges.insert("", query);
+                let ty = if committed { "Committed" } else { "Candidate" };
+                (format!("rayQueryGet{}Intersection", ty).into(), 4)
+            }
         };
 
         // give uniform expressions an outline
