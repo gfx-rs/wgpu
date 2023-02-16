@@ -73,10 +73,10 @@ impl From<ShaderStage> for Options {
 /// stored in the shader [`Module`](Module).
 #[derive(Debug)]
 pub struct ShaderMetadata {
-    /// The GLSL version specified in the shader trough the use of the
+    /// The GLSL version specified in the shader through the use of the
     /// `#version` preprocessor directive.
     pub version: u16,
-    /// The GLSL profile specified in the shader trough the use of the
+    /// The GLSL profile specified in the shader through the use of the
     /// `#version` preprocessor directive.
     pub profile: Profile,
     /// The shader stage in the pipeline, passed to the [`parse`](Frontend::parse)

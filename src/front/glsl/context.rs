@@ -47,8 +47,24 @@ impl ExprPos {
 pub struct Context {
     pub expressions: Arena<Expression>,
     pub locals: Arena<LocalVariable>,
+
+    /// The [`FunctionArgument`]s for the final [`crate::Function`].
+    ///
+    /// Parameters with the `out` and `inout` qualifiers have [`Pointer`] types
+    /// here. For example, an `inout vec2 a` argument would be a [`Pointer`] to
+    /// a [`Vector`].
+    ///
+    /// [`Pointer`]: crate::TypeInner::Pointer
+    /// [`Vector`]: crate::TypeInner::Vector
     pub arguments: Vec<FunctionArgument>,
 
+    /// The parameter types given in the source code.
+    ///
+    /// The `out` and `inout` qualifiers don't affect the types that appear
+    /// here. For example, an `inout vec2 a` argument would simply be a
+    /// [`Vector`], not a pointer to one.
+    ///
+    /// [`Vector`]: crate::TypeInner::Vector
     pub parameters: Vec<Handle<Type>>,
     pub parameters_info: Vec<ParameterInfo>,
 
@@ -1019,7 +1035,7 @@ impl Context {
                 }
                 ExprPos::AccessBase { constant_index } => {
                     // If the index isn't constant all accesses backed by a constant base need
-                    // to be done trough a proxy local variable, since constants have a non
+                    // to be done through a proxy local variable, since constants have a non
                     // pointer type which is required for dynamic indexing
                     if !constant_index {
                         if let Some((constant, ty)) = var.constant {
@@ -1575,11 +1591,11 @@ impl Index<Handle<Expression>> for Context {
 
 /// Helper struct passed when parsing expressions
 ///
-/// This struct should only be obtained trough [`stmt_ctx`](Context::stmt_ctx)
+/// This struct should only be obtained through [`stmt_ctx`](Context::stmt_ctx)
 /// and only one of these may be active at any time per context.
 #[derive(Debug)]
 pub struct StmtContext {
-    /// A arena of high level expressions which can be lowered trough a
+    /// A arena of high level expressions which can be lowered through a
     /// [`Context`](Context) to naga's [`Expression`](crate::Expression)s
     pub hir_exprs: Arena<HirExpr>,
 }

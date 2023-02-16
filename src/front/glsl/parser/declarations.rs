@@ -388,7 +388,7 @@ impl<'source> ParsingContext<'source> {
 
                 // If program execution has reached here then this will be a
                 // init_declarator_list
-                // token_falltrough will have a token that was already bumped
+                // token_fallthrough will have a token that was already bumped
                 if let Some(ty) = ty {
                     let mut ctx = DeclarationContext {
                         qualifiers,

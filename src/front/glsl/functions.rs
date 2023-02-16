@@ -660,7 +660,7 @@ impl Frontend {
             // conversions used for querying the best overload
             let mut new_conversions = vec![Conversion::None; args.len()];
 
-            // Loop trough the overload parameters and check if the current overload is better
+            // Loop through the overload parameters and check if the current overload is better
             // compared to the previous best overload.
             for (i, overload_parameter) in overload.parameters.iter().enumerate() {
                 let call_argument = &args[i];
@@ -875,7 +875,7 @@ impl Frontend {
         let mut arguments = Vec::with_capacity(args.len());
         let mut proxy_writes = Vec::new();
 
-        // Iterate trough the function call arguments applying transformations as needed
+        // Iterate through the function call arguments applying transformations as needed
         for (((parameter_info, call_argument), expr), parameter) in parameters_info
             .iter()
             .zip(&args)

@@ -286,7 +286,7 @@ impl<'source> ParsingContext<'source> {
                 // to have any cases.
                 if let Some(case) = cases.last_mut() {
                     // GLSL requires that the last case not be empty, so we check
-                    // that here and produce an error otherwise (fall_trough must
+                    // that here and produce an error otherwise (fall_through must
                     // also be checked because `break`s count as statements but
                     // they aren't added to the body)
                     if case.body.is_empty() && case.fall_through {
@@ -299,9 +299,9 @@ impl<'source> ParsingContext<'source> {
                     }
 
                     // GLSL allows the last case to not have any `break` statement,
-                    // this would mark it as fall trough but naga's IR requires that
-                    // the last case must not be fall trough, so we mark need to mark
-                    // the last case as not fall trough always.
+                    // this would mark it as fall through but naga's IR requires that
+                    // the last case must not be fall through, so we mark need to mark
+                    // the last case as not fall through always.
                     case.fall_through = false;
                 }
 
