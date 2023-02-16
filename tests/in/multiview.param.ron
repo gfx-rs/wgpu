@@ -1,3 +1,4 @@
 (
+	god_mode: true,
 	glsl_multiview: Some(2),
 )

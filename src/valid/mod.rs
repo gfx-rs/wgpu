@@ -106,6 +106,8 @@ bitflags::bitflags! {
         const CULL_DISTANCE = 0x80;
         /// Support for 16-bit normalized storage texture formats.
         const STORAGE_TEXTURE_16BIT_NORM_FORMATS = 0x100;
+        /// Support for [`BuiltIn::ViewIndex`].
+        const MULTIVIEW = 0x200;
     }
 }
 

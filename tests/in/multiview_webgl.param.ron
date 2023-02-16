@@ -1,4 +1,5 @@
 (
+	god_mode: true,
     glsl: (
 		version: Embedded (
             version: 300,

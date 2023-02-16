@@ -140,6 +140,7 @@ impl VaryingContext<'_> {
                     Bi::ClipDistance => Capabilities::CLIP_DISTANCE,
                     Bi::CullDistance => Capabilities::CULL_DISTANCE,
                     Bi::PrimitiveIndex => Capabilities::PRIMITIVE_INDEX,
+                    Bi::ViewIndex => Capabilities::MULTIVIEW,
                     _ => Capabilities::empty(),
                 };
                 if !self.capabilities.contains(required) {
