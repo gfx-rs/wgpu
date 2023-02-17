@@ -476,6 +476,9 @@ bitflags::bitflags! {
         /// - Metal (Emulated on top of `draw_indirect` and `draw_indexed_indirect`)
         ///
         /// This is a native only feature.
+        ///
+        /// [`RenderPass::multi_draw_indirect`]: ../wgpu/struct.RenderPass.html#method.multi_draw_indirect
+        /// [`RenderPass::multi_draw_indexed_indirect`]: ../wgpu/struct.RenderPass.html#method.multi_draw_indexed_indirect
         const MULTI_DRAW_INDIRECT = 1 << 23;
         /// Allows the user to call [`RenderPass::multi_draw_indirect_count`] and [`RenderPass::multi_draw_indexed_indirect_count`].
         ///
@@ -486,6 +489,9 @@ bitflags::bitflags! {
         /// - Vulkan 1.2+ (or VK_KHR_draw_indirect_count)
         ///
         /// This is a native only feature.
+        ///
+        /// [`RenderPass::multi_draw_indirect_count`]: ../wgpu/struct.RenderPass.html#method.multi_draw_indirect_count
+        /// [`RenderPass::multi_draw_indexed_indirect_count`]: ../wgpu/struct.RenderPass.html#method.multi_draw_indexed_indirect_count
         const MULTI_DRAW_INDIRECT_COUNT = 1 << 24;
         /// Allows the use of push constants: small, fast bits of memory that can be updated
         /// inside a [`RenderPass`].
@@ -503,6 +509,10 @@ bitflags::bitflags! {
         /// - OpenGL (emulated with uniforms)
         ///
         /// This is a native only feature.
+        ///
+        /// [`RenderPass`]: ../wgpu/struct.RenderPass.html
+        /// [`PipelineLayoutDescriptor`]: ../wgpu/struct.PipelineLayoutDescriptor.html
+        /// [`RenderPass::set_push_constants`]: ../wgpu/struct.RenderPass.html#method.set_push_constants
         const PUSH_CONSTANTS = 1 << 25;
         /// Allows the use of [`AddressMode::ClampToBorder`] with a border color
         /// other than [`SamplerBorderColor::Zero`].
@@ -2370,7 +2380,7 @@ impl Serialize for TextureFormat {
 impl TextureFormat {
     /// Returns the aspect-specific format of the original format
     ///
-    /// see https://gpuweb.github.io/gpuweb/#abstract-opdef-resolving-gputextureaspect
+    /// see <https://gpuweb.github.io/gpuweb/#abstract-opdef-resolving-gputextureaspect>
     pub fn aspect_specific_format(&self, aspect: TextureAspect) -> Option<Self> {
         match (*self, aspect) {
             (Self::Stencil8, TextureAspect::StencilOnly) => Some(*self),
@@ -2401,7 +2411,7 @@ impl TextureFormat {
 
     /// Returns `true` if the format is a depth and/or stencil format
     ///
-    /// see https://gpuweb.github.io/gpuweb/#depth-formats
+    /// see <https://gpuweb.github.io/gpuweb/#depth-formats>
     pub fn is_depth_stencil_format(&self) -> bool {
         match *self {
             Self::Stencil8
@@ -2416,7 +2426,7 @@ impl TextureFormat {
 
     /// Returns `true` if the format is a combined depth-stencil format
     ///
-    /// see https://gpuweb.github.io/gpuweb/#combined-depth-stencil-format
+    /// see <https://gpuweb.github.io/gpuweb/#combined-depth-stencil-format>
     pub fn is_combined_depth_stencil_format(&self) -> bool {
         match *self {
             Self::Depth24PlusStencil8 | Self::Depth32FloatStencil8 => true,
@@ -4468,20 +4478,25 @@ pub enum SurfaceStatus {
 ///
 /// <table>
 /// <tr>
-///     <td>WSI
-///     <td>Clock
+///     <td>WSI</td>
+///     <td>Clock</td>
+/// </tr>
 /// <tr>
-///     <td>IDXGISwapchain
-///     <td><a href="https://docs.microsoft.com/en-us/windows/win32/api/profileapi/nf-profileapi-queryperformancecounter">QueryPerformanceCounter</a>
+///     <td>IDXGISwapchain</td>
+///     <td><a href="https://docs.microsoft.com/en-us/windows/win32/api/profileapi/nf-profileapi-queryperformancecounter">QueryPerformanceCounter</a></td>
+/// </tr>
 /// <tr>
-///     <td>IPresentationManager
-///     <td><a href="https://docs.microsoft.com/en-us/windows/win32/api/realtimeapiset/nf-realtimeapiset-queryinterrupttimeprecise">QueryInterruptTimePrecise</a>
+///     <td>IPresentationManager</td>
+///     <td><a href="https://docs.microsoft.com/en-us/windows/win32/api/realtimeapiset/nf-realtimeapiset-queryinterrupttimeprecise">QueryInterruptTimePrecise</a></td>
+/// </tr>
 /// <tr>
-///     <td>CAMetalLayer
-///     <td><a href="https://developer.apple.com/documentation/kernel/1462446-mach_absolute_time">mach_absolute_time</a>
+///     <td>CAMetalLayer</td>
+///     <td><a href="https://developer.apple.com/documentation/kernel/1462446-mach_absolute_time">mach_absolute_time</a></td>
+/// </tr>
 /// <tr>
-///     <td>VK_GOOGLE_display_timing
-///     <td><a href="https://linux.die.net/man/3/clock_gettime">clock_gettime(CLOCK_MONOTONIC)</a>
+///     <td>VK_GOOGLE_display_timing</td>
+///     <td><a href="https://linux.die.net/man/3/clock_gettime">clock_gettime(CLOCK_MONOTONIC)</a></td>
+/// </tr>
 /// </table>
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct PresentationTimestamp(
@@ -4720,7 +4735,7 @@ impl Extent3d {
     /// Calculates the extent at a given mip level.
     /// Does *not* account for memory size being a multiple of block size.
     ///
-    /// https://gpuweb.github.io/gpuweb/#logical-miplevel-specific-texture-extent
+    /// <https://gpuweb.github.io/gpuweb/#logical-miplevel-specific-texture-extent>
     pub fn mip_level_size(&self, level: u32, dim: TextureDimension) -> Self {
         Self {
             width: u32::max(1, self.width >> level),
@@ -4950,7 +4965,7 @@ impl<L, V> TextureDescriptor<L, V> {
 
     /// Computes the render extent of this texture.
     ///
-    /// https://gpuweb.github.io/gpuweb/#abstract-opdef-compute-render-extent
+    /// <https://gpuweb.github.io/gpuweb/#abstract-opdef-compute-render-extent>
     pub fn compute_render_extent(&self, mip_level: u32) -> Extent3d {
         Extent3d {
             width: u32::max(1, self.size.width >> mip_level),
@@ -4961,7 +4976,7 @@ impl<L, V> TextureDescriptor<L, V> {
 
     /// Returns the number of array layers.
     ///
-    /// https://gpuweb.github.io/gpuweb/#abstract-opdef-array-layer-count
+    /// <https://gpuweb.github.io/gpuweb/#abstract-opdef-array-layer-count>
     pub fn array_layer_count(&self) -> u32 {
         match self.dimension {
             TextureDimension::D1 | TextureDimension::D3 => 1,
@@ -6054,7 +6069,7 @@ pub enum Dx12Compiler {
     /// The Dxc compiler is new, fast and maintained.
     ///
     /// However, it requires both `dxcompiler.dll` and `dxil.dll` to be shipped with the application.
-    /// These files can be downloaded from https://github.com/microsoft/DirectXShaderCompiler/releases
+    /// These files can be downloaded from <https://github.com/microsoft/DirectXShaderCompiler/releases>.
     Dxc {
         /// Path to the `dxcompiler.dll` file. Passing `None` will use standard platform specific dll loading rules.
         dxil_path: Option<PathBuf>,
