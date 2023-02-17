@@ -124,7 +124,6 @@ impl super::Adapter {
         }
 
         if feature_level >= FL10_0 {
-            downlevel |= wgt::DownlevelFlags::INDEPENDENT_BLEND;
             downlevel |= wgt::DownlevelFlags::FRAGMENT_STORAGE;
             downlevel |= wgt::DownlevelFlags::FRAGMENT_WRITABLE_STORAGE;
             downlevel |= wgt::DownlevelFlags::DEPTH_BIAS_CLAMP;
@@ -136,6 +135,7 @@ impl super::Adapter {
 
         if feature_level >= FL10_1 {
             downlevel |= wgt::DownlevelFlags::CUBE_ARRAY_TEXTURES;
+            downlevel |= wgt::DownlevelFlags::MULTISAMPLED_SHADING;
         }
 
         if feature_level >= FL11_0 {

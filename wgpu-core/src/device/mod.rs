@@ -1388,6 +1388,21 @@ impl<A: HalApi> Device<A> {
             self.features
                 .contains(wgt::Features::TEXTURE_FORMAT_16BIT_NORM),
         );
+        caps.set(
+            Caps::MULTIVIEW,
+            self.features.contains(wgt::Features::MULTIVIEW),
+        );
+        caps.set(
+            Caps::EARLY_DEPTH_TEST,
+            self.features
+                .contains(wgt::Features::SHADER_EARLY_DEPTH_TEST),
+        );
+        caps.set(
+            Caps::MULTISAMPLED_SHADING,
+            self.downlevel
+                .flags
+                .contains(wgt::DownlevelFlags::MULTISAMPLED_SHADING),
+        );
 
         let info = naga::valid::Validator::new(naga::valid::ValidationFlags::all(), caps)
             .validate(&module)
