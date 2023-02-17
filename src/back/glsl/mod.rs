@@ -1455,8 +1455,16 @@ impl<'a, W: Write> Writer<'a, W> {
             write!(this.out, " {}", &this.names[&ctx.argument_key(i as u32)])?;
 
             // Write array size
-            if let TypeInner::Array { base, size, .. } = this.module.types[arg.ty].inner {
-                this.write_array_size(base, size)?;
+            match this.module.types[arg.ty].inner {
+                TypeInner::Array { base, size, .. } => {
+                    this.write_array_size(base, size)?;
+                }
+                TypeInner::Pointer { base, .. } => {
+                    if let TypeInner::Array { base, size, .. } = this.module.types[base].inner {
+                        this.write_array_size(base, size)?;
+                    }
+                }
+                _ => {}
             }
 
             Ok(())

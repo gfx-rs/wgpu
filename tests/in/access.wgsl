@@ -174,7 +174,14 @@ fn assign_through_ptr_fn(p: ptr<workgroup, u32>) {
     *p = 42u;
 }
 
+fn assign_array_through_ptr_fn(foo: ptr<function, array<vec4<f32>, 2>>) {
+    *foo = array<vec4<f32>, 2>(vec4(1.0), vec4(2.0));
+}
+
 @compute @workgroup_size(1)
 fn assign_through_ptr() {
+	var arr = array<vec4<f32>, 2>(vec4(6.0), vec4(7.0));
+
     assign_through_ptr_fn(&val);
+    assign_array_through_ptr_fn(&arr);
 }

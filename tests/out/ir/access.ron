@@ -317,6 +317,21 @@
                 space: WorkGroup,
             ),
         ),
+        (
+            name: None,
+            inner: Array(
+                base: 26,
+                size: Constant(5),
+                stride: 16,
+            ),
+        ),
+        (
+            name: None,
+            inner: Pointer(
+                base: 32,
+                space: Function,
+            ),
+        ),
     ],
     constants: [
         (
@@ -1964,6 +1979,58 @@
                 ),
             ],
         ),
+        (
+            name: Some("assign_array_through_ptr_fn"),
+            arguments: [
+                (
+                    name: Some("foo"),
+                    ty: 33,
+                    binding: None,
+                ),
+            ],
+            result: None,
+            local_variables: [],
+            expressions: [
+                FunctionArgument(0),
+                Constant(8),
+                Splat(
+                    size: Quad,
+                    value: 2,
+                ),
+                Constant(9),
+                Splat(
+                    size: Quad,
+                    value: 4,
+                ),
+                Compose(
+                    ty: 32,
+                    components: [
+                        3,
+                        5,
+                    ],
+                ),
+            ],
+            named_expressions: {
+                1: "foo",
+            },
+            body: [
+                Emit((
+                    start: 2,
+                    end: 3,
+                )),
+                Emit((
+                    start: 4,
+                    end: 6,
+                )),
+                Store(
+                    pointer: 1,
+                    value: 6,
+                ),
+                Return(
+                    value: None,
+                ),
+            ],
+        ),
     ],
     entry_points: [
         (
@@ -2721,16 +2788,59 @@
                 name: Some("assign_through_ptr"),
                 arguments: [],
                 result: None,
-                local_variables: [],
+                local_variables: [
+                    (
+                        name: Some("arr"),
+                        ty: 32,
+                        init: None,
+                    ),
+                ],
                 expressions: [
+                    Constant(11),
+                    Splat(
+                        size: Quad,
+                        value: 1,
+                    ),
+                    Constant(25),
+                    Splat(
+                        size: Quad,
+                        value: 3,
+                    ),
+                    Compose(
+                        ty: 32,
+                        components: [
+                            2,
+                            4,
+                        ],
+                    ),
+                    LocalVariable(1),
                     GlobalVariable(6),
                 ],
                 named_expressions: {},
                 body: [
+                    Emit((
+                        start: 1,
+                        end: 2,
+                    )),
+                    Emit((
+                        start: 3,
+                        end: 5,
+                    )),
+                    Store(
+                        pointer: 6,
+                        value: 5,
+                    ),
                     Call(
                         function: 5,
                         arguments: [
-                            1,
+                            7,
+                        ],
+                        result: None,
+                    ),
+                    Call(
+                        function: 6,
+                        arguments: [
+                            6,
                         ],
                         result: None,
                     ),

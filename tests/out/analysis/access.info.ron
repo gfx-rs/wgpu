@@ -93,6 +93,12 @@
         (
             bits: 70,
         ),
+        (
+            bits: 215,
+        ),
+        (
+            bits: 70,
+        ),
     ],
     functions: [
         (
@@ -3588,6 +3594,125 @@
             ],
             sampling: [],
         ),
+        (
+            flags: (
+                bits: 63,
+            ),
+            available_stages: (
+                bits: 7,
+            ),
+            uniformity: (
+                non_uniform_result: None,
+                requirements: (
+                    bits: 0,
+                ),
+            ),
+            may_kill: false,
+            sampling_set: [],
+            global_uses: [
+                (
+                    bits: 0,
+                ),
+                (
+                    bits: 0,
+                ),
+                (
+                    bits: 0,
+                ),
+                (
+                    bits: 0,
+                ),
+                (
+                    bits: 0,
+                ),
+                (
+                    bits: 0,
+                ),
+            ],
+            expressions: [
+                (
+                    uniformity: (
+                        non_uniform_result: Some(1),
+                        requirements: (
+                            bits: 0,
+                        ),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(33),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (
+                            bits: 0,
+                        ),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Scalar(
+                        kind: Float,
+                        width: 4,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (
+                            bits: 0,
+                        ),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Vector(
+                        size: Quad,
+                        kind: Float,
+                        width: 4,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (
+                            bits: 0,
+                        ),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Scalar(
+                        kind: Float,
+                        width: 4,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (
+                            bits: 0,
+                        ),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Vector(
+                        size: Quad,
+                        kind: Float,
+                        width: 4,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (
+                            bits: 0,
+                        ),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(32),
+                ),
+            ],
+            sampling: [],
+        ),
     ],
     entry_points: [
         (
@@ -5661,6 +5786,89 @@
                 ),
             ],
             expressions: [
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (
+                            bits: 0,
+                        ),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Scalar(
+                        kind: Float,
+                        width: 4,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (
+                            bits: 0,
+                        ),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Vector(
+                        size: Quad,
+                        kind: Float,
+                        width: 4,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (
+                            bits: 0,
+                        ),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Scalar(
+                        kind: Float,
+                        width: 4,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (
+                            bits: 0,
+                        ),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Vector(
+                        size: Quad,
+                        kind: Float,
+                        width: 4,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (
+                            bits: 0,
+                        ),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(32),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(6),
+                        requirements: (
+                            bits: 0,
+                        ),
+                    ),
+                    ref_count: 2,
+                    assignable_global: None,
+                    ty: Value(Pointer(
+                        base: 32,
+                        space: Function,
+                    )),
+                ),
                 (
                     uniformity: (
                         non_uniform_result: None,

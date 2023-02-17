@@ -44,6 +44,11 @@ void assign_through_ptr_fn(inout uint p) {
     return;
 }
 
+void assign_array_through_ptr_fn(inout vec4 foo_2[2]) {
+    foo_2 = vec4[2](vec4(1.0), vec4(2.0));
+    return;
+}
+
 void main() {
     _group_0_binding_0_fs._matrix[1][2] = 1.0;
     _group_0_binding_0_fs._matrix = mat4x3(vec3(0.0), vec3(1.0), vec3(2.0), vec3(3.0));

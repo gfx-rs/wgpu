@@ -36,13 +36,21 @@ void assign_through_ptr_fn(inout uint p) {
     return;
 }
 
+void assign_array_through_ptr_fn(inout vec4 foo_2[2]) {
+    foo_2 = vec4[2](vec4(1.0), vec4(2.0));
+    return;
+}
+
 void main() {
     if (gl_GlobalInvocationID == uvec3(0u)) {
         val = 0u;
     }
     memoryBarrierShared();
     barrier();
+    vec4 arr[2] = vec4[2](vec4(0.0), vec4(0.0));
+    arr = vec4[2](vec4(6.0), vec4(7.0));
     assign_through_ptr_fn(val);
+    assign_array_through_ptr_fn(arr);
     return;
 }
 

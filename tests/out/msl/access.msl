@@ -54,6 +54,9 @@ struct type_19 {
 struct type_22 {
     int inner[5];
 };
+struct type_26 {
+    metal::float4 inner[2];
+};
 constant metal::uint3 const_type_1_ = {0u, 0u, 0u};
 constant GlobalConst const_GlobalConst = {0u, {}, const_type_1_, 0};
 constant metal::float2 const_type_13_ = {0.0, 0.0};
@@ -161,6 +164,13 @@ void assign_through_ptr_fn(
     return;
 }
 
+void assign_array_through_ptr_fn(
+    thread type_26& foo_2
+) {
+    for(int _i=0; _i<2; ++_i) foo_2.inner[_i] = type_26 {metal::float4(1.0), metal::float4(2.0)}.inner[_i];
+    return;
+}
+
 struct foo_vertInput {
 };
 struct foo_vertOutput {
@@ -182,7 +192,7 @@ vertex foo_vertOutput foo_vert(
     test_matrix_within_struct_accesses(baz);
     test_matrix_within_array_within_struct_accesses(nested_mat_cx2_);
     metal::float4x3 _matrix = bar._matrix;
-    type_9 arr = bar.arr;
+    type_9 arr_1 = bar.arr;
     float b = bar._matrix[3].x;
     int a_1 = bar.data[(1 + (_buffer_sizes.size1 - 160 - 8) / 8) - 2u].value;
     metal::int2 c = qux;
@@ -247,6 +257,9 @@ kernel void assign_through_ptr(
         val = {};
     }
     metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);
+    type_26 arr = {};
+    for(int _i=0; _i<2; ++_i) arr.inner[_i] = type_26 {metal::float4(6.0), metal::float4(7.0)}.inner[_i];
     assign_through_ptr_fn(val);
+    assign_array_through_ptr_fn(arr);
     return;
 }

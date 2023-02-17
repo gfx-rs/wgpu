@@ -126,6 +126,11 @@ fn assign_through_ptr_fn(p: ptr<workgroup, u32>) {
     return;
 }
 
+fn assign_array_through_ptr_fn(foo_2: ptr<function, array<vec4<f32>,2>>) {
+    (*foo_2) = array<vec4<f32>,2>(vec4<f32>(1.0), vec4<f32>(2.0));
+    return;
+}
+
 @vertex 
 fn foo_vert(@builtin(vertex_index) vi: u32) -> @builtin(position) vec4<f32> {
     var foo: f32;
@@ -137,7 +142,7 @@ fn foo_vert(@builtin(vertex_index) vi: u32) -> @builtin(position) vec4<f32> {
     test_matrix_within_struct_accesses();
     test_matrix_within_array_within_struct_accesses();
     let _matrix = bar._matrix;
-    let arr = bar.arr;
+    let arr_1 = bar.arr;
     let b = bar._matrix[3][0];
     let a_1 = bar.data[(arrayLength((&bar.data)) - 2u)].value;
     let c = qux;
@@ -187,6 +192,10 @@ fn atomics() {
 
 @compute @workgroup_size(1, 1, 1) 
 fn assign_through_ptr() {
+    var arr: array<vec4<f32>,2>;
+
+    arr = array<vec4<f32>,2>(vec4<f32>(6.0), vec4<f32>(7.0));
     assign_through_ptr_fn((&val));
+    assign_array_through_ptr_fn((&arr));
     return;
 }

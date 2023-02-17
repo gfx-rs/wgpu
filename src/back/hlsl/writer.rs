@@ -1143,7 +1143,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
 
                     // Write argument name. Space is important.
                     write!(self.out, " {argument_name}")?;
-                    if let TypeInner::Array { base, size, .. } = module.types[arg.ty].inner {
+                    if let TypeInner::Array { base, size, .. } = module.types[arg_ty].inner {
                         self.write_array_size(module, base, size)?;
                     }
                 }

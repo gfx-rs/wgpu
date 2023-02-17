@@ -237,6 +237,18 @@ void assign_through_ptr_fn(inout uint p)
     return;
 }
 
+typedef float4 ret_Constructarray2_float4_[2];
+ret_Constructarray2_float4_ Constructarray2_float4_(float4 arg0, float4 arg1) {
+    float4 ret[2] = { arg0, arg1 };
+    return ret;
+}
+
+void assign_array_through_ptr_fn(inout float4 foo_2[2])
+{
+    foo_2 = Constructarray2_float4_((1.0).xxxx, (2.0).xxxx);
+    return;
+}
+
 uint NagaBufferLengthRW(RWByteAddressBuffer buffer)
 {
     uint ret;
@@ -261,7 +273,7 @@ float4 foo_vert(uint vi : SV_VertexID) : SV_Position
     test_matrix_within_struct_accesses();
     test_matrix_within_array_within_struct_accesses();
     float4x3 _matrix = float4x3(asfloat(bar.Load3(0+0)), asfloat(bar.Load3(0+16)), asfloat(bar.Load3(0+32)), asfloat(bar.Load3(0+48)));
-    uint2 arr[2] = {asuint(bar.Load2(144+0)), asuint(bar.Load2(144+8))};
+    uint2 arr_1[2] = {asuint(bar.Load2(144+0)), asuint(bar.Load2(144+8))};
     float b = asfloat(bar.Load(0+48+0));
     int a_1 = asint(bar.Load(0+(((NagaBufferLengthRW(bar) - 160) / 8) - 2u)*8+160));
     int2 c = asint(qux.Load2(0));
@@ -332,6 +344,10 @@ void assign_through_ptr(uint3 __global_invocation_id : SV_DispatchThreadID)
         val = (uint)0;
     }
     GroupMemoryBarrierWithGroupSync();
+    float4 arr[2] = (float4[2])0;
+
+    arr = Constructarray2_float4_((6.0).xxxx, (7.0).xxxx);
     assign_through_ptr_fn(val);
+    assign_array_through_ptr_fn(arr);
     return;
 }
