@@ -124,7 +124,6 @@ impl super::Adapter {
         }
 
         if feature_level >= FL10_0 {
-            downlevel |= wgt::DownlevelFlags::INDEPENDENT_BLEND;
             downlevel |= wgt::DownlevelFlags::FRAGMENT_STORAGE;
             downlevel |= wgt::DownlevelFlags::FRAGMENT_WRITABLE_STORAGE;
             downlevel |= wgt::DownlevelFlags::DEPTH_BIAS_CLAMP;
