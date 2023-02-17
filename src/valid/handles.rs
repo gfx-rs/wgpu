@@ -520,7 +520,10 @@ impl super::Validator {
                         validate_expr(acceleration_structure)?;
                         validate_expr(descriptor)?;
                     }
-                    crate::RayQueryFunction::Proceed | crate::RayQueryFunction::Terminate => {}
+                    crate::RayQueryFunction::Proceed { result } => {
+                        validate_expr(result)?;
+                    }
+                    crate::RayQueryFunction::Terminate => {}
                 }
                 Ok(())
             }

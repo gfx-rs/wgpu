@@ -350,9 +350,12 @@ impl Writer {
                 pointer_type_id,
                 id,
                 spirv::StorageClass::Function,
-                init_word.or_else(|| {
-                    let type_id = self.get_type_id(LookupType::Handle(variable.ty));
-                    Some(self.write_constant_null(type_id))
+                init_word.or_else(|| match ir_module.types[variable.ty].inner {
+                    crate::TypeInner::RayQuery => None,
+                    _ => {
+                        let type_id = self.get_type_id(LookupType::Handle(variable.ty));
+                        Some(self.write_constant_null(type_id))
+                    }
                 }),
             );
             function
@@ -814,47 +817,54 @@ impl Writer {
         }
     }
 
-    fn request_image_capabilities(&mut self, inner: &crate::TypeInner) -> Result<(), Error> {
-        if let crate::TypeInner::Image {
-            dim,
-            arrayed,
-            class,
-        } = *inner
-        {
-            let sampled = match class {
-                crate::ImageClass::Sampled { .. } => true,
-                crate::ImageClass::Depth { .. } => true,
-                crate::ImageClass::Storage { format, .. } => {
-                    self.request_image_format_capabilities(format.into())?;
-                    false
-                }
-            };
+    fn request_type_capabilities(&mut self, inner: &crate::TypeInner) -> Result<(), Error> {
+        match *inner {
+            crate::TypeInner::Image {
+                dim,
+                arrayed,
+                class,
+            } => {
+                let sampled = match class {
+                    crate::ImageClass::Sampled { .. } => true,
+                    crate::ImageClass::Depth { .. } => true,
+                    crate::ImageClass::Storage { format, .. } => {
+                        self.request_image_format_capabilities(format.into())?;
+                        false
+                    }
+                };
 
-            match dim {
-                crate::ImageDimension::D1 => {
-                    if sampled {
-                        self.require_any("sampled 1D images", &[spirv::Capability::Sampled1D])?;
-                    } else {
-                        self.require_any("1D storage images", &[spirv::Capability::Image1D])?;
+                match dim {
+                    crate::ImageDimension::D1 => {
+                        if sampled {
+                            self.require_any("sampled 1D images", &[spirv::Capability::Sampled1D])?;
+                        } else {
+                            self.require_any("1D storage images", &[spirv::Capability::Image1D])?;
+                        }
                     }
-                }
-                crate::ImageDimension::Cube if arrayed => {
-                    if sampled {
-                        self.require_any(
-                            "sampled cube array images",
-                            &[spirv::Capability::SampledCubeArray],
-                        )?;
-                    } else {
-                        self.require_any(
-                            "cube array storage images",
-                            &[spirv::Capability::ImageCubeArray],
-                        )?;
+                    crate::ImageDimension::Cube if arrayed => {
+                        if sampled {
+                            self.require_any(
+                                "sampled cube array images",
+                                &[spirv::Capability::SampledCubeArray],
+                            )?;
+                        } else {
+                            self.require_any(
+                                "cube array storage images",
+                                &[spirv::Capability::ImageCubeArray],
+                            )?;
+                        }
                     }
+                    _ => {}
                 }
-                _ => {}
             }
+            crate::TypeInner::AccelerationStructure => {
+                self.require_any("Acceleration Structure", &[spirv::Capability::RayQueryKHR])?;
+            }
+            crate::TypeInner::RayQuery => {
+                self.require_any("Ray Query", &[spirv::Capability::RayQueryKHR])?;
+            }
+            _ => {}
         }
-
         Ok(())
     }
 
@@ -935,6 +945,8 @@ impl Writer {
                     self.get_type_id(LookupType::Local(LocalType::BindingArray { base, size }));
                 Instruction::type_pointer(id, spirv::StorageClass::UniformConstant, inner_ty)
             }
+            LocalType::AccelerationStructure => Instruction::type_acceleration_structure(id),
+            LocalType::RayQuery => Instruction::type_ray_query(id),
         };
 
         instruction.to_words(&mut self.logical_layout.declarations);
@@ -961,9 +973,9 @@ impl Writer {
 
                     self.write_type_declaration_local(id, local);
 
-                    // If it's an image type, request SPIR-V capabilities here, so
-                    // write_type_declaration_local can stay infallible.
-                    self.request_image_capabilities(&ty.inner)?;
+                    // If it's an type that needs SPIR-V capabilities, request them now,
+                    // so write_type_declaration_local can stay infallible.
+                    self.request_type_capabilities(&ty.inner)?;
 
                     id
                 }
@@ -1758,6 +1770,8 @@ impl Writer {
             .iter()
             .flat_map(|entry| entry.function.arguments.iter())
             .any(|arg| has_view_index_check(ir_module, arg.binding.as_ref(), arg.ty));
+        let has_ray_query = ir_module.special_types.ray_desc.is_some()
+            | ir_module.special_types.ray_intersection.is_some();
 
         if self.physical_layout.version < 0x10300 && has_storage_buffers {
             // enable the storage buffer class on < SPV-1.3
@@ -1766,6 +1780,10 @@ impl Writer {
         }
         if has_view_index {
             Instruction::extension("SPV_KHR_multiview")
+                .to_words(&mut self.logical_layout.extensions)
+        }
+        if has_ray_query {
+            Instruction::extension("SPV_KHR_ray_query")
                 .to_words(&mut self.logical_layout.extensions)
         }
         Instruction::type_void(self.void_type).to_words(&mut self.logical_layout.declarations);

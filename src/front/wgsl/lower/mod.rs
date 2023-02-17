@@ -1915,7 +1915,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         }
                         "rayQueryInitialize" => {
                             let mut args = ctx.prepare_args(arguments, 3, span);
-                            let query = self.expression(args.next()?, ctx.reborrow())?;
+                            let query = self.ray_query_pointer(args.next()?, ctx.reborrow())?;
                             let acceleration_structure =
                                 self.expression(args.next()?, ctx.reborrow())?;
                             let descriptor = self.expression(args.next()?, ctx.reborrow())?;
@@ -1935,15 +1935,15 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         }
                         "rayQueryProceed" => {
                             let mut args = ctx.prepare_args(arguments, 1, span);
-                            let query = self.expression(args.next()?, ctx.reborrow())?;
+                            let query = self.ray_query_pointer(args.next()?, ctx.reborrow())?;
                             args.finish()?;
-
-                            let fun = crate::RayQueryFunction::Proceed;
 
                             ctx.block.extend(ctx.emitter.finish(ctx.naga_expressions));
                             let result = ctx
                                 .naga_expressions
                                 .append(crate::Expression::RayQueryProceedResult, span);
+                            let fun = crate::RayQueryFunction::Proceed { result };
+
                             ctx.emitter.start(ctx.naga_expressions);
                             ctx.block
                                 .push(crate::Statement::RayQuery { query, fun }, span);
@@ -1951,7 +1951,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         }
                         "rayQueryGetCommittedIntersection" => {
                             let mut args = ctx.prepare_args(arguments, 1, span);
-                            let query = self.expression(args.next()?, ctx.reborrow())?;
+                            let query = self.ray_query_pointer(args.next()?, ctx.reborrow())?;
                             args.finish()?;
 
                             let _ = ctx.module.generate_ray_intersection_type();
@@ -2421,5 +2421,29 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         }
 
         binding
+    }
+
+    fn ray_query_pointer(
+        &mut self,
+        expr: Handle<ast::Expression<'source>>,
+        mut ctx: ExpressionContext<'source, '_, '_>,
+    ) -> Result<Handle<crate::Expression>, Error<'source>> {
+        let span = ctx.ast_expressions.get_span(expr);
+        let pointer = self.expression(expr, ctx.reborrow())?;
+
+        ctx.grow_types(pointer)?;
+        match *ctx.resolved_inner(pointer) {
+            crate::TypeInner::Pointer { base, .. } => match ctx.module.types[base].inner {
+                crate::TypeInner::RayQuery => Ok(pointer),
+                ref other => {
+                    log::error!("Pointer type to {:?} passed to ray query op", other);
+                    Err(Error::InvalidAtomicPointer(span))
+                }
+            },
+            ref other => {
+                log::error!("Type {:?} passed to ray query op", other);
+                Err(Error::InvalidAtomicPointer(span))
+            }
+        }
     }
 }

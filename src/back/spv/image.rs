@@ -373,7 +373,7 @@ impl<'w> BlockContext<'w> {
         })
     }
 
-    fn get_image_id(&mut self, expr_handle: Handle<crate::Expression>) -> Word {
+    pub(super) fn get_image_id(&mut self, expr_handle: Handle<crate::Expression>) -> Word {
         let id = match self.ir_function.expressions[expr_handle] {
             crate::Expression::GlobalVariable(handle) => {
                 self.writer.global_variables[handle.index()].handle_id

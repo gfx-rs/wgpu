@@ -249,6 +249,18 @@ impl super::Instruction {
         instruction
     }
 
+    pub(super) fn type_acceleration_structure(id: Word) -> Self {
+        let mut instruction = Self::new(Op::TypeAccelerationStructureKHR);
+        instruction.set_result(id);
+        instruction
+    }
+
+    pub(super) fn type_ray_query(id: Word) -> Self {
+        let mut instruction = Self::new(Op::TypeRayQueryKHR);
+        instruction.set_result(id);
+        instruction
+    }
+
     pub(super) fn type_sampled_image(id: Word, image_type_id: Word) -> Self {
         let mut instruction = Self::new(Op::TypeSampledImage);
         instruction.set_result(id);
@@ -624,6 +636,54 @@ impl super::Instruction {
         instruction.set_type(result_type_id);
         instruction.set_result(id);
         instruction.add_operand(image);
+        instruction
+    }
+
+    //
+    //  Ray Query Instructions
+    //
+    pub(super) fn ray_query_initialize(
+        query: Word,
+        acceleration_structure: Word,
+        ray_flags: Word,
+        cull_mask: Word,
+        ray_origin: Word,
+        ray_tmin: Word,
+        ray_dir: Word,
+        ray_tmax: Word,
+    ) -> Self {
+        let mut instruction = Self::new(Op::RayQueryInitializeKHR);
+        instruction.add_operand(query);
+        instruction.add_operand(acceleration_structure);
+        instruction.add_operand(ray_flags);
+        instruction.add_operand(cull_mask);
+        instruction.add_operand(ray_origin);
+        instruction.add_operand(ray_tmin);
+        instruction.add_operand(ray_dir);
+        instruction.add_operand(ray_tmax);
+        instruction
+    }
+
+    pub(super) fn ray_query_proceed(result_type_id: Word, id: Word, query: Word) -> Self {
+        let mut instruction = Self::new(Op::RayQueryProceedKHR);
+        instruction.set_type(result_type_id);
+        instruction.set_result(id);
+        instruction.add_operand(query);
+        instruction
+    }
+
+    pub(super) fn ray_query_get_intersection(
+        op: Op,
+        result_type_id: Word,
+        id: Word,
+        query: Word,
+        intersection: Word,
+    ) -> Self {
+        let mut instruction = Self::new(op);
+        instruction.set_type(result_type_id);
+        instruction.set_result(id);
+        instruction.add_operand(query);
+        instruction.add_operand(intersection);
         instruction
     }
 

@@ -44,10 +44,10 @@ var<storage, read_write> output: Output;
 fn main() {
     var rq: ray_query;
 
-    rayQueryInitialize(rq, acc_struct, RayDesc(RAY_FLAG_TERMINATE_ON_FIRST_HIT, 0xFFu, 0.1, 100.0, vec3<f32>(0.0), vec3<f32>(0.0, 1.0, 0.0)));
+    rayQueryInitialize(&rq, acc_struct, RayDesc(RAY_FLAG_TERMINATE_ON_FIRST_HIT, 0xFFu, 0.1, 100.0, vec3<f32>(0.0), vec3<f32>(0.0, 1.0, 0.0)));
 
-    rayQueryProceed(rq);
+    rayQueryProceed(&rq);
 
-    let intersection = rayQueryGetCommittedIntersection(rq);
+    let intersection = rayQueryGetCommittedIntersection(&rq);
     output.visible = u32(intersection.kind == RAY_QUERY_INTERSECTION_NONE);
 }

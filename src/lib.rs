@@ -1492,7 +1492,9 @@ pub enum RayQueryFunction {
         acceleration_structure: Handle<Expression>,
         descriptor: Handle<Expression>,
     },
-    Proceed,
+    Proceed {
+        result: Handle<Expression>,
+    },
     Terminate,
 }
 
