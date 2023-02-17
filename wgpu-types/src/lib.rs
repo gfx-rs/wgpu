@@ -681,6 +681,13 @@ bitflags::bitflags! {
         ///
         /// This is a native-only feature.
         const SHADER_INT16 = 1 << 42;
+        /// Allows shaders to use the `early_depth_test` attribute.
+        ///
+        /// Supported platforms:
+        /// - GLES 3.1+
+        ///
+        /// This is a native-only feature.
+        const SHADER_EARLY_DEPTH_TEST = 1 << 43;
     }
 }
 
