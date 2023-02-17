@@ -274,7 +274,7 @@ pub fn op_webgpu_render_bundle_encoder_set_vertex_buffer(
     slot: u32,
     buffer: ResourceId,
     offset: u64,
-    size: u64,
+    size: Option<u64>,
 ) -> Result<WebGpuResult, AnyError> {
     let buffer_resource = state
         .resource_table
@@ -282,9 +282,14 @@ pub fn op_webgpu_render_bundle_encoder_set_vertex_buffer(
     let render_bundle_encoder_resource = state
         .resource_table
         .get::<WebGpuRenderBundleEncoder>(render_bundle_encoder_rid)?;
-    let size = Some(
-        std::num::NonZeroU64::new(size).ok_or_else(|| type_error("size must be larger than 0"))?,
-    );
+    let size = if let Some(size) = size {
+        Some(
+            std::num::NonZeroU64::new(size)
+                .ok_or_else(|| type_error("size must be larger than 0"))?,
+        )
+    } else {
+        None
+    };
 
     wgpu_core::command::bundle_ffi::wgpu_render_bundle_set_vertex_buffer(
         &mut render_bundle_encoder_resource.0.borrow_mut(),
