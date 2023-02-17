@@ -269,10 +269,6 @@ impl Example {
 }
 
 impl framework::Example for Example {
-    fn required_features() -> wgpu::Features {
-        wgpu::Features::SHADER_EARLY_DEPTH_TEST
-    }
-
     fn init(
         config: &wgpu::SurfaceConfiguration,
         _adapter: &wgpu::Adapter,
