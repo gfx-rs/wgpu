@@ -169,6 +169,7 @@ need to be stored in a local variable to be carried upwards in the statement
 tree.
 
 [`AtomicResult`]: Expression::AtomicResult
+[`RayQueryProceedResult`]: Expression::RayQueryProceedResult
 [`CallResult`]: Expression::CallResult
 [`Constant`]: Expression::Constant
 [`Derivative`]: Expression::Derivative

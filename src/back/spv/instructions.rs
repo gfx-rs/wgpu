@@ -642,6 +642,7 @@ impl super::Instruction {
     //
     //  Ray Query Instructions
     //
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn ray_query_initialize(
         query: Word,
         acceleration_structure: Word,

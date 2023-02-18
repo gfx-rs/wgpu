@@ -209,7 +209,7 @@ pub struct ResolveContext<'a> {
 
 impl<'a> ResolveContext<'a> {
     /// Initialize a resolve context from the module.
-    pub fn with_locals(
+    pub const fn with_locals(
         module: &'a crate::Module,
         local_vars: &'a Arena<crate::LocalVariable>,
         arguments: &'a [crate::FunctionArgument],

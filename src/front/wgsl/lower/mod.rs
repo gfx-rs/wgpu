@@ -234,8 +234,7 @@ impl<'a> ExpressionContext<'a, '_, '_> {
     /// [`self.resolved_inner(handle)`]: ExpressionContext::resolved_inner
     /// [`Typifier`]: Typifier
     fn grow_types(&mut self, handle: Handle<crate::Expression>) -> Result<&mut Self, Error<'a>> {
-        let resolve_ctx =
-            ResolveContext::with_locals(&self.module, self.local_vars, self.arguments);
+        let resolve_ctx = ResolveContext::with_locals(self.module, self.local_vars, self.arguments);
         self.typifier
             .grow(handle, self.naga_expressions, &resolve_ctx)
             .map_err(Error::InvalidResolve)?;
