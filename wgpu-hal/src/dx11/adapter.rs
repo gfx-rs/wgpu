@@ -127,6 +127,7 @@ impl super::Adapter {
             downlevel |= wgt::DownlevelFlags::FRAGMENT_STORAGE;
             downlevel |= wgt::DownlevelFlags::FRAGMENT_WRITABLE_STORAGE;
             downlevel |= wgt::DownlevelFlags::DEPTH_BIAS_CLAMP;
+            downlevel |= wgt::DownlevelFlags::VERTEX_STORAGE;
             features |= wgt::Features::DEPTH_CLIP_CONTROL;
             features |= wgt::Features::TIMESTAMP_QUERY;
             features |= wgt::Features::PIPELINE_STATISTICS_QUERY;
@@ -145,7 +146,7 @@ impl super::Adapter {
         }
 
         if feature_level >= FL11_1 {
-            downlevel |= wgt::DownlevelFlags::VERTEX_STORAGE;
+            features |= wgt::Features::VERTEX_WRITABLE_STORAGE;
         }
 
         //
