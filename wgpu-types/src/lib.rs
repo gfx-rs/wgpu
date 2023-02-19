@@ -308,6 +308,8 @@ bitflags::bitflags! {
         /// - Vulkan
         /// - DX12
         ///
+        /// This is currently unimplemented on Metal.
+        ///
         /// This is a web and native feature.
         const TIMESTAMP_QUERY = 1 << 7;
         /// Enables use of Pipeline Statistics Queries. These queries tell the count of various operations
@@ -674,15 +676,16 @@ bitflags::bitflags! {
         ///
         /// This is a native-only feature.
         const TEXTURE_COMPRESSION_ASTC_HDR = 1 << 40;
-        /// Allows for timestamp queries inside render passes. Metal does not allow this
-        /// on Apple GPUs.
+        /// Allows for timestamp queries inside render passes.
         ///
         /// Implies [`Features::TIMESTAMP_QUERIES`] is supported.
         ///
         /// Supported platforms:
         /// - Vulkan
         /// - DX12
-        /// - Metal (Intel and AMD GPUs)
+        ///
+        /// This is currently unimplemented on Metal.
+        /// When implemented, it will be supported on Metal on AMD and Intel GPUs, but not Apple GPUs.
         const WRITE_TIMESTAMP_INSIDE_PASSES = 1 << 41;
         /// Allows shaders to use i16. Not currently supported in naga, only available through `spirv-passthrough`.
         ///
