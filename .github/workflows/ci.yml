@@ -127,13 +127,8 @@ jobs:
           cargo clippy --target ${{ matrix.target }} -p wgpu --tests --features glsl,spirv
           cargo doc --target ${{ matrix.target }} -p wgpu --no-deps --features glsl,spirv
 
-          # build for WebGL
-          cargo clippy --target ${{ matrix.target }} -p wgpu --tests --features webgl,glsl,spirv
-          cargo doc --target ${{ matrix.target }} -p wgpu --no-deps --features webgl,glsl,spirv
-
           # all features
-          cargo clippy --target ${{ matrix.target }} -p wgpu-hal --tests --all-features
-          cargo clippy --target ${{ matrix.target }} -p wgpu --tests --all-features
+          cargo clippy --target ${{ matrix.target }} -p wgpu -p wgpu-hal --tests --all-features
           cargo doc --target ${{ matrix.target }} -p wgpu --no-deps --all-features
 
       - name: check em
@@ -165,17 +160,10 @@ jobs:
           cargo clippy --target ${{ matrix.target }} -p wgpu -p wgpu-core -p wgpu-info -p player --no-default-features
 
           # Check with all features.
-          # (But watch out for backend-selection features in wgpu-core; some of
-          # those only build on the right platforms.)
-          cargo clippy --target ${{ matrix.target }} -p wgpu-hal --tests --all-features
-          cargo clippy --target ${{ matrix.target }} -p wgpu-core --tests --all-features
-          cargo clippy --target ${{ matrix.target }} -p wgpu -p wgpu-info -p player --tests --all-features
+          cargo clippy --target ${{ matrix.target }} -p wgpu -p wgpu-info -p player -p wgpu-core -p wgpu-hal --tests --all-features
 
           # build docs
-          # (Watch out for backend-selection features in wgpu-core; some of
-          # those only build on the right platforms.)
-          cargo doc --target ${{ matrix.target }} -p wgpu -p wgpu-info -p player --all-features --no-deps
-          cargo doc --target ${{ matrix.target }} -p wgpu-core --no-deps --all-features
+          cargo doc --target ${{ matrix.target }} -p wgpu -p wgpu-info -p player -p wgpu-core -p wgpu-hal --all-features --no-deps
 
   wasm-test:
     name: Test WebAssembly

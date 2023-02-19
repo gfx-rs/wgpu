@@ -27,7 +27,7 @@ and [`crate::CommandEncoder::set_render_pipeline`] with
 [`crate::CommandEncoder::set_compute_pipeline`].
 
 For this reason, in order avoid repeating the binding code,
-we are binding everything in [`CommandEncoder::update_root_elements`].
+we are binding everything in `CommandEncoder::update_root_elements`.
 When the pipeline layout is changed, we reset all bindings.
 Otherwise, we pass a range corresponding only to the current bind group.
 
