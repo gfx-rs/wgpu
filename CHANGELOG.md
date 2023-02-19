@@ -98,6 +98,7 @@ By @teoxoy in [#3436](https://github.com/gfx-rs/wgpu/pull/3436)
 #### DX12
 
 - Fix DXC validation issues when using a custom `dxil_path`. By @Elabajaba in [#3434](https://github.com/gfx-rs/wgpu/pull/3434)
+- Reuse equivalent samplers in dx12 to help stay under the limit of 2048 per heap. By @Davidster in [#3499](https://github.com/gfx-rs/wgpu/pull/3499)
 
 #### GLES
 
