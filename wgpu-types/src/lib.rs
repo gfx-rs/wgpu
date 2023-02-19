@@ -684,8 +684,8 @@ bitflags::bitflags! {
         /// - Vulkan
         /// - DX12
         ///
-        /// Metal does not allow this on Apple GPUs, but it is supported on AMD and Intel.
         /// This is currently unimplemented on Metal.
+        /// When implemented, it will be supported on Metal on AMD and Intel GPUs, but not Apple GPUs.
         const WRITE_TIMESTAMP_INSIDE_PASSES = 1 << 41;
         /// Allows shaders to use i16. Not currently supported in naga, only available through `spirv-passthrough`.
         ///
