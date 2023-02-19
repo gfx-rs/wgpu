@@ -101,6 +101,7 @@ pub mod api {
 use std::{
     borrow::{Borrow, Cow},
     fmt,
+    hash::{Hash, Hasher},
     num::{NonZeroU32, NonZeroU8},
     ops::{Range, RangeInclusive},
     ptr::NonNull,
@@ -937,6 +938,25 @@ pub struct SamplerDescriptor<'a> {
     pub compare: Option<wgt::CompareFunction>,
     pub anisotropy_clamp: Option<NonZeroU8>,
     pub border_color: Option<wgt::SamplerBorderColor>,
+}
+
+impl Hash for SamplerDescriptor<'_> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.label.hash(state);
+        self.address_modes.hash(state);
+        self.mag_filter.hash(state);
+        self.min_filter.hash(state);
+        self.mipmap_filter.hash(state);
+        self.compare.hash(state);
+        self.anisotropy_clamp.hash(state);
+        self.border_color.hash(state);
+
+        let hashable_lod_clamp = self
+            .lod_clamp
+            .as_ref()
+            .map(|lod_clamp| (lod_clamp.start.to_bits(), lod_clamp.end.to_bits()));
+        hashable_lod_clamp.hash(state);
+    }
 }
 
 /// BindGroupLayout descriptor.

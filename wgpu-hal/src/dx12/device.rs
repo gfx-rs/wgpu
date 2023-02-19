@@ -2,7 +2,15 @@ use crate::auxil::{self, dxgi::result::HResult as _};
 
 use super::{conv, descriptor, view};
 use parking_lot::Mutex;
-use std::{ffi, mem, num::NonZeroU32, ptr, sync::Arc};
+use std::{
+    collections::{hash_map::Entry, HashMap},
+    ffi,
+    hash::{Hash, Hasher},
+    mem,
+    num::NonZeroU32,
+    ptr,
+    sync::Arc,
+};
 use winapi::{
     shared::{dxgiformat, dxgitype, minwindef::BOOL, winerror},
     um::{d3d12, synchapi, winbase},
@@ -173,6 +181,7 @@ impl super::Device {
             null_rtv_handle,
             mem_allocator,
             dxc_container,
+            uploaded_sampler_handles: Mutex::new(HashMap::new()),
         })
     }
 
@@ -616,7 +625,13 @@ impl crate::Device<super::Api> for super::Device {
             desc.lod_clamp.clone().unwrap_or(0.0..16.0),
         );
 
-        Ok(super::Sampler { handle })
+        let hash = {
+            let mut state = std::collections::hash_map::DefaultHasher::new();
+            desc.hash(&mut state);
+            state.finish()
+        };
+
+        Ok(super::Sampler { handle, hash })
     }
     unsafe fn destroy_sampler(&self, sampler: super::Sampler) {
         self.sampler_pool.lock().free_handle(sampler.handle);
@@ -1099,6 +1114,7 @@ impl crate::Device<super::Api> for super::Device {
         if let Some(ref mut inner) = cpu_samplers {
             inner.stage.clear();
         }
+        let mut sampler_hashes = Vec::new();
         let mut dynamic_buffers = Vec::new();
 
         for (layout, entry) in desc.layout.entries.iter().zip(desc.entries.iter()) {
@@ -1205,6 +1221,7 @@ impl crate::Device<super::Api> for super::Device {
                     let end = start + entry.count as usize;
                     for data in &desc.samplers[start..end] {
                         cpu_samplers.as_mut().unwrap().stage.push(data.handle.raw);
+                        sampler_hashes.push(data.hash);
                     }
                 }
             }
@@ -1225,17 +1242,29 @@ impl crate::Device<super::Api> for super::Device {
             None => None,
         };
         let handle_samplers = match cpu_samplers {
-            Some(inner) => {
-                let dual = unsafe {
-                    descriptor::upload(
-                        self.raw,
-                        &inner,
-                        &self.shared.heap_samplers,
-                        &desc.layout.copy_counts,
-                    )
-                }?;
-                Some(dual)
-            }
+            Some(inner) => match self
+                .uploaded_sampler_handles
+                .lock()
+                .entry(sampler_hashes.clone())
+            {
+                Entry::Occupied(mut entry) => {
+                    let &mut (dual, ref mut ref_count) = entry.get_mut();
+                    *ref_count += 1;
+                    Some((dual, sampler_hashes))
+                }
+                Entry::Vacant(entry) => {
+                    let dual = unsafe {
+                        descriptor::upload(
+                            self.raw,
+                            &inner,
+                            &self.shared.heap_samplers,
+                            &desc.layout.copy_counts,
+                        )
+                    }?;
+                    entry.insert((dual, 1));
+                    Some((dual, sampler_hashes))
+                }
+            },
             None => None,
         };
 
@@ -1249,8 +1278,24 @@ impl crate::Device<super::Api> for super::Device {
         if let Some(dual) = group.handle_views {
             self.shared.heap_views.free_slice(dual);
         }
-        if let Some(dual) = group.handle_samplers {
-            self.shared.heap_samplers.free_slice(dual);
+
+        if let Some((dual, sampler_hashes)) = group.handle_samplers {
+            let mut uploaded_sampler_handles = self.uploaded_sampler_handles.lock();
+
+            let mut ref_count_is_zero = false;
+            if let Some(&mut (_, ref mut ref_count)) =
+                uploaded_sampler_handles.get_mut(&sampler_hashes)
+            {
+                *ref_count -= 1;
+                if *ref_count == 0 {
+                    ref_count_is_zero = true;
+                }
+            }
+
+            if ref_count_is_zero {
+                self.shared.heap_samplers.free_slice(dual);
+                uploaded_sampler_handles.remove(&sampler_hashes);
+            }
         }
     }
 

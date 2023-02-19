@@ -853,7 +853,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         if info.tables.contains(super::TableTypes::SAMPLERS) {
             log::trace!("\tBind element[{}] = sampler", root_index);
             self.pass.root_elements[root_index] =
-                super::RootElement::Table(group.handle_samplers.unwrap().gpu);
+                super::RootElement::Table(group.handle_samplers.as_ref().unwrap().0.gpu);
             root_index += 1;
         }
 
