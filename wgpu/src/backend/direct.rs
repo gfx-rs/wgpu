@@ -195,7 +195,7 @@ impl Context {
         &self,
         layer: *mut std::ffi::c_void,
     ) -> Surface {
-        let id = self.0.instance_create_surface_metal(layer, ());
+        let id = unsafe { self.0.instance_create_surface_metal(layer, ()) };
         Surface {
             id,
             configured_device: Mutex::default(),
