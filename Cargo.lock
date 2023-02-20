@@ -3028,6 +3028,7 @@ dependencies = [
  "image",
  "js-sys",
  "log",
+ "metal",
  "naga",
  "nanorand",
  "noise",

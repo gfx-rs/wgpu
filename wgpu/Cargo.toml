@@ -176,6 +176,9 @@ nanorand = { workspace = true, features = ["wyrand"] }
 wasm-bindgen-test.workspace = true
 winit.workspace = true # for "halmark" example
 
+[target.'cfg(any(target_os="macos", target_os="ios"))'.dev-dependencies]
+mtl = { package = "metal", version = "0.24.0" }
+
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 async-executor.workspace = true
 

@@ -237,6 +237,23 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
         parameters.required_limits.clone(),
     ));
 
+    #[cfg(any(target_os = "macos", target_os = "ios"))]
+    let capture_mgr = unsafe {
+        // The metal capture manager informs tools like xcode's metal debugger what to consider a frame.
+        // Normally, these tools guess by listing for window presentation, however tests don't necessarily
+        // present to a window, so this lets us capture and replay a test in xcode.
+        // TODO: implement this in wgpu_hal/wgpu.
+        device.as_hal::<hal::api::Metal, _, _>(|device: Option<&hal::metal::Device>| {
+            device.map(|device| {
+                let capture_mgr = mtl::CaptureManager::shared();
+                let mtl_device = device.raw_device().lock();
+                capture_mgr.start_capture_with_device(&*mtl_device);
+
+                capture_mgr
+            })
+        })
+    };
+
     let context = TestingContext {
         adapter,
         adapter_info: adapter_info.clone(),
@@ -311,6 +328,11 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
     };
 
     let expect_failure = expected_failure_reason.is_some();
+
+    #[cfg(any(target_os = "macos", target_os = "ios"))]
+    if let Some(mgr) = capture_mgr {
+        mgr.stop_capture();
+    }
 
     if failed == expect_failure {
         // We got the conditions we expected
