@@ -18,6 +18,14 @@ vertex void main_(
     int const_dot = ( + const_type_1_.x * const_type_1_.x + const_type_1_.y * const_type_1_.y);
     uint _e13 = metal::abs(0u);
     uint first_leading_bit_abs = metal::select(31 - metal::clz(_e13), uint(-1), _e13 == 0 || _e13 == -1);
+    uint ctz_a = metal::ctz(0u);
+    int ctz_b = metal::ctz(0);
+    uint ctz_c = metal::ctz(4294967295u);
+    int ctz_d = metal::ctz(-1);
+    metal::uint2 ctz_e = metal::ctz(metal::uint2(0u));
+    metal::int2 ctz_f = metal::ctz(metal::int2(0));
+    metal::uint2 ctz_g = metal::ctz(metal::uint2(1u));
+    metal::int2 ctz_h = metal::ctz(metal::int2(1));
     int clz_a = metal::clz(-1);
     uint clz_b = metal::clz(1u);
     metal::int2 clz_c = metal::clz(metal::int2(-1));

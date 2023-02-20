@@ -874,6 +874,49 @@ impl<'w> BlockContext<'w> {
                         id,
                         arg0_id,
                     )),
+                    Mf::CountTrailingZeros => {
+                        let uint = crate::ScalarValue::Uint(32);
+                        let uint_id = match *arg_ty {
+                            crate::TypeInner::Vector { size, width, .. } => {
+                                let ty = LocalType::Value {
+                                    vector_size: Some(size),
+                                    kind: crate::ScalarKind::Uint,
+                                    width,
+                                    pointer_space: None,
+                                }
+                                .into();
+
+                                self.temp_list.clear();
+                                self.temp_list.resize(
+                                    size as _,
+                                    self.writer.get_constant_scalar(uint, width),
+                                );
+
+                                self.writer.get_constant_composite(ty, &self.temp_list)
+                            }
+                            crate::TypeInner::Scalar { width, .. } => {
+                                self.writer.get_constant_scalar(uint, width)
+                            }
+                            _ => unreachable!(),
+                        };
+
+                        let lsb_id = self.gen_id();
+                        block.body.push(Instruction::ext_inst(
+                            self.writer.gl450_ext_inst_id,
+                            spirv::GLOp::FindILsb,
+                            result_type_id,
+                            lsb_id,
+                            &[arg0_id],
+                        ));
+
+                        MathOp::Custom(Instruction::ext_inst(
+                            self.writer.gl450_ext_inst_id,
+                            spirv::GLOp::UMin,
+                            result_type_id,
+                            id,
+                            &[uint_id, lsb_id],
+                        ))
+                    }
                     Mf::CountLeadingZeros => {
                         let int = crate::ScalarValue::Sint(31);
 

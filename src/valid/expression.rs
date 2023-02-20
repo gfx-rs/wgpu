@@ -1223,7 +1223,8 @@ impl super::Validator {
                             _ => return Err(ExpressionError::InvalidArgumentType(fun, 0, arg)),
                         }
                     }
-                    Mf::CountLeadingZeros
+                    Mf::CountTrailingZeros
+                    | Mf::CountLeadingZeros
                     | Mf::CountOneBits
                     | Mf::ReverseBits
                     | Mf::FindLsb

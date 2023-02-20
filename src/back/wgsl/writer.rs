@@ -1578,6 +1578,7 @@ impl<W: Write> Writer<W> {
                     Mf::Transpose => Function::Regular("transpose"),
                     Mf::Determinant => Function::Regular("determinant"),
                     // bits
+                    Mf::CountTrailingZeros => Function::Regular("countTrailingZeros"),
                     Mf::CountLeadingZeros => Function::Regular("countLeadingZeros"),
                     Mf::CountOneBits => Function::Regular("countOneBits"),
                     Mf::ReverseBits => Function::Regular("reverseBits"),

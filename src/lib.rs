@@ -1066,6 +1066,7 @@ pub enum MathFunction {
     Transpose,
     Determinant,
     // bits
+    CountTrailingZeros,
     CountLeadingZeros,
     CountOneBits,
     ReverseBits,

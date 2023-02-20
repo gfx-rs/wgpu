@@ -2996,6 +2996,35 @@ impl<'a, W: Write> Writer<'a, W> {
                     Mf::Transpose => "transpose",
                     Mf::Determinant => "determinant",
                     // bits
+                    Mf::CountTrailingZeros => {
+                        match *ctx.info[arg].ty.inner_with(&self.module.types) {
+                            crate::TypeInner::Vector { size, kind, .. } => {
+                                let s = back::vector_size_str(size);
+                                if let crate::ScalarKind::Uint = kind {
+                                    write!(self.out, "min(uvec{s}(findLSB(")?;
+                                    self.write_expr(arg, ctx)?;
+                                    write!(self.out, ")), uvec{s}(32u))")?;
+                                } else {
+                                    write!(self.out, "ivec{s}(min(uvec{s}(findLSB(")?;
+                                    self.write_expr(arg, ctx)?;
+                                    write!(self.out, ")), uvec{s}(32u)))")?;
+                                }
+                            }
+                            crate::TypeInner::Scalar { kind, .. } => {
+                                if let crate::ScalarKind::Uint = kind {
+                                    write!(self.out, "min(uint(findLSB(")?;
+                                    self.write_expr(arg, ctx)?;
+                                    write!(self.out, ")), 32u)")?;
+                                } else {
+                                    write!(self.out, "int(min(uint(findLSB(")?;
+                                    self.write_expr(arg, ctx)?;
+                                    write!(self.out, ")), 32u))")?;
+                                }
+                            }
+                            _ => unreachable!(),
+                        };
+                        return Ok(());
+                    }
                     Mf::CountLeadingZeros => {
                         if self.options.version.supports_integer_functions() {
                             match *ctx.info[arg].ty.inner_with(&self.module.types) {

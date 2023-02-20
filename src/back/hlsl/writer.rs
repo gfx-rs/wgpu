@@ -2551,6 +2551,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     Unpack2x16float,
                     Regular(&'static str),
                     MissingIntOverload(&'static str),
+                    CountTrailingZeros,
                     CountLeadingZeros,
                 }
 
@@ -2614,6 +2615,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     Mf::Transpose => Function::Regular("transpose"),
                     Mf::Determinant => Function::Regular("determinant"),
                     // bits
+                    Mf::CountTrailingZeros => Function::CountTrailingZeros,
                     Mf::CountLeadingZeros => Function::CountLeadingZeros,
                     Mf::CountOneBits => Function::MissingIntOverload("countbits"),
                     Mf::ReverseBits => Function::MissingIntOverload("reversebits"),
@@ -2681,6 +2683,41 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                             self.write_expr(module, arg, func_ctx)?;
                             write!(self.out, ")")?;
                         }
+                    }
+                    Function::CountTrailingZeros => {
+                        match *func_ctx.info[arg].ty.inner_with(&module.types) {
+                            TypeInner::Vector { size, kind, .. } => {
+                                let s = match size {
+                                    crate::VectorSize::Bi => ".xx",
+                                    crate::VectorSize::Tri => ".xxx",
+                                    crate::VectorSize::Quad => ".xxxx",
+                                };
+
+                                if let ScalarKind::Uint = kind {
+                                    write!(self.out, "min((32u){s}, firstbitlow(")?;
+                                    self.write_expr(module, arg, func_ctx)?;
+                                    write!(self.out, "))")?;
+                                } else {
+                                    write!(self.out, "asint(min((32u){s}, asuint(firstbitlow(")?;
+                                    self.write_expr(module, arg, func_ctx)?;
+                                    write!(self.out, "))))")?;
+                                }
+                            }
+                            TypeInner::Scalar { kind, .. } => {
+                                if let ScalarKind::Uint = kind {
+                                    write!(self.out, "min(32u, firstbitlow(")?;
+                                    self.write_expr(module, arg, func_ctx)?;
+                                    write!(self.out, "))")?;
+                                } else {
+                                    write!(self.out, "asint(min(32u, asuint(firstbitlow(")?;
+                                    self.write_expr(module, arg, func_ctx)?;
+                                    write!(self.out, "))))")?;
+                                }
+                            }
+                            _ => unreachable!(),
+                        }
+
+                        return Ok(());
                     }
                     Function::CountLeadingZeros => {
                         match *func_ctx.info[arg].ty.inner_with(&module.types) {
