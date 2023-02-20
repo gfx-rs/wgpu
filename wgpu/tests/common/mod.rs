@@ -29,7 +29,7 @@ async fn initialize_device(
 
     match bundle {
         Ok(b) => b,
-        Err(e) => panic!("Failed to initialize device: {}", e),
+        Err(e) => panic!("Failed to initialize device: {e}"),
     }
 }
 
@@ -324,24 +324,34 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
         }
     } else if let Some((reason, _)) = expected_failure_reason {
         // We expected to fail, but things passed
-        panic!("UNEXPECTED TEST PASS: {:?}", reason);
+        panic!("UNEXPECTED TEST PASS: {reason:?}");
     } else {
-        panic!("UNEXPECTED TEST FAILURE DUE TO {}", failure_cause)
+        panic!("UNEXPECTED TEST FAILURE DUE TO {failure_cause}")
     }
 }
 
 fn initialize_adapter() -> (Adapter, SurfaceGuard) {
-    let backend_bits = wgpu::util::backend_bits_from_env().unwrap_or_else(Backends::all);
-    let instance = Instance::new(backend_bits);
+    let backends = wgpu::util::backend_bits_from_env().unwrap_or_else(Backends::all);
+    let dx12_shader_compiler = wgpu::util::dx12_shader_compiler_from_env().unwrap_or_default();
+    let instance = Instance::new(wgpu::InstanceDescriptor {
+        backends,
+        dx12_shader_compiler,
+    });
     let surface_guard;
     let compatible_surface;
 
-    #[cfg(not(all(target_arch = "wasm32", feature = "webgl")))]
+    #[cfg(not(all(
+        target_arch = "wasm32",
+        any(target_os = "emscripten", feature = "webgl")
+    )))]
     {
         surface_guard = SurfaceGuard {};
         compatible_surface = None;
     }
-    #[cfg(all(target_arch = "wasm32", feature = "webgl"))]
+    #[cfg(all(
+        target_arch = "wasm32",
+        any(target_os = "emscripten", feature = "webgl")
+    ))]
     {
         // On wasm, append a canvas to the document body for initializing the adapter
         let canvas = create_html_canvas();
@@ -358,7 +368,7 @@ fn initialize_adapter() -> (Adapter, SurfaceGuard) {
     let compatible_surface: Option<&Surface> = compatible_surface.as_ref();
     let adapter = pollster::block_on(wgpu::util::initialize_adapter_from_env_or_default(
         &instance,
-        backend_bits,
+        backends,
         compatible_surface,
     ))
     .expect("could not find suitable adapter on the system");
@@ -367,14 +377,17 @@ fn initialize_adapter() -> (Adapter, SurfaceGuard) {
 }
 
 struct SurfaceGuard {
-    #[cfg(all(target_arch = "wasm32", feature = "webgl"))]
+    #[cfg(all(
+        target_arch = "wasm32",
+        any(target_os = "emscripten", feature = "webgl")
+    ))]
     canvas: web_sys::HtmlCanvasElement,
 }
 
 impl SurfaceGuard {
     fn check_for_unreported_errors(&self) -> bool {
         cfg_if::cfg_if! {
-            if #[cfg(all(target_arch = "wasm32", feature = "webgl"))] {
+            if #[cfg(all(target_arch = "wasm32", any(target_os = "emscripten", feature = "webgl")))] {
                 use wasm_bindgen::JsCast;
 
                 self.canvas
@@ -392,14 +405,20 @@ impl SurfaceGuard {
     }
 }
 
-#[cfg(all(target_arch = "wasm32", feature = "webgl"))]
+#[cfg(all(
+    target_arch = "wasm32",
+    any(target_os = "emscripten", feature = "webgl")
+))]
 impl Drop for SurfaceGuard {
     fn drop(&mut self) {
         delete_html_canvas();
     }
 }
 
-#[cfg(all(target_arch = "wasm32", feature = "webgl"))]
+#[cfg(all(
+    target_arch = "wasm32",
+    any(target_os = "emscripten", feature = "webgl")
+))]
 fn create_html_canvas() -> web_sys::HtmlCanvasElement {
     use wasm_bindgen::JsCast;
 
@@ -415,7 +434,10 @@ fn create_html_canvas() -> web_sys::HtmlCanvasElement {
         .expect("couldn't append canvas to document body")
 }
 
-#[cfg(all(target_arch = "wasm32", feature = "webgl"))]
+#[cfg(all(
+    target_arch = "wasm32",
+    any(target_os = "emscripten", feature = "webgl")
+))]
 fn delete_html_canvas() {
     if let Some(document) = web_sys::window().and_then(|win| win.document()) {
         if let Some(element) = document.get_element_by_id(CANVAS_ID) {

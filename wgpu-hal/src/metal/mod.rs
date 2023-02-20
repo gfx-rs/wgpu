@@ -286,6 +286,13 @@ pub struct Queue {
 unsafe impl Send for Queue {}
 unsafe impl Sync for Queue {}
 
+impl Queue {
+    pub unsafe fn queue_from_raw(raw: mtl::CommandQueue) -> Self {
+        Self {
+            raw: Arc::new(Mutex::new(raw)),
+        }
+    }
+}
 pub struct Device {
     shared: Arc<AdapterShared>,
     features: wgt::Features,
@@ -294,7 +301,7 @@ pub struct Device {
 pub struct Surface {
     view: Option<NonNull<objc::runtime::Object>>,
     render_layer: Mutex<mtl::MetalLayer>,
-    raw_swapchain_format: mtl::MTLPixelFormat,
+    swapchain_format: Option<wgt::TextureFormat>,
     extent: wgt::Extent3d,
     main_thread_id: thread::ThreadId,
     // Useful for UI-intensive applications that are sensitive to
@@ -418,7 +425,7 @@ impl Buffer {
 #[derive(Debug)]
 pub struct Texture {
     raw: mtl::Texture,
-    raw_format: mtl::MTLPixelFormat,
+    format: wgt::TextureFormat,
     raw_type: mtl::MTLTextureType,
     array_layers: u32,
     mip_levels: u32,

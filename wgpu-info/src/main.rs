@@ -133,7 +133,7 @@ mod inner {
         let features = adapter.features();
         let limits = adapter.limits();
 
-        println!("Adapter {}:", idx);
+        println!("Adapter {idx}:");
         println!("\t   Backend: {:?}", info.backend);
         println!("\t      Name: {:?}", info.name);
         println!("\t  VendorID: {:?}", info.vendor);
@@ -147,7 +147,7 @@ mod inner {
             let bit = wgpu::Features::from_bits(1 << i as u64);
             if let Some(bit) = bit {
                 if wgpu::Features::all().contains(bit) {
-                    println!("\t\t{:>63} {}", format!("{:?}:", bit), features.contains(bit));
+                    println!("\t\t{:>63} {}", format!("{bit:?}:"), features.contains(bit));
                 }
             }
         }
@@ -184,35 +184,35 @@ mod inner {
             max_compute_workgroup_size_z,
             max_compute_workgroups_per_dimension,
         } = limits;
-        println!("\t\t                        Max Texture Dimension 1d: {}", max_texture_dimension_1d);
-        println!("\t\t                        Max Texture Dimension 2d: {}", max_texture_dimension_2d);
-        println!("\t\t                        Max Texture Dimension 3d: {}", max_texture_dimension_3d);
-        println!("\t\t                        Max Texture Array Layers: {}", max_texture_array_layers);
-        println!("\t\t                                 Max Bind Groups: {}", max_bind_groups);
-        println!("\t\t                     Max Bindings Per Bind Group: {}", max_bindings_per_bind_group);
-        println!("\t\t Max Dynamic Uniform Buffers Per Pipeline Layout: {}", max_dynamic_uniform_buffers_per_pipeline_layout);
-        println!("\t\t Max Dynamic Storage Buffers Per Pipeline Layout: {}", max_dynamic_storage_buffers_per_pipeline_layout);
-        println!("\t\t           Max Sampled Textures Per Shader Stage: {}", max_sampled_textures_per_shader_stage);
-        println!("\t\t                   Max Samplers Per Shader Stage: {}", max_samplers_per_shader_stage);
-        println!("\t\t            Max Storage Buffers Per Shader Stage: {}", max_storage_buffers_per_shader_stage);
-        println!("\t\t           Max Storage Textures Per Shader Stage: {}", max_storage_textures_per_shader_stage);
-        println!("\t\t            Max Uniform Buffers Per Shader Stage: {}", max_uniform_buffers_per_shader_stage);
-        println!("\t\t                 Max Uniform Buffer Binding Size: {}", max_uniform_buffer_binding_size);
-        println!("\t\t                 Max Storage Buffer Binding Size: {}", max_storage_buffer_binding_size);
-        println!("\t\t                                 Max Buffer Size: {}", max_buffer_size);
-        println!("\t\t                              Max Vertex Buffers: {}", max_vertex_buffers);
-        println!("\t\t                           Max Vertex Attributes: {}", max_vertex_attributes);
-        println!("\t\t                  Max Vertex Buffer Array Stride: {}", max_vertex_buffer_array_stride);
-        println!("\t\t                          Max Push Constant Size: {}", max_push_constant_size);
-        println!("\t\t             Min Uniform Buffer Offset Alignment: {}", min_uniform_buffer_offset_alignment);
-        println!("\t\t             Min Storage Buffer Offset Alignment: {}", min_storage_buffer_offset_alignment);
-        println!("\t\t                Max Inter-Stage Shader Component: {}", max_inter_stage_shader_components);
-        println!("\t\t              Max Compute Workgroup Storage Size: {}", max_compute_workgroup_storage_size);
-        println!("\t\t           Max Compute Invocations Per Workgroup: {}", max_compute_invocations_per_workgroup);
-        println!("\t\t                    Max Compute Workgroup Size X: {}", max_compute_workgroup_size_x);
-        println!("\t\t                    Max Compute Workgroup Size Y: {}", max_compute_workgroup_size_y);
-        println!("\t\t                    Max Compute Workgroup Size Z: {}", max_compute_workgroup_size_z);
-        println!("\t\t            Max Compute Workgroups Per Dimension: {}", max_compute_workgroups_per_dimension);
+        println!("\t\t                        Max Texture Dimension 1d: {max_texture_dimension_1d}");
+        println!("\t\t                        Max Texture Dimension 2d: {max_texture_dimension_2d}");
+        println!("\t\t                        Max Texture Dimension 3d: {max_texture_dimension_3d}");
+        println!("\t\t                        Max Texture Array Layers: {max_texture_array_layers}");
+        println!("\t\t                                 Max Bind Groups: {max_bind_groups}");
+        println!("\t\t                     Max Bindings Per Bind Group: {max_bindings_per_bind_group}");
+        println!("\t\t Max Dynamic Uniform Buffers Per Pipeline Layout: {max_dynamic_uniform_buffers_per_pipeline_layout}");
+        println!("\t\t Max Dynamic Storage Buffers Per Pipeline Layout: {max_dynamic_storage_buffers_per_pipeline_layout}");
+        println!("\t\t           Max Sampled Textures Per Shader Stage: {max_sampled_textures_per_shader_stage}");
+        println!("\t\t                   Max Samplers Per Shader Stage: {max_samplers_per_shader_stage}");
+        println!("\t\t            Max Storage Buffers Per Shader Stage: {max_storage_buffers_per_shader_stage}");
+        println!("\t\t           Max Storage Textures Per Shader Stage: {max_storage_textures_per_shader_stage}");
+        println!("\t\t            Max Uniform Buffers Per Shader Stage: {max_uniform_buffers_per_shader_stage}");
+        println!("\t\t                 Max Uniform Buffer Binding Size: {max_uniform_buffer_binding_size}");
+        println!("\t\t                 Max Storage Buffer Binding Size: {max_storage_buffer_binding_size}");
+        println!("\t\t                                 Max Buffer Size: {max_buffer_size}");
+        println!("\t\t                              Max Vertex Buffers: {max_vertex_buffers}");
+        println!("\t\t                           Max Vertex Attributes: {max_vertex_attributes}");
+        println!("\t\t                  Max Vertex Buffer Array Stride: {max_vertex_buffer_array_stride}");
+        println!("\t\t                          Max Push Constant Size: {max_push_constant_size}");
+        println!("\t\t             Min Uniform Buffer Offset Alignment: {min_uniform_buffer_offset_alignment}");
+        println!("\t\t             Min Storage Buffer Offset Alignment: {min_storage_buffer_offset_alignment}");
+        println!("\t\t                Max Inter-Stage Shader Component: {max_inter_stage_shader_components}");
+        println!("\t\t              Max Compute Workgroup Storage Size: {max_compute_workgroup_storage_size}");
+        println!("\t\t           Max Compute Invocations Per Workgroup: {max_compute_invocations_per_workgroup}");
+        println!("\t\t                    Max Compute Workgroup Size X: {max_compute_workgroup_size_x}");
+        println!("\t\t                    Max Compute Workgroup Size Y: {max_compute_workgroup_size_y}");
+        println!("\t\t                    Max Compute Workgroup Size Z: {max_compute_workgroup_size_z}");
+        println!("\t\t            Max Compute Workgroups Per Dimension: {max_compute_workgroups_per_dimension}");
 
         println!("\tDownlevel Properties:");
         let wgpu::DownlevelCapabilities {
@@ -220,17 +220,17 @@ mod inner {
             limits: _,
             flags,
         } = downlevel;
-        println!("\t\t                       Shader Model: {:?}", shader_model);
+        println!("\t\t                       Shader Model: {shader_model:?}");
         for i in 0..(size_of::<wgpu::DownlevelFlags>() * 8) {
             let bit = wgpu::DownlevelFlags::from_bits(1 << i as u64);
             if let Some(bit) = bit {
                 if wgpu::DownlevelFlags::all().contains(bit) {
-                    println!("\t\t{:>36} {}", format!("{:?}:", bit), flags.contains(bit));
+                    println!("\t\t{:>37} {}", format!("{bit:?}:"), flags.contains(bit));
                 }
             }
         }
 
-        println!("\tTexture Format Features:      ┌──────────┬──────────┬──────────Allowed┬Usages───────────┬───────────────────┐ ┌────────────┬────────────────┬──────────────Feature┬Flags──────┬─────────────────────┬────────────────────┬─");
+        println!("\tTexture Format Features:      ┌──────────┬──────────┬──────────Allowed┬Usages───────────┬───────────────────┐ ┌────────────┬────────────────┬────────────────┬─────────Feature┬Flags────────────────┬────────────────────┬─────────────────┬───────────┐");
         for format in TEXTURE_FORMAT_LIST {
             let features = adapter.get_texture_format_features(format);
             let format_name = match format {
@@ -241,7 +241,7 @@ mod inner {
                     format!("{format:?}:")
                 }
             };
-            print!("\t\t{:>21}", format_name);
+            print!("\t\t{format_name:>21}");
             for i in 0..(size_of::<wgpu::TextureUsages>() * 8) {
                 let bit = wgpu::TextureUsages::from_bits(1 << i as u32);
                 if let Some(bit) = bit {
@@ -274,14 +274,14 @@ mod inner {
 
             println!(" │");
         }
-        println!("\t                              └──────────┴──────────┴─────────────────┴─────────────────┴───────────────────┘ └────────────┴────────────────┴────────────────┴────────────────┴─────────────────────┘");
+        println!("\t                              └──────────┴──────────┴─────────────────┴─────────────────┴───────────────────┘ └────────────┴────────────────┴────────────────┴────────────────┴─────────────────────┴────────────────────┴─────────────────┴───────────┘");
     }
 
     pub fn main() {
         env_logger::init();
         let args: Vec<_> = std::env::args().skip(1).collect();
 
-        let instance = wgpu::Instance::new(wgpu::Backends::all());
+        let instance = wgpu::Instance::default();
         let adapters: Vec<_> = instance.enumerate_adapters(wgpu::Backends::all()).collect();
         let adapter_count = adapters.len();
 
@@ -338,10 +338,7 @@ mod inner {
 
             let all_time = all_start.elapsed().as_secs_f32();
 
-            println!(
-                "=========== {} adapters PASSED in {:.3}s ===========",
-                adapter_count, all_time
-            );
+            println!("=========== {adapter_count} adapters PASSED in {all_time:.3}s ===========");
         }
     }
 }

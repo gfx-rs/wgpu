@@ -247,7 +247,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 copy.texture_base.array_layer as u64,
                 copy.texture_base.mip_level as u64,
                 dst_origin,
-                mtl::MTLBlitOption::empty(),
+                conv::get_blit_option(dst.format, copy.texture_base.aspect),
             );
         }
     }
@@ -287,7 +287,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 copy.buffer_layout.offset,
                 bytes_per_row,
                 bytes_per_image,
-                mtl::MTLBlitOption::empty(),
+                conv::get_blit_option(src.format, copy.texture_base.aspect),
             );
         }
     }

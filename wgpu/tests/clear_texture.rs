@@ -1,8 +1,7 @@
-use crate::common::{initialize_test, TestParameters, TestingContext};
+use crate::common::{image::ReadbackBuffers, initialize_test, TestParameters, TestingContext};
 use wasm_bindgen_test::*;
-use wgpu::util::align_to;
 
-static TEXTURE_FORMATS_UNCOMPRESSED: &[wgpu::TextureFormat] = &[
+static TEXTURE_FORMATS_UNCOMPRESSED_GLES_COMPAT: &[wgpu::TextureFormat] = &[
     wgpu::TextureFormat::R8Unorm,
     wgpu::TextureFormat::R8Snorm,
     wgpu::TextureFormat::R8Uint,
@@ -10,10 +9,6 @@ static TEXTURE_FORMATS_UNCOMPRESSED: &[wgpu::TextureFormat] = &[
     wgpu::TextureFormat::R16Uint,
     wgpu::TextureFormat::R16Sint,
     wgpu::TextureFormat::R16Float,
-    wgpu::TextureFormat::Rg8Unorm,
-    wgpu::TextureFormat::Rg8Snorm,
-    wgpu::TextureFormat::Rg8Uint,
-    wgpu::TextureFormat::Rg8Sint,
     wgpu::TextureFormat::R32Uint,
     wgpu::TextureFormat::R32Sint,
     wgpu::TextureFormat::R32Float,
@@ -38,6 +33,13 @@ static TEXTURE_FORMATS_UNCOMPRESSED: &[wgpu::TextureFormat] = &[
     wgpu::TextureFormat::Rgba32Uint,
     wgpu::TextureFormat::Rgba32Sint,
     wgpu::TextureFormat::Rgba32Float,
+];
+
+static TEXTURE_FORMATS_UNCOMPRESSED: &[wgpu::TextureFormat] = &[
+    wgpu::TextureFormat::Rg8Unorm,
+    wgpu::TextureFormat::Rg8Snorm,
+    wgpu::TextureFormat::Rg8Uint,
+    wgpu::TextureFormat::Rg8Sint,
     wgpu::TextureFormat::Rgb9e5Ufloat,
 ];
 
@@ -46,6 +48,7 @@ static TEXTURE_FORMATS_DEPTH: &[wgpu::TextureFormat] = &[
     wgpu::TextureFormat::Depth16Unorm,
     wgpu::TextureFormat::Depth24Plus,
     wgpu::TextureFormat::Depth24PlusStencil8,
+    wgpu::TextureFormat::Depth32Float,
 ];
 
 // needs TEXTURE_COMPRESSION_BC
@@ -210,8 +213,15 @@ fn single_texture_clear_test(
         size
     );
 
+    let extra_usages = match format {
+        wgpu::TextureFormat::Depth24Plus | wgpu::TextureFormat::Depth24PlusStencil8 => {
+            wgpu::TextureUsages::TEXTURE_BINDING
+        }
+        _ => wgpu::TextureUsages::empty(),
+    };
+
     let texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
-        label: Some(&format!("texture {:?}", format)),
+        label: Some(&format!("texture {format:?}")),
         size,
         mip_level_count: if dimension == wgpu::TextureDimension::D1 {
             1
@@ -222,9 +232,8 @@ fn single_texture_clear_test(
         sample_count: 1, // multisampling is not supported for clear
         dimension,
         format,
-        // Forces internally the required usages to be able to clear it.
-        // This is not visible on the API level.
-        usage: wgpu::TextureUsages::TEXTURE_BINDING,
+        usage: wgpu::TextureUsages::COPY_SRC | extra_usages,
+        view_formats: &[],
     });
     let mut encoder = ctx
         .device
@@ -239,21 +248,29 @@ fn single_texture_clear_test(
             array_layer_count: None,
         },
     );
+
+    let readback_buffers = ReadbackBuffers::new(&ctx.device, &texture);
+
+    readback_buffers.copy_from(&ctx.device, &mut encoder, &texture);
+
     ctx.queue.submit([encoder.finish()]);
 
-    // TODO: Read back and check zeroness?
+    assert!(
+        readback_buffers.are_zero(&ctx.device),
+        "texture with format {format:?} was not fully cleared"
+    );
 }
 
-fn clear_texture_tests(
-    ctx: &TestingContext,
-    formats: &[wgpu::TextureFormat],
-    supports_1d: bool,
-    supports_3d: bool,
-) {
+fn clear_texture_tests(ctx: &TestingContext, formats: &[wgpu::TextureFormat]) {
     for &format in formats {
-        let desc = format.describe();
-        let rounded_width = align_to(64, desc.block_dimensions.0 as u32);
-        let rounded_height = align_to(64, desc.block_dimensions.1 as u32);
+        let (block_width, block_height) = format.block_dimensions();
+        let rounded_width = block_width * wgpu::COPY_BYTES_PER_ROW_ALIGNMENT;
+        let rounded_height = block_height * wgpu::COPY_BYTES_PER_ROW_ALIGNMENT;
+
+        let is_compressed_or_depth_stencil_format =
+            format.is_compressed() || format.is_depth_stencil_format();
+        let supports_1d = !is_compressed_or_depth_stencil_format;
+        let supports_3d = !is_compressed_or_depth_stencil_format;
 
         // 1D texture
         if supports_1d {
@@ -308,14 +325,45 @@ fn clear_texture_tests(
 
 #[test]
 #[wasm_bindgen_test]
-fn clear_texture_2d_uncompressed() {
+fn clear_texture_uncompressed_gles_compat() {
     initialize_test(
         TestParameters::default()
             .webgl2_failure()
             .features(wgpu::Features::CLEAR_TEXTURE),
         |ctx| {
-            clear_texture_tests(&ctx, TEXTURE_FORMATS_UNCOMPRESSED, true, true);
-            clear_texture_tests(&ctx, TEXTURE_FORMATS_DEPTH, false, false);
+            clear_texture_tests(&ctx, TEXTURE_FORMATS_UNCOMPRESSED_GLES_COMPAT);
+        },
+    )
+}
+
+#[test]
+#[wasm_bindgen_test]
+fn clear_texture_uncompressed() {
+    initialize_test(
+        TestParameters::default()
+            .webgl2_failure()
+            .backend_failure(wgpu::Backends::GL)
+            .features(wgpu::Features::CLEAR_TEXTURE),
+        |ctx| {
+            clear_texture_tests(&ctx, TEXTURE_FORMATS_UNCOMPRESSED);
+        },
+    )
+}
+
+#[test]
+#[wasm_bindgen_test]
+fn clear_texture_depth() {
+    initialize_test(
+        TestParameters::default()
+            .webgl2_failure()
+            .downlevel_flags(
+                wgpu::DownlevelFlags::DEPTH_TEXTURE_AND_BUFFER_COPIES
+                    | wgpu::DownlevelFlags::COMPUTE_SHADERS,
+            )
+            .limits(wgpu::Limits::downlevel_defaults())
+            .features(wgpu::Features::CLEAR_TEXTURE),
+        |ctx| {
+            clear_texture_tests(&ctx, TEXTURE_FORMATS_DEPTH);
         },
     )
 }
@@ -327,48 +375,50 @@ fn clear_texture_d32_s8() {
         TestParameters::default()
             .features(wgpu::Features::CLEAR_TEXTURE | wgpu::Features::DEPTH32FLOAT_STENCIL8),
         |ctx| {
-            clear_texture_tests(
-                &ctx,
-                &[wgpu::TextureFormat::Depth32FloatStencil8],
-                false,
-                false,
-            );
+            clear_texture_tests(&ctx, &[wgpu::TextureFormat::Depth32FloatStencil8]);
         },
     )
 }
 
 #[test]
-fn clear_texture_2d_bc() {
+fn clear_texture_bc() {
     initialize_test(
         TestParameters::default()
             .features(wgpu::Features::CLEAR_TEXTURE | wgpu::Features::TEXTURE_COMPRESSION_BC)
-            .specific_failure(Some(wgpu::Backends::GL), None, Some("ANGLE"), false), // https://bugs.chromium.org/p/angleproject/issues/detail?id=7056
+            .specific_failure(Some(wgpu::Backends::GL), None, Some("ANGLE"), false) // https://bugs.chromium.org/p/angleproject/issues/detail?id=7056
+            .backend_failure(wgpu::Backends::GL), // compressed texture copy to buffer not yet implemented
         |ctx| {
-            clear_texture_tests(&ctx, TEXTURE_FORMATS_BC, false, false);
+            clear_texture_tests(&ctx, TEXTURE_FORMATS_BC);
         },
     )
 }
 
 #[test]
-fn clear_texture_2d_astc() {
+fn clear_texture_astc() {
     initialize_test(
         TestParameters::default()
             .features(wgpu::Features::CLEAR_TEXTURE | wgpu::Features::TEXTURE_COMPRESSION_ASTC_LDR)
-            .specific_failure(Some(wgpu::Backends::GL), None, Some("ANGLE"), false), // https://bugs.chromium.org/p/angleproject/issues/detail?id=7056
+            .limits(wgpu::Limits {
+                max_texture_dimension_2d: wgpu::COPY_BYTES_PER_ROW_ALIGNMENT * 12,
+                ..wgpu::Limits::downlevel_defaults()
+            })
+            .specific_failure(Some(wgpu::Backends::GL), None, Some("ANGLE"), false) // https://bugs.chromium.org/p/angleproject/issues/detail?id=7056
+            .backend_failure(wgpu::Backends::GL), // compressed texture copy to buffer not yet implemented
         |ctx| {
-            clear_texture_tests(&ctx, TEXTURE_FORMATS_ASTC, false, false);
+            clear_texture_tests(&ctx, TEXTURE_FORMATS_ASTC);
         },
     )
 }
 
 #[test]
-fn clear_texture_2d_etc2() {
+fn clear_texture_etc2() {
     initialize_test(
         TestParameters::default()
             .features(wgpu::Features::CLEAR_TEXTURE | wgpu::Features::TEXTURE_COMPRESSION_ETC2)
-            .specific_failure(Some(wgpu::Backends::GL), None, Some("ANGLE"), false), // https://bugs.chromium.org/p/angleproject/issues/detail?id=7056
+            .specific_failure(Some(wgpu::Backends::GL), None, Some("ANGLE"), false) // https://bugs.chromium.org/p/angleproject/issues/detail?id=7056
+            .backend_failure(wgpu::Backends::GL), // compressed texture copy to buffer not yet implemented
         |ctx| {
-            clear_texture_tests(&ctx, TEXTURE_FORMATS_ETC2, false, false);
+            clear_texture_tests(&ctx, TEXTURE_FORMATS_ETC2);
         },
     )
 }

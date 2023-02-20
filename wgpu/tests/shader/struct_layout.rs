@@ -221,7 +221,8 @@ fn push_constant_input() {
             .limits(Limits {
                 max_push_constant_size: MAX_BUFFER_SIZE as u32,
                 ..Limits::downlevel_defaults()
-            }),
+            })
+            .backend_failure(Backends::GL),
         |ctx| {
             shader_input_output_test(
                 ctx,

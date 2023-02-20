@@ -126,7 +126,7 @@ impl Example {
                     dimension: None,
                     aspect: wgpu::TextureAspect::All,
                     base_mip_level: mip,
-                    mip_level_count: NonZeroU32::new(1),
+                    mip_level_count: Some(1),
                     base_array_layer: 0,
                     array_layer_count: None,
                 })
@@ -232,6 +232,7 @@ impl framework::Example for Example {
                 | wgpu::TextureUsages::RENDER_ATTACHMENT
                 | wgpu::TextureUsages::COPY_DST,
             label: None,
+            view_formats: &[],
         });
         let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
         //Note: we could use queue.write_texture instead, and this is what other

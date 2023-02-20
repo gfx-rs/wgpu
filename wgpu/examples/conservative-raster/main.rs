@@ -36,6 +36,7 @@ impl Example {
                 format: RENDER_TARGET_FORMAT,
                 usage: wgpu::TextureUsages::TEXTURE_BINDING
                     | wgpu::TextureUsages::RENDER_ATTACHMENT,
+                view_formats: &[],
             })
             .create_view(&Default::default());
 

@@ -318,8 +318,16 @@ impl super::Adapter {
             !cfg!(target_arch = "wasm32"),
         );
         downlevel_flags.set(
+            wgt::DownlevelFlags::UNRESTRICTED_EXTERNAL_TEXTURE_COPIES,
+            !cfg!(target_arch = "wasm32"),
+        );
+        downlevel_flags.set(
             wgt::DownlevelFlags::FULL_DRAW_INDEX_UINT32,
             max_element_index == u32::MAX,
+        );
+        downlevel_flags.set(
+            wgt::DownlevelFlags::MULTISAMPLED_SHADING,
+            ver >= (3, 2) || extensions.contains("OES_sample_variables"),
         );
 
         let mut features = wgt::Features::empty()
@@ -347,6 +355,7 @@ impl super::Adapter {
             wgt::Features::SHADER_PRIMITIVE_INDEX,
             ver >= (3, 2) || extensions.contains("OES_geometry_shader"),
         );
+        features.set(wgt::Features::SHADER_EARLY_DEPTH_TEST, ver >= (3, 1));
         let gles_bcn_exts = [
             "GL_EXT_texture_compression_s3tc_srgb",
             "GL_EXT_texture_compression_rgtc",
@@ -578,6 +587,8 @@ impl super::Adapter {
                     features,
                     shading_language_version,
                     max_texture_size,
+                    next_shader_id: Default::default(),
+                    program_cache: Default::default(),
                 }),
             },
             info: Self::make_info(vendor, renderer),
@@ -683,7 +694,12 @@ impl crate::Adapter<super::Api> for super::Adapter {
                     .lock()
                     .get_parameter_i32(glow::MAX_SAMPLES)
             };
-            if max_samples >= 8 {
+            if max_samples >= 16 {
+                Tfc::MULTISAMPLE_X2
+                    | Tfc::MULTISAMPLE_X4
+                    | Tfc::MULTISAMPLE_X8
+                    | Tfc::MULTISAMPLE_X16
+            } else if max_samples >= 8 {
                 Tfc::MULTISAMPLE_X2 | Tfc::MULTISAMPLE_X4 | Tfc::MULTISAMPLE_X8
             } else if max_samples >= 4 {
                 Tfc::MULTISAMPLE_X2 | Tfc::MULTISAMPLE_X4

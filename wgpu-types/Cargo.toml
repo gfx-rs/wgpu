@@ -1,6 +1,6 @@
 [package]
 name = "wgpu-types"
-version = "0.14.0"
+version = "0.15.0"
 authors = ["wgpu developers"]
 edition = "2021"
 description = "WebGPU types"
@@ -12,6 +12,12 @@ license = "MIT OR Apache-2.0"
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
+targets = [
+    "x86_64-unknown-linux-gnu",
+    "x86_64-apple-darwin",
+    "x86_64-pc-windows-msvc",
+    "wasm32-unknown-unknown",
+]
 
 [lib]
 
@@ -23,6 +29,15 @@ strict_asserts = []
 [dependencies]
 bitflags = "1"
 serde = { version = "1", features = ["serde_derive"], optional = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+js-sys = "0.3.60"
+web-sys = { version = "0.3.60", features = [
+    "ImageBitmap",
+    "HtmlVideoElement",
+    "HtmlCanvasElement",
+    "OffscreenCanvas",
+] }
 
 [dev-dependencies]
 serde = { version = "1", features = ["serde_derive"] }

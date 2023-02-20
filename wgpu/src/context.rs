@@ -1,12 +1,10 @@
-use std::{
-    any::Any, fmt::Debug, future::Future, num::NonZeroU128, ops::Range, pin::Pin, sync::Arc,
-};
+use std::{any::Any, fmt::Debug, future::Future, num::NonZeroU64, ops::Range, pin::Pin, sync::Arc};
 
 use wgt::{
     strict_assert, strict_assert_eq, AdapterInfo, BufferAddress, BufferSize, Color,
     DownlevelCapabilities, DynamicOffset, Extent3d, Features, ImageDataLayout,
-    ImageSubresourceRange, IndexFormat, Limits, ShaderStages, SurfaceConfiguration, SurfaceStatus,
-    TextureFormat, TextureFormatFeatures,
+    ImageSubresourceRange, IndexFormat, Limits, ShaderStages, SurfaceStatus, TextureFormat,
+    TextureFormatFeatures,
 };
 
 use crate::{
@@ -97,7 +95,7 @@ pub trait Context: Debug + Send + Sized + Sync {
         + 'static;
     type PopErrorScopeFuture: Future<Output = Option<Error>> + Send + 'static;
 
-    fn init(backends: wgt::Backends) -> Self;
+    fn init(instance_desc: wgt::InstanceDescriptor) -> Self;
     fn instance_create_surface(
         &self,
         display_handle: raw_window_handle::RawDisplayHandle,
@@ -164,7 +162,7 @@ pub trait Context: Debug + Send + Sized + Sync {
         surface_data: &Self::SurfaceData,
         device: &Self::DeviceId,
         device_data: &Self::DeviceData,
-        config: &SurfaceConfiguration,
+        config: &crate::SurfaceConfiguration,
     );
     #[allow(clippy::type_complexity)]
     fn surface_get_current_texture(
@@ -440,11 +438,11 @@ pub trait Context: Debug + Send + Sized + Sync {
         pass: &mut Self::ComputePassId,
         pass_data: &mut Self::ComputePassData,
     );
-    fn command_encoder_begin_render_pass<'a>(
+    fn command_encoder_begin_render_pass(
         &self,
         encoder: &Self::CommandEncoderId,
         encoder_data: &Self::CommandEncoderData,
-        desc: &RenderPassDescriptor<'a, '_>,
+        desc: &RenderPassDescriptor<'_, '_>,
     ) -> (Self::RenderPassId, Self::RenderPassData);
     fn command_encoder_end_render_pass(
         &self,
@@ -562,6 +560,15 @@ pub trait Context: Debug + Send + Sized + Sync {
         data: &[u8],
         data_layout: ImageDataLayout,
         size: Extent3d,
+    );
+    #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
+    fn queue_copy_external_image_to_texture(
+        &self,
+        queue: &Self::QueueId,
+        queue_data: &Self::QueueData,
+        source: &wgt::ImageCopyExternalImage,
+        dest: crate::ImageCopyTextureTagged,
+        size: wgt::Extent3d,
     );
     fn queue_submit<I: Iterator<Item = Self::CommandBufferId>>(
         &self,
@@ -985,27 +992,47 @@ pub trait Context: Debug + Send + Sized + Sync {
 }
 
 /// Object id.
-///
-/// An ObjectId is a 128-bit number internally, where the first 64-bits represent a backend internal id and
-/// the last 64-bits are a global id.
-#[derive(Debug, Clone, Copy)]
-pub struct ObjectId(NonZeroU128);
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct ObjectId {
+    /// ID that is unique at any given time
+    id: Option<NonZeroU64>,
+    #[cfg(feature = "expose-ids")]
+    /// ID that is unique at all times
+    global_id: Option<crate::Id>,
+}
 
 impl ObjectId {
-    pub fn global_id(&self) -> u64 {
-        (self.0.get() >> 64) as u64
-    }
-}
+    const UNUSED: Self = ObjectId {
+        id: None,
+        #[cfg(feature = "expose-ids")]
+        global_id: None,
+    };
 
-impl From<NonZeroU128> for ObjectId {
-    fn from(raw: NonZeroU128) -> Self {
-        Self(raw)
+    pub fn new(id: NonZeroU64, #[cfg(feature = "expose-ids")] global_id: crate::Id) -> Self {
+        Self {
+            id: Some(id),
+            #[cfg(feature = "expose-ids")]
+            global_id: Some(global_id),
+        }
     }
-}
 
-impl From<ObjectId> for NonZeroU128 {
-    fn from(id: ObjectId) -> Self {
-        id.0
+    #[allow(dead_code)]
+    pub fn from_global_id(global_id: NonZeroU64) -> Self {
+        Self {
+            id: Some(global_id),
+            #[cfg(feature = "expose-ids")]
+            global_id: Some(crate::Id(global_id)),
+        }
+    }
+
+    pub fn id(&self) -> NonZeroU64 {
+        self.id.unwrap()
+    }
+
+    #[cfg(feature = "expose-ids")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
+    pub fn global_id(&self) -> crate::Id {
+        self.global_id.unwrap()
     }
 }
 
@@ -1029,18 +1056,16 @@ fn downcast_mut<T: Debug + Send + Sync + 'static>(data: &mut crate::Data) -> &mu
 #[derive(Debug, Clone, Copy)]
 pub struct Unused;
 
-const UNUSED_SENTINEL: Option<NonZeroU128> = NonZeroU128::new(u128::MAX);
-
 impl From<ObjectId> for Unused {
     fn from(id: ObjectId) -> Self {
-        strict_assert_eq!(Some(NonZeroU128::from(id)), UNUSED_SENTINEL);
+        strict_assert_eq!(id, ObjectId::UNUSED);
         Self
     }
 }
 
 impl From<Unused> for ObjectId {
     fn from(_: Unused) -> Self {
-        ObjectId::from(UNUSED_SENTINEL.expect("This should never panic"))
+        ObjectId::UNUSED
     }
 }
 
@@ -1114,7 +1139,7 @@ pub(crate) trait DynContext: Debug + Send + Sync {
         surface_data: &crate::Data,
         device: &ObjectId,
         device_data: &crate::Data,
-        config: &SurfaceConfiguration,
+        config: &crate::SurfaceConfiguration,
     );
     fn surface_get_current_texture(
         &self,
@@ -1344,11 +1369,11 @@ pub(crate) trait DynContext: Debug + Send + Sync {
         pass: &mut ObjectId,
         pass_data: &mut crate::Data,
     );
-    fn command_encoder_begin_render_pass<'a>(
+    fn command_encoder_begin_render_pass(
         &self,
         encoder: &ObjectId,
         encoder_data: &crate::Data,
-        desc: &RenderPassDescriptor<'a, '_>,
+        desc: &RenderPassDescriptor<'_, '_>,
     ) -> (ObjectId, Box<crate::Data>);
     fn command_encoder_end_render_pass(
         &self,
@@ -1462,6 +1487,15 @@ pub(crate) trait DynContext: Debug + Send + Sync {
         data: &[u8],
         data_layout: ImageDataLayout,
         size: Extent3d,
+    );
+    #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
+    fn queue_copy_external_image_to_texture(
+        &self,
+        queue: &ObjectId,
+        queue_data: &crate::Data,
+        source: &wgt::ImageCopyExternalImage,
+        dest: crate::ImageCopyTextureTagged,
+        size: wgt::Extent3d,
     );
     fn queue_submit<'a>(
         &self,
@@ -2010,7 +2044,7 @@ where
         surface_data: &crate::Data,
         device: &ObjectId,
         device_data: &crate::Data,
-        config: &SurfaceConfiguration,
+        config: &crate::SurfaceConfiguration,
     ) {
         let surface = <T::SurfaceId>::from(*surface);
         let surface_data = downcast_ref(surface_data);
@@ -2599,11 +2633,11 @@ where
         )
     }
 
-    fn command_encoder_begin_render_pass<'a>(
+    fn command_encoder_begin_render_pass(
         &self,
         encoder: &ObjectId,
         encoder_data: &crate::Data,
-        desc: &RenderPassDescriptor<'a, '_>,
+        desc: &RenderPassDescriptor<'_, '_>,
     ) -> (ObjectId, Box<crate::Data>) {
         let encoder = <T::CommandEncoderId>::from(*encoder);
         let encoder_data = downcast_ref(encoder_data);
@@ -2848,6 +2882,20 @@ where
         let queue = <T::QueueId>::from(*queue);
         let queue_data = downcast_ref(queue_data);
         Context::queue_write_texture(self, &queue, queue_data, texture, data, data_layout, size)
+    }
+
+    #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
+    fn queue_copy_external_image_to_texture(
+        &self,
+        queue: &ObjectId,
+        queue_data: &crate::Data,
+        source: &wgt::ImageCopyExternalImage,
+        dest: crate::ImageCopyTextureTagged,
+        size: wgt::Extent3d,
+    ) {
+        let queue = <T::QueueId>::from(*queue);
+        let queue_data = downcast_ref(queue_data);
+        Context::queue_copy_external_image_to_texture(self, &queue, queue_data, source, dest, size)
     }
 
     fn queue_submit<'a>(

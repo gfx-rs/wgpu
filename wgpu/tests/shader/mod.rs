@@ -17,6 +17,7 @@ use crate::common::TestingContext;
 
 mod numeric_builtins;
 mod struct_layout;
+mod zero_init_workgroup_mem;
 
 #[derive(Clone, Copy, PartialEq)]
 enum InputStorageType {

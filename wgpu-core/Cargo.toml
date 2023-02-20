@@ -1,6 +1,6 @@
 [package]
 name = "wgpu-core"
-version = "0.14.0"
+version = "0.15.0"
 authors = ["wgpu developers"]
 edition = "2021"
 description = "WebGPU core logic on wgpu-hal"
@@ -12,6 +12,12 @@ license = "MIT OR Apache-2.0"
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
+targets = [
+    "x86_64-unknown-linux-gnu",
+    "x86_64-apple-darwin",
+    "x86_64-pc-windows-msvc",
+    "wasm32-unknown-unknown",
+]
 
 [lib]
 
@@ -29,9 +35,6 @@ dx12 = ["hal/dx12"]
 # https://renderdoc.org/
 renderdoc = ["hal/renderdoc"]
 
-# Compile for the Emscripten POSIX-in-a-web-page emulation environment.
-emscripten = ["hal/emscripten"]
-
 # Apply run-time checks, even in release builds. These are in addition
 # to the validation carried out at public APIs in all builds.
 strict_asserts = ["wgt/strict_asserts"]
@@ -45,7 +48,6 @@ serial-pass = ["serde", "wgt/serde", "arrayvec/serde"]
 id32 = []
 # Enable `ShaderModuleSource::Wgsl`
 wgsl = ["naga/wgsl-in"]
-vulkan-portability = ["hal/vulkan"]
 
 # Features that are intended to work on all platforms.
 portable_features = ["gles", "strict_asserts", "trace", "replay", "serial-pass", "id32", "wgsl"]
@@ -68,17 +70,19 @@ thiserror = "1"
 
 [dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-rev = "e7fc8e6"
-version = "0.10"
+rev = "7422ace934b7ed51c1e061eb1d36de8259b5f619"
+version = "0.11.0"
 features = ["clone", "span", "validate"]
 
 [dependencies.wgt]
 package = "wgpu-types"
 path = "../wgpu-types"
+version = "0.15"
 
 [dependencies.hal]
 package = "wgpu-hal"
 path = "../wgpu-hal"
+version = "0.15"
 
 [target.'cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))'.dependencies]
 web-sys = { version = "0.3.60", features = ["HtmlCanvasElement", "OffscreenCanvas"] }

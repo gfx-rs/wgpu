@@ -57,9 +57,9 @@ To address this, we invalidate the vertex buffers based on:
 */
 
 ///cbindgen:ignore
-#[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
+#[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))]
 mod egl;
-#[cfg(all(target_arch = "wasm32", not(feature = "emscripten")))]
+#[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
 mod web;
 
 mod adapter;
@@ -70,20 +70,23 @@ mod queue;
 
 use crate::{CopyExtent, TextureDescriptor};
 
-#[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
+#[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))]
 pub use self::egl::{AdapterContext, AdapterContextLock};
-#[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
+#[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))]
 use self::egl::{Instance, Surface};
 
-#[cfg(all(target_arch = "wasm32", not(feature = "emscripten")))]
+#[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
 pub use self::web::AdapterContext;
-#[cfg(all(target_arch = "wasm32", not(feature = "emscripten")))]
+#[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
 use self::web::{Instance, Surface};
 
 use arrayvec::ArrayVec;
 
 use glow::HasContext;
 
+use naga::FastHashMap;
+use parking_lot::Mutex;
+use std::sync::atomic::AtomicU32;
 use std::{fmt, ops::Range, sync::Arc};
 
 #[derive(Clone)]
@@ -95,7 +98,7 @@ const MAX_TEXTURE_SLOTS: usize = 16;
 const MAX_SAMPLERS: usize = 16;
 const MAX_VERTEX_ATTRIBUTES: usize = 16;
 const ZERO_BUFFER_SIZE: usize = 256 << 10;
-const MAX_PUSH_CONSTANTS: usize = 16;
+const MAX_PUSH_CONSTANTS: usize = 64;
 
 impl crate::Api for Api {
     type Instance = Instance;
@@ -184,10 +187,10 @@ impl Default for VertexAttribKind {
 }
 
 #[derive(Clone, Debug)]
-struct TextureFormatDesc {
-    internal: u32,
-    external: u32,
-    data_type: u32,
+pub struct TextureFormatDesc {
+    pub internal: u32,
+    pub external: u32,
+    pub data_type: u32,
 }
 
 struct AdapterShared {
@@ -197,6 +200,8 @@ struct AdapterShared {
     workarounds: Workarounds,
     shading_language_version: naga::back::glsl::Version,
     max_texture_size: u32,
+    next_shader_id: AtomicU32,
+    program_cache: Mutex<ProgramCache>,
 }
 
 pub struct Adapter {
@@ -244,7 +249,7 @@ unsafe impl Sync for Buffer {}
 unsafe impl Send for Buffer {}
 
 #[derive(Clone, Debug)]
-enum TextureInner {
+pub enum TextureInner {
     Renderbuffer {
         raw: glow::Renderbuffer,
     },
@@ -253,7 +258,17 @@ enum TextureInner {
         raw: glow::Texture,
         target: BindTarget,
     },
+    #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
+    ExternalFramebuffer {
+        inner: web_sys::WebGlFramebuffer,
+    },
 }
+
+// SAFE: WASM doesn't have threads
+#[cfg(target_arch = "wasm32")]
+unsafe impl Send for TextureInner {}
+#[cfg(target_arch = "wasm32")]
+unsafe impl Sync for TextureInner {}
 
 impl TextureInner {
     fn as_native(&self) -> (glow::Texture, BindTarget) {
@@ -262,21 +277,23 @@ impl TextureInner {
                 panic!("Unexpected renderbuffer");
             }
             Self::Texture { raw, target } => (raw, target),
+            #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
+            Self::ExternalFramebuffer { .. } => panic!("Unexpected external framebuffer"),
         }
     }
 }
 
 #[derive(Debug)]
 pub struct Texture {
-    inner: TextureInner,
-    drop_guard: Option<crate::DropGuard>,
-    mip_level_count: u32,
-    array_layer_count: u32,
-    format: wgt::TextureFormat,
+    pub inner: TextureInner,
+    pub drop_guard: Option<crate::DropGuard>,
+    pub mip_level_count: u32,
+    pub array_layer_count: u32,
+    pub format: wgt::TextureFormat,
     #[allow(unused)]
-    format_desc: TextureFormatDesc,
-    copy_size: CopyExtent,
-    is_cubemap: bool,
+    pub format_desc: TextureFormatDesc,
+    pub copy_size: CopyExtent,
+    pub is_cubemap: bool,
 }
 
 impl Texture {
@@ -302,35 +319,19 @@ impl Texture {
     }
 
     /// Returns the `target`, whether the image is 3d and whether the image is a cubemap.
-    fn get_info_from_desc(
-        copy_size: &mut CopyExtent,
-        desc: &TextureDescriptor,
-    ) -> (u32, bool, bool) {
+    fn get_info_from_desc(desc: &TextureDescriptor) -> (u32, bool, bool) {
         match desc.dimension {
-            wgt::TextureDimension::D1 | wgt::TextureDimension::D2 => {
-                if desc.size.depth_or_array_layers > 1 {
-                    //HACK: detect a cube map
-                    let cube_count = if desc.size.width == desc.size.height
-                        && desc.size.depth_or_array_layers % 6 == 0
-                        && desc.sample_count == 1
-                    {
-                        Some(desc.size.depth_or_array_layers / 6)
-                    } else {
-                        None
-                    };
-                    match cube_count {
-                        None => (glow::TEXTURE_2D_ARRAY, true, false),
-                        Some(1) => (glow::TEXTURE_CUBE_MAP, false, true),
-                        Some(_) => (glow::TEXTURE_CUBE_MAP_ARRAY, true, true),
-                    }
-                } else {
-                    (glow::TEXTURE_2D, false, false)
+            wgt::TextureDimension::D1 => (glow::TEXTURE_2D, false, false),
+            wgt::TextureDimension::D2 => {
+                // HACK: detect a cube map; forces cube compatible textures to be cube textures
+                match (desc.is_cube_compatible(), desc.size.depth_or_array_layers) {
+                    (false, 1) => (glow::TEXTURE_2D, false, false),
+                    (false, _) => (glow::TEXTURE_2D_ARRAY, true, false),
+                    (true, 6) => (glow::TEXTURE_CUBE_MAP, false, true),
+                    (true, _) => (glow::TEXTURE_CUBE_MAP_ARRAY, true, true),
                 }
             }
-            wgt::TextureDimension::D3 => {
-                copy_size.depth = desc.size.depth_or_array_layers;
-                (glow::TEXTURE_3D, true, false)
-            }
+            wgt::TextureDimension::D3 => (glow::TEXTURE_3D, true, false),
         }
     }
 }
@@ -338,7 +339,6 @@ impl Texture {
 #[derive(Clone, Debug)]
 pub struct TextureView {
     inner: TextureInner,
-    sample_type: wgt::TextureSampleType,
     aspects: crate::FormatAspects,
     mip_levels: Range<u32>,
     array_layers: Range<u32>,
@@ -394,6 +394,7 @@ enum RawBinding {
     Texture {
         raw: glow::Texture,
         target: BindTarget,
+        aspects: crate::FormatAspects,
         //TODO: mip levels, array layers
     },
     Image(ImageBinding),
@@ -405,10 +406,13 @@ pub struct BindGroup {
     contents: Box<[RawBinding]>,
 }
 
+type ShaderId = u32;
+
 #[derive(Debug)]
 pub struct ShaderModule {
     naga: crate::NagaShader,
     label: Option<String>,
+    id: ShaderId,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -495,8 +499,23 @@ struct ColorTargetDesc {
     blend: Option<BlendDesc>,
 }
 
+#[derive(PartialEq, Eq, Hash)]
+struct ProgramStage {
+    naga_stage: naga::ShaderStage,
+    shader_id: ShaderId,
+    entry_point: String,
+}
+
+#[derive(PartialEq, Eq, Hash)]
+struct ProgramCacheKey {
+    stages: ArrayVec<ProgramStage, 3>,
+    group_to_binding_to_slot: Box<[Box<[u8]>]>,
+}
+
+type ProgramCache = FastHashMap<ProgramCacheKey, Result<Arc<PipelineInner>, crate::PipelineError>>;
+
 pub struct RenderPipeline {
-    inner: PipelineInner,
+    inner: Arc<PipelineInner>,
     primitive: wgt::PrimitiveState,
     vertex_buffers: Box<[VertexBufferDesc]>,
     vertex_attributes: Box<[AttributeDesc]>,
@@ -514,7 +533,7 @@ unsafe impl Send for RenderPipeline {}
 unsafe impl Sync for RenderPipeline {}
 
 pub struct ComputePipeline {
-    inner: PipelineInner,
+    inner: Arc<PipelineInner>,
 }
 
 // SAFE: WASM doesn't have threads
@@ -661,6 +680,15 @@ enum Command {
         dst_target: BindTarget,
         copy: crate::BufferCopy,
     },
+    #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
+    CopyExternalImageToTexture {
+        src: wgt::ImageCopyExternalImage,
+        dst: glow::Texture,
+        dst_target: BindTarget,
+        dst_format: wgt::TextureFormat,
+        dst_premultiplication: bool,
+        copy: crate::TextureCopy,
+    },
     CopyTextureToTexture {
         src: glow::Texture,
         src_target: BindTarget,
@@ -776,6 +804,7 @@ enum Command {
         slot: u32,
         texture: glow::Texture,
         target: BindTarget,
+        aspects: crate::FormatAspects,
     },
     BindImage {
         slot: u32,

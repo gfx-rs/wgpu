@@ -7,7 +7,9 @@ use winit::{
 
 async fn run(event_loop: EventLoop<()>, window: Window) {
     let size = window.inner_size();
-    let instance = wgpu::Instance::new(wgpu::Backends::all());
+
+    let instance = wgpu::Instance::default();
+
     let surface = unsafe { instance.create_surface(&window) }.unwrap();
     let adapter = instance
         .request_adapter(&wgpu::RequestAdapterOptions {
@@ -75,6 +77,7 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
         height: size.height,
         present_mode: wgpu::PresentMode::Fifo,
         alpha_mode: swapchain_capabilities.alpha_modes[0],
+        view_formats: vec![],
     };
 
     surface.configure(&device, &config);

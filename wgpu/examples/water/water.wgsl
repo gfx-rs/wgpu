@@ -6,13 +6,13 @@ struct Uniforms {
 };
 @group(0) @binding(0) var<uniform> uniforms: Uniforms;
 
-let light_point = vec3<f32>(150.0, 70.0, 0.0);
-let light_colour = vec3<f32>(1.0, 0.98, 0.82);
-let one = vec4<f32>(1.0, 1.0, 1.0, 1.0);
+const light_point = vec3<f32>(150.0, 70.0, 0.0);
+const light_colour = vec3<f32>(1.0, 0.98, 0.82);
+const one = vec4<f32>(1.0, 1.0, 1.0, 1.0);
 
-let Y_SCL: f32 = 0.86602540378443864676372317075294;
-let CURVE_BIAS: f32 = -0.1;
-let INV_1_CURVE_BIAS: f32 = 1.11111111111; //1.0 / (1.0 + CURVE_BIAS);
+const Y_SCL: f32 = 0.86602540378443864676372317075294;
+const CURVE_BIAS: f32 = -0.1;
+const INV_1_CURVE_BIAS: f32 = 1.11111111111; //1.0 / (1.0 + CURVE_BIAS);
 
 //
 // The following code to calculate simplex 3D
@@ -218,9 +218,9 @@ fn vs_main(
 }
 
 
-let water_colour = vec3<f32>(0.0, 0.46, 0.95);
-let zNear = 10.0;
-let zFar = 400.0;
+const water_colour = vec3<f32>(0.0, 0.46, 0.95);
+const zNear = 10.0;
+const zFar = 400.0;
 
 @group(0) @binding(1) var reflection: texture_2d<f32>;
 @group(0) @binding(2) var terrain_depth_tex: texture_2d<f32>;

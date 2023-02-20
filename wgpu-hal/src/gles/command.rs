@@ -309,6 +309,31 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         }
     }
 
+    #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
+    unsafe fn copy_external_image_to_texture<T>(
+        &mut self,
+        src: &wgt::ImageCopyExternalImage,
+        dst: &super::Texture,
+        dst_premultiplication: bool,
+        regions: T,
+    ) where
+        T: Iterator<Item = crate::TextureCopy>,
+    {
+        let (dst_raw, dst_target) = dst.inner.as_native();
+        for copy in regions {
+            self.cmd_buffer
+                .commands
+                .push(C::CopyExternalImageToTexture {
+                    src: src.clone(),
+                    dst: dst_raw,
+                    dst_target,
+                    dst_format: dst.format,
+                    dst_premultiplication,
+                    copy,
+                })
+        }
+    }
+
     unsafe fn copy_texture_to_texture<T>(
         &mut self,
         src: &super::Texture,
@@ -427,6 +452,20 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             self.state.has_pass_label = true;
         }
 
+        let rendering_to_external_framebuffer = desc
+            .color_attachments
+            .iter()
+            .filter_map(|at| at.as_ref())
+            .any(|at| match at.target.view.inner {
+                #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
+                super::TextureInner::ExternalFramebuffer { .. } => true,
+                _ => false,
+            });
+
+        if rendering_to_external_framebuffer && desc.color_attachments.len() != 1 {
+            panic!("Multiple render attachments with external framebuffers are not supported.");
+        }
+
         match desc
             .color_attachments
             .first()
@@ -489,10 +528,12 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                     }
                 }
 
-                // set the draw buffers and states
-                self.cmd_buffer
-                    .commands
-                    .push(C::SetDrawColorBuffers(desc.color_attachments.len() as u8));
+                if !rendering_to_external_framebuffer {
+                    // set the draw buffers and states
+                    self.cmd_buffer
+                        .commands
+                        .push(C::SetDrawColorBuffers(desc.color_attachments.len() as u8));
+                }
             }
         }
 
@@ -517,15 +558,13 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         {
             if !cat.ops.contains(crate::AttachmentOps::LOAD) {
                 let c = &cat.clear_value;
-                self.cmd_buffer
-                    .commands
-                    .push(match cat.target.view.sample_type {
+                self.cmd_buffer.commands.push(
+                    match cat.target.view.format.sample_type(None).unwrap() {
                         wgt::TextureSampleType::Float { .. } => C::ClearColorF {
                             draw_buffer: i as u32,
                             color: [c.r as f32, c.g as f32, c.b as f32, c.a as f32],
-                            is_srgb: cat.target.view.format.describe().srgb,
+                            is_srgb: cat.target.view.format.is_srgb(),
                         },
-                        wgt::TextureSampleType::Depth => unimplemented!(),
                         wgt::TextureSampleType::Uint => C::ClearColorU(
                             i as u32,
                             [c.r as u32, c.g as u32, c.b as u32, c.a as u32],
@@ -534,7 +573,9 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                             i as u32,
                             [c.r as i32, c.g as i32, c.b as i32, c.a as i32],
                         ),
-                    });
+                        wgt::TextureSampleType::Depth => unreachable!(),
+                    },
+                );
             }
         }
         if let Some(ref dsat) = desc.depth_stencil_attachment {
@@ -579,6 +620,11 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         self.state.dirty_vbuf_mask = 0;
         self.state.active_first_instance = 0;
         self.state.color_targets.clear();
+        for index in 0..self.state.vertex_attributes.len() {
+            self.cmd_buffer
+                .commands
+                .push(C::UnsetVertexAttribute(index as u32));
+        }
         self.state.vertex_attributes.clear();
         self.state.primitive = super::PrimitiveState::default();
     }
@@ -635,13 +681,18 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                     dirty_samplers |= 1 << slot;
                     self.state.samplers[slot as usize] = Some(sampler);
                 }
-                super::RawBinding::Texture { raw, target } => {
+                super::RawBinding::Texture {
+                    raw,
+                    target,
+                    aspects,
+                } => {
                     dirty_textures |= 1 << slot;
                     self.state.texture_slots[slot as usize].tex_target = target;
                     self.cmd_buffer.commands.push(C::BindTexture {
                         slot,
                         texture: raw,
                         target,
+                        aspects,
                     });
                 }
                 super::RawBinding::Image(ref binding) => {

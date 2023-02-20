@@ -203,7 +203,7 @@ impl super::Device {
 
     pub unsafe fn texture_from_raw(
         raw: mtl::Texture,
-        raw_format: mtl::MTLPixelFormat,
+        format: wgt::TextureFormat,
         raw_type: mtl::MTLTextureType,
         array_layers: u32,
         mip_levels: u32,
@@ -211,11 +211,18 @@ impl super::Device {
     ) -> super::Texture {
         super::Texture {
             raw,
-            raw_format,
+            format,
             raw_type,
             array_layers,
             mip_levels,
             copy_size,
+        }
+    }
+
+    pub unsafe fn device_from_raw(raw: mtl::Device, features: wgt::Features) -> super::Device {
+        super::Device {
+            shared: Arc::new(super::AdapterShared::new(raw)),
+            features,
         }
     }
 
@@ -285,21 +292,9 @@ impl crate::Device<super::Api> for super::Device {
 
         objc::rc::autoreleasepool(|| {
             let descriptor = mtl::TextureDescriptor::new();
-            let mut array_layers = desc.size.depth_or_array_layers;
-            let mut copy_size = crate::CopyExtent {
-                width: desc.size.width,
-                height: desc.size.height,
-                depth: 1,
-            };
+
             let mtl_type = match desc.dimension {
-                wgt::TextureDimension::D1 => {
-                    if desc.size.depth_or_array_layers > 1 {
-                        descriptor.set_array_length(desc.size.depth_or_array_layers as u64);
-                        mtl::MTLTextureType::D1Array
-                    } else {
-                        mtl::MTLTextureType::D1
-                    }
-                }
+                wgt::TextureDimension::D1 => mtl::MTLTextureType::D1,
                 wgt::TextureDimension::D2 => {
                     if desc.sample_count > 1 {
                         descriptor.set_sample_count(desc.sample_count as u64);
@@ -313,8 +308,6 @@ impl crate::Device<super::Api> for super::Device {
                 }
                 wgt::TextureDimension::D3 => {
                     descriptor.set_depth(desc.size.depth_or_array_layers as u64);
-                    array_layers = 1;
-                    copy_size.depth = desc.size.depth_or_array_layers;
                     mtl::MTLTextureType::D3
                 }
             };
@@ -324,7 +317,7 @@ impl crate::Device<super::Api> for super::Device {
             descriptor.set_height(desc.size.height as u64);
             descriptor.set_mipmap_level_count(desc.mip_level_count as u64);
             descriptor.set_pixel_format(mtl_format);
-            descriptor.set_usage(conv::map_texture_usage(desc.usage));
+            descriptor.set_usage(conv::map_texture_usage(desc.format, desc.usage));
             descriptor.set_storage_mode(mtl::MTLStorageMode::Private);
 
             let raw = self.shared.device.lock().new_texture(&descriptor);
@@ -334,11 +327,11 @@ impl crate::Device<super::Api> for super::Device {
 
             Ok(super::Texture {
                 raw,
-                raw_format: mtl_format,
+                format: desc.format,
                 raw_type: mtl_type,
                 mip_levels: desc.mip_level_count,
-                array_layers,
-                copy_size,
+                array_layers: desc.array_layer_count(),
+                copy_size: desc.copy_extent(),
             })
         })
     }
@@ -350,33 +343,38 @@ impl crate::Device<super::Api> for super::Device {
         texture: &super::Texture,
         desc: &crate::TextureViewDescriptor,
     ) -> DeviceResult<super::TextureView> {
-        let raw_format = self.shared.private_caps.map_format(desc.format);
-
         let raw_type = if texture.raw_type == mtl::MTLTextureType::D2Multisample {
             texture.raw_type
         } else {
             conv::map_texture_view_dimension(desc.dimension)
         };
 
-        let format_equal = raw_format == texture.raw_format;
+        let aspects = crate::FormatAspects::new(desc.format, desc.range.aspect);
+
+        let raw_format = self
+            .shared
+            .private_caps
+            .map_view_format(desc.format, aspects);
+
+        let format_equal = raw_format == self.shared.private_caps.map_format(texture.format);
         let type_equal = raw_type == texture.raw_type;
-        let range_full_resource = desc
-            .range
-            .is_full_resource(texture.mip_levels, texture.array_layers);
+        let range_full_resource =
+            desc.range
+                .is_full_resource(desc.format, texture.mip_levels, texture.array_layers);
 
         let raw = if format_equal && type_equal && range_full_resource {
             // Some images are marked as framebuffer-only, and we can't create aliases of them.
             // Also helps working around Metal bugs with aliased array textures.
             texture.raw.to_owned()
         } else {
-            let mip_level_count = match desc.range.mip_level_count {
-                Some(count) => count.get(),
-                None => texture.mip_levels - desc.range.base_mip_level,
-            };
-            let array_layer_count = match desc.range.array_layer_count {
-                Some(count) => count.get(),
-                None => texture.array_layers - desc.range.base_array_layer,
-            };
+            let mip_level_count = desc
+                .range
+                .mip_level_count
+                .unwrap_or(texture.mip_levels - desc.range.base_mip_level);
+            let array_layer_count = desc
+                .range
+                .array_layer_count
+                .unwrap_or(texture.array_layers - desc.range.base_array_layer);
 
             objc::rc::autoreleasepool(|| {
                 let raw = texture.raw.new_texture_view_from_slice(
@@ -398,7 +396,6 @@ impl crate::Device<super::Api> for super::Device {
             })
         };
 
-        let aspects = crate::FormatAspects::from(desc.format);
         Ok(super::TextureView { raw, aspects })
     }
     unsafe fn destroy_texture_view(&self, _view: super::TextureView) {}
@@ -699,6 +696,7 @@ impl crate::Device<super::Api> for super::Device {
                     // TODO: support bounds checks on binding arrays
                     binding_array: naga::proc::BoundsCheckPolicy::Unchecked,
                 },
+                zero_initialize_workgroup_memory: true,
             },
             total_push_constants,
         })

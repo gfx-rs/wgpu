@@ -22,41 +22,45 @@ keywords = ["graphics"]
 license = "MIT OR Apache-2.0"
 homepage = "https://wgpu.rs/"
 repository = "https://github.com/gfx-rs/wgpu"
-version = "0.14.0"
+version = "0.15.0"
 authors = ["wgpu developers"]
 
 [workspace.dependencies.wgc]
 package = "wgpu-core"
 path = "./wgpu-core"
+version = "0.15"
 
 [workspace.dependencies.wgt]
 package = "wgpu-types"
 path = "./wgpu-types"
+version = "0.15"
 
 [workspace.dependencies.hal]
 package = "wgpu-hal"
 path = "./wgpu-hal"
+version = "0.15"
 
 [workspace.dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-rev = "e7fc8e6"
-version = "0.10"
+rev = "7422ace934b7ed51c1e061eb1d36de8259b5f619"
+version = "0.11.0"
 
 [workspace.dependencies]
 arrayvec = "0.7"
 async-executor = "1.0"
 bitflags = "1"
 bit-vec = "0.6"
-bytemuck = "1.4"
-cargo-run-wasm = "0.2.0"
+bytemuck = "1.13"
+cargo-run-wasm = "0.3.0"
 cfg_aliases = "0.1"
 cfg-if = "1"
 codespan-reporting = "0.11"
 ddsfile = "0.5"
-env_logger = "0.9"
+env_logger = "0.10"
 futures-intrusive = "0.4"
 rustc-hash = "1.1.0"
 glam = "0.21.3"
+image = { version = "0.24", default-features = false, features = ["png"] }
 libloading = "0.7"
 libc = "0.2"
 log = "0.4"
@@ -78,7 +82,7 @@ serde_json = "1.0.85"
 smallvec = "1"
 static_assertions = "1.1.0"
 thiserror = "1"
-wgpu = { version = "0.14", path = "./wgpu" }
+wgpu = { version = "0.15", path = "./wgpu" }
 winit = "0.27.1"
 
 # Metal dependencies
@@ -89,7 +93,7 @@ objc = "0.2.5"
 core-graphics-types = "0.1"
 
 # Vulkan dependencies
-ash = "0.37.1"
+ash = "0.37.2"
 gpu-alloc = "0.5"
 gpu-descriptor = "0.2"
 android_system_properties = "0.1.1"
@@ -100,32 +104,31 @@ gpu-allocator = { version = "0.21", default_features = false, features = ["d3d12
 native = { package = "d3d12", version = "0.5.0" }
 range-alloc = "0.1"
 winapi = "0.3"
+hassle-rs = "0.10.0"
 
 # Gles dependencies
 egl = { package = "khronos-egl", version = "4.1" }
-# glow = { version = "0.11.2", optional = true }
-# TODO: New glow release
-glow = { git = "https://github.com/grovesNL/glow", rev = "c8a011fcd57a5c68cc917ed394baa484bdefc909" }
+glow = "0.12.0"
 glutin = "0.29.1"
 
 # wasm32 dependencies
 console_error_panic_hook = "0.1.7"
 console_log = "0.2"
-js-sys = "0.3.60"
-wasm-bindgen = "0.2.83"
-wasm-bindgen-futures = "0.4.33"
+js-sys = "0.3.61"
+wasm-bindgen = "0.2.84"
+wasm-bindgen-futures = "0.4.34"
 wasm-bindgen-test = "0.3"
-web-sys = "0.3.60"
+web-sys = "0.3.61"
 
 # deno dependencies
-deno_console = "0.80.0"
-deno_core = "0.162.0"
-deno_url = "0.80.0"
-deno_web = "0.111.0"
-deno_webidl = "0.80.0"
+deno_console = "0.84.0"
+deno_core = "0.166.0"
+deno_url = "0.84.0"
+deno_web = "0.115.0"
+deno_webidl = "0.84.0"
 deno_webgpu = { path = "./deno_webgpu" }
 tokio = "1.19.0"
-termcolor = "1.1.2"
+termcolor = "1.2.0"
 wgpu-core = { path = "./wgpu-core" }
 wgpu-types = { path = "./wgpu-types" }
 

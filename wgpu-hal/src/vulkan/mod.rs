@@ -96,11 +96,13 @@ pub struct Instance {
 
 struct Swapchain {
     raw: vk::SwapchainKHR,
+    raw_flags: vk::SwapchainCreateFlagsKHR,
     functor: khr::Swapchain,
     device: Arc<DeviceShared>,
     fence: vk::Fence,
     images: Vec<vk::Image>,
     config: crate::SurfaceConfiguration,
+    view_formats: Vec<wgt::TextureFormat>,
 }
 
 pub struct Surface {
@@ -166,6 +168,7 @@ struct PrivateCapabilities {
     non_coherent_map_mask: wgt::BufferAddress,
     robust_buffer_access: bool,
     robust_image_access: bool,
+    zero_initialize_workgroup_memory: bool,
 }
 
 bitflags::bitflags!(
@@ -224,6 +227,7 @@ struct FramebufferAttachment {
     raw_image_flags: vk::ImageCreateFlags,
     view_usage: crate::TextureUses,
     view_format: wgt::TextureFormat,
+    raw_view_formats: Vec<vk::Format>,
 }
 
 #[derive(Clone, Eq, Hash, PartialEq)]
@@ -231,65 +235,6 @@ struct FramebufferKey {
     attachments: ArrayVec<FramebufferAttachment, { MAX_TOTAL_ATTACHMENTS }>,
     extent: wgt::Extent3d,
     sample_count: u32,
-}
-
-bitflags::bitflags! {
-    pub struct UpdateAfterBindTypes: u8 {
-        const UNIFORM_BUFFER = 0x1;
-        const STORAGE_BUFFER = 0x2;
-        const SAMPLED_TEXTURE = 0x4;
-        const STORAGE_TEXTURE = 0x8;
-    }
-}
-
-impl UpdateAfterBindTypes {
-    pub fn from_limits(limits: &wgt::Limits, phd_limits: &vk::PhysicalDeviceLimits) -> Self {
-        let mut uab_types = UpdateAfterBindTypes::empty();
-        uab_types.set(
-            UpdateAfterBindTypes::UNIFORM_BUFFER,
-            limits.max_uniform_buffers_per_shader_stage
-                > phd_limits.max_per_stage_descriptor_uniform_buffers,
-        );
-        uab_types.set(
-            UpdateAfterBindTypes::STORAGE_BUFFER,
-            limits.max_storage_buffers_per_shader_stage
-                > phd_limits.max_per_stage_descriptor_storage_buffers,
-        );
-        uab_types.set(
-            UpdateAfterBindTypes::SAMPLED_TEXTURE,
-            limits.max_sampled_textures_per_shader_stage
-                > phd_limits.max_per_stage_descriptor_sampled_images,
-        );
-        uab_types.set(
-            UpdateAfterBindTypes::STORAGE_TEXTURE,
-            limits.max_storage_textures_per_shader_stage
-                > phd_limits.max_per_stage_descriptor_storage_images,
-        );
-        uab_types
-    }
-
-    fn from_features(features: &adapter::PhysicalDeviceFeatures) -> Self {
-        let mut uab_types = UpdateAfterBindTypes::empty();
-        if let Some(di) = features.descriptor_indexing {
-            uab_types.set(
-                UpdateAfterBindTypes::UNIFORM_BUFFER,
-                di.descriptor_binding_uniform_buffer_update_after_bind != 0,
-            );
-            uab_types.set(
-                UpdateAfterBindTypes::STORAGE_BUFFER,
-                di.descriptor_binding_storage_buffer_update_after_bind != 0,
-            );
-            uab_types.set(
-                UpdateAfterBindTypes::SAMPLED_TEXTURE,
-                di.descriptor_binding_sampled_image_update_after_bind != 0,
-            );
-            uab_types.set(
-                UpdateAfterBindTypes::STORAGE_TEXTURE,
-                di.descriptor_binding_storage_image_update_after_bind != 0,
-            );
-        }
-        uab_types
-    }
 }
 
 struct DeviceShared {
@@ -304,7 +249,6 @@ struct DeviceShared {
     extension_fns: DeviceExtensionFunctions,
     vendor_id: u32,
     timestamp_period: f32,
-    uab_types: UpdateAfterBindTypes,
     downlevel_flags: wgt::DownlevelFlags,
     private_caps: PrivateCapabilities,
     workarounds: Workarounds,
@@ -349,10 +293,10 @@ pub struct Texture {
     drop_guard: Option<crate::DropGuard>,
     block: Option<gpu_alloc::MemoryBlock<vk::DeviceMemory>>,
     usage: crate::TextureUses,
-    aspects: crate::FormatAspects,
-    format_info: wgt::TextureFormatInfo,
+    format: wgt::TextureFormat,
     raw_flags: vk::ImageCreateFlags,
     copy_size: crate::CopyExtent,
+    view_formats: Vec<wgt::TextureFormat>,
 }
 
 impl Texture {
@@ -371,12 +315,6 @@ pub struct TextureView {
     attachment: FramebufferAttachment,
 }
 
-impl TextureView {
-    fn aspects(&self) -> crate::FormatAspects {
-        self.attachment.view_format.into()
-    }
-}
-
 #[derive(Debug)]
 pub struct Sampler {
     raw: vk::Sampler,
@@ -389,7 +327,6 @@ pub struct BindGroupLayout {
     types: Box<[(vk::DescriptorType, u32)]>,
     /// Map of binding index to size,
     binding_arrays: Vec<(u32, NonZeroU32)>,
-    requires_update_after_bind: bool,
 }
 
 #[derive(Debug)]

@@ -392,7 +392,7 @@ impl<T, I: id::TypedId> Storage<T, I> {
         }
         match std::mem::replace(&mut self.map[index], element) {
             Element::Vacant => {}
-            _ => panic!("Index {:?} is already occupied", index),
+            _ => panic!("Index {index:?} is already occupied"),
         }
     }
 
@@ -1108,10 +1108,10 @@ pub struct Global<G: GlobalIdentityHandlerFactory> {
 }
 
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
-    pub fn new(name: &str, factory: G, backends: wgt::Backends) -> Self {
+    pub fn new(name: &str, factory: G, instance_desc: wgt::InstanceDescriptor) -> Self {
         profiling::scope!("Global::new");
         Self {
-            instance: Instance::new(name, backends),
+            instance: Instance::new(name, instance_desc),
             surfaces: Registry::without_backend(&factory, "Surface"),
             hubs: Hubs::new(&factory),
         }

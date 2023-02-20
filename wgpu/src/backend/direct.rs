@@ -41,7 +41,6 @@ impl fmt::Debug for Context {
 }
 
 impl Context {
-    #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
     pub unsafe fn from_hal_instance<A: wgc::hub::HalApi>(hal_instance: A::Instance) -> Self {
         Self(unsafe {
             wgc::hub::Global::from_hal_instance::<A>(
@@ -69,13 +68,11 @@ impl Context {
         &self.0
     }
 
-    #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
     pub fn enumerate_adapters(&self, backends: wgt::Backends) -> Vec<wgc::id::AdapterId> {
         self.0
             .enumerate_adapters(wgc::instance::AdapterInputs::Mask(backends, |_| ()))
     }
 
-    #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
     pub unsafe fn create_adapter_from_hal<A: wgc::hub::HalApi>(
         &self,
         hal_adapter: hal::ExposedAdapter<A>,
@@ -94,7 +91,6 @@ impl Context {
         }
     }
 
-    #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
     pub unsafe fn create_device_from_hal<A: wgc::hub::HalApi>(
         &self,
         adapter: &wgc::id::AdapterId,
@@ -128,22 +124,16 @@ impl Context {
         Ok((device, queue))
     }
 
-    #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
     pub unsafe fn create_texture_from_hal<A: wgc::hub::HalApi>(
         &self,
         hal_texture: A::Texture,
         device: &Device,
         desc: &TextureDescriptor,
     ) -> Texture {
+        let descriptor = desc.map_label_and_view_formats(|l| l.map(Borrowed), |v| v.to_vec());
         let global = &self.0;
-        let (id, error) = unsafe {
-            global.create_texture_from_hal::<A>(
-                hal_texture,
-                device.id,
-                &desc.map_label(|l| l.map(Borrowed)),
-                (),
-            )
-        };
+        let (id, error) =
+            unsafe { global.create_texture_from_hal::<A>(hal_texture, device.id, &descriptor, ()) };
         if let Some(cause) = error {
             self.handle_error(
                 &device.error_sink,
@@ -159,7 +149,6 @@ impl Context {
         }
     }
 
-    #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
     pub unsafe fn device_as_hal<A: wgc::hub::HalApi, F: FnOnce(Option<&A::Device>) -> R, R>(
         &self,
         device: &Device,
@@ -171,7 +160,6 @@ impl Context {
         }
     }
 
-    #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
     pub unsafe fn surface_as_hal_mut<
         A: wgc::hub::HalApi,
         F: FnOnce(Option<&mut A::Surface>) -> R,
@@ -187,7 +175,6 @@ impl Context {
         }
     }
 
-    #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
     pub unsafe fn texture_as_hal<A: wgc::hub::HalApi, F: FnOnce(Option<&A::Texture>)>(
         &self,
         texture: &Texture,
@@ -199,7 +186,6 @@ impl Context {
         }
     }
 
-    #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
     pub fn generate_report(&self) -> wgc::hub::GlobalReport {
         self.0.generate_report()
     }
@@ -216,7 +202,7 @@ impl Context {
         }
     }
 
-    #[cfg(all(target_arch = "wasm32", feature = "webgl", not(feature = "emscripten")))]
+    #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
     pub fn instance_create_surface_from_canvas(
         &self,
         canvas: &web_sys::HtmlCanvasElement,
@@ -231,7 +217,7 @@ impl Context {
         })
     }
 
-    #[cfg(all(target_arch = "wasm32", feature = "webgl", not(feature = "emscripten")))]
+    #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
     pub fn instance_create_surface_from_offscreen_canvas(
         &self,
         canvas: &web_sys::OffscreenCanvas,
@@ -249,6 +235,21 @@ impl Context {
     #[cfg(target_os = "windows")]
     pub unsafe fn create_surface_from_visual(&self, visual: *mut std::ffi::c_void) -> Surface {
         let id = unsafe { self.0.instance_create_surface_from_visual(visual, ()) };
+        Surface {
+            id,
+            configured_device: Mutex::default(),
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    pub unsafe fn create_surface_from_surface_handle(
+        &self,
+        surface_handle: *mut std::ffi::c_void,
+    ) -> Surface {
+        let id = unsafe {
+            self.0
+                .instance_create_surface_from_surface_handle(surface_handle, ())
+        };
         Surface {
             id,
             configured_device: Mutex::default(),
@@ -303,7 +304,7 @@ impl Context {
         cause: impl Error + Send + Sync + 'static,
         string: &'static str,
     ) -> ! {
-        panic!("Error in {}: {}", string, cause);
+        panic!("Error in {string}: {cause}");
     }
 
     fn format_error(&self, err: &(impl Error + 'static)) -> String {
@@ -339,6 +340,23 @@ fn map_texture_copy_view(view: crate::ImageCopyTexture) -> wgc::command::ImageCo
         mip_level: view.mip_level,
         origin: view.origin,
         aspect: view.aspect,
+    }
+}
+
+#[cfg_attr(
+    any(not(target_arch = "wasm32"), target_os = "emscripten"),
+    allow(unused)
+)]
+fn map_texture_tagged_copy_view(
+    view: crate::ImageCopyTextureTagged,
+) -> wgc::command::ImageCopyTextureTagged {
+    wgc::command::ImageCopyTextureTagged {
+        texture: view.texture.id.into(),
+        mip_level: view.mip_level,
+        origin: view.origin,
+        aspect: view.aspect,
+        color_space: view.color_space,
+        premultiplied_alpha: view.premultiplied_alpha,
     }
 }
 
@@ -516,11 +534,11 @@ impl crate::Context for Context {
 
     type PopErrorScopeFuture = Ready<Option<crate::Error>>;
 
-    fn init(backends: wgt::Backends) -> Self {
+    fn init(instance_desc: wgt::InstanceDescriptor) -> Self {
         Self(wgc::hub::Global::new(
             "wgpu",
             wgc::hub::IdentityManagerFactory,
-            backends,
+            instance_desc,
         ))
     }
 
@@ -707,7 +725,7 @@ impl crate::Context for Context {
         surface_data: &Self::SurfaceData,
         device: &Self::DeviceId,
         _device_data: &Self::DeviceData,
-        config: &wgt::SurfaceConfiguration,
+        config: &crate::SurfaceConfiguration,
     ) {
         let global = &self.0;
         let error = wgc::gfx_select!(device => global.surface_configure(*surface, *device, config));
@@ -842,7 +860,7 @@ impl crate::Context for Context {
                     strict_capabilities: true,
                     block_ctx_dump_prefix: None,
                 };
-                let parser = naga::front::spv::Parser::new(spv.iter().cloned(), &options);
+                let parser = naga::front::spv::Frontend::new(spv.iter().cloned(), &options);
                 let module = parser.parse().unwrap();
                 wgc::pipeline::ShaderModuleSource::Naga(Owned(module))
             }
@@ -857,7 +875,7 @@ impl crate::Context for Context {
                     stage,
                     defines: defines.clone(),
                 };
-                let mut parser = naga::front::glsl::Parser::default();
+                let mut parser = naga::front::glsl::Frontend::default();
                 let module = parser.parse(&options, shader).unwrap();
 
                 wgc::pipeline::ShaderModuleSource::Naga(Owned(module))
@@ -1249,10 +1267,11 @@ impl crate::Context for Context {
         device_data: &Self::DeviceData,
         desc: &TextureDescriptor,
     ) -> (Self::TextureId, Self::TextureData) {
+        let wgt_desc = desc.map_label_and_view_formats(|l| l.map(Borrowed), |v| v.to_vec());
         let global = &self.0;
         let (id, error) = wgc::gfx_select!(device => global.device_create_texture(
             *device,
-            &desc.map_label(|l| l.map(Borrowed)),
+            &wgt_desc,
             ()
         ));
         if let Some(cause) = error {
@@ -1373,14 +1392,14 @@ impl crate::Context for Context {
         };
         match wgc::command::RenderBundleEncoder::new(&descriptor, *device, None) {
             Ok(encoder) => (Unused, encoder),
-            Err(e) => panic!("Error in Device::create_render_bundle_encoder: {}", e),
+            Err(e) => panic!("Error in Device::create_render_bundle_encoder: {e}"),
         }
     }
     #[cfg_attr(target_arch = "wasm32", allow(unused))]
     fn device_drop(&self, device: &Self::DeviceId, _device_data: &Self::DeviceData) {
         let global = &self.0;
 
-        #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
+        #[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))]
         {
             match wgc::gfx_select!(device => global.device_poll(*device, wgt::Maintain::Wait)) {
                 Ok(_) => (),
@@ -1670,7 +1689,7 @@ impl crate::Context for Context {
         let global = &self.0;
         let (id, error) = wgc::gfx_select!(*pipeline => global.compute_pipeline_get_bind_group_layout(*pipeline, index, ()));
         if let Some(err) = error {
-            panic!("Error reflecting bind group {}: {}", index, err);
+            panic!("Error reflecting bind group {index}: {err}");
         }
         (id, ())
     }
@@ -1684,7 +1703,7 @@ impl crate::Context for Context {
         let global = &self.0;
         let (id, error) = wgc::gfx_select!(*pipeline => global.render_pipeline_get_bind_group_layout(*pipeline, index, ()));
         if let Some(err) = error {
-            panic!("Error reflecting bind group {}: {}", index, err);
+            panic!("Error reflecting bind group {index}: {err}");
         }
         (id, ())
     }
@@ -1826,12 +1845,21 @@ impl crate::Context for Context {
         }
     }
 
-    fn command_encoder_begin_render_pass<'a>(
+    fn command_encoder_begin_render_pass(
         &self,
         encoder: &Self::CommandEncoderId,
         _encoder_data: &Self::CommandEncoderData,
-        desc: &crate::RenderPassDescriptor<'a, '_>,
+        desc: &crate::RenderPassDescriptor<'_, '_>,
     ) -> (Self::RenderPassId, Self::RenderPassData) {
+        if desc.color_attachments.len() > wgc::MAX_COLOR_ATTACHMENTS {
+            self.handle_error_fatal(
+                wgc::command::ColorAttachmentError::TooMany {
+                    given: desc.color_attachments.len(),
+                    limit: wgc::MAX_COLOR_ATTACHMENTS,
+                },
+                "CommandEncoder::begin_render_pass",
+            );
+        }
         let colors = desc
             .color_attachments
             .iter()
@@ -2179,6 +2207,31 @@ impl crate::Context for Context {
             Err(err) => {
                 self.handle_error_nolabel(&queue_data.error_sink, err, "Queue::write_texture")
             }
+        }
+    }
+
+    #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
+    fn queue_copy_external_image_to_texture(
+        &self,
+        queue: &Self::QueueId,
+        queue_data: &Self::QueueData,
+        source: &wgt::ImageCopyExternalImage,
+        dest: crate::ImageCopyTextureTagged,
+        size: wgt::Extent3d,
+    ) {
+        let global = &self.0;
+        match wgc::gfx_select!(*queue => global.queue_copy_external_image_to_texture(
+            *queue,
+            source,
+            map_texture_tagged_copy_view(dest),
+            size
+        )) {
+            Ok(()) => (),
+            Err(err) => self.handle_error_nolabel(
+                &queue_data.error_sink,
+                err,
+                "Queue::copy_external_image_to_texture",
+            ),
         }
     }
 
@@ -2885,22 +2938,21 @@ impl crate::Context for Context {
 }
 
 impl<T> From<ObjectId> for wgc::id::Id<T> {
-    // If the id32 feature is enabled, this conversion is not useless.
-    #[allow(clippy::useless_conversion)]
     fn from(id: ObjectId) -> Self {
-        let raw = std::num::NonZeroU128::from(id);
-        // If the id32 feature is enabled, this will truncate the id to a NonZeroU32.
-        let id = raw.try_into().expect("Id exceeded 32-bits");
-        // FIXME: This is not safe
+        // If the id32 feature is enabled in wgpu-core, this will make sure that the id fits in a NonZeroU32.
+        #[allow(clippy::useless_conversion)]
+        let id = id.id().try_into().expect("Id exceeded 32-bits");
+        // SAFETY: The id was created via the impl below
         unsafe { Self::from_raw(id) }
     }
 }
 
 impl<T> From<wgc::id::Id<T>> for ObjectId {
-    // If the id32 feature is enabled, this conversion is not useless.
-    #[allow(clippy::useless_conversion)]
     fn from(id: wgc::id::Id<T>) -> Self {
-        ObjectId::from(std::num::NonZeroU128::from(id.as_raw()))
+        // If the id32 feature is enabled in wgpu-core, the conversion is not useless
+        #[allow(clippy::useless_conversion)]
+        let id = id.into_raw().into();
+        Self::from_global_id(id)
     }
 }
 
@@ -2960,7 +3012,7 @@ impl fmt::Debug for ErrorSinkRaw {
 
 fn default_error_handler(err: crate::Error) {
     log::error!("Handling wgpu errors as fatal by default");
-    panic!("wgpu error: {}\n", err);
+    panic!("wgpu error: {err}\n");
 }
 
 #[derive(Debug)]

@@ -3,12 +3,14 @@ use crate::auxil::map_naga_stage;
 use glow::HasContext;
 use std::{
     convert::TryInto,
-    iter, ptr,
+    ptr,
     sync::{Arc, Mutex},
 };
 
+use arrayvec::ArrayVec;
 #[cfg(not(target_arch = "wasm32"))]
 use std::mem;
+use std::sync::atomic::Ordering;
 
 type ShaderStage<'a> = (
     naga::ShaderStage,
@@ -92,16 +94,14 @@ impl super::Device {
     /// - If `drop_guard` is [`None`], wgpu-hal will take ownership of the texture. If `drop_guard` is
     ///   [`Some`], the texture must be valid until the drop implementation
     ///   of the drop guard is called.
-    #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
+    #[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))]
     pub unsafe fn texture_from_raw(
         &self,
         name: std::num::NonZeroU32,
         desc: &crate::TextureDescriptor,
         drop_guard: Option<crate::DropGuard>,
     ) -> super::Texture {
-        let mut copy_size = crate::CopyExtent::map_extent_to_copy_size(&desc.size, desc.dimension);
-
-        let (target, _, is_cubemap) = super::Texture::get_info_from_desc(&mut copy_size, desc);
+        let (target, _, is_cubemap) = super::Texture::get_info_from_desc(desc);
 
         super::Texture {
             inner: super::TextureInner::Texture {
@@ -110,14 +110,10 @@ impl super::Device {
             },
             drop_guard,
             mip_level_count: desc.mip_level_count,
-            array_layer_count: if desc.dimension == wgt::TextureDimension::D2 {
-                desc.size.depth_or_array_layers
-            } else {
-                1
-            },
+            array_layer_count: desc.array_layer_count(),
             format: desc.format,
             format_desc: self.shared.describe_texture_format(desc.format),
-            copy_size,
+            copy_size: desc.copy_extent(),
             is_cubemap,
         }
     }
@@ -129,29 +125,23 @@ impl super::Device {
     /// - If `drop_guard` is [`None`], wgpu-hal will take ownership of the renderbuffer. If `drop_guard` is
     ///   [`Some`], the renderbuffer must be valid until the drop implementation
     ///   of the drop guard is called.
-    #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
+    #[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))]
     pub unsafe fn texture_from_raw_renderbuffer(
         &self,
         name: std::num::NonZeroU32,
         desc: &crate::TextureDescriptor,
         drop_guard: Option<crate::DropGuard>,
     ) -> super::Texture {
-        let copy_size = crate::CopyExtent::map_extent_to_copy_size(&desc.size, desc.dimension);
-
         super::Texture {
             inner: super::TextureInner::Renderbuffer {
                 raw: glow::NativeRenderbuffer(name),
             },
             drop_guard,
             mip_level_count: desc.mip_level_count,
-            array_layer_count: if desc.dimension == wgt::TextureDimension::D2 {
-                desc.size.depth_or_array_layers
-            } else {
-                1
-            },
+            array_layer_count: desc.array_layer_count(),
             format: desc.format,
             format_desc: self.shared.describe_texture_format(desc.format),
-            copy_size,
+            copy_size: desc.copy_extent(),
             is_cubemap: false,
         }
     }
@@ -245,12 +235,12 @@ impl super::Device {
             policies,
         )
         .map_err(|e| {
-            let msg = format!("{}", e);
+            let msg = format!("{e}");
             crate::PipelineError::Linkage(map_naga_stage(naga_stage), msg)
         })?;
 
         let reflection_info = writer.write().map_err(|e| {
-            let msg = format!("{}", e);
+            let msg = format!("{e}");
             crate::PipelineError::Linkage(map_naga_stage(naga_stage), msg)
         })?;
 
@@ -265,14 +255,68 @@ impl super::Device {
         unsafe { Self::compile_shader(gl, &output, naga_stage, stage.module.label.as_deref()) }
     }
 
-    unsafe fn create_pipeline<'a, I: Iterator<Item = ShaderStage<'a>>>(
+    unsafe fn create_pipeline<'a>(
         &self,
         gl: &glow::Context,
-        shaders: I,
+        shaders: ArrayVec<ShaderStage<'a>, 3>,
         layout: &super::PipelineLayout,
         #[cfg_attr(target_arch = "wasm32", allow(unused))] label: Option<&str>,
         multiview: Option<std::num::NonZeroU32>,
-    ) -> Result<super::PipelineInner, crate::PipelineError> {
+    ) -> Result<Arc<super::PipelineInner>, crate::PipelineError> {
+        let mut program_stages = ArrayVec::new();
+        let mut group_to_binding_to_slot = Vec::with_capacity(layout.group_infos.len());
+        for group in &*layout.group_infos {
+            group_to_binding_to_slot.push(group.binding_to_slot.clone());
+        }
+        for &(naga_stage, stage) in &shaders {
+            program_stages.push(super::ProgramStage {
+                naga_stage: naga_stage.to_owned(),
+                shader_id: stage.module.id,
+                entry_point: stage.entry_point.to_owned(),
+            });
+        }
+        let glsl_version = match self.shared.shading_language_version {
+            naga::back::glsl::Version::Embedded { version, .. } => version,
+            naga::back::glsl::Version::Desktop(_) => unreachable!(),
+        };
+        let mut guard = self
+            .shared
+            .program_cache
+            .try_lock()
+            .expect("Couldn't acquire program_cache lock");
+        // This guard ensures that we can't accidentally destroy a program whilst we're about to reuse it
+        // The only place that destroys a pipeline is also locking on `program_cache`
+        let program = guard
+            .entry(super::ProgramCacheKey {
+                stages: program_stages,
+                group_to_binding_to_slot: group_to_binding_to_slot.into_boxed_slice(),
+            })
+            .or_insert_with(|| unsafe {
+                Self::create_program(
+                    gl,
+                    shaders,
+                    layout,
+                    label,
+                    multiview,
+                    glsl_version,
+                    self.shared.private_caps,
+                )
+            })
+            .to_owned()?;
+        drop(guard);
+
+        Ok(program)
+    }
+
+    unsafe fn create_program<'a>(
+        gl: &glow::Context,
+        shaders: ArrayVec<ShaderStage<'a>, 3>,
+        layout: &super::PipelineLayout,
+        #[cfg_attr(target_arch = "wasm32", allow(unused))] label: Option<&str>,
+        multiview: Option<std::num::NonZeroU32>,
+        glsl_version: u16,
+        private_caps: super::PrivateCapabilities,
+    ) -> Result<Arc<super::PipelineInner>, crate::PipelineError> {
         let program = unsafe { gl.create_program() }.unwrap();
         #[cfg(not(target_arch = "wasm32"))]
         if let Some(label) = label {
@@ -302,11 +346,7 @@ impl super::Device {
 
         // Create empty fragment shader if only vertex shader is present
         if has_stages == wgt::ShaderStages::VERTEX {
-            let version = match self.shared.shading_language_version {
-                naga::back::glsl::Version::Embedded { version, .. } => version,
-                naga::back::glsl::Version::Desktop(_) => unreachable!(),
-            };
-            let shader_src = format!("#version {} es \n void main(void) {{}}", version,);
+            let shader_src = format!("#version {glsl_version} es \n void main(void) {{}}",);
             log::info!("Only vertex shader is present. Creating an empty fragment shader",);
             let shader = unsafe {
                 Self::compile_shader(
@@ -339,11 +379,7 @@ impl super::Device {
             log::warn!("\tLink: {}", msg);
         }
 
-        if !self
-            .shared
-            .private_caps
-            .contains(super::PrivateCapabilities::SHADER_BINDING_LAYOUT)
-        {
+        if !private_caps.contains(super::PrivateCapabilities::SHADER_BINDING_LAYOUT) {
             // This remapping is only needed if we aren't able to put the binding layout
             // in the shader. We can't remap storage buffers this way.
             unsafe { gl.use_program(Some(program)) };
@@ -372,7 +408,8 @@ impl super::Device {
             }
         }
 
-        let mut uniforms: [super::UniformDesc; super::MAX_PUSH_CONSTANTS] = Default::default();
+        let mut uniforms: [super::UniformDesc; super::MAX_PUSH_CONSTANTS] =
+            [None; super::MAX_PUSH_CONSTANTS].map(|_: Option<()>| Default::default());
         let count = unsafe { gl.get_active_uniforms(program) };
         let mut offset = 0;
 
@@ -380,7 +417,7 @@ impl super::Device {
             let glow::ActiveUniform { utype, name, .. } =
                 unsafe { gl.get_active_uniform(program, uniform) }.unwrap();
 
-            if conv::is_sampler(utype) {
+            if conv::is_opaque_type(utype) {
                 continue;
             }
 
@@ -402,11 +439,11 @@ impl super::Device {
             }
         }
 
-        Ok(super::PipelineInner {
+        Ok(Arc::new(super::PipelineInner {
             program,
             sampler_map,
             uniforms,
-        })
+        }))
     }
 }
 
@@ -471,7 +508,7 @@ impl crate::Device<super::Api> for super::Device {
             map_flags |= glow::MAP_WRITE_BIT;
         }
 
-        let raw = Some(unsafe { gl.create_buffer() }.unwrap());
+        let raw = Some(unsafe { gl.create_buffer() }.map_err(|_| crate::DeviceError::OutOfMemory)?);
         unsafe { gl.bind_buffer(target, raw) };
         let raw_size = desc
             .size
@@ -499,7 +536,10 @@ impl crate::Device<super::Api> for super::Device {
                     glow::DYNAMIC_DRAW
                 }
             } else {
-                glow::STATIC_DRAW
+                // Even if the usage doesn't contain SRC_READ, we update it internally at least once
+                // Some vendors take usage very literally and STATIC_DRAW will freeze us with an empty buffer
+                // https://github.com/gfx-rs/wgpu/issues/3371
+                glow::DYNAMIC_DRAW
             };
             unsafe { gl.buffer_data_size(target, raw_size, usage) };
         }
@@ -623,12 +663,6 @@ impl crate::Device<super::Api> for super::Device {
             | crate::TextureUses::DEPTH_STENCIL_READ;
         let format_desc = self.shared.describe_texture_format(desc.format);
 
-        let mut copy_size = crate::CopyExtent {
-            width: desc.size.width,
-            height: desc.size.height,
-            depth: 1,
-        };
-
         let (inner, is_cubemap) = if render_usage.contains(desc.usage)
             && desc.dimension == wgt::TextureDimension::D2
             && desc.size.depth_or_array_layers == 1
@@ -668,15 +702,16 @@ impl crate::Device<super::Api> for super::Device {
             (super::TextureInner::Renderbuffer { raw }, false)
         } else {
             let raw = unsafe { gl.create_texture().unwrap() };
-            let (target, is_3d, is_cubemap) =
-                super::Texture::get_info_from_desc(&mut copy_size, desc);
+            let (target, is_3d, is_cubemap) = super::Texture::get_info_from_desc(desc);
 
             unsafe { gl.bind_texture(target, Some(raw)) };
             //Note: this has to be done before defining the storage!
-            match desc.format.describe().sample_type {
-                wgt::TextureSampleType::Float { filterable: false }
-                | wgt::TextureSampleType::Uint
-                | wgt::TextureSampleType::Sint => {
+            match desc.format.sample_type(None) {
+                Some(
+                    wgt::TextureSampleType::Float { filterable: false }
+                    | wgt::TextureSampleType::Uint
+                    | wgt::TextureSampleType::Sint,
+                ) => {
                     // reset default filtering mode
                     unsafe {
                         gl.tex_parameter_i32(target, glow::TEXTURE_MIN_FILTER, glow::NEAREST as i32)
@@ -685,8 +720,7 @@ impl crate::Device<super::Api> for super::Device {
                         gl.tex_parameter_i32(target, glow::TEXTURE_MAG_FILTER, glow::NEAREST as i32)
                     };
                 }
-                wgt::TextureSampleType::Float { filterable: true }
-                | wgt::TextureSampleType::Depth => {}
+                _ => {}
             }
 
             if is_3d {
@@ -739,14 +773,10 @@ impl crate::Device<super::Api> for super::Device {
             inner,
             drop_guard: None,
             mip_level_count: desc.mip_level_count,
-            array_layer_count: if desc.dimension == wgt::TextureDimension::D2 {
-                desc.size.depth_or_array_layers
-            } else {
-                1
-            },
+            array_layer_count: desc.array_layer_count(),
             format: desc.format,
             format_desc,
-            copy_size,
+            copy_size: desc.copy_extent(),
             is_cubemap,
         })
     }
@@ -761,6 +791,8 @@ impl crate::Device<super::Api> for super::Device {
                 super::TextureInner::Texture { raw, .. } => {
                     unsafe { gl.delete_texture(raw) };
                 }
+                #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
+                super::TextureInner::ExternalFramebuffer { .. } => {}
             }
         }
 
@@ -774,22 +806,12 @@ impl crate::Device<super::Api> for super::Device {
         texture: &super::Texture,
         desc: &crate::TextureViewDescriptor,
     ) -> Result<super::TextureView, crate::DeviceError> {
-        let end_array_layer = match desc.range.array_layer_count {
-            Some(count) => desc.range.base_array_layer + count.get(),
-            None => texture.array_layer_count,
-        };
-        let end_mip_level = match desc.range.mip_level_count {
-            Some(count) => desc.range.base_mip_level + count.get(),
-            None => texture.mip_level_count,
-        };
         Ok(super::TextureView {
             //TODO: use `conv::map_view_dimension(desc.dimension)`?
             inner: texture.inner.clone(),
-            sample_type: texture.format.describe().sample_type,
-            aspects: crate::FormatAspects::from(texture.format)
-                & crate::FormatAspects::from(desc.range.aspect),
-            mip_levels: desc.range.base_mip_level..end_mip_level,
-            array_layers: desc.range.base_array_layer..end_array_layer,
+            aspects: crate::FormatAspects::new(texture.format, desc.range.aspect),
+            mip_levels: desc.range.mip_range(texture.mip_level_count),
+            array_layers: desc.range.layer_range(texture.array_layer_count),
             format: texture.format,
         })
     }
@@ -929,6 +951,9 @@ impl crate::Device<super::Api> for super::Device {
                 .private_caps
                 .contains(super::PrivateCapabilities::SHADER_TEXTURE_SHADOW_LOD),
         );
+        // We always force point size to be written and it will be ignored by the driver if it's not a point list primitive.
+        // https://github.com/gfx-rs/wgpu/pull/3440/files#r1095726950
+        writer_flags.set(glsl::WriterFlags::FORCE_POINT_SIZE, true);
         let mut binding_map = glsl::BindingMap::default();
 
         for (group_index, bg_layout) in desc.bind_group_layouts.iter().enumerate() {
@@ -978,6 +1003,7 @@ impl crate::Device<super::Api> for super::Device {
                 version: self.shared.shading_language_version,
                 writer_flags,
                 binding_map,
+                zero_initialize_workgroup_memory: true,
             },
         })
     }
@@ -1013,7 +1039,11 @@ impl crate::Device<super::Api> for super::Device {
                             "This is an implementation problem of wgpu-hal/gles backend.")
                     }
                     let (raw, target) = view.inner.as_native();
-                    super::RawBinding::Texture { raw, target }
+                    super::RawBinding::Texture {
+                        raw,
+                        target,
+                        aspects: view.aspects,
+                    }
                 }
                 wgt::BindingType::StorageTexture {
                     access,
@@ -1058,6 +1088,7 @@ impl crate::Device<super::Api> for super::Device {
                 crate::ShaderInput::Naga(naga) => naga,
             },
             label: desc.label.map(|str| str.to_string()),
+            id: self.shared.next_shader_id.fetch_add(1, Ordering::Relaxed),
         })
     }
     unsafe fn destroy_shader_module(&self, _module: super::ShaderModule) {}
@@ -1067,11 +1098,11 @@ impl crate::Device<super::Api> for super::Device {
         desc: &crate::RenderPipelineDescriptor<super::Api>,
     ) -> Result<super::RenderPipeline, crate::PipelineError> {
         let gl = &self.shared.context.lock();
-        let shaders = iter::once((naga::ShaderStage::Vertex, &desc.vertex_stage)).chain(
-            desc.fragment_stage
-                .as_ref()
-                .map(|fs| (naga::ShaderStage::Fragment, fs)),
-        );
+        let mut shaders = ArrayVec::new();
+        shaders.push((naga::ShaderStage::Vertex, &desc.vertex_stage));
+        if let Some(ref fs) = desc.fragment_stage {
+            shaders.push((naga::ShaderStage::Fragment, fs));
+        }
         let inner =
             unsafe { self.create_pipeline(gl, shaders, desc.layout, desc.label, desc.multiview) }?;
 
@@ -1132,8 +1163,19 @@ impl crate::Device<super::Api> for super::Device {
         })
     }
     unsafe fn destroy_render_pipeline(&self, pipeline: super::RenderPipeline) {
-        let gl = &self.shared.context.lock();
-        unsafe { gl.delete_program(pipeline.inner.program) };
+        let mut program_cache = self.shared.program_cache.lock();
+        // If the pipeline only has 2 strong references remaining, they're `pipeline` and `program_cache`
+        // This is safe to assume as long as:
+        // - `RenderPipeline` can't be cloned
+        // - The only place that we can get a new reference is during `program_cache.lock()`
+        if Arc::strong_count(&pipeline.inner) == 2 {
+            program_cache.retain(|_, v| match *v {
+                Ok(ref p) => p.program != pipeline.inner.program,
+                Err(_) => false,
+            });
+            let gl = &self.shared.context.lock();
+            unsafe { gl.delete_program(pipeline.inner.program) };
+        }
     }
 
     unsafe fn create_compute_pipeline(
@@ -1141,14 +1183,26 @@ impl crate::Device<super::Api> for super::Device {
         desc: &crate::ComputePipelineDescriptor<super::Api>,
     ) -> Result<super::ComputePipeline, crate::PipelineError> {
         let gl = &self.shared.context.lock();
-        let shaders = iter::once((naga::ShaderStage::Compute, &desc.stage));
+        let mut shaders = ArrayVec::new();
+        shaders.push((naga::ShaderStage::Compute, &desc.stage));
         let inner = unsafe { self.create_pipeline(gl, shaders, desc.layout, desc.label, None) }?;
 
         Ok(super::ComputePipeline { inner })
     }
     unsafe fn destroy_compute_pipeline(&self, pipeline: super::ComputePipeline) {
-        let gl = &self.shared.context.lock();
-        unsafe { gl.delete_program(pipeline.inner.program) };
+        let mut program_cache = self.shared.program_cache.lock();
+        // If the pipeline only has 2 strong references remaining, they're `pipeline` and `program_cache``
+        // This is safe to assume as long as:
+        // - `ComputePipeline` can't be cloned
+        // - The only place that we can get a new reference is during `program_cache.lock()`
+        if Arc::strong_count(&pipeline.inner) == 2 {
+            program_cache.retain(|_, v| match *v {
+                Ok(ref p) => p.program != pipeline.inner.program,
+                Err(_) => false,
+            });
+            let gl = &self.shared.context.lock();
+            unsafe { gl.delete_program(pipeline.inner.program) };
+        }
     }
 
     #[cfg_attr(target_arch = "wasm32", allow(unused))]
@@ -1169,7 +1223,7 @@ impl crate::Device<super::Api> for super::Device {
 
                 if let Some(label) = desc.label {
                     temp_string.clear();
-                    let _ = write!(temp_string, "{}[{}]", label, i);
+                    let _ = write!(temp_string, "{label}[{i}]");
                     let name = unsafe { mem::transmute(query) };
                     unsafe { gl.object_label(glow::QUERY, name, Some(&temp_string)) };
                 }

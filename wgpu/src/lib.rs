@@ -20,7 +20,7 @@ use std::{
     future::Future,
     marker::PhantomData,
     num::{NonZeroU32, NonZeroU8},
-    ops::{Bound, Range, RangeBounds},
+    ops::{Bound, Deref, DerefMut, Range, RangeBounds},
     sync::Arc,
     thread,
 };
@@ -33,19 +33,26 @@ pub use wgt::{
     BindingType, BlendComponent, BlendFactor, BlendOperation, BlendState, BufferAddress,
     BufferBindingType, BufferSize, BufferUsages, Color, ColorTargetState, ColorWrites,
     CommandBufferDescriptor, CompareFunction, CompositeAlphaMode, DepthBiasState,
-    DepthStencilState, DeviceType, DownlevelCapabilities, DownlevelFlags, DynamicOffset, Extent3d,
-    Face, Features, FilterMode, FrontFace, ImageDataLayout, ImageSubresourceRange, IndexFormat,
-    Limits, MultisampleState, Origin3d, PipelineStatisticsTypes, PolygonMode, PowerPreference,
+    DepthStencilState, DeviceType, DownlevelCapabilities, DownlevelFlags, Dx12Compiler,
+    DynamicOffset, Extent3d, Face, Features, FilterMode, FrontFace, ImageDataLayout,
+    ImageSubresourceRange, IndexFormat, InstanceDescriptor, Limits, MultisampleState, Origin2d,
+    Origin3d, PipelineStatisticsTypes, PolygonMode, PowerPreference, PredefinedColorSpace,
     PresentMode, PresentationTimestamp, PrimitiveState, PrimitiveTopology, PushConstantRange,
     QueryType, RenderBundleDepthStencil, SamplerBindingType, SamplerBorderColor, ShaderLocation,
     ShaderModel, ShaderStages, StencilFaceState, StencilOperation, StencilState,
-    StorageTextureAccess, SurfaceCapabilities, SurfaceConfiguration, SurfaceStatus, TextureAspect,
-    TextureDimension, TextureFormat, TextureFormatFeatureFlags, TextureFormatFeatures,
-    TextureSampleType, TextureUsages, TextureViewDimension, VertexAttribute, VertexFormat,
-    VertexStepMode, COPY_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT, MAP_ALIGNMENT,
-    PUSH_CONSTANT_ALIGNMENT, QUERY_RESOLVE_BUFFER_ALIGNMENT, QUERY_SET_MAX_QUERIES, QUERY_SIZE,
-    VERTEX_STRIDE_ALIGNMENT,
+    StorageTextureAccess, SurfaceCapabilities, SurfaceStatus, TextureAspect, TextureDimension,
+    TextureFormat, TextureFormatFeatureFlags, TextureFormatFeatures, TextureSampleType,
+    TextureUsages, TextureViewDimension, VertexAttribute, VertexFormat, VertexStepMode,
+    COPY_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT, MAP_ALIGNMENT, PUSH_CONSTANT_ALIGNMENT,
+    QUERY_RESOLVE_BUFFER_ALIGNMENT, QUERY_SET_MAX_QUERIES, QUERY_SIZE, VERTEX_STRIDE_ALIGNMENT,
 };
+
+// wasm-only types, we try to keep as many types non-platform
+// specific, but these need to depend on web-sys.
+#[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
+pub use wgt::{ExternalImageSource, ImageCopyExternalImage};
+#[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
+static_assertions::assert_impl_all!(ExternalImageSource: Send, Sync);
 
 /// Filter for error scopes.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd)]
@@ -60,7 +67,7 @@ static_assertions::assert_impl_all!(ErrorFilter: Send, Sync);
 type C = dyn DynContext;
 type Data = dyn Any + Send + Sync;
 
-/// Context for all other wgpu objects. Instan ce of wgpu.
+/// Context for all other wgpu objects. Instance of wgpu.
 ///
 /// This is the first thing you create when using wgpu.
 /// Its primary use is to create [`Adapter`]s and [`Surface`]s.
@@ -160,8 +167,7 @@ impl MapContext {
         for sub in self.sub_ranges.iter() {
             assert!(
                 end <= sub.start || offset >= sub.end,
-                "Intersecting map range with {:?}",
-                sub
+                "Intersecting map range with {sub:?}"
             );
         }
         self.sub_ranges.push(offset..end);
@@ -197,6 +203,7 @@ pub struct Buffer {
     map_context: Mutex<MapContext>,
     size: wgt::BufferAddress,
     usage: BufferUsages,
+    // Todo: missing map_state https://www.w3.org/TR/webgpu/#dom-gpubuffer-mapstate
 }
 static_assertions::assert_impl_all!(Buffer: Send, Sync);
 
@@ -227,6 +234,7 @@ pub struct Texture {
     id: ObjectId,
     data: Box<Data>,
     owned: bool,
+    descriptor: TextureDescriptor<'static>,
 }
 static_assertions::assert_impl_all!(Texture: Send, Sync);
 
@@ -269,6 +277,15 @@ impl Drop for Sampler {
     }
 }
 
+/// Describes a [`Surface`].
+///
+/// For use with [`Surface::configure`].
+///
+/// Corresponds to [WebGPU `GPUCanvasConfiguration`](
+/// https://gpuweb.github.io/gpuweb/#canvas-configuration).
+pub type SurfaceConfiguration = wgt::SurfaceConfiguration<Vec<TextureFormat>>;
+static_assertions::assert_impl_all!(SurfaceConfiguration: Send, Sync);
+
 /// Handle to a presentable surface.
 ///
 /// A `Surface` represents a platform-specific surface (e.g. a window) onto which rendered images may
@@ -282,6 +299,13 @@ pub struct Surface {
     context: Arc<C>,
     id: ObjectId,
     data: Box<Data>,
+    // Stores the latest `SurfaceConfiguration` that was set using `Surface::configure`.
+    // It is required to set the attributes of the `SurfaceTexture` in the
+    // `Surface::get_current_texture` method.
+    // Because the `Surface::configure` method operates on an immutable reference this type has to
+    // be wrapped in a mutex and since the configuration is only supplied after the surface has
+    // been created is is additionally wrapped in an option.
+    config: Mutex<Option<SurfaceConfiguration>>,
 }
 static_assertions::assert_impl_all!(Surface: Send, Sync);
 
@@ -887,7 +911,7 @@ static_assertions::assert_impl_all!(RenderBundleDescriptor: Send, Sync);
 ///
 /// Corresponds to [WebGPU `GPUTextureDescriptor`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gputexturedescriptor).
-pub type TextureDescriptor<'a> = wgt::TextureDescriptor<Label<'a>>;
+pub type TextureDescriptor<'a> = wgt::TextureDescriptor<Label<'a>, &'a [TextureFormat]>;
 static_assertions::assert_impl_all!(TextureDescriptor: Send, Sync);
 /// Describes a [`QuerySet`].
 ///
@@ -924,13 +948,13 @@ pub struct TextureViewDescriptor<'a> {
     /// Mip level count.
     /// If `Some(count)`, `base_mip_level + count` must be less or equal to underlying texture mip count.
     /// If `None`, considered to include the rest of the mipmap levels, but at least 1 in total.
-    pub mip_level_count: Option<NonZeroU32>,
+    pub mip_level_count: Option<u32>,
     /// Base array layer.
     pub base_array_layer: u32,
     /// Layer count.
     /// If `Some(count)`, `base_array_layer + count` must be less or equal to the underlying array count.
     /// If `None`, considered to include the rest of the array layers, but at least 1 in total.
-    pub array_layer_count: Option<NonZeroU32>,
+    pub array_layer_count: Option<u32>,
 }
 static_assertions::assert_impl_all!(TextureViewDescriptor: Send, Sync);
 
@@ -1192,6 +1216,15 @@ pub use wgt::ImageCopyTexture as ImageCopyTextureBase;
 pub type ImageCopyTexture<'a> = ImageCopyTextureBase<&'a Texture>;
 static_assertions::assert_impl_all!(ImageCopyTexture: Send, Sync);
 
+pub use wgt::ImageCopyTextureTagged as ImageCopyTextureTaggedBase;
+/// View of a texture which can be used to copy to a texture, including
+/// color space and alpha premultiplication information.
+///
+/// Corresponds to [WebGPU `GPUImageCopyTextureTagged`](
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpuimagecopytexturetagged).
+pub type ImageCopyTextureTagged<'a> = ImageCopyTextureTaggedBase<&'a Texture>;
+static_assertions::assert_impl_all!(ImageCopyTexture: Send, Sync);
+
 /// Describes a [`BindGroupLayout`].
 ///
 /// For use with [`Device::create_bind_group_layout`].
@@ -1277,16 +1310,25 @@ impl Display for SurfaceError {
 
 impl error::Error for SurfaceError {}
 
+impl Default for Instance {
+    /// Creates a new instance of wgpu with default options.
+    ///
+    /// Backends are set to `Backends::all()`, and FXC is chosen as the `dx12_shader_compiler`.
+    fn default() -> Self {
+        Self::new(InstanceDescriptor::default())
+    }
+}
+
 impl Instance {
     /// Create an new instance of wgpu.
     ///
     /// # Arguments
     ///
-    /// - `backends` - Controls from which [backends][Backends] wgpu will choose
-    ///   during instantiation.
-    pub fn new(backends: Backends) -> Self {
+    /// - `instance_desc` - Has fields for which [backends][Backends] wgpu will choose
+    ///   during instantiation, and which [DX12 shader compiler][Dx12Compiler] wgpu will use.
+    pub fn new(instance_desc: InstanceDescriptor) -> Self {
         Self {
-            context: Arc::from(crate::backend::Context::init(backends)),
+            context: Arc::from(crate::backend::Context::init(instance_desc)),
         }
     }
 
@@ -1299,7 +1341,11 @@ impl Instance {
     /// # Safety
     ///
     /// Refer to the creation of wgpu-hal Instance for every backend.
-    #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
+    #[cfg(any(
+        not(target_arch = "wasm32"),
+        target_os = "emscripten",
+        feature = "webgl"
+    ))]
     pub unsafe fn from_hal<A: wgc::hub::HalApi>(hal_instance: A::Instance) -> Self {
         Self {
             context: Arc::new(unsafe {
@@ -1318,7 +1364,11 @@ impl Instance {
     /// - The raw instance handle returned must not be manually destroyed.
     ///
     /// [`Instance`]: hal::Api::Instance
-    #[cfg(any(not(target_arch = "wasm32"), feature = "webgl"))]
+    #[cfg(any(
+        not(target_arch = "wasm32"),
+        target_os = "emscripten",
+        feature = "webgl"
+    ))]
     pub unsafe fn as_hal<A: wgc::hub::HalApi>(&self) -> Option<&A::Instance> {
         unsafe {
             self.context
@@ -1338,7 +1388,11 @@ impl Instance {
     /// # Safety
     ///
     /// Refer to the creation of wgpu-core Instance.
-    #[cfg(any(not(target_arch = "wasm32"), feature = "webgl"))]
+    #[cfg(any(
+        not(target_arch = "wasm32"),
+        target_os = "emscripten",
+        feature = "webgl"
+    ))]
     pub unsafe fn from_core(core_instance: wgc::instance::Instance) -> Self {
         Self {
             context: Arc::new(unsafe {
@@ -1352,7 +1406,11 @@ impl Instance {
     /// # Arguments
     ///
     /// - `backends` - Backends from which to enumerate adapters.
-    #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
+    #[cfg(any(
+        not(target_arch = "wasm32"),
+        target_os = "emscripten",
+        feature = "webgl"
+    ))]
     pub fn enumerate_adapters(&self, backends: Backends) -> impl Iterator<Item = Adapter> {
         let context = Arc::clone(&self.context);
         self.context
@@ -1391,7 +1449,11 @@ impl Instance {
     /// # Safety
     ///
     /// `hal_adapter` must be created from this instance internal handle.
-    #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
+    #[cfg(any(
+        not(target_arch = "wasm32"),
+        target_os = "emscripten",
+        feature = "webgl"
+    ))]
     pub unsafe fn create_adapter_from_hal<A: wgc::hub::HalApi>(
         &self,
         hal_adapter: hal::ExposedAdapter<A>,
@@ -1448,6 +1510,7 @@ impl Instance {
             context: Arc::clone(&self.context),
             id,
             data,
+            config: Mutex::new(None),
         })
     }
 
@@ -1472,6 +1535,7 @@ impl Instance {
             context: Arc::clone(&self.context),
             id: ObjectId::from(surface.id()),
             data: Box::new(surface),
+            config: Mutex::new(None),
         }
     }
 
@@ -1493,6 +1557,32 @@ impl Instance {
             context: Arc::clone(&self.context),
             id: ObjectId::from(surface.id()),
             data: Box::new(surface),
+            config: Mutex::new(None),
+        }
+    }
+
+    /// Creates a surface from `SurfaceHandle`.
+    ///
+    /// # Safety
+    ///
+    /// - surface_handle must be a valid SurfaceHandle to create a surface upon.
+    #[cfg(target_os = "windows")]
+    pub unsafe fn create_surface_from_surface_handle(
+        &self,
+        surface_handle: *mut std::ffi::c_void,
+    ) -> Surface {
+        let surface = unsafe {
+            self.context
+                .as_any()
+                .downcast_ref::<crate::backend::Context>()
+                .unwrap()
+                .create_surface_from_surface_handle(surface_handle)
+        };
+        Surface {
+            context: Arc::clone(&self.context),
+            id: ObjectId::from(surface.id()),
+            data: Box::new(surface),
+            config: Mutex::new(None),
         }
     }
 
@@ -1505,7 +1595,7 @@ impl Instance {
     ///
     /// - On WebGL2: Will return an error if the browser does not support WebGL2,
     ///   or declines to provide GPU access (such as due to a resource shortage).
-    #[cfg(all(target_arch = "wasm32", not(feature = "emscripten")))]
+    #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
     pub fn create_surface_from_canvas(
         &self,
         canvas: &web_sys::HtmlCanvasElement,
@@ -1528,6 +1618,7 @@ impl Instance {
             id: ObjectId::from(surface),
             #[cfg(all(target_arch = "wasm32", not(feature = "webgl")))]
             data: Box::new(()),
+            config: Mutex::new(None),
         })
     }
 
@@ -1540,7 +1631,7 @@ impl Instance {
     ///
     /// - On WebGL2: Will return an error if the browser does not support WebGL2,
     ///   or declines to provide GPU access (such as due to a resource shortage).
-    #[cfg(all(target_arch = "wasm32", not(feature = "emscripten")))]
+    #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
     pub fn create_surface_from_offscreen_canvas(
         &self,
         canvas: &web_sys::OffscreenCanvas,
@@ -1563,6 +1654,7 @@ impl Instance {
             id: ObjectId::from(surface),
             #[cfg(all(target_arch = "wasm32", not(feature = "webgl")))]
             data: Box::new(()),
+            config: Mutex::new(None),
         })
     }
 
@@ -1587,7 +1679,11 @@ impl Instance {
     }
 
     /// Generates memory report.
-    #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
+    #[cfg(any(
+        not(target_arch = "wasm32"),
+        target_os = "emscripten",
+        feature = "webgl"
+    ))]
     pub fn generate_report(&self) -> wgc::hub::GlobalReport {
         self.context
             .as_any()
@@ -1658,7 +1754,11 @@ impl Adapter {
     ///
     /// - `hal_device` must be created from this adapter internal handle.
     /// - `desc.features` must be a subset of `hal_device` features.
-    #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
+    #[cfg(any(
+        not(target_arch = "wasm32"),
+        target_os = "emscripten",
+        feature = "webgl"
+    ))]
     pub unsafe fn create_device_from_hal<A: wgc::hub::HalApi>(
         &self,
         hal_device: hal::OpenDevice<A>,
@@ -1708,7 +1808,11 @@ impl Adapter {
     /// - The raw handle passed to the callback must not be manually destroyed.
     ///
     /// [`A::Adapter`]: hal::Api::Adapter
-    #[cfg(any(not(target_arch = "wasm32"), feature = "webgl"))]
+    #[cfg(any(
+        not(target_arch = "wasm32"),
+        target_os = "emscripten",
+        feature = "webgl"
+    ))]
     pub unsafe fn as_hal<A: wgc::hub::HalApi, F: FnOnce(Option<&A::Adapter>) -> R, R>(
         &self,
         hal_adapter_callback: F,
@@ -2038,6 +2142,11 @@ impl Device {
             id,
             data,
             owned: true,
+            descriptor: TextureDescriptor {
+                label: None,
+                view_formats: &[],
+                ..desc.clone()
+            },
         }
     }
 
@@ -2048,7 +2157,11 @@ impl Device {
     /// - `hal_texture` must be created from this device internal handle
     /// - `hal_texture` must be created respecting `desc`
     /// - `hal_texture` must be initialized
-    #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
+    #[cfg(any(
+        not(target_arch = "wasm32"),
+        target_os = "emscripten",
+        feature = "webgl"
+    ))]
     pub unsafe fn create_texture_from_hal<A: wgc::hub::HalApi>(
         &self,
         hal_texture: A::Texture,
@@ -2070,6 +2183,11 @@ impl Device {
             id: ObjectId::from(texture.id()),
             data: Box::new(texture),
             owned: true,
+            descriptor: TextureDescriptor {
+                label: None,
+                view_formats: &[],
+                ..desc.clone()
+            },
         }
     }
 
@@ -2144,7 +2262,11 @@ impl Device {
     /// - The raw handle passed to the callback must not be manually destroyed.
     ///
     /// [`A::Device`]: hal::Api::Device
-    #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
+    #[cfg(any(
+        not(target_arch = "wasm32"),
+        target_os = "emscripten",
+        feature = "webgl"
+    ))]
     pub unsafe fn as_hal<A: wgc::hub::HalApi, F: FnOnce(Option<&A::Device>) -> R, R>(
         &self,
         hal_device_callback: F,
@@ -2275,6 +2397,9 @@ pub struct BufferView<'a> {
 }
 
 /// Write only view into mapped buffer.
+///
+/// It is possible to read the buffer using this view, but doing so is not
+/// recommended, as it is likely to be slow.
 #[derive(Debug)]
 pub struct BufferViewMut<'a> {
     slice: BufferSlice<'a>,
@@ -2291,27 +2416,6 @@ impl std::ops::Deref for BufferView<'_> {
     }
 }
 
-impl std::ops::Deref for BufferViewMut<'_> {
-    type Target = [u8];
-
-    #[inline]
-    fn deref(&self) -> &[u8] {
-        assert!(
-            self.readable,
-            "Attempting to read a write-only mapping for buffer {:?}",
-            self.slice.buffer.id
-        );
-        self.data.slice()
-    }
-}
-
-impl std::ops::DerefMut for BufferViewMut<'_> {
-    #[inline]
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        self.data.slice_mut()
-    }
-}
-
 impl AsRef<[u8]> for BufferView<'_> {
     #[inline]
     fn as_ref(&self) -> &[u8] {
@@ -2322,6 +2426,24 @@ impl AsRef<[u8]> for BufferView<'_> {
 impl AsMut<[u8]> for BufferViewMut<'_> {
     #[inline]
     fn as_mut(&mut self) -> &mut [u8] {
+        self.data.slice_mut()
+    }
+}
+
+impl Deref for BufferViewMut<'_> {
+    type Target = [u8];
+
+    fn deref(&self) -> &Self::Target {
+        if !self.readable {
+            log::warn!("Reading from a BufferViewMut is slow and not recommended.");
+        }
+
+        self.data.slice()
+    }
+}
+
+impl DerefMut for BufferViewMut<'_> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
         self.data.slice_mut()
     }
 }
@@ -2386,7 +2508,7 @@ impl Buffer {
     /// Returns the length of the buffer allocation in bytes.
     ///
     /// This is always equal to the `size` that was specified when creating the buffer.
-    pub fn size(&self) -> wgt::BufferAddress {
+    pub fn size(&self) -> BufferAddress {
         self.size
     }
 
@@ -2482,7 +2604,11 @@ impl Texture {
     /// # Safety
     ///
     /// - The raw handle obtained from the hal Texture must not be manually destroyed
-    #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
+    #[cfg(any(
+        not(target_arch = "wasm32"),
+        target_os = "emscripten",
+        feature = "webgl"
+    ))]
     pub unsafe fn as_hal<A: wgc::hub::HalApi, F: FnOnce(Option<&A::Texture>)>(
         &self,
         hal_texture_callback: F,
@@ -2521,6 +2647,69 @@ impl Texture {
             origin: Origin3d::ZERO,
             aspect: TextureAspect::All,
         }
+    }
+
+    /// Returns the size of this `Texture`.
+    ///
+    /// This is always equal to the `size` that was specified when creating the texture.
+    pub fn size(&self) -> Extent3d {
+        self.descriptor.size
+    }
+
+    /// Returns the width of this `Texture`.
+    ///
+    /// This is always equal to the `size.width` that was specified when creating the texture.
+    pub fn width(&self) -> u32 {
+        self.descriptor.size.width
+    }
+
+    /// Returns the height of this `Texture`.
+    ///
+    /// This is always equal to the `size.height` that was specified when creating the texture.
+    pub fn height(&self) -> u32 {
+        self.descriptor.size.height
+    }
+
+    /// Returns the depth or layer count of this `Texture`.
+    ///
+    /// This is always equal to the `size.depth_or_array_layers` that was specified when creating the texture.
+    pub fn depth_or_array_layers(&self) -> u32 {
+        self.descriptor.size.depth_or_array_layers
+    }
+
+    /// Returns the mip_level_count of this `Texture`.
+    ///
+    /// This is always equal to the `mip_level_count` that was specified when creating the texture.
+    pub fn mip_level_count(&self) -> u32 {
+        self.descriptor.mip_level_count
+    }
+
+    /// Returns the sample_count of this `Texture`.
+    ///
+    /// This is always equal to the `sample_count` that was specified when creating the texture.
+    pub fn sample_count(&self) -> u32 {
+        self.descriptor.sample_count
+    }
+
+    /// Returns the dimension of this `Texture`.
+    ///
+    /// This is always equal to the `dimension` that was specified when creating the texture.
+    pub fn dimension(&self) -> TextureDimension {
+        self.descriptor.dimension
+    }
+
+    /// Returns the format of this `Texture`.
+    ///
+    /// This is always equal to the `format` that was specified when creating the texture.
+    pub fn format(&self) -> TextureFormat {
+        self.descriptor.format
+    }
+
+    /// Returns the allowed usages of this `Texture`.
+    ///
+    /// This is always equal to the `usage` that was specified when creating the texture.
+    pub fn usage(&self) -> TextureUsages {
+        self.descriptor.usage
     }
 }
 
@@ -2624,12 +2813,6 @@ impl CommandEncoder {
     }
 
     /// Copy data from a buffer to a texture.
-    ///
-    /// # Panics
-    ///
-    /// - Copy would overrun buffer.
-    /// - Copy would overrun texture.
-    /// - `source.layout.bytes_per_row` isn't divisible by [`COPY_BYTES_PER_ROW_ALIGNMENT`].
     pub fn copy_buffer_to_texture(
         &mut self,
         source: ImageCopyBuffer,
@@ -2647,12 +2830,6 @@ impl CommandEncoder {
     }
 
     /// Copy data from a texture to a buffer.
-    ///
-    /// # Panics
-    ///
-    /// - Copy would overrun buffer.
-    /// - Copy would overrun texture.
-    /// - `source.layout.bytes_per_row` isn't divisible by [`COPY_BYTES_PER_ROW_ALIGNMENT`].
     pub fn copy_texture_to_buffer(
         &mut self,
         source: ImageCopyTexture,
@@ -3231,7 +3408,7 @@ impl<'a> RenderPass<'a> {
     ///
     /// - Bytes `4..8` are accessed by both the fragment shader and the vertex shader.
     ///
-    /// - Bytes `8..12 are accessed only by the vertex shader.
+    /// - Bytes `8..12` are accessed only by the vertex shader.
     ///
     /// To write all twelve bytes requires three `set_push_constants` calls, one
     /// for each range, each passing the matching `stages` mask.
@@ -3683,7 +3860,11 @@ impl<'a> RenderBundleEncoder<'a> {
     }
 }
 
-/// A write-only view into a staging buffer
+/// A read-only view into a staging buffer.
+///
+/// Reading into this buffer won't yield the contents of the buffer from the
+/// GPU and is likely to be slow. Because of this, although [`AsMut`] is
+/// implemented for this type, [`AsRef`] is not.
 pub struct QueueWriteBufferView<'a> {
     queue: &'a Queue,
     buffer: &'a Buffer,
@@ -3692,17 +3873,23 @@ pub struct QueueWriteBufferView<'a> {
 }
 static_assertions::assert_impl_all!(QueueWriteBufferView: Send, Sync);
 
-impl<'a> std::ops::Deref for QueueWriteBufferView<'a> {
+impl Deref for QueueWriteBufferView<'_> {
     type Target = [u8];
 
     fn deref(&self) -> &Self::Target {
-        panic!("QueueWriteBufferView is write-only!");
+        log::warn!("Reading from a QueueWriteBufferView won't yield the contents of the buffer and may be slow.");
+        self.inner.slice()
     }
 }
 
-impl<'a> std::ops::DerefMut for QueueWriteBufferView<'a> {
-    #[inline]
+impl DerefMut for QueueWriteBufferView<'_> {
     fn deref_mut(&mut self) -> &mut Self::Target {
+        self.inner.slice_mut()
+    }
+}
+
+impl<'a> AsMut<[u8]> for QueueWriteBufferView<'a> {
+    fn as_mut(&mut self) -> &mut [u8] {
         self.inner.slice_mut()
     }
 }
@@ -3742,12 +3929,9 @@ impl Queue {
     }
 
     /// Schedule a data write into `buffer` starting at `offset` via the returned
-    /// [QueueWriteBufferView].
+    /// [`QueueWriteBufferView`].
     ///
-    /// The returned value can be dereferenced to a `&mut [u8]`; dereferencing it to a
-    /// `&[u8]` panics!
-    /// (It is not unsound to read through the `&mut [u8]` anyway, but doing so will not
-    /// yield the existing contents of `buffer` from the GPU, and it is likely to be slow.)
+    /// Reading from this buffer is slow and will not yield the actual contents of the buffer.
     ///
     /// This method is intended to have low performance costs.
     /// As such, the write is not immediately submitted, and instead enqueued
@@ -3761,6 +3945,7 @@ impl Queue {
         offset: BufferAddress,
         size: BufferSize,
     ) -> Option<QueueWriteBufferView<'a>> {
+        profiling::scope!("Queue::write_buffer_with");
         DynContext::queue_validate_write_buffer(
             &*self.context,
             &self.id,
@@ -3820,18 +4005,21 @@ impl Queue {
     }
 
     /// Schedule a copy of data from `image` into `texture`.
-    #[cfg(all(target_arch = "wasm32", not(feature = "webgl")))]
+    #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
     pub fn copy_external_image_to_texture(
         &self,
-        image: &web_sys::ImageBitmap,
-        texture: ImageCopyTexture,
+        source: &wgt::ImageCopyExternalImage,
+        dest: ImageCopyTextureTagged,
         size: Extent3d,
     ) {
-        self.context
-            .as_any()
-            .downcast_ref::<crate::backend::Context>()
-            .unwrap()
-            .queue_copy_external_image_to_texture(&self.id.into(), image, texture, size)
+        DynContext::queue_copy_external_image_to_texture(
+            &*self.context,
+            &self.id,
+            self.data.as_ref(),
+            source,
+            dest,
+            size,
+        )
     }
 
     /// Submits a series of finished command buffers for execution.
@@ -3933,15 +4121,16 @@ impl Surface {
         adapter: &Adapter,
         width: u32,
         height: u32,
-    ) -> Option<wgt::SurfaceConfiguration> {
+    ) -> Option<SurfaceConfiguration> {
         let caps = self.get_capabilities(adapter);
-        Some(wgt::SurfaceConfiguration {
+        Some(SurfaceConfiguration {
             usage: wgt::TextureUsages::RENDER_ATTACHMENT,
             format: *caps.formats.get(0)?,
             width,
             height,
             present_mode: *caps.present_modes.get(0)?,
             alpha_mode: wgt::CompositeAlphaMode::Auto,
+            view_formats: vec![],
         })
     }
 
@@ -3959,7 +4148,10 @@ impl Surface {
             &device.id,
             device.data.as_ref(),
             config,
-        )
+        );
+
+        let mut conf = self.config.lock();
+        *conf = Some(config.clone());
     }
 
     /// Returns the next texture to be presented by the swapchain for drawing.
@@ -3982,6 +4174,26 @@ impl Surface {
             SurfaceStatus::Lost => return Err(SurfaceError::Lost),
         };
 
+        let guard = self.config.lock();
+        let config = guard
+            .as_ref()
+            .expect("This surface has not been configured yet.");
+
+        let descriptor = TextureDescriptor {
+            label: None,
+            size: Extent3d {
+                width: config.width,
+                height: config.height,
+                depth_or_array_layers: 1,
+            },
+            format: config.format,
+            usage: config.usage,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: TextureDimension::D2,
+            view_formats: &[],
+        };
+
         texture_id
             .zip(texture_data)
             .map(|(id, data)| SurfaceTexture {
@@ -3990,6 +4202,7 @@ impl Surface {
                     id,
                     data,
                     owned: false,
+                    descriptor,
                 },
                 suboptimal,
                 presented: false,
@@ -4004,7 +4217,11 @@ impl Surface {
     /// # Safety
     ///
     /// - The raw handle obtained from the hal Surface must not be manually destroyed
-    #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
+    #[cfg(any(
+        not(target_arch = "wasm32"),
+        target_os = "emscripten",
+        feature = "webgl"
+    ))]
     pub unsafe fn as_hal_mut<A: wgc::hub::HalApi, F: FnOnce(Option<&mut A::Surface>) -> R, R>(
         &mut self,
         hal_surface_callback: F,
@@ -4027,7 +4244,7 @@ impl Surface {
 #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
 #[repr(transparent)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-pub struct Id(u64);
+pub struct Id(core::num::NonZeroU64);
 
 #[cfg(feature = "expose-ids")]
 impl Adapter {
@@ -4037,7 +4254,7 @@ impl Adapter {
     /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
     #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
     pub fn global_id(&self) -> Id {
-        Id(self.id.global_id())
+        self.id.global_id()
     }
 }
 
@@ -4049,7 +4266,7 @@ impl Device {
     /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
     #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
     pub fn global_id(&self) -> Id {
-        Id(self.id.global_id())
+        self.id.global_id()
     }
 }
 
@@ -4061,7 +4278,7 @@ impl Queue {
     /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
     #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
     pub fn global_id(&self) -> Id {
-        Id(self.id.global_id())
+        self.id.global_id()
     }
 }
 
@@ -4073,7 +4290,7 @@ impl ShaderModule {
     /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
     #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
     pub fn global_id(&self) -> Id {
-        Id(self.id.global_id())
+        self.id.global_id()
     }
 }
 
@@ -4085,7 +4302,7 @@ impl BindGroupLayout {
     /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
     #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
     pub fn global_id(&self) -> Id {
-        Id(self.id.global_id())
+        self.id.global_id()
     }
 }
 
@@ -4097,7 +4314,7 @@ impl BindGroup {
     /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
     #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
     pub fn global_id(&self) -> Id {
-        Id(self.id.global_id())
+        self.id.global_id()
     }
 }
 
@@ -4109,7 +4326,7 @@ impl TextureView {
     /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
     #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
     pub fn global_id(&self) -> Id {
-        Id(self.id.global_id())
+        self.id.global_id()
     }
 }
 
@@ -4121,7 +4338,7 @@ impl Sampler {
     /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
     #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
     pub fn global_id(&self) -> Id {
-        Id(self.id.global_id())
+        self.id.global_id()
     }
 }
 
@@ -4133,7 +4350,7 @@ impl Buffer {
     /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
     #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
     pub fn global_id(&self) -> Id {
-        Id(self.id.global_id())
+        self.id.global_id()
     }
 }
 
@@ -4145,7 +4362,7 @@ impl Texture {
     /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
     #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
     pub fn global_id(&self) -> Id {
-        Id(self.id.global_id())
+        self.id.global_id()
     }
 }
 
@@ -4157,7 +4374,7 @@ impl QuerySet {
     /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
     #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
     pub fn global_id(&self) -> Id {
-        Id(self.id.global_id())
+        self.id.global_id()
     }
 }
 
@@ -4169,7 +4386,7 @@ impl PipelineLayout {
     /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
     #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
     pub fn global_id(&self) -> Id {
-        Id(self.id.global_id())
+        self.id.global_id()
     }
 }
 
@@ -4181,7 +4398,7 @@ impl RenderPipeline {
     /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
     #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
     pub fn global_id(&self) -> Id {
-        Id(self.id.global_id())
+        self.id.global_id()
     }
 }
 
@@ -4193,7 +4410,7 @@ impl ComputePipeline {
     /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
     #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
     pub fn global_id(&self) -> Id {
-        Id(self.id.global_id())
+        self.id.global_id()
     }
 }
 
@@ -4205,7 +4422,7 @@ impl RenderBundle {
     /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
     #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
     pub fn global_id(&self) -> Id {
-        Id(self.id.global_id())
+        self.id.global_id()
     }
 }
 
@@ -4217,7 +4434,7 @@ impl Surface {
     /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
     #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
     pub fn global_id(&self) -> Id {
-        Id(self.id.global_id())
+        self.id.global_id()
     }
 }
 

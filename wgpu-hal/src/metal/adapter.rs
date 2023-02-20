@@ -484,6 +484,9 @@ impl super::PrivateCapabilities {
         if device.supports_texture_sample_count(8) {
             sample_count_mask |= crate::TextureFormatCapabilities::MULTISAMPLE_X8;
         }
+        if device.supports_texture_sample_count(16) {
+            sample_count_mask |= crate::TextureFormatCapabilities::MULTISAMPLE_X16;
+        }
 
         let rw_texture_tier = if version.at_least((10, 13), (11, 0)) {
             device.read_write_texture_support()
@@ -998,6 +1001,30 @@ impl super::PrivateCapabilities {
                     AstcBlock::B12x12 => ASTC_12x12_HDR,
                 },
             },
+        }
+    }
+
+    pub fn map_view_format(
+        &self,
+        format: wgt::TextureFormat,
+        aspects: crate::FormatAspects,
+    ) -> mtl::MTLPixelFormat {
+        use crate::FormatAspects as Fa;
+        use mtl::MTLPixelFormat::*;
+        use wgt::TextureFormat as Tf;
+        match (format, aspects) {
+            // map combined depth-stencil format to their stencil-only format
+            // see https://developer.apple.com/library/archive/documentation/Miscellaneous/Conceptual/MetalProgrammingGuide/WhatsNewiniOS10tvOS10andOSX1012/WhatsNewiniOS10tvOS10andOSX1012.html#//apple_ref/doc/uid/TP40014221-CH14-DontLinkElementID_77
+            (Tf::Depth24PlusStencil8, Fa::STENCIL) => {
+                if self.format_depth24_stencil8 {
+                    X24_Stencil8
+                } else {
+                    X32_Stencil8
+                }
+            }
+            (Tf::Depth32FloatStencil8, Fa::STENCIL) => X32_Stencil8,
+
+            _ => self.map_format(format),
         }
     }
 }

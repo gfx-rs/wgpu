@@ -39,6 +39,7 @@ mod conv;
 mod descriptor;
 mod device;
 mod instance;
+mod shader_compilation;
 mod suballocation;
 mod view;
 
@@ -88,10 +89,12 @@ const ZERO_BUFFER_SIZE: wgt::BufferAddress = 256 << 10;
 
 pub struct Instance {
     factory: native::DxgiFactory,
+    factory_media: Option<native::FactoryMedia>,
     library: Arc<native::D3D12Lib>,
     supports_allow_tearing: bool,
     _lib_dxgi: native::DxgiLib,
     flags: crate::InstanceFlags,
+    dx12_shader_compiler: wgt::Dx12Compiler,
 }
 
 impl Instance {
@@ -101,7 +104,21 @@ impl Instance {
     ) -> Surface {
         Surface {
             factory: self.factory,
+            factory_media: self.factory_media,
             target: SurfaceTarget::Visual(unsafe { native::WeakPtr::from_raw(visual) }),
+            supports_allow_tearing: self.supports_allow_tearing,
+            swap_chain: None,
+        }
+    }
+
+    pub unsafe fn create_surface_from_surface_handle(
+        &self,
+        surface_handle: winnt::HANDLE,
+    ) -> Surface {
+        Surface {
+            factory: self.factory,
+            factory_media: self.factory_media,
+            target: SurfaceTarget::SurfaceHandle(surface_handle),
             supports_allow_tearing: self.supports_allow_tearing,
             swap_chain: None,
         }
@@ -126,10 +143,12 @@ struct SwapChain {
 enum SurfaceTarget {
     WndHandle(windef::HWND),
     Visual(native::WeakPtr<dcomp::IDCompositionVisual>),
+    SurfaceHandle(winnt::HANDLE),
 }
 
 pub struct Surface {
     factory: native::DxgiFactory,
+    factory_media: Option<native::FactoryMedia>,
     target: SurfaceTarget,
     supports_allow_tearing: bool,
     swap_chain: Option<SwapChain>,
@@ -173,6 +192,7 @@ pub struct Adapter {
     //Note: this isn't used right now, but we'll need it later.
     #[allow(unused)]
     workarounds: Workarounds,
+    dx12_shader_compiler: wgt::Dx12Compiler,
 }
 
 unsafe impl Send for Adapter {}
@@ -241,6 +261,7 @@ pub struct Device {
     render_doc: crate::auxil::renderdoc::RenderDoc,
     null_rtv_handle: descriptor::Handle,
     mem_allocator: Option<Mutex<suballocation::GpuAllocatorWrapper>>,
+    dxc_container: Option<shader_compilation::DxcContainer>,
 }
 
 unsafe impl Send for Device {}
@@ -367,6 +388,7 @@ impl fmt::Debug for CommandEncoder {
 #[derive(Debug)]
 pub struct CommandBuffer {
     raw: native::GraphicsCommandList,
+    closed: bool,
 }
 
 unsafe impl Send for CommandBuffer {}
@@ -412,26 +434,30 @@ unsafe impl Sync for Texture {}
 impl Texture {
     fn array_layer_count(&self) -> u32 {
         match self.dimension {
-            wgt::TextureDimension::D1 | wgt::TextureDimension::D2 => {
-                self.size.depth_or_array_layers
-            }
-            wgt::TextureDimension::D3 => 1,
+            wgt::TextureDimension::D1 | wgt::TextureDimension::D3 => 1,
+            wgt::TextureDimension::D2 => self.size.depth_or_array_layers,
         }
     }
 
+    /// see https://learn.microsoft.com/en-us/windows/win32/direct3d12/subresources#plane-slice
     fn calc_subresource(&self, mip_level: u32, array_layer: u32, plane: u32) -> u32 {
         mip_level + (array_layer + plane * self.array_layer_count()) * self.mip_level_count
     }
 
     fn calc_subresource_for_copy(&self, base: &crate::TextureCopyBase) -> u32 {
-        self.calc_subresource(base.mip_level, base.array_layer, 0)
+        let plane = match base.aspect {
+            crate::FormatAspects::COLOR | crate::FormatAspects::DEPTH => 0,
+            crate::FormatAspects::STENCIL => 1,
+            _ => unreachable!(),
+        };
+        self.calc_subresource(base.mip_level, base.array_layer, plane)
     }
 }
 
 #[derive(Debug)]
 pub struct TextureView {
     raw_format: native::Format,
-    format_aspects: crate::FormatAspects, // May explicitly ignore stencil aspect of raw_format!
+    aspects: crate::FormatAspects,
     target_base: (native::Resource, u32),
     handle_srv: Option<descriptor::Handle>,
     handle_uav: Option<descriptor::Handle>,
@@ -535,6 +561,30 @@ pub struct PipelineLayout {
 pub struct ShaderModule {
     naga: crate::NagaShader,
     raw_name: Option<ffi::CString>,
+}
+
+pub(super) enum CompiledShader {
+    #[allow(unused)]
+    Dxc(Vec<u8>),
+    Fxc(native::Blob),
+}
+
+impl CompiledShader {
+    fn create_native_shader(&self) -> native::Shader {
+        match *self {
+            CompiledShader::Dxc(ref shader) => native::Shader::from_raw(shader),
+            CompiledShader::Fxc(shader) => native::Shader::from_blob(shader),
+        }
+    }
+
+    unsafe fn destroy(self) {
+        match self {
+            CompiledShader::Dxc(_) => {}
+            CompiledShader::Fxc(shader) => unsafe {
+                shader.destroy();
+            },
+        }
+    }
 }
 
 pub struct RenderPipeline {
@@ -651,6 +701,19 @@ impl crate::Surface<Api> for Surface {
                             )
                             .into_result()
                     }
+                    SurfaceTarget::SurfaceHandle(handle) => {
+                        profiling::scope!(
+                            "IDXGIFactoryMedia::CreateSwapChainForCompositionSurfaceHandle"
+                        );
+                        self.factory_media
+                            .ok_or(crate::SurfaceError::Other("IDXGIFactoryMedia not found"))?
+                            .create_swapchain_for_composition_surface_handle(
+                                device.present_queue.as_mut_ptr() as *mut _,
+                                handle,
+                                &desc,
+                            )
+                            .into_result()
+                    }
                     SurfaceTarget::WndHandle(hwnd) => {
                         profiling::scope!("IDXGIFactory4::CreateSwapChainForHwnd");
                         self.factory
@@ -674,7 +737,7 @@ impl crate::Surface<Api> for Surface {
                 };
 
                 match self.target {
-                    SurfaceTarget::WndHandle(_) => {}
+                    SurfaceTarget::WndHandle(_) | SurfaceTarget::SurfaceHandle(_) => {}
                     SurfaceTarget::Visual(visual) => {
                         if let Err(err) =
                             unsafe { visual.SetContent(swap_chain1.as_unknown()) }.into_result()
@@ -712,7 +775,7 @@ impl crate::Surface<Api> for Surface {
                     )
                 };
             }
-            SurfaceTarget::Visual(_) => {}
+            SurfaceTarget::Visual(_) | SurfaceTarget::SurfaceHandle(_) => {}
         }
 
         unsafe { swap_chain.SetMaximumFrameLatency(config.swap_chain_size) };

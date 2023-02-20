@@ -20,26 +20,30 @@ impl crate::BufferTextureCopy {
         &self,
         format: wgt::TextureFormat,
     ) -> d3d12::D3D12_PLACED_SUBRESOURCE_FOOTPRINT {
-        let desc = format.describe();
+        let (block_width, block_height) = format.block_dimensions();
         d3d12::D3D12_PLACED_SUBRESOURCE_FOOTPRINT {
             Offset: self.buffer_layout.offset,
             Footprint: d3d12::D3D12_SUBRESOURCE_FOOTPRINT {
-                Format: auxil::dxgi::conv::map_texture_format(format),
+                Format: auxil::dxgi::conv::map_texture_format_for_copy(
+                    format,
+                    self.texture_base.aspect,
+                )
+                .unwrap(),
                 Width: self.size.width,
                 Height: self
                     .buffer_layout
                     .rows_per_image
-                    .map_or(self.size.height, |count| {
-                        count.get() * desc.block_dimensions.1 as u32
-                    }),
+                    .map_or(self.size.height, |count| count.get() * block_height),
                 Depth: self.size.depth,
                 RowPitch: {
                     let actual = match self.buffer_layout.bytes_per_row {
                         Some(count) => count.get(),
                         // this may happen for single-line updates
                         None => {
-                            (self.size.width / desc.block_dimensions.0 as u32)
-                                * desc.block_size as u32
+                            let block_size = format
+                                .block_size(Some(self.texture_base.aspect.map()))
+                                .unwrap();
+                            (self.size.width / block_width) * block_size
                         }
                     };
                     crate::auxil::align_to(actual, d3d12::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT)
@@ -228,20 +232,34 @@ impl super::CommandEncoder {
 
 impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     unsafe fn begin_encoding(&mut self, label: crate::Label) -> Result<(), crate::DeviceError> {
-        let list = match self.free_lists.pop() {
-            Some(list) => {
-                list.reset(self.allocator, native::PipelineState::null());
-                list
+        let list = loop {
+            if let Some(list) = self.free_lists.pop() {
+                let reset_result = list
+                    .reset(self.allocator, native::PipelineState::null())
+                    .into_result();
+                if reset_result.is_ok() {
+                    break Some(list);
+                } else {
+                    unsafe {
+                        list.destroy();
+                    }
+                }
+            } else {
+                break None;
             }
-            None => self
-                .device
+        };
+
+        let list = if let Some(list) = list {
+            list
+        } else {
+            self.device
                 .create_graphics_command_list(
                     native::CmdListType::Direct,
                     self.allocator,
                     native::PipelineState::null(),
                     0,
                 )
-                .into_device_result("Create command list")?,
+                .into_device_result("Create command list")?
         };
 
         if let Some(label) = label {
@@ -256,18 +274,29 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     }
     unsafe fn discard_encoding(&mut self) {
         if let Some(list) = self.list.take() {
-            list.close();
-            self.free_lists.push(list);
+            if list.close().into_result().is_ok() {
+                self.free_lists.push(list);
+            } else {
+                unsafe {
+                    list.destroy();
+                }
+            }
         }
     }
     unsafe fn end_encoding(&mut self) -> Result<super::CommandBuffer, crate::DeviceError> {
         let raw = self.list.take().unwrap();
-        raw.close();
-        Ok(super::CommandBuffer { raw })
+        let closed = raw.close().into_result().is_ok();
+        Ok(super::CommandBuffer { raw, closed })
     }
     unsafe fn reset_all<I: Iterator<Item = super::CommandBuffer>>(&mut self, command_buffers: I) {
         for cmd_buf in command_buffers {
-            self.free_lists.push(cmd_buf.raw);
+            if cmd_buf.closed {
+                self.free_lists.push(cmd_buf.raw);
+            } else {
+                unsafe {
+                    cmd_buf.raw.destroy();
+                }
+            }
         }
         self.allocator.reset();
     }
@@ -359,47 +388,39 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                     }
                 };
 
-                let mip_level_count = match barrier.range.mip_level_count {
-                    Some(count) => count.get(),
-                    None => barrier.texture.mip_level_count - barrier.range.base_mip_level,
-                };
-                let array_layer_count = match barrier.range.array_layer_count {
-                    Some(count) => count.get(),
-                    None => barrier.texture.array_layer_count() - barrier.range.base_array_layer,
-                };
+                let tex_mip_level_count = barrier.texture.mip_level_count;
+                let tex_array_layer_count = barrier.texture.array_layer_count();
 
-                if barrier.range.aspect == wgt::TextureAspect::All
-                    && barrier.range.base_mip_level == 0
-                    && mip_level_count == barrier.texture.mip_level_count
-                    && barrier.range.base_array_layer == 0
-                    && array_layer_count == barrier.texture.array_layer_count()
-                {
+                if barrier.range.is_full_resource(
+                    barrier.texture.format,
+                    tex_mip_level_count,
+                    tex_array_layer_count,
+                ) {
                     // Only one barrier if it affects the whole image.
                     self.temp.barriers.push(raw);
                 } else {
                     // Selected texture aspect is relevant if the texture format has both depth _and_ stencil aspects.
-                    let planes = if crate::FormatAspects::from(barrier.texture.format)
-                        .contains(crate::FormatAspects::DEPTH | crate::FormatAspects::STENCIL)
-                    {
+                    let planes = if barrier.texture.format.is_combined_depth_stencil_format() {
                         match barrier.range.aspect {
                             wgt::TextureAspect::All => 0..2,
-                            wgt::TextureAspect::StencilOnly => 1..2,
                             wgt::TextureAspect::DepthOnly => 0..1,
+                            wgt::TextureAspect::StencilOnly => 1..2,
                         }
                     } else {
-                        0..1
+                        match barrier.texture.format {
+                            wgt::TextureFormat::Stencil8 => 1..2,
+                            wgt::TextureFormat::Depth24Plus => 0..2, // TODO: investigate why tests fail if we set this to 0..1
+                            _ => 0..1,
+                        }
                     };
 
-                    for rel_mip_level in 0..mip_level_count {
-                        for rel_array_layer in 0..array_layer_count {
+                    for mip_level in barrier.range.mip_range(tex_mip_level_count) {
+                        for array_layer in barrier.range.layer_range(tex_array_layer_count) {
                             for plane in planes.clone() {
                                 unsafe {
-                                    raw.u.Transition_mut().Subresource =
-                                        barrier.texture.calc_subresource(
-                                            barrier.range.base_mip_level + rel_mip_level,
-                                            barrier.range.base_array_layer + rel_array_layer,
-                                            plane,
-                                        );
+                                    raw.u.Transition_mut().Subresource = barrier
+                                        .texture
+                                        .calc_subresource(mip_level, array_layer, plane);
                                 };
                                 self.temp.barriers.push(raw);
                             }
@@ -691,7 +712,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
 
         if let Some(ref ds) = desc.depth_stencil_attachment {
             let mut flags = native::ClearFlags::empty();
-            let aspects = ds.target.view.format_aspects;
+            let aspects = ds.target.view.aspects;
             if !ds.depth_ops.contains(crate::AttachmentOps::LOAD)
                 && aspects.contains(crate::FormatAspects::DEPTH)
             {

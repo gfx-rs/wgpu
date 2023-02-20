@@ -13,16 +13,16 @@ pub struct ErrorFormatter<'a> {
 
 impl<'a> ErrorFormatter<'a> {
     pub fn error(&mut self, err: &dyn Error) {
-        writeln!(self.writer, "    {}", err).expect("Error formatting error");
+        writeln!(self.writer, "    {err}").expect("Error formatting error");
     }
 
     pub fn note(&mut self, note: &dyn fmt::Display) {
-        writeln!(self.writer, "      note: {}", note).expect("Error formatting error");
+        writeln!(self.writer, "      note: {note}").expect("Error formatting error");
     }
 
     pub fn label(&mut self, label_key: &str, label_value: &str) {
         if !label_key.is_empty() && !label_value.is_empty() {
-            self.note(&format!("{} = `{}`", label_key, label_value));
+            self.note(&format!("{label_key} = `{label_value}`"));
         }
     }
 

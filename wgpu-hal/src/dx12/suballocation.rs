@@ -153,7 +153,7 @@ mod allocation {
         match allocator.lock().allocator.free(allocation.allocation) {
             Ok(_) => (),
             // TODO: Don't panic here
-            Err(e) => panic!("Failed to destroy dx12 buffer, {}", e),
+            Err(e) => panic!("Failed to destroy dx12 buffer, {e}"),
         };
     }
 
@@ -164,7 +164,7 @@ mod allocation {
         match allocator.lock().allocator.free(allocation.allocation) {
             Ok(_) => (),
             // TODO: Don't panic here
-            Err(e) => panic!("Failed to destroy dx12 texture, {}", e),
+            Err(e) => panic!("Failed to destroy dx12 texture, {e}"),
         };
     }
 

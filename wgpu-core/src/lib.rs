@@ -24,6 +24,8 @@
     // For some reason `rustc` can warn about these in const generics even
     // though they are required.
     unused_braces,
+    // Clashes with clippy::pattern_type_mismatch
+    clippy::needless_borrowed_reference,
 )]
 #![warn(
     trivial_casts,

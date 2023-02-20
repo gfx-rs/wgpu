@@ -39,6 +39,7 @@ impl ViewportDesc {
             height: size.height,
             present_mode: wgpu::PresentMode::Fifo,
             alpha_mode: caps.alpha_modes[0],
+            view_formats: vec![],
         };
 
         self.surface.configure(device, &config);
@@ -62,7 +63,7 @@ impl Viewport {
 }
 
 async fn run(event_loop: EventLoop<()>, viewports: Vec<(Window, wgpu::Color)>) {
-    let instance = wgpu::Instance::new(wgpu::Backends::all());
+    let instance = wgpu::Instance::default();
     let viewports: Vec<_> = viewports
         .into_iter()
         .map(|(window, color)| ViewportDesc::new(window, color, &instance))
@@ -171,7 +172,7 @@ fn main() {
         for row in 0..ROWS {
             for column in 0..COLUMNS {
                 let window = winit::window::WindowBuilder::new()
-                    .with_title(format!("x{}y{}", column, row))
+                    .with_title(format!("x{column}y{row}"))
                     .with_inner_size(winit::dpi::PhysicalSize::new(WINDOW_SIZE, WINDOW_SIZE))
                     .build(&event_loop)
                     .unwrap();

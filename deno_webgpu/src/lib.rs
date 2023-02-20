@@ -1,4 +1,4 @@
-// Copyright 2018-2022 the Deno authors. All rights reserved. MIT license.
+// Copyright 2018-2023 the Deno authors. All rights reserved. MIT license.
 
 #![warn(unsafe_op_in_unsafe_fn)]
 
@@ -27,13 +27,22 @@ mod macros {
     macro_rules! gfx_select {
     ($id:expr => $global:ident.$method:ident( $($param:expr),* )) => {
       match $id.backend() {
-        #[cfg(not(target_os = "macos"))]
+        #[cfg(any(
+            all(not(target_arch = "wasm32"), not(target_os = "ios"), not(target_os = "macos")),
+            feature = "vulkan-portability"
+        ))]
         wgpu_types::Backend::Vulkan => $global.$method::<wgpu_core::api::Vulkan>( $($param),* ),
-        #[cfg(target_os = "macos")]
+        #[cfg(all(not(target_arch = "wasm32"), any(target_os = "ios", target_os = "macos")))]
         wgpu_types::Backend::Metal => $global.$method::<wgpu_core::api::Metal>( $($param),* ),
-        #[cfg(windows)]
+        #[cfg(all(not(target_arch = "wasm32"), windows))]
         wgpu_types::Backend::Dx12 => $global.$method::<wgpu_core::api::Dx12>( $($param),* ),
-        #[cfg(all(unix, not(target_os = "macos")))]
+        #[cfg(all(not(target_arch = "wasm32"), windows))]
+        wgpu_types::Backend::Dx11 => $global.$method::<wgpu_core::api::Dx11>( $($param),* ),
+        #[cfg(any(
+            all(unix, not(target_os = "macos"), not(target_os = "ios")),
+            feature = "angle",
+            target_arch = "wasm32"
+        ))]
         wgpu_types::Backend::Gl => $global.$method::<wgpu_core::api::Gles>( $($param),+ ),
         other => panic!("Unexpected backend {:?}", other),
       }
@@ -67,6 +76,8 @@ pub mod queue;
 pub mod render_pass;
 pub mod sampler;
 pub mod shader;
+#[cfg(feature = "surface")]
+pub mod surface;
 pub mod texture;
 
 pub struct Unstable(pub bool);
@@ -82,7 +93,7 @@ fn check_unstable(state: &OpState, api_name: &str) {
     }
 }
 
-type Instance = wgpu_core::hub::Global<wgpu_core::hub::IdentityManagerFactory>;
+pub type Instance = wgpu_core::hub::Global<wgpu_core::hub::IdentityManagerFactory>;
 
 struct WebGpuAdapter(wgpu_core::id::AdapterId);
 impl Resource for WebGpuAdapter {
@@ -106,7 +117,8 @@ impl Resource for WebGpuQuerySet {
 }
 
 pub fn init(unstable: bool) -> Extension {
-    Extension::builder()
+    Extension::builder(env!("CARGO_PKG_NAME"))
+        .dependencies(vec!["deno_webidl", "deno_web"])
         .js(include_js_files!(
           prefix "deno:deno_webgpu",
           "01_webgpu.js",
@@ -152,7 +164,7 @@ fn deserialize_features(features: &wgpu_types::Features) -> Vec<&'static str> {
         return_features.push("indirect-first-instance");
     }
     if features.contains(wgpu_types::Features::SHADER_FLOAT16) {
-        return_features.push("shader-f16")
+        return_features.push("shader-f16");
     }
 
     // extended from spec
@@ -202,6 +214,9 @@ fn deserialize_features(features: &wgpu_types::Features) -> Vec<&'static str> {
     if features.contains(wgpu_types::Features::PARTIALLY_BOUND_BINDING_ARRAY) {
         return_features.push("shader-primitive-index");
     }
+    if features.contains(wgpu_types::Features::SHADER_INT16) {
+        return_features.push("shader-i16");
+    }
 
     return_features
 }
@@ -240,7 +255,10 @@ pub async fn op_webgpu_request_adapter(
         state.put(wgpu_core::hub::Global::new(
             "webgpu",
             wgpu_core::hub::IdentityManagerFactory,
-            backends,
+            wgpu_types::InstanceDescriptor {
+                backends,
+                dx12_shader_compiler: wgpu_types::Dx12Compiler::Fxc,
+            },
         ));
         state.borrow::<Instance>()
     };
@@ -366,6 +384,10 @@ impl From<GpuRequiredFeatures> for wgpu_types::Features {
             required_features.0.contains("shader-float64"),
         );
         features.set(
+            wgpu_types::Features::SHADER_INT16,
+            required_features.0.contains("shader-i16"),
+        );
+        features.set(
             wgpu_types::Features::VERTEX_ATTRIBUTE_64BIT,
             required_features.0.contains("vertex-attribute-64bit"),
         );
@@ -397,7 +419,7 @@ pub async fn op_webgpu_request_device(
     state: Rc<RefCell<OpState>>,
     adapter_rid: ResourceId,
     label: Option<String>,
-    required_features: Option<GpuRequiredFeatures>,
+    required_features: GpuRequiredFeatures,
     required_limits: Option<wgpu_types::Limits>,
 ) -> Result<GpuAdapterDevice, AnyError> {
     let mut state = state.borrow_mut();
@@ -407,8 +429,8 @@ pub async fn op_webgpu_request_device(
 
     let descriptor = wgpu_types::DeviceDescriptor {
         label: label.map(Cow::from),
-        features: required_features.map(Into::into).unwrap_or_default(),
-        limits: required_limits.map(Into::into).unwrap_or_default(),
+        features: required_features.into(),
+        limits: required_limits.unwrap_or_default(),
     };
 
     let (device, maybe_err) = gfx_select!(adapter => instance.adapter_request_device(

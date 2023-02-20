@@ -24,6 +24,12 @@ autotests = false
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
+targets = [
+    "x86_64-unknown-linux-gnu",
+    "x86_64-apple-darwin",
+    "x86_64-pc-windows-msvc",
+    "wasm32-unknown-unknown",
+]
 
 [lib]
 
@@ -80,7 +86,7 @@ name = "stencil-triangles"
 test = true
 
 [features]
-default = ["wgsl", "expose-ids"]
+default = ["wgsl"]
 # Apply run-time checks, even in release builds. These are in addition
 # to the validation carried out at public APIs in all builds.
 strict_asserts = ["wgc?/strict_asserts", "wgt/strict_asserts"]
@@ -91,8 +97,7 @@ trace = ["serde", "wgc/trace"]
 replay = ["serde", "wgc/replay"]
 angle = ["wgc/angle"]
 webgl = ["hal", "wgc"]
-emscripten = ["webgl"]
-vulkan-portability = ["wgc/vulkan-portability"]
+vulkan-portability = ["wgc/vulkan"]
 expose-ids = []
 
 # wgpu-core is always available as an optional dependency, "wgc".
@@ -122,13 +127,9 @@ workspace = true
 features = ["dx11", "dx12"]
 
 # We want the wgpu-core Vulkan backend on Unix (but not Emscripten) and Windows.
-[target.'cfg(any(windows, all(unix, not(target_arch = "emscripten"))))'.dependencies.wgc]
+[target.'cfg(any(windows, all(unix, not(target_os = "emscripten"), not(target_os = "ios"), not(target_os = "macos"))))'.dependencies.wgc]
 workspace = true
 features = ["vulkan"]
-
-[target.'cfg(target_os = "emscripten")'.dependencies.wgc]
-workspace = true
-features = ["emscripten"]
 
 [dependencies.wgt]
 workspace = true
@@ -141,7 +142,7 @@ hal = { workspace = true }
 hal = { workspace = true, features = ["renderdoc"] }
 
 [target.'cfg(windows)'.dependencies]
-hal = { workspace = true, features = ["renderdoc", "windows_rs"] }
+hal = { workspace = true, features = ["dxc_shader_compiler", "renderdoc", "windows_rs"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies.hal]
 workspace = true
@@ -151,6 +152,7 @@ optional = true
 arrayvec.workspace = true
 log.workspace = true
 parking_lot.workspace = true
+profiling.workspace = true
 raw-window-handle.workspace = true
 serde = { workspace = true, features = ["derive"], optional = true }
 smallvec.workspace = true
@@ -164,6 +166,7 @@ glam.workspace = true
 ddsfile.workspace = true
 futures-intrusive.workspace = true
 env_logger.workspace = true
+image.workspace = true
 log.workspace = true
 noise = { workspace = true }
 obj.workspace = true
@@ -240,6 +243,7 @@ web-sys = { workspace = true, features = [
     "GpuDeviceLostReason",
     "GpuError",
     "GpuErrorFilter",
+    # "GpuExtent2dDict", Not yet implemented in web_sys
     "GpuExtent3dDict",
     "GpuFeatureName",
     "GpuFilterMode",
@@ -336,5 +340,6 @@ web-sys = { workspace = true, features = [
     "RequestMode",
     "Request",
     "Response",
-    "WebGl2RenderingContext"
+    "WebGl2RenderingContext",
+    "CanvasRenderingContext2d"
 ] }

@@ -153,6 +153,7 @@ impl framework::Example for Triangles {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::Stencil8,
+            view_formats: &[],
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
         });
 
