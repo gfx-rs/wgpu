@@ -308,8 +308,8 @@ struct DeviceShared {
     downlevel_flags: wgt::DownlevelFlags,
     private_caps: PrivateCapabilities,
     workarounds: Workarounds,
-    render_passes: Mutex<fxhash::FxHashMap<RenderPassKey, vk::RenderPass>>,
-    framebuffers: Mutex<fxhash::FxHashMap<FramebufferKey, vk::Framebuffer>>,
+    render_passes: Mutex<rustc_hash::FxHashMap<RenderPassKey, vk::RenderPass>>,
+    framebuffers: Mutex<rustc_hash::FxHashMap<FramebufferKey, vk::Framebuffer>>,
 }
 
 pub struct Device {

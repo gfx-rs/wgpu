@@ -54,7 +54,7 @@ thiserror = "1"
 
 # backends common
 arrayvec = "0.7"
-fxhash = "0.2.1"
+rustc-hash = "1.1"
 log = "0.4"
 renderdoc-sys = { version = "0.7.1", optional = true }
 
