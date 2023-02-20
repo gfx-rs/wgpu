@@ -1,7 +1,7 @@
 ; SPIR-V
 ; Version: 1.1
 ; Generator: rspirv
-; Bound: 55
+; Bound: 54
 OpCapability Shader
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
@@ -20,13 +20,12 @@ OpEntryPoint Vertex %16 "main"
 %13 = OpTypeVector %7 2
 %14 = OpConstantComposite  %13  %6 %6
 %17 = OpTypeFunction %2
-%40 = OpConstant  %7  31
-%49 = OpTypeVector %9 2
 %25 = OpConstantComposite  %12  %5 %5 %5 %5
 %26 = OpConstantComposite  %12  %3 %3 %3 %3
-%29 = OpConstantNull  %7
+%40 = OpConstant  %7  31
 %47 = OpConstantComposite  %13  %40 %40
-%52 = OpConstantComposite  %13  %40 %40
+%49 = OpTypeVector %9 2
+%29 = OpConstantNull  %7
 %16 = OpFunction  %2  None %17
 %15 = OpLabel
 OpBranch %18
@@ -58,7 +57,7 @@ OpBranch %18
 %48 = OpISub  %13  %47 %46
 %50 = OpCompositeConstruct  %49  %11 %11
 %51 = OpExtInst  %13  %1 FindUMsb %50
-%53 = OpISub  %13  %52 %51
-%54 = OpBitcast  %49  %53
+%52 = OpISub  %13  %47 %51
+%53 = OpBitcast  %49  %52
 OpReturn
 OpFunctionEnd

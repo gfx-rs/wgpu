@@ -1,7 +1,7 @@
 use super::{
     helpers::{contains_builtin, global_needs_wrapper, map_storage_class},
-    make_local, Block, BlockContext, CachedExpressions, EntryPointContext, Error, Function,
-    FunctionArgument, GlobalVariable, IdGenerator, Instruction, LocalType, LocalVariable,
+    make_local, Block, BlockContext, CachedConstant, CachedExpressions, EntryPointContext, Error,
+    Function, FunctionArgument, GlobalVariable, IdGenerator, Instruction, LocalType, LocalVariable,
     LogicalLayout, LookupFunctionType, LookupType, LoopContext, Options, PhysicalLayout,
     PipelineOptions, ResultMember, Writer, WriterFlags, BITS_PER_BYTE,
 };
@@ -1101,12 +1101,13 @@ impl Writer {
         value: crate::ScalarValue,
         width: crate::Bytes,
     ) -> Word {
-        if let Some(&id) = self.cached_constants.get(&(value, width)) {
+        let scalar = CachedConstant::Scalar { value, width };
+        if let Some(&id) = self.cached_constants.get(&scalar) {
             return id;
         }
         let id = self.id_gen.next();
         self.write_constant_scalar(id, &value, width, None);
-        self.cached_constants.insert((value, width), id);
+        self.cached_constants.insert(scalar, id);
         id
     }
 
@@ -1180,22 +1181,39 @@ impl Writer {
         instruction.to_words(&mut self.logical_layout.declarations);
     }
 
+    pub(super) fn get_constant_composite(
+        &mut self,
+        ty: LookupType,
+        constituent_ids: &[Word],
+    ) -> Word {
+        let composite = CachedConstant::Composite {
+            ty,
+            constituent_ids: constituent_ids.to_vec(),
+        };
+        if let Some(&id) = self.cached_constants.get(&composite) {
+            return id;
+        }
+        let id = self.id_gen.next();
+        self.write_constant_composite(id, ty, constituent_ids, None);
+        self.cached_constants.insert(composite, id);
+        id
+    }
+
     fn write_constant_composite(
         &mut self,
         id: Word,
-        ty: Handle<crate::Type>,
-        components: &[Handle<crate::Constant>],
-    ) -> Result<(), Error> {
-        let mut constituent_ids = Vec::with_capacity(components.len());
-        for constituent in components.iter() {
-            let constituent_id = self.constant_ids[constituent.index()];
-            constituent_ids.push(constituent_id);
+        ty: LookupType,
+        constituent_ids: &[Word],
+        debug_name: Option<&String>,
+    ) {
+        if self.flags.contains(WriterFlags::DEBUG) {
+            if let Some(name) = debug_name {
+                self.debugs.push(Instruction::name(id, name));
+            }
         }
-
-        let type_id = self.get_type_id(LookupType::Handle(ty));
-        Instruction::constant_composite(type_id, id, constituent_ids.as_slice())
+        let type_id = self.get_type_id(ty);
+        Instruction::constant_composite(type_id, id, constituent_ids)
             .to_words(&mut self.logical_layout.declarations);
-        Ok(())
     }
 
     pub(super) fn write_constant_null(&mut self, type_id: Word) -> Word {
@@ -1776,19 +1794,27 @@ impl Writer {
             self.write_type_declaration_arena(&ir_module.types, handle)?;
         }
 
-        // the all the composite constants, they rely on types
+        // then all the composite constants, they rely on types
         for (handle, constant) in ir_module.constants.iter() {
             match constant.inner {
                 crate::ConstantInner::Scalar { .. } => continue,
                 crate::ConstantInner::Composite { ty, ref components } => {
-                    let id = self.id_gen.next();
-                    self.constant_ids[handle.index()] = id;
-                    if self.flags.contains(WriterFlags::DEBUG) {
-                        if let Some(ref name) = constant.name {
-                            self.debugs.push(Instruction::name(id, name));
-                        }
+                    let ty = LookupType::Handle(ty);
+
+                    let mut constituent_ids = Vec::with_capacity(components.len());
+                    for constituent in components.iter() {
+                        let constituent_id = self.constant_ids[constituent.index()];
+                        constituent_ids.push(constituent_id);
                     }
-                    self.write_constant_composite(id, ty, components)?;
+
+                    self.constant_ids[handle.index()] = match constant.name {
+                        Some(ref name) => {
+                            let id = self.id_gen.next();
+                            self.write_constant_composite(id, ty, &constituent_ids, Some(name));
+                            id
+                        }
+                        None => self.get_constant_composite(ty, &constituent_ids),
+                    };
                 }
             }
         }

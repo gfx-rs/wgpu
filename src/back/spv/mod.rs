@@ -439,6 +439,18 @@ impl recyclable::Recyclable for CachedExpressions {
     }
 }
 
+#[derive(Eq, Hash, PartialEq)]
+enum CachedConstant {
+    Scalar {
+        value: crate::ScalarValue,
+        width: crate::Bytes,
+    },
+    Composite {
+        ty: LookupType,
+        constituent_ids: Vec<Word>,
+    },
+}
+
 #[derive(Clone)]
 struct GlobalVariable {
     /// ID of the OpVariable that declares the global.
@@ -589,7 +601,7 @@ pub struct Writer {
     lookup_function: crate::FastHashMap<Handle<crate::Function>, Word>,
     lookup_function_type: crate::FastHashMap<LookupFunctionType, Word>,
     constant_ids: Vec<Word>,
-    cached_constants: crate::FastHashMap<(crate::ScalarValue, crate::Bytes), Word>,
+    cached_constants: crate::FastHashMap<CachedConstant, Word>,
     global_variables: Vec<GlobalVariable>,
     binding_map: BindingMap,
 
