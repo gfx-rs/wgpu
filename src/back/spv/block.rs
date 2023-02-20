@@ -951,33 +951,22 @@ impl<'w> BlockContext<'w> {
                             _ => unreachable!(),
                         };
 
+                        let msb_id = self.gen_id();
                         block.body.push(Instruction::ext_inst(
                             self.writer.gl450_ext_inst_id,
                             spirv::GLOp::FindUMsb,
                             int_type_id,
-                            id,
+                            msb_id,
                             &[arg0_id],
                         ));
 
-                        let sub_id = self.gen_id();
-                        block.body.push(Instruction::binary(
+                        MathOp::Custom(Instruction::binary(
                             spirv::Op::ISub,
-                            int_type_id,
-                            sub_id,
-                            int_id,
+                            result_type_id,
                             id,
-                        ));
-
-                        if let Some(crate::ScalarKind::Uint) = arg_scalar_kind {
-                            block.body.push(Instruction::unary(
-                                spirv::Op::Bitcast,
-                                result_type_id,
-                                self.gen_id(),
-                                sub_id,
-                            ));
-                        }
-
-                        return Ok(());
+                            int_id,
+                            msb_id,
+                        ))
                     }
                     Mf::CountOneBits => MathOp::Custom(Instruction::unary(
                         spirv::Op::BitCount,

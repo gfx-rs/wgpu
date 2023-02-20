@@ -1,7 +1,7 @@
 ; SPIR-V
 ; Version: 1.1
 ; Generator: rspirv
-; Bound: 78
+; Bound: 76
 OpCapability Shader
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
@@ -28,7 +28,7 @@ OpEntryPoint Vertex %18 "main"
 %50 = OpTypeVector %9 2
 %53 = OpConstantComposite  %50  %42 %42
 %65 = OpConstant  %7  31
-%72 = OpConstantComposite  %15  %65 %65
+%71 = OpConstantComposite  %15  %65 %65
 %31 = OpConstantNull  %7
 %18 = OpFunction  %2  None %19
 %17 = OpLabel
@@ -71,17 +71,15 @@ OpBranch %20
 %61 = OpCompositeConstruct  %15  %13 %13
 %63 = OpExtInst  %15  %1 FindILsb %61
 %62 = OpExtInst  %15  %1 UMin %53 %63
-%64 = OpExtInst  %7  %1 FindUMsb %11
-%66 = OpISub  %7  %65 %64
-%67 = OpExtInst  %7  %1 FindUMsb %12
-%68 = OpISub  %7  %65 %67
-%69 = OpBitcast  %9  %68
-%70 = OpCompositeConstruct  %15  %11 %11
-%71 = OpExtInst  %15  %1 FindUMsb %70
-%73 = OpISub  %15  %72 %71
-%74 = OpCompositeConstruct  %50  %12 %12
-%75 = OpExtInst  %15  %1 FindUMsb %74
-%76 = OpISub  %15  %72 %75
-%77 = OpBitcast  %50  %76
+%66 = OpExtInst  %7  %1 FindUMsb %11
+%64 = OpISub  %7  %65 %66
+%68 = OpExtInst  %7  %1 FindUMsb %12
+%67 = OpISub  %9  %65 %68
+%69 = OpCompositeConstruct  %15  %11 %11
+%72 = OpExtInst  %15  %1 FindUMsb %69
+%70 = OpISub  %15  %71 %72
+%73 = OpCompositeConstruct  %50  %12 %12
+%75 = OpExtInst  %15  %1 FindUMsb %73
+%74 = OpISub  %50  %71 %75
 OpReturn
 OpFunctionEnd
