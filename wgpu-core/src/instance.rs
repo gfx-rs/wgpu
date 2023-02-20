@@ -485,8 +485,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         id.0
     }
 
+    /// # Safety
+    ///
+    /// `layer` must be a valid pointer.
     #[cfg(feature = "metal")]
-    pub fn instance_create_surface_metal(
+    pub unsafe fn instance_create_surface_metal(
         &self,
         layer: *mut std::ffi::c_void,
         id_in: Input<G, SurfaceId>,
