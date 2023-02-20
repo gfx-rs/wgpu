@@ -122,6 +122,7 @@ Additionally `Surface::get_default_config` now returns an Option and returns Non
 - Dereferencing a buffer view is now marked inline. By @Wumpf in [#3307](https://github.com/gfx-rs/wgpu/pull/3307)
 - The `strict_assert` family of macros was moved to `wgpu-types`. By @i509VCB in [#3051](https://github.com/gfx-rs/wgpu/pull/3051)
 - Add missing `DEPTH_BIAS_CLAMP` and `FULL_DRAW_INDEX_UINT32` downlevel flags. By @teoxoy in [#3316](https://github.com/gfx-rs/wgpu/pull/3316)
+- All `fxhash` dependencies have been replaced with `rustc-hash`. By @james7132 in [#3502](https://github.com/gfx-rs/wgpu/pull/3502)
 
 #### WebGPU
 
