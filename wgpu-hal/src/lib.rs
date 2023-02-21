@@ -51,20 +51,6 @@
     clippy::pattern_type_mismatch,
 )]
 
-#[cfg(not(any(
-    feature = "dx11",
-    feature = "dx12",
-    feature = "gles",
-    feature = "metal",
-    feature = "vulkan"
-)))]
-compile_error!("No back ends enabled in `wgpu-hal`. Enable at least one backend feature.");
-
-#[cfg(all(feature = "metal", not(any(target_os = "macos", target_os = "ios"))))]
-compile_error!("Metal API enabled on non-Apple OS. If your project is not using resolver=\"2\" in Cargo.toml, it should.");
-#[cfg(all(feature = "dx12", not(windows)))]
-compile_error!("DX12 API enabled on non-Windows OS. If your project is not using resolver=\"2\" in Cargo.toml, it should.");
-
 /// DirectX11 API internals.
 #[cfg(all(feature = "dx11", windows))]
 pub mod dx11;
@@ -77,24 +63,24 @@ pub mod empty;
 #[cfg(all(feature = "gles"))]
 pub mod gles;
 /// Metal API internals.
-#[cfg(all(feature = "metal"))]
+#[cfg(all(feature = "metal", any(target_os = "macos", target_os = "ios")))]
 pub mod metal;
 /// Vulkan API internals.
-#[cfg(feature = "vulkan")]
+#[cfg(all(feature = "vulkan", not(target_arch = "wasm32")))]
 pub mod vulkan;
 
 pub mod auxil;
 pub mod api {
-    #[cfg(feature = "dx11")]
+    #[cfg(all(feature = "dx11", windows))]
     pub use super::dx11::Api as Dx11;
-    #[cfg(feature = "dx12")]
+    #[cfg(all(feature = "dx12", windows))]
     pub use super::dx12::Api as Dx12;
     pub use super::empty::Api as Empty;
     #[cfg(feature = "gles")]
     pub use super::gles::Api as Gles;
-    #[cfg(feature = "metal")]
+    #[cfg(all(feature = "metal", any(target_os = "macos", target_os = "ios")))]
     pub use super::metal::Api as Metal;
-    #[cfg(feature = "vulkan")]
+    #[cfg(all(feature = "vulkan", not(target_arch = "wasm32")))]
     pub use super::vulkan::Api as Vulkan;
 }
 
