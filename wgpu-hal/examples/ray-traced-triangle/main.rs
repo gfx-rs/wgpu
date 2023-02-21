@@ -100,7 +100,7 @@ impl<A: hal::Api> Example<A> {
             } else {
                 hal::InstanceFlags::empty()
             },
-            dx12_shader_compiler: wgt::Dx12Compiler::Fxc
+            dx12_shader_compiler: wgt::Dx12Compiler::Fxc,
         };
         let instance = unsafe { A::Instance::init(&instance_desc)? };
         let mut surface = unsafe {
@@ -127,9 +127,12 @@ impl<A: hal::Api> Example<A> {
 
         let window_size: (u32, u32) = window.inner_size().into();
         dbg!(&surface_caps.formats);
-        let surface_format = if surface_caps.formats.contains(&wgt::TextureFormat::Rgba8Snorm) {
+        let surface_format = if surface_caps
+            .formats
+            .contains(&wgt::TextureFormat::Rgba8Snorm)
+        {
             wgt::TextureFormat::Rgba8Unorm
-        }else{
+        } else {
             *surface_caps.formats.first().unwrap()
         };
         let surface_config = hal::SurfaceConfiguration {
@@ -417,7 +420,7 @@ impl<A: hal::Api> Example<A> {
             format: wgt::TextureFormat::Rgba8Unorm,
             usage: hal::TextureUses::STORAGE_READ_WRITE | hal::TextureUses::COPY_SRC,
             memory_flags: hal::MemoryFlags::empty(),
-            view_formats: vec![wgt::TextureFormat::Rgba8Unorm]
+            view_formats: vec![wgt::TextureFormat::Rgba8Unorm],
         };
         let texture = unsafe { device.create_texture(&texture_desc).unwrap() };
 

@@ -384,11 +384,8 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                             &vk::BufferDeviceAddressInfo::builder().buffer(buffer.raw),
                         )
                 };
-                let instances = vk::AccelerationStructureGeometryInstancesDataKHR::builder().data(
-                    vk::DeviceOrHostAddressConstKHR {
-                        device_address
-                    },
-                );
+                let instances = vk::AccelerationStructureGeometryInstancesDataKHR::builder()
+                    .data(vk::DeviceOrHostAddressConstKHR { device_address });
 
                 vk::AccelerationStructureGeometryKHR::builder()
                     .geometry_type(vk::GeometryTypeKHR::INSTANCES)
@@ -408,15 +405,12 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                     ray_tracing_functions
                         .buffer_device_address
                         .get_buffer_device_address(
-                            &vk::BufferDeviceAddressInfo::builder()
-                                .buffer(vertex_buffer.raw),
+                            &vk::BufferDeviceAddressInfo::builder().buffer(vertex_buffer.raw),
                         )
                 };
                 let mut triangles_data =
                     vk::AccelerationStructureGeometryTrianglesDataKHR::builder()
-                        .vertex_data(vk::DeviceOrHostAddressConstKHR {
-                            device_address
-                        })
+                        .vertex_data(vk::DeviceOrHostAddressConstKHR { device_address })
                         .vertex_format(conv::map_vertex_format(vertex_format))
                         .vertex_stride(vertex_stride)
                         .max_vertex(max_vertex);
@@ -426,15 +420,12 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                         ray_tracing_functions
                             .buffer_device_address
                             .get_buffer_device_address(
-                                &vk::BufferDeviceAddressInfo::builder()
-                                    .buffer(indices.buffer.raw),
+                                &vk::BufferDeviceAddressInfo::builder().buffer(indices.buffer.raw),
                             )
                     };
                     triangles_data = triangles_data
                         .index_type(conv::map_index_format(indices.format))
-                        .index_data(vk::DeviceOrHostAddressConstKHR {
-                            device_address
-                        })
+                        .index_data(vk::DeviceOrHostAddressConstKHR { device_address })
                 }
 
                 let triangles_data = triangles_data.build();
@@ -468,9 +459,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             .flags(conv::map_acceleration_structure_flags(desc.flags))
             .geometries(geometries)
             .dst_acceleration_structure(desc.destination_acceleration_structure.raw)
-            .scratch_data(vk::DeviceOrHostAddressKHR {
-                device_address
-            });
+            .scratch_data(vk::DeviceOrHostAddressKHR { device_address });
 
         if desc.mode == crate::AccelerationStructureBuildMode::Update {
             geometry_info.src_acceleration_structure = desc.destination_acceleration_structure.raw;
@@ -479,13 +468,13 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         let geometry_info = geometry_info.build();
 
         //each geometry has multiple ranges; building requires a vector of geometry_infos and a vector of vectors of ranges
-        let ranges : &[&[vk::AccelerationStructureBuildRangeInfoKHR]] = &[&[range]];
+        let ranges: &[&[vk::AccelerationStructureBuildRangeInfoKHR]] = &[&[range]];
         let geometry_infos = &[geometry_info];
 
         unsafe {
             ray_tracing_functions
-            .acceleration_structure
-            .cmd_build_acceleration_structures(self.active, geometry_infos, ranges);
+                .acceleration_structure
+                .cmd_build_acceleration_structures(self.active, geometry_infos, ranges);
         }
     }
 

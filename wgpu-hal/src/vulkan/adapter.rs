@@ -874,7 +874,7 @@ impl super::InstanceShared {
                         .insert(vk::PhysicalDeviceAccelerationStructurePropertiesKHR::default());
                     builder = builder.push_next(next);
                 }
-                
+
                 if supports_driver_properties {
                     let next = capabilities
                         .driver

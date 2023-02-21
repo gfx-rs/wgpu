@@ -841,8 +841,10 @@ impl crate::Device<super::Api> for super::Device {
             desc.memory_flags.contains(crate::MemoryFlags::TRANSIENT),
         );
 
-        let alignment_mask = if desc.usage
-            .contains(crate::BufferUses::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT){
+        let alignment_mask = if desc
+            .usage
+            .contains(crate::BufferUses::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT)
+        {
             16
         } else {
             req.alignment
@@ -1510,7 +1512,10 @@ impl crate::Device<super::Api> for super::Device {
                     // `raw_acceleration_structures`.
                     let acceleration_structure_info: vk::WriteDescriptorSetAccelerationStructureKHR = *acceleration_structure_info;
 
-                    assert!(index < desc.acceleration_structures.len(), "Encountered more acceleration structures then expected");
+                    assert!(
+                        index < desc.acceleration_structures.len(),
+                        "Encountered more acceleration structures then expected"
+                    );
                     acceleration_structure_infos.push(acceleration_structure_info);
 
                     extra_descriptor_count += 1;
@@ -2134,11 +2139,11 @@ impl crate::Device<super::Api> for super::Device {
 
         unsafe {
             ray_tracing_functions
-            .acceleration_structure
-            .get_acceleration_structure_device_address(
-                &vk::AccelerationStructureDeviceAddressInfoKHR::builder()
-                    .acceleration_structure(acceleration_structure.raw),
-            )
+                .acceleration_structure
+                .get_acceleration_structure_device_address(
+                    &vk::AccelerationStructureDeviceAddressInfoKHR::builder()
+                        .acceleration_structure(acceleration_structure.raw),
+                )
         }
     }
 
@@ -2157,7 +2162,6 @@ impl crate::Device<super::Api> for super::Device {
             .sharing_mode(vk::SharingMode::EXCLUSIVE);
 
         unsafe {
-
             let raw_buffer = self.shared.raw.create_buffer(&vk_buffer_info, None)?;
             let req = self.shared.raw.get_buffer_memory_requirements(raw_buffer);
 
@@ -2203,7 +2207,6 @@ impl crate::Device<super::Api> for super::Device {
                 buffer: raw_buffer,
                 block: Mutex::new(block),
             })
-
         }
     }
 
@@ -2216,7 +2219,7 @@ impl crate::Device<super::Api> for super::Device {
             None => panic!("Feature `RAY_TRACING` not enabled"),
         };
 
-        unsafe{
+        unsafe {
             ray_tracing_functions
                 .acceleration_structure
                 .destroy_acceleration_structure(acceleration_structure.raw, None);
