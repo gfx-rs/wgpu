@@ -2106,13 +2106,15 @@ impl crate::Device<super::Api> for super::Device {
             .flags(conv::map_acceleration_structure_flags(desc.flags))
             .geometries(geometries);
 
-        let raw = ray_tracing_functions
-            .acceleration_structure
-            .get_acceleration_structure_build_sizes(
-                vk::AccelerationStructureBuildTypeKHR::DEVICE,
-                &geometry_info,
-                &[desc.primitive_count],
-            );
+        let raw = unsafe {
+            ray_tracing_functions
+                .acceleration_structure
+                .get_acceleration_structure_build_sizes(
+                    vk::AccelerationStructureBuildTypeKHR::DEVICE,
+                    &geometry_info,
+                    &[desc.primitive_count],
+                )
+        };
 
         crate::AccelerationStructureBuildSizes {
             acceleration_structure_size: raw.acceleration_structure_size,
@@ -2130,12 +2132,14 @@ impl crate::Device<super::Api> for super::Device {
             None => panic!("Feature `RAY_TRACING` not enabled"),
         };
 
-        ray_tracing_functions
+        unsafe {
+            ray_tracing_functions
             .acceleration_structure
             .get_acceleration_structure_device_address(
                 &vk::AccelerationStructureDeviceAddressInfoKHR::builder()
                     .acceleration_structure(acceleration_structure.raw),
             )
+        }
     }
 
     unsafe fn create_acceleration_structure(
@@ -2152,51 +2156,55 @@ impl crate::Device<super::Api> for super::Device {
             .usage(vk::BufferUsageFlags::ACCELERATION_STRUCTURE_STORAGE_KHR)
             .sharing_mode(vk::SharingMode::EXCLUSIVE);
 
-        let raw_buffer = self.shared.raw.create_buffer(&vk_buffer_info, None)?;
-        let req = self.shared.raw.get_buffer_memory_requirements(raw_buffer);
+        unsafe {
 
-        let block = self.mem_allocator.lock().alloc(
-            &*self.shared,
-            gpu_alloc::Request {
-                size: req.size,
-                align_mask: req.alignment - 1,
-                usage: gpu_alloc::UsageFlags::FAST_DEVICE_ACCESS,
-                memory_types: req.memory_type_bits & self.valid_ash_memory_types,
-            },
-        )?;
+            let raw_buffer = self.shared.raw.create_buffer(&vk_buffer_info, None)?;
+            let req = self.shared.raw.get_buffer_memory_requirements(raw_buffer);
 
-        self.shared
-            .raw
-            .bind_buffer_memory(raw_buffer, *block.memory(), block.offset())?;
+            let block = self.mem_allocator.lock().alloc(
+                &*self.shared,
+                gpu_alloc::Request {
+                    size: req.size,
+                    align_mask: req.alignment - 1,
+                    usage: gpu_alloc::UsageFlags::FAST_DEVICE_ACCESS,
+                    memory_types: req.memory_type_bits & self.valid_ash_memory_types,
+                },
+            )?;
 
-        if let Some(label) = desc.label {
             self.shared
-                .set_object_name(vk::ObjectType::BUFFER, raw_buffer, label);
+                .raw
+                .bind_buffer_memory(raw_buffer, *block.memory(), block.offset())?;
+
+            if let Some(label) = desc.label {
+                self.shared
+                    .set_object_name(vk::ObjectType::BUFFER, raw_buffer, label);
+            }
+
+            let vk_info = vk::AccelerationStructureCreateInfoKHR::builder()
+                .buffer(raw_buffer)
+                .offset(0)
+                .size(desc.size)
+                .ty(conv::map_acceleration_structure_format(desc.format));
+
+            let raw_acceleration_structure = ray_tracing_functions
+                .acceleration_structure
+                .create_acceleration_structure(&vk_info, None)?;
+
+            if let Some(label) = desc.label {
+                self.shared.set_object_name(
+                    vk::ObjectType::ACCELERATION_STRUCTURE_KHR,
+                    raw_acceleration_structure,
+                    label,
+                );
+            }
+
+            Ok(super::AccelerationStructure {
+                raw: raw_acceleration_structure,
+                buffer: raw_buffer,
+                block: Mutex::new(block),
+            })
+
         }
-
-        let vk_info = vk::AccelerationStructureCreateInfoKHR::builder()
-            .buffer(raw_buffer)
-            .offset(0)
-            .size(desc.size)
-            .ty(conv::map_acceleration_structure_format(desc.format));
-
-        let raw_acceleration_structure = ray_tracing_functions
-            .acceleration_structure
-            .create_acceleration_structure(&vk_info, None)?;
-
-        if let Some(label) = desc.label {
-            self.shared.set_object_name(
-                vk::ObjectType::ACCELERATION_STRUCTURE_KHR,
-                raw_acceleration_structure,
-                label,
-            );
-        }
-
-        Ok(super::AccelerationStructure {
-            raw: raw_acceleration_structure,
-            buffer: raw_buffer,
-            block: Mutex::new(block),
-        })
     }
 
     unsafe fn destroy_acceleration_structure(
@@ -2208,15 +2216,17 @@ impl crate::Device<super::Api> for super::Device {
             None => panic!("Feature `RAY_TRACING` not enabled"),
         };
 
-        ray_tracing_functions
-            .acceleration_structure
-            .destroy_acceleration_structure(acceleration_structure.raw, None);
-        self.shared
-            .raw
-            .destroy_buffer(acceleration_structure.buffer, None);
-        self.mem_allocator
-            .lock()
-            .dealloc(&*self.shared, acceleration_structure.block.into_inner());
+        unsafe{
+            ray_tracing_functions
+                .acceleration_structure
+                .destroy_acceleration_structure(acceleration_structure.raw, None);
+            self.shared
+                .raw
+                .destroy_buffer(acceleration_structure.buffer, None);
+            self.mem_allocator
+                .lock()
+                .dealloc(&*self.shared, acceleration_structure.block.into_inner());
+        }
     }
 }
 

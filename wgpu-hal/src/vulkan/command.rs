@@ -377,13 +377,16 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
 
         let geometry = match *desc.geometry {
             crate::AccelerationStructureGeometry::Instances { buffer } => {
+                let device_address = unsafe {
+                    ray_tracing_functions
+                        .buffer_device_address
+                        .get_buffer_device_address(
+                            &vk::BufferDeviceAddressInfo::builder().buffer(buffer.raw),
+                        )
+                };
                 let instances = vk::AccelerationStructureGeometryInstancesDataKHR::builder().data(
                     vk::DeviceOrHostAddressConstKHR {
-                        device_address: ray_tracing_functions
-                            .buffer_device_address
-                            .get_buffer_device_address(
-                                &vk::BufferDeviceAddressInfo::builder().buffer(buffer.raw),
-                            ),
+                        device_address
                     },
                 );
 
@@ -401,30 +404,36 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 vertex_stride,
                 ref indices,
             } => {
+                let device_address = unsafe {
+                    ray_tracing_functions
+                        .buffer_device_address
+                        .get_buffer_device_address(
+                            &vk::BufferDeviceAddressInfo::builder()
+                                .buffer(vertex_buffer.raw),
+                        )
+                };
                 let mut triangles_data =
                     vk::AccelerationStructureGeometryTrianglesDataKHR::builder()
                         .vertex_data(vk::DeviceOrHostAddressConstKHR {
-                            device_address: ray_tracing_functions
-                                .buffer_device_address
-                                .get_buffer_device_address(
-                                    &vk::BufferDeviceAddressInfo::builder()
-                                        .buffer(vertex_buffer.raw),
-                                ),
+                            device_address
                         })
                         .vertex_format(conv::map_vertex_format(vertex_format))
                         .vertex_stride(vertex_stride)
                         .max_vertex(max_vertex);
 
                 if let Some(ref indices) = *indices {
+                    let device_address = unsafe {
+                        ray_tracing_functions
+                            .buffer_device_address
+                            .get_buffer_device_address(
+                                &vk::BufferDeviceAddressInfo::builder()
+                                    .buffer(indices.buffer.raw),
+                            )
+                    };
                     triangles_data = triangles_data
                         .index_type(conv::map_index_format(indices.format))
                         .index_data(vk::DeviceOrHostAddressConstKHR {
-                            device_address: ray_tracing_functions
-                                .buffer_device_address
-                                .get_buffer_device_address(
-                                    &vk::BufferDeviceAddressInfo::builder()
-                                        .buffer(indices.buffer.raw),
-                                ),
+                            device_address
                         })
                 }
 
@@ -446,6 +455,13 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             .primitive_offset(desc.primitive_offset)
             .build();
 
+        let device_address = unsafe {
+            ray_tracing_functions
+                .buffer_device_address
+                .get_buffer_device_address(
+                    &vk::BufferDeviceAddressInfo::builder().buffer(desc.scratch_buffer.raw),
+                )
+        };
         let mut geometry_info = vk::AccelerationStructureBuildGeometryInfoKHR::builder()
             .ty(conv::map_acceleration_structure_format(desc.format))
             .mode(conv::map_acceleration_structure_build_mode(desc.mode))
@@ -453,11 +469,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             .geometries(geometries)
             .dst_acceleration_structure(desc.destination_acceleration_structure.raw)
             .scratch_data(vk::DeviceOrHostAddressKHR {
-                device_address: ray_tracing_functions
-                    .buffer_device_address
-                    .get_buffer_device_address(
-                        &vk::BufferDeviceAddressInfo::builder().buffer(desc.scratch_buffer.raw),
-                    ),
+                device_address
             });
 
         if desc.mode == crate::AccelerationStructureBuildMode::Update {
@@ -470,9 +482,11 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         let ranges : &[&[vk::AccelerationStructureBuildRangeInfoKHR]] = &[&[range]];
         let geometry_infos = &[geometry_info];
 
-        ray_tracing_functions
+        unsafe {
+            ray_tracing_functions
             .acceleration_structure
             .cmd_build_acceleration_structures(self.active, geometry_infos, ranges);
+        }
     }
 
     // render
