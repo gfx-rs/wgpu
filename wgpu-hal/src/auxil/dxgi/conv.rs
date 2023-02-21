@@ -33,6 +33,7 @@ pub fn map_texture_format_failable(format: wgt::TextureFormat) -> Option<dxgifor
         Tf::Bgra8Unorm => DXGI_FORMAT_B8G8R8A8_UNORM,
         Tf::Rgba8Uint => DXGI_FORMAT_R8G8B8A8_UINT,
         Tf::Rgba8Sint => DXGI_FORMAT_R8G8B8A8_SINT,
+        Tf::Rgb9e5Ufloat => DXGI_FORMAT_R9G9B9E5_SHAREDEXP,
         Tf::Rgb10a2Unorm => DXGI_FORMAT_R10G10B10A2_UNORM,
         Tf::Rg11b10Float => DXGI_FORMAT_R11G11B10_FLOAT,
         Tf::Rg32Uint => DXGI_FORMAT_R32G32_UINT,
@@ -46,11 +47,12 @@ pub fn map_texture_format_failable(format: wgt::TextureFormat) -> Option<dxgifor
         Tf::Rgba32Uint => DXGI_FORMAT_R32G32B32A32_UINT,
         Tf::Rgba32Sint => DXGI_FORMAT_R32G32B32A32_SINT,
         Tf::Rgba32Float => DXGI_FORMAT_R32G32B32A32_FLOAT,
+        Tf::Stencil8 => DXGI_FORMAT_D24_UNORM_S8_UINT,
+        Tf::Depth16Unorm => DXGI_FORMAT_D16_UNORM,
+        Tf::Depth24Plus => DXGI_FORMAT_D24_UNORM_S8_UINT,
+        Tf::Depth24PlusStencil8 => DXGI_FORMAT_D24_UNORM_S8_UINT,
         Tf::Depth32Float => DXGI_FORMAT_D32_FLOAT,
         Tf::Depth32FloatStencil8 => DXGI_FORMAT_D32_FLOAT_S8X24_UINT,
-        Tf::Depth24Plus => DXGI_FORMAT_D24_UNORM_S8_UINT,
-        Tf::Depth24PlusStencil8 | Tf::Depth24UnormStencil8 => DXGI_FORMAT_D24_UNORM_S8_UINT,
-        Tf::Rgb9e5Ufloat => DXGI_FORMAT_R9G9B9E5_SHAREDEXP,
         Tf::Bc1RgbaUnorm => DXGI_FORMAT_BC1_UNORM,
         Tf::Bc1RgbaUnormSrgb => DXGI_FORMAT_BC1_UNORM_SRGB,
         Tf::Bc2RgbaUnorm => DXGI_FORMAT_BC2_UNORM,
@@ -99,34 +101,78 @@ pub fn map_texture_format_nosrgb(format: wgt::TextureFormat) -> dxgiformat::DXGI
     }
 }
 
-//Note: SRV and UAV can't use the depth formats directly
-//TODO: stencil views?
-pub fn map_texture_format_nodepth(format: wgt::TextureFormat) -> dxgiformat::DXGI_FORMAT {
-    match format {
-        wgt::TextureFormat::Depth32Float => dxgiformat::DXGI_FORMAT_R32_FLOAT,
-        wgt::TextureFormat::Depth32FloatStencil8 => {
+// SRV and UAV can't use the depth or typeless formats
+// see https://microsoft.github.io/DirectX-Specs/d3d/PlanarDepthStencilDDISpec.html#view-creation
+pub fn map_texture_format_for_srv_uav(
+    format: wgt::TextureFormat,
+    aspect: crate::FormatAspects,
+) -> Option<dxgiformat::DXGI_FORMAT> {
+    Some(match (format, aspect) {
+        (wgt::TextureFormat::Depth16Unorm, crate::FormatAspects::DEPTH) => {
+            dxgiformat::DXGI_FORMAT_R16_UNORM
+        }
+        (wgt::TextureFormat::Depth32Float, crate::FormatAspects::DEPTH) => {
+            dxgiformat::DXGI_FORMAT_R32_FLOAT
+        }
+        (wgt::TextureFormat::Depth32FloatStencil8, crate::FormatAspects::DEPTH) => {
             dxgiformat::DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS
         }
-        wgt::TextureFormat::Depth24Plus
-        | wgt::TextureFormat::Depth24PlusStencil8
-        | wgt::TextureFormat::Depth24UnormStencil8 => dxgiformat::DXGI_FORMAT_R24_UNORM_X8_TYPELESS,
-        _ => {
-            assert_eq!(
-                crate::FormatAspects::from(format),
-                crate::FormatAspects::COLOR
-            );
-            map_texture_format(format)
+        (
+            wgt::TextureFormat::Depth24Plus | wgt::TextureFormat::Depth24PlusStencil8,
+            crate::FormatAspects::DEPTH,
+        ) => dxgiformat::DXGI_FORMAT_R24_UNORM_X8_TYPELESS,
+
+        (wgt::TextureFormat::Depth32FloatStencil8, crate::FormatAspects::STENCIL) => {
+            dxgiformat::DXGI_FORMAT_X32_TYPELESS_G8X24_UINT
         }
-    }
+        (
+            wgt::TextureFormat::Stencil8 | wgt::TextureFormat::Depth24PlusStencil8,
+            crate::FormatAspects::STENCIL,
+        ) => dxgiformat::DXGI_FORMAT_X24_TYPELESS_G8_UINT,
+
+        (format, crate::FormatAspects::COLOR) => map_texture_format(format),
+
+        _ => return None,
+    })
 }
 
-pub fn map_texture_format_depth_typeless(format: wgt::TextureFormat) -> dxgiformat::DXGI_FORMAT {
+// see https://microsoft.github.io/DirectX-Specs/d3d/PlanarDepthStencilDDISpec.html#planar-layout-for-staging-from-buffer
+pub fn map_texture_format_for_copy(
+    format: wgt::TextureFormat,
+    aspect: crate::FormatAspects,
+) -> Option<dxgiformat::DXGI_FORMAT> {
+    Some(match (format, aspect) {
+        (wgt::TextureFormat::Depth16Unorm, crate::FormatAspects::DEPTH) => {
+            dxgiformat::DXGI_FORMAT_R16_UNORM
+        }
+        (
+            wgt::TextureFormat::Depth32Float | wgt::TextureFormat::Depth32FloatStencil8,
+            crate::FormatAspects::DEPTH,
+        ) => dxgiformat::DXGI_FORMAT_R32_FLOAT,
+
+        (
+            wgt::TextureFormat::Stencil8
+            | wgt::TextureFormat::Depth24PlusStencil8
+            | wgt::TextureFormat::Depth32FloatStencil8,
+            crate::FormatAspects::STENCIL,
+        ) => dxgiformat::DXGI_FORMAT_R8_UINT,
+
+        (format, crate::FormatAspects::COLOR) => map_texture_format(format),
+
+        _ => return None,
+    })
+}
+
+pub fn map_texture_format_depth_stencil_typeless(
+    format: wgt::TextureFormat,
+) -> dxgiformat::DXGI_FORMAT {
     match format {
+        wgt::TextureFormat::Depth16Unorm => dxgiformat::DXGI_FORMAT_R16_TYPELESS,
         wgt::TextureFormat::Depth32Float => dxgiformat::DXGI_FORMAT_R32_TYPELESS,
         wgt::TextureFormat::Depth32FloatStencil8 => dxgiformat::DXGI_FORMAT_R32G8X24_TYPELESS,
-        wgt::TextureFormat::Depth24Plus
-        | wgt::TextureFormat::Depth24PlusStencil8
-        | wgt::TextureFormat::Depth24UnormStencil8 => dxgiformat::DXGI_FORMAT_R24G8_TYPELESS,
+        wgt::TextureFormat::Stencil8
+        | wgt::TextureFormat::Depth24Plus
+        | wgt::TextureFormat::Depth24PlusStencil8 => dxgiformat::DXGI_FORMAT_R24G8_TYPELESS,
         _ => unreachable!(),
     }
 }
@@ -177,11 +223,6 @@ pub fn map_vertex_format(format: wgt::VertexFormat) -> dxgiformat::DXGI_FORMAT {
     }
 }
 
-pub fn map_acomposite_alpha_mode(mode: crate::CompositeAlphaMode) -> native::AlphaMode {
-    use crate::CompositeAlphaMode as Cam;
-    match mode {
-        Cam::Opaque => native::AlphaMode::Ignore,
-        Cam::PreMultiplied => native::AlphaMode::Premultiplied,
-        Cam::PostMultiplied => native::AlphaMode::Straight,
-    }
+pub fn map_acomposite_alpha_mode(_mode: wgt::CompositeAlphaMode) -> native::AlphaMode {
+    native::AlphaMode::Ignore
 }

@@ -32,6 +32,7 @@ struct Example {
     sample_count: u32,
     rebuild_bundle: bool,
     config: wgpu::SurfaceConfiguration,
+    max_sample_count: u32,
 }
 
 impl Example {
@@ -108,6 +109,7 @@ impl Example {
             format: config.format,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             label: None,
+            view_formats: &[],
         };
 
         device
@@ -117,6 +119,10 @@ impl Example {
 }
 
 impl framework::Example for Example {
+    fn optional_features() -> wgt::Features {
+        wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
+    }
+
     fn init(
         config: &wgpu::SurfaceConfiguration,
         _adapter: &wgpu::Adapter,
@@ -124,7 +130,24 @@ impl framework::Example for Example {
         _queue: &wgpu::Queue,
     ) -> Self {
         log::info!("Press left/right arrow keys to change sample_count.");
-        let sample_count = 4;
+
+        let sample_flags = _adapter.get_texture_format_features(config.format).flags;
+
+        let max_sample_count = {
+            if sample_flags.contains(wgpu::TextureFormatFeatureFlags::MULTISAMPLE_X16) {
+                16
+            } else if sample_flags.contains(wgpu::TextureFormatFeatureFlags::MULTISAMPLE_X8) {
+                8
+            } else if sample_flags.contains(wgpu::TextureFormatFeatureFlags::MULTISAMPLE_X4) {
+                4
+            } else if sample_flags.contains(wgpu::TextureFormatFeatureFlags::MULTISAMPLE_X2) {
+                2
+            } else {
+                1
+            }
+        };
+
+        let sample_count = max_sample_count;
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
@@ -181,6 +204,7 @@ impl framework::Example for Example {
             vertex_buffer,
             vertex_count,
             sample_count,
+            max_sample_count,
             rebuild_bundle: false,
             config: config.clone(),
         }
@@ -195,14 +219,14 @@ impl framework::Example for Example {
                         // TODO: Switch back to full scans of possible options when we expose
                         //       supported sample counts to the user.
                         Some(winit::event::VirtualKeyCode::Left) => {
-                            if self.sample_count == 4 {
+                            if self.sample_count == self.max_sample_count {
                                 self.sample_count = 1;
                                 self.rebuild_bundle = true;
                             }
                         }
                         Some(winit::event::VirtualKeyCode::Right) => {
                             if self.sample_count == 1 {
-                                self.sample_count = 4;
+                                self.sample_count = self.max_sample_count;
                                 self.rebuild_bundle = true;
                             }
                         }
@@ -289,13 +313,17 @@ fn main() {
     framework::run::<Example>("msaa-line");
 }
 
+wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
+
 #[test]
+#[wasm_bindgen_test::wasm_bindgen_test]
 fn msaa_line() {
     framework::test::<Example>(framework::FrameworkRefTest {
         image_path: "/examples/msaa-line/screenshot.png",
         width: 1024,
         height: 768,
-        optional_features: wgpu::Features::default(),
+        optional_features: wgpu::Features::default()
+            | wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
         base_test_parameters: framework::test_common::TestParameters::default(),
         tolerance: 64,
         max_outliers: 1 << 16, // MSAA is comically different between vendors, 32k is a decent limit

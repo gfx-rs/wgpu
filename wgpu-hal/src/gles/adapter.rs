@@ -2,6 +2,8 @@ use glow::HasContext;
 use std::sync::Arc;
 use wgt::AstcChannel;
 
+use crate::auxil::db;
+
 // https://webgl2fundamentals.org/webgl/lessons/webgl-data-textures.html
 
 const GL_UNMASKED_VENDOR_WEBGL: u32 = 0x9245;
@@ -120,7 +122,7 @@ impl super::Adapter {
             "mali",
             "intel",
             "v3d",
-            "apple m1",
+            "apple m", // all apple m are integrated
         ];
         let strings_that_imply_cpu = ["mesa offscreen", "swiftshader", "llvmpipe"];
 
@@ -145,28 +147,34 @@ impl super::Adapter {
 
         // source: Sascha Willems at Vulkan
         let vendor_id = if vendor.contains("amd") {
-            0x1002
+            db::amd::VENDOR
         } else if vendor.contains("imgtec") {
-            0x1010
+            db::imgtec::VENDOR
         } else if vendor.contains("nvidia") {
-            0x10DE
+            db::nvidia::VENDOR
         } else if vendor.contains("arm") {
-            0x13B5
+            db::arm::VENDOR
         } else if vendor.contains("qualcomm") {
-            0x5143
+            db::qualcomm::VENDOR
         } else if vendor.contains("intel") {
-            0x8086
+            db::intel::VENDOR
         } else if vendor.contains("broadcom") {
-            0x14e4
+            db::broadcom::VENDOR
+        } else if vendor.contains("mesa") {
+            db::mesa::VENDOR
+        } else if vendor.contains("apple") {
+            db::apple::VENDOR
         } else {
             0
         };
 
         wgt::AdapterInfo {
             name: renderer_orig,
-            vendor: vendor_id,
+            vendor: vendor_id as usize,
             device: 0,
             device_type: inferred_device_type,
+            driver: String::new(),
+            driver_info: String::new(),
             backend: wgt::Backend::Gl,
         }
     }
@@ -183,13 +191,12 @@ impl super::Adapter {
             (glow::VENDOR, glow::RENDERER)
         };
         let (vendor, renderer) = {
-            let vendor = gl.get_parameter_string(vendor_const);
-            let renderer = gl.get_parameter_string(renderer_const);
+            let vendor = unsafe { gl.get_parameter_string(vendor_const) };
+            let renderer = unsafe { gl.get_parameter_string(renderer_const) };
 
             (vendor, renderer)
         };
-        let version = gl.get_parameter_string(glow::VERSION);
-
+        let version = unsafe { gl.get_parameter_string(glow::VERSION) };
         log::info!("Vendor: {}", vendor);
         log::info!("Renderer: {}", renderer);
         log::info!("Version: {}", version);
@@ -210,7 +217,7 @@ impl super::Adapter {
         let supports_work_group_params = ver >= (3, 1);
 
         let shading_language_version = {
-            let sl_version = gl.get_parameter_string(glow::SHADING_LANGUAGE_VERSION);
+            let sl_version = unsafe { gl.get_parameter_string(glow::SHADING_LANGUAGE_VERSION) };
             log::info!("SL version: {}", &sl_version);
             let (sl_major, sl_minor) = Self::parse_version(&sl_version).ok()?;
             let value = sl_major as u16 * 100 + sl_minor as u16 * 10;
@@ -224,30 +231,31 @@ impl super::Adapter {
         let is_angle = renderer.contains("ANGLE");
 
         let vertex_shader_storage_blocks = if supports_storage {
-            gl.get_parameter_i32(glow::MAX_VERTEX_SHADER_STORAGE_BLOCKS) as u32
+            (unsafe { gl.get_parameter_i32(glow::MAX_VERTEX_SHADER_STORAGE_BLOCKS) } as u32)
         } else {
             0
         };
         let fragment_shader_storage_blocks = if supports_storage {
-            gl.get_parameter_i32(glow::MAX_FRAGMENT_SHADER_STORAGE_BLOCKS) as u32
+            (unsafe { gl.get_parameter_i32(glow::MAX_FRAGMENT_SHADER_STORAGE_BLOCKS) } as u32)
         } else {
             0
         };
         let vertex_shader_storage_textures = if supports_storage {
-            gl.get_parameter_i32(glow::MAX_VERTEX_IMAGE_UNIFORMS) as u32
+            (unsafe { gl.get_parameter_i32(glow::MAX_VERTEX_IMAGE_UNIFORMS) } as u32)
         } else {
             0
         };
         let fragment_shader_storage_textures = if supports_storage {
-            gl.get_parameter_i32(glow::MAX_FRAGMENT_IMAGE_UNIFORMS) as u32
+            (unsafe { gl.get_parameter_i32(glow::MAX_FRAGMENT_IMAGE_UNIFORMS) } as u32)
         } else {
             0
         };
         let max_storage_block_size = if supports_storage {
-            gl.get_parameter_i32(glow::MAX_SHADER_STORAGE_BLOCK_SIZE) as u32
+            (unsafe { gl.get_parameter_i32(glow::MAX_SHADER_STORAGE_BLOCK_SIZE) } as u32)
         } else {
             0
         };
+        let max_element_index = unsafe { gl.get_parameter_i32(glow::MAX_ELEMENT_INDEX) } as u32;
 
         // WORKAROUND: In order to work around an issue with GL on RPI4 and similar, we ignore a
         // zero vertex ssbo count if there are vertex sstos. (more info:
@@ -304,6 +312,23 @@ impl super::Adapter {
             wgt::DownlevelFlags::BUFFER_BINDINGS_NOT_16_BYTE_ALIGNED,
             !(cfg!(target_arch = "wasm32") || is_angle),
         );
+        // see https://registry.khronos.org/webgl/specs/latest/2.0/#BUFFER_OBJECT_BINDING
+        downlevel_flags.set(
+            wgt::DownlevelFlags::UNRESTRICTED_INDEX_BUFFER,
+            !cfg!(target_arch = "wasm32"),
+        );
+        downlevel_flags.set(
+            wgt::DownlevelFlags::UNRESTRICTED_EXTERNAL_TEXTURE_COPIES,
+            !cfg!(target_arch = "wasm32"),
+        );
+        downlevel_flags.set(
+            wgt::DownlevelFlags::FULL_DRAW_INDEX_UINT32,
+            max_element_index == u32::MAX,
+        );
+        downlevel_flags.set(
+            wgt::DownlevelFlags::MULTISAMPLED_SHADING,
+            ver >= (3, 2) || extensions.contains("OES_sample_variables"),
+        );
 
         let mut features = wgt::Features::empty()
             | wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
@@ -322,6 +347,15 @@ impl super::Adapter {
             downlevel_flags.contains(wgt::DownlevelFlags::VERTEX_STORAGE)
                 && vertex_shader_storage_textures != 0,
         );
+        features.set(
+            wgt::Features::MULTIVIEW,
+            extensions.contains("OVR_multiview2"),
+        );
+        features.set(
+            wgt::Features::SHADER_PRIMITIVE_INDEX,
+            ver >= (3, 2) || extensions.contains("OES_geometry_shader"),
+        );
+        features.set(wgt::Features::SHADER_EARLY_DEPTH_TEST, ver >= (3, 1));
         let gles_bcn_exts = [
             "GL_EXT_texture_compression_s3tc_srgb",
             "GL_EXT_texture_compression_rgtc",
@@ -347,11 +381,22 @@ impl super::Adapter {
             // This is a part of GLES-3 but not WebGL2 core
             !cfg!(target_arch = "wasm32") || extensions.contains("WEBGL_compressed_texture_etc"),
         );
-        features.set(
-            wgt::Features::TEXTURE_COMPRESSION_ASTC_LDR,
-            extensions.contains("GL_KHR_texture_compression_astc_ldr")
-                || extensions.contains("WEBGL_compressed_texture_astc"),
-        );
+        // `OES_texture_compression_astc` provides 2D + 3D, LDR + HDR support
+        if extensions.contains("WEBGL_compressed_texture_astc")
+            || extensions.contains("GL_OES_texture_compression_astc")
+        {
+            features.insert(wgt::Features::TEXTURE_COMPRESSION_ASTC_LDR);
+            features.insert(wgt::Features::TEXTURE_COMPRESSION_ASTC_HDR);
+        } else {
+            features.set(
+                wgt::Features::TEXTURE_COMPRESSION_ASTC_LDR,
+                extensions.contains("GL_KHR_texture_compression_astc_ldr"),
+            );
+            features.set(
+                wgt::Features::TEXTURE_COMPRESSION_ASTC_HDR,
+                extensions.contains("GL_KHR_texture_compression_astc_hdr"),
+            );
+        }
 
         let mut private_caps = super::PrivateCapabilities::empty();
         private_caps.set(
@@ -394,25 +439,30 @@ impl super::Adapter {
             super::PrivateCapabilities::COLOR_BUFFER_FLOAT,
             color_buffer_float,
         );
+        private_caps.set(
+            super::PrivateCapabilities::TEXTURE_FLOAT_LINEAR,
+            extensions.contains("OES_texture_float_linear"),
+        );
 
-        let max_texture_size = gl.get_parameter_i32(glow::MAX_TEXTURE_SIZE) as u32;
-        let max_texture_3d_size = gl.get_parameter_i32(glow::MAX_3D_TEXTURE_SIZE) as u32;
+        let max_texture_size = unsafe { gl.get_parameter_i32(glow::MAX_TEXTURE_SIZE) } as u32;
+        let max_texture_3d_size = unsafe { gl.get_parameter_i32(glow::MAX_3D_TEXTURE_SIZE) } as u32;
 
         let min_uniform_buffer_offset_alignment =
-            gl.get_parameter_i32(glow::UNIFORM_BUFFER_OFFSET_ALIGNMENT) as u32;
+            (unsafe { gl.get_parameter_i32(glow::UNIFORM_BUFFER_OFFSET_ALIGNMENT) } as u32);
         let min_storage_buffer_offset_alignment = if ver >= (3, 1) {
-            gl.get_parameter_i32(glow::SHADER_STORAGE_BUFFER_OFFSET_ALIGNMENT) as u32
+            (unsafe { gl.get_parameter_i32(glow::SHADER_STORAGE_BUFFER_OFFSET_ALIGNMENT) } as u32)
         } else {
             256
         };
         let max_uniform_buffers_per_shader_stage =
-            gl.get_parameter_i32(glow::MAX_VERTEX_UNIFORM_BLOCKS)
-                .min(gl.get_parameter_i32(glow::MAX_FRAGMENT_UNIFORM_BLOCKS)) as u32;
+            unsafe { gl.get_parameter_i32(glow::MAX_VERTEX_UNIFORM_BLOCKS) }
+                .min(unsafe { gl.get_parameter_i32(glow::MAX_FRAGMENT_UNIFORM_BLOCKS) })
+                as u32;
 
         let max_compute_workgroups_per_dimension = if supports_work_group_params {
-            gl.get_parameter_indexed_i32(glow::MAX_COMPUTE_WORK_GROUP_COUNT, 0)
-                .min(gl.get_parameter_indexed_i32(glow::MAX_COMPUTE_WORK_GROUP_COUNT, 1))
-                .min(gl.get_parameter_indexed_i32(glow::MAX_COMPUTE_WORK_GROUP_COUNT, 2))
+            unsafe { gl.get_parameter_indexed_i32(glow::MAX_COMPUTE_WORK_GROUP_COUNT, 0) }
+                .min(unsafe { gl.get_parameter_indexed_i32(glow::MAX_COMPUTE_WORK_GROUP_COUNT, 1) })
+                .min(unsafe { gl.get_parameter_indexed_i32(glow::MAX_COMPUTE_WORK_GROUP_COUNT, 2) })
                 as u32
         } else {
             0
@@ -422,8 +472,11 @@ impl super::Adapter {
             max_texture_dimension_1d: max_texture_size,
             max_texture_dimension_2d: max_texture_size,
             max_texture_dimension_3d: max_texture_3d_size,
-            max_texture_array_layers: gl.get_parameter_i32(glow::MAX_ARRAY_TEXTURE_LAYERS) as u32,
+            max_texture_array_layers: unsafe {
+                gl.get_parameter_i32(glow::MAX_ARRAY_TEXTURE_LAYERS)
+            } as u32,
             max_bind_groups: crate::MAX_BIND_GROUPS as u32,
+            max_bindings_per_bind_group: 65535,
             max_dynamic_uniform_buffers_per_pipeline_layout: max_uniform_buffers_per_shader_stage,
             max_dynamic_storage_buffers_per_pipeline_layout: max_storage_buffers_per_shader_stage,
             max_sampled_textures_per_shader_stage: super::MAX_TEXTURE_SLOTS as u32,
@@ -431,56 +484,62 @@ impl super::Adapter {
             max_storage_buffers_per_shader_stage,
             max_storage_textures_per_shader_stage,
             max_uniform_buffers_per_shader_stage,
-            max_uniform_buffer_binding_size: gl.get_parameter_i32(glow::MAX_UNIFORM_BLOCK_SIZE)
-                as u32,
+            max_uniform_buffer_binding_size: unsafe {
+                gl.get_parameter_i32(glow::MAX_UNIFORM_BLOCK_SIZE)
+            } as u32,
             max_storage_buffer_binding_size: if ver >= (3, 1) {
-                gl.get_parameter_i32(glow::MAX_SHADER_STORAGE_BLOCK_SIZE)
+                unsafe { gl.get_parameter_i32(glow::MAX_SHADER_STORAGE_BLOCK_SIZE) }
             } else {
                 0
             } as u32,
             max_vertex_buffers: if private_caps
                 .contains(super::PrivateCapabilities::VERTEX_BUFFER_LAYOUT)
             {
-                gl.get_parameter_i32(glow::MAX_VERTEX_ATTRIB_BINDINGS) as u32
+                (unsafe { gl.get_parameter_i32(glow::MAX_VERTEX_ATTRIB_BINDINGS) } as u32)
             } else {
                 16 // should this be different?
             },
-            max_vertex_attributes: (gl.get_parameter_i32(glow::MAX_VERTEX_ATTRIBS) as u32)
+            max_vertex_attributes: (unsafe { gl.get_parameter_i32(glow::MAX_VERTEX_ATTRIBS) }
+                as u32)
                 .min(super::MAX_VERTEX_ATTRIBUTES as u32),
             max_vertex_buffer_array_stride: if private_caps
                 .contains(super::PrivateCapabilities::VERTEX_BUFFER_LAYOUT)
             {
-                gl.get_parameter_i32(glow::MAX_VERTEX_ATTRIB_STRIDE) as u32
+                (unsafe { gl.get_parameter_i32(glow::MAX_VERTEX_ATTRIB_STRIDE) } as u32)
             } else {
                 !0
             },
             max_push_constant_size: super::MAX_PUSH_CONSTANTS as u32 * 4,
             min_uniform_buffer_offset_alignment,
             min_storage_buffer_offset_alignment,
-            max_inter_stage_shader_components: gl.get_parameter_i32(glow::MAX_VARYING_COMPONENTS)
-                as u32,
+            max_inter_stage_shader_components: unsafe {
+                gl.get_parameter_i32(glow::MAX_VARYING_COMPONENTS)
+            } as u32,
             max_compute_workgroup_storage_size: if supports_work_group_params {
-                gl.get_parameter_i32(glow::MAX_COMPUTE_SHARED_MEMORY_SIZE) as u32
+                (unsafe { gl.get_parameter_i32(glow::MAX_COMPUTE_SHARED_MEMORY_SIZE) } as u32)
             } else {
                 0
             },
             max_compute_invocations_per_workgroup: if supports_work_group_params {
-                gl.get_parameter_i32(glow::MAX_COMPUTE_WORK_GROUP_INVOCATIONS) as u32
+                (unsafe { gl.get_parameter_i32(glow::MAX_COMPUTE_WORK_GROUP_INVOCATIONS) } as u32)
             } else {
                 0
             },
             max_compute_workgroup_size_x: if supports_work_group_params {
-                gl.get_parameter_indexed_i32(glow::MAX_COMPUTE_WORK_GROUP_SIZE, 0) as u32
+                (unsafe { gl.get_parameter_indexed_i32(glow::MAX_COMPUTE_WORK_GROUP_SIZE, 0) }
+                    as u32)
             } else {
                 0
             },
             max_compute_workgroup_size_y: if supports_work_group_params {
-                gl.get_parameter_indexed_i32(glow::MAX_COMPUTE_WORK_GROUP_SIZE, 1) as u32
+                (unsafe { gl.get_parameter_indexed_i32(glow::MAX_COMPUTE_WORK_GROUP_SIZE, 1) }
+                    as u32)
             } else {
                 0
             },
             max_compute_workgroup_size_z: if supports_work_group_params {
-                gl.get_parameter_indexed_i32(glow::MAX_COMPUTE_WORK_GROUP_SIZE, 2) as u32
+                (unsafe { gl.get_parameter_indexed_i32(glow::MAX_COMPUTE_WORK_GROUP_SIZE, 2) }
+                    as u32)
             } else {
                 0
             },
@@ -528,6 +587,8 @@ impl super::Adapter {
                     features,
                     shading_language_version,
                     max_texture_size,
+                    next_shader_id: Default::default(),
+                    program_cache: Default::default(),
                 }),
             },
             info: Self::make_info(vendor, renderer),
@@ -550,27 +611,22 @@ impl super::Adapter {
     unsafe fn create_shader_clear_program(
         gl: &glow::Context,
     ) -> (glow::Program, glow::UniformLocation) {
-        let program = gl
-            .create_program()
-            .expect("Could not create shader program");
-        let vertex = gl
-            .create_shader(glow::VERTEX_SHADER)
-            .expect("Could not create shader");
-        gl.shader_source(vertex, include_str!("./shaders/clear.vert"));
-        gl.compile_shader(vertex);
-        let fragment = gl
-            .create_shader(glow::FRAGMENT_SHADER)
-            .expect("Could not create shader");
-        gl.shader_source(fragment, include_str!("./shaders/clear.frag"));
-        gl.compile_shader(fragment);
-        gl.attach_shader(program, vertex);
-        gl.attach_shader(program, fragment);
-        gl.link_program(program);
-        let color_uniform_location = gl
-            .get_uniform_location(program, "color")
+        let program = unsafe { gl.create_program() }.expect("Could not create shader program");
+        let vertex =
+            unsafe { gl.create_shader(glow::VERTEX_SHADER) }.expect("Could not create shader");
+        unsafe { gl.shader_source(vertex, include_str!("./shaders/clear.vert")) };
+        unsafe { gl.compile_shader(vertex) };
+        let fragment =
+            unsafe { gl.create_shader(glow::FRAGMENT_SHADER) }.expect("Could not create shader");
+        unsafe { gl.shader_source(fragment, include_str!("./shaders/clear.frag")) };
+        unsafe { gl.compile_shader(fragment) };
+        unsafe { gl.attach_shader(program, vertex) };
+        unsafe { gl.attach_shader(program, fragment) };
+        unsafe { gl.link_program(program) };
+        let color_uniform_location = unsafe { gl.get_uniform_location(program, "color") }
             .expect("Could not find color uniform in shader clear shader");
-        gl.delete_shader(vertex);
-        gl.delete_shader(fragment);
+        unsafe { gl.delete_shader(vertex) };
+        unsafe { gl.delete_shader(fragment) };
 
         (program, color_uniform_location)
     }
@@ -583,24 +639,22 @@ impl crate::Adapter<super::Api> for super::Adapter {
         _limits: &wgt::Limits,
     ) -> Result<crate::OpenDevice<super::Api>, crate::DeviceError> {
         let gl = &self.shared.context.lock();
-        gl.pixel_store_i32(glow::UNPACK_ALIGNMENT, 1);
-        gl.pixel_store_i32(glow::PACK_ALIGNMENT, 1);
-        let main_vao = gl
-            .create_vertex_array()
-            .map_err(|_| crate::DeviceError::OutOfMemory)?;
-        gl.bind_vertex_array(Some(main_vao));
+        unsafe { gl.pixel_store_i32(glow::UNPACK_ALIGNMENT, 1) };
+        unsafe { gl.pixel_store_i32(glow::PACK_ALIGNMENT, 1) };
+        let main_vao =
+            unsafe { gl.create_vertex_array() }.map_err(|_| crate::DeviceError::OutOfMemory)?;
+        unsafe { gl.bind_vertex_array(Some(main_vao)) };
 
-        let zero_buffer = gl
-            .create_buffer()
-            .map_err(|_| crate::DeviceError::OutOfMemory)?;
-        gl.bind_buffer(glow::COPY_READ_BUFFER, Some(zero_buffer));
+        let zero_buffer =
+            unsafe { gl.create_buffer() }.map_err(|_| crate::DeviceError::OutOfMemory)?;
+        unsafe { gl.bind_buffer(glow::COPY_READ_BUFFER, Some(zero_buffer)) };
         let zeroes = vec![0u8; super::ZERO_BUFFER_SIZE];
-        gl.buffer_data_u8_slice(glow::COPY_READ_BUFFER, &zeroes, glow::STATIC_DRAW);
+        unsafe { gl.buffer_data_u8_slice(glow::COPY_READ_BUFFER, &zeroes, glow::STATIC_DRAW) };
 
         // Compile the shader program we use for doing manual clears to work around Mesa fastclear
         // bug.
         let (shader_clear_program, shader_clear_program_color_uniform_location) =
-            Self::create_shader_clear_program(gl);
+            unsafe { Self::create_shader_clear_program(gl) };
 
         Ok(crate::OpenDevice {
             device: super::Device {
@@ -612,11 +666,9 @@ impl crate::Adapter<super::Api> for super::Adapter {
             queue: super::Queue {
                 shared: Arc::clone(&self.shared),
                 features,
-                draw_fbo: gl
-                    .create_framebuffer()
+                draw_fbo: unsafe { gl.create_framebuffer() }
                     .map_err(|_| crate::DeviceError::OutOfMemory)?,
-                copy_fbo: gl
-                    .create_framebuffer()
+                copy_fbo: unsafe { gl.create_framebuffer() }
                     .map_err(|_| crate::DeviceError::OutOfMemory)?,
                 shader_clear_program,
                 shader_clear_program_color_uniform_location,
@@ -635,6 +687,27 @@ impl crate::Adapter<super::Api> for super::Adapter {
         use crate::TextureFormatCapabilities as Tfc;
         use wgt::TextureFormat as Tf;
 
+        let sample_count = {
+            let max_samples = unsafe {
+                self.shared
+                    .context
+                    .lock()
+                    .get_parameter_i32(glow::MAX_SAMPLES)
+            };
+            if max_samples >= 16 {
+                Tfc::MULTISAMPLE_X2
+                    | Tfc::MULTISAMPLE_X4
+                    | Tfc::MULTISAMPLE_X8
+                    | Tfc::MULTISAMPLE_X16
+            } else if max_samples >= 8 {
+                Tfc::MULTISAMPLE_X2 | Tfc::MULTISAMPLE_X4 | Tfc::MULTISAMPLE_X8
+            } else if max_samples >= 4 {
+                Tfc::MULTISAMPLE_X2 | Tfc::MULTISAMPLE_X4
+            } else {
+                Tfc::MULTISAMPLE_X2
+            }
+        };
+
         // Base types are pulled from the table in the OpenGLES 3.0 spec in section 3.8.
         //
         // The storage types are based on table 8.26, in section
@@ -642,10 +715,10 @@ impl crate::Adapter<super::Api> for super::Adapter {
         let empty = Tfc::empty();
         let base = Tfc::COPY_SRC | Tfc::COPY_DST;
         let unfilterable = base | Tfc::SAMPLED;
-        let depth = base | Tfc::SAMPLED | Tfc::MULTISAMPLE | Tfc::DEPTH_STENCIL_ATTACHMENT;
+        let depth = base | Tfc::SAMPLED | sample_count | Tfc::DEPTH_STENCIL_ATTACHMENT;
         let filterable = unfilterable | Tfc::SAMPLED_LINEAR;
         let renderable =
-            unfilterable | Tfc::COLOR_ATTACHMENT | Tfc::MULTISAMPLE | Tfc::MULTISAMPLE_RESOLVE;
+            unfilterable | Tfc::COLOR_ATTACHMENT | sample_count | Tfc::MULTISAMPLE_RESOLVE;
         let filterable_renderable = filterable | renderable | Tfc::COLOR_ATTACHMENT_BLEND;
         let storage = base | Tfc::STORAGE | Tfc::STORAGE_READ_WRITE;
 
@@ -660,6 +733,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
         let bcn_features = feature_fn(wgt::Features::TEXTURE_COMPRESSION_BC, filterable);
         let etc2_features = feature_fn(wgt::Features::TEXTURE_COMPRESSION_ETC2, filterable);
         let astc_features = feature_fn(wgt::Features::TEXTURE_COMPRESSION_ASTC_LDR, filterable);
+        let astc_hdr_features = feature_fn(wgt::Features::TEXTURE_COMPRESSION_ASTC_HDR, filterable);
 
         let private_caps_fn = |f, caps| {
             if self.shared.private_caps.contains(f) {
@@ -671,13 +745,22 @@ impl crate::Adapter<super::Api> for super::Adapter {
 
         let half_float_renderable = private_caps_fn(
             super::PrivateCapabilities::COLOR_BUFFER_HALF_FLOAT,
-            Tfc::COLOR_ATTACHMENT | Tfc::COLOR_ATTACHMENT_BLEND,
+            Tfc::COLOR_ATTACHMENT
+                | Tfc::COLOR_ATTACHMENT_BLEND
+                | sample_count
+                | Tfc::MULTISAMPLE_RESOLVE,
         );
 
         let float_renderable = private_caps_fn(
             super::PrivateCapabilities::COLOR_BUFFER_FLOAT,
-            Tfc::COLOR_ATTACHMENT | Tfc::COLOR_ATTACHMENT_BLEND,
+            Tfc::COLOR_ATTACHMENT
+                | Tfc::COLOR_ATTACHMENT_BLEND
+                | sample_count
+                | Tfc::MULTISAMPLE_RESOLVE,
         );
+
+        let texture_float_linear =
+            private_caps_fn(super::PrivateCapabilities::TEXTURE_FLOAT_LINEAR, filterable);
 
         match format {
             Tf::R8Unorm => filterable_renderable,
@@ -695,7 +778,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
             Tf::Rg8Sint => renderable,
             Tf::R32Uint => renderable | storage,
             Tf::R32Sint => renderable | storage,
-            Tf::R32Float => unfilterable | storage | float_renderable,
+            Tf::R32Float => unfilterable | storage | float_renderable | texture_float_linear,
             Tf::Rg16Uint => renderable,
             Tf::Rg16Sint => renderable,
             Tf::Rg16Unorm => empty,
@@ -710,7 +793,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
             Tf::Rg11b10Float => filterable | float_renderable,
             Tf::Rg32Uint => renderable,
             Tf::Rg32Sint => renderable,
-            Tf::Rg32Float => unfilterable | float_renderable,
+            Tf::Rg32Float => unfilterable | float_renderable | texture_float_linear,
             Tf::Rgba16Uint => renderable | storage,
             Tf::Rgba16Sint => renderable | storage,
             Tf::Rgba16Unorm => empty,
@@ -718,12 +801,13 @@ impl crate::Adapter<super::Api> for super::Adapter {
             Tf::Rgba16Float => filterable | storage | half_float_renderable,
             Tf::Rgba32Uint => renderable | storage,
             Tf::Rgba32Sint => renderable | storage,
-            Tf::Rgba32Float => unfilterable | storage | float_renderable,
-            Tf::Depth32Float
+            Tf::Rgba32Float => unfilterable | storage | float_renderable | texture_float_linear,
+            Tf::Stencil8
+            | Tf::Depth16Unorm
+            | Tf::Depth32Float
             | Tf::Depth32FloatStencil8
             | Tf::Depth24Plus
-            | Tf::Depth24PlusStencil8
-            | Tf::Depth24UnormStencil8 => depth,
+            | Tf::Depth24PlusStencil8 => depth,
             Tf::Rgb9e5Ufloat => filterable,
             Tf::Bc1RgbaUnorm
             | Tf::Bc1RgbaUnormSrgb
@@ -756,7 +840,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
             Tf::Astc {
                 block: _,
                 channel: AstcChannel::Hdr,
-            } => Tfc::empty(),
+            } => astc_hdr_features,
         }
     }
 
@@ -765,22 +849,30 @@ impl crate::Adapter<super::Api> for super::Adapter {
         surface: &super::Surface,
     ) -> Option<crate::SurfaceCapabilities> {
         if surface.presentable {
+            let mut formats = vec![
+                wgt::TextureFormat::Rgba8Unorm,
+                #[cfg(not(target_arch = "wasm32"))]
+                wgt::TextureFormat::Bgra8Unorm,
+            ];
+            if surface.supports_srgb() {
+                formats.extend([
+                    wgt::TextureFormat::Rgba8UnormSrgb,
+                    #[cfg(not(target_arch = "wasm32"))]
+                    wgt::TextureFormat::Bgra8UnormSrgb,
+                ])
+            }
+            if self
+                .shared
+                .private_caps
+                .contains(super::PrivateCapabilities::COLOR_BUFFER_HALF_FLOAT)
+            {
+                formats.push(wgt::TextureFormat::Rgba16Float)
+            }
+
             Some(crate::SurfaceCapabilities {
-                formats: if surface.supports_srgb() {
-                    vec![
-                        wgt::TextureFormat::Rgba8UnormSrgb,
-                        #[cfg(not(target_arch = "wasm32"))]
-                        wgt::TextureFormat::Bgra8UnormSrgb,
-                    ]
-                } else {
-                    vec![
-                        wgt::TextureFormat::Rgba8Unorm,
-                        #[cfg(not(target_arch = "wasm32"))]
-                        wgt::TextureFormat::Bgra8Unorm,
-                    ]
-                },
+                formats,
                 present_modes: vec![wgt::PresentMode::Fifo], //TODO
-                composite_alpha_modes: vec![crate::CompositeAlphaMode::Opaque], //TODO
+                composite_alpha_modes: vec![wgt::CompositeAlphaMode::Opaque], //TODO
                 swap_chain_sizes: 2..=2,
                 current_extent: None,
                 extents: wgt::Extent3d {
@@ -798,6 +890,10 @@ impl crate::Adapter<super::Api> for super::Adapter {
             None
         }
     }
+
+    unsafe fn get_presentation_timestamp(&self) -> wgt::PresentationTimestamp {
+        wgt::PresentationTimestamp::INVALID_TIMESTAMP
+    }
 }
 
 impl super::AdapterShared {
@@ -812,16 +908,16 @@ impl super::AdapterShared {
             .private_caps
             .contains(super::PrivateCapabilities::GET_BUFFER_SUB_DATA)
         {
-            gl.get_buffer_sub_data(target, offset, dst_data);
+            unsafe { gl.get_buffer_sub_data(target, offset, dst_data) };
         } else {
             log::error!("Fake map");
             let length = dst_data.len();
             let buffer_mapping =
-                gl.map_buffer_range(target, offset, length as _, glow::MAP_READ_BIT);
+                unsafe { gl.map_buffer_range(target, offset, length as _, glow::MAP_READ_BIT) };
 
-            std::ptr::copy_nonoverlapping(buffer_mapping, dst_data.as_mut_ptr(), length);
+            unsafe { std::ptr::copy_nonoverlapping(buffer_mapping, dst_data.as_mut_ptr(), length) };
 
-            gl.unmap_buffer(target);
+            unsafe { gl.unmap_buffer(target) };
         }
     }
 }

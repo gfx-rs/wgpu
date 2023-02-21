@@ -3,6 +3,24 @@ struct VertexOutput {
     @location(0) tex_coords: vec2<f32>,
 };
 
+// meant to be called with 3 vertex indices: 0, 1, 2
+// draws one large triangle over the clip space like this:
+// (the asterisks represent the clip space bounds)
+//-1,1           1,1
+// ---------------------------------
+// |              *              .
+// |              *           .
+// |              *        .
+// |              *      .
+// |              *    . 
+// |              * .
+// |***************
+// |            . 1,-1 
+// |          .
+// |       .
+// |     .
+// |   .
+// |.
 @vertex
 fn vs_main(@builtin(vertex_index) vertex_index: u32) -> VertexOutput {
     var result: VertexOutput;

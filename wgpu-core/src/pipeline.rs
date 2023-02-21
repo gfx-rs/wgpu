@@ -1,12 +1,13 @@
 use crate::{
     binding_model::{CreateBindGroupLayoutError, CreatePipelineLayoutError},
+    command::ColorAttachmentError,
     device::{DeviceError, MissingDownlevelFlags, MissingFeatures, RenderPassContext},
     hub::Resource,
     id::{DeviceId, PipelineLayoutId, ShaderModuleId},
     validation, Label, LifeGuard, Stored,
 };
 use arrayvec::ArrayVec;
-use std::{borrow::Cow, error::Error, fmt, num::NonZeroU32};
+use std::{borrow::Cow, error::Error, fmt, marker::PhantomData, num::NonZeroU32};
 use thiserror::Error;
 
 /// Information about buffer bindings, which
@@ -20,8 +21,13 @@ pub(crate) struct LateSizedBufferGroup {
 
 #[allow(clippy::large_enum_variant)]
 pub enum ShaderModuleSource<'a> {
+    #[cfg(feature = "wgsl")]
     Wgsl(Cow<'a, str>),
-    Naga(naga::Module),
+    Naga(Cow<'static, naga::Module>),
+    /// Dummy variant because `Naga` doesn't have a lifetime and without enough active features it
+    /// could be the last one active.
+    #[doc(hidden)]
+    Dummy(PhantomData<&'a ()>),
 }
 
 #[derive(Clone, Debug)]
@@ -61,13 +67,14 @@ impl<A: hal::Api> Resource for ShaderModule<A> {
 pub struct ShaderError<E> {
     pub source: String,
     pub label: Option<String>,
-    pub inner: E,
+    pub inner: Box<E>,
 }
+#[cfg(feature = "wgsl")]
 impl fmt::Display for ShaderError<naga::front::wgsl::ParseError> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let label = self.label.as_deref().unwrap_or_default();
         let string = self.inner.emit_to_string(&self.source);
-        write!(f, "\nShader '{}' parsing {}", label, string)
+        write!(f, "\nShader '{label}' parsing {string}")
     }
 }
 impl fmt::Display for ShaderError<naga::WithSpan<naga::valid::ValidationError>> {
@@ -114,6 +121,7 @@ where
 //Note: `Clone` would require `WithSpan: Clone`.
 #[derive(Debug, Error)]
 pub enum CreateShaderModuleError {
+    #[cfg(feature = "wgsl")]
     #[error(transparent)]
     Parsing(#[from] ShaderError<naga::front::wgsl::ParseError>),
     #[error("Failed to generate the backend-specific code")]
@@ -137,6 +145,7 @@ pub enum CreateShaderModuleError {
 impl CreateShaderModuleError {
     pub fn location(&self, source: &str) -> Option<naga::SourceLocation> {
         match *self {
+            #[cfg(feature = "wgsl")]
             CreateShaderModuleError::Parsing(ref err) => err.inner.location(source),
             CreateShaderModuleError::Validation(ref err) => err.inner.location(source),
             _ => None,
@@ -295,6 +304,8 @@ pub enum ColorStateError {
     },
     #[error("blend factors for {0:?} must be `One`")]
     InvalidMinMaxBlendFactors(wgt::BlendComponent),
+    #[error("invalid write mask {0:?}")]
+    InvalidWriteMask(wgt::ColorWrites),
 }
 
 #[derive(Clone, Debug, Error)]
@@ -312,6 +323,8 @@ pub enum DepthStencilStateError {
 #[derive(Clone, Debug, Error)]
 pub enum CreateRenderPipelineError {
     #[error(transparent)]
+    ColorAttachment(#[from] ColorAttachmentError),
+    #[error(transparent)]
     Device(#[from] DeviceError),
     #[error("pipeline layout is invalid")]
     InvalidLayout,
@@ -323,8 +336,6 @@ pub enum CreateRenderPipelineError {
     DepthStencilState(#[from] DepthStencilStateError),
     #[error("invalid sample count {0}")]
     InvalidSampleCount(u32),
-    #[error("the number of color attachments {given} exceeds the limit {limit}")]
-    TooManyColorAttachments { given: u32, limit: u32 },
     #[error("the number of vertex buffers {given} exceeds the limit {limit}")]
     TooManyVertexBuffers { given: u32, limit: u32 },
     #[error("the total number of vertex attributes {given} exceeds the limit {limit}")]
@@ -363,6 +374,8 @@ pub enum CreateRenderPipelineError {
         stage: wgt::ShaderStages,
         error: String,
     },
+    #[error("In the provided shader, the type given for group {group} binding {binding} has a size of {size}. As the device does not support `DownlevelFlags::BUFFER_BINDINGS_NOT_16_BYTE_ALIGNED`, the type must have a size that is a multiple of 16 bytes.")]
+    UnalignedShader { group: u32, binding: u32, size: u64 },
 }
 
 bitflags::bitflags! {

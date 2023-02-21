@@ -1,4 +1,4 @@
-// Copyright 2018-2022 the Deno authors. All rights reserved. MIT license.
+// Copyright 2018-2023 the Deno authors. All rights reserved. MIT license.
 
 // @ts-check
 /// <reference path="../web/internal.d.ts" />
@@ -134,6 +134,7 @@
       "clear-commands",
       "spirv-shader-passthrough",
       "shader-primitive-index",
+      "shader-i16",
     ],
   );
 
@@ -141,10 +142,14 @@
   webidl.converters["GPUSize32"] = (V, opts) =>
     webidl.converters["unsigned long"](V, { ...opts, enforceRange: true });
 
+  // TYPEDEF: GPUSize64
+  webidl.converters["GPUSize64"] = (V, opts) =>
+    webidl.converters["unsigned long long"](V, { ...opts, enforceRange: true });
+
   // DICTIONARY: GPUDeviceDescriptor
   const dictMembersGPUDeviceDescriptor = [
     {
-      key: "nonGuaranteedFeatures",
+      key: "requiredFeatures",
       converter: webidl.createSequenceConverter(
         webidl.converters["GPUFeatureName"],
       ),
@@ -153,14 +158,11 @@
       },
     },
     {
-      key: "nonGuaranteedLimits",
+      key: "requiredLimits",
       converter: webidl.createRecordConverter(
         webidl.converters["DOMString"],
-        webidl.converters["GPUSize32"],
+        webidl.converters["GPUSize64"],
       ),
-      get defaultValue() {
-        return {};
-      },
     },
   ];
   webidl.converters["GPUDeviceDescriptor"] = webidl.createDictionaryConverter(
@@ -180,10 +182,6 @@
     "GPUBuffer",
     GPUBuffer.prototype,
   );
-
-  // TYPEDEF: GPUSize64
-  webidl.converters["GPUSize64"] = (V, opts) =>
-    webidl.converters["unsigned long long"](V, { ...opts, enforceRange: true });
 
   // TYPEDEF: GPUBufferUsageFlags
   webidl.converters["GPUBufferUsageFlags"] = (V, opts) =>
@@ -426,6 +424,15 @@
       key: "usage",
       converter: webidl.converters["GPUTextureUsageFlags"],
       required: true,
+    },
+    {
+      key: "viewFormats",
+      converter: webidl.createSequenceConverter(
+        webidl.converters["GPUTextureFormat"],
+      ),
+      get defaultValue() {
+        return [];
+      },
     },
   ];
   webidl.converters["GPUTextureDescriptor"] = webidl.createDictionaryConverter(

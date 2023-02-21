@@ -8,7 +8,10 @@ on:
     types: [labeled, opened, synchronize]
 
 env:
-  RUST_BACKTRACE: 1
+  CARGO_INCREMENTAL: false
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: full
+  MSRV: 1.64
 
 jobs:
   cts:
@@ -36,7 +39,7 @@ jobs:
 
     steps:
       - name: checkout repo
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           path: wgpu
 
@@ -46,15 +49,13 @@ jobs:
           cd cts
           git checkout $(cat ../wgpu/cts_runner/revision.txt)
 
-      - name: install rust
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          target: ${{ matrix.target }}
-          profile: minimal
+      - name: Install MSRV toolchain
+        run: |
+          rustup toolchain install ${{ env.MSRV }} --no-self-update --profile=minimal --target ${{ matrix.target }}
+          rustup default ${{ env.MSRV }}
 
       - name: caching
-        uses: Swatinem/rust-cache@v1
+        uses: Swatinem/rust-cache@v2
         with:
           key: cts-a # suffix for cache busting
           working-directory: wgpu/cts_runner

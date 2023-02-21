@@ -1,35 +1,45 @@
 [package]
 name = "player"
-version = "0.1.0"
-authors = [
-	"Dzmitry Malyshau <kvark@mozilla.com>",
-]
-edition = "2021"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
 description = "WebGPU trace player"
-homepage = "https://github.com/gfx-rs/wgpu"
-repository = "https://github.com/gfx-rs/wgpu"
-keywords = ["graphics"]
-license = "MIT OR Apache-2.0"
+homepage.workspace = true
+repository.workspace = true
+keywords.workspace = true
+license.workspace = true
 publish = false
 
 [features]
+angle = ["wgc/angle"]
+vulkan-portability = ["wgc/vulkan"]
 
 [dependencies]
-env_logger = "0.9"
-log = "0.4"
-raw-window-handle = "0.5"
-ron = "0.7"
-winit = { version = "0.27", optional = true }
+env_logger.workspace = true
+log.workspace = true
+raw-window-handle.workspace = true
+ron.workspace = true
+winit = { workspace = true, optional = true }
 
 [dependencies.wgt]
-path = "../wgpu-types"
-package = "wgpu-types"
+workspace = true
 features = ["replay"]
 
 [dependencies.wgc]
-path = "../wgpu-core"
-package = "wgpu-core"
-features = ["replay", "raw-window-handle", "strict_asserts"]
+workspace = true
+features = ["replay", "raw-window-handle", "strict_asserts", "wgsl"]
+
+[target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies.wgc]
+workspace = true
+features = ["metal"]
+
+[target.'cfg(windows)'.dependencies.wgc]
+workspace = true
+features = ["dx11", "dx12"]
+
+[target.'cfg(any(windows, all(unix, not(target_os = "emscripten"), not(target_os = "ios"), not(target_os = "macos"))))'.dependencies.wgc]
+workspace = true
+features = ["vulkan"]
 
 [dev-dependencies]
-serde = "1"
+serde.workspace = true

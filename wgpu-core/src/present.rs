@@ -15,7 +15,7 @@ use std::borrow::Borrow;
 use crate::device::trace::Action;
 use crate::{
     conv,
-    device::DeviceError,
+    device::{DeviceError, MissingDownlevelFlags},
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Input, Token},
     id::{DeviceId, SurfaceId, TextureId, Valid},
     init_tracker::TextureInitTracker,
@@ -32,7 +32,7 @@ pub const DESIRED_NUM_FRAMES: u32 = 3;
 #[derive(Debug)]
 pub(crate) struct Presentation {
     pub(crate) device_id: Stored<DeviceId>,
-    pub(crate) config: wgt::SurfaceConfiguration,
+    pub(crate) config: wgt::SurfaceConfiguration<Vec<wgt::TextureFormat>>,
     #[allow(unused)]
     pub(crate) num_frames: u32,
     pub(crate) acquired_texture: Option<Stored<TextureId>>,
@@ -64,6 +64,10 @@ pub enum ConfigureSurfaceError {
     Device(#[from] DeviceError),
     #[error("invalid surface")]
     InvalidSurface,
+    #[error("The view format {0:?} is not compatible with texture format {1:?}, only changing srgb-ness is allowed.")]
+    InvalidViewFormat(wgt::TextureFormat, wgt::TextureFormat),
+    #[error(transparent)]
+    MissingDownlevelFlags(#[from] MissingDownlevelFlags),
     #[error("`SurfaceOutput` must be dropped before a new `Surface` is made")]
     PreviousOutputExists,
     #[error("Both `Surface` width and height must be non-zero. Wait to recreate the `Surface` until the window has non-zero area.")]
@@ -79,6 +83,11 @@ pub enum ConfigureSurfaceError {
     UnsupportedPresentMode {
         requested: wgt::PresentMode,
         available: Vec<wgt::PresentMode>,
+    },
+    #[error("requested alpha mode {requested:?} is not in the list of supported alpha modes: {available:?}")]
+    UnsupportedAlphaMode {
+        requested: wgt::CompositeAlphaMode,
+        available: Vec<wgt::CompositeAlphaMode>,
     },
     #[error("requested usage is not supported")]
     UnsupportedUsage,
@@ -129,7 +138,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let suf = A::get_surface_mut(surface);
         let (texture_id, status) = match unsafe {
-            suf.raw
+            suf.unwrap()
+                .raw
                 .acquire_texture(Some(std::time::Duration::from_millis(
                     FRAME_TIMEOUT_MS as u64,
                 )))
@@ -174,11 +184,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         format: config.format,
                         dimension: wgt::TextureDimension::D2,
                         usage: config.usage,
+                        view_formats: config.view_formats,
                     },
                     hal_usage: conv::map_texture_usage(config.usage, config.format.into()),
                     format_features: wgt::TextureFormatFeatures {
                         allowed_usages: wgt::TextureUsages::RENDER_ATTACHMENT,
-                        flags: wgt::TextureFormatFeatureFlags::MULTISAMPLE
+                        flags: wgt::TextureFormatFeatureFlags::MULTISAMPLE_X4
                             | wgt::TextureFormatFeatureFlags::MULTISAMPLE_RESOLVE,
                     },
                     initialization_status: TextureInitTracker::new(1, 1),
@@ -306,10 +317,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             Err(hal::SurfaceError::Lost)
                         } else if !has_work {
                             log::error!("No work has been submitted for this frame");
-                            unsafe { suf.raw.discard_texture(raw) };
+                            unsafe { suf.unwrap().raw.discard_texture(raw) };
                             Err(hal::SurfaceError::Outdated)
                         } else {
-                            unsafe { device.queue.present(&mut suf.raw, raw) }
+                            unsafe { device.queue.present(&mut suf.unwrap().raw, raw) }
                         }
                     }
                     resource::TextureInner::Native { .. } => unreachable!(),
@@ -382,7 +393,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         has_work: _,
                     } => {
                         if surface_id == parent_id.0 {
-                            unsafe { suf.raw.discard_texture(raw) };
+                            unsafe { suf.unwrap().raw.discard_texture(raw) };
                         } else {
                             log::warn!("Surface texture is outdated");
                         }

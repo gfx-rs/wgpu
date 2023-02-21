@@ -100,6 +100,7 @@ impl<A: hal::Api> Example<A> {
             } else {
                 hal::InstanceFlags::empty()
             },
+            dx12_shader_compiler: wgt::Dx12Compiler::Fxc
         };
         let instance = unsafe { A::Instance::init(&instance_desc)? };
         let mut surface = unsafe {
@@ -136,7 +137,7 @@ impl<A: hal::Api> Example<A> {
                 .max(*surface_caps.swap_chain_sizes.start())
                 .min(*surface_caps.swap_chain_sizes.end()),
             present_mode: wgt::PresentMode::Fifo,
-            composite_alpha_mode: hal::CompositeAlphaMode::Opaque,
+            composite_alpha_mode: wgt::CompositeAlphaMode::Opaque,
             format: surface_format,
             extent: wgt::Extent3d {
                 width: window_size.0,
@@ -144,6 +145,7 @@ impl<A: hal::Api> Example<A> {
                 depth_or_array_layers: 1,
             },
             usage: hal::TextureUses::COLOR_TARGET | hal::TextureUses::COPY_DST,
+            view_formats: vec![surface_format],
         };
         unsafe {
             surface.configure(&device, &surface_config).unwrap();
@@ -415,6 +417,7 @@ impl<A: hal::Api> Example<A> {
             format: wgt::TextureFormat::Rgba8Unorm,
             usage: hal::TextureUses::STORAGE_READ_WRITE | hal::TextureUses::COPY_SRC,
             memory_flags: hal::MemoryFlags::empty(),
+            view_formats: vec![wgt::TextureFormat::Rgba8Unorm]
         };
         let texture = unsafe { device.create_texture(&texture_desc).unwrap() };
 

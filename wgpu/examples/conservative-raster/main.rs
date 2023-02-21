@@ -36,6 +36,7 @@ impl Example {
                 format: RENDER_TARGET_FORMAT,
                 usage: wgpu::TextureUsages::TEXTURE_BINDING
                     | wgpu::TextureUsages::RENDER_ATTACHMENT,
+                view_formats: &[],
             })
             .create_view(&Default::default());
 
@@ -314,7 +315,10 @@ fn main() {
     framework::run::<Example>("conservative-raster");
 }
 
+wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
+
 #[test]
+#[wasm_bindgen_test::wasm_bindgen_test]
 fn conservative_raster() {
     framework::test::<Example>(framework::FrameworkRefTest {
         image_path: "/examples/conservative-raster/screenshot.png",

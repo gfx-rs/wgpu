@@ -81,8 +81,8 @@ index format changes.
 use crate::{
     binding_model::{self, buffer_binding_type_alignment},
     command::{
-        BasePass, BindGroupStateChange, DrawError, MapPassErr, PassErrorScope, RenderCommand,
-        RenderCommandError, StateChange,
+        BasePass, BindGroupStateChange, ColorAttachmentError, DrawError, MapPassErr,
+        PassErrorScope, RenderCommand, RenderCommandError, StateChange,
     },
     conv,
     device::{
@@ -110,18 +110,28 @@ use hal::CommandEncoder as _;
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub struct RenderBundleEncoderDescriptor<'a> {
-    /// Debug label of the render bundle encoder. This will show up in graphics debuggers for easy identification.
+    /// Debug label of the render bundle encoder.
+    ///
+    /// This will show up in graphics debuggers for easy identification.
     pub label: Label<'a>,
-    /// The formats of the color attachments that this render bundle is capable to rendering to. This
-    /// must match the formats of the color attachments in the renderpass this render bundle is executed in.
+    /// The formats of the color attachments that this render bundle is capable
+    /// to rendering to.
+    ///
+    /// This must match the formats of the color attachments in the
+    /// renderpass this render bundle is executed in.
     pub color_formats: Cow<'a, [Option<wgt::TextureFormat>]>,
-    /// Information about the depth attachment that this render bundle is capable to rendering to. The format
-    /// must match the format of the depth attachments in the renderpass this render bundle is executed in.
+    /// Information about the depth attachment that this render bundle is
+    /// capable to rendering to.
+    ///
+    /// The format must match the format of the depth attachments in the
+    /// renderpass this render bundle is executed in.
     pub depth_stencil: Option<wgt::RenderBundleDepthStencil>,
-    /// Sample count this render bundle is capable of rendering to. This must match the pipelines and
-    /// the renderpasses it is used in.
+    /// Sample count this render bundle is capable of rendering to.
+    ///
+    /// This must match the pipelines and the renderpasses it is used in.
     pub sample_count: u32,
-    /// If this render bundle will rendering to multiple array layers in the attachments at the same time.
+    /// If this render bundle will rendering to multiple array layers in the
+    /// attachments at the same time.
     pub multiview: Option<NonZeroU32>,
 }
 
@@ -169,7 +179,12 @@ impl RenderBundleEncoder {
             context: RenderPassContext {
                 attachments: AttachmentData {
                     colors: if desc.color_formats.len() > hal::MAX_COLOR_ATTACHMENTS {
-                        return Err(CreateRenderBundleError::TooManyColorAttachments);
+                        return Err(CreateRenderBundleError::ColorAttachment(
+                            ColorAttachmentError::TooMany {
+                                given: desc.color_formats.len(),
+                                limit: hal::MAX_COLOR_ATTACHMENTS,
+                            },
+                        ));
                     } else {
                         desc.color_formats.iter().cloned().collect()
                     },
@@ -681,10 +696,10 @@ impl RenderBundleEncoder {
 /// Error type returned from `RenderBundleEncoder::new` if the sample count is invalid.
 #[derive(Clone, Debug, Error)]
 pub enum CreateRenderBundleError {
+    #[error(transparent)]
+    ColorAttachment(#[from] ColorAttachmentError),
     #[error("invalid number of samples {0}")]
     InvalidSampleCount(u32),
-    #[error("number of color attachments exceeds the limit")]
-    TooManyColorAttachments,
 }
 
 /// Error type returned from `RenderBundleEncoder::new` if the sample count is invalid.
@@ -753,7 +768,7 @@ impl<A: HalApi> RenderBundle<A> {
         let mut offsets = self.base.dynamic_offsets.as_slice();
         let mut pipeline_layout_id = None::<id::Valid<id::PipelineLayoutId>>;
         if let Some(ref label) = self.base.label {
-            raw.begin_debug_marker(label);
+            unsafe { raw.begin_debug_marker(label) };
         }
 
         for command in self.base.commands.iter() {
@@ -764,17 +779,19 @@ impl<A: HalApi> RenderBundle<A> {
                     bind_group_id,
                 } => {
                     let bind_group = bind_group_guard.get(bind_group_id).unwrap();
-                    raw.set_bind_group(
-                        &pipeline_layout_guard[pipeline_layout_id.unwrap()].raw,
-                        index as u32,
-                        &bind_group.raw,
-                        &offsets[..num_dynamic_offsets as usize],
-                    );
+                    unsafe {
+                        raw.set_bind_group(
+                            &pipeline_layout_guard[pipeline_layout_id.unwrap()].raw,
+                            index as u32,
+                            &bind_group.raw,
+                            &offsets[..num_dynamic_offsets as usize],
+                        )
+                    };
                     offsets = &offsets[num_dynamic_offsets as usize..];
                 }
                 RenderCommand::SetPipeline(pipeline_id) => {
                     let pipeline = pipeline_guard.get(pipeline_id).unwrap();
-                    raw.set_render_pipeline(&pipeline.raw);
+                    unsafe { raw.set_render_pipeline(&pipeline.raw) };
 
                     pipeline_layout_id = Some(pipeline.layout_id.value);
                 }
@@ -795,7 +812,7 @@ impl<A: HalApi> RenderBundle<A> {
                         offset,
                         size,
                     };
-                    raw.set_index_buffer(bb, index_format);
+                    unsafe { raw.set_index_buffer(bb, index_format) };
                 }
                 RenderCommand::SetVertexBuffer {
                     slot,
@@ -814,7 +831,7 @@ impl<A: HalApi> RenderBundle<A> {
                         offset,
                         size,
                     };
-                    raw.set_vertex_buffer(slot, bb);
+                    unsafe { raw.set_vertex_buffer(slot, bb) };
                 }
                 RenderCommand::SetPushConstant {
                     stages,
@@ -831,18 +848,22 @@ impl<A: HalApi> RenderBundle<A> {
                         let data_slice = &self.base.push_constant_data
                             [(values_offset as usize)..values_end_offset];
 
-                        raw.set_push_constants(&pipeline_layout.raw, stages, offset, data_slice)
+                        unsafe {
+                            raw.set_push_constants(&pipeline_layout.raw, stages, offset, data_slice)
+                        }
                     } else {
                         super::push_constant_clear(
                             offset,
                             size_bytes,
                             |clear_offset, clear_data| {
-                                raw.set_push_constants(
-                                    &pipeline_layout.raw,
-                                    stages,
-                                    clear_offset,
-                                    clear_data,
-                                );
+                                unsafe {
+                                    raw.set_push_constants(
+                                        &pipeline_layout.raw,
+                                        stages,
+                                        clear_offset,
+                                        clear_data,
+                                    )
+                                };
                             },
                         );
                     }
@@ -853,7 +874,7 @@ impl<A: HalApi> RenderBundle<A> {
                     first_vertex,
                     first_instance,
                 } => {
-                    raw.draw(first_vertex, vertex_count, first_instance, instance_count);
+                    unsafe { raw.draw(first_vertex, vertex_count, first_instance, instance_count) };
                 }
                 RenderCommand::DrawIndexed {
                     index_count,
@@ -862,13 +883,15 @@ impl<A: HalApi> RenderBundle<A> {
                     base_vertex,
                     first_instance,
                 } => {
-                    raw.draw_indexed(
-                        first_index,
-                        index_count,
-                        base_vertex,
-                        first_instance,
-                        instance_count,
-                    );
+                    unsafe {
+                        raw.draw_indexed(
+                            first_index,
+                            index_count,
+                            base_vertex,
+                            first_instance,
+                            instance_count,
+                        )
+                    };
                 }
                 RenderCommand::MultiDrawIndirect {
                     buffer_id,
@@ -882,7 +905,7 @@ impl<A: HalApi> RenderBundle<A> {
                         .raw
                         .as_ref()
                         .ok_or(ExecutionError::DestroyedBuffer(buffer_id))?;
-                    raw.draw_indirect(buffer, offset, 1);
+                    unsafe { raw.draw_indirect(buffer, offset, 1) };
                 }
                 RenderCommand::MultiDrawIndirect {
                     buffer_id,
@@ -896,7 +919,7 @@ impl<A: HalApi> RenderBundle<A> {
                         .raw
                         .as_ref()
                         .ok_or(ExecutionError::DestroyedBuffer(buffer_id))?;
-                    raw.draw_indexed_indirect(buffer, offset, 1);
+                    unsafe { raw.draw_indexed_indirect(buffer, offset, 1) };
                 }
                 RenderCommand::MultiDrawIndirect { .. }
                 | RenderCommand::MultiDrawIndirectCount { .. } => {
@@ -921,7 +944,7 @@ impl<A: HalApi> RenderBundle<A> {
         }
 
         if let Some(_) = self.base.label {
-            raw.end_debug_marker();
+            unsafe { raw.end_debug_marker() };
         }
 
         Ok(())
@@ -1429,13 +1452,15 @@ pub mod bundle_ffi {
         offsets: *const DynamicOffset,
         offset_length: usize,
     ) {
-        let redundant = bundle.current_bind_groups.set_and_check_redundant(
-            bind_group_id,
-            index,
-            &mut bundle.base.dynamic_offsets,
-            offsets,
-            offset_length,
-        );
+        let redundant = unsafe {
+            bundle.current_bind_groups.set_and_check_redundant(
+                bind_group_id,
+                index,
+                &mut bundle.base.dynamic_offsets,
+                offsets,
+                offset_length,
+            )
+        };
 
         if redundant {
             return;
@@ -1512,7 +1537,7 @@ pub mod bundle_ffi {
             0,
             "Push constant size must be aligned to 4 bytes."
         );
-        let data_slice = slice::from_raw_parts(data, size_bytes as usize);
+        let data_slice = unsafe { slice::from_raw_parts(data, size_bytes as usize) };
         let value_offset = pass.base.push_constant_data.len().try_into().expect(
             "Ran out of push constant space. Don't set 4gb of push constants per RenderBundle.",
         );

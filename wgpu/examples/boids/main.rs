@@ -197,7 +197,7 @@ impl framework::Example for Example {
         for i in 0..2 {
             particle_buffers.push(
                 device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some(&format!("Particle Buffer {}", i)),
+                    label: Some(&format!("Particle Buffer {i}")),
                     contents: bytemuck::cast_slice(&initial_particle_data),
                     usage: wgpu::BufferUsages::VERTEX
                         | wgpu::BufferUsages::STORAGE
@@ -329,7 +329,10 @@ fn main() {
     framework::run::<Example>("boids");
 }
 
+wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
+
 #[test]
+#[wasm_bindgen_test::wasm_bindgen_test]
 fn boids() {
     framework::test::<Example>(framework::FrameworkRefTest {
         image_path: "/examples/boids/screenshot.png",

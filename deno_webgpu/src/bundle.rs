@@ -1,6 +1,6 @@
-// Copyright 2018-2022 the Deno authors. All rights reserved. MIT license.
+// Copyright 2018-2023 the Deno authors. All rights reserved. MIT license.
 
-use deno_core::error::AnyError;
+use deno_core::error::{type_error, AnyError};
 use deno_core::op;
 use deno_core::OpState;
 use deno_core::Resource;
@@ -255,16 +255,14 @@ pub fn op_webgpu_render_bundle_encoder_set_index_buffer(
     let render_bundle_encoder_resource = state
         .resource_table
         .get::<WebGpuRenderBundleEncoder>(render_bundle_encoder_rid)?;
+    let size = Some(
+        std::num::NonZeroU64::new(size).ok_or_else(|| type_error("size must be larger than 0"))?,
+    );
 
     render_bundle_encoder_resource
         .0
         .borrow_mut()
-        .set_index_buffer(
-            buffer_resource.0,
-            index_format,
-            offset,
-            std::num::NonZeroU64::new(size),
-        );
+        .set_index_buffer(buffer_resource.0, index_format, offset, size);
 
     Ok(WebGpuResult::empty())
 }
@@ -276,7 +274,7 @@ pub fn op_webgpu_render_bundle_encoder_set_vertex_buffer(
     slot: u32,
     buffer: ResourceId,
     offset: u64,
-    size: u64,
+    size: Option<u64>,
 ) -> Result<WebGpuResult, AnyError> {
     let buffer_resource = state
         .resource_table
@@ -284,13 +282,21 @@ pub fn op_webgpu_render_bundle_encoder_set_vertex_buffer(
     let render_bundle_encoder_resource = state
         .resource_table
         .get::<WebGpuRenderBundleEncoder>(render_bundle_encoder_rid)?;
+    let size = if let Some(size) = size {
+        Some(
+            std::num::NonZeroU64::new(size)
+                .ok_or_else(|| type_error("size must be larger than 0"))?,
+        )
+    } else {
+        None
+    };
 
     wgpu_core::command::bundle_ffi::wgpu_render_bundle_set_vertex_buffer(
         &mut render_bundle_encoder_resource.0.borrow_mut(),
         slot,
         buffer_resource.0,
         offset,
-        std::num::NonZeroU64::new(size),
+        size,
     );
 
     Ok(WebGpuResult::empty())

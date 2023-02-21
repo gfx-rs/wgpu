@@ -18,9 +18,10 @@ mod command;
 mod conv;
 mod device;
 mod surface;
+mod time;
 
 use std::{
-    iter, ops,
+    fmt, iter, ops,
     ptr::NonNull,
     sync::{atomic, Arc},
     thread,
@@ -90,19 +91,18 @@ impl crate::Instance<Api> for Instance {
             #[cfg(target_os = "ios")]
             raw_window_handle::RawWindowHandle::UiKit(handle) => {
                 let _ = &self.managed_metal_layer_delegate;
-                Ok(Surface::from_view(handle.ui_view, None))
+                Ok(unsafe { Surface::from_view(handle.ui_view, None) })
             }
             #[cfg(target_os = "macos")]
-            raw_window_handle::RawWindowHandle::AppKit(handle) => Ok(Surface::from_view(
-                handle.ns_view,
-                Some(&self.managed_metal_layer_delegate),
-            )),
+            raw_window_handle::RawWindowHandle::AppKit(handle) => Ok(unsafe {
+                Surface::from_view(handle.ns_view, Some(&self.managed_metal_layer_delegate))
+            }),
             _ => Err(crate::InstanceError),
         }
     }
 
     unsafe fn destroy_surface(&self, surface: Surface) {
-        surface.dispose();
+        unsafe { surface.dispose() };
     }
 
     unsafe fn enumerate_adapters(&self) -> Vec<crate::ExposedAdapter<Api>> {
@@ -118,6 +118,8 @@ impl crate::Instance<Api> for Instance {
                         vendor: 0,
                         device: 0,
                         device_type: shared.private_caps.device_type(),
+                        driver: String::new(),
+                        driver_info: String::new(),
                         backend: wgt::Backend::Metal,
                     },
                     features: shared.private_caps.features(),
@@ -219,7 +221,7 @@ struct PrivateCapabilities {
     max_varying_components: u32,
     max_threads_per_group: u32,
     max_total_threadgroup_memory: u32,
-    sample_count_mask: u8,
+    sample_count_mask: crate::TextureFormatCapabilities,
     supports_debug_markers: bool,
     supports_binary_archives: bool,
     supports_capture_manager: bool,
@@ -231,6 +233,7 @@ struct PrivateCapabilities {
     supports_mutability: bool,
     supports_depth_clip_control: bool,
     supports_preserve_invariance: bool,
+    supports_shader_primitive_index: bool,
     has_unified_memory: Option<bool>,
 }
 
@@ -253,6 +256,7 @@ struct AdapterShared {
     disabilities: PrivateDisabilities,
     private_caps: PrivateCapabilities,
     settings: Settings,
+    presentation_timer: time::PresentationTimer,
 }
 
 unsafe impl Send for AdapterShared {}
@@ -268,6 +272,7 @@ impl AdapterShared {
             private_caps,
             device: Mutex::new(device),
             settings: Settings::default(),
+            presentation_timer: time::PresentationTimer::new(),
         }
     }
 }
@@ -283,6 +288,13 @@ pub struct Queue {
 unsafe impl Send for Queue {}
 unsafe impl Sync for Queue {}
 
+impl Queue {
+    pub unsafe fn queue_from_raw(raw: mtl::CommandQueue) -> Self {
+        Self {
+            raw: Arc::new(Mutex::new(raw)),
+        }
+    }
+}
 pub struct Device {
     shared: Arc<AdapterShared>,
     features: wgt::Features,
@@ -291,7 +303,7 @@ pub struct Device {
 pub struct Surface {
     view: Option<NonNull<objc::runtime::Object>>,
     render_layer: Mutex<mtl::MetalLayer>,
-    raw_swapchain_format: mtl::MTLPixelFormat,
+    swapchain_format: Option<wgt::TextureFormat>,
     extent: wgt::Extent3d,
     main_thread_id: thread::ThreadId,
     // Useful for UI-intensive applications that are sensitive to
@@ -415,7 +427,7 @@ impl Buffer {
 #[derive(Debug)]
 pub struct Texture {
     raw: mtl::Texture,
-    raw_format: mtl::MTLPixelFormat,
+    format: wgt::TextureFormat,
     raw_type: mtl::MTLTextureType,
     array_layers: u32,
     mip_levels: u32,
@@ -584,7 +596,17 @@ struct BufferResource {
     ptr: BufferPtr,
     offset: wgt::BufferAddress,
     dynamic_index: Option<u32>,
+
+    /// The buffer's size, if it is a [`Storage`] binding. Otherwise `None`.
+    ///
+    /// Buffers with the [`wgt::BufferBindingType::Storage`] binding type can
+    /// hold WGSL runtime-sized arrays. When one does, we must pass its size to
+    /// shader entry points to implement bounds checks and WGSL's `arrayLength`
+    /// function. See [`device::CompiledShader::sized_bindings`] for details.
+    ///
+    /// [`Storage`]: wgt::BufferBindingType::Storage
     binding_size: Option<wgt::BufferSize>,
+
     binding_location: u32,
 }
 
@@ -607,7 +629,15 @@ pub struct ShaderModule {
 #[derive(Debug, Default)]
 struct PipelineStageInfo {
     push_constants: Option<PushConstantsInfo>,
+
+    /// The buffer argument table index at which we pass runtime-sized arrays' buffer sizes.
+    ///
+    /// See [`device::CompiledShader::sized_bindings`] for more details.
     sizes_slot: Option<naga::back::msl::Slot>,
+
+    /// Bindings of all WGSL `storage` globals that contain runtime-sized arrays.
+    ///
+    /// See [`device::CompiledShader::sized_bindings`] for more details.
     sized_bindings: Vec<naga::ResourceBinding>,
 }
 
@@ -714,7 +744,28 @@ struct CommandState {
     index: Option<IndexState>,
     raw_wg_size: mtl::MTLSize,
     stage_infos: MultiStageData<PipelineStageInfo>,
+
+    /// Sizes of currently bound [`wgt::BufferBindingType::Storage`] buffers.
+    ///
+    /// Specifically:
+    ///
+    /// - The keys are ['ResourceBinding`] values (that is, the WGSL `@group`
+    ///   and `@binding` attributes) for `var<storage>` global variables in the
+    ///   current module that contain runtime-sized arrays.
+    ///
+    /// - The values are the actual sizes of the buffers currently bound to
+    ///   provide those globals' contents, which are needed to implement bounds
+    ///   checks and the WGSL `arrayLength` function.
+    ///
+    /// For each stage `S` in `stage_infos`, we consult this to find the sizes
+    /// of the buffers listed in [`stage_infos.S.sized_bindings`], which we must
+    /// pass to the entry point.
+    ///
+    /// See [`device::CompiledShader::sized_bindings`] for more details.
+    ///
+    /// [`ResourceBinding`]: naga::ResourceBinding
     storage_buffer_length_map: fxhash::FxHashMap<naga::ResourceBinding, wgt::BufferSize>,
+
     work_group_memory_sizes: Vec<u32>,
     push_constants: Vec<u32>,
 }
@@ -727,9 +778,19 @@ pub struct CommandEncoder {
     temp: Temp,
 }
 
+impl fmt::Debug for CommandEncoder {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("CommandEncoder")
+            .field("raw_queue", &self.raw_queue)
+            .field("raw_cmd_buf", &self.raw_cmd_buf)
+            .finish()
+    }
+}
+
 unsafe impl Send for CommandEncoder {}
 unsafe impl Sync for CommandEncoder {}
 
+#[derive(Debug)]
 pub struct CommandBuffer {
     raw: mtl::CommandBuffer,
 }

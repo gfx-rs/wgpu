@@ -8,23 +8,52 @@ pub fn is_power_of_two_u32(val: u32) -> bool {
     val != 0 && (val & (val - 1)) == 0
 }
 
-pub fn is_valid_copy_src_texture_format(format: wgt::TextureFormat) -> bool {
+pub fn is_valid_copy_src_texture_format(
+    format: wgt::TextureFormat,
+    aspect: wgt::TextureAspect,
+) -> bool {
+    use wgt::TextureAspect as Ta;
     use wgt::TextureFormat as Tf;
-    match format {
-        Tf::Depth24Plus | Tf::Depth24PlusStencil8 => false,
+    match (format, aspect) {
+        (Tf::Depth24Plus, _) | (Tf::Depth24PlusStencil8, Ta::DepthOnly) => false,
         _ => true,
     }
 }
 
-pub fn is_valid_copy_dst_texture_format(format: wgt::TextureFormat) -> bool {
+pub fn is_valid_copy_dst_texture_format(
+    format: wgt::TextureFormat,
+    aspect: wgt::TextureAspect,
+) -> bool {
+    use wgt::TextureAspect as Ta;
+    use wgt::TextureFormat as Tf;
+    match (format, aspect) {
+        (Tf::Depth24Plus | Tf::Depth32Float, _)
+        | (Tf::Depth24PlusStencil8 | Tf::Depth32FloatStencil8, Ta::DepthOnly) => false,
+        _ => true,
+    }
+}
+
+#[cfg_attr(
+    any(not(target_arch = "wasm32"), target_os = "emscripten"),
+    allow(unused)
+)]
+pub fn is_valid_external_image_copy_dst_texture_format(format: wgt::TextureFormat) -> bool {
     use wgt::TextureFormat as Tf;
     match format {
-        Tf::Depth32Float
-        | Tf::Depth32FloatStencil8
-        | Tf::Depth24Plus
-        | Tf::Depth24PlusStencil8
-        | Tf::Depth24UnormStencil8 => false,
-        _ => true,
+        Tf::R8Unorm
+        | Tf::R16Float
+        | Tf::R32Float
+        | Tf::Rg8Unorm
+        | Tf::Rg16Float
+        | Tf::Rg32Float
+        | Tf::Rgba8Unorm
+        | Tf::Rgba8UnormSrgb
+        | Tf::Bgra8Unorm
+        | Tf::Bgra8UnormSrgb
+        | Tf::Rgb10a2Unorm
+        | Tf::Rgba16Float
+        | Tf::Rgba32Float => true,
+        _ => false,
     }
 }
 

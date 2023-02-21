@@ -6,15 +6,17 @@ use std::ops::Range;
 #[derive(Debug, Clone)]
 pub(crate) struct TextureInitRange {
     pub(crate) mip_range: Range<u32>,
-    pub(crate) layer_range: Range<u32>, // Strictly array layers. We do *not* track volume slices separately.
+    // Strictly array layers. We do *not* track volume slices separately.
+    pub(crate) layer_range: Range<u32>,
 }
 
-// Returns true if a copy operation doesn't fully cover the texture init tracking granularity.
-// I.e. if this function returns true for a pending copy operation, the target texture needs to be ensured to be initialized first!
+// Returns true if a copy operation doesn't fully cover the texture init
+// tracking granularity. I.e. if this function returns true for a pending copy
+// operation, the target texture needs to be ensured to be initialized first!
 pub(crate) fn has_copy_partial_init_tracker_coverage(
     copy_size: &wgt::Extent3d,
     mip_level: u32,
-    desc: &wgt::TextureDescriptor<()>,
+    desc: &wgt::TextureDescriptor<(), Vec<wgt::TextureFormat>>,
 ) -> bool {
     let target_size = desc.mip_level_size(mip_level).unwrap();
     copy_size.width != target_size.width

@@ -7,7 +7,7 @@ const OVERFLOW: u32 = 0xffffffff;
 async fn run() {
     let numbers = if std::env::args().len() <= 1 {
         let default = vec![1, 2, 3, 4];
-        println!("No numbers were provided, defaulting to {:?}", default);
+        println!("No numbers were provided, defaulting to {default:?}");
         default
     } else {
         std::env::args()
@@ -33,7 +33,7 @@ async fn run() {
 
 async fn execute_gpu(numbers: &[u32]) -> Option<Vec<u32>> {
     // Instantiates instance of WebGPU
-    let instance = wgpu::Instance::new(wgpu::Backends::all());
+    let instance = wgpu::Instance::default();
 
     // `request_adapter` instantiates the general connection to the GPU
     let adapter = instance

@@ -56,19 +56,31 @@ impl super::AdapterShared {
             Tf::Rgba32Uint => (glow::RGBA32UI, glow::RGBA_INTEGER, glow::UNSIGNED_INT),
             Tf::Rgba32Sint => (glow::RGBA32I, glow::RGBA_INTEGER, glow::INT),
             Tf::Rgba32Float => (glow::RGBA32F, glow::RGBA, glow::FLOAT),
+            Tf::Stencil8 => (
+                glow::STENCIL_INDEX8,
+                glow::STENCIL_INDEX,
+                glow::UNSIGNED_BYTE,
+            ),
+            Tf::Depth16Unorm => (
+                glow::DEPTH_COMPONENT16,
+                glow::DEPTH_COMPONENT,
+                glow::UNSIGNED_SHORT,
+            ),
             Tf::Depth32Float => (glow::DEPTH_COMPONENT32F, glow::DEPTH_COMPONENT, glow::FLOAT),
-            Tf::Depth32FloatStencil8 => {
-                (glow::DEPTH32F_STENCIL8, glow::DEPTH_COMPONENT, glow::FLOAT)
-            }
+            Tf::Depth32FloatStencil8 => (
+                glow::DEPTH32F_STENCIL8,
+                glow::DEPTH_STENCIL,
+                glow::FLOAT_32_UNSIGNED_INT_24_8_REV,
+            ),
             Tf::Depth24Plus => (
                 glow::DEPTH_COMPONENT24,
                 glow::DEPTH_COMPONENT,
-                glow::UNSIGNED_NORMALIZED,
-            ),
-            Tf::Depth24PlusStencil8 | Tf::Depth24UnormStencil8 => (
-                glow::DEPTH24_STENCIL8,
-                glow::DEPTH_COMPONENT,
                 glow::UNSIGNED_INT,
+            ),
+            Tf::Depth24PlusStencil8 => (
+                glow::DEPTH24_STENCIL8,
+                glow::DEPTH_STENCIL,
+                glow::UNSIGNED_INT_24_8,
             ),
             Tf::Rgb9e5Ufloat => (glow::RGB9_E5, glow::RGB, glow::UNSIGNED_INT_5_9_9_9_REV),
             Tf::Bc1RgbaUnorm => (glow::COMPRESSED_RGBA_S3TC_DXT1_EXT, glow::RGBA, 0),
@@ -109,7 +121,7 @@ impl super::AdapterShared {
             Tf::EacRg11Unorm => (glow::COMPRESSED_RG11_EAC, glow::RG, 0),
             Tf::EacRg11Snorm => (glow::COMPRESSED_SIGNED_RG11_EAC, glow::RG, 0),
             Tf::Astc { block, channel } => match channel {
-                AstcChannel::Unorm => match block {
+                AstcChannel::Unorm | AstcChannel::Hdr => match block {
                     AstcBlock::B4x4 => (glow::COMPRESSED_RGBA_ASTC_4x4_KHR, glow::RGBA, 0),
                     AstcBlock::B5x4 => (glow::COMPRESSED_RGBA_ASTC_5x4_KHR, glow::RGBA, 0),
                     AstcBlock::B5x5 => (glow::COMPRESSED_RGBA_ASTC_5x5_KHR, glow::RGBA, 0),
@@ -153,7 +165,6 @@ impl super::AdapterShared {
                         (glow::COMPRESSED_SRGB8_ALPHA8_ASTC_12x12_KHR, glow::RGBA, 0)
                     }
                 },
-                AstcChannel::Hdr => unimplemented!(),
             },
         };
 
@@ -430,6 +441,52 @@ pub(super) fn is_sampler(glsl_uniform_type: u32) -> bool {
     }
 }
 
+pub(super) fn is_image(glsl_uniform_type: u32) -> bool {
+    match glsl_uniform_type {
+        glow::INT_IMAGE_1D
+        | glow::INT_IMAGE_1D_ARRAY
+        | glow::INT_IMAGE_2D
+        | glow::INT_IMAGE_2D_ARRAY
+        | glow::INT_IMAGE_2D_MULTISAMPLE
+        | glow::INT_IMAGE_2D_MULTISAMPLE_ARRAY
+        | glow::INT_IMAGE_2D_RECT
+        | glow::INT_IMAGE_3D
+        | glow::INT_IMAGE_CUBE
+        | glow::INT_IMAGE_CUBE_MAP_ARRAY
+        | glow::UNSIGNED_INT_IMAGE_1D
+        | glow::UNSIGNED_INT_IMAGE_1D_ARRAY
+        | glow::UNSIGNED_INT_IMAGE_2D
+        | glow::UNSIGNED_INT_IMAGE_2D_ARRAY
+        | glow::UNSIGNED_INT_IMAGE_2D_MULTISAMPLE
+        | glow::UNSIGNED_INT_IMAGE_2D_MULTISAMPLE_ARRAY
+        | glow::UNSIGNED_INT_IMAGE_2D_RECT
+        | glow::UNSIGNED_INT_IMAGE_3D
+        | glow::UNSIGNED_INT_IMAGE_CUBE
+        | glow::UNSIGNED_INT_IMAGE_CUBE_MAP_ARRAY
+        | glow::IMAGE_1D
+        | glow::IMAGE_1D_ARRAY
+        | glow::IMAGE_2D
+        | glow::IMAGE_2D_ARRAY
+        | glow::IMAGE_2D_MULTISAMPLE
+        | glow::IMAGE_2D_MULTISAMPLE_ARRAY
+        | glow::IMAGE_2D_RECT
+        | glow::IMAGE_3D
+        | glow::IMAGE_CUBE
+        | glow::IMAGE_CUBE_MAP_ARRAY => true,
+        _ => false,
+    }
+}
+
+pub(super) fn is_atomic_counter(glsl_uniform_type: u32) -> bool {
+    glsl_uniform_type == glow::UNSIGNED_INT_ATOMIC_COUNTER
+}
+
+pub(super) fn is_opaque_type(glsl_uniform_type: u32) -> bool {
+    is_sampler(glsl_uniform_type)
+        || is_image(glsl_uniform_type)
+        || is_atomic_counter(glsl_uniform_type)
+}
+
 pub(super) fn uniform_byte_size(glsl_uniform_type: u32) -> u32 {
     match glsl_uniform_type {
         glow::FLOAT | glow::INT => 4,
@@ -439,6 +496,6 @@ pub(super) fn uniform_byte_size(glsl_uniform_type: u32) -> u32 {
         glow::FLOAT_MAT2 => 16,
         glow::FLOAT_MAT3 => 36,
         glow::FLOAT_MAT4 => 64,
-        _ => panic!("Unsupported uniform datatype!"),
+        _ => panic!("Unsupported uniform datatype! {glsl_uniform_type:#X}"),
     }
 }

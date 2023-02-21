@@ -36,12 +36,15 @@ async fn create_red_image_with_dimensions(
     width: usize,
     height: usize,
 ) -> (Device, Buffer, BufferDimensions, SubmissionIndex) {
-    let adapter = wgpu::Instance::new(
-        wgpu::util::backend_bits_from_env().unwrap_or_else(wgpu::Backends::all),
-    )
-    .request_adapter(&wgpu::RequestAdapterOptions::default())
-    .await
-    .unwrap();
+    let backends = wgpu::util::backend_bits_from_env().unwrap_or_else(wgpu::Backends::all);
+    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+        backends,
+        dx12_shader_compiler: wgpu::Dx12Compiler::default(),
+    });
+    let adapter = instance
+        .request_adapter(&wgpu::RequestAdapterOptions::default())
+        .await
+        .unwrap();
 
     let (device, queue) = adapter
         .request_device(
@@ -83,6 +86,7 @@ async fn create_red_image_with_dimensions(
         format: wgpu::TextureFormat::Rgba8UnormSrgb,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
         label: None,
+        view_formats: &[],
     });
 
     // Set the background to be red
@@ -225,7 +229,10 @@ mod tests {
     use super::*;
     use wgpu::BufferView;
 
+    wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
+
     #[test]
+    #[wasm_bindgen_test::wasm_bindgen_test]
     fn ensure_generated_data_matches_expected() {
         assert_generated_data_matches_expected();
     }

@@ -46,21 +46,23 @@ unsafe extern "system" fn output_debug_string_handler(
     exception_info: *mut winnt::EXCEPTION_POINTERS,
 ) -> i32 {
     // See https://stackoverflow.com/a/41480827
-    let record = &*(*exception_info).ExceptionRecord;
+    let record = unsafe { &*(*exception_info).ExceptionRecord };
     if record.NumberParameters != 2 {
         return excpt::EXCEPTION_CONTINUE_SEARCH;
     }
     let message = match record.ExceptionCode {
-        winnt::DBG_PRINTEXCEPTION_C => String::from_utf8_lossy(slice::from_raw_parts(
-            record.ExceptionInformation[1] as *const u8,
-            record.ExceptionInformation[0],
-        )),
-        winnt::DBG_PRINTEXCEPTION_WIDE_C => {
-            Cow::Owned(String::from_utf16_lossy(slice::from_raw_parts(
+        winnt::DBG_PRINTEXCEPTION_C => String::from_utf8_lossy(unsafe {
+            slice::from_raw_parts(
+                record.ExceptionInformation[1] as *const u8,
+                record.ExceptionInformation[0],
+            )
+        }),
+        winnt::DBG_PRINTEXCEPTION_WIDE_C => Cow::Owned(String::from_utf16_lossy(unsafe {
+            slice::from_raw_parts(
                 record.ExceptionInformation[1] as *const u16,
                 record.ExceptionInformation[0],
-            )))
-        }
+            )
+        })),
         _ => return excpt::EXCEPTION_CONTINUE_SEARCH,
     };
 

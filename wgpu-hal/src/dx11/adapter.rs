@@ -24,6 +24,10 @@ impl crate::Adapter<super::Api> for super::Adapter {
     ) -> Option<crate::SurfaceCapabilities> {
         todo!()
     }
+
+    unsafe fn get_presentation_timestamp(&self) -> wgt::PresentationTimestamp {
+        todo!()
+    }
 }
 
 impl super::Adapter {
@@ -91,8 +95,10 @@ impl super::Adapter {
             | wgt::Features::CLEAR_TEXTURE
             | wgt::Features::TEXTURE_FORMAT_16BIT_NORM
             | wgt::Features::ADDRESS_MODE_CLAMP_TO_ZERO;
-        let mut downlevel =
-            wgt::DownlevelFlags::BASE_VERTEX | wgt::DownlevelFlags::READ_ONLY_DEPTH_STENCIL;
+        let mut downlevel = wgt::DownlevelFlags::BASE_VERTEX
+            | wgt::DownlevelFlags::READ_ONLY_DEPTH_STENCIL
+            | wgt::DownlevelFlags::UNRESTRICTED_INDEX_BUFFER
+            | wgt::DownlevelFlags::UNRESTRICTED_EXTERNAL_TEXTURE_COPIES;
 
         // Features from queries
         downlevel.set(
@@ -109,6 +115,8 @@ impl super::Adapter {
             downlevel |= wgt::DownlevelFlags::INDEPENDENT_BLEND;
             // formally FL9_1 supports aniso 2, but we don't support that level of distinction
             downlevel |= wgt::DownlevelFlags::ANISOTROPIC_FILTERING;
+            // this is actually the first FL that supports u32 at all
+            downlevel |= wgt::DownlevelFlags::FULL_DRAW_INDEX_UINT32;
         }
 
         if feature_level >= FL9_3 {
@@ -116,16 +124,19 @@ impl super::Adapter {
         }
 
         if feature_level >= FL10_0 {
-            downlevel |= wgt::DownlevelFlags::INDEPENDENT_BLEND;
             downlevel |= wgt::DownlevelFlags::FRAGMENT_STORAGE;
             downlevel |= wgt::DownlevelFlags::FRAGMENT_WRITABLE_STORAGE;
+            downlevel |= wgt::DownlevelFlags::DEPTH_BIAS_CLAMP;
+            downlevel |= wgt::DownlevelFlags::VERTEX_STORAGE;
             features |= wgt::Features::DEPTH_CLIP_CONTROL;
             features |= wgt::Features::TIMESTAMP_QUERY;
             features |= wgt::Features::PIPELINE_STATISTICS_QUERY;
+            features |= wgt::Features::SHADER_PRIMITIVE_INDEX;
         }
 
         if feature_level >= FL10_1 {
             downlevel |= wgt::DownlevelFlags::CUBE_ARRAY_TEXTURES;
+            downlevel |= wgt::DownlevelFlags::MULTISAMPLED_SHADING;
         }
 
         if feature_level >= FL11_0 {
@@ -135,7 +146,7 @@ impl super::Adapter {
         }
 
         if feature_level >= FL11_1 {
-            downlevel |= wgt::DownlevelFlags::VERTEX_STORAGE;
+            features |= wgt::Features::VERTEX_WRITABLE_STORAGE;
         }
 
         //
@@ -198,6 +209,7 @@ impl super::Adapter {
             max_texture_dimension_3d,
             max_texture_array_layers: max_texture_dimension_3d,
             max_bind_groups: u32::MAX,
+            max_bindings_per_bind_group: 65535,
             max_dynamic_uniform_buffers_per_pipeline_layout: max_constant_buffers,
             max_dynamic_storage_buffers_per_pipeline_layout: 0,
             max_sampled_textures_per_shader_stage: max_sampled_textures,
@@ -243,6 +255,8 @@ impl super::Adapter {
                 1 => wgt::DeviceType::IntegratedGpu,
                 _ => unreachable!(),
             },
+            driver: String::new(),
+            driver_info: String::new(),
             backend: wgt::Backend::Dx11,
         };
 

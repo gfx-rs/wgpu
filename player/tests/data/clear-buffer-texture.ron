@@ -1,5 +1,5 @@
 (
-    features: 0x0000_0004_0000_0000,
+    features: 0x0000_0004_0001_0000,
     expectations: [
         (
             name: "Quad",
@@ -29,8 +29,9 @@
             mip_level_count: 1,
             sample_count: 1,
             dimension: r#2d,
-            format: rgba8unorm,
+            format: "rgba8unorm",
             usage: 27,
+            view_formats: [],
         )),
         // First fill the texture to ensure it wasn't just zero initialized or "happened" to be zero.
         WriteTexture(

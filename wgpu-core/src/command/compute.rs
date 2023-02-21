@@ -268,7 +268,8 @@ impl<A: HalApi> State<A> {
         Ok(())
     }
 
-    // `extra_buffer` is there to represent the indirect buffer that is also part of the usage scope.
+    // `extra_buffer` is there to represent the indirect buffer that is also
+    // part of the usage scope.
     fn flush_states(
         &mut self,
         raw_encoder: &mut A::CommandEncoder,
@@ -391,7 +392,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             raw.begin_compute_pass(&hal_desc);
         }
 
-        // Immediate texture inits required because of prior discards. Need to be inserted before texture reads.
+        // Immediate texture inits required because of prior discards. Need to
+        // be inserted before texture reads.
         let mut pending_discard_init_fixups = SurfacesInDiscardState::new();
 
         for command in base.commands {
@@ -426,7 +428,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .ok_or(ComputePassErrorInner::InvalidBindGroup(bind_group_id))
                         .map_pass_err(scope)?;
                     bind_group
-                        .validate_dynamic_bindings(&temp_offsets, &cmd_buf.limits)
+                        .validate_dynamic_bindings(index, &temp_offsets, &cmd_buf.limits)
                         .map_pass_err(scope)?;
 
                     cmd_buf.buffer_memory_init_actions.extend(
@@ -763,8 +765,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
         cmd_buf.status = CommandEncoderStatus::Recording;
 
-        // There can be entries left in pending_discard_init_fixups if a bind group was set, but not used (i.e. no Dispatch occurred)
-        // However, we already altered the discard/init_action state on this cmd_buf, so we need to apply the promised changes.
+        // There can be entries left in pending_discard_init_fixups if a bind
+        // group was set, but not used (i.e. no Dispatch occurred)
+        //
+        // However, we already altered the discard/init_action state on this
+        // cmd_buf, so we need to apply the promised changes.
         fixup_discarded_surfaces(
             pending_discard_init_fixups.into_iter(),
             raw,
@@ -795,13 +800,15 @@ pub mod compute_ffi {
         offsets: *const DynamicOffset,
         offset_length: usize,
     ) {
-        let redundant = pass.current_bind_groups.set_and_check_redundant(
-            bind_group_id,
-            index,
-            &mut pass.base.dynamic_offsets,
-            offsets,
-            offset_length,
-        );
+        let redundant = unsafe {
+            pass.current_bind_groups.set_and_check_redundant(
+                bind_group_id,
+                index,
+                &mut pass.base.dynamic_offsets,
+                offsets,
+                offset_length,
+            )
+        };
 
         if redundant {
             return;
@@ -849,7 +856,7 @@ pub mod compute_ffi {
             0,
             "Push constant size must be aligned to 4 bytes."
         );
-        let data_slice = slice::from_raw_parts(data, size_bytes as usize);
+        let data_slice = unsafe { slice::from_raw_parts(data, size_bytes as usize) };
         let value_offset = pass.base.push_constant_data.len().try_into().expect(
             "Ran out of push constant space. Don't set 4gb of push constants per ComputePass.",
         );
@@ -900,7 +907,7 @@ pub mod compute_ffi {
         label: RawString,
         color: u32,
     ) {
-        let bytes = ffi::CStr::from_ptr(label).to_bytes();
+        let bytes = unsafe { ffi::CStr::from_ptr(label) }.to_bytes();
         pass.base.string_data.extend_from_slice(bytes);
 
         pass.base.commands.push(ComputeCommand::PushDebugGroup {
@@ -924,7 +931,7 @@ pub mod compute_ffi {
         label: RawString,
         color: u32,
     ) {
-        let bytes = ffi::CStr::from_ptr(label).to_bytes();
+        let bytes = unsafe { ffi::CStr::from_ptr(label) }.to_bytes();
         pass.base.string_data.extend_from_slice(bytes);
 
         pass.base.commands.push(ComputeCommand::InsertDebugMarker {

@@ -12,7 +12,8 @@ pub(crate) struct BufferInitTrackerAction {
 pub(crate) type BufferInitTracker = InitTracker<wgt::BufferAddress>;
 
 impl BufferInitTracker {
-    /// Checks if an action has/requires any effect on the initialization status and shrinks its range if possible.
+    /// Checks if an action has/requires any effect on the initialization status
+    /// and shrinks its range if possible.
     pub(crate) fn check_action(
         &self,
         action: &BufferInitTrackerAction,
@@ -20,7 +21,8 @@ impl BufferInitTracker {
         self.create_action(action.id, action.range.clone(), action.kind)
     }
 
-    /// Creates an action if it would have any effect on the initialization status and shrinks the range if possible.
+    /// Creates an action if it would have any effect on the initialization
+    /// status and shrinks the range if possible.
     pub(crate) fn create_action(
         &self,
         id: BufferId,

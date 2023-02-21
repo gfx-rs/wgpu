@@ -2,9 +2,9 @@ use crate::{
     auxil::{self, dxgi::result::HResult as _},
     dx12::SurfaceTarget,
 };
-use std::{mem, sync::Arc, thread};
+use std::{mem, ptr, sync::Arc, thread};
 use winapi::{
-    shared::{dxgi, dxgi1_2, windef, winerror},
+    shared::{dxgi, dxgi1_2, minwindef::DWORD, windef, winerror},
     um::{d3d12, d3d12sdklayers, winuser},
 };
 
@@ -29,15 +29,17 @@ impl Drop for super::Adapter {
 
 impl super::Adapter {
     pub unsafe fn report_live_objects(&self) {
-        if let Ok(debug_device) = self
-            .raw
-            .cast::<d3d12sdklayers::ID3D12DebugDevice>()
-            .into_result()
-        {
-            debug_device.ReportLiveDeviceObjects(
-                d3d12sdklayers::D3D12_RLDO_SUMMARY | d3d12sdklayers::D3D12_RLDO_IGNORE_INTERNAL,
-            );
-            debug_device.destroy();
+        if let Ok(debug_device) = unsafe {
+            self.raw
+                .cast::<d3d12sdklayers::ID3D12DebugDevice>()
+                .into_result()
+        } {
+            unsafe {
+                debug_device.ReportLiveDeviceObjects(
+                    d3d12sdklayers::D3D12_RLDO_SUMMARY | d3d12sdklayers::D3D12_RLDO_IGNORE_INTERNAL,
+                )
+            };
+            unsafe { debug_device.destroy() };
         }
     }
 
@@ -50,6 +52,7 @@ impl super::Adapter {
         adapter: native::DxgiAdapter,
         library: &Arc<native::D3D12Lib>,
         instance_flags: crate::InstanceFlags,
+        dx12_shader_compiler: &wgt::Dx12Compiler,
     ) -> Option<crate::ExposedAdapter<super::Api>> {
         // Create the device so that we can get the capabilities.
         let device = {
@@ -122,6 +125,8 @@ impl super::Adapter {
             } else {
                 wgt::DeviceType::DiscreteGpu
             },
+            driver: String::new(),
+            driver_info: String::new(),
         };
 
         let mut options: d3d12::D3D12_FEATURE_DATA_D3D12_OPTIONS = unsafe { mem::zeroed() };
@@ -189,7 +194,6 @@ impl super::Adapter {
 
         let mut features = wgt::Features::empty()
             | wgt::Features::DEPTH_CLIP_CONTROL
-            | wgt::Features::DEPTH24UNORM_STENCIL8
             | wgt::Features::DEPTH32FLOAT_STENCIL8
             | wgt::Features::INDIRECT_FIRST_INSTANCE
             | wgt::Features::MAPPABLE_PRIMARY_BUFFERS
@@ -205,7 +209,9 @@ impl super::Adapter {
             | wgt::Features::WRITE_TIMESTAMP_INSIDE_PASSES
             | wgt::Features::TEXTURE_COMPRESSION_BC
             | wgt::Features::CLEAR_TEXTURE
-            | wgt::Features::TEXTURE_FORMAT_16BIT_NORM;
+            | wgt::Features::TEXTURE_FORMAT_16BIT_NORM
+            | wgt::Features::PUSH_CONSTANTS
+            | wgt::Features::SHADER_PRIMITIVE_INDEX;
         //TODO: in order to expose this, we need to run a compute shader
         // that extract the necessary statistics out of the D3D12 result.
         // Alternatively, we could allocate a buffer for the query set,
@@ -225,6 +231,9 @@ impl super::Adapter {
             shader_model_support.HighestShaderModel >= d3d12::D3D_SHADER_MODEL_5_1,
         );
 
+        // TODO: Determine if IPresentationManager is supported
+        let presentation_timer = auxil::dxgi::time::PresentationTimer::new_dxgi();
+
         let base = wgt::Limits::default();
 
         Some(crate::ExposedAdapter {
@@ -233,7 +242,9 @@ impl super::Adapter {
                 device,
                 library: Arc::clone(library),
                 private_caps,
+                presentation_timer,
                 workarounds,
+                dx12_shader_compiler: dx12_shader_compiler.clone(),
             },
             info,
             features,
@@ -245,6 +256,7 @@ impl super::Adapter {
                     max_texture_dimension_3d: d3d12::D3D12_REQ_TEXTURE3D_U_V_OR_W_DIMENSION,
                     max_texture_array_layers: d3d12::D3D12_REQ_TEXTURE2D_ARRAY_AXIS_DIMENSION,
                     max_bind_groups: crate::MAX_BIND_GROUPS as u32,
+                    max_bindings_per_bind_group: 65535,
                     // dynamic offsets take a root constant, so we expose the minimum here
                     max_dynamic_uniform_buffers_per_pipeline_layout: base
                         .max_dynamic_uniform_buffers_per_pipeline_layout,
@@ -270,7 +282,25 @@ impl super::Adapter {
                         .min(crate::MAX_VERTEX_BUFFERS as u32),
                     max_vertex_attributes: d3d12::D3D12_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT,
                     max_vertex_buffer_array_stride: d3d12::D3D12_SO_BUFFER_MAX_STRIDE_IN_BYTES,
-                    max_push_constant_size: 0,
+                    // The push constants are part of the root signature which
+                    // has a limit of 64 DWORDS (256 bytes), but other resources
+                    // also share the root signature:
+                    //
+                    // - push constants consume a `DWORD` for each `4 bytes` of data
+                    // - If a bind group has buffers it will consume a `DWORD`
+                    //   for the descriptor table
+                    // - If a bind group has samplers it will consume a `DWORD`
+                    //   for the descriptor table
+                    // - Each dynamic buffer will consume `2 DWORDs` for the
+                    //   root descriptor
+                    // - The special constants buffer count as constants
+                    //
+                    // Since we can't know beforehand all root signatures that
+                    // will be created, the max size to be used for push
+                    // constants needs to be set to a reasonable number instead.
+                    //
+                    // Source: https://learn.microsoft.com/en-us/windows/win32/direct3d12/root-signature-limits#memory-limits-and-costs
+                    max_push_constant_size: 128,
                     min_uniform_buffer_offset_alignment:
                         d3d12::D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT,
                     min_storage_buffer_offset_alignment: 4,
@@ -319,7 +349,13 @@ impl crate::Adapter<super::Api> for super::Adapter {
                 .into_device_result("Queue creation")?
         };
 
-        let device = super::Device::new(self.device, queue, self.private_caps, &self.library)?;
+        let device = super::Device::new(
+            self.device,
+            queue,
+            self.private_caps,
+            &self.library,
+            self.dx12_shader_compiler.clone(),
+        )?;
         Ok(crate::OpenDevice {
             device,
             queue: super::Queue {
@@ -340,42 +376,53 @@ impl crate::Adapter<super::Api> for super::Adapter {
             Some(f) => f,
             None => return Tfc::empty(),
         };
-        let no_depth_format = auxil::dxgi::conv::map_texture_format_nodepth(format);
+        let srv_uav_format = if format.is_combined_depth_stencil_format() {
+            auxil::dxgi::conv::map_texture_format_for_srv_uav(
+                format,
+                // use the depth aspect here as opposed to stencil since it has more capabilities
+                crate::FormatAspects::DEPTH,
+            )
+        } else {
+            auxil::dxgi::conv::map_texture_format_for_srv_uav(
+                format,
+                crate::FormatAspects::from(format),
+            )
+        }
+        .unwrap();
 
         let mut data = d3d12::D3D12_FEATURE_DATA_FORMAT_SUPPORT {
             Format: raw_format,
-            Support1: mem::zeroed(),
-            Support2: mem::zeroed(),
+            Support1: unsafe { mem::zeroed() },
+            Support2: unsafe { mem::zeroed() },
         };
-        assert_eq!(
-            winerror::S_OK,
+        assert_eq!(winerror::S_OK, unsafe {
             self.device.CheckFeatureSupport(
                 d3d12::D3D12_FEATURE_FORMAT_SUPPORT,
                 &mut data as *mut _ as *mut _,
                 mem::size_of::<d3d12::D3D12_FEATURE_DATA_FORMAT_SUPPORT>() as _,
             )
-        );
+        });
 
         // Because we use a different format for SRV and UAV views of depth textures, we need to check
         // the features that use SRV/UAVs using the no-depth format.
-        let mut data_no_depth = d3d12::D3D12_FEATURE_DATA_FORMAT_SUPPORT {
-            Format: no_depth_format,
-            Support1: mem::zeroed(),
-            Support2: mem::zeroed(),
+        let mut data_srv_uav = d3d12::D3D12_FEATURE_DATA_FORMAT_SUPPORT {
+            Format: srv_uav_format,
+            Support1: d3d12::D3D12_FORMAT_SUPPORT1_NONE,
+            Support2: d3d12::D3D12_FORMAT_SUPPORT2_NONE,
         };
-        if raw_format != no_depth_format {
+        if raw_format != srv_uav_format {
             // Only-recheck if we're using a different format
-            assert_eq!(
-                winerror::S_OK,
+            assert_eq!(winerror::S_OK, unsafe {
                 self.device.CheckFeatureSupport(
                     d3d12::D3D12_FEATURE_FORMAT_SUPPORT,
-                    &mut data_no_depth as *mut _ as *mut _,
-                    mem::size_of::<d3d12::D3D12_FEATURE_DATA_FORMAT_SUPPORT>() as _,
+                    ptr::addr_of_mut!(data_srv_uav).cast(),
+                    DWORD::try_from(mem::size_of::<d3d12::D3D12_FEATURE_DATA_FORMAT_SUPPORT>())
+                        .unwrap(),
                 )
-            );
+            });
         } else {
             // Same format, just copy over.
-            data_no_depth = data;
+            data_srv_uav = data;
         }
 
         let mut caps = Tfc::COPY_SRC | Tfc::COPY_DST;
@@ -385,14 +432,14 @@ impl crate::Adapter<super::Api> for super::Adapter {
                 | d3d12::D3D12_FORMAT_SUPPORT1_TEXTURE3D
                 | d3d12::D3D12_FORMAT_SUPPORT1_TEXTURECUBE)
             != 0;
-        // SRVs use no-depth format
+        // SRVs use srv_uav_format
         caps.set(
             Tfc::SAMPLED,
-            is_texture && data_no_depth.Support1 & d3d12::D3D12_FORMAT_SUPPORT1_SHADER_LOAD != 0,
+            is_texture && data_srv_uav.Support1 & d3d12::D3D12_FORMAT_SUPPORT1_SHADER_LOAD != 0,
         );
         caps.set(
             Tfc::SAMPLED_LINEAR,
-            data_no_depth.Support1 & d3d12::D3D12_FORMAT_SUPPORT1_SHADER_SAMPLE != 0,
+            data_srv_uav.Support1 & d3d12::D3D12_FORMAT_SUPPORT1_SHADER_SAMPLE != 0,
         );
         caps.set(
             Tfc::COLOR_ATTACHMENT,
@@ -406,30 +453,58 @@ impl crate::Adapter<super::Api> for super::Adapter {
             Tfc::DEPTH_STENCIL_ATTACHMENT,
             data.Support1 & d3d12::D3D12_FORMAT_SUPPORT1_DEPTH_STENCIL != 0,
         );
-        // UAVs use no-depth format
+        // UAVs use srv_uav_format
         caps.set(
             Tfc::STORAGE,
-            data_no_depth.Support1 & d3d12::D3D12_FORMAT_SUPPORT1_TYPED_UNORDERED_ACCESS_VIEW != 0,
+            data_srv_uav.Support1 & d3d12::D3D12_FORMAT_SUPPORT1_TYPED_UNORDERED_ACCESS_VIEW != 0,
         );
         caps.set(
             Tfc::STORAGE_READ_WRITE,
-            data_no_depth.Support2 & d3d12::D3D12_FORMAT_SUPPORT2_UAV_TYPED_LOAD != 0,
+            data_srv_uav.Support2 & d3d12::D3D12_FORMAT_SUPPORT2_UAV_TYPED_LOAD != 0,
         );
 
-        // We load via UAV/SRV so use no-depth
+        // We load via UAV/SRV so use srv_uav_format
         let no_msaa_load = caps.contains(Tfc::SAMPLED)
-            && data_no_depth.Support1 & d3d12::D3D12_FORMAT_SUPPORT1_MULTISAMPLE_LOAD == 0;
+            && data_srv_uav.Support1 & d3d12::D3D12_FORMAT_SUPPORT1_MULTISAMPLE_LOAD == 0;
 
         let no_msaa_target = data.Support1
             & (d3d12::D3D12_FORMAT_SUPPORT1_RENDER_TARGET
                 | d3d12::D3D12_FORMAT_SUPPORT1_DEPTH_STENCIL)
             != 0
             && data.Support1 & d3d12::D3D12_FORMAT_SUPPORT1_MULTISAMPLE_RENDERTARGET == 0;
-        caps.set(Tfc::MULTISAMPLE, !no_msaa_load && !no_msaa_target);
+
         caps.set(
             Tfc::MULTISAMPLE_RESOLVE,
             data.Support1 & d3d12::D3D12_FORMAT_SUPPORT1_MULTISAMPLE_RESOLVE != 0,
         );
+
+        let mut ms_levels = d3d12::D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS {
+            Format: raw_format,
+            SampleCount: 0,
+            Flags: d3d12::D3D12_MULTISAMPLE_QUALITY_LEVELS_FLAG_NONE,
+            NumQualityLevels: 0,
+        };
+
+        let mut set_sample_count = |sc: u32, tfc: Tfc| {
+            ms_levels.SampleCount = sc;
+
+            if unsafe {
+                self.device.CheckFeatureSupport(
+                    d3d12::D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS,
+                    <*mut _>::cast(&mut ms_levels),
+                    mem::size_of::<d3d12::D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS>() as _,
+                )
+            } == winerror::S_OK
+                && ms_levels.NumQualityLevels != 0
+            {
+                caps.set(tfc, !no_msaa_load && !no_msaa_target);
+            }
+        };
+
+        set_sample_count(2, Tfc::MULTISAMPLE_X2);
+        set_sample_count(4, Tfc::MULTISAMPLE_X4);
+        set_sample_count(8, Tfc::MULTISAMPLE_X8);
+        set_sample_count(16, Tfc::MULTISAMPLE_X16);
 
         caps
     }
@@ -441,8 +516,8 @@ impl crate::Adapter<super::Api> for super::Adapter {
         let current_extent = {
             match surface.target {
                 SurfaceTarget::WndHandle(wnd_handle) => {
-                    let mut rect: windef::RECT = mem::zeroed();
-                    if winuser::GetClientRect(wnd_handle, &mut rect) != 0 {
+                    let mut rect: windef::RECT = unsafe { mem::zeroed() };
+                    if unsafe { winuser::GetClientRect(wnd_handle, &mut rect) } != 0 {
                         Some(wgt::Extent3d {
                             width: (rect.right - rect.left) as u32,
                             height: (rect.bottom - rect.top) as u32,
@@ -453,7 +528,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
                         None
                     }
                 }
-                SurfaceTarget::Visual(_) => None,
+                SurfaceTarget::Visual(_) | SurfaceTarget::SurfaceHandle(_) => None,
             }
         };
 
@@ -488,11 +563,11 @@ impl crate::Adapter<super::Api> for super::Adapter {
                 | crate::TextureUses::COPY_SRC
                 | crate::TextureUses::COPY_DST,
             present_modes,
-            composite_alpha_modes: vec![
-                crate::CompositeAlphaMode::Opaque,
-                crate::CompositeAlphaMode::PreMultiplied,
-                crate::CompositeAlphaMode::PostMultiplied,
-            ],
+            composite_alpha_modes: vec![wgt::CompositeAlphaMode::Opaque],
         })
+    }
+
+    unsafe fn get_presentation_timestamp(&self) -> wgt::PresentationTimestamp {
+        wgt::PresentationTimestamp(self.presentation_timer.get_timestamp_ns())
     }
 }

@@ -6,7 +6,10 @@ use std::sync::Arc;
 use super::*;
 use common::{initialize_test, TestParameters};
 
+wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
+
 #[test]
+#[wasm_bindgen_test::wasm_bindgen_test]
 fn test_compute_1() {
     initialize_test(
         TestParameters::default()
@@ -27,6 +30,7 @@ fn test_compute_1() {
 }
 
 #[test]
+#[wasm_bindgen_test::wasm_bindgen_test]
 fn test_compute_2() {
     initialize_test(
         TestParameters::default()
@@ -47,6 +51,7 @@ fn test_compute_2() {
 }
 
 #[test]
+#[wasm_bindgen_test::wasm_bindgen_test]
 fn test_compute_overflow() {
     initialize_test(
         TestParameters::default()
@@ -66,12 +71,15 @@ fn test_compute_overflow() {
 }
 
 #[test]
+// Wasm doesn't support threads
 fn test_multithreaded_compute() {
     initialize_test(
         TestParameters::default()
             .downlevel_flags(wgpu::DownlevelFlags::COMPUTE_SHADERS)
             .limits(wgpu::Limits::downlevel_defaults())
-            .specific_failure(None, None, Some("V3D"), true),
+            .specific_failure(None, None, Some("V3D"), true)
+            // https://github.com/gfx-rs/wgpu/issues/3250
+            .specific_failure(Some(wgpu::Backends::GL), None, Some("llvmpipe"), true),
         |ctx| {
             use std::{sync::mpsc, thread, time::Duration};
 

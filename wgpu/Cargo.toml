@@ -1,13 +1,13 @@
 [package]
 name = "wgpu"
-version = "0.13.0"
-authors = ["wgpu developers"]
-edition = "2021"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
 description = "Rusty WebGPU API wrapper"
-homepage = "https://wgpu.rs/"
-repository = "https://github.com/gfx-rs/wgpu/tree/v0.13"
-keywords = ["graphics"]
-license = "MIT OR Apache-2.0"
+homepage.workspace = true
+repository.workspace = true
+keywords.workspace = true
+license.workspace = true
 exclude = [
     "etc/**/*",
     "examples/**/*.png",  # Image comparison test
@@ -24,6 +24,12 @@ autotests = false
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
+targets = [
+    "x86_64-unknown-linux-gnu",
+    "x86_64-apple-darwin",
+    "x86_64-pc-windows-msvc",
+    "wasm32-unknown-unknown",
+]
 
 [lib]
 
@@ -75,91 +81,120 @@ test = true
 name = "water"
 test = true
 
+[[example]]
+name = "stencil-triangles"
+test = true
+
 [features]
-default = []
+default = ["wgsl"]
+# Apply run-time checks, even in release builds. These are in addition
+# to the validation carried out at public APIs in all builds.
+strict_asserts = ["wgc?/strict_asserts", "wgt/strict_asserts"]
 spirv = ["naga/spv-in"]
 glsl = ["naga/glsl-in"]
+wgsl = ["wgc?/wgsl"]
 trace = ["serde", "wgc/trace"]
 replay = ["serde", "wgc/replay"]
 angle = ["wgc/angle"]
-webgl = ["wgc"]
-emscripten = ["webgl"]
-vulkan-portability = ["wgc/vulkan-portability"]
+webgl = ["hal", "wgc"]
+vulkan-portability = ["wgc/vulkan"]
+expose-ids = []
 
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies.wgc]
-package = "wgpu-core"
-path = "../wgpu-core"
-version = "0.13"
-features = ["raw-window-handle"]
-
-[target.'cfg(target_arch = "wasm32")'.dependencies.wgc]
-package = "wgpu-core"
-path = "../wgpu-core"
-version = "0.13"
-features = ["raw-window-handle"]
+# wgpu-core is always available as an optional dependency, "wgc".
+# Whenever wgpu-core is selected, we want the GLES backend and raw
+# window handle support.
+[dependencies.wgc]
 optional = true
+workspace = true
+features = ["raw-window-handle", "gles"]
+
+# wgpu-core is required whenever not targeting web APIs directly.
+# Whenever wgpu-core is selected, we want the GLES backend and raw
+# window handle support.
+[target.'cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))'.dependencies.wgc]
+workspace = true
+features = ["raw-window-handle", "gles"]
+
+# We want the wgpu-core Metal backend on macOS and iOS.
+# (We should consider also enabling "vulkan" for Vulkan Portability.)
+[target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies.wgc]
+workspace = true
+features = ["metal"]
+
+# We want the wgpu-core Direct3D backends on Windows.
+[target.'cfg(windows)'.dependencies.wgc]
+workspace = true
+features = ["dx11", "dx12"]
+
+# We want the wgpu-core Vulkan backend on Unix (but not Emscripten) and Windows.
+[target.'cfg(any(windows, all(unix, not(target_os = "emscripten"), not(target_os = "ios"), not(target_os = "macos"))))'.dependencies.wgc]
+workspace = true
+features = ["vulkan"]
 
 [dependencies.wgt]
-package = "wgpu-types"
-path = "../wgpu-types"
-version = "0.13"
+workspace = true
 
-[target.'cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))'.dependencies.hal]
-package = "wgpu-hal"
-path = "../wgpu-hal"
-version = "0.13"
+# We need wgpu-hal unless we're targeting the web APIs.
+[target.'cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))'.dependencies]
+hal = { workspace = true }
+
+[target.'cfg(all(not(target_arch = "wasm32"), unix, not(target_os = "ios"), not(target_os = "macos")))'.dependencies]
+hal = { workspace = true, features = ["renderdoc"] }
+
+[target.'cfg(windows)'.dependencies]
+hal = { workspace = true, features = ["dxc_shader_compiler", "renderdoc", "windows_rs"] }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies.hal]
+workspace = true
+optional = true
 
 [dependencies]
-arrayvec = "0.7"
-log = "0.4"
-# parking_lot 0.12 switches from `winapi` to `windows`; permit either
-parking_lot = ">=0.11,<0.13"
-raw-window-handle = "0.5"
-serde = { version = "1", features = ["derive"], optional = true }
-smallvec = "1"
-static_assertions = "1.1.0"
+arrayvec.workspace = true
+log.workspace = true
+parking_lot.workspace = true
+profiling.workspace = true
+raw-window-handle.workspace = true
+serde = { workspace = true, features = ["derive"], optional = true }
+smallvec.workspace = true
+static_assertions.workspace = true
+cfg-if.workspace = true
 
 [dev-dependencies]
-bitflags = "1"
-bytemuck = { version = "1.4", features = ["derive"] }
-glam = "0.20.2"
-ddsfile = "0.5"
-futures-intrusive = "0.4"
-log = "0.4"
-# Opt out of noise's "default-features" to avoid "image" feature as a dependency count optimization.
-# This will not be required in the next release since it has been removed from the default feature in https://github.com/Razaekel/noise-rs/commit/1af9e1522236b2c584fb9a02150c9c67a5e6bb04#diff-2e9d962a08321605940b5a657135052fbcef87b5e360662bb527c96d9a615542
-noise = { version = "0.7", default-features = false }
-obj = "0.10"
-png = "0.17"
-nanorand = { version = "0.7", default-features = false, features = ["wyrand"] }
-winit = "0.27.1"     # for "halmark" example
+bitflags.workspace = true
+bytemuck = { workspace = true, features = ["derive"] }
+glam.workspace = true
+ddsfile.workspace = true
+futures-intrusive.workspace = true
+env_logger.workspace = true
+image.workspace = true
+log.workspace = true
+noise = { workspace = true }
+obj.workspace = true
+pollster.workspace = true
+png.workspace = true
+nanorand = { workspace = true, features = ["wyrand"] }
+wasm-bindgen-test.workspace = true
+winit.workspace = true # for "halmark" example
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
-async-executor = "1.0"
-pollster = "0.2"
-env_logger = "0.9"
+async-executor.workspace = true
 
 [dependencies.naga]
-git = "https://github.com/gfx-rs/naga"
-rev = "b209d911"
-version = "0.9"
+workspace = true
+features = ["clone"]
 optional = true
 
 # used to test all the example shaders
 [dev-dependencies.naga]
-git = "https://github.com/gfx-rs/naga"
-rev = "b209d911"
-version = "0.9"
+workspace = true
 features = ["wgsl-in"]
 
 [target.'cfg(target_arch = "wasm32")'.dependencies.naga]
-git = "https://github.com/gfx-rs/naga"
-rev = "b209d911"
-version = "0.9"
+workspace = true
 features = ["wgsl-out"]
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-web-sys = { version = "0.3.58", features = [
+web-sys = { workspace = true, features = [
     "Document",
     "Navigator",
     "Node",
@@ -183,6 +218,7 @@ web-sys = { version = "0.3.58", features = [
     "GpuBufferBindingLayout",
     "GpuBufferBindingType",
     "GpuBufferDescriptor",
+    "GpuCanvasAlphaMode",
     "GpuCanvasContext",
     "GpuCanvasConfiguration",
     "GpuColorDict",
@@ -207,13 +243,16 @@ web-sys = { version = "0.3.58", features = [
     "GpuDeviceLostReason",
     "GpuError",
     "GpuErrorFilter",
+    # "GpuExtent2dDict", Not yet implemented in web_sys
     "GpuExtent3dDict",
     "GpuFeatureName",
     "GpuFilterMode",
     "GpuFragmentState",
     "GpuFrontFace",
     "GpuImageCopyBuffer",
+    "GpuImageCopyExternalImage",
     "GpuImageCopyTexture",
+    "GpuImageCopyTextureTagged",
     "GpuImageDataLayout",
     "GpuIndexFormat",
     "GpuLoadOp",
@@ -281,16 +320,26 @@ web-sys = { version = "0.3.58", features = [
     "OffscreenCanvas",
     "ImageBitmap",
     "ImageBitmapRenderingContext",
-    "Window"
+    "Window",
+    "WorkerGlobalScope",
+    "WorkerNavigator"
 ] }
-wasm-bindgen = "0.2.81"
-js-sys = "0.3.58"
-wasm-bindgen-futures = "0.4.31"
-# parking_lot 0.12 switches from `winapi` to `windows`; permit either
-parking_lot = ">=0.11,<0.13"
+wasm-bindgen.workspace = true
+js-sys.workspace = true
+wasm-bindgen-futures.workspace = true
+parking_lot.workspace = true
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
-console_error_panic_hook = "0.1.6"
-console_log = "0.1.2"
-# We need the Location feature in the framework examples
-web-sys = { version = "0.3.58", features = ["Location"] }
+console_error_panic_hook.workspace = true
+console_log.workspace = true
+# We need these features in the framework examples and tests
+web-sys = { workspace = true, features = [
+    "Location",
+    "Blob",
+    "RequestInit",
+    "RequestMode",
+    "Request",
+    "Response",
+    "WebGl2RenderingContext",
+    "CanvasRenderingContext2d"
+] }

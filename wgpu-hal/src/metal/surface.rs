@@ -63,7 +63,7 @@ impl super::Surface {
         Self {
             view,
             render_layer: Mutex::new(layer),
-            raw_swapchain_format: mtl::MTLPixelFormat::Invalid,
+            swapchain_format: None,
             extent: wgt::Extent3d::default(),
             main_thread_id: thread::current().id(),
             present_with_transaction: false,
@@ -83,9 +83,11 @@ impl super::Surface {
         delegate: Option<&HalManagedMetalLayerDelegate>,
     ) -> Self {
         let view = view as *mut Object;
-        let render_layer =
-            mem::transmute::<_, &mtl::MetalLayerRef>(Self::get_metal_layer(view, delegate))
-                .to_owned();
+        let render_layer = {
+            let layer = unsafe { Self::get_metal_layer(view, delegate) };
+            unsafe { mem::transmute::<_, &mtl::MetalLayerRef>(layer) }
+        }
+        .to_owned();
         let _: *mut c_void = msg_send![view, retain];
         Self::new(NonNull::new(view), render_layer)
     }
@@ -98,7 +100,7 @@ impl super::Surface {
     }
 
     /// If not called on the main thread, this will panic.
-    pub unsafe fn get_metal_layer(
+    pub(crate) unsafe fn get_metal_layer(
         view: *mut Object,
         delegate: Option<&HalManagedMetalLayerDelegate>,
     ) -> *mut Object {
@@ -136,7 +138,7 @@ impl super::Surface {
             {
                 let () = msg_send![view, setLayer: new_layer];
                 let () = msg_send![view, setWantsLayer: YES];
-                let () = msg_send![new_layer, setContentsGravity: kCAGravityTopLeft];
+                let () = msg_send![new_layer, setContentsGravity: unsafe { kCAGravityTopLeft }];
                 let window: *mut Object = msg_send![view, window];
                 if !window.is_null() {
                     let scale_factor: CGFloat = msg_send![window, backingScaleFactor];
@@ -176,7 +178,7 @@ impl crate::Surface<super::Api> for super::Surface {
         log::info!("build swapchain {:?}", config);
 
         let caps = &device.shared.private_caps;
-        self.raw_swapchain_format = caps.map_format(config.format);
+        self.swapchain_format = Some(config.format);
         self.extent = config.extent;
 
         let render_layer = self.render_layer.lock();
@@ -189,9 +191,9 @@ impl crate::Surface<super::Api> for super::Surface {
         let drawable_size = CGSize::new(config.extent.width as f64, config.extent.height as f64);
 
         match config.composite_alpha_mode {
-            crate::CompositeAlphaMode::Opaque => render_layer.set_opaque(true),
-            crate::CompositeAlphaMode::PostMultiplied => render_layer.set_opaque(false),
-            crate::CompositeAlphaMode::PreMultiplied => (),
+            wgt::CompositeAlphaMode::Opaque => render_layer.set_opaque(true),
+            wgt::CompositeAlphaMode::PostMultiplied => render_layer.set_opaque(false),
+            _ => (),
         }
 
         let device_raw = device.shared.device.lock();
@@ -207,13 +209,13 @@ impl crate::Surface<super::Api> for super::Surface {
                 let () = msg_send![*render_layer, setFrame: bounds];
             }
         }
-        render_layer.set_device(&*device_raw);
-        render_layer.set_pixel_format(self.raw_swapchain_format);
+        render_layer.set_device(&device_raw);
+        render_layer.set_pixel_format(caps.map_format(config.format));
         render_layer.set_framebuffer_only(framebuffer_only);
         render_layer.set_presents_with_transaction(self.present_with_transaction);
         // opt-in to Metal EDR
         // EDR potentially more power used in display and more bandwidth, memory footprint.
-        let wants_edr = self.raw_swapchain_format == mtl::MTLPixelFormat::RGBA16Float;
+        let wants_edr = config.format == wgt::TextureFormat::Rgba16Float;
         if wants_edr != render_layer.wants_extended_dynamic_range_content() {
             render_layer.set_wants_extended_dynamic_range_content(wants_edr);
         }
@@ -232,7 +234,7 @@ impl crate::Surface<super::Api> for super::Surface {
     }
 
     unsafe fn unconfigure(&mut self, _device: &super::Device) {
-        self.raw_swapchain_format = mtl::MTLPixelFormat::Invalid;
+        self.swapchain_format = None;
     }
 
     unsafe fn acquire_texture(
@@ -252,7 +254,7 @@ impl crate::Surface<super::Api> for super::Surface {
         let suf_texture = super::SurfaceTexture {
             texture: super::Texture {
                 raw: texture,
-                raw_format: self.raw_swapchain_format,
+                format: self.swapchain_format.unwrap(),
                 raw_type: mtl::MTLTextureType::D2,
                 array_layers: 1,
                 mip_levels: 1,

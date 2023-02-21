@@ -33,38 +33,59 @@ impl Instance {
         &self,
         canvas: &web_sys::HtmlCanvasElement,
     ) -> Result<Surface, crate::InstanceError> {
-        let webgl2_context = canvas
-            .get_context_with_context_options("webgl2", &Self::create_context_options())
-            .expect("Cannot create WebGL2 context")
-            .and_then(|context| context.dyn_into::<web_sys::WebGl2RenderingContext>().ok())
-            .expect("Cannot convert into WebGL2 context");
-
-        *self.webgl2_context.lock() = Some(webgl2_context.clone());
-
-        Ok(Surface {
-            webgl2_context,
-            present_program: None,
-            swapchain: None,
-            texture: None,
-            presentable: true,
-        })
+        self.create_surface_from_context(
+            canvas.get_context_with_context_options("webgl2", &Self::create_context_options()),
+        )
     }
 
     pub fn create_surface_from_offscreen_canvas(
         &self,
         canvas: &web_sys::OffscreenCanvas,
     ) -> Result<Surface, crate::InstanceError> {
-        let webgl2_context = canvas
-            .get_context_with_context_options("webgl2", &Self::create_context_options())
-            .expect("Cannot create WebGL2 context")
-            .and_then(|context| context.dyn_into::<web_sys::WebGl2RenderingContext>().ok())
-            .expect("Cannot convert into WebGL2 context");
+        self.create_surface_from_context(
+            canvas.get_context_with_context_options("webgl2", &Self::create_context_options()),
+        )
+    }
+
+    /// Common portion of public `create_surface_from_*` functions.
+    ///
+    /// Note: Analogous code also exists in the WebGPU backend at
+    /// `wgpu::backend::web::Context`.
+    fn create_surface_from_context(
+        &self,
+        context_result: Result<Option<js_sys::Object>, wasm_bindgen::JsValue>,
+    ) -> Result<Surface, crate::InstanceError> {
+        let context_object: js_sys::Object = match context_result {
+            Ok(Some(context)) => context,
+            Ok(None) => {
+                // <https://html.spec.whatwg.org/multipage/canvas.html#dom-canvas-getcontext-dev>
+                // A getContext() call “returns null if contextId is not supported, or if the
+                // canvas has already been initialized with another context type”. Additionally,
+                // “not supported” could include “insufficient GPU resources” or “the GPU process
+                // previously crashed”. So, we must return it as an `Err` since it could occur
+                // for circumstances outside the application author's control.
+                return Err(crate::InstanceError);
+            }
+            Err(js_error) => {
+                // <https://html.spec.whatwg.org/multipage/canvas.html#dom-canvas-getcontext>
+                // A thrown exception indicates misuse of the canvas state. Ideally we wouldn't
+                // panic in this case, but for now, `InstanceError` conveys no detail, so it
+                // is more informative to panic with a specific message.
+                panic!("canvas.getContext() threw {js_error:?}")
+            }
+        };
+
+        // Not returning this error because it is a type error that shouldn't happen unless
+        // the browser, JS builtin objects, or wasm bindings are misbehaving somehow.
+        let webgl2_context: web_sys::WebGl2RenderingContext = context_object
+            .dyn_into()
+            .expect("canvas context is not a WebGl2RenderingContext");
 
         *self.webgl2_context.lock() = Some(webgl2_context.clone());
 
         Ok(Surface {
             webgl2_context,
-            present_program: None,
+            srgb_present_program: None,
             swapchain: None,
             texture: None,
             presentable: true,
@@ -101,7 +122,7 @@ impl crate::Instance<super::Api> for Instance {
             None => return Vec::new(),
         };
 
-        super::Adapter::expose(AdapterContext { glow_context: gl })
+        unsafe { super::Adapter::expose(AdapterContext { glow_context: gl }) }
             .into_iter()
             .collect()
     }
@@ -123,7 +144,7 @@ impl crate::Instance<super::Api> for Instance {
 
             self.create_surface_from_canvas(&canvas)
         } else {
-            unreachable!()
+            Err(crate::InstanceError)
         }
     }
 
@@ -144,7 +165,7 @@ pub struct Surface {
     pub(super) swapchain: Option<Swapchain>,
     texture: Option<glow::Texture>,
     pub(super) presentable: bool,
-    present_program: Option<glow::Program>,
+    srgb_present_program: Option<glow::Program>,
 }
 
 // SAFE: Because web doesn't have threads ( yet )
@@ -166,48 +187,80 @@ impl Surface {
         _suf_texture: super::Texture,
         gl: &glow::Context,
     ) -> Result<(), crate::SurfaceError> {
-        gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, None);
-        gl.bind_sampler(0, None);
-        gl.active_texture(glow::TEXTURE0);
-        gl.bind_texture(glow::TEXTURE_2D, self.texture);
-        gl.use_program(self.present_program);
-        gl.disable(glow::DEPTH_TEST);
-        gl.disable(glow::STENCIL_TEST);
-        gl.disable(glow::SCISSOR_TEST);
-        gl.disable(glow::BLEND);
-        gl.disable(glow::CULL_FACE);
-        gl.draw_buffers(&[glow::BACK]);
-        gl.draw_arrays(glow::TRIANGLES, 0, 3);
+        let swapchain = self.swapchain.as_ref().ok_or(crate::SurfaceError::Other(
+            "need to configure surface before presenting",
+        ))?;
+
+        if swapchain.format.is_srgb() {
+            // Important to set the viewport since we don't know in what state the user left it.
+            unsafe {
+                gl.viewport(
+                    0,
+                    0,
+                    swapchain.extent.width as _,
+                    swapchain.extent.height as _,
+                )
+            };
+            unsafe { gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, None) };
+            unsafe { gl.bind_sampler(0, None) };
+            unsafe { gl.active_texture(glow::TEXTURE0) };
+            unsafe { gl.bind_texture(glow::TEXTURE_2D, self.texture) };
+            unsafe { gl.use_program(self.srgb_present_program) };
+            unsafe { gl.disable(glow::DEPTH_TEST) };
+            unsafe { gl.disable(glow::STENCIL_TEST) };
+            unsafe { gl.disable(glow::SCISSOR_TEST) };
+            unsafe { gl.disable(glow::BLEND) };
+            unsafe { gl.disable(glow::CULL_FACE) };
+            unsafe { gl.draw_buffers(&[glow::BACK]) };
+            unsafe { gl.draw_arrays(glow::TRIANGLES, 0, 3) };
+        } else {
+            unsafe { gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(swapchain.framebuffer)) };
+            unsafe { gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, None) };
+            // Note the Y-flipping here. GL's presentation is not flipped,
+            // but main rendering is. Therefore, we Y-flip the output positions
+            // in the shader, and also this blit.
+            unsafe {
+                gl.blit_framebuffer(
+                    0,
+                    swapchain.extent.height as i32,
+                    swapchain.extent.width as i32,
+                    0,
+                    0,
+                    0,
+                    swapchain.extent.width as i32,
+                    swapchain.extent.height as i32,
+                    glow::COLOR_BUFFER_BIT,
+                    glow::NEAREST,
+                )
+            };
+        }
 
         Ok(())
     }
 
-    unsafe fn create_present_program(gl: &glow::Context) -> glow::Program {
-        let program = gl
-            .create_program()
-            .expect("Could not create shader program");
-        let vertex = gl
-            .create_shader(glow::VERTEX_SHADER)
-            .expect("Could not create shader");
-        gl.shader_source(vertex, include_str!("./shaders/present.vert"));
-        gl.compile_shader(vertex);
-        let fragment = gl
-            .create_shader(glow::FRAGMENT_SHADER)
-            .expect("Could not create shader");
-        gl.shader_source(fragment, include_str!("./shaders/present.frag"));
-        gl.compile_shader(fragment);
-        gl.attach_shader(program, vertex);
-        gl.attach_shader(program, fragment);
-        gl.link_program(program);
-        gl.delete_shader(vertex);
-        gl.delete_shader(fragment);
-        gl.bind_texture(glow::TEXTURE_2D, None);
+    unsafe fn create_srgb_present_program(gl: &glow::Context) -> glow::Program {
+        let program = unsafe { gl.create_program() }.expect("Could not create shader program");
+        let vertex =
+            unsafe { gl.create_shader(glow::VERTEX_SHADER) }.expect("Could not create shader");
+        unsafe { gl.shader_source(vertex, include_str!("./shaders/srgb_present.vert")) };
+        unsafe { gl.compile_shader(vertex) };
+        let fragment =
+            unsafe { gl.create_shader(glow::FRAGMENT_SHADER) }.expect("Could not create shader");
+        unsafe { gl.shader_source(fragment, include_str!("./shaders/srgb_present.frag")) };
+        unsafe { gl.compile_shader(fragment) };
+        unsafe { gl.attach_shader(program, vertex) };
+        unsafe { gl.attach_shader(program, fragment) };
+        unsafe { gl.link_program(program) };
+        unsafe { gl.delete_shader(vertex) };
+        unsafe { gl.delete_shader(fragment) };
+        unsafe { gl.bind_texture(glow::TEXTURE_2D, None) };
 
         program
     }
 
     pub fn supports_srgb(&self) -> bool {
-        true // WebGL only supports sRGB
+        // present.frag takes care of handling srgb conversion
+        true
     }
 }
 
@@ -221,49 +274,57 @@ impl crate::Surface<super::Api> for Surface {
 
         if let Some(swapchain) = self.swapchain.take() {
             // delete all frame buffers already allocated
-            gl.delete_framebuffer(swapchain.framebuffer);
+            unsafe { gl.delete_framebuffer(swapchain.framebuffer) };
         }
 
-        if self.present_program.is_none() {
-            self.present_program = Some(Self::create_present_program(gl));
+        if self.srgb_present_program.is_none() && config.format.is_srgb() {
+            self.srgb_present_program = Some(unsafe { Self::create_srgb_present_program(gl) });
         }
 
         if let Some(texture) = self.texture.take() {
-            gl.delete_texture(texture);
+            unsafe { gl.delete_texture(texture) };
         }
 
-        self.texture = Some(gl.create_texture().unwrap());
+        self.texture = Some(unsafe { gl.create_texture() }.unwrap());
 
         let desc = device.shared.describe_texture_format(config.format);
-        gl.bind_texture(glow::TEXTURE_2D, self.texture);
-        gl.tex_parameter_i32(
-            glow::TEXTURE_2D,
-            glow::TEXTURE_MIN_FILTER,
-            glow::NEAREST as _,
-        );
-        gl.tex_parameter_i32(
-            glow::TEXTURE_2D,
-            glow::TEXTURE_MAG_FILTER,
-            glow::NEAREST as _,
-        );
-        gl.tex_storage_2d(
-            glow::TEXTURE_2D,
-            1,
-            desc.internal,
-            config.extent.width as i32,
-            config.extent.height as i32,
-        );
+        unsafe { gl.bind_texture(glow::TEXTURE_2D, self.texture) };
+        unsafe {
+            gl.tex_parameter_i32(
+                glow::TEXTURE_2D,
+                glow::TEXTURE_MIN_FILTER,
+                glow::NEAREST as _,
+            )
+        };
+        unsafe {
+            gl.tex_parameter_i32(
+                glow::TEXTURE_2D,
+                glow::TEXTURE_MAG_FILTER,
+                glow::NEAREST as _,
+            )
+        };
+        unsafe {
+            gl.tex_storage_2d(
+                glow::TEXTURE_2D,
+                1,
+                desc.internal,
+                config.extent.width as i32,
+                config.extent.height as i32,
+            )
+        };
 
-        let framebuffer = gl.create_framebuffer().unwrap();
-        gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(framebuffer));
-        gl.framebuffer_texture_2d(
-            glow::READ_FRAMEBUFFER,
-            glow::COLOR_ATTACHMENT0,
-            glow::TEXTURE_2D,
-            self.texture,
-            0,
-        );
-        gl.bind_texture(glow::TEXTURE_2D, None);
+        let framebuffer = unsafe { gl.create_framebuffer() }.unwrap();
+        unsafe { gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(framebuffer)) };
+        unsafe {
+            gl.framebuffer_texture_2d(
+                glow::READ_FRAMEBUFFER,
+                glow::COLOR_ATTACHMENT0,
+                glow::TEXTURE_2D,
+                self.texture,
+                0,
+            )
+        };
+        unsafe { gl.bind_texture(glow::TEXTURE_2D, None) };
 
         self.swapchain = Some(Swapchain {
             extent: config.extent,
@@ -278,10 +339,10 @@ impl crate::Surface<super::Api> for Surface {
     unsafe fn unconfigure(&mut self, device: &super::Device) {
         let gl = device.shared.context.lock();
         if let Some(swapchain) = self.swapchain.take() {
-            gl.delete_framebuffer(swapchain.framebuffer);
+            unsafe { gl.delete_framebuffer(swapchain.framebuffer) };
         }
         if let Some(renderbuffer) = self.texture.take() {
-            gl.delete_texture(renderbuffer);
+            unsafe { gl.delete_texture(renderbuffer) };
         }
     }
 
@@ -295,6 +356,7 @@ impl crate::Surface<super::Api> for Surface {
                 raw: self.texture.unwrap(),
                 target: glow::TEXTURE_2D,
             },
+            drop_guard: None,
             array_layer_count: 1,
             mip_level_count: 1,
             format: sc.format,

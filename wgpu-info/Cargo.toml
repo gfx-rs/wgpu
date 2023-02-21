@@ -1,14 +1,15 @@
 [package]
 name = "wgpu-info"
-version = "0.13.0"
-authors = ["wgpu developers"]
-edition = "2021"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
 description = "Adapter information and per-adapter test program"
-homepage = "https://github.com/gfx-rs/wgpu"
-repository = "https://github.com/gfx-rs/wgpu"
-keywords = ["graphics"]
-license = "MIT OR Apache-2.0"
+homepage.workspace = true
+repository.workspace = true
+keywords.workspace = true
+license.workspace = true
+publish = false
 
 [dependencies]
-env_logger = "0.9"
-wgpu = { version = "0.13", path = "../wgpu" }
+env_logger.workspace = true
+wgpu.workspace = true
