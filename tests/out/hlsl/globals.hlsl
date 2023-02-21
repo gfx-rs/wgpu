@@ -106,9 +106,9 @@ uint NagaBufferLength(ByteAddressBuffer buffer)
 }
 
 [numthreads(1, 1, 1)]
-void main(uint3 __global_invocation_id : SV_DispatchThreadID)
+void main(uint3 __local_invocation_id : SV_GroupThreadID)
 {
-    if (all(__global_invocation_id == uint3(0u, 0u, 0u))) {
+    if (all(__local_invocation_id == uint3(0u, 0u, 0u))) {
         wg = (float[10])0;
         at_1 = (uint)0;
     }

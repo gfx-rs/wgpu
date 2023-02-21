@@ -1176,10 +1176,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         if !func.arguments.is_empty() {
                             write!(self.out, ", ")?;
                         }
-                        write!(
-                            self.out,
-                            "uint3 __global_invocation_id : SV_DispatchThreadID"
-                        )?;
+                        write!(self.out, "uint3 __local_invocation_id : SV_GroupThreadID")?;
                     }
                 }
             }
@@ -1281,7 +1278,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
 
         writeln!(
             self.out,
-            "{level}if (all(__global_invocation_id == uint3(0u, 0u, 0u))) {{"
+            "{level}if (all(__local_invocation_id == uint3(0u, 0u, 0u))) {{"
         )?;
 
         let vars = module.global_variables.iter().filter(|&(handle, var)| {

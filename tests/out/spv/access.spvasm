@@ -107,7 +107,7 @@ OpMemberDecorate %83 0 Offset 0
 OpDecorate %242 BuiltIn VertexIndex
 OpDecorate %245 BuiltIn Position
 OpDecorate %288 Location 0
-OpDecorate %337 BuiltIn GlobalInvocationId
+OpDecorate %337 BuiltIn LocalInvocationId
 %2 = OpTypeVoid
 %4 = OpTypeInt 32 0
 %3 = OpConstant  %4  0

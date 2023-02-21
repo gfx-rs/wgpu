@@ -51,7 +51,7 @@ void test_msl_packed_vec3_() {
 }
 
 void main() {
-    if (gl_GlobalInvocationID == uvec3(0u)) {
+    if (gl_LocalInvocationID == uvec3(0u)) {
         wg = float[10](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
         at_1 = 0u;
     }

@@ -42,7 +42,7 @@ void assign_array_through_ptr_fn(inout vec4 foo_2[2]) {
 }
 
 void main() {
-    if (gl_GlobalInvocationID == uvec3(0u)) {
+    if (gl_LocalInvocationID == uvec3(0u)) {
         val = 0u;
     }
     memoryBarrierShared();

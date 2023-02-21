@@ -367,7 +367,7 @@ impl Writer {
             results: Vec::new(),
         };
 
-        let mut global_invocation_id = None;
+        let mut local_invocation_id = None;
 
         let mut parameter_type_ids = Vec::with_capacity(ir_function.arguments.len());
         for argument in ir_function.arguments.iter() {
@@ -400,8 +400,8 @@ impl Writer {
                         .body
                         .push(Instruction::load(argument_type_id, id, varying_id, None));
 
-                    if binding == &crate::Binding::BuiltIn(crate::BuiltIn::GlobalInvocationId) {
-                        global_invocation_id = Some(id);
+                    if binding == &crate::Binding::BuiltIn(crate::BuiltIn::LocalInvocationId) {
+                        local_invocation_id = Some(id);
                     }
 
                     id
@@ -430,7 +430,7 @@ impl Writer {
                         constituent_ids.push(id);
 
                         if binding == &crate::Binding::BuiltIn(crate::BuiltIn::GlobalInvocationId) {
-                            global_invocation_id = Some(id);
+                            local_invocation_id = Some(id);
                         }
                     }
                     prelude.body.push(Instruction::composite_construct(
@@ -673,7 +673,7 @@ impl Writer {
                     next_id,
                     ir_module,
                     info,
-                    global_invocation_id,
+                    local_invocation_id,
                     interface,
                     context.function,
                 ),
@@ -1253,7 +1253,7 @@ impl Writer {
         entry_id: Word,
         ir_module: &crate::Module,
         info: &FunctionInfo,
-        global_invocation_id: Option<Word>,
+        local_invocation_id: Option<Word>,
         interface: &mut FunctionInterface,
         function: &mut Function,
     ) -> Option<Word> {
@@ -1282,8 +1282,8 @@ impl Writer {
 
         let mut pre_if_block = Block::new(entry_id);
 
-        let global_invocation_id = if let Some(global_invocation_id) = global_invocation_id {
-            global_invocation_id
+        let local_invocation_id = if let Some(local_invocation_id) = local_invocation_id {
+            local_invocation_id
         } else {
             let varying_id = self.id_gen.next();
             let class = spirv::StorageClass::Input;
@@ -1295,7 +1295,7 @@ impl Writer {
             self.decorate(
                 varying_id,
                 spirv::Decoration::BuiltIn,
-                &[spirv::BuiltIn::GlobalInvocationId as u32],
+                &[spirv::BuiltIn::LocalInvocationId as u32],
             );
 
             interface.varying_ids.push(varying_id);
@@ -1315,7 +1315,7 @@ impl Writer {
             spirv::Op::IEqual,
             bool3_type_id,
             eq_id,
-            global_invocation_id,
+            local_invocation_id,
             zero_id,
         ));
 

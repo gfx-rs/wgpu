@@ -63,7 +63,7 @@ OpDecorate %33 BuiltIn NumWorkgroups
 %34 = OpLoad  %17  %33
 OpBranch %37
 %37 = OpLabel
-%41 = OpIEqual  %40  %25 %39
+%41 = OpIEqual  %40  %27 %39
 %42 = OpAll  %15  %41
 OpSelectionMerge %43 None
 OpBranchConditional %42 %44 %43

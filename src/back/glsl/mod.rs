@@ -1583,10 +1583,7 @@ impl<'a, W: Write> Writer<'a, W> {
         if vars.peek().is_some() {
             let level = back::Level(1);
 
-            writeln!(
-                self.out,
-                "{level}if (gl_GlobalInvocationID == uvec3(0u)) {{"
-            )?;
+            writeln!(self.out, "{level}if (gl_LocalInvocationID == uvec3(0u)) {{")?;
 
             for (handle, var) in vars {
                 let name = &self.names[&NameKey::GlobalVariable(handle)];

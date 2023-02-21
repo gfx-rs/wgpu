@@ -26,7 +26,7 @@ OpDecorate %13 DescriptorSet 0
 OpDecorate %13 Binding 0
 OpDecorate %14 Block
 OpMemberDecorate %14 0 Offset 0
-OpDecorate %25 BuiltIn GlobalInvocationId
+OpDecorate %25 BuiltIn LocalInvocationId
 %2 = OpTypeVoid
 %4 = OpTypeInt 32 1
 %3 = OpConstant  %4  512
