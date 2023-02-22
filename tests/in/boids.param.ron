@@ -6,8 +6,8 @@
 	),
 	msl: (
 		lang_version: (2, 0),
-		per_stage_map: (
-			cs: (
+		per_entry_point_map: {
+			"main": (
 				resources: {
 					(group: 0, binding: 0): (buffer: Some(0), mutable: false),
 					(group: 0, binding: 1): (buffer: Some(1), mutable: true),
@@ -15,7 +15,7 @@
 				},
 				sizes_buffer: Some(3),
 			)
-		),
+		},
 		inline_samplers: [],
 		spirv_cross_compatibility: false,
 		fake_missing_bindings: false,

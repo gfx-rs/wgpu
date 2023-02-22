@@ -5,11 +5,11 @@
 	),
 	msl: (
 		lang_version: (2, 2),
-		per_stage_map: (
-			fs: (
+		per_entry_point_map: {
+			"main": (
 				push_constant_buffer: Some(1),
 			),
-		),
+		},
 		inline_samplers: [],
 		spirv_cross_compatibility: false,
 		fake_missing_bindings: false,

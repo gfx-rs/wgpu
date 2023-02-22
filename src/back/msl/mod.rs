@@ -27,10 +27,7 @@ holding the result.
 */
 
 use crate::{arena::Handle, proc::index, valid::ModuleInfo};
-use std::{
-    fmt::{Error as FmtError, Write},
-    ops,
-};
+use std::fmt::{Error as FmtError, Write};
 
 mod keywords;
 pub mod sampler;
@@ -69,7 +66,7 @@ pub type BindingMap = std::collections::BTreeMap<crate::ResourceBinding, BindTar
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 #[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(default))]
-pub struct PerStageResources {
+pub struct EntryPointResources {
     pub resources: BindingMap,
 
     pub push_constant_buffer: Option<Slot>,
@@ -80,26 +77,7 @@ pub struct PerStageResources {
     pub sizes_buffer: Option<Slot>,
 }
 
-#[derive(Clone, Debug, Default, Hash, Eq, PartialEq)]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
-#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
-#[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(default))]
-pub struct PerStageMap {
-    pub vs: PerStageResources,
-    pub fs: PerStageResources,
-    pub cs: PerStageResources,
-}
-
-impl ops::Index<crate::ShaderStage> for PerStageMap {
-    type Output = PerStageResources;
-    fn index(&self, stage: crate::ShaderStage) -> &PerStageResources {
-        match stage {
-            crate::ShaderStage::Vertex => &self.vs,
-            crate::ShaderStage::Fragment => &self.fs,
-            crate::ShaderStage::Compute => &self.cs,
-        }
-    }
-}
+pub type EntryPointResourceMap = std::collections::BTreeMap<String, EntryPointResources>;
 
 enum ResolvedBinding {
     BuiltIn(crate::BuiltIn),
@@ -198,8 +176,8 @@ enum LocationMode {
 pub struct Options {
     /// (Major, Minor) target version of the Metal Shading Language.
     pub lang_version: (u8, u8),
-    /// Map of per-stage resources to slots.
-    pub per_stage_map: PerStageMap,
+    /// Map of entry-point resources, indexed by entry point function name, to slots.
+    pub per_entry_point_map: EntryPointResourceMap,
     /// Samplers to be inlined into the code.
     pub inline_samplers: Vec<sampler::InlineSampler>,
     /// Make it possible to link different stages via SPIRV-Cross.
@@ -217,7 +195,7 @@ impl Default for Options {
     fn default() -> Self {
         Options {
             lang_version: (2, 0),
-            per_stage_map: PerStageMap::default(),
+            per_entry_point_map: EntryPointResourceMap::default(),
             inline_samplers: Vec::new(),
             spirv_cross_compatibility: false,
             fake_missing_bindings: true,
@@ -296,12 +274,26 @@ impl Options {
         }
     }
 
+    fn get_entry_point_resources(&self, ep: &crate::EntryPoint) -> Option<&EntryPointResources> {
+        self.per_entry_point_map.get(&ep.name)
+    }
+
+    fn get_resource_binding_target(
+        &self,
+        ep: &crate::EntryPoint,
+        res_binding: &crate::ResourceBinding,
+    ) -> Option<&BindTarget> {
+        self.get_entry_point_resources(ep)
+            .and_then(|res| res.resources.get(res_binding))
+    }
+
     fn resolve_resource_binding(
         &self,
-        stage: crate::ShaderStage,
+        ep: &crate::EntryPoint,
         res_binding: &crate::ResourceBinding,
     ) -> Result<ResolvedBinding, EntryPointError> {
-        match self.per_stage_map[stage].resources.get(res_binding) {
+        let target = self.get_resource_binding_target(ep, res_binding);
+        match target {
             Some(target) => Ok(ResolvedBinding::Resource(target.clone())),
             None if self.fake_missing_bindings => Ok(ResolvedBinding::User {
                 prefix: "fake",
@@ -312,15 +304,13 @@ impl Options {
         }
     }
 
-    const fn resolve_push_constants(
+    fn resolve_push_constants(
         &self,
-        stage: crate::ShaderStage,
+        ep: &crate::EntryPoint,
     ) -> Result<ResolvedBinding, EntryPointError> {
-        let slot = match stage {
-            crate::ShaderStage::Vertex => self.per_stage_map.vs.push_constant_buffer,
-            crate::ShaderStage::Fragment => self.per_stage_map.fs.push_constant_buffer,
-            crate::ShaderStage::Compute => self.per_stage_map.cs.push_constant_buffer,
-        };
+        let slot = self
+            .get_entry_point_resources(ep)
+            .and_then(|res| res.push_constant_buffer);
         match slot {
             Some(slot) => Ok(ResolvedBinding::Resource(BindTarget {
                 buffer: Some(slot),
@@ -340,9 +330,11 @@ impl Options {
 
     fn resolve_sizes_buffer(
         &self,
-        stage: crate::ShaderStage,
+        ep: &crate::EntryPoint,
     ) -> Result<ResolvedBinding, EntryPointError> {
-        let slot = self.per_stage_map[stage].sizes_buffer;
+        let slot = self
+            .get_entry_point_resources(ep)
+            .and_then(|res| res.sizes_buffer);
         match slot {
             Some(slot) => Ok(ResolvedBinding::Resource(BindTarget {
                 buffer: Some(slot),

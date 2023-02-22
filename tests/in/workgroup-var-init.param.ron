@@ -6,14 +6,14 @@
 	),
 	msl: (
 		lang_version: (2, 0),
-		per_stage_map: (
-			cs: (
+		per_entry_point_map: {
+			"main": (
 				resources: {
 					(group: 0, binding: 0): (buffer: Some(0), mutable: true),
 				},
 				sizes_buffer: None,
 			),
-		),
+		},
 		inline_samplers: [],
 		spirv_cross_compatibility: false,
 		fake_missing_bindings: false,

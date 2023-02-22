@@ -7,19 +7,19 @@
 	),
 	msl: (
 		lang_version: (2, 1),
-		per_stage_map: (
-			vs: (
+		per_entry_point_map: {
+			"vs_main": (
 				resources: {
 					(group: 0, binding: 0): (buffer: Some(0)),
 				},
 			),
-			fs: (
+			"fs_main": (
 				resources: {
 					(group: 0, binding: 1): (texture: Some(0)),
 					(group: 0, binding: 2): (sampler: Some(Inline(0))),
 				},
 			),
-		),
+		},
 		inline_samplers: [
 			(
 				coord: Normalized,

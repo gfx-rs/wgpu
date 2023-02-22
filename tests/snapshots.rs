@@ -90,8 +90,11 @@ struct Parameters {
 #[allow(unused_variables)]
 fn check_targets(module: &naga::Module, name: &str, targets: Targets) {
     let root = env!("CARGO_MANIFEST_DIR");
-    let params = match fs::read_to_string(format!("{root}/{BASE_DIR_IN}/{name}.param.ron")) {
-        Ok(string) => ron::de::from_str(&string).expect("Couldn't parse param file"),
+    let filepath = format!("{root}/{BASE_DIR_IN}/{name}.param.ron");
+    let params = match fs::read_to_string(&filepath) {
+        Ok(string) => {
+            ron::de::from_str(&string).expect(&format!("Couldn't parse param file: {}", filepath))
+        }
         Err(_) => Parameters::default(),
     };
 
@@ -543,6 +546,7 @@ fn convert_wgsl() {
             "binding-arrays",
             Targets::WGSL | Targets::HLSL | Targets::METAL | Targets::SPIRV,
         ),
+        ("resource-binding-map", Targets::METAL),
         ("multiview", Targets::SPIRV | Targets::GLSL | Targets::WGSL),
         ("multiview_webgl", Targets::GLSL),
         (
