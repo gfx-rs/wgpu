@@ -40,6 +40,13 @@ Bottom level categories:
 
 ## Unreleased
 
+## wgpu-0.15.2 (2023-03-08)
+
+### Bug Fixes
+
+#### GLES
+- Enable `WEBGL_debug_renderer_info` before querying unmasked vendor/renderer to avoid crashing on emscripten in [#3519](https://github.com/gfx-rs/wgpu/pull/3519)
+
 ## wgpu-0.15.1 (2023-02-09)
 
 ### Changes
