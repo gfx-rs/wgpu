@@ -6,6 +6,9 @@ use crate::auxil::db;
 
 // https://webgl2fundamentals.org/webgl/lessons/webgl-data-textures.html
 
+const GL_UNMASKED_VENDOR_WEBGL: u32 = 0x9245;
+const GL_UNMASKED_RENDERER_WEBGL: u32 = 0x9246;
+
 impl super::Adapter {
     /// According to the OpenGL specification, the version information is
     /// expected to follow the following syntax:
@@ -182,11 +185,20 @@ impl super::Adapter {
         let gl = context.lock();
         let extensions = gl.supported_extensions();
 
-        #[cfg(target_os = "emscripten")]
-        let (vendor_const, renderer_const) =
-            unsafe { super::emscripten::get_vendor_renderer_constants(extensions) }; // context must be current
-        #[cfg(not(target_os = "emscripten"))]
-        let (vendor_const, renderer_const) = (glow::VENDOR, glow::RENDERER);
+        let (vendor_const, renderer_const) = if extensions.contains("WEBGL_debug_renderer_info") {
+            // context must be current
+            #[cfg(target_os = "emscripten")]
+            if unsafe { super::emscripten::enable_extension("WEBGL_debug_renderer_info\0") } {
+                (GL_UNMASKED_VENDOR_WEBGL, GL_UNMASKED_RENDERER_WEBGL)
+            } else {
+                (glow::VENDOR, glow::RENDERER)
+            }
+            // glow enables WEBGL_debug_renderer_info on w-u-u target.
+            #[cfg(not(target_os = "emscripten"))]
+            (GL_UNMASKED_VENDOR_WEBGL, GL_UNMASKED_RENDERER_WEBGL)
+        } else {
+            (glow::VENDOR, glow::RENDERER)
+        };
 
         let (vendor, renderer) = {
             let vendor = unsafe { gl.get_parameter_string(vendor_const) };
