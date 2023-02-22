@@ -186,14 +186,15 @@ impl super::Adapter {
         let extensions = gl.supported_extensions();
 
         let (vendor_const, renderer_const) = if extensions.contains("WEBGL_debug_renderer_info") {
-            // context must be current
+            // emscripten doesn't enable "WEBGL_debug_renderer_info" extension by default. so, we do it manually.
+            // See https://github.com/gfx-rs/wgpu/issues/3245 for context
             #[cfg(target_os = "emscripten")]
             if unsafe { super::emscripten::enable_extension("WEBGL_debug_renderer_info\0") } {
                 (GL_UNMASKED_VENDOR_WEBGL, GL_UNMASKED_RENDERER_WEBGL)
             } else {
                 (glow::VENDOR, glow::RENDERER)
             }
-            // glow enables WEBGL_debug_renderer_info on w-u-u target.
+            // glow already enables WEBGL_debug_renderer_info on wasm32-unknown-unknown target by default.
             #[cfg(not(target_os = "emscripten"))]
             (GL_UNMASKED_VENDOR_WEBGL, GL_UNMASKED_RENDERER_WEBGL)
         } else {
