@@ -602,8 +602,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .get_mut(destination.texture)
             .map_err(|_| TransferError::InvalidTexture(destination.texture))?;
 
-        let format_desc = dst.desc.format.describe();
-
         if !dst.desc.usage.contains(wgt::TextureUsages::COPY_DST) {
             return Err(
                 TransferError::MissingCopyDstUsageFlag(None, Some(destination.texture)).into(),
@@ -617,17 +615,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let (selector, dst_base) = extract_texture_selector(destination, size, dst)?;
 
-        // Note: `_source_bytes_per_array_layer` is ignored since we
-        // have a staging copy, and it can have a different value.
-        let (_, _source_bytes_per_array_layer) = validate_linear_texture_data(
-            data_layout,
-            dst.desc.format,
-            data.len() as wgt::BufferAddress,
-            CopySide::Source,
-            format_desc.block_size as wgt::BufferAddress,
-            size,
-            false,
-        )?;
+        if !dst_base.aspect.is_one() {
+            return Err(TransferError::CopyAspectNotOne.into());
+        }
 
         if !conv::is_valid_copy_dst_texture_format(dst.desc.format, destination.aspect) {
             return Err(TransferError::CopyToForbiddenTextureFormat {
@@ -636,9 +626,28 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
             .into());
         }
-        let (block_width, block_height) = format_desc.block_dimensions;
-        let width_blocks = size.width / block_width as u32;
-        let height_blocks = size.height / block_height as u32;
+
+        // Note: `_source_bytes_per_array_layer` is ignored since we
+        // have a staging copy, and it can have a different value.
+        let (_, _source_bytes_per_array_layer) = validate_linear_texture_data(
+            data_layout,
+            dst.desc.format,
+            destination.aspect,
+            data.len() as wgt::BufferAddress,
+            CopySide::Source,
+            size,
+            false,
+        )?;
+
+        if dst.desc.format.is_depth_stencil_format() {
+            device
+                .require_downlevel_flags(wgt::DownlevelFlags::DEPTH_TEXTURE_AND_BUFFER_COPIES)
+                .map_err(TransferError::from)?;
+        }
+
+        let (block_width, block_height) = dst.desc.format.block_dimensions();
+        let width_blocks = size.width / block_width;
+        let height_blocks = size.height / block_height;
 
         let block_rows_per_image = match data_layout.rows_per_image {
             Some(rows_per_image) => rows_per_image.get(),
@@ -650,14 +659,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
         };
 
-        let bytes_per_row_alignment = get_lowest_common_denom(
-            device.alignments.buffer_copy_pitch.get() as u32,
-            format_desc.block_size as u32,
-        );
-        let stage_bytes_per_row = hal::auxil::align_to(
-            format_desc.block_size as u32 * width_blocks,
-            bytes_per_row_alignment,
-        );
+        let block_size = dst
+            .desc
+            .format
+            .block_size(Some(destination.aspect))
+            .unwrap();
+        let bytes_per_row_alignment =
+            get_lowest_common_denom(device.alignments.buffer_copy_pitch.get() as u32, block_size);
+        let stage_bytes_per_row =
+            hal::auxil::align_to(block_size * width_blocks, bytes_per_row_alignment);
 
         let block_rows_in_copy =
             (size.depth_or_array_layers - 1) * block_rows_per_image + height_blocks;
@@ -731,7 +741,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let bytes_per_row = if let Some(bytes_per_row) = data_layout.bytes_per_row {
             bytes_per_row.get()
         } else {
-            width_blocks * format_desc.block_size as u32
+            width_blocks * block_size
         };
 
         // Platform validation requires that the staging buffer always be
@@ -814,7 +824,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         Ok(())
     }
 
-    #[cfg(all(target_arch = "wasm32", not(feature = "emscripten")))]
+    #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
     pub fn queue_copy_external_image_to_texture<A: HalApi>(
         &self,
         queue_id: id::QueueId,

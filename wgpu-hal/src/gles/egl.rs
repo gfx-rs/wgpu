@@ -26,10 +26,10 @@ type WlDisplayConnectFun =
 
 type WlDisplayDisconnectFun = unsafe extern "system" fn(display: *const raw::c_void);
 
-#[cfg(not(feature = "emscripten"))]
+#[cfg(not(target_os = "emscripten"))]
 type EglInstance = egl::DynamicInstance<egl::EGL1_4>;
 
-#[cfg(feature = "emscripten")]
+#[cfg(target_os = "emscripten")]
 type EglInstance = egl::Instance<egl::Static>;
 
 type WlEglWindowCreateFun = unsafe extern "system" fn(
@@ -423,7 +423,7 @@ struct Inner {
     version: (i32, i32),
     supports_native_window: bool,
     config: egl::Config,
-    #[cfg_attr(feature = "emscripten", allow(dead_code))]
+    #[cfg_attr(target_os = "emscripten", allow(dead_code))]
     wl_display: Option<*mut raw::c_void>,
     /// Method by which the framebuffer should support srgb
     srgb_kind: SrgbFrameBufferKind,
@@ -535,7 +535,7 @@ impl Inner {
         // and creating dummy pbuffer surface if not.
         let pbuffer = if version >= (1, 5)
             || display_extensions.contains("EGL_KHR_surfaceless_context")
-            || cfg!(feature = "emscripten")
+            || cfg!(target_os = "emscripten")
         {
             log::info!("\tEGL context: +surfaceless");
             None
@@ -624,10 +624,10 @@ unsafe impl Sync for Instance {}
 
 impl crate::Instance<super::Api> for Instance {
     unsafe fn init(desc: &crate::InstanceDescriptor) -> Result<Self, crate::InstanceError> {
-        #[cfg(feature = "emscripten")]
+        #[cfg(target_os = "emscripten")]
         let egl_result: Result<EglInstance, egl::Error> = Ok(egl::Instance::new(egl::Static));
 
-        #[cfg(not(feature = "emscripten"))]
+        #[cfg(not(target_os = "emscripten"))]
         let egl_result = if cfg!(windows) {
             unsafe {
                 egl::DynamicInstance::<egl::EGL1_4>::load_required_from_filename("libEGL.dll")
@@ -674,10 +674,10 @@ impl crate::Instance<super::Api> for Instance {
             None
         };
 
-        #[cfg(not(feature = "emscripten"))]
+        #[cfg(not(target_os = "emscripten"))]
         let egl1_5 = egl.upcast::<egl::EGL1_5>();
 
-        #[cfg(feature = "emscripten")]
+        #[cfg(target_os = "emscripten")]
         let egl1_5: Option<&Arc<EglInstance>> = Some(&egl);
 
         let (display, wsi_library, wsi_kind) = if let (Some(library), Some(egl)) =
@@ -776,7 +776,10 @@ impl crate::Instance<super::Api> for Instance {
     ) -> Result<Surface, crate::InstanceError> {
         use raw_window_handle::RawWindowHandle as Rwh;
 
-        #[cfg_attr(any(target_os = "android", feature = "emscripten"), allow(unused_mut))]
+        #[cfg_attr(
+            any(target_os = "android", target_os = "emscripten"),
+            allow(unused_mut)
+        )]
         let mut inner = self.inner.lock();
 
         match (window_handle, display_handle) {
@@ -801,7 +804,7 @@ impl crate::Instance<super::Api> for Instance {
                     return Err(crate::InstanceError);
                 }
             }
-            #[cfg(not(feature = "emscripten"))]
+            #[cfg(not(target_os = "emscripten"))]
             (Rwh::Wayland(_), raw_window_handle::RawDisplayHandle::Wayland(display_handle)) => {
                 if inner
                     .wl_display
@@ -841,7 +844,7 @@ impl crate::Instance<super::Api> for Instance {
                     drop(old_inner);
                 }
             }
-            #[cfg(feature = "emscripten")]
+            #[cfg(target_os = "emscripten")]
             (Rwh::Web(_), _) => {}
             other => {
                 log::error!("Unsupported window: {:?}", other);
@@ -1087,7 +1090,7 @@ impl crate::Surface<super::Api> for Surface {
                         wl_window = Some(window);
                         window
                     }
-                    #[cfg(feature = "emscripten")]
+                    #[cfg(target_os = "emscripten")]
                     (WindowKind::Unknown, Rwh::Web(handle)) => handle.id as *mut std::ffi::c_void,
                     (WindowKind::Unknown, Rwh::Win32(handle)) => handle.hwnd,
                     (WindowKind::Unknown, Rwh::AppKit(handle)) => {
@@ -1140,10 +1143,10 @@ impl crate::Surface<super::Api> for Surface {
                 }
                 attributes.push(egl::ATTRIB_NONE as i32);
 
-                #[cfg(not(feature = "emscripten"))]
+                #[cfg(not(target_os = "emscripten"))]
                 let egl1_5 = self.egl.instance.upcast::<egl::EGL1_5>();
 
-                #[cfg(feature = "emscripten")]
+                #[cfg(target_os = "emscripten")]
                 let egl1_5: Option<&Arc<EglInstance>> = Some(&self.egl.instance);
 
                 // Careful, we can still be in 1.4 version even if `upcast` succeeds

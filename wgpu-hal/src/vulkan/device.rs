@@ -673,8 +673,7 @@ impl super::Device {
             drop_guard,
             block: None,
             usage: desc.usage,
-            aspects: crate::FormatAspects::from(desc.format),
-            format_info: desc.format.describe(),
+            format: desc.format,
             raw_flags: vk::ImageCreateFlags::empty(),
             copy_size: desc.copy_extent(),
             view_formats,
@@ -1015,8 +1014,7 @@ impl crate::Device<super::Api> for super::Device {
             drop_guard: None,
             block: Some(block),
             usage: desc.usage,
-            aspects: crate::FormatAspects::from(desc.format),
-            format_info: desc.format.describe(),
+            format: desc.format,
             raw_flags,
             copy_size,
             view_formats: wgt_view_formats,
@@ -1036,7 +1034,7 @@ impl crate::Device<super::Api> for super::Device {
         texture: &super::Texture,
         desc: &crate::TextureViewDescriptor,
     ) -> Result<super::TextureView, crate::DeviceError> {
-        let subresource_range = conv::map_subresource_range(&desc.range, texture.aspects);
+        let subresource_range = conv::map_subresource_range(&desc.range, desc.format);
         let mut vk_info = vk::ImageViewCreateInfo::builder()
             .flags(vk::ImageViewCreateFlags::empty())
             .image(texture.raw)
@@ -1444,8 +1442,10 @@ impl crate::Device<super::Api> for super::Device {
                     let end = start + entry.count;
                     image_infos.extend(desc.textures[start as usize..end as usize].iter().map(
                         |binding| {
-                            let layout =
-                                conv::derive_image_layout(binding.usage, binding.view.aspects());
+                            let layout = conv::derive_image_layout(
+                                binding.usage,
+                                binding.view.attachment.view_format,
+                            );
                             vk::DescriptorImageInfo::builder()
                                 .image_view(binding.view.raw)
                                 .image_layout(layout)

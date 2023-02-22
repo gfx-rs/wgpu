@@ -1,4 +1,4 @@
-#![cfg(all(target_arch = "wasm32", not(features = "emscripten")))]
+#![cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
 
 use std::num::NonZeroU32;
 

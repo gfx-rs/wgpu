@@ -561,7 +561,7 @@ pub trait Context: Debug + Send + Sized + Sync {
         data_layout: ImageDataLayout,
         size: Extent3d,
     );
-    #[cfg(all(target_arch = "wasm32", not(feature = "emscripten")))]
+    #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
     fn queue_copy_external_image_to_texture(
         &self,
         queue: &Self::QueueId,
@@ -1488,7 +1488,7 @@ pub(crate) trait DynContext: Debug + Send + Sync {
         data_layout: ImageDataLayout,
         size: Extent3d,
     );
-    #[cfg(all(target_arch = "wasm32", not(feature = "emscripten")))]
+    #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
     fn queue_copy_external_image_to_texture(
         &self,
         queue: &ObjectId,
@@ -2884,7 +2884,7 @@ where
         Context::queue_write_texture(self, &queue, queue_data, texture, data, data_layout, size)
     }
 
-    #[cfg(all(target_arch = "wasm32", not(feature = "emscripten")))]
+    #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
     fn queue_copy_external_image_to_texture(
         &self,
         queue: &ObjectId,

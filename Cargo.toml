@@ -42,7 +42,7 @@ version = "0.15"
 
 [workspace.dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-rev = "4b796b157cb2b67b0ab166a2238fe4e9473bfd52"
+rev = "9742f1616c3e3dd2cc9a5880616fc886c391bb9f"
 version = "0.11.0"
 
 [workspace.dependencies]
@@ -75,7 +75,7 @@ png = "0.17.5"
 pollster = "0.2"
 profiling = { version = "1", default-features = false }
 raw-window-handle = "0.5"
-renderdoc-sys = "0.7.1"
+renderdoc-sys = "1.0.0"
 ron = "0.8"
 serde = "1"
 serde_json = "1.0.85"
@@ -108,7 +108,7 @@ hassle-rs = "0.10.0"
 
 # Gles dependencies
 egl = { package = "khronos-egl", version = "4.1" }
-glow = "0.12.0"
+glow = "0.12.1"
 glutin = "0.29.1"
 
 # wasm32 dependencies

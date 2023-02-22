@@ -1003,6 +1003,30 @@ impl super::PrivateCapabilities {
             },
         }
     }
+
+    pub fn map_view_format(
+        &self,
+        format: wgt::TextureFormat,
+        aspects: crate::FormatAspects,
+    ) -> mtl::MTLPixelFormat {
+        use crate::FormatAspects as Fa;
+        use mtl::MTLPixelFormat::*;
+        use wgt::TextureFormat as Tf;
+        match (format, aspects) {
+            // map combined depth-stencil format to their stencil-only format
+            // see https://developer.apple.com/library/archive/documentation/Miscellaneous/Conceptual/MetalProgrammingGuide/WhatsNewiniOS10tvOS10andOSX1012/WhatsNewiniOS10tvOS10andOSX1012.html#//apple_ref/doc/uid/TP40014221-CH14-DontLinkElementID_77
+            (Tf::Depth24PlusStencil8, Fa::STENCIL) => {
+                if self.format_depth24_stencil8 {
+                    X24_Stencil8
+                } else {
+                    X32_Stencil8
+                }
+            }
+            (Tf::Depth32FloatStencil8, Fa::STENCIL) => X32_Stencil8,
+
+            _ => self.map_format(format),
+        }
+    }
 }
 
 impl super::PrivateDisabilities {

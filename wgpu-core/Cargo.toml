@@ -35,9 +35,6 @@ dx12 = ["hal/dx12"]
 # https://renderdoc.org/
 renderdoc = ["hal/renderdoc"]
 
-# Compile for the Emscripten POSIX-in-a-web-page emulation environment.
-emscripten = ["hal/emscripten"]
-
 # Apply run-time checks, even in release builds. These are in addition
 # to the validation carried out at public APIs in all builds.
 strict_asserts = ["wgt/strict_asserts"]
@@ -51,9 +48,6 @@ serial-pass = ["serde", "wgt/serde", "arrayvec/serde"]
 id32 = []
 # Enable `ShaderModuleSource::Wgsl`
 wgsl = ["naga/wgsl-in"]
-
-# Features that are intended to work on all platforms.
-portable_features = ["gles", "strict_asserts", "trace", "replay", "serial-pass", "id32", "wgsl"]
 
 [dependencies]
 arrayvec = "0.7"
@@ -73,7 +67,7 @@ thiserror = "1"
 
 [dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-rev = "4b796b157cb2b67b0ab166a2238fe4e9473bfd52"
+rev = "9742f1616c3e3dd2cc9a5880616fc886c391bb9f"
 version = "0.11.0"
 features = ["clone", "span", "validate"]
 

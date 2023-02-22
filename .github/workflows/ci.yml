@@ -125,12 +125,11 @@ jobs:
 
           # build for WebGPU
           cargo clippy --target ${{ matrix.target }} -p wgpu --tests --features glsl,spirv
-
-          # build for WebGL
-          cargo clippy --target ${{ matrix.target }} -p wgpu --tests --features webgl,glsl,spirv
-
-          # build docs
           cargo doc --target ${{ matrix.target }} -p wgpu --no-deps --features glsl,spirv
+
+          # all features
+          cargo clippy --target ${{ matrix.target }} -p wgpu -p wgpu-hal --tests --all-features
+          cargo doc --target ${{ matrix.target }} -p wgpu --no-deps --all-features
 
       - name: check em
         if: matrix.kind == 'em'
@@ -138,14 +137,18 @@ jobs:
         run: |
           set -e
 
-          # build for Emscripten/WebGL
-          cargo clippy --target ${{ matrix.target }} -p wgpu -p wgpu-hal --no-default-features --features webgl,emscripten
+          # build for Emscripten
+          cargo clippy --target ${{ matrix.target }} -p wgpu -p wgpu-hal --no-default-features
 
           # build cube example
-          cargo clippy --target ${{ matrix.target }} --example cube --features webgl,emscripten
+          cargo clippy --target ${{ matrix.target }} --example cube
 
           # build raw-gles example
-          cargo clippy --target ${{ matrix.target }} --example raw-gles --features webgl,emscripten
+          cargo clippy --target ${{ matrix.target }} --example raw-gles
+
+          # all features
+          cargo clippy --target ${{ matrix.target }} -p wgpu-hal --all-features
+          cargo clippy --target ${{ matrix.target }} -p wgpu --all-features
 
       - name: check native
         if: matrix.kind == 'native'
@@ -157,16 +160,10 @@ jobs:
           cargo clippy --target ${{ matrix.target }} -p wgpu -p wgpu-core -p wgpu-info -p player --no-default-features
 
           # Check with all features.
-          # (But watch out for backend-selection features in wgpu-core; some of
-          # those only build on the right platforms.)
-          cargo clippy --target ${{ matrix.target }} -p wgpu -p wgpu-info -p player --tests --all-features
-          cargo clippy --target ${{ matrix.target }} -p wgpu-core --tests --features="portable_features"
+          cargo clippy --target ${{ matrix.target }} -p wgpu -p wgpu-info -p player -p wgpu-core -p wgpu-hal --tests --all-features
 
           # build docs
-          # (Watch out for backend-selection features in wgpu-core; some of
-          # those only build on the right platforms.)
-          cargo doc --target ${{ matrix.target }} -p wgpu -p wgpu-info -p player --all-features --no-deps
-          cargo doc --target ${{ matrix.target }} -p wgpu-core --no-deps --features="portable_features"
+          cargo doc --target ${{ matrix.target }} -p wgpu -p wgpu-info -p player -p wgpu-core -p wgpu-hal --all-features --no-deps
 
   wasm-test:
     name: Test WebAssembly

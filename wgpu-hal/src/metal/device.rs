@@ -203,7 +203,7 @@ impl super::Device {
 
     pub unsafe fn texture_from_raw(
         raw: mtl::Texture,
-        raw_format: mtl::MTLPixelFormat,
+        format: wgt::TextureFormat,
         raw_type: mtl::MTLTextureType,
         array_layers: u32,
         mip_levels: u32,
@@ -211,7 +211,7 @@ impl super::Device {
     ) -> super::Texture {
         super::Texture {
             raw,
-            raw_format,
+            format,
             raw_type,
             array_layers,
             mip_levels,
@@ -317,7 +317,7 @@ impl crate::Device<super::Api> for super::Device {
             descriptor.set_height(desc.size.height as u64);
             descriptor.set_mipmap_level_count(desc.mip_level_count as u64);
             descriptor.set_pixel_format(mtl_format);
-            descriptor.set_usage(conv::map_texture_usage(desc.usage));
+            descriptor.set_usage(conv::map_texture_usage(desc.format, desc.usage));
             descriptor.set_storage_mode(mtl::MTLStorageMode::Private);
 
             let raw = self.shared.device.lock().new_texture(&descriptor);
@@ -327,7 +327,7 @@ impl crate::Device<super::Api> for super::Device {
 
             Ok(super::Texture {
                 raw,
-                raw_format: mtl_format,
+                format: desc.format,
                 raw_type: mtl_type,
                 mip_levels: desc.mip_level_count,
                 array_layers: desc.array_layer_count(),
@@ -343,19 +343,24 @@ impl crate::Device<super::Api> for super::Device {
         texture: &super::Texture,
         desc: &crate::TextureViewDescriptor,
     ) -> DeviceResult<super::TextureView> {
-        let raw_format = self.shared.private_caps.map_format(desc.format);
-
         let raw_type = if texture.raw_type == mtl::MTLTextureType::D2Multisample {
             texture.raw_type
         } else {
             conv::map_texture_view_dimension(desc.dimension)
         };
 
-        let format_equal = raw_format == texture.raw_format;
+        let aspects = crate::FormatAspects::new(desc.format, desc.range.aspect);
+
+        let raw_format = self
+            .shared
+            .private_caps
+            .map_view_format(desc.format, aspects);
+
+        let format_equal = raw_format == self.shared.private_caps.map_format(texture.format);
         let type_equal = raw_type == texture.raw_type;
-        let range_full_resource = desc
-            .range
-            .is_full_resource(texture.mip_levels, texture.array_layers);
+        let range_full_resource =
+            desc.range
+                .is_full_resource(desc.format, texture.mip_levels, texture.array_layers);
 
         let raw = if format_equal && type_equal && range_full_resource {
             // Some images are marked as framebuffer-only, and we can't create aliases of them.
@@ -391,7 +396,6 @@ impl crate::Device<super::Api> for super::Device {
             })
         };
 
-        let aspects = crate::FormatAspects::from(desc.format);
         Ok(super::TextureView { raw, aspects })
     }
     unsafe fn destroy_texture_view(&self, _view: super::TextureView) {}

@@ -309,7 +309,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         }
     }
 
-    #[cfg(all(target_arch = "wasm32", not(feature = "emscripten")))]
+    #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
     unsafe fn copy_external_image_to_texture<T>(
         &mut self,
         src: &wgt::ImageCopyExternalImage,
@@ -558,15 +558,13 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         {
             if !cat.ops.contains(crate::AttachmentOps::LOAD) {
                 let c = &cat.clear_value;
-                self.cmd_buffer
-                    .commands
-                    .push(match cat.target.view.sample_type {
+                self.cmd_buffer.commands.push(
+                    match cat.target.view.format.sample_type(None).unwrap() {
                         wgt::TextureSampleType::Float { .. } => C::ClearColorF {
                             draw_buffer: i as u32,
                             color: [c.r as f32, c.g as f32, c.b as f32, c.a as f32],
-                            is_srgb: cat.target.view.format.describe().srgb,
+                            is_srgb: cat.target.view.format.is_srgb(),
                         },
-                        wgt::TextureSampleType::Depth => unreachable!(),
                         wgt::TextureSampleType::Uint => C::ClearColorU(
                             i as u32,
                             [c.r as u32, c.g as u32, c.b as u32, c.a as u32],
@@ -575,7 +573,9 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                             i as u32,
                             [c.r as i32, c.g as i32, c.b as i32, c.a as i32],
                         ),
-                    });
+                        wgt::TextureSampleType::Depth => unreachable!(),
+                    },
+                );
             }
         }
         if let Some(ref dsat) = desc.depth_stencil_attachment {
@@ -681,13 +681,18 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                     dirty_samplers |= 1 << slot;
                     self.state.samplers[slot as usize] = Some(sampler);
                 }
-                super::RawBinding::Texture { raw, target } => {
+                super::RawBinding::Texture {
+                    raw,
+                    target,
+                    aspects,
+                } => {
                     dirty_textures |= 1 << slot;
                     self.state.texture_slots[slot as usize].tex_target = target;
                     self.cmd_buffer.commands.push(C::BindTexture {
                         slot,
                         texture: raw,
                         target,
+                        aspects,
                     });
                 }
                 super::RawBinding::Image(ref binding) => {

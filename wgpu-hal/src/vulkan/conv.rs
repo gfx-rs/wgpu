@@ -182,10 +182,9 @@ impl crate::Attachment<'_, super::Api> {
         ops: crate::AttachmentOps,
         caps: &super::PrivateCapabilities,
     ) -> super::AttachmentKey {
-        let aspects = self.view.aspects();
         super::AttachmentKey {
             format: caps.map_texture_format(self.view.attachment.view_format),
-            layout: derive_image_layout(self.usage, aspects),
+            layout: derive_image_layout(self.usage, self.view.attachment.view_format),
             ops,
         }
     }
@@ -199,8 +198,8 @@ impl crate::ColorAttachment<'_, super::Api> {
             .view
             .attachment
             .view_format
-            .describe()
-            .sample_type
+            .sample_type(None)
+            .unwrap()
         {
             wgt::TextureSampleType::Float { .. } => vk::ClearColorValue {
                 float32: [cv.r as f32, cv.g as f32, cv.b as f32, cv.a as f32],
@@ -218,10 +217,10 @@ impl crate::ColorAttachment<'_, super::Api> {
 
 pub fn derive_image_layout(
     usage: crate::TextureUses,
-    aspects: crate::FormatAspects,
+    format: wgt::TextureFormat,
 ) -> vk::ImageLayout {
-    //Note: depth textures are always sampled with RODS layout
-    let is_color = aspects.contains(crate::FormatAspects::COLOR);
+    // Note: depth textures are always sampled with RODS layout
+    let is_color = crate::FormatAspects::from(format).contains(crate::FormatAspects::COLOR);
     match usage {
         crate::TextureUses::UNINITIALIZED => vk::ImageLayout::UNDEFINED,
         crate::TextureUses::COPY_SRC => vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
@@ -586,10 +585,10 @@ pub fn map_copy_extent(extent: &crate::CopyExtent) -> vk::Extent3D {
 
 pub fn map_subresource_range(
     range: &wgt::ImageSubresourceRange,
-    texture_aspect: crate::FormatAspects,
+    format: wgt::TextureFormat,
 ) -> vk::ImageSubresourceRange {
     vk::ImageSubresourceRange {
-        aspect_mask: map_aspects(crate::FormatAspects::from(range.aspect) & texture_aspect),
+        aspect_mask: map_aspects(crate::FormatAspects::new(format, range.aspect)),
         base_mip_level: range.base_mip_level,
         level_count: range.mip_level_count.unwrap_or(vk::REMAINING_MIP_LEVELS),
         base_array_layer: range.base_array_layer,
@@ -601,7 +600,6 @@ pub fn map_subresource_range(
 
 pub fn map_subresource_layers(
     base: &crate::TextureCopyBase,
-    texture_aspect: crate::FormatAspects,
 ) -> (vk::ImageSubresourceLayers, vk::Offset3D) {
     let offset = vk::Offset3D {
         x: base.origin.x as i32,
@@ -609,7 +607,7 @@ pub fn map_subresource_layers(
         z: base.origin.z as i32,
     };
     let subresource = vk::ImageSubresourceLayers {
-        aspect_mask: map_aspects(base.aspect & texture_aspect),
+        aspect_mask: map_aspects(base.aspect),
         mip_level: base.mip_level,
         base_array_layer: base.array_layer,
         layer_count: 1,

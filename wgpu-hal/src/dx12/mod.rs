@@ -27,7 +27,7 @@ and [`crate::CommandEncoder::set_render_pipeline`] with
 [`crate::CommandEncoder::set_compute_pipeline`].
 
 For this reason, in order avoid repeating the binding code,
-we are binding everything in [`CommandEncoder::update_root_elements`].
+we are binding everything in `CommandEncoder::update_root_elements`.
 When the pipeline layout is changed, we reset all bindings.
 Otherwise, we pass a range corresponding only to the current bind group.
 
@@ -439,19 +439,25 @@ impl Texture {
         }
     }
 
+    /// see https://learn.microsoft.com/en-us/windows/win32/direct3d12/subresources#plane-slice
     fn calc_subresource(&self, mip_level: u32, array_layer: u32, plane: u32) -> u32 {
         mip_level + (array_layer + plane * self.array_layer_count()) * self.mip_level_count
     }
 
     fn calc_subresource_for_copy(&self, base: &crate::TextureCopyBase) -> u32 {
-        self.calc_subresource(base.mip_level, base.array_layer, 0)
+        let plane = match base.aspect {
+            crate::FormatAspects::COLOR | crate::FormatAspects::DEPTH => 0,
+            crate::FormatAspects::STENCIL => 1,
+            _ => unreachable!(),
+        };
+        self.calc_subresource(base.mip_level, base.array_layer, plane)
     }
 }
 
 #[derive(Debug)]
 pub struct TextureView {
     raw_format: native::Format,
-    format_aspects: crate::FormatAspects, // May explicitly ignore stencil aspect of raw_format!
+    aspects: crate::FormatAspects,
     target_base: (native::Resource, u32),
     handle_srv: Option<descriptor::Handle>,
     handle_uav: Option<descriptor::Handle>,

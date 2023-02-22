@@ -1008,7 +1008,7 @@ impl crate::context::Context for Context {
         _adapter_data: &Self::AdapterData,
         format: wgt::TextureFormat,
     ) -> wgt::TextureFormatFeatures {
-        format.describe().guaranteed_format_features
+        format.guaranteed_format_features()
     }
 
     fn adapter_get_presentation_timestamp(
@@ -2400,7 +2400,6 @@ impl crate::context::Context for Context {
             );
     }
 
-    #[cfg(all(target_arch = "wasm32", not(feature = "emscripten")))]
     fn queue_copy_external_image_to_texture(
         &self,
         queue: &Self::QueueId,

@@ -43,7 +43,6 @@ dx12 = ["naga/hlsl-out", "native", "bit-set", "range-alloc", "winapi/std", "wina
 windows_rs = ["gpu-allocator"]
 dxc_shader_compiler = ["hassle-rs"]
 renderdoc = ["libloading", "renderdoc-sys"]
-emscripten = ["gles"]
 
 [[example]]
 name = "halmark"
@@ -63,26 +62,9 @@ thiserror = "1"
 arrayvec = "0.7"
 fxhash = "0.2.1"
 log = "0.4"
-renderdoc-sys = { version = "0.7.1", optional = true }
-
-# backend: Metal
-block = { version = "0.1", optional = true }
-foreign-types = { version = "0.3", optional = true }
-
-# backend: Vulkan
-ash = { version = "0.37.2", optional = true }
-gpu-alloc = { version = "0.5", optional = true }
-gpu-descriptor = { version = "0.2", optional = true }
-smallvec = { version = "1", optional = true, features = ["union"] }
 
 # backend: Gles
-glow = { version = "0.12.0", optional = true }
-
-# backend: Dx12
-bit-set = { version = "0.5", optional = true }
-range-alloc = { version = "0.1", optional = true }
-gpu-allocator = { version = "0.22", default_features = false, features = ["d3d12", "windows", "public-winapi"], optional = true }
-hassle-rs = { version = "0.10", optional = true }
+glow = { version = "0.12.1", optional = true }
 
 [dependencies.wgt]
 package = "wgpu-types"
@@ -90,8 +72,15 @@ path = "../wgpu-types"
 version = "0.15"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+# backend: Vulkan
+ash = { version = "0.37.2", optional = true }
+gpu-alloc = { version = "0.5", optional = true }
+gpu-descriptor = { version = "0.2", optional = true }
+smallvec = { version = "1", optional = true, features = ["union"] }
+
 egl = { package = "khronos-egl", version = "4.1", features = ["dynamic"], optional = true }
 libloading = { version = "0.7", optional = true }
+renderdoc-sys = { version = "1.0.0", optional = true }
 
 [target.'cfg(target_os = "emscripten")'.dependencies]
 egl = { package = "khronos-egl", version = "4.1", features = ["static", "no-pkg-config"] }
@@ -99,10 +88,20 @@ egl = { package = "khronos-egl", version = "4.1", features = ["static", "no-pkg-
 libloading = { version = "0.7", optional = true }
 
 [target.'cfg(windows)'.dependencies]
+# backend: Dx12
+bit-set = { version = "0.5", optional = true }
+range-alloc = { version = "0.1", optional = true }
+gpu-allocator = { version = "0.22", default_features = false, features = ["d3d12", "windows", "public-winapi"], optional = true }
+hassle-rs = { version = "0.10", optional = true }
+
 winapi = { version = "0.3", features = ["profileapi", "libloaderapi", "windef", "winuser", "dcomp"] }
 native = { package = "d3d12", version = "0.6.0", git = "https://github.com/gfx-rs/d3d12-rs", rev = "b940b1d71", features = ["libloading"], optional = true }
 
 [target.'cfg(any(target_os="macos", target_os="ios"))'.dependencies]
+# backend: Metal
+block = { version = "0.1", optional = true }
+foreign-types = { version = "0.3", optional = true }
+
 mtl = { package = "metal", version = "0.24.0" }
 objc = "0.2.5"
 core-graphics-types = "0.1"
@@ -120,14 +119,14 @@ android_system_properties = "0.1.1"
 
 [dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-rev = "4b796b157cb2b67b0ab166a2238fe4e9473bfd52"
+rev = "9742f1616c3e3dd2cc9a5880616fc886c391bb9f"
 version = "0.11.0"
 features = ["clone"]
 
 # DEV dependencies
 [dev-dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-rev = "4b796b157cb2b67b0ab166a2238fe4e9473bfd52"
+rev = "9742f1616c3e3dd2cc9a5880616fc886c391bb9f"
 version = "0.11.0"
 features = ["wgsl-in"]
 
