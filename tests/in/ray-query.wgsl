@@ -29,7 +29,8 @@ struct RayIntersection {
     primitive_index: u32,
     barycentrics: vec2<f32>,
     front_face: bool,
-    //TODO: object ray direction, origin, matrices
+    object_to_world: mat4x3<f32>,
+    world_to_object: mat4x3<f32>,
 }
 */
 

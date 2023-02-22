@@ -1387,59 +1387,10 @@ impl<'w> BlockContext<'w> {
             }
             crate::Expression::ArrayLength(expr) => self.write_runtime_array_length(expr, block)?,
             crate::Expression::RayQueryGetIntersection { query, committed } => {
-                let width = 4;
-                let query_id = self.cached[query];
-                let intersection_id = self.writer.get_constant_scalar(
-                    crate::ScalarValue::Uint(
-                        spirv::RayQueryIntersection::RayQueryCommittedIntersectionKHR as _,
-                    ),
-                    width,
-                );
                 if !committed {
                     return Err(Error::FeatureNotImplemented("candidate intersection"));
                 }
-
-                let flag_type_id = self.get_type_id(LookupType::Local(LocalType::Value {
-                    vector_size: None,
-                    kind: crate::ScalarKind::Uint,
-                    width,
-                    pointer_space: None,
-                }));
-                let kind_id = self.gen_id();
-                block.body.push(Instruction::ray_query_get_intersection(
-                    spirv::Op::RayQueryGetIntersectionTypeKHR,
-                    flag_type_id,
-                    kind_id,
-                    query_id,
-                    intersection_id,
-                ));
-
-                let scalar_type_id = self.get_type_id(LookupType::Local(LocalType::Value {
-                    vector_size: None,
-                    kind: crate::ScalarKind::Float,
-                    width,
-                    pointer_space: None,
-                }));
-                let t_id = self.gen_id();
-                block.body.push(Instruction::ray_query_get_intersection(
-                    spirv::Op::RayQueryGetIntersectionTKHR,
-                    scalar_type_id,
-                    t_id,
-                    query_id,
-                    intersection_id,
-                ));
-
-                let id = self.gen_id();
-                let intersection_type_id = self.get_type_id(LookupType::Handle(
-                    self.ir_module.special_types.ray_intersection.unwrap(),
-                ));
-                //Note: the arguments must match `generate_ray_intersection_type` layout
-                block.body.push(Instruction::composite_construct(
-                    intersection_type_id,
-                    id,
-                    &[kind_id, t_id],
-                ));
-                id
+                self.write_ray_query_get_intersection(query, block)
             }
         };
 
@@ -2252,108 +2203,7 @@ impl<'w> BlockContext<'w> {
                     block.body.push(instruction);
                 }
                 crate::Statement::RayQuery { query, ref fun } => {
-                    let query_id = self.cached[query];
-                    match *fun {
-                        crate::RayQueryFunction::Initialize {
-                            acceleration_structure,
-                            descriptor,
-                        } => {
-                            //Note: composite extract indices and types must match `generate_ray_desc_type`
-                            let desc_id = self.cached[descriptor];
-                            let acc_struct_id = self.get_image_id(acceleration_structure);
-                            let width = 4;
-
-                            let flag_type_id =
-                                self.get_type_id(LookupType::Local(LocalType::Value {
-                                    vector_size: None,
-                                    kind: crate::ScalarKind::Uint,
-                                    width,
-                                    pointer_space: None,
-                                }));
-                            let ray_flags_id = self.gen_id();
-                            block.body.push(Instruction::composite_extract(
-                                flag_type_id,
-                                ray_flags_id,
-                                desc_id,
-                                &[0],
-                            ));
-                            let cull_mask_id = self.gen_id();
-                            block.body.push(Instruction::composite_extract(
-                                flag_type_id,
-                                cull_mask_id,
-                                desc_id,
-                                &[1],
-                            ));
-
-                            let scalar_type_id =
-                                self.get_type_id(LookupType::Local(LocalType::Value {
-                                    vector_size: None,
-                                    kind: crate::ScalarKind::Float,
-                                    width,
-                                    pointer_space: None,
-                                }));
-                            let tmin_id = self.gen_id();
-                            block.body.push(Instruction::composite_extract(
-                                scalar_type_id,
-                                tmin_id,
-                                desc_id,
-                                &[2],
-                            ));
-                            let tmax_id = self.gen_id();
-                            block.body.push(Instruction::composite_extract(
-                                scalar_type_id,
-                                tmax_id,
-                                desc_id,
-                                &[3],
-                            ));
-
-                            let vector_type_id =
-                                self.get_type_id(LookupType::Local(LocalType::Value {
-                                    vector_size: Some(crate::VectorSize::Tri),
-                                    kind: crate::ScalarKind::Float,
-                                    width,
-                                    pointer_space: None,
-                                }));
-                            let ray_origin_id = self.gen_id();
-                            block.body.push(Instruction::composite_extract(
-                                vector_type_id,
-                                ray_origin_id,
-                                desc_id,
-                                &[4],
-                            ));
-                            let ray_dir_id = self.gen_id();
-                            block.body.push(Instruction::composite_extract(
-                                vector_type_id,
-                                ray_dir_id,
-                                desc_id,
-                                &[5],
-                            ));
-
-                            block.body.push(Instruction::ray_query_initialize(
-                                query_id,
-                                acc_struct_id,
-                                ray_flags_id,
-                                cull_mask_id,
-                                ray_origin_id,
-                                tmin_id,
-                                ray_dir_id,
-                                tmax_id,
-                            ));
-                        }
-                        crate::RayQueryFunction::Proceed { result } => {
-                            let id = self.gen_id();
-                            self.cached[result] = id;
-                            let result_type_id =
-                                self.get_expression_type_id(&self.fun_info[result].ty);
-
-                            block.body.push(Instruction::ray_query_proceed(
-                                result_type_id,
-                                id,
-                                query_id,
-                            ));
-                        }
-                        crate::RayQueryFunction::Terminate => {}
-                    }
+                    self.write_ray_query_function(query, fun, &mut block);
                 }
             }
         }

@@ -10,6 +10,7 @@ mod image;
 mod index;
 mod instructions;
 mod layout;
+mod ray;
 mod recyclable;
 mod selection;
 mod writer;
