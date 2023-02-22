@@ -5,7 +5,7 @@ use hal::{
 };
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 
-use glam::{Mat4, Vec3};
+use glam::{Affine3A, Mat4, Vec3};
 use std::{
     borrow::{Borrow, Cow},
     iter, mem,
@@ -17,27 +17,152 @@ use std::{
 const COMMAND_BUFFER_PER_CONTEXT: usize = 100;
 const DESIRED_FRAMES: u32 = 3;
 
-fn pack_24_8(low_24: u32, high_8: u8) -> u32 {
-    (low_24 & 0x00ff_ffff) | (u32::from(high_8) << 24)
-}
-
-#[derive(Debug)]
+/// [D3D12_RAYTRACING_INSTANCE_DESC](https://microsoft.github.io/DirectX-Specs/d3d/Raytracing.html#d3d12_raytracing_instance_desc)
+/// [VkAccelerationStructureInstanceKHR](https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VkAccelerationStructureInstanceKHR.html)
+#[derive(Clone)]
 #[repr(C)]
-struct Instance {
+struct AccelerationStructureInstance {
     transform: [f32; 12],
-    instance_custom_index_and_mask: u32,
-    instance_shader_binding_table_record_offset_and_flags: u32,
+    custom_index_and_mask: u32,
+    shader_binding_table_record_offset_and_flags: u32,
     acceleration_structure_reference: u64,
 }
 
-fn transpose_matrix_for_acceleration_structure_instance(matrix: Mat4) -> [f32; 12] {
-    let row_0 = matrix.row(0);
-    let row_1 = matrix.row(1);
-    let row_2 = matrix.row(2);
-    [
-        row_0.x, row_0.y, row_0.z, row_0.w, row_1.x, row_1.y, row_1.z, row_1.w, row_2.x, row_2.y,
-        row_2.z, row_2.w,
-    ]
+impl std::fmt::Debug for AccelerationStructureInstance {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Instance")
+            .field("transform", &self.transform)
+            .field("custom_index()", &self.custom_index())
+            .field("mask()", &self.mask())
+            .field(
+                "shader_binding_table_record_offset()",
+                &self.shader_binding_table_record_offset(),
+            )
+            .field("flags()", &self.flags())
+            .field(
+                "acceleration_structure_reference",
+                &self.acceleration_structure_reference,
+            )
+            .finish()
+    }
+}
+
+#[allow(dead_code)]
+impl AccelerationStructureInstance {
+    const LOW_24_MASK: u32 = 0x00ff_ffff;
+    const MAX_U24: u32 = (1u32 << 24u32) - 1u32;
+
+    #[inline]
+    fn affine_to_rows(mat: &Affine3A) -> [f32; 12] {
+        let row_0 = mat.matrix3.row(0);
+        let row_1 = mat.matrix3.row(1);
+        let row_2 = mat.matrix3.row(2);
+        let translation = mat.translation;
+        [
+            row_0.x,
+            row_0.y,
+            row_0.z,
+            translation.x,
+            row_1.x,
+            row_1.y,
+            row_1.z,
+            translation.y,
+            row_2.x,
+            row_2.y,
+            row_2.z,
+            translation.z,
+        ]
+    }
+
+    #[inline]
+    fn rows_to_affine(rows: &[f32; 12]) -> Affine3A {
+        Affine3A::from_cols_array(&[
+            rows[0], rows[3], rows[6], rows[9], rows[1], rows[4], rows[7], rows[10], rows[2],
+            rows[5], rows[8], rows[11],
+        ])
+    }
+
+    pub fn transform_as_affine(&self) -> Affine3A {
+        Self::rows_to_affine(&self.transform)
+    }
+    pub fn set_transform(&mut self, transform: &Affine3A) {
+        self.transform = Self::affine_to_rows(&transform);
+    }
+
+    pub fn custom_index(&self) -> u32 {
+        self.custom_index_and_mask & Self::LOW_24_MASK
+    }
+
+    pub fn mask(&self) -> u8 {
+        (self.custom_index_and_mask >> 24) as u8
+    }
+
+    pub fn shader_binding_table_record_offset(&self) -> u32 {
+        self.shader_binding_table_record_offset_and_flags & Self::LOW_24_MASK
+    }
+
+    pub fn flags(&self) -> u8 {
+        (self.shader_binding_table_record_offset_and_flags >> 24) as u8
+    }
+
+    pub fn set_custom_index(&mut self, custom_index: u32) {
+        debug_assert!(
+            custom_index <= Self::MAX_U24,
+            "custom_index uses more than 24 bits! {custom_index} > {}",
+            Self::MAX_U24
+        );
+        self.custom_index_and_mask =
+            (custom_index & Self::LOW_24_MASK) | (self.custom_index_and_mask & !Self::LOW_24_MASK)
+    }
+
+    pub fn set_mask(&mut self, mask: u8) {
+        self.custom_index_and_mask =
+            (self.custom_index_and_mask & Self::LOW_24_MASK) | (u32::from(mask) << 24)
+    }
+
+    pub fn set_shader_binding_table_record_offset(
+        &mut self,
+        shader_binding_table_record_offset: u32,
+    ) {
+        debug_assert!(shader_binding_table_record_offset <= Self::MAX_U24, "shader_binding_table_record_offset uses more than 24 bits! {shader_binding_table_record_offset} > {}", Self::MAX_U24);
+        self.shader_binding_table_record_offset_and_flags = (shader_binding_table_record_offset
+            & Self::LOW_24_MASK)
+            | (self.shader_binding_table_record_offset_and_flags & !Self::LOW_24_MASK)
+    }
+
+    pub fn set_flags(&mut self, flags: u8) {
+        self.shader_binding_table_record_offset_and_flags =
+            (self.shader_binding_table_record_offset_and_flags & Self::LOW_24_MASK)
+                | (u32::from(flags) << 24)
+    }
+
+    pub fn new(
+        transform: &Affine3A,
+        custom_index: u32,
+        mask: u8,
+        shader_binding_table_record_offset: u32,
+        flags: u8,
+        acceleration_structure_reference: u64,
+    ) -> Self {
+        dbg!(transform);
+        debug_assert!(
+            custom_index <= Self::MAX_U24,
+            "custom_index uses more than 24 bits! {custom_index} > {}",
+            Self::MAX_U24
+        );
+        debug_assert!(
+            shader_binding_table_record_offset <= Self::MAX_U24,
+            "shader_binding_table_record_offset uses more than 24 bits! {shader_binding_table_record_offset} > {}", Self::MAX_U24
+        );
+        AccelerationStructureInstance {
+            transform: Self::affine_to_rows(transform),
+            custom_index_and_mask: (custom_index & Self::MAX_U24) | (u32::from(mask) << 24),
+            shader_binding_table_record_offset_and_flags: (shader_binding_table_record_offset
+                & Self::MAX_U24)
+                | (u32::from(flags) << 24),
+            acceleration_structure_reference,
+        }
+    }
 }
 
 struct ExecutionContext<A: hal::Api> {
@@ -83,7 +208,7 @@ struct Example<A: hal::Api> {
     vertices_buffer: A::Buffer,
     indices_buffer: A::Buffer,
     texture: A::Texture,
-    instances: [Instance; 1],
+    instances: [AccelerationStructureInstance; 3],
     instances_buffer: A::Buffer,
     blas: A::AccelerationStructure,
     tlas: A::AccelerationStructure,
@@ -270,8 +395,6 @@ impl<A: hal::Api> Example<A> {
         let indices: [u32; 3] = [0, 1, 2];
 
         let indices_size_in_bytes = indices.len() * 4;
-
-        let transform_matrix = [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0];
 
         let vertices_buffer = unsafe {
             let vertices_buffer = device
@@ -485,37 +608,48 @@ impl<A: hal::Api> Example<A> {
         };
 
         let instances = [
-            Instance {
-                transform: transform_matrix,
-                instance_custom_index_and_mask: pack_24_8(0, 0xff),
-                instance_shader_binding_table_record_offset_and_flags: pack_24_8(0, 0),
-                acceleration_structure_reference: unsafe {
-                    device.get_acceleration_structure_device_address(&blas)
-                },
-            },
-            /*Instance {
-                transform: transpose_matrix_for_acceleration_structure_instance(
-                    Mat4::from_rotation_y(1.0),
-                ),
-                instance_custom_index_and_mask: pack_24_8(0, 0xff),
-                instance_shader_binding_table_record_offset_and_flags: pack_24_8(0, 0),
-                acceleration_structure_reference: unsafe {
-                    device.get_acceleration_structure_device_address(&blas)
-                },
-            },
-            Instance {
-                transform: transpose_matrix_for_acceleration_structure_instance(
-                    Mat4::from_rotation_y(-1.0),
-                ),
-                instance_custom_index_and_mask: pack_24_8(0, 0xff),
-                instance_shader_binding_table_record_offset_and_flags: pack_24_8(0, 0),
-                acceleration_structure_reference: unsafe {
-                    device.get_acceleration_structure_device_address(&blas)
-                },
-            },*/
+            AccelerationStructureInstance::new(
+                &Affine3A::from_translation(Vec3 {
+                    x: 0.0,
+                    y: 0.0,
+                    z: 0.0,
+                }),
+                0,
+                0xff,
+                0,
+                0,
+                unsafe { device.get_acceleration_structure_device_address(&blas) },
+            ),
+            AccelerationStructureInstance::new(
+                &Affine3A::from_translation(Vec3 {
+                    x: -1.0,
+                    y: -1.0,
+                    z: -2.0,
+                }),
+                0,
+                0xff,
+                0,
+                0,
+                unsafe { device.get_acceleration_structure_device_address(&blas) },
+            ),
+            AccelerationStructureInstance::new(
+                &Affine3A::from_translation(Vec3 {
+                    x: 1.0,
+                    y: -1.0,
+                    z: -2.0,
+                }),
+                0,
+                0xff,
+                0,
+                0,
+                unsafe { device.get_acceleration_structure_device_address(&blas) },
+            ),
         ];
 
-        let instances_buffer_size = instances.len() * std::mem::size_of::<Instance>();
+        dbg!(&instances[0]);
+
+        let instances_buffer_size =
+            instances.len() * std::mem::size_of::<AccelerationStructureInstance>();
 
         let instances_buffer = unsafe {
             let instances_buffer = device
@@ -662,24 +796,15 @@ impl<A: hal::Api> Example<A> {
             usage: hal::TextureUses::UNINITIALIZED..hal::TextureUses::COPY_DST,
         };
 
-        let instances_buffer_size = self.instances.len() * std::mem::size_of::<Instance>();
+        let instances_buffer_size =
+            self.instances.len() * std::mem::size_of::<AccelerationStructureInstance>();
 
         let tlas_flags = hal::AccelerationStructureBuildFlags::PREFER_FAST_TRACE
             | hal::AccelerationStructureBuildFlags::ALLOW_UPDATE;
 
         self.time += 1.0 / 60.0;
 
-        self.instances[0] = Instance {
-            transform: transpose_matrix_for_acceleration_structure_instance(Mat4::from_rotation_y(
-                self.time,
-            )),
-            instance_custom_index_and_mask: pack_24_8(0, 0xff),
-            instance_shader_binding_table_record_offset_and_flags: pack_24_8(0, 0),
-            acceleration_structure_reference: unsafe {
-                self.device
-                    .get_acceleration_structure_device_address(&self.blas)
-            },
-        };
+        self.instances[0].set_transform(&Affine3A::from_rotation_y(self.time));
 
         unsafe {
             let mapping = self
@@ -902,6 +1027,7 @@ fn main() {
             width: 512,
             height: 512,
         })
+        .with_resizable(false)
         .build(&event_loop)
         .unwrap();
 
