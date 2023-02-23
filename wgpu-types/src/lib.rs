@@ -265,7 +265,7 @@ bitflags::bitflags! {
         /// [`Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES`] may enable additional usages.
         ///
         /// Supported Platforms:
-        /// - Intel/Vulkan
+        /// - Vulkan on Intel
         /// - Mobile (some)
         ///
         /// This is a web and native feature.
@@ -280,7 +280,7 @@ bitflags::bitflags! {
         /// [`Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES`] may enable additional usages.
         ///
         /// Supported Platforms:
-        /// - Intel/Vulkan
+        /// - Vulkan on Intel
         /// - Mobile (some)
         ///
         /// This is a web and native feature.
