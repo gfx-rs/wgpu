@@ -1500,7 +1500,7 @@ impl crate::Device<super::Api> for super::Device {
         let (heap_ty, raw_ty) = match desc.ty {
             wgt::QueryType::Occlusion => (
                 native::QueryHeapType::Occlusion,
-                d3d12::D3D12_QUERY_TYPE_BINARY_OCCLUSION,
+                d3d12::D3D12_QUERY_TYPE_OCCLUSION,
             ),
             wgt::QueryType::PipelineStatistics(_) => (
                 native::QueryHeapType::PipelineStatistics,

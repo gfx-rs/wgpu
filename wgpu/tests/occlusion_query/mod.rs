@@ -8,24 +8,6 @@ fn occlusion_query() {
     initialize_test(
         TestParameters::default().downlevel_flags(wgpu::DownlevelFlags::OCCLUSION_QUERY),
         |ctx| {
-            // Create albedo texture
-            let color_texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
-                label: None,
-                size: wgpu::Extent3d {
-                    width: 64,
-                    height: 64,
-                    depth_or_array_layers: 1,
-                },
-                mip_level_count: 1,
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format: wgpu::TextureFormat::Rgba8UnormSrgb,
-                usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-                view_formats: &[],
-            });
-            let color_texture_view =
-                color_texture.create_view(&wgpu::TextureViewDescriptor::default());
-
             // Create depth texture
             let depth_texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
                 label: None,
@@ -71,7 +53,7 @@ fn occlusion_query() {
                     fragment: Some(wgpu::FragmentState {
                         module: &shader,
                         entry_point: "fs_main",
-                        targets: &[Some(color_texture.format().into())],
+                        targets: &[],
                     }),
                     primitive: wgpu::PrimitiveState::default(),
                     depth_stencil: Some(wgpu::DepthStencilState {
@@ -98,14 +80,7 @@ fn occlusion_query() {
             {
                 let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                     label: None,
-                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                        view: &color_texture_view,
-                        resolve_target: None,
-                        ops: wgpu::Operations {
-                            load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-                            store: true,
-                        },
-                    })],
+                    color_attachments: &[],
                     depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                         view: &depth_texture_view,
                         depth_ops: Some(wgpu::Operations {
@@ -152,8 +127,9 @@ fn occlusion_query() {
             let query_buffer_view = query_buffer.slice(..).get_mapped_range();
             let query_data: &[u64; 3] = bytemuck::from_bytes(&query_buffer_view);
 
-            assert_eq!(query_data[0], 2048);
-            assert_eq!(query_data[1], 2048);
+            // Half a quad shader invocation
+            assert_eq!(query_data[0], 64 * 64 / 2);
+            assert_eq!(query_data[1], 64 * 64 / 2);
             assert_eq!(query_data[2], 0);
         },
     )
