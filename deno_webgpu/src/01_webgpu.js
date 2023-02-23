@@ -2844,11 +2844,25 @@
         },
       );
 
+      let occlusionQuerySetRid;
+      if (descriptor.occlusionQuerySet) {
+        occlusionQuerySetRid = assertResource(descriptor.occlusionQuerySet, {
+          prefix,
+          context: "occlusion query set",
+        });
+        assertDeviceMatch(device, descriptor.occlusionQuerySet, {
+          prefix,
+          resourceContext: "occlusion query set",
+          selfContext: "this",
+        });
+      }
+
       const { rid } = ops.op_webgpu_command_encoder_begin_render_pass(
         commandEncoderRid,
         descriptor.label,
         colorAttachments,
         depthStencilAttachment,
+        occlusionQuerySetRid
       );
 
       const renderPassEncoder = createGPURenderPassEncoder(

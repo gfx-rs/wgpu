@@ -1843,6 +1843,10 @@
       key: "depthStencilAttachment",
       converter: webidl.converters["GPURenderPassDepthStencilAttachment"],
     },
+    {
+      key: "occlusionQuerySet",
+      converter: webidl.converters["GPUQuerySet"],
+    },
   ];
   webidl.converters["GPURenderPassDescriptor"] = webidl
     .createDictionaryConverter(
