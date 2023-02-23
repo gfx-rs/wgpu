@@ -548,30 +548,17 @@ impl crate::Device<super::Api> for super::Device {
         // Second, place the described resources
         for (group_index, &bgl) in desc.bind_group_layouts.iter().enumerate() {
             // remember where the resources for this set start at each shader stage
-            let mut dynamic_buffers = Vec::new();
             let base_resource_indices = stage_data.map(|info| info.counters.clone());
 
             for entry in bgl.entries.iter() {
                 if let wgt::BindingType::Buffer {
-                    ty,
-                    has_dynamic_offset,
-                    min_binding_size: _,
+                    ty: wgt::BufferBindingType::Storage { .. },
+                    ..
                 } = entry.ty
                 {
-                    if has_dynamic_offset {
-                        dynamic_buffers.push(stage_data.map(|info| {
-                            if entry.visibility.contains(map_naga_stage(info.stage)) {
-                                info.counters.buffers
-                            } else {
-                                !0
-                            }
-                        }));
-                    }
-                    if let wgt::BufferBindingType::Storage { .. } = ty {
-                        for info in stage_data.iter_mut() {
-                            if entry.visibility.contains(map_naga_stage(info.stage)) {
-                                info.sizes_count += 1;
-                            }
+                    for info in stage_data.iter_mut() {
+                        if entry.visibility.contains(map_naga_stage(info.stage)) {
+                            info.sizes_count += 1;
                         }
                     }
                 }
