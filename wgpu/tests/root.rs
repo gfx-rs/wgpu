@@ -15,6 +15,7 @@ mod encoder;
 mod example_wgsl;
 mod external_texture;
 mod instance;
+mod occlusion_query;
 mod poll;
 mod queue_transfer;
 mod resource_descriptor_accessor;
