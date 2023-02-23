@@ -10,12 +10,12 @@ OpMemoryModel Logical GLSL450
 OpEntryPoint GLCompute %29 "main" %21 %23
 OpExecutionMode %29 LocalSize 1 1 1
 OpMemberDecorate %13 0 Offset 0
-OpMemberDecorate %16 0 Offset 0
-OpMemberDecorate %16 1 Offset 4
-OpMemberDecorate %16 2 Offset 8
-OpMemberDecorate %16 3 Offset 12
-OpMemberDecorate %16 4 Offset 16
-OpMemberDecorate %16 5 Offset 32
+OpMemberDecorate %15 0 Offset 0
+OpMemberDecorate %15 1 Offset 4
+OpMemberDecorate %15 2 Offset 8
+OpMemberDecorate %15 3 Offset 12
+OpMemberDecorate %15 4 Offset 16
+OpMemberDecorate %15 5 Offset 32
 OpMemberDecorate %20 0 Offset 0
 OpMemberDecorate %20 1 Offset 4
 OpMemberDecorate %20 2 Offset 8
@@ -49,19 +49,19 @@ OpMemberDecorate %24 0 Offset 0
 %11 = OpConstant  %4  0
 %12 = OpTypeAccelerationStructureNV
 %13 = OpTypeStruct %4
-%14 = OpTypeRayQueryKHR
-%15 = OpTypeVector %7 3
-%16 = OpTypeStruct %4 %4 %7 %7 %15 %15
+%14 = OpTypeVector %7 3
+%15 = OpTypeStruct %4 %4 %7 %7 %14 %14
+%16 = OpTypeRayQueryKHR
 %17 = OpTypeVector %7 2
 %18 = OpTypeBool
-%19 = OpTypeMatrix %15 4
+%19 = OpTypeMatrix %14 4
 %20 = OpTypeStruct %4 %7 %4 %4 %4 %4 %4 %17 %18 %19 %19
 %22 = OpTypePointer UniformConstant %12
 %21 = OpVariable  %22  UniformConstant
 %24 = OpTypeStruct %13
 %25 = OpTypePointer StorageBuffer %24
 %23 = OpVariable  %25  StorageBuffer
-%27 = OpTypePointer Function %14
+%27 = OpTypePointer Function %16
 %30 = OpTypeFunction %2
 %32 = OpTypePointer StorageBuffer %13
 %45 = OpConstant  %4  1
@@ -73,15 +73,15 @@ OpMemberDecorate %24 0 Offset 0
 %33 = OpAccessChain  %32  %23 %11
 OpBranch %34
 %34 = OpLabel
-%35 = OpCompositeConstruct  %15  %9 %9 %9
-%36 = OpCompositeConstruct  %15  %9 %10 %9
-%37 = OpCompositeConstruct  %16  %3 %5 %6 %8 %35 %36
+%35 = OpCompositeConstruct  %14  %9 %9 %9
+%36 = OpCompositeConstruct  %14  %9 %10 %9
+%37 = OpCompositeConstruct  %15  %3 %5 %6 %8 %35 %36
 %38 = OpCompositeExtract  %4  %37 0
 %39 = OpCompositeExtract  %4  %37 1
 %40 = OpCompositeExtract  %7  %37 2
 %41 = OpCompositeExtract  %7  %37 3
-%42 = OpCompositeExtract  %15  %37 4
-%43 = OpCompositeExtract  %15  %37 5
+%42 = OpCompositeExtract  %14  %37 4
+%43 = OpCompositeExtract  %14  %37 5
 OpRayQueryInitializeKHR %26 %31 %38 %39 %42 %40 %43 %41
 %44 = OpRayQueryProceedKHR  %18  %26
 %46 = OpRayQueryGetIntersectionTypeKHR  %4  %26 %45

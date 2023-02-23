@@ -441,7 +441,6 @@ impl Parser {
                 }))
             }
             "array" => ast::ConstructorType::PartialArray,
-            "RayDesc" => ast::ConstructorType::RayDesc,
             "atomic"
             | "binding_array"
             | "sampler"
@@ -1382,6 +1381,8 @@ impl Parser {
             }
             "acceleration_structure" => ast::Type::AccelerationStructure,
             "ray_query" => ast::Type::RayQuery,
+            "RayDesc" => ast::Type::RayDesc,
+            "RayIntersection" => ast::Type::RayIntersection,
             _ => return Ok(None),
         }))
     }

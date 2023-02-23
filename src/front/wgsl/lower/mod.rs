@@ -637,14 +637,21 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             module: &mut module,
         };
 
-        for decl in self.index.visit_ordered() {
-            let span = tu.decls.get_span(decl);
-            let decl = &tu.decls[decl];
+        for decl_handle in self.index.visit_ordered() {
+            let span = tu.decls.get_span(decl_handle);
+            let decl = &tu.decls[decl_handle];
+
+            //TODO: find a nicer way?
+            if let Some(dep) = decl.dependencies.iter().find(|dep| dep.ident == "RayDesc") {
+                let ty_handle = ctx.module.generate_ray_desc_type();
+                ctx.globals
+                    .insert(dep.ident, LoweredGlobalDecl::Type(ty_handle));
+            }
 
             match decl.kind {
                 ast::GlobalDeclKind::Fn(ref f) => {
-                    let decl = self.function(f, span, ctx.reborrow())?;
-                    ctx.globals.insert(f.name.name, decl);
+                    let lowered_decl = self.function(f, span, ctx.reborrow())?;
+                    ctx.globals.insert(f.name.name, lowered_decl);
                 }
                 ast::GlobalDeclKind::Var(ref v) => {
                     let ty = self.resolve_ast_type(v.ty, ctx.reborrow())?;
@@ -2301,6 +2308,12 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         ast::ArraySize::Dynamic => crate::ArraySize::Dynamic,
                     },
                 }
+            }
+            ast::Type::RayDesc => {
+                return Ok(ctx.module.generate_ray_desc_type());
+            }
+            ast::Type::RayIntersection => {
+                return Ok(ctx.module.generate_ray_intersection_type());
             }
             ast::Type::User(ref ident) => {
                 return match ctx.globals.get(ident.name) {

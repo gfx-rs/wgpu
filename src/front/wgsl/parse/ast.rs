@@ -231,6 +231,8 @@ pub enum Type<'a> {
     },
     AccelerationStructure,
     RayQuery,
+    RayDesc,
+    RayIntersection,
     BindingArray {
         base: Handle<Type<'a>>,
         size: ArraySize<'a>,
@@ -369,9 +371,6 @@ pub enum ConstructorType<'a> {
         base: Handle<Type<'a>>,
         size: ArraySize<'a>,
     },
-
-    /// Ray description.
-    RayDesc,
 
     /// Constructing a value of a known Naga IR type.
     ///

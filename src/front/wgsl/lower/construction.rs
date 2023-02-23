@@ -660,10 +660,6 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 });
                 ConcreteConstructorHandle::Type(ty)
             }
-            ast::ConstructorType::RayDesc => {
-                let ty = ctx.module.generate_ray_desc_type();
-                ConcreteConstructorHandle::Type(ty)
-            }
             ast::ConstructorType::Type(ty) => ConcreteConstructorHandle::Type(ty),
         };
 
