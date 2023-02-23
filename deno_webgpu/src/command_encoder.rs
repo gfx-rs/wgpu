@@ -155,7 +155,12 @@ pub fn op_webgpu_command_encoder_begin_render_pass(
     }
 
     let occlusion_query_set_resource = if let Some(query_set) = occlusion_query_set {
-        Some(state.resource_table.get::<super::WebGpuQuerySet>(query_set)?.0)
+        Some(
+            state
+                .resource_table
+                .get::<super::WebGpuQuerySet>(query_set)?
+                .0,
+        )
     } else {
         None
     };
