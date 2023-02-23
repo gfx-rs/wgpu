@@ -594,12 +594,12 @@ impl crate::Queue<Api> for Queue {
                 }
             })?
         };
-        // We treat `VK_SUBOPTIMAL_KHR` as `VK_SUCCESS` on Android.
-        // On Android 10+, libvulkan's `vkQueuePresentKHR` implementation returns `VK_SUBOPTIMAL_KHR` if not doing pre-rotation
-        // (i.e `VkSwapchainCreateInfoKHR::preTransform` not being equal to the current device orientation).
-        // This is always the case when the device orientation is anything other than the identity one, as we unconditionally use `VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR`.
-        #[cfg(not(target_os = "android"))]
         if suboptimal {
+            // We treat `VK_SUBOPTIMAL_KHR` as `VK_SUCCESS` on Android.
+            // On Android 10+, libvulkan's `vkQueuePresentKHR` implementation returns `VK_SUBOPTIMAL_KHR` if not doing pre-rotation
+            // (i.e `VkSwapchainCreateInfoKHR::preTransform` not being equal to the current device orientation).
+            // This is always the case when the device orientation is anything other than the identity one, as we unconditionally use `VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR`.
+            #[cfg(not(target_os = "android"))]
             log::warn!("Suboptimal present of frame {}", texture.index);
         }
         Ok(())
