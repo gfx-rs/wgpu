@@ -666,7 +666,10 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     unsafe fn set_render_pipeline(&mut self, pipeline: &super::RenderPipeline) {
         self.state.raw_primitive_type = pipeline.raw_primitive_type;
         self.state.stage_infos.vs.assign_from(&pipeline.vs_info);
-        self.state.stage_infos.fs.assign_from(&pipeline.fs_info);
+        match pipeline.fs_info {
+            Some(ref info) => self.state.stage_infos.fs.assign_from(info),
+            None => self.state.stage_infos.fs.clear(),
+        }
 
         let encoder = self.state.render.as_ref().unwrap();
         encoder.set_render_pipeline_state(&pipeline.raw);

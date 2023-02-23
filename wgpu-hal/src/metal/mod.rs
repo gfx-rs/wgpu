@@ -502,11 +502,18 @@ impl<T> ops::Index<naga::ShaderStage> for MultiStageData<T> {
 }
 
 impl<T> MultiStageData<T> {
-    fn map<Y>(&self, fun: impl Fn(&T) -> Y) -> MultiStageData<Y> {
+    fn map_ref<Y>(&self, fun: impl Fn(&T) -> Y) -> MultiStageData<Y> {
         MultiStageData {
             vs: fun(&self.vs),
             fs: fun(&self.fs),
             cs: fun(&self.cs),
+        }
+    }
+    fn map<Y>(self, fun: impl Fn(T) -> Y) -> MultiStageData<Y> {
+        MultiStageData {
+            vs: fun(self.vs),
+            fs: fun(self.fs),
+            cs: fun(self.cs),
         }
     }
     fn iter<'a>(&'a self) -> impl Iterator<Item = &'a T> {
@@ -522,6 +529,7 @@ impl<T> MultiStageData<T> {
 }
 
 type MultiStageResourceCounters = MultiStageData<ResourceData<ResourceIndex>>;
+type MultiStageResources = MultiStageData<naga::back::msl::EntryPointResources>;
 
 #[derive(Debug)]
 struct BindGroupLayoutInfo {
@@ -536,11 +544,11 @@ struct PushConstantsInfo {
 
 #[derive(Debug)]
 pub struct PipelineLayout {
-    naga_options: naga::back::msl::Options,
     bind_group_infos: ArrayVec<BindGroupLayoutInfo, { crate::MAX_BIND_GROUPS }>,
     push_constants_infos: MultiStageData<Option<PushConstantsInfo>>,
     total_counters: MultiStageResourceCounters,
     total_push_constants: u32,
+    per_stage_map: MultiStageResources,
 }
 
 trait AsNative {
@@ -661,7 +669,7 @@ pub struct RenderPipeline {
     #[allow(dead_code)]
     fs_lib: Option<mtl::Library>,
     vs_info: PipelineStageInfo,
-    fs_info: PipelineStageInfo,
+    fs_info: Option<PipelineStageInfo>,
     raw_primitive_type: mtl::MTLPrimitiveType,
     raw_triangle_fill_mode: mtl::MTLTriangleFillMode,
     raw_front_winding: mtl::MTLWinding,
