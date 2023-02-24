@@ -8,8 +8,8 @@ const HEAP_SIZE_FIXED: usize = 64;
 
 #[derive(Copy, Clone)]
 pub(super) struct DualHandle {
-    cpu: native::CpuDescriptor,
-    pub gpu: native::GpuDescriptor,
+    cpu: d3d12::CpuDescriptor,
+    pub gpu: d3d12::GpuDescriptor,
     /// How large the block allocated to this handle is.
     count: u64,
 }
@@ -27,8 +27,8 @@ impl fmt::Debug for DualHandle {
 type DescriptorIndex = u64;
 
 pub(super) struct GeneralHeap {
-    pub raw: native::DescriptorHeap,
-    ty: native::DescriptorHeapType,
+    pub raw: d3d12::DescriptorHeap,
+    ty: d3d12::DescriptorHeapType,
     handle_size: u64,
     total_handles: u64,
     start: DualHandle,
@@ -37,8 +37,8 @@ pub(super) struct GeneralHeap {
 
 impl GeneralHeap {
     pub(super) fn new(
-        device: native::Device,
-        ty: native::DescriptorHeapType,
+        device: d3d12::Device,
+        ty: d3d12::DescriptorHeapType,
         total_handles: u64,
     ) -> Result<Self, crate::DeviceError> {
         let raw = {
@@ -47,7 +47,7 @@ impl GeneralHeap {
                 .create_descriptor_heap(
                     total_handles as u32,
                     ty,
-                    native::DescriptorHeapFlags::SHADER_VISIBLE,
+                    d3d12::DescriptorHeapFlags::SHADER_VISIBLE,
                     0,
                 )
                 .into_device_result("Descriptor heap creation")?
@@ -76,14 +76,14 @@ impl GeneralHeap {
         }
     }
 
-    fn cpu_descriptor_at(&self, index: u64) -> native::CpuDescriptor {
-        native::CpuDescriptor {
+    fn cpu_descriptor_at(&self, index: u64) -> d3d12::CpuDescriptor {
+        d3d12::CpuDescriptor {
             ptr: self.start.cpu.ptr + (self.handle_size * index) as usize,
         }
     }
 
-    fn gpu_descriptor_at(&self, index: u64) -> native::GpuDescriptor {
-        native::GpuDescriptor {
+    fn gpu_descriptor_at(&self, index: u64) -> d3d12::GpuDescriptor {
+        d3d12::GpuDescriptor {
             ptr: self.start.gpu.ptr + self.handle_size * index,
         }
     }
@@ -106,22 +106,22 @@ impl GeneralHeap {
 
 /// Fixed-size free-list allocator for CPU descriptors.
 struct FixedSizeHeap {
-    raw: native::DescriptorHeap,
+    raw: d3d12::DescriptorHeap,
     /// Bit flag representation of available handles in the heap.
     ///
     ///  0 - Occupied
     ///  1 - free
     availability: u64,
     handle_size: usize,
-    start: native::CpuDescriptor,
+    start: d3d12::CpuDescriptor,
 }
 
 impl FixedSizeHeap {
-    fn new(device: native::Device, ty: native::DescriptorHeapType) -> Self {
+    fn new(device: d3d12::Device, ty: d3d12::DescriptorHeapType) -> Self {
         let (heap, _hr) = device.create_descriptor_heap(
             HEAP_SIZE_FIXED as _,
             ty,
-            native::DescriptorHeapFlags::empty(),
+            d3d12::DescriptorHeapFlags::empty(),
             0,
         );
 
@@ -133,19 +133,19 @@ impl FixedSizeHeap {
         }
     }
 
-    fn alloc_handle(&mut self) -> native::CpuDescriptor {
+    fn alloc_handle(&mut self) -> d3d12::CpuDescriptor {
         // Find first free slot.
         let slot = self.availability.trailing_zeros() as usize;
         assert!(slot < HEAP_SIZE_FIXED);
         // Set the slot as occupied.
         self.availability ^= 1 << slot;
 
-        native::CpuDescriptor {
+        d3d12::CpuDescriptor {
             ptr: self.start.ptr + self.handle_size * slot,
         }
     }
 
-    fn free_handle(&mut self, handle: native::CpuDescriptor) {
+    fn free_handle(&mut self, handle: d3d12::CpuDescriptor) {
         let slot = (handle.ptr - self.start.ptr) / self.handle_size;
         assert!(slot < HEAP_SIZE_FIXED);
         assert_eq!(self.availability & (1 << slot), 0);
@@ -163,7 +163,7 @@ impl FixedSizeHeap {
 
 #[derive(Clone, Copy)]
 pub(super) struct Handle {
-    pub raw: native::CpuDescriptor,
+    pub raw: d3d12::CpuDescriptor,
     heap_index: usize,
 }
 
@@ -177,14 +177,14 @@ impl fmt::Debug for Handle {
 }
 
 pub(super) struct CpuPool {
-    device: native::Device,
-    ty: native::DescriptorHeapType,
+    device: d3d12::Device,
+    ty: d3d12::DescriptorHeapType,
     heaps: Vec<FixedSizeHeap>,
     avaliable_heap_indices: BitSet,
 }
 
 impl CpuPool {
-    pub(super) fn new(device: native::Device, ty: native::DescriptorHeapType) -> Self {
+    pub(super) fn new(device: d3d12::Device, ty: d3d12::DescriptorHeapType) -> Self {
         Self {
             device,
             ty,
@@ -231,13 +231,13 @@ impl CpuPool {
 }
 
 pub(super) struct CpuHeapInner {
-    pub raw: native::DescriptorHeap,
-    pub stage: Vec<native::CpuDescriptor>,
+    pub raw: d3d12::DescriptorHeap,
+    pub stage: Vec<d3d12::CpuDescriptor>,
 }
 
 pub(super) struct CpuHeap {
     pub inner: Mutex<CpuHeapInner>,
-    start: native::CpuDescriptor,
+    start: d3d12::CpuDescriptor,
     handle_size: u32,
     total: u32,
 }
@@ -247,13 +247,13 @@ unsafe impl Sync for CpuHeap {}
 
 impl CpuHeap {
     pub(super) fn new(
-        device: native::Device,
-        ty: native::DescriptorHeapType,
+        device: d3d12::Device,
+        ty: d3d12::DescriptorHeapType,
         total: u32,
     ) -> Result<Self, crate::DeviceError> {
         let handle_size = device.get_descriptor_increment_size(ty);
         let raw = device
-            .create_descriptor_heap(total, ty, native::DescriptorHeapFlags::empty(), 0)
+            .create_descriptor_heap(total, ty, d3d12::DescriptorHeapFlags::empty(), 0)
             .into_device_result("CPU descriptor heap creation")?;
 
         Ok(Self {
@@ -267,8 +267,8 @@ impl CpuHeap {
         })
     }
 
-    pub(super) fn at(&self, index: u32) -> native::CpuDescriptor {
-        native::CpuDescriptor {
+    pub(super) fn at(&self, index: u32) -> d3d12::CpuDescriptor {
+        d3d12::CpuDescriptor {
             ptr: self.start.ptr + (self.handle_size * index) as usize,
         }
     }
@@ -289,7 +289,7 @@ impl fmt::Debug for CpuHeap {
 }
 
 pub(super) unsafe fn upload(
-    device: native::Device,
+    device: d3d12::Device,
     src: &CpuHeapInner,
     dst: &GeneralHeap,
     dummy_copy_counts: &[u32],

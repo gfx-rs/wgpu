@@ -23,7 +23,7 @@ pub(super) fn compile_fxc(
     log::Level,
 ) {
     profiling::scope!("compile_fxc");
-    let mut shader_data = native::Blob::null();
+    let mut shader_data = d3d12::Blob::null();
     let mut compile_flags = d3dcompiler::D3DCOMPILE_ENABLE_STRICTNESS;
     if device
         .private_caps
@@ -32,7 +32,7 @@ pub(super) fn compile_fxc(
     {
         compile_flags |= d3dcompiler::D3DCOMPILE_DEBUG | d3dcompiler::D3DCOMPILE_SKIP_OPTIMIZATION;
     }
-    let mut error = native::Blob::null();
+    let mut error = d3d12::Blob::null();
     let hr = unsafe {
         profiling::scope!("d3dcompiler::D3DCompile");
         d3dcompiler::D3DCompile(

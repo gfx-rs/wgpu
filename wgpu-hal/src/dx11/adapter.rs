@@ -33,7 +33,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
 impl super::Adapter {
     pub(super) fn expose(
         instance: &super::library::D3D11Lib,
-        adapter: native::DxgiAdapter,
+        adapter: d3d12::DxgiAdapter,
     ) -> Option<crate::ExposedAdapter<super::Api>> {
         use d3dcommon::{
             D3D_FEATURE_LEVEL_10_0 as FL10_0, D3D_FEATURE_LEVEL_10_1 as FL10_1,
