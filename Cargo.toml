@@ -107,7 +107,7 @@ winapi = "0.3"
 hassle-rs = "0.10.0"
 
 # Gles dependencies
-egl = { package = "khronos-egl", version = "4.1" }
+khronos-egl = "4.1"
 glow = "0.12.1"
 glutin = "0.29.1"
 
