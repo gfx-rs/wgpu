@@ -3,13 +3,13 @@
 #include <simd/simd.h>
 
 using metal::uint;
-
 struct DefaultConstructible {
     template<typename T>
     operator T() && {
         return T {};
     }
 };
+
 struct _mslBufferSizes {
     uint size0;
 };

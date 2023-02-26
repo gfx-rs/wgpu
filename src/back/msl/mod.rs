@@ -314,10 +314,7 @@ impl Options {
         match slot {
             Some(slot) => Ok(ResolvedBinding::Resource(BindTarget {
                 buffer: Some(slot),
-                texture: None,
-                sampler: None,
-                binding_array_size: None,
-                mutable: false,
+                ..Default::default()
             })),
             None if self.fake_missing_bindings => Ok(ResolvedBinding::User {
                 prefix: "fake",
@@ -338,10 +335,7 @@ impl Options {
         match slot {
             Some(slot) => Ok(ResolvedBinding::Resource(BindTarget {
                 buffer: Some(slot),
-                texture: None,
-                sampler: None,
-                binding_array_size: None,
-                mutable: false,
+                ..Default::default()
             })),
             None if self.fake_missing_bindings => Ok(ResolvedBinding::User {
                 prefix: "fake",

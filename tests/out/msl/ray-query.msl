@@ -1,0 +1,58 @@
+// language: metal2.4
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+using metal::uint;
+struct _RayQuery {
+    metal::raytracing::intersector<metal::raytracing::instancing, metal::raytracing::triangle_data, metal::raytracing::world_space_data> intersector;
+    metal::raytracing::intersector<metal::raytracing::instancing, metal::raytracing::triangle_data, metal::raytracing::world_space_data>::result_type intersection;
+    bool ready = false;
+};
+constexpr metal::uint _map_intersection_type(const metal::raytracing::intersection_type ty) {
+    return ty==metal::raytracing::intersection_type::triangle ? 1 : 
+        ty==metal::raytracing::intersection_type::bounding_box ? 4 : 0;
+}
+
+struct Output {
+    uint visible_;
+};
+struct RayDesc {
+    uint flags;
+    uint cull_mask;
+    float tmin;
+    float tmax;
+    metal::float3 origin;
+    metal::float3 dir;
+};
+struct RayIntersection {
+    uint kind;
+    float t;
+    uint instance_custom_index;
+    uint instance_id;
+    uint sbt_record_offset;
+    uint geometry_index;
+    uint primitive_index;
+    metal::float2 barycentrics;
+    bool front_face;
+    char _pad9[11];
+    metal::float4x3 object_to_world;
+    metal::float4x3 world_to_object;
+};
+
+kernel void main_(
+  metal::raytracing::instance_acceleration_structure acc_struct [[user(fake0)]]
+, device Output& output [[user(fake0)]]
+) {
+    _RayQuery rq = {};
+    RayDesc _e12 = RayDesc {4u, 255u, 0.10000000149011612, 100.0, metal::float3(0.0), metal::float3(0.0, 1.0, 0.0)};
+    rq.intersector.assume_geometry_type(metal::raytracing::geometry_type::triangle);
+    rq.intersector.set_opacity_cull_mode((_e12.flags & 64) != 0 ? metal::raytracing::opacity_cull_mode::opaque : (_e12.flags & 128) != 0 ? metal::raytracing::opacity_cull_mode::non_opaque : metal::raytracing::opacity_cull_mode::none);
+    rq.intersector.force_opacity((_e12.flags & 1) != 0 ? metal::raytracing::forced_opacity::opaque : (_e12.flags & 2) != 0 ? metal::raytracing::forced_opacity::non_opaque : metal::raytracing::forced_opacity::none);
+    rq.intersector.accept_any_intersection((_e12.flags & 4) != 0);
+    rq.intersection = rq.intersector.intersect(metal::raytracing::ray(_e12.origin, _e12.dir, _e12.tmin, _e12.tmax), acc_struct, _e12.cull_mask);    rq.ready = true;
+    bool _e13 = rq.ready;
+    rq.ready = false;
+    RayIntersection intersection = RayIntersection {_map_intersection_type(rq.intersection.type), rq.intersection.distance, rq.intersection.user_instance_id, rq.intersection.instance_id, {}, rq.intersection.geometry_id, rq.intersection.primitive_id, rq.intersection.triangle_barycentric_coord, rq.intersection.triangle_front_facing, {}, rq.intersection.object_to_world_transform, rq.intersection.world_to_object_transform};
+    output.visible_ = static_cast<uint>(intersection.kind == 0u);
+    return;
+}
