@@ -102,11 +102,8 @@ pub struct CreateTextureViewArgs {
     label: Option<String>,
     format: Option<wgpu_types::TextureFormat>,
     dimension: Option<wgpu_types::TextureViewDimension>,
-    aspect: wgpu_types::TextureAspect,
-    base_mip_level: u32,
-    mip_level_count: Option<u32>,
-    base_array_layer: u32,
-    array_layer_count: Option<u32>,
+    #[serde(flatten)]
+    range: wgpu_types::ImageSubresourceRange,
 }
 
 #[op]
