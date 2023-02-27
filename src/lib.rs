@@ -107,8 +107,10 @@ Naga's rules for when `Expression`s are evaluated are as follows:
     [`Atomic`] statement, representing the result of the atomic operation, is
     evaluated when the `Atomic` statement is executed.
 
--   Similarly, an [`RayQueryProceedResult`] expression, which is a boolean
-    indicating if the ray query is finished.
+-   A [`RayQueryProceedResult`] expression, which is a boolean
+    indicating if the ray query is finished, is evaluated when the
+    [`RayQuery`] statement whose [`Proceed::result`] points to it is
+    executed.
 
 -   All other expressions are evaluated when the (unique) [`Statement::Emit`]
     statement that covers them is executed.
@@ -184,6 +186,9 @@ tree.
 [`Call`]: Statement::Call
 [`Emit`]: Statement::Emit
 [`Store`]: Statement::Store
+[`RayQuery`]: Statement::RayQuery
+
+[`Proceed::result`]: RayQueryFunction::Proceed::result
 
 [`Validator::validate`]: valid::Validator::validate
 [`ModuleInfo`]: valid::ModuleInfo
@@ -727,6 +732,7 @@ pub enum TypeInner {
 
     /// Opaque object representing an acceleration structure of geometry.
     AccelerationStructure,
+
     /// Locally used handle for ray queries.
     RayQuery,
 
@@ -1445,9 +1451,16 @@ pub enum Expression {
     /// This doesn't match the semantics of spirv's `OpArrayLength`, which must be passed
     /// a pointer to a structure containing a runtime array in its' last field.
     ArrayLength(Handle<Expression>),
-    /// Result of `rayQueryProceed`.
+
+    /// Result of a [`Proceed`] [`RayQuery`] statement.
+    ///
+    /// [`Proceed`]: RayQueryFunction::Proceed
+    /// [`RayQuery`]: Statement::RayQuery
     RayQueryProceedResult,
-    /// Result of `rayQueryGet*Intersection`.
+
+    /// Return an intersection found by `query`.
+    ///
+    /// If `committed` is true, return the committed result available when 
     RayQueryGetIntersection {
         query: Handle<Expression>,
         committed: bool,
@@ -1484,18 +1497,45 @@ pub struct SwitchCase {
     pub fall_through: bool,
 }
 
+/// An operation that a [`RayQuery` statement] applies to its [`query`] operand.
+///
+/// [`RayQuery` statement]: Statement::RayQuery
+/// [`query`]: Statement::RayQuery::query
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 pub enum RayQueryFunction {
+    /// Initialize the `RayQuery` object.
     Initialize {
+        /// The acceleration structure within which this query should search for hits.
+        ///
+        /// The expression must be an [`AccelerationStructure`].
+        ///
+        /// [`AccelerationStructure`]: TypeInner::AccelerationStructure
         acceleration_structure: Handle<Expression>,
+
+        #[allow(rustdoc::private_intra_doc_links)]
+        /// A struct of detailed parameters for the ray query.
+        ///
+        /// This expression should have the struct type given in
+        /// [`SpecialTypes::ray_desc`]. This is available in the WGSL
+        /// front end as the `RayDesc` type.
         descriptor: Handle<Expression>,
     },
+
+    /// Start or continue the query given by the statement's [`query`] operand.
+    ///
+    /// After executing this statement, the `result` expression is a
+    /// [`Bool`] scalar indicating whether there are more intersection
+    /// candidates to consider.
+    ///
+    /// [`query`]: Statement::RayQuery::query
+    /// [`Bool`]: ScalarKind::Bool
     Proceed {
         result: Handle<Expression>,
     },
+
     Terminate,
 }
 
@@ -1673,7 +1713,12 @@ pub enum Statement {
         result: Option<Handle<Expression>>,
     },
     RayQuery {
+        /// The [`RayQuery`] object this statement operates on.
+        ///
+        /// [`RayQuery`]: TypeInner::RayQuery
         query: Handle<Expression>,
+
+        /// The specific operation we're performing on `query`.
         fun: RayQueryFunction,
     },
 }
@@ -1800,8 +1845,15 @@ pub struct EntryPoint {
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 pub struct SpecialTypes {
     /// Type for `RayDesc`.
+    ///
+    /// Call [`Module::generate_ray_desc_type`] to populate this if
+    /// needed and return the handle.
     ray_desc: Option<Handle<Type>>,
+
     /// Type for `RayIntersection`.
+    ///
+    /// Call [`Module::generate_ray_intersection_type`] to populate
+    /// this if needed and return the handle.
     ray_intersection: Option<Handle<Type>>,
 }
 

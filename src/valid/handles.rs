@@ -1,4 +1,4 @@
-//! Implementation of [`super::Validator::validate_module_handles`].
+//! Implementation of `Validator::validate_module_handles`.
 
 use crate::{
     arena::{BadHandle, BadRangeError},

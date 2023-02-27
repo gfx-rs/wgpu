@@ -220,7 +220,14 @@ impl crate::Statement {
 }
 
 bitflags::bitflags! {
-    /// Ray flags.
+    /// Ray flags, for a [`RayDesc`]'s `flags` field.
+    ///
+    /// Note that these exactly correspond to the SPIR-V "Ray Flags" mask, and
+    /// the SPIR-V backend passes them directly through to the
+    /// `OpRayQueryInitializeKHR` instruction. (We have to choose something, so
+    /// we might as well make one back end's life easier.)
+    ///
+    /// [`RayDesc`]: crate::Module::generate_ray_desc_type
     #[derive(Default)]
     pub struct RayFlag: u32 {
         const OPAQUE = 0x01;

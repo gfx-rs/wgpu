@@ -5,7 +5,21 @@ Type generators.
 use crate::{arena::Handle, span::Span};
 
 impl crate::Module {
-    //Note: has to match `struct RayDesc`
+    /// Populate this module's [`SpecialTypes::ray_desc`] type.
+    ///
+    /// [`SpecialTypes::ray_desc`] is the type of the [`descriptor`] operand of
+    /// an [`Initialize`] [`RayQuery`] statement. In WGSL, it is a struct type
+    /// referred to as `RayDesc`.
+    ///
+    /// Backends consume values of this type to drive platform APIs, so if you
+    /// change any its fields, you must update the backends to match. Look for
+    /// backend code dealing with [`RayQueryFunction::Initialize`].
+    ///
+    /// [`SpecialTypes::ray_desc`]: crate::SpecialTypes::ray_desc
+    /// [`descriptor`]: crate::RayQueryFunction::Initialize::descriptor
+    /// [`Initialize`]: crate::RayQueryFunction::Initialize
+    /// [`RayQuery`]: crate::Statement::RayQuery
+    /// [`RayQueryFunction::Initialize`]: crate::RayQueryFunction::Initialize
     pub(super) fn generate_ray_desc_type(&mut self) -> Handle<crate::Type> {
         if let Some(handle) = self.special_types.ray_desc {
             return handle;
@@ -96,7 +110,18 @@ impl crate::Module {
         handle
     }
 
-    //Note: has to match `struct RayIntersection`
+    /// Populate this module's [`SpecialTypes::ray_intersection`] type.
+    ///
+    /// [`SpecialTypes::ray_intersection`] is the type of a
+    /// `RayQueryGetIntersection` expression. In WGSL, it is a struct type
+    /// referred to as `RayIntersection`.
+    ///
+    /// Backends construct values of this type based on platform APIs, so if you
+    /// change any its fields, you must update the backends to match. Look for
+    /// the backend's handling for [`Expression::RayQueryGetIntersection`].
+    ///
+    /// [`SpecialTypes::ray_intersection`]: crate::SpecialTypes::ray_intersection
+    /// [`Expression::RayQueryGetIntersection`]: crate::Expression::RayQueryGetIntersection
     pub(super) fn generate_ray_intersection_type(&mut self) -> Handle<crate::Type> {
         if let Some(handle) = self.special_types.ray_intersection {
             return handle;
