@@ -1755,7 +1755,7 @@ impl Adapter {
                 Queue {
                     context,
                     id: queue.id().into(),
-                    data: Box::new(()),
+                    data: Box::new(queue),
                 },
             )
         })
