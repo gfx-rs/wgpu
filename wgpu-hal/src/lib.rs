@@ -1392,32 +1392,52 @@ pub enum AccelerationStructureGeometryInfo {
 }
 
 pub struct BuildAccelerationStructureDescriptor<'a, A: Api> {
-    pub geometry: &'a AccelerationStructureGeometry<'a, A>,
-    pub format: AccelerationStructureFormat,
+    pub entries: &'a AccelerationStructureEntries<'a, A>,
     pub mode: AccelerationStructureBuildMode,
     pub flags: AccelerationStructureBuildFlags,
-    pub primitive_count: u32,
-    pub primitive_offset: u32,
+    pub source_acceleration_structure: Option<&'a A::AccelerationStructure>,
     pub destination_acceleration_structure: &'a A::AccelerationStructure,
     pub scratch_buffer: &'a A::Buffer,
 }
 
-pub enum AccelerationStructureGeometry<'a, A: Api> {
-    Triangles {
-        vertex_buffer: &'a A::Buffer,
-        vertex_format: wgt::VertexFormat,
-        max_vertex: u32,
-        vertex_stride: wgt::BufferAddress,
-        indices: Option<AccelerationStructureGeometryIndices<'a, A>>,
-    },
-    Instances {
-        buffer: &'a A::Buffer,
-    },
+pub enum AccelerationStructureEntries<'a, A: Api> {
+    Instances(&'a AccelerationStructureInstances<'a, A>),
+    Triangles(&'a [AccelerationStructureTriangles<'a, A>]),
+    AABBs(&'a [AccelerationStructureAABBs]),
 }
 
-pub struct AccelerationStructureGeometryIndices<'a, A: Api> {
+// TODO: flags
+pub struct AccelerationStructureTriangles<'a, A: Api> {
+    pub vertex_buffer: &'a A::Buffer,
+    pub first_vertex: u32,
+    pub vertex_format: wgt::VertexFormat,
+    pub vertex_count: u32,
+    pub vertex_stride: wgt::BufferAddress,
+    pub indices: Option<AccelerationStructureTriangleIndices<'a, A>>,
+    pub transforms: Option<AccelerationStructureTriangleTransforms<'a, A>>,
+}
+
+// TODO: *
+pub struct AccelerationStructureAABBs {
+    pub count: u32, //TODO
+}
+
+// TODO: offset
+pub struct AccelerationStructureInstances<'a, A: Api> {
+    pub buffer: &'a A::Buffer,
+    pub count: u32,
+}
+
+pub struct AccelerationStructureTriangleIndices<'a, A: Api> {
     pub format: wgt::IndexFormat,
     pub buffer: &'a A::Buffer,
+    pub offset: u32,
+    pub count: u32,
+}
+
+pub struct AccelerationStructureTriangleTransforms<'a, A: Api> {
+    pub buffer: &'a A::Buffer,
+    pub offset: u32,
 }
 
 bitflags!(
