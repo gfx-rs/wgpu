@@ -317,6 +317,12 @@ pub struct TextureView {
     attachment: FramebufferAttachment,
 }
 
+impl TextureView {
+    fn aspects(&self) -> crate::FormatAspects {
+        self.attachment.view_format.into()
+    }
+}
+
 #[derive(Debug)]
 pub struct Sampler {
     raw: vk::Sampler,
@@ -379,6 +385,15 @@ pub struct CommandEncoder {
     /// If this is true, the active renderpass enabled a debug span,
     /// and needs to be disabled on renderpass close.
     rpass_debug_marker_active: bool,
+}
+
+impl CommandEncoder {
+    /// # Safety
+    ///
+    /// - The commmand buffer handle must not be manually destroyed
+    pub unsafe fn raw_handle(&self) -> vk::CommandBuffer {
+        self.active
+    }
 }
 
 impl fmt::Debug for CommandEncoder {
