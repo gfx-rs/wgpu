@@ -2619,7 +2619,7 @@ impl Texture {
     ///
     /// - The raw handle obtained from the hal Texture must not be manually destroyed
     #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
-    pub unsafe fn as_hal<A: wgc::hub::HalApi, F: FnOnce(Option<&A::Texture>)>(
+    pub unsafe fn as_hal<A: wgc::hub::HalApi, F: FnOnce(Option<&A::Texture>) -> R, R>(
         &self,
         hal_texture_callback: F,
     ) -> R {

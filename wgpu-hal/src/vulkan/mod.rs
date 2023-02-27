@@ -317,12 +317,6 @@ pub struct TextureView {
     attachment: FramebufferAttachment,
 }
 
-impl TextureView {
-    fn aspects(&self) -> crate::FormatAspects {
-        self.attachment.view_format.into()
-    }
-}
-
 #[derive(Debug)]
 pub struct Sampler {
     raw: vk::Sampler,
