@@ -944,6 +944,35 @@ fn invalid_arrays() {
 }
 
 #[test]
+fn discard_in_wrong_stage() {
+    check_validation! {
+        "@compute @workgroup_size(1)
+fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
+    if global_id.x == 3u {
+        discard;
+    }
+}":
+        Err(naga::valid::ValidationError::EntryPoint {
+            stage: naga::ShaderStage::Compute,
+            source: naga::valid::EntryPointError::ForbiddenStageOperations,
+            ..
+        })
+    }
+
+    check_validation! {
+        "@vertex
+fn main() {
+    discard;
+}":
+        Err(naga::valid::ValidationError::EntryPoint {
+            stage: naga::ShaderStage::Vertex,
+            source: naga::valid::EntryPointError::ForbiddenStageOperations,
+            ..
+        })
+    }
+}
+
+#[test]
 fn invalid_structs() {
     check_validation! {
         "struct Bad { data: sampler }",

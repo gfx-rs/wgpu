@@ -595,6 +595,7 @@ impl super::Validator {
                     finished = true;
                 }
                 S::Kill => {
+                    stages &= super::ShaderStages::FRAGMENT;
                     finished = true;
                 }
                 S::Barrier(_) => {
