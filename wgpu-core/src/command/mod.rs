@@ -43,7 +43,7 @@ enum CommandEncoderStatus {
 }
 
 pub struct CommandEncoder<A: hal::Api> {
-    pub(crate) raw: A::CommandEncoder,
+    raw: A::CommandEncoder,
     list: Vec<A::CommandBuffer>,
     is_open: bool,
     label: Option<String>,
@@ -51,7 +51,7 @@ pub struct CommandEncoder<A: hal::Api> {
 
 //TODO: handle errors better
 impl<A: hal::Api> CommandEncoder<A> {
-    pub fn close(&mut self) {
+    fn close(&mut self) {
         if self.is_open {
             self.is_open = false;
             let cmd_buf = unsafe { self.raw.end_encoding().unwrap() };

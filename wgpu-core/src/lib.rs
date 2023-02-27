@@ -49,7 +49,7 @@ pub mod instance;
 pub mod pipeline;
 pub mod present;
 pub mod resource;
-pub mod track;
+mod track;
 mod validation;
 
 pub use hal::{api, MAX_BIND_GROUPS, MAX_COLOR_ATTACHMENTS, MAX_VERTEX_BUFFERS};

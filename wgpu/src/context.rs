@@ -1,6 +1,5 @@
 use std::{any::Any, fmt::Debug, future::Future, num::NonZeroU64, ops::Range, pin::Pin, sync::Arc};
 
-use wgc::track::TextureSelector;
 use wgt::{
     strict_assert, strict_assert_eq, AdapterInfo, BufferAddress, BufferSize, Color,
     DownlevelCapabilities, DynamicOffset, Extent3d, Features, ImageDataLayout,
