@@ -94,16 +94,14 @@ impl super::Device {
     /// - If `drop_guard` is [`None`], wgpu-hal will take ownership of the texture. If `drop_guard` is
     ///   [`Some`], the texture must be valid until the drop implementation
     ///   of the drop guard is called.
-    #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
+    #[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))]
     pub unsafe fn texture_from_raw(
         &self,
         name: std::num::NonZeroU32,
         desc: &crate::TextureDescriptor,
         drop_guard: Option<crate::DropGuard>,
     ) -> super::Texture {
-        let mut copy_size = crate::CopyExtent::map_extent_to_copy_size(&desc.size, desc.dimension);
-
-        let (target, _, is_cubemap) = super::Texture::get_info_from_desc(&mut copy_size, desc);
+        let (target, _, is_cubemap) = super::Texture::get_info_from_desc(desc);
 
         super::Texture {
             inner: super::TextureInner::Texture {
@@ -112,14 +110,10 @@ impl super::Device {
             },
             drop_guard,
             mip_level_count: desc.mip_level_count,
-            array_layer_count: if desc.dimension == wgt::TextureDimension::D2 {
-                desc.size.depth_or_array_layers
-            } else {
-                1
-            },
+            array_layer_count: desc.array_layer_count(),
             format: desc.format,
             format_desc: self.shared.describe_texture_format(desc.format),
-            copy_size,
+            copy_size: desc.copy_extent(),
             is_cubemap,
         }
     }
@@ -131,29 +125,23 @@ impl super::Device {
     /// - If `drop_guard` is [`None`], wgpu-hal will take ownership of the renderbuffer. If `drop_guard` is
     ///   [`Some`], the renderbuffer must be valid until the drop implementation
     ///   of the drop guard is called.
-    #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
+    #[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))]
     pub unsafe fn texture_from_raw_renderbuffer(
         &self,
         name: std::num::NonZeroU32,
         desc: &crate::TextureDescriptor,
         drop_guard: Option<crate::DropGuard>,
     ) -> super::Texture {
-        let copy_size = crate::CopyExtent::map_extent_to_copy_size(&desc.size, desc.dimension);
-
         super::Texture {
             inner: super::TextureInner::Renderbuffer {
                 raw: glow::NativeRenderbuffer(name),
             },
             drop_guard,
             mip_level_count: desc.mip_level_count,
-            array_layer_count: if desc.dimension == wgt::TextureDimension::D2 {
-                desc.size.depth_or_array_layers
-            } else {
-                1
-            },
+            array_layer_count: desc.array_layer_count(),
             format: desc.format,
             format_desc: self.shared.describe_texture_format(desc.format),
-            copy_size,
+            copy_size: desc.copy_extent(),
             is_cubemap: false,
         }
     }
@@ -675,12 +663,6 @@ impl crate::Device<super::Api> for super::Device {
             | crate::TextureUses::DEPTH_STENCIL_READ;
         let format_desc = self.shared.describe_texture_format(desc.format);
 
-        let mut copy_size = crate::CopyExtent {
-            width: desc.size.width,
-            height: desc.size.height,
-            depth: 1,
-        };
-
         let (inner, is_cubemap) = if render_usage.contains(desc.usage)
             && desc.dimension == wgt::TextureDimension::D2
             && desc.size.depth_or_array_layers == 1
@@ -720,15 +702,16 @@ impl crate::Device<super::Api> for super::Device {
             (super::TextureInner::Renderbuffer { raw }, false)
         } else {
             let raw = unsafe { gl.create_texture().unwrap() };
-            let (target, is_3d, is_cubemap) =
-                super::Texture::get_info_from_desc(&mut copy_size, desc);
+            let (target, is_3d, is_cubemap) = super::Texture::get_info_from_desc(desc);
 
             unsafe { gl.bind_texture(target, Some(raw)) };
             //Note: this has to be done before defining the storage!
-            match desc.format.describe().sample_type {
-                wgt::TextureSampleType::Float { filterable: false }
-                | wgt::TextureSampleType::Uint
-                | wgt::TextureSampleType::Sint => {
+            match desc.format.sample_type(None) {
+                Some(
+                    wgt::TextureSampleType::Float { filterable: false }
+                    | wgt::TextureSampleType::Uint
+                    | wgt::TextureSampleType::Sint,
+                ) => {
                     // reset default filtering mode
                     unsafe {
                         gl.tex_parameter_i32(target, glow::TEXTURE_MIN_FILTER, glow::NEAREST as i32)
@@ -737,8 +720,7 @@ impl crate::Device<super::Api> for super::Device {
                         gl.tex_parameter_i32(target, glow::TEXTURE_MAG_FILTER, glow::NEAREST as i32)
                     };
                 }
-                wgt::TextureSampleType::Float { filterable: true }
-                | wgt::TextureSampleType::Depth => {}
+                _ => {}
             }
 
             if is_3d {
@@ -791,14 +773,10 @@ impl crate::Device<super::Api> for super::Device {
             inner,
             drop_guard: None,
             mip_level_count: desc.mip_level_count,
-            array_layer_count: if desc.dimension == wgt::TextureDimension::D2 {
-                desc.size.depth_or_array_layers
-            } else {
-                1
-            },
+            array_layer_count: desc.array_layer_count(),
             format: desc.format,
             format_desc,
-            copy_size,
+            copy_size: desc.copy_extent(),
             is_cubemap,
         })
     }
@@ -828,22 +806,12 @@ impl crate::Device<super::Api> for super::Device {
         texture: &super::Texture,
         desc: &crate::TextureViewDescriptor,
     ) -> Result<super::TextureView, crate::DeviceError> {
-        let end_array_layer = match desc.range.array_layer_count {
-            Some(count) => desc.range.base_array_layer + count.get(),
-            None => texture.array_layer_count,
-        };
-        let end_mip_level = match desc.range.mip_level_count {
-            Some(count) => desc.range.base_mip_level + count.get(),
-            None => texture.mip_level_count,
-        };
         Ok(super::TextureView {
             //TODO: use `conv::map_view_dimension(desc.dimension)`?
             inner: texture.inner.clone(),
-            sample_type: texture.format.describe().sample_type,
-            aspects: crate::FormatAspects::from(texture.format)
-                & crate::FormatAspects::from(desc.range.aspect),
-            mip_levels: desc.range.base_mip_level..end_mip_level,
-            array_layers: desc.range.base_array_layer..end_array_layer,
+            aspects: crate::FormatAspects::new(texture.format, desc.range.aspect),
+            mip_levels: desc.range.mip_range(texture.mip_level_count),
+            array_layers: desc.range.layer_range(texture.array_layer_count),
             format: texture.format,
         })
     }
@@ -983,6 +951,9 @@ impl crate::Device<super::Api> for super::Device {
                 .private_caps
                 .contains(super::PrivateCapabilities::SHADER_TEXTURE_SHADOW_LOD),
         );
+        // We always force point size to be written and it will be ignored by the driver if it's not a point list primitive.
+        // https://github.com/gfx-rs/wgpu/pull/3440/files#r1095726950
+        writer_flags.set(glsl::WriterFlags::FORCE_POINT_SIZE, true);
         let mut binding_map = glsl::BindingMap::default();
 
         for (group_index, bg_layout) in desc.bind_group_layouts.iter().enumerate() {
@@ -1068,7 +1039,11 @@ impl crate::Device<super::Api> for super::Device {
                             "This is an implementation problem of wgpu-hal/gles backend.")
                     }
                     let (raw, target) = view.inner.as_native();
-                    super::RawBinding::Texture { raw, target }
+                    super::RawBinding::Texture {
+                        raw,
+                        target,
+                        aspects: view.aspects,
+                    }
                 }
                 wgt::BindingType::StorageTexture {
                     access,
@@ -1326,7 +1301,7 @@ impl crate::Device<super::Api> for super::Device {
     }
 
     unsafe fn start_capture(&self) -> bool {
-        #[cfg(feature = "renderdoc")]
+        #[cfg(all(not(target_arch = "wasm32"), feature = "renderdoc"))]
         return unsafe {
             self.render_doc
                 .start_frame_capture(self.shared.context.raw_context(), ptr::null_mut())
@@ -1335,7 +1310,7 @@ impl crate::Device<super::Api> for super::Device {
         false
     }
     unsafe fn stop_capture(&self) {
-        #[cfg(feature = "renderdoc")]
+        #[cfg(all(not(target_arch = "wasm32"), feature = "renderdoc"))]
         unsafe {
             self.render_doc
                 .end_frame_capture(ptr::null_mut(), ptr::null_mut())

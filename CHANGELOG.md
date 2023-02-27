@@ -40,16 +40,58 @@ Bottom level categories:
 
 ## Unreleased
 
+### Major changes
+
+#### TextureFormat info API
+
+The `describe` fn was removed in favor of separate functions: `block_dimensions`, `is_compressed`, `is_srgb`, `required_features`, `guaranteed_format_features`, `sample_type` and `block_size`.
+
+```diff
+- let block_dimensions = format.describe().block_dimensions;
++ let block_dimensions = format.block_dimensions();
+- let is_compressed = format.describe().is_compressed();
++ let is_compressed = format.is_compressed();
+- let is_srgb = format.describe().srgb;
++ let is_srgb = format.is_srgb();
+- let required_features = format.describe().required_features;
++ let required_features = format.required_features();
+- let guaranteed_format_features = format.describe().guaranteed_format_features;
++ let guaranteed_format_features = format.guaranteed_format_features();
+```
+
+Additionally `sample_type` and `block_size` now take an optional `TextureAspect` and return `Option`s.
+
+```diff
+- let sample_type = format.describe().sample_type;
++ let sample_type = format.sample_type(None).expect("combined depth-stencil format requires specifying a TextureAspect");
+- let block_size = format.describe().block_size;
++ let block_size = format.block_size(None).expect("combined depth-stencil format requires specifying a TextureAspect");
+```
+
+By @teoxoy in [#3436](https://github.com/gfx-rs/wgpu/pull/3436)
+
+#### General
+
+- Change type of `mip_level_count` and `array_layer_count` (members of `TextureViewDescriptor` and `ImageSubresourceRange`) from `Option<NonZeroU32>` to `Option<u32>`. By @teoxoy in [#3445](https://github.com/gfx-rs/wgpu/pull/3445)
+
 ### Changes
+
+#### General
+
+- Added `TextureFormatFeatureFlags::MULTISAMPLE_X16`. By @Dinnerbone in [#3454](https://github.com/gfx-rs/wgpu/pull/3454)
+- Support stencil-only views and copying to/from combined depth-stencil textures. By @teoxoy in [#3436](https://github.com/gfx-rs/wgpu/pull/3436)
+- Added `Features::SHADER_EARLY_DEPTH_TEST`. By @teoxoy in [#3494](https://github.com/gfx-rs/wgpu/pull/3494)
 
 #### WebGPU
 
 - Implement `CommandEncoder::clear_buffer`. By @raphlinus in [#3426](https://github.com/gfx-rs/wgpu/pull/3426)
 - Implement the new checks for readonly stencils. By @JCapucho in [#3443](https://github.com/gfx-rs/wgpu/pull/3443)
+- Reimplement `adapter|device_features`. By @jinleili in [#3428](https://github.com/gfx-rs/wgpu/pull/3428)
 
 #### Vulkan
 
 - Improve format MSAA capabilities detection. By @jinleili in [#3429](https://github.com/gfx-rs/wgpu/pull/3429)
+- Fix surface view formats validation error. By @jinleili in [#3432](https://github.com/gfx-rs/wgpu/pull/3432)
 
 ### Bug Fixes
 
@@ -57,9 +99,19 @@ Bottom level categories:
 
 - Fix DXC validation issues when using a custom `dxil_path`. By @Elabajaba in [#3434](https://github.com/gfx-rs/wgpu/pull/3434)
 
+#### GLES
+
+- [gles] fix: Set FORCE_POINT_SIZE if it is vertex shader with mesh consist of point list. By @REASY in [3440](https://github.com/gfx-rs/wgpu/pull/3440)
+- [gles] fix: enable `WEBGL_debug_renderer_info` before querying unmasked vendor/renderer to avoid crashing on emscripten in [#3519](https://github.com/gfx-rs/wgpu/pull/3519)
+
 #### General
 
 - `copyTextureToTexture` src/dst aspects must both refer to all aspects of src/dst format. By @teoxoy in [#3431](https://github.com/gfx-rs/wgpu/pull/3431)
+- Validate before extracting texture selectors. By @teoxoy in [#3487](https://github.com/gfx-rs/wgpu/pull/3487)
+
+#### Vulkan
+
+- Treat `VK_SUBOPTIMAL_KHR` as `VK_SUCCESS` on Android. By @James2022-rgb in [#3525](https://github.com/gfx-rs/wgpu/pull/3525)
 
 ## wgpu-0.15.0 (2023-01-25)
 

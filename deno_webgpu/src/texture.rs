@@ -73,11 +73,8 @@ pub struct CreateTextureViewArgs {
     label: Option<String>,
     format: Option<wgpu_types::TextureFormat>,
     dimension: Option<wgpu_types::TextureViewDimension>,
-    aspect: wgpu_types::TextureAspect,
-    base_mip_level: u32,
-    mip_level_count: Option<u32>,
-    base_array_layer: u32,
-    array_layer_count: Option<u32>,
+    #[serde(flatten)]
+    range: wgpu_types::ImageSubresourceRange,
 }
 
 #[op]
@@ -95,13 +92,7 @@ pub fn op_webgpu_create_texture_view(
         label: args.label.map(Cow::from),
         format: args.format,
         dimension: args.dimension,
-        range: wgpu_types::ImageSubresourceRange {
-            aspect: args.aspect,
-            base_mip_level: args.base_mip_level,
-            mip_level_count: std::num::NonZeroU32::new(args.mip_level_count.unwrap_or(0)),
-            base_array_layer: args.base_array_layer,
-            array_layer_count: std::num::NonZeroU32::new(args.array_layer_count.unwrap_or(0)),
-        },
+        range: args.range,
     };
 
     gfx_put!(texture => instance.texture_create_view(

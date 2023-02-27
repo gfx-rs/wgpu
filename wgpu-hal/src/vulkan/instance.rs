@@ -10,8 +10,6 @@ use ash::{
     vk,
 };
 
-use super::conv;
-
 unsafe extern "system" fn debug_utils_messenger_callback(
     message_severity: vk::DebugUtilsMessageSeverityFlagsEXT,
     message_type: vk::DebugUtilsMessageTypeFlagsEXT,
@@ -760,6 +758,11 @@ impl crate::Surface<super::Api> for super::Surface {
             sc.functor
                 .acquire_next_image(sc.raw, timeout_ns, vk::Semaphore::null(), sc.fence)
         } {
+            // We treat `VK_SUBOPTIMAL_KHR` as `VK_SUCCESS` on Android.
+            // See the comment in `Queue::present`.
+            #[cfg(target_os = "android")]
+            Ok((index, _)) => (index, false),
+            #[cfg(not(target_os = "android"))]
             Ok(pair) => pair,
             Err(error) => {
                 return match error {
@@ -784,6 +787,16 @@ impl crate::Surface<super::Api> for super::Surface {
             .map_err(crate::DeviceError::from)?;
         unsafe { sc.device.raw.reset_fences(fences) }.map_err(crate::DeviceError::from)?;
 
+        // https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VkRenderPassBeginInfo.html#VUID-VkRenderPassBeginInfo-framebuffer-03209
+        let raw_flags = if sc
+            .raw_flags
+            .contains(vk::SwapchainCreateFlagsKHR::MUTABLE_FORMAT)
+        {
+            vk::ImageCreateFlags::MUTABLE_FORMAT | vk::ImageCreateFlags::EXTENDED_USAGE
+        } else {
+            vk::ImageCreateFlags::empty()
+        };
+
         let texture = super::SurfaceTexture {
             index,
             texture: super::Texture {
@@ -791,13 +804,14 @@ impl crate::Surface<super::Api> for super::Surface {
                 drop_guard: None,
                 block: None,
                 usage: sc.config.usage,
-                aspects: crate::FormatAspects::COLOR,
-                format_info: sc.config.format.describe(),
-                raw_flags: vk::ImageCreateFlags::empty(),
-                copy_size: conv::map_extent_to_copy_size(
-                    &sc.config.extent,
-                    wgt::TextureDimension::D2,
-                ),
+                format: sc.config.format,
+                raw_flags,
+                copy_size: crate::CopyExtent {
+                    width: sc.config.extent.width,
+                    height: sc.config.extent.height,
+                    depth: 1,
+                },
+                view_formats: sc.view_formats.clone(),
             },
         };
         Ok(Some(crate::AcquiredSurfaceTexture {

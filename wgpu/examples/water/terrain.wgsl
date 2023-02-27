@@ -37,7 +37,6 @@ fn vs_main(
 }
 
 @fragment
-@early_depth_test
 fn fs_main(
     vertex: VertexOutput,
 ) -> @location(0) vec4<f32> {

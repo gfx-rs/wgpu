@@ -101,36 +101,78 @@ pub fn map_texture_format_nosrgb(format: wgt::TextureFormat) -> dxgiformat::DXGI
     }
 }
 
-// Note: SRV and UAV can't use the depth formats directly
-pub fn map_texture_format_nodepth(format: wgt::TextureFormat) -> dxgiformat::DXGI_FORMAT {
-    match format {
-        wgt::TextureFormat::Depth16Unorm => dxgiformat::DXGI_FORMAT_R16_UNORM,
-        wgt::TextureFormat::Depth32Float => dxgiformat::DXGI_FORMAT_R32_FLOAT,
-        wgt::TextureFormat::Depth32FloatStencil8 => {
+// SRV and UAV can't use the depth or typeless formats
+// see https://microsoft.github.io/DirectX-Specs/d3d/PlanarDepthStencilDDISpec.html#view-creation
+pub fn map_texture_format_for_srv_uav(
+    format: wgt::TextureFormat,
+    aspect: crate::FormatAspects,
+) -> Option<dxgiformat::DXGI_FORMAT> {
+    Some(match (format, aspect) {
+        (wgt::TextureFormat::Depth16Unorm, crate::FormatAspects::DEPTH) => {
+            dxgiformat::DXGI_FORMAT_R16_UNORM
+        }
+        (wgt::TextureFormat::Depth32Float, crate::FormatAspects::DEPTH) => {
+            dxgiformat::DXGI_FORMAT_R32_FLOAT
+        }
+        (wgt::TextureFormat::Depth32FloatStencil8, crate::FormatAspects::DEPTH) => {
             dxgiformat::DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS
         }
-        wgt::TextureFormat::Stencil8
-        | wgt::TextureFormat::Depth24Plus
-        | wgt::TextureFormat::Depth24PlusStencil8 => dxgiformat::DXGI_FORMAT_R24_UNORM_X8_TYPELESS,
-        _ => {
-            assert_eq!(
-                crate::FormatAspects::from(format),
-                crate::FormatAspects::COLOR
-            );
-            map_texture_format(format)
+        (
+            wgt::TextureFormat::Depth24Plus | wgt::TextureFormat::Depth24PlusStencil8,
+            crate::FormatAspects::DEPTH,
+        ) => dxgiformat::DXGI_FORMAT_R24_UNORM_X8_TYPELESS,
+
+        (wgt::TextureFormat::Depth32FloatStencil8, crate::FormatAspects::STENCIL) => {
+            dxgiformat::DXGI_FORMAT_X32_TYPELESS_G8X24_UINT
         }
-    }
+        (
+            wgt::TextureFormat::Stencil8 | wgt::TextureFormat::Depth24PlusStencil8,
+            crate::FormatAspects::STENCIL,
+        ) => dxgiformat::DXGI_FORMAT_X24_TYPELESS_G8_UINT,
+
+        (format, crate::FormatAspects::COLOR) => map_texture_format(format),
+
+        _ => return None,
+    })
 }
 
-pub fn map_texture_format_depth_typeless(format: wgt::TextureFormat) -> dxgiformat::DXGI_FORMAT {
+// see https://microsoft.github.io/DirectX-Specs/d3d/PlanarDepthStencilDDISpec.html#planar-layout-for-staging-from-buffer
+pub fn map_texture_format_for_copy(
+    format: wgt::TextureFormat,
+    aspect: crate::FormatAspects,
+) -> Option<dxgiformat::DXGI_FORMAT> {
+    Some(match (format, aspect) {
+        (wgt::TextureFormat::Depth16Unorm, crate::FormatAspects::DEPTH) => {
+            dxgiformat::DXGI_FORMAT_R16_UNORM
+        }
+        (
+            wgt::TextureFormat::Depth32Float | wgt::TextureFormat::Depth32FloatStencil8,
+            crate::FormatAspects::DEPTH,
+        ) => dxgiformat::DXGI_FORMAT_R32_FLOAT,
+
+        (
+            wgt::TextureFormat::Stencil8
+            | wgt::TextureFormat::Depth24PlusStencil8
+            | wgt::TextureFormat::Depth32FloatStencil8,
+            crate::FormatAspects::STENCIL,
+        ) => dxgiformat::DXGI_FORMAT_R8_UINT,
+
+        (format, crate::FormatAspects::COLOR) => map_texture_format(format),
+
+        _ => return None,
+    })
+}
+
+pub fn map_texture_format_depth_stencil_typeless(
+    format: wgt::TextureFormat,
+) -> dxgiformat::DXGI_FORMAT {
     match format {
         wgt::TextureFormat::Depth16Unorm => dxgiformat::DXGI_FORMAT_R16_TYPELESS,
         wgt::TextureFormat::Depth32Float => dxgiformat::DXGI_FORMAT_R32_TYPELESS,
         wgt::TextureFormat::Depth32FloatStencil8 => dxgiformat::DXGI_FORMAT_R32G8X24_TYPELESS,
-        wgt::TextureFormat::Stencil8 => dxgiformat::DXGI_FORMAT_R24G8_TYPELESS,
-        wgt::TextureFormat::Depth24Plus | wgt::TextureFormat::Depth24PlusStencil8 => {
-            dxgiformat::DXGI_FORMAT_R24G8_TYPELESS
-        }
+        wgt::TextureFormat::Stencil8
+        | wgt::TextureFormat::Depth24Plus
+        | wgt::TextureFormat::Depth24PlusStencil8 => dxgiformat::DXGI_FORMAT_R24G8_TYPELESS,
         _ => unreachable!(),
     }
 }

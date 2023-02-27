@@ -42,21 +42,21 @@ version = "0.15"
 
 [workspace.dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-rev = "f0edae8"
-version = "0.11"
+rev = "9742f1616c3e3dd2cc9a5880616fc886c391bb9f"
+version = "0.11.0"
 
 [workspace.dependencies]
 arrayvec = "0.7"
 async-executor = "1.0"
 bitflags = "1"
 bit-vec = "0.6"
-bytemuck = "1.4"
-cargo-run-wasm = "0.2.0"
+bytemuck = "1.13"
+cargo-run-wasm = "0.3.0"
 cfg_aliases = "0.1"
 cfg-if = "1"
 codespan-reporting = "0.11"
 ddsfile = "0.5"
-env_logger = "0.9"
+env_logger = "0.10"
 futures-intrusive = "0.4"
 fxhash = "0.2.1"
 glam = "0.21.3"
@@ -75,7 +75,7 @@ png = "0.17.5"
 pollster = "0.2"
 profiling = { version = "1", default-features = false }
 raw-window-handle = "0.5"
-renderdoc-sys = "0.7.1"
+renderdoc-sys = "1.0.0"
 ron = "0.8"
 serde = "1"
 serde_json = "1.0.85"
@@ -104,21 +104,21 @@ gpu-allocator = { version = "0.21", default_features = false, features = ["d3d12
 native = { package = "d3d12", version = "0.5.0" }
 range-alloc = "0.1"
 winapi = "0.3"
-hassle-rs = "0.9.0"
+hassle-rs = "0.10.0"
 
 # Gles dependencies
 egl = { package = "khronos-egl", version = "4.1" }
-glow = "0.12.0"
+glow = "0.12.1"
 glutin = "0.29.1"
 
 # wasm32 dependencies
 console_error_panic_hook = "0.1.7"
 console_log = "0.2"
-js-sys = "0.3.60"
-wasm-bindgen = "0.2.83"
-wasm-bindgen-futures = "0.4.33"
+js-sys = "0.3.61"
+wasm-bindgen = "0.2.84"
+wasm-bindgen-futures = "0.4.34"
 wasm-bindgen-test = "0.3"
-web-sys = "0.3.60"
+web-sys = "0.3.61"
 
 # deno dependencies
 deno_console = "0.84.0"
@@ -128,7 +128,7 @@ deno_web = "0.115.0"
 deno_webidl = "0.84.0"
 deno_webgpu = { path = "./deno_webgpu" }
 tokio = "1.19.0"
-termcolor = "1.1.2"
+termcolor = "1.2.0"
 wgpu-core = { path = "./wgpu-core" }
 wgpu-types = { path = "./wgpu-types" }
 

@@ -5,10 +5,13 @@ on:
     branches: ["*"]
     tags: [v0.*]
   pull_request:
+  merge_group:
 
 env:
-  RUST_BACKTRACE: 1
-  RUST_VERSION: 1.64
+  CARGO_INCREMENTAL: false
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: full
+  MSRV: 1.64
   PKG_CONFIG_ALLOW_CROSS: 1 # allow android to work
   RUSTFLAGS: --cfg=web_sys_unstable_apis -D warnings
   RUSTDOCFLAGS: -Dwarnings
@@ -91,14 +94,10 @@ jobs:
       - name: checkout repo
         uses: actions/checkout@v3
 
-      - name: install rust ${{ env.RUST_VERSION }}
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: ${{ env.RUST_VERSION }}
-          target: ${{ matrix.target }}
-          profile: minimal
-          override: true
-          components: clippy
+      - name: Install MSRV toolchain
+        run: |
+          rustup toolchain install ${{ env.MSRV }} --no-self-update --profile=minimal --component clippy --target ${{ matrix.target }}
+          rustup default ${{ env.MSRV }}
 
       - name: disable debug
         shell: bash
@@ -106,7 +105,6 @@ jobs:
           mkdir -p .cargo
           echo """
           [profile.dev]
-          incremental = false
           debug = false" >> .cargo/config.toml
 
       - name: caching
@@ -127,12 +125,11 @@ jobs:
 
           # build for WebGPU
           cargo clippy --target ${{ matrix.target }} -p wgpu --tests --features glsl,spirv
-
-          # build for WebGL
-          cargo clippy --target ${{ matrix.target }} -p wgpu --tests --features webgl,glsl,spirv
-
-          # build docs
           cargo doc --target ${{ matrix.target }} -p wgpu --no-deps --features glsl,spirv
+
+          # all features
+          cargo clippy --target ${{ matrix.target }} -p wgpu -p wgpu-hal --tests --all-features
+          cargo doc --target ${{ matrix.target }} -p wgpu --no-deps --all-features
 
       - name: check em
         if: matrix.kind == 'em'
@@ -140,15 +137,18 @@ jobs:
         run: |
           set -e
 
-          # build for Emscripten/WebGL
-          cargo clippy --target ${{ matrix.target }} -p wgpu -p wgpu-hal \
-                       --no-default-features --features webgl,emscripten
+          # build for Emscripten
+          cargo clippy --target ${{ matrix.target }} -p wgpu -p wgpu-hal --no-default-features
 
           # build cube example
-          cargo clippy --target ${{ matrix.target }} --example cube --features webgl,emscripten
+          cargo clippy --target ${{ matrix.target }} --example cube
 
           # build raw-gles example
-          cargo clippy --target ${{ matrix.target }} --example raw-gles --features webgl,emscripten
+          cargo clippy --target ${{ matrix.target }} --example raw-gles
+
+          # all features
+          cargo clippy --target ${{ matrix.target }} -p wgpu-hal --all-features
+          cargo clippy --target ${{ matrix.target }} -p wgpu --all-features
 
       - name: check native
         if: matrix.kind == 'native'
@@ -160,17 +160,10 @@ jobs:
           cargo clippy --target ${{ matrix.target }} -p wgpu -p wgpu-core -p wgpu-info -p player --no-default-features
 
           # Check with all features.
-          # (But watch out for backend-selection features in wgpu-core; some of
-          # those only build on the right platforms.)
-          cargo clippy --target ${{ matrix.target }} -p wgpu -p wgpu-info -p player --tests --all-features
-          cargo clippy --target ${{ matrix.target }} -p wgpu-core --tests \
-              --features="portable_features"
+          cargo clippy --target ${{ matrix.target }} -p wgpu -p wgpu-info -p player -p wgpu-core -p wgpu-hal --tests --all-features
 
           # build docs
-          # (Watch out for backend-selection features in wgpu-core; some of
-          # those only build on the right platforms.)
-          cargo doc --target ${{ matrix.target }} -p wgpu -p wgpu-info -p player --all-features --no-deps
-          cargo doc --target ${{ matrix.target }} -p wgpu-core --no-deps --features="portable_features"
+          cargo doc --target ${{ matrix.target }} -p wgpu -p wgpu-info -p player -p wgpu-core -p wgpu-hal --all-features --no-deps
 
   wasm-test:
     name: Test WebAssembly
@@ -179,19 +172,14 @@ jobs:
       - name: checkout repo
         uses: actions/checkout@v3
 
-      - name: install rust stable
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          profile: minimal
-          override: true
-
-      - name: install wasm-pack  # install from fork until this is merged: https://github.com/rustwasm/wasm-pack/pull/1185
-        run: |
-          # replace with "install wasm-pack action", which doesn't work for this project because of https://github.com/rustwasm/wasm-pack/issues/1180
-          #      - name: install wasm-pack
-          #        uses: jetli/wasm-pack-action@v0.4.0
-          cargo install --git https://github.com/haraldreingruber/wasm-pack wasm-pack
+      # TODO: replace with this once there is a release containing this PR:
+      # https://github.com/rustwasm/wasm-pack/pull/1185
+      # - name: Install wasm-pack
+      #   uses: taiki-e/install-action@v2
+      #   with:
+      #     tool: wasm-pack
+      - name: install wasm-pack
+        run: cargo install --git https://github.com/rustwasm/wasm-pack --rev e1010233b0ce304f42cda59962254bf30ae97c3e wasm-pack
 
       - name: execute tests
         run: |
@@ -220,18 +208,10 @@ jobs:
       - name: checkout repo
         uses: actions/checkout@v3
 
-      - name: install rust stable
-        uses: actions-rs/toolchain@v1
+      - name: Install cargo-nextest and cargo-llvm-cov
+        uses: taiki-e/install-action@v2
         with:
-          toolchain: nightly
-          profile: minimal
-          override: true
-          components: llvm-tools-preview
-
-      - name: latest cargo-nextest
-        uses: taiki-e/install-action@nextest
-      - name: install cargo-llvm-cov
-        uses: taiki-e/install-action@cargo-llvm-cov
+          tool: cargo-nextest,cargo-llvm-cov
 
       - name: install swiftshader
         if: matrix.os == 'ubuntu-22.04'
@@ -265,7 +245,6 @@ jobs:
           mkdir -p .cargo
           echo """
           [profile.dev]
-          incremental = false
           debug = 1" >> .cargo/config.toml
 
       - name: caching
@@ -278,7 +257,7 @@ jobs:
         run: |
           set -e
 
-          cargo llvm-cov run --bin wgpu-info --no-report
+          cargo llvm-cov --no-cfg-coverage run --bin wgpu-info --no-report
 
       - name: run tests
         shell: bash
@@ -287,7 +266,7 @@ jobs:
 
           for backend in ${{ matrix.backends }}; do
             echo "======= NATIVE TESTS $backend ======";
-            WGPU_BACKEND=$backend cargo llvm-cov nextest -p wgpu -p wgpu-types -p wgpu-hal -p wgpu-core -p player --no-fail-fast --no-report
+            WGPU_BACKEND=$backend cargo llvm-cov --no-cfg-coverage nextest -p wgpu -p wgpu-types -p wgpu-hal -p wgpu-core -p player --no-fail-fast --no-report
           done
 
       - name: generate coverage report
@@ -304,18 +283,11 @@ jobs:
 
   doctest:
     name: Doctest
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
 
     steps:
       - name: checkout repo
         uses: actions/checkout@v3
-
-      - name: install rust stable
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          profile: minimal
-          override: true
 
       - name: disable debug
         shell: bash
@@ -323,7 +295,6 @@ jobs:
           mkdir -p .cargo
           echo """
           [profile.dev]
-          incremental = false
           debug = 1" >> .cargo/config.toml
 
       - name: caching
@@ -345,14 +316,6 @@ jobs:
       - name: checkout repo
         uses: actions/checkout@v3
 
-      - name: install rust
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
-          components: rustfmt
-
       - name: run rustfmt
         run: |
           cargo fmt -- --check
@@ -364,13 +327,10 @@ jobs:
       - name: checkout repo
         uses: actions/checkout@v3
 
-      - name: install rust ${{ env.RUST_VERSION }}
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: ${{ env.RUST_VERSION }}
-          override: true
-          components: clippy
+      - name: Install MSRV toolchain
+        run: |
+          rustup toolchain install ${{ env.MSRV }} --no-self-update --profile=minimal --component clippy
+          rustup default ${{ env.MSRV }}
 
       - name: disable debug
         shell: bash
@@ -378,7 +338,6 @@ jobs:
           mkdir -p .cargo
           echo """
           [profile.dev]
-          incremental = false
           debug = 1" >> .cargo/config.toml
 
       - name: caching
@@ -402,7 +361,7 @@ jobs:
         with:
           command: check advisories
           arguments: --all-features --workspace
-          rust-version: ${{ env.RUST_VERSION }}
+          rust-version: ${{ env.MSRV }}
 
   cargo-deny-check-rest:
     name: "Run `cargo deny check`"
@@ -416,4 +375,4 @@ jobs:
         with:
           command: check bans licenses sources
           arguments: --all-features --workspace
-          rust-version: ${{ env.RUST_VERSION }}
+          rust-version: ${{ env.MSRV }}

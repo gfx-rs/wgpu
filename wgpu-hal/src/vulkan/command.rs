@@ -13,22 +13,24 @@ impl super::Texture {
     where
         T: Iterator<Item = crate::BufferTextureCopy>,
     {
-        let aspects = self.aspects;
-        let fi = self.format_info;
+        let (block_width, block_height) = self.format.block_dimensions();
+        let format = self.format;
         let copy_size = self.copy_size;
         regions.map(move |r| {
             let extent = r.texture_base.max_copy_size(&copy_size).min(&r.size);
-            let (image_subresource, image_offset) =
-                conv::map_subresource_layers(&r.texture_base, aspects);
+            let (image_subresource, image_offset) = conv::map_subresource_layers(&r.texture_base);
             vk::BufferImageCopy {
                 buffer_offset: r.buffer_layout.offset,
                 buffer_row_length: r.buffer_layout.bytes_per_row.map_or(0, |bpr| {
-                    fi.block_dimensions.0 as u32 * (bpr.get() / fi.block_size as u32)
+                    let block_size = format
+                        .block_size(Some(r.texture_base.aspect.map()))
+                        .unwrap();
+                    block_width * (bpr.get() / block_size)
                 }),
                 buffer_image_height: r
                     .buffer_layout
                     .rows_per_image
-                    .map_or(0, |rpi| rpi.get() * fi.block_dimensions.1 as u32),
+                    .map_or(0, |rpi| rpi.get() * block_height),
                 image_subresource,
                 image_offset,
                 image_extent: conv::map_copy_extent(&extent),
@@ -155,12 +157,12 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         vk_barriers.clear();
 
         for bar in barriers {
-            let range = conv::map_subresource_range(&bar.range, bar.texture.aspects);
+            let range = conv::map_subresource_range(&bar.range, bar.texture.format);
             let (src_stage, src_access) = conv::map_texture_usage_to_barrier(bar.usage.start);
-            let src_layout = conv::derive_image_layout(bar.usage.start, bar.texture.aspects);
+            let src_layout = conv::derive_image_layout(bar.usage.start, bar.texture.format);
             src_stages |= src_stage;
             let (dst_stage, dst_access) = conv::map_texture_usage_to_barrier(bar.usage.end);
-            let dst_layout = conv::derive_image_layout(bar.usage.end, bar.texture.aspects);
+            let dst_layout = conv::derive_image_layout(bar.usage.end, bar.texture.format);
             dst_stages |= dst_stage;
 
             vk_barriers.push(
@@ -235,13 +237,11 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     ) where
         T: Iterator<Item = crate::TextureCopy>,
     {
-        let src_layout = conv::derive_image_layout(src_usage, src.aspects);
+        let src_layout = conv::derive_image_layout(src_usage, src.format);
 
         let vk_regions_iter = regions.map(|r| {
-            let (src_subresource, src_offset) =
-                conv::map_subresource_layers(&r.src_base, src.aspects);
-            let (dst_subresource, dst_offset) =
-                conv::map_subresource_layers(&r.dst_base, dst.aspects);
+            let (src_subresource, src_offset) = conv::map_subresource_layers(&r.src_base);
+            let (dst_subresource, dst_offset) = conv::map_subresource_layers(&r.dst_base);
             let extent = r
                 .size
                 .min(&r.src_base.max_copy_size(&src.copy_size))
@@ -297,7 +297,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     ) where
         T: Iterator<Item = crate::BufferTextureCopy>,
     {
-        let src_layout = conv::derive_image_layout(src_usage, src.aspects);
+        let src_layout = conv::derive_image_layout(src_usage, src.format);
         let vk_regions_iter = src.map_buffer_copies(regions);
 
         unsafe {
@@ -820,7 +820,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
 #[test]
 fn check_dst_image_layout() {
     assert_eq!(
-        conv::derive_image_layout(crate::TextureUses::COPY_DST, crate::FormatAspects::empty()),
+        conv::derive_image_layout(crate::TextureUses::COPY_DST, wgt::TextureFormat::Rgba8Unorm),
         DST_IMAGE_LAYOUT
     );
 }

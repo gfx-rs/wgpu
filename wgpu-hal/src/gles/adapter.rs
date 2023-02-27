@@ -186,10 +186,21 @@ impl super::Adapter {
         let extensions = gl.supported_extensions();
 
         let (vendor_const, renderer_const) = if extensions.contains("WEBGL_debug_renderer_info") {
+            // emscripten doesn't enable "WEBGL_debug_renderer_info" extension by default. so, we do it manually.
+            // See https://github.com/gfx-rs/wgpu/issues/3245 for context
+            #[cfg(target_os = "emscripten")]
+            if unsafe { super::emscripten::enable_extension("WEBGL_debug_renderer_info\0") } {
+                (GL_UNMASKED_VENDOR_WEBGL, GL_UNMASKED_RENDERER_WEBGL)
+            } else {
+                (glow::VENDOR, glow::RENDERER)
+            }
+            // glow already enables WEBGL_debug_renderer_info on wasm32-unknown-unknown target by default.
+            #[cfg(not(target_os = "emscripten"))]
             (GL_UNMASKED_VENDOR_WEBGL, GL_UNMASKED_RENDERER_WEBGL)
         } else {
             (glow::VENDOR, glow::RENDERER)
         };
+
         let (vendor, renderer) = {
             let vendor = unsafe { gl.get_parameter_string(vendor_const) };
             let renderer = unsafe { gl.get_parameter_string(renderer_const) };
@@ -325,6 +336,10 @@ impl super::Adapter {
             wgt::DownlevelFlags::FULL_DRAW_INDEX_UINT32,
             max_element_index == u32::MAX,
         );
+        downlevel_flags.set(
+            wgt::DownlevelFlags::MULTISAMPLED_SHADING,
+            ver >= (3, 2) || extensions.contains("OES_sample_variables"),
+        );
 
         let mut features = wgt::Features::empty()
             | wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
@@ -351,6 +366,7 @@ impl super::Adapter {
             wgt::Features::SHADER_PRIMITIVE_INDEX,
             ver >= (3, 2) || extensions.contains("OES_geometry_shader"),
         );
+        features.set(wgt::Features::SHADER_EARLY_DEPTH_TEST, ver >= (3, 1));
         let gles_bcn_exts = [
             "GL_EXT_texture_compression_s3tc_srgb",
             "GL_EXT_texture_compression_rgtc",
@@ -655,7 +671,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
             device: super::Device {
                 shared: Arc::clone(&self.shared),
                 main_vao,
-                #[cfg(feature = "renderdoc")]
+                #[cfg(all(not(target_arch = "wasm32"), feature = "renderdoc"))]
                 render_doc: Default::default(),
             },
             queue: super::Queue {
@@ -689,7 +705,12 @@ impl crate::Adapter<super::Api> for super::Adapter {
                     .lock()
                     .get_parameter_i32(glow::MAX_SAMPLES)
             };
-            if max_samples >= 8 {
+            if max_samples >= 16 {
+                Tfc::MULTISAMPLE_X2
+                    | Tfc::MULTISAMPLE_X4
+                    | Tfc::MULTISAMPLE_X8
+                    | Tfc::MULTISAMPLE_X16
+            } else if max_samples >= 8 {
                 Tfc::MULTISAMPLE_X2 | Tfc::MULTISAMPLE_X4 | Tfc::MULTISAMPLE_X8
             } else if max_samples >= 4 {
                 Tfc::MULTISAMPLE_X2 | Tfc::MULTISAMPLE_X4

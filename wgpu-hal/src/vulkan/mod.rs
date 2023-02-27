@@ -98,11 +98,13 @@ pub struct Instance {
 
 struct Swapchain {
     raw: vk::SwapchainKHR,
+    raw_flags: vk::SwapchainCreateFlagsKHR,
     functor: khr::Swapchain,
     device: Arc<DeviceShared>,
     fence: vk::Fence,
     images: Vec<vk::Image>,
     config: crate::SurfaceConfiguration,
+    view_formats: Vec<wgt::TextureFormat>,
 }
 
 pub struct Surface {
@@ -227,6 +229,7 @@ struct FramebufferAttachment {
     raw_image_flags: vk::ImageCreateFlags,
     view_usage: crate::TextureUses,
     view_format: wgt::TextureFormat,
+    raw_view_formats: Vec<vk::Format>,
 }
 
 #[derive(Clone, Eq, Hash, PartialEq)]
@@ -291,11 +294,11 @@ pub struct Texture {
     raw: vk::Image,
     drop_guard: Option<crate::DropGuard>,
     block: Option<gpu_alloc::MemoryBlock<vk::DeviceMemory>>,
-    pub usage: crate::TextureUses,
-    pub aspects: crate::FormatAspects,
-    format_info: wgt::TextureFormatInfo,
+    usage: crate::TextureUses,
+    format: wgt::TextureFormat,
     raw_flags: vk::ImageCreateFlags,
     copy_size: crate::CopyExtent,
+    view_formats: Vec<wgt::TextureFormat>,
 }
 
 impl Texture {
@@ -317,13 +320,6 @@ pub struct TextureView {
 impl TextureView {
     fn aspects(&self) -> crate::FormatAspects {
         self.attachment.view_format.into()
-    }
-
-    /// # Safety
-    ///
-    /// - The image view handle must not be manually destroyed
-    pub unsafe fn raw_handle(&self) -> vk::ImageView {
-        self.raw
     }
 }
 
@@ -616,6 +612,11 @@ impl crate::Queue<Api> for Queue {
             })?
         };
         if suboptimal {
+            // We treat `VK_SUBOPTIMAL_KHR` as `VK_SUCCESS` on Android.
+            // On Android 10+, libvulkan's `vkQueuePresentKHR` implementation returns `VK_SUBOPTIMAL_KHR` if not doing pre-rotation
+            // (i.e `VkSwapchainCreateInfoKHR::preTransform` not being equal to the current device orientation).
+            // This is always the case when the device orientation is anything other than the identity one, as we unconditionally use `VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR`.
+            #[cfg(not(target_os = "android"))]
             log::warn!("Suboptimal present of frame {}", texture.index);
         }
         Ok(())

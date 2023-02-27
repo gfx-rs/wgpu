@@ -24,6 +24,12 @@ autotests = false
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
+targets = [
+    "x86_64-unknown-linux-gnu",
+    "x86_64-apple-darwin",
+    "x86_64-pc-windows-msvc",
+    "wasm32-unknown-unknown",
+]
 
 [lib]
 
@@ -91,7 +97,6 @@ trace = ["serde", "wgc/trace"]
 replay = ["serde", "wgc/replay"]
 angle = ["wgc/angle"]
 webgl = ["hal", "wgc"]
-emscripten = ["webgl"]
 vulkan-portability = ["wgc/vulkan"]
 expose-ids = []
 
@@ -122,13 +127,9 @@ workspace = true
 features = ["dx11", "dx12"]
 
 # We want the wgpu-core Vulkan backend on Unix (but not Emscripten) and Windows.
-[target.'cfg(any(windows, all(unix, not(target_arch = "emscripten"), not(target_os = "ios"), not(target_os = "macos"))))'.dependencies.wgc]
+[target.'cfg(any(windows, all(unix, not(target_os = "emscripten"), not(target_os = "ios"), not(target_os = "macos"))))'.dependencies.wgc]
 workspace = true
 features = ["vulkan"]
-
-[target.'cfg(target_os = "emscripten")'.dependencies.wgc]
-workspace = true
-features = ["emscripten"]
 
 [dependencies.wgt]
 workspace = true

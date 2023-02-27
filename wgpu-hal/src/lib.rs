@@ -51,20 +51,6 @@
     clippy::pattern_type_mismatch,
 )]
 
-#[cfg(not(any(
-    feature = "dx11",
-    feature = "dx12",
-    feature = "gles",
-    feature = "metal",
-    feature = "vulkan"
-)))]
-compile_error!("No back ends enabled in `wgpu-hal`. Enable at least one backend feature.");
-
-#[cfg(all(feature = "metal", not(any(target_os = "macos", target_os = "ios"))))]
-compile_error!("Metal API enabled on non-Apple OS. If your project is not using resolver=\"2\" in Cargo.toml, it should.");
-#[cfg(all(feature = "dx12", not(windows)))]
-compile_error!("DX12 API enabled on non-Windows OS. If your project is not using resolver=\"2\" in Cargo.toml, it should.");
-
 /// DirectX11 API internals.
 #[cfg(all(feature = "dx11", windows))]
 pub mod dx11;
@@ -77,24 +63,24 @@ pub mod empty;
 #[cfg(all(feature = "gles"))]
 pub mod gles;
 /// Metal API internals.
-#[cfg(all(feature = "metal"))]
+#[cfg(all(feature = "metal", any(target_os = "macos", target_os = "ios")))]
 pub mod metal;
 /// Vulkan API internals.
-#[cfg(feature = "vulkan")]
+#[cfg(all(feature = "vulkan", not(target_arch = "wasm32")))]
 pub mod vulkan;
 
 pub mod auxil;
 pub mod api {
-    #[cfg(feature = "dx11")]
+    #[cfg(all(feature = "dx11", windows))]
     pub use super::dx11::Api as Dx11;
-    #[cfg(feature = "dx12")]
+    #[cfg(all(feature = "dx12", windows))]
     pub use super::dx12::Api as Dx12;
     pub use super::empty::Api as Empty;
     #[cfg(feature = "gles")]
     pub use super::gles::Api as Gles;
-    #[cfg(feature = "metal")]
+    #[cfg(all(feature = "metal", any(target_os = "macos", target_os = "ios")))]
     pub use super::metal::Api as Metal;
-    #[cfg(feature = "vulkan")]
+    #[cfg(all(feature = "vulkan", not(target_arch = "wasm32")))]
     pub use super::vulkan::Api as Vulkan;
 }
 
@@ -412,7 +398,7 @@ pub trait CommandEncoder<A: Api>: Send + Sync + fmt::Debug {
     /// Works with a single array layer.
     /// Note: `dst` current usage has to be `TextureUses::COPY_DST`.
     /// Note: the copy extent is in physical size (rounded to the block size)
-    #[cfg(all(target_arch = "wasm32", not(feature = "emscripten")))]
+    #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
     unsafe fn copy_external_image_to_texture<T>(
         &mut self,
         src: &wgt::ImageCopyExternalImage,
@@ -627,14 +613,16 @@ bitflags!(
         const MULTISAMPLE_X4   = 1 << 10;
         /// Format can be multisampled by x8.
         const MULTISAMPLE_X8   = 1 << 11;
+        /// Format can be multisampled by x16.
+        const MULTISAMPLE_X16  = 1 << 12;
 
         /// Format can be used for render pass resolve targets.
-        const MULTISAMPLE_RESOLVE = 1 << 12;
+        const MULTISAMPLE_RESOLVE = 1 << 13;
 
         /// Format can be copied from.
-        const COPY_SRC = 1 << 13;
+        const COPY_SRC = 1 << 14;
         /// Format can be copied to.
-        const COPY_DST = 1 << 14;
+        const COPY_DST = 1 << 15;
     }
 );
 
@@ -647,12 +635,27 @@ bitflags!(
     }
 );
 
-impl From<wgt::TextureAspect> for FormatAspects {
-    fn from(aspect: wgt::TextureAspect) -> Self {
-        match aspect {
+impl FormatAspects {
+    pub fn new(format: wgt::TextureFormat, aspect: wgt::TextureAspect) -> Self {
+        let aspect_mask = match aspect {
             wgt::TextureAspect::All => Self::all(),
             wgt::TextureAspect::DepthOnly => Self::DEPTH,
             wgt::TextureAspect::StencilOnly => Self::STENCIL,
+        };
+        Self::from(format) & aspect_mask
+    }
+
+    /// Returns `true` if only one flag is set
+    pub fn is_one(&self) -> bool {
+        self.bits().count_ones() == 1
+    }
+
+    pub fn map(&self) -> wgt::TextureAspect {
+        match *self {
+            Self::COLOR => wgt::TextureAspect::All,
+            Self::DEPTH => wgt::TextureAspect::DepthOnly,
+            Self::STENCIL => wgt::TextureAspect::StencilOnly,
+            _ => unreachable!(),
         }
     }
 }
@@ -661,8 +664,9 @@ impl From<wgt::TextureFormat> for FormatAspects {
     fn from(format: wgt::TextureFormat) -> Self {
         match format {
             wgt::TextureFormat::Stencil8 => Self::STENCIL,
-            wgt::TextureFormat::Depth16Unorm => Self::DEPTH,
-            wgt::TextureFormat::Depth32Float | wgt::TextureFormat::Depth24Plus => Self::DEPTH,
+            wgt::TextureFormat::Depth16Unorm
+            | wgt::TextureFormat::Depth32Float
+            | wgt::TextureFormat::Depth24Plus => Self::DEPTH,
             wgt::TextureFormat::Depth32FloatStencil8 | wgt::TextureFormat::Depth24PlusStencil8 => {
                 Self::DEPTH | Self::STENCIL
             }
@@ -875,6 +879,26 @@ pub struct TextureDescriptor<'a> {
     /// Allows views of this texture to have a different format
     /// than the texture does.
     pub view_formats: Vec<wgt::TextureFormat>,
+}
+
+impl TextureDescriptor<'_> {
+    pub fn copy_extent(&self) -> CopyExtent {
+        CopyExtent::map_extent_to_copy_size(&self.size, self.dimension)
+    }
+
+    pub fn is_cube_compatible(&self) -> bool {
+        self.dimension == wgt::TextureDimension::D2
+            && self.size.depth_or_array_layers % 6 == 0
+            && self.sample_count == 1
+            && self.size.width == self.size.height
+    }
+
+    pub fn array_layer_count(&self) -> u32 {
+        match self.dimension {
+            wgt::TextureDimension::D1 | wgt::TextureDimension::D3 => 1,
+            wgt::TextureDimension::D2 => self.size.depth_or_array_layers,
+        }
+    }
 }
 
 /// TextureView descriptor.

@@ -3,6 +3,9 @@ use wasm_bindgen_test::wasm_bindgen_test_configure;
 // All files containing tests
 mod common;
 
+mod regression {
+    mod issue_3457;
+}
 mod buffer;
 mod buffer_copy;
 mod buffer_usages;

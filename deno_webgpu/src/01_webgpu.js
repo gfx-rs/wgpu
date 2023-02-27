@@ -614,11 +614,12 @@
     /** @type {GPUSupportedFeatures} */
     const supportedFeatures = webidl.createBranded(GPUSupportedFeatures);
     supportedFeatures[webidl.setlikeInner] = new Set(features);
-    return webidl.setlike(
+    webidl.setlike(
       supportedFeatures,
       GPUSupportedFeaturesPrototype,
       true,
     );
+    return supportedFeatures;
   }
 
   class GPUSupportedFeatures {
@@ -988,7 +989,7 @@
         context: "Argument 1",
       });
       const device = assertDevice(this, { prefix, context: "this" });
-      const { rid, err } = ops.op_webgpu_create_texture({
+      const { rid, err } = ops.op_webgpu_create_sampler({
         deviceRid: device.rid,
         ...descriptor,
       });
@@ -4916,14 +4917,14 @@
      * @param {number} offset
      * @param {number} size
      */
-    setVertexBuffer(slot, buffer, offset = 0, size = 0) {
+    setVertexBuffer(slot, buffer, offset = 0, size) {
       webidl.assertBranded(this, GPURenderBundleEncoderPrototype);
       const prefix =
         "Failed to execute 'setVertexBuffer' on 'GPURenderBundleEncoder'";
       webidl.requiredArguments(arguments.length, 2, { prefix });
       slot = webidl.converters.GPUSize32(slot, {
         prefix,
-        context: "Argument 2",
+        context: "Argument 1",
       });
       buffer = webidl.converters.GPUBuffer(buffer, {
         prefix,
@@ -4933,10 +4934,12 @@
         prefix,
         context: "Argument 3",
       });
-      size = webidl.converters.GPUSize64(size, {
-        prefix,
-        context: "Argument 4",
-      });
+      if (size !== undefined) {
+        size = webidl.converters.GPUSize64(size, {
+          prefix,
+          context: "Argument 4",
+        });
+      }
       const device = assertDevice(this, { prefix, context: "this" });
       const renderBundleEncoderRid = assertResource(this, {
         prefix,
