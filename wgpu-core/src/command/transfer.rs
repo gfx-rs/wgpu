@@ -1149,41 +1149,4 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
         Ok(())
     }
-
-    pub fn command_encoder_transition_textures<A, T>(
-        &self,
-        command_encoder_id: &CommandEncoderId,
-        texture_uses: T,
-    ) -> Result<(), Box<dyn std::error::Error>>
-    where
-        A: HalApi,
-        T: Iterator<Item = (TextureId, hal::TextureUses, TextureSelector)> + ExactSizeIterator,
-    {
-        profiling::scope!("CommandEncoder::transition_textures");
-
-        let hub = A::hub(self);
-        let mut token = Token::root();
-
-        let (_, mut token) = hub.devices.read(&mut token);
-        let (mut cmd_buf_guard, mut token) = hub.command_buffers.write(&mut token);
-        let cmd_buf = CommandBuffer::get_encoder_mut(&mut *cmd_buf_guard, *command_encoder_id)?;
-        let (_, mut token) = hub.buffers.read(&mut token); // skip token
-        let (texture_guard, _) = hub.textures.read(&mut token);
-
-        let mut barriers = Vec::with_capacity(texture_uses.len());
-        for (texture_id, texture_use, texture_selector) in texture_uses {
-            let texture = texture_guard.get(texture_id).unwrap(); // TODO
-            let texture_barriers = cmd_buf
-                .trackers
-                .textures
-                .set_single(texture, texture_id, texture_selector, texture_use)
-                .unwrap();
-            barriers.extend(texture_barriers.map(|b| b.into_hal(texture)));
-        }
-
-        let cmd_buf_raw = cmd_buf.encoder.open();
-        unsafe { cmd_buf_raw.transition_textures(barriers.into_iter()) };
-
-        Ok(())
-    }
 }

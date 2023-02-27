@@ -359,13 +359,6 @@ pub trait Context: Debug + Send + Sized + Sync {
         command_buffer: &Self::CommandBufferId,
         command_buffer_data: &Self::CommandBufferData,
     );
-    fn command_encoder_transition_textures<T>(
-        &self,
-        command_encoder_id: &Self::CommandEncoderId,
-        texture_uses: T,
-    ) where
-        T: Iterator<Item = (Self::TextureId, hal::TextureUses, TextureSelector)>
-            + ExactSizeIterator;
     fn render_bundle_drop(
         &self,
         render_bundle: &Self::RenderBundleId,

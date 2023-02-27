@@ -4,7 +4,6 @@
 //! they are unique to the `wgpu` library.
 
 mod belt;
-mod command;
 mod device;
 mod encoder;
 mod indirect;
@@ -19,7 +18,6 @@ use std::{
 };
 
 pub use belt::StagingBelt;
-pub use command::*;
 pub use device::{BufferInitDescriptor, DeviceExt};
 pub use encoder::RenderEncoder;
 pub use indirect::*;
