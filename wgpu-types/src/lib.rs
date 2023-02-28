@@ -1744,11 +1744,8 @@ bitflags::bitflags! {
         /// When used as a STORAGE texture, then a texture with this format can be bound with
         /// [`StorageTextureAccess::ReadOnly`] or [`StorageTextureAccess::ReadWrite`].
         const STORAGE_READ_WRITE = 1 << 6;
-        /// When used as a STORAGE texture, then a texture with this format can be written to with atomics.
-        // TODO: No access flag exposed as of writing
-        const STORAGE_ATOMICS = 1 << 7;
         /// If not present, the texture can't be blended into the render target.
-        const BLENDABLE = 1 << 8;
+        const BLENDABLE = 1 << 7;
     }
 }
 
