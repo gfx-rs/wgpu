@@ -2061,55 +2061,72 @@ impl crate::Device<super::Api> for super::Device {
 
     unsafe fn get_acceleration_structure_build_sizes(
         &self,
-        desc: &crate::GetAccelerationStructureBuildSizesDescriptor,
+        desc: &crate::GetAccelerationStructureBuildSizesDescriptor<super::Api>,
     ) -> crate::AccelerationStructureBuildSizes {
         let ray_tracing_functions = match self.shared.extension_fns.ray_tracing {
             Some(ref functions) => functions,
             None => panic!("Feature `RAY_TRACING` not enabled"),
         };
 
-        let geometry = match desc.geometry_info {
-            crate::AccelerationStructureGeometryInfo::Instances => {
-                let instances_data = vk::AccelerationStructureGeometryInstancesDataKHR::builder();
+        let (geometries, primitive_counts) = match *desc.entries {
+            crate::AccelerationStructureEntries::Instances(ref instances) => {
+                let instance_data = vk::AccelerationStructureGeometryInstancesDataKHR::builder();
 
-                vk::AccelerationStructureGeometryKHR::builder()
+                let geometry = vk::AccelerationStructureGeometryKHR::builder()
                     .geometry_type(vk::GeometryTypeKHR::INSTANCES)
                     .geometry(vk::AccelerationStructureGeometryDataKHR {
-                        instances: *instances_data,
+                        instances: *instance_data,
                     })
-                    .flags(vk::GeometryFlagsKHR::empty())
-            }
-            crate::AccelerationStructureGeometryInfo::Triangles {
-                vertex_format,
-                max_vertex,
-                index_format,
-            } => {
-                let mut triangles_data =
-                    vk::AccelerationStructureGeometryTrianglesDataKHR::builder()
-                        .vertex_format(conv::map_vertex_format(vertex_format))
-                        .max_vertex(max_vertex);
+                    .flags(vk::GeometryFlagsKHR::empty());
 
-                if let Some(index_format) = index_format {
-                    triangles_data =
-                        triangles_data.index_type(conv::map_index_format(index_format));
+                (vec![*geometry], vec![instances.count])
+            }
+            crate::AccelerationStructureEntries::Triangles(in_geometries) => {
+                let mut primitive_counts = Vec::<u32>::with_capacity(in_geometries.len());
+                let mut geometries =
+                    Vec::<vk::AccelerationStructureGeometryKHR>::with_capacity(in_geometries.len());
+
+                for triangles in in_geometries {
+                    let mut triangle_data =
+                        vk::AccelerationStructureGeometryTrianglesDataKHR::builder()
+                            .vertex_format(conv::map_vertex_format(triangles.vertex_format))
+                            .max_vertex(triangles.vertex_count)
+                            .vertex_stride(triangles.vertex_stride);
+
+                    let pritive_count = if let Some(ref indices) = triangles.indices {
+                        triangle_data =
+                            triangle_data.index_type(conv::map_index_format(indices.format));
+                        indices.count / 3
+                    } else {
+                        triangles.vertex_count
+                    };
+
+                    let geometry = vk::AccelerationStructureGeometryKHR::builder()
+                        .geometry_type(vk::GeometryTypeKHR::TRIANGLES)
+                        .geometry(vk::AccelerationStructureGeometryDataKHR {
+                            triangles: *triangle_data,
+                        })
+                        .flags(vk::GeometryFlagsKHR::empty())
+                        .build();
+                    geometries.push(geometry);
+                    primitive_counts.push(pritive_count);
                 }
-
-                vk::AccelerationStructureGeometryKHR::builder()
-                    .geometry_type(vk::GeometryTypeKHR::TRIANGLES)
-                    .geometry(vk::AccelerationStructureGeometryDataKHR {
-                        triangles: *triangles_data,
-                    })
-                    .flags(vk::GeometryFlagsKHR::empty())
+                (geometries, primitive_counts)
             }
+            crate::AccelerationStructureEntries::AABBs(_) => todo!(),
         };
 
-        let geometries = &[*geometry];
+        let ty = match *desc.entries {
+            crate::AccelerationStructureEntries::Instances(_) => {
+                vk::AccelerationStructureTypeKHR::TOP_LEVEL
+            }
+            _ => vk::AccelerationStructureTypeKHR::BOTTOM_LEVEL,
+        };
 
         let geometry_info = vk::AccelerationStructureBuildGeometryInfoKHR::builder()
-            .ty(conv::map_acceleration_structure_format(desc.format))
-            .mode(conv::map_acceleration_structure_build_mode(desc.mode))
+            .ty(ty)
             .flags(conv::map_acceleration_structure_flags(desc.flags))
-            .geometries(geometries);
+            .geometries(&geometries);
 
         let raw = unsafe {
             ray_tracing_functions
@@ -2117,7 +2134,7 @@ impl crate::Device<super::Api> for super::Device {
                 .get_acceleration_structure_build_sizes(
                     vk::AccelerationStructureBuildTypeKHR::DEVICE,
                     &geometry_info,
-                    &[desc.primitive_count],
+                    &primitive_counts,
                 )
         };
 

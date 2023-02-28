@@ -445,18 +445,33 @@ impl<A: hal::Api> Example<A> {
             indices_buffer
         };
 
+        let blas_triangles = vec![hal::AccelerationStructureTriangles {
+            vertex_buffer: Some(&vertices_buffer),
+            first_vertex: 0,
+            vertex_format: wgt::VertexFormat::Float32x3,
+            vertex_count: vertices.len() as u32,
+            vertex_stride: 3 * 4,
+            indices: Some(hal::AccelerationStructureTriangleIndices {
+                buffer: Some(&indices_buffer),
+                format: wgt::IndexFormat::Uint32,
+                offset: 0,
+                count: indices.len() as u32,
+            }),
+            transforms: None,
+        }];
+        let blas_entries = hal::AccelerationStructureEntries::Triangles(&blas_triangles);
+
+        let mut tlas_entries =
+            hal::AccelerationStructureEntries::Instances(hal::AccelerationStructureInstances {
+                buffer: None,
+                count: 3,
+            });
+
         let blas_sizes = unsafe {
             device.get_acceleration_structure_build_sizes(
                 &hal::GetAccelerationStructureBuildSizesDescriptor {
-                    geometry_info: hal::AccelerationStructureGeometryInfo::Triangles {
-                        vertex_format: wgt::VertexFormat::Float32x3,
-                        max_vertex: 3,
-                        index_format: Some(wgt::IndexFormat::Uint32),
-                    },
-                    format: hal::AccelerationStructureFormat::BottomLevel,
-                    mode: hal::AccelerationStructureBuildMode::Build,
+                    entries: &blas_entries,
                     flags: hal::AccelerationStructureBuildFlags::PREFER_FAST_TRACE,
-                    primitive_count: 1,
                 },
             )
         };
@@ -467,11 +482,8 @@ impl<A: hal::Api> Example<A> {
         let tlas_sizes = unsafe {
             device.get_acceleration_structure_build_sizes(
                 &hal::GetAccelerationStructureBuildSizesDescriptor {
-                    geometry_info: hal::AccelerationStructureGeometryInfo::Instances,
-                    format: hal::AccelerationStructureFormat::TopLevel,
-                    mode: hal::AccelerationStructureBuildMode::Build,
+                    entries: &tlas_entries,
                     flags: tlas_flags,
-                    primitive_count: 1,
                 },
             )
         };
@@ -673,6 +685,14 @@ impl<A: hal::Api> Example<A> {
             instances_buffer
         };
 
+        if let hal::AccelerationStructureEntries::Instances(ref mut i) = tlas_entries {
+            i.buffer = Some(&instances_buffer);
+            assert!(
+                instances.len() <= i.count as usize,
+                "Tlas allocation to small"
+            );
+        }
+
         let cmd_encoder_desc = hal::CommandEncoderDescriptor {
             label: None,
             queue: &queue,
@@ -682,26 +702,12 @@ impl<A: hal::Api> Example<A> {
         unsafe { cmd_encoder.begin_encoding(Some("init")).unwrap() };
 
         unsafe {
-            let geometry = hal::AccelerationStructureTriangles {
-                vertex_buffer: Some(&vertices_buffer),
-                first_vertex: 0,
-                vertex_format: wgt::VertexFormat::Float32x3,
-                vertex_count: vertices.len() as u32,
-                vertex_stride: 3 * 4,
-                indices: Some(hal::AccelerationStructureTriangleIndices {
-                    buffer: Some(&indices_buffer),
-                    format: wgt::IndexFormat::Uint32,
-                    offset: 0,
-                    count: indices.len() as u32,
-                }),
-                transforms: None,
-            };
             cmd_encoder.build_acceleration_structures(&hal::BuildAccelerationStructureDescriptor {
                 mode: hal::AccelerationStructureBuildMode::Build,
                 flags: hal::AccelerationStructureBuildFlags::PREFER_FAST_TRACE,
                 destination_acceleration_structure: &blas,
                 scratch_buffer: &scratch_buffer,
-                entries: &hal::AccelerationStructureEntries::Triangles(&vec![geometry]),
+                entries: &blas_entries,
                 source_acceleration_structure: None,
             });
 
@@ -712,16 +718,12 @@ impl<A: hal::Api> Example<A> {
             };
             cmd_encoder.transition_buffers(iter::once(as_barrier));
 
-            let instances = hal::AccelerationStructureInstances {
-                buffer: Some(&instances_buffer),
-                count: instances.len() as u32,
-            };
             cmd_encoder.build_acceleration_structures(&hal::BuildAccelerationStructureDescriptor {
                 mode: hal::AccelerationStructureBuildMode::Build,
                 flags: tlas_flags,
                 destination_acceleration_structure: &tlas,
                 scratch_buffer: &scratch_buffer,
-                entries: &hal::AccelerationStructureEntries::Instances(&instances),
+                entries: &tlas_entries,
                 source_acceleration_structure: None,
             });
 
@@ -833,7 +835,7 @@ impl<A: hal::Api> Example<A> {
                     flags: tlas_flags,
                     destination_acceleration_structure: &self.tlas,
                     scratch_buffer: &self.scratch_buffer,
-                    entries: &hal::AccelerationStructureEntries::Instances(&instances),
+                    entries: &hal::AccelerationStructureEntries::Instances(instances),
                     source_acceleration_structure: Some(&self.tlas),
                 });
 

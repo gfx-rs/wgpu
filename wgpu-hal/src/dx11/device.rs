@@ -205,25 +205,25 @@ impl crate::Device<super::Api> for super::Device {
         &self,
         desc: &crate::AccelerationStructureDescriptor,
     ) -> Result<super::AccelerationStructure, crate::DeviceError> {
-        todo!()
+        unimplemented!()
     }
     unsafe fn get_acceleration_structure_build_sizes(
         &self,
-        desc: &crate::GetAccelerationStructureBuildSizesDescriptor,
+        desc: &crate::GetAccelerationStructureBuildSizesDescriptor<super::Api>,
     ) -> crate::AccelerationStructureBuildSizes {
-        todo!()
+        unimplemented!()
     }
     unsafe fn get_acceleration_structure_device_address(
         &self,
         acceleration_structure: &super::AccelerationStructure,
     ) -> wgt::BufferAddress {
-        todo!()
+        unimplemented!()
     }
     unsafe fn destroy_acceleration_structure(
         &self,
         acceleration_structure: super::AccelerationStructure,
     ) {
-        todo!()
+        unimplemented!()
     }
 }
 

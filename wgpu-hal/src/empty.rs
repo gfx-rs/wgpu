@@ -245,7 +245,7 @@ impl crate::Device<Api> for Context {
     }
     unsafe fn get_acceleration_structure_build_sizes(
         &self,
-        _desc: &crate::GetAccelerationStructureBuildSizesDescriptor,
+        _desc: &crate::GetAccelerationStructureBuildSizesDescriptor<Api>,
     ) -> crate::AccelerationStructureBuildSizes {
         Default::default()
     }

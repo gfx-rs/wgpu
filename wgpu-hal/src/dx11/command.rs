@@ -270,6 +270,6 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         &mut self,
         desc: &crate::BuildAccelerationStructureDescriptor<super::Api>,
     ) {
-        todo!()
+        unimplemented!()
     }
 }

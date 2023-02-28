@@ -357,7 +357,7 @@ pub trait Device<A: Api>: Send + Sync {
     ) -> Result<A::AccelerationStructure, DeviceError>;
     unsafe fn get_acceleration_structure_build_sizes(
         &self,
-        desc: &GetAccelerationStructureBuildSizesDescriptor,
+        desc: &GetAccelerationStructureBuildSizesDescriptor<A>,
     ) -> AccelerationStructureBuildSizes;
     unsafe fn get_acceleration_structure_device_address(
         &self,
@@ -1373,24 +1373,6 @@ pub struct AccelerationStructureBuildSizes {
     pub build_scratch_size: wgt::BufferAddress,
 }
 
-pub struct GetAccelerationStructureBuildSizesDescriptor {
-    pub geometry_info: AccelerationStructureGeometryInfo,
-    pub format: AccelerationStructureFormat,
-    pub mode: AccelerationStructureBuildMode,
-    pub flags: AccelerationStructureBuildFlags,
-    pub primitive_count: u32,
-}
-
-#[derive(Clone, Copy)]
-pub enum AccelerationStructureGeometryInfo {
-    Triangles {
-        vertex_format: wgt::VertexFormat,
-        max_vertex: u32,
-        index_format: Option<wgt::IndexFormat>,
-    },
-    Instances,
-}
-
 pub struct BuildAccelerationStructureDescriptor<'a, A: Api> {
     pub entries: &'a AccelerationStructureEntries<'a, A>,
     pub mode: AccelerationStructureBuildMode,
@@ -1400,13 +1382,20 @@ pub struct BuildAccelerationStructureDescriptor<'a, A: Api> {
     pub scratch_buffer: &'a A::Buffer,
 }
 
+pub struct GetAccelerationStructureBuildSizesDescriptor<'a, A: Api> {
+    pub entries: &'a AccelerationStructureEntries<'a, A>,
+    pub flags: AccelerationStructureBuildFlags,
+}
+
 ///
 /// Usage for buffer size requirements:
 /// All Buffers, BufferAdresses and offsets will be ignored.
+/// The build mode will be ignored.
 /// Reducing the amount of Instances, Triangle groups or AABB groups (or the number of Trinagles/AABBs in coresponding groups),
 /// may result in reduced size requirements.
+/// Any other change may result in a bigger or smaller size requirement.
 pub enum AccelerationStructureEntries<'a, A: Api> {
-    Instances(&'a AccelerationStructureInstances<'a, A>),
+    Instances(AccelerationStructureInstances<'a, A>),
     Triangles(&'a [AccelerationStructureTriangles<'a, A>]),
     AABBs(&'a [AccelerationStructureAABBs]),
 }
