@@ -328,13 +328,6 @@ impl TextureView {
     fn aspects(&self) -> crate::FormatAspects {
         self.attachment.view_format.into()
     }
-
-    /// # Safety
-    ///
-    /// - The image view handle must not be manually destroyed
-    pub unsafe fn raw_handle(&self) -> vk::ImageView {
-        self.raw
-    }
 }
 
 #[derive(Debug)]
