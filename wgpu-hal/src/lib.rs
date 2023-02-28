@@ -1400,6 +1400,11 @@ pub struct BuildAccelerationStructureDescriptor<'a, A: Api> {
     pub scratch_buffer: &'a A::Buffer,
 }
 
+///
+/// Usage for buffer size requirements:
+/// All Buffers, BufferAdresses and offsets will be ignored.
+/// Reducing the amount of Instances, Triangle groups or AABB groups (or the number of Trinagles/AABBs in coresponding groups),
+/// may result in reduced size requirements.
 pub enum AccelerationStructureEntries<'a, A: Api> {
     Instances(&'a AccelerationStructureInstances<'a, A>),
     Triangles(&'a [AccelerationStructureTriangles<'a, A>]),
@@ -1408,7 +1413,7 @@ pub enum AccelerationStructureEntries<'a, A: Api> {
 
 // TODO: flags
 pub struct AccelerationStructureTriangles<'a, A: Api> {
-    pub vertex_buffer: &'a A::Buffer,
+    pub vertex_buffer: Option<&'a A::Buffer>,
     pub first_vertex: u32,
     pub vertex_format: wgt::VertexFormat,
     pub vertex_count: u32,
@@ -1424,13 +1429,13 @@ pub struct AccelerationStructureAABBs {
 
 // TODO: offset
 pub struct AccelerationStructureInstances<'a, A: Api> {
-    pub buffer: &'a A::Buffer,
+    pub buffer: Option<&'a A::Buffer>,
     pub count: u32,
 }
 
 pub struct AccelerationStructureTriangleIndices<'a, A: Api> {
     pub format: wgt::IndexFormat,
-    pub buffer: &'a A::Buffer,
+    pub buffer: Option<&'a A::Buffer>,
     pub offset: u32,
     pub count: u32,
 }

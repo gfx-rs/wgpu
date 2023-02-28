@@ -683,13 +683,13 @@ impl<A: hal::Api> Example<A> {
 
         unsafe {
             let geometry = hal::AccelerationStructureTriangles {
-                vertex_buffer: &vertices_buffer,
+                vertex_buffer: Some(&vertices_buffer),
                 first_vertex: 0,
                 vertex_format: wgt::VertexFormat::Float32x3,
                 vertex_count: vertices.len() as u32,
                 vertex_stride: 3 * 4,
                 indices: Some(hal::AccelerationStructureTriangleIndices {
-                    buffer: &indices_buffer,
+                    buffer: Some(&indices_buffer),
                     format: wgt::IndexFormat::Uint32,
                     offset: 0,
                     count: indices.len() as u32,
@@ -713,7 +713,7 @@ impl<A: hal::Api> Example<A> {
             cmd_encoder.transition_buffers(iter::once(as_barrier));
 
             let instances = hal::AccelerationStructureInstances {
-                buffer: &instances_buffer,
+                buffer: Some(&instances_buffer),
                 count: instances.len() as u32,
             };
             cmd_encoder.build_acceleration_structures(&hal::BuildAccelerationStructureDescriptor {
@@ -824,7 +824,7 @@ impl<A: hal::Api> Example<A> {
             ctx.encoder.begin_encoding(Some("frame")).unwrap();
 
             let instances = hal::AccelerationStructureInstances {
-                buffer: &self.instances_buffer,
+                buffer: Some(&self.instances_buffer),
                 count: self.instances.len() as u32,
             };
             ctx.encoder

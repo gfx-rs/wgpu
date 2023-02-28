@@ -375,110 +375,8 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             None => panic!("Feature `RAY_TRACING` not enabled"),
         };
 
-        let (geometries, ranges) = match *desc.entries {
-            crate::AccelerationStructureEntries::Instances(instances) => {
-                let device_address = unsafe {
-                    ray_tracing_functions
-                        .buffer_device_address
-                        .get_buffer_device_address(
-                            &vk::BufferDeviceAddressInfo::builder().buffer(instances.buffer.raw),
-                        )
-                };
-                let instance_data = vk::AccelerationStructureGeometryInstancesDataKHR::builder()
-                    .data(vk::DeviceOrHostAddressConstKHR { device_address });
-
-                let geometry = vk::AccelerationStructureGeometryKHR::builder()
-                    .geometry_type(vk::GeometryTypeKHR::INSTANCES)
-                    .geometry(vk::AccelerationStructureGeometryDataKHR {
-                        instances: *instance_data,
-                    })
-                    .flags(vk::GeometryFlagsKHR::empty());
-
-                let range = vk::AccelerationStructureBuildRangeInfoKHR::builder()
-                    .primitive_count(instances.count);
-
-                (vec![*geometry], vec![*range])
-            }
-            crate::AccelerationStructureEntries::Triangles(in_geometries) => {
-                let mut ranges = Vec::<vk::AccelerationStructureBuildRangeInfoKHR>::with_capacity(
-                    in_geometries.len(),
-                );
-                let mut geometries =
-                    Vec::<vk::AccelerationStructureGeometryKHR>::with_capacity(in_geometries.len());
-                for triangles in in_geometries {
-                    let vertex_device_address = unsafe {
-                        ray_tracing_functions
-                            .buffer_device_address
-                            .get_buffer_device_address(
-                                &vk::BufferDeviceAddressInfo::builder()
-                                    .buffer(triangles.vertex_buffer.raw),
-                            )
-                    };
-                    let mut triangle_data =
-                        vk::AccelerationStructureGeometryTrianglesDataKHR::builder()
-                            .vertex_data(vk::DeviceOrHostAddressConstKHR {
-                                device_address: vertex_device_address,
-                            })
-                            .vertex_format(conv::map_vertex_format(triangles.vertex_format))
-                            .max_vertex(triangles.vertex_count)
-                            .vertex_stride(triangles.vertex_stride);
-
-                    let mut range = vk::AccelerationStructureBuildRangeInfoKHR::builder();
-
-                    if let Some(indices) = &triangles.indices {
-                        let index_device_address = unsafe {
-                            ray_tracing_functions
-                                .buffer_device_address
-                                .get_buffer_device_address(
-                                    &vk::BufferDeviceAddressInfo::builder()
-                                        .buffer(indices.buffer.raw),
-                                )
-                        };
-                        triangle_data = triangle_data
-                            .index_data(vk::DeviceOrHostAddressConstKHR {
-                                device_address: index_device_address,
-                            })
-                            .index_type(conv::map_index_format(indices.format));
-
-                        range = range
-                            .primitive_count(indices.count / 3)
-                            .primitive_offset(indices.offset)
-                            .first_vertex(triangles.first_vertex);
-                    } else {
-                        range = range
-                            .primitive_count(triangles.vertex_count)
-                            .first_vertex(triangles.first_vertex);
-                    }
-                    if let Some(transform) = &triangles.transforms {
-                        let transform_device_address = unsafe {
-                            ray_tracing_functions
-                                .buffer_device_address
-                                .get_buffer_device_address(
-                                    &vk::BufferDeviceAddressInfo::builder()
-                                        .buffer(transform.buffer.raw),
-                                )
-                        };
-                        triangle_data =
-                            triangle_data.transform_data(vk::DeviceOrHostAddressConstKHR {
-                                device_address: transform_device_address,
-                            });
-
-                        range = range.transform_offset(transform.offset);
-                    }
-
-                    let geometry = vk::AccelerationStructureGeometryKHR::builder()
-                        .geometry_type(vk::GeometryTypeKHR::TRIANGLES)
-                        .geometry(vk::AccelerationStructureGeometryDataKHR {
-                            triangles: *triangle_data,
-                        })
-                        .flags(vk::GeometryFlagsKHR::empty())
-                        .build();
-                    geometries.push(geometry);
-                    ranges.push(*range);
-                }
-                (geometries, ranges)
-            }
-            crate::AccelerationStructureEntries::AABBs(_) => todo!(),
+        let (geometries, ranges) = unsafe {
+            to_raw_acceleration_structure_geometry_and_range_info(desc, ray_tracing_functions, true)
         };
 
         let scratch_device_address = unsafe {
@@ -969,6 +867,117 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 .cmd_dispatch_indirect(self.active, buffer.raw, offset)
         }
     }
+}
+
+unsafe fn to_raw_acceleration_structure_geometry_and_range_info(
+    desc: &crate::BuildAccelerationStructureDescriptor<super::Api>,
+    ray_tracing_functions: &super::RayTracingDeviceExtensionFunctions,
+    require_buffers: bool,
+) -> (
+    Vec<vk::AccelerationStructureGeometryKHR>,
+    Vec<vk::AccelerationStructureBuildRangeInfoKHR>,
+) {
+    let get_device_address = |buffer: Option<&super::Buffer>| {
+        if let Some(buffer) = buffer {
+            unsafe {
+                ray_tracing_functions
+                    .buffer_device_address
+                    .get_buffer_device_address(
+                        &vk::BufferDeviceAddressInfo::builder().buffer(buffer.raw),
+                    )
+            }
+        } else {
+            if require_buffers {
+                panic!("Buffers are required to build acceleration structures");
+            }
+            0u64
+        }
+    };
+    let (geometries, ranges) = match *desc.entries {
+        crate::AccelerationStructureEntries::Instances(instances) => {
+            let instance_data = vk::AccelerationStructureGeometryInstancesDataKHR::builder().data(
+                vk::DeviceOrHostAddressConstKHR {
+                    device_address: get_device_address(instances.buffer),
+                },
+            );
+
+            let geometry = vk::AccelerationStructureGeometryKHR::builder()
+                .geometry_type(vk::GeometryTypeKHR::INSTANCES)
+                .geometry(vk::AccelerationStructureGeometryDataKHR {
+                    instances: *instance_data,
+                })
+                .flags(vk::GeometryFlagsKHR::empty());
+
+            let range = vk::AccelerationStructureBuildRangeInfoKHR::builder()
+                .primitive_count(instances.count);
+
+            (vec![*geometry], vec![*range])
+        }
+        crate::AccelerationStructureEntries::Triangles(in_geometries) => {
+            let mut ranges = Vec::<vk::AccelerationStructureBuildRangeInfoKHR>::with_capacity(
+                in_geometries.len(),
+            );
+            let mut geometries =
+                Vec::<vk::AccelerationStructureGeometryKHR>::with_capacity(in_geometries.len());
+            for triangles in in_geometries {
+                let mut triangle_data =
+                    vk::AccelerationStructureGeometryTrianglesDataKHR::builder()
+                        .vertex_data(vk::DeviceOrHostAddressConstKHR {
+                            device_address: get_device_address(triangles.vertex_buffer),
+                        })
+                        .vertex_format(conv::map_vertex_format(triangles.vertex_format))
+                        .max_vertex(triangles.vertex_count)
+                        .vertex_stride(triangles.vertex_stride);
+
+                let mut range = vk::AccelerationStructureBuildRangeInfoKHR::builder();
+
+                if let Some(indices) = &triangles.indices {
+                    triangle_data = triangle_data
+                        .index_data(vk::DeviceOrHostAddressConstKHR {
+                            device_address: get_device_address(indices.buffer),
+                        })
+                        .index_type(conv::map_index_format(indices.format));
+
+                    range = range
+                        .primitive_count(indices.count / 3)
+                        .primitive_offset(indices.offset)
+                        .first_vertex(triangles.first_vertex);
+                } else {
+                    range = range
+                        .primitive_count(triangles.vertex_count)
+                        .first_vertex(triangles.first_vertex);
+                }
+                if let Some(transform) = &triangles.transforms {
+                    let transform_device_address = unsafe {
+                        ray_tracing_functions
+                            .buffer_device_address
+                            .get_buffer_device_address(
+                                &vk::BufferDeviceAddressInfo::builder()
+                                    .buffer(transform.buffer.raw),
+                            )
+                    };
+                    triangle_data = triangle_data.transform_data(vk::DeviceOrHostAddressConstKHR {
+                        device_address: transform_device_address,
+                    });
+
+                    range = range.transform_offset(transform.offset);
+                }
+
+                let geometry = vk::AccelerationStructureGeometryKHR::builder()
+                    .geometry_type(vk::GeometryTypeKHR::TRIANGLES)
+                    .geometry(vk::AccelerationStructureGeometryDataKHR {
+                        triangles: *triangle_data,
+                    })
+                    .flags(vk::GeometryFlagsKHR::empty())
+                    .build();
+                geometries.push(geometry);
+                ranges.push(*range);
+            }
+            (geometries, ranges)
+        }
+        crate::AccelerationStructureEntries::AABBs(_) => todo!(),
+    };
+    (geometries, ranges)
 }
 
 #[test]
