@@ -1552,7 +1552,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
         }
     }
 
-    unsafe fn build_acceleration_structures(
+    unsafe fn build_acceleration_structure(
         &mut self,
         _desc: &crate::BuildAccelerationStructureDescriptor<super::Api>,
     ) {
