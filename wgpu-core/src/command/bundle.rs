@@ -86,8 +86,8 @@ use crate::{
     },
     conv,
     device::{
-        AttachmentData, Device, DeviceError, MissingDownlevelFlags, RenderPassContext,
-        SHADER_STAGE_COUNT,
+        AttachmentData, Device, DeviceError, MissingDownlevelFlags,
+        RenderPassCompatibilityCheckType, RenderPassContext, SHADER_STAGE_COUNT,
     },
     error::{ErrorFormatter, PrettyError},
     hub::{GlobalIdentityHandlerFactory, HalApi, Hub, Resource, Storage, Token},
@@ -367,7 +367,7 @@ impl RenderBundleEncoder {
                         .map_pass_err(scope)?;
 
                     self.context
-                        .check_compatible(&pipeline.pass_context)
+                        .check_compatible(&pipeline.pass_context, RenderPassCompatibilityCheckType::RenderPipeline)
                         .map_err(RenderCommandError::IncompatiblePipelineTargets)
                         .map_pass_err(scope)?;
 
