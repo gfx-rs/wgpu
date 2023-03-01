@@ -1,37 +1,37 @@
 pub fn map_texture_usage(
     format: wgt::TextureFormat,
     usage: crate::TextureUses,
-) -> mtl::MTLTextureUsage {
+) -> metal::MTLTextureUsage {
     use crate::TextureUses as Tu;
 
-    let mut mtl_usage = mtl::MTLTextureUsage::Unknown;
+    let mut mtl_usage = metal::MTLTextureUsage::Unknown;
 
     mtl_usage.set(
-        mtl::MTLTextureUsage::RenderTarget,
+        metal::MTLTextureUsage::RenderTarget,
         usage.intersects(Tu::COLOR_TARGET | Tu::DEPTH_STENCIL_READ | Tu::DEPTH_STENCIL_WRITE),
     );
     mtl_usage.set(
-        mtl::MTLTextureUsage::ShaderRead,
+        metal::MTLTextureUsage::ShaderRead,
         usage.intersects(
             Tu::RESOURCE | Tu::DEPTH_STENCIL_READ | Tu::STORAGE_READ | Tu::STORAGE_READ_WRITE,
         ),
     );
     mtl_usage.set(
-        mtl::MTLTextureUsage::ShaderWrite,
+        metal::MTLTextureUsage::ShaderWrite,
         usage.intersects(Tu::STORAGE_READ_WRITE),
     );
     // needed for combined depth/stencil formats since we might
     // create a stencil-only view from them
     mtl_usage.set(
-        mtl::MTLTextureUsage::PixelFormatView,
+        metal::MTLTextureUsage::PixelFormatView,
         format.is_combined_depth_stencil_format(),
     );
 
     mtl_usage
 }
 
-pub fn map_texture_view_dimension(dim: wgt::TextureViewDimension) -> mtl::MTLTextureType {
-    use mtl::MTLTextureType::*;
+pub fn map_texture_view_dimension(dim: wgt::TextureViewDimension) -> metal::MTLTextureType {
+    use metal::MTLTextureType::*;
     use wgt::TextureViewDimension as Tvd;
     match dim {
         Tvd::D1 => D1,
@@ -43,8 +43,8 @@ pub fn map_texture_view_dimension(dim: wgt::TextureViewDimension) -> mtl::MTLTex
     }
 }
 
-pub fn map_compare_function(fun: wgt::CompareFunction) -> mtl::MTLCompareFunction {
-    use mtl::MTLCompareFunction::*;
+pub fn map_compare_function(fun: wgt::CompareFunction) -> metal::MTLCompareFunction {
+    use metal::MTLCompareFunction::*;
     use wgt::CompareFunction as Cf;
     match fun {
         Cf::Never => Never,
@@ -58,16 +58,16 @@ pub fn map_compare_function(fun: wgt::CompareFunction) -> mtl::MTLCompareFunctio
     }
 }
 
-pub fn map_filter_mode(filter: wgt::FilterMode) -> mtl::MTLSamplerMinMagFilter {
-    use mtl::MTLSamplerMinMagFilter::*;
+pub fn map_filter_mode(filter: wgt::FilterMode) -> metal::MTLSamplerMinMagFilter {
+    use metal::MTLSamplerMinMagFilter::*;
     match filter {
         wgt::FilterMode::Nearest => Nearest,
         wgt::FilterMode::Linear => Linear,
     }
 }
 
-pub fn map_address_mode(address: wgt::AddressMode) -> mtl::MTLSamplerAddressMode {
-    use mtl::MTLSamplerAddressMode::*;
+pub fn map_address_mode(address: wgt::AddressMode) -> metal::MTLSamplerAddressMode {
+    use metal::MTLSamplerAddressMode::*;
     use wgt::AddressMode as Fm;
     match address {
         Fm::Repeat => Repeat,
@@ -78,8 +78,8 @@ pub fn map_address_mode(address: wgt::AddressMode) -> mtl::MTLSamplerAddressMode
     }
 }
 
-pub fn map_border_color(border_color: wgt::SamplerBorderColor) -> mtl::MTLSamplerBorderColor {
-    use mtl::MTLSamplerBorderColor::*;
+pub fn map_border_color(border_color: wgt::SamplerBorderColor) -> metal::MTLSamplerBorderColor {
+    use metal::MTLSamplerBorderColor::*;
     match border_color {
         wgt::SamplerBorderColor::TransparentBlack => TransparentBlack,
         wgt::SamplerBorderColor::OpaqueBlack => OpaqueBlack,
@@ -90,53 +90,53 @@ pub fn map_border_color(border_color: wgt::SamplerBorderColor) -> mtl::MTLSample
 
 pub fn map_primitive_topology(
     topology: wgt::PrimitiveTopology,
-) -> (mtl::MTLPrimitiveTopologyClass, mtl::MTLPrimitiveType) {
+) -> (metal::MTLPrimitiveTopologyClass, metal::MTLPrimitiveType) {
     use wgt::PrimitiveTopology as Pt;
     match topology {
         Pt::PointList => (
-            mtl::MTLPrimitiveTopologyClass::Point,
-            mtl::MTLPrimitiveType::Point,
+            metal::MTLPrimitiveTopologyClass::Point,
+            metal::MTLPrimitiveType::Point,
         ),
         Pt::LineList => (
-            mtl::MTLPrimitiveTopologyClass::Line,
-            mtl::MTLPrimitiveType::Line,
+            metal::MTLPrimitiveTopologyClass::Line,
+            metal::MTLPrimitiveType::Line,
         ),
         Pt::LineStrip => (
-            mtl::MTLPrimitiveTopologyClass::Line,
-            mtl::MTLPrimitiveType::LineStrip,
+            metal::MTLPrimitiveTopologyClass::Line,
+            metal::MTLPrimitiveType::LineStrip,
         ),
         Pt::TriangleList => (
-            mtl::MTLPrimitiveTopologyClass::Triangle,
-            mtl::MTLPrimitiveType::Triangle,
+            metal::MTLPrimitiveTopologyClass::Triangle,
+            metal::MTLPrimitiveType::Triangle,
         ),
         Pt::TriangleStrip => (
-            mtl::MTLPrimitiveTopologyClass::Triangle,
-            mtl::MTLPrimitiveType::TriangleStrip,
+            metal::MTLPrimitiveTopologyClass::Triangle,
+            metal::MTLPrimitiveType::TriangleStrip,
         ),
     }
 }
 
-pub fn map_color_write(mask: wgt::ColorWrites) -> mtl::MTLColorWriteMask {
-    let mut raw_mask = mtl::MTLColorWriteMask::empty();
+pub fn map_color_write(mask: wgt::ColorWrites) -> metal::MTLColorWriteMask {
+    let mut raw_mask = metal::MTLColorWriteMask::empty();
 
     if mask.contains(wgt::ColorWrites::RED) {
-        raw_mask |= mtl::MTLColorWriteMask::Red;
+        raw_mask |= metal::MTLColorWriteMask::Red;
     }
     if mask.contains(wgt::ColorWrites::GREEN) {
-        raw_mask |= mtl::MTLColorWriteMask::Green;
+        raw_mask |= metal::MTLColorWriteMask::Green;
     }
     if mask.contains(wgt::ColorWrites::BLUE) {
-        raw_mask |= mtl::MTLColorWriteMask::Blue;
+        raw_mask |= metal::MTLColorWriteMask::Blue;
     }
     if mask.contains(wgt::ColorWrites::ALPHA) {
-        raw_mask |= mtl::MTLColorWriteMask::Alpha;
+        raw_mask |= metal::MTLColorWriteMask::Alpha;
     }
 
     raw_mask
 }
 
-pub fn map_blend_factor(factor: wgt::BlendFactor) -> mtl::MTLBlendFactor {
-    use mtl::MTLBlendFactor::*;
+pub fn map_blend_factor(factor: wgt::BlendFactor) -> metal::MTLBlendFactor {
+    use metal::MTLBlendFactor::*;
     use wgt::BlendFactor as Bf;
 
     match factor {
@@ -162,8 +162,8 @@ pub fn map_blend_factor(factor: wgt::BlendFactor) -> mtl::MTLBlendFactor {
     }
 }
 
-pub fn map_blend_op(operation: wgt::BlendOperation) -> mtl::MTLBlendOperation {
-    use mtl::MTLBlendOperation::*;
+pub fn map_blend_op(operation: wgt::BlendOperation) -> metal::MTLBlendOperation {
+    use metal::MTLBlendOperation::*;
     use wgt::BlendOperation as Bo;
 
     match operation {
@@ -178,9 +178,9 @@ pub fn map_blend_op(operation: wgt::BlendOperation) -> mtl::MTLBlendOperation {
 pub fn map_blend_component(
     component: &wgt::BlendComponent,
 ) -> (
-    mtl::MTLBlendOperation,
-    mtl::MTLBlendFactor,
-    mtl::MTLBlendFactor,
+    metal::MTLBlendOperation,
+    metal::MTLBlendFactor,
+    metal::MTLBlendFactor,
 ) {
     (
         map_blend_op(component.operation),
@@ -189,8 +189,8 @@ pub fn map_blend_component(
     )
 }
 
-pub fn map_vertex_format(format: wgt::VertexFormat) -> mtl::MTLVertexFormat {
-    use mtl::MTLVertexFormat::*;
+pub fn map_vertex_format(format: wgt::VertexFormat) -> metal::MTLVertexFormat {
+    use metal::MTLVertexFormat::*;
     use wgt::VertexFormat as Vf;
 
     match format {
@@ -228,15 +228,15 @@ pub fn map_vertex_format(format: wgt::VertexFormat) -> mtl::MTLVertexFormat {
     }
 }
 
-pub fn map_step_mode(mode: wgt::VertexStepMode) -> mtl::MTLVertexStepFunction {
+pub fn map_step_mode(mode: wgt::VertexStepMode) -> metal::MTLVertexStepFunction {
     match mode {
-        wgt::VertexStepMode::Vertex => mtl::MTLVertexStepFunction::PerVertex,
-        wgt::VertexStepMode::Instance => mtl::MTLVertexStepFunction::PerInstance,
+        wgt::VertexStepMode::Vertex => metal::MTLVertexStepFunction::PerVertex,
+        wgt::VertexStepMode::Instance => metal::MTLVertexStepFunction::PerInstance,
     }
 }
 
-pub fn map_stencil_op(op: wgt::StencilOperation) -> mtl::MTLStencilOperation {
-    use mtl::MTLStencilOperation::*;
+pub fn map_stencil_op(op: wgt::StencilOperation) -> metal::MTLStencilOperation {
+    use metal::MTLStencilOperation::*;
     use wgt::StencilOperation as So;
 
     match op {
@@ -251,46 +251,46 @@ pub fn map_stencil_op(op: wgt::StencilOperation) -> mtl::MTLStencilOperation {
     }
 }
 
-pub fn map_winding(winding: wgt::FrontFace) -> mtl::MTLWinding {
+pub fn map_winding(winding: wgt::FrontFace) -> metal::MTLWinding {
     match winding {
-        wgt::FrontFace::Cw => mtl::MTLWinding::Clockwise,
-        wgt::FrontFace::Ccw => mtl::MTLWinding::CounterClockwise,
+        wgt::FrontFace::Cw => metal::MTLWinding::Clockwise,
+        wgt::FrontFace::Ccw => metal::MTLWinding::CounterClockwise,
     }
 }
 
-pub fn map_cull_mode(face: Option<wgt::Face>) -> mtl::MTLCullMode {
+pub fn map_cull_mode(face: Option<wgt::Face>) -> metal::MTLCullMode {
     match face {
-        None => mtl::MTLCullMode::None,
-        Some(wgt::Face::Front) => mtl::MTLCullMode::Front,
-        Some(wgt::Face::Back) => mtl::MTLCullMode::Back,
+        None => metal::MTLCullMode::None,
+        Some(wgt::Face::Front) => metal::MTLCullMode::Front,
+        Some(wgt::Face::Back) => metal::MTLCullMode::Back,
     }
 }
 
-pub fn map_range(range: &crate::MemoryRange) -> mtl::NSRange {
-    mtl::NSRange {
+pub fn map_range(range: &crate::MemoryRange) -> metal::NSRange {
+    metal::NSRange {
         location: range.start,
         length: range.end - range.start,
     }
 }
 
-pub fn map_copy_extent(extent: &crate::CopyExtent) -> mtl::MTLSize {
-    mtl::MTLSize {
+pub fn map_copy_extent(extent: &crate::CopyExtent) -> metal::MTLSize {
+    metal::MTLSize {
         width: extent.width as u64,
         height: extent.height as u64,
         depth: extent.depth as u64,
     }
 }
 
-pub fn map_origin(origin: &wgt::Origin3d) -> mtl::MTLOrigin {
-    mtl::MTLOrigin {
+pub fn map_origin(origin: &wgt::Origin3d) -> metal::MTLOrigin {
+    metal::MTLOrigin {
         x: origin.x as u64,
         y: origin.y as u64,
         z: origin.z as u64,
     }
 }
 
-pub fn map_store_action(store: bool, resolve: bool) -> mtl::MTLStoreAction {
-    use mtl::MTLStoreAction::*;
+pub fn map_store_action(store: bool, resolve: bool) -> metal::MTLStoreAction {
+    use metal::MTLStoreAction::*;
     match (store, resolve) {
         (true, true) => StoreAndMultisampleResolve,
         (false, true) => MultisampleResolve,
@@ -299,8 +299,8 @@ pub fn map_store_action(store: bool, resolve: bool) -> mtl::MTLStoreAction {
     }
 }
 
-pub fn map_clear_color(color: &wgt::Color) -> mtl::MTLClearColor {
-    mtl::MTLClearColor {
+pub fn map_clear_color(color: &wgt::Color) -> metal::MTLClearColor {
+    metal::MTLClearColor {
         red: color.r,
         green: color.g,
         blue: color.b,
@@ -311,14 +311,14 @@ pub fn map_clear_color(color: &wgt::Color) -> mtl::MTLClearColor {
 pub fn get_blit_option(
     format: wgt::TextureFormat,
     aspect: crate::FormatAspects,
-) -> mtl::MTLBlitOption {
+) -> metal::MTLBlitOption {
     if format.is_combined_depth_stencil_format() {
         match aspect {
-            crate::FormatAspects::DEPTH => mtl::MTLBlitOption::DepthFromDepthStencil,
-            crate::FormatAspects::STENCIL => mtl::MTLBlitOption::StencilFromDepthStencil,
+            crate::FormatAspects::DEPTH => metal::MTLBlitOption::DepthFromDepthStencil,
+            crate::FormatAspects::STENCIL => metal::MTLBlitOption::StencilFromDepthStencil,
             _ => unreachable!(),
         }
     } else {
-        mtl::MTLBlitOption::None
+        metal::MTLBlitOption::None
     }
 }
