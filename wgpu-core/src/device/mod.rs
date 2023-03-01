@@ -9,7 +9,7 @@ use crate::{
     },
     instance::{self, Adapter, Surface},
     pipeline, present,
-    resource::{self, BufferAccessResult, BufferMapState},
+    resource::{self, BufferAccessResult, BufferMapState, TextureViewNotRenderableReason},
     resource::{BufferAccessError, BufferMapOperation},
     track::{BindGroupStates, TextureSelector, Tracker},
     validation::{self, check_buffer_usage, check_texture_usage},
@@ -1175,20 +1175,41 @@ impl<A: HalApi> Device<A> {
         };
 
         // https://gpuweb.github.io/gpuweb/#abstract-opdef-renderable-texture-view
-        let is_renderable = texture
-            .desc
-            .usage
-            .contains(wgt::TextureUsages::RENDER_ATTACHMENT)
-            && resolved_dimension == TextureViewDimension::D2
-            && resolved_mip_level_count == 1
-            && resolved_array_layer_count == 1
-            && aspects == hal::FormatAspects::from(texture.desc.format);
-
-        let render_extent = is_renderable.then(|| {
-            texture
+        let render_extent = 'b: loop {
+            if !texture
                 .desc
-                .compute_render_extent(desc.range.base_mip_level)
-        });
+                .usage
+                .contains(wgt::TextureUsages::RENDER_ATTACHMENT)
+            {
+                break 'b Err(TextureViewNotRenderableReason::Usage(texture.desc.usage));
+            }
+
+            if resolved_dimension != TextureViewDimension::D2 {
+                break 'b Err(TextureViewNotRenderableReason::Dimension(
+                    resolved_dimension,
+                ));
+            }
+
+            if resolved_mip_level_count != 1 {
+                break 'b Err(TextureViewNotRenderableReason::MipLevelCount(
+                    resolved_mip_level_count,
+                ));
+            }
+
+            if resolved_array_layer_count != 1 {
+                break 'b Err(TextureViewNotRenderableReason::ArrayLayerCount(
+                    resolved_array_layer_count,
+                ));
+            }
+
+            if aspects != hal::FormatAspects::from(texture.desc.format) {
+                break 'b Err(TextureViewNotRenderableReason::Aspects(aspects));
+            }
+
+            break 'b Ok(texture
+                .desc
+                .compute_render_extent(desc.range.base_mip_level));
+        };
 
         // filter the usages based on the other criteria
         let usage = {
