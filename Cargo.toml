@@ -65,6 +65,7 @@ libloading = "0.7"
 libc = "0.2"
 log = "0.4"
 nanorand = { version = "0.7", default-features = false }
+num-traits = { version = "0.2" }
 # Opt out of noise's "default-features" to avoid "image" feature as a dependency count optimization.
 # This will not be required in the next release since it has been removed from the default feature in https://github.com/Razaekel/noise-rs/commit/1af9e1522236b2c584fb9a02150c9c67a5e6bb04#diff-2e9d962a08321605940b5a657135052fbcef87b5e360662bb527c96d9a615542
 noise = { version = "0.7", default-features = false }
