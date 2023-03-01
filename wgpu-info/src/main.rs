@@ -298,7 +298,7 @@ mod inner {
             });
             println!(" │");
         }
-        print!("\t\t                      ");
+        print!("\t\t {texture_format_whitespace}");
         wgpu::TextureFormatFeatureFlags::println_table_footer();
     }
 
