@@ -1163,6 +1163,8 @@ impl super::Adapter {
     /// - `raw_device` must be created from this adapter.
     /// - `raw_device` must be created using `family_index`, `enabled_extensions` and `physical_device_features()`
     /// - `enabled_extensions` must be a superset of `required_device_extensions()`.
+    /// - If `drop_guard` is `None`, then the underlying `VkDevice`
+    /// will *not* be destroyed when the created `Device` is dropped.
     #[allow(clippy::too_many_arguments)]
     pub unsafe fn device_from_raw(
         &self,
@@ -1172,6 +1174,7 @@ impl super::Adapter {
         features: wgt::Features,
         family_index: u32,
         queue_index: u32,
+        drop_guard: Option<crate::DropGuard>
     ) -> Result<crate::OpenDevice<super::Api>, crate::DeviceError> {
         let mem_properties = {
             profiling::scope!("vkGetPhysicalDeviceMemoryProperties");
@@ -1317,6 +1320,7 @@ impl super::Adapter {
             workarounds: self.workarounds,
             render_passes: Mutex::new(Default::default()),
             framebuffers: Mutex::new(Default::default()),
+            drop_guard,
         });
         let mut relay_semaphores = [vk::Semaphore::null(); 2];
         for sem in relay_semaphores.iter_mut() {
@@ -1427,6 +1431,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
                 features,
                 family_info.queue_family_index,
                 0,
+                Some(Box::new(()))
             )
         }
     }

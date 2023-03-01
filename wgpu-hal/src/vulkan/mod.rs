@@ -254,6 +254,7 @@ struct DeviceShared {
     workarounds: Workarounds,
     render_passes: Mutex<fxhash::FxHashMap<RenderPassKey, vk::RenderPass>>,
     framebuffers: Mutex<fxhash::FxHashMap<FramebufferKey, vk::Framebuffer>>,
+    drop_guard: Option<crate::DropGuard>,
 }
 
 pub struct Device {

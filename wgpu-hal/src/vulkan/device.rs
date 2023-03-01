@@ -305,6 +305,16 @@ impl super::DeviceShared {
     }
 }
 
+impl Drop for super::DeviceShared {
+    fn drop(&mut self) {
+        unsafe {
+            if let Some(_drop_guard) = self.drop_guard.take() {
+                self.raw.destroy_device(None);
+            }
+        }
+    }
+}
+
 impl gpu_alloc::MemoryDevice<vk::DeviceMemory> for super::DeviceShared {
     unsafe fn allocate_memory(
         &self,
