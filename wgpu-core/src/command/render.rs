@@ -466,9 +466,9 @@ impl fmt::Display for AttachmentErrorLocation {
 
 #[derive(Clone, Debug, Error)]
 pub enum ColorAttachmentError {
-    #[error("attachment format {0:?} is not a color format")]
+    #[error("Attachment format {0:?} is not a color format")]
     InvalidFormat(wgt::TextureFormat),
-    #[error("the number of color attachments {given} exceeds the limit {limit}")]
+    #[error("The number of color attachments {given} exceeds the limit {limit}")]
     TooMany { given: usize, limit: usize },
 }
 
@@ -479,66 +479,66 @@ pub enum RenderPassErrorInner {
     ColorAttachment(#[from] ColorAttachmentError),
     #[error(transparent)]
     Encoder(#[from] CommandEncoderError),
-    #[error("attachment texture view {0:?} is invalid")]
+    #[error("Attachment texture view {0:?} is invalid")]
     InvalidAttachment(id::TextureViewId),
-    #[error("the format of the depth-stencil attachment ({0:?}) is not a depth-stencil format")]
+    #[error("The format of the depth-stencil attachment ({0:?}) is not a depth-stencil format")]
     InvalidDepthStencilAttachmentFormat(wgt::TextureFormat),
-    #[error("the format of the {location} ({format:?}) is not resolvable")]
+    #[error("The format of the {location} ({format:?}) is not resolvable")]
     UnsupportedResolveTargetFormat {
         location: AttachmentErrorLocation,
         format: wgt::TextureFormat,
     },
-    #[error("no color attachments or depth attachments were provided, at least one attachment of any kind must be provided")]
+    #[error("No color attachments or depth attachments were provided, at least one attachment of any kind must be provided")]
     MissingAttachments,
-    #[error("the {location} is not renderable:")]
+    #[error("The {location} is not renderable:")]
     TextureViewIsNotRenderable {
         location: AttachmentErrorLocation,
         #[source]
         reason: TextureViewNotRenderableReason,
     },
-    #[error("attachments have differing sizes: the {expected_location} has extent {expected_extent:?} but is followed by the {actual_location} which has {actual_extent:?}")]
+    #[error("Attachments have differing sizes: the {expected_location} has extent {expected_extent:?} but is followed by the {actual_location} which has {actual_extent:?}")]
     AttachmentsDimensionMismatch {
         expected_location: AttachmentErrorLocation,
         expected_extent: wgt::Extent3d,
         actual_location: AttachmentErrorLocation,
         actual_extent: wgt::Extent3d,
     },
-    #[error("attachments have differing sample counts: the {expected_location} has count {expected_samples:?} but is followed by the {actual_location} which has count {actual_samples:?}")]
+    #[error("Attachments have differing sample counts: the {expected_location} has count {expected_samples:?} but is followed by the {actual_location} which has count {actual_samples:?}")]
     AttachmentSampleCountMismatch {
         expected_location: AttachmentErrorLocation,
         expected_samples: u32,
         actual_location: AttachmentErrorLocation,
         actual_samples: u32,
     },
-    #[error("the resolve source, {location}, must be multi-sampled (has {src} samples) while the resolve destination must not be multisampled (has {dst} samples)")]
+    #[error("The resolve source, {location}, must be multi-sampled (has {src} samples) while the resolve destination must not be multisampled (has {dst} samples)")]
     InvalidResolveSampleCounts {
         location: AttachmentErrorLocation,
         src: u32,
         dst: u32,
     },
     #[error(
-        "resource source, {location}, format ({src:?}) must match the resolve destination format ({dst:?})"
+        "Resource source, {location}, format ({src:?}) must match the resolve destination format ({dst:?})"
     )]
     MismatchedResolveTextureFormat {
         location: AttachmentErrorLocation,
         src: wgt::TextureFormat,
         dst: wgt::TextureFormat,
     },
-    #[error("surface texture is dropped before the render pass is finished")]
+    #[error("Surface texture is dropped before the render pass is finished")]
     SurfaceTextureDropped,
-    #[error("not enough memory left")]
+    #[error("Not enough memory left")]
     OutOfMemory,
-    #[error("unable to clear non-present/read-only depth")]
+    #[error("Unable to clear non-present/read-only depth")]
     InvalidDepthOps,
-    #[error("unable to clear non-present/read-only stencil")]
+    #[error("Unable to clear non-present/read-only stencil")]
     InvalidStencilOps,
-    #[error("setting `values_offset` to be `None` is only for internal use in render bundles")]
+    #[error("Setting `values_offset` to be `None` is only for internal use in render bundles")]
     InvalidValuesOffset,
     #[error(transparent)]
     MissingFeatures(#[from] MissingFeatures),
     #[error(transparent)]
     MissingDownlevelFlags(#[from] MissingDownlevelFlags),
-    #[error("indirect draw uses bytes {offset}..{end_offset} {} which overruns indirect buffer of size {buffer_size}",
+    #[error("Indirect draw uses bytes {offset}..{end_offset} {} which overruns indirect buffer of size {buffer_size}",
         count.map_or_else(String::new, |v| format!("(using count {v})")))]
     IndirectBufferOverrun {
         count: Option<NonZeroU32>,
@@ -546,20 +546,20 @@ pub enum RenderPassErrorInner {
         end_offset: u64,
         buffer_size: u64,
     },
-    #[error("indirect draw uses bytes {begin_count_offset}..{end_count_offset} which overruns indirect buffer of size {count_buffer_size}")]
+    #[error("Indirect draw uses bytes {begin_count_offset}..{end_count_offset} which overruns indirect buffer of size {count_buffer_size}")]
     IndirectCountBufferOverrun {
         begin_count_offset: u64,
         end_count_offset: u64,
         count_buffer_size: u64,
     },
-    #[error("cannot pop debug group, because number of pushed debug groups is zero")]
+    #[error("Cannot pop debug group, because number of pushed debug groups is zero")]
     InvalidPopDebugGroup,
     #[error(transparent)]
     ResourceUsageConflict(#[from] UsageConflict),
-    #[error("render bundle has incompatible targets, {0}")]
+    #[error("Render bundle has incompatible targets, {0}")]
     IncompatibleBundleTargets(#[from] RenderPassCompatibilityError),
     #[error(
-        "render bundle has incompatible read-only flags: \
+        "Render bundle has incompatible read-only flags: \
              bundle has flags depth = {bundle_depth} and stencil = {bundle_stencil}, \
              while the pass has flags depth = {pass_depth} and stencil = {pass_stencil}. \
              Read-only renderpasses are only compatible with read-only bundles for that aspect."
@@ -578,10 +578,10 @@ pub enum RenderPassErrorInner {
     Bind(#[from] BindError),
     #[error(transparent)]
     QueryUse(#[from] QueryUseError),
-    #[error("multiview layer count must match")]
+    #[error("Multiview layer count must match")]
     MultiViewMismatch,
     #[error(
-        "multiview pass texture views with more than one array layer must have D2Array dimension"
+        "Multiview pass texture views with more than one array layer must have D2Array dimension"
     )]
     MultiViewDimensionMismatch,
 }
