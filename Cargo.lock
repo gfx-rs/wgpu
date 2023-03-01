@@ -3112,6 +3112,7 @@ name = "wgpu-info"
 version = "0.15.0"
 dependencies = [
  "env_logger",
+ "num-traits 0.2.15",
  "wgpu",
 ]
 
