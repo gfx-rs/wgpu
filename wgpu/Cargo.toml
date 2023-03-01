@@ -86,7 +86,7 @@ name = "stencil-triangles"
 test = true
 
 [features]
-default = ["wgsl"]
+default = ["wgsl", "suballocation"]
 # Apply run-time checks, even in release builds. These are in addition
 # to the validation carried out at public APIs in all builds.
 strict_asserts = ["wgc?/strict_asserts", "wgt/strict_asserts"]
@@ -99,6 +99,7 @@ angle = ["wgc/angle"]
 webgl = ["hal", "wgc"]
 vulkan-portability = ["wgc/vulkan"]
 expose-ids = []
+suballocation = ["hal/windows_rs"]
 
 # wgpu-core is always available as an optional dependency, "wgc".
 # Whenever wgpu-core is selected, we want the GLES backend and raw
@@ -142,7 +143,7 @@ hal = { workspace = true }
 hal = { workspace = true, features = ["renderdoc"] }
 
 [target.'cfg(windows)'.dependencies]
-hal = { workspace = true, features = ["dxc_shader_compiler", "renderdoc", "windows_rs"] }
+hal = { workspace = true, features = ["dxc_shader_compiler", "renderdoc"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies.hal]
 workspace = true
