@@ -704,7 +704,7 @@ impl<A: hal::Api> Example<A> {
         unsafe { cmd_encoder.begin_encoding(Some("init")).unwrap() };
 
         unsafe {
-            cmd_encoder.build_acceleration_structures(&hal::BuildAccelerationStructureDescriptor {
+            cmd_encoder.build_acceleration_structure(&hal::BuildAccelerationStructureDescriptor {
                 mode: hal::AccelerationStructureBuildMode::Build,
                 flags: hal::AccelerationStructureBuildFlags::PREFER_FAST_TRACE,
                 destination_acceleration_structure: &blas,
@@ -720,7 +720,7 @@ impl<A: hal::Api> Example<A> {
             };
             cmd_encoder.transition_buffers(iter::once(as_barrier));
 
-            cmd_encoder.build_acceleration_structures(&hal::BuildAccelerationStructureDescriptor {
+            cmd_encoder.build_acceleration_structure(&hal::BuildAccelerationStructureDescriptor {
                 mode: hal::AccelerationStructureBuildMode::Build,
                 flags: tlas_flags,
                 destination_acceleration_structure: &tlas,
@@ -833,7 +833,7 @@ impl<A: hal::Api> Example<A> {
                 offset: 0,
             };
             ctx.encoder
-                .build_acceleration_structures(&hal::BuildAccelerationStructureDescriptor {
+                .build_acceleration_structure(&hal::BuildAccelerationStructureDescriptor {
                     mode: hal::AccelerationStructureBuildMode::Update,
                     flags: tlas_flags,
                     destination_acceleration_structure: &self.tlas,

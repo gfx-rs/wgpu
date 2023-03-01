@@ -582,7 +582,7 @@ pub trait CommandEncoder<A: Api>: Send + Sync + fmt::Debug {
     unsafe fn dispatch(&mut self, count: [u32; 3]);
     unsafe fn dispatch_indirect(&mut self, buffer: &A::Buffer, offset: wgt::BufferAddress);
 
-    unsafe fn build_acceleration_structures(
+    unsafe fn build_acceleration_structure(
         &mut self,
         desc: &BuildAccelerationStructureDescriptor<A>,
     );
