@@ -83,7 +83,7 @@ smallvec = "1"
 static_assertions = "1.1.0"
 thiserror = "1"
 wgpu = { version = "0.15", path = "./wgpu" }
-winit = "0.27.1"
+winit = "0.28.1"
 
 # Metal dependencies
 block = "0.1"
