@@ -35,26 +35,26 @@ pub enum CopySide {
 /// Error encountered while attempting a data transfer.
 #[derive(Clone, Debug, Error)]
 pub enum TransferError {
-    #[error("buffer {0:?} is invalid or destroyed")]
+    #[error("Buffer {0:?} is invalid or destroyed")]
     InvalidBuffer(BufferId),
-    #[error("texture {0:?} is invalid or destroyed")]
+    #[error("Texture {0:?} is invalid or destroyed")]
     InvalidTexture(TextureId),
     #[error("Source and destination cannot be the same buffer")]
     SameSourceDestinationBuffer,
-    #[error("source buffer/texture is missing the `COPY_SRC` usage flag")]
+    #[error("Source buffer/texture is missing the `COPY_SRC` usage flag")]
     MissingCopySrcUsageFlag,
-    #[error("destination buffer/texture is missing the `COPY_DST` usage flag")]
+    #[error("Destination buffer/texture is missing the `COPY_DST` usage flag")]
     MissingCopyDstUsageFlag(Option<BufferId>, Option<TextureId>),
-    #[error("destination texture is missing the `RENDER_ATTACHMENT` usage flag")]
+    #[error("Destination texture is missing the `RENDER_ATTACHMENT` usage flag")]
     MissingRenderAttachmentUsageFlag(TextureId),
-    #[error("copy of {start_offset}..{end_offset} would end up overrunning the bounds of the {side:?} buffer of size {buffer_size}")]
+    #[error("Copy of {start_offset}..{end_offset} would end up overrunning the bounds of the {side:?} buffer of size {buffer_size}")]
     BufferOverrun {
         start_offset: BufferAddress,
         end_offset: BufferAddress,
         buffer_size: BufferAddress,
         side: CopySide,
     },
-    #[error("copy of {dimension:?} {start_offset}..{end_offset} would end up overrunning the bounds of the {side:?} texture of {dimension:?} size {texture_size}")]
+    #[error("Copy of {dimension:?} {start_offset}..{end_offset} would end up overrunning the bounds of the {side:?} texture of {dimension:?} size {texture_size}")]
     TextureOverrun {
         start_offset: u32,
         end_offset: u32,
@@ -62,65 +62,65 @@ pub enum TransferError {
         dimension: TextureErrorDimension,
         side: CopySide,
     },
-    #[error("unable to select texture aspect {aspect:?} from fromat {format:?}")]
+    #[error("Unable to select texture aspect {aspect:?} from fromat {format:?}")]
     InvalidTextureAspect {
         format: wgt::TextureFormat,
         aspect: wgt::TextureAspect,
     },
-    #[error("unable to select texture mip level {level} out of {total}")]
+    #[error("Unable to select texture mip level {level} out of {total}")]
     InvalidTextureMipLevel { level: u32, total: u32 },
-    #[error("texture dimension must be 2D when copying from an external texture")]
+    #[error("Texture dimension must be 2D when copying from an external texture")]
     InvalidDimensionExternal(TextureId),
-    #[error("buffer offset {0} is not aligned to block size or `COPY_BUFFER_ALIGNMENT`")]
+    #[error("Buffer offset {0} is not aligned to block size or `COPY_BUFFER_ALIGNMENT`")]
     UnalignedBufferOffset(BufferAddress),
-    #[error("copy size {0} does not respect `COPY_BUFFER_ALIGNMENT`")]
+    #[error("Copy size {0} does not respect `COPY_BUFFER_ALIGNMENT`")]
     UnalignedCopySize(BufferAddress),
-    #[error("copy width is not a multiple of block width")]
+    #[error("Copy width is not a multiple of block width")]
     UnalignedCopyWidth,
-    #[error("copy height is not a multiple of block height")]
+    #[error("Copy height is not a multiple of block height")]
     UnalignedCopyHeight,
-    #[error("copy origin's x component is not a multiple of block width")]
+    #[error("Copy origin's x component is not a multiple of block width")]
     UnalignedCopyOriginX,
-    #[error("copy origin's y component is not a multiple of block height")]
+    #[error("Copy origin's y component is not a multiple of block height")]
     UnalignedCopyOriginY,
-    #[error("bytes per row does not respect `COPY_BYTES_PER_ROW_ALIGNMENT`")]
+    #[error("Bytes per row does not respect `COPY_BYTES_PER_ROW_ALIGNMENT`")]
     UnalignedBytesPerRow,
-    #[error("number of bytes per row needs to be specified since more than one row is copied")]
+    #[error("Number of bytes per row needs to be specified since more than one row is copied")]
     UnspecifiedBytesPerRow,
-    #[error("number of rows per image needs to be specified since more than one image is copied")]
+    #[error("Number of rows per image needs to be specified since more than one image is copied")]
     UnspecifiedRowsPerImage,
-    #[error("number of bytes per row is less than the number of bytes in a complete row")]
+    #[error("Number of bytes per row is less than the number of bytes in a complete row")]
     InvalidBytesPerRow,
-    #[error("image is 1D and the copy height and depth are not both set to 1")]
+    #[error("Image is 1D and the copy height and depth are not both set to 1")]
     InvalidCopySize,
-    #[error("number of rows per image is invalid")]
+    #[error("Number of rows per image is invalid")]
     InvalidRowsPerImage,
-    #[error("copy source aspects must refer to all aspects of the source texture format")]
+    #[error("Copy source aspects must refer to all aspects of the source texture format")]
     CopySrcMissingAspects,
     #[error(
-        "copy destination aspects must refer to all aspects of the destination texture format"
+        "Copy destination aspects must refer to all aspects of the destination texture format"
     )]
     CopyDstMissingAspects,
-    #[error("copy aspect must refer to a single aspect of texture format")]
+    #[error("Copy aspect must refer to a single aspect of texture format")]
     CopyAspectNotOne,
-    #[error("copying from textures with format {format:?} and aspect {aspect:?} is forbidden")]
+    #[error("Copying from textures with format {format:?} and aspect {aspect:?} is forbidden")]
     CopyFromForbiddenTextureFormat {
         format: wgt::TextureFormat,
         aspect: wgt::TextureAspect,
     },
-    #[error("copying to textures with format {format:?} and aspect {aspect:?} is forbidden")]
+    #[error("Copying to textures with format {format:?} and aspect {aspect:?} is forbidden")]
     CopyToForbiddenTextureFormat {
         format: wgt::TextureFormat,
         aspect: wgt::TextureAspect,
     },
     #[error(
-        "copying to textures with format {0:?} is forbidden when copying from external texture"
+        "Copying to textures with format {0:?} is forbidden when copying from external texture"
     )]
     ExternalCopyToForbiddenTextureFormat(wgt::TextureFormat),
-    #[error("the entire texture must be copied when copying from depth texture")]
+    #[error("The entire texture must be copied when copying from depth texture")]
     InvalidDepthTextureExtent,
     #[error(
-        "source format ({src_format:?}) and destination format ({dst_format:?}) are not copy-compatible"
+        "Source format ({src_format:?}) and destination format ({dst_format:?}) are not copy-compatible"
     )]
     MismatchedTextureFormats {
         src_format: wgt::TextureFormat,

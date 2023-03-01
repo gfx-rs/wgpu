@@ -344,9 +344,9 @@ pub struct Device<A: HalApi> {
 
 #[derive(Clone, Debug, Error)]
 pub enum CreateDeviceError {
-    #[error("not enough memory left")]
+    #[error("Not enough memory left")]
     OutOfMemory,
-    #[error("failed to create internal buffer for initializing textures")]
+    #[error("Failed to create internal buffer for initializing textures")]
     FailedToCreateZeroBuffer(#[from] DeviceError),
 }
 
@@ -3334,16 +3334,16 @@ impl<A: HalApi> crate::hub::Resource for Device<A> {
 }
 
 #[derive(Clone, Debug, Error)]
-#[error("device is invalid")]
+#[error("Device is invalid")]
 pub struct InvalidDevice;
 
 #[derive(Clone, Debug, Error)]
 pub enum DeviceError {
-    #[error("parent device is invalid")]
+    #[error("Parent device is invalid")]
     Invalid,
-    #[error("parent device is lost")]
+    #[error("Parent device is lost")]
     Lost,
-    #[error("not enough memory left")]
+    #[error("Not enough memory left")]
     OutOfMemory,
 }
 
