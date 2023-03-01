@@ -573,8 +573,12 @@ impl PhysicalDeviceFeatures {
             F::RAY_TRACING,
             caps.supports_extension(vk::KhrDeferredHostOperationsFn::name())
                 && caps.supports_extension(vk::KhrAccelerationStructureFn::name())
-                && caps.supports_extension(vk::KhrBufferDeviceAddressFn::name())
-                && caps.supports_extension(vk::KhrRayQueryFn::name()),
+                && caps.supports_extension(vk::KhrBufferDeviceAddressFn::name()),
+        );
+
+        features.set(
+            F::RAY_QUERY,
+            caps.supports_extension(vk::KhrRayQueryFn::name()),
         );
 
         (features, dl_flags)
@@ -735,10 +739,15 @@ impl PhysicalDeviceCapabilities {
             extensions.push(vk::KhrDrawIndirectCountFn::name());
         }
 
+        // Require `VK_KHR_deferred_host_operations`, `VK_KHR_acceleration_structure` and `VK_KHR_buffer_device_address` if the feature `RAY_TRACING` was requested
         if requested_features.contains(wgt::Features::RAY_TRACING) {
             extensions.push(vk::KhrDeferredHostOperationsFn::name());
             extensions.push(vk::KhrAccelerationStructureFn::name());
             extensions.push(vk::KhrBufferDeviceAddressFn::name());
+        }
+
+        // Require `VK_KHR_ray_query` if the associated feature was requested
+        if requested_features.contains(wgt::Features::RAY_QUERY) {
             extensions.push(vk::KhrRayQueryFn::name());
         }
 

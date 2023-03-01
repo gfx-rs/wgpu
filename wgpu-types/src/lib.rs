@@ -687,13 +687,6 @@ bitflags::bitflags! {
         /// This is currently unimplemented on Metal.
         /// When implemented, it will be supported on Metal on AMD and Intel GPUs, but not Apple GPUs.
         const WRITE_TIMESTAMP_INSIDE_PASSES = 1 << 41;
-        /// Allows for the creation of ray-tracing acceleration structures and ray queries within shaders.
-        ///
-        /// Supported platforms:
-        /// - Vulkan
-        ///
-        /// This is a native-only feature.
-        const RAY_TRACING = 1 << 42;
         /// Allows shaders to use i16. Not currently supported in naga, only available through `spirv-passthrough`.
         const SHADER_INT16 = 1 << 42;
         /// Allows shaders to use the `early_depth_test` attribute.
@@ -703,6 +696,20 @@ bitflags::bitflags! {
         ///
         /// This is a native-only feature.
         const SHADER_EARLY_DEPTH_TEST = 1 << 43;
+        /// Allows for the creation of ray-tracing acceleration structures.
+        ///
+        /// Supported platforms:
+        /// - Vulkan
+        ///
+        /// This is a native-only feature.
+        const RAY_TRACING = 1 << 44;
+        /// Allows for the creation of ray-tracing queries within shaders.
+        ///
+        /// Supported platforms:
+        /// - Vulkan
+        ///
+        /// This is a native-only feature.
+        const RAY_QUERY = 1 << 45;
     }
 }
 
