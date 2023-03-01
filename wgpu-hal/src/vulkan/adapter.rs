@@ -1174,7 +1174,7 @@ impl super::Adapter {
         features: wgt::Features,
         family_index: u32,
         queue_index: u32,
-        drop_guard: Option<crate::DropGuard>
+        drop_guard: Option<crate::DropGuard>,
     ) -> Result<crate::OpenDevice<super::Api>, crate::DeviceError> {
         let mem_properties = {
             profiling::scope!("vkGetPhysicalDeviceMemoryProperties");
@@ -1431,7 +1431,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
                 features,
                 family_info.queue_family_index,
                 0,
-                Some(Box::new(()))
+                Some(Box::new(())),
             )
         }
     }
