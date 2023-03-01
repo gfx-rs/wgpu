@@ -40,8 +40,8 @@ impl crate::Api for Api {
 
 pub struct Instance {
     lib_d3d11: library::D3D11Lib,
-    lib_dxgi: native::DxgiLib,
-    factory: native::DxgiFactory,
+    lib_dxgi: d3d12::DxgiLib,
+    factory: d3d12::DxgiFactory,
 }
 
 unsafe impl Send for Instance {}
@@ -56,7 +56,7 @@ pub struct Adapter {
 unsafe impl Send for Adapter {}
 unsafe impl Sync for Adapter {}
 
-native::weak_com_inheritance_chain! {
+d3d12::weak_com_inheritance_chain! {
     #[derive(Debug, Copy, Clone, PartialEq)]
     enum D3D11Device {
         Device(d3d11::ID3D11Device), from_device, as_device, device;

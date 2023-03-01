@@ -71,19 +71,19 @@ fn main() {
     env_logger::init();
 
     println!("Initializing external GL context");
-    let egl = egl::Instance::new(egl::Static);
-    let display = egl.get_display(egl::DEFAULT_DISPLAY).unwrap();
+    let egl = khronos_egl::Instance::new(khronos_egl::Static);
+    let display = egl.get_display(khronos_egl::DEFAULT_DISPLAY).unwrap();
     egl.initialize(display)
         .expect("unable to initialize display");
 
     let attributes = [
-        egl::RED_SIZE,
+        khronos_egl::RED_SIZE,
         8,
-        egl::GREEN_SIZE,
+        khronos_egl::GREEN_SIZE,
         8,
-        egl::BLUE_SIZE,
+        khronos_egl::BLUE_SIZE,
         8,
-        egl::NONE,
+        khronos_egl::NONE,
     ];
 
     let config = egl
@@ -96,7 +96,7 @@ fn main() {
     }
     .expect("unable to create surface");
 
-    let context_attributes = [egl::CONTEXT_CLIENT_VERSION, 3, egl::NONE];
+    let context_attributes = [khronos_egl::CONTEXT_CLIENT_VERSION, 3, khronos_egl::NONE];
 
     let gl_context = egl
         .create_context(display, config, None, &context_attributes)
