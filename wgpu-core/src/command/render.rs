@@ -18,7 +18,7 @@ use crate::{
     id,
     init_tracker::{MemoryInitKind, TextureInitRange, TextureInitTrackerAction},
     pipeline::{self, PipelineFlags},
-    resource::{self, Buffer, Texture, TextureView},
+    resource::{self, Buffer, Texture, TextureView, TextureViewNotRenderableReason},
     track::{TextureSelector, UsageConflict, UsageScope},
     validation::{
         check_buffer_usage, check_texture_usage, MissingBufferUsageError, MissingTextureUsageError,
@@ -436,6 +436,34 @@ impl State {
     }
 }
 
+/// Describes an attachment location in words.
+///
+/// Can be used as "the {loc} has..." or "{loc} has..."
+#[derive(Debug, Copy, Clone)]
+pub enum AttachmentErrorLocation {
+    Color { index: usize, resolve: bool },
+    Depth,
+}
+
+impl fmt::Display for AttachmentErrorLocation {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match *self {
+            AttachmentErrorLocation::Color {
+                index,
+                resolve: false,
+            } => write!(f, "color attachment at index {index}'s texture view"),
+            AttachmentErrorLocation::Color {
+                index,
+                resolve: true,
+            } => write!(
+                f,
+                "color attachment at index {index}'s resolve texture view"
+            ),
+            AttachmentErrorLocation::Depth => write!(f, "depth attachment's texture view"),
+        }
+    }
+}
+
 #[derive(Clone, Debug, Error)]
 pub enum ColorAttachmentError {
     #[error("attachment format {0:?} is not a color format")]
@@ -453,27 +481,46 @@ pub enum RenderPassErrorInner {
     Encoder(#[from] CommandEncoderError),
     #[error("attachment texture view {0:?} is invalid")]
     InvalidAttachment(id::TextureViewId),
-    #[error("attachment format {0:?} is not a depth-stencil format")]
+    #[error("the format of the depth-stencil attachment ({0:?}) is not a depth-stencil format")]
     InvalidDepthStencilAttachmentFormat(wgt::TextureFormat),
-    #[error("attachment format {0:?} can not be resolved")]
-    UnsupportedResolveTargetFormat(wgt::TextureFormat),
-    #[error("missing color or depth_stencil attachments, at least one is required.")]
-    MissingAttachments,
-    #[error("attachment texture view is not renderable")]
-    TextureViewIsNotRenderable,
-    #[error("attachments have differing sizes: {previous:?} is followed by {mismatch:?}")]
-    AttachmentsDimensionMismatch {
-        previous: (&'static str, wgt::Extent3d),
-        mismatch: (&'static str, wgt::Extent3d),
+    #[error("the format of the {location} ({format:?}) is not resolvable")]
+    UnsupportedResolveTargetFormat {
+        location: AttachmentErrorLocation,
+        format: wgt::TextureFormat,
     },
-    #[error("attachment's sample count {0} is invalid")]
-    InvalidSampleCount(u32),
-    #[error("resolve source must be multi-sampled (has {src} samples) while the resolve destination must not be multisampled (has {dst} samples)")]
-    InvalidResolveSampleCounts { src: u32, dst: u32 },
+    #[error("no color attachments or depth attachments were provided, at least one attachment of any kind must be provided")]
+    MissingAttachments,
+    #[error("the {location} is not renderable:")]
+    TextureViewIsNotRenderable {
+        location: AttachmentErrorLocation,
+        #[source]
+        reason: TextureViewNotRenderableReason,
+    },
+    #[error("attachments have differing sizes: the {expected_location} has extent {expected_extent:?} but is followed by the {actual_location} which has {actual_extent:?}")]
+    AttachmentsDimensionMismatch {
+        expected_location: AttachmentErrorLocation,
+        expected_extent: wgt::Extent3d,
+        actual_location: AttachmentErrorLocation,
+        actual_extent: wgt::Extent3d,
+    },
+    #[error("attachments have differing sample counts: the {expected_location} has count {expected_samples:?} but is followed by the {actual_location} which has count {actual_samples:?}")]
+    AttachmentSampleCountMismatch {
+        expected_location: AttachmentErrorLocation,
+        expected_samples: u32,
+        actual_location: AttachmentErrorLocation,
+        actual_samples: u32,
+    },
+    #[error("the resolve source, {location}, must be multi-sampled (has {src} samples) while the resolve destination must not be multisampled (has {dst} samples)")]
+    InvalidResolveSampleCounts {
+        location: AttachmentErrorLocation,
+        src: u32,
+        dst: u32,
+    },
     #[error(
-        "resource source format ({src:?}) must match the resolve destination format ({dst:?})"
+        "resource source, {location}, format ({src:?}) must match the resolve destination format ({dst:?})"
     )]
     MismatchedResolveTextureFormat {
+        location: AttachmentErrorLocation,
         src: wgt::TextureFormat,
         dst: wgt::TextureFormat,
     },
@@ -485,8 +532,6 @@ pub enum RenderPassErrorInner {
     InvalidDepthOps,
     #[error("unable to clear non-present/read-only stencil")]
     InvalidStencilOps,
-    #[error("all attachments must have the same sample count, found {actual} != {expected}")]
-    SampleCountMismatch { actual: u32, expected: u32 },
     #[error("setting `values_offset` to be `None` is only for internal use in render bundles")]
     InvalidValuesOffset,
     #[error(transparent)]
@@ -519,7 +564,7 @@ pub enum RenderPassErrorInner {
              while the pass has flags depth = {pass_depth} and stencil = {pass_stencil}. \
              Read-only renderpasses are only compatible with read-only bundles for that aspect."
     )]
-    IncompatibleBundleRods {
+    IncompatibleBundleReadOnlyDepthStencil {
         pass_depth: bool,
         pass_stencil: bool,
         bundle_depth: bool,
@@ -686,7 +731,10 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
         let mut pending_discard_init_fixups = SurfacesInDiscardState::new();
         let mut divergent_discarded_depth_stencil_aspect = None;
 
-        let mut attachment_type_name = "";
+        let mut attachment_location = AttachmentErrorLocation::Color {
+            index: usize::MAX,
+            resolve: false,
+        };
         let mut extent = None;
         let mut sample_count = 0;
 
@@ -723,15 +771,17 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
 
             Ok(())
         };
-        let mut add_view = |view: &TextureView<A>, type_name| {
-            let render_extent = view
-                .render_extent
-                .ok_or(RenderPassErrorInner::TextureViewIsNotRenderable)?;
+        let mut add_view = |view: &TextureView<A>, location| {
+            let render_extent = view.render_extent.map_err(|reason| {
+                RenderPassErrorInner::TextureViewIsNotRenderable { location, reason }
+            })?;
             if let Some(ex) = extent {
                 if ex != render_extent {
                     return Err(RenderPassErrorInner::AttachmentsDimensionMismatch {
-                        previous: (attachment_type_name, ex),
-                        mismatch: (type_name, render_extent),
+                        expected_location: attachment_location,
+                        expected_extent: ex,
+                        actual_location: location,
+                        actual_extent: render_extent,
                     });
                 }
             } else {
@@ -740,12 +790,14 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
             if sample_count == 0 {
                 sample_count = view.samples;
             } else if sample_count != view.samples {
-                return Err(RenderPassErrorInner::SampleCountMismatch {
-                    actual: view.samples,
-                    expected: sample_count,
+                return Err(RenderPassErrorInner::AttachmentSampleCountMismatch {
+                    expected_location: attachment_location,
+                    expected_samples: sample_count,
+                    actual_location: location,
+                    actual_samples: view.samples,
                 });
             }
-            attachment_type_name = type_name;
+            attachment_location = location;
             Ok(())
         };
 
@@ -760,7 +812,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                 .add_single(view_guard, at.view)
                 .ok_or(RenderPassErrorInner::InvalidAttachment(at.view))?;
             check_multiview(view)?;
-            add_view(view, "depth")?;
+            add_view(view, AttachmentErrorLocation::Depth)?;
 
             let ds_aspects = view.desc.aspects();
             if ds_aspects.contains(hal::FormatAspects::COLOR) {
@@ -879,8 +931,8 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
             });
         }
 
-        for at in color_attachments {
-            let at = if let Some(attachment) = at.as_ref() {
+        for (index, attachment) in color_attachments.iter().enumerate() {
+            let at = if let Some(attachment) = attachment.as_ref() {
                 attachment
             } else {
                 colors.push(None);
@@ -892,7 +944,13 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                 .add_single(view_guard, at.view)
                 .ok_or(RenderPassErrorInner::InvalidAttachment(at.view))?;
             check_multiview(color_view)?;
-            add_view(color_view, "color")?;
+            add_view(
+                color_view,
+                AttachmentErrorLocation::Color {
+                    index,
+                    resolve: false,
+                },
+            )?;
 
             if !color_view
                 .desc
@@ -924,23 +982,35 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
 
                 check_multiview(resolve_view)?;
 
-                let render_extent = resolve_view
-                    .render_extent
-                    .ok_or(RenderPassErrorInner::TextureViewIsNotRenderable)?;
+                let resolve_location = AttachmentErrorLocation::Color {
+                    index,
+                    resolve: true,
+                };
+
+                let render_extent = resolve_view.render_extent.map_err(|reason| {
+                    RenderPassErrorInner::TextureViewIsNotRenderable {
+                        location: resolve_location,
+                        reason,
+                    }
+                })?;
                 if color_view.render_extent.unwrap() != render_extent {
                     return Err(RenderPassErrorInner::AttachmentsDimensionMismatch {
-                        previous: (attachment_type_name, extent.unwrap_or_default()),
-                        mismatch: ("resolve", render_extent),
+                        expected_location: attachment_location,
+                        expected_extent: extent.unwrap_or_default(),
+                        actual_location: resolve_location,
+                        actual_extent: render_extent,
                     });
                 }
                 if color_view.samples == 1 || resolve_view.samples != 1 {
                     return Err(RenderPassErrorInner::InvalidResolveSampleCounts {
+                        location: resolve_location,
                         src: color_view.samples,
                         dst: resolve_view.samples,
                     });
                 }
                 if color_view.desc.format != resolve_view.desc.format {
                     return Err(RenderPassErrorInner::MismatchedResolveTextureFormat {
+                        location: resolve_location,
                         src: color_view.desc.format,
                         dst: resolve_view.desc.format,
                     });
@@ -950,9 +1020,10 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                     .flags
                     .contains(wgt::TextureFormatFeatureFlags::MULTISAMPLE_RESOLVE)
                 {
-                    return Err(RenderPassErrorInner::UnsupportedResolveTargetFormat(
-                        resolve_view.desc.format,
-                    ));
+                    return Err(RenderPassErrorInner::UnsupportedResolveTargetFormat {
+                        location: resolve_location,
+                        format: resolve_view.desc.format,
+                    });
                 }
 
                 cmd_buf.texture_memory_actions.register_implicit_init(
@@ -1999,12 +2070,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         if (info.is_depth_read_only && !bundle.is_depth_read_only)
                             || (info.is_stencil_read_only && !bundle.is_stencil_read_only)
                         {
-                            return Err(RenderPassErrorInner::IncompatibleBundleRods {
-                                pass_depth: info.is_depth_read_only,
-                                pass_stencil: info.is_stencil_read_only,
-                                bundle_depth: bundle.is_depth_read_only,
-                                bundle_stencil: bundle.is_stencil_read_only,
-                            })
+                            return Err(
+                                RenderPassErrorInner::IncompatibleBundleReadOnlyDepthStencil {
+                                    pass_depth: info.is_depth_read_only,
+                                    pass_stencil: info.is_stencil_read_only,
+                                    bundle_depth: bundle.is_depth_read_only,
+                                    bundle_stencil: bundle.is_stencil_read_only,
+                                },
+                            )
                             .map_pass_err(scope);
                         }
 

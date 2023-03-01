@@ -576,6 +576,22 @@ impl HalTextureViewDescriptor {
     }
 }
 
+#[derive(Debug, Copy, Clone, Error)]
+pub enum TextureViewNotRenderableReason {
+    #[error("the texture this view references doesn't include the RENDER_ATTACHMENT usage. Provided usages: {0:?}")]
+    Usage(wgt::TextureUsages),
+    #[error("the dimension of this texture view is not 2D. View dimension: {0:?}")]
+    Dimension(wgt::TextureViewDimension),
+    #[error("this texture view has more than one mipmap level. View mipmap levels: {0:?}")]
+    MipLevelCount(u32),
+    #[error("this texture view has more than one array layer. View array layers: {0:?}")]
+    ArrayLayerCount(u32),
+    #[error(
+        "the aspects of this texture view are a subset of the aspects in the original texture. Aspects: {0:?}"
+    )]
+    Aspects(hal::FormatAspects),
+}
+
 #[derive(Debug)]
 pub struct TextureView<A: hal::Api> {
     pub(crate) raw: A::TextureView,
@@ -586,8 +602,8 @@ pub struct TextureView<A: hal::Api> {
     //TODO: store device_id for quick access?
     pub(crate) desc: HalTextureViewDescriptor,
     pub(crate) format_features: wgt::TextureFormatFeatures,
-    /// This is `None` only if the texture view is not renderable
-    pub(crate) render_extent: Option<wgt::Extent3d>,
+    /// This is `Err` only if the texture view is not renderable
+    pub(crate) render_extent: Result<wgt::Extent3d, TextureViewNotRenderableReason>,
     pub(crate) samples: u32,
     pub(crate) selector: TextureSelector,
     pub(crate) life_guard: LifeGuard,
