@@ -758,6 +758,11 @@ impl crate::Surface<super::Api> for super::Surface {
             sc.functor
                 .acquire_next_image(sc.raw, timeout_ns, vk::Semaphore::null(), sc.fence)
         } {
+            // We treat `VK_SUBOPTIMAL_KHR` as `VK_SUCCESS` on Android.
+            // See the comment in `Queue::present`.
+            #[cfg(target_os = "android")]
+            Ok((index, _)) => (index, false),
+            #[cfg(not(target_os = "android"))]
             Ok(pair) => pair,
             Err(error) => {
                 return match error {

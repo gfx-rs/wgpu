@@ -223,6 +223,6 @@ pub fn map_vertex_format(format: wgt::VertexFormat) -> dxgiformat::DXGI_FORMAT {
     }
 }
 
-pub fn map_acomposite_alpha_mode(_mode: wgt::CompositeAlphaMode) -> native::AlphaMode {
-    native::AlphaMode::Ignore
+pub fn map_acomposite_alpha_mode(_mode: wgt::CompositeAlphaMode) -> d3d12::AlphaMode {
+    d3d12::AlphaMode::Ignore
 }

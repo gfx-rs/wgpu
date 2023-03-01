@@ -1057,13 +1057,13 @@ impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<A, F> {
 }
 
 pub struct Hubs<F: GlobalIdentityHandlerFactory> {
-    #[cfg(feature = "vulkan")]
+    #[cfg(all(feature = "vulkan", not(target_arch = "wasm32")))]
     vulkan: Hub<hal::api::Vulkan, F>,
-    #[cfg(feature = "metal")]
+    #[cfg(all(feature = "metal", any(target_os = "macos", target_os = "ios")))]
     metal: Hub<hal::api::Metal, F>,
-    #[cfg(feature = "dx12")]
+    #[cfg(all(feature = "dx12", windows))]
     dx12: Hub<hal::api::Dx12, F>,
-    #[cfg(feature = "dx11")]
+    #[cfg(all(feature = "dx11", windows))]
     dx11: Hub<hal::api::Dx11, F>,
     #[cfg(feature = "gles")]
     gl: Hub<hal::api::Gles, F>,
@@ -1072,13 +1072,13 @@ pub struct Hubs<F: GlobalIdentityHandlerFactory> {
 impl<F: GlobalIdentityHandlerFactory> Hubs<F> {
     fn new(factory: &F) -> Self {
         Self {
-            #[cfg(feature = "vulkan")]
+            #[cfg(all(feature = "vulkan", not(target_arch = "wasm32")))]
             vulkan: Hub::new(factory),
-            #[cfg(feature = "metal")]
+            #[cfg(all(feature = "metal", any(target_os = "macos", target_os = "ios")))]
             metal: Hub::new(factory),
-            #[cfg(feature = "dx12")]
+            #[cfg(all(feature = "dx12", windows))]
             dx12: Hub::new(factory),
-            #[cfg(feature = "dx11")]
+            #[cfg(all(feature = "dx11", windows))]
             dx11: Hub::new(factory),
             #[cfg(feature = "gles")]
             gl: Hub::new(factory),
@@ -1089,13 +1089,13 @@ impl<F: GlobalIdentityHandlerFactory> Hubs<F> {
 #[derive(Debug)]
 pub struct GlobalReport {
     pub surfaces: StorageReport,
-    #[cfg(feature = "vulkan")]
+    #[cfg(all(feature = "vulkan", not(target_arch = "wasm32")))]
     pub vulkan: Option<HubReport>,
-    #[cfg(feature = "metal")]
+    #[cfg(all(feature = "metal", any(target_os = "macos", target_os = "ios")))]
     pub metal: Option<HubReport>,
-    #[cfg(feature = "dx12")]
+    #[cfg(all(feature = "dx12", windows))]
     pub dx12: Option<HubReport>,
-    #[cfg(feature = "dx11")]
+    #[cfg(all(feature = "dx11", windows))]
     pub dx11: Option<HubReport>,
     #[cfg(feature = "gles")]
     pub gl: Option<HubReport>,
@@ -1162,25 +1162,25 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn generate_report(&self) -> GlobalReport {
         GlobalReport {
             surfaces: self.surfaces.data.read().generate_report(),
-            #[cfg(feature = "vulkan")]
+            #[cfg(all(feature = "vulkan", not(target_arch = "wasm32")))]
             vulkan: if self.instance.vulkan.is_some() {
                 Some(self.hubs.vulkan.generate_report())
             } else {
                 None
             },
-            #[cfg(feature = "metal")]
+            #[cfg(all(feature = "metal", any(target_os = "macos", target_os = "ios")))]
             metal: if self.instance.metal.is_some() {
                 Some(self.hubs.metal.generate_report())
             } else {
                 None
             },
-            #[cfg(feature = "dx12")]
+            #[cfg(all(feature = "dx12", windows))]
             dx12: if self.instance.dx12.is_some() {
                 Some(self.hubs.dx12.generate_report())
             } else {
                 None
             },
-            #[cfg(feature = "dx11")]
+            #[cfg(all(feature = "dx11", windows))]
             dx11: if self.instance.dx11.is_some() {
                 Some(self.hubs.dx11.generate_report())
             } else {
@@ -1203,19 +1203,19 @@ impl<G: GlobalIdentityHandlerFactory> Drop for Global<G> {
         let mut surface_guard = self.surfaces.data.write();
 
         // destroy hubs before the instance gets dropped
-        #[cfg(feature = "vulkan")]
+        #[cfg(all(feature = "vulkan", not(target_arch = "wasm32")))]
         {
             self.hubs.vulkan.clear(&mut surface_guard, true);
         }
-        #[cfg(feature = "metal")]
+        #[cfg(all(feature = "metal", any(target_os = "macos", target_os = "ios")))]
         {
             self.hubs.metal.clear(&mut surface_guard, true);
         }
-        #[cfg(feature = "dx12")]
+        #[cfg(all(feature = "dx12", windows))]
         {
             self.hubs.dx12.clear(&mut surface_guard, true);
         }
-        #[cfg(feature = "dx11")]
+        #[cfg(all(feature = "dx11", windows))]
         {
             self.hubs.dx11.clear(&mut surface_guard, true);
         }
@@ -1261,7 +1261,7 @@ impl HalApi for hal::api::Empty {
     }
 }
 
-#[cfg(feature = "vulkan")]
+#[cfg(all(feature = "vulkan", not(target_arch = "wasm32")))]
 impl HalApi for hal::api::Vulkan {
     const VARIANT: Backend = Backend::Vulkan;
     fn create_instance_from_hal(name: &str, hal_instance: Self::Instance) -> Instance {
@@ -1285,7 +1285,7 @@ impl HalApi for hal::api::Vulkan {
     }
 }
 
-#[cfg(feature = "metal")]
+#[cfg(all(feature = "metal", any(target_os = "macos", target_os = "ios")))]
 impl HalApi for hal::api::Metal {
     const VARIANT: Backend = Backend::Metal;
     fn create_instance_from_hal(name: &str, hal_instance: Self::Instance) -> Instance {
@@ -1309,7 +1309,7 @@ impl HalApi for hal::api::Metal {
     }
 }
 
-#[cfg(feature = "dx12")]
+#[cfg(all(feature = "dx12", windows))]
 impl HalApi for hal::api::Dx12 {
     const VARIANT: Backend = Backend::Dx12;
     fn create_instance_from_hal(name: &str, hal_instance: Self::Instance) -> Instance {
@@ -1333,7 +1333,7 @@ impl HalApi for hal::api::Dx12 {
     }
 }
 
-#[cfg(feature = "dx11")]
+#[cfg(all(feature = "dx11", windows))]
 impl HalApi for hal::api::Dx11 {
     const VARIANT: Backend = Backend::Dx11;
     fn create_instance_from_hal(name: &str, hal_instance: Self::Instance) -> Instance {

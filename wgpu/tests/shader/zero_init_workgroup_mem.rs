@@ -23,16 +23,7 @@ fn zero_init_workgroup_mem() {
                 Some(5140),
                 Some("Microsoft Basic Render Driver"),
                 true,
-            )
-            // this one is flakey
-            .specific_failure(
-                Some(Backends::VULKAN),
-                Some(6880),
-                Some("SwiftShader"),
-                true,
-            )
-            // TODO: investigate why it fails
-            .specific_failure(Some(Backends::GL), Some(65541), Some("llvmpipe"), false),
+            ),
         zero_init_workgroup_mem_impl,
     );
 }

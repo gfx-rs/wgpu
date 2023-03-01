@@ -49,15 +49,12 @@ id32 = []
 # Enable `ShaderModuleSource::Wgsl`
 wgsl = ["naga/wgsl-in"]
 
-# Features that are intended to work on all platforms.
-portable_features = ["gles", "strict_asserts", "trace", "replay", "serial-pass", "id32", "wgsl"]
-
 [dependencies]
 arrayvec = "0.7"
 bitflags = "1"
 bit-vec = "0.6"
 codespan-reporting = "0.11"
-fxhash = "0.2.1"
+rustc-hash = "1.1"
 log = "0.4"
 # parking_lot 0.12 switches from `winapi` to `windows`; permit either
 parking_lot = ">=0.11,<0.13"
@@ -70,7 +67,7 @@ thiserror = "1"
 
 [dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-rev = "58105a06e2bd5aefeb9330984d47976e63c11dc4"
+rev = "9742f1616c3e3dd2cc9a5880616fc886c391bb9f"
 version = "0.11.0"
 features = ["clone", "span", "validate"]
 

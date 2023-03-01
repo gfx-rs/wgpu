@@ -22,7 +22,7 @@ type D3D11CreateDeviceFun = unsafe extern "system" fn(
     *mut *mut d3d11::ID3D11Device,
     *mut d3dcommon::D3D_FEATURE_LEVEL,
     *mut *mut d3d11::ID3D11DeviceContext,
-) -> native::HRESULT;
+) -> d3d12::HRESULT;
 
 pub(super) struct D3D11Lib {
     // We use the os specific symbol to drop the lifetime parameter.
@@ -51,7 +51,7 @@ impl D3D11Lib {
 
     pub fn create_device(
         &self,
-        adapter: native::DxgiAdapter,
+        adapter: d3d12::DxgiAdapter,
     ) -> Option<(super::D3D11Device, d3dcommon::D3D_FEATURE_LEVEL)> {
         let feature_levels = [
             d3dcommon::D3D_FEATURE_LEVEL_11_1,
@@ -63,7 +63,7 @@ impl D3D11Lib {
             d3dcommon::D3D_FEATURE_LEVEL_9_1,
         ];
 
-        let mut device = native::WeakPtr::<d3d11::ID3D11Device>::null();
+        let mut device = d3d12::WeakPtr::<d3d11::ID3D11Device>::null();
         let mut feature_level: d3dcommon::D3D_FEATURE_LEVEL = 0;
 
         // We need to try this twice. If the first time fails due to E_INVALIDARG

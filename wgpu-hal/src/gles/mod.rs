@@ -59,6 +59,8 @@ To address this, we invalidate the vertex buffers based on:
 ///cbindgen:ignore
 #[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))]
 mod egl;
+#[cfg(target_os = "emscripten")]
+mod emscripten;
 #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
 mod web;
 
@@ -212,7 +214,7 @@ pub struct Adapter {
 pub struct Device {
     shared: Arc<AdapterShared>,
     main_vao: glow::VertexArray,
-    #[cfg(feature = "renderdoc")]
+    #[cfg(all(not(target_arch = "wasm32"), feature = "renderdoc"))]
     render_doc: crate::auxil::renderdoc::RenderDoc,
 }
 

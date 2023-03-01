@@ -16,7 +16,7 @@ type ShaderStage<'a> = (
     naga::ShaderStage,
     &'a crate::ProgrammableStage<'a, super::Api>,
 );
-type NameBindingMap = fxhash::FxHashMap<String, (super::BindingRegister, u8)>;
+type NameBindingMap = rustc_hash::FxHashMap<String, (super::BindingRegister, u8)>;
 
 struct CompilationContext<'a> {
     layout: &'a super::PipelineLayout,
@@ -1303,7 +1303,7 @@ impl crate::Device<super::Api> for super::Device {
     }
 
     unsafe fn start_capture(&self) -> bool {
-        #[cfg(feature = "renderdoc")]
+        #[cfg(all(not(target_arch = "wasm32"), feature = "renderdoc"))]
         return unsafe {
             self.render_doc
                 .start_frame_capture(self.shared.context.raw_context(), ptr::null_mut())
@@ -1312,7 +1312,7 @@ impl crate::Device<super::Api> for super::Device {
         false
     }
     unsafe fn stop_capture(&self) {
-        #[cfg(feature = "renderdoc")]
+        #[cfg(all(not(target_arch = "wasm32"), feature = "renderdoc"))]
         unsafe {
             self.render_doc
                 .end_frame_capture(ptr::null_mut(), ptr::null_mut())
