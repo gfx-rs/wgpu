@@ -16,7 +16,7 @@ type ShaderStage<'a> = (
     naga::ShaderStage,
     &'a crate::ProgrammableStage<'a, super::Api>,
 );
-type NameBindingMap = fxhash::FxHashMap<String, (super::BindingRegister, u8)>;
+type NameBindingMap = rustc_hash::FxHashMap<String, (super::BindingRegister, u8)>;
 
 struct CompilationContext<'a> {
     layout: &'a super::PipelineLayout,

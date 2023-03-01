@@ -58,7 +58,7 @@ codespan-reporting = "0.11"
 ddsfile = "0.5"
 env_logger = "0.10"
 futures-intrusive = "0.4"
-fxhash = "0.2.1"
+rustc-hash = "1.1.0"
 glam = "0.21.3"
 image = { version = "0.24", default-features = false, features = ["png"] }
 libloading = "0.7"

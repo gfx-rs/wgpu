@@ -1009,15 +1009,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "fxhash"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c31b6d751ae2c7f11320402d34e41349dd1016f8d5d45e48c4312bc8625af50c"
-dependencies = [
- "byteorder",
-]
-
-[[package]]
 name = "getrandom"
 version = "0.1.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3058,13 +3049,13 @@ dependencies = [
  "bit-vec",
  "bitflags",
  "codespan-reporting",
- "fxhash",
  "log",
  "naga",
  "parking_lot 0.12.1",
  "profiling",
  "raw-window-handle 0.5.0",
  "ron",
+ "rustc-hash",
  "serde",
  "smallvec",
  "thiserror",
@@ -3087,7 +3078,6 @@ dependencies = [
  "d3d12",
  "env_logger",
  "foreign-types 0.3.2",
- "fxhash",
  "glow",
  "glutin",
  "gpu-alloc",
@@ -3107,6 +3097,7 @@ dependencies = [
  "range-alloc",
  "raw-window-handle 0.5.0",
  "renderdoc-sys",
+ "rustc-hash",
  "smallvec",
  "thiserror",
  "wasm-bindgen",
