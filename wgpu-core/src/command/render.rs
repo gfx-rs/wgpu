@@ -11,7 +11,7 @@ use crate::{
     },
     device::{
         AttachmentData, Device, MissingDownlevelFlags, MissingFeatures,
-        RenderPassCompatibilityError, RenderPassContext,
+        RenderPassCompatibilityCheckType, RenderPassCompatibilityError, RenderPassContext,
     },
     error::{ErrorFormatter, PrettyError},
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Storage, Token},
@@ -1320,7 +1320,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .map_pass_err(scope)?;
 
                         info.context
-                            .check_compatible(&pipeline.pass_context)
+                            .check_compatible(
+                                &pipeline.pass_context,
+                                RenderPassCompatibilityCheckType::RenderPipeline,
+                            )
                             .map_err(RenderCommandError::IncompatiblePipelineTargets)
                             .map_pass_err(scope)?;
 
@@ -1986,7 +1989,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .map_pass_err(scope)?;
 
                         info.context
-                            .check_compatible(&bundle.context)
+                            .check_compatible(
+                                &bundle.context,
+                                RenderPassCompatibilityCheckType::RenderBundle,
+                            )
                             .map_err(RenderPassErrorInner::IncompatibleBundleTargets)
                             .map_pass_err(scope)?;
 
