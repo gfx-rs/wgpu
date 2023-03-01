@@ -1397,28 +1397,34 @@ pub struct GetAccelerationStructureBuildSizesDescriptor<'a, A: Api> {
 pub enum AccelerationStructureEntries<'a, A: Api> {
     Instances(AccelerationStructureInstances<'a, A>),
     Triangles(&'a [AccelerationStructureTriangles<'a, A>]),
-    AABBs(&'a [AccelerationStructureAABBs]),
+    AABBs(&'a [AccelerationStructureAABBs<'a, A>]),
 }
 
 // TODO: flags
 pub struct AccelerationStructureTriangles<'a, A: Api> {
     pub vertex_buffer: Option<&'a A::Buffer>,
-    pub first_vertex: u32,
     pub vertex_format: wgt::VertexFormat,
+    pub first_vertex: u32,
     pub vertex_count: u32,
     pub vertex_stride: wgt::BufferAddress,
     pub indices: Option<AccelerationStructureTriangleIndices<'a, A>>,
     pub transforms: Option<AccelerationStructureTriangleTransforms<'a, A>>,
+    pub flags: AccelerationStructureGeometryFlags,
 }
 
 // TODO: *
-pub struct AccelerationStructureAABBs {
-    pub count: u32, //TODO
+pub struct AccelerationStructureAABBs<'a, A: Api> {
+    pub buffer: Option<&'a A::Buffer>,
+    pub offset: u32,
+    pub count: u32,
+    pub stride: wgt::BufferAddress,
+    pub flags: AccelerationStructureGeometryFlags,
 }
 
 // TODO: offset
 pub struct AccelerationStructureInstances<'a, A: Api> {
     pub buffer: Option<&'a A::Buffer>,
+    pub offset: u32,
     pub count: u32,
 }
 
@@ -1436,9 +1442,17 @@ pub struct AccelerationStructureTriangleTransforms<'a, A: Api> {
 
 bitflags!(
     pub struct AccelerationStructureBuildFlags: u32 {
-        const PREFER_FAST_TRACE = 1 << 0;
-        const PREFER_FAST_BUILD = 1 << 1;
-        const ALLOW_UPDATE = 1 << 2;
-        const LOW_MEMORY = 1 << 3;
+        const ALLOW_UPDATE = 1 << 0;
+        const ALLOW_COMPACTION = 1 << 1;
+        const PREFER_FAST_TRACE = 1 << 2;
+        const PREFER_FAST_BUILD = 1 << 3;
+        const LOW_MEMORY = 1 << 4;
+    }
+);
+
+bitflags!(
+    pub struct AccelerationStructureGeometryFlags: u32 {
+        const OPAQUE = 1 << 0;
+        const NO_DUPLICATE_ANY_HIT_INVOCATION = 1 << 1;
     }
 );

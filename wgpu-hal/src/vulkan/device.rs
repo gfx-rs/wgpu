@@ -2070,14 +2070,13 @@ impl crate::Device<super::Api> for super::Device {
 
         let (geometries, primitive_counts) = match *desc.entries {
             crate::AccelerationStructureEntries::Instances(ref instances) => {
-                let instance_data = vk::AccelerationStructureGeometryInstancesDataKHR::builder();
+                let instance_data = vk::AccelerationStructureGeometryInstancesDataKHR::default();
 
                 let geometry = vk::AccelerationStructureGeometryKHR::builder()
                     .geometry_type(vk::GeometryTypeKHR::INSTANCES)
                     .geometry(vk::AccelerationStructureGeometryDataKHR {
-                        instances: *instance_data,
-                    })
-                    .flags(vk::GeometryFlagsKHR::empty());
+                        instances: instance_data,
+                    });
 
                 (vec![*geometry], vec![instances.count])
             }
@@ -2106,14 +2105,33 @@ impl crate::Device<super::Api> for super::Device {
                         .geometry(vk::AccelerationStructureGeometryDataKHR {
                             triangles: *triangle_data,
                         })
-                        .flags(vk::GeometryFlagsKHR::empty())
-                        .build();
-                    geometries.push(geometry);
+                        .flags(conv::map_acceleration_structure_geomety_flags(
+                            triangles.flags,
+                        ));
+
+                    geometries.push(*geometry);
                     primitive_counts.push(pritive_count);
                 }
                 (geometries, primitive_counts)
             }
-            crate::AccelerationStructureEntries::AABBs(_) => todo!(),
+            crate::AccelerationStructureEntries::AABBs(in_geometries) => {
+                let mut primitive_counts = Vec::<u32>::with_capacity(in_geometries.len());
+                let mut geometries =
+                    Vec::<vk::AccelerationStructureGeometryKHR>::with_capacity(in_geometries.len());
+                for aabb in in_geometries {
+                    let aabbs_data = vk::AccelerationStructureGeometryAabbsDataKHR::builder()
+                        .stride(aabb.stride);
+
+                    let geometry = vk::AccelerationStructureGeometryKHR::builder()
+                        .geometry_type(vk::GeometryTypeKHR::AABBS)
+                        .geometry(vk::AccelerationStructureGeometryDataKHR { aabbs: *aabbs_data })
+                        .flags(conv::map_acceleration_structure_geomety_flags(aabb.flags));
+
+                    geometries.push(*geometry);
+                    primitive_counts.push(aabb.count);
+                }
+                (geometries, primitive_counts)
+            }
         };
 
         let ty = match *desc.entries {

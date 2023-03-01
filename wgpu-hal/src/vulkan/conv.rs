@@ -889,5 +889,25 @@ pub fn map_acceleration_structure_flags(
         vk_flags |= vk::BuildAccelerationStructureFlagsKHR::LOW_MEMORY;
     }
 
+    if flags.contains(crate::AccelerationStructureBuildFlags::ALLOW_COMPACTION) {
+        vk_flags |= vk::BuildAccelerationStructureFlagsKHR::ALLOW_COMPACTION
+    }
+
+    vk_flags
+}
+
+pub fn map_acceleration_structure_geomety_flags(
+    flags: crate::AccelerationStructureGeometryFlags,
+) -> vk::GeometryFlagsKHR {
+    let mut vk_flags = vk::GeometryFlagsKHR::empty();
+
+    if flags.contains(crate::AccelerationStructureGeometryFlags::OPAQUE) {
+        vk_flags |= vk::GeometryFlagsKHR::OPAQUE;
+    }
+
+    if flags.contains(crate::AccelerationStructureGeometryFlags::NO_DUPLICATE_ANY_HIT_INVOCATION) {
+        vk_flags |= vk::GeometryFlagsKHR::NO_DUPLICATE_ANY_HIT_INVOCATION;
+    }
+
     vk_flags
 }

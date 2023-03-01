@@ -397,11 +397,11 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                     .geometry_type(vk::GeometryTypeKHR::INSTANCES)
                     .geometry(vk::AccelerationStructureGeometryDataKHR {
                         instances: *instance_data,
-                    })
-                    .flags(vk::GeometryFlagsKHR::empty());
+                    });
 
                 let range = vk::AccelerationStructureBuildRangeInfoKHR::builder()
-                    .primitive_count(instances.count);
+                    .primitive_count(instances.count)
+                    .primitive_offset(instances.offset);
 
                 (vec![*geometry], vec![*range])
             }
@@ -439,6 +439,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                             .primitive_count(triangles.vertex_count)
                             .first_vertex(triangles.first_vertex);
                     }
+
                     if let Some(ref transform) = triangles.transforms {
                         let transform_device_address = unsafe {
                             ray_tracing_functions
@@ -461,14 +462,42 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                         .geometry(vk::AccelerationStructureGeometryDataKHR {
                             triangles: *triangle_data,
                         })
-                        .flags(vk::GeometryFlagsKHR::empty())
-                        .build();
-                    geometries.push(geometry);
+                        .flags(conv::map_acceleration_structure_geomety_flags(
+                            triangles.flags,
+                        ));
+
+                    geometries.push(*geometry);
                     ranges.push(*range);
                 }
                 (geometries, ranges)
             }
-            crate::AccelerationStructureEntries::AABBs(_) => todo!(),
+            crate::AccelerationStructureEntries::AABBs(in_geometries) => {
+                let mut ranges = Vec::<vk::AccelerationStructureBuildRangeInfoKHR>::with_capacity(
+                    in_geometries.len(),
+                );
+                let mut geometries =
+                    Vec::<vk::AccelerationStructureGeometryKHR>::with_capacity(in_geometries.len());
+                for aabb in in_geometries {
+                    let aabbs_data = vk::AccelerationStructureGeometryAabbsDataKHR::builder()
+                        .data(vk::DeviceOrHostAddressConstKHR {
+                            device_address: get_device_address(aabb.buffer),
+                        })
+                        .stride(aabb.stride);
+
+                    let range = vk::AccelerationStructureBuildRangeInfoKHR::builder()
+                        .primitive_count(aabb.count)
+                        .primitive_offset(aabb.offset);
+
+                    let geometry = vk::AccelerationStructureGeometryKHR::builder()
+                        .geometry_type(vk::GeometryTypeKHR::AABBS)
+                        .geometry(vk::AccelerationStructureGeometryDataKHR { aabbs: *aabbs_data })
+                        .flags(conv::map_acceleration_structure_geomety_flags(aabb.flags));
+
+                    geometries.push(*geometry);
+                    ranges.push(*range);
+                }
+                (geometries, ranges)
+            }
         };
 
         let scratch_device_address = unsafe {

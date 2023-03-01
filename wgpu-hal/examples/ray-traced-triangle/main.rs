@@ -458,6 +458,7 @@ impl<A: hal::Api> Example<A> {
                 count: indices.len() as u32,
             }),
             transforms: None,
+            flags: hal::AccelerationStructureGeometryFlags::OPAQUE,
         }];
         let blas_entries = hal::AccelerationStructureEntries::Triangles(&blas_triangles);
 
@@ -465,6 +466,7 @@ impl<A: hal::Api> Example<A> {
             hal::AccelerationStructureEntries::Instances(hal::AccelerationStructureInstances {
                 buffer: None,
                 count: 3,
+                offset: 0,
             });
 
         let blas_sizes = unsafe {
@@ -828,6 +830,7 @@ impl<A: hal::Api> Example<A> {
             let instances = hal::AccelerationStructureInstances {
                 buffer: Some(&self.instances_buffer),
                 count: self.instances.len() as u32,
+                offset: 0,
             };
             ctx.encoder
                 .build_acceleration_structures(&hal::BuildAccelerationStructureDescriptor {
