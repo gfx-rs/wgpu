@@ -269,7 +269,7 @@ impl framework::Example for Skybox {
         let device_features = device.features();
 
         let skybox_format = if device_features.contains(wgpu::Features::TEXTURE_COMPRESSION_ASTC) {
-            log::info!("Using ASTC_LDR");
+            log::info!("Using ASTC");
             wgpu::TextureFormat::Astc {
                 block: AstcBlock::B4x4,
                 channel: AstcChannel::UnormSrgb,

@@ -281,6 +281,10 @@ bitflags::bitflags! {
 
         // Texture Formats:
 
+        // The features starting with a ? are features that might become part of the spec or
+        // at the very least we can implement as native features; since they should cover all
+        // possible formats and capabilities across backends.
+        //
         // ? const FORMATS_TIER_1 = 1 << 14; (https://github.com/gpuweb/gpuweb/issues/3837)
         // ? const RW_STORAGE_TEXTURE_TIER_1 = 1 << 15; (https://github.com/gpuweb/gpuweb/issues/3838)
         // TODO const BGRA8UNORM_STORAGE = 1 << 16;
