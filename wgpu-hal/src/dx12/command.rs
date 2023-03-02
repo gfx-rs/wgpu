@@ -852,9 +852,10 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         // Bind Sampler descriptor tables.
         if info.tables.contains(super::TableTypes::SAMPLERS) {
             log::trace!("\tBind element[{}] = sampler", root_index);
-            self.pass.root_elements[root_index] =
-                super::RootElement::Table(group.handle_samplers.as_ref().unwrap().0.gpu);
-            root_index += 1;
+            for &(ref sampler_handle, _) in &group.handle_samplers {
+                self.pass.root_elements[root_index] = super::RootElement::Table(sampler_handle.gpu);
+                root_index += 1;
+            }
         }
 
         // Bind root descriptors

@@ -1106,15 +1106,14 @@ impl crate::Device<super::Api> for super::Device {
         if let Some(ref mut inner) = cpu_views {
             inner.stage.clear();
         }
-        let mut cpu_samplers = desc
+
+        let mut cpu_heap_inner = desc
             .layout
             .cpu_heap_samplers
             .as_ref()
             .map(|cpu_heap| cpu_heap.inner.lock());
-        if let Some(ref mut inner) = cpu_samplers {
-            inner.stage.clear();
-        }
-        let mut sampler_hashes = Vec::new();
+
+        let mut cpu_samplers = Vec::new();
         let mut dynamic_buffers = Vec::new();
 
         for (layout, entry) in desc.layout.entries.iter().zip(desc.entries.iter()) {
@@ -1220,8 +1219,7 @@ impl crate::Device<super::Api> for super::Device {
                     let start = entry.resource_index as usize;
                     let end = start + entry.count as usize;
                     for data in &desc.samplers[start..end] {
-                        cpu_samplers.as_mut().unwrap().stage.push(data.handle.raw);
-                        sampler_hashes.push(data.hash);
+                        cpu_samplers.push((data.handle.raw, data.hash));
                     }
                 }
             }
@@ -1241,36 +1239,40 @@ impl crate::Device<super::Api> for super::Device {
             }
             None => None,
         };
-        let handle_samplers = match cpu_samplers {
-            Some(inner) => match self
-                .uploaded_sampler_handles
-                .lock()
-                .entry(sampler_hashes.clone())
+
+        let mut gpu_sample_handlers: Vec<(descriptor::DualHandle, u64)> = Vec::new();
+        for (cpu_sampler_handle, sampler_hash) in cpu_samplers {
+            let gpu_sampler_handle = match self.uploaded_sampler_handles.lock().entry(sampler_hash)
             {
                 Entry::Occupied(mut entry) => {
                     let &mut (dual, ref mut ref_count) = entry.get_mut();
                     *ref_count += 1;
-                    Some((dual, sampler_hashes))
+                    (dual, sampler_hash)
                 }
                 Entry::Vacant(entry) => {
+                    let inner = cpu_heap_inner.as_mut().unwrap();
+                    inner.stage.clear();
+
+                    inner.stage.push(cpu_sampler_handle);
+
                     let dual = unsafe {
                         descriptor::upload(
                             self.raw,
-                            &inner,
+                            inner,
                             &self.shared.heap_samplers,
                             &desc.layout.copy_counts,
                         )
                     }?;
                     entry.insert((dual, 1));
-                    Some((dual, sampler_hashes))
+                    (dual, sampler_hash)
                 }
-            },
-            None => None,
-        };
+            };
+            gpu_sample_handlers.push(gpu_sampler_handle);
+        }
 
         Ok(super::BindGroup {
             handle_views,
-            handle_samplers,
+            handle_samplers: gpu_sample_handlers,
             dynamic_buffers,
         })
     }
@@ -1279,12 +1281,12 @@ impl crate::Device<super::Api> for super::Device {
             self.shared.heap_views.free_slice(dual);
         }
 
-        if let Some((dual, sampler_hashes)) = group.handle_samplers {
+        for (dual, sampler_hash) in group.handle_samplers {
             let mut uploaded_sampler_handles = self.uploaded_sampler_handles.lock();
 
             let mut ref_count_is_zero = false;
             if let Some(&mut (_, ref mut ref_count)) =
-                uploaded_sampler_handles.get_mut(&sampler_hashes)
+                uploaded_sampler_handles.get_mut(&sampler_hash)
             {
                 *ref_count -= 1;
                 if *ref_count == 0 {
@@ -1294,7 +1296,7 @@ impl crate::Device<super::Api> for super::Device {
 
             if ref_count_is_zero {
                 self.shared.heap_samplers.free_slice(dual);
-                uploaded_sampler_handles.remove(&sampler_hashes);
+                uploaded_sampler_handles.remove(&sampler_hash);
             }
         }
     }

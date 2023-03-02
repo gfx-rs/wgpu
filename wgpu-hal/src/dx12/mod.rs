@@ -262,7 +262,7 @@ pub struct Device {
     null_rtv_handle: descriptor::Handle,
     mem_allocator: Option<Mutex<suballocation::GpuAllocatorWrapper>>,
     dxc_container: Option<shader_compilation::DxcContainer>,
-    uploaded_sampler_handles: Mutex<HashMap<Vec<u64>, (descriptor::DualHandle, usize)>>,
+    uploaded_sampler_handles: Mutex<HashMap<u64, (descriptor::DualHandle, usize)>>,
 }
 
 unsafe impl Send for Device {}
@@ -514,7 +514,7 @@ enum BufferViewKind {
 #[derive(Debug)]
 pub struct BindGroup {
     handle_views: Option<descriptor::DualHandle>,
-    handle_samplers: Option<(descriptor::DualHandle, Vec<u64>)>,
+    handle_samplers: Vec<(descriptor::DualHandle, u64)>,
     dynamic_buffers: Vec<native::GpuAddress>,
 }
 

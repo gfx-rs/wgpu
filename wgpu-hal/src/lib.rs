@@ -942,7 +942,6 @@ pub struct SamplerDescriptor<'a> {
 
 impl Hash for SamplerDescriptor<'_> {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.label.hash(state);
         self.address_modes.hash(state);
         self.mag_filter.hash(state);
         self.min_filter.hash(state);
