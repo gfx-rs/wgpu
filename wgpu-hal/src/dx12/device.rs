@@ -627,7 +627,7 @@ impl crate::Device<super::Api> for super::Device {
 
         let hash = {
             let mut state = std::collections::hash_map::DefaultHasher::new();
-            desc.hash(&mut state);
+            hash_sampler_descriptor(desc, &mut state);
             state.finish()
         };
 
@@ -1639,4 +1639,23 @@ impl crate::Device<super::Api> for super::Device {
                 .end_frame_capture(self.raw.as_mut_ptr() as *mut _, ptr::null_mut())
         }
     }
+}
+
+fn hash_sampler_descriptor<H: Hasher>(
+    sampler_descriptor: &crate::SamplerDescriptor<'_>,
+    state: &mut H,
+) {
+    sampler_descriptor.address_modes.hash(state);
+    sampler_descriptor.mag_filter.hash(state);
+    sampler_descriptor.min_filter.hash(state);
+    sampler_descriptor.mipmap_filter.hash(state);
+    sampler_descriptor.compare.hash(state);
+    sampler_descriptor.anisotropy_clamp.hash(state);
+    sampler_descriptor.border_color.hash(state);
+
+    let hashable_lod_clamp = sampler_descriptor
+        .lod_clamp
+        .as_ref()
+        .map(|lod_clamp| (lod_clamp.start.to_bits(), lod_clamp.end.to_bits()));
+    hashable_lod_clamp.hash(state);
 }
