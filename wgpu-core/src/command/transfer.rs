@@ -120,9 +120,9 @@ pub enum TransferError {
     #[error("the entire texture must be copied when copying from depth texture")]
     InvalidDepthTextureExtent,
     #[error(
-        "source format ({src_format:?}) and destination format ({dst_format:?}) are not copy-compatible"
+        "source format ({src_format:?}) and destination format ({dst_format:?}) are not copy-compatible (they may only differ in srgb-ness)"
     )]
-    MismatchedTextureFormats {
+    TextureFormatsNotCopyCompatible {
         src_format: wgt::TextureFormat,
         dst_format: wgt::TextureFormat,
     },
@@ -1036,13 +1036,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .get(destination.texture)
             .map_err(|_| TransferError::InvalidTexture(source.texture))?;
 
-        // src and dst texture format must be the same.
-        let src_format = src_texture.desc.format;
-        let dst_format = dst_texture.desc.format;
-        if src_format != dst_format {
-            return Err(TransferError::MismatchedTextureFormats {
-                src_format,
-                dst_format,
+        // src and dst texture format must be copy-compatible
+        // https://gpuweb.github.io/gpuweb/#copy-compatible
+        if src_texture.desc.format.remove_srgb_suffix()
+            != dst_texture.desc.format.remove_srgb_suffix()
+        {
+            return Err(TransferError::TextureFormatsNotCopyCompatible {
+                src_format: src_texture.desc.format,
+                dst_format: dst_texture.desc.format,
             }
             .into());
         }
