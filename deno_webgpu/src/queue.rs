@@ -1,7 +1,5 @@
 // Copyright 2018-2023 the Deno authors. All rights reserved. MIT license.
 
-use std::num::NonZeroU32;
-
 use deno_core::error::AnyError;
 use deno_core::op;
 use deno_core::OpState;
@@ -54,8 +52,8 @@ impl From<GpuImageDataLayout> for wgpu_types::ImageDataLayout {
     fn from(layout: GpuImageDataLayout) -> Self {
         wgpu_types::ImageDataLayout {
             offset: layout.offset,
-            bytes_per_row: NonZeroU32::new(layout.bytes_per_row.unwrap_or(0)),
-            rows_per_image: NonZeroU32::new(layout.rows_per_image.unwrap_or(0)),
+            bytes_per_row: layout.bytes_per_row,
+            rows_per_image: layout.rows_per_image,
         }
     }
 }

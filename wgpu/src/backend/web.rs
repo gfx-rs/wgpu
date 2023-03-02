@@ -460,10 +460,10 @@ fn map_buffer_copy_view(view: crate::ImageCopyBuffer) -> web_sys::GpuImageCopyBu
     let buffer = &<<Context as crate::Context>::BufferId>::from(view.buffer.id).0;
     let mut mapped = web_sys::GpuImageCopyBuffer::new(buffer);
     if let Some(bytes_per_row) = view.layout.bytes_per_row {
-        mapped.bytes_per_row(bytes_per_row.get());
+        mapped.bytes_per_row(bytes_per_row);
     }
     if let Some(rows_per_image) = view.layout.rows_per_image {
-        mapped.rows_per_image(rows_per_image.get());
+        mapped.rows_per_image(rows_per_image);
     }
     mapped.offset(view.layout.offset as f64);
     mapped
@@ -2369,10 +2369,10 @@ impl crate::context::Context for Context {
     ) {
         let mut mapped_data_layout = web_sys::GpuImageDataLayout::new();
         if let Some(bytes_per_row) = data_layout.bytes_per_row {
-            mapped_data_layout.bytes_per_row(bytes_per_row.get());
+            mapped_data_layout.bytes_per_row(bytes_per_row);
         }
         if let Some(rows_per_image) = data_layout.rows_per_image {
-            mapped_data_layout.rows_per_image(rows_per_image.get());
+            mapped_data_layout.rows_per_image(rows_per_image);
         }
         mapped_data_layout.offset(data_layout.offset as f64);
 

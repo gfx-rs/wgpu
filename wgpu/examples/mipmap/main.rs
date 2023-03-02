@@ -2,7 +2,7 @@
 mod framework;
 
 use bytemuck::{Pod, Zeroable};
-use std::{borrow::Cow, f32::consts, mem, num::NonZeroU32};
+use std::{borrow::Cow, f32::consts, mem};
 use wgpu::util::DeviceExt;
 
 const TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
@@ -247,7 +247,7 @@ impl framework::Example for Example {
                 buffer: &temp_buf,
                 layout: wgpu::ImageDataLayout {
                     offset: 0,
-                    bytes_per_row: Some(NonZeroU32::new(4 * size).unwrap()),
+                    bytes_per_row: Some(4 * size),
                     rows_per_image: None,
                 },
             },

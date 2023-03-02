@@ -264,7 +264,7 @@ pub(crate) fn validate_linear_texture_data(
     let bytes_in_last_row = width_in_blocks * block_size;
 
     let bytes_per_row = if let Some(bytes_per_row) = layout.bytes_per_row {
-        let bytes_per_row = bytes_per_row.get() as BufferAddress;
+        let bytes_per_row = bytes_per_row as BufferAddress;
         if bytes_per_row < bytes_in_last_row {
             return Err(TransferError::InvalidBytesPerRow);
         }
@@ -276,7 +276,7 @@ pub(crate) fn validate_linear_texture_data(
         0
     };
     let block_rows_per_image = if let Some(rows_per_image) = layout.rows_per_image {
-        let rows_per_image = rows_per_image.get() as BufferAddress;
+        let rows_per_image = rows_per_image as BufferAddress;
         if rows_per_image < height_in_blocks {
             return Err(TransferError::InvalidRowsPerImage);
         }

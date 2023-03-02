@@ -5177,7 +5177,7 @@ pub struct ImageDataLayout {
     /// [CEcbtt]: ../wgpu/struct.CommandEncoder.html#method.copy_buffer_to_texture
     /// [CEcttb]: ../wgpu/struct.CommandEncoder.html#method.copy_texture_to_buffer
     /// [Qwt]: ../wgpu/struct.Queue.html#method.write_texture
-    pub bytes_per_row: Option<NonZeroU32>,
+    pub bytes_per_row: Option<u32>,
     /// "Rows" that make up a single "image".
     ///
     /// A row is one row of pixels or of compressed blocks in the x direction.
@@ -5187,7 +5187,7 @@ pub struct ImageDataLayout {
     /// The amount of rows per image may be larger than the actual amount of rows of data.
     ///
     /// Required if there are multiple images (i.e. the depth is more than one).
-    pub rows_per_image: Option<NonZeroU32>,
+    pub rows_per_image: Option<u32>,
 }
 
 /// Specific type of a buffer binding.

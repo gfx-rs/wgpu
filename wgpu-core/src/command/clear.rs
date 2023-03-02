@@ -1,4 +1,4 @@
-use std::{num::NonZeroU32, ops::Range};
+use std::ops::Range;
 
 #[cfg(feature = "trace")]
 use crate::device::trace::Command as TraceCommand;
@@ -363,7 +363,7 @@ fn clear_texture_via_buffer_copies<A: hal::Api>(
                     zero_buffer_copy_regions.push(hal::BufferTextureCopy {
                         buffer_layout: wgt::ImageDataLayout {
                             offset: 0,
-                            bytes_per_row: NonZeroU32::new(bytes_per_row),
+                            bytes_per_row: Some(bytes_per_row),
                             rows_per_image: None,
                         },
                         texture_base: hal::TextureCopyBase {
