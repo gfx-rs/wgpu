@@ -302,9 +302,9 @@ impl Context {
     fn handle_error_fatal(
         &self,
         cause: impl Error + Send + Sync + 'static,
-        string: &'static str,
+        operation: &'static str,
     ) -> ! {
-        panic!("Error in {string}: {cause}");
+        panic!("Error in {operation}: {f}", f = self.format_error(&cause));
     }
 
     fn format_error(&self, err: &(impl Error + 'static)) -> String {
