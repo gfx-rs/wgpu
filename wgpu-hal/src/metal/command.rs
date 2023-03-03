@@ -1,5 +1,5 @@
 use super::{conv, AsNative};
-use std::{mem, ops::Range};
+use std::{borrow::Cow, mem, ops::Range};
 
 // has to match `Temp::binding_sizes`
 const WORD_SIZE: usize = 4;
@@ -187,6 +187,14 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     ) where
         T: Iterator<Item = crate::TextureCopy>,
     {
+        let dst_texture = if src.format != dst.format {
+            let raw_format = self.shared.private_caps.map_format(src.format);
+            Cow::Owned(objc::rc::autoreleasepool(|| {
+                dst.raw.new_texture_view(raw_format)
+            }))
+        } else {
+            Cow::Borrowed(&dst.raw)
+        };
         let encoder = self.enter_blit();
         for copy in regions {
             let src_origin = conv::map_origin(&copy.src_base.origin);
@@ -199,7 +207,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 copy.src_base.mip_level as u64,
                 src_origin,
                 extent,
-                &dst.raw,
+                &dst_texture,
                 copy.dst_base.array_layer as u64,
                 copy.dst_base.mip_level as u64,
                 dst_origin,
