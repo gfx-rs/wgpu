@@ -151,8 +151,18 @@ impl super::Adapter {
             hr == 0 && features2.DepthBoundsTestSupported != 0
         };
 
-        //Note: `D3D12_FEATURE_D3D12_OPTIONS3::CastingFullyTypedFormatSupported` can be checked
-        // to know if we can skip "typeless" formats entirely.
+        let casting_fully_typed_format_supported = {
+            let mut features3: crate::dx12::types::D3D12_FEATURE_DATA_D3D12_OPTIONS3 =
+                unsafe { mem::zeroed() };
+            let hr = unsafe {
+                device.CheckFeatureSupport(
+                    21, // D3D12_FEATURE_D3D12_OPTIONS3
+                    &mut features3 as *mut _ as *mut _,
+                    mem::size_of::<crate::dx12::types::D3D12_FEATURE_DATA_D3D12_OPTIONS3>() as _,
+                )
+            };
+            hr == 0 && features3.CastingFullyTypedFormatSupported != 0
+        };
 
         let private_caps = super::PrivateCapabilities {
             instance_flags,
@@ -166,6 +176,7 @@ impl super::Adapter {
                 super::MemoryArchitecture::NonUnified
             },
             heap_create_not_zeroed: false, //TODO: winapi support for Options7
+            casting_fully_typed_format_supported,
         };
 
         // Theoretically vram limited, but in practice 2^20 is the limit
