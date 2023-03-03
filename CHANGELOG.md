@@ -114,6 +114,9 @@ By @teoxoy in [#3436](https://github.com/gfx-rs/wgpu/pull/3436)
 
 - Treat `VK_SUBOPTIMAL_KHR` as `VK_SUCCESS` on Android. By @James2022-rgb in [#3525](https://github.com/gfx-rs/wgpu/pull/3525)
 
+#### Metal
+- `create_texture` returns an error if `new_texture` returns NULL. By @jinleili in [#3554](https://github.com/gfx-rs/wgpu/pull/3554)
+
 ## wgpu-0.15.0 (2023-01-25)
 
 ### Major Changes
