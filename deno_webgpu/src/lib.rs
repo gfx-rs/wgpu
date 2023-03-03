@@ -52,7 +52,7 @@ mod macros {
     macro_rules! gfx_put {
     ($id:expr => $global:ident.$method:ident( $($param:expr),* ) => $state:expr, $rc:expr) => {{
       let (val, maybe_err) = gfx_select!($id => $global.$method($($param),*));
-      let rid = $state.resource_table.add($rc(val));
+      let rid = $state.resource_table.add($rc($global.clone(), val));
       Ok(WebGpuResult::rid_err(rid, maybe_err))
     }};
   }
@@ -93,26 +93,41 @@ fn check_unstable(state: &OpState, api_name: &str) {
     }
 }
 
-pub type Instance = wgpu_core::hub::Global<wgpu_core::hub::IdentityManagerFactory>;
+pub type Instance = std::sync::Arc<wgpu_core::hub::Global<wgpu_core::hub::IdentityManagerFactory>>;
 
-struct WebGpuAdapter(wgpu_core::id::AdapterId);
+struct WebGpuAdapter(Instance, wgpu_core::id::AdapterId);
 impl Resource for WebGpuAdapter {
     fn name(&self) -> Cow<str> {
         "webGPUAdapter".into()
     }
+
+    fn close(self: Rc<Self>) {
+        let instance = &self.0;
+        gfx_select!(self.1 => instance.adapter_drop(self.1));
+    }
 }
 
-struct WebGpuDevice(wgpu_core::id::DeviceId);
+struct WebGpuDevice(Instance, wgpu_core::id::DeviceId);
 impl Resource for WebGpuDevice {
     fn name(&self) -> Cow<str> {
         "webGPUDevice".into()
     }
+
+    fn close(self: Rc<Self>) {
+        let instance = &self.0;
+        gfx_select!(self.1 => instance.device_drop(self.1));
+    }
 }
 
-struct WebGpuQuerySet(wgpu_core::id::QuerySetId);
+struct WebGpuQuerySet(Instance, wgpu_core::id::QuerySetId);
 impl Resource for WebGpuQuerySet {
     fn name(&self) -> Cow<str> {
         "webGPUQuerySet".into()
+    }
+
+    fn close(self: Rc<Self>) {
+        let instance = &self.0;
+        gfx_select!(self.1 => instance.query_set_drop(self.1));
     }
 }
 
@@ -298,14 +313,14 @@ pub async fn op_webgpu_request_adapter(
     let instance = if let Some(instance) = state.try_borrow::<Instance>() {
         instance
     } else {
-        state.put(wgpu_core::hub::Global::new(
+        state.put(std::sync::Arc::new(wgpu_core::hub::Global::new(
             "webgpu",
             wgpu_core::hub::IdentityManagerFactory,
             wgpu_types::InstanceDescriptor {
                 backends,
                 dx12_shader_compiler: wgpu_types::Dx12Compiler::Fxc,
             },
-        ));
+        )));
         state.borrow::<Instance>()
     };
 
@@ -331,7 +346,9 @@ pub async fn op_webgpu_request_adapter(
     let features = deserialize_features(&adapter_features);
     let adapter_limits = gfx_select!(adapter => instance.adapter_limits(adapter))?;
 
-    let rid = state.resource_table.add(WebGpuAdapter(adapter));
+    let instance = instance.clone();
+
+    let rid = state.resource_table.add(WebGpuAdapter(instance, adapter));
 
     Ok(GpuAdapterDeviceOrErr::Features(GpuAdapterDevice {
         rid,
@@ -531,7 +548,7 @@ pub async fn op_webgpu_request_device(
 ) -> Result<GpuAdapterDevice, AnyError> {
     let mut state = state.borrow_mut();
     let adapter_resource = state.resource_table.get::<WebGpuAdapter>(adapter_rid)?;
-    let adapter = adapter_resource.0;
+    let adapter = adapter_resource.1;
     let instance = state.borrow::<Instance>();
 
     let descriptor = wgpu_types::DeviceDescriptor {
@@ -554,7 +571,8 @@ pub async fn op_webgpu_request_device(
     let features = deserialize_features(&device_features);
     let limits = gfx_select!(device => instance.device_limits(device))?;
 
-    let rid = state.resource_table.add(WebGpuDevice(device));
+    let instance = instance.clone();
+    let rid = state.resource_table.add(WebGpuDevice(instance, device));
 
     Ok(GpuAdapterDevice {
         rid,
@@ -581,7 +599,7 @@ pub async fn op_webgpu_request_adapter_info(
 ) -> Result<GPUAdapterInfo, AnyError> {
     let state = state.borrow_mut();
     let adapter_resource = state.resource_table.get::<WebGpuAdapter>(adapter_rid)?;
-    let adapter = adapter_resource.0;
+    let adapter = adapter_resource.1;
     let instance = state.borrow::<Instance>();
 
     let info = gfx_select!(adapter => instance.adapter_get_info(adapter))?;
@@ -655,8 +673,8 @@ pub fn op_webgpu_create_query_set(
     args: CreateQuerySetArgs,
 ) -> Result<WebGpuResult, AnyError> {
     let device_resource = state.resource_table.get::<WebGpuDevice>(args.device_rid)?;
-    let device = device_resource.0;
-    let instance = &state.borrow::<Instance>();
+    let device = device_resource.1;
+    let instance = state.borrow::<Instance>();
 
     let descriptor = wgpu_types::QuerySetDescriptor {
         label: args.label.map(Cow::from),
