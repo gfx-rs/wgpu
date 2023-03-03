@@ -288,6 +288,8 @@ impl crate::Device<super::Api> for super::Device {
         &self,
         desc: &crate::TextureDescriptor,
     ) -> DeviceResult<super::Texture> {
+        use foreign_types::ForeignTypeRef;
+
         let mtl_format = self.shared.private_caps.map_format(desc.format);
 
         objc::rc::autoreleasepool(|| {
@@ -321,6 +323,9 @@ impl crate::Device<super::Api> for super::Device {
             descriptor.set_storage_mode(metal::MTLStorageMode::Private);
 
             let raw = self.shared.device.lock().new_texture(&descriptor);
+            if raw.as_ptr().is_null() {
+                return Err(crate::DeviceError::OutOfMemory);
+            }
             if let Some(label) = desc.label {
                 raw.set_label(label);
             }

@@ -105,36 +105,52 @@
   webidl.converters["GPUFeatureName"] = webidl.createEnumConverter(
     "GPUFeatureName",
     [
+      // api
       "depth-clip-control",
+      "timestamp-query",
+      "indirect-first-instance",
+      // shader
+      "shader-f16",
+      // texture formats
       "depth32float-stencil8",
-      "pipeline-statistics-query",
       "texture-compression-bc",
       "texture-compression-etc2",
       "texture-compression-astc",
-      "timestamp-query",
-      "indirect-first-instance",
-      "shader-f16",
+
       // extended from spec
+
+      // texture formats
+      "texture-format-16-bit-norm",
+      "texture-compression-astc-hdr",
+      "texture-adapter-specific-format-features",
+      // api
+      "pipeline-statistics-query",
+      "timestamp-query-inside-passes",
       "mappable-primary-buffers",
       "texture-binding-array",
       "buffer-binding-array",
       "storage-resource-binding-array",
       "sampled-texture-and-storage-buffer-array-non-uniform-indexing",
-      "uniform-buffer-and-storage-buffer-texture-non-uniform-indexing",
-      "unsized-binding-array",
+      "uniform-buffer-and-storage-texture-array-non-uniform-indexing",
+      "partially-bound-binding-array",
       "multi-draw-indirect",
       "multi-draw-indirect-count",
       "push-constants",
+      "address-mode-clamp-to-zero",
       "address-mode-clamp-to-border",
-      "texture-adapter-specific-format-features",
-      "shader-float64",
-      "vertex-attribute-64bit",
+      "polygon-mode-line",
+      "polygon-mode-point",
       "conservative-rasterization",
       "vertex-writable-storage",
-      "clear-commands",
+      "clear-texture",
       "spirv-shader-passthrough",
-      "shader-primitive-index",
+      "multiview",
+      "vertex-attribute-64-bit",
+      // shader
+      "shader-f64",
       "shader-i16",
+      "shader-primitive-index",
+      "shader-early-depth-test",
     ],
   );
 
