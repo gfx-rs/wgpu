@@ -94,7 +94,7 @@ impl Skybox {
 
 impl framework::Example for Skybox {
     fn optional_features() -> wgpu::Features {
-        wgpu::Features::TEXTURE_COMPRESSION_ASTC_LDR
+        wgpu::Features::TEXTURE_COMPRESSION_ASTC
             | wgpu::Features::TEXTURE_COMPRESSION_ETC2
             | wgpu::Features::TEXTURE_COMPRESSION_BC
     }
@@ -268,23 +268,22 @@ impl framework::Example for Skybox {
 
         let device_features = device.features();
 
-        let skybox_format =
-            if device_features.contains(wgpu::Features::TEXTURE_COMPRESSION_ASTC_LDR) {
-                log::info!("Using ASTC_LDR");
-                wgpu::TextureFormat::Astc {
-                    block: AstcBlock::B4x4,
-                    channel: AstcChannel::UnormSrgb,
-                }
-            } else if device_features.contains(wgpu::Features::TEXTURE_COMPRESSION_ETC2) {
-                log::info!("Using ETC2");
-                wgpu::TextureFormat::Etc2Rgb8UnormSrgb
-            } else if device_features.contains(wgpu::Features::TEXTURE_COMPRESSION_BC) {
-                log::info!("Using BC");
-                wgpu::TextureFormat::Bc1RgbaUnormSrgb
-            } else {
-                log::info!("Using plain");
-                wgpu::TextureFormat::Bgra8UnormSrgb
-            };
+        let skybox_format = if device_features.contains(wgpu::Features::TEXTURE_COMPRESSION_ASTC) {
+            log::info!("Using ASTC");
+            wgpu::TextureFormat::Astc {
+                block: AstcBlock::B4x4,
+                channel: AstcChannel::UnormSrgb,
+            }
+        } else if device_features.contains(wgpu::Features::TEXTURE_COMPRESSION_ETC2) {
+            log::info!("Using ETC2");
+            wgpu::TextureFormat::Etc2Rgb8UnormSrgb
+        } else if device_features.contains(wgpu::Features::TEXTURE_COMPRESSION_BC) {
+            log::info!("Using BC");
+            wgpu::TextureFormat::Bc1RgbaUnormSrgb
+        } else {
+            log::info!("Using plain");
+            wgpu::TextureFormat::Bgra8UnormSrgb
+        };
 
         let size = wgpu::Extent3d {
             width: IMAGE_SIZE,
@@ -523,7 +522,7 @@ fn skybox_astc() {
         image_path: "/examples/skybox/screenshot-astc.png",
         width: 1024,
         height: 768,
-        optional_features: wgpu::Features::TEXTURE_COMPRESSION_ASTC_LDR,
+        optional_features: wgpu::Features::TEXTURE_COMPRESSION_ASTC,
         base_test_parameters: framework::test_common::TestParameters::default(), // https://bugs.chromium.org/p/angleproject/issues/detail?id=7056
         tolerance: 5,
         max_outliers: 300, // Bounded by rp4 on vk

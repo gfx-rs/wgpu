@@ -70,6 +70,18 @@ Additionally `sample_type` and `block_size` now take an optional `TextureAspect`
 
 By @teoxoy in [#3436](https://github.com/gfx-rs/wgpu/pull/3436)
 
+#### Renamed features
+
+The following `Features` have been renamed.
+
+- `SHADER_FLOAT16` -> `SHADER_F16`
+- `SHADER_FLOAT64` -> `SHADER_F64`
+- `SHADER_INT16` -> `SHADER_I16`
+- `TEXTURE_COMPRESSION_ASTC_LDR` -> `TEXTURE_COMPRESSION_ASTC`
+- `WRITE_TIMESTAMP_INSIDE_PASSES` -> `TIMESTAMP_QUERY_INSIDE_PASSES`
+
+By @teoxoy in [#3534](https://github.com/gfx-rs/wgpu/pull/3534)
+
 #### General
 
 - Change type of `mip_level_count` and `array_layer_count` (members of `TextureViewDescriptor` and `ImageSubresourceRange`) from `Option<NonZeroU32>` to `Option<u32>`. By @teoxoy in [#3445](https://github.com/gfx-rs/wgpu/pull/3445)

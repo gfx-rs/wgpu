@@ -568,7 +568,7 @@ const FEATURES_MAPPING: [(wgt::Features, web_sys::GpuFeatureName); 8] = [
         web_sys::GpuFeatureName::TextureCompressionEtc2,
     ),
     (
-        wgt::Features::TEXTURE_COMPRESSION_ASTC_LDR,
+        wgt::Features::TEXTURE_COMPRESSION_ASTC,
         web_sys::GpuFeatureName::TextureCompressionAstc,
     ),
     (
@@ -580,7 +580,7 @@ const FEATURES_MAPPING: [(wgt::Features, web_sys::GpuFeatureName); 8] = [
         web_sys::GpuFeatureName::IndirectFirstInstance,
     ),
     (
-        wgt::Features::SHADER_FLOAT16,
+        wgt::Features::SHADER_F16,
         web_sys::GpuFeatureName::ShaderF16,
     ),
 ];
@@ -2520,7 +2520,7 @@ impl crate::context::Context for Context {
         _query_set_data: &Self::QuerySetData,
         _query_index: u32,
     ) {
-        panic!("WRITE_TIMESTAMP_INSIDE_PASSES feature must be enabled to call write_timestamp in a compute pass")
+        panic!("TIMESTAMP_QUERY_INSIDE_PASSES feature must be enabled to call write_timestamp in a compute pass")
     }
 
     fn compute_pass_begin_pipeline_statistics_query(
@@ -3073,7 +3073,7 @@ impl crate::context::Context for Context {
         _query_set_data: &Self::QuerySetData,
         _query_index: u32,
     ) {
-        panic!("WRITE_TIMESTAMP_INSIDE_PASSES feature must be enabled to call write_timestamp in a compute pass")
+        panic!("TIMESTAMP_QUERY_INSIDE_PASSES feature must be enabled to call write_timestamp in a compute pass")
     }
 
     fn render_pass_begin_pipeline_statistics_query(

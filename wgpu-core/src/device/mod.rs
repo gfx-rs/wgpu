@@ -1419,7 +1419,7 @@ impl<A: HalApi> Device<A> {
         );
         caps.set(
             Caps::FLOAT64,
-            self.features.contains(wgt::Features::SHADER_FLOAT64),
+            self.features.contains(wgt::Features::SHADER_F64),
         );
         caps.set(
             Caps::PRIMITIVE_INDEX,

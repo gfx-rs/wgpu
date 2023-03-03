@@ -202,7 +202,7 @@ impl framework::Example for Example {
     fn optional_features() -> wgpu::Features {
         wgpu::Features::TIMESTAMP_QUERY
             | wgpu::Features::PIPELINE_STATISTICS_QUERY
-            | wgpu::Features::WRITE_TIMESTAMP_INSIDE_PASSES
+            | wgpu::Features::TIMESTAMP_QUERY_INSIDE_PASSES
     }
 
     fn init(
@@ -329,7 +329,7 @@ impl framework::Example for Example {
         let query_sets = if device.features().contains(
             wgpu::Features::TIMESTAMP_QUERY
                 | wgpu::Features::PIPELINE_STATISTICS_QUERY
-                | wgpu::Features::WRITE_TIMESTAMP_INSIDE_PASSES,
+                | wgpu::Features::TIMESTAMP_QUERY_INSIDE_PASSES,
         ) {
             // For N total mips, it takes N - 1 passes to generate them, and we're measuring those.
             let mip_passes = MIP_LEVEL_COUNT - 1;
