@@ -918,8 +918,23 @@ impl crate::Device<super::Api> for super::Device {
                         self.shared.private_caps.max_vertex_buffers as u64 - 1 - i as u64;
                     let buffer_desc = vertex_descriptor.layouts().object_at(buffer_index).unwrap();
 
-                    buffer_desc.set_stride(vb.array_stride);
-                    buffer_desc.set_step_function(conv::map_step_mode(vb.step_mode));
+                    // Metal expects the stride to be the actual size of the attributes.
+                    // The semantics of array_stride == 0 can be achieved by setting
+                    // the step function to constant and rate to 0.
+                    if vb.array_stride == 0 {
+                        let stride = vb
+                            .attributes
+                            .iter()
+                            .map(|attribute| attribute.offset + attribute.format.size())
+                            .max()
+                            .unwrap_or(0);
+                        buffer_desc.set_stride(crate::auxil::align_to_u64(stride, 4));
+                        buffer_desc.set_step_function(metal::MTLVertexStepFunction::Constant);
+                        buffer_desc.set_step_rate(0);
+                    } else {
+                        buffer_desc.set_stride(vb.array_stride);
+                        buffer_desc.set_step_function(conv::map_step_mode(vb.step_mode));
+                    }
 
                     for at in vb.attributes {
                         let attribute_desc = vertex_descriptor
