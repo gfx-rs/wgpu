@@ -928,7 +928,7 @@ impl crate::Device<super::Api> for super::Device {
                             .map(|attribute| attribute.offset + attribute.format.size())
                             .max()
                             .unwrap_or(0);
-                        buffer_desc.set_stride(crate::auxil::align_to_u64(stride, 4));
+                        buffer_desc.set_stride(wgt::math::align_to(stride, 4));
                         buffer_desc.set_step_function(metal::MTLVertexStepFunction::Constant);
                         buffer_desc.set_step_rate(0);
                     } else {

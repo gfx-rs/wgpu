@@ -12,9 +12,11 @@ use crate::{
     track::{TextureSelector, TextureTracker},
 };
 
-use hal::{auxil::align_to, CommandEncoder as _};
+use hal::CommandEncoder as _;
 use thiserror::Error;
-use wgt::{BufferAddress, BufferSize, BufferUsages, ImageSubresourceRange, TextureAspect};
+use wgt::{
+    math::align_to, BufferAddress, BufferSize, BufferUsages, ImageSubresourceRange, TextureAspect,
+};
 
 /// Error encountered while attempting a clear.
 #[derive(Clone, Debug, Error)]
