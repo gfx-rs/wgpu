@@ -1240,30 +1240,26 @@ impl crate::Device<super::Api> for super::Device {
             None => None,
         };
 
-        let mut gpu_sample_handlers: Vec<(descriptor::DualHandle, u64)> = Vec::new();
+        let mut gpu_sample_handlers = Vec::new();
         for (cpu_sampler_handle, sampler_hash) in cpu_samplers {
             let gpu_sampler_handle = match self.uploaded_sampler_handles.lock().entry(sampler_hash)
             {
-                Entry::Occupied(mut entry) => {
-                    let &mut (dual, ref mut ref_count) = entry.get_mut();
-                    *ref_count += 1;
-                    (dual, sampler_hash)
-                }
+                Entry::Occupied(entry) => (entry.get().clone(), sampler_hash),
                 Entry::Vacant(entry) => {
                     let inner = cpu_heap_inner.as_mut().unwrap();
                     inner.stage.clear();
 
                     inner.stage.push(cpu_sampler_handle);
 
-                    let dual = unsafe {
+                    let dual = Arc::new(unsafe {
                         descriptor::upload(
                             self.raw,
                             inner,
                             &self.shared.heap_samplers,
                             &desc.layout.copy_counts,
                         )
-                    }?;
-                    entry.insert((dual, 1));
+                    }?);
+                    entry.insert(dual.clone());
                     (dual, sampler_hash)
                 }
             };
@@ -1276,28 +1272,27 @@ impl crate::Device<super::Api> for super::Device {
             dynamic_buffers,
         })
     }
-    unsafe fn destroy_bind_group(&self, group: super::BindGroup) {
+
+    unsafe fn destroy_bind_group(&self, mut group: super::BindGroup) {
         if let Some(dual) = group.handle_views {
             self.shared.heap_views.free_slice(dual);
         }
 
-        for (dual, sampler_hash) in group.handle_samplers {
-            let mut uploaded_sampler_handles = self.uploaded_sampler_handles.lock();
+        let mut uploaded_sampler_handles = self.uploaded_sampler_handles.lock();
+        while !group.handle_samplers.is_empty() {
+            let (dual, sampler_hash) = group.handle_samplers.pop().unwrap();
 
-            let mut ref_count_is_zero = false;
-            if let Some(&mut (_, ref mut ref_count)) =
-                uploaded_sampler_handles.get_mut(&sampler_hash)
-            {
-                *ref_count -= 1;
-                if *ref_count == 0 {
-                    ref_count_is_zero = true;
-                }
-            }
-
-            if ref_count_is_zero {
-                self.shared.heap_samplers.free_slice(dual);
+            // checking the count is thread safe since we locked self.uploaded_sampler_handles
+            if Arc::strong_count(&dual) == 2 {
                 uploaded_sampler_handles.remove(&sampler_hash);
+                self.shared
+                    .heap_samplers
+                    .free_slice(Arc::try_unwrap(dual).unwrap());
             }
+        }
+
+        if uploaded_sampler_handles.is_empty() {
+            panic!("hey! that's pretty good");
         }
     }
 
