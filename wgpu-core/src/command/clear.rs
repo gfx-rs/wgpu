@@ -19,43 +19,43 @@ use wgt::{BufferAddress, BufferSize, BufferUsages, ImageSubresourceRange, Textur
 /// Error encountered while attempting a clear.
 #[derive(Clone, Debug, Error)]
 pub enum ClearError {
-    #[error("to use clear_texture the CLEAR_TEXTURE feature needs to be enabled")]
+    #[error("To use clear_texture the CLEAR_TEXTURE feature needs to be enabled")]
     MissingClearTextureFeature,
-    #[error("command encoder {0:?} is invalid")]
+    #[error("Command encoder {0:?} is invalid")]
     InvalidCommandEncoder(CommandEncoderId),
-    #[error("device {0:?} is invalid")]
+    #[error("Device {0:?} is invalid")]
     InvalidDevice(DeviceId),
-    #[error("buffer {0:?} is invalid or destroyed")]
+    #[error("Buffer {0:?} is invalid or destroyed")]
     InvalidBuffer(BufferId),
-    #[error("texture {0:?} is invalid or destroyed")]
+    #[error("Texture {0:?} is invalid or destroyed")]
     InvalidTexture(TextureId),
-    #[error("texture {0:?} can not be cleared")]
+    #[error("Texture {0:?} can not be cleared")]
     NoValidTextureClearMode(TextureId),
-    #[error("buffer clear size {0:?} is not a multiple of `COPY_BUFFER_ALIGNMENT`")]
+    #[error("Buffer clear size {0:?} is not a multiple of `COPY_BUFFER_ALIGNMENT`")]
     UnalignedFillSize(BufferSize),
-    #[error("buffer offset {0:?} is not a multiple of `COPY_BUFFER_ALIGNMENT`")]
+    #[error("Buffer offset {0:?} is not a multiple of `COPY_BUFFER_ALIGNMENT`")]
     UnalignedBufferOffset(BufferAddress),
-    #[error("clear of {start_offset}..{end_offset} would end up overrunning the bounds of the buffer of size {buffer_size}")]
+    #[error("Clear of {start_offset}..{end_offset} would end up overrunning the bounds of the buffer of size {buffer_size}")]
     BufferOverrun {
         start_offset: BufferAddress,
         end_offset: BufferAddress,
         buffer_size: BufferAddress,
     },
-    #[error("destination buffer is missing the `COPY_DST` usage flag")]
+    #[error("Destination buffer is missing the `COPY_DST` usage flag")]
     MissingCopyDstUsageFlag(Option<BufferId>, Option<TextureId>),
-    #[error("texture lacks the aspects that were specified in the image subresource range. Texture with format {texture_format:?}, specified was {subresource_range_aspects:?}")]
+    #[error("Texture lacks the aspects that were specified in the image subresource range. Texture with format {texture_format:?}, specified was {subresource_range_aspects:?}")]
     MissingTextureAspect {
         texture_format: wgt::TextureFormat,
         subresource_range_aspects: TextureAspect,
     },
-    #[error("image subresource level range is outside of the texture's level range. texture range is {texture_level_range:?},  \
+    #[error("Image subresource level range is outside of the texture's level range. texture range is {texture_level_range:?},  \
 whereas subesource range specified start {subresource_base_mip_level} and count {subresource_mip_level_count:?}")]
     InvalidTextureLevelRange {
         texture_level_range: Range<u32>,
         subresource_base_mip_level: u32,
         subresource_mip_level_count: Option<u32>,
     },
-    #[error("image subresource layer range is outside of the texture's layer range. texture range is {texture_layer_range:?},  \
+    #[error("Image subresource layer range is outside of the texture's layer range. texture range is {texture_layer_range:?},  \
 whereas subesource range specified start {subresource_base_array_layer} and count {subresource_array_layer_count:?}")]
     InvalidTextureLayerRange {
         texture_layer_range: Range<u32>,

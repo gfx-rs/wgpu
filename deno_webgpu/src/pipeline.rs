@@ -8,30 +8,55 @@ use deno_core::ResourceId;
 use serde::Deserialize;
 use serde::Serialize;
 use std::borrow::Cow;
+use std::rc::Rc;
 
 use super::error::WebGpuError;
 use super::error::WebGpuResult;
 
 const MAX_BIND_GROUPS: usize = 8;
 
-pub(crate) struct WebGpuPipelineLayout(pub(crate) wgpu_core::id::PipelineLayoutId);
+pub(crate) struct WebGpuPipelineLayout(
+    pub(crate) crate::Instance,
+    pub(crate) wgpu_core::id::PipelineLayoutId,
+);
 impl Resource for WebGpuPipelineLayout {
     fn name(&self) -> Cow<str> {
         "webGPUPipelineLayout".into()
     }
+
+    fn close(self: Rc<Self>) {
+        let instance = &self.0;
+        gfx_select!(self.1 => instance.pipeline_layout_drop(self.1));
+    }
 }
 
-pub(crate) struct WebGpuComputePipeline(pub(crate) wgpu_core::id::ComputePipelineId);
+pub(crate) struct WebGpuComputePipeline(
+    pub(crate) crate::Instance,
+    pub(crate) wgpu_core::id::ComputePipelineId,
+);
 impl Resource for WebGpuComputePipeline {
     fn name(&self) -> Cow<str> {
         "webGPUComputePipeline".into()
     }
+
+    fn close(self: Rc<Self>) {
+        let instance = &self.0;
+        gfx_select!(self.1 => instance.compute_pipeline_drop(self.1));
+    }
 }
 
-pub(crate) struct WebGpuRenderPipeline(pub(crate) wgpu_core::id::RenderPipelineId);
+pub(crate) struct WebGpuRenderPipeline(
+    pub(crate) crate::Instance,
+    pub(crate) wgpu_core::id::RenderPipelineId,
+);
 impl Resource for WebGpuRenderPipeline {
     fn name(&self) -> Cow<str> {
         "webGPURenderPipeline".into()
+    }
+
+    fn close(self: Rc<Self>) {
+        let instance = &self.0;
+        gfx_select!(self.1 => instance.render_pipeline_drop(self.1));
     }
 }
 
@@ -68,12 +93,12 @@ pub fn op_webgpu_create_compute_pipeline(
     let device_resource = state
         .resource_table
         .get::<super::WebGpuDevice>(device_rid)?;
-    let device = device_resource.0;
+    let device = device_resource.1;
 
     let pipeline_layout = match layout {
         GPUPipelineLayoutOrGPUAutoLayoutMode::Layout(rid) => {
             let id = state.resource_table.get::<WebGpuPipelineLayout>(rid)?;
-            Some(id.0)
+            Some(id.1)
         }
         GPUPipelineLayoutOrGPUAutoLayoutMode::Auto(GPUAutoLayoutMode::Auto) => None,
     };
@@ -86,7 +111,7 @@ pub fn op_webgpu_create_compute_pipeline(
         label: label.map(Cow::from),
         layout: pipeline_layout,
         stage: wgpu_core::pipeline::ProgrammableStageDescriptor {
-            module: compute_shader_module_resource.0,
+            module: compute_shader_module_resource.1,
             entry_point: Cow::from(compute.entry_point),
             // TODO(lucacasonato): support args.compute.constants
         },
@@ -110,7 +135,7 @@ pub fn op_webgpu_create_compute_pipeline(
 
     let rid = state
         .resource_table
-        .add(WebGpuComputePipeline(compute_pipeline));
+        .add(WebGpuComputePipeline(instance.clone(), compute_pipeline));
 
     Ok(WebGpuResult::rid_err(rid, maybe_err))
 }
@@ -133,7 +158,7 @@ pub fn op_webgpu_compute_pipeline_get_bind_group_layout(
     let compute_pipeline_resource = state
         .resource_table
         .get::<WebGpuComputePipeline>(compute_pipeline_rid)?;
-    let compute_pipeline = compute_pipeline_resource.0;
+    let compute_pipeline = compute_pipeline_resource.1;
 
     let (bind_group_layout, maybe_err) = gfx_select!(compute_pipeline => instance.compute_pipeline_get_bind_group_layout(compute_pipeline, index, ()));
 
@@ -142,7 +167,10 @@ pub fn op_webgpu_compute_pipeline_get_bind_group_layout(
 
     let rid = state
         .resource_table
-        .add(super::binding::WebGpuBindGroupLayout(bind_group_layout));
+        .add(super::binding::WebGpuBindGroupLayout(
+            instance.clone(),
+            bind_group_layout,
+        ));
 
     Ok(PipelineLayout {
         rid,
@@ -304,12 +332,12 @@ pub fn op_webgpu_create_render_pipeline(
     let device_resource = state
         .resource_table
         .get::<super::WebGpuDevice>(args.device_rid)?;
-    let device = device_resource.0;
+    let device = device_resource.1;
 
     let layout = match args.layout {
         GPUPipelineLayoutOrGPUAutoLayoutMode::Layout(rid) => {
             let pipeline_layout_resource = state.resource_table.get::<WebGpuPipelineLayout>(rid)?;
-            Some(pipeline_layout_resource.0)
+            Some(pipeline_layout_resource.1)
         }
         GPUPipelineLayoutOrGPUAutoLayoutMode::Auto(GPUAutoLayoutMode::Auto) => None,
     };
@@ -326,7 +354,7 @@ pub fn op_webgpu_create_render_pipeline(
 
         Some(wgpu_core::pipeline::FragmentState {
             stage: wgpu_core::pipeline::ProgrammableStageDescriptor {
-                module: fragment_shader_module_resource.0,
+                module: fragment_shader_module_resource.1,
                 entry_point: Cow::from(fragment.entry_point),
             },
             targets: Cow::from(fragment.targets),
@@ -348,7 +376,7 @@ pub fn op_webgpu_create_render_pipeline(
         layout,
         vertex: wgpu_core::pipeline::VertexState {
             stage: wgpu_core::pipeline::ProgrammableStageDescriptor {
-                module: vertex_shader_module_resource.0,
+                module: vertex_shader_module_resource.1,
                 entry_point: Cow::Owned(args.vertex.entry_point),
             },
             buffers: Cow::Owned(vertex_buffers),
@@ -379,7 +407,7 @@ pub fn op_webgpu_create_render_pipeline(
 
     let rid = state
         .resource_table
-        .add(WebGpuRenderPipeline(render_pipeline));
+        .add(WebGpuRenderPipeline(instance.clone(), render_pipeline));
 
     Ok(WebGpuResult::rid_err(rid, maybe_err))
 }
@@ -394,7 +422,7 @@ pub fn op_webgpu_render_pipeline_get_bind_group_layout(
     let render_pipeline_resource = state
         .resource_table
         .get::<WebGpuRenderPipeline>(render_pipeline_rid)?;
-    let render_pipeline = render_pipeline_resource.0;
+    let render_pipeline = render_pipeline_resource.1;
 
     let (bind_group_layout, maybe_err) = gfx_select!(render_pipeline => instance.render_pipeline_get_bind_group_layout(render_pipeline, index, ()));
 
@@ -403,7 +431,10 @@ pub fn op_webgpu_render_pipeline_get_bind_group_layout(
 
     let rid = state
         .resource_table
-        .add(super::binding::WebGpuBindGroupLayout(bind_group_layout));
+        .add(super::binding::WebGpuBindGroupLayout(
+            instance.clone(),
+            bind_group_layout,
+        ));
 
     Ok(PipelineLayout {
         rid,

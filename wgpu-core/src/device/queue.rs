@@ -284,7 +284,7 @@ impl<A: hal::Api> StagingBuffer<A> {
 }
 
 #[derive(Clone, Debug, Error)]
-#[error("queue is invalid")]
+#[error("Queue is invalid")]
 pub struct InvalidQueue;
 
 #[derive(Clone, Debug, Error)]
@@ -301,17 +301,17 @@ pub enum QueueWriteError {
 pub enum QueueSubmitError {
     #[error(transparent)]
     Queue(#[from] DeviceError),
-    #[error("buffer {0:?} is destroyed")]
+    #[error("Buffer {0:?} is destroyed")]
     DestroyedBuffer(id::BufferId),
-    #[error("texture {0:?} is destroyed")]
+    #[error("Texture {0:?} is destroyed")]
     DestroyedTexture(id::TextureId),
     #[error(transparent)]
     Unmap(#[from] BufferAccessError),
     #[error("Buffer {0:?} is still mapped")]
     BufferStillMapped(id::BufferId),
-    #[error("surface output was dropped before the command buffer got submitted")]
+    #[error("Surface output was dropped before the command buffer got submitted")]
     SurfaceOutputDropped,
-    #[error("surface was unconfigured before the command buffer got submitted")]
+    #[error("Surface was unconfigured before the command buffer got submitted")]
     SurfaceUnconfigured,
     #[error("GPU got stuck :(")]
     StuckGpu,
