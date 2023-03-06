@@ -159,7 +159,7 @@ impl framework::Example for Example {
                 &buf,
                 wgpu::ImageDataLayout {
                     offset: 0,
-                    bytes_per_row: std::num::NonZeroU32::new(info.width * 4),
+                    bytes_per_row: Some(info.width * 4),
                     rows_per_image: None,
                 },
                 size,

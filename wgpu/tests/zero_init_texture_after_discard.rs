@@ -1,5 +1,3 @@
-use std::num::NonZeroU32;
-
 use crate::common::{image::ReadbackBuffers, initialize_test, TestParameters, TestingContext};
 use wasm_bindgen_test::*;
 use wgpu::*;
@@ -184,7 +182,7 @@ impl<'ctx> TestCase<'ctx> {
                 &data,
                 ImageDataLayout {
                     offset: 0,
-                    bytes_per_row: NonZeroU32::new(bytes_per_row),
+                    bytes_per_row: Some(bytes_per_row),
                     rows_per_image: None,
                 },
                 texture.size(),

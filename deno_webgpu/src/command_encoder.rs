@@ -8,7 +8,6 @@ use deno_core::ResourceId;
 use serde::Deserialize;
 use std::borrow::Cow;
 use std::cell::RefCell;
-use std::num::NonZeroU32;
 use std::rc::Rc;
 
 use super::error::WebGpuResult;
@@ -291,8 +290,8 @@ pub fn op_webgpu_command_encoder_copy_buffer_to_texture(
         buffer: source_buffer_resource.1,
         layout: wgpu_types::ImageDataLayout {
             offset: source.offset,
-            bytes_per_row: NonZeroU32::new(source.bytes_per_row.unwrap_or(0)),
-            rows_per_image: NonZeroU32::new(source.rows_per_image.unwrap_or(0)),
+            bytes_per_row: source.bytes_per_row,
+            rows_per_image: source.rows_per_image,
         },
     };
     let destination = wgpu_core::command::ImageCopyTexture {
@@ -339,8 +338,8 @@ pub fn op_webgpu_command_encoder_copy_texture_to_buffer(
         buffer: destination_buffer_resource.1,
         layout: wgpu_types::ImageDataLayout {
             offset: destination.offset,
-            bytes_per_row: NonZeroU32::new(destination.bytes_per_row.unwrap_or(0)),
-            rows_per_image: NonZeroU32::new(destination.rows_per_image.unwrap_or(0)),
+            bytes_per_row: destination.bytes_per_row,
+            rows_per_image: destination.rows_per_image,
         },
     };
     gfx_ok!(command_encoder => instance.command_encoder_copy_texture_to_buffer(

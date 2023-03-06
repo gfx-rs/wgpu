@@ -2,7 +2,6 @@
 
 use crate::common::{initialize_test, TestParameters};
 
-use std::num::NonZeroU32;
 use wasm_bindgen_test::*;
 
 #[test]
@@ -39,8 +38,8 @@ fn write_texture_subset_2d() {
             bytemuck::cast_slice(&data),
             wgpu::ImageDataLayout {
                 offset: 0,
-                bytes_per_row: std::num::NonZeroU32::new(size),
-                rows_per_image: std::num::NonZeroU32::new(size),
+                bytes_per_row: Some(size),
+                rows_per_image: Some(size),
             },
             wgpu::Extent3d {
                 width: size,
@@ -73,8 +72,8 @@ fn write_texture_subset_2d() {
                 buffer: &read_buffer,
                 layout: wgpu::ImageDataLayout {
                     offset: 0,
-                    bytes_per_row: NonZeroU32::new(size),
-                    rows_per_image: NonZeroU32::new(size),
+                    bytes_per_row: Some(size),
+                    rows_per_image: Some(size),
                 },
             },
             wgpu::Extent3d {
@@ -135,8 +134,8 @@ fn write_texture_subset_3d() {
             bytemuck::cast_slice(&data),
             wgpu::ImageDataLayout {
                 offset: 0,
-                bytes_per_row: std::num::NonZeroU32::new(size),
-                rows_per_image: std::num::NonZeroU32::new(size),
+                bytes_per_row: Some(size),
+                rows_per_image: Some(size),
             },
             wgpu::Extent3d {
                 width: size,
@@ -169,8 +168,8 @@ fn write_texture_subset_3d() {
                 buffer: &read_buffer,
                 layout: wgpu::ImageDataLayout {
                     offset: 0,
-                    bytes_per_row: NonZeroU32::new(size),
-                    rows_per_image: NonZeroU32::new(size),
+                    bytes_per_row: Some(size),
+                    rows_per_image: Some(size),
                 },
             },
             wgpu::Extent3d {

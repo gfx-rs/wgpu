@@ -597,11 +597,11 @@ impl super::Queue {
                 let row_texels = copy
                     .buffer_layout
                     .bytes_per_row
-                    .map_or(0, |bpr| block_width * bpr.get() / block_size);
+                    .map_or(0, |bpr| block_width * bpr / block_size);
                 let column_texels = copy
                     .buffer_layout
                     .rows_per_image
-                    .map_or(0, |rpi| block_height * rpi.get());
+                    .map_or(0, |rpi| block_height * rpi);
 
                 unsafe { gl.bind_texture(dst_target, Some(dst)) };
                 unsafe { gl.pixel_store_i32(glow::UNPACK_ROW_LENGTH, row_texels as i32) };
@@ -711,13 +711,13 @@ impl super::Queue {
                     let bytes_per_row = copy
                         .buffer_layout
                         .bytes_per_row
-                        .map_or(copy.size.width * block_size, |bpr| bpr.get());
+                        .unwrap_or(copy.size.width * block_size);
                     let minimum_rows_per_image =
                         (copy.size.height + block_height - 1) / block_height;
                     let rows_per_image = copy
                         .buffer_layout
                         .rows_per_image
-                        .map_or(minimum_rows_per_image, |rpi| rpi.get());
+                        .unwrap_or(minimum_rows_per_image);
 
                     let bytes_per_image = bytes_per_row * rows_per_image;
                     let minimum_bytes_per_image = bytes_per_row * minimum_rows_per_image;
@@ -819,11 +819,11 @@ impl super::Queue {
                 let row_texels = copy
                     .buffer_layout
                     .bytes_per_row
-                    .map_or(copy.size.width, |bpr| bpr.get() / block_size);
+                    .map_or(copy.size.width, |bpr| bpr / block_size);
                 let column_texels = copy
                     .buffer_layout
                     .rows_per_image
-                    .map_or(copy.size.height, |bpr| bpr.get());
+                    .unwrap_or(copy.size.height);
 
                 unsafe { gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(self.copy_fbo)) };
 

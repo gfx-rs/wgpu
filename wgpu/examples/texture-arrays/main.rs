@@ -197,7 +197,7 @@ impl framework::Example for Example {
             &red_texture_data,
             wgpu::ImageDataLayout {
                 offset: 0,
-                bytes_per_row: Some(NonZeroU32::new(4).unwrap()),
+                bytes_per_row: Some(4),
                 rows_per_image: None,
             },
             wgpu::Extent3d::default(),
@@ -207,7 +207,7 @@ impl framework::Example for Example {
             &green_texture_data,
             wgpu::ImageDataLayout {
                 offset: 0,
-                bytes_per_row: Some(NonZeroU32::new(4).unwrap()),
+                bytes_per_row: Some(4),
                 rows_per_image: None,
             },
             wgpu::Extent3d::default(),
@@ -217,7 +217,7 @@ impl framework::Example for Example {
             &blue_texture_data,
             wgpu::ImageDataLayout {
                 offset: 0,
-                bytes_per_row: Some(NonZeroU32::new(4).unwrap()),
+                bytes_per_row: Some(4),
                 rows_per_image: None,
             },
             wgpu::Extent3d::default(),
@@ -227,7 +227,7 @@ impl framework::Example for Example {
             &white_texture_data,
             wgpu::ImageDataLayout {
                 offset: 0,
-                bytes_per_row: Some(NonZeroU32::new(4).unwrap()),
+                bytes_per_row: Some(4),
                 rows_per_image: None,
             },
             wgpu::Extent3d::default(),

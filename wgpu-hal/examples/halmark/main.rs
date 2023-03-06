@@ -9,9 +9,7 @@ use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 
 use std::{
     borrow::{Borrow, Cow},
-    iter, mem,
-    num::NonZeroU32,
-    ptr,
+    iter, mem, ptr,
     time::Instant,
 };
 
@@ -328,7 +326,7 @@ impl<A: hal::Api> Example<A> {
             let copy = hal::BufferTextureCopy {
                 buffer_layout: wgt::ImageDataLayout {
                     offset: 0,
-                    bytes_per_row: NonZeroU32::new(4),
+                    bytes_per_row: Some(4),
                     rows_per_image: None,
                 },
                 texture_base: hal::TextureCopyBase {

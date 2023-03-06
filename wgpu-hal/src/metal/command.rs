@@ -231,14 +231,11 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 .texture_base
                 .max_copy_size(&dst.copy_size)
                 .min(&copy.size);
-            let bytes_per_row = copy
-                .buffer_layout
-                .bytes_per_row
-                .map_or(0, |v| v.get() as u64);
+            let bytes_per_row = copy.buffer_layout.bytes_per_row.unwrap_or(0) as u64;
             let image_byte_stride = if extent.depth > 1 {
                 copy.buffer_layout
                     .rows_per_image
-                    .map_or(0, |v| v.get() as u64 * bytes_per_row)
+                    .map_or(0, |v| v as u64 * bytes_per_row)
             } else {
                 // Don't pass a stride when updating a single layer, otherwise metal validation
                 // fails when updating a subset of the image due to the stride being larger than
@@ -277,14 +274,11 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 .texture_base
                 .max_copy_size(&src.copy_size)
                 .min(&copy.size);
-            let bytes_per_row = copy
-                .buffer_layout
-                .bytes_per_row
-                .map_or(0, |v| v.get() as u64);
+            let bytes_per_row = copy.buffer_layout.bytes_per_row.unwrap_or(0) as u64;
             let bytes_per_image = copy
                 .buffer_layout
                 .rows_per_image
-                .map_or(0, |v| v.get() as u64 * bytes_per_row);
+                .map_or(0, |v| v as u64 * bytes_per_row);
             encoder.copy_from_texture_to_buffer(
                 &src.raw,
                 copy.texture_base.array_layer as u64,
