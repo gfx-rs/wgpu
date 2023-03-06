@@ -1,4 +1,4 @@
-use mtl::{MTLFeatureSet, MTLGPUFamily, MTLLanguageVersion, MTLReadWriteTextureTier};
+use metal::{MTLFeatureSet, MTLGPUFamily, MTLLanguageVersion, MTLReadWriteTextureTier};
 use objc::{class, msg_send, sel, sel_impl};
 use parking_lot::Mutex;
 use wgt::{AstcBlock, AstcChannel};
@@ -50,9 +50,9 @@ impl crate::Adapter<super::Api> for super::Adapter {
         // https://developer.apple.com/documentation/metal/mtlreadwritetexturetier/mtlreadwritetexturetier1?language=objc
         // https://developer.apple.com/documentation/metal/mtlreadwritetexturetier/mtlreadwritetexturetier2?language=objc
         let (read_write_tier1_if, read_write_tier2_if) = match pc.read_write_texture_tier {
-            mtl::MTLReadWriteTextureTier::TierNone => (Tfc::empty(), Tfc::empty()),
-            mtl::MTLReadWriteTextureTier::Tier1 => (Tfc::STORAGE_READ_WRITE, Tfc::empty()),
-            mtl::MTLReadWriteTextureTier::Tier2 => {
+            metal::MTLReadWriteTextureTier::TierNone => (Tfc::empty(), Tfc::empty()),
+            metal::MTLReadWriteTextureTier::Tier1 => (Tfc::STORAGE_READ_WRITE, Tfc::empty()),
+            metal::MTLReadWriteTextureTier::Tier2 => {
                 (Tfc::STORAGE_READ_WRITE, Tfc::STORAGE_READ_WRITE)
             }
         };
@@ -444,14 +444,14 @@ const DEPTH_CLIP_MODE: &[MTLFeatureSet] = &[
 const OS_NOT_SUPPORT: (usize, usize) = (10000, 0);
 
 impl super::PrivateCapabilities {
-    fn supports_any(raw: &mtl::DeviceRef, features_sets: &[MTLFeatureSet]) -> bool {
+    fn supports_any(raw: &metal::DeviceRef, features_sets: &[MTLFeatureSet]) -> bool {
         features_sets
             .iter()
             .cloned()
             .any(|x| raw.supports_feature_set(x))
     }
 
-    pub fn new(device: &mtl::Device) -> Self {
+    pub fn new(device: &metal::Device) -> Self {
         #[repr(C)]
         #[derive(Clone, Copy, Debug)]
         #[allow(clippy::upper_case_acronyms)]
@@ -635,7 +635,7 @@ impl super::PrivateCapabilities {
             buffer_alignment: if os_is_mac { 256 } else { 64 },
             max_buffer_size: if version.at_least((10, 14), (12, 0)) {
                 // maxBufferLength available on macOS 10.14+ and iOS 12.0+
-                let buffer_size: mtl::NSInteger =
+                let buffer_size: metal::NSInteger =
                     unsafe { msg_send![device.as_ref(), maxBufferLength] };
                 buffer_size as _
             } else if os_is_mac {
@@ -768,11 +768,11 @@ impl super::PrivateCapabilities {
             | F::POLYGON_MODE_LINE
             | F::CLEAR_TEXTURE
             | F::TEXTURE_FORMAT_16BIT_NORM
-            | F::SHADER_FLOAT16
+            | F::SHADER_F16
             | F::DEPTH32FLOAT_STENCIL8
             | F::MULTI_DRAW_INDIRECT;
 
-        features.set(F::TEXTURE_COMPRESSION_ASTC_LDR, self.format_astc);
+        features.set(F::TEXTURE_COMPRESSION_ASTC, self.format_astc);
         features.set(F::TEXTURE_COMPRESSION_ASTC_HDR, self.format_astc_hdr);
         features.set(F::TEXTURE_COMPRESSION_BC, self.format_bc);
         features.set(F::TEXTURE_COMPRESSION_ETC2, self.format_eac_etc);
@@ -870,8 +870,8 @@ impl super::PrivateCapabilities {
         }
     }
 
-    pub fn map_format(&self, format: wgt::TextureFormat) -> mtl::MTLPixelFormat {
-        use mtl::MTLPixelFormat::*;
+    pub fn map_format(&self, format: wgt::TextureFormat) -> metal::MTLPixelFormat {
+        use metal::MTLPixelFormat::*;
         use wgt::TextureFormat as Tf;
         match format {
             Tf::R8Unorm => R8Unorm,
@@ -1015,9 +1015,9 @@ impl super::PrivateCapabilities {
         &self,
         format: wgt::TextureFormat,
         aspects: crate::FormatAspects,
-    ) -> mtl::MTLPixelFormat {
+    ) -> metal::MTLPixelFormat {
         use crate::FormatAspects as Fa;
-        use mtl::MTLPixelFormat::*;
+        use metal::MTLPixelFormat::*;
         use wgt::TextureFormat as Tf;
         match (format, aspects) {
             // map combined depth-stencil format to their stencil-only format
@@ -1037,7 +1037,7 @@ impl super::PrivateCapabilities {
 }
 
 impl super::PrivateDisabilities {
-    pub fn new(device: &mtl::Device) -> Self {
+    pub fn new(device: &metal::Device) -> Self {
         let is_intel = device.name().starts_with("Intel");
         Self {
             broken_viewport_near_depth: is_intel

@@ -9,7 +9,7 @@ use crate::{
     },
     instance::{self, Adapter, Surface},
     pipeline, present,
-    resource::{self, BufferAccessResult, BufferMapState},
+    resource::{self, BufferAccessResult, BufferMapState, TextureViewNotRenderableReason},
     resource::{BufferAccessError, BufferMapOperation},
     track::{BindGroupStates, TextureSelector, Tracker},
     validation::{self, check_buffer_usage, check_texture_usage},
@@ -70,6 +70,12 @@ impl<T> AttachmentData<T> {
     }
 }
 
+#[derive(Debug, Copy, Clone)]
+pub enum RenderPassCompatibilityCheckType {
+    RenderPipeline,
+    RenderBundle,
+}
+
 #[derive(Clone, Debug, Hash, PartialEq)]
 #[cfg_attr(feature = "serial-pass", derive(serde::Deserialize, serde::Serialize))]
 pub(crate) struct RenderPassContext {
@@ -79,16 +85,37 @@ pub(crate) struct RenderPassContext {
 }
 #[derive(Clone, Debug, Error)]
 pub enum RenderPassCompatibilityError {
-    #[error("Incompatible color attachment: the renderpass expected {0:?} but was given {1:?}")]
-    IncompatibleColorAttachment(Vec<Option<TextureFormat>>, Vec<Option<TextureFormat>>),
     #[error(
-        "Incompatible depth-stencil attachment: the renderpass expected {0:?} but was given {1:?}"
+        "Incompatible color attachments at indices {indices:?}: the RenderPass uses textures with formats {expected:?} but the {ty:?} uses attachments with formats {actual:?}",
     )]
-    IncompatibleDepthStencilAttachment(Option<TextureFormat>, Option<TextureFormat>),
-    #[error("Incompatible sample count: the renderpass expected {0:?} but was given {1:?}")]
-    IncompatibleSampleCount(u32, u32),
-    #[error("Incompatible multiview: the renderpass expected {0:?} but was given {1:?}")]
-    IncompatibleMultiview(Option<NonZeroU32>, Option<NonZeroU32>),
+    IncompatibleColorAttachment {
+        indices: Vec<usize>,
+        expected: Vec<Option<TextureFormat>>,
+        actual: Vec<Option<TextureFormat>>,
+        ty: RenderPassCompatibilityCheckType,
+    },
+    #[error(
+        "Incompatible depth-stencil attachment format: the RenderPass uses a texture with format {expected:?} but the {ty:?} uses an attachment with format {actual:?}",
+    )]
+    IncompatibleDepthStencilAttachment {
+        expected: Option<TextureFormat>,
+        actual: Option<TextureFormat>,
+        ty: RenderPassCompatibilityCheckType,
+    },
+    #[error(
+        "Incompatible sample count: the RenderPass uses textures with sample count {expected:?} but the {ty:?} uses attachments with format {actual:?}",
+    )]
+    IncompatibleSampleCount {
+        expected: u32,
+        actual: u32,
+        ty: RenderPassCompatibilityCheckType,
+    },
+    #[error("Incompatible multiview setting: the RenderPass uses setting {expected:?} but the {ty:?} uses setting {actual:?}")]
+    IncompatibleMultiview {
+        expected: Option<NonZeroU32>,
+        actual: Option<NonZeroU32>,
+        ty: RenderPassCompatibilityCheckType,
+    },
 }
 
 impl RenderPassContext {
@@ -96,32 +123,46 @@ impl RenderPassContext {
     pub(crate) fn check_compatible(
         &self,
         other: &Self,
+        ty: RenderPassCompatibilityCheckType,
     ) -> Result<(), RenderPassCompatibilityError> {
         if self.attachments.colors != other.attachments.colors {
-            return Err(RenderPassCompatibilityError::IncompatibleColorAttachment(
-                self.attachments.colors.iter().cloned().collect(),
-                other.attachments.colors.iter().cloned().collect(),
-            ));
+            let indices = self
+                .attachments
+                .colors
+                .iter()
+                .zip(&other.attachments.colors)
+                .enumerate()
+                .filter_map(|(idx, (left, right))| (left != right).then_some(idx))
+                .collect();
+            return Err(RenderPassCompatibilityError::IncompatibleColorAttachment {
+                indices,
+                expected: self.attachments.colors.iter().cloned().collect(),
+                actual: other.attachments.colors.iter().cloned().collect(),
+                ty,
+            });
         }
         if self.attachments.depth_stencil != other.attachments.depth_stencil {
             return Err(
-                RenderPassCompatibilityError::IncompatibleDepthStencilAttachment(
-                    self.attachments.depth_stencil,
-                    other.attachments.depth_stencil,
-                ),
+                RenderPassCompatibilityError::IncompatibleDepthStencilAttachment {
+                    expected: self.attachments.depth_stencil,
+                    actual: other.attachments.depth_stencil,
+                    ty,
+                },
             );
         }
         if self.sample_count != other.sample_count {
-            return Err(RenderPassCompatibilityError::IncompatibleSampleCount(
-                self.sample_count,
-                other.sample_count,
-            ));
+            return Err(RenderPassCompatibilityError::IncompatibleSampleCount {
+                expected: self.sample_count,
+                actual: other.sample_count,
+                ty,
+            });
         }
         if self.multiview != other.multiview {
-            return Err(RenderPassCompatibilityError::IncompatibleMultiview(
-                self.multiview,
-                other.multiview,
-            ));
+            return Err(RenderPassCompatibilityError::IncompatibleMultiview {
+                expected: self.multiview,
+                actual: other.multiview,
+                ty,
+            });
         }
         Ok(())
     }
@@ -303,9 +344,9 @@ pub struct Device<A: HalApi> {
 
 #[derive(Clone, Debug, Error)]
 pub enum CreateDeviceError {
-    #[error("not enough memory left")]
+    #[error("Not enough memory left")]
     OutOfMemory,
-    #[error("failed to create internal buffer for initializing textures")]
+    #[error("Failed to create internal buffer for initializing textures")]
     FailedToCreateZeroBuffer(#[from] DeviceError),
 }
 
@@ -1134,20 +1175,41 @@ impl<A: HalApi> Device<A> {
         };
 
         // https://gpuweb.github.io/gpuweb/#abstract-opdef-renderable-texture-view
-        let is_renderable = texture
-            .desc
-            .usage
-            .contains(wgt::TextureUsages::RENDER_ATTACHMENT)
-            && resolved_dimension == TextureViewDimension::D2
-            && resolved_mip_level_count == 1
-            && resolved_array_layer_count == 1
-            && aspects == hal::FormatAspects::from(texture.desc.format);
-
-        let render_extent = is_renderable.then(|| {
-            texture
+        let render_extent = 'b: loop {
+            if !texture
                 .desc
-                .compute_render_extent(desc.range.base_mip_level)
-        });
+                .usage
+                .contains(wgt::TextureUsages::RENDER_ATTACHMENT)
+            {
+                break 'b Err(TextureViewNotRenderableReason::Usage(texture.desc.usage));
+            }
+
+            if resolved_dimension != TextureViewDimension::D2 {
+                break 'b Err(TextureViewNotRenderableReason::Dimension(
+                    resolved_dimension,
+                ));
+            }
+
+            if resolved_mip_level_count != 1 {
+                break 'b Err(TextureViewNotRenderableReason::MipLevelCount(
+                    resolved_mip_level_count,
+                ));
+            }
+
+            if resolved_array_layer_count != 1 {
+                break 'b Err(TextureViewNotRenderableReason::ArrayLayerCount(
+                    resolved_array_layer_count,
+                ));
+            }
+
+            if aspects != hal::FormatAspects::from(texture.desc.format) {
+                break 'b Err(TextureViewNotRenderableReason::Aspects(aspects));
+            }
+
+            break 'b Ok(texture
+                .desc
+                .compute_render_extent(desc.range.base_mip_level));
+        };
 
         // filter the usages based on the other criteria
         let usage = {
@@ -1357,7 +1419,7 @@ impl<A: HalApi> Device<A> {
         );
         caps.set(
             Caps::FLOAT64,
-            self.features.contains(wgt::Features::SHADER_FLOAT64),
+            self.features.contains(wgt::Features::SHADER_F64),
         );
         caps.set(
             Caps::PRIMITIVE_INDEX,
@@ -3272,16 +3334,16 @@ impl<A: HalApi> crate::hub::Resource for Device<A> {
 }
 
 #[derive(Clone, Debug, Error)]
-#[error("device is invalid")]
+#[error("Device is invalid")]
 pub struct InvalidDevice;
 
 #[derive(Clone, Debug, Error)]
 pub enum DeviceError {
-    #[error("parent device is invalid")]
+    #[error("Parent device is invalid")]
     Invalid,
-    #[error("parent device is lost")]
+    #[error("Parent device is lost")]
     Lost,
-    #[error("not enough memory left")]
+    #[error("Not enough memory left")]
     OutOfMemory,
 }
 

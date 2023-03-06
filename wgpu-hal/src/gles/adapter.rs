@@ -396,11 +396,11 @@ impl super::Adapter {
         if extensions.contains("WEBGL_compressed_texture_astc")
             || extensions.contains("GL_OES_texture_compression_astc")
         {
-            features.insert(wgt::Features::TEXTURE_COMPRESSION_ASTC_LDR);
+            features.insert(wgt::Features::TEXTURE_COMPRESSION_ASTC);
             features.insert(wgt::Features::TEXTURE_COMPRESSION_ASTC_HDR);
         } else {
             features.set(
-                wgt::Features::TEXTURE_COMPRESSION_ASTC_LDR,
+                wgt::Features::TEXTURE_COMPRESSION_ASTC,
                 extensions.contains("GL_KHR_texture_compression_astc_ldr"),
             );
             features.set(
@@ -743,7 +743,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
 
         let bcn_features = feature_fn(wgt::Features::TEXTURE_COMPRESSION_BC, filterable);
         let etc2_features = feature_fn(wgt::Features::TEXTURE_COMPRESSION_ETC2, filterable);
-        let astc_features = feature_fn(wgt::Features::TEXTURE_COMPRESSION_ASTC_LDR, filterable);
+        let astc_features = feature_fn(wgt::Features::TEXTURE_COMPRESSION_ASTC, filterable);
         let astc_hdr_features = feature_fn(wgt::Features::TEXTURE_COMPRESSION_ASTC_HDR, filterable);
 
         let private_caps_fn = |f, caps| {

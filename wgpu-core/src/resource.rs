@@ -170,46 +170,46 @@ pub struct BufferMapOperation {
 pub enum BufferAccessError {
     #[error(transparent)]
     Device(#[from] DeviceError),
-    #[error("buffer map failed")]
+    #[error("Buffer map failed")]
     Failed,
-    #[error("buffer is invalid")]
+    #[error("Buffer is invalid")]
     Invalid,
-    #[error("buffer is destroyed")]
+    #[error("Buffer is destroyed")]
     Destroyed,
-    #[error("buffer is already mapped")]
+    #[error("Buffer is already mapped")]
     AlreadyMapped,
-    #[error("buffer map is pending")]
+    #[error("Buffer map is pending")]
     MapAlreadyPending,
     #[error(transparent)]
     MissingBufferUsage(#[from] MissingBufferUsageError),
-    #[error("buffer is not mapped")]
+    #[error("Buffer is not mapped")]
     NotMapped,
     #[error(
-        "buffer map range must start aligned to `MAP_ALIGNMENT` and end to `COPY_BUFFER_ALIGNMENT`"
+        "Buffer map range must start aligned to `MAP_ALIGNMENT` and end to `COPY_BUFFER_ALIGNMENT`"
     )]
     UnalignedRange,
-    #[error("buffer offset invalid: offset {offset} must be multiple of 8")]
+    #[error("Buffer offset invalid: offset {offset} must be multiple of 8")]
     UnalignedOffset { offset: wgt::BufferAddress },
-    #[error("buffer range size invalid: range_size {range_size} must be multiple of 4")]
+    #[error("Buffer range size invalid: range_size {range_size} must be multiple of 4")]
     UnalignedRangeSize { range_size: wgt::BufferAddress },
-    #[error("buffer access out of bounds: index {index} would underrun the buffer (limit: {min})")]
+    #[error("Buffer access out of bounds: index {index} would underrun the buffer (limit: {min})")]
     OutOfBoundsUnderrun {
         index: wgt::BufferAddress,
         min: wgt::BufferAddress,
     },
     #[error(
-        "buffer access out of bounds: last index {index} would overrun the buffer (limit: {max})"
+        "Buffer access out of bounds: last index {index} would overrun the buffer (limit: {max})"
     )]
     OutOfBoundsOverrun {
         index: wgt::BufferAddress,
         max: wgt::BufferAddress,
     },
-    #[error("buffer map range start {start} is greater than end {end}")]
+    #[error("Buffer map range start {start} is greater than end {end}")]
     NegativeRange {
         start: wgt::BufferAddress,
         end: wgt::BufferAddress,
     },
-    #[error("buffer map aborted")]
+    #[error("Buffer map aborted")]
     MapAborted,
 }
 
@@ -238,9 +238,9 @@ pub struct Buffer<A: hal::Api> {
 pub enum CreateBufferError {
     #[error(transparent)]
     Device(#[from] DeviceError),
-    #[error("failed to map buffer while creating: {0}")]
+    #[error("Failed to map buffer while creating: {0}")]
     AccessError(#[from] BufferAccessError),
-    #[error("buffers that are mapped at creation have to be aligned to `COPY_BUFFER_ALIGNMENT`")]
+    #[error("Buffers that are mapped at creation have to be aligned to `COPY_BUFFER_ALIGNMENT`")]
     UnalignedSize,
     #[error("Invalid usage flags {0:?}")]
     InvalidUsage(wgt::BufferUsages),
@@ -637,6 +637,22 @@ impl HalTextureViewDescriptor {
     }
 }
 
+#[derive(Debug, Copy, Clone, Error)]
+pub enum TextureViewNotRenderableReason {
+    #[error("The texture this view references doesn't include the RENDER_ATTACHMENT usage. Provided usages: {0:?}")]
+    Usage(wgt::TextureUsages),
+    #[error("The dimension of this texture view is not 2D. View dimension: {0:?}")]
+    Dimension(wgt::TextureViewDimension),
+    #[error("This texture view has more than one mipmap level. View mipmap levels: {0:?}")]
+    MipLevelCount(u32),
+    #[error("This texture view has more than one array layer. View array layers: {0:?}")]
+    ArrayLayerCount(u32),
+    #[error(
+        "The aspects of this texture view are a subset of the aspects in the original texture. Aspects: {0:?}"
+    )]
+    Aspects(hal::FormatAspects),
+}
+
 #[derive(Debug)]
 pub struct TextureView<A: hal::Api> {
     pub(crate) raw: A::TextureView,
@@ -647,8 +663,8 @@ pub struct TextureView<A: hal::Api> {
     //TODO: store device_id for quick access?
     pub(crate) desc: HalTextureViewDescriptor,
     pub(crate) format_features: wgt::TextureFormatFeatures,
-    /// This is `None` only if the texture view is not renderable
-    pub(crate) render_extent: Option<wgt::Extent3d>,
+    /// This is `Err` only if the texture view is not renderable
+    pub(crate) render_extent: Result<wgt::Extent3d, TextureViewNotRenderableReason>,
     pub(crate) samples: u32,
     pub(crate) selector: TextureSelector,
     pub(crate) life_guard: LifeGuard,
@@ -656,9 +672,9 @@ pub struct TextureView<A: hal::Api> {
 
 #[derive(Clone, Debug, Error)]
 pub enum CreateTextureViewError {
-    #[error("parent texture is invalid or destroyed")]
+    #[error("Parent texture is invalid or destroyed")]
     InvalidTexture,
-    #[error("not enough memory left")]
+    #[error("Not enough memory left")]
     OutOfMemory,
     #[error("Invalid texture view dimension `{view:?}` with texture of dimension `{texture:?}`")]
     InvalidTextureViewDimension {
@@ -673,9 +689,9 @@ pub enum CreateTextureViewError {
     InvalidCubemapArrayTextureDepth { depth: u32 },
     #[error("Source texture width and height must be equal for a texture view of dimension `Cube`/`CubeArray`")]
     InvalidCubeTextureViewSize,
-    #[error("mip level count is 0")]
+    #[error("Mip level count is 0")]
     ZeroMipLevelCount,
-    #[error("array layer count is 0")]
+    #[error("Array layer count is 0")]
     ZeroArrayLayerCount,
     #[error(
         "TextureView mip level count + base mip level {requested} must be <= Texture mip level count {total}"
@@ -773,11 +789,11 @@ pub struct Sampler<A: hal::Api> {
 pub enum CreateSamplerError {
     #[error(transparent)]
     Device(#[from] DeviceError),
-    #[error("invalid lod clamp lod_min_clamp:{} lod_max_clamp:{}, must satisfy lod_min_clamp >= 0 and lod_max_clamp >= lod_min_clamp ", .0.start, .0.end)]
+    #[error("Invalid lod clamp lod_min_clamp:{} lod_max_clamp:{}, must satisfy lod_min_clamp >= 0 and lod_max_clamp >= lod_min_clamp ", .0.start, .0.end)]
     InvalidLodClamp(Range<f32>),
-    #[error("invalid anisotropic clamp {0}, must be one of 1, 2, 4, 8 or 16")]
+    #[error("Invalid anisotropic clamp {0}, must be one of 1, 2, 4, 8 or 16")]
     InvalidClamp(u8),
-    #[error("cannot create any more samplers")]
+    #[error("Cannot create any more samplers")]
     TooManyObjects,
     /// AddressMode::ClampToBorder requires feature ADDRESS_MODE_CLAMP_TO_BORDER.
     #[error(transparent)]
@@ -824,8 +840,8 @@ impl<A: hal::Api> Resource for QuerySet<A> {
 
 #[derive(Clone, Debug, Error)]
 pub enum DestroyError {
-    #[error("resource is invalid")]
+    #[error("Resource is invalid")]
     Invalid,
-    #[error("resource is already destroyed")]
+    #[error("Resource is already destroyed")]
     AlreadyDestroyed,
 }

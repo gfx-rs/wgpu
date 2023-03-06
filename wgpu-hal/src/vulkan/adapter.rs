@@ -140,7 +140,7 @@ impl PhysicalDeviceFeatures {
                     requested_features.contains(wgt::Features::TEXTURE_COMPRESSION_ETC2),
                 )
                 .texture_compression_astc_ldr(
-                    requested_features.contains(wgt::Features::TEXTURE_COMPRESSION_ASTC_LDR),
+                    requested_features.contains(wgt::Features::TEXTURE_COMPRESSION_ASTC),
                 )
                 .texture_compression_bc(
                     requested_features.contains(wgt::Features::TEXTURE_COMPRESSION_BC),
@@ -174,9 +174,9 @@ impl PhysicalDeviceFeatures {
                 //.shader_storage_image_array_dynamic_indexing(
                 //.shader_clip_distance(requested_features.contains(wgt::Features::SHADER_CLIP_DISTANCE))
                 //.shader_cull_distance(requested_features.contains(wgt::Features::SHADER_CULL_DISTANCE))
-                .shader_float64(requested_features.contains(wgt::Features::SHADER_FLOAT64))
+                .shader_float64(requested_features.contains(wgt::Features::SHADER_F64))
                 //.shader_int64(requested_features.contains(wgt::Features::SHADER_INT64))
-                .shader_int16(requested_features.contains(wgt::Features::SHADER_INT16))
+                .shader_int16(requested_features.contains(wgt::Features::SHADER_I16))
                 //.shader_resource_residency(requested_features.contains(wgt::Features::SHADER_RESOURCE_RESIDENCY))
                 .geometry_shader(requested_features.contains(wgt::Features::SHADER_PRIMITIVE_INDEX))
                 .build(),
@@ -278,7 +278,7 @@ impl PhysicalDeviceFeatures {
             } else {
                 None
             },
-            shader_float16: if requested_features.contains(wgt::Features::SHADER_FLOAT16) {
+            shader_float16: if requested_features.contains(wgt::Features::SHADER_F16) {
                 Some((
                     vk::PhysicalDeviceShaderFloat16Int8Features::builder()
                         .shader_float16(true)
@@ -322,7 +322,7 @@ impl PhysicalDeviceFeatures {
             | F::ADDRESS_MODE_CLAMP_TO_BORDER
             | F::ADDRESS_MODE_CLAMP_TO_ZERO
             | F::TIMESTAMP_QUERY
-            | F::WRITE_TIMESTAMP_INSIDE_PASSES
+            | F::TIMESTAMP_QUERY_INSIDE_PASSES
             | F::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
             | F::CLEAR_TEXTURE;
 
@@ -374,7 +374,7 @@ impl PhysicalDeviceFeatures {
             self.core.texture_compression_etc2 != 0,
         );
         features.set(
-            F::TEXTURE_COMPRESSION_ASTC_LDR,
+            F::TEXTURE_COMPRESSION_ASTC,
             self.core.texture_compression_astc_ldr != 0,
         );
         features.set(
@@ -418,9 +418,9 @@ impl PhysicalDeviceFeatures {
         //if self.core.shader_storage_image_array_dynamic_indexing != 0 {
         //if self.core.shader_clip_distance != 0 {
         //if self.core.shader_cull_distance != 0 {
-        features.set(F::SHADER_FLOAT64, self.core.shader_float64 != 0);
+        features.set(F::SHADER_F64, self.core.shader_float64 != 0);
         //if self.core.shader_int64 != 0 {
-        features.set(F::SHADER_INT16, self.core.shader_int16 != 0);
+        features.set(F::SHADER_I16, self.core.shader_int16 != 0);
 
         //if caps.supports_extension(vk::KhrSamplerMirrorClampToEdgeFn::name()) {
         //if caps.supports_extension(vk::ExtSamplerFilterMinmaxFn::name()) {
@@ -494,7 +494,7 @@ impl PhysicalDeviceFeatures {
 
         if let Some((ref f16_i8, ref bit16)) = self.shader_float16 {
             features.set(
-                F::SHADER_FLOAT16,
+                F::SHADER_F16,
                 f16_i8.shader_float16 != 0
                     && bit16.storage_buffer16_bit_access != 0
                     && bit16.uniform_and_storage_buffer16_bit_access != 0,
@@ -647,7 +647,7 @@ impl PhysicalDeviceCapabilities {
             }
 
             // Require `VK_KHR_shader_float16_int8` and `VK_KHR_16bit_storage` if the associated feature was requested
-            if requested_features.contains(wgt::Features::SHADER_FLOAT16) {
+            if requested_features.contains(wgt::Features::SHADER_F16) {
                 extensions.push(vk::KhrShaderFloat16Int8Fn::name());
                 // `VK_KHR_16bit_storage` requires `VK_KHR_storage_buffer_storage_class`, however we require that one already
                 if self.effective_api_version < vk::API_VERSION_1_1 {

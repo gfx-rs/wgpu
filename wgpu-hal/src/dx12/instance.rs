@@ -13,7 +13,7 @@ impl Drop for super::Instance {
 
 impl crate::Instance<super::Api> for super::Instance {
     unsafe fn init(desc: &crate::InstanceDescriptor) -> Result<Self, crate::InstanceError> {
-        let lib_main = native::D3D12Lib::new().map_err(|_| crate::InstanceError)?;
+        let lib_main = d3d12::D3D12Lib::new().map_err(|_| crate::InstanceError)?;
 
         if desc.flags.contains(crate::InstanceFlags::VALIDATION) {
             // Enable debug layer
