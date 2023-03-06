@@ -745,6 +745,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (staging_buffer, staging_buffer_ptr) =
             prepare_staging_buffer(&mut device.raw, stage_size)?;
 
+        unsafe { encoder.discard_buffer(&staging_buffer.raw) };
+
         if stage_bytes_per_row == bytes_per_row {
             profiling::scope!("copy aligned");
             // Fast path if the data is already being aligned optimally.

@@ -158,6 +158,8 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         encoder.fill_buffer(&buffer.raw, conv::map_range(&range), 0);
     }
 
+    unsafe fn discard_buffer(&mut self, _buffer: &super::Buffer) {}
+
     unsafe fn copy_buffer_to_buffer<T>(
         &mut self,
         src: &super::Buffer,

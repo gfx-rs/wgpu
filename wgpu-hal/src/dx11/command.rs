@@ -36,6 +36,10 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         todo!()
     }
 
+    unsafe fn discard_buffer(&mut self, _buffer: &super::Buffer) {
+        todo!()
+    }
+
     unsafe fn copy_buffer_to_buffer<T>(
         &mut self,
         src: &super::Buffer,
