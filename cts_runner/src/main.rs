@@ -71,16 +71,13 @@ async fn run() -> Result<(), AnyError> {
 }
 
 fn extension() -> deno_core::Extension {
-    deno_core::Extension::builder("bootstrap")
+    deno_core::Extension::builder(env!("CARGO_PKG_NAME"))
         .ops(vec![
             op_exit::decl(),
             op_read_file_sync::decl(),
             op_write_file_sync::decl(),
         ])
-        .js(deno_core::include_js_files!(
-          prefix "deno:cts_runner",
-          "bootstrap.js",
-        ))
+        .js(deno_core::include_js_files!("bootstrap.js",))
         .build()
 }
 
