@@ -299,6 +299,7 @@ impl Context {
         self.handle_error(sink_mutex, cause, "", None, string)
     }
 
+    #[track_caller]
     fn handle_error_fatal(
         &self,
         cause: impl Error + Send + Sync + 'static,
