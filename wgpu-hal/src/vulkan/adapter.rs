@@ -544,7 +544,7 @@ impl PhysicalDeviceFeatures {
 pub struct PhysicalDeviceCapabilities {
     supported_extensions: Vec<vk::ExtensionProperties>,
     properties: vk::PhysicalDeviceProperties,
-    maintenance_3: vk::PhysicalDeviceMaintenance3Properties,
+    maintenance_3: Option<vk::PhysicalDeviceMaintenance3Properties>,
     descriptor_indexing: Option<vk::PhysicalDeviceDescriptorIndexingPropertiesEXT>,
     driver: Option<vk::PhysicalDeviceDriverPropertiesKHR>,
     /// The effective driver api version supported by the physical device.
@@ -799,7 +799,10 @@ impl super::InstanceShared {
                     || capabilities.supports_extension(vk::KhrDriverPropertiesFn::name());
 
                 let mut builder = vk::PhysicalDeviceProperties2KHR::builder();
-                builder = builder.push_next(&mut capabilities.maintenance_3);
+                if self.driver_api_version >= vk::API_VERSION_1_1 {
+                    capabilities.maintenance_3 = Some(vk::PhysicalDeviceMaintenance3Properties::default());
+                    builder = builder.push_next(capabilities.maintenance_3.as_mut().unwrap());
+                }
 
                 if supports_descriptor_indexing {
                     let next = capabilities
@@ -1340,17 +1343,15 @@ impl super::Adapter {
         let mem_allocator = {
             let limits = self.phd_capabilities.properties.limits;
             let config = gpu_alloc::Config::i_am_prototyping(); //TODO
-            let max_memory_allocation_size = self
-                .phd_capabilities
-                .maintenance_3
-                .max_memory_allocation_size;
-            let properties = gpu_alloc::DeviceProperties {
-                max_memory_allocation_count: limits.max_memory_allocation_count,
-                max_memory_allocation_size: if max_memory_allocation_size > 0 {
-                    max_memory_allocation_size
+            let max_memory_allocation_size =
+                if let Some(maintenance_3) = self.phd_capabilities.maintenance_3 {
+                    maintenance_3.max_memory_allocation_size
                 } else {
                     u64::max_value()
-                }, 
+                };
+            let properties = gpu_alloc::DeviceProperties {
+                max_memory_allocation_count: limits.max_memory_allocation_count,
+                max_memory_allocation_size,
                 non_coherent_atom_size: limits.non_coherent_atom_size,
                 memory_types: memory_types
                     .iter()
