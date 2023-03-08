@@ -603,6 +603,11 @@ impl PhysicalDeviceCapabilities {
                 extensions.push(vk::KhrMaintenance2Fn::name());
             }
 
+            // Optional `VK_KHR_maintenance3`
+            if self.supports_extension(vk::KhrMaintenance3Fn::name()) {
+                extensions.push(vk::KhrMaintenance3Fn::name());
+            }
+
             // Require `VK_KHR_storage_buffer_storage_class`
             extensions.push(vk::KhrStorageBufferStorageClassFn::name());
 
@@ -640,11 +645,6 @@ impl PhysicalDeviceCapabilities {
             // Require `VK_EXT_descriptor_indexing` if one of the associated features was requested
             if requested_features.intersects(indexing_features()) {
                 extensions.push(vk::ExtDescriptorIndexingFn::name());
-
-                // Require `VK_KHR_maintenance3` due to it being a dependency
-                if self.effective_api_version < vk::API_VERSION_1_1 {
-                    extensions.push(vk::KhrMaintenance3Fn::name());
-                }
             }
 
             // Require `VK_KHR_shader_float16_int8` and `VK_KHR_16bit_storage` if the associated feature was requested
@@ -799,7 +799,9 @@ impl super::InstanceShared {
                     || capabilities.supports_extension(vk::KhrDriverPropertiesFn::name());
 
                 let mut builder = vk::PhysicalDeviceProperties2KHR::builder();
-                if self.driver_api_version >= vk::API_VERSION_1_1 || capabilities.supports_extension(vk::KhrMaintenance3Fn::name()) {
+                if self.driver_api_version >= vk::API_VERSION_1_1
+                    || capabilities.supports_extension(vk::KhrMaintenance3Fn::name())
+                {
                     capabilities.maintenance_3 =
                         Some(vk::PhysicalDeviceMaintenance3Properties::default());
                     builder = builder.push_next(capabilities.maintenance_3.as_mut().unwrap());
