@@ -110,7 +110,7 @@ hassle-rs = "0.10.0"
 # Gles dependencies
 khronos-egl = "4.1"
 glow = "0.12.1"
-glutin = "0.29.1"
+glutin = "0.30.6"
 
 # wasm32 dependencies
 console_error_panic_hook = "0.1.7"
