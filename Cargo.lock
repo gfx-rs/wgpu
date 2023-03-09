@@ -628,7 +628,7 @@ name = "deno_webgpu"
 version = "0.85.0"
 dependencies = [
  "deno_core",
- "raw-window-handle 0.5.0",
+ "raw-window-handle 0.5.1",
  "serde",
  "tokio",
  "wgpu-core",
@@ -1084,7 +1084,7 @@ dependencies = [
  "once_cell",
  "osmesa-sys",
  "parking_lot 0.12.1",
- "raw-window-handle 0.5.0",
+ "raw-window-handle 0.5.1",
  "wayland-client",
  "wayland-egl",
  "winapi",
@@ -1541,7 +1541,7 @@ dependencies = [
  "jni-sys",
  "ndk-sys",
  "num_enum",
- "raw-window-handle 0.5.0",
+ "raw-window-handle 0.5.1",
  "thiserror",
 ]
 
@@ -1866,7 +1866,7 @@ version = "0.15.0"
 dependencies = [
  "env_logger",
  "log",
- "raw-window-handle 0.5.0",
+ "raw-window-handle 0.5.1",
  "ron",
  "serde",
  "wgpu-core",
@@ -2020,12 +2020,9 @@ dependencies = [
 
 [[package]]
 name = "raw-window-handle"
-version = "0.5.0"
+version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ed7e3d950b66e19e0c372f3fa3fbbcf85b1746b571f74e0c2af6042a5c93420a"
-dependencies = [
- "cty",
-]
+checksum = "4f851a03551ceefd30132e447f07f96cb7011d6b658374f3aed847333adb5559"
 
 [[package]]
 name = "redox_syscall"
@@ -3027,7 +3024,7 @@ dependencies = [
  "png",
  "pollster",
  "profiling",
- "raw-window-handle 0.5.0",
+ "raw-window-handle 0.5.1",
  "serde",
  "smallvec",
  "static_assertions",
@@ -3053,7 +3050,7 @@ dependencies = [
  "naga",
  "parking_lot 0.12.1",
  "profiling",
- "raw-window-handle 0.5.0",
+ "raw-window-handle 0.5.1",
  "ron",
  "rustc-hash",
  "serde",
@@ -3095,7 +3092,7 @@ dependencies = [
  "parking_lot 0.12.1",
  "profiling",
  "range-alloc",
- "raw-window-handle 0.5.0",
+ "raw-window-handle 0.5.1",
  "renderdoc-sys",
  "rustc-hash",
  "smallvec",
@@ -3330,7 +3327,7 @@ dependencies = [
  "parking_lot 0.12.1",
  "percent-encoding",
  "raw-window-handle 0.4.3",
- "raw-window-handle 0.5.0",
+ "raw-window-handle 0.5.1",
  "sctk-adwaita",
  "smithay-client-toolkit",
  "wasm-bindgen",
