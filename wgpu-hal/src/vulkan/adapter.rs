@@ -544,6 +544,7 @@ impl PhysicalDeviceFeatures {
 pub struct PhysicalDeviceCapabilities {
     supported_extensions: Vec<vk::ExtensionProperties>,
     properties: vk::PhysicalDeviceProperties,
+    maintenance_3: Option<vk::PhysicalDeviceMaintenance3Properties>,
     descriptor_indexing: Option<vk::PhysicalDeviceDescriptorIndexingPropertiesEXT>,
     driver: Option<vk::PhysicalDeviceDriverPropertiesKHR>,
     /// The effective driver api version supported by the physical device.
@@ -602,6 +603,11 @@ impl PhysicalDeviceCapabilities {
                 extensions.push(vk::KhrMaintenance2Fn::name());
             }
 
+            // Optional `VK_KHR_maintenance3`
+            if self.supports_extension(vk::KhrMaintenance3Fn::name()) {
+                extensions.push(vk::KhrMaintenance3Fn::name());
+            }
+
             // Require `VK_KHR_storage_buffer_storage_class`
             extensions.push(vk::KhrStorageBufferStorageClassFn::name());
 
@@ -639,11 +645,6 @@ impl PhysicalDeviceCapabilities {
             // Require `VK_EXT_descriptor_indexing` if one of the associated features was requested
             if requested_features.intersects(indexing_features()) {
                 extensions.push(vk::ExtDescriptorIndexingFn::name());
-
-                // Require `VK_KHR_maintenance3` due to it being a dependency
-                if self.effective_api_version < vk::API_VERSION_1_1 {
-                    extensions.push(vk::KhrMaintenance3Fn::name());
-                }
             }
 
             // Require `VK_KHR_shader_float16_int8` and `VK_KHR_16bit_storage` if the associated feature was requested
@@ -798,6 +799,13 @@ impl super::InstanceShared {
                     || capabilities.supports_extension(vk::KhrDriverPropertiesFn::name());
 
                 let mut builder = vk::PhysicalDeviceProperties2KHR::builder();
+                if self.driver_api_version >= vk::API_VERSION_1_1
+                    || capabilities.supports_extension(vk::KhrMaintenance3Fn::name())
+                {
+                    capabilities.maintenance_3 =
+                        Some(vk::PhysicalDeviceMaintenance3Properties::default());
+                    builder = builder.push_next(capabilities.maintenance_3.as_mut().unwrap());
+                }
 
                 if supports_descriptor_indexing {
                     let next = capabilities
@@ -1338,9 +1346,15 @@ impl super::Adapter {
         let mem_allocator = {
             let limits = self.phd_capabilities.properties.limits;
             let config = gpu_alloc::Config::i_am_prototyping(); //TODO
+            let max_memory_allocation_size =
+                if let Some(maintenance_3) = self.phd_capabilities.maintenance_3 {
+                    maintenance_3.max_memory_allocation_size
+                } else {
+                    u64::max_value()
+                };
             let properties = gpu_alloc::DeviceProperties {
                 max_memory_allocation_count: limits.max_memory_allocation_count,
-                max_memory_allocation_size: u64::max_value(), // TODO
+                max_memory_allocation_size,
                 non_coherent_atom_size: limits.non_coherent_atom_size,
                 memory_types: memory_types
                     .iter()
