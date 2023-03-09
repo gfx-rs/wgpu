@@ -15,10 +15,9 @@ use wgpu_types::SurfaceStatus;
 pub fn init_surface(unstable: bool) -> Extension {
     Extension::builder("deno_webgpu_surface")
         .dependencies(vec!["deno_webidl", "deno_web", "deno_webgpu"])
-        .js(include_js_files!(
-          prefix "deno:deno_webgpu",
-          "03_surface.js",
-          "04_surface_idl_types.js",
+        .esm(include_js_files!(
+            "03_surface.js",
+            "04_surface_idl_types.js",
         ))
         .ops(vec![
             op_webgpu_surface_configure::decl(),
