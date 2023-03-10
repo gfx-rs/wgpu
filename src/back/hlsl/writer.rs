@@ -1883,13 +1883,6 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 write!(self.out, "switch(")?;
                 self.write_expr(module, selector, func_ctx)?;
                 writeln!(self.out, ") {{")?;
-                let type_postfix = match *func_ctx.info[selector].ty.inner_with(&module.types) {
-                    crate::TypeInner::Scalar {
-                        kind: crate::ScalarKind::Uint,
-                        ..
-                    } => "u",
-                    _ => "",
-                };
 
                 // Write all cases
                 let indent_level_1 = level.next();
@@ -1897,8 +1890,11 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
 
                 for (i, case) in cases.iter().enumerate() {
                     match case.value {
-                        crate::SwitchValue::Integer(value) => {
-                            write!(self.out, "{indent_level_1}case {value}{type_postfix}:")?
+                        crate::SwitchValue::I32(value) => {
+                            write!(self.out, "{indent_level_1}case {value}:")?
+                        }
+                        crate::SwitchValue::U32(value) => {
+                            write!(self.out, "{indent_level_1}case {value}u:")?
                         }
                         crate::SwitchValue::Default => {
                             write!(self.out, "{indent_level_1}default:")?

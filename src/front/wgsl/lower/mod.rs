@@ -1006,11 +1006,11 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     .map(|case| {
                         Ok(crate::SwitchCase {
                             value: match case.value {
-                                ast::SwitchValue::I32(num) if !uint => {
-                                    crate::SwitchValue::Integer(num)
+                                ast::SwitchValue::I32(value) if !uint => {
+                                    crate::SwitchValue::I32(value)
                                 }
-                                ast::SwitchValue::U32(num) if uint => {
-                                    crate::SwitchValue::Integer(num as i32)
+                                ast::SwitchValue::U32(value) if uint => {
+                                    crate::SwitchValue::U32(value)
                                 }
                                 ast::SwitchValue::Default => crate::SwitchValue::Default,
                                 _ => {

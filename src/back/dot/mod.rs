@@ -157,8 +157,8 @@ impl StatementGraph {
                     for case in cases {
                         let (case_id, case_last) = self.add(&case.body, targets);
                         let label = match case.value {
-                            crate::SwitchValue::Integer(_) => "case",
                             crate::SwitchValue::Default => "default",
+                            _ => "case",
                         };
                         self.flow.push((id, case_id, label));
                         // Link the last node of the branch to the merge node

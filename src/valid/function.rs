@@ -103,7 +103,9 @@ pub enum FunctionError {
     #[error("The `switch` value {0:?} is not an integer scalar")]
     InvalidSwitchType(Handle<crate::Expression>),
     #[error("Multiple `switch` cases for {0:?} are present")]
-    ConflictingSwitchCase(i32),
+    ConflictingSwitchCase(crate::SwitchValue),
+    #[error("The `switch` contains cases with conflicting types")]
+    ConflictingCaseType,
     #[error("The `switch` is missing a `default` case")]
     MissingDefaultCase,
     #[error("Multiple `default` cases are present")]
@@ -434,52 +436,55 @@ impl super::Validator {
                     selector,
                     ref cases,
                 } => {
-                    match *context.resolve_type(selector, &self.valid_expression_set)? {
-                        Ti::Scalar {
-                            kind: crate::ScalarKind::Uint,
-                            width: _,
-                        } => {}
-                        Ti::Scalar {
-                            kind: crate::ScalarKind::Sint,
-                            width: _,
-                        } => {}
+                    let uint = match context
+                        .resolve_type(selector, &self.valid_expression_set)?
+                        .scalar_kind()
+                    {
+                        Some(crate::ScalarKind::Uint) => true,
+                        Some(crate::ScalarKind::Sint) => false,
                         _ => {
                             return Err(FunctionError::InvalidSwitchType(selector)
                                 .with_span_handle(selector, context.expressions))
                         }
-                    }
-                    self.select_cases.clear();
-                    let mut default = false;
+                    };
+                    self.switch_values.clear();
                     for case in cases {
                         match case.value {
-                            crate::SwitchValue::Integer(value) => {
-                                if !self.select_cases.insert(value) {
-                                    return Err(FunctionError::ConflictingSwitchCase(value)
-                                        .with_span_static(
-                                            case.body
-                                                .span_iter()
-                                                .next()
-                                                .map_or(Default::default(), |(_, s)| *s),
-                                            "conflicting switch arm here",
-                                        ));
-                                }
+                            crate::SwitchValue::I32(_) if !uint => {}
+                            crate::SwitchValue::U32(_) if uint => {}
+                            crate::SwitchValue::Default => {}
+                            _ => {
+                                return Err(FunctionError::ConflictingCaseType.with_span_static(
+                                    case.body
+                                        .span_iter()
+                                        .next()
+                                        .map_or(Default::default(), |(_, s)| *s),
+                                    "conflicting switch arm here",
+                                ));
                             }
-                            crate::SwitchValue::Default => {
-                                if default {
-                                    return Err(FunctionError::MultipleDefaultCases
-                                        .with_span_static(
-                                            case.body
-                                                .span_iter()
-                                                .next()
-                                                .map_or(Default::default(), |(_, s)| *s),
-                                            "duplicated switch arm here",
-                                        ));
-                                }
-                                default = true
-                            }
+                        };
+                        if !self.switch_values.insert(case.value) {
+                            return Err(match case.value {
+                                crate::SwitchValue::Default => FunctionError::MultipleDefaultCases
+                                    .with_span_static(
+                                        case.body
+                                            .span_iter()
+                                            .next()
+                                            .map_or(Default::default(), |(_, s)| *s),
+                                        "duplicated switch arm here",
+                                    ),
+                                _ => FunctionError::ConflictingSwitchCase(case.value)
+                                    .with_span_static(
+                                        case.body
+                                            .span_iter()
+                                            .next()
+                                            .map_or(Default::default(), |(_, s)| *s),
+                                        "conflicting switch arm here",
+                                    ),
+                            });
                         }
                     }
-                    if !default {
+                    if !self.switch_values.contains(&crate::SwitchValue::Default) {
                         return Err(FunctionError::MissingDefaultCase
                             .with_span_static(span, "missing default case"));
                     }

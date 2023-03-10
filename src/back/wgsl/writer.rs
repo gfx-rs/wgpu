@@ -865,14 +865,6 @@ impl<W: Write> Writer<W> {
                 self.write_expr(module, selector, func_ctx)?;
                 writeln!(self.out, " {{")?;
 
-                let type_postfix = match *func_ctx.info[selector].ty.inner_with(&module.types) {
-                    crate::TypeInner::Scalar {
-                        kind: crate::ScalarKind::Uint,
-                        ..
-                    } => "u",
-                    _ => "",
-                };
-
                 let l2 = level.next();
                 let mut new_case = true;
                 for case in cases {
@@ -884,11 +876,17 @@ impl<W: Write> Writer<W> {
                     }
 
                     match case.value {
-                        crate::SwitchValue::Integer(value) => {
+                        crate::SwitchValue::I32(value) => {
                             if new_case {
                                 write!(self.out, "{l2}case ")?;
                             }
-                            write!(self.out, "{value}{type_postfix}")?;
+                            write!(self.out, "{value}")?;
+                        }
+                        crate::SwitchValue::U32(value) => {
+                            if new_case {
+                                write!(self.out, "{l2}case ")?;
+                            }
+                            write!(self.out, "{value}u")?;
                         }
                         crate::SwitchValue::Default => {
                             if new_case {

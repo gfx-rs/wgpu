@@ -1770,11 +1770,14 @@ impl<'w> BlockContext<'w> {
                         case_ids.push(label_id);
 
                         match case.value {
-                            crate::SwitchValue::Integer(value) => {
+                            crate::SwitchValue::I32(value) => {
                                 raw_cases.push(super::instructions::Case {
                                     value: value as Word,
                                     label_id,
                                 });
+                            }
+                            crate::SwitchValue::U32(value) => {
+                                raw_cases.push(super::instructions::Case { value, label_id });
                             }
                             crate::SwitchValue::Default => {
                                 default_id = Some(label_id);

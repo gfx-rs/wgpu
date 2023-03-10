@@ -596,7 +596,7 @@ impl<'function> BlockContext<'function> {
                                 let fall_through = body.last().map_or(true, |s| !s.is_terminator());
 
                                 crate::SwitchCase {
-                                    value: crate::SwitchValue::Integer(value),
+                                    value: crate::SwitchValue::I32(value),
                                     body,
                                     fall_through,
                                 }

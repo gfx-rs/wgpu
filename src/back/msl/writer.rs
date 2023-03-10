@@ -2551,19 +2551,15 @@ impl<W: Write> Writer<W> {
                 } => {
                     write!(self.out, "{level}switch(")?;
                     self.put_expression(selector, &context.expression, true)?;
-                    let type_postfix = match *context.expression.resolve_type(selector) {
-                        crate::TypeInner::Scalar {
-                            kind: crate::ScalarKind::Uint,
-                            ..
-                        } => "u",
-                        _ => "",
-                    };
                     writeln!(self.out, ") {{")?;
                     let lcase = level.next();
                     for case in cases.iter() {
                         match case.value {
-                            crate::SwitchValue::Integer(value) => {
-                                write!(self.out, "{lcase}case {value}{type_postfix}:")?;
+                            crate::SwitchValue::I32(value) => {
+                                write!(self.out, "{lcase}case {value}:")?;
+                            }
+                            crate::SwitchValue::U32(value) => {
+                                write!(self.out, "{lcase}case {value}u:")?;
                             }
                             crate::SwitchValue::Default => {
                                 write!(self.out, "{lcase}default:")?;
