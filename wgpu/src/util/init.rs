@@ -86,3 +86,23 @@ pub async fn initialize_adapter_from_env_or_default(
         }
     }
 }
+
+/// Choose which DX12 shader compiler to use from the environment variable `WGPU_DX12_COMPILER`.
+///
+/// Possible values are `dxc` and `fxc`. Case insensitive.
+pub fn dx12_shader_compiler_from_env() -> Option<wgt::Dx12Compiler> {
+    Some(
+        match std::env::var("WGPU_DX12_COMPILER")
+            .as_deref()
+            .map(str::to_lowercase)
+            .as_deref()
+        {
+            Ok("dxc") => wgt::Dx12Compiler::Dxc {
+                dxil_path: None,
+                dxc_path: None,
+            },
+            Ok("fxc") => wgt::Dx12Compiler::Fxc,
+            _ => return None,
+        },
+    )
+}

@@ -9,8 +9,8 @@ use crate::{
     },
     instance::{self, Adapter, Surface},
     pipeline, present,
-    resource::{self, BufferMapState},
-    resource::{BufferAccessError, BufferMapAsyncStatus, BufferMapOperation},
+    resource::{self, BufferAccessResult, BufferMapState, TextureViewNotRenderableReason},
+    resource::{BufferAccessError, BufferMapOperation},
     track::{BindGroupStates, TextureSelector, Tracker},
     validation::{self, check_buffer_usage, check_texture_usage},
     FastHashMap, Label, LabelHelpers as _, LifeGuard, MultiRefCount, RefCount, Stored,
@@ -31,11 +31,9 @@ pub mod queue;
 #[cfg(any(feature = "trace", feature = "replay"))]
 pub mod trace;
 
-// Per WebGPU specification.
-pub const MAX_BINDING_INDEX: u32 = 65535;
-
 pub const SHADER_STAGE_COUNT: usize = 3;
-// Should be large enough for the largest possible texture row. This value is enough for a 16k texture with float4 format.
+// Should be large enough for the largest possible texture row. This
+// value is enough for a 16k texture with float4 format.
 pub(crate) const ZERO_BUFFER_SIZE: BufferAddress = 512 << 10;
 
 const CLEANUP_WAIT_MS: u32 = 5000;
@@ -72,6 +70,12 @@ impl<T> AttachmentData<T> {
     }
 }
 
+#[derive(Debug, Copy, Clone)]
+pub enum RenderPassCompatibilityCheckType {
+    RenderPipeline,
+    RenderBundle,
+}
+
 #[derive(Clone, Debug, Hash, PartialEq)]
 #[cfg_attr(feature = "serial-pass", derive(serde::Deserialize, serde::Serialize))]
 pub(crate) struct RenderPassContext {
@@ -81,19 +85,37 @@ pub(crate) struct RenderPassContext {
 }
 #[derive(Clone, Debug, Error)]
 pub enum RenderPassCompatibilityError {
-    #[error("Incompatible color attachment: the renderpass expected {0:?} but was given {1:?}")]
-    IncompatibleColorAttachment(
-        ArrayVec<Option<TextureFormat>, { hal::MAX_COLOR_ATTACHMENTS }>,
-        ArrayVec<Option<TextureFormat>, { hal::MAX_COLOR_ATTACHMENTS }>,
-    ),
     #[error(
-        "Incompatible depth-stencil attachment: the renderpass expected {0:?} but was given {1:?}"
+        "Incompatible color attachments at indices {indices:?}: the RenderPass uses textures with formats {expected:?} but the {ty:?} uses attachments with formats {actual:?}",
     )]
-    IncompatibleDepthStencilAttachment(Option<TextureFormat>, Option<TextureFormat>),
-    #[error("Incompatible sample count: the renderpass expected {0:?} but was given {1:?}")]
-    IncompatibleSampleCount(u32, u32),
-    #[error("Incompatible multiview: the renderpass expected {0:?} but was given {1:?}")]
-    IncompatibleMultiview(Option<NonZeroU32>, Option<NonZeroU32>),
+    IncompatibleColorAttachment {
+        indices: Vec<usize>,
+        expected: Vec<Option<TextureFormat>>,
+        actual: Vec<Option<TextureFormat>>,
+        ty: RenderPassCompatibilityCheckType,
+    },
+    #[error(
+        "Incompatible depth-stencil attachment format: the RenderPass uses a texture with format {expected:?} but the {ty:?} uses an attachment with format {actual:?}",
+    )]
+    IncompatibleDepthStencilAttachment {
+        expected: Option<TextureFormat>,
+        actual: Option<TextureFormat>,
+        ty: RenderPassCompatibilityCheckType,
+    },
+    #[error(
+        "Incompatible sample count: the RenderPass uses textures with sample count {expected:?} but the {ty:?} uses attachments with format {actual:?}",
+    )]
+    IncompatibleSampleCount {
+        expected: u32,
+        actual: u32,
+        ty: RenderPassCompatibilityCheckType,
+    },
+    #[error("Incompatible multiview setting: the RenderPass uses setting {expected:?} but the {ty:?} uses setting {actual:?}")]
+    IncompatibleMultiview {
+        expected: Option<NonZeroU32>,
+        actual: Option<NonZeroU32>,
+        ty: RenderPassCompatibilityCheckType,
+    },
 }
 
 impl RenderPassContext {
@@ -101,38 +123,52 @@ impl RenderPassContext {
     pub(crate) fn check_compatible(
         &self,
         other: &Self,
+        ty: RenderPassCompatibilityCheckType,
     ) -> Result<(), RenderPassCompatibilityError> {
         if self.attachments.colors != other.attachments.colors {
-            return Err(RenderPassCompatibilityError::IncompatibleColorAttachment(
-                self.attachments.colors.clone(),
-                other.attachments.colors.clone(),
-            ));
+            let indices = self
+                .attachments
+                .colors
+                .iter()
+                .zip(&other.attachments.colors)
+                .enumerate()
+                .filter_map(|(idx, (left, right))| (left != right).then_some(idx))
+                .collect();
+            return Err(RenderPassCompatibilityError::IncompatibleColorAttachment {
+                indices,
+                expected: self.attachments.colors.iter().cloned().collect(),
+                actual: other.attachments.colors.iter().cloned().collect(),
+                ty,
+            });
         }
         if self.attachments.depth_stencil != other.attachments.depth_stencil {
             return Err(
-                RenderPassCompatibilityError::IncompatibleDepthStencilAttachment(
-                    self.attachments.depth_stencil,
-                    other.attachments.depth_stencil,
-                ),
+                RenderPassCompatibilityError::IncompatibleDepthStencilAttachment {
+                    expected: self.attachments.depth_stencil,
+                    actual: other.attachments.depth_stencil,
+                    ty,
+                },
             );
         }
         if self.sample_count != other.sample_count {
-            return Err(RenderPassCompatibilityError::IncompatibleSampleCount(
-                self.sample_count,
-                other.sample_count,
-            ));
+            return Err(RenderPassCompatibilityError::IncompatibleSampleCount {
+                expected: self.sample_count,
+                actual: other.sample_count,
+                ty,
+            });
         }
         if self.multiview != other.multiview {
-            return Err(RenderPassCompatibilityError::IncompatibleMultiview(
-                self.multiview,
-                other.multiview,
-            ));
+            return Err(RenderPassCompatibilityError::IncompatibleMultiview {
+                expected: self.multiview,
+                actual: other.multiview,
+                ty,
+            });
         }
         Ok(())
     }
 }
 
-pub type BufferMapPendingClosure = (BufferMapOperation, BufferMapAsyncStatus);
+pub type BufferMapPendingClosure = (BufferMapOperation, BufferAccessResult);
 
 #[derive(Default)]
 pub struct UserClosures {
@@ -184,19 +220,27 @@ fn map_buffer<A: hal::Api>(
 
     assert_eq!(offset % wgt::COPY_BUFFER_ALIGNMENT, 0);
     assert_eq!(size % wgt::COPY_BUFFER_ALIGNMENT, 0);
-    // Zero out uninitialized parts of the mapping. (Spec dictates all resources behave as if they were initialized with zero)
+    // Zero out uninitialized parts of the mapping. (Spec dictates all resources
+    // behave as if they were initialized with zero)
     //
-    // If this is a read mapping, ideally we would use a `clear_buffer` command before reading the data from GPU (i.e. `invalidate_range`).
-    // However, this would require us to kick off and wait for a command buffer or piggy back on an existing one (the later is likely the only worthwhile option).
-    // As reading uninitialized memory isn't a particular important path to support,
-    // we instead just initialize the memory here and make sure it is GPU visible, so this happens at max only once for every buffer region.
+    // If this is a read mapping, ideally we would use a `clear_buffer` command
+    // before reading the data from GPU (i.e. `invalidate_range`). However, this
+    // would require us to kick off and wait for a command buffer or piggy back
+    // on an existing one (the later is likely the only worthwhile option). As
+    // reading uninitialized memory isn't a particular important path to
+    // support, we instead just initialize the memory here and make sure it is
+    // GPU visible, so this happens at max only once for every buffer region.
     //
-    // If this is a write mapping zeroing out the memory here is the only reasonable way as all data is pushed to GPU anyways.
-    let zero_init_needs_flush_now = mapping.is_coherent && buffer.sync_mapped_writes.is_none(); // No need to flush if it is flushed later anyways.
+    // If this is a write mapping zeroing out the memory here is the only
+    // reasonable way as all data is pushed to GPU anyways.
+
+    // No need to flush if it is flushed later anyways.
+    let zero_init_needs_flush_now = mapping.is_coherent && buffer.sync_mapped_writes.is_none();
     let mapped = unsafe { std::slice::from_raw_parts_mut(mapping.ptr.as_ptr(), size as usize) };
 
     for uninitialized in buffer.initialization_status.drain(offset..(size + offset)) {
-        // The mapping's pointer is already offset, however we track the uninitialized range relative to the buffer's start.
+        // The mapping's pointer is already offset, however we track the
+        // uninitialized range relative to the buffer's start.
         let fill_range =
             (uninitialized.start - offset) as usize..(uninitialized.end - offset) as usize;
         mapped[fill_range].fill(0);
@@ -246,6 +290,7 @@ impl<A: hal::Api> CommandAllocator<A> {
 
 /// Structure describing a logical device. Some members are internally mutable,
 /// stored behind mutexes.
+///
 /// TODO: establish clear order of locking for these:
 /// `mem_allocator`, `desc_allocator`, `life_tracker`, `trackers`,
 /// `render_passes`, `pending_writes`, `trace`.
@@ -289,8 +334,9 @@ pub struct Device<A: HalApi> {
     pub(crate) limits: wgt::Limits,
     pub(crate) features: wgt::Features,
     pub(crate) downlevel: wgt::DownlevelCapabilities,
-    //TODO: move this behind another mutex. This would allow several methods to switch
-    // to borrow Device immutably, such as `write_buffer`, `write_texture`, and `buffer_unmap`.
+    // TODO: move this behind another mutex. This would allow several methods to
+    // switch to borrow Device immutably, such as `write_buffer`, `write_texture`,
+    // and `buffer_unmap`.
     pending_writes: queue::PendingWrites<A>,
     #[cfg(feature = "trace")]
     pub(crate) trace: Option<Mutex<trace::Trace>>,
@@ -298,9 +344,9 @@ pub struct Device<A: HalApi> {
 
 #[derive(Clone, Debug, Error)]
 pub enum CreateDeviceError {
-    #[error("not enough memory left")]
+    #[error("Not enough memory left")]
     OutOfMemory,
-    #[error("failed to create internal buffer for initializing textures")]
+    #[error("Failed to create internal buffer for initializing textures")]
     FailedToCreateZeroBuffer(#[from] DeviceError),
 }
 
@@ -582,10 +628,21 @@ impl<A: HalApi> Device<A> {
             });
         }
 
+        if desc.usage.contains(wgt::BufferUsages::INDEX)
+            && desc.usage.contains(
+                wgt::BufferUsages::VERTEX
+                    | wgt::BufferUsages::UNIFORM
+                    | wgt::BufferUsages::INDIRECT
+                    | wgt::BufferUsages::STORAGE,
+            )
+        {
+            self.require_downlevel_flags(wgt::DownlevelFlags::UNRESTRICTED_INDEX_BUFFER)?;
+        }
+
         let mut usage = conv::map_buffer_usage(desc.usage);
 
-        if desc.usage.is_empty() {
-            return Err(resource::CreateBufferError::EmptyUsage);
+        if desc.usage.is_empty() || desc.usage.contains_invalid_bits() {
+            return Err(resource::CreateBufferError::InvalidUsage(desc.usage));
         }
 
         if !self
@@ -611,15 +668,16 @@ impl<A: HalApi> Device<A> {
                 usage |= hal::BufferUses::COPY_DST;
             }
         } else {
-            // We are required to zero out (initialize) all memory.
-            // This is done on demand using clear_buffer which requires write transfer usage!
+            // We are required to zero out (initialize) all memory. This is done
+            // on demand using clear_buffer which requires write transfer usage!
             usage |= hal::BufferUses::COPY_DST;
         }
 
         let actual_size = if desc.size == 0 {
             wgt::COPY_BUFFER_ALIGNMENT
         } else if desc.usage.contains(wgt::BufferUsages::VERTEX) {
-            // Bumping the size by 1 so that we can bind an empty range at the end of the buffer.
+            // Bumping the size by 1 so that we can bind an empty range at the
+            // end of the buffer.
             desc.size + 1
         } else {
             desc.size
@@ -700,8 +758,8 @@ impl<A: HalApi> Device<A> {
     ) -> Result<resource::Texture<A>, resource::CreateTextureError> {
         use resource::{CreateTextureError, TextureDimensionError};
 
-        if desc.usage.is_empty() {
-            return Err(CreateTextureError::EmptyUsage);
+        if desc.usage.is_empty() || desc.usage.contains_invalid_bits() {
+            return Err(CreateTextureError::InvalidUsage(desc.usage));
         }
 
         conv::check_texture_dimension_size(
@@ -711,11 +769,9 @@ impl<A: HalApi> Device<A> {
             &self.limits,
         )?;
 
-        let format_desc = desc.format.describe();
-
         if desc.dimension != wgt::TextureDimension::D2 {
             // Depth textures can only be 2D
-            if format_desc.sample_type == wgt::TextureSampleType::Depth {
+            if desc.format.is_depth_stencil_format() {
                 return Err(CreateTextureError::InvalidDepthDimension(
                     desc.dimension,
                     desc.format,
@@ -730,7 +786,7 @@ impl<A: HalApi> Device<A> {
             }
 
             // Compressed textures can only be 2D
-            if format_desc.is_compressed() {
+            if desc.format.is_compressed() {
                 return Err(CreateTextureError::InvalidCompressedDimension(
                     desc.dimension,
                     desc.format,
@@ -738,9 +794,8 @@ impl<A: HalApi> Device<A> {
             }
         }
 
-        if format_desc.is_compressed() {
-            let block_width = format_desc.block_dimensions.0 as u32;
-            let block_height = format_desc.block_dimensions.1 as u32;
+        if desc.format.is_compressed() {
+            let (block_width, block_height) = desc.format.block_dimensions();
 
             if desc.size.width % block_width != 0 {
                 return Err(CreateTextureError::InvalidDimension(
@@ -791,12 +846,24 @@ impl<A: HalApi> Device<A> {
                 return Err(CreateTextureError::MultisampledNotRenderAttachment);
             }
 
-            if !format_features
-                .flags
-                .contains(wgt::TextureFormatFeatureFlags::MULTISAMPLE)
-            {
+            if !format_features.flags.intersects(
+                wgt::TextureFormatFeatureFlags::MULTISAMPLE_X4
+                    | wgt::TextureFormatFeatureFlags::MULTISAMPLE_X2
+                    | wgt::TextureFormatFeatureFlags::MULTISAMPLE_X8
+                    | wgt::TextureFormatFeatureFlags::MULTISAMPLE_X16,
+            ) {
                 return Err(CreateTextureError::InvalidMultisampledFormat(desc.format));
             }
+
+            if !format_features
+                .flags
+                .sample_count_supported(desc.sample_count)
+            {
+                return Err(CreateTextureError::InvalidSampleCount(
+                    desc.sample_count,
+                    desc.format,
+                ));
+            };
         }
 
         let mips = desc.mip_level_count;
@@ -811,11 +878,7 @@ impl<A: HalApi> Device<A> {
         let missing_allowed_usages = desc.usage - format_features.allowed_usages;
         if !missing_allowed_usages.is_empty() {
             // detect downlevel incompatibilities
-            let wgpu_allowed_usages = desc
-                .format
-                .describe()
-                .guaranteed_format_features
-                .allowed_usages;
+            let wgpu_allowed_usages = desc.format.guaranteed_format_features().allowed_usages;
             let wgpu_missing_usages = desc.usage - wgpu_allowed_usages;
             return Err(CreateTextureError::InvalidFormatUsages(
                 missing_allowed_usages,
@@ -824,11 +887,24 @@ impl<A: HalApi> Device<A> {
             ));
         }
 
-        // TODO: validate missing TextureDescriptor::view_formats.
+        let mut hal_view_formats = vec![];
+        for format in desc.view_formats.iter() {
+            if desc.format == *format {
+                continue;
+            }
+            if desc.format.remove_srgb_suffix() != format.remove_srgb_suffix() {
+                return Err(CreateTextureError::InvalidViewFormat(*format, desc.format));
+            }
+            hal_view_formats.push(*format);
+        }
+        if !hal_view_formats.is_empty() {
+            self.require_downlevel_flags(wgt::DownlevelFlags::VIEW_FORMATS)?;
+        }
 
-        // Enforce having COPY_DST/DEPTH_STENCIL_WRIT/COLOR_TARGET otherwise we wouldn't be able to initialize the texture.
+        // Enforce having COPY_DST/DEPTH_STENCIL_WRITE/COLOR_TARGET otherwise we
+        // wouldn't be able to initialize the texture.
         let hal_usage = conv::map_texture_usage(desc.usage, desc.format.into())
-            | if format_desc.sample_type == wgt::TextureSampleType::Depth {
+            | if desc.format.is_depth_stencil_format() {
                 hal::TextureUses::DEPTH_STENCIL_WRITE
             } else if desc.usage.contains(wgt::TextureUsages::COPY_DST) {
                 hal::TextureUses::COPY_DST // (set already)
@@ -855,6 +931,7 @@ impl<A: HalApi> Device<A> {
             format: desc.format,
             usage: hal_usage,
             memory_flags: hal::MemoryFlags::empty(),
+            view_formats: hal_view_formats,
         };
 
         let raw_texture = unsafe {
@@ -866,12 +943,11 @@ impl<A: HalApi> Device<A> {
         let clear_mode = if hal_usage
             .intersects(hal::TextureUses::DEPTH_STENCIL_WRITE | hal::TextureUses::COLOR_TARGET)
         {
-            let (is_color, usage) =
-                if desc.format.describe().sample_type == wgt::TextureSampleType::Depth {
-                    (false, hal::TextureUses::DEPTH_STENCIL_WRITE)
-                } else {
-                    (true, hal::TextureUses::COLOR_TARGET)
-                };
+            let (is_color, usage) = if desc.format.is_depth_stencil_format() {
+                (false, hal::TextureUses::DEPTH_STENCIL_WRITE)
+            } else {
+                (true, hal::TextureUses::COLOR_TARGET)
+            };
             let dimension = match desc.dimension {
                 wgt::TextureDimension::D1 => wgt::TextureViewDimension::D1,
                 wgt::TextureDimension::D2 => wgt::TextureViewDimension::D2,
@@ -889,9 +965,9 @@ impl<A: HalApi> Device<A> {
                         range: wgt::ImageSubresourceRange {
                             aspect: wgt::TextureAspect::All,
                             base_mip_level: mip_level,
-                            mip_level_count: NonZeroU32::new(1),
+                            mip_level_count: Some(1),
                             base_array_layer: array_layer,
-                            array_layer_count: NonZeroU32::new(1),
+                            array_layer_count: Some(1),
                         },
                     };
                     clear_views.push(
@@ -931,142 +1007,214 @@ impl<A: HalApi> Device<A> {
             .as_raw()
             .ok_or(resource::CreateTextureViewError::InvalidTexture)?;
 
-        let view_dim = match desc.dimension {
-            Some(dim) => {
-                // check if the dimension is compatible with the texture
-                if texture.desc.dimension != dim.compatible_texture_dimension() {
-                    return Err(
-                        resource::CreateTextureViewError::InvalidTextureViewDimension {
-                            view: dim,
-                            texture: texture.desc.dimension,
-                        },
-                    );
-                }
-                // check if multisampled texture is seen as anything but 2D
-                match dim {
-                    wgt::TextureViewDimension::D2 | wgt::TextureViewDimension::D2Array => {}
-                    _ if texture.desc.sample_count > 1 => {
-                        return Err(resource::CreateTextureViewError::InvalidMultisampledTextureViewDimension(dim));
-                    }
-                    _ => {}
-                }
-                dim
-            }
-            None => match texture.desc.dimension {
+        // resolve TextureViewDescriptor defaults
+        // https://gpuweb.github.io/gpuweb/#abstract-opdef-resolving-gputextureviewdescriptor-defaults
+
+        let resolved_format = desc.format.unwrap_or_else(|| {
+            texture
+                .desc
+                .format
+                .aspect_specific_format(desc.range.aspect)
+                .unwrap_or(texture.desc.format)
+        });
+
+        let resolved_dimension = desc
+            .dimension
+            .unwrap_or_else(|| match texture.desc.dimension {
                 wgt::TextureDimension::D1 => wgt::TextureViewDimension::D1,
-                wgt::TextureDimension::D2 if texture.desc.size.depth_or_array_layers > 1 => {
-                    wgt::TextureViewDimension::D2Array
+                wgt::TextureDimension::D2 => {
+                    if texture.desc.array_layer_count() == 1 {
+                        wgt::TextureViewDimension::D2
+                    } else {
+                        wgt::TextureViewDimension::D2Array
+                    }
                 }
-                wgt::TextureDimension::D2 => wgt::TextureViewDimension::D2,
                 wgt::TextureDimension::D3 => wgt::TextureViewDimension::D3,
-            },
-        };
-
-        let mip_count = desc.range.mip_level_count.map_or(1, |count| count.get());
-        let required_level_count = desc.range.base_mip_level.saturating_add(mip_count);
-
-        let required_layer_count = match desc.range.array_layer_count {
-            Some(count) => desc.range.base_array_layer.saturating_add(count.get()),
-            None => match view_dim {
-                wgt::TextureViewDimension::D1
-                | wgt::TextureViewDimension::D2
-                | wgt::TextureViewDimension::D3 => 1,
-                wgt::TextureViewDimension::Cube => 6,
-                _ => texture.desc.array_layer_count(),
-            }
-            .max(desc.range.base_array_layer.saturating_add(1)),
-        };
-
-        let level_end = texture.full_range.mips.end;
-        let layer_end = texture.full_range.layers.end;
-        if required_level_count > level_end {
-            return Err(resource::CreateTextureViewError::TooManyMipLevels {
-                requested: required_level_count,
-                total: level_end,
             });
-        }
-        if required_layer_count > layer_end {
-            return Err(resource::CreateTextureViewError::TooManyArrayLayers {
-                requested: required_layer_count,
-                total: layer_end,
-            });
-        };
 
-        match view_dim {
-            TextureViewDimension::Cube if required_layer_count != 6 => {
-                return Err(
-                    resource::CreateTextureViewError::InvalidCubemapTextureDepth {
-                        depth: required_layer_count,
-                    },
-                )
-            }
-            TextureViewDimension::CubeArray if required_layer_count % 6 != 0 => {
-                return Err(
-                    resource::CreateTextureViewError::InvalidCubemapArrayTextureDepth {
-                        depth: required_layer_count,
-                    },
-                )
-            }
-            _ => {}
-        }
+        let resolved_mip_level_count = desc.range.mip_level_count.unwrap_or_else(|| {
+            texture
+                .desc
+                .mip_level_count
+                .saturating_sub(desc.range.base_mip_level)
+        });
 
-        let full_aspect = hal::FormatAspects::from(texture.desc.format);
-        let select_aspect = hal::FormatAspects::from(desc.range.aspect);
-        if (full_aspect & select_aspect).is_empty() {
+        let resolved_array_layer_count =
+            desc.range
+                .array_layer_count
+                .unwrap_or_else(|| match resolved_dimension {
+                    wgt::TextureViewDimension::D1
+                    | wgt::TextureViewDimension::D2
+                    | wgt::TextureViewDimension::D3 => 1,
+                    wgt::TextureViewDimension::Cube => 6,
+                    wgt::TextureViewDimension::D2Array | wgt::TextureViewDimension::CubeArray => {
+                        texture
+                            .desc
+                            .array_layer_count()
+                            .saturating_sub(desc.range.base_array_layer)
+                    }
+                });
+
+        // validate TextureViewDescriptor
+
+        let aspects = hal::FormatAspects::new(texture.desc.format, desc.range.aspect);
+        if aspects.is_empty() {
             return Err(resource::CreateTextureViewError::InvalidAspect {
                 texture_format: texture.desc.format,
                 requested_aspect: desc.range.aspect,
             });
         }
 
-        let end_level = desc
-            .range
-            .mip_level_count
-            .map_or(level_end, |_| required_level_count);
-        let end_layer = desc
-            .range
-            .array_layer_count
-            .map_or(layer_end, |_| required_layer_count);
-        let selector = TextureSelector {
-            mips: desc.range.base_mip_level..end_level,
-            layers: desc.range.base_array_layer..end_layer,
+        let format_is_good = if desc.range.aspect == wgt::TextureAspect::All {
+            resolved_format == texture.desc.format
+                || texture.desc.view_formats.contains(&resolved_format)
+        } else {
+            Some(resolved_format)
+                == texture
+                    .desc
+                    .format
+                    .aspect_specific_format(desc.range.aspect)
         };
-
-        let view_layer_count = selector.layers.end - selector.layers.start;
-        let layer_check_ok = match view_dim {
-            wgt::TextureViewDimension::D1
-            | wgt::TextureViewDimension::D2
-            | wgt::TextureViewDimension::D3 => view_layer_count == 1,
-            wgt::TextureViewDimension::D2Array => true,
-            wgt::TextureViewDimension::Cube => view_layer_count == 6,
-            wgt::TextureViewDimension::CubeArray => view_layer_count % 6 == 0,
-        };
-        if !layer_check_ok {
-            return Err(resource::CreateTextureViewError::InvalidArrayLayerCount {
-                requested: view_layer_count,
-                dim: view_dim,
-            });
-        }
-
-        let mut extent = texture
-            .desc
-            .mip_level_size(desc.range.base_mip_level)
-            .unwrap();
-        if view_dim != wgt::TextureViewDimension::D3 {
-            extent.depth_or_array_layers = view_layer_count;
-        }
-        let format = desc.format.unwrap_or(texture.desc.format);
-        if format != texture.desc.format {
+        if !format_is_good {
             return Err(resource::CreateTextureViewError::FormatReinterpretation {
                 texture: texture.desc.format,
-                view: format,
+                view: resolved_format,
             });
         }
+
+        // check if multisampled texture is seen as anything but 2D
+        if texture.desc.sample_count > 1 && resolved_dimension != wgt::TextureViewDimension::D2 {
+            return Err(
+                resource::CreateTextureViewError::InvalidMultisampledTextureViewDimension(
+                    resolved_dimension,
+                ),
+            );
+        }
+
+        // check if the dimension is compatible with the texture
+        if texture.desc.dimension != resolved_dimension.compatible_texture_dimension() {
+            return Err(
+                resource::CreateTextureViewError::InvalidTextureViewDimension {
+                    view: resolved_dimension,
+                    texture: texture.desc.dimension,
+                },
+            );
+        }
+
+        match resolved_dimension {
+            TextureViewDimension::D1 | TextureViewDimension::D2 | TextureViewDimension::D3 => {
+                if resolved_array_layer_count != 1 {
+                    return Err(resource::CreateTextureViewError::InvalidArrayLayerCount {
+                        requested: resolved_array_layer_count,
+                        dim: resolved_dimension,
+                    });
+                }
+            }
+            TextureViewDimension::Cube => {
+                if resolved_array_layer_count != 6 {
+                    return Err(
+                        resource::CreateTextureViewError::InvalidCubemapTextureDepth {
+                            depth: resolved_array_layer_count,
+                        },
+                    );
+                }
+            }
+            TextureViewDimension::CubeArray => {
+                if resolved_array_layer_count % 6 != 0 {
+                    return Err(
+                        resource::CreateTextureViewError::InvalidCubemapArrayTextureDepth {
+                            depth: resolved_array_layer_count,
+                        },
+                    );
+                }
+            }
+            _ => {}
+        }
+
+        match resolved_dimension {
+            TextureViewDimension::Cube | TextureViewDimension::CubeArray => {
+                if texture.desc.size.width != texture.desc.size.height {
+                    return Err(resource::CreateTextureViewError::InvalidCubeTextureViewSize);
+                }
+            }
+            _ => {}
+        }
+
+        if resolved_mip_level_count == 0 {
+            return Err(resource::CreateTextureViewError::ZeroMipLevelCount);
+        }
+
+        let mip_level_end = desc
+            .range
+            .base_mip_level
+            .saturating_add(resolved_mip_level_count);
+
+        let level_end = texture.desc.mip_level_count;
+        if mip_level_end > level_end {
+            return Err(resource::CreateTextureViewError::TooManyMipLevels {
+                requested: mip_level_end,
+                total: level_end,
+            });
+        }
+
+        if resolved_array_layer_count == 0 {
+            return Err(resource::CreateTextureViewError::ZeroArrayLayerCount);
+        }
+
+        let array_layer_end = desc
+            .range
+            .base_array_layer
+            .saturating_add(resolved_array_layer_count);
+
+        let layer_end = texture.desc.array_layer_count();
+        if array_layer_end > layer_end {
+            return Err(resource::CreateTextureViewError::TooManyArrayLayers {
+                requested: array_layer_end,
+                total: layer_end,
+            });
+        };
+
+        // https://gpuweb.github.io/gpuweb/#abstract-opdef-renderable-texture-view
+        let render_extent = 'b: loop {
+            if !texture
+                .desc
+                .usage
+                .contains(wgt::TextureUsages::RENDER_ATTACHMENT)
+            {
+                break 'b Err(TextureViewNotRenderableReason::Usage(texture.desc.usage));
+            }
+
+            if resolved_dimension != TextureViewDimension::D2 {
+                break 'b Err(TextureViewNotRenderableReason::Dimension(
+                    resolved_dimension,
+                ));
+            }
+
+            if resolved_mip_level_count != 1 {
+                break 'b Err(TextureViewNotRenderableReason::MipLevelCount(
+                    resolved_mip_level_count,
+                ));
+            }
+
+            if resolved_array_layer_count != 1 {
+                break 'b Err(TextureViewNotRenderableReason::ArrayLayerCount(
+                    resolved_array_layer_count,
+                ));
+            }
+
+            if aspects != hal::FormatAspects::from(texture.desc.format) {
+                break 'b Err(TextureViewNotRenderableReason::Aspects(aspects));
+            }
+
+            break 'b Ok(texture
+                .desc
+                .compute_render_extent(desc.range.base_mip_level));
+        };
 
         // filter the usages based on the other criteria
         let usage = {
             let mask_copy = !(hal::TextureUses::COPY_SRC | hal::TextureUses::COPY_DST);
-            let mask_dimension = match view_dim {
+            let mask_dimension = match resolved_dimension {
                 wgt::TextureViewDimension::Cube | wgt::TextureViewDimension::CubeArray => {
                     hal::TextureUses::RESOURCE
                 }
@@ -1077,10 +1225,10 @@ impl<A: HalApi> Device<A> {
                 }
                 _ => hal::TextureUses::all(),
             };
-            let mask_mip_level = if selector.mips.end - selector.mips.start != 1 {
-                hal::TextureUses::RESOURCE
-            } else {
+            let mask_mip_level = if resolved_mip_level_count == 1 {
                 hal::TextureUses::all()
+            } else {
+                hal::TextureUses::RESOURCE
             };
             texture.hal_usage & mask_copy & mask_dimension & mask_mip_level
         };
@@ -1090,18 +1238,39 @@ impl<A: HalApi> Device<A> {
             texture_id,
             usage
         );
+
+        // use the combined depth-stencil format for the view
+        let format = if resolved_format.is_depth_stencil_component(texture.desc.format) {
+            texture.desc.format
+        } else {
+            resolved_format
+        };
+
+        let resolved_range = wgt::ImageSubresourceRange {
+            aspect: desc.range.aspect,
+            base_mip_level: desc.range.base_mip_level,
+            mip_level_count: Some(resolved_mip_level_count),
+            base_array_layer: desc.range.base_array_layer,
+            array_layer_count: Some(resolved_array_layer_count),
+        };
+
         let hal_desc = hal::TextureViewDescriptor {
             label: desc.label.borrow_option(),
             format,
-            dimension: view_dim,
+            dimension: resolved_dimension,
             usage,
-            range: desc.range.clone(),
+            range: resolved_range,
         };
 
         let raw = unsafe {
             self.raw
                 .create_texture_view(texture_raw, &hal_desc)
                 .map_err(|_| resource::CreateTextureViewError::OutOfMemory)?
+        };
+
+        let selector = TextureSelector {
+            mips: desc.range.base_mip_level..mip_level_end,
+            layers: desc.range.base_array_layer..array_layer_end,
         };
 
         Ok(resource::TextureView {
@@ -1112,12 +1281,12 @@ impl<A: HalApi> Device<A> {
             },
             device_id: texture.device_id.clone(),
             desc: resource::HalTextureViewDescriptor {
-                format: hal_desc.format,
-                dimension: hal_desc.dimension,
-                range: hal_desc.range,
+                format: resolved_format,
+                dimension: resolved_dimension,
+                range: resolved_range,
             },
             format_features: texture.format_features,
-            extent,
+            render_extent,
             samples: texture.desc.sample_count,
             selector,
             life_guard: LifeGuard::new(desc.label.borrow_or_default()),
@@ -1139,6 +1308,12 @@ impl<A: HalApi> Device<A> {
 
         if desc.border_color == Some(wgt::SamplerBorderColor::Zero) {
             self.require_features(wgt::Features::ADDRESS_MODE_CLAMP_TO_ZERO)?;
+        }
+
+        if desc.lod_min_clamp < 0.0 || desc.lod_max_clamp < desc.lod_min_clamp {
+            return Err(resource::CreateSamplerError::InvalidLodClamp(
+                desc.lod_min_clamp..desc.lod_max_clamp,
+            ));
         }
 
         let lod_clamp = if desc.lod_min_clamp > 0.0 || desc.lod_max_clamp < 32.0 {
@@ -1206,18 +1381,20 @@ impl<A: HalApi> Device<A> {
         source: pipeline::ShaderModuleSource<'a>,
     ) -> Result<pipeline::ShaderModule<A>, pipeline::CreateShaderModuleError> {
         let (module, source) = match source {
+            #[cfg(feature = "wgsl")]
             pipeline::ShaderModuleSource::Wgsl(code) => {
                 profiling::scope!("naga::wgsl::parse_str");
                 let module = naga::front::wgsl::parse_str(&code).map_err(|inner| {
                     pipeline::CreateShaderModuleError::Parsing(pipeline::ShaderError {
                         source: code.to_string(),
                         label: desc.label.as_ref().map(|l| l.to_string()),
-                        inner,
+                        inner: Box::new(inner),
                     })
                 })?;
                 (Cow::Owned(module), code.into_owned())
             }
             pipeline::ShaderModuleSource::Naga(module) => (module, String::new()),
+            pipeline::ShaderModuleSource::Dummy(_) => panic!("found `ShaderModuleSource::Dummy`"),
         };
         for (_, var) in module.global_variables.iter() {
             match var.binding {
@@ -1242,7 +1419,7 @@ impl<A: HalApi> Device<A> {
         );
         caps.set(
             Caps::FLOAT64,
-            self.features.contains(wgt::Features::SHADER_FLOAT64),
+            self.features.contains(wgt::Features::SHADER_F64),
         );
         caps.set(
             Caps::PRIMITIVE_INDEX,
@@ -1268,13 +1445,34 @@ impl<A: HalApi> Device<A> {
                 wgt::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
             ),
         );
+        caps.set(
+            Caps::STORAGE_TEXTURE_16BIT_NORM_FORMATS,
+            self.features
+                .contains(wgt::Features::TEXTURE_FORMAT_16BIT_NORM),
+        );
+        caps.set(
+            Caps::MULTIVIEW,
+            self.features.contains(wgt::Features::MULTIVIEW),
+        );
+        caps.set(
+            Caps::EARLY_DEPTH_TEST,
+            self.features
+                .contains(wgt::Features::SHADER_EARLY_DEPTH_TEST),
+        );
+        caps.set(
+            Caps::MULTISAMPLED_SHADING,
+            self.downlevel
+                .flags
+                .contains(wgt::DownlevelFlags::MULTISAMPLED_SHADING),
+        );
+
         let info = naga::valid::Validator::new(naga::valid::ValidationFlags::all(), caps)
             .validate(&module)
             .map_err(|inner| {
                 pipeline::CreateShaderModuleError::Validation(pipeline::ShaderError {
                     source,
                     label: desc.label.as_ref().map(|l| l.to_string()),
-                    inner,
+                    inner: Box::new(inner),
                 })
             })?;
         let interface =
@@ -1529,6 +1727,13 @@ impl<A: HalApi> Device<A> {
                         error,
                     })?;
             }
+
+            if entry.visibility.contains_invalid_bits() {
+                return Err(
+                    binding_model::CreateBindGroupLayoutError::InvalidVisibility(entry.visibility),
+                );
+            }
+
             if entry.visibility.contains(wgt::ShaderStages::VERTEX) {
                 if writable_storage == WritableStorage::Yes {
                     required_features |= wgt::Features::VERTEX_WRITABLE_STORAGE;
@@ -1580,8 +1785,8 @@ impl<A: HalApi> Device<A> {
         for entry in entry_map.values() {
             count_validator.add_binding(entry);
         }
-        // If a single bind group layout violates limits, the pipeline layout is definitely
-        // going to violate limits too, lets catch it now.
+        // If a single bind group layout violates limits, the pipeline layout is
+        // definitely going to violate limits too, lets catch it now.
         count_validator
             .validate(&self.limits)
             .map_err(binding_model::CreateBindGroupLayoutError::TooManyBindings)?;
@@ -1694,6 +1899,9 @@ impl<A: HalApi> Device<A> {
         // Record binding info for validating dynamic offsets
         if dynamic {
             dynamic_binding_info.push(binding_model::BindGroupDynamicBindingData {
+                binding_idx: binding,
+                buffer_size: buffer.size,
+                binding_range: bb.offset..bind_end,
                 maximum_dynamic_offset: buffer.size - bind_end,
                 binding_type: binding_ty,
             });
@@ -1755,8 +1963,11 @@ impl<A: HalApi> Device<A> {
         used_texture_ranges.push(TextureInitTrackerAction {
             id: view.parent_id.value.0,
             range: TextureInitRange {
-                mip_range: view.desc.range.mip_range(&texture.desc),
-                layer_range: view.desc.range.layer_range(&texture.desc),
+                mip_range: view.desc.range.mip_range(texture.desc.mip_level_count),
+                layer_range: view
+                    .desc
+                    .range
+                    .layer_range(texture.desc.array_layer_count()),
             },
             kind: MemoryInitKind::NeedsInitializedMemory,
         });
@@ -2069,7 +2280,6 @@ impl<A: HalApi> Device<A> {
         {
             return Err(Error::DepthStencilAspect);
         }
-        let format_info = view.desc.format.describe();
         match decl.ty {
             wgt::BindingType::Texture {
                 sample_type,
@@ -2084,7 +2294,12 @@ impl<A: HalApi> Device<A> {
                         view_samples: view.samples,
                     });
                 }
-                match (sample_type, format_info.sample_type) {
+                let compat_sample_type = view
+                    .desc
+                    .format
+                    .sample_type(Some(view.desc.range.aspect))
+                    .unwrap();
+                match (sample_type, compat_sample_type) {
                     (Tst::Uint, Tst::Uint) |
                     (Tst::Sint, Tst::Sint) |
                     (Tst::Depth, Tst::Depth) |
@@ -2092,10 +2307,12 @@ impl<A: HalApi> Device<A> {
                     (Tst::Float { filterable: false }, Tst::Float { .. }) |
                     // if we expect filterable, require it
                     (Tst::Float { filterable: true }, Tst::Float { filterable: true }) |
-                    // if we expect float, also accept depth
-                    (Tst::Float { .. }, Tst::Depth, ..) => {}
-                    // if we expect filterable, also accept Float that is defined as unfilterable if filterable feature is explicitly enabled
-                    // (only hit if wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES is enabled)
+                    // if we expect non-filterable, also accept depth
+                    (Tst::Float { filterable: false }, Tst::Depth) => {}
+                    // if we expect filterable, also accept Float that is defined as
+                    // unfilterable if filterable feature is explicitly enabled (only hit
+                    // if wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES is
+                    // enabled)
                     (Tst::Float { filterable: true }, Tst::Float { .. }) if view.format_features.flags.contains(wgt::TextureFormatFeatureFlags::FILTERABLE) => {}
                     _ => {
                         return Err(Error::InvalidTextureSampleType {
@@ -2484,12 +2701,12 @@ impl<A: HalApi> Device<A> {
 
         let num_attachments = desc.fragment.as_ref().map(|f| f.targets.len()).unwrap_or(0);
         if num_attachments > hal::MAX_COLOR_ATTACHMENTS {
-            return Err(
-                pipeline::CreateRenderPipelineError::TooManyColorAttachments {
-                    given: num_attachments as u32,
-                    limit: hal::MAX_COLOR_ATTACHMENTS as u32,
+            return Err(pipeline::CreateRenderPipelineError::ColorAttachment(
+                command::ColorAttachmentError::TooMany {
+                    given: num_attachments,
+                    limit: hal::MAX_COLOR_ATTACHMENTS,
                 },
-            );
+            ));
         }
 
         let color_targets = desc
@@ -2617,6 +2834,10 @@ impl<A: HalApi> Device<A> {
         for (i, cs) in color_targets.iter().enumerate() {
             if let Some(cs) = cs.as_ref() {
                 let error = loop {
+                    if cs.write_mask.contains_invalid_bits() {
+                        break Some(pipeline::ColorStateError::InvalidWriteMask(cs.write_mask));
+                    }
+
                     let format_features = self.describe_format_features(adapter, cs.format)?;
                     if !format_features
                         .allowed_usages
@@ -2629,8 +2850,10 @@ impl<A: HalApi> Device<A> {
                     let adapter_specific = self
                         .features
                         .contains(wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES);
-                    // according to WebGPU specifications the texture needs to be [`TextureFormatFeatureFlags::FILTERABLE`]
-                    // if blending is set - use [`Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES`] to elude this limitation
+                    // according to WebGPU specifications the texture needs to be
+                    // [`TextureFormatFeatureFlags::FILTERABLE`] if blending is set - use
+                    // [`Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES`] to elude
+                    // this limitation
                     if cs.blend.is_some() && (!blendable || (!filterable && !adapter_specific)) {
                         break Some(pipeline::ColorStateError::FormatNotBlendable(cs.format));
                     }
@@ -2638,7 +2861,9 @@ impl<A: HalApi> Device<A> {
                         break Some(pipeline::ColorStateError::FormatNotColor(cs.format));
                     }
                     if desc.multisample.count > 1
-                        && !format_features.flags.contains(Tfff::MULTISAMPLE)
+                        && !format_features
+                            .flags
+                            .sample_count_supported(desc.multisample.count)
                     {
                         break Some(pipeline::ColorStateError::FormatNotMultisampled(cs.format));
                     }
@@ -2672,7 +2897,10 @@ impl<A: HalApi> Device<A> {
                         ds.format,
                     ));
                 }
-                if desc.multisample.count > 1 && !format_features.flags.contains(Tfff::MULTISAMPLE)
+                if desc.multisample.count > 1
+                    && !format_features
+                        .flags
+                        .sample_count_supported(desc.multisample.count)
                 {
                     break Some(pipeline::DepthStencilStateError::FormatNotMultisampled(
                         ds.format,
@@ -2683,6 +2911,10 @@ impl<A: HalApi> Device<A> {
             };
             if let Some(e) = error {
                 return Err(pipeline::CreateRenderPipelineError::DepthStencilState(e));
+            }
+
+            if ds.bias.clamp != 0.0 {
+                self.require_downlevel_flags(wgt::DownlevelFlags::DEPTH_BIAS_CLAMP)?;
             }
         }
 
@@ -2855,11 +3087,19 @@ impl<A: HalApi> Device<A> {
             self.require_features(wgt::Features::MULTIVIEW)?;
         }
 
-        for size in shader_binding_sizes.values() {
-            if size.get() % 16 != 0 {
-                self.require_downlevel_flags(
-                    wgt::DownlevelFlags::BUFFER_BINDINGS_NOT_16_BYTE_ALIGNED,
-                )?;
+        if !self
+            .downlevel
+            .flags
+            .contains(wgt::DownlevelFlags::BUFFER_BINDINGS_NOT_16_BYTE_ALIGNED)
+        {
+            for (binding, size) in shader_binding_sizes.iter() {
+                if size.get() % 16 != 0 {
+                    return Err(pipeline::CreateRenderPipelineError::UnalignedShader {
+                        binding: binding.binding,
+                        group: binding.group,
+                        size: size.get(),
+                    });
+                }
             }
         }
 
@@ -2924,7 +3164,7 @@ impl<A: HalApi> Device<A> {
             if !ds.is_depth_read_only() {
                 flags |= pipeline::PipelineFlags::WRITES_DEPTH;
             }
-            if !ds.is_stencil_read_only() {
+            if !ds.is_stencil_read_only(desc.primitive.cull_mode) {
                 flags |= pipeline::PipelineFlags::WRITES_STENCIL;
             }
         }
@@ -2954,19 +3194,19 @@ impl<A: HalApi> Device<A> {
         adapter: &Adapter<A>,
         format: TextureFormat,
     ) -> Result<wgt::TextureFormatFeatures, MissingFeatures> {
-        let format_desc = format.describe();
-        self.require_features(format_desc.required_features)?;
+        self.require_features(format.required_features())?;
 
         let using_device_features = self
             .features
             .contains(wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES);
-        // If we're running downlevel, we need to manually ask the backend what we can use as we can't trust WebGPU.
+        // If we're running downlevel, we need to manually ask the backend what
+        // we can use as we can't trust WebGPU.
         let downlevel = !self.downlevel.is_webgpu_compliant();
 
         if using_device_features || downlevel {
             Ok(adapter.get_texture_format_features(format))
         } else {
-            Ok(format_desc.guaranteed_format_features)
+            Ok(format.guaranteed_format_features())
         }
     }
 
@@ -3094,16 +3334,16 @@ impl<A: HalApi> crate::hub::Resource for Device<A> {
 }
 
 #[derive(Clone, Debug, Error)]
-#[error("device is invalid")]
+#[error("Device is invalid")]
 pub struct InvalidDevice;
 
 #[derive(Clone, Debug, Error)]
 pub enum DeviceError {
-    #[error("parent device is invalid")]
+    #[error("Parent device is invalid")]
     Invalid,
-    #[error("parent device is lost")]
+    #[error("Parent device is lost")]
     Lost,
-    #[error("not enough memory left")]
+    #[error("Not enough memory left")]
     OutOfMemory,
 }
 
@@ -3173,43 +3413,23 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         Ok(adapter.is_surface_supported(surface))
     }
 
-    pub fn surface_get_supported_formats<A: HalApi>(
+    pub fn surface_get_capabilities<A: HalApi>(
         &self,
         surface_id: id::SurfaceId,
         adapter_id: id::AdapterId,
-    ) -> Result<Vec<TextureFormat>, instance::GetSurfaceSupportError> {
-        profiling::scope!("Surface::get_supported_formats");
-        self.fetch_adapter_and_surface::<A, _, Vec<TextureFormat>>(
-            surface_id,
-            adapter_id,
-            |adapter, surface| surface.get_supported_formats(adapter),
-        )
-    }
+    ) -> Result<wgt::SurfaceCapabilities, instance::GetSurfaceSupportError> {
+        profiling::scope!("Surface::get_capabilities");
+        self.fetch_adapter_and_surface::<A, _, _>(surface_id, adapter_id, |adapter, surface| {
+            let mut hal_caps = surface.get_capabilities(adapter)?;
 
-    pub fn surface_get_supported_present_modes<A: HalApi>(
-        &self,
-        surface_id: id::SurfaceId,
-        adapter_id: id::AdapterId,
-    ) -> Result<Vec<wgt::PresentMode>, instance::GetSurfaceSupportError> {
-        profiling::scope!("Surface::get_supported_present_modes");
-        self.fetch_adapter_and_surface::<A, _, Vec<wgt::PresentMode>>(
-            surface_id,
-            adapter_id,
-            |adapter, surface| surface.get_supported_present_modes(adapter),
-        )
-    }
+            hal_caps.formats.sort_by_key(|f| !f.is_srgb());
 
-    pub fn surface_get_supported_alpha_modes<A: HalApi>(
-        &self,
-        surface_id: id::SurfaceId,
-        adapter_id: id::AdapterId,
-    ) -> Result<Vec<wgt::CompositeAlphaMode>, instance::GetSurfaceSupportError> {
-        profiling::scope!("Surface::get_supported_alpha_modes");
-        self.fetch_adapter_and_surface::<A, _, Vec<wgt::CompositeAlphaMode>>(
-            surface_id,
-            adapter_id,
-            |adapter, surface| surface.get_supported_alpha_modes(adapter),
-        )
+            Ok(wgt::SurfaceCapabilities {
+                formats: hal_caps.formats,
+                present_modes: hal_caps.present_modes,
+                alpha_modes: hal_caps.composite_alpha_modes,
+            })
+        })
     }
 
     fn fetch_adapter_and_surface<
@@ -3481,7 +3701,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         buffer_id: id::BufferId,
         offset: BufferAddress,
         data: &[u8],
-    ) -> Result<(), BufferAccessError> {
+    ) -> BufferAccessResult {
         profiling::scope!("Device::set_buffer_sub_data");
 
         let hub = A::hub(self);
@@ -3538,7 +3758,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         buffer_id: id::BufferId,
         offset: BufferAddress,
         data: &mut [u8],
-    ) -> Result<(), BufferAccessError> {
+    ) -> BufferAccessResult {
         profiling::scope!("Device::get_buffer_sub_data");
 
         let hub = A::hub(self);
@@ -3768,7 +3988,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Err(_) => break DeviceError::Invalid.into(),
             };
 
-            // NB: Any change done through the raw texture handle will not be recorded in the replay
+            // NB: Any change done through the raw texture handle will not be
+            // recorded in the replay
             #[cfg(feature = "trace")]
             if let Some(ref trace) = device.trace {
                 trace
@@ -4134,10 +4355,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             let mut entry_map = FastHashMap::default();
             for entry in desc.entries.iter() {
-                if entry.binding > MAX_BINDING_INDEX {
+                if entry.binding > device.limits.max_bindings_per_bind_group {
                     break 'outer binding_model::CreateBindGroupLayoutError::InvalidBindingIndex {
                         binding: entry.binding,
-                        maximum: MAX_BINDING_INDEX,
+                        maximum: device.limits.max_bindings_per_bind_group,
                     };
                 }
                 if entry_map.insert(entry.binding, *entry).is_some() {
@@ -4400,6 +4621,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             if let Some(ref trace) = device.trace {
                 let mut trace = trace.lock();
                 let data = match source {
+                    #[cfg(feature = "wgsl")]
                     pipeline::ShaderModuleSource::Wgsl(ref code) => {
                         trace.make_binary("wgsl", code.as_bytes())
                     }
@@ -4408,6 +4630,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             ron::ser::to_string_pretty(module, ron::ser::PrettyConfig::default())
                                 .unwrap();
                         trace.make_binary("ron", string.as_bytes())
+                    }
+                    pipeline::ShaderModuleSource::Dummy(_) => {
+                        panic!("found `ShaderModuleSource::Dummy`")
                     }
                 };
                 trace.add(trace::Action::CreateShaderModule {
@@ -4429,7 +4654,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         (id, Some(error))
     }
 
-    #[allow(unused_unsafe)] // Unsafe-ness of internal calls has little to do with unsafe-ness of this.
+    // Unsafe-ness of internal calls has little to do with unsafe-ness of this.
+    #[allow(unused_unsafe)]
     /// # Safety
     ///
     /// This function passes SPIR-V binary to the backend as-is and can potentially result in a
@@ -4469,10 +4695,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 });
             };
 
-            let shader = match device.create_shader_module_spirv(device_id, desc, &source) {
-                Ok(shader) => shader,
-                Err(e) => break e,
-            };
+            let shader =
+                match unsafe { device.create_shader_module_spirv(device_id, desc, &source) } {
+                    Ok(shader) => shader,
+                    Err(e) => break e,
+                };
             let id = fid.assign(shader, &mut token);
             return (id.0, None);
         };
@@ -4574,6 +4801,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         if let Some(cmdbuf) = cmdbuf {
             let device = &mut device_guard[cmdbuf.device_id.value];
             device.untrack::<G>(hub, &cmdbuf.trackers, &mut token);
+            device.destroy_command_buffer(cmdbuf);
         }
     }
 
@@ -4757,6 +4985,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .suspected_resources
             .query_sets
             .push(id::Valid(query_set_id));
+    }
+
+    pub fn query_set_label<A: HalApi>(&self, id: id::QuerySetId) -> String {
+        A::hub(self).query_sets.label_for_resource(id)
     }
 
     pub fn device_create_render_pipeline<A: HalApi>(
@@ -5047,7 +5279,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         surface_id: id::SurfaceId,
         device_id: id::DeviceId,
-        config: &wgt::SurfaceConfiguration,
+        config: &wgt::SurfaceConfiguration<Vec<TextureFormat>>,
     ) -> Option<present::ConfigureSurfaceError> {
         use hal::{Adapter as _, Surface as _};
         use present::ConfigureSurfaceError as E;
@@ -5119,7 +5351,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .composite_alpha_modes
                 .contains(&config.composite_alpha_mode)
             {
-                let new_alpha_mode = 'b: loop {
+                let new_alpha_mode = 'alpha: loop {
                     // Automatic alpha mode checks.
                     let fallbacks = match config.composite_alpha_mode {
                         wgt::CompositeAlphaMode::Auto => &[
@@ -5136,11 +5368,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                     for &fallback in fallbacks {
                         if caps.composite_alpha_modes.contains(&fallback) {
-                            break 'b fallback;
+                            break 'alpha fallback;
                         }
                     }
 
-                    unreachable!("Fallback system failed to choose alpha mode. This is a bug. AlphaMode: {:?}, Options: {:?}", config.composite_alpha_mode, &caps.composite_alpha_modes);
+                    unreachable!(
+                        "Fallback system failed to choose alpha mode. This is a bug. \
+                                  AlphaMode: {:?}, Options: {:?}",
+                        config.composite_alpha_mode, &caps.composite_alpha_modes
+                    );
                 };
 
                 log::info!(
@@ -5166,7 +5402,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (adapter_guard, mut token) = hub.adapters.read(&mut token);
         let (device_guard, _token) = hub.devices.read(&mut token);
 
-        let error = loop {
+        let error = 'outer: loop {
             let device = match device_guard.get(device_id) {
                 Ok(device) => device,
                 Err(_) => break DeviceError::Invalid.into(),
@@ -5192,9 +5428,33 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 }
             };
 
+            let mut hal_view_formats = vec![];
+            for format in config.view_formats.iter() {
+                if *format == config.format {
+                    continue;
+                }
+                if !caps.formats.contains(&config.format) {
+                    break 'outer E::UnsupportedFormat {
+                        requested: config.format,
+                        available: caps.formats.clone(),
+                    };
+                }
+                if config.format.remove_srgb_suffix() != format.remove_srgb_suffix() {
+                    break 'outer E::InvalidViewFormat(*format, config.format);
+                }
+                hal_view_formats.push(*format);
+            }
+
+            if !hal_view_formats.is_empty() {
+                if let Err(missing_flag) =
+                    device.require_downlevel_flags(wgt::DownlevelFlags::SURFACE_VIEW_FORMATS)
+                {
+                    break 'outer E::MissingDownlevelFlags(missing_flag);
+                }
+            }
+
             let num_frames = present::DESIRED_NUM_FRAMES
-                .max(*caps.swap_chain_sizes.start())
-                .min(*caps.swap_chain_sizes.end());
+                .clamp(*caps.swap_chain_sizes.start(), *caps.swap_chain_sizes.end());
             let mut hal_config = hal::SurfaceConfiguration {
                 swap_chain_size: num_frames,
                 present_mode: config.present_mode,
@@ -5206,6 +5466,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     depth_or_array_layers: 1,
                 },
                 usage: conv::map_texture_usage(config.usage, hal::FormatAspects::COLOR),
+                view_formats: hal_view_formats,
             };
 
             if let Err(error) = validate_surface_configuration(&mut hal_config, &caps) {
@@ -5310,7 +5571,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     ///
     /// If `force_wait` is true, block until all buffer mappings are done.
     ///
-    /// Return `all_queue_empty` indicating whether there are more queue submissions still in flight.
+    /// Return `all_queue_empty` indicating whether there are more queue
+    /// submissions still in flight.
     fn poll_devices<A: HalApi>(
         &self,
         force_wait: bool,
@@ -5354,32 +5616,33 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     ///
     /// This is the implementation of `wgpu::Instance::poll_all`.
     ///
-    /// Return `all_queue_empty` indicating whether there are more queue submissions still in flight.
+    /// Return `all_queue_empty` indicating whether there are more queue
+    /// submissions still in flight.
     pub fn poll_all_devices(&self, force_wait: bool) -> Result<bool, WaitIdleError> {
         let mut closures = UserClosures::default();
         let mut all_queue_empty = true;
 
-        #[cfg(vulkan)]
+        #[cfg(all(feature = "vulkan", not(target_arch = "wasm32")))]
         {
             all_queue_empty = self.poll_devices::<hal::api::Vulkan>(force_wait, &mut closures)?
                 && all_queue_empty;
         }
-        #[cfg(metal)]
+        #[cfg(all(feature = "metal", any(target_os = "macos", target_os = "ios")))]
         {
             all_queue_empty =
                 self.poll_devices::<hal::api::Metal>(force_wait, &mut closures)? && all_queue_empty;
         }
-        #[cfg(dx12)]
+        #[cfg(all(feature = "dx12", windows))]
         {
             all_queue_empty =
                 self.poll_devices::<hal::api::Dx12>(force_wait, &mut closures)? && all_queue_empty;
         }
-        #[cfg(dx11)]
+        #[cfg(all(feature = "dx11", windows))]
         {
             all_queue_empty =
                 self.poll_devices::<hal::api::Dx11>(force_wait, &mut closures)? && all_queue_empty;
         }
-        #[cfg(gl)]
+        #[cfg(feature = "gles")]
         {
             all_queue_empty =
                 self.poll_devices::<hal::api::Gles>(force_wait, &mut closures)? && all_queue_empty;
@@ -5465,33 +5728,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         buffer_id: id::BufferId,
         range: Range<BufferAddress>,
         op: BufferMapOperation,
-    ) -> Result<(), BufferAccessError> {
+    ) -> BufferAccessResult {
         // User callbacks must not be called while holding buffer_map_async_inner's locks, so we
         // defer the error callback if it needs to be called immediately (typically when running
         // into errors).
         if let Err((op, err)) = self.buffer_map_async_inner::<A>(buffer_id, range, op) {
-            let status = match &err {
-                &BufferAccessError::Device(_) => BufferMapAsyncStatus::ContextLost,
-                &BufferAccessError::Invalid | &BufferAccessError::Destroyed => {
-                    BufferMapAsyncStatus::Invalid
-                }
-                &BufferAccessError::AlreadyMapped => BufferMapAsyncStatus::AlreadyMapped,
-                &BufferAccessError::MapAlreadyPending => BufferMapAsyncStatus::MapAlreadyPending,
-                &BufferAccessError::MissingBufferUsage(_) => {
-                    BufferMapAsyncStatus::InvalidUsageFlags
-                }
-                &BufferAccessError::UnalignedRange
-                | &BufferAccessError::UnalignedRangeSize { .. }
-                | &BufferAccessError::UnalignedOffset { .. } => {
-                    BufferMapAsyncStatus::InvalidAlignment
-                }
-                &BufferAccessError::OutOfBoundsUnderrun { .. }
-                | &BufferAccessError::OutOfBoundsOverrun { .. }
-                | &BufferAccessError::NegativeRange { .. } => BufferMapAsyncStatus::InvalidRange,
-                _ => BufferMapAsyncStatus::Error,
-            };
-
-            op.callback.call(status);
+            op.callback.call(Err(err.clone()));
 
             return Err(err);
         }
@@ -5650,7 +5892,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         max: range.end,
                     });
                 }
-                unsafe { Ok((ptr.as_ptr().offset(offset as isize), range_size)) }
+                // ptr points to the beginning of the range we mapped in map_async
+                // rather thant the beginning of the buffer.
+                let relative_offset = (offset - range.start) as isize;
+                unsafe { Ok((ptr.as_ptr().offset(relative_offset), range_size)) }
             }
             resource::BufferMapState::Idle | resource::BufferMapState::Waiting(_) => {
                 Err(BufferAccessError::NotMapped)
@@ -5727,7 +5972,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 return Err(BufferAccessError::NotMapped);
             }
             resource::BufferMapState::Waiting(pending) => {
-                return Ok(Some((pending.op, resource::BufferMapAsyncStatus::Aborted)));
+                return Ok(Some((pending.op, Err(BufferAccessError::MapAborted))));
             }
             resource::BufferMapState::Active { ptr, range, host } => {
                 if host == HostMap::Write {
@@ -5758,10 +6003,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         Ok(None)
     }
 
-    pub fn buffer_unmap<A: HalApi>(
-        &self,
-        buffer_id: id::BufferId,
-    ) -> Result<(), BufferAccessError> {
+    pub fn buffer_unmap<A: HalApi>(&self, buffer_id: id::BufferId) -> BufferAccessResult {
         profiling::scope!("unmap", "Buffer");
 
         let closure;

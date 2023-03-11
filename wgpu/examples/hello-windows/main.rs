@@ -20,7 +20,7 @@ struct Viewport {
 
 impl ViewportDesc {
     fn new(window: Window, background: wgpu::Color, instance: &wgpu::Instance) -> Self {
-        let surface = unsafe { instance.create_surface(&window) };
+        let surface = unsafe { instance.create_surface(&window) }.unwrap();
         Self {
             window,
             background,
@@ -31,13 +31,15 @@ impl ViewportDesc {
     fn build(self, adapter: &wgpu::Adapter, device: &wgpu::Device) -> Viewport {
         let size = self.window.inner_size();
 
+        let caps = self.surface.get_capabilities(adapter);
         let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-            format: self.surface.get_supported_formats(adapter)[0],
+            format: caps.formats[0],
             width: size.width,
             height: size.height,
             present_mode: wgpu::PresentMode::Fifo,
-            alpha_mode: self.surface.get_supported_alpha_modes(adapter)[0],
+            alpha_mode: caps.alpha_modes[0],
+            view_formats: vec![],
         };
 
         self.surface.configure(device, &config);
@@ -61,7 +63,7 @@ impl Viewport {
 }
 
 async fn run(event_loop: EventLoop<()>, viewports: Vec<(Window, wgpu::Color)>) {
-    let instance = wgpu::Instance::new(wgpu::Backends::all());
+    let instance = wgpu::Instance::default();
     let viewports: Vec<_> = viewports
         .into_iter()
         .map(|(window, color)| ViewportDesc::new(window, color, &instance))
@@ -170,7 +172,7 @@ fn main() {
         for row in 0..ROWS {
             for column in 0..COLUMNS {
                 let window = winit::window::WindowBuilder::new()
-                    .with_title(format!("x{}y{}", column, row))
+                    .with_title(format!("x{column}y{row}"))
                     .with_inner_size(winit::dpi::PhysicalSize::new(WINDOW_SIZE, WINDOW_SIZE))
                     .build(&event_loop)
                     .unwrap();

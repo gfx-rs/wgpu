@@ -2,265 +2,377 @@ name: CI
 
 on:
   push:
-    branches: [master, staging]
+    branches: ["*"]
     tags: [v0.*]
   pull_request:
+  merge_group:
 
 env:
-  RUST_BACKTRACE: 1
-  RUST_VERSION: 1.59
+  CARGO_INCREMENTAL: false
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: full
+  MSRV: 1.64
+  PKG_CONFIG_ALLOW_CROSS: 1 # allow android to work
+  RUSTFLAGS: --cfg=web_sys_unstable_apis -D warnings
+  RUSTDOCFLAGS: -Dwarnings
+  CACHE_SUFFIX: c # cache busting
 
 # We distinguish the following kinds of builds:
-# - local: build for the same target as we compile on, and do local tests
-# - other: build without testing, e.g. cross-build
+# - native: build for the same target as we compile on
 # - web: build for the Web
 # - em: build for the Emscripten
 
+# For build time and size optimization we disable debug
+# entirely on clippy jobs and reduce it to line-numbers
+# only for ones where we run tests.
+#
+# Additionally, we disable incremental builds entirely
+# as our caching system doesn't actually cache our crates.
+# It adds overhead to the build and another point of failure.
+
 jobs:
-  build:
+  check-msrv:
     strategy:
       fail-fast: false
       matrix:
         include:
           # Windows
           - name: Windows x86_64
-            os: windows-2019
+            os: windows-2022
             target: x86_64-pc-windows-msvc
-            tool: clippy
-            kind: local
-            backends: dx12 # dx11
-            nextest_url: https://get.nexte.st/latest/windows-tar
+            kind: native
 
-          - name: Windows Nightly x86_64
-            os: windows-2019
-            target: x86_64-pc-windows-msvc
-            tool: check
-            kind: other
-          
           # MacOS
           - name: MacOS x86_64
-            os: macos-11
+            os: macos-12
             target: x86_64-apple-darwin
-            tool: clippy
-            # Mac has no software runners, so don't run tests
-            kind: other
+            kind: native
 
           - name: MacOS aarch64
-            os: macos-11
+            os: macos-12
             target: aarch64-apple-darwin
-            tool: check
-            # Mac has no software runners, so don't run tests
-            kind: other
-          
+            kind: native
+
           # IOS
           - name: IOS aarch64
-            os: macos-11
+            os: macos-12
             target: aarch64-apple-ios
-            tool: clippy
-            kind: other
-
+            kind: native
 
           # Linux
           - name: Linux x86_64
-            os: ubuntu-20.04
+            os: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
-            tool: clippy
-            kind: local
-            backends: vulkan gl
-            nextest_url: https://get.nexte.st/latest/linux
+            kind: native
 
           - name: Linux aarch64
-            os: ubuntu-20.04
+            os: ubuntu-22.04
             target: aarch64-unknown-linux-gnu
-            tool: check
-            kind: other
+            kind: native
 
-          - name: Linux Nightly x86_64
-            os: ubuntu-20.04
-            target: x86_64-unknown-linux-gnu
-            tool: check
-            kind: other
-
-          
           # Android
           - name: Android aarch64
-            os: ubuntu-20.04
+            os: ubuntu-22.04
             target: aarch64-linux-android
-            tool: clippy
-            kind: other
+            kind: native
 
-          
           # WebGPU/WebGL
           - name: WebAssembly
-            os: ubuntu-20.04
+            os: ubuntu-22.04
             target: wasm32-unknown-unknown
-            tool: clippy
             kind: web
 
           - name: Emscripten
-            os: ubuntu-20.04
+            os: ubuntu-22.04
             target: wasm32-unknown-emscripten
-            tool: clippy
             kind: em
 
-    name: Check ${{ matrix.name }}
+    name: Clippy ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
-
-    env:
-      PKG_CONFIG_ALLOW_CROSS: 1 # allow android to work
-      RUSTFLAGS: --cfg=web_sys_unstable_apis -D warnings
-      RUSTDOCFLAGS: -Dwarnings
 
     steps:
       - name: checkout repo
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
-      # Only run clippy on MSRV
-      - name: install rust stable
-        if: matrix.tool == 'clippy'
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: ${{ env.RUST_VERSION }}
-          target: ${{ matrix.target }}
-          profile: minimal
-          override: true
-          components: clippy
-
-      # Other builds can use nightly
-      - name: install rust nightly
-        if: matrix.tool != 'clippy'
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: nightly
-          target: ${{ matrix.target }}
-          profile: minimal
-          override: true
-
-      - name: caching
-        uses: Swatinem/rust-cache@v1
-        with:
-          key: ${{ matrix.target }}-b # suffix for cache busting
-
-      - name: download nextest
-        if: matrix.kind == 'local'
-        shell: bash
+      - name: Install MSRV toolchain
         run: |
-          curl -LsSf ${{ matrix.nextest_url }} | tar xzf - -C ${CARGO_HOME:-~/.cargo}/bin
+          rustup toolchain install ${{ env.MSRV }} --no-self-update --profile=minimal --component clippy --target ${{ matrix.target }}
+          rustup default ${{ env.MSRV }}
 
-      - name: add android apk to path
-        if: matrix.os == 'ubuntu-20.04' && matrix.target == 'aarch64-linux-android'
-        run: |
-          echo "$ANDROID_HOME/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/bin" >> $GITHUB_PATH
-
-      - name: install llvmpipe, lavapipe, and vulkan sdk
-        if: matrix.os == 'ubuntu-20.04' && matrix.target != 'aarch64-linux-android' && matrix.kind == 'local'
-        run: |
-          sudo apt-get update -y -qq
-          
-          # llvmpipe/lavapipe
-          sudo add-apt-repository ppa:oibaf/graphics-drivers -y
-
-          # vulkan sdk
-          wget -qO - https://packages.lunarg.com/lunarg-signing-key-pub.asc | sudo apt-key add -
-          sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-focal.list https://packages.lunarg.com/vulkan/lunarg-vulkan-focal.list
-
-          sudo apt-get update
-          sudo apt install -y libegl1-mesa libgl1-mesa-dri libxcb-xfixes0-dev mesa-vulkan-drivers vulkan-sdk
-
-      # We enable line numbers for panics, but that's it
       - name: disable debug
         shell: bash
         run: |
           mkdir -p .cargo
-          echo """\n[profile.dev]
-          debug = 1" >> .cargo/config.toml
+          echo """
+          [profile.dev]
+          debug = false" >> .cargo/config.toml
+
+      - name: caching
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: clippy-${{ matrix.target }}-${{ matrix.kind }}-${{ env.CACHE_SUFFIX }}
+
+      - name: add android apk to path
+        if: matrix.target == 'aarch64-linux-android'
+        run: |
+          echo "$ANDROID_HOME/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/bin" >> $GITHUB_PATH
 
       - name: check web
         if: matrix.kind == 'web'
+        shell: bash
         run: |
-          # build examples
-          cargo ${{matrix.tool}} --target ${{ matrix.target }} -p wgpu --examples
+          set -e
 
-          # build with features
-          cargo ${{matrix.tool}} --target ${{ matrix.target }} -p wgpu --features glsl,spirv
+          # build for WebGPU
+          cargo clippy --target ${{ matrix.target }} -p wgpu --tests --features glsl,spirv
+          cargo doc --target ${{ matrix.target }} -p wgpu --no-deps --features glsl,spirv
 
-          # build for WebGL
-          cargo ${{matrix.tool}} --target ${{ matrix.target }} -p wgpu --features webgl
-
-          # build docs
-          cargo doc --target ${{ matrix.target }} -p wgpu --no-deps
+          # all features
+          cargo clippy --target ${{ matrix.target }} -p wgpu -p wgpu-hal --tests --all-features
+          cargo doc --target ${{ matrix.target }} -p wgpu --no-deps --all-features
 
       - name: check em
         if: matrix.kind == 'em'
-        run: |
-          # build for Emscripten/WebGL
-          cargo ${{matrix.tool}} --target ${{ matrix.target }} -p wgpu -p wgpu-hal --features webgl,emscripten
-
-          # build raw-gles example
-          cargo ${{matrix.tool}} --target ${{ matrix.target }} --example raw-gles --features webgl,emscripten
-
-      - name: check native
-        if: matrix.kind == 'local' || matrix.kind == 'other'
-        run: |
-          # check with no features
-          cargo ${{matrix.tool}} --target ${{ matrix.target }} -p wgpu -p wgpu-core -p wgpu-info -p player
-
-          # check with all features
-          # explicitly don't mention wgpu-hal so that --all-features don't apply to it
-          cargo ${{matrix.tool}} --target ${{ matrix.target }} -p wgpu -p wgpu-core -p wgpu-info -p player --examples --tests --all-features
-
-          # build docs
-          cargo doc --target ${{ matrix.target }} --no-deps
-          cargo doc --target ${{ matrix.target }} -p wgpu -p wgpu-core -p wgpu-info -p player --all-features --no-deps
-
-      - name: local tests
-        if: matrix.kind == 'local'
         shell: bash
         run: |
-          # run wgpu-info
-          cargo run --bin wgpu-info --features angle,vulkan-portability
-          # run unit and player tests
-          cargo nextest run -p wgpu-types -p wgpu-hal -p wgpu-core -p player --no-fail-fast
-          # run native tests
+          set -e
+
+          # build for Emscripten
+          cargo clippy --target ${{ matrix.target }} -p wgpu -p wgpu-hal --no-default-features
+
+          # build cube example
+          cargo clippy --target ${{ matrix.target }} --example cube
+
+          # build raw-gles example
+          cargo clippy --target ${{ matrix.target }} --example raw-gles
+
+          # all features
+          cargo clippy --target ${{ matrix.target }} -p wgpu-hal --all-features
+          cargo clippy --target ${{ matrix.target }} -p wgpu --all-features
+
+      - name: check native
+        if: matrix.kind == 'native'
+        shell: bash
+        run: |
+          set -e
+
+          # check with no features
+          cargo clippy --target ${{ matrix.target }} -p wgpu -p wgpu-core -p wgpu-info -p player --no-default-features
+
+          # Check with all features.
+          cargo clippy --target ${{ matrix.target }} -p wgpu -p wgpu-info -p player -p wgpu-core -p wgpu-hal --tests --all-features
+
+          # build docs
+          cargo doc --target ${{ matrix.target }} -p wgpu -p wgpu-info -p player -p wgpu-core -p wgpu-hal --all-features --no-deps
+
+  wasm-test:
+    name: Test WebAssembly
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout repo
+        uses: actions/checkout@v3
+
+      # TODO: replace with this once there is a release containing this PR:
+      # https://github.com/rustwasm/wasm-pack/pull/1185
+      # - name: Install wasm-pack
+      #   uses: taiki-e/install-action@v2
+      #   with:
+      #     tool: wasm-pack
+      - name: install wasm-pack
+        run: cargo install --git https://github.com/rustwasm/wasm-pack --rev e1010233b0ce304f42cda59962254bf30ae97c3e wasm-pack
+
+      - name: execute tests
+        run: |
+          cd wgpu
+          wasm-pack test --headless --chrome --features webgl
+
+  gpu-test:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Windows
+          - name: Windows x86_64
+            os: windows-2022
+            backends: dx12
+
+          # Linux
+          - name: Linux x86_64
+            os: ubuntu-22.04
+            backends: vulkan gl
+
+    name: Test ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: checkout repo
+        uses: actions/checkout@v3
+
+      - name: Install cargo-nextest and cargo-llvm-cov
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest,cargo-llvm-cov
+
+      - name: install swiftshader
+        if: matrix.os == 'ubuntu-22.04'
+        shell: bash
+        run: |
+          set -e
+
+          mkdir -p swiftshader
+          curl -LsSf https://github.com/gfx-rs/ci-build/releases/latest/download/swiftshader-linux-x86_64.tar.xz | tar -xf - -C swiftshader
+
+          echo "LD_LIBRARY_PATH=$PWD/swiftshader" >> $GITHUB_ENV
+
+      - name: install llvmpipe, vulkan sdk
+        if: matrix.os == 'ubuntu-22.04'
+        shell: bash
+        run: |
+          set -e
+
+          sudo apt-get update -y -qq
+
+          # vulkan sdk
+          wget -qO - https://packages.lunarg.com/lunarg-signing-key-pub.asc | sudo apt-key add -
+          sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-jammy.list https://packages.lunarg.com/vulkan/lunarg-vulkan-jammy.list
+
+          sudo apt-get update
+          sudo apt install -y libegl1-mesa libgl1-mesa-dri libxcb-xfixes0-dev vulkan-sdk
+
+      - name: disable debug
+        shell: bash
+        run: |
+          mkdir -p .cargo
+          echo """
+          [profile.dev]
+          debug = 1" >> .cargo/config.toml
+
+      - name: caching
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: test-${{ matrix.os }}-${{ env.CACHE_SUFFIX }}
+
+      - name: run wgpu-info
+        shell: bash
+        run: |
+          set -e
+
+          cargo llvm-cov --no-cfg-coverage run --bin wgpu-info --no-report
+
+      - name: run tests
+        shell: bash
+        run: |
+          set -e
+
           for backend in ${{ matrix.backends }}; do
             echo "======= NATIVE TESTS $backend ======";
-            WGPU_BACKEND=$backend cargo nextest run -p wgpu --no-fail-fast
-            # Test that we catch overflows in `--release` builds too.
-            WGPU_BACKEND=$backend cargo nextest run --release -p wgpu --no-fail-fast
+            WGPU_BACKEND=$backend cargo llvm-cov --no-cfg-coverage nextest -p wgpu -p wgpu-types -p wgpu-hal -p wgpu-core -p player --no-fail-fast --no-report
           done
+
+      - name: generate coverage report
+        shell: bash
+        run: |
+          set -e
+
+          cargo llvm-cov report --lcov --output-path lcov.info
+
+      - name: upload coverage report to codecov
+        uses: codecov/codecov-action@v3
+        with:
+          files: lcov.info
+
+  doctest:
+    name: Doctest
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: checkout repo
+        uses: actions/checkout@v3
+
+      - name: disable debug
+        shell: bash
+        run: |
+          mkdir -p .cargo
+          echo """
+          [profile.dev]
+          debug = 1" >> .cargo/config.toml
+
+      - name: caching
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: clippy-${{ matrix.target }}-${{ matrix.kind }}-${{ env.CACHE_SUFFIX }}
+
+      - name: run doctests
+        shell: bash
+        run: |
+          set -e
+
+          cargo test --doc -p wgpu -p wgpu-core -p wgpu-hal -p wgpu-types
 
   fmt:
     name: Format
     runs-on: ubuntu-latest
     steps:
       - name: checkout repo
-        uses: actions/checkout@v2
-
-      - name: install rust
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
-          components: rustfmt
+        uses: actions/checkout@v3
 
       - name: run rustfmt
         run: |
           cargo fmt -- --check
 
-  deno:
-    name: Deno
+  check-msrv-cts_runner:
+    name: Clippy cts_runner
     runs-on: ubuntu-latest
     steps:
       - name: checkout repo
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
-      - name: install rust
-        uses: actions-rs/toolchain@v1
+      - name: Install MSRV toolchain
+        run: |
+          rustup toolchain install ${{ env.MSRV }} --no-self-update --profile=minimal --component clippy
+          rustup default ${{ env.MSRV }}
+
+      - name: disable debug
+        shell: bash
+        run: |
+          mkdir -p .cargo
+          echo """
+          [profile.dev]
+          debug = 1" >> .cargo/config.toml
+
+      - name: caching
+        uses: Swatinem/rust-cache@v2
         with:
-          profile: minimal
-          toolchain: stable
+          key: cts_runner-${{ env.CACHE_SUFFIX }}
 
       - name: build Deno
         run: |
-          cargo check --manifest-path cts_runner/Cargo.toml
+          cargo clippy --manifest-path cts_runner/Cargo.toml
+
+  cargo-deny-check-advisories:
+    name: "Run `cargo deny check advisories`"
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout repo
+        uses: actions/checkout@v3
+
+      - name: Run `cargo deny check`
+        uses: EmbarkStudios/cargo-deny-action@v1
+        with:
+          command: check advisories
+          arguments: --all-features --workspace
+          rust-version: ${{ env.MSRV }}
+
+  cargo-deny-check-rest:
+    name: "Run `cargo deny check`"
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout repo
+        uses: actions/checkout@v3
+
+      - name: Run `cargo deny check`
+        uses: EmbarkStudios/cargo-deny-action@v1
+        with:
+          command: check bans licenses sources
+          arguments: --all-features --workspace
+          rust-version: ${{ env.MSRV }}

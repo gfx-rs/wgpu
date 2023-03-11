@@ -28,6 +28,7 @@
             dimension: r#2d,
             format: "rgba8unorm",
             usage: 5, // SAMPLED + COPY_SRC
+            view_formats: [],
         )),
         CreateTextureView(
             id: Id(0, 1, Empty),
@@ -54,6 +55,7 @@
             dimension: r#2d,
             format: "rgba8unorm",
             usage: 9, // STORAGE + COPY_SRC
+            view_formats: [],
         )),
         CreateTextureView(
             id: Id(1, 1, Empty),

@@ -132,61 +132,61 @@ impl<A: hal::Api> NonReferencedResources<A> {
         if !self.buffers.is_empty() {
             profiling::scope!("destroy_buffers");
             for raw in self.buffers.drain(..) {
-                device.destroy_buffer(raw);
+                unsafe { device.destroy_buffer(raw) };
             }
         }
         if !self.textures.is_empty() {
             profiling::scope!("destroy_textures");
             for raw in self.textures.drain(..) {
-                device.destroy_texture(raw);
+                unsafe { device.destroy_texture(raw) };
             }
         }
         if !self.texture_views.is_empty() {
             profiling::scope!("destroy_texture_views");
             for raw in self.texture_views.drain(..) {
-                device.destroy_texture_view(raw);
+                unsafe { device.destroy_texture_view(raw) };
             }
         }
         if !self.samplers.is_empty() {
             profiling::scope!("destroy_samplers");
             for raw in self.samplers.drain(..) {
-                device.destroy_sampler(raw);
+                unsafe { device.destroy_sampler(raw) };
             }
         }
         if !self.bind_groups.is_empty() {
             profiling::scope!("destroy_bind_groups");
             for raw in self.bind_groups.drain(..) {
-                device.destroy_bind_group(raw);
+                unsafe { device.destroy_bind_group(raw) };
             }
         }
         if !self.compute_pipes.is_empty() {
             profiling::scope!("destroy_compute_pipelines");
             for raw in self.compute_pipes.drain(..) {
-                device.destroy_compute_pipeline(raw);
+                unsafe { device.destroy_compute_pipeline(raw) };
             }
         }
         if !self.render_pipes.is_empty() {
             profiling::scope!("destroy_render_pipelines");
             for raw in self.render_pipes.drain(..) {
-                device.destroy_render_pipeline(raw);
+                unsafe { device.destroy_render_pipeline(raw) };
             }
         }
         if !self.bind_group_layouts.is_empty() {
             profiling::scope!("destroy_bind_group_layouts");
             for raw in self.bind_group_layouts.drain(..) {
-                device.destroy_bind_group_layout(raw);
+                unsafe { device.destroy_bind_group_layout(raw) };
             }
         }
         if !self.pipeline_layouts.is_empty() {
             profiling::scope!("destroy_pipeline_layouts");
             for raw in self.pipeline_layouts.drain(..) {
-                device.destroy_pipeline_layout(raw);
+                unsafe { device.destroy_pipeline_layout(raw) };
             }
         }
         if !self.query_sets.is_empty() {
             profiling::scope!("destroy_query_sets");
             for raw in self.query_sets.drain(..) {
-                device.destroy_query_set(raw);
+                unsafe { device.destroy_query_set(raw) };
             }
         }
     }
@@ -887,11 +887,11 @@ impl<A: HalApi> LifetimeTracker<A> {
                                 range: mapping.range.start..mapping.range.start + size,
                                 host,
                             };
-                            resource::BufferMapAsyncStatus::Success
+                            Ok(())
                         }
                         Err(e) => {
                             log::error!("Mapping failed {:?}", e);
-                            resource::BufferMapAsyncStatus::Error
+                            Err(e)
                         }
                     }
                 } else {
@@ -900,7 +900,7 @@ impl<A: HalApi> LifetimeTracker<A> {
                         range: mapping.range,
                         host: mapping.op.host,
                     };
-                    resource::BufferMapAsyncStatus::Success
+                    Ok(())
                 };
                 pending_callbacks.push((mapping.op, status));
             }

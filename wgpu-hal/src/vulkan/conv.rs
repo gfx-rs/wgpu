@@ -1,5 +1,4 @@
 use ash::vk;
-use std::num::NonZeroU32;
 
 impl super::PrivateCapabilities {
     pub fn map_texture_format(&self, format: wgt::TextureFormat) -> vk::Format {
@@ -64,7 +63,15 @@ impl super::PrivateCapabilities {
                     F::D32_SFLOAT_S8_UINT
                 }
             }
-            //Tf::Stencil8 => F::R8_UNORM,
+            Tf::Stencil8 => {
+                if self.texture_s8 {
+                    F::S8_UINT
+                } else if self.texture_d24_s8 {
+                    F::D24_UNORM_S8_UINT
+                } else {
+                    F::D32_SFLOAT_S8_UINT
+                }
+            }
             Tf::Depth16Unorm => F::D16_UNORM,
             Tf::Rgb9e5Ufloat => F::E5B9G9R9_UFLOAT_PACK32,
             Tf::Bc1RgbaUnorm => F::BC1_RGBA_UNORM_BLOCK,
@@ -149,16 +156,22 @@ pub fn map_vk_surface_formats(sf: vk::SurfaceFormatKHR) -> Option<wgt::TextureFo
     use ash::vk::Format as F;
     use wgt::TextureFormat as Tf;
     // List we care about pulled from https://vulkan.gpuinfo.org/listsurfaceformats.php
-    Some(match sf.format {
-        F::B8G8R8A8_UNORM => Tf::Bgra8Unorm,
-        F::B8G8R8A8_SRGB => Tf::Bgra8UnormSrgb,
-        F::R8G8B8A8_SNORM => Tf::Rgba8Snorm,
-        F::R8G8B8A8_UNORM => Tf::Rgba8Unorm,
-        F::R8G8B8A8_SRGB => Tf::Rgba8UnormSrgb,
-        F::R16G16B16A16_SFLOAT => Tf::Rgba16Float,
-        F::R16G16B16A16_SNORM => Tf::Rgba16Snorm,
-        F::R16G16B16A16_UNORM => Tf::Rgba16Unorm,
-        F::A2B10G10R10_UNORM_PACK32 => Tf::Rgb10a2Unorm,
+    Some(match sf.color_space {
+        vk::ColorSpaceKHR::SRGB_NONLINEAR => match sf.format {
+            F::B8G8R8A8_UNORM => Tf::Bgra8Unorm,
+            F::B8G8R8A8_SRGB => Tf::Bgra8UnormSrgb,
+            F::R8G8B8A8_SNORM => Tf::Rgba8Snorm,
+            F::R8G8B8A8_UNORM => Tf::Rgba8Unorm,
+            F::R8G8B8A8_SRGB => Tf::Rgba8UnormSrgb,
+            _ => return None,
+        },
+        vk::ColorSpaceKHR::EXTENDED_SRGB_LINEAR_EXT => match sf.format {
+            F::R16G16B16A16_SFLOAT => Tf::Rgba16Float,
+            F::R16G16B16A16_SNORM => Tf::Rgba16Snorm,
+            F::R16G16B16A16_UNORM => Tf::Rgba16Unorm,
+            F::A2B10G10R10_UNORM_PACK32 => Tf::Rgb10a2Unorm,
+            _ => return None,
+        },
         _ => return None,
     })
 }
@@ -169,10 +182,9 @@ impl crate::Attachment<'_, super::Api> {
         ops: crate::AttachmentOps,
         caps: &super::PrivateCapabilities,
     ) -> super::AttachmentKey {
-        let aspects = self.view.aspects();
         super::AttachmentKey {
             format: caps.map_texture_format(self.view.attachment.view_format),
-            layout: derive_image_layout(self.usage, aspects),
+            layout: derive_image_layout(self.usage, self.view.attachment.view_format),
             ops,
         }
     }
@@ -186,30 +198,29 @@ impl crate::ColorAttachment<'_, super::Api> {
             .view
             .attachment
             .view_format
-            .describe()
-            .sample_type
+            .sample_type(None)
+            .unwrap()
         {
-            wgt::TextureSampleType::Float { .. } | wgt::TextureSampleType::Depth => {
-                vk::ClearColorValue {
-                    float32: [cv.r as f32, cv.g as f32, cv.b as f32, cv.a as f32],
-                }
-            }
+            wgt::TextureSampleType::Float { .. } => vk::ClearColorValue {
+                float32: [cv.r as f32, cv.g as f32, cv.b as f32, cv.a as f32],
+            },
             wgt::TextureSampleType::Sint => vk::ClearColorValue {
                 int32: [cv.r as i32, cv.g as i32, cv.b as i32, cv.a as i32],
             },
             wgt::TextureSampleType::Uint => vk::ClearColorValue {
                 uint32: [cv.r as u32, cv.g as u32, cv.b as u32, cv.a as u32],
             },
+            wgt::TextureSampleType::Depth => unreachable!(),
         }
     }
 }
 
 pub fn derive_image_layout(
     usage: crate::TextureUses,
-    aspects: crate::FormatAspects,
+    format: wgt::TextureFormat,
 ) -> vk::ImageLayout {
-    //Note: depth textures are always sampled with RODS layout
-    let is_color = aspects.contains(crate::FormatAspects::COLOR);
+    // Note: depth textures are always sampled with RODS layout
+    let is_color = crate::FormatAspects::from(format).contains(crate::FormatAspects::COLOR);
     match usage {
         crate::TextureUses::UNINITIALIZED => vk::ImageLayout::UNDEFINED,
         crate::TextureUses::COPY_SRC => vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
@@ -572,40 +583,23 @@ pub fn map_copy_extent(extent: &crate::CopyExtent) -> vk::Extent3D {
     }
 }
 
-pub fn map_extent_to_copy_size(
-    extent: &wgt::Extent3d,
-    dim: wgt::TextureDimension,
-) -> crate::CopyExtent {
-    crate::CopyExtent {
-        width: extent.width,
-        height: extent.height,
-        depth: match dim {
-            wgt::TextureDimension::D1 | wgt::TextureDimension::D2 => 1,
-            wgt::TextureDimension::D3 => extent.depth_or_array_layers,
-        },
-    }
-}
-
 pub fn map_subresource_range(
     range: &wgt::ImageSubresourceRange,
-    texture_aspect: crate::FormatAspects,
+    format: wgt::TextureFormat,
 ) -> vk::ImageSubresourceRange {
     vk::ImageSubresourceRange {
-        aspect_mask: map_aspects(crate::FormatAspects::from(range.aspect) & texture_aspect),
+        aspect_mask: map_aspects(crate::FormatAspects::new(format, range.aspect)),
         base_mip_level: range.base_mip_level,
-        level_count: range
-            .mip_level_count
-            .map_or(vk::REMAINING_MIP_LEVELS, NonZeroU32::get),
+        level_count: range.mip_level_count.unwrap_or(vk::REMAINING_MIP_LEVELS),
         base_array_layer: range.base_array_layer,
         layer_count: range
             .array_layer_count
-            .map_or(vk::REMAINING_ARRAY_LAYERS, NonZeroU32::get),
+            .unwrap_or(vk::REMAINING_ARRAY_LAYERS),
     }
 }
 
 pub fn map_subresource_layers(
     base: &crate::TextureCopyBase,
-    texture_aspect: crate::FormatAspects,
 ) -> (vk::ImageSubresourceLayers, vk::Offset3D) {
     let offset = vk::Offset3D {
         x: base.origin.x as i32,
@@ -613,7 +607,7 @@ pub fn map_subresource_layers(
         z: base.origin.z as i32,
     };
     let subresource = vk::ImageSubresourceLayers {
-        aspect_mask: map_aspects(base.aspect & texture_aspect),
+        aspect_mask: map_aspects(base.aspect),
         mip_level: base.mip_level,
         base_array_layer: base.array_layer,
         layer_count: 1,

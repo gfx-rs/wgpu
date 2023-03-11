@@ -197,6 +197,7 @@ impl Example {
             usage: wgpu::TextureUsages::TEXTURE_BINDING
                 | wgpu::TextureUsages::COPY_DST
                 | wgpu::TextureUsages::RENDER_ATTACHMENT,
+            view_formats: &[],
         });
 
         let draw_depth_buffer = device.create_texture(&wgpu::TextureDescriptor {
@@ -209,6 +210,7 @@ impl Example {
             usage: wgpu::TextureUsages::TEXTURE_BINDING
                 | wgpu::TextureUsages::COPY_DST
                 | wgpu::TextureUsages::RENDER_ATTACHMENT,
+            view_formats: &[],
         });
 
         let color_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
@@ -382,7 +384,7 @@ impl framework::Example for Example {
                         visibility: wgpu::ShaderStages::FRAGMENT,
                         ty: wgpu::BindingType::Texture {
                             multisampled: false,
-                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                            sample_type: wgpu::TextureSampleType::Float { filterable: false },
                             view_dimension: wgpu::TextureViewDimension::D2,
                         },
                         count: None,
@@ -818,7 +820,10 @@ fn main() {
     framework::run::<Example>("water");
 }
 
+wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
+
 #[test]
+#[wasm_bindgen_test::wasm_bindgen_test]
 fn water() {
     framework::test::<Example>(framework::FrameworkRefTest {
         image_path: "/examples/water/screenshot.png",
@@ -826,9 +831,8 @@ fn water() {
         height: 768,
         optional_features: wgpu::Features::default(),
         base_test_parameters: framework::test_common::TestParameters::default()
-            .downlevel_flags(wgpu::DownlevelFlags::READ_ONLY_DEPTH_STENCIL)
-            .specific_failure(Some(wgpu::Backends::DX12), None, Some("Basic"), false), // WARP has a bug https://github.com/gfx-rs/wgpu/issues/1730
+            .downlevel_flags(wgpu::DownlevelFlags::READ_ONLY_DEPTH_STENCIL),
         tolerance: 5,
-        max_outliers: 470, // bounded by DX12, then AMD Radeon Polaris12 on vk linux
+        max_outliers: 1693, // bounded by swiftshader
     });
 }

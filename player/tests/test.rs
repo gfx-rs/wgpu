@@ -55,10 +55,9 @@ struct Test<'a> {
     actions: Vec<wgc::device::trace::Action<'a>>,
 }
 
-fn map_callback(status: wgc::resource::BufferMapAsyncStatus) {
-    match status {
-        wgc::resource::BufferMapAsyncStatus::Success => (),
-        _ => panic!("Unable to map"),
+fn map_callback(status: Result<(), wgc::resource::BufferAccessError>) {
+    if let Err(e) = status {
+        panic!("Buffer map error: {}", e);
     }
 }
 
@@ -179,7 +178,14 @@ impl Corpus {
         let dir = path.parent().unwrap();
         let corpus: Corpus = ron::de::from_reader(File::open(&path).unwrap()).unwrap();
 
-        let global = wgc::hub::Global::new("test", IdentityPassThroughFactory, corpus.backends);
+        let global = wgc::hub::Global::new(
+            "test",
+            IdentityPassThroughFactory,
+            wgt::InstanceDescriptor {
+                backends: corpus.backends,
+                dx12_shader_compiler: wgt::Dx12Compiler::Fxc,
+            },
+        );
         for &backend in BACKENDS {
             if !corpus.backends.contains(backend.into()) {
                 continue;

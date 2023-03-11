@@ -1,5 +1,3 @@
-use std::num::NonZeroU32;
-
 /// Describes a [Buffer](crate::Buffer) when allocating.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct BufferInitDescriptor<'a> {
@@ -87,7 +85,11 @@ impl DeviceExt for crate::Device {
         desc.usage |= crate::TextureUsages::COPY_DST;
         let texture = self.create_texture(&desc);
 
-        let format_info = desc.format.describe();
+        // Will return None only if it's a combined depth-stencil format
+        // If so, default to 4, validation will fail later anyway since the depth or stencil
+        // aspect needs to be written to individually
+        let block_size = desc.format.block_size(None).unwrap_or(4);
+        let (block_width, block_height) = desc.format.block_dimensions();
         let layer_iterations = desc.array_layer_count();
 
         let mut binary_offset = 0;
@@ -106,10 +108,10 @@ impl DeviceExt for crate::Device {
 
                 // All these calculations are performed on the physical size as that's the
                 // data that exists in the buffer.
-                let width_blocks = mip_physical.width / format_info.block_dimensions.0 as u32;
-                let height_blocks = mip_physical.height / format_info.block_dimensions.1 as u32;
+                let width_blocks = mip_physical.width / block_width;
+                let height_blocks = mip_physical.height / block_height;
 
-                let bytes_per_row = width_blocks * format_info.block_size as u32;
+                let bytes_per_row = width_blocks * block_size;
                 let data_size = bytes_per_row * height_blocks * mip_size.depth_or_array_layers;
 
                 let end_offset = binary_offset + data_size as usize;
@@ -117,7 +119,7 @@ impl DeviceExt for crate::Device {
                 queue.write_texture(
                     crate::ImageCopyTexture {
                         texture: &texture,
-                        mip_level: mip as u32,
+                        mip_level: mip,
                         origin: crate::Origin3d {
                             x: 0,
                             y: 0,
@@ -128,12 +130,8 @@ impl DeviceExt for crate::Device {
                     &data[binary_offset..end_offset],
                     crate::ImageDataLayout {
                         offset: 0,
-                        bytes_per_row: Some(
-                            NonZeroU32::new(bytes_per_row).expect("invalid bytes per row"),
-                        ),
-                        rows_per_image: Some(
-                            NonZeroU32::new(height_blocks).expect("invalid height"),
-                        ),
+                        bytes_per_row: Some(bytes_per_row),
+                        rows_per_image: Some(height_blocks),
                     },
                     mip_physical,
                 );

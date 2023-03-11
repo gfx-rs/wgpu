@@ -13,16 +13,16 @@ pub struct ErrorFormatter<'a> {
 
 impl<'a> ErrorFormatter<'a> {
     pub fn error(&mut self, err: &dyn Error) {
-        writeln!(self.writer, "    {}", err).expect("Error formatting error");
+        writeln!(self.writer, "    {err}").expect("Error formatting error");
     }
 
     pub fn note(&mut self, note: &dyn fmt::Display) {
-        writeln!(self.writer, "      note: {}", note).expect("Error formatting error");
+        writeln!(self.writer, "      note: {note}").expect("Error formatting error");
     }
 
     pub fn label(&mut self, label_key: &str, label_value: &str) {
         if !label_key.is_empty() && !label_value.is_empty() {
-            self.note(&format!("{} = `{}`", label_key, label_value));
+            self.note(&format!("{label_key} = `{label_value}`"));
         }
     }
 
@@ -91,6 +91,12 @@ impl<'a> ErrorFormatter<'a> {
         let label = gfx_select!(id => global.command_buffer_label(*id));
         self.label("command buffer", &label);
     }
+
+    pub fn query_set_label(&mut self, id: &crate::id::QuerySetId) {
+        let global = self.global;
+        let label = gfx_select!(id => global.query_set_label(*id));
+        self.label("query set", &label);
+    }
 }
 
 pub trait PrettyError: Error + Sized {
@@ -140,6 +146,15 @@ pub fn format_pretty_any(
         return pretty_err.fmt_pretty(&mut fmt);
     }
     if let Some(pretty_err) = error.downcast_ref::<crate::command::TransferError>() {
+        return pretty_err.fmt_pretty(&mut fmt);
+    }
+    if let Some(pretty_err) = error.downcast_ref::<crate::command::PassErrorScope>() {
+        return pretty_err.fmt_pretty(&mut fmt);
+    }
+    if let Some(pretty_err) = error.downcast_ref::<crate::track::UsageConflict>() {
+        return pretty_err.fmt_pretty(&mut fmt);
+    }
+    if let Some(pretty_err) = error.downcast_ref::<crate::command::QueryError>() {
         return pretty_err.fmt_pretty(&mut fmt);
     }
 

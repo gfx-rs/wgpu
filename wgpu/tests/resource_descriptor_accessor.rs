@@ -1,7 +1,9 @@
 use crate::common::{initialize_test, TestParameters};
+use wasm_bindgen_test::*;
 
 /// Buffer's size and usage can be read back.
 #[test]
+#[wasm_bindgen_test]
 fn buffer_size_and_usage() {
     initialize_test(TestParameters::default(), |ctx| {
         let buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {

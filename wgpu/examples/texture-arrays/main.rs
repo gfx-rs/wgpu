@@ -125,7 +125,7 @@ impl framework::Example for Example {
             &base_shader_module
         };
 
-        println!("Using fragment entry point '{}'", fragment_entry_point);
+        println!("Using fragment entry point '{fragment_entry_point}'");
 
         let vertex_size = std::mem::size_of::<Vertex>();
         let vertex_data = create_vertices();
@@ -164,21 +164,26 @@ impl framework::Example for Example {
             format: wgpu::TextureFormat::Rgba8UnormSrgb,
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
             label: None,
+            view_formats: &[],
         };
         let red_texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("red"),
+            view_formats: &[],
             ..texture_descriptor
         });
         let green_texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("green"),
+            view_formats: &[],
             ..texture_descriptor
         });
         let blue_texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("blue"),
+            view_formats: &[],
             ..texture_descriptor
         });
         let white_texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("white"),
+            view_formats: &[],
             ..texture_descriptor
         });
 
@@ -192,7 +197,7 @@ impl framework::Example for Example {
             &red_texture_data,
             wgpu::ImageDataLayout {
                 offset: 0,
-                bytes_per_row: Some(NonZeroU32::new(4).unwrap()),
+                bytes_per_row: Some(4),
                 rows_per_image: None,
             },
             wgpu::Extent3d::default(),
@@ -202,7 +207,7 @@ impl framework::Example for Example {
             &green_texture_data,
             wgpu::ImageDataLayout {
                 offset: 0,
-                bytes_per_row: Some(NonZeroU32::new(4).unwrap()),
+                bytes_per_row: Some(4),
                 rows_per_image: None,
             },
             wgpu::Extent3d::default(),
@@ -212,7 +217,7 @@ impl framework::Example for Example {
             &blue_texture_data,
             wgpu::ImageDataLayout {
                 offset: 0,
-                bytes_per_row: Some(NonZeroU32::new(4).unwrap()),
+                bytes_per_row: Some(4),
                 rows_per_image: None,
             },
             wgpu::Extent3d::default(),
@@ -222,7 +227,7 @@ impl framework::Example for Example {
             &white_texture_data,
             wgpu::ImageDataLayout {
                 offset: 0,
-                bytes_per_row: Some(NonZeroU32::new(4).unwrap()),
+                bytes_per_row: Some(4),
                 rows_per_image: None,
             },
             wgpu::Extent3d::default(),
@@ -406,7 +411,10 @@ fn main() {
     framework::run::<Example>("texture-arrays");
 }
 
+wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
+
 #[test]
+#[wasm_bindgen_test::wasm_bindgen_test]
 fn texture_arrays_uniform() {
     framework::test::<Example>(framework::FrameworkRefTest {
         image_path: "/examples/texture-arrays/screenshot.png",
@@ -420,6 +428,7 @@ fn texture_arrays_uniform() {
 }
 
 #[test]
+#[wasm_bindgen_test::wasm_bindgen_test]
 fn texture_arrays_non_uniform() {
     framework::test::<Example>(framework::FrameworkRefTest {
         image_path: "/examples/texture-arrays/screenshot.png",

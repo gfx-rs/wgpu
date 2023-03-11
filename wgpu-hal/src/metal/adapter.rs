@@ -1,4 +1,4 @@
-use mtl::{MTLFeatureSet, MTLGPUFamily, MTLLanguageVersion, MTLReadWriteTextureTier};
+use metal::{MTLFeatureSet, MTLGPUFamily, MTLLanguageVersion, MTLReadWriteTextureTier};
 use objc::{class, msg_send, sel, sel_impl};
 use parking_lot::Mutex;
 use wgt::{AstcBlock, AstcChannel};
@@ -50,22 +50,14 @@ impl crate::Adapter<super::Api> for super::Adapter {
         // https://developer.apple.com/documentation/metal/mtlreadwritetexturetier/mtlreadwritetexturetier1?language=objc
         // https://developer.apple.com/documentation/metal/mtlreadwritetexturetier/mtlreadwritetexturetier2?language=objc
         let (read_write_tier1_if, read_write_tier2_if) = match pc.read_write_texture_tier {
-            mtl::MTLReadWriteTextureTier::TierNone => (Tfc::empty(), Tfc::empty()),
-            mtl::MTLReadWriteTextureTier::Tier1 => (Tfc::STORAGE_READ_WRITE, Tfc::empty()),
-            mtl::MTLReadWriteTextureTier::Tier2 => {
+            metal::MTLReadWriteTextureTier::TierNone => (Tfc::empty(), Tfc::empty()),
+            metal::MTLReadWriteTextureTier::Tier1 => (Tfc::STORAGE_READ_WRITE, Tfc::empty()),
+            metal::MTLReadWriteTextureTier::Tier2 => {
                 (Tfc::STORAGE_READ_WRITE, Tfc::STORAGE_READ_WRITE)
             }
         };
-        let msaa_desktop_if = if pc.msaa_desktop {
-            Tfc::MULTISAMPLE
-        } else {
-            Tfc::empty()
-        };
-        let msaa_apple7x_if = if pc.msaa_desktop | pc.msaa_apple7 {
-            Tfc::MULTISAMPLE
-        } else {
-            Tfc::empty()
-        };
+        let msaa_count = pc.sample_count_mask;
+
         let msaa_resolve_desktop_if = if pc.msaa_desktop {
             Tfc::MULTISAMPLE_RESOLVE
         } else {
@@ -90,7 +82,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
             | Tfc::STORAGE
             | Tfc::COLOR_ATTACHMENT
             | Tfc::COLOR_ATTACHMENT_BLEND
-            | Tfc::MULTISAMPLE
+            | msaa_count
             | Tfc::MULTISAMPLE_RESOLVE;
 
         let extra = match format {
@@ -110,7 +102,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
             | Tf::Rgba8Sint
             | Tf::Rgba16Uint
             | Tf::Rgba16Sint => {
-                read_write_tier2_if | Tfc::STORAGE | Tfc::COLOR_ATTACHMENT | Tfc::MULTISAMPLE
+                read_write_tier2_if | Tfc::STORAGE | Tfc::COLOR_ATTACHMENT | msaa_count
             }
             Tf::R16Unorm
             | Tf::R16Snorm
@@ -122,26 +114,23 @@ impl crate::Adapter<super::Api> for super::Adapter {
                     | Tfc::STORAGE
                     | Tfc::COLOR_ATTACHMENT
                     | Tfc::COLOR_ATTACHMENT_BLEND
-                    | Tfc::MULTISAMPLE
+                    | msaa_count
                     | msaa_resolve_desktop_if
             }
             Tf::Rg8Unorm | Tf::Rg16Float | Tf::Bgra8Unorm => all_caps,
-            Tf::Rg8Uint | Tf::Rg8Sint => Tfc::STORAGE | Tfc::COLOR_ATTACHMENT | Tfc::MULTISAMPLE,
+            Tf::Rg8Uint | Tf::Rg8Sint => Tfc::STORAGE | Tfc::COLOR_ATTACHMENT | msaa_count,
             Tf::R32Uint | Tf::R32Sint => {
-                read_write_tier1_if | Tfc::STORAGE | Tfc::COLOR_ATTACHMENT | msaa_desktop_if
+                read_write_tier1_if | Tfc::STORAGE | Tfc::COLOR_ATTACHMENT | msaa_count
             }
             Tf::R32Float => {
                 let flags = if pc.format_r32float_all {
                     all_caps
                 } else {
-                    Tfc::STORAGE
-                        | Tfc::COLOR_ATTACHMENT
-                        | Tfc::COLOR_ATTACHMENT_BLEND
-                        | Tfc::MULTISAMPLE
+                    Tfc::STORAGE | Tfc::COLOR_ATTACHMENT | Tfc::COLOR_ATTACHMENT_BLEND | msaa_count
                 };
                 read_write_tier1_if | flags
             }
-            Tf::Rg16Uint | Tf::Rg16Sint => Tfc::STORAGE | Tfc::COLOR_ATTACHMENT | Tfc::MULTISAMPLE,
+            Tf::Rg16Uint | Tf::Rg16Sint => Tfc::STORAGE | Tfc::COLOR_ATTACHMENT | msaa_count,
             Tf::Rgba8UnormSrgb | Tf::Bgra8UnormSrgb => {
                 let mut flags = all_caps;
                 flags.set(Tfc::STORAGE, pc.format_rgba8_srgb_all);
@@ -157,39 +146,32 @@ impl crate::Adapter<super::Api> for super::Adapter {
                 flags.set(Tfc::STORAGE, pc.format_rg11b10_all);
                 flags
             }
-            Tf::Rg32Uint | Tf::Rg32Sint => Tfc::COLOR_ATTACHMENT | Tfc::STORAGE | msaa_apple7x_if,
+            Tf::Rg32Uint | Tf::Rg32Sint => Tfc::COLOR_ATTACHMENT | Tfc::STORAGE | msaa_count,
             Tf::Rg32Float => {
                 if pc.format_rg32float_all {
                     all_caps
                 } else {
-                    Tfc::STORAGE
-                        | Tfc::COLOR_ATTACHMENT
-                        | Tfc::COLOR_ATTACHMENT_BLEND
-                        | msaa_apple7x_if
+                    Tfc::STORAGE | Tfc::COLOR_ATTACHMENT | Tfc::COLOR_ATTACHMENT_BLEND | msaa_count
                 }
             }
             Tf::Rgba32Uint | Tf::Rgba32Sint => {
-                read_write_tier2_if | Tfc::STORAGE | Tfc::COLOR_ATTACHMENT | msaa_desktop_if
+                read_write_tier2_if | Tfc::STORAGE | Tfc::COLOR_ATTACHMENT | msaa_count
             }
             Tf::Rgba32Float => {
                 let mut flags = read_write_tier2_if | Tfc::STORAGE | Tfc::COLOR_ATTACHMENT;
                 if pc.format_rgba32float_all {
                     flags |= all_caps
                 } else if pc.msaa_apple7 {
-                    flags |= Tfc::MULTISAMPLE
+                    flags |= msaa_count
                 };
                 flags
             }
-            /*Tf::Stencil8 => {
-                let mut flags = all_caps
-                    | Tfc::DEPTH_STENCIL_ATTACHMENT
-                    | Tfc::MULTISAMPLE
-                    | msaa_resolve_apple3x_if;
-                flags
-            }*/
+            Tf::Stencil8 => {
+                all_caps | Tfc::DEPTH_STENCIL_ATTACHMENT | msaa_count | msaa_resolve_apple3x_if
+            }
             Tf::Depth16Unorm => {
                 let mut flags =
-                    Tfc::DEPTH_STENCIL_ATTACHMENT | Tfc::MULTISAMPLE | msaa_resolve_apple3x_if;
+                    Tfc::DEPTH_STENCIL_ATTACHMENT | msaa_count | msaa_resolve_apple3x_if;
                 if pc.format_depth16unorm {
                     flags |= Tfc::SAMPLED_LINEAR
                 }
@@ -197,14 +179,14 @@ impl crate::Adapter<super::Api> for super::Adapter {
             }
             Tf::Depth32Float | Tf::Depth32FloatStencil8 => {
                 let mut flags =
-                    Tfc::DEPTH_STENCIL_ATTACHMENT | Tfc::MULTISAMPLE | msaa_resolve_apple3x_if;
+                    Tfc::DEPTH_STENCIL_ATTACHMENT | msaa_count | msaa_resolve_apple3x_if;
                 if pc.format_depth32float_filter {
                     flags |= Tfc::SAMPLED_LINEAR
                 }
                 flags
             }
             Tf::Depth24Plus | Tf::Depth24PlusStencil8 => {
-                let mut flags = Tfc::DEPTH_STENCIL_ATTACHMENT | Tfc::MULTISAMPLE;
+                let mut flags = Tfc::DEPTH_STENCIL_ATTACHMENT | msaa_count;
                 if pc.format_depth24_stencil8 {
                     flags |= Tfc::SAMPLED_LINEAR | Tfc::MULTISAMPLE_RESOLVE
                 } else {
@@ -224,7 +206,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
                     Tfc::SAMPLED_LINEAR
                         | Tfc::COLOR_ATTACHMENT
                         | Tfc::COLOR_ATTACHMENT_BLEND
-                        | Tfc::MULTISAMPLE
+                        | msaa_count
                         | Tfc::MULTISAMPLE_RESOLVE
                 }
             }
@@ -332,6 +314,12 @@ impl crate::Adapter<super::Api> for super::Adapter {
             },
             usage: crate::TextureUses::COLOR_TARGET | crate::TextureUses::COPY_DST, //TODO: expose more
         })
+    }
+
+    unsafe fn get_presentation_timestamp(&self) -> wgt::PresentationTimestamp {
+        let timestamp = self.shared.presentation_timer.get_timestamp_ns();
+
+        wgt::PresentationTimestamp(timestamp)
     }
 }
 
@@ -449,14 +437,14 @@ const DEPTH_CLIP_MODE: &[MTLFeatureSet] = &[
 const OS_NOT_SUPPORT: (usize, usize) = (10000, 0);
 
 impl super::PrivateCapabilities {
-    fn supports_any(raw: &mtl::DeviceRef, features_sets: &[MTLFeatureSet]) -> bool {
+    fn supports_any(raw: &metal::DeviceRef, features_sets: &[MTLFeatureSet]) -> bool {
         features_sets
             .iter()
             .cloned()
             .any(|x| raw.supports_feature_set(x))
     }
 
-    pub fn new(device: &mtl::Device) -> Self {
+    pub fn new(device: &metal::Device) -> Self {
         #[repr(C)]
         #[derive(Clone, Copy, Debug)]
         #[allow(clippy::upper_case_acronyms)]
@@ -464,12 +452,16 @@ impl super::PrivateCapabilities {
             major: usize,
             minor: usize,
             patch: usize,
-            is_mac: bool,
         }
 
         impl NSOperatingSystemVersion {
-            fn at_least(&self, mac_version: (usize, usize), ios_version: (usize, usize)) -> bool {
-                if self.is_mac {
+            fn at_least(
+                &self,
+                mac_version: (usize, usize),
+                ios_version: (usize, usize),
+                is_mac: bool,
+            ) -> bool {
+                if is_mac {
                     self.major > mac_version.0
                         || (self.major == mac_version.0 && self.minor >= mac_version.1)
                 } else {
@@ -479,27 +471,29 @@ impl super::PrivateCapabilities {
             }
         }
 
-        let mut version: NSOperatingSystemVersion = unsafe {
+        let version: NSOperatingSystemVersion = unsafe {
             let process_info: *mut objc::runtime::Object =
                 msg_send![class!(NSProcessInfo), processInfo];
             msg_send![process_info, operatingSystemVersion]
         };
 
         let os_is_mac = device.supports_feature_set(MTLFeatureSet::macOS_GPUFamily1_v1);
-        version.is_mac = os_is_mac;
-        let family_check = version.at_least((10, 15), (13, 0));
+        let family_check = version.at_least((10, 15), (13, 0), os_is_mac);
 
-        let mut sample_count_mask: u8 = 1 | 4; // 1 and 4 samples are supported on all devices
+        let mut sample_count_mask = crate::TextureFormatCapabilities::MULTISAMPLE_X4; // 1 and 4 samples are supported on all devices
         if device.supports_texture_sample_count(2) {
-            sample_count_mask |= 2;
+            sample_count_mask |= crate::TextureFormatCapabilities::MULTISAMPLE_X2;
         }
         if device.supports_texture_sample_count(8) {
-            sample_count_mask |= 8;
+            sample_count_mask |= crate::TextureFormatCapabilities::MULTISAMPLE_X8;
+        }
+        if device.supports_texture_sample_count(16) {
+            sample_count_mask |= crate::TextureFormatCapabilities::MULTISAMPLE_X16;
         }
 
-        let rw_texture_tier = if version.at_least((10, 13), (11, 0)) {
+        let rw_texture_tier = if version.at_least((10, 13), (11, 0), os_is_mac) {
             device.read_write_texture_support()
-        } else if version.at_least((10, 12), OS_NOT_SUPPORT) {
+        } else if version.at_least((10, 12), OS_NOT_SUPPORT, os_is_mac) {
             if Self::supports_any(device, &[MTLFeatureSet::macOS_ReadWriteTextureTier2]) {
                 MTLReadWriteTextureTier::Tier2
             } else {
@@ -511,25 +505,25 @@ impl super::PrivateCapabilities {
 
         Self {
             family_check,
-            msl_version: if version.at_least((12, 0), (15, 0)) {
+            msl_version: if version.at_least((12, 0), (15, 0), os_is_mac) {
                 MTLLanguageVersion::V2_4
-            } else if version.at_least((11, 0), (14, 0)) {
+            } else if version.at_least((11, 0), (14, 0), os_is_mac) {
                 MTLLanguageVersion::V2_3
-            } else if version.at_least((10, 15), (13, 0)) {
+            } else if version.at_least((10, 15), (13, 0), os_is_mac) {
                 MTLLanguageVersion::V2_2
-            } else if version.at_least((10, 14), (12, 0)) {
+            } else if version.at_least((10, 14), (12, 0), os_is_mac) {
                 MTLLanguageVersion::V2_1
-            } else if version.at_least((10, 13), (11, 0)) {
+            } else if version.at_least((10, 13), (11, 0), os_is_mac) {
                 MTLLanguageVersion::V2_0
-            } else if version.at_least((10, 12), (10, 0)) {
+            } else if version.at_least((10, 12), (10, 0), os_is_mac) {
                 MTLLanguageVersion::V1_2
-            } else if version.at_least((10, 11), (9, 0)) {
+            } else if version.at_least((10, 11), (9, 0), os_is_mac) {
                 MTLLanguageVersion::V1_1
             } else {
                 MTLLanguageVersion::V1_0
             },
             // macOS 10.11 doesn't support read-write resources
-            fragment_rw_storage: version.at_least((10, 12), (8, 0)),
+            fragment_rw_storage: version.at_least((10, 12), (8, 0), os_is_mac),
             read_write_texture_tier: rw_texture_tier,
             msaa_desktop: os_is_mac,
             msaa_apple3: if family_check {
@@ -546,7 +540,7 @@ impl super::PrivateCapabilities {
                 MUTABLE_COMPARISON_SAMPLER_SUPPORT,
             ),
             sampler_clamp_to_border: Self::supports_any(device, SAMPLER_CLAMP_TO_BORDER_SUPPORT),
-            sampler_lod_average: { version.at_least((11, 0), (9, 0)) },
+            sampler_lod_average: { version.at_least((11, 0), (9, 0), os_is_mac) },
             base_instance: Self::supports_any(device, BASE_INSTANCE_SUPPORT),
             base_vertex_instance_drawing: Self::supports_any(device, BASE_VERTEX_INSTANCE_SUPPORT),
             dual_source_blending: Self::supports_any(device, DUAL_SOURCE_BLEND_SUPPORT),
@@ -635,9 +629,9 @@ impl super::PrivateCapabilities {
             },
             max_samplers_per_stage: 16,
             buffer_alignment: if os_is_mac { 256 } else { 64 },
-            max_buffer_size: if version.at_least((10, 14), (12, 0)) {
+            max_buffer_size: if version.at_least((10, 14), (12, 0), os_is_mac) {
                 // maxBufferLength available on macOS 10.14+ and iOS 12.0+
-                let buffer_size: mtl::NSInteger =
+                let buffer_size: metal::NSInteger =
                     unsafe { msg_send![device.as_ref(), maxBufferLength] };
                 buffer_size as _
             } else if os_is_mac {
@@ -719,10 +713,10 @@ impl super::PrivateCapabilities {
             supports_binary_archives: family_check
                 && (device.supports_family(MTLGPUFamily::Apple3)
                     || device.supports_family(MTLGPUFamily::Mac1)),
-            supports_capture_manager: version.at_least((10, 13), (11, 0)),
-            can_set_maximum_drawables_count: version.at_least((10, 14), (11, 2)),
-            can_set_display_sync: version.at_least((10, 13), OS_NOT_SUPPORT),
-            can_set_next_drawable_timeout: version.at_least((10, 13), (11, 0)),
+            supports_capture_manager: version.at_least((10, 13), (11, 0), os_is_mac),
+            can_set_maximum_drawables_count: version.at_least((10, 14), (11, 2), os_is_mac),
+            can_set_display_sync: version.at_least((10, 13), OS_NOT_SUPPORT, os_is_mac),
+            can_set_next_drawable_timeout: version.at_least((10, 13), (11, 0), os_is_mac),
             supports_arrays_of_textures: Self::supports_any(
                 device,
                 &[
@@ -735,12 +729,14 @@ impl super::PrivateCapabilities {
                 && (device.supports_family(MTLGPUFamily::Apple6)
                     || device.supports_family(MTLGPUFamily::Mac1)
                     || device.supports_family(MTLGPUFamily::MacCatalyst1)),
-            supports_mutability: version.at_least((10, 13), (11, 0)),
+            supports_mutability: version.at_least((10, 13), (11, 0), os_is_mac),
             //Depth clipping is supported on all macOS GPU families and iOS family 4 and later
             supports_depth_clip_control: os_is_mac
                 || device.supports_feature_set(MTLFeatureSet::iOS_GPUFamily4_v1),
-            supports_preserve_invariance: version.at_least((11, 0), (13, 0)),
-            has_unified_memory: if version.at_least((10, 15), (13, 0)) {
+            supports_preserve_invariance: version.at_least((11, 0), (13, 0), os_is_mac),
+            // Metal 2.2 on mac, 2.3 on iOS.
+            supports_shader_primitive_index: version.at_least((10, 15), (14, 0), os_is_mac),
+            has_unified_memory: if version.at_least((10, 15), (13, 0), os_is_mac) {
                 Some(device.has_unified_memory())
             } else {
                 None
@@ -768,17 +764,20 @@ impl super::PrivateCapabilities {
             | F::POLYGON_MODE_LINE
             | F::CLEAR_TEXTURE
             | F::TEXTURE_FORMAT_16BIT_NORM
-            | F::SHADER_FLOAT16
+            | F::SHADER_F16
             | F::DEPTH32FLOAT_STENCIL8
             | F::MULTI_DRAW_INDIRECT;
 
-        features.set(F::TEXTURE_COMPRESSION_ASTC_LDR, self.format_astc);
+        features.set(F::TEXTURE_COMPRESSION_ASTC, self.format_astc);
         features.set(F::TEXTURE_COMPRESSION_ASTC_HDR, self.format_astc_hdr);
         features.set(F::TEXTURE_COMPRESSION_BC, self.format_bc);
         features.set(F::TEXTURE_COMPRESSION_ETC2, self.format_eac_etc);
 
         features.set(F::DEPTH_CLIP_CONTROL, self.supports_depth_clip_control);
-        features.set(F::DEPTH24PLUS_STENCIL8, self.format_depth24_stencil8);
+        features.set(
+            F::SHADER_PRIMITIVE_INDEX,
+            self.supports_shader_primitive_index,
+        );
 
         features.set(
             F::TEXTURE_BINDING_ARRAY
@@ -832,6 +831,7 @@ impl super::PrivateCapabilities {
                 max_texture_dimension_3d: self.max_texture_3d_size as u32,
                 max_texture_array_layers: self.max_texture_layers as u32,
                 max_bind_groups: 8,
+                max_bindings_per_bind_group: 65535,
                 max_dynamic_uniform_buffers_per_pipeline_layout: base
                     .max_dynamic_uniform_buffers_per_pipeline_layout,
                 max_dynamic_storage_buffers_per_pipeline_layout: base
@@ -866,8 +866,8 @@ impl super::PrivateCapabilities {
         }
     }
 
-    pub fn map_format(&self, format: wgt::TextureFormat) -> mtl::MTLPixelFormat {
-        use mtl::MTLPixelFormat::*;
+    pub fn map_format(&self, format: wgt::TextureFormat) -> metal::MTLPixelFormat {
+        use metal::MTLPixelFormat::*;
         use wgt::TextureFormat as Tf;
         match format {
             Tf::R8Unorm => R8Unorm,
@@ -911,7 +911,7 @@ impl super::PrivateCapabilities {
             Tf::Rgba32Uint => RGBA32Uint,
             Tf::Rgba32Sint => RGBA32Sint,
             Tf::Rgba32Float => RGBA32Float,
-            //Tf::Stencil8 => R8Unorm,
+            Tf::Stencil8 => Stencil8,
             Tf::Depth16Unorm => Depth16Unorm,
             Tf::Depth32Float => Depth32Float,
             Tf::Depth32FloatStencil8 => Depth32Float_Stencil8,
@@ -1006,10 +1006,34 @@ impl super::PrivateCapabilities {
             },
         }
     }
+
+    pub fn map_view_format(
+        &self,
+        format: wgt::TextureFormat,
+        aspects: crate::FormatAspects,
+    ) -> metal::MTLPixelFormat {
+        use crate::FormatAspects as Fa;
+        use metal::MTLPixelFormat::*;
+        use wgt::TextureFormat as Tf;
+        match (format, aspects) {
+            // map combined depth-stencil format to their stencil-only format
+            // see https://developer.apple.com/library/archive/documentation/Miscellaneous/Conceptual/MetalProgrammingGuide/WhatsNewiniOS10tvOS10andOSX1012/WhatsNewiniOS10tvOS10andOSX1012.html#//apple_ref/doc/uid/TP40014221-CH14-DontLinkElementID_77
+            (Tf::Depth24PlusStencil8, Fa::STENCIL) => {
+                if self.format_depth24_stencil8 {
+                    X24_Stencil8
+                } else {
+                    X32_Stencil8
+                }
+            }
+            (Tf::Depth32FloatStencil8, Fa::STENCIL) => X32_Stencil8,
+
+            _ => self.map_format(format),
+        }
+    }
 }
 
 impl super::PrivateDisabilities {
-    pub fn new(device: &mtl::Device) -> Self {
+    pub fn new(device: &metal::Device) -> Self {
         let is_intel = device.name().starts_with("Intel");
         Self {
             broken_viewport_near_depth: is_intel

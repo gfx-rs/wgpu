@@ -2,20 +2,19 @@
 name = "cts_runner"
 version = "0.1.0"
 authors = [
-	"Luca Casonato <hello@lcas.dev>",
+	"Luca Casonato <hello@lcas.dev>"
 ]
-edition = "2021"
+edition.workspace = true
 description = "CTS runner for wgpu"
-license = "MIT OR Apache-2.0"
+license.workspace = true
 publish = false
-resolver = "2"
 
 [dependencies]
-deno_console = "0.71.0"
-deno_core = "0.153.0"
-deno_url = "0.71.0"
-deno_web = "0.102.0"
-deno_webidl = "0.71.0"
-deno_webgpu = { path = "../deno_webgpu" }
-tokio = { version = "1.19.0", features = ["full"] }
-termcolor = "1.1.2"
+deno_console.workspace = true
+deno_core.workspace = true
+deno_url.workspace = true
+deno_web.workspace = true
+deno_webidl.workspace = true
+deno_webgpu.workspace = true
+tokio = { workspace = true, features = ["full"] }
+termcolor.workspace = true

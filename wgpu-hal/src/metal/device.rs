@@ -12,11 +12,21 @@ use crate::auxil::map_naga_stage;
 type DeviceResult<T> = Result<T, crate::DeviceError>;
 
 struct CompiledShader {
-    library: mtl::Library,
-    function: mtl::Function,
-    wg_size: mtl::MTLSize,
+    library: metal::Library,
+    function: metal::Function,
+    wg_size: metal::MTLSize,
     wg_memory_sizes: Vec<u32>,
+
+    /// Bindings of WGSL `storage` globals that contain variable-sized arrays.
+    ///
+    /// In order to implement bounds checks and the `arrayLength` function for
+    /// WGSL runtime-sized arrays, we pass the entry point a struct with a
+    /// member for each global variable that contains such an array. That member
+    /// is a `u32` holding the variable's total size in bytes---which is simply
+    /// the size of the `Buffer` supplying that variable's contents for the
+    /// draw call.
     sized_bindings: Vec<naga::ResourceBinding>,
+
     immutable_buffer_mask: usize,
 }
 
@@ -24,8 +34,8 @@ fn create_stencil_desc(
     face: &wgt::StencilFaceState,
     read_mask: u32,
     write_mask: u32,
-) -> mtl::StencilDescriptor {
-    let desc = mtl::StencilDescriptor::new();
+) -> metal::StencilDescriptor {
+    let desc = metal::StencilDescriptor::new();
     desc.set_stencil_compare_function(conv::map_compare_function(face.compare));
     desc.set_read_mask(read_mask);
     desc.set_write_mask(write_mask);
@@ -35,8 +45,8 @@ fn create_stencil_desc(
     desc
 }
 
-fn create_depth_stencil_desc(state: &wgt::DepthStencilState) -> mtl::DepthStencilDescriptor {
-    let desc = mtl::DepthStencilDescriptor::new();
+fn create_depth_stencil_desc(state: &wgt::DepthStencilState) -> metal::DepthStencilDescriptor {
+    let desc = metal::DepthStencilDescriptor::new();
     desc.set_depth_compare_function(conv::map_compare_function(state.depth_compare));
     desc.set_depth_write_enabled(state.depth_write_enabled);
     let s = &state.stencil;
@@ -54,13 +64,13 @@ impl super::Device {
         &self,
         stage: &crate::ProgrammableStage<super::Api>,
         layout: &super::PipelineLayout,
-        primitive_class: mtl::MTLPrimitiveTopologyClass,
+        primitive_class: metal::MTLPrimitiveTopologyClass,
         naga_stage: naga::ShaderStage,
     ) -> Result<CompiledShader, crate::PipelineError> {
         let stage_bit = map_naga_stage(naga_stage);
         let pipeline_options = naga::back::msl::PipelineOptions {
             allow_point_size: match primitive_class {
-                mtl::MTLPrimitiveTopologyClass::Point => true,
+                metal::MTLPrimitiveTopologyClass::Point => true,
                 _ => false,
             },
         };
@@ -81,7 +91,7 @@ impl super::Device {
             &source
         );
 
-        let options = mtl::CompileOptions::new();
+        let options = metal::CompileOptions::new();
         options.set_language_version(self.shared.private_caps.msl_version);
 
         if self.shared.private_caps.supports_preserve_invariance {
@@ -107,7 +117,7 @@ impl super::Device {
         let name = info.entry_point_names[ep_index]
             .as_ref()
             .map_err(|e| crate::PipelineError::Linkage(stage_bit, format!("{}", e)))?;
-        let wg_size = mtl::MTLSize {
+        let wg_size = metal::MTLSize {
             width: ep.workgroup_size[0] as _,
             height: ep.workgroup_size[1] as _,
             depth: ep.workgroup_size[2] as _,
@@ -178,7 +188,7 @@ impl super::Device {
     }
 
     fn set_buffers_mutability(
-        buffers: &mtl::PipelineBufferDescriptorArrayRef,
+        buffers: &metal::PipelineBufferDescriptorArrayRef,
         mut immutable_mask: usize,
     ) {
         while immutable_mask != 0 {
@@ -187,21 +197,21 @@ impl super::Device {
             buffers
                 .object_at(slot as u64)
                 .unwrap()
-                .set_mutability(mtl::MTLMutability::Immutable);
+                .set_mutability(metal::MTLMutability::Immutable);
         }
     }
 
     pub unsafe fn texture_from_raw(
-        raw: mtl::Texture,
-        raw_format: mtl::MTLPixelFormat,
-        raw_type: mtl::MTLTextureType,
+        raw: metal::Texture,
+        format: wgt::TextureFormat,
+        raw_type: metal::MTLTextureType,
         array_layers: u32,
         mip_levels: u32,
         copy_size: crate::CopyExtent,
     ) -> super::Texture {
         super::Texture {
             raw,
-            raw_format,
+            format,
             raw_type,
             array_layers,
             mip_levels,
@@ -209,7 +219,14 @@ impl super::Device {
         }
     }
 
-    pub fn raw_device(&self) -> &Mutex<mtl::Device> {
+    pub unsafe fn device_from_raw(raw: metal::Device, features: wgt::Features) -> super::Device {
+        super::Device {
+            shared: Arc::new(super::AdapterShared::new(raw)),
+            features,
+        }
+    }
+
+    pub fn raw_device(&self) -> &Mutex<metal::Device> {
         &self.shared.device
     }
 }
@@ -221,27 +238,29 @@ impl crate::Device<super::Api> for super::Device {
         let map_read = desc.usage.contains(crate::BufferUses::MAP_READ);
         let map_write = desc.usage.contains(crate::BufferUses::MAP_WRITE);
 
-        let mut options = mtl::MTLResourceOptions::empty();
+        let mut options = metal::MTLResourceOptions::empty();
         options |= if map_read || map_write {
             // `crate::MemoryFlags::PREFER_COHERENT` is ignored here
-            mtl::MTLResourceOptions::StorageModeShared
+            metal::MTLResourceOptions::StorageModeShared
         } else {
-            mtl::MTLResourceOptions::StorageModePrivate
+            metal::MTLResourceOptions::StorageModePrivate
         };
         options.set(
-            mtl::MTLResourceOptions::CPUCacheModeWriteCombined,
+            metal::MTLResourceOptions::CPUCacheModeWriteCombined,
             map_write,
         );
 
         //TODO: HazardTrackingModeUntracked
 
-        let raw = self.shared.device.lock().new_buffer(desc.size, options);
-        if let Some(label) = desc.label {
-            raw.set_label(label);
-        }
-        Ok(super::Buffer {
-            raw,
-            size: desc.size,
+        objc::rc::autoreleasepool(|| {
+            let raw = self.shared.device.lock().new_buffer(desc.size, options);
+            if let Some(label) = desc.label {
+                raw.set_label(label);
+            }
+            Ok(super::Buffer {
+                raw,
+                size: desc.size,
+            })
         })
     }
     unsafe fn destroy_buffer(&self, _buffer: super::Buffer) {}
@@ -254,7 +273,7 @@ impl crate::Device<super::Api> for super::Device {
         let ptr = buffer.raw.contents() as *mut u8;
         assert!(!ptr.is_null());
         Ok(crate::BufferMapping {
-            ptr: ptr::NonNull::new(ptr.offset(range.start as isize)).unwrap(),
+            ptr: ptr::NonNull::new(unsafe { ptr.offset(range.start as isize) }).unwrap(),
             is_coherent: true,
         })
     }
@@ -269,63 +288,56 @@ impl crate::Device<super::Api> for super::Device {
         &self,
         desc: &crate::TextureDescriptor,
     ) -> DeviceResult<super::Texture> {
+        use foreign_types::ForeignTypeRef;
+
         let mtl_format = self.shared.private_caps.map_format(desc.format);
 
-        let descriptor = mtl::TextureDescriptor::new();
-        let mut array_layers = desc.size.depth_or_array_layers;
-        let mut copy_size = crate::CopyExtent {
-            width: desc.size.width,
-            height: desc.size.height,
-            depth: 1,
-        };
-        let mtl_type = match desc.dimension {
-            wgt::TextureDimension::D1 => {
-                if desc.size.depth_or_array_layers > 1 {
-                    descriptor.set_array_length(desc.size.depth_or_array_layers as u64);
-                    mtl::MTLTextureType::D1Array
-                } else {
-                    mtl::MTLTextureType::D1
+        objc::rc::autoreleasepool(|| {
+            let descriptor = metal::TextureDescriptor::new();
+
+            let mtl_type = match desc.dimension {
+                wgt::TextureDimension::D1 => metal::MTLTextureType::D1,
+                wgt::TextureDimension::D2 => {
+                    if desc.sample_count > 1 {
+                        descriptor.set_sample_count(desc.sample_count as u64);
+                        metal::MTLTextureType::D2Multisample
+                    } else if desc.size.depth_or_array_layers > 1 {
+                        descriptor.set_array_length(desc.size.depth_or_array_layers as u64);
+                        metal::MTLTextureType::D2Array
+                    } else {
+                        metal::MTLTextureType::D2
+                    }
                 }
-            }
-            wgt::TextureDimension::D2 => {
-                if desc.sample_count > 1 {
-                    descriptor.set_sample_count(desc.sample_count as u64);
-                    mtl::MTLTextureType::D2Multisample
-                } else if desc.size.depth_or_array_layers > 1 {
-                    descriptor.set_array_length(desc.size.depth_or_array_layers as u64);
-                    mtl::MTLTextureType::D2Array
-                } else {
-                    mtl::MTLTextureType::D2
+                wgt::TextureDimension::D3 => {
+                    descriptor.set_depth(desc.size.depth_or_array_layers as u64);
+                    metal::MTLTextureType::D3
                 }
+            };
+
+            descriptor.set_texture_type(mtl_type);
+            descriptor.set_width(desc.size.width as u64);
+            descriptor.set_height(desc.size.height as u64);
+            descriptor.set_mipmap_level_count(desc.mip_level_count as u64);
+            descriptor.set_pixel_format(mtl_format);
+            descriptor.set_usage(conv::map_texture_usage(desc.format, desc.usage));
+            descriptor.set_storage_mode(metal::MTLStorageMode::Private);
+
+            let raw = self.shared.device.lock().new_texture(&descriptor);
+            if raw.as_ptr().is_null() {
+                return Err(crate::DeviceError::OutOfMemory);
             }
-            wgt::TextureDimension::D3 => {
-                descriptor.set_depth(desc.size.depth_or_array_layers as u64);
-                array_layers = 1;
-                copy_size.depth = desc.size.depth_or_array_layers;
-                mtl::MTLTextureType::D3
+            if let Some(label) = desc.label {
+                raw.set_label(label);
             }
-        };
 
-        descriptor.set_texture_type(mtl_type);
-        descriptor.set_width(desc.size.width as u64);
-        descriptor.set_height(desc.size.height as u64);
-        descriptor.set_mipmap_level_count(desc.mip_level_count as u64);
-        descriptor.set_pixel_format(mtl_format);
-        descriptor.set_usage(conv::map_texture_usage(desc.usage));
-        descriptor.set_storage_mode(mtl::MTLStorageMode::Private);
-
-        let raw = self.shared.device.lock().new_texture(&descriptor);
-        if let Some(label) = desc.label {
-            raw.set_label(label);
-        }
-
-        Ok(super::Texture {
-            raw,
-            raw_format: mtl_format,
-            raw_type: mtl_type,
-            mip_levels: desc.mip_level_count,
-            array_layers,
-            copy_size,
+            Ok(super::Texture {
+                raw,
+                format: desc.format,
+                raw_type: mtl_type,
+                mip_levels: desc.mip_level_count,
+                array_layers: desc.array_layer_count(),
+                copy_size: desc.copy_extent(),
+            })
         })
     }
 
@@ -336,54 +348,59 @@ impl crate::Device<super::Api> for super::Device {
         texture: &super::Texture,
         desc: &crate::TextureViewDescriptor,
     ) -> DeviceResult<super::TextureView> {
-        let raw_format = self.shared.private_caps.map_format(desc.format);
-
-        let raw_type = if texture.raw_type == mtl::MTLTextureType::D2Multisample {
+        let raw_type = if texture.raw_type == metal::MTLTextureType::D2Multisample {
             texture.raw_type
         } else {
             conv::map_texture_view_dimension(desc.dimension)
         };
 
-        //Note: this doesn't check properly if the mipmap level count or array layer count
-        // is explicitly set to 1.
-        let raw = if raw_format == texture.raw_format
-            && raw_type == texture.raw_type
-            && desc.range == wgt::ImageSubresourceRange::default()
-        {
+        let aspects = crate::FormatAspects::new(desc.format, desc.range.aspect);
+
+        let raw_format = self
+            .shared
+            .private_caps
+            .map_view_format(desc.format, aspects);
+
+        let format_equal = raw_format == self.shared.private_caps.map_format(texture.format);
+        let type_equal = raw_type == texture.raw_type;
+        let range_full_resource =
+            desc.range
+                .is_full_resource(desc.format, texture.mip_levels, texture.array_layers);
+
+        let raw = if format_equal && type_equal && range_full_resource {
             // Some images are marked as framebuffer-only, and we can't create aliases of them.
             // Also helps working around Metal bugs with aliased array textures.
             texture.raw.to_owned()
         } else {
-            let mip_level_count = match desc.range.mip_level_count {
-                Some(count) => count.get(),
-                None => texture.mip_levels - desc.range.base_mip_level,
-            };
-            let array_layer_count = match desc.range.array_layer_count {
-                Some(count) => count.get(),
-                None => texture.array_layers - desc.range.base_array_layer,
-            };
+            let mip_level_count = desc
+                .range
+                .mip_level_count
+                .unwrap_or(texture.mip_levels - desc.range.base_mip_level);
+            let array_layer_count = desc
+                .range
+                .array_layer_count
+                .unwrap_or(texture.array_layers - desc.range.base_array_layer);
 
-            let raw = texture.raw.new_texture_view_from_slice(
-                raw_format,
-                raw_type,
-                mtl::NSRange {
-                    location: desc.range.base_mip_level as _,
-                    length: mip_level_count as _,
-                },
-                mtl::NSRange {
-                    location: desc.range.base_array_layer as _,
-                    length: array_layer_count as _,
-                },
-            );
-            if let Some(label) = desc.label {
-                objc::rc::autoreleasepool(|| {
+            objc::rc::autoreleasepool(|| {
+                let raw = texture.raw.new_texture_view_from_slice(
+                    raw_format,
+                    raw_type,
+                    metal::NSRange {
+                        location: desc.range.base_mip_level as _,
+                        length: mip_level_count as _,
+                    },
+                    metal::NSRange {
+                        location: desc.range.base_array_layer as _,
+                        length: array_layer_count as _,
+                    },
+                );
+                if let Some(label) = desc.label {
                     raw.set_label(label);
-                });
-            }
-            raw
+                }
+                raw
+            })
         };
 
-        let aspects = crate::FormatAspects::from(desc.format);
         Ok(super::TextureView { raw, aspects })
     }
     unsafe fn destroy_texture_view(&self, _view: super::TextureView) {}
@@ -393,64 +410,66 @@ impl crate::Device<super::Api> for super::Device {
         desc: &crate::SamplerDescriptor,
     ) -> DeviceResult<super::Sampler> {
         let caps = &self.shared.private_caps;
-        let descriptor = mtl::SamplerDescriptor::new();
+        objc::rc::autoreleasepool(|| {
+            let descriptor = metal::SamplerDescriptor::new();
 
-        descriptor.set_min_filter(conv::map_filter_mode(desc.min_filter));
-        descriptor.set_mag_filter(conv::map_filter_mode(desc.mag_filter));
-        descriptor.set_mip_filter(match desc.mipmap_filter {
-            wgt::FilterMode::Nearest if desc.lod_clamp.is_none() => {
-                mtl::MTLSamplerMipFilter::NotMipmapped
+            descriptor.set_min_filter(conv::map_filter_mode(desc.min_filter));
+            descriptor.set_mag_filter(conv::map_filter_mode(desc.mag_filter));
+            descriptor.set_mip_filter(match desc.mipmap_filter {
+                wgt::FilterMode::Nearest if desc.lod_clamp.is_none() => {
+                    metal::MTLSamplerMipFilter::NotMipmapped
+                }
+                wgt::FilterMode::Nearest => metal::MTLSamplerMipFilter::Nearest,
+                wgt::FilterMode::Linear => metal::MTLSamplerMipFilter::Linear,
+            });
+
+            let [s, t, r] = desc.address_modes;
+            descriptor.set_address_mode_s(conv::map_address_mode(s));
+            descriptor.set_address_mode_t(conv::map_address_mode(t));
+            descriptor.set_address_mode_r(conv::map_address_mode(r));
+
+            if let Some(aniso) = desc.anisotropy_clamp {
+                descriptor.set_max_anisotropy(aniso.get() as _);
             }
-            wgt::FilterMode::Nearest => mtl::MTLSamplerMipFilter::Nearest,
-            wgt::FilterMode::Linear => mtl::MTLSamplerMipFilter::Linear,
-        });
 
-        let [s, t, r] = desc.address_modes;
-        descriptor.set_address_mode_s(conv::map_address_mode(s));
-        descriptor.set_address_mode_t(conv::map_address_mode(t));
-        descriptor.set_address_mode_r(conv::map_address_mode(r));
-
-        if let Some(aniso) = desc.anisotropy_clamp {
-            descriptor.set_max_anisotropy(aniso.get() as _);
-        }
-
-        if let Some(ref range) = desc.lod_clamp {
-            descriptor.set_lod_min_clamp(range.start);
-            descriptor.set_lod_max_clamp(range.end);
-        }
-
-        if caps.sampler_lod_average {
-            descriptor.set_lod_average(true); // optimization
-        }
-
-        if let Some(fun) = desc.compare {
-            descriptor.set_compare_function(conv::map_compare_function(fun));
-        }
-
-        if let Some(border_color) = desc.border_color {
-            if let wgt::SamplerBorderColor::Zero = border_color {
-                if s == wgt::AddressMode::ClampToBorder {
-                    descriptor.set_address_mode_s(mtl::MTLSamplerAddressMode::ClampToZero);
-                }
-
-                if t == wgt::AddressMode::ClampToBorder {
-                    descriptor.set_address_mode_t(mtl::MTLSamplerAddressMode::ClampToZero);
-                }
-
-                if r == wgt::AddressMode::ClampToBorder {
-                    descriptor.set_address_mode_r(mtl::MTLSamplerAddressMode::ClampToZero);
-                }
-            } else {
-                descriptor.set_border_color(conv::map_border_color(border_color));
+            if let Some(ref range) = desc.lod_clamp {
+                descriptor.set_lod_min_clamp(range.start);
+                descriptor.set_lod_max_clamp(range.end);
             }
-        }
 
-        if let Some(label) = desc.label {
-            descriptor.set_label(label);
-        }
-        let raw = self.shared.device.lock().new_sampler(&descriptor);
+            if caps.sampler_lod_average {
+                descriptor.set_lod_average(true); // optimization
+            }
 
-        Ok(super::Sampler { raw })
+            if let Some(fun) = desc.compare {
+                descriptor.set_compare_function(conv::map_compare_function(fun));
+            }
+
+            if let Some(border_color) = desc.border_color {
+                if let wgt::SamplerBorderColor::Zero = border_color {
+                    if s == wgt::AddressMode::ClampToBorder {
+                        descriptor.set_address_mode_s(metal::MTLSamplerAddressMode::ClampToZero);
+                    }
+
+                    if t == wgt::AddressMode::ClampToBorder {
+                        descriptor.set_address_mode_t(metal::MTLSamplerAddressMode::ClampToZero);
+                    }
+
+                    if r == wgt::AddressMode::ClampToBorder {
+                        descriptor.set_address_mode_r(metal::MTLSamplerAddressMode::ClampToZero);
+                    }
+                } else {
+                    descriptor.set_border_color(conv::map_border_color(border_color));
+                }
+            }
+
+            if let Some(label) = desc.label {
+                descriptor.set_label(label);
+            }
+            let raw = self.shared.device.lock().new_sampler(&descriptor);
+
+            Ok(super::Sampler { raw })
+        })
     }
     unsafe fn destroy_sampler(&self, _sampler: super::Sampler) {}
 
@@ -534,30 +553,17 @@ impl crate::Device<super::Api> for super::Device {
         // Second, place the described resources
         for (group_index, &bgl) in desc.bind_group_layouts.iter().enumerate() {
             // remember where the resources for this set start at each shader stage
-            let mut dynamic_buffers = Vec::new();
             let base_resource_indices = stage_data.map(|info| info.counters.clone());
 
             for entry in bgl.entries.iter() {
                 if let wgt::BindingType::Buffer {
-                    ty,
-                    has_dynamic_offset,
-                    min_binding_size: _,
+                    ty: wgt::BufferBindingType::Storage { .. },
+                    ..
                 } = entry.ty
                 {
-                    if has_dynamic_offset {
-                        dynamic_buffers.push(stage_data.map(|info| {
-                            if entry.visibility.contains(map_naga_stage(info.stage)) {
-                                info.counters.buffers
-                            } else {
-                                !0
-                            }
-                        }));
-                    }
-                    if let wgt::BufferBindingType::Storage { .. } = ty {
-                        for info in stage_data.iter_mut() {
-                            if entry.visibility.contains(map_naga_stage(info.stage)) {
-                                info.sizes_count += 1;
-                            }
+                    for info in stage_data.iter_mut() {
+                        if entry.visibility.contains(map_naga_stage(info.stage)) {
+                            info.sizes_count += 1;
                         }
                     }
                 }
@@ -649,14 +655,14 @@ impl crate::Device<super::Api> for super::Device {
             total_counters: stage_data.map(|info| info.counters.clone()),
             naga_options: naga::back::msl::Options {
                 lang_version: match self.shared.private_caps.msl_version {
-                    mtl::MTLLanguageVersion::V1_0 => (1, 0),
-                    mtl::MTLLanguageVersion::V1_1 => (1, 1),
-                    mtl::MTLLanguageVersion::V1_2 => (1, 2),
-                    mtl::MTLLanguageVersion::V2_0 => (2, 0),
-                    mtl::MTLLanguageVersion::V2_1 => (2, 1),
-                    mtl::MTLLanguageVersion::V2_2 => (2, 2),
-                    mtl::MTLLanguageVersion::V2_3 => (2, 3),
-                    mtl::MTLLanguageVersion::V2_4 => (2, 4),
+                    metal::MTLLanguageVersion::V1_0 => (1, 0),
+                    metal::MTLLanguageVersion::V1_1 => (1, 1),
+                    metal::MTLLanguageVersion::V1_2 => (1, 2),
+                    metal::MTLLanguageVersion::V2_0 => (2, 0),
+                    metal::MTLLanguageVersion::V2_1 => (2, 1),
+                    metal::MTLLanguageVersion::V2_2 => (2, 2),
+                    metal::MTLLanguageVersion::V2_3 => (2, 3),
+                    metal::MTLLanguageVersion::V2_4 => (2, 4),
                 },
                 inline_samplers: Default::default(),
                 spirv_cross_compatibility: false,
@@ -682,6 +688,7 @@ impl crate::Device<super::Api> for super::Device {
                     // TODO: support bounds checks on binding arrays
                     binding_array: naga::proc::BoundsCheckPolicy::Unchecked,
                 },
+                zero_initialize_workgroup_memory: true,
             },
             total_push_constants,
         })
@@ -718,6 +725,8 @@ impl crate::Device<super::Api> for super::Device {
                         let end = start + size as usize;
                         bg.buffers
                             .extend(desc.buffers[start..end].iter().map(|source| {
+                                // Given the restrictions on `BufferBinding::offset`,
+                                // this should never be `None`.
                                 let remaining_size =
                                     wgt::BufferSize::new(source.buffer.size - source.offset);
                                 let binding_size = match ty {
@@ -784,201 +793,205 @@ impl crate::Device<super::Api> for super::Device {
         &self,
         desc: &crate::RenderPipelineDescriptor<super::Api>,
     ) -> Result<super::RenderPipeline, crate::PipelineError> {
-        let descriptor = mtl::RenderPipelineDescriptor::new();
+        objc::rc::autoreleasepool(|| {
+            let descriptor = metal::RenderPipelineDescriptor::new();
 
-        let raw_triangle_fill_mode = match desc.primitive.polygon_mode {
-            wgt::PolygonMode::Fill => mtl::MTLTriangleFillMode::Fill,
-            wgt::PolygonMode::Line => mtl::MTLTriangleFillMode::Lines,
-            wgt::PolygonMode::Point => panic!(
-                "{:?} is not enabled for this backend",
-                wgt::Features::POLYGON_MODE_POINT
-            ),
-        };
-
-        let (primitive_class, raw_primitive_type) =
-            conv::map_primitive_topology(desc.primitive.topology);
-
-        let vs = self.load_shader(
-            &desc.vertex_stage,
-            desc.layout,
-            primitive_class,
-            naga::ShaderStage::Vertex,
-        )?;
-
-        descriptor.set_vertex_function(Some(&vs.function));
-        if self.shared.private_caps.supports_mutability {
-            Self::set_buffers_mutability(
-                descriptor.vertex_buffers().unwrap(),
-                vs.immutable_buffer_mask,
-            );
-        }
-
-        // Fragment shader
-        let (fs_lib, fs_sized_bindings) = match desc.fragment_stage {
-            Some(ref stage) => {
-                let fs = self.load_shader(
-                    stage,
-                    desc.layout,
-                    primitive_class,
-                    naga::ShaderStage::Fragment,
-                )?;
-                descriptor.set_fragment_function(Some(&fs.function));
-                if self.shared.private_caps.supports_mutability {
-                    Self::set_buffers_mutability(
-                        descriptor.fragment_buffers().unwrap(),
-                        fs.immutable_buffer_mask,
-                    );
-                }
-                (Some(fs.library), fs.sized_bindings)
-            }
-            None => {
-                // TODO: This is a workaround for what appears to be a Metal validation bug
-                // A pixel format is required even though no attachments are provided
-                if desc.color_targets.is_empty() && desc.depth_stencil.is_none() {
-                    descriptor.set_depth_attachment_pixel_format(mtl::MTLPixelFormat::Depth32Float);
-                }
-                (None, Vec::new())
-            }
-        };
-
-        for (i, ct) in desc.color_targets.iter().enumerate() {
-            let at_descriptor = descriptor.color_attachments().object_at(i as u64).unwrap();
-            let ct = if let Some(color_target) = ct.as_ref() {
-                color_target
-            } else {
-                at_descriptor.set_pixel_format(mtl::MTLPixelFormat::Invalid);
-                continue;
+            let raw_triangle_fill_mode = match desc.primitive.polygon_mode {
+                wgt::PolygonMode::Fill => metal::MTLTriangleFillMode::Fill,
+                wgt::PolygonMode::Line => metal::MTLTriangleFillMode::Lines,
+                wgt::PolygonMode::Point => panic!(
+                    "{:?} is not enabled for this backend",
+                    wgt::Features::POLYGON_MODE_POINT
+                ),
             };
 
-            let raw_format = self.shared.private_caps.map_format(ct.format);
-            at_descriptor.set_pixel_format(raw_format);
-            at_descriptor.set_write_mask(conv::map_color_write(ct.write_mask));
+            let (primitive_class, raw_primitive_type) =
+                conv::map_primitive_topology(desc.primitive.topology);
 
-            if let Some(ref blend) = ct.blend {
-                at_descriptor.set_blending_enabled(true);
-                let (color_op, color_src, color_dst) = conv::map_blend_component(&blend.color);
-                let (alpha_op, alpha_src, alpha_dst) = conv::map_blend_component(&blend.alpha);
+            let vs = self.load_shader(
+                &desc.vertex_stage,
+                desc.layout,
+                primitive_class,
+                naga::ShaderStage::Vertex,
+            )?;
 
-                at_descriptor.set_rgb_blend_operation(color_op);
-                at_descriptor.set_source_rgb_blend_factor(color_src);
-                at_descriptor.set_destination_rgb_blend_factor(color_dst);
-
-                at_descriptor.set_alpha_blend_operation(alpha_op);
-                at_descriptor.set_source_alpha_blend_factor(alpha_src);
-                at_descriptor.set_destination_alpha_blend_factor(alpha_dst);
+            descriptor.set_vertex_function(Some(&vs.function));
+            if self.shared.private_caps.supports_mutability {
+                Self::set_buffers_mutability(
+                    descriptor.vertex_buffers().unwrap(),
+                    vs.immutable_buffer_mask,
+                );
             }
-        }
 
-        let depth_stencil = match desc.depth_stencil {
-            Some(ref ds) => {
-                let raw_format = self.shared.private_caps.map_format(ds.format);
-                let aspects = crate::FormatAspects::from(ds.format);
-                if aspects.contains(crate::FormatAspects::DEPTH) {
-                    descriptor.set_depth_attachment_pixel_format(raw_format);
+            // Fragment shader
+            let (fs_lib, fs_sized_bindings) = match desc.fragment_stage {
+                Some(ref stage) => {
+                    let fs = self.load_shader(
+                        stage,
+                        desc.layout,
+                        primitive_class,
+                        naga::ShaderStage::Fragment,
+                    )?;
+                    descriptor.set_fragment_function(Some(&fs.function));
+                    if self.shared.private_caps.supports_mutability {
+                        Self::set_buffers_mutability(
+                            descriptor.fragment_buffers().unwrap(),
+                            fs.immutable_buffer_mask,
+                        );
+                    }
+                    (Some(fs.library), fs.sized_bindings)
                 }
-                if aspects.contains(crate::FormatAspects::STENCIL) {
-                    descriptor.set_stencil_attachment_pixel_format(raw_format);
+                None => {
+                    // TODO: This is a workaround for what appears to be a Metal validation bug
+                    // A pixel format is required even though no attachments are provided
+                    if desc.color_targets.is_empty() && desc.depth_stencil.is_none() {
+                        descriptor
+                            .set_depth_attachment_pixel_format(metal::MTLPixelFormat::Depth32Float);
+                    }
+                    (None, Vec::new())
                 }
+            };
 
-                let ds_descriptor = create_depth_stencil_desc(ds);
-                let raw = self
-                    .shared
-                    .device
-                    .lock()
-                    .new_depth_stencil_state(&ds_descriptor);
-                Some((raw, ds.bias))
-            }
-            None => None,
-        };
-
-        if desc.layout.total_counters.vs.buffers + (desc.vertex_buffers.len() as u32)
-            > self.shared.private_caps.max_vertex_buffers
-        {
-            let msg = format!(
-                "pipeline needs too many buffers in the vertex stage: {} vertex and {} layout",
-                desc.vertex_buffers.len(),
-                desc.layout.total_counters.vs.buffers
-            );
-            return Err(crate::PipelineError::Linkage(
-                wgt::ShaderStages::VERTEX,
-                msg,
-            ));
-        }
-
-        if !desc.vertex_buffers.is_empty() {
-            let vertex_descriptor = mtl::VertexDescriptor::new();
-            for (i, vb) in desc.vertex_buffers.iter().enumerate() {
-                let buffer_index =
-                    self.shared.private_caps.max_vertex_buffers as u64 - 1 - i as u64;
-                let buffer_desc = vertex_descriptor.layouts().object_at(buffer_index).unwrap();
-
-                buffer_desc.set_stride(vb.array_stride);
-                buffer_desc.set_step_function(conv::map_step_mode(vb.step_mode));
-
-                for at in vb.attributes {
-                    let attribute_desc = vertex_descriptor
-                        .attributes()
-                        .object_at(at.shader_location as u64)
-                        .unwrap();
-                    attribute_desc.set_format(conv::map_vertex_format(at.format));
-                    attribute_desc.set_buffer_index(buffer_index);
-                    attribute_desc.set_offset(at.offset);
-                }
-            }
-            descriptor.set_vertex_descriptor(Some(vertex_descriptor));
-        }
-
-        if desc.multisample.count != 1 {
-            //TODO: handle sample mask
-            descriptor.set_sample_count(desc.multisample.count as u64);
-            descriptor.set_alpha_to_coverage_enabled(desc.multisample.alpha_to_coverage_enabled);
-            //descriptor.set_alpha_to_one_enabled(desc.multisample.alpha_to_one_enabled);
-        }
-
-        if let Some(name) = desc.label {
-            descriptor.set_label(name);
-        }
-
-        let raw = self
-            .shared
-            .device
-            .lock()
-            .new_render_pipeline_state(&descriptor)
-            .map_err(|e| {
-                crate::PipelineError::Linkage(
-                    wgt::ShaderStages::VERTEX | wgt::ShaderStages::FRAGMENT,
-                    format!("new_render_pipeline_state: {:?}", e),
-                )
-            })?;
-
-        Ok(super::RenderPipeline {
-            raw,
-            vs_lib: vs.library,
-            fs_lib,
-            vs_info: super::PipelineStageInfo {
-                push_constants: desc.layout.push_constants_infos.vs,
-                sizes_slot: desc.layout.naga_options.per_stage_map.vs.sizes_buffer,
-                sized_bindings: vs.sized_bindings,
-            },
-            fs_info: super::PipelineStageInfo {
-                push_constants: desc.layout.push_constants_infos.fs,
-                sizes_slot: desc.layout.naga_options.per_stage_map.fs.sizes_buffer,
-                sized_bindings: fs_sized_bindings,
-            },
-            raw_primitive_type,
-            raw_triangle_fill_mode,
-            raw_front_winding: conv::map_winding(desc.primitive.front_face),
-            raw_cull_mode: conv::map_cull_mode(desc.primitive.cull_mode),
-            raw_depth_clip_mode: if self.features.contains(wgt::Features::DEPTH_CLIP_CONTROL) {
-                Some(if desc.primitive.unclipped_depth {
-                    mtl::MTLDepthClipMode::Clamp
+            for (i, ct) in desc.color_targets.iter().enumerate() {
+                let at_descriptor = descriptor.color_attachments().object_at(i as u64).unwrap();
+                let ct = if let Some(color_target) = ct.as_ref() {
+                    color_target
                 } else {
-                    mtl::MTLDepthClipMode::Clip
-                })
-            } else {
-                None
-            },
-            depth_stencil,
+                    at_descriptor.set_pixel_format(metal::MTLPixelFormat::Invalid);
+                    continue;
+                };
+
+                let raw_format = self.shared.private_caps.map_format(ct.format);
+                at_descriptor.set_pixel_format(raw_format);
+                at_descriptor.set_write_mask(conv::map_color_write(ct.write_mask));
+
+                if let Some(ref blend) = ct.blend {
+                    at_descriptor.set_blending_enabled(true);
+                    let (color_op, color_src, color_dst) = conv::map_blend_component(&blend.color);
+                    let (alpha_op, alpha_src, alpha_dst) = conv::map_blend_component(&blend.alpha);
+
+                    at_descriptor.set_rgb_blend_operation(color_op);
+                    at_descriptor.set_source_rgb_blend_factor(color_src);
+                    at_descriptor.set_destination_rgb_blend_factor(color_dst);
+
+                    at_descriptor.set_alpha_blend_operation(alpha_op);
+                    at_descriptor.set_source_alpha_blend_factor(alpha_src);
+                    at_descriptor.set_destination_alpha_blend_factor(alpha_dst);
+                }
+            }
+
+            let depth_stencil = match desc.depth_stencil {
+                Some(ref ds) => {
+                    let raw_format = self.shared.private_caps.map_format(ds.format);
+                    let aspects = crate::FormatAspects::from(ds.format);
+                    if aspects.contains(crate::FormatAspects::DEPTH) {
+                        descriptor.set_depth_attachment_pixel_format(raw_format);
+                    }
+                    if aspects.contains(crate::FormatAspects::STENCIL) {
+                        descriptor.set_stencil_attachment_pixel_format(raw_format);
+                    }
+
+                    let ds_descriptor = create_depth_stencil_desc(ds);
+                    let raw = self
+                        .shared
+                        .device
+                        .lock()
+                        .new_depth_stencil_state(&ds_descriptor);
+                    Some((raw, ds.bias))
+                }
+                None => None,
+            };
+
+            if desc.layout.total_counters.vs.buffers + (desc.vertex_buffers.len() as u32)
+                > self.shared.private_caps.max_vertex_buffers
+            {
+                let msg = format!(
+                    "pipeline needs too many buffers in the vertex stage: {} vertex and {} layout",
+                    desc.vertex_buffers.len(),
+                    desc.layout.total_counters.vs.buffers
+                );
+                return Err(crate::PipelineError::Linkage(
+                    wgt::ShaderStages::VERTEX,
+                    msg,
+                ));
+            }
+
+            if !desc.vertex_buffers.is_empty() {
+                let vertex_descriptor = metal::VertexDescriptor::new();
+                for (i, vb) in desc.vertex_buffers.iter().enumerate() {
+                    let buffer_index =
+                        self.shared.private_caps.max_vertex_buffers as u64 - 1 - i as u64;
+                    let buffer_desc = vertex_descriptor.layouts().object_at(buffer_index).unwrap();
+
+                    buffer_desc.set_stride(vb.array_stride);
+                    buffer_desc.set_step_function(conv::map_step_mode(vb.step_mode));
+
+                    for at in vb.attributes {
+                        let attribute_desc = vertex_descriptor
+                            .attributes()
+                            .object_at(at.shader_location as u64)
+                            .unwrap();
+                        attribute_desc.set_format(conv::map_vertex_format(at.format));
+                        attribute_desc.set_buffer_index(buffer_index);
+                        attribute_desc.set_offset(at.offset);
+                    }
+                }
+                descriptor.set_vertex_descriptor(Some(vertex_descriptor));
+            }
+
+            if desc.multisample.count != 1 {
+                //TODO: handle sample mask
+                descriptor.set_sample_count(desc.multisample.count as u64);
+                descriptor
+                    .set_alpha_to_coverage_enabled(desc.multisample.alpha_to_coverage_enabled);
+                //descriptor.set_alpha_to_one_enabled(desc.multisample.alpha_to_one_enabled);
+            }
+
+            if let Some(name) = desc.label {
+                descriptor.set_label(name);
+            }
+
+            let raw = self
+                .shared
+                .device
+                .lock()
+                .new_render_pipeline_state(&descriptor)
+                .map_err(|e| {
+                    crate::PipelineError::Linkage(
+                        wgt::ShaderStages::VERTEX | wgt::ShaderStages::FRAGMENT,
+                        format!("new_render_pipeline_state: {:?}", e),
+                    )
+                })?;
+
+            Ok(super::RenderPipeline {
+                raw,
+                vs_lib: vs.library,
+                fs_lib,
+                vs_info: super::PipelineStageInfo {
+                    push_constants: desc.layout.push_constants_infos.vs,
+                    sizes_slot: desc.layout.naga_options.per_stage_map.vs.sizes_buffer,
+                    sized_bindings: vs.sized_bindings,
+                },
+                fs_info: super::PipelineStageInfo {
+                    push_constants: desc.layout.push_constants_infos.fs,
+                    sizes_slot: desc.layout.naga_options.per_stage_map.fs.sizes_buffer,
+                    sized_bindings: fs_sized_bindings,
+                },
+                raw_primitive_type,
+                raw_triangle_fill_mode,
+                raw_front_winding: conv::map_winding(desc.primitive.front_face),
+                raw_cull_mode: conv::map_cull_mode(desc.primitive.cull_mode),
+                raw_depth_clip_mode: if self.features.contains(wgt::Features::DEPTH_CLIP_CONTROL) {
+                    Some(if desc.primitive.unclipped_depth {
+                        metal::MTLDepthClipMode::Clamp
+                    } else {
+                        metal::MTLDepthClipMode::Clip
+                    })
+                } else {
+                    None
+                },
+                depth_stencil,
+            })
         })
     }
     unsafe fn destroy_render_pipeline(&self, _pipeline: super::RenderPipeline) {}
@@ -987,46 +1000,51 @@ impl crate::Device<super::Api> for super::Device {
         &self,
         desc: &crate::ComputePipelineDescriptor<super::Api>,
     ) -> Result<super::ComputePipeline, crate::PipelineError> {
-        let descriptor = mtl::ComputePipelineDescriptor::new();
+        objc::rc::autoreleasepool(|| {
+            let descriptor = metal::ComputePipelineDescriptor::new();
 
-        let cs = self.load_shader(
-            &desc.stage,
-            desc.layout,
-            mtl::MTLPrimitiveTopologyClass::Unspecified,
-            naga::ShaderStage::Compute,
-        )?;
-        descriptor.set_compute_function(Some(&cs.function));
+            let cs = self.load_shader(
+                &desc.stage,
+                desc.layout,
+                metal::MTLPrimitiveTopologyClass::Unspecified,
+                naga::ShaderStage::Compute,
+            )?;
+            descriptor.set_compute_function(Some(&cs.function));
 
-        if self.shared.private_caps.supports_mutability {
-            Self::set_buffers_mutability(descriptor.buffers().unwrap(), cs.immutable_buffer_mask);
-        }
+            if self.shared.private_caps.supports_mutability {
+                Self::set_buffers_mutability(
+                    descriptor.buffers().unwrap(),
+                    cs.immutable_buffer_mask,
+                );
+            }
 
-        if let Some(name) = desc.label {
-            descriptor.set_label(name);
-        }
+            if let Some(name) = desc.label {
+                descriptor.set_label(name);
+            }
 
-        let raw = self
-            .shared
-            .device
-            .lock()
-            .new_compute_pipeline_state(&descriptor)
-            .map_err(|e| {
-                crate::PipelineError::Linkage(
-                    wgt::ShaderStages::COMPUTE,
-                    format!("new_compute_pipeline_state: {:?}", e),
-                )
-            })?;
+            let raw = self
+                .shared
+                .device
+                .lock()
+                .new_compute_pipeline_state(&descriptor)
+                .map_err(|e| {
+                    crate::PipelineError::Linkage(
+                        wgt::ShaderStages::COMPUTE,
+                        format!("new_compute_pipeline_state: {:?}", e),
+                    )
+                })?;
 
-        Ok(super::ComputePipeline {
-            raw,
-            cs_info: super::PipelineStageInfo {
-                push_constants: desc.layout.push_constants_infos.cs,
-                sizes_slot: desc.layout.naga_options.per_stage_map.cs.sizes_buffer,
-                sized_bindings: cs.sized_bindings,
-            },
-            cs_lib: cs.library,
-            work_group_size: cs.wg_size,
-            work_group_memory_sizes: cs.wg_memory_sizes,
+            Ok(super::ComputePipeline {
+                raw,
+                cs_info: super::PipelineStageInfo {
+                    push_constants: desc.layout.push_constants_infos.cs,
+                    sizes_slot: desc.layout.naga_options.per_stage_map.cs.sizes_buffer,
+                    sized_bindings: cs.sized_bindings,
+                },
+                cs_lib: cs.library,
+                work_group_size: cs.wg_size,
+                work_group_memory_sizes: cs.wg_memory_sizes,
+            })
         })
     }
     unsafe fn destroy_compute_pipeline(&self, _pipeline: super::ComputePipeline) {}
@@ -1035,24 +1053,26 @@ impl crate::Device<super::Api> for super::Device {
         &self,
         desc: &wgt::QuerySetDescriptor<crate::Label>,
     ) -> DeviceResult<super::QuerySet> {
-        match desc.ty {
-            wgt::QueryType::Occlusion => {
-                let size = desc.count as u64 * crate::QUERY_SIZE;
-                let options = mtl::MTLResourceOptions::empty();
-                //TODO: HazardTrackingModeUntracked
-                let raw_buffer = self.shared.device.lock().new_buffer(size, options);
-                if let Some(label) = desc.label {
-                    raw_buffer.set_label(label);
+        objc::rc::autoreleasepool(|| {
+            match desc.ty {
+                wgt::QueryType::Occlusion => {
+                    let size = desc.count as u64 * crate::QUERY_SIZE;
+                    let options = metal::MTLResourceOptions::empty();
+                    //TODO: HazardTrackingModeUntracked
+                    let raw_buffer = self.shared.device.lock().new_buffer(size, options);
+                    if let Some(label) = desc.label {
+                        raw_buffer.set_label(label);
+                    }
+                    Ok(super::QuerySet {
+                        raw_buffer,
+                        ty: desc.ty,
+                    })
                 }
-                Ok(super::QuerySet {
-                    raw_buffer,
-                    ty: desc.ty,
-                })
+                wgt::QueryType::Timestamp | wgt::QueryType::PipelineStatistics(_) => {
+                    Err(crate::DeviceError::OutOfMemory)
+                }
             }
-            wgt::QueryType::Timestamp | wgt::QueryType::PipelineStatistics(_) => {
-                Err(crate::DeviceError::OutOfMemory)
-            }
-        }
+        })
     }
     unsafe fn destroy_query_set(&self, _set: super::QuerySet) {}
 
@@ -1066,7 +1086,7 @@ impl crate::Device<super::Api> for super::Device {
     unsafe fn get_fence_value(&self, fence: &super::Fence) -> DeviceResult<crate::FenceValue> {
         let mut max_value = fence.completed_value.load(atomic::Ordering::Acquire);
         for &(value, ref cmd_buf) in fence.pending_command_buffers.iter() {
-            if cmd_buf.status() == mtl::MTLCommandBufferStatus::Completed {
+            if cmd_buf.status() == metal::MTLCommandBufferStatus::Completed {
                 max_value = value;
             }
         }
@@ -1096,7 +1116,7 @@ impl crate::Device<super::Api> for super::Device {
 
         let start = time::Instant::now();
         loop {
-            if let mtl::MTLCommandBufferStatus::Completed = cmd_buf.status() {
+            if let metal::MTLCommandBufferStatus::Completed = cmd_buf.status() {
                 return Ok(true);
             }
             if start.elapsed().as_millis() >= timeout_ms as u128 {
@@ -1111,7 +1131,7 @@ impl crate::Device<super::Api> for super::Device {
             return false;
         }
         let device = self.shared.device.lock();
-        let shared_capture_manager = mtl::CaptureManager::shared();
+        let shared_capture_manager = metal::CaptureManager::shared();
         let default_capture_scope = shared_capture_manager.new_capture_scope_with_device(&device);
         shared_capture_manager.set_default_capture_scope(&default_capture_scope);
         shared_capture_manager.start_capture_with_scope(&default_capture_scope);
@@ -1119,7 +1139,7 @@ impl crate::Device<super::Api> for super::Device {
         true
     }
     unsafe fn stop_capture(&self) {
-        let shared_capture_manager = mtl::CaptureManager::shared();
+        let shared_capture_manager = metal::CaptureManager::shared();
         if let Some(default_capture_scope) = shared_capture_manager.default_capture_scope() {
             default_capture_scope.end_scope();
         }

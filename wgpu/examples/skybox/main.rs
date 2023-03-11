@@ -85,6 +85,7 @@ impl Skybox {
             format: Self::DEPTH_FORMAT,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             label: None,
+            view_formats: &[],
         });
 
         depth_texture.create_view(&wgpu::TextureViewDescriptor::default())
@@ -93,7 +94,7 @@ impl Skybox {
 
 impl framework::Example for Skybox {
     fn optional_features() -> wgpu::Features {
-        wgpu::Features::TEXTURE_COMPRESSION_ASTC_LDR
+        wgpu::Features::TEXTURE_COMPRESSION_ASTC
             | wgpu::Features::TEXTURE_COMPRESSION_ETC2
             | wgpu::Features::TEXTURE_COMPRESSION_BC
     }
@@ -267,23 +268,22 @@ impl framework::Example for Skybox {
 
         let device_features = device.features();
 
-        let skybox_format =
-            if device_features.contains(wgpu::Features::TEXTURE_COMPRESSION_ASTC_LDR) {
-                log::info!("Using ASTC_LDR");
-                wgpu::TextureFormat::Astc {
-                    block: AstcBlock::B4x4,
-                    channel: AstcChannel::UnormSrgb,
-                }
-            } else if device_features.contains(wgpu::Features::TEXTURE_COMPRESSION_ETC2) {
-                log::info!("Using ETC2");
-                wgpu::TextureFormat::Etc2Rgb8UnormSrgb
-            } else if device_features.contains(wgpu::Features::TEXTURE_COMPRESSION_BC) {
-                log::info!("Using BC");
-                wgpu::TextureFormat::Bc1RgbaUnormSrgb
-            } else {
-                log::info!("Using plain");
-                wgpu::TextureFormat::Bgra8UnormSrgb
-            };
+        let skybox_format = if device_features.contains(wgpu::Features::TEXTURE_COMPRESSION_ASTC) {
+            log::info!("Using ASTC");
+            wgpu::TextureFormat::Astc {
+                block: AstcBlock::B4x4,
+                channel: AstcChannel::UnormSrgb,
+            }
+        } else if device_features.contains(wgpu::Features::TEXTURE_COMPRESSION_ETC2) {
+            log::info!("Using ETC2");
+            wgpu::TextureFormat::Etc2Rgb8UnormSrgb
+        } else if device_features.contains(wgpu::Features::TEXTURE_COMPRESSION_BC) {
+            log::info!("Using BC");
+            wgpu::TextureFormat::Bc1RgbaUnormSrgb
+        } else {
+            log::info!("Using plain");
+            wgpu::TextureFormat::Bgra8UnormSrgb
+        };
 
         let size = wgpu::Extent3d {
             width: IMAGE_SIZE,
@@ -322,12 +322,13 @@ impl framework::Example for Skybox {
             queue,
             &wgpu::TextureDescriptor {
                 size,
-                mip_level_count: max_mips as u32,
+                mip_level_count: max_mips,
                 sample_count: 1,
                 dimension: wgpu::TextureDimension::D2,
                 format: skybox_format,
                 usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
                 label: None,
+                view_formats: &[],
             },
             &image.data,
         );
@@ -465,21 +466,29 @@ fn main() {
     framework::run::<Skybox>("skybox");
 }
 
+wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
+
 #[test]
+#[wasm_bindgen_test::wasm_bindgen_test]
 fn skybox() {
     framework::test::<Skybox>(framework::FrameworkRefTest {
         image_path: "/examples/skybox/screenshot.png",
         width: 1024,
         height: 768,
         optional_features: wgpu::Features::default(),
-        base_test_parameters: framework::test_common::TestParameters::default()
-            .backend_failure(wgpu::Backends::GL),
+        base_test_parameters: framework::test_common::TestParameters::default().specific_failure(
+            Some(wgpu::Backends::GL),
+            None,
+            Some("ANGLE"),
+            false,
+        ),
         tolerance: 3,
-        max_outliers: 3,
+        max_outliers: 207, // bounded by swiftshader
     });
 }
 
 #[test]
+#[wasm_bindgen_test::wasm_bindgen_test]
 fn skybox_bc1() {
     framework::test::<Skybox>(framework::FrameworkRefTest {
         image_path: "/examples/skybox/screenshot-bc1.png",
@@ -488,11 +497,12 @@ fn skybox_bc1() {
         optional_features: wgpu::Features::TEXTURE_COMPRESSION_BC,
         base_test_parameters: framework::test_common::TestParameters::default(), // https://bugs.chromium.org/p/angleproject/issues/detail?id=7056
         tolerance: 5,
-        max_outliers: 105, // Bounded by llvmpipe
+        max_outliers: 191, // Bounded by swiftshader
     });
 }
 
 #[test]
+#[wasm_bindgen_test::wasm_bindgen_test]
 fn skybox_etc2() {
     framework::test::<Skybox>(framework::FrameworkRefTest {
         image_path: "/examples/skybox/screenshot-etc2.png",
@@ -501,17 +511,18 @@ fn skybox_etc2() {
         optional_features: wgpu::Features::TEXTURE_COMPRESSION_ETC2,
         base_test_parameters: framework::test_common::TestParameters::default(), // https://bugs.chromium.org/p/angleproject/issues/detail?id=7056
         tolerance: 5,
-        max_outliers: 105, // Bounded by llvmpipe
+        max_outliers: 248, // Bounded by swiftshader
     });
 }
 
 #[test]
+#[wasm_bindgen_test::wasm_bindgen_test]
 fn skybox_astc() {
     framework::test::<Skybox>(framework::FrameworkRefTest {
         image_path: "/examples/skybox/screenshot-astc.png",
         width: 1024,
         height: 768,
-        optional_features: wgpu::Features::TEXTURE_COMPRESSION_ASTC_LDR,
+        optional_features: wgpu::Features::TEXTURE_COMPRESSION_ASTC,
         base_test_parameters: framework::test_common::TestParameters::default(), // https://bugs.chromium.org/p/angleproject/issues/detail?id=7056
         tolerance: 5,
         max_outliers: 300, // Bounded by rp4 on vk

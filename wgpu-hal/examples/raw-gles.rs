@@ -4,7 +4,7 @@
 //! Emscripten build:
 //! 1. install emsdk
 //! 2. build this example with cargo:
-//!    EMCC_CFLAGS="-g -s ERROR_ON_UNDEFINED_SYMBOLS=0 --no-entry -s FULL_ES3=1" cargo build --example raw-gles --target wasm32-unknown-emscripten --features emscripten,webgl
+//!    EMCC_CFLAGS="-g -s ERROR_ON_UNDEFINED_SYMBOLS=0 --no-entry -s FULL_ES3=1" cargo build --example raw-gles --target wasm32-unknown-emscripten
 //! 3. copy raw-gles.em.html into target directory and open it in browser:
 //!    cp wgpu-hal/examples/raw-gles.em.html target/wasm32-unknown-emscripten/debug/examples
 
@@ -48,7 +48,7 @@ fn main() {
         *control_flow = ControlFlow::Wait;
 
         match event {
-            Event::LoopDestroyed => return,
+            Event::LoopDestroyed => (),
             Event::WindowEvent { event, .. } => match event {
                 WindowEvent::CloseRequested
                 | WindowEvent::KeyboardInput {
@@ -66,24 +66,24 @@ fn main() {
     });
 }
 
-#[cfg(feature = "emscripten")]
+#[cfg(target_os = "emscripten")]
 fn main() {
     env_logger::init();
 
     println!("Initializing external GL context");
-    let egl = egl::Instance::new(egl::Static);
-    let display = egl.get_display(egl::DEFAULT_DISPLAY).unwrap();
+    let egl = khronos_egl::Instance::new(khronos_egl::Static);
+    let display = egl.get_display(khronos_egl::DEFAULT_DISPLAY).unwrap();
     egl.initialize(display)
         .expect("unable to initialize display");
 
     let attributes = [
-        egl::RED_SIZE,
+        khronos_egl::RED_SIZE,
         8,
-        egl::GREEN_SIZE,
+        khronos_egl::GREEN_SIZE,
         8,
-        egl::BLUE_SIZE,
+        khronos_egl::BLUE_SIZE,
         8,
-        egl::NONE,
+        khronos_egl::NONE,
     ];
 
     let config = egl
@@ -96,7 +96,7 @@ fn main() {
     }
     .expect("unable to create surface");
 
-    let context_attributes = [egl::CONTEXT_CLIENT_VERSION, 3, egl::NONE];
+    let context_attributes = [khronos_egl::CONTEXT_CLIENT_VERSION, 3, khronos_egl::NONE];
 
     let gl_context = egl
         .create_context(display, config, None, &context_attributes)
@@ -116,7 +116,7 @@ fn main() {
     fill_screen(&exposed, 640, 400);
 }
 
-#[cfg(all(target_arch = "wasm32", not(feature = "emscripten")))]
+#[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
 fn main() {}
 
 fn fill_screen(exposed: &hal::ExposedAdapter<hal::api::Gles>, width: u32, height: u32) {

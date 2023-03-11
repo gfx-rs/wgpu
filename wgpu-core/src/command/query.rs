@@ -112,6 +112,18 @@ pub enum QueryError {
     InvalidQuerySet(id::QuerySetId),
 }
 
+impl crate::error::PrettyError for QueryError {
+    fn fmt_pretty(&self, fmt: &mut crate::error::ErrorFormatter) {
+        fmt.error(self);
+        match *self {
+            Self::InvalidBuffer(id) => fmt.buffer_label(&id),
+            Self::InvalidQuerySet(id) => fmt.query_set_label(&id),
+
+            _ => {}
+        }
+    }
+}
+
 /// Error encountered while trying to use queries
 #[derive(Clone, Debug, Error)]
 pub enum QueryUseError {
@@ -168,7 +180,8 @@ impl<A: HalApi> QuerySet<A> {
         query_index: u32,
         reset_state: Option<&mut QueryResetMap<A>>,
     ) -> Result<&A::QuerySet, QueryUseError> {
-        // We need to defer our resets because we are in a renderpass, add the usage to the reset map.
+        // We need to defer our resets because we are in a renderpass,
+        // add the usage to the reset map.
         if let Some(reset) = reset_state {
             let used = reset.use_query_set(query_set_id, self, query_index);
             if used {

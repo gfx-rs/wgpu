@@ -157,15 +157,19 @@ async fn setup<E: Example>(title: &str) -> Setup {
 
     log::info!("Initializing the surface...");
 
-    let backend = wgpu::util::backend_bits_from_env().unwrap_or_else(wgpu::Backends::all);
+    let backends = wgpu::util::backend_bits_from_env().unwrap_or_else(wgpu::Backends::all);
+    let dx12_shader_compiler = wgpu::util::dx12_shader_compiler_from_env().unwrap_or_default();
 
-    let instance = wgpu::Instance::new(backend);
+    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+        backends,
+        dx12_shader_compiler,
+    });
     let (size, surface) = unsafe {
         let size = window.inner_size();
 
-        #[cfg(not(target_arch = "wasm32"))]
-        let surface = instance.create_surface(&window);
-        #[cfg(target_arch = "wasm32")]
+        #[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))]
+        let surface = instance.create_surface(&window).unwrap();
+        #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
         let surface = {
             if let Some(offscreen_canvas_setup) = &offscreen_canvas_setup {
                 log::info!("Creating surface from OffscreenCanvas");
@@ -174,12 +178,13 @@ async fn setup<E: Example>(title: &str) -> Setup {
             } else {
                 instance.create_surface(&window)
             }
-        };
+        }
+        .unwrap();
 
         (size, surface)
     };
     let adapter =
-        wgpu::util::initialize_adapter_from_env_or_default(&instance, backend, Some(&surface))
+        wgpu::util::initialize_adapter_from_env_or_default(&instance, backends, Some(&surface))
             .await
             .expect("No suitable GPU adapters found on the system!");
 
@@ -267,14 +272,9 @@ fn start<E: Example>(
     }: Setup,
 ) {
     let spawner = Spawner::new();
-    let mut config = wgpu::SurfaceConfiguration {
-        usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-        format: surface.get_supported_formats(&adapter)[0],
-        width: size.width,
-        height: size.height,
-        present_mode: wgpu::PresentMode::Fifo,
-        alpha_mode: surface.get_supported_alpha_modes(&adapter)[0],
-    };
+    let mut config = surface
+        .get_default_config(&adapter, size.width, size.height)
+        .expect("Surface isn't supported by the adapter.");
     surface.configure(&device, &config);
 
     log::info!("Initializing the example...");
@@ -504,7 +504,7 @@ pub struct FrameworkRefTest {
 #[cfg(test)]
 #[allow(dead_code)]
 pub fn test<E: Example>(mut params: FrameworkRefTest) {
-    use std::{mem, num::NonZeroU32};
+    use std::mem;
 
     assert_eq!(params.width % 64, 0, "width needs to be aligned 64");
 
@@ -527,6 +527,7 @@ pub fn test<E: Example>(mut params: FrameworkRefTest) {
                 dimension: wgpu::TextureDimension::D2,
                 format: wgpu::TextureFormat::Rgba8UnormSrgb,
                 usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+                view_formats: &[],
             });
 
             let dst_view = dst_texture.create_view(&wgpu::TextureViewDescriptor::default());
@@ -546,6 +547,7 @@ pub fn test<E: Example>(mut params: FrameworkRefTest) {
                     height: params.height,
                     present_mode: wgpu::PresentMode::Fifo,
                     alpha_mode: wgpu::CompositeAlphaMode::Auto,
+                    view_formats: vec![wgpu::TextureFormat::Rgba8Unorm],
                 },
                 &ctx.adapter,
                 &ctx.device,
@@ -590,7 +592,7 @@ pub fn test<E: Example>(mut params: FrameworkRefTest) {
                     buffer: &dst_buffer,
                     layout: wgpu::ImageDataLayout {
                         offset: 0,
-                        bytes_per_row: NonZeroU32::new(params.width * 4),
+                        bytes_per_row: Some(params.width * 4),
                         rows_per_image: None,
                     },
                 },
