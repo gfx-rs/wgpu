@@ -132,7 +132,7 @@ features = ["wgsl-in"]
 
 [dev-dependencies]
 env_logger = "0.10"
-winit = "0.27.1"   # for "halmark" example
+winit = "0.28.2"   # for "halmark" example
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 glutin = "0.29.1" # for "gles" example
