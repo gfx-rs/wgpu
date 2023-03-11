@@ -73,6 +73,7 @@ class Navigator {
     return `${this.constructor.name} ${inspect({})}`;
   }
 }
+const NavigatorPrototype = Navigator.prototype;
 
 const navigator = webidl.createBranded(Navigator);
 
@@ -81,17 +82,17 @@ ObjectDefineProperties(Navigator.prototype, {
     configurable: true,
     enumerable: true,
     get() {
-      webidl.assertBranded(this, Navigator);
+      webidl.assertBranded(this, NavigatorPrototype);
       return webgpu.gpu;
     },
   },
 });
 
 const windowOrWorkerGlobalScope = {
-  CloseEvent: util.nonEnumerable(CloseEvent),
-  CustomEvent: util.nonEnumerable(CustomEvent),
-  DOMException: util.nonEnumerable(domException.DOMException),
-  ErrorEvent: util.nonEnumerable(ErrorEvent),
+  CloseEvent: util.nonEnumerable(event.CloseEvent),
+  CustomEvent: util.nonEnumerable(event.CustomEvent),
+  DOMException: util.nonEnumerable(DOMException),
+  ErrorEvent: util.nonEnumerable(event.ErrorEvent),
   Event: util.nonEnumerable(event.Event),
   EventTarget: util.nonEnumerable(event.EventTarget),
   Navigator: util.nonEnumerable(Navigator),
@@ -191,7 +192,6 @@ function bootstrapRuntime({ args, cwd }) {
   delete globalThis.bootstrap;
   hasBootstrapped = true;
 
-  ObjectSetPrototypeOf(globalThis, Window.prototype);
   event.setEventTargetData(globalThis);
   event.saveGlobalThisReference(globalThis);
 

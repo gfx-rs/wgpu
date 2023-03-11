@@ -36,11 +36,11 @@ async fn run() -> Result<(), AnyError> {
         module_loader: Some(Rc::new(deno_core::FsModuleLoader)),
         get_error_class_fn: Some(&get_error_class_name),
         extensions: vec![
-            deno_webidl::init(),
-            deno_console::init(),
+            deno_webidl::init_esm(),
+            deno_console::init_esm(),
             deno_url::init_ops_and_esm(),
             deno_web::init_ops_and_esm::<Permissions>(BlobStore::default(), None),
-            deno_webgpu::init(true),
+            deno_webgpu::init_ops_and_esm(true),
             extension(),
         ],
         ..Default::default()

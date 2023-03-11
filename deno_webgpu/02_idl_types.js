@@ -960,6 +960,7 @@ const dictMembersGPUPipelineDescriptorBase = [
   {
     key: "layout",
     converter: webidl.converters["GPUPipelineLayout or GPUAutoLayoutMode"],
+    required: true,
   },
 ];
 webidl.converters["GPUPipelineDescriptorBase"] = webidl

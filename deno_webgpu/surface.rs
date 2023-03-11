@@ -5,6 +5,7 @@ use deno_core::error::AnyError;
 use deno_core::include_js_files;
 use deno_core::op;
 use deno_core::Extension;
+use deno_core::ExtensionBuilder;
 use deno_core::OpState;
 use deno_core::Resource;
 use deno_core::ResourceId;
@@ -12,16 +13,15 @@ use serde::Deserialize;
 use std::borrow::Cow;
 use wgpu_types::SurfaceStatus;
 
-pub fn init_surface(unstable: bool) -> Extension {
+fn ext() -> ExtensionBuilder {
     Extension::builder_with_deps(
         "deno_webgpu_surface",
         &["deno_webidl", "deno_web", "deno_webgpu"],
     )
-    .esm(include_js_files!(
-        "03_surface.js",
-        "04_surface_idl_types.js",
-    ))
-    .ops(vec![
+}
+
+fn ops(ext: &mut ExtensionBuilder, unstable: bool) -> &mut ExtensionBuilder {
+    ext.ops(vec![
         op_webgpu_surface_configure::decl(),
         op_webgpu_surface_get_current_texture::decl(),
         op_webgpu_surface_present::decl(),
@@ -33,7 +33,19 @@ pub fn init_surface(unstable: bool) -> Extension {
         // let unstable = unstable_checker.unstable;
         state.put(super::Unstable(unstable));
     })
-    .build()
+}
+
+pub fn init_ops_and_esm(unstable: bool) -> Extension {
+    ops(&mut ext(), unstable)
+        .esm(include_js_files!(
+            "03_surface.js",
+            "04_surface_idl_types.js",
+        ))
+        .build()
+}
+
+pub fn init_ops(unstable: bool) -> Extension {
+    ops(&mut ext(), unstable).build()
 }
 
 pub struct WebGpuSurface(pub wgpu_core::id::SurfaceId);
