@@ -11,6 +11,7 @@ use deno_core::Resource;
 use deno_core::ResourceId;
 use serde::Deserialize;
 use std::borrow::Cow;
+use std::rc::Rc;
 use wgpu_types::SurfaceStatus;
 
 fn ext() -> ExtensionBuilder {
@@ -48,10 +49,14 @@ pub fn init_ops(unstable: bool) -> Extension {
     ops(&mut ext(), unstable).build()
 }
 
-pub struct WebGpuSurface(pub wgpu_core::id::SurfaceId);
+pub struct WebGpuSurface(pub crate::Instance, pub wgpu_core::id::SurfaceId);
 impl Resource for WebGpuSurface {
     fn name(&self) -> Cow<str> {
         "webGPUSurface".into()
+    }
+
+    fn close(self: Rc<Self>) {
+        self.0.surface_drop(self.1);
     }
 }
 
@@ -78,11 +83,11 @@ pub fn op_webgpu_surface_configure(
     let device_resource = state
         .resource_table
         .get::<super::WebGpuDevice>(args.device_rid)?;
-    let device = device_resource.0;
+    let device = device_resource.1;
     let surface_resource = state
         .resource_table
         .get::<WebGpuSurface>(args.surface_rid)?;
-    let surface = surface_resource.0;
+    let surface = surface_resource.1;
 
     let conf = wgpu_types::SurfaceConfiguration::<Vec<wgpu_types::TextureFormat>> {
         usage: wgpu_types::TextureUsages::from_bits_truncate(args.usage),
@@ -109,16 +114,20 @@ pub fn op_webgpu_surface_get_current_texture(
     let device_resource = state
         .resource_table
         .get::<super::WebGpuDevice>(device_rid)?;
-    let device = device_resource.0;
+    let device = device_resource.1;
     let surface_resource = state.resource_table.get::<WebGpuSurface>(surface_rid)?;
-    let surface = surface_resource.0;
+    let surface = surface_resource.1;
 
     let output = gfx_select!(device => instance.surface_get_current_texture(surface, ()))?;
 
     match output.status {
         SurfaceStatus::Good | SurfaceStatus::Suboptimal => {
             let id = output.texture_id.unwrap();
-            let rid = state.resource_table.add(crate::texture::WebGpuTexture(id));
+            let rid = state.resource_table.add(crate::texture::WebGpuTexture {
+                instance: instance.clone(),
+                id,
+                owned: false,
+            });
             Ok(WebGpuResult::rid(rid))
         }
         _ => Err(AnyError::msg("Invalid Surface Status")),
@@ -135,9 +144,9 @@ pub fn op_webgpu_surface_present(
     let device_resource = state
         .resource_table
         .get::<super::WebGpuDevice>(device_rid)?;
-    let device = device_resource.0;
+    let device = device_resource.1;
     let surface_resource = state.resource_table.get::<WebGpuSurface>(surface_rid)?;
-    let surface = surface_resource.0;
+    let surface = surface_resource.1;
 
     let _ = gfx_select!(device => instance.surface_present(surface))?;
 

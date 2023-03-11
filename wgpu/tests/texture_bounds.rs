@@ -1,7 +1,6 @@
 //! Tests for texture copy bounds checks.
 
 use crate::common::{fail_if, initialize_test, TestParameters};
-use std::num::NonZeroU32;
 use wasm_bindgen_test::*;
 
 #[test]
@@ -112,6 +111,6 @@ const BUFFER_SIZE: u32 = TEXTURE_SIZE.width * TEXTURE_SIZE.height * BYTES_PER_PI
 
 const BUFFER_COPY_LAYOUT: wgpu::ImageDataLayout = wgpu::ImageDataLayout {
     offset: 0,
-    bytes_per_row: NonZeroU32::new(TEXTURE_SIZE.width * BYTES_PER_PIXEL),
+    bytes_per_row: Some(TEXTURE_SIZE.width * BYTES_PER_PIXEL),
     rows_per_image: None,
 };

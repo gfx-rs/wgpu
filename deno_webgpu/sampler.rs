@@ -7,13 +7,22 @@ use deno_core::Resource;
 use deno_core::ResourceId;
 use serde::Deserialize;
 use std::borrow::Cow;
+use std::rc::Rc;
 
 use super::error::WebGpuResult;
 
-pub(crate) struct WebGpuSampler(pub(crate) wgpu_core::id::SamplerId);
+pub(crate) struct WebGpuSampler(
+    pub(crate) crate::Instance,
+    pub(crate) wgpu_core::id::SamplerId,
+);
 impl Resource for WebGpuSampler {
     fn name(&self) -> Cow<str> {
         "webGPUSampler".into()
+    }
+
+    fn close(self: Rc<Self>) {
+        let instance = &self.0;
+        gfx_select!(self.1 => instance.sampler_drop(self.1));
     }
 }
 
@@ -43,7 +52,7 @@ pub fn op_webgpu_create_sampler(
     let device_resource = state
         .resource_table
         .get::<super::WebGpuDevice>(args.device_rid)?;
-    let device = device_resource.0;
+    let device = device_resource.1;
 
     let descriptor = wgpu_core::resource::SamplerDescriptor {
         label: args.label.map(Cow::from),

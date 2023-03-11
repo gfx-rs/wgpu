@@ -70,10 +70,23 @@ Additionally `sample_type` and `block_size` now take an optional `TextureAspect`
 
 By @teoxoy in [#3436](https://github.com/gfx-rs/wgpu/pull/3436)
 
+#### Renamed features
+
+The following `Features` have been renamed.
+
+- `SHADER_FLOAT16` -> `SHADER_F16`
+- `SHADER_FLOAT64` -> `SHADER_F64`
+- `SHADER_INT16` -> `SHADER_I16`
+- `TEXTURE_COMPRESSION_ASTC_LDR` -> `TEXTURE_COMPRESSION_ASTC`
+- `WRITE_TIMESTAMP_INSIDE_PASSES` -> `TIMESTAMP_QUERY_INSIDE_PASSES`
+
+By @teoxoy in [#3534](https://github.com/gfx-rs/wgpu/pull/3534)
+
 #### General
 
 - Change type of `mip_level_count` and `array_layer_count` (members of `TextureViewDescriptor` and `ImageSubresourceRange`) from `Option<NonZeroU32>` to `Option<u32>`. By @teoxoy in [#3445](https://github.com/gfx-rs/wgpu/pull/3445)
 - All `fxhash` dependencies have been replaced with `rustc-hash`. By @james7132 in [#3502](https://github.com/gfx-rs/wgpu/pull/3502)
+- Change type of `bytes_per_row` and `rows_per_image` (members of `ImageDataLayout`) from `Option<NonZeroU32>` to `Option<u32>`. By @teoxoy in [#3529](https://github.com/gfx-rs/wgpu/pull/3529)
 
 ### Changes
 
@@ -82,6 +95,9 @@ By @teoxoy in [#3436](https://github.com/gfx-rs/wgpu/pull/3436)
 - Added `TextureFormatFeatureFlags::MULTISAMPLE_X16`. By @Dinnerbone in [#3454](https://github.com/gfx-rs/wgpu/pull/3454)
 - Support stencil-only views and copying to/from combined depth-stencil textures. By @teoxoy in [#3436](https://github.com/gfx-rs/wgpu/pull/3436)
 - Added `Features::SHADER_EARLY_DEPTH_TEST`. By @teoxoy in [#3494](https://github.com/gfx-rs/wgpu/pull/3494)
+- Allow copying of textures with copy-compatible formats. By @teoxoy in [#3528](https://github.com/gfx-rs/wgpu/pull/3528)
+- Improve attachment related errors. By @cwfitzgerald in [#3549](https://github.com/gfx-rs/wgpu/pull/3549)
+- Make error descriptions all upper case. By @cwfitzgerald in [#3549](https://github.com/gfx-rs/wgpu/pull/3549)
 
 #### WebGPU
 
@@ -93,12 +109,14 @@ By @teoxoy in [#3436](https://github.com/gfx-rs/wgpu/pull/3436)
 
 - Improve format MSAA capabilities detection. By @jinleili in [#3429](https://github.com/gfx-rs/wgpu/pull/3429)
 - Fix surface view formats validation error. By @jinleili in [#3432](https://github.com/gfx-rs/wgpu/pull/3432)
+- Set `max_memory_allocation_size` via `PhysicalDeviceMaintenance3Properties`. By @jinleili in [#3567](https://github.com/gfx-rs/wgpu/pull/3567)
 
 ### Bug Fixes
 
 #### DX12
 
 - Fix DXC validation issues when using a custom `dxil_path`. By @Elabajaba in [#3434](https://github.com/gfx-rs/wgpu/pull/3434)
+- Use typeless formats for textures that might be viewed as srgb or non-srgb. By @teoxoy in [#3555](https://github.com/gfx-rs/wgpu/pull/3555)
 
 #### GLES
 
@@ -109,10 +127,15 @@ By @teoxoy in [#3436](https://github.com/gfx-rs/wgpu/pull/3436)
 
 - `copyTextureToTexture` src/dst aspects must both refer to all aspects of src/dst format. By @teoxoy in [#3431](https://github.com/gfx-rs/wgpu/pull/3431)
 - Validate before extracting texture selectors. By @teoxoy in [#3487](https://github.com/gfx-rs/wgpu/pull/3487)
+- Fix fatal errors (those which panic even if an error handler is set) not including all of the details. By @kpreid in [#3563](https://github.com/gfx-rs/wgpu/pull/3563)
 
 #### Vulkan
 
 - Treat `VK_SUBOPTIMAL_KHR` as `VK_SUCCESS` on Android. By @James2022-rgb in [#3525](https://github.com/gfx-rs/wgpu/pull/3525)
+
+#### Metal
+- `create_texture` returns an error if `new_texture` returns NULL. By @jinleili in [#3554](https://github.com/gfx-rs/wgpu/pull/3554)
+- Fix definition of `NSOperatingSystemVersion` to avoid potential crashes. By @grovesNL in [#3557](https://github.com/gfx-rs/wgpu/pull/3557)
 
 ## wgpu-0.15.0 (2023-01-25)
 

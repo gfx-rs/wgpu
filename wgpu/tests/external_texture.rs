@@ -1,7 +1,5 @@
 #![cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
 
-use std::num::NonZeroU32;
-
 use crate::common::{fail_if, initialize_test, TestParameters};
 use wasm_bindgen::JsCast;
 use wasm_bindgen_test::*;
@@ -314,7 +312,7 @@ async fn image_bitmap_import() {
                         buffer: &readback_buffer,
                         layout: wgpu::ImageDataLayout {
                             offset: 0,
-                            bytes_per_row: Some(NonZeroU32::new(256).unwrap()),
+                            bytes_per_row: Some(256),
                             rows_per_image: None,
                         },
                     },
