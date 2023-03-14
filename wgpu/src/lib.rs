@@ -1544,7 +1544,7 @@ impl Instance {
     /// # Safety
     ///
     /// - visual must be a valid IDCompositionVisual to create a surface upon.
-    #[cfg(target_os = "windows")]
+    #[cfg(all(target_os = "windows", feature = "dx12"))]
     pub unsafe fn create_surface_from_visual(&self, visual: *mut std::ffi::c_void) -> Surface {
         let surface = unsafe {
             self.context
@@ -1566,7 +1566,7 @@ impl Instance {
     /// # Safety
     ///
     /// - surface_handle must be a valid SurfaceHandle to create a surface upon.
-    #[cfg(target_os = "windows")]
+    #[cfg(all(target_os = "windows", feature = "dx12"))]
     pub unsafe fn create_surface_from_surface_handle(
         &self,
         surface_handle: *mut std::ffi::c_void,
