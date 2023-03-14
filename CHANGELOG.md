@@ -43,7 +43,8 @@ Bottom level categories:
 ### Bug Fixes
 
 #### GLES
-- Reset the state of `SAMPLE_ALPHA_TO_COVERAGE` on queue submit. By @jleibs [#3589](https://github.com/gfx-rs/wgpu/pull/3589)
+- Reset all queue state between command buffers in a submit. By @jleibs [#3589](https://github.com/gfx-rs/wgpu/pull/3589)
+- Reset the state of `SAMPLE_ALPHA_TO_COVERAGE` on queue reset. By @jleibs [#3589](https://github.com/gfx-rs/wgpu/pull/3589)
 
 
 ## wgpu-0.15.2 (2023-03-08)

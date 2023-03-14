@@ -1478,8 +1478,12 @@ impl crate::Queue<super::Api> for super::Queue {
     ) -> Result<(), crate::DeviceError> {
         let shared = Arc::clone(&self.shared);
         let gl = &shared.context.lock();
-        unsafe { self.reset_state(gl) };
         for cmd_buf in command_buffers.iter() {
+            // The command encoder assumes a default state when encoding the command buffer.
+            // Always reset the state between command_buffers to reflect this assumption. Do
+            // this at the beginning of the loop in case something outside of wgpu modified
+            // this state prior to commit.
+            unsafe { self.reset_state(gl) };
             #[cfg(not(target_arch = "wasm32"))]
             if let Some(ref label) = cmd_buf.label {
                 unsafe { gl.push_debug_group(glow::DEBUG_SOURCE_APPLICATION, DEBUG_ID, label) };
