@@ -166,11 +166,14 @@ impl<'source> ParsingContext<'source> {
 
                 self.expect(frontend, TokenValue::LeftParen)?;
 
-                let selector = {
+                let (selector, uint) = {
                     let mut stmt = ctx.stmt_ctx();
                     let expr = self.parse_expression(frontend, ctx, &mut stmt, body)?;
-                    ctx.lower_expect(stmt, frontend, expr, ExprPos::Rhs, body)?
-                        .0
+                    let (root, meta) =
+                        ctx.lower_expect(stmt, frontend, expr, ExprPos::Rhs, body)?;
+                    let uint = frontend.resolve_type(ctx, root, meta)?.scalar_kind()
+                        == Some(crate::ScalarKind::Uint);
+                    (root, uint)
                 };
 
                 self.expect(frontend, TokenValue::RightParen)?;
@@ -197,7 +200,10 @@ impl<'source> ParsingContext<'source> {
                                 ConstantInner::Scalar {
                                     value: ScalarValue::Sint(int),
                                     ..
-                                } => crate::SwitchValue::I32(int as i32),
+                                } => match uint {
+                                    true => crate::SwitchValue::U32(int as u32),
+                                    false => crate::SwitchValue::I32(int as i32),
+                                },
                                 ConstantInner::Scalar {
                                     value: ScalarValue::Uint(int),
                                     ..

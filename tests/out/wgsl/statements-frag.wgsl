@@ -24,15 +24,29 @@ fn switchNoDefault(a_2: i32) {
     return;
 }
 
-fn switchNoLastBreak(a_4: i32) {
-    var a_5: i32;
-    var b: i32;
+fn switchCaseImplConv(a_4: u32) {
+    var a_5: u32;
 
     a_5 = a_4;
     let _e2 = a_5;
     switch _e2 {
+        case 0u: {
+        }
         default: {
-            let _e3 = a_5;
+        }
+    }
+    return;
+}
+
+fn switchNoLastBreak(a_6: i32) {
+    var a_7: i32;
+    var b: i32;
+
+    a_7 = a_6;
+    let _e2 = a_7;
+    switch _e2 {
+        default: {
+            let _e3 = a_7;
             b = _e3;
         }
     }

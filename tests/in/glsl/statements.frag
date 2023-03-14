@@ -15,6 +15,15 @@ void switchNoDefault(int a) {
     return;
 }
 
+void switchCaseImplConv(uint a) {
+    switch (a) {
+        case 0:
+            break;
+    }
+
+    return;
+}
+
 void switchNoLastBreak(int a) {
     switch (a) {
         default:
