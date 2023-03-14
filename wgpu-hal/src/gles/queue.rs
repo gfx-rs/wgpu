@@ -70,6 +70,7 @@ impl super::Queue {
         unsafe { gl.disable(glow::BLEND) };
         unsafe { gl.disable(glow::CULL_FACE) };
         unsafe { gl.disable(glow::POLYGON_OFFSET_FILL) };
+        unsafe { gl.disable(glow::SAMPLE_ALPHA_TO_COVERAGE) };
         if self.features.contains(wgt::Features::DEPTH_CLIP_CONTROL) {
             unsafe { gl.disable(glow::DEPTH_CLAMP) };
         }
