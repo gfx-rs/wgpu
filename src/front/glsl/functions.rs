@@ -301,7 +301,6 @@ impl Frontend {
                             Expression::Compose {
                                 ty: vector_ty,
                                 components: (0..rows as u32)
-                                    .into_iter()
                                     .map(|r| match r == i {
                                         true => value,
                                         false => zero,
@@ -376,7 +375,6 @@ impl Frontend {
                         components.push(match ori_rows.cmp(&rows) {
                             Ordering::Less => {
                                 let components = (0..rows as u32)
-                                    .into_iter()
                                     .map(|r| {
                                         if r < ori_rows as u32 {
                                             ctx.add_expression(
@@ -415,7 +413,6 @@ impl Frontend {
                                 inner: ConstantInner::Composite {
                                     ty: vector_ty,
                                     components: (0..rows as u32)
-                                        .into_iter()
                                         .map(|r| match r == i {
                                             true => one_constant,
                                             false => zero_constant,
