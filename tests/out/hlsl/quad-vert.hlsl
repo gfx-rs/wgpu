@@ -1,9 +1,10 @@
 
 struct gl_PerVertex {
     float4 gl_Position : SV_Position;
-    float gl_PointSize : PSIZE;
-    float gl_ClipDistance[1] : SV_ClipDistance;
-    float gl_CullDistance[1] : SV_CullDistance;
+    float gl_PointSize;
+    float gl_ClipDistance[1];
+    float gl_CullDistance[1];
+    int _end_pad_0;
 };
 
 struct type_9 {

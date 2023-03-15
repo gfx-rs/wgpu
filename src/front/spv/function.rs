@@ -370,22 +370,50 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
                     let expr_handle = function
                         .expressions
                         .append(crate::Expression::GlobalVariable(lvar.handle), span);
+
+                    // Cull problematic builtins of gl_PerVertex.
+                    // See the docs for `Frontend::gl_per_vertex_builtin_access`.
+                    {
+                        let ty = &module.types[result.ty];
+                        match ty.inner {
+                            crate::TypeInner::Struct {
+                                members: ref original_members,
+                                span,
+                            } if ty.name.as_deref() == Some("gl_PerVertex") => {
+                                let mut new_members = original_members.clone();
+                                for member in &mut new_members {
+                                    if let Some(crate::Binding::BuiltIn(built_in)) = member.binding
+                                    {
+                                        if !self.gl_per_vertex_builtin_access.contains(&built_in) {
+                                            member.binding = None
+                                        }
+                                    }
+                                }
+                                if &new_members != original_members {
+                                    module.types.replace(
+                                        result.ty,
+                                        crate::Type {
+                                            name: ty.name.clone(),
+                                            inner: crate::TypeInner::Struct {
+                                                members: new_members,
+                                                span,
+                                            },
+                                        },
+                                    );
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+
                     match module.types[result.ty].inner {
                         crate::TypeInner::Struct {
                             members: ref sub_members,
                             ..
                         } => {
                             for (index, sm) in sub_members.iter().enumerate() {
-                                match sm.binding {
-                                    Some(crate::Binding::BuiltIn(built_in)) => {
-                                        // Cull unused builtins to preserve performances
-                                        if !self.builtin_usage.contains(&built_in) {
-                                            continue;
-                                        }
-                                    }
-                                    // unrecognized binding, skip
-                                    None => continue,
-                                    _ => {}
+                                if sm.binding.is_none() {
+                                    continue;
                                 }
                                 let mut sm = sm.clone();
 

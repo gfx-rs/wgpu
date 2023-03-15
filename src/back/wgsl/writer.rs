@@ -335,11 +335,8 @@ impl<W: Write> Writer<W> {
             match *attribute {
                 Attribute::Location(id) => write!(self.out, "@location({id}) ")?,
                 Attribute::BuiltIn(builtin_attrib) => {
-                    if let Some(builtin) = builtin_str(builtin_attrib) {
-                        write!(self.out, "@builtin({builtin}) ")?;
-                    } else {
-                        log::warn!("Unsupported builtin attribute: {:?}", builtin_attrib);
-                    }
+                    let builtin = builtin_str(builtin_attrib)?;
+                    write!(self.out, "@builtin({builtin}) ")?;
                 }
                 Attribute::Stage(shader_stage) => {
                     let stage_str = match shader_stage {
@@ -401,14 +398,6 @@ impl<W: Write> Writer<W> {
         write!(self.out, " {{")?;
         writeln!(self.out)?;
         for (index, member) in members.iter().enumerate() {
-            // Skip struct member with unsupported built in
-            if let Some(crate::Binding::BuiltIn(built_in)) = member.binding {
-                if builtin_str(built_in).is_none() {
-                    log::warn!("Skip member with unsupported builtin {:?}", built_in);
-                    continue;
-                }
-            }
-
             // The indentation is only for readability
             write!(self.out, "{}", back::INDENT)?;
             if let Some(ref binding) = member.binding {
@@ -669,22 +658,6 @@ impl<W: Write> Writer<W> {
                             _ => false,
                         };
                         if min_ref_count <= info.ref_count || required_baking_expr {
-                            // If expression contains unsupported builtin we should skip it
-                            if let Expression::Load { pointer } = func_ctx.expressions[handle] {
-                                if let Expression::AccessIndex { base, index } =
-                                    func_ctx.expressions[pointer]
-                                {
-                                    if access_to_unsupported_builtin(
-                                        base,
-                                        index,
-                                        module,
-                                        func_ctx.info,
-                                    ) {
-                                        return Ok(());
-                                    }
-                                }
-                            }
-
                             Some(format!("{}{}", back::BAKE_PREFIX, handle.index()))
                         } else {
                             None
@@ -746,14 +719,6 @@ impl<W: Write> Writer<W> {
                 writeln!(self.out, "discard;")?
             }
             Statement::Store { pointer, value } => {
-                // WGSL does not support all SPIR-V builtins and we should skip it in generated shaders.
-                // We already skip them when we generate struct type.
-                // Now we need to find expression that used struct with ignored builtins
-                if let Expression::AccessIndex { base, index } = func_ctx.expressions[pointer] {
-                    if access_to_unsupported_builtin(base, index, module, func_ctx.info) {
-                        return Ok(());
-                    }
-                }
                 write!(self.out, "{level}")?;
 
                 let is_atomic = match *func_ctx.info[pointer].ty.inner_with(&module.types) {
@@ -1150,42 +1115,10 @@ impl<W: Write> Writer<W> {
             Expression::Compose { ty, ref components } => {
                 self.write_type(module, ty)?;
                 write!(self.out, "(")?;
-                // !spv-in specific notes!
-                // WGSL does not support all SPIR-V builtins and we should skip it in generated shaders.
-                // We already skip them when we generate struct type.
-                // Now we need to find components that used struct with ignored builtins.
-
-                // So, why we can't just return the error to a user?
-                // We can, but otherwise, we can't generate WGSL shader from any glslang SPIR-V shaders.
-                // glslang generates gl_PerVertex struct with gl_CullDistance, gl_ClipDistance and gl_PointSize builtin inside by default.
-                // All of them are not supported by WGSL.
-
-                // We need to copy components to another vec because we don't know which of them we should write.
-                let mut components_to_write = Vec::with_capacity(components.len());
-                for component in components {
-                    let mut skip_component = false;
-                    if let Expression::Load { pointer } = func_ctx.expressions[*component] {
-                        if let Expression::AccessIndex { base, index } =
-                            func_ctx.expressions[pointer]
-                        {
-                            if access_to_unsupported_builtin(base, index, module, func_ctx.info) {
-                                skip_component = true;
-                            }
-                        }
-                    }
-                    if skip_component {
-                        continue;
-                    } else {
-                        components_to_write.push(*component);
-                    }
-                }
-
-                // non spv-in specific notes!
-                // Real `Expression::Compose` logic generates here.
-                for (index, component) in components_to_write.iter().enumerate() {
+                for (index, component) in components.iter().enumerate() {
                     self.write_expr(module, *component, func_ctx)?;
                     // Only write a comma if isn't the last element
-                    if index != components_to_write.len().saturating_sub(1) {
+                    if index != components.len().saturating_sub(1) {
                         // The leading space is for readability only
                         write!(self.out, ", ")?;
                     }
@@ -1764,25 +1697,8 @@ impl<W: Write> Writer<W> {
                 self.write_type(module, ty)?;
                 write!(self.out, "(")?;
 
-                let members = match module.types[ty].inner {
-                    TypeInner::Struct { ref members, .. } => Some(members),
-                    _ => None,
-                };
-
                 // Write the comma separated constants
                 for (index, constant) in components.iter().enumerate() {
-                    if let Some(&crate::Binding::BuiltIn(built_in)) =
-                        members.and_then(|members| members.get(index)?.binding.as_ref())
-                    {
-                        if builtin_str(built_in).is_none() {
-                            log::warn!(
-                                "Skip constant for struct member with unsupported builtin {:?}",
-                                built_in
-                            );
-                            continue;
-                        }
-                    }
-
                     self.write_constant(module, *constant)?;
                     // Only write a comma if isn't the last element
                     if index != components.len().saturating_sub(1) {
@@ -1869,26 +1785,34 @@ impl<W: Write> Writer<W> {
     }
 }
 
-const fn builtin_str(built_in: crate::BuiltIn) -> Option<&'static str> {
+fn builtin_str(built_in: crate::BuiltIn) -> Result<&'static str, Error> {
     use crate::BuiltIn as Bi;
 
-    match built_in {
-        Bi::VertexIndex => Some("vertex_index"),
-        Bi::InstanceIndex => Some("instance_index"),
-        Bi::Position { .. } => Some("position"),
-        Bi::FrontFacing => Some("front_facing"),
-        Bi::FragDepth => Some("frag_depth"),
-        Bi::LocalInvocationId => Some("local_invocation_id"),
-        Bi::LocalInvocationIndex => Some("local_invocation_index"),
-        Bi::GlobalInvocationId => Some("global_invocation_id"),
-        Bi::WorkGroupId => Some("workgroup_id"),
-        Bi::NumWorkGroups => Some("num_workgroups"),
-        Bi::SampleIndex => Some("sample_index"),
-        Bi::SampleMask => Some("sample_mask"),
-        Bi::PrimitiveIndex => Some("primitive_index"),
-        Bi::ViewIndex => Some("view_index"),
-        _ => None,
-    }
+    Ok(match built_in {
+        Bi::VertexIndex => "vertex_index",
+        Bi::InstanceIndex => "instance_index",
+        Bi::Position { .. } => "position",
+        Bi::FrontFacing => "front_facing",
+        Bi::FragDepth => "frag_depth",
+        Bi::LocalInvocationId => "local_invocation_id",
+        Bi::LocalInvocationIndex => "local_invocation_index",
+        Bi::GlobalInvocationId => "global_invocation_id",
+        Bi::WorkGroupId => "workgroup_id",
+        Bi::NumWorkGroups => "num_workgroups",
+        Bi::SampleIndex => "sample_index",
+        Bi::SampleMask => "sample_mask",
+        Bi::PrimitiveIndex => "primitive_index",
+        Bi::ViewIndex => "view_index",
+        Bi::BaseInstance
+        | Bi::BaseVertex
+        | Bi::ClipDistance
+        | Bi::CullDistance
+        | Bi::PointSize
+        | Bi::PointCoord
+        | Bi::WorkGroupSize => {
+            return Err(Error::Custom(format!("Unsupported builtin {built_in:?}")))
+        }
+    })
 }
 
 const fn image_dimension_str(dim: crate::ImageDimension) -> &'static str {
@@ -2031,32 +1955,4 @@ fn map_binding_to_attribute(
             _ => vec![Attribute::Location(location)],
         },
     }
-}
-
-/// Helper function that check that expression don't access to structure member with unsupported builtin.
-fn access_to_unsupported_builtin(
-    expr: Handle<crate::Expression>,
-    index: u32,
-    module: &Module,
-    info: &valid::FunctionInfo,
-) -> bool {
-    let base_ty_res = &info[expr].ty;
-    let resolved = base_ty_res.inner_with(&module.types);
-    if let TypeInner::Pointer {
-        base: pointer_base_handle,
-        ..
-    } = *resolved
-    {
-        // Let's check that we try to access a struct member with unsupported built-in and skip it.
-        if let TypeInner::Struct { ref members, .. } = module.types[pointer_base_handle].inner {
-            if let Some(crate::Binding::BuiltIn(built_in)) = members[index as usize].binding {
-                if builtin_str(built_in).is_none() {
-                    log::warn!("Skip component with unsupported builtin {:?}", built_in);
-                    return true;
-                }
-            }
-        }
-    }
-
-    false
 }

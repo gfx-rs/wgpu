@@ -2029,27 +2029,11 @@ impl<'a, W: Write> Writer<'a, W> {
                                     };
 
                                     for (index, member) in members.iter().enumerate() {
-                                        // TODO: handle builtin in better way
-                                        if let Some(crate::Binding::BuiltIn(builtin)) =
-                                            member.binding
+                                        if let Some(crate::Binding::BuiltIn(
+                                            crate::BuiltIn::PointSize,
+                                        )) = member.binding
                                         {
-                                            has_point_size |= builtin == crate::BuiltIn::PointSize;
-
-                                            match builtin {
-                                                crate::BuiltIn::ClipDistance
-                                                | crate::BuiltIn::CullDistance => {
-                                                    if self.options.version.is_es() {
-                                                        // Note that gl_ClipDistance and gl_CullDistance are listed in the GLSL ES 3.2 spec but shouldn't
-                                                        // See https://github.com/KhronosGroup/GLSL/issues/132#issuecomment-685818465
-                                                        log::warn!(
-                                                            "{:?} is not part of GLSL ES",
-                                                            builtin
-                                                        );
-                                                        continue;
-                                                    }
-                                                }
-                                                _ => {}
-                                            }
+                                            has_point_size = true;
                                         }
 
                                         let varying_name = VaryingName {

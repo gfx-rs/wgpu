@@ -99,9 +99,8 @@ impl FeaturesManager {
         check_feature!(CONSERVATIVE_DEPTH, 130, 300);
         check_feature!(NOPERSPECTIVE_QUALIFIER, 130);
         check_feature!(SAMPLE_QUALIFIER, 400, 320);
-        // gl_ClipDistance is supported by core versions > 1.3 and aren't supported by an es versions without extensions
-        check_feature!(CLIP_DISTANCE, 130, 300);
-        check_feature!(CULL_DISTANCE, 450, 300);
+        check_feature!(CLIP_DISTANCE, 130, 300 /* with extension */);
+        check_feature!(CULL_DISTANCE, 450, 300 /* with extension */);
         check_feature!(SAMPLE_VARIABLES, 400, 300);
         check_feature!(DYNAMIC_ARRAY_SIZE, 430, 310);
         match version {
@@ -197,9 +196,8 @@ impl FeaturesManager {
         if (self.0.contains(Features::CLIP_DISTANCE) || self.0.contains(Features::CULL_DISTANCE))
             && version.is_es()
         {
-            // TODO: handle gl_ClipDistance and gl_CullDistance usage in better way
             // https://www.khronos.org/registry/OpenGL/extensions/EXT/EXT_clip_cull_distance.txt
-            // writeln!(out, "#extension GL_EXT_clip_cull_distance : require")?;
+            writeln!(out, "#extension GL_EXT_clip_cull_distance : require")?;
         }
 
         if self.0.contains(Features::SAMPLE_VARIABLES) && version.is_es() {

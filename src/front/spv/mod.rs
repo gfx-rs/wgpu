@@ -560,9 +560,15 @@ pub struct Frontend<I> {
         std::hash::BuildHasherDefault<rustc_hash::FxHasher>,
     >,
 
-    /// Tracks usage of builtins, used to cull unused builtins since they can
-    /// have serious performance implications.
-    builtin_usage: FastHashSet<crate::BuiltIn>,
+    /// Tracks access to gl_PerVertex's builtins, it is used to cull unused builtins since initializing those can
+    /// affect performance and the mere presence of some of these builtins might cause backends to error since they
+    /// might be unsupported.
+    ///
+    /// The problematic builtins are: PointSize, ClipDistance and CullDistance.
+    ///
+    /// glslang declares those by default even though they are never written to
+    /// (see <https://github.com/KhronosGroup/glslang/issues/1868>)
+    gl_per_vertex_builtin_access: FastHashSet<crate::BuiltIn>,
 }
 
 impl<I: Iterator<Item = u32>> Frontend<I> {
@@ -596,7 +602,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             index_constants: Vec::new(),
             index_constant_expressions: Vec::new(),
             switch_cases: indexmap::IndexMap::default(),
-            builtin_usage: FastHashSet::default(),
+            gl_per_vertex_builtin_access: FastHashSet::default(),
         }
     }
 
@@ -1480,7 +1486,8 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
 
                         log::trace!("\t\t\tlooking up type {:?}", acex.type_id);
                         let type_lookup = self.lookup_type.lookup(acex.type_id)?;
-                        acex = match ctx.type_arena[type_lookup.handle].inner {
+                        let ty = &ctx.type_arena[type_lookup.handle];
+                        acex = match ty.inner {
                             // can only index a struct with a constant
                             crate::TypeInner::Struct { ref members, .. } => {
                                 let index = index_maybe
@@ -1498,10 +1505,12 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                                     span,
                                 );
 
-                                if let Some(crate::Binding::BuiltIn(built_in)) =
-                                    members[index as usize].binding
-                                {
-                                    self.builtin_usage.insert(built_in);
+                                if ty.name.as_deref() == Some("gl_PerVertex") {
+                                    if let Some(crate::Binding::BuiltIn(built_in)) =
+                                        members[index as usize].binding
+                                    {
+                                        self.gl_per_vertex_builtin_access.insert(built_in);
+                                    }
                                 }
 
                                 AccessExpression {

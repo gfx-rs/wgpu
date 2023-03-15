@@ -590,6 +590,19 @@ impl<T: Eq + hash::Hash> UniqueArena<T> {
         Handle::from_usize(index)
     }
 
+    /// Replace an old value with a new value.
+    ///
+    /// # Panics
+    ///
+    /// - if the old value is not in the arena
+    /// - if the new value already exists in the arena
+    pub fn replace(&mut self, old: Handle<T>, new: T) {
+        let (index, added) = self.set.insert_full(new);
+        assert!(added && index == self.set.len() - 1);
+
+        self.set.swap_remove_index(old.index()).unwrap();
+    }
+
     /// Return this arena's handle for `value`, if present.
     ///
     /// If this arena already contains an element equal to `value`,

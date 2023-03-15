@@ -200,8 +200,8 @@ impl Frontend {
                         stride: 4,
                     },
                     builtin: match name {
-                        "gl_ClipDistance" => BuiltIn::PointSize,
-                        "gl_CullDistance" => BuiltIn::FragDepth,
+                        "gl_ClipDistance" => BuiltIn::ClipDistance,
+                        "gl_CullDistance" => BuiltIn::CullDistance,
                         _ => unreachable!(),
                     },
                     mutable: self.meta.stage == ShaderStage::Vertex,

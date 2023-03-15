@@ -2233,18 +2233,13 @@ impl<W: Write> Writer<W> {
                         let mut is_first = true;
 
                         for (index, member) in members.iter().enumerate() {
-                            match member.binding {
-                                Some(crate::Binding::BuiltIn(crate::BuiltIn::PointSize)) => {
-                                    has_point_size = true;
-                                    if !context.pipeline_options.allow_point_size {
-                                        continue;
-                                    }
-                                }
-                                Some(crate::Binding::BuiltIn(crate::BuiltIn::CullDistance)) => {
-                                    log::warn!("Ignoring CullDistance built-in");
+                            if let Some(crate::Binding::BuiltIn(crate::BuiltIn::PointSize)) =
+                                member.binding
+                            {
+                                has_point_size = true;
+                                if !context.pipeline_options.allow_point_size {
                                     continue;
                                 }
-                                _ => {}
                             }
 
                             let comma = if is_first { "" } else { "," };
@@ -3563,24 +3558,11 @@ impl<W: Write> Writer<W> {
                         };
                         let binding = binding.ok_or(Error::Validation)?;
 
-                        match *binding {
-                            // Point size is only supported in VS of pipelines with
-                            // point primitive topology.
-                            crate::Binding::BuiltIn(crate::BuiltIn::PointSize) => {
-                                has_point_size = true;
-                                if !pipeline_options.allow_point_size {
-                                    continue;
-                                }
-                            }
-                            // Cull Distance is not supported in Metal.
-                            // But we can't return UnsupportedBuiltIn error to user.
-                            // Because otherwise we can't generate msl shader from any glslang SPIR-V shaders.
-                            // glslang generates gl_PerVertex struct with gl_CullDistance builtin inside by default.
-                            crate::Binding::BuiltIn(crate::BuiltIn::CullDistance) => {
-                                log::warn!("Ignoring CullDistance BuiltIn");
+                        if let crate::Binding::BuiltIn(crate::BuiltIn::PointSize) = *binding {
+                            has_point_size = true;
+                            if !pipeline_options.allow_point_size {
                                 continue;
                             }
-                            _ => {}
                         }
 
                         let array_len = match module.types[ty].inner {
