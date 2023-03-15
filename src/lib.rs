@@ -199,7 +199,8 @@ tree.
     unused_extern_crates,
     unused_qualifications,
     clippy::pattern_type_mismatch,
-    clippy::missing_const_for_fn
+    clippy::missing_const_for_fn,
+    clippy::rest_pat_in_fully_bound_structs
 )]
 #![cfg_attr(not(test), deny(clippy::panic))]
 
