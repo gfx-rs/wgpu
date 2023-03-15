@@ -189,7 +189,6 @@ tree.
     clippy::new_without_default,
     clippy::unneeded_field_pattern,
     clippy::match_like_matches_macro,
-    clippy::if_same_then_else,
     clippy::collapsible_if,
     clippy::derive_partial_eq_without_eq,
     clippy::needless_borrowed_reference
