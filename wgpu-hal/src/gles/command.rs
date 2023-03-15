@@ -285,8 +285,6 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         });
     }
 
-    unsafe fn discard_buffer(&mut self, _buffer: &super::Buffer) {}
-
     unsafe fn copy_buffer_to_buffer<T>(
         &mut self,
         src: &super::Buffer,

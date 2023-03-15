@@ -262,8 +262,6 @@ impl crate::CommandEncoder<Api> for Encoder {
 
     unsafe fn clear_buffer(&mut self, buffer: &Resource, range: crate::MemoryRange) {}
 
-    unsafe fn discard_buffer(&mut self, _buffer: &Resource) {}
-
     unsafe fn copy_buffer_to_buffer<T>(&mut self, src: &Resource, dst: &Resource, regions: T) {}
 
     #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
