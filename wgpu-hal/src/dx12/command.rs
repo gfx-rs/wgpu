@@ -312,6 +312,18 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 barrier.usage.start,
                 barrier.usage.end
             );
+            if barrier
+                .buffer
+                .memory_flags
+                .contains(crate::MemoryFlags::TRANSIENT)
+            {
+                unsafe {
+                    self.list
+                        .unwrap()
+                        .DiscardResource(barrier.buffer.resource.as_mut_ptr(), ptr::null());
+                }
+            }
+
             let s0 = conv::map_buffer_usage_to_state(barrier.usage.start);
             let s1 = conv::map_buffer_usage_to_state(barrier.usage.end);
             if s0 != s1 {

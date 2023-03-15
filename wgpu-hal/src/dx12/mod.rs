@@ -400,6 +400,7 @@ unsafe impl Sync for CommandBuffer {}
 pub struct Buffer {
     resource: d3d12::Resource,
     size: wgt::BufferAddress,
+    memory_flags: crate::MemoryFlags,
     allocation: Option<suballocation::AllocationWrapper>,
 }
 

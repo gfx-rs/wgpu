@@ -349,6 +349,7 @@ impl crate::Device<super::Api> for super::Device {
         Ok(super::Buffer {
             resource,
             size,
+            memory_flags: desc.memory_flags,
             allocation,
         })
     }
