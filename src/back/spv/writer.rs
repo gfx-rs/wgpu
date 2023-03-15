@@ -1702,7 +1702,7 @@ impl Writer {
             .entry(lookup_function_type.clone())
         {
             Entry::Occupied(e) => *e.get(),
-            _ => {
+            Entry::Vacant(_) => {
                 let id = self.id_gen.next();
                 let instruction = Instruction::type_function(
                     id,

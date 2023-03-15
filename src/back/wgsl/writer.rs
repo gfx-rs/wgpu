@@ -1529,7 +1529,7 @@ impl<W: Write> Writer<W> {
                     Mf::Unpack2x16snorm => Function::Regular("unpack2x16snorm"),
                     Mf::Unpack2x16unorm => Function::Regular("unpack2x16unorm"),
                     Mf::Unpack2x16float => Function::Regular("unpack2x16float"),
-                    _ => {
+                    Mf::Inverse => {
                         return Err(Error::UnsupportedMathFunction(fun));
                     }
                 };

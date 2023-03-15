@@ -371,7 +371,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     }
                 }
             }
-            _ => {}
+            crate::Binding::BuiltIn(_) => {}
         }
 
         Ok(())

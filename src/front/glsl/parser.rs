@@ -148,7 +148,7 @@ impl<'source> ParsingContext<'source> {
                             kind: ErrorKind::PreprocessorError(error),
                             meta: res.meta,
                         }),
-                        _ => unreachable!(),
+                        LexerResultKind::Token(_) => unreachable!(),
                     }
                 }
             }

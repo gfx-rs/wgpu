@@ -252,7 +252,7 @@ pub fn inject_builtin(
                             args.push(make_coords_arg(num_coords_from_dim, Sk::Float));
                             args.push(make_coords_arg(num_coords_from_dim, Sk::Float));
                         }
-                        _ => {}
+                        TextureLevelType::None => {}
                     };
 
                     if offset {
@@ -2255,7 +2255,7 @@ impl Frontend {
             let (shadow, storage) = match class {
                 ImageClass::Depth { .. } => (true, false),
                 ImageClass::Storage { .. } => (false, true),
-                _ => (false, false),
+                ImageClass::Sampled { .. } => (false, false),
             };
 
             let coordinate = match (image_size, coord_size) {
@@ -2377,7 +2377,7 @@ pub fn sampled_to_depth(
             }
             ImageClass::Depth { .. } => {}
             // Other image classes aren't allowed to be transformed to depth
-            _ => errors.push(Error {
+            ImageClass::Storage { .. } => errors.push(Error {
                 kind: ErrorKind::SemanticError("Not a texture".into()),
                 meta,
             }),

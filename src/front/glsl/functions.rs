@@ -34,7 +34,7 @@ impl Frontend {
             ScalarKind::Uint => ScalarValue::Uint(value),
             ScalarKind::Sint => ScalarValue::Sint(value as i64),
             ScalarKind::Float => ScalarValue::Float(value as f64),
-            _ => unreachable!(),
+            ScalarKind::Bool => unreachable!(),
         };
 
         self.module.constants.fetch_or_append(
@@ -1323,7 +1323,7 @@ impl Frontend {
             } => {
                 let mut location = match binding {
                     crate::Binding::Location { location, .. } => location,
-                    _ => return,
+                    crate::Binding::BuiltIn(_) => return,
                 };
 
                 // TODO: Better error reporting
@@ -1372,7 +1372,7 @@ impl Frontend {
             TypeInner::Struct { ref members, .. } => {
                 let mut location = match binding {
                     crate::Binding::Location { location, .. } => location,
-                    _ => return,
+                    crate::Binding::BuiltIn(_) => return,
                 };
 
                 for (i, member) in members.iter().enumerate() {

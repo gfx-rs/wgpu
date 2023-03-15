@@ -305,7 +305,7 @@ impl VaryingContext<'_> {
                 let needs_interpolation = match self.stage {
                     crate::ShaderStage::Vertex => self.output,
                     crate::ShaderStage::Fragment => !self.output,
-                    _ => false,
+                    crate::ShaderStage::Compute => false,
                 };
 
                 // It doesn't make sense to specify a sampling when `interpolation` is `Flat`, but

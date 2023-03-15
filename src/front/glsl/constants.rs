@@ -413,7 +413,7 @@ impl<'a> ConstantSolver<'a> {
                     ScalarValue::Sint(ref mut v) => *v = !*v,
                     ScalarValue::Uint(ref mut v) => *v = !*v,
                     ScalarValue::Bool(ref mut v) => *v = !*v,
-                    _ => return Err(ConstantSolvingError::InvalidUnaryOpArg),
+                    ScalarValue::Float(_) => return Err(ConstantSolvingError::InvalidUnaryOpArg),
                 },
             },
             ConstantInner::Composite {

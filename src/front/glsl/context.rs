@@ -1063,7 +1063,7 @@ impl Context {
                 _ if var.load => {
                     self.add_expression(Expression::Load { pointer: var.expr }, meta, body)
                 }
-                _ => var.expr,
+                ExprPos::Rhs => var.expr,
             },
             HirExprKind::Call(ref call) if pos != ExprPos::Lhs => {
                 let maybe_expr = frontend.function_or_constructor_call(

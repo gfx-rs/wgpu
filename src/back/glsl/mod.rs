@@ -1297,7 +1297,7 @@ impl<'a, W: Write> Writer<'a, W> {
         let emit_interpolation_and_auxiliary = match self.entry_point.stage {
             ShaderStage::Vertex => output,
             ShaderStage::Fragment => !output,
-            _ => false,
+            ShaderStage::Compute => false,
         };
 
         // Write the I/O locations, if allowed

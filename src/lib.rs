@@ -200,7 +200,8 @@ tree.
     unused_qualifications,
     clippy::pattern_type_mismatch,
     clippy::missing_const_for_fn,
-    clippy::rest_pat_in_fully_bound_structs
+    clippy::rest_pat_in_fully_bound_structs,
+    clippy::match_wildcard_for_single_variants
 )]
 #![cfg_attr(not(test), deny(clippy::panic))]
 

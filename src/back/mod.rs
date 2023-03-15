@@ -53,7 +53,7 @@ impl FunctionType {
             FunctionType::EntryPoint(index) => {
                 module.entry_points[index as usize].stage == crate::ShaderStage::Compute
             }
-            _ => false,
+            FunctionType::Function(_) => false,
         }
     }
 }
