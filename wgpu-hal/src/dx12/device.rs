@@ -406,20 +406,12 @@ impl crate::Device<super::Api> for super::Device {
             Height: desc.size.height,
             DepthOrArraySize: desc.size.depth_or_array_layers as u16,
             MipLevels: desc.mip_level_count as u16,
-            Format: if crate::FormatAspects::from(desc.format).contains(crate::FormatAspects::COLOR)
-                || !desc.usage.intersects(
-                    crate::TextureUses::RESOURCE
-                        | crate::TextureUses::STORAGE_READ
-                        | crate::TextureUses::STORAGE_READ_WRITE,
-                ) {
-                auxil::dxgi::conv::map_texture_format(desc.format)
-            } else {
-                // This branch is needed if it's a depth texture, and it's ever needed to be viewed as SRV or UAV,
-                // because then we'd create a non-depth format view of it.
-                // Note: we can skip this branch if
-                // `D3D12_FEATURE_D3D12_OPTIONS3::CastingFullyTypedFormatSupported`
-                auxil::dxgi::conv::map_texture_format_depth_stencil_typeless(desc.format)
-            },
+            Format: auxil::dxgi::conv::map_texture_format_for_resource(
+                desc.format,
+                desc.usage,
+                !desc.view_formats.is_empty(),
+                self.private_caps.casting_fully_typed_format_supported,
+            ),
             SampleDesc: dxgitype::DXGI_SAMPLE_DESC {
                 Count: desc.sample_count,
                 Quality: 0,

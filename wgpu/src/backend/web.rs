@@ -460,10 +460,10 @@ fn map_buffer_copy_view(view: crate::ImageCopyBuffer) -> web_sys::GpuImageCopyBu
     let buffer = &<<Context as crate::Context>::BufferId>::from(view.buffer.id).0;
     let mut mapped = web_sys::GpuImageCopyBuffer::new(buffer);
     if let Some(bytes_per_row) = view.layout.bytes_per_row {
-        mapped.bytes_per_row(bytes_per_row.get());
+        mapped.bytes_per_row(bytes_per_row);
     }
     if let Some(rows_per_image) = view.layout.rows_per_image {
-        mapped.rows_per_image(rows_per_image.get());
+        mapped.rows_per_image(rows_per_image);
     }
     mapped.offset(view.layout.offset as f64);
     mapped
@@ -568,7 +568,7 @@ const FEATURES_MAPPING: [(wgt::Features, web_sys::GpuFeatureName); 8] = [
         web_sys::GpuFeatureName::TextureCompressionEtc2,
     ),
     (
-        wgt::Features::TEXTURE_COMPRESSION_ASTC_LDR,
+        wgt::Features::TEXTURE_COMPRESSION_ASTC,
         web_sys::GpuFeatureName::TextureCompressionAstc,
     ),
     (
@@ -580,7 +580,7 @@ const FEATURES_MAPPING: [(wgt::Features, web_sys::GpuFeatureName); 8] = [
         web_sys::GpuFeatureName::IndirectFirstInstance,
     ),
     (
-        wgt::Features::SHADER_FLOAT16,
+        wgt::Features::SHADER_F16,
         web_sys::GpuFeatureName::ShaderF16,
     ),
 ];
@@ -2370,10 +2370,10 @@ impl crate::context::Context for Context {
     ) {
         let mut mapped_data_layout = web_sys::GpuImageDataLayout::new();
         if let Some(bytes_per_row) = data_layout.bytes_per_row {
-            mapped_data_layout.bytes_per_row(bytes_per_row.get());
+            mapped_data_layout.bytes_per_row(bytes_per_row);
         }
         if let Some(rows_per_image) = data_layout.rows_per_image {
-            mapped_data_layout.rows_per_image(rows_per_image.get());
+            mapped_data_layout.rows_per_image(rows_per_image);
         }
         mapped_data_layout.offset(data_layout.offset as f64);
 
@@ -2521,7 +2521,7 @@ impl crate::context::Context for Context {
         _query_set_data: &Self::QuerySetData,
         _query_index: u32,
     ) {
-        panic!("WRITE_TIMESTAMP_INSIDE_PASSES feature must be enabled to call write_timestamp in a compute pass")
+        panic!("TIMESTAMP_QUERY_INSIDE_PASSES feature must be enabled to call write_timestamp in a compute pass")
     }
 
     fn compute_pass_begin_pipeline_statistics_query(
@@ -3074,7 +3074,7 @@ impl crate::context::Context for Context {
         _query_set_data: &Self::QuerySetData,
         _query_index: u32,
     ) {
-        panic!("WRITE_TIMESTAMP_INSIDE_PASSES feature must be enabled to call write_timestamp in a compute pass")
+        panic!("TIMESTAMP_QUERY_INSIDE_PASSES feature must be enabled to call write_timestamp in a compute pass")
     }
 
     fn render_pass_begin_pipeline_statistics_query(

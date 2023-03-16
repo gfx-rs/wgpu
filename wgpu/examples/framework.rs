@@ -504,7 +504,7 @@ pub struct FrameworkRefTest {
 #[cfg(test)]
 #[allow(dead_code)]
 pub fn test<E: Example>(mut params: FrameworkRefTest) {
-    use std::{mem, num::NonZeroU32};
+    use std::mem;
 
     assert_eq!(params.width % 64, 0, "width needs to be aligned 64");
 
@@ -592,7 +592,7 @@ pub fn test<E: Example>(mut params: FrameworkRefTest) {
                     buffer: &dst_buffer,
                     layout: wgpu::ImageDataLayout {
                         offset: 0,
-                        bytes_per_row: NonZeroU32::new(params.width * 4),
+                        bytes_per_row: Some(params.width * 4),
                         rows_per_image: None,
                     },
                 },

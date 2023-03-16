@@ -113,15 +113,15 @@ pub type DropGuard = Box<dyn std::any::Any + Send + Sync>;
 
 #[derive(Clone, Debug, PartialEq, Eq, Error)]
 pub enum DeviceError {
-    #[error("out of memory")]
+    #[error("Out of memory")]
     OutOfMemory,
-    #[error("device is lost")]
+    #[error("Device is lost")]
     Lost,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Error)]
 pub enum ShaderError {
-    #[error("compilation failed: {0:?}")]
+    #[error("Compilation failed: {0:?}")]
     Compilation(String),
     #[error(transparent)]
     Device(#[from] DeviceError),
@@ -129,9 +129,9 @@ pub enum ShaderError {
 
 #[derive(Clone, Debug, Eq, PartialEq, Error)]
 pub enum PipelineError {
-    #[error("linkage failed for stage {0:?}: {1}")]
+    #[error("Linkage failed for stage {0:?}: {1}")]
     Linkage(wgt::ShaderStages, String),
-    #[error("entry point for stage {0:?} is invalid")]
+    #[error("Entry point for stage {0:?} is invalid")]
     EntryPoint(naga::ShaderStage),
     #[error(transparent)]
     Device(#[from] DeviceError),
@@ -139,13 +139,13 @@ pub enum PipelineError {
 
 #[derive(Clone, Debug, Eq, PartialEq, Error)]
 pub enum SurfaceError {
-    #[error("surface is lost")]
+    #[error("Surface is lost")]
     Lost,
-    #[error("surface is outdated, needs to be re-created")]
+    #[error("Surface is outdated, needs to be re-created")]
     Outdated,
     #[error(transparent)]
     Device(#[from] DeviceError),
-    #[error("other reason: {0}")]
+    #[error("Other reason: {0}")]
     Other(&'static str),
 }
 

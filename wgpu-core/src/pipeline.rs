@@ -88,7 +88,7 @@ impl fmt::Display for ShaderError<naga::WithSpan<naga::valid::ValidationError>> 
         let label = self.label.as_deref().unwrap_or_default();
         let files = SimpleFile::new(label, &self.source);
         let config = term::Config::default();
-        let mut writer = term::termcolor::Ansi::new(Vec::new());
+        let mut writer = term::termcolor::NoColor::new(Vec::new());
 
         let diagnostic = Diagnostic::error().with_labels(
             self.inner
@@ -133,7 +133,7 @@ pub enum CreateShaderModuleError {
     #[error(transparent)]
     MissingFeatures(#[from] MissingFeatures),
     #[error(
-        "shader global {bind:?} uses a group index {group} that exceeds the max_bind_groups limit of {limit}."
+        "Shader global {bind:?} uses a group index {group} that exceeds the max_bind_groups limit of {limit}."
     )]
     InvalidGroupIndex {
         bind: naga::ResourceBinding,
@@ -170,9 +170,9 @@ pub type ImplicitBindGroupCount = u8;
 
 #[derive(Clone, Debug, Error)]
 pub enum ImplicitLayoutError {
-    #[error("missing IDs for deriving {0} bind groups")]
+    #[error("Missing IDs for deriving {0} bind groups")]
     MissingIds(ImplicitBindGroupCount),
-    #[error("unable to reflect the shader {0:?} interface")]
+    #[error("Unable to reflect the shader {0:?} interface")]
     ReflectionError(wgt::ShaderStages),
     #[error(transparent)]
     BindGroup(#[from] CreateBindGroupLayoutError),
@@ -196,11 +196,11 @@ pub struct ComputePipelineDescriptor<'a> {
 pub enum CreateComputePipelineError {
     #[error(transparent)]
     Device(#[from] DeviceError),
-    #[error("pipeline layout is invalid")]
+    #[error("Pipeline layout is invalid")]
     InvalidLayout,
-    #[error("unable to derive an implicit layout")]
+    #[error("Unable to derive an implicit layout")]
     Implicit(#[from] ImplicitLayoutError),
-    #[error("error matching shader requirements against the pipeline")]
+    #[error("Error matching shader requirements against the pipeline")]
     Stage(#[from] validation::StageError),
     #[error("Internal error: {0}")]
     Internal(String),
@@ -289,34 +289,34 @@ pub struct RenderPipelineDescriptor<'a> {
 
 #[derive(Clone, Debug, Error)]
 pub enum ColorStateError {
-    #[error("format {0:?} is not renderable")]
+    #[error("Format {0:?} is not renderable")]
     FormatNotRenderable(wgt::TextureFormat),
-    #[error("format {0:?} is not blendable")]
+    #[error("Format {0:?} is not blendable")]
     FormatNotBlendable(wgt::TextureFormat),
-    #[error("format {0:?} does not have a color aspect")]
+    #[error("Format {0:?} does not have a color aspect")]
     FormatNotColor(wgt::TextureFormat),
-    #[error("format {0:?} can't be multisampled")]
+    #[error("Format {0:?} can't be multisampled")]
     FormatNotMultisampled(wgt::TextureFormat),
-    #[error("output format {pipeline} is incompatible with the shader {shader}")]
+    #[error("Output format {pipeline} is incompatible with the shader {shader}")]
     IncompatibleFormat {
         pipeline: validation::NumericType,
         shader: validation::NumericType,
     },
-    #[error("blend factors for {0:?} must be `One`")]
+    #[error("Blend factors for {0:?} must be `One`")]
     InvalidMinMaxBlendFactors(wgt::BlendComponent),
-    #[error("invalid write mask {0:?}")]
+    #[error("Invalid write mask {0:?}")]
     InvalidWriteMask(wgt::ColorWrites),
 }
 
 #[derive(Clone, Debug, Error)]
 pub enum DepthStencilStateError {
-    #[error("format {0:?} is not renderable")]
+    #[error("Format {0:?} is not renderable")]
     FormatNotRenderable(wgt::TextureFormat),
-    #[error("format {0:?} does not have a depth aspect, but depth test/write is enabled")]
+    #[error("Format {0:?} does not have a depth aspect, but depth test/write is enabled")]
     FormatNotDepth(wgt::TextureFormat),
-    #[error("format {0:?} does not have a stencil aspect, but stencil test/write is enabled")]
+    #[error("Format {0:?} does not have a stencil aspect, but stencil test/write is enabled")]
     FormatNotStencil(wgt::TextureFormat),
-    #[error("format {0:?} can't be multisampled")]
+    #[error("Format {0:?} can't be multisampled")]
     FormatNotMultisampled(wgt::TextureFormat),
 }
 
@@ -326,33 +326,33 @@ pub enum CreateRenderPipelineError {
     ColorAttachment(#[from] ColorAttachmentError),
     #[error(transparent)]
     Device(#[from] DeviceError),
-    #[error("pipeline layout is invalid")]
+    #[error("Pipeline layout is invalid")]
     InvalidLayout,
-    #[error("unable to derive an implicit layout")]
+    #[error("Unable to derive an implicit layout")]
     Implicit(#[from] ImplicitLayoutError),
-    #[error("color state [{0}] is invalid")]
+    #[error("Color state [{0}] is invalid")]
     ColorState(u8, #[source] ColorStateError),
-    #[error("depth/stencil state is invalid")]
+    #[error("Depth/stencil state is invalid")]
     DepthStencilState(#[from] DepthStencilStateError),
-    #[error("invalid sample count {0}")]
+    #[error("Invalid sample count {0}")]
     InvalidSampleCount(u32),
-    #[error("the number of vertex buffers {given} exceeds the limit {limit}")]
+    #[error("The number of vertex buffers {given} exceeds the limit {limit}")]
     TooManyVertexBuffers { given: u32, limit: u32 },
-    #[error("the total number of vertex attributes {given} exceeds the limit {limit}")]
+    #[error("The total number of vertex attributes {given} exceeds the limit {limit}")]
     TooManyVertexAttributes { given: u32, limit: u32 },
-    #[error("vertex buffer {index} stride {given} exceeds the limit {limit}")]
+    #[error("Vertex buffer {index} stride {given} exceeds the limit {limit}")]
     VertexStrideTooLarge { index: u32, given: u32, limit: u32 },
-    #[error("vertex buffer {index} stride {stride} does not respect `VERTEX_STRIDE_ALIGNMENT`")]
+    #[error("Vertex buffer {index} stride {stride} does not respect `VERTEX_STRIDE_ALIGNMENT`")]
     UnalignedVertexStride {
         index: u32,
         stride: wgt::BufferAddress,
     },
-    #[error("vertex attribute at location {location} has invalid offset {offset}")]
+    #[error("Vertex attribute at location {location} has invalid offset {offset}")]
     InvalidVertexAttributeOffset {
         location: wgt::ShaderLocation,
         offset: wgt::BufferAddress,
     },
-    #[error("strip index format was not set to None but to {strip_index_format:?} while using the non-strip topology {topology:?}")]
+    #[error("Strip index format was not set to None but to {strip_index_format:?} while using the non-strip topology {topology:?}")]
     StripIndexFormatForNonStripTopology {
         strip_index_format: Option<wgt::IndexFormat>,
         topology: wgt::PrimitiveTopology,
@@ -363,7 +363,7 @@ pub enum CreateRenderPipelineError {
     MissingFeatures(#[from] MissingFeatures),
     #[error(transparent)]
     MissingDownlevelFlags(#[from] MissingDownlevelFlags),
-    #[error("error matching {stage:?} shader requirements against the pipeline")]
+    #[error("Error matching {stage:?} shader requirements against the pipeline")]
     Stage {
         stage: wgt::ShaderStages,
         #[source]

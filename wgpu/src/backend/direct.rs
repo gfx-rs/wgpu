@@ -232,7 +232,7 @@ impl Context {
         })
     }
 
-    #[cfg(target_os = "windows")]
+    #[cfg(all(feature = "dx12", windows))]
     pub unsafe fn create_surface_from_visual(&self, visual: *mut std::ffi::c_void) -> Surface {
         let id = unsafe { self.0.instance_create_surface_from_visual(visual, ()) };
         Surface {
@@ -241,7 +241,7 @@ impl Context {
         }
     }
 
-    #[cfg(target_os = "windows")]
+    #[cfg(all(feature = "dx12", windows))]
     pub unsafe fn create_surface_from_surface_handle(
         &self,
         surface_handle: *mut std::ffi::c_void,
@@ -299,12 +299,13 @@ impl Context {
         self.handle_error(sink_mutex, cause, "", None, string)
     }
 
+    #[track_caller]
     fn handle_error_fatal(
         &self,
         cause: impl Error + Send + Sync + 'static,
-        string: &'static str,
+        operation: &'static str,
     ) -> ! {
-        panic!("Error in {string}: {cause}");
+        panic!("Error in {operation}: {f}", f = self.format_error(&cause));
     }
 
     fn format_error(&self, err: &(impl Error + 'static)) -> String {

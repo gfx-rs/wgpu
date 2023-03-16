@@ -1544,7 +1544,7 @@ impl Instance {
     /// # Safety
     ///
     /// - visual must be a valid IDCompositionVisual to create a surface upon.
-    #[cfg(target_os = "windows")]
+    #[cfg(all(feature = "dx12", windows))]
     pub unsafe fn create_surface_from_visual(&self, visual: *mut std::ffi::c_void) -> Surface {
         let surface = unsafe {
             self.context
@@ -1566,7 +1566,7 @@ impl Instance {
     /// # Safety
     ///
     /// - surface_handle must be a valid SurfaceHandle to create a surface upon.
-    #[cfg(target_os = "windows")]
+    #[cfg(all(feature = "dx12", windows))]
     pub unsafe fn create_surface_from_surface_handle(
         &self,
         surface_handle: *mut std::ffi::c_void,
@@ -3426,7 +3426,7 @@ impl<'a> RenderPass<'a> {
     }
 }
 
-/// [`Features::WRITE_TIMESTAMP_INSIDE_PASSES`] must be enabled on the device in order to call these functions.
+/// [`Features::TIMESTAMP_QUERY_INSIDE_PASSES`] must be enabled on the device in order to call these functions.
 impl<'a> RenderPass<'a> {
     /// Issue a timestamp command at this point in the queue. The
     /// timestamp will be written to the specified query set, at the specified index.
@@ -3605,7 +3605,7 @@ impl<'a> ComputePass<'a> {
     }
 }
 
-/// [`Features::WRITE_TIMESTAMP_INSIDE_PASSES`] must be enabled on the device in order to call these functions.
+/// [`Features::TIMESTAMP_QUERY_INSIDE_PASSES`] must be enabled on the device in order to call these functions.
 impl<'a> ComputePass<'a> {
     /// Issue a timestamp command at this point in the queue. The timestamp will be written to the specified query set, at the specified index.
     ///

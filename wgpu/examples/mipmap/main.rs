@@ -2,7 +2,7 @@
 mod framework;
 
 use bytemuck::{Pod, Zeroable};
-use std::{borrow::Cow, f32::consts, mem, num::NonZeroU32};
+use std::{borrow::Cow, f32::consts, mem};
 use wgpu::util::DeviceExt;
 
 const TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
@@ -202,7 +202,7 @@ impl framework::Example for Example {
     fn optional_features() -> wgpu::Features {
         wgpu::Features::TIMESTAMP_QUERY
             | wgpu::Features::PIPELINE_STATISTICS_QUERY
-            | wgpu::Features::WRITE_TIMESTAMP_INSIDE_PASSES
+            | wgpu::Features::TIMESTAMP_QUERY_INSIDE_PASSES
     }
 
     fn init(
@@ -247,7 +247,7 @@ impl framework::Example for Example {
                 buffer: &temp_buf,
                 layout: wgpu::ImageDataLayout {
                     offset: 0,
-                    bytes_per_row: Some(NonZeroU32::new(4 * size).unwrap()),
+                    bytes_per_row: Some(4 * size),
                     rows_per_image: None,
                 },
             },
@@ -329,7 +329,7 @@ impl framework::Example for Example {
         let query_sets = if device.features().contains(
             wgpu::Features::TIMESTAMP_QUERY
                 | wgpu::Features::PIPELINE_STATISTICS_QUERY
-                | wgpu::Features::WRITE_TIMESTAMP_INSIDE_PASSES,
+                | wgpu::Features::TIMESTAMP_QUERY_INSIDE_PASSES,
         ) {
             // For N total mips, it takes N - 1 passes to generate them, and we're measuring those.
             let mip_passes = MIP_LEVEL_COUNT - 1;

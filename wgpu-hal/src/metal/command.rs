@@ -1,5 +1,5 @@
 use super::{conv, AsNative};
-use std::{mem, ops::Range};
+use std::{borrow::Cow, mem, ops::Range};
 
 // has to match `Temp::binding_sizes`
 const WORD_SIZE: usize = 4;
@@ -187,6 +187,14 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     ) where
         T: Iterator<Item = crate::TextureCopy>,
     {
+        let dst_texture = if src.format != dst.format {
+            let raw_format = self.shared.private_caps.map_format(src.format);
+            Cow::Owned(objc::rc::autoreleasepool(|| {
+                dst.raw.new_texture_view(raw_format)
+            }))
+        } else {
+            Cow::Borrowed(&dst.raw)
+        };
         let encoder = self.enter_blit();
         for copy in regions {
             let src_origin = conv::map_origin(&copy.src_base.origin);
@@ -199,7 +207,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 copy.src_base.mip_level as u64,
                 src_origin,
                 extent,
-                &dst.raw,
+                &dst_texture,
                 copy.dst_base.array_layer as u64,
                 copy.dst_base.mip_level as u64,
                 dst_origin,
@@ -223,14 +231,11 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 .texture_base
                 .max_copy_size(&dst.copy_size)
                 .min(&copy.size);
-            let bytes_per_row = copy
-                .buffer_layout
-                .bytes_per_row
-                .map_or(0, |v| v.get() as u64);
+            let bytes_per_row = copy.buffer_layout.bytes_per_row.unwrap_or(0) as u64;
             let image_byte_stride = if extent.depth > 1 {
                 copy.buffer_layout
                     .rows_per_image
-                    .map_or(0, |v| v.get() as u64 * bytes_per_row)
+                    .map_or(0, |v| v as u64 * bytes_per_row)
             } else {
                 // Don't pass a stride when updating a single layer, otherwise metal validation
                 // fails when updating a subset of the image due to the stride being larger than
@@ -269,14 +274,11 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 .texture_base
                 .max_copy_size(&src.copy_size)
                 .min(&copy.size);
-            let bytes_per_row = copy
-                .buffer_layout
-                .bytes_per_row
-                .map_or(0, |v| v.get() as u64);
+            let bytes_per_row = copy.buffer_layout.bytes_per_row.unwrap_or(0) as u64;
             let bytes_per_image = copy
                 .buffer_layout
                 .rows_per_image
-                .map_or(0, |v| v.get() as u64 * bytes_per_row);
+                .map_or(0, |v| v as u64 * bytes_per_row);
             encoder.copy_from_texture_to_buffer(
                 &src.raw,
                 copy.texture_base.array_layer as u64,

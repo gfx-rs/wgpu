@@ -1,5 +1,3 @@
-use std::num::NonZeroU32;
-
 /// Describes a [Buffer](crate::Buffer) when allocating.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct BufferInitDescriptor<'a> {
@@ -132,12 +130,8 @@ impl DeviceExt for crate::Device {
                     &data[binary_offset..end_offset],
                     crate::ImageDataLayout {
                         offset: 0,
-                        bytes_per_row: Some(
-                            NonZeroU32::new(bytes_per_row).expect("invalid bytes per row"),
-                        ),
-                        rows_per_image: Some(
-                            NonZeroU32::new(height_blocks).expect("invalid height"),
-                        ),
+                        bytes_per_row: Some(bytes_per_row),
+                        rows_per_image: Some(height_blocks),
                     },
                     mip_physical,
                 );
