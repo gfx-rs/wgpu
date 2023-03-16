@@ -832,7 +832,7 @@ impl super::Validator {
                 }
                 ShaderStages::all()
             }
-            E::Derivative { axis: _, expr } => {
+            E::Derivative { expr, .. } => {
                 match resolver[expr] {
                     Ti::Scalar {
                         kind: Sk::Float, ..

@@ -1572,12 +1572,12 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     args.finish()?;
 
                     crate::Expression::Relational { fun, argument }
-                } else if let Some(axis) = conv::map_derivative_axis(function.name) {
+                } else if let Some((axis, ctrl)) = conv::map_derivative(function.name) {
                     let mut args = ctx.prepare_args(arguments, 1, span);
                     let expr = self.expression(args.next()?, ctx.reborrow())?;
                     args.finish()?;
 
-                    crate::Expression::Derivative { axis, expr }
+                    crate::Expression::Derivative { axis, ctrl, expr }
                 } else if let Some(fun) = conv::map_standard_fun(function.name) {
                     let expected = fun.argument_count() as _;
                     let mut args = ctx.prepare_args(arguments, expected, span);

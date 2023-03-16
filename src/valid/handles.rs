@@ -345,10 +345,7 @@ impl super::Validator {
                     .check_dep(accept)?
                     .check_dep(reject)?;
             }
-            crate::Expression::Derivative {
-                axis: _,
-                expr: argument,
-            } => {
+            crate::Expression::Derivative { expr: argument, .. } => {
                 handle.check_dep(argument)?;
             }
             crate::Expression::Relational { fun: _, argument } => {

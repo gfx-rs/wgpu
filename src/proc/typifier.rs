@@ -635,7 +635,7 @@ impl<'a> ResolveContext<'a> {
             },
             crate::Expression::AtomicResult { ty, .. } => TypeResolution::Handle(ty),
             crate::Expression::Select { accept, .. } => past(accept)?.clone(),
-            crate::Expression::Derivative { axis: _, expr } => past(expr)?.clone(),
+            crate::Expression::Derivative { expr, .. } => past(expr)?.clone(),
             crate::Expression::Relational { fun, argument } => match fun {
                 crate::RelationalFunction::All | crate::RelationalFunction::Any => {
                     TypeResolution::Value(Ti::Scalar {

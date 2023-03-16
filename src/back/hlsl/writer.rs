@@ -133,6 +133,13 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     _ => {}
                 }
             }
+
+            if let Expression::Derivative { axis, ctrl, expr } = *expr {
+                use crate::{DerivativeAxis as Axis, DerivativeControl as Ctrl};
+                if axis == Axis::Width && (ctrl == Ctrl::Coarse || ctrl == Ctrl::Fine) {
+                    self.need_bake_expressions.insert(expr);
+                }
+            }
         }
     }
 
@@ -2801,17 +2808,34 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 let var_name = &self.names[&NameKey::GlobalVariable(var_handle)];
                 write!(self.out, "({var_name}) - {offset}) / {stride})")?
             }
-            Expression::Derivative { axis, expr } => {
-                use crate::DerivativeAxis as Da;
-
-                let fun_str = match axis {
-                    Da::X => "ddx",
-                    Da::Y => "ddy",
-                    Da::Width => "fwidth",
-                };
-                write!(self.out, "{fun_str}(")?;
-                self.write_expr(module, expr, func_ctx)?;
-                write!(self.out, ")")?
+            Expression::Derivative { axis, ctrl, expr } => {
+                use crate::{DerivativeAxis as Axis, DerivativeControl as Ctrl};
+                if axis == Axis::Width && (ctrl == Ctrl::Coarse || ctrl == Ctrl::Fine) {
+                    let tail = match ctrl {
+                        Ctrl::Coarse => "coarse",
+                        Ctrl::Fine => "fine",
+                        Ctrl::None => unreachable!(),
+                    };
+                    write!(self.out, "abs(ddx_{tail}(")?;
+                    self.write_expr(module, expr, func_ctx)?;
+                    write!(self.out, ")) + abs(ddy_{tail}(")?;
+                    self.write_expr(module, expr, func_ctx)?;
+                    write!(self.out, "))")?
+                } else {
+                    let fun_str = match (axis, ctrl) {
+                        (Axis::X, Ctrl::Coarse) => "ddx_coarse",
+                        (Axis::X, Ctrl::Fine) => "ddx_fine",
+                        (Axis::X, Ctrl::None) => "ddx",
+                        (Axis::Y, Ctrl::Coarse) => "ddy_coarse",
+                        (Axis::Y, Ctrl::Fine) => "ddy_fine",
+                        (Axis::Y, Ctrl::None) => "ddy",
+                        (Axis::Width, Ctrl::Coarse | Ctrl::Fine) => unreachable!(),
+                        (Axis::Width, Ctrl::None) => "fwidth",
+                    };
+                    write!(self.out, "{fun_str}(")?;
+                    self.write_expr(module, expr, func_ctx)?;
+                    write!(self.out, ")")?
+                }
             }
             Expression::Relational { fun, argument } => {
                 use crate::RelationalFunction as Rf;

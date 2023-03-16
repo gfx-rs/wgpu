@@ -1590,13 +1590,18 @@ impl<W: Write> Writer<W> {
                 self.write_expr(module, condition, func_ctx)?;
                 write!(self.out, ")")?
             }
-            Expression::Derivative { axis, expr } => {
-                use crate::DerivativeAxis as Da;
-
-                let op = match axis {
-                    Da::X => "dpdx",
-                    Da::Y => "dpdy",
-                    Da::Width => "fwidth",
+            Expression::Derivative { axis, ctrl, expr } => {
+                use crate::{DerivativeAxis as Axis, DerivativeControl as Ctrl};
+                let op = match (axis, ctrl) {
+                    (Axis::X, Ctrl::Coarse) => "dpdxCoarse",
+                    (Axis::X, Ctrl::Fine) => "dpdxFine",
+                    (Axis::X, Ctrl::None) => "dpdx",
+                    (Axis::Y, Ctrl::Coarse) => "dpdyCoarse",
+                    (Axis::Y, Ctrl::Fine) => "dpdyFine",
+                    (Axis::Y, Ctrl::None) => "dpdy",
+                    (Axis::Width, Ctrl::Coarse) => "fwidthCoarse",
+                    (Axis::Width, Ctrl::Fine) => "fwidthFine",
+                    (Axis::Width, Ctrl::None) => "fwidth",
                 };
                 write!(self.out, "{op}(")?;
                 self.write_expr(module, expr, func_ctx)?;

@@ -1015,6 +1015,7 @@ fn uniform_control_flow() {
     let derivative_expr = expressions.append(
         E::Derivative {
             axis: crate::DerivativeAxis::X,
+            ctrl: crate::DerivativeControl::None,
             expr: constant_expr,
         },
         Default::default(),

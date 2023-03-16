@@ -1579,11 +1579,12 @@ impl<W: Write> Writer<W> {
                 }
                 _ => return Err(Error::Validation),
             },
-            crate::Expression::Derivative { axis, expr } => {
+            crate::Expression::Derivative { axis, expr, .. } => {
+                use crate::DerivativeAxis as Axis;
                 let op = match axis {
-                    crate::DerivativeAxis::X => "dfdx",
-                    crate::DerivativeAxis::Y => "dfdy",
-                    crate::DerivativeAxis::Width => "fwidth",
+                    Axis::X => "dfdx",
+                    Axis::Y => "dfdy",
+                    Axis::Width => "fwidth",
                 };
                 write!(self.out, "{NAMESPACE}::{op}")?;
                 self.put_call_parameters(iter::once(expr), context)?;

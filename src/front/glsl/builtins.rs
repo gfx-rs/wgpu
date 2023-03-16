@@ -7,9 +7,10 @@ use super::{
     Error, ErrorKind, Frontend, Result,
 };
 use crate::{
-    BinaryOperator, Block, Constant, DerivativeAxis, Expression, Handle, ImageClass,
-    ImageDimension as Dim, ImageQuery, MathFunction, Module, RelationalFunction, SampleLevel,
-    ScalarKind as Sk, Span, Type, TypeInner, UnaryOperator, VectorSize,
+    BinaryOperator, Block, Constant, DerivativeAxis as Axis, DerivativeControl as Ctrl, Expression,
+    Handle, ImageClass, ImageDimension as Dim, ImageQuery, MathFunction, Module,
+    RelationalFunction, SampleLevel, ScalarKind as Sk, Span, Type, TypeInner, UnaryOperator,
+    VectorSize,
 };
 
 impl crate::ScalarKind {
@@ -571,15 +572,15 @@ fn inject_standard_builtins(
                         "degrees" => MacroCall::MathFunction(MathFunction::Degrees),
                         "floatBitsToInt" => MacroCall::BitCast(Sk::Sint),
                         "floatBitsToUint" => MacroCall::BitCast(Sk::Uint),
-                        "dFdx" | "dFdxFine" | "dFdxCoarse" => {
-                            MacroCall::Derivate(DerivativeAxis::X)
-                        }
-                        "dFdy" | "dFdyFine" | "dFdyCoarse" => {
-                            MacroCall::Derivate(DerivativeAxis::Y)
-                        }
-                        "fwidth" | "fwidthFine" | "fwidthCoarse" => {
-                            MacroCall::Derivate(DerivativeAxis::Width)
-                        }
+                        "dFdxCoarse" => MacroCall::Derivate(Axis::X, Ctrl::Coarse),
+                        "dFdyCoarse" => MacroCall::Derivate(Axis::Y, Ctrl::Coarse),
+                        "fwidthCoarse" => MacroCall::Derivate(Axis::Width, Ctrl::Coarse),
+                        "dFdxFine" => MacroCall::Derivate(Axis::X, Ctrl::Fine),
+                        "dFdyFine" => MacroCall::Derivate(Axis::Y, Ctrl::Fine),
+                        "fwidthFine" => MacroCall::Derivate(Axis::Width, Ctrl::Fine),
+                        "dFdx" => MacroCall::Derivate(Axis::X, Ctrl::None),
+                        "dFdy" => MacroCall::Derivate(Axis::Y, Ctrl::None),
+                        "fwidth" => MacroCall::Derivate(Axis::Width, Ctrl::None),
                         _ => unreachable!(),
                     },
                 ))
@@ -1661,7 +1662,7 @@ pub enum MacroCall {
     MixBoolean,
     Clamp(Option<VectorSize>),
     BitCast(Sk),
-    Derivate(DerivativeAxis),
+    Derivate(Axis, Ctrl),
     Barrier,
     /// SmoothStep needs a separate variant because it might need it's inputs
     /// to be splatted depending on the overload
@@ -2143,9 +2144,10 @@ impl MacroCall {
                 Span::default(),
                 body,
             ),
-            MacroCall::Derivate(axis) => ctx.add_expression(
+            MacroCall::Derivate(axis, ctrl) => ctx.add_expression(
                 Expression::Derivative {
                     axis,
+                    ctrl,
                     expr: args[0],
                 },
                 Span::default(),

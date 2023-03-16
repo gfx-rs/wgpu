@@ -977,6 +977,17 @@ pub enum AtomicFunction {
     Exchange { compare: Option<Handle<Expression>> },
 }
 
+/// Hint at which precision to compute a derivative.
+#[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
+pub enum DerivativeControl {
+    Coarse,
+    Fine,
+    None,
+}
+
 /// Axis on which to compute a derivative.
 #[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
@@ -1388,6 +1399,7 @@ pub enum Expression {
     /// Compute the derivative on an axis.
     Derivative {
         axis: DerivativeAxis,
+        ctrl: DerivativeControl,
         //modifier,
         expr: Handle<Expression>,
     },

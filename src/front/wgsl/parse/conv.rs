@@ -113,11 +113,18 @@ pub fn get_scalar_type(word: &str) -> Option<(crate::ScalarKind, crate::Bytes)> 
     }
 }
 
-pub fn map_derivative_axis(word: &str) -> Option<crate::DerivativeAxis> {
+pub fn map_derivative(word: &str) -> Option<(crate::DerivativeAxis, crate::DerivativeControl)> {
+    use crate::{DerivativeAxis as Axis, DerivativeControl as Ctrl};
     match word {
-        "dpdx" => Some(crate::DerivativeAxis::X),
-        "dpdy" => Some(crate::DerivativeAxis::Y),
-        "fwidth" => Some(crate::DerivativeAxis::Width),
+        "dpdxCoarse" => Some((Axis::X, Ctrl::Coarse)),
+        "dpdyCoarse" => Some((Axis::Y, Ctrl::Coarse)),
+        "fwidthCoarse" => Some((Axis::Width, Ctrl::Coarse)),
+        "dpdxFine" => Some((Axis::X, Ctrl::Fine)),
+        "dpdyFine" => Some((Axis::Y, Ctrl::Fine)),
+        "fwidthFine" => Some((Axis::Width, Ctrl::Fine)),
+        "dpdx" => Some((Axis::X, Ctrl::None)),
+        "dpdy" => Some((Axis::Y, Ctrl::None)),
+        "fwidth" => Some((Axis::Width, Ctrl::None)),
         _ => None,
     }
 }

@@ -1334,15 +1334,29 @@ impl<'w> BlockContext<'w> {
                 block.body.push(instruction);
                 id
             }
-            crate::Expression::Derivative { axis, expr } => {
-                use crate::DerivativeAxis as Da;
-
+            crate::Expression::Derivative { axis, ctrl, expr } => {
+                use crate::{DerivativeAxis as Axis, DerivativeControl as Ctrl};
+                match ctrl {
+                    Ctrl::Coarse | Ctrl::Fine => {
+                        self.writer.require_any(
+                            "DerivativeControl",
+                            &[spirv::Capability::DerivativeControl],
+                        )?;
+                    }
+                    Ctrl::None => {}
+                }
                 let id = self.gen_id();
                 let expr_id = self.cached[expr];
-                let op = match axis {
-                    Da::X => spirv::Op::DPdx,
-                    Da::Y => spirv::Op::DPdy,
-                    Da::Width => spirv::Op::Fwidth,
+                let op = match (axis, ctrl) {
+                    (Axis::X, Ctrl::Coarse) => spirv::Op::DPdxCoarse,
+                    (Axis::X, Ctrl::Fine) => spirv::Op::DPdxFine,
+                    (Axis::X, Ctrl::None) => spirv::Op::DPdx,
+                    (Axis::Y, Ctrl::Coarse) => spirv::Op::DPdyCoarse,
+                    (Axis::Y, Ctrl::Fine) => spirv::Op::DPdyFine,
+                    (Axis::Y, Ctrl::None) => spirv::Op::DPdy,
+                    (Axis::Width, Ctrl::Coarse) => spirv::Op::FwidthCoarse,
+                    (Axis::Width, Ctrl::Fine) => spirv::Op::FwidthFine,
+                    (Axis::Width, Ctrl::None) => spirv::Op::Fwidth,
                 };
                 block
                     .body

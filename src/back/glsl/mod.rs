@@ -185,6 +185,10 @@ impl Version {
     fn supports_integer_functions(&self) -> bool {
         *self >= Version::Desktop(400) || *self >= Version::new_gles(310)
     }
+
+    fn supports_derivative_control(&self) -> bool {
+        *self >= Version::Desktop(450)
+    }
 }
 
 impl PartialOrd for Version {
@@ -2812,18 +2816,28 @@ impl<'a, W: Write> Writer<'a, W> {
                 write!(self.out, ")")?
             }
             // `Derivative` is a function call to a glsl provided function
-            Expression::Derivative { axis, expr } => {
-                use crate::DerivativeAxis as Da;
-
-                write!(
-                    self.out,
-                    "{}(",
-                    match axis {
-                        Da::X => "dFdx",
-                        Da::Y => "dFdy",
-                        Da::Width => "fwidth",
+            Expression::Derivative { axis, ctrl, expr } => {
+                use crate::{DerivativeAxis as Axis, DerivativeControl as Ctrl};
+                let fun_name = if self.options.version.supports_derivative_control() {
+                    match (axis, ctrl) {
+                        (Axis::X, Ctrl::Coarse) => "dFdxCoarse",
+                        (Axis::X, Ctrl::Fine) => "dFdxFine",
+                        (Axis::X, Ctrl::None) => "dFdx",
+                        (Axis::Y, Ctrl::Coarse) => "dFdyCoarse",
+                        (Axis::Y, Ctrl::Fine) => "dFdyFine",
+                        (Axis::Y, Ctrl::None) => "dFdy",
+                        (Axis::Width, Ctrl::Coarse) => "fwidthCoarse",
+                        (Axis::Width, Ctrl::Fine) => "fwidthFine",
+                        (Axis::Width, Ctrl::None) => "fwidth",
                     }
-                )?;
+                } else {
+                    match axis {
+                        Axis::X => "dFdx",
+                        Axis::Y => "dFdy",
+                        Axis::Width => "fwidth",
+                    }
+                };
+                write!(self.out, "{fun_name}(")?;
                 self.write_expr(expr, ctx)?;
                 write!(self.out, ")")?
             }

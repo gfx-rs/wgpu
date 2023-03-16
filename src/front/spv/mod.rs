@@ -1129,7 +1129,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
         block: &mut crate::Block,
         block_id: spirv::Word,
         body_idx: usize,
-        axis: crate::DerivativeAxis,
+        (axis, ctrl): (crate::DerivativeAxis, crate::DerivativeControl),
     ) -> Result<(), Error> {
         let start = self.data_offset;
         let result_type_id = self.next()?;
@@ -1141,6 +1141,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
 
         let expr = crate::Expression::Derivative {
             axis,
+            ctrl,
             expr: arg_handle,
         };
         self.lookup_expression.insert(
@@ -1294,8 +1295,15 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             ($op:expr, UNARY) => {
                 self.parse_expr_unary_op(ctx, &mut emitter, &mut block, block_id, body_idx, $op)
             };
-            ($axis:expr, DERIVATIVE) => {
-                self.parse_expr_derivative(ctx, &mut emitter, &mut block, block_id, body_idx, $axis)
+            ($axis:expr, $ctrl:expr, DERIVATIVE) => {
+                self.parse_expr_derivative(
+                    ctx,
+                    &mut emitter,
+                    &mut block,
+                    block_id,
+                    body_idx,
+                    ($axis, $ctrl),
+                )
             };
         }
 
@@ -3346,14 +3354,68 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     });
                     body_idx = loop_body_idx;
                 }
-                Op::DPdx | Op::DPdxFine | Op::DPdxCoarse => {
-                    parse_expr_op!(crate::DerivativeAxis::X, DERIVATIVE)?;
+                Op::DPdxCoarse => {
+                    parse_expr_op!(
+                        crate::DerivativeAxis::X,
+                        crate::DerivativeControl::Coarse,
+                        DERIVATIVE
+                    )?;
                 }
-                Op::DPdy | Op::DPdyFine | Op::DPdyCoarse => {
-                    parse_expr_op!(crate::DerivativeAxis::Y, DERIVATIVE)?;
+                Op::DPdyCoarse => {
+                    parse_expr_op!(
+                        crate::DerivativeAxis::Y,
+                        crate::DerivativeControl::Coarse,
+                        DERIVATIVE
+                    )?;
                 }
-                Op::Fwidth | Op::FwidthFine | Op::FwidthCoarse => {
-                    parse_expr_op!(crate::DerivativeAxis::Width, DERIVATIVE)?;
+                Op::FwidthCoarse => {
+                    parse_expr_op!(
+                        crate::DerivativeAxis::Width,
+                        crate::DerivativeControl::Coarse,
+                        DERIVATIVE
+                    )?;
+                }
+                Op::DPdxFine => {
+                    parse_expr_op!(
+                        crate::DerivativeAxis::X,
+                        crate::DerivativeControl::Fine,
+                        DERIVATIVE
+                    )?;
+                }
+                Op::DPdyFine => {
+                    parse_expr_op!(
+                        crate::DerivativeAxis::Y,
+                        crate::DerivativeControl::Fine,
+                        DERIVATIVE
+                    )?;
+                }
+                Op::FwidthFine => {
+                    parse_expr_op!(
+                        crate::DerivativeAxis::Width,
+                        crate::DerivativeControl::Fine,
+                        DERIVATIVE
+                    )?;
+                }
+                Op::DPdx => {
+                    parse_expr_op!(
+                        crate::DerivativeAxis::X,
+                        crate::DerivativeControl::None,
+                        DERIVATIVE
+                    )?;
+                }
+                Op::DPdy => {
+                    parse_expr_op!(
+                        crate::DerivativeAxis::Y,
+                        crate::DerivativeControl::None,
+                        DERIVATIVE
+                    )?;
+                }
+                Op::Fwidth => {
+                    parse_expr_op!(
+                        crate::DerivativeAxis::Width,
+                        crate::DerivativeControl::None,
+                        DERIVATIVE
+                    )?;
                 }
                 Op::ArrayLength => {
                     inst.expect(5)?;

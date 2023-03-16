@@ -1,32 +1,58 @@
 ; SPIR-V
 ; Version: 1.1
 ; Generator: rspirv
-; Bound: 19
+; Bound: 35
 OpCapability Shader
+OpCapability DerivativeControl
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
-OpEntryPoint Fragment %11 "derivatives" %6 %9
-OpExecutionMode %11 OriginUpperLeft
-OpDecorate %6 BuiltIn FragCoord
-OpDecorate %9 Location 0
+OpEntryPoint Fragment %18 "derivatives" %13 %16
+OpExecutionMode %18 OriginUpperLeft
+OpDecorate %13 BuiltIn FragCoord
+OpDecorate %16 Location 0
 %2 = OpTypeVoid
 %4 = OpTypeFloat 32
 %3 = OpTypeVector %4 4
-%7 = OpTypePointer Input %3
-%6 = OpVariable  %7  Input
-%10 = OpTypePointer Output %3
-%9 = OpVariable  %10  Output
-%12 = OpTypeFunction %2
-%11 = OpFunction  %2  None %12
-%5 = OpLabel
-%8 = OpLoad  %3  %6
-OpBranch %13
-%13 = OpLabel
-%14 = OpDPdx  %3  %8
-%15 = OpDPdy  %3  %8
-%16 = OpFwidth  %3  %8
-%17 = OpFAdd  %3  %14 %15
-%18 = OpFMul  %3  %17 %16
-OpStore %9 %18
+%6 = OpTypePointer Function %3
+%7 = OpConstantNull  %3
+%9 = OpConstantNull  %3
+%11 = OpConstantNull  %3
+%14 = OpTypePointer Input %3
+%13 = OpVariable  %14  Input
+%17 = OpTypePointer Output %3
+%16 = OpVariable  %17  Output
+%19 = OpTypeFunction %2
+%18 = OpFunction  %2  None %19
+%12 = OpLabel
+%5 = OpVariable  %6  Function %7
+%8 = OpVariable  %6  Function %9
+%10 = OpVariable  %6  Function %11
+%15 = OpLoad  %3  %13
+OpBranch %20
+%20 = OpLabel
+%21 = OpDPdxCoarse  %3  %15
+OpStore %5 %21
+%22 = OpDPdyCoarse  %3  %15
+OpStore %8 %22
+%23 = OpFwidthCoarse  %3  %15
+OpStore %10 %23
+%24 = OpDPdxFine  %3  %15
+OpStore %5 %24
+%25 = OpDPdyFine  %3  %15
+OpStore %8 %25
+%26 = OpFwidthFine  %3  %15
+OpStore %10 %26
+%27 = OpDPdx  %3  %15
+OpStore %5 %27
+%28 = OpDPdy  %3  %15
+OpStore %8 %28
+%29 = OpFwidth  %3  %15
+OpStore %10 %29
+%30 = OpLoad  %3  %5
+%31 = OpLoad  %3  %8
+%32 = OpFAdd  %3  %30 %31
+%33 = OpLoad  %3  %10
+%34 = OpFMul  %3  %32 %33
+OpStore %16 %34
 OpReturn
 OpFunctionEnd
