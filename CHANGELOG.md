@@ -39,6 +39,9 @@ Bottom level categories:
 -->
 
 ## Unreleased
+### Bug Fixes
+#### GLES
+- Fix `Vertex buffer is not big enough for the draw call.` for ANGLE/Web when rendering with instance attributes on a single instance. By @wumpf in [#3596](https://github.com/gfx-rs/wgpu/pull/3596)
 
 ## wgpu-0.15.2 (2023-03-08)
 
