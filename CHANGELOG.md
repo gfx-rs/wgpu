@@ -139,6 +139,7 @@ By @teoxoy in [#3534](https://github.com/gfx-rs/wgpu/pull/3534)
 #### Metal
 - `create_texture` returns an error if `new_texture` returns NULL. By @jinleili in [#3554](https://github.com/gfx-rs/wgpu/pull/3554)
 - Fix definition of `NSOperatingSystemVersion` to avoid potential crashes. By @grovesNL in [#3557](https://github.com/gfx-rs/wgpu/pull/3557)
+- Fix shader bounds checking being ignored. By @FL33TW00D in [#3603](https://github.com/gfx-rs/wgpu/pull/3603)
 
 ## wgpu-0.15.0 (2023-01-25)
 
