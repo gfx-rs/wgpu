@@ -869,7 +869,7 @@ impl crate::Context for Context {
                     strict_capabilities: true,
                     block_ctx_dump_prefix: None,
                 };
-                let parser = naga::front::spv::Parser::new(spv.iter().cloned(), &options);
+                let parser = naga::front::spv::Frontend::new(spv.iter().cloned(), &options);
                 let module = parser.parse().unwrap();
                 wgc::pipeline::ShaderModuleSource::Naga(Owned(module))
             }
@@ -884,7 +884,7 @@ impl crate::Context for Context {
                     stage,
                     defines: defines.clone(),
                 };
-                let mut parser = naga::front::glsl::Parser::default();
+                let mut parser = naga::front::glsl::Frontend::default();
                 let module = parser.parse(&options, shader).unwrap();
 
                 wgc::pipeline::ShaderModuleSource::Naga(Owned(module))
