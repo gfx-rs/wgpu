@@ -15,14 +15,8 @@ constexpr metal::uint _map_intersection_type(const metal::raytracing::intersecti
 
 struct Output {
     uint visible_;
-};
-struct RayDesc {
-    uint flags;
-    uint cull_mask;
-    float tmin;
-    float tmax;
-    metal::float3 origin;
-    metal::float3 dir;
+    char _pad1[12];
+    metal::float3 normal;
 };
 struct RayIntersection {
     uint kind;
@@ -38,21 +32,48 @@ struct RayIntersection {
     metal::float4x3 object_to_world;
     metal::float4x3 world_to_object;
 };
+struct RayDesc {
+    uint flags;
+    uint cull_mask;
+    float tmin;
+    float tmax;
+    metal::float3 origin;
+    metal::float3 dir;
+};
+
+metal::float3 get_torus_normal(
+    metal::float3 world_point,
+    RayIntersection intersection
+) {
+    metal::float3 local_point = intersection.world_to_object * metal::float4(world_point, 1.0);
+    metal::float2 point_on_guiding_line = metal::normalize(local_point.xy) * 2.4000000953674316;
+    metal::float3 world_point_on_guiding_line = intersection.object_to_world * metal::float4(point_on_guiding_line, 0.0, 1.0);
+    return metal::normalize(world_point - world_point_on_guiding_line);
+}
 
 kernel void main_(
   metal::raytracing::instance_acceleration_structure acc_struct [[user(fake0)]]
 , device Output& output [[user(fake0)]]
 ) {
     _RayQuery rq = {};
-    RayDesc _e12 = RayDesc {4u, 255u, 0.10000000149011612, 100.0, metal::float3(0.0), metal::float3(0.0, 1.0, 0.0)};
+    metal::float3 dir = metal::float3(0.0, 1.0, 0.0);
+    RayDesc _e12 = RayDesc {4u, 255u, 0.10000000149011612, 100.0, metal::float3(0.0), dir};
     rq.intersector.assume_geometry_type(metal::raytracing::geometry_type::triangle);
     rq.intersector.set_opacity_cull_mode((_e12.flags & 64) != 0 ? metal::raytracing::opacity_cull_mode::opaque : (_e12.flags & 128) != 0 ? metal::raytracing::opacity_cull_mode::non_opaque : metal::raytracing::opacity_cull_mode::none);
     rq.intersector.force_opacity((_e12.flags & 1) != 0 ? metal::raytracing::forced_opacity::opaque : (_e12.flags & 2) != 0 ? metal::raytracing::forced_opacity::non_opaque : metal::raytracing::forced_opacity::none);
     rq.intersector.accept_any_intersection((_e12.flags & 4) != 0);
     rq.intersection = rq.intersector.intersect(metal::raytracing::ray(_e12.origin, _e12.dir, _e12.tmin, _e12.tmax), acc_struct, _e12.cull_mask);    rq.ready = true;
-    bool _e13 = rq.ready;
-    rq.ready = false;
-    RayIntersection intersection = RayIntersection {_map_intersection_type(rq.intersection.type), rq.intersection.distance, rq.intersection.user_instance_id, rq.intersection.instance_id, {}, rq.intersection.geometry_id, rq.intersection.primitive_id, rq.intersection.triangle_barycentric_coord, rq.intersection.triangle_front_facing, {}, rq.intersection.object_to_world_transform, rq.intersection.world_to_object_transform};
-    output.visible_ = static_cast<uint>(intersection.kind == 0u);
+    while(true) {
+        bool _e13 = rq.ready;
+        rq.ready = false;
+        if (_e13) {
+        } else {
+            break;
+        }
+    }
+    RayIntersection intersection_1 = RayIntersection {_map_intersection_type(rq.intersection.type), rq.intersection.distance, rq.intersection.user_instance_id, rq.intersection.instance_id, {}, rq.intersection.geometry_id, rq.intersection.primitive_id, rq.intersection.triangle_barycentric_coord, rq.intersection.triangle_front_facing, {}, rq.intersection.object_to_world_transform, rq.intersection.world_to_object_transform};
+    output.visible_ = static_cast<uint>(intersection_1.kind == 0u);
+    metal::float3 _e25 = get_torus_normal(dir * intersection_1.t, intersection_1);
+    output.normal = _e25;
     return;
 }

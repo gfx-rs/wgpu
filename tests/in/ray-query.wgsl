@@ -45,19 +45,29 @@ struct RayIntersection {
 
 struct Output {
     visible: u32,
+    normal: vec3<f32>,
 }
 
 @group(0) @binding(1)
 var<storage, read_write> output: Output;
 
+fn get_torus_normal(world_point: vec3<f32>, intersection: RayIntersection) -> vec3<f32> {
+    let local_point = intersection.world_to_object * vec4<f32>(world_point, 1.0);
+    let point_on_guiding_line = normalize(local_point.xy) * 2.4;
+    let world_point_on_guiding_line = intersection.object_to_world * vec4<f32>(point_on_guiding_line, 0.0, 1.0);
+    return normalize(world_point - world_point_on_guiding_line);
+}
+
 @compute @workgroup_size(1)
 fn main() {
     var rq: ray_query;
 
-    rayQueryInitialize(&rq, acc_struct, RayDesc(RAY_FLAG_TERMINATE_ON_FIRST_HIT, 0xFFu, 0.1, 100.0, vec3<f32>(0.0), vec3<f32>(0.0, 1.0, 0.0)));
+    let dir = vec3<f32>(0.0, 1.0, 0.0);
+    rayQueryInitialize(&rq, acc_struct, RayDesc(RAY_FLAG_TERMINATE_ON_FIRST_HIT, 0xFFu, 0.1, 100.0, vec3<f32>(0.0), dir));
 
-    rayQueryProceed(&rq);
+    while (rayQueryProceed(&rq)) {}
 
     let intersection = rayQueryGetCommittedIntersection(&rq);
     output.visible = u32(intersection.kind == RAY_QUERY_INTERSECTION_NONE);
+    output.normal = get_torus_normal(dir * intersection.t, intersection);
 }

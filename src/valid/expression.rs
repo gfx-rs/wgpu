@@ -35,6 +35,8 @@ pub enum ExpressionError {
     InvalidPointerType(Handle<crate::Expression>),
     #[error("Array length of {0:?} can't be done")]
     InvalidArrayType(Handle<crate::Expression>),
+    #[error("Get intersection of {0:?} can't be done")]
+    InvalidRayQueryType(Handle<crate::Expression>),
     #[error("Splatting {0:?} can't be done")]
     InvalidSplatType(Handle<crate::Expression>),
     #[error("Swizzling {0:?} can't be done")]
@@ -1427,7 +1429,26 @@ impl super::Validator {
                     return Err(ExpressionError::InvalidArrayType(expr));
                 }
             },
-            E::RayQueryProceedResult | E::RayQueryGetIntersection { .. } => ShaderStages::all(),
+            E::RayQueryProceedResult => ShaderStages::all(),
+            E::RayQueryGetIntersection {
+                query,
+                committed: _,
+            } => match resolver[query] {
+                Ti::Pointer {
+                    base,
+                    space: crate::AddressSpace::Function,
+                } => match resolver.types[base].inner {
+                    Ti::RayQuery => ShaderStages::all(),
+                    ref other => {
+                        log::error!("Intersection result of a pointer to {:?}", other);
+                        return Err(ExpressionError::InvalidRayQueryType(query));
+                    }
+                },
+                ref other => {
+                    log::error!("Intersection result of {:?}", other);
+                    return Err(ExpressionError::InvalidRayQueryType(query));
+                }
+            },
         };
         Ok(stages)
     }
