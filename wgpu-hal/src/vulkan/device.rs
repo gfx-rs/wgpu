@@ -2080,12 +2080,17 @@ impl crate::Device<super::Api> for super::Device {
                         instances: instance_data,
                     });
 
-                (smallvec::smallvec![*geometry], smallvec::smallvec![instances.count])
+                (
+                    smallvec::smallvec![*geometry],
+                    smallvec::smallvec![instances.count],
+                )
             }
             crate::AccelerationStructureEntries::Triangles(in_geometries) => {
-                let mut primitive_counts = smallvec::SmallVec::<[u32;CAPACITY]>::with_capacity(in_geometries.len());
-                let mut geometries =
-                    smallvec::SmallVec::<[vk::AccelerationStructureGeometryKHR;CAPACITY]>::with_capacity(in_geometries.len());
+                let mut primitive_counts =
+                    smallvec::SmallVec::<[u32; CAPACITY]>::with_capacity(in_geometries.len());
+                let mut geometries = smallvec::SmallVec::<
+                    [vk::AccelerationStructureGeometryKHR; CAPACITY],
+                >::with_capacity(in_geometries.len());
 
                 for triangles in in_geometries {
                     let mut triangle_data =
@@ -2117,9 +2122,11 @@ impl crate::Device<super::Api> for super::Device {
                 (geometries, primitive_counts)
             }
             crate::AccelerationStructureEntries::AABBs(in_geometries) => {
-                let mut primitive_counts = smallvec::SmallVec::<[u32;CAPACITY]>::with_capacity(in_geometries.len());
-                let mut geometries =
-                smallvec::SmallVec::<[vk::AccelerationStructureGeometryKHR;CAPACITY]>::with_capacity(in_geometries.len());
+                let mut primitive_counts =
+                    smallvec::SmallVec::<[u32; CAPACITY]>::with_capacity(in_geometries.len());
+                let mut geometries = smallvec::SmallVec::<
+                    [vk::AccelerationStructureGeometryKHR; CAPACITY],
+                >::with_capacity(in_geometries.len());
                 for aabb in in_geometries {
                     let aabbs_data = vk::AccelerationStructureGeometryAabbsDataKHR::builder()
                         .stride(aabb.stride);

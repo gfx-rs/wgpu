@@ -568,6 +568,13 @@ pub trait CommandEncoder<A: Api>: Send + Sync + fmt::Debug {
     unsafe fn dispatch(&mut self, count: [u32; 3]);
     unsafe fn dispatch_indirect(&mut self, buffer: &A::Buffer, offset: wgt::BufferAddress);
 
+    /// To get the required sizes for the buffer allocations use `get_acceleration_structure_build_sizes` per descriptor
+    /// All buffers must be synchronized externally
+    /// All buffer regions, which are written to may only be passed once per function call,
+    /// with the exertion of updates in the same descriptor.
+    /// Consequences of this limitation:
+    /// - scratch buffers need to be unique
+    /// - a tlas can't be build in the same call with a blas it contains
     unsafe fn build_acceleration_structures(
         &mut self,
         descriptors: &[&BuildAccelerationStructureDescriptor<A>],
@@ -1352,13 +1359,17 @@ pub enum AccelerationStructureBuildMode {
     Update,
 }
 
-#[derive(Clone, Debug, Default)]
+/// Information of the required size for a corresponding entries struct (+ flags)
+#[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
 pub struct AccelerationStructureBuildSizes {
     pub acceleration_structure_size: wgt::BufferAddress,
     pub update_scratch_size: wgt::BufferAddress,
     pub build_scratch_size: wgt::BufferAddress,
 }
 
+/// Updates use source_acceleration_structure if present, else the update will be performed in place.
+/// For updates, only the data is allowed to change (not the meta data or sizes).
+#[derive(Clone, Debug)]
 pub struct BuildAccelerationStructureDescriptor<'a, A: Api> {
     pub entries: &'a AccelerationStructureEntries<'a, A>,
     pub mode: AccelerationStructureBuildMode,
@@ -1368,25 +1379,32 @@ pub struct BuildAccelerationStructureDescriptor<'a, A: Api> {
     pub scratch_buffer: &'a A::Buffer,
 }
 
+/// - All buffers, buffer addresses and offsets will be ignored.
+/// - The build mode will be ignored.
+/// - Reducing the amount of Instances, Triangle groups or AABB groups (or the number of Triangles/AABBs in corresponding groups),
+/// may result in reduced size requirements.
+/// - Any other change may result in a bigger or smaller size requirement.
+#[derive(Clone, Debug)]
 pub struct GetAccelerationStructureBuildSizesDescriptor<'a, A: Api> {
     pub entries: &'a AccelerationStructureEntries<'a, A>,
     pub flags: AccelerationStructureBuildFlags,
 }
 
-///
-/// Usage for buffer size requirements:
-/// All Buffers, BufferAdresses and offsets will be ignored.
-/// The build mode will be ignored.
-/// Reducing the amount of Instances, Triangle groups or AABB groups (or the number of Trinagles/AABBs in coresponding groups),
-/// may result in reduced size requirements.
-/// Any other change may result in a bigger or smaller size requirement.
+/// Entries for a single descriptor
+/// * `Instances` - Multiple instances for a top level acceleration structure
+/// * `Triangles` - Multiple triangle meshes for a bottom level acceleration structure
+/// * `AABBs` - List of list of axis aligned bounding boxes for a bottom level acceleration structure
+#[derive(Debug)]
 pub enum AccelerationStructureEntries<'a, A: Api> {
     Instances(AccelerationStructureInstances<'a, A>),
     Triangles(&'a [AccelerationStructureTriangles<'a, A>]),
     AABBs(&'a [AccelerationStructureAABBs<'a, A>]),
 }
 
-// TODO: flags
+/// * `first_vertex` - offset in the vertex buffer (as number of vertices)
+/// * `indices` - optional index buffer with attributes
+/// * `transform` - optional transform
+#[derive(Clone, Debug)]
 pub struct AccelerationStructureTriangles<'a, A: Api> {
     pub vertex_buffer: Option<&'a A::Buffer>,
     pub vertex_format: wgt::VertexFormat,
@@ -1394,11 +1412,12 @@ pub struct AccelerationStructureTriangles<'a, A: Api> {
     pub vertex_count: u32,
     pub vertex_stride: wgt::BufferAddress,
     pub indices: Option<AccelerationStructureTriangleIndices<'a, A>>,
-    pub transforms: Option<AccelerationStructureTriangleTransforms<'a, A>>,
+    pub transform: Option<AccelerationStructureTriangleTransform<'a, A>>,
     pub flags: AccelerationStructureGeometryFlags,
 }
 
-// TODO: *
+/// * `offset` - offset in bytes
+#[derive(Clone, Debug)]
 pub struct AccelerationStructureAABBs<'a, A: Api> {
     pub buffer: Option<&'a A::Buffer>,
     pub offset: u32,
@@ -1407,13 +1426,16 @@ pub struct AccelerationStructureAABBs<'a, A: Api> {
     pub flags: AccelerationStructureGeometryFlags,
 }
 
-// TODO: offset
+/// * `offset` - offset in bytes
+#[derive(Clone, Debug)]
 pub struct AccelerationStructureInstances<'a, A: Api> {
     pub buffer: Option<&'a A::Buffer>,
     pub offset: u32,
     pub count: u32,
 }
 
+/// * `offset` - offset in bytes
+#[derive(Clone, Debug)]
 pub struct AccelerationStructureTriangleIndices<'a, A: Api> {
     pub format: wgt::IndexFormat,
     pub buffer: Option<&'a A::Buffer>,
@@ -1421,17 +1443,25 @@ pub struct AccelerationStructureTriangleIndices<'a, A: Api> {
     pub count: u32,
 }
 
-pub struct AccelerationStructureTriangleTransforms<'a, A: Api> {
+/// * `offset` - offset in bytes
+#[derive(Clone, Debug)]
+pub struct AccelerationStructureTriangleTransform<'a, A: Api> {
     pub buffer: &'a A::Buffer,
     pub offset: u32,
 }
 
 bitflags!(
+    /// Flags for acceleration structures
     pub struct AccelerationStructureBuildFlags: u32 {
+        /// Allow for incremental updates (no change in size)
         const ALLOW_UPDATE = 1 << 0;
+        /// Allow the acceleration structure to be compacted in a copy operation
         const ALLOW_COMPACTION = 1 << 1;
+        /// Optimize for fast ray tracing performance
         const PREFER_FAST_TRACE = 1 << 2;
+        /// Optimize for fast build time
         const PREFER_FAST_BUILD = 1 << 3;
+        /// Optimize for low memory footprint (scratch and output)
         const LOW_MEMORY = 1 << 4;
     }
 );

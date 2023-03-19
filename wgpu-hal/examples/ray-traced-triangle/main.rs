@@ -457,7 +457,7 @@ impl<A: hal::Api> Example<A> {
                 offset: 0,
                 count: indices.len() as u32,
             }),
-            transforms: None,
+            transform: None,
             flags: hal::AccelerationStructureGeometryFlags::OPAQUE,
         }];
         let blas_entries = hal::AccelerationStructureEntries::Triangles(&blas_triangles);

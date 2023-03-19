@@ -464,7 +464,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                                 .first_vertex(triangles.first_vertex);
                         }
 
-                        if let Some(ref transform) = triangles.transforms {
+                        if let Some(ref transform) = triangles.transform {
                             let transform_device_address = unsafe {
                                 ray_tracing_functions
                                     .buffer_device_address
@@ -558,7 +558,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             if desc.mode == crate::AccelerationStructureBuildMode::Update {
                 geometry_info.src_acceleration_structure = desc
                     .source_acceleration_structure
-                    .expect("Acceleration tructure update: source structure required")
+                    .unwrap_or(desc.destination_acceleration_structure)
                     .raw;
             }
 
