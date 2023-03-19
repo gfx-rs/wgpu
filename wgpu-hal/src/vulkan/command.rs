@@ -370,6 +370,9 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         &mut self,
         descriptors: &[&crate::BuildAccelerationStructureDescriptor<super::Api>],
     ) {
+        const CAPACITY_OUTER: usize = 8;
+        const CAPACITY_INNER: usize = 1;
+
         let ray_tracing_functions = match self.device.extension_fns.ray_tracing {
             Some(ref functions) => functions,
             None => panic!("Feature `RAY_TRACING` not enabled"),
@@ -387,20 +390,22 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         };
 
         // storage to all the data required for cmd_build_acceleration_structures
-        let mut ranges_storage =
-            Vec::<Vec<vk::AccelerationStructureBuildRangeInfoKHR>>::with_capacity(
-                descriptors.len(),
-            );
-        let mut geometries_storage =
-            Vec::<Vec<vk::AccelerationStructureGeometryKHR>>::with_capacity(descriptors.len());
+        let mut ranges_storage = smallvec::SmallVec::<
+            [smallvec::SmallVec<[vk::AccelerationStructureBuildRangeInfoKHR; CAPACITY_INNER]>;
+                CAPACITY_OUTER],
+        >::with_capacity(descriptors.len());
+        let mut geometries_storage = smallvec::SmallVec::<
+            [smallvec::SmallVec<[vk::AccelerationStructureGeometryKHR; CAPACITY_INNER]>;
+                CAPACITY_OUTER],
+        >::with_capacity(descriptors.len());
 
         // pointers to all the data required for cmd_build_acceleration_structures
-
-        let mut geometry_infos =
-            Vec::<vk::AccelerationStructureBuildGeometryInfoKHR>::with_capacity(descriptors.len());
-
-        let mut ranges_ptrs =
-            Vec::<&[vk::AccelerationStructureBuildRangeInfoKHR]>::with_capacity(descriptors.len());
+        let mut geometry_infos = smallvec::SmallVec::<
+            [vk::AccelerationStructureBuildGeometryInfoKHR; CAPACITY_OUTER],
+        >::with_capacity(descriptors.len());
+        let mut ranges_ptrs = smallvec::SmallVec::<
+            [&[vk::AccelerationStructureBuildRangeInfoKHR]; CAPACITY_OUTER],
+        >::with_capacity(descriptors.len());
 
         for desc in descriptors {
             let (geometries, ranges) = match *desc.entries {
@@ -421,16 +426,15 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                         .primitive_count(instances.count)
                         .primitive_offset(instances.offset);
 
-                    (vec![*geometry], vec![*range])
+                    (smallvec::smallvec![*geometry], smallvec::smallvec![*range])
                 }
                 crate::AccelerationStructureEntries::Triangles(in_geometries) => {
-                    let mut ranges =
-                        Vec::<vk::AccelerationStructureBuildRangeInfoKHR>::with_capacity(
-                            in_geometries.len(),
-                        );
-                    let mut geometries = Vec::<vk::AccelerationStructureGeometryKHR>::with_capacity(
-                        in_geometries.len(),
-                    );
+                    let mut ranges = smallvec::SmallVec::<
+                        [vk::AccelerationStructureBuildRangeInfoKHR; CAPACITY_INNER],
+                    >::with_capacity(in_geometries.len());
+                    let mut geometries = smallvec::SmallVec::<
+                        [vk::AccelerationStructureGeometryKHR; CAPACITY_INNER],
+                    >::with_capacity(in_geometries.len());
                     for triangles in in_geometries {
                         let mut triangle_data =
                             vk::AccelerationStructureGeometryTrianglesDataKHR::builder()
@@ -492,13 +496,12 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                     (geometries, ranges)
                 }
                 crate::AccelerationStructureEntries::AABBs(in_geometries) => {
-                    let mut ranges =
-                        Vec::<vk::AccelerationStructureBuildRangeInfoKHR>::with_capacity(
-                            in_geometries.len(),
-                        );
-                    let mut geometries = Vec::<vk::AccelerationStructureGeometryKHR>::with_capacity(
-                        in_geometries.len(),
-                    );
+                    let mut ranges = smallvec::SmallVec::<
+                        [vk::AccelerationStructureBuildRangeInfoKHR; CAPACITY_INNER],
+                    >::with_capacity(in_geometries.len());
+                    let mut geometries = smallvec::SmallVec::<
+                        [vk::AccelerationStructureGeometryKHR; CAPACITY_INNER],
+                    >::with_capacity(in_geometries.len());
                     for aabb in in_geometries {
                         let aabbs_data = vk::AccelerationStructureGeometryAabbsDataKHR::builder()
                             .data(vk::DeviceOrHostAddressConstKHR {
