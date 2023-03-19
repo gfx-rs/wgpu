@@ -704,14 +704,16 @@ impl<A: hal::Api> Example<A> {
         unsafe { cmd_encoder.begin_encoding(Some("init")).unwrap() };
 
         unsafe {
-            cmd_encoder.build_acceleration_structure(&hal::BuildAccelerationStructureDescriptor {
-                mode: hal::AccelerationStructureBuildMode::Build,
-                flags: hal::AccelerationStructureBuildFlags::PREFER_FAST_TRACE,
-                destination_acceleration_structure: &blas,
-                scratch_buffer: &scratch_buffer,
-                entries: &blas_entries,
-                source_acceleration_structure: None,
-            });
+            cmd_encoder.build_acceleration_structures(&[
+                &hal::BuildAccelerationStructureDescriptor {
+                    mode: hal::AccelerationStructureBuildMode::Build,
+                    flags: hal::AccelerationStructureBuildFlags::PREFER_FAST_TRACE,
+                    destination_acceleration_structure: &blas,
+                    scratch_buffer: &scratch_buffer,
+                    entries: &blas_entries,
+                    source_acceleration_structure: None,
+                },
+            ]);
 
             let as_barrier = hal::BufferBarrier {
                 buffer: &scratch_buffer,
@@ -720,14 +722,16 @@ impl<A: hal::Api> Example<A> {
             };
             cmd_encoder.transition_buffers(iter::once(as_barrier));
 
-            cmd_encoder.build_acceleration_structure(&hal::BuildAccelerationStructureDescriptor {
-                mode: hal::AccelerationStructureBuildMode::Build,
-                flags: tlas_flags,
-                destination_acceleration_structure: &tlas,
-                scratch_buffer: &scratch_buffer,
-                entries: &tlas_entries,
-                source_acceleration_structure: None,
-            });
+            cmd_encoder.build_acceleration_structures(&[
+                &hal::BuildAccelerationStructureDescriptor {
+                    mode: hal::AccelerationStructureBuildMode::Build,
+                    flags: tlas_flags,
+                    destination_acceleration_structure: &tlas,
+                    scratch_buffer: &scratch_buffer,
+                    entries: &tlas_entries,
+                    source_acceleration_structure: None,
+                },
+            ]);
 
             let texture_barrier = hal::TextureBarrier {
                 texture: &texture,
@@ -832,15 +836,16 @@ impl<A: hal::Api> Example<A> {
                 count: self.instances.len() as u32,
                 offset: 0,
             };
-            ctx.encoder
-                .build_acceleration_structure(&hal::BuildAccelerationStructureDescriptor {
+            ctx.encoder.build_acceleration_structures(&[
+                &hal::BuildAccelerationStructureDescriptor {
                     mode: hal::AccelerationStructureBuildMode::Update,
                     flags: tlas_flags,
                     destination_acceleration_structure: &self.tlas,
                     scratch_buffer: &self.scratch_buffer,
                     entries: &hal::AccelerationStructureEntries::Instances(instances),
                     source_acceleration_structure: Some(&self.tlas),
-                });
+                },
+            ]);
 
             let as_barrier = hal::BufferBarrier {
                 buffer: &self.scratch_buffer,

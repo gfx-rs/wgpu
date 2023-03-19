@@ -1141,9 +1141,9 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         };
     }
 
-    unsafe fn build_acceleration_structure(
+    unsafe fn build_acceleration_structures(
         &mut self,
-        _desc: &crate::BuildAccelerationStructureDescriptor<super::Api>,
+        _desc: &[&crate::BuildAccelerationStructureDescriptor<super::Api>],
     ) {
         // Implement using `BuildRaytracingAccelerationStructure`:
         // https://microsoft.github.io/DirectX-Specs/d3d/Raytracing.html#buildraytracingaccelerationstructure

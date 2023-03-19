@@ -431,9 +431,9 @@ impl crate::CommandEncoder<Api> for Encoder {
     unsafe fn dispatch(&mut self, count: [u32; 3]) {}
     unsafe fn dispatch_indirect(&mut self, buffer: &Resource, offset: wgt::BufferAddress) {}
 
-    unsafe fn build_acceleration_structure(
+    unsafe fn build_acceleration_structures(
         &mut self,
-        _desc: &crate::BuildAccelerationStructureDescriptor<Api>,
+        _desc: &[&crate::BuildAccelerationStructureDescriptor<Api>],
     ) {
     }
 }

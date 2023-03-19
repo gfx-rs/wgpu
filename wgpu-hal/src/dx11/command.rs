@@ -266,9 +266,9 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         todo!()
     }
 
-    unsafe fn build_acceleration_structure(
+    unsafe fn build_acceleration_structures(
         &mut self,
-        desc: &crate::BuildAccelerationStructureDescriptor<super::Api>,
+        desc: &[&crate::BuildAccelerationStructureDescriptor<super::Api>],
     ) {
         unimplemented!()
     }
