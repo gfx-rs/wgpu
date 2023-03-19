@@ -88,6 +88,20 @@ By @teoxoy in [#3534](https://github.com/gfx-rs/wgpu/pull/3534)
 - All `fxhash` dependencies have been replaced with `rustc-hash`. By @james7132 in [#3502](https://github.com/gfx-rs/wgpu/pull/3502)
 - Change type of `bytes_per_row` and `rows_per_image` (members of `ImageDataLayout`) from `Option<NonZeroU32>` to `Option<u32>`. By @teoxoy in [#3529](https://github.com/gfx-rs/wgpu/pull/3529)
 
+### Added/New Features
+
+#### General
+- Added feature flags for ray-tracing (currently only hal): `RAY_QUERY` and `RAY_TRACING` @daniel-keitel (started by @expenses) in [#3507](https://github.com/gfx-rs/wgpu/pull/3507)
+
+#### Vulkan
+
+- Implemented basic ray-tracing api for acceleration structures, and ray-queries @daniel-keitel (started by @expenses) in [#3507](https://github.com/gfx-rs/wgpu/pull/3507)
+
+#### Hal 
+
+- Added basic ray-tracing api for acceleration structures, and ray-queries @daniel-keitel (started by @expenses) in [#3507](https://github.com/gfx-rs/wgpu/pull/3507)
+
+
 ### Changes
 
 #### General
