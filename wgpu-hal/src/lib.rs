@@ -571,7 +571,7 @@ pub trait CommandEncoder<A: Api>: Send + Sync + fmt::Debug {
     /// To get the required sizes for the buffer allocations use `get_acceleration_structure_build_sizes` per descriptor
     /// All buffers must be synchronized externally
     /// All buffer regions, which are written to may only be passed once per function call,
-    /// with the exertion of updates in the same descriptor.
+    /// with the exception of updates in the same descriptor.
     /// Consequences of this limitation:
     /// - scratch buffers need to be unique
     /// - a tlas can't be build in the same call with a blas it contains
