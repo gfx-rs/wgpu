@@ -447,14 +447,11 @@ impl crate::CommandEncoder<Api> for Encoder {
     ) {
     }
 
-    unsafe fn begin_ray_tracing_pass(&mut self, desc: &crate::RayTracingPassDescriptor) {
-    }
+    unsafe fn begin_ray_tracing_pass(&mut self, desc: &crate::RayTracingPassDescriptor) {}
 
-    unsafe fn end_ray_tracing_pass(&mut self) {
-    }
+    unsafe fn end_ray_tracing_pass(&mut self) {}
 
-    unsafe fn set_ray_tracing_pipeline(&mut self, pipeline: &Resource) {
-    }
+    unsafe fn set_ray_tracing_pipeline(&mut self, pipeline: &Resource) {}
 
     unsafe fn trace_rays(
         &mut self,

@@ -1089,32 +1089,34 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             None => panic!("Feature `RAY_TRACING` not enabled"),
         };
 
-        unsafe {ray_tracing_functions.rt_pipeline.cmd_trace_rays(
-            self.active,
-            &vk::StridedDeviceAddressRegionKHR {
-                device_address: ray_gen_sbt.address,
-                stride: ray_gen_sbt.stride,
-                size: ray_gen_sbt.size,
-            },
-            &vk::StridedDeviceAddressRegionKHR {
-                device_address: miss_sbt.address,
-                stride: miss_sbt.stride,
-                size: miss_sbt.size,
-            },
-            &vk::StridedDeviceAddressRegionKHR {
-                device_address: callable_sbt.address,
-                stride: callable_sbt.stride,
-                size: callable_sbt.size,
-            },
-            &vk::StridedDeviceAddressRegionKHR {
-                device_address: hit_sbt.address,
-                stride: hit_sbt.stride,
-                size: hit_sbt.size,
-            },
-            dimensions[0],
-            dimensions[1],
-            dimensions[2],
-        )};
+        unsafe {
+            ray_tracing_functions.rt_pipeline.cmd_trace_rays(
+                self.active,
+                &vk::StridedDeviceAddressRegionKHR {
+                    device_address: ray_gen_sbt.address,
+                    stride: ray_gen_sbt.stride,
+                    size: ray_gen_sbt.size,
+                },
+                &vk::StridedDeviceAddressRegionKHR {
+                    device_address: miss_sbt.address,
+                    stride: miss_sbt.stride,
+                    size: miss_sbt.size,
+                },
+                &vk::StridedDeviceAddressRegionKHR {
+                    device_address: callable_sbt.address,
+                    stride: callable_sbt.stride,
+                    size: callable_sbt.size,
+                },
+                &vk::StridedDeviceAddressRegionKHR {
+                    device_address: hit_sbt.address,
+                    stride: hit_sbt.stride,
+                    size: hit_sbt.size,
+                },
+                dimensions[0],
+                dimensions[1],
+                dimensions[2],
+            )
+        };
     }
 }
 

@@ -1068,7 +1068,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         unimplemented!()
     }
 
-    unsafe fn begin_ray_tracing_pass(&mut self, desc: &crate::RayTracingPassDescriptor) {
+    unsafe fn begin_ray_tracing_pass(&mut self, _desc: &crate::RayTracingPassDescriptor) {
         unimplemented!()
     }
 
@@ -1076,20 +1076,17 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         unimplemented!()
     }
 
-    unsafe fn set_ray_tracing_pipeline(
-        &mut self,
-        pipeline: &super::RayTracingPipeline,
-    ) {
+    unsafe fn set_ray_tracing_pipeline(&mut self, _pipeline: &super::RayTracingPipeline) {
         unimplemented!()
     }
 
     unsafe fn trace_rays(
         &mut self,
-        ray_gen_sbt: &crate::ShaderBindingTableReference,
-        miss_sbt: &crate::ShaderBindingTableReference,
-        callable_sbt: &crate::ShaderBindingTableReference,
-        hit_sbt: &crate::ShaderBindingTableReference,
-        dimensions: [u32; 3],
+        _ray_gen_sbt: &crate::ShaderBindingTableReference,
+        _miss_sbt: &crate::ShaderBindingTableReference,
+        _callable_sbt: &crate::ShaderBindingTableReference,
+        _hit_sbt: &crate::ShaderBindingTableReference,
+        _dimensions: [u32; 3],
     ) {
         unimplemented!()
     }

@@ -281,10 +281,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         unimplemented!()
     }
 
-    unsafe fn set_ray_tracing_pipeline(
-        &mut self,
-        pipeline: &super::RayTracingPipeline,
-    ) {
+    unsafe fn set_ray_tracing_pipeline(&mut self, pipeline: &super::RayTracingPipeline) {
         unimplemented!()
     }
 
