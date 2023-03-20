@@ -586,6 +586,23 @@ pub trait CommandEncoder<A: Api>: Send + Sync + fmt::Debug {
         &mut self,
         descriptors: &[&BuildAccelerationStructureDescriptor<A>],
     );
+
+    // ray-tracing passes
+
+    // Begins a ray-tracing pass, clears all active bindings.
+    unsafe fn begin_ray_tracing_pass(&mut self, desc: &RayTracingPassDescriptor);
+    unsafe fn end_ray_tracing_pass(&mut self);
+
+    unsafe fn set_ray_tracing_pipeline(&mut self, pipeline: &A::RayTracingPipeline);
+
+    unsafe fn trace_rays(
+        &mut self,
+        ray_gen_sbt: &ShaderBindingTableReference,
+        miss_sbt: &ShaderBindingTableReference,
+        callable_sbt: &ShaderBindingTableReference,
+        hit_sbt: &ShaderBindingTableReference,
+        dimensions: [u32; 3],
+    );
 }
 
 bitflags!(
@@ -1515,4 +1532,16 @@ pub trait RayTracingPipeline {
     fn miss_handles<'a>(&'a self) -> Vec<&'a [u8]>;
     fn call_handles<'a>(&'a self) -> Vec<&'a [u8]>;
     fn hit_handles<'a>(&'a self) -> Vec<&'a [u8]>;
+}
+
+#[derive(Clone, Debug)]
+pub struct ShaderBindingTableReference {
+    pub address: wgt::BufferAddress,
+    pub stride: wgt::BufferAddress,
+    pub size: wgt::BufferAddress,
+}
+
+#[derive(Clone, Debug)]
+pub struct RayTracingPassDescriptor<'a> {
+    pub label: Label<'a>,
 }

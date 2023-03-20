@@ -446,6 +446,25 @@ impl crate::CommandEncoder<Api> for Encoder {
         _desc: &[&crate::BuildAccelerationStructureDescriptor<Api>],
     ) {
     }
+
+    unsafe fn begin_ray_tracing_pass(&mut self, desc: &crate::RayTracingPassDescriptor) {
+    }
+
+    unsafe fn end_ray_tracing_pass(&mut self) {
+    }
+
+    unsafe fn set_ray_tracing_pipeline(&mut self, pipeline: &Resource) {
+    }
+
+    unsafe fn trace_rays(
+        &mut self,
+        ray_gen_sbt: &crate::ShaderBindingTableReference,
+        miss_sbt: &crate::ShaderBindingTableReference,
+        callable_sbt: &crate::ShaderBindingTableReference,
+        hit_sbt: &crate::ShaderBindingTableReference,
+        dimensions: [u32; 3],
+    ) {
+    }
 }
 
 impl crate::RayTracingPipeline for Resource {

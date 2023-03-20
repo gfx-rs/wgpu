@@ -1050,6 +1050,72 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 .cmd_dispatch_indirect(self.active, buffer.raw, offset)
         }
     }
+
+    unsafe fn begin_ray_tracing_pass(&mut self, desc: &crate::RayTracingPassDescriptor) {
+        self.bind_point = vk::PipelineBindPoint::RAY_TRACING_KHR;
+        if let Some(label) = desc.label {
+            unsafe { self.begin_debug_marker(label) };
+            self.rpass_debug_marker_active = true;
+        }
+    }
+
+    unsafe fn end_ray_tracing_pass(&mut self) {
+        if self.rpass_debug_marker_active {
+            unsafe { self.end_debug_marker() };
+            self.rpass_debug_marker_active = false
+        }
+    }
+
+    unsafe fn set_ray_tracing_pipeline(&mut self, pipeline: &super::RayTracingPipeline) {
+        unsafe {
+            self.device.raw.cmd_bind_pipeline(
+                self.active,
+                vk::PipelineBindPoint::RAY_TRACING_KHR,
+                pipeline.raw,
+            )
+        };
+    }
+
+    unsafe fn trace_rays(
+        &mut self,
+        ray_gen_sbt: &crate::ShaderBindingTableReference,
+        miss_sbt: &crate::ShaderBindingTableReference,
+        callable_sbt: &crate::ShaderBindingTableReference,
+        hit_sbt: &crate::ShaderBindingTableReference,
+        dimensions: [u32; 3],
+    ) {
+        let ray_tracing_functions = match self.device.extension_fns.ray_tracing {
+            Some(ref functions) => functions,
+            None => panic!("Feature `RAY_TRACING` not enabled"),
+        };
+
+        unsafe {ray_tracing_functions.rt_pipeline.cmd_trace_rays(
+            self.active,
+            &vk::StridedDeviceAddressRegionKHR {
+                device_address: ray_gen_sbt.address,
+                stride: ray_gen_sbt.stride,
+                size: ray_gen_sbt.size,
+            },
+            &vk::StridedDeviceAddressRegionKHR {
+                device_address: miss_sbt.address,
+                stride: miss_sbt.stride,
+                size: miss_sbt.size,
+            },
+            &vk::StridedDeviceAddressRegionKHR {
+                device_address: callable_sbt.address,
+                stride: callable_sbt.stride,
+                size: callable_sbt.size,
+            },
+            &vk::StridedDeviceAddressRegionKHR {
+                device_address: hit_sbt.address,
+                stride: hit_sbt.stride,
+                size: hit_sbt.size,
+            },
+            dimensions[0],
+            dimensions[1],
+            dimensions[2],
+        )};
+    }
 }
 
 #[test]

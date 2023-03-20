@@ -1149,4 +1149,30 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         // https://microsoft.github.io/DirectX-Specs/d3d/Raytracing.html#buildraytracingaccelerationstructure
         todo!()
     }
+
+    unsafe fn begin_ray_tracing_pass(&mut self, desc: &crate::RayTracingPassDescriptor) {
+        todo!()
+    }
+
+    unsafe fn end_ray_tracing_pass(&mut self) {
+        todo!()
+    }
+
+    unsafe fn set_ray_tracing_pipeline(
+        &mut self,
+        pipeline: &super::RayTracingPipeline,
+    ) {
+        todo!()
+    }
+
+    unsafe fn trace_rays(
+        &mut self,
+        ray_gen_sbt: &crate::ShaderBindingTableReference,
+        miss_sbt: &crate::ShaderBindingTableReference,
+        callable_sbt: &crate::ShaderBindingTableReference,
+        hit_sbt: &crate::ShaderBindingTableReference,
+        dimensions: [u32; 3],
+    ) {
+        todo!()
+    }
 }
