@@ -1407,12 +1407,17 @@ impl Writer {
             } => {
                 self.decorate(id, Decoration::Location, &[location]);
 
-                // The Vulkan spec says: VUID-StandaloneSpirv-Flat-06202
-                //
-                // > The Flat, NoPerspective, Sample, and Centroid decorations
-                // > must not be used on variables with the Input storage class in
-                // > a vertex shader
-                if class != spirv::StorageClass::Input || stage != crate::ShaderStage::Vertex {
+                let no_decorations =
+                    // VUID-StandaloneSpirv-Flat-06202
+                    // > The Flat, NoPerspective, Sample, and Centroid decorations
+                    // > must not be used on variables with the Input storage class in a vertex shader
+                    (class == spirv::StorageClass::Input && stage == crate::ShaderStage::Vertex) ||
+                    // VUID-StandaloneSpirv-Flat-06201
+                    // > The Flat, NoPerspective, Sample, and Centroid decorations
+                    // > must not be used on variables with the Output storage class in a fragment shader
+                    (class == spirv::StorageClass::Output && stage == crate::ShaderStage::Fragment);
+
+                if !no_decorations {
                     match interpolation {
                         // Perspective-correct interpolation is the default in SPIR-V.
                         None | Some(crate::Interpolation::Perspective) => (),
@@ -1423,20 +1428,19 @@ impl Writer {
                             self.decorate(id, Decoration::NoPerspective, &[]);
                         }
                     }
-                }
-
-                match sampling {
-                    // Center sampling is the default in SPIR-V.
-                    None | Some(crate::Sampling::Center) => (),
-                    Some(crate::Sampling::Centroid) => {
-                        self.decorate(id, Decoration::Centroid, &[]);
-                    }
-                    Some(crate::Sampling::Sample) => {
-                        self.require_any(
-                            "per-sample interpolation",
-                            &[spirv::Capability::SampleRateShading],
-                        )?;
-                        self.decorate(id, Decoration::Sample, &[]);
+                    match sampling {
+                        // Center sampling is the default in SPIR-V.
+                        None | Some(crate::Sampling::Center) => (),
+                        Some(crate::Sampling::Centroid) => {
+                            self.decorate(id, Decoration::Centroid, &[]);
+                        }
+                        Some(crate::Sampling::Sample) => {
+                            self.require_any(
+                                "per-sample interpolation",
+                                &[spirv::Capability::SampleRateShading],
+                            )?;
+                            self.decorate(id, Decoration::Sample, &[]);
+                        }
                     }
                 }
             }
