@@ -39,7 +39,6 @@ Bottom level categories:
 -->
 
 ## Unreleased
-
 ### Major changes
 
 #### TextureFormat info API
@@ -98,6 +97,7 @@ By @teoxoy in [#3534](https://github.com/gfx-rs/wgpu/pull/3534)
 - Allow copying of textures with copy-compatible formats. By @teoxoy in [#3528](https://github.com/gfx-rs/wgpu/pull/3528)
 - Improve attachment related errors. By @cwfitzgerald in [#3549](https://github.com/gfx-rs/wgpu/pull/3549)
 - Make error descriptions all upper case. By @cwfitzgerald in [#3549](https://github.com/gfx-rs/wgpu/pull/3549)
+- Don't include ANSI terminal color escape sequences in shader module validation error messages. By @jimblandy in [#3591](https://github.com/gfx-rs/wgpu/pull/3591)
 
 #### WebGPU
 
@@ -117,6 +117,7 @@ By @teoxoy in [#3534](https://github.com/gfx-rs/wgpu/pull/3534)
 
 - Fix DXC validation issues when using a custom `dxil_path`. By @Elabajaba in [#3434](https://github.com/gfx-rs/wgpu/pull/3434)
 - Use typeless formats for textures that might be viewed as srgb or non-srgb. By @teoxoy in [#3555](https://github.com/gfx-rs/wgpu/pull/3555)
+- Fix conditional compilation for `dx12` feature. By @toastmod in [#3590](https://github.com/gfx-rs/wgpu/pull/3590)
 
 #### GLES
 
@@ -125,6 +126,7 @@ By @teoxoy in [#3534](https://github.com/gfx-rs/wgpu/pull/3534)
 - Remove unwraps inside `surface.configure`. By @cwfitzgerald in [#3585](https://github.com/gfx-rs/wgpu/pull/3585)
 - Reset all queue state between command buffers in a submit. By @jleibs [#3589](https://github.com/gfx-rs/wgpu/pull/3589)
 - Reset the state of `SAMPLE_ALPHA_TO_COVERAGE` on queue reset. By @jleibs [#3589](https://github.com/gfx-rs/wgpu/pull/3589)
+- Fix `Vertex buffer is not big enough for the draw call.` for ANGLE/Web when rendering with instance attributes on a single instance. By @wumpf in [#3597](https://github.com/gfx-rs/wgpu/pull/3597)
 
 #### General
 
