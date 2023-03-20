@@ -39,6 +39,7 @@ Bottom level categories:
 -->
 
 ## Unreleased
+
 ### Major changes
 
 #### TextureFormat info API
@@ -112,6 +113,9 @@ By @teoxoy in [#3534](https://github.com/gfx-rs/wgpu/pull/3534)
 - Set `max_memory_allocation_size` via `PhysicalDeviceMaintenance3Properties`. By @jinleili in [#3567](https://github.com/gfx-rs/wgpu/pull/3567)
 
 ### Bug Fixes
+
+#### Metal
+- Fix incorrect mipmap being sampled when using `MinLod <= 0.0` and `MaxLod >= 32.0` or when the fragment shaders in the same squad sample different Lods. By @cwfitzgerald in [#3610](https://github.com/gfx-rs/wgpu/pull/3610).
 
 #### DX12
 
