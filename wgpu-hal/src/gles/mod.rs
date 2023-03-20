@@ -127,6 +127,7 @@ impl crate::Api for Api {
     type ShaderModule = ShaderModule;
     type RenderPipeline = RenderPipeline;
     type ComputePipeline = ComputePipeline;
+    type RayTracingPipeline = RayTracingPipeline;
 }
 
 bitflags::bitflags! {
@@ -856,5 +857,25 @@ impl fmt::Debug for CommandEncoder {
         f.debug_struct("CommandEncoder")
             .field("cmd_buffer", &self.cmd_buffer)
             .finish()
+    }
+}
+
+pub struct RayTracingPipeline {}
+
+impl crate::RayTracingPipeline for RayTracingPipeline {
+    fn gen_handles<'a>(&'a self) -> Vec<&'a [u8]> {
+        unimplemented!()
+    }
+
+    fn miss_handles<'a>(&'a self) -> Vec<&'a [u8]> {
+        unimplemented!()
+    }
+
+    fn call_handles<'a>(&'a self) -> Vec<&'a [u8]> {
+        unimplemented!()
+    }
+
+    fn hit_handles<'a>(&'a self) -> Vec<&'a [u8]> {
+        unimplemented!()
     }
 }

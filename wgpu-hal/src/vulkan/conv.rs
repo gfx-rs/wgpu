@@ -693,6 +693,24 @@ pub fn map_shader_stage(stage: wgt::ShaderStages) -> vk::ShaderStageFlags {
     if stage.contains(wgt::ShaderStages::COMPUTE) {
         flags |= vk::ShaderStageFlags::COMPUTE;
     }
+    if stage.contains(wgt::ShaderStages::RAYGEN) {
+        flags |= vk::ShaderStageFlags::RAYGEN_KHR;
+    }
+    if stage.contains(wgt::ShaderStages::MISS) {
+        flags |= vk::ShaderStageFlags::MISS_KHR;
+    }
+    if stage.contains(wgt::ShaderStages::CALLABLE) {
+        flags |= vk::ShaderStageFlags::CALLABLE_KHR;
+    }
+    if stage.contains(wgt::ShaderStages::CLOSEST_HIT) {
+        flags |= vk::ShaderStageFlags::CLOSEST_HIT_KHR;
+    }
+    if stage.contains(wgt::ShaderStages::ANY_HIT) {
+        flags |= vk::ShaderStageFlags::ANY_HIT_KHR;
+    }
+    if stage.contains(wgt::ShaderStages::INTERSECTION) {
+        flags |= vk::ShaderStageFlags::INTERSECTION_KHR;
+    }
     flags
 }
 

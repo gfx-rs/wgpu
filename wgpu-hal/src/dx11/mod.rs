@@ -36,6 +36,7 @@ impl crate::Api for Api {
     type ShaderModule = ShaderModule;
     type RenderPipeline = RenderPipeline;
     type ComputePipeline = ComputePipeline;
+    type RayTracingPipeline = RayTracingPipeline;
 
     type AccelerationStructure = AccelerationStructure;
 }
@@ -137,5 +138,25 @@ impl crate::Surface<Api> for Surface {
 
     unsafe fn discard_texture(&mut self, texture: SurfaceTexture) {
         todo!()
+    }
+}
+
+pub struct RayTracingPipeline {}
+
+impl crate::RayTracingPipeline for RayTracingPipeline {
+    fn gen_handles<'a>(&'a self) -> Vec<&'a [u8]> {
+        unimplemented!()
+    }
+
+    fn miss_handles<'a>(&'a self) -> Vec<&'a [u8]> {
+        unimplemented!()
+    }
+
+    fn call_handles<'a>(&'a self) -> Vec<&'a [u8]> {
+        unimplemented!()
+    }
+
+    fn hit_handles<'a>(&'a self) -> Vec<&'a [u8]> {
+        unimplemented!()
     }
 }

@@ -82,6 +82,7 @@ impl crate::Api for Api {
     type ShaderModule = ShaderModule;
     type RenderPipeline = RenderPipeline;
     type ComputePipeline = ComputePipeline;
+    type RayTracingPipeline = RayTracingPipeline;
 
     type AccelerationStructure = AccelerationStructure;
 }
@@ -902,5 +903,25 @@ impl crate::Queue<Api> for Queue {
         let mut frequency = 0u64;
         unsafe { self.raw.GetTimestampFrequency(&mut frequency) };
         (1_000_000_000.0 / frequency as f64) as f32
+    }
+}
+
+pub struct RayTracingPipeline {}
+
+impl crate::RayTracingPipeline for RayTracingPipeline {
+    fn gen_handles<'a>(&'a self) -> Vec<&'a [u8]> {
+        todo!()
+    }
+
+    fn miss_handles<'a>(&'a self) -> Vec<&'a [u8]> {
+        todo!()
+    }
+
+    fn call_handles<'a>(&'a self) -> Vec<&'a [u8]> {
+        todo!()
+    }
+
+    fn hit_handles<'a>(&'a self) -> Vec<&'a [u8]> {
+        todo!()
     }
 }

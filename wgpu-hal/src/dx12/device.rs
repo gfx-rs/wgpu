@@ -1622,4 +1622,15 @@ impl crate::Device<super::Api> for super::Device {
         // Destroy a D3D12 resource as per-usual.
         todo!()
     }
+
+    unsafe fn create_ray_tracing_pipeline(
+        &self,
+        _desc: &crate::RayTracingPipelineDescriptor<super::Api>,
+    ) -> Result<super::RayTracingPipeline, crate::PipelineError> {
+        todo!()
+    }
+
+    unsafe fn destroy_ray_tracing_pipeline(&self, _pipeline: super::RayTracingPipeline) {
+        todo!()
+    }
 }

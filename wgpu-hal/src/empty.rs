@@ -37,6 +37,7 @@ impl crate::Api for Api {
     type ShaderModule = Resource;
     type RenderPipeline = Resource;
     type ComputePipeline = Resource;
+    type RayTracingPipeline = Resource;
 }
 
 impl crate::Instance<Api> for Context {
@@ -256,6 +257,15 @@ impl crate::Device<Api> for Context {
         Default::default()
     }
     unsafe fn destroy_acceleration_structure(&self, _acceleration_structure: Resource) {}
+
+    unsafe fn create_ray_tracing_pipeline(
+        &self,
+        desc: &crate::RayTracingPipelineDescriptor<Api>,
+    ) -> Result<Resource, crate::PipelineError> {
+        Ok(Resource)
+    }
+
+    unsafe fn destroy_ray_tracing_pipeline(&self, pipeline: Resource) {}
 }
 
 impl crate::CommandEncoder<Api> for Encoder {
@@ -435,5 +445,23 @@ impl crate::CommandEncoder<Api> for Encoder {
         &mut self,
         _desc: &[&crate::BuildAccelerationStructureDescriptor<Api>],
     ) {
+    }
+}
+
+impl crate::RayTracingPipeline for Resource {
+    fn gen_handles<'a>(&'a self) -> Vec<&'a [u8]> {
+        vec![]
+    }
+
+    fn miss_handles<'a>(&'a self) -> Vec<&'a [u8]> {
+        vec![]
+    }
+
+    fn call_handles<'a>(&'a self) -> Vec<&'a [u8]> {
+        vec![]
+    }
+
+    fn hit_handles<'a>(&'a self) -> Vec<&'a [u8]> {
+        vec![]
     }
 }

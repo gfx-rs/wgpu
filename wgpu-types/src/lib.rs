@@ -1371,6 +1371,18 @@ bitflags::bitflags! {
         const FRAGMENT = 1 << 1;
         /// Binding is visible from the compute shader of a compute pipeline.
         const COMPUTE = 1 << 2;
+        /// Binding is visible from a ray generation shader of a ray-tracing pipeline.
+        const RAYGEN = 1 << 3;
+        /// Binding is visible from a miss shader of a ray-tracing pipeline.
+        const MISS = 1 << 4;
+        /// Binding is visible from a callable shader of a ray-tracing pipeline.
+        const CALLABLE = 1 << 5;
+        /// Binding is visible from a closest hit shader of a ray-tracing pipeline.
+        const CLOSEST_HIT = 1 << 6;
+        /// Binding is visible from a any hit shader of a ray-tracing pipeline.
+        const ANY_HIT = 1 << 7;
+        /// Binding is visible from a intersection shader of a ray-tracing pipeline.
+        const INTERSECTION = 1 << 8;
         /// Binding is visible from the vertex and fragment shaders of a render pipeline.
         const VERTEX_FRAGMENT = Self::VERTEX.bits | Self::FRAGMENT.bits;
     }

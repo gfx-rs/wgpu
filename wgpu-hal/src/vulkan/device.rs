@@ -762,6 +762,34 @@ impl super::Device {
         })
     }
 
+    fn compile_stage_temp_ray_tracing(
+        &self,
+        stage: &crate::ProgrammableStage<super::Api>,
+        stage_flags: wgt::ShaderStages,
+        _binding_map: &naga::back::spv::BindingMap,
+    ) -> Result<CompiledStage, crate::PipelineError> {
+        let vk_module = match *stage.module {
+            super::ShaderModule::Raw(raw) => raw,
+            _ => unimplemented!("naga support for ray tracing shaders not yet implemented"),
+        };
+
+        let entry_point = CString::new(stage.entry_point).unwrap();
+        let create_info = vk::PipelineShaderStageCreateInfo::builder()
+            .stage(conv::map_shader_stage(stage_flags))
+            .module(vk_module)
+            .name(&entry_point)
+            .build();
+
+        Ok(CompiledStage {
+            create_info,
+            _entry_point: entry_point,
+            temp_raw_module: match *stage.module {
+                super::ShaderModule::Raw(_) => None,
+                super::ShaderModule::Intermediate { .. } => Some(vk_module),
+            },
+        })
+    }
+
     /// Returns the queue family index of the device's internal queue.
     ///
     /// This is useful for constructing memory barriers needed for queue family ownership transfer when
@@ -2274,6 +2302,134 @@ impl crate::Device<super::Api> for super::Device {
                 .lock()
                 .dealloc(&*self.shared, acceleration_structure.block.into_inner());
         }
+    }
+
+    unsafe fn create_ray_tracing_pipeline(
+        &self,
+        desc: &crate::RayTracingPipelineDescriptor<super::Api>,
+    ) -> Result<super::RayTracingPipeline, crate::PipelineError> {
+        let ray_tracing_functions = match self.shared.extension_fns.ray_tracing {
+            Some(ref functions) => functions,
+            None => panic!("Feature `RAY_TRACING` not enabled"),
+        };
+
+        let get_create_info = |stage, stage_flags| -> Result<_, crate::PipelineError> {
+            Ok(self
+                .compile_stage_temp_ray_tracing(stage, stage_flags, &desc.layout.binding_arrays)?
+                .create_info)
+        };
+
+        let mut stages = Vec::<vk::PipelineShaderStageCreateInfo>::new();
+        let mut groups = Vec::<vk::RayTracingShaderGroupCreateInfoKHR>::new();
+
+        let mut next_shader_index = 0;
+
+        for (entries, stage_flags) in [
+            (desc.gen_groups, wgt::ShaderStages::RAYGEN),
+            (desc.miss_groups, wgt::ShaderStages::MISS),
+            (desc.call_groups, wgt::ShaderStages::CALLABLE),
+        ] {
+            for entry in entries {
+                let group = vk::RayTracingShaderGroupCreateInfoKHR::builder()
+                    .ty(vk::RayTracingShaderGroupTypeKHR::GENERAL)
+                    .general_shader(next_shader_index);
+                next_shader_index += 1;
+
+                stages.push(get_create_info(&entry.stage, stage_flags)?);
+                groups.push(*group);
+            }
+        }
+
+        for entry in desc.hit_groups {
+            let mut group =
+                vk::RayTracingShaderGroupCreateInfoKHR::builder().ty(match entry.hit_group_type {
+                    crate::RayTracingHitGroupType::Triangles => {
+                        vk::RayTracingShaderGroupTypeKHR::TRIANGLES_HIT_GROUP
+                    }
+                    crate::RayTracingHitGroupType::Procedural => {
+                        vk::RayTracingShaderGroupTypeKHR::PROCEDURAL_HIT_GROUP
+                    }
+                });
+
+            if let Some(ref stage) = entry.closest_hit {
+                stages.push(get_create_info(stage, wgt::ShaderStages::CLOSEST_HIT)?);
+                group = group.closest_hit_shader(next_shader_index);
+                next_shader_index += 1;
+            }
+            if let Some(ref stage) = entry.any_hit {
+                stages.push(get_create_info(stage, wgt::ShaderStages::ANY_HIT)?);
+                group = group.any_hit_shader(next_shader_index);
+                next_shader_index += 1;
+            }
+            if let Some(ref stage) = entry.intersection {
+                stages.push(get_create_info(stage, wgt::ShaderStages::INTERSECTION)?);
+                group = group.intersection_shader(next_shader_index);
+                next_shader_index += 1;
+            }
+
+            groups.push(*group);
+        }
+
+        let create_info = vk::RayTracingPipelineCreateInfoKHR::builder()
+            .stages(&stages)
+            .groups(&groups)
+            .max_pipeline_ray_recursion_depth(desc.max_recursion_depth)
+            .layout(desc.layout.raw);
+
+        let raw = unsafe {
+            ray_tracing_functions
+                .rt_pipeline
+                .create_ray_tracing_pipelines(
+                    vk::DeferredOperationKHR::null(),
+                    vk::PipelineCache::null(),
+                    &[*create_info],
+                    None,
+                )
+                .map_err(crate::DeviceError::from)?[0]
+        };
+
+        let handle_size = self
+            .shared
+            .private_caps
+            .ray_tracing_pipeline_shader_group_size
+            .unwrap() as usize;
+
+        let handle_data = unsafe {
+            ray_tracing_functions
+                .rt_pipeline
+                .get_ray_tracing_shader_group_handles(
+                    raw,
+                    0,
+                    groups.len() as u32,
+                    handle_size * groups.len(),
+                )
+        }
+        .map_err(crate::DeviceError::from)?;
+
+        let mut range_acc = 0;
+
+        let ranges = [
+            0,
+            desc.gen_groups.len(),
+            desc.miss_groups.len(),
+            desc.call_groups.len(),
+            desc.hit_groups.len(),
+        ]
+        .map(|x| {
+            range_acc += x * handle_size;
+            range_acc
+        });
+
+        Ok(super::RayTracingPipeline {
+            raw,
+            handle_data,
+            handle_size,
+            ranges,
+        })
+    }
+
+    unsafe fn destroy_ray_tracing_pipeline(&self, pipeline: super::RayTracingPipeline) {
+        unsafe { self.shared.raw.destroy_pipeline(pipeline.raw, None) };
     }
 }
 

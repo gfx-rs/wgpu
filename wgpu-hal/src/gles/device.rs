@@ -1337,6 +1337,17 @@ impl crate::Device<super::Api> for super::Device {
         unimplemented!()
     }
     unsafe fn destroy_acceleration_structure(&self, _acceleration_structure: ()) {}
+
+    unsafe fn create_ray_tracing_pipeline(
+        &self,
+        _desc: &crate::RayTracingPipelineDescriptor<super::Api>,
+    ) -> Result<super::RayTracingPipeline, crate::PipelineError> {
+        unimplemented!()
+    }
+
+    unsafe fn destroy_ray_tracing_pipeline(&self, _pipeline: super::RayTracingPipeline) {
+        unimplemented!()
+    }
 }
 
 // SAFE: WASM doesn't have threads

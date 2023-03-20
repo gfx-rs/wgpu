@@ -177,6 +177,7 @@ pub trait Api: Clone + Sized {
     type ShaderModule: fmt::Debug + Send + Sync;
     type RenderPipeline: Send + Sync;
     type ComputePipeline: Send + Sync;
+    type RayTracingPipeline: RayTracingPipeline + Send + Sync;
 
     type AccelerationStructure: fmt::Debug + Send + Sync + 'static;
 }
@@ -353,6 +354,12 @@ pub trait Device<A: Api>: Send + Sync {
         &self,
         acceleration_structure: A::AccelerationStructure,
     );
+
+    unsafe fn create_ray_tracing_pipeline(
+        &self,
+        desc: &RayTracingPipelineDescriptor<A>,
+    ) -> Result<A::RayTracingPipeline, PipelineError>;
+    unsafe fn destroy_ray_tracing_pipeline(&self, pipeline: A::RayTracingPipeline);
 }
 
 pub trait Queue<A: Api>: Send + Sync {
@@ -1472,3 +1479,40 @@ bitflags!(
         const NO_DUPLICATE_ANY_HIT_INVOCATION = 1 << 1;
     }
 );
+
+#[derive(Clone, Debug)]
+pub struct RayTracingGeneralShaderGroup<'a, A: Api> {
+    pub stage: ProgrammableStage<'a, A>,
+}
+
+#[derive(Clone, Debug)]
+pub struct RayTracingHitShaderGroup<'a, A: Api> {
+    pub closest_hit: Option<ProgrammableStage<'a, A>>,
+    pub any_hit: Option<ProgrammableStage<'a, A>>,
+    pub intersection: Option<ProgrammableStage<'a, A>>,
+    pub hit_group_type: RayTracingHitGroupType,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum RayTracingHitGroupType {
+    Triangles,
+    Procedural,
+}
+
+#[derive(Clone, Debug)]
+pub struct RayTracingPipelineDescriptor<'a, A: Api> {
+    pub label: Label<'a>,
+    pub layout: &'a A::PipelineLayout,
+    pub max_recursion_depth: u32,
+    pub gen_groups: &'a [RayTracingGeneralShaderGroup<'a, A>],
+    pub miss_groups: &'a [RayTracingGeneralShaderGroup<'a, A>],
+    pub call_groups: &'a [RayTracingGeneralShaderGroup<'a, A>],
+    pub hit_groups: &'a [RayTracingHitShaderGroup<'a, A>],
+}
+
+pub trait RayTracingPipeline {
+    fn gen_handles<'a>(&'a self) -> Vec<&'a [u8]>;
+    fn miss_handles<'a>(&'a self) -> Vec<&'a [u8]>;
+    fn call_handles<'a>(&'a self) -> Vec<&'a [u8]>;
+    fn hit_handles<'a>(&'a self) -> Vec<&'a [u8]>;
+}

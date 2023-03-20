@@ -34,6 +34,7 @@ pub struct PhysicalDeviceFeatures {
     acceleration_structure: Option<vk::PhysicalDeviceAccelerationStructureFeaturesKHR>,
     buffer_device_address: Option<vk::PhysicalDeviceBufferDeviceAddressFeaturesKHR>,
     ray_query: Option<vk::PhysicalDeviceRayQueryFeaturesKHR>,
+    ray_tracing_pipeline: Option<vk::PhysicalDeviceRayTracingPipelineFeaturesKHR>,
     zero_initialize_workgroup_memory:
         Option<vk::PhysicalDeviceZeroInitializeWorkgroupMemoryFeatures>,
 }
@@ -84,6 +85,9 @@ impl PhysicalDeviceFeatures {
             info = info.push_next(feature);
         }
         if let Some(ref mut feature) = self.ray_query {
+            info = info.push_next(feature);
+        }
+        if let Some(ref mut feature) = self.ray_tracing_pipeline {
             info = info.push_next(feature);
         }
         info
@@ -334,6 +338,17 @@ impl PhysicalDeviceFeatures {
             } else {
                 None
             },
+            ray_tracing_pipeline: if enabled_extensions
+                .contains(&vk::KhrRayTracingPipelineFn::name())
+            {
+                Some(
+                    vk::PhysicalDeviceRayTracingPipelineFeaturesKHR::builder()
+                        .ray_tracing_pipeline(true)
+                        .build(),
+                )
+            } else {
+                None
+            },
             zero_initialize_workgroup_memory: if effective_api_version >= vk::API_VERSION_1_3
                 || enabled_extensions.contains(&vk::KhrZeroInitializeWorkgroupMemoryFn::name())
             {
@@ -573,7 +588,8 @@ impl PhysicalDeviceFeatures {
             F::RAY_TRACING,
             caps.supports_extension(vk::KhrDeferredHostOperationsFn::name())
                 && caps.supports_extension(vk::KhrAccelerationStructureFn::name())
-                && caps.supports_extension(vk::KhrBufferDeviceAddressFn::name()),
+                && caps.supports_extension(vk::KhrBufferDeviceAddressFn::name())
+                && caps.supports_extension(vk::KhrRayTracingPipelineFn::name()),
         );
 
         features.set(
@@ -602,6 +618,7 @@ pub struct PhysicalDeviceCapabilities {
     maintenance_3: Option<vk::PhysicalDeviceMaintenance3Properties>,
     descriptor_indexing: Option<vk::PhysicalDeviceDescriptorIndexingPropertiesEXT>,
     acceleration_structure: Option<vk::PhysicalDeviceAccelerationStructurePropertiesKHR>,
+    ray_tracing_pipeline: Option<vk::PhysicalDeviceRayTracingPipelinePropertiesKHR>,
     driver: Option<vk::PhysicalDeviceDriverPropertiesKHR>,
     /// The effective driver api version supported by the physical device.
     ///
@@ -745,6 +762,7 @@ impl PhysicalDeviceCapabilities {
             extensions.push(vk::KhrDeferredHostOperationsFn::name());
             extensions.push(vk::KhrAccelerationStructureFn::name());
             extensions.push(vk::KhrBufferDeviceAddressFn::name());
+            extensions.push(vk::KhrRayTracingPipelineFn::name())
         }
 
         // Require `VK_KHR_ray_query` if the associated feature was requested
@@ -869,6 +887,9 @@ impl super::InstanceShared {
                 let supports_acceleration_structure =
                     capabilities.supports_extension(vk::KhrAccelerationStructureFn::name());
 
+                let supports_ray_tracing_pipeline =
+                    capabilities.supports_extension(vk::KhrRayTracingPipelineFn::name());
+
                 let mut builder = vk::PhysicalDeviceProperties2KHR::builder();
                 if self.driver_api_version >= vk::API_VERSION_1_1
                     || capabilities.supports_extension(vk::KhrMaintenance3Fn::name())
@@ -889,6 +910,13 @@ impl super::InstanceShared {
                     let next = capabilities
                         .acceleration_structure
                         .insert(vk::PhysicalDeviceAccelerationStructurePropertiesKHR::default());
+                    builder = builder.push_next(next);
+                }
+
+                if supports_ray_tracing_pipeline {
+                    let next = capabilities
+                        .ray_tracing_pipeline
+                        .insert(vk::PhysicalDeviceRayTracingPipelinePropertiesKHR::default());
                     builder = builder.push_next(next);
                 }
 
@@ -1169,6 +1197,9 @@ impl super::Instance {
                 .map_or(false, |ext| {
                     ext.shader_zero_initialize_workgroup_memory == vk::TRUE
                 }),
+            ray_tracing_pipeline_shader_group_size: phd_capabilities
+                .ray_tracing_pipeline
+                .map(|x| x.shader_group_handle_size),
         };
         let capabilities = crate::Capabilities {
             limits: phd_capabilities.to_wgpu_limits(),
@@ -1303,6 +1334,7 @@ impl super::Adapter {
         };
         let ray_tracing_fns = if enabled_extensions.contains(&khr::AccelerationStructure::name())
             && enabled_extensions.contains(&khr::BufferDeviceAddress::name())
+            && enabled_extensions.contains(&khr::RayTracingPipeline::name())
         {
             Some(super::RayTracingDeviceExtensionFunctions {
                 acceleration_structure: khr::AccelerationStructure::new(
@@ -1313,6 +1345,7 @@ impl super::Adapter {
                     &self.instance.raw,
                     &raw_device,
                 ),
+                rt_pipeline: khr::RayTracingPipeline::new(&self.instance.raw, &raw_device),
             })
         } else {
             None

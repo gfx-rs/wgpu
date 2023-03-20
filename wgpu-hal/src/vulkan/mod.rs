@@ -71,6 +71,7 @@ impl crate::Api for Api {
     type ShaderModule = ShaderModule;
     type RenderPipeline = RenderPipeline;
     type ComputePipeline = ComputePipeline;
+    type RayTracingPipeline = RayTracingPipeline;
 }
 
 struct DebugUtils {
@@ -154,6 +155,7 @@ struct DeviceExtensionFunctions {
 struct RayTracingDeviceExtensionFunctions {
     acceleration_structure: khr::AccelerationStructure,
     buffer_device_address: khr::BufferDeviceAddress,
+    rt_pipeline: khr::RayTracingPipeline,
 }
 
 /// Set of internal capabilities, which don't show up in the exposed
@@ -176,6 +178,7 @@ struct PrivateCapabilities {
     robust_buffer_access: bool,
     robust_image_access: bool,
     zero_initialize_workgroup_memory: bool,
+    ray_tracing_pipeline_shader_group_size: Option<u32>,
 }
 
 bitflags::bitflags!(
@@ -299,6 +302,39 @@ pub struct AccelerationStructure {
     raw: vk::AccelerationStructureKHR,
     buffer: vk::Buffer,
     block: Mutex<gpu_alloc::MemoryBlock<vk::DeviceMemory>>,
+}
+
+#[derive(Debug)]
+pub struct RayTracingPipeline {
+    raw: vk::Pipeline,
+    handle_data: Vec<u8>,
+    handle_size: usize,
+    ranges: [usize; 5],
+}
+
+fn get_handle_slices<'a>(pipeline: &'a RayTracingPipeline, range_index: usize) -> Vec<&'a [u8]> {
+    let range = pipeline.ranges[range_index]..pipeline.ranges[range_index + 1];
+    pipeline.handle_data[range]
+        .chunks(pipeline.handle_size)
+        .collect()
+}
+
+impl crate::RayTracingPipeline for RayTracingPipeline {
+    fn gen_handles<'a>(&'a self) -> Vec<&'a [u8]> {
+        get_handle_slices(self, 0)
+    }
+
+    fn miss_handles<'a>(&'a self) -> Vec<&'a [u8]> {
+        get_handle_slices(self, 1)
+    }
+
+    fn call_handles<'a>(&'a self) -> Vec<&'a [u8]> {
+        get_handle_slices(self, 2)
+    }
+
+    fn hit_handles<'a>(&'a self) -> Vec<&'a [u8]> {
+        get_handle_slices(self, 3)
+    }
 }
 
 #[derive(Debug)]

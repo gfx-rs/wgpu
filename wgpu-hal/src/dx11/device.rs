@@ -225,6 +225,17 @@ impl crate::Device<super::Api> for super::Device {
     ) {
         unimplemented!()
     }
+
+    unsafe fn create_ray_tracing_pipeline(
+        &self,
+        _desc: &crate::RayTracingPipelineDescriptor<super::Api>,
+    ) -> Result<super::RayTracingPipeline, crate::PipelineError> {
+        unimplemented!()
+    }
+
+    unsafe fn destroy_ray_tracing_pipeline(&self, _pipeline: super::RayTracingPipeline) {
+        unimplemented!()
+    }
 }
 
 impl crate::Queue<super::Api> for super::Queue {
