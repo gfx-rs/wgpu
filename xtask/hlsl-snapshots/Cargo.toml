@@ -1,0 +1,8 @@
+[package]
+name = "hlsl-snapshots"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1"
+nanoserde = "0.1.32"

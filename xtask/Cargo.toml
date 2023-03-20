@@ -1,0 +1,19 @@
+[package]
+name = "xtask"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+anyhow = "1"
+env_logger = { version = "0.10.0", default-features = false }
+glob = "0.3.1"
+hlsl-snapshots = { path = "./hlsl-snapshots"}
+log = "0.4.17"
+pico-args = "0.5.0"
+shell-words = "1.1.0"
+which = "4.4.0"
+
+[workspace]
+
+members = [".", "./hlsl-snapshots"]

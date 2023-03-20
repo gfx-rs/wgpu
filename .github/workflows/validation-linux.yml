@@ -8,6 +8,7 @@ on:
       - 'tests/out/dot/*.dot'
       - 'tests/out/wgsl/*.wgsl'
       - 'src/front/wgsl/*'
+      - 'xtask/**'
 
 jobs:
   validate-linux:
@@ -19,10 +20,15 @@ jobs:
       - name: Install tools
         run: sudo apt-get install spirv-tools glslang-tools graphviz
 
-      - run: make validate-spv
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            xtask -> target
 
-      - run: make validate-glsl
+      - run: cargo xtask validate spv
 
-      - run: make validate-dot
+      - run: cargo xtask validate glsl
 
-      - run: make validate-wgsl
+      - run: cargo xtask validate dot
+
+      - run: cargo xtask validate wgsl

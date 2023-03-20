@@ -348,56 +348,30 @@ fn write_output_hlsl(
     // We need a config file for validation script
     // This file contains an info about profiles (shader stages) contains inside generated shader
     // This info will be passed to dxc
-    let mut config_str = String::new();
-    let mut vertex_str = String::from("vertex=(");
-    let mut fragment_str = String::from("fragment=(");
-    let mut compute_str = String::from("compute=(");
+    let mut config = hlsl_snapshots::Config::empty();
     for (index, ep) in module.entry_points.iter().enumerate() {
         let name = match reflection_info.entry_point_names[index] {
             Ok(ref name) => name,
             Err(_) => continue,
         };
         match ep.stage {
-            naga::ShaderStage::Vertex => {
-                write!(
-                    vertex_str,
-                    "{}:{}_{} ",
-                    name,
-                    ep.stage.to_hlsl_str(),
-                    options.shader_model.to_str(),
-                )
-                .unwrap();
-            }
-            naga::ShaderStage::Fragment => {
-                write!(
-                    fragment_str,
-                    "{}:{}_{} ",
-                    name,
-                    ep.stage.to_hlsl_str(),
-                    options.shader_model.to_str(),
-                )
-                .unwrap();
-            }
-            naga::ShaderStage::Compute => {
-                write!(
-                    compute_str,
-                    "{}:{}_{} ",
-                    name,
-                    ep.stage.to_hlsl_str(),
-                    options.shader_model.to_str(),
-                )
-                .unwrap();
-            }
+            naga::ShaderStage::Vertex => &mut config.vertex,
+            naga::ShaderStage::Fragment => &mut config.fragment,
+            naga::ShaderStage::Compute => &mut config.compute,
         }
+        .push(hlsl_snapshots::ConfigItem {
+            entry_point: name.clone(),
+            target_profile: format!(
+                "{}_{}",
+                ep.stage.to_hlsl_str(),
+                options.shader_model.to_str()
+            ),
+        });
     }
 
-    writeln!(config_str, "{vertex_str})\n{fragment_str})\n{compute_str})").unwrap();
-
-    fs::write(
-        destination.join(format!("hlsl/{file_name}.hlsl.config")),
-        config_str,
-    )
-    .unwrap();
+    config
+        .to_file(destination.join(format!("hlsl/{file_name}.ron")))
+        .unwrap();
 }
 
 #[cfg(feature = "wgsl-out")]

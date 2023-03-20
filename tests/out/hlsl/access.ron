@@ -1,0 +1,20 @@
+(
+    vertex:[
+        (
+            entry_point:"foo_vert",
+            target_profile:"vs_5_1",
+        ),
+    ],
+    fragment:[
+        (
+            entry_point:"foo_frag",
+            target_profile:"ps_5_1",
+        ),
+    ],
+    compute:[
+        (
+            entry_point:"assign_through_ptr",
+            target_profile:"cs_5_1",
+        ),
+    ],
+)
