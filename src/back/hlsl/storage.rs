@@ -147,12 +147,16 @@ impl<W: fmt::Write> super::Writer<'_, W> {
                 size: crate::ArraySize::Constant(const_handle),
                 ..
             } => {
-                write!(self.out, "{{")?;
+                let constructor = super::help::WrappedConstructor {
+                    ty: result_ty.handle().unwrap(),
+                };
+                self.write_wrapped_constructor_function_name(module, constructor)?;
+                write!(self.out, "(")?;
                 let count = module.constants[const_handle].to_array_length().unwrap();
                 let stride = module.types[base].inner.size(&module.constants);
                 let iter = (0..count).map(|i| (TypeResolution::Handle(base), stride * i));
                 self.write_storage_load_sequence(module, var_handle, iter, func_ctx)?;
-                write!(self.out, "}}")?;
+                write!(self.out, ")")?;
             }
             crate::TypeInner::Struct { ref members, .. } => {
                 let constructor = super::help::WrappedConstructor {

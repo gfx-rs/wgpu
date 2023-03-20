@@ -882,6 +882,12 @@ impl<'a, W: Write> super::Writer<'a, W> {
                             }
                             crate::TypeInner::Array { base, .. } => {
                                 write_wrapped_constructor(writer, base, module)?;
+                                let constructor = WrappedConstructor { ty };
+                                if !writer.wrapped.constructors.contains(&constructor) {
+                                    writer
+                                        .write_wrapped_constructor_function(module, constructor)?;
+                                    writer.wrapped.constructors.insert(constructor);
+                                }
                             }
                             _ => {}
                         };

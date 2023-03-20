@@ -427,6 +427,10 @@ fn convert_wgsl() {
     let root = env!("CARGO_MANIFEST_DIR");
     let inputs = [
         (
+            "array-in-ctor",
+            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
+        ),
+        (
             "empty",
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
         ),
