@@ -2,7 +2,12 @@ use crate::auxil::{self, dxgi::result::HResult as _};
 
 use super::{conv, descriptor, view};
 use parking_lot::Mutex;
-use std::{ffi, mem, num::NonZeroU32, ptr, sync::Arc};
+use std::{
+    ffi, mem,
+    num::NonZeroU32,
+    ptr,
+    sync::{atomic::AtomicBool, Arc},
+};
 use winapi::{
     shared::{dxgiformat, dxgitype, minwindef::BOOL, winerror},
     um::{d3d12 as d3d12_ty, synchapi, winbase},
@@ -349,7 +354,7 @@ impl crate::Device<super::Api> for super::Device {
         Ok(super::Buffer {
             resource,
             size,
-            memory_flags: desc.memory_flags,
+            initialized: AtomicBool::new(allocation.is_none()),
             allocation,
         })
     }
