@@ -151,7 +151,6 @@ struct PrivateCapabilities {
     shared_textures: bool,
     mutable_comparison_samplers: bool,
     sampler_clamp_to_border: bool,
-    sampler_lod_average: bool,
     base_instance: bool,
     base_vertex_instance_drawing: bool,
     dual_source_blending: bool,
