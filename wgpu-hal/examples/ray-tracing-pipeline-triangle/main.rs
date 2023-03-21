@@ -204,6 +204,7 @@ struct Example<A: hal::Api> {
     bgl: A::BindGroupLayout,
     gen_shader_module: A::ShaderModule,
     miss_shader_module: A::ShaderModule,
+    call_shader_module: A::ShaderModule,
     hit_shader_module: A::ShaderModule,
     texture_view: A::TextureView,
     uniform_buffer: A::Buffer,
@@ -219,6 +220,7 @@ struct Example<A: hal::Api> {
     sbt_buffer: A::Buffer,
     gen_sbt_ref: ShaderBindingTableReference,
     miss_sbt_ref: ShaderBindingTableReference,
+    call_sbt_ref: ShaderBindingTableReference,
     hit_sbt_ref: ShaderBindingTableReference,
     time: f32,
 }
@@ -383,6 +385,18 @@ impl<A: hal::Api> Example<A> {
                 .unwrap()
         };
 
+        let call_shader_module = unsafe {
+            device
+                .create_shader_module(
+                    &hal::ShaderModuleDescriptor {
+                        label: None,
+                        runtime_checks: false,
+                    },
+                    hal::ShaderInput::SpirV(&make_spirv_raw(include_bytes!("shader.rcall.spv"))),
+                )
+                .unwrap()
+        };
+
         let hit_shader_module = unsafe {
             device
                 .create_shader_module(
@@ -417,6 +431,11 @@ impl<A: hal::Api> Example<A> {
             entry_point: "main",
         };
 
+        let call_group = hal::ProgrammableStage {
+            module: &call_shader_module,
+            entry_point: "main",
+        };
+
         let hit_group = RayTracingHitShaderGroup {
             closest_hit: Some(hal::ProgrammableStage {
                 module: &hit_shader_module,
@@ -434,15 +453,14 @@ impl<A: hal::Api> Example<A> {
                 skip_hit_type: SkipHitType::None,
                 gen_groups: &[gen_group],
                 miss_groups: &[miss_group],
-                call_groups: &[],
+                call_groups: &[call_group],
                 hit_groups: &[hit_group],
             })
         }
         .unwrap();
 
         //SBT
-
-        let (sbt_buffer, gen_sbt_ref, miss_sbt_ref, hit_sbt_ref) = {
+        let (sbt_buffer, gen_sbt_ref, miss_sbt_ref, call_sbt_ref, hit_sbt_ref) = {
             let col_a = glam::vec4(1.0, 1.0, 1.0, 0.5);
             let col_b = glam::vec4(0.0, 0.0, 0.0, 0.0);
 
@@ -464,23 +482,27 @@ impl<A: hal::Api> Example<A> {
 
             let gen_records: [&[u8]; 1] = [&[]];
             let miss_records: [&[u8]; 1] = [&[]];
+            let call_records: [&[u8]; 1] = [&[]];
             let hit_records: [&[u8]; 2] = [&col_a_mem, &col_b_mem];
 
             let gen_handles = pipeline.gen_handles();
             let miss_handles = pipeline.miss_handles();
+            let call_handles = pipeline.call_handles();
             let hit_handles = pipeline.hit_handles().repeat(2);
 
             let gen_sbt_data = device.assemble_sbt_data(&gen_handles, &gen_records);
             let miss_sbt_data = device.assemble_sbt_data(&miss_handles, &miss_records);
+            let call_sbt_data = device.assemble_sbt_data(&call_handles, &call_records);
             let hit_sbt_data = device.assemble_sbt_data(&hit_handles, &hit_records);
 
             let combined_iterator = gen_sbt_data
                 .data
                 .chain(miss_sbt_data.data)
+                .chain(call_sbt_data.data)
                 .chain(hit_sbt_data.data);
 
             let sbt_size =
-                gen_sbt_data.padded_size + miss_sbt_data.padded_size + hit_sbt_data.padded_size;
+                gen_sbt_data.padded_size + miss_sbt_data.padded_size + call_sbt_data.padded_size + hit_sbt_data.padded_size;
 
             let sbt_buffer = unsafe {
                 let sbt_buffer = device
@@ -523,12 +545,19 @@ impl<A: hal::Api> Example<A> {
             };
             offset += miss_sbt_data.padded_size;
 
+            let call_sbt_ref = ShaderBindingTableReference {
+                address: sbt_address + offset,
+                stride: call_sbt_data.stride,
+                size: call_sbt_data.size,
+            };
+            offset += call_sbt_data.padded_size;
+
             let hit_sbt_ref = ShaderBindingTableReference {
                 address: sbt_address + offset,
                 stride: hit_sbt_data.stride as u64,
                 size: hit_sbt_data.size,
             };
-            (sbt_buffer, gen_sbt_ref, miss_sbt_ref, hit_sbt_ref)
+            (sbt_buffer, gen_sbt_ref, miss_sbt_ref, call_sbt_ref, hit_sbt_ref)
         };
 
         // t[0] = &[1u8; 8];
@@ -799,7 +828,7 @@ impl<A: hal::Api> Example<A> {
                     y: -1.0,
                     z: -2.0,
                 }),
-                0,
+                1,
                 0xff,
                 0,
                 0,
@@ -950,9 +979,11 @@ impl<A: hal::Api> Example<A> {
             bgl,
             gen_shader_module,
             miss_shader_module,
+            call_shader_module,
             hit_shader_module,
             gen_sbt_ref,
             miss_sbt_ref,
+            call_sbt_ref,
             hit_sbt_ref,
         })
     }
@@ -1045,7 +1076,7 @@ impl<A: hal::Api> Example<A> {
             ctx.encoder.trace_rays(
                 &self.gen_sbt_ref,
                 &self.miss_sbt_ref,
-                &ShaderBindingTableReference::default(),
+                &self.call_sbt_ref,
                 &self.hit_sbt_ref,
                 [512, 512, 1],
             )
@@ -1172,6 +1203,7 @@ impl<A: hal::Api> Example<A> {
             self.device.destroy_bind_group_layout(self.bgl);
             self.device.destroy_shader_module(self.gen_shader_module);
             self.device.destroy_shader_module(self.miss_shader_module);
+            self.device.destroy_shader_module(self.call_shader_module);
             self.device.destroy_shader_module(self.hit_shader_module);
 
             self.surface.unconfigure(&self.device);
