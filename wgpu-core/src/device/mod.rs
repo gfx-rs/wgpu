@@ -1310,36 +1310,64 @@ impl<A: HalApi> Device<A> {
             self.require_features(wgt::Features::ADDRESS_MODE_CLAMP_TO_ZERO)?;
         }
 
-        if desc.lod_min_clamp < 0.0 || desc.lod_max_clamp < desc.lod_min_clamp {
-            return Err(resource::CreateSamplerError::InvalidLodClamp(
-                desc.lod_min_clamp..desc.lod_max_clamp,
+        if desc.lod_min_clamp < 0.0 {
+            return Err(resource::CreateSamplerError::InvalidLodMinClamp(
+                desc.lod_min_clamp,
+            ));
+        }
+        if desc.lod_max_clamp < desc.lod_min_clamp {
+            return Err(resource::CreateSamplerError::InvalidLodMaxClamp {
+                lod_min_clamp: desc.lod_min_clamp,
+                lod_max_clamp: desc.lod_max_clamp,
+            });
+        }
+
+        if desc.anisotropy_clamp < 1 {
+            return Err(resource::CreateSamplerError::InvalidAnisotropy(
+                desc.anisotropy_clamp,
             ));
         }
 
-        let lod_clamp = if desc.lod_min_clamp > 0.0 || desc.lod_max_clamp < 32.0 {
-            Some(desc.lod_min_clamp..desc.lod_max_clamp)
-        } else {
-            None
-        };
+        if desc.anisotropy_clamp != 1 {
+            if !matches!(desc.min_filter, wgt::FilterMode::Linear) {
+                return Err(
+                    resource::CreateSamplerError::InvalidFilterModeWithAnisotropy {
+                        filter_type: resource::SamplerFilterErrorType::MinFilter,
+                        filter_mode: desc.min_filter,
+                        anisotropic_clamp: desc.anisotropy_clamp,
+                    },
+                );
+            }
+            if !matches!(desc.mag_filter, wgt::FilterMode::Linear) {
+                return Err(
+                    resource::CreateSamplerError::InvalidFilterModeWithAnisotropy {
+                        filter_type: resource::SamplerFilterErrorType::MagFilter,
+                        filter_mode: desc.mag_filter,
+                        anisotropic_clamp: desc.anisotropy_clamp,
+                    },
+                );
+            }
+            if !matches!(desc.mipmap_filter, wgt::FilterMode::Linear) {
+                return Err(
+                    resource::CreateSamplerError::InvalidFilterModeWithAnisotropy {
+                        filter_type: resource::SamplerFilterErrorType::MipmapFilter,
+                        filter_mode: desc.mipmap_filter,
+                        anisotropic_clamp: desc.anisotropy_clamp,
+                    },
+                );
+            }
+        }
 
-        let anisotropy_clamp = if let Some(clamp) = desc.anisotropy_clamp {
-            let clamp = clamp.get();
-            let valid_clamp =
-                clamp <= hal::MAX_ANISOTROPY && conv::is_power_of_two_u32(clamp as u32);
-            if !valid_clamp {
-                return Err(resource::CreateSamplerError::InvalidClamp(clamp));
-            }
-            if self
-                .downlevel
-                .flags
-                .contains(wgt::DownlevelFlags::ANISOTROPIC_FILTERING)
-            {
-                std::num::NonZeroU8::new(clamp)
-            } else {
-                None
-            }
+        let anisotropy_clamp = if self
+            .downlevel
+            .flags
+            .contains(wgt::DownlevelFlags::ANISOTROPIC_FILTERING)
+        {
+            // Clamp anisotropy clamp to [1, 16] per the wgpu-hal interface
+            desc.anisotropy_clamp.min(16)
         } else {
-            None
+            // If it isn't supported, set this unconditionally to 1
+            1
         };
 
         //TODO: check for wgt::DownlevelFlags::COMPARISON_SAMPLERS
@@ -1350,7 +1378,7 @@ impl<A: HalApi> Device<A> {
             mag_filter: desc.mag_filter,
             min_filter: desc.min_filter,
             mipmap_filter: desc.mipmap_filter,
-            lod_clamp,
+            lod_clamp: desc.lod_min_clamp..desc.lod_max_clamp,
             compare: desc.compare,
             anisotropy_clamp,
             border_color: desc.border_color,

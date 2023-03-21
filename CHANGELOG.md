@@ -39,6 +39,7 @@ Bottom level categories:
 -->
 
 ## Unreleased
+
 ### Major changes
 
 #### TextureFormat info API
@@ -81,6 +82,21 @@ The following `Features` have been renamed.
 
 By @teoxoy in [#3534](https://github.com/gfx-rs/wgpu/pull/3534)
 
+#### Anisotropic Filtering
+
+Anisotropic filtering has been brought in line with the spec. The anisotropic clamp is now a u16 (was a `Option<u8>`) which must be at least 1.
+
+If the anisotropy clamp is not 1, all the filters in a sampler must be `Linear`.
+
+```diff
+SamplerDescriptor {
+-    anisotropic_clamp: None,
++    anisotropic_clamp: 1,
+}
+```
+
+By @cwfitzgerald in [#3610](https://github.com/gfx-rs/wgpu/pull/3610).
+
 #### General
 
 - Change type of `mip_level_count` and `array_layer_count` (members of `TextureViewDescriptor` and `ImageSubresourceRange`) from `Option<NonZeroU32>` to `Option<u32>`. By @teoxoy in [#3445](https://github.com/gfx-rs/wgpu/pull/3445)
@@ -112,6 +128,9 @@ By @teoxoy in [#3534](https://github.com/gfx-rs/wgpu/pull/3534)
 - Set `max_memory_allocation_size` via `PhysicalDeviceMaintenance3Properties`. By @jinleili in [#3567](https://github.com/gfx-rs/wgpu/pull/3567)
 
 ### Bug Fixes
+
+#### Metal
+- Fix incorrect mipmap being sampled when using `MinLod <= 0.0` and `MaxLod >= 32.0` or when the fragment shader samples different Lods in the same quad. By @cwfitzgerald in [#3610](https://github.com/gfx-rs/wgpu/pull/3610).
 
 #### DX12
 

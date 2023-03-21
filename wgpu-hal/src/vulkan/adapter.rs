@@ -1320,7 +1320,6 @@ impl super::Adapter {
             },
             vendor_id: self.phd_capabilities.properties.vendor_id,
             timestamp_period: self.phd_capabilities.properties.limits.timestamp_period,
-            downlevel_flags: self.downlevel_flags,
             private_caps: self.private_caps.clone(),
             workarounds: self.workarounds,
             render_passes: Mutex::new(Default::default()),
