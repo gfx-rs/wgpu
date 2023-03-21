@@ -1121,8 +1121,8 @@ impl crate::Device<super::Api> for super::Device {
         }
 
         if desc.anisotropy_clamp != 1 {
-            // We only enable the downlevel flag if supports 16x anisotropy,
-            // and wgpu-hal interface guarentees the clamp is in the range [1, 16]
+            // We only enable anisotropy if it is supported, and wgpu-hal interface guarentees
+            // the clamp is in the range [1, 16] which is always supported if anisotropy is.
             vk_info = vk_info
                 .anisotropy_enable(true)
                 .max_anisotropy(desc.anisotropy_clamp as f32);
