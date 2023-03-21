@@ -864,16 +864,12 @@ impl crate::Device<super::Api> for super::Device {
             unsafe { gl.sampler_parameter_f32_slice(raw, glow::TEXTURE_BORDER_COLOR, &border) };
         }
 
-        if let Some(ref range) = desc.lod_clamp {
-            unsafe { gl.sampler_parameter_f32(raw, glow::TEXTURE_MIN_LOD, range.start) };
-            unsafe { gl.sampler_parameter_f32(raw, glow::TEXTURE_MAX_LOD, range.end) };
-        }
+        unsafe { gl.sampler_parameter_f32(raw, glow::TEXTURE_MIN_LOD, desc.lod_clamp.start) };
+        unsafe { gl.sampler_parameter_f32(raw, glow::TEXTURE_MAX_LOD, desc.lod_clamp.end) };
 
-        if let Some(anisotropy) = desc.anisotropy_clamp {
-            unsafe {
-                gl.sampler_parameter_i32(raw, glow::TEXTURE_MAX_ANISOTROPY, anisotropy.get() as i32)
-            };
-        }
+        unsafe {
+            gl.sampler_parameter_f32(raw, glow::TEXTURE_MAX_ANISOTROPY, desc.anisotropy_clamp)
+        };
 
         //set_param_float(glow::TEXTURE_LOD_BIAS, info.lod_bias.0);
 

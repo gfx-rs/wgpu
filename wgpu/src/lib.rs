@@ -19,7 +19,7 @@ use std::{
     fmt::{Debug, Display},
     future::Future,
     marker::PhantomData,
-    num::{NonZeroU32, NonZeroU8},
+    num::NonZeroU32,
     ops::{Bound, Deref, DerefMut, Range, RangeBounds},
     sync::Arc,
     thread,
@@ -1008,8 +1008,8 @@ pub struct SamplerDescriptor<'a> {
     pub lod_max_clamp: f32,
     /// If this is enabled, this is a comparison sampler using the given comparison function.
     pub compare: Option<CompareFunction>,
-    /// Valid values: 1, 2, 4, 8, and 16.
-    pub anisotropy_clamp: Option<NonZeroU8>,
+    /// Valid values between 1 and 16 inclusive. If this is not 1.0, all filter modes must be linear.
+    pub anisotropy_clamp: f32,
     /// Border color to use when address_mode is [`AddressMode::ClampToBorder`]
     pub border_color: Option<SamplerBorderColor>,
 }
@@ -1028,7 +1028,7 @@ impl Default for SamplerDescriptor<'_> {
             lod_min_clamp: 0.0,
             lod_max_clamp: std::f32::MAX,
             compare: None,
-            anisotropy_clamp: None,
+            anisotropy_clamp: 1.0,
             border_color: None,
         }
     }

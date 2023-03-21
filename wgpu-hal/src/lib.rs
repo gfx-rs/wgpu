@@ -87,7 +87,7 @@ pub mod api {
 use std::{
     borrow::{Borrow, Cow},
     fmt,
-    num::{NonZeroU32, NonZeroU8},
+    num::NonZeroU32,
     ops::{Range, RangeInclusive},
     ptr::NonNull,
     sync::atomic::AtomicBool,
@@ -919,9 +919,10 @@ pub struct SamplerDescriptor<'a> {
     pub mag_filter: wgt::FilterMode,
     pub min_filter: wgt::FilterMode,
     pub mipmap_filter: wgt::FilterMode,
-    pub lod_clamp: Option<Range<f32>>,
+    pub lod_clamp: Range<f32>,
     pub compare: Option<wgt::CompareFunction>,
-    pub anisotropy_clamp: Option<NonZeroU8>,
+    // Must be in the range 1.0 to 16.0 inclusive. Anisotropic filtering must be supported if this is not 1.0.
+    pub anisotropy_clamp: f32,
     pub border_color: Option<wgt::SamplerBorderColor>,
 }
 

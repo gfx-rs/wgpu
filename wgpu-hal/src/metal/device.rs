@@ -415,6 +415,9 @@ impl crate::Device<super::Api> for super::Device {
             descriptor.set_min_filter(conv::map_filter_mode(desc.min_filter));
             descriptor.set_mag_filter(conv::map_filter_mode(desc.mag_filter));
             descriptor.set_mip_filter(match desc.mipmap_filter {
+                wgt::FilterMode::Nearest if desc.lod_clamp == (0.0..0.0) => {
+                    metal::MTLSamplerMipFilter::NotMipmapped
+                }
                 wgt::FilterMode::Nearest => metal::MTLSamplerMipFilter::Nearest,
                 wgt::FilterMode::Linear => metal::MTLSamplerMipFilter::Linear,
             });
@@ -424,14 +427,10 @@ impl crate::Device<super::Api> for super::Device {
             descriptor.set_address_mode_t(conv::map_address_mode(t));
             descriptor.set_address_mode_r(conv::map_address_mode(r));
 
-            if let Some(aniso) = desc.anisotropy_clamp {
-                descriptor.set_max_anisotropy(aniso.get() as _);
-            }
+            descriptor.set_max_anisotropy(desc.anisotropy_clamp as _);
 
-            if let Some(ref range) = desc.lod_clamp {
-                descriptor.set_lod_min_clamp(range.start);
-                descriptor.set_lod_max_clamp(range.end);
-            }
+            descriptor.set_lod_min_clamp(desc.lod_clamp.start);
+            descriptor.set_lod_max_clamp(desc.lod_clamp.end);
 
             if let Some(fun) = desc.compare {
                 descriptor.set_compare_function(conv::map_compare_function(fun));

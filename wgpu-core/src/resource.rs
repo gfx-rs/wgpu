@@ -11,7 +11,7 @@ use crate::{
 use smallvec::SmallVec;
 use thiserror::Error;
 
-use std::{borrow::Borrow, num::NonZeroU8, ops::Range, ptr::NonNull};
+use std::{borrow::Borrow, ops::Range, ptr::NonNull};
 
 /// The status code provided to the buffer mapping callback.
 ///
@@ -689,8 +689,8 @@ pub struct SamplerDescriptor<'a> {
     pub lod_max_clamp: f32,
     /// If this is enabled, this is a comparison sampler using the given comparison function.
     pub compare: Option<wgt::CompareFunction>,
-    /// Valid values: 1, 2, 4, 8, and 16.
-    pub anisotropy_clamp: Option<NonZeroU8>,
+    /// Valid values between 1 and 16 inclusive. If this is not 1.0, all filter modes must be linear.
+    pub anisotropy_clamp: f32,
     /// Border color to use when address_mode is
     /// [`AddressMode::ClampToBorder`](wgt::AddressMode::ClampToBorder)
     pub border_color: Option<wgt::SamplerBorderColor>,
@@ -707,7 +707,7 @@ impl Default for SamplerDescriptor<'_> {
             lod_min_clamp: 0.0,
             lod_max_clamp: std::f32::MAX,
             compare: None,
-            anisotropy_clamp: None,
+            anisotropy_clamp: 1.0,
             border_color: None,
         }
     }
@@ -724,14 +724,42 @@ pub struct Sampler<A: hal::Api> {
     pub(crate) filtering: bool,
 }
 
+#[derive(Copy, Clone)]
+pub enum SamplerFilterErrorType {
+    MagFilter,
+    MinFilter,
+    MipmapFilter,
+}
+
+impl std::fmt::Debug for SamplerFilterErrorType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match *self {
+            SamplerFilterErrorType::MagFilter => write!(f, "magFilter"),
+            SamplerFilterErrorType::MinFilter => write!(f, "minFilter"),
+            SamplerFilterErrorType::MipmapFilter => write!(f, "mipmapFilter"),
+        }
+    }
+}
+
 #[derive(Clone, Debug, Error)]
 pub enum CreateSamplerError {
     #[error(transparent)]
     Device(#[from] DeviceError),
-    #[error("Invalid lod clamp lod_min_clamp:{} lod_max_clamp:{}, must satisfy lod_min_clamp >= 0 and lod_max_clamp >= lod_min_clamp ", .0.start, .0.end)]
-    InvalidLodClamp(Range<f32>),
-    #[error("Invalid anisotropic clamp {0}, must be one of 1, 2, 4, 8 or 16")]
-    InvalidClamp(u8),
+    #[error("Invalid lodMinClamp: {0}. Must be greater or equal to 0.0")]
+    InvalidLodMinClamp(f32),
+    #[error("Invalid lodMaxClamp: {lod_max_clamp}. Must be greater or equal to lodMinClamp (which is {lod_min_clamp}).")]
+    InvalidLodMaxClamp {
+        lod_min_clamp: f32,
+        lod_max_clamp: f32,
+    },
+    #[error("Invalid anisotropic clamp: {0}. Must be in the range 1 to 16 inclusive.")]
+    InvalidAnisotropy(f32),
+    #[error("Invalid filter mode for {filter_type:?}: {filter_mode:?}. When anistropic clamp is not 1.0 (it is {anisotropic_clamp}), all filter modes must be linear.")]
+    InvalidFilterModeWithAnisotropy {
+        filter_type: SamplerFilterErrorType,
+        filter_mode: wgt::FilterMode,
+        anisotropic_clamp: f32,
+    },
     #[error("Cannot create any more samplers")]
     TooManyObjects,
     /// AddressMode::ClampToBorder requires feature ADDRESS_MODE_CLAMP_TO_BORDER.

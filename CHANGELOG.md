@@ -82,6 +82,21 @@ The following `Features` have been renamed.
 
 By @teoxoy in [#3534](https://github.com/gfx-rs/wgpu/pull/3534)
 
+#### Anisotropic Filtering
+
+Anisotropic filtering has been brought in line with the spec. The anisotropic clamp is now a f32 which must be between 1.0 and 16.0 inclusive.
+
+If the anisotropy clamp is not 1.0, all the filters in a sampler must be `Linear`.
+
+```diff
+SamplerDescriptor {
+-    anisotropic_clamp: None,
++    anisotropic_clamp: 1.0,
+}
+```
+
+By @cwfitzgerald in [#3610](https://github.com/gfx-rs/wgpu/pull/3610).
+
 #### General
 
 - Change type of `mip_level_count` and `array_layer_count` (members of `TextureViewDescriptor` and `ImageSubresourceRange`) from `Option<NonZeroU32>` to `Option<u32>`. By @teoxoy in [#3445](https://github.com/gfx-rs/wgpu/pull/3445)
@@ -99,6 +114,7 @@ By @teoxoy in [#3534](https://github.com/gfx-rs/wgpu/pull/3534)
 - Improve attachment related errors. By @cwfitzgerald in [#3549](https://github.com/gfx-rs/wgpu/pull/3549)
 - Make error descriptions all upper case. By @cwfitzgerald in [#3549](https://github.com/gfx-rs/wgpu/pull/3549)
 - Don't include ANSI terminal color escape sequences in shader module validation error messages. By @jimblandy in [#3591](https://github.com/gfx-rs/wgpu/pull/3591)
+- Bring anisotropic filtering in line with the spec. 
 
 #### WebGPU
 
@@ -115,7 +131,7 @@ By @teoxoy in [#3534](https://github.com/gfx-rs/wgpu/pull/3534)
 ### Bug Fixes
 
 #### Metal
-- Fix incorrect mipmap being sampled when using `MinLod <= 0.0` and `MaxLod >= 32.0` or when the fragment shaders in the same squad sample different Lods. By @cwfitzgerald in [#3610](https://github.com/gfx-rs/wgpu/pull/3610).
+- Fix incorrect mipmap being sampled when using `MinLod <= 0.0` and `MaxLod >= 32.0` or when the fragment shader samples different Lods in the same quad. By @cwfitzgerald in [#3610](https://github.com/gfx-rs/wgpu/pull/3610).
 
 #### DX12
 
