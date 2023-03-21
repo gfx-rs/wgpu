@@ -78,14 +78,12 @@ impl super::Device {
         let mut temp_options;
         let options = if !stage.module.runtime_checks {
             temp_options = layout.naga_options.clone();
-            if !stage.module.runtime_checks {
-                temp_options.bounds_check_policies = naga::proc::BoundsCheckPolicies {
-                    index: naga::proc::BoundsCheckPolicy::Unchecked,
-                    buffer: naga::proc::BoundsCheckPolicy::Unchecked,
-                    image: naga::proc::BoundsCheckPolicy::Unchecked,
-                    binding_array: naga::proc::BoundsCheckPolicy::Unchecked,
-                };
-            }
+            temp_options.bounds_check_policies = naga::proc::BoundsCheckPolicies {
+                index: naga::proc::BoundsCheckPolicy::Unchecked,
+                buffer: naga::proc::BoundsCheckPolicy::Unchecked,
+                image: naga::proc::BoundsCheckPolicy::Unchecked,
+                binding_array: naga::proc::BoundsCheckPolicy::Unchecked,
+            };
             &temp_options
         } else {
             &layout.naga_options
