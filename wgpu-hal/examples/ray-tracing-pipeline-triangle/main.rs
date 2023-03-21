@@ -2,8 +2,8 @@ extern crate wgpu_hal as hal;
 
 use hal::{
     Adapter as _, CommandEncoder as _, Device as _, Instance as _, Queue as _,
-    RayTracingGeneralShaderGroup, RayTracingHitGroupType, RayTracingHitShaderGroup,
-    RayTracingPipeline, ShaderBindingTableReference, Surface as _,
+    RayTracingHitShaderGroup, RayTracingPipeline, ShaderBindingTableReference, SkipHitType,
+    Surface as _,
 };
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 
@@ -407,18 +407,14 @@ impl<A: hal::Api> Example<A> {
                 .unwrap()
         };
 
-        let gen_group = RayTracingGeneralShaderGroup {
-            stage: hal::ProgrammableStage {
-                module: &gen_shader_module,
-                entry_point: "main",
-            },
+        let gen_group = hal::ProgrammableStage {
+            module: &gen_shader_module,
+            entry_point: "main",
         };
 
-        let miss_group = RayTracingGeneralShaderGroup {
-            stage: hal::ProgrammableStage {
-                module: &miss_shader_module,
-                entry_point: "main",
-            },
+        let miss_group = hal::ProgrammableStage {
+            module: &miss_shader_module,
+            entry_point: "main",
         };
 
         let hit_group = RayTracingHitShaderGroup {
@@ -428,7 +424,6 @@ impl<A: hal::Api> Example<A> {
             }),
             any_hit: None,
             intersection: None,
-            hit_group_type: RayTracingHitGroupType::Triangles,
         };
 
         let pipeline = unsafe {
@@ -436,6 +431,7 @@ impl<A: hal::Api> Example<A> {
                 label: Some("pipeline"),
                 layout: &pipeline_layout,
                 max_recursion_depth: 1,
+                skip_hit_type: SkipHitType::None,
                 gen_groups: &[gen_group],
                 miss_groups: &[miss_group],
                 call_groups: &[],

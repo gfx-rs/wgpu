@@ -1095,7 +1095,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 &vk::StridedDeviceAddressRegionKHR {
                     device_address: ray_gen_sbt.address,
                     stride: ray_gen_sbt.stride,
-                    size: ray_gen_sbt.size,
+                    size: ray_gen_sbt.stride, // intentional
                 },
                 &vk::StridedDeviceAddressRegionKHR {
                     device_address: miss_sbt.address,

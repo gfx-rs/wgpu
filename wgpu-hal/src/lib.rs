@@ -1508,20 +1508,16 @@ bitflags!(
 );
 
 #[derive(Clone, Debug)]
-pub struct RayTracingGeneralShaderGroup<'a, A: Api> {
-    pub stage: ProgrammableStage<'a, A>,
-}
-
-#[derive(Clone, Debug)]
 pub struct RayTracingHitShaderGroup<'a, A: Api> {
     pub closest_hit: Option<ProgrammableStage<'a, A>>,
     pub any_hit: Option<ProgrammableStage<'a, A>>,
     pub intersection: Option<ProgrammableStage<'a, A>>,
-    pub hit_group_type: RayTracingHitGroupType,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum RayTracingHitGroupType {
+#[derive(Copy, Clone, Debug, Default)]
+pub enum SkipHitType {
+    #[default]
+    None,
     Triangles,
     Procedural,
 }
@@ -1531,12 +1527,14 @@ pub struct RayTracingPipelineDescriptor<'a, A: Api> {
     pub label: Label<'a>,
     pub layout: &'a A::PipelineLayout,
     pub max_recursion_depth: u32,
-    pub gen_groups: &'a [RayTracingGeneralShaderGroup<'a, A>],
-    pub miss_groups: &'a [RayTracingGeneralShaderGroup<'a, A>],
-    pub call_groups: &'a [RayTracingGeneralShaderGroup<'a, A>],
+    pub skip_hit_type: SkipHitType,
+    pub gen_groups: &'a [ProgrammableStage<'a, A>],
+    pub miss_groups: &'a [ProgrammableStage<'a, A>],
+    pub call_groups: &'a [ProgrammableStage<'a, A>],
     pub hit_groups: &'a [RayTracingHitShaderGroup<'a, A>],
 }
 
+/// unstable may change for dx12 implementation
 pub trait RayTracingPipeline {
     fn gen_handles<'a>(&'a self) -> Vec<&'a [u8]>;
     fn miss_handles<'a>(&'a self) -> Vec<&'a [u8]>;

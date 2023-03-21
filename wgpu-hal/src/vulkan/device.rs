@@ -2333,6 +2333,7 @@ impl crate::Device<super::Api> for super::Device {
             Ok(compiled_storage.last().unwrap().create_info)
         };
 
+        // Future work: don't add the same shader to stages multiple times
         let mut stages = Vec::<vk::PipelineShaderStageCreateInfo>::new();
         let mut groups = Vec::<vk::RayTracingShaderGroupCreateInfoKHR>::new();
 
@@ -2343,7 +2344,7 @@ impl crate::Device<super::Api> for super::Device {
             (desc.miss_groups, wgt::ShaderStages::MISS),
             (desc.call_groups, wgt::ShaderStages::CALLABLE),
         ] {
-            for entry in entries {
+            for programmable_stage in entries {
                 let group = vk::RayTracingShaderGroupCreateInfoKHR::builder()
                     .ty(vk::RayTracingShaderGroupTypeKHR::GENERAL)
                     .general_shader(next_shader_index)
@@ -2352,20 +2353,16 @@ impl crate::Device<super::Api> for super::Device {
                     .intersection_shader(vk::SHADER_UNUSED_KHR);
                 next_shader_index += 1;
 
-                stages.push(get_create_info(&entry.stage, stage_flags)?);
+                stages.push(get_create_info(programmable_stage, stage_flags)?);
                 groups.push(*group);
             }
         }
 
         for entry in desc.hit_groups {
             let mut group = vk::RayTracingShaderGroupCreateInfoKHR::builder()
-                .ty(match entry.hit_group_type {
-                    crate::RayTracingHitGroupType::Triangles => {
-                        vk::RayTracingShaderGroupTypeKHR::TRIANGLES_HIT_GROUP
-                    }
-                    crate::RayTracingHitGroupType::Procedural => {
-                        vk::RayTracingShaderGroupTypeKHR::PROCEDURAL_HIT_GROUP
-                    }
+                .ty(match entry.intersection {
+                    None => vk::RayTracingShaderGroupTypeKHR::TRIANGLES_HIT_GROUP,
+                    Some(_) => vk::RayTracingShaderGroupTypeKHR::PROCEDURAL_HIT_GROUP,
                 })
                 .general_shader(vk::SHADER_UNUSED_KHR);
 
