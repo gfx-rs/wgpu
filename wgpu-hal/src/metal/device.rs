@@ -75,11 +75,25 @@ impl super::Device {
             },
         };
 
+        let mut temp_options;
+        let options = if !stage.module.runtime_checks {
+            temp_options = layout.naga_options.clone();
+            temp_options.bounds_check_policies = naga::proc::BoundsCheckPolicies {
+                index: naga::proc::BoundsCheckPolicy::Unchecked,
+                buffer: naga::proc::BoundsCheckPolicy::Unchecked,
+                image: naga::proc::BoundsCheckPolicy::Unchecked,
+                binding_array: naga::proc::BoundsCheckPolicy::Unchecked,
+            };
+            &temp_options
+        } else {
+            &layout.naga_options
+        };
+
         let module = &stage.module.naga.module;
         let (source, info) = naga::back::msl::write_string(
             module,
             &stage.module.naga.info,
-            &layout.naga_options,
+            options,
             &pipeline_options,
         )
         .map_err(|e| crate::PipelineError::Linkage(stage_bit, format!("MSL: {:?}", e)))?;
@@ -777,11 +791,14 @@ impl crate::Device<super::Api> for super::Device {
 
     unsafe fn create_shader_module(
         &self,
-        _desc: &crate::ShaderModuleDescriptor,
+        desc: &crate::ShaderModuleDescriptor,
         shader: crate::ShaderInput,
     ) -> Result<super::ShaderModule, crate::ShaderError> {
         match shader {
-            crate::ShaderInput::Naga(naga) => Ok(super::ShaderModule { naga }),
+            crate::ShaderInput::Naga(naga) => Ok(super::ShaderModule {
+                naga,
+                runtime_checks: desc.runtime_checks,
+            }),
             crate::ShaderInput::SpirV(_) => {
                 panic!("SPIRV_SHADER_PASSTHROUGH is not enabled for this backend")
             }
