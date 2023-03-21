@@ -518,6 +518,10 @@ pub fn map_buffer_usage(usage: crate::BufferUses) -> vk::BufferUsageFlags {
         flags |= vk::BufferUsageFlags::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_KHR
             | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS;
     }
+    if usage.contains(crate::BufferUses::SHADER_BINDING_TABLE) {
+        flags |= vk::BufferUsageFlags::SHADER_BINDING_TABLE_KHR
+            | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS;
+    }
     flags
 }
 

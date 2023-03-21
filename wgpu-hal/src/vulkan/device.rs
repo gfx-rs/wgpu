@@ -869,21 +869,30 @@ impl crate::Device<super::Api> for super::Device {
             desc.memory_flags.contains(crate::MemoryFlags::TRANSIENT),
         );
 
-        let alignment_mask = if desc
+        let mut alignment = req.alignment;
+        if desc
             .usage
             .contains(crate::BufferUses::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT)
         {
-            16
-        } else {
-            req.alignment
-        } - 1;
-
+            alignment = std::cmp::max(alignment, 16)
+        }
+        if desc.usage.contains(crate::BufferUses::SHADER_BINDING_TABLE) {
+            alignment = std::cmp::max(
+                alignment,
+                self.shared
+                    .private_caps
+                    .ray_tracing_device_properties
+                    .as_ref()
+                    .expect("Feature `RAY_TRACING` not enabled")
+                    .shader_group_base_alignment as u64,
+            )
+        }
         let block = unsafe {
             self.mem_allocator.lock().alloc(
                 &*self.shared,
                 gpu_alloc::Request {
                     size: req.size,
-                    align_mask: alignment_mask,
+                    align_mask: alignment - 1,
                     usage: alloc_usage,
                     memory_types: req.memory_type_bits & self.valid_ash_memory_types,
                 },
@@ -2313,10 +2322,15 @@ impl crate::Device<super::Api> for super::Device {
             None => panic!("Feature `RAY_TRACING` not enabled"),
         };
 
-        let get_create_info = |stage, stage_flags| -> Result<_, crate::PipelineError> {
-            Ok(self
-                .compile_stage_temp_ray_tracing(stage, stage_flags, &desc.layout.binding_arrays)?
-                .create_info)
+        let mut compiled_storage = Vec::<CompiledStage>::new();
+        let mut get_create_info = |stage, stage_flags| -> Result<_, crate::PipelineError> {
+            let t = self.compile_stage_temp_ray_tracing(
+                stage,
+                stage_flags,
+                &desc.layout.binding_arrays,
+            )?;
+            compiled_storage.push(t);
+            Ok(compiled_storage.last().unwrap().create_info)
         };
 
         let mut stages = Vec::<vk::PipelineShaderStageCreateInfo>::new();
@@ -2332,7 +2346,10 @@ impl crate::Device<super::Api> for super::Device {
             for entry in entries {
                 let group = vk::RayTracingShaderGroupCreateInfoKHR::builder()
                     .ty(vk::RayTracingShaderGroupTypeKHR::GENERAL)
-                    .general_shader(next_shader_index);
+                    .general_shader(next_shader_index)
+                    .any_hit_shader(vk::SHADER_UNUSED_KHR)
+                    .closest_hit_shader(vk::SHADER_UNUSED_KHR)
+                    .intersection_shader(vk::SHADER_UNUSED_KHR);
                 next_shader_index += 1;
 
                 stages.push(get_create_info(&entry.stage, stage_flags)?);
@@ -2341,30 +2358,37 @@ impl crate::Device<super::Api> for super::Device {
         }
 
         for entry in desc.hit_groups {
-            let mut group =
-                vk::RayTracingShaderGroupCreateInfoKHR::builder().ty(match entry.hit_group_type {
+            let mut group = vk::RayTracingShaderGroupCreateInfoKHR::builder()
+                .ty(match entry.hit_group_type {
                     crate::RayTracingHitGroupType::Triangles => {
                         vk::RayTracingShaderGroupTypeKHR::TRIANGLES_HIT_GROUP
                     }
                     crate::RayTracingHitGroupType::Procedural => {
                         vk::RayTracingShaderGroupTypeKHR::PROCEDURAL_HIT_GROUP
                     }
-                });
+                })
+                .general_shader(vk::SHADER_UNUSED_KHR);
 
             if let Some(ref stage) = entry.closest_hit {
                 stages.push(get_create_info(stage, wgt::ShaderStages::CLOSEST_HIT)?);
                 group = group.closest_hit_shader(next_shader_index);
                 next_shader_index += 1;
+            } else {
+                group = group.closest_hit_shader(vk::SHADER_UNUSED_KHR);
             }
             if let Some(ref stage) = entry.any_hit {
                 stages.push(get_create_info(stage, wgt::ShaderStages::ANY_HIT)?);
                 group = group.any_hit_shader(next_shader_index);
                 next_shader_index += 1;
+            } else {
+                group = group.any_hit_shader(vk::SHADER_UNUSED_KHR);
             }
             if let Some(ref stage) = entry.intersection {
                 stages.push(get_create_info(stage, wgt::ShaderStages::INTERSECTION)?);
                 group = group.intersection_shader(next_shader_index);
                 next_shader_index += 1;
+            } else {
+                group = group.intersection_shader(vk::SHADER_UNUSED_KHR);
             }
 
             groups.push(*group);
@@ -2391,8 +2415,19 @@ impl crate::Device<super::Api> for super::Device {
         let handle_size = self
             .shared
             .private_caps
-            .ray_tracing_pipeline_shader_group_size
-            .unwrap() as usize;
+            .ray_tracing_device_properties
+            .as_ref()
+            .unwrap()
+            .shader_group_handle_size as usize;
+
+        println!(
+            "{:?}",
+            self.shared
+                .private_caps
+                .ray_tracing_device_properties
+                .as_ref()
+                .unwrap()
+        );
 
         let handle_data = unsafe {
             ray_tracing_functions
@@ -2430,6 +2465,73 @@ impl crate::Device<super::Api> for super::Device {
 
     unsafe fn destroy_ray_tracing_pipeline(&self, pipeline: super::RayTracingPipeline) {
         unsafe { self.shared.raw.destroy_pipeline(pipeline.raw, None) };
+    }
+
+    fn assemble_sbt_data<'a>(
+        &self,
+        handles: &'a [&'a [u8]],
+        records: &'a [&'a [u8]],
+    ) -> crate::ShaderBindingTableData<'a> {
+        assert!(
+            handles.len() == records.len(),
+            "the number of handles and record must match"
+        );
+
+        let cap = self
+            .shared
+            .private_caps
+            .ray_tracing_device_properties
+            .as_ref()
+            .expect("Feature `RAY_TRACING` not enabled");
+
+        let shader_group_handle_alignment = cap.shader_group_handle_alignment;
+        let shader_group_base_alignment = cap.shader_group_base_alignment;
+        let shader_group_handle_size = cap.shader_group_handle_size;
+
+        let max_record_size = records.iter().map(|e| e.len()).max().unwrap_or(0) as u32;
+
+        let stride = crate::auxil::align_to(
+            max_record_size + shader_group_handle_size,
+            shader_group_handle_alignment,
+        ) as u64;
+        let count = handles.len() as u64;
+        let size = stride * count;
+        let padded_size = crate::auxil::align_to(size as u32, shader_group_base_alignment) as u64;
+        let outer_padding = padded_size - size;
+
+        let ret = std::iter::zip(handles, records)
+            .flat_map(move |(handle, record)| {
+                let inner_padding = stride - (handle.len() + record.len()) as u64;
+                handle
+                    .iter()
+                    .chain(record.iter())
+                    .copied()
+                    .chain((0..inner_padding).map(|_| 0))
+            })
+            .chain((0..outer_padding).map(|_| 0));
+
+        crate::ShaderBindingTableData {
+            data: Box::new(ret),
+            stride,
+            count,
+            size,
+            padded_size,
+        }
+    }
+
+    unsafe fn get_buffer_device_address(&self, buffer: &super::Buffer) -> wgt::BufferAddress {
+        let ray_tracing_functions = match self.shared.extension_fns.ray_tracing {
+            Some(ref functions) => functions,
+            None => panic!("Feature `RAY_TRACING` not enabled"),
+        };
+
+        unsafe {
+            ray_tracing_functions
+                .buffer_device_address
+                .get_buffer_device_address(
+                    &vk::BufferDeviceAddressInfo::builder().buffer(buffer.raw),
+                )
+        }
     }
 }
 

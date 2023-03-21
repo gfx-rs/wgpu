@@ -360,6 +360,14 @@ pub trait Device<A: Api>: Send + Sync {
         desc: &RayTracingPipelineDescriptor<A>,
     ) -> Result<A::RayTracingPipeline, PipelineError>;
     unsafe fn destroy_ray_tracing_pipeline(&self, pipeline: A::RayTracingPipeline);
+
+    unsafe fn get_buffer_device_address(&self, buffer: &A::Buffer) -> wgt::BufferAddress;
+
+    fn assemble_sbt_data<'a>(
+        &self,
+        handles: &'a [&'a [u8]],
+        records: &'a [&'a [u8]],
+    ) -> ShaderBindingTableData<'a>;
 }
 
 pub trait Queue<A: Api>: Send + Sync {
@@ -767,11 +775,13 @@ bitflags::bitflags! {
         const ACCELERATION_STRUCTURE_SCRATCH = 1 << 10;
         const BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT = 1 << 11;
         const TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT = 1 << 12;
+        const SHADER_BINDING_TABLE = 1 << 13;
         /// The combination of states that a buffer may be in _at the same time_.
         const INCLUSIVE = Self::MAP_READ.bits | Self::COPY_SRC.bits |
             Self::INDEX.bits | Self::VERTEX.bits | Self::UNIFORM.bits |
             Self::STORAGE_READ.bits | Self::INDIRECT.bits |
-            Self::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT.bits | Self::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT.bits;
+            Self::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT.bits | Self::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT.bits |
+            Self::SHADER_BINDING_TABLE.bits;
         /// The combination of states that a buffer must exclusively be in.
         const EXCLUSIVE = Self::MAP_WRITE.bits | Self::COPY_DST.bits |
             Self::STORAGE_READ_WRITE.bits | Self::ACCELERATION_STRUCTURE_SCRATCH.bits;
@@ -1534,7 +1544,7 @@ pub trait RayTracingPipeline {
     fn hit_handles<'a>(&'a self) -> Vec<&'a [u8]>;
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct ShaderBindingTableReference {
     pub address: wgt::BufferAddress,
     pub stride: wgt::BufferAddress,
@@ -1544,4 +1554,12 @@ pub struct ShaderBindingTableReference {
 #[derive(Clone, Debug)]
 pub struct RayTracingPassDescriptor<'a> {
     pub label: Label<'a>,
+}
+
+pub struct ShaderBindingTableData<'a> {
+    pub data: Box<dyn Iterator<Item = u8> + 'a>,
+    pub stride: wgt::BufferAddress,
+    pub count: wgt::BufferAddress,
+    pub size: wgt::BufferAddress,
+    pub padded_size: wgt::BufferAddress,
 }

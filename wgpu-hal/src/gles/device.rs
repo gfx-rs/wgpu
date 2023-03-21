@@ -1348,6 +1348,18 @@ impl crate::Device<super::Api> for super::Device {
     unsafe fn destroy_ray_tracing_pipeline(&self, _pipeline: super::RayTracingPipeline) {
         unimplemented!()
     }
+
+    fn assemble_sbt_data<'a>(
+        &self,
+        _handles: &'a [&'a [u8]],
+        _records: &'a [&'a [u8]],
+    ) -> crate::ShaderBindingTableData<'a> {
+        unimplemented!()
+    }
+
+    unsafe fn get_buffer_device_address(&self, _buffer: &super::Buffer) -> wgt::BufferAddress {
+        unimplemented!()
+    }
 }
 
 // SAFE: WASM doesn't have threads

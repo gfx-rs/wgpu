@@ -178,7 +178,19 @@ struct PrivateCapabilities {
     robust_buffer_access: bool,
     robust_image_access: bool,
     zero_initialize_workgroup_memory: bool,
-    ray_tracing_pipeline_shader_group_size: Option<u32>,
+    ray_tracing_device_properties: Option<RayTracingCapabilities>,
+}
+
+#[derive(Clone, Debug)]
+pub struct RayTracingCapabilities {
+    pub shader_group_handle_size: u32,
+    pub max_ray_recursion_depth: u32,
+    pub max_shader_group_stride: u32,
+    pub shader_group_base_alignment: u32,
+    pub shader_group_handle_capture_replay_size: u32,
+    pub max_ray_dispatch_invocation_count: u32,
+    pub shader_group_handle_alignment: u32,
+    pub max_ray_hit_attribute_size: u32,
 }
 
 bitflags::bitflags!(

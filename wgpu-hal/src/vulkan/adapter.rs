@@ -1197,9 +1197,19 @@ impl super::Instance {
                 .map_or(false, |ext| {
                     ext.shader_zero_initialize_workgroup_memory == vk::TRUE
                 }),
-            ray_tracing_pipeline_shader_group_size: phd_capabilities
-                .ray_tracing_pipeline
-                .map(|x| x.shader_group_handle_size),
+            ray_tracing_device_properties: phd_capabilities.ray_tracing_pipeline.map(|x| {
+                super::RayTracingCapabilities {
+                    shader_group_handle_size: x.shader_group_handle_size,
+                    max_ray_recursion_depth: x.max_ray_recursion_depth,
+                    max_shader_group_stride: x.max_shader_group_stride,
+                    shader_group_base_alignment: x.shader_group_base_alignment,
+                    shader_group_handle_capture_replay_size: x
+                        .shader_group_handle_capture_replay_size,
+                    max_ray_dispatch_invocation_count: x.max_ray_dispatch_invocation_count,
+                    shader_group_handle_alignment: x.shader_group_handle_alignment,
+                    max_ray_hit_attribute_size: x.max_ray_hit_attribute_size,
+                }
+            }),
         };
         let capabilities = crate::Capabilities {
             limits: phd_capabilities.to_wgpu_limits(),
@@ -1530,6 +1540,10 @@ impl super::Adapter {
         };
 
         Ok(crate::OpenDevice { device, queue })
+    }
+
+    pub fn ray_tracing_capabilities(&self) -> &Option<super::RayTracingCapabilities> {
+        &self.private_caps.ray_tracing_device_properties
     }
 }
 

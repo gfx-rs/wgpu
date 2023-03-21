@@ -266,6 +266,18 @@ impl crate::Device<Api> for Context {
     }
 
     unsafe fn destroy_ray_tracing_pipeline(&self, pipeline: Resource) {}
+
+    fn assemble_sbt_data<'a>(
+        &self,
+        _handles: &'a [&'a [u8]],
+        _records: &'a [&'a [u8]],
+    ) -> crate::ShaderBindingTableData<'a> {
+        unimplemented!()
+    }
+
+    unsafe fn get_buffer_device_address(&self, buffer: &Resource) -> wgt::BufferAddress {
+        Default::default()
+    }
 }
 
 impl crate::CommandEncoder<Api> for Encoder {

@@ -1,0 +1,55 @@
+// glslc --target-spv=spv1.6 shader.rgen -o shader.rgen.spv
+#version 460 core
+#extension GL_EXT_ray_tracing : require
+
+layout(set = 0, binding = 0) uniform Uniforms 
+{
+	mat4 viewInverse;
+	mat4 projInverse;
+} cam;
+
+layout(set = 0, binding = 1, rgba8) uniform image2D image;
+layout(set = 0, binding = 2) uniform accelerationStructureEXT tlas;
+
+struct ray_payload {
+    vec3 pos;
+    vec3 dir;
+    vec3 col;
+};
+layout (location = 0) rayPayloadEXT ray_payload payload;
+
+
+void main() {
+    ivec2 coords = ivec2(gl_LaunchIDEXT.xy);
+
+    vec4 cam_position = cam.viewInverse * vec4(0.0, 0.0, 0.0, 1.0);
+    
+    payload.pos = cam_position.xyz;
+    payload.col = vec3(0,0,1);
+
+    vec2 offset = vec2(0.5);
+
+    vec2 pixel_center = vec2(coords) + offset;
+    vec2 uv = pixel_center / vec2(gl_LaunchSizeEXT.xy);
+
+    vec4 target = cam.projInverse * vec4(uv * 2.0 - 1.0, 1.0, 1.0);
+    vec4 direction = cam.viewInverse * vec4(normalize(target.xyz), 0.0);
+
+    payload.dir = direction.xyz;
+    
+    traceRayEXT(
+            tlas,
+            gl_RayFlagsOpaqueEXT,
+            0xff,
+            0, // SBT hit group index
+            0, // SBT record stride
+            0, // SBT miss index
+            payload.pos,
+            0.001, // min distance
+            payload.dir,
+            200, // max distance
+            0 // payload location
+        );
+    
+    imageStore(image, coords, vec4(payload.col, 1.0));
+}
