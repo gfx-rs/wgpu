@@ -427,6 +427,7 @@ impl crate::Device<super::Api> for super::Device {
             descriptor.set_address_mode_t(conv::map_address_mode(t));
             descriptor.set_address_mode_r(conv::map_address_mode(r));
 
+            // Anisotropy is always supported on mac up to 16x
             descriptor.set_max_anisotropy(desc.anisotropy_clamp as _);
 
             descriptor.set_lod_min_clamp(desc.lod_clamp.start);

@@ -345,7 +345,10 @@ impl PhysicalDeviceFeatures {
             caps.supports_extension(vk::KhrSwapchainMutableFormatFn::name()),
         );
         dl_flags.set(Df::CUBE_ARRAY_TEXTURES, self.core.image_cube_array != 0);
-        dl_flags.set(Df::ANISOTROPIC_FILTERING, self.core.sampler_anisotropy != 0);
+        dl_flags.set(
+            Df::ANISOTROPIC_FILTERING,
+            self.core.sampler_anisotropy >= 16,
+        );
         dl_flags.set(
             Df::FRAGMENT_WRITABLE_STORAGE,
             self.core.fragment_stores_and_atomics != 0,
@@ -1320,7 +1323,6 @@ impl super::Adapter {
             },
             vendor_id: self.phd_capabilities.properties.vendor_id,
             timestamp_period: self.phd_capabilities.properties.limits.timestamp_period,
-            downlevel_flags: self.downlevel_flags,
             private_caps: self.private_caps.clone(),
             workarounds: self.workarounds,
             render_passes: Mutex::new(Default::default()),

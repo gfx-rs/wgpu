@@ -867,9 +867,16 @@ impl crate::Device<super::Api> for super::Device {
         unsafe { gl.sampler_parameter_f32(raw, glow::TEXTURE_MIN_LOD, desc.lod_clamp.start) };
         unsafe { gl.sampler_parameter_f32(raw, glow::TEXTURE_MAX_LOD, desc.lod_clamp.end) };
 
-        unsafe {
-            gl.sampler_parameter_f32(raw, glow::TEXTURE_MAX_ANISOTROPY, desc.anisotropy_clamp)
-        };
+        // If clamp is not 1, we know anisotropy is supported up to 16x
+        if desc.anisotropy_clamp != 1 {
+            unsafe {
+                gl.sampler_parameter_i32(
+                    raw,
+                    glow::TEXTURE_MAX_ANISOTROPY,
+                    desc.anisotropy_clamp as i32,
+                )
+            };
+        }
 
         //set_param_float(glow::TEXTURE_LOD_BIAS, info.lod_bias.0);
 

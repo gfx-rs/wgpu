@@ -1008,8 +1008,8 @@ pub struct SamplerDescriptor<'a> {
     pub lod_max_clamp: f32,
     /// If this is enabled, this is a comparison sampler using the given comparison function.
     pub compare: Option<CompareFunction>,
-    /// Valid values between 1 and 16 inclusive. If this is not 1.0, all filter modes must be linear.
-    pub anisotropy_clamp: f32,
+    /// Must be at least 1. If this is not 1, all filter modes must be linear.
+    pub anisotropy_clamp: u16,
     /// Border color to use when address_mode is [`AddressMode::ClampToBorder`]
     pub border_color: Option<SamplerBorderColor>,
 }
@@ -1026,9 +1026,9 @@ impl Default for SamplerDescriptor<'_> {
             min_filter: Default::default(),
             mipmap_filter: Default::default(),
             lod_min_clamp: 0.0,
-            lod_max_clamp: std::f32::MAX,
+            lod_max_clamp: 32.0,
             compare: None,
-            anisotropy_clamp: 1.0,
+            anisotropy_clamp: 1,
             border_color: None,
         }
     }

@@ -40,7 +40,7 @@ pub struct CreateSamplerArgs {
     lod_min_clamp: f32,
     lod_max_clamp: f32,
     compare: Option<wgpu_types::CompareFunction>,
-    max_anisotropy: f32,
+    max_anisotropy: u16,
 }
 
 #[op]

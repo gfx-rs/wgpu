@@ -84,14 +84,14 @@ By @teoxoy in [#3534](https://github.com/gfx-rs/wgpu/pull/3534)
 
 #### Anisotropic Filtering
 
-Anisotropic filtering has been brought in line with the spec. The anisotropic clamp is now a f32 which must be between 1.0 and 16.0 inclusive.
+Anisotropic filtering has been brought in line with the spec. The anisotropic clamp is now a u16 (was a `Option<u8>`) which must be at least 1.
 
-If the anisotropy clamp is not 1.0, all the filters in a sampler must be `Linear`.
+If the anisotropy clamp is not 1, all the filters in a sampler must be `Linear`.
 
 ```diff
 SamplerDescriptor {
 -    anisotropic_clamp: None,
-+    anisotropic_clamp: 1.0,
++    anisotropic_clamp: 1,
 }
 ```
 

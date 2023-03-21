@@ -689,28 +689,11 @@ pub struct SamplerDescriptor<'a> {
     pub lod_max_clamp: f32,
     /// If this is enabled, this is a comparison sampler using the given comparison function.
     pub compare: Option<wgt::CompareFunction>,
-    /// Valid values between 1 and 16 inclusive. If this is not 1.0, all filter modes must be linear.
-    pub anisotropy_clamp: f32,
+    /// Must be at least 1. If this is not 1, all filter modes must be linear.
+    pub anisotropy_clamp: u16,
     /// Border color to use when address_mode is
     /// [`AddressMode::ClampToBorder`](wgt::AddressMode::ClampToBorder)
     pub border_color: Option<wgt::SamplerBorderColor>,
-}
-
-impl Default for SamplerDescriptor<'_> {
-    fn default() -> Self {
-        Self {
-            label: None,
-            address_modes: Default::default(),
-            mag_filter: Default::default(),
-            min_filter: Default::default(),
-            mipmap_filter: Default::default(),
-            lod_min_clamp: 0.0,
-            lod_max_clamp: std::f32::MAX,
-            compare: None,
-            anisotropy_clamp: 1.0,
-            border_color: None,
-        }
-    }
 }
 
 #[derive(Debug)]
@@ -752,13 +735,13 @@ pub enum CreateSamplerError {
         lod_min_clamp: f32,
         lod_max_clamp: f32,
     },
-    #[error("Invalid anisotropic clamp: {0}. Must be in the range 1 to 16 inclusive.")]
-    InvalidAnisotropy(f32),
+    #[error("Invalid anisotropic clamp: {0}. Must be at least 1.")]
+    InvalidAnisotropy(u16),
     #[error("Invalid filter mode for {filter_type:?}: {filter_mode:?}. When anistropic clamp is not 1.0 (it is {anisotropic_clamp}), all filter modes must be linear.")]
     InvalidFilterModeWithAnisotropy {
         filter_type: SamplerFilterErrorType,
         filter_mode: wgt::FilterMode,
-        anisotropic_clamp: f32,
+        anisotropic_clamp: u16,
     },
     #[error("Cannot create any more samplers")]
     TooManyObjects,

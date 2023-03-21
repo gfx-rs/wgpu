@@ -921,8 +921,10 @@ pub struct SamplerDescriptor<'a> {
     pub mipmap_filter: wgt::FilterMode,
     pub lod_clamp: Range<f32>,
     pub compare: Option<wgt::CompareFunction>,
-    // Must be in the range 1.0 to 16.0 inclusive. Anisotropic filtering must be supported if this is not 1.0.
-    pub anisotropy_clamp: f32,
+    // Must in the range [1, 16].
+    //
+    // Anisotropic filtering must be supported if this is not 1.
+    pub anisotropy_clamp: u16,
     pub border_color: Option<wgt::SamplerBorderColor>,
 }
 

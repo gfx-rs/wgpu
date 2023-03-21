@@ -588,7 +588,7 @@ impl crate::Device<super::Api> for super::Device {
             | conv::map_filter_mode(desc.mipmap_filter) << d3d12_ty::D3D12_MIP_FILTER_SHIFT
             | reduction << d3d12_ty::D3D12_FILTER_REDUCTION_TYPE_SHIFT;
 
-        if desc.anisotropy_clamp != 1.0 {
+        if desc.anisotropy_clamp != 1 {
             filter |= d3d12_ty::D3D12_FILTER_ANISOTROPIC;
         };
 

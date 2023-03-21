@@ -1120,14 +1120,12 @@ impl crate::Device<super::Api> for super::Device {
                 .compare_op(conv::map_comparison(fun));
         }
 
-        if self
-            .shared
-            .downlevel_flags
-            .contains(wgt::DownlevelFlags::ANISOTROPIC_FILTERING)
-        {
+        if desc.anisotropy_clamp != 1 {
+            // We only enable the downlevel flag if supports 16x anisotropy,
+            // and wgpu-hal interface guarentees the clamp is in the range [1, 16]
             vk_info = vk_info
                 .anisotropy_enable(true)
-                .max_anisotropy(desc.anisotropy_clamp);
+                .max_anisotropy(desc.anisotropy_clamp as f32);
         }
 
         if let Some(color) = desc.border_color {

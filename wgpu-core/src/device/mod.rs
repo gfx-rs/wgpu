@@ -1322,13 +1322,13 @@ impl<A: HalApi> Device<A> {
             });
         }
 
-        if !(1.0..=16.0).contains(&desc.anisotropy_clamp) {
+        if desc.anisotropy_clamp < 1 {
             return Err(resource::CreateSamplerError::InvalidAnisotropy(
                 desc.anisotropy_clamp,
             ));
         }
 
-        if desc.anisotropy_clamp != 1.0 {
+        if desc.anisotropy_clamp != 1 {
             if !matches!(desc.min_filter, wgt::FilterMode::Linear) {
                 return Err(
                     resource::CreateSamplerError::InvalidFilterModeWithAnisotropy {
@@ -1358,6 +1358,18 @@ impl<A: HalApi> Device<A> {
             }
         }
 
+        let anisotropy_clamp = if self
+            .downlevel
+            .flags
+            .contains(wgt::DownlevelFlags::ANISOTROPIC_FILTERING)
+        {
+            // Clamp anisotropy clamp to [1, 16] per the wgpu-hal interface
+            desc.anisotropy_clamp.min(16)
+        } else {
+            // If it isn't supported, set this unconditionally to 1
+            1
+        };
+
         //TODO: check for wgt::DownlevelFlags::COMPARISON_SAMPLERS
 
         let hal_desc = hal::SamplerDescriptor {
@@ -1368,7 +1380,7 @@ impl<A: HalApi> Device<A> {
             mipmap_filter: desc.mipmap_filter,
             lod_clamp: desc.lod_min_clamp..desc.lod_max_clamp,
             compare: desc.compare,
-            anisotropy_clamp: desc.anisotropy_clamp,
+            anisotropy_clamp,
             border_color: desc.border_color,
         };
 
