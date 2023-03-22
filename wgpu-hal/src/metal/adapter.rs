@@ -537,7 +537,6 @@ impl super::PrivateCapabilities {
                 MUTABLE_COMPARISON_SAMPLER_SUPPORT,
             ),
             sampler_clamp_to_border: Self::supports_any(device, SAMPLER_CLAMP_TO_BORDER_SUPPORT),
-            sampler_lod_average: { version.at_least((11, 0), (9, 0), os_is_mac) },
             base_instance: Self::supports_any(device, BASE_INSTANCE_SUPPORT),
             base_vertex_instance_drawing: Self::supports_any(device, BASE_VERTEX_INSTANCE_SUPPORT),
             dual_source_blending: Self::supports_any(device, DUAL_SOURCE_BLEND_SUPPORT),

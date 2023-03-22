@@ -39,13 +39,15 @@ Bottom level categories:
 -->
 
 ## Unreleased
+
+## v0.15.3 (2023-03-22)
 ### Bug Fixes
+
+#### Metal
+- Fix incorrect mipmap being sampled when using `MinLod <= 0.0` and `MaxLod >= 32.0` or when the fragment shader samples different Lods in the same quad. By @cwfitzgerald in [#3610](https://github.com/gfx-rs/wgpu/pull/3610).
+
 #### GLES
 - Fix `Vertex buffer is not big enough for the draw call.` for ANGLE/Web when rendering with instance attributes on a single instance. By @wumpf in [#3596](https://github.com/gfx-rs/wgpu/pull/3596)
-
-### Bug Fixes
-
-#### GLES
 - Reset all queue state between command buffers in a submit. By @jleibs [#3589](https://github.com/gfx-rs/wgpu/pull/3589)
 - Reset the state of `SAMPLE_ALPHA_TO_COVERAGE` on queue reset. By @jleibs [#3589](https://github.com/gfx-rs/wgpu/pull/3589)
 

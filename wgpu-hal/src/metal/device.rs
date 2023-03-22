@@ -407,14 +407,13 @@ impl crate::Device<super::Api> for super::Device {
         &self,
         desc: &crate::SamplerDescriptor,
     ) -> DeviceResult<super::Sampler> {
-        let caps = &self.shared.private_caps;
         objc::rc::autoreleasepool(|| {
             let descriptor = mtl::SamplerDescriptor::new();
 
             descriptor.set_min_filter(conv::map_filter_mode(desc.min_filter));
             descriptor.set_mag_filter(conv::map_filter_mode(desc.mag_filter));
             descriptor.set_mip_filter(match desc.mipmap_filter {
-                wgt::FilterMode::Nearest if desc.lod_clamp.is_none() => {
+                wgt::FilterMode::Nearest if desc.lod_clamp == Some(0.0..0.0) => {
                     mtl::MTLSamplerMipFilter::NotMipmapped
                 }
                 wgt::FilterMode::Nearest => mtl::MTLSamplerMipFilter::Nearest,
@@ -433,10 +432,6 @@ impl crate::Device<super::Api> for super::Device {
             if let Some(ref range) = desc.lod_clamp {
                 descriptor.set_lod_min_clamp(range.start);
                 descriptor.set_lod_max_clamp(range.end);
-            }
-
-            if caps.sampler_lod_average {
-                descriptor.set_lod_average(true); // optimization
             }
 
             if let Some(fun) = desc.compare {
