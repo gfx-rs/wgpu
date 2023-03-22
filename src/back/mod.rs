@@ -234,8 +234,8 @@ bitflags::bitflags! {
         const NO_OPAQUE = 0x02;
         const TERMINATE_ON_FIRST_HIT = 0x04;
         const SKIP_CLOSEST_HIT_SHADER = 0x08;
-        const CULL_FRONT_FACING = 0x10;
-        const CULL_BACK_FACING = 0x20;
+        const CULL_BACK_FACING = 0x10;
+        const CULL_FRONT_FACING = 0x20;
         const CULL_OPAQUE = 0x40;
         const CULL_NO_OPAQUE = 0x80;
         const SKIP_TRIANGLES = 0x100;

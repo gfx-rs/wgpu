@@ -188,6 +188,7 @@ pub enum Error<'a> {
     MissingAttribute(&'static str, Span),
     InvalidAtomicPointer(Span),
     InvalidAtomicOperandType(Span),
+    InvalidRayQueryPointer(Span),
     Pointer(&'static str, Span),
     NotPointer(Span),
     NotReference(&'static str, Span),
@@ -524,6 +525,11 @@ impl<'a> Error<'a> {
             Error::InvalidAtomicOperandType(span) => ParseError {
                 message: "atomic operand type is inconsistent with the operation".to_string(),
                 labels: vec![(span, "atomic operand type is invalid".into())],
+                notes: vec![],
+            },
+            Error::InvalidRayQueryPointer(span) => ParseError {
+                message: "ray query operation is done on a pointer to a non-ray-query".to_string(),
+                labels: vec![(span, "ray query pointer is invalid".into())],
                 notes: vec![],
             },
             Error::NotPointer(span) => ParseError {

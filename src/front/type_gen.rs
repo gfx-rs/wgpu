@@ -5,6 +5,55 @@ Type generators.
 use crate::{arena::Handle, span::Span};
 
 impl crate::Module {
+    pub fn generate_atomic_compare_exchange_result(
+        &mut self,
+        kind: crate::ScalarKind,
+        width: crate::Bytes,
+    ) -> Handle<crate::Type> {
+        let bool_ty = self.types.insert(
+            crate::Type {
+                name: None,
+                inner: crate::TypeInner::Scalar {
+                    kind: crate::ScalarKind::Bool,
+                    width: crate::BOOL_WIDTH,
+                },
+            },
+            Span::UNDEFINED,
+        );
+        let scalar_ty = self.types.insert(
+            crate::Type {
+                name: None,
+                inner: crate::TypeInner::Scalar { kind, width },
+            },
+            Span::UNDEFINED,
+        );
+
+        self.types.insert(
+            crate::Type {
+                name: Some(format!(
+                    "__atomic_compare_exchange_result<{kind:?},{width}>"
+                )),
+                inner: crate::TypeInner::Struct {
+                    members: vec![
+                        crate::StructMember {
+                            name: Some("old_value".to_string()),
+                            ty: scalar_ty,
+                            binding: None,
+                            offset: 0,
+                        },
+                        crate::StructMember {
+                            name: Some("exchanged".to_string()),
+                            ty: bool_ty,
+                            binding: None,
+                            offset: 4,
+                        },
+                    ],
+                    span: 8,
+                },
+            },
+            Span::UNDEFINED,
+        )
+    }
     /// Populate this module's [`SpecialTypes::ray_desc`] type.
     ///
     /// [`SpecialTypes::ray_desc`] is the type of the [`descriptor`] operand of
@@ -20,7 +69,7 @@ impl crate::Module {
     /// [`Initialize`]: crate::RayQueryFunction::Initialize
     /// [`RayQuery`]: crate::Statement::RayQuery
     /// [`RayQueryFunction::Initialize`]: crate::RayQueryFunction::Initialize
-    pub(super) fn generate_ray_desc_type(&mut self) -> Handle<crate::Type> {
+    pub fn generate_ray_desc_type(&mut self) -> Handle<crate::Type> {
         if let Some(handle) = self.special_types.ray_desc {
             return handle;
         }
@@ -122,7 +171,7 @@ impl crate::Module {
     ///
     /// [`SpecialTypes::ray_intersection`]: crate::SpecialTypes::ray_intersection
     /// [`Expression::RayQueryGetIntersection`]: crate::Expression::RayQueryGetIntersection
-    pub(super) fn generate_ray_intersection_type(&mut self) -> Handle<crate::Type> {
+    pub fn generate_ray_intersection_type(&mut self) -> Handle<crate::Type> {
         if let Some(handle) = self.special_types.ray_intersection {
             return handle;
         }

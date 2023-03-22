@@ -973,7 +973,7 @@ impl Writer {
 
                     self.write_type_declaration_local(id, local);
 
-                    // If it's an type that needs SPIR-V capabilities, request them now,
+                    // If it's a type that needs SPIR-V capabilities, request them now,
                     // so write_type_declaration_local can stay infallible.
                     self.request_type_capabilities(&ty.inner)?;
 

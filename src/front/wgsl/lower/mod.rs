@@ -641,6 +641,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             let span = tu.decls.get_span(decl_handle);
             let decl = &tu.decls[decl_handle];
 
+            //NOTE: This is done separately from `resolve_ast_type` because `RayDesc` may be
+            // first encountered in a local constructor invocation.
             //TODO: find a nicer way?
             if let Some(dep) = decl.dependencies.iter().find(|dep| dep.ident == "RayDesc") {
                 let ty_handle = ctx.module.generate_ray_desc_type();
@@ -1733,50 +1735,11 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
                             let expression = match *ctx.resolved_inner(value) {
                                 crate::TypeInner::Scalar { kind, width } => {
-                                    let bool_ty = ctx.module.types.insert(
-                                        crate::Type {
-                                            name: None,
-                                            inner: crate::TypeInner::Scalar {
-                                                kind: crate::ScalarKind::Bool,
-                                                width: crate::BOOL_WIDTH,
-                                            },
-                                        },
-                                        Span::UNDEFINED,
-                                    );
-                                    let scalar_ty = ctx.module.types.insert(
-                                        crate::Type {
-                                            name: None,
-                                            inner: crate::TypeInner::Scalar { kind, width },
-                                        },
-                                        Span::UNDEFINED,
-                                    );
-                                    let struct_ty = ctx.module.types.insert(
-                                        crate::Type {
-                                            name: Some(
-                                                "__atomic_compare_exchange_result".to_string(),
-                                            ),
-                                            inner: crate::TypeInner::Struct {
-                                                members: vec![
-                                                    crate::StructMember {
-                                                        name: Some("old_value".to_string()),
-                                                        ty: scalar_ty,
-                                                        binding: None,
-                                                        offset: 0,
-                                                    },
-                                                    crate::StructMember {
-                                                        name: Some("exchanged".to_string()),
-                                                        ty: bool_ty,
-                                                        binding: None,
-                                                        offset: 4,
-                                                    },
-                                                ],
-                                                span: 8,
-                                            },
-                                        },
-                                        Span::UNDEFINED,
-                                    );
                                     crate::Expression::AtomicResult {
-                                        ty: struct_ty,
+                                        //TODO: cache this to avoid generating duplicate types
+                                        ty: ctx
+                                            .module
+                                            .generate_atomic_compare_exchange_result(kind, width),
                                         comparison: true,
                                     }
                                 }
@@ -2449,12 +2412,12 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 crate::TypeInner::RayQuery => Ok(pointer),
                 ref other => {
                     log::error!("Pointer type to {:?} passed to ray query op", other);
-                    Err(Error::InvalidAtomicPointer(span))
+                    Err(Error::InvalidRayQueryPointer(span))
                 }
             },
             ref other => {
                 log::error!("Type {:?} passed to ray query op", other);
-                Err(Error::InvalidAtomicPointer(span))
+                Err(Error::InvalidRayQueryPointer(span))
             }
         }
     }

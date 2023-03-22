@@ -254,19 +254,25 @@ impl StatementGraph {
                 }
                 S::RayQuery { query, ref fun } => {
                     self.dependencies.push((id, query, "query"));
-                    if let crate::RayQueryFunction::Initialize {
-                        acceleration_structure,
-                        descriptor,
-                    } = *fun
-                    {
-                        self.dependencies.push((
-                            id,
+                    match *fun {
+                        crate::RayQueryFunction::Initialize {
                             acceleration_structure,
-                            "acceleration_structure",
-                        ));
-                        self.dependencies.push((id, descriptor, "descriptor"));
+                            descriptor,
+                        } => {
+                            self.dependencies.push((
+                                id,
+                                acceleration_structure,
+                                "acceleration_structure",
+                            ));
+                            self.dependencies.push((id, descriptor, "descriptor"));
+                            "RayQueryInitialize"
+                        }
+                        crate::RayQueryFunction::Proceed { result } => {
+                            self.emits.push((id, result));
+                            "RayQueryProceed"
+                        }
+                        crate::RayQueryFunction::Terminate => "RayQueryTerminate",
                     }
-                    "RayQuery"
                 }
             };
             // Set the last node to the merge node

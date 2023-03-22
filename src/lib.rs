@@ -1460,7 +1460,7 @@ pub enum Expression {
 
     /// Return an intersection found by `query`.
     ///
-    /// If `committed` is true, return the committed result available when 
+    /// If `committed` is true, return the committed result available when
     RayQueryGetIntersection {
         query: Handle<Expression>,
         committed: bool,
@@ -1848,13 +1848,13 @@ pub struct SpecialTypes {
     ///
     /// Call [`Module::generate_ray_desc_type`] to populate this if
     /// needed and return the handle.
-    ray_desc: Option<Handle<Type>>,
+    pub ray_desc: Option<Handle<Type>>,
 
     /// Type for `RayIntersection`.
     ///
     /// Call [`Module::generate_ray_intersection_type`] to populate
     /// this if needed and return the handle.
-    ray_intersection: Option<Handle<Type>>,
+    pub ray_intersection: Option<Handle<Type>>,
 }
 
 /// Shader module.
