@@ -633,6 +633,7 @@ dependencies = [
  "serde",
  "tokio",
  "wgpu-core",
+ "wgpu-hal",
  "wgpu-types",
 ]
 
