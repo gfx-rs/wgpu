@@ -88,7 +88,7 @@ impl fmt::Display for ShaderError<naga::WithSpan<naga::valid::ValidationError>> 
         let label = self.label.as_deref().unwrap_or_default();
         let files = SimpleFile::new(label, &self.source);
         let config = term::Config::default();
-        let mut writer = term::termcolor::Ansi::new(Vec::new());
+        let mut writer = term::termcolor::NoColor::new(Vec::new());
 
         let diagnostic = Diagnostic::error().with_labels(
             self.inner
@@ -352,6 +352,8 @@ pub enum CreateRenderPipelineError {
         location: wgt::ShaderLocation,
         offset: wgt::BufferAddress,
     },
+    #[error("Two or more vertex attributes were assigned to the same location in the shader: {0}")]
+    ShaderLocationClash(u32),
     #[error("Strip index format was not set to None but to {strip_index_format:?} while using the non-strip topology {topology:?}")]
     StripIndexFormatForNonStripTopology {
         strip_index_format: Option<wgt::IndexFormat>,
