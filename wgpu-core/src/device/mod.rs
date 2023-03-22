@@ -2806,10 +2806,16 @@ impl<A: HalApi> Device<A> {
                     self.require_features(wgt::Features::VERTEX_ATTRIBUTE_64BIT)?;
                 }
 
-                io.insert(
+                let previous = io.insert(
                     attribute.shader_location,
                     validation::InterfaceVar::vertex_attribute(attribute.format),
                 );
+
+                if previous.is_some() {
+                    return Err(pipeline::CreateRenderPipelineError::ShaderLocationClash(
+                        attribute.shader_location,
+                    ));
+                }
             }
             total_attributes += vb_state.attributes.len();
         }
