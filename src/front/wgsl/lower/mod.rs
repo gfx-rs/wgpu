@@ -641,15 +641,6 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             let span = tu.decls.get_span(decl_handle);
             let decl = &tu.decls[decl_handle];
 
-            //NOTE: This is done separately from `resolve_ast_type` because `RayDesc` may be
-            // first encountered in a local constructor invocation.
-            //TODO: find a nicer way?
-            if let Some(dep) = decl.dependencies.iter().find(|dep| dep.ident == "RayDesc") {
-                let ty_handle = ctx.module.generate_ray_desc_type();
-                ctx.globals
-                    .insert(dep.ident, LoweredGlobalDecl::Type(ty_handle));
-            }
-
             match decl.kind {
                 ast::GlobalDeclKind::Fn(ref f) => {
                     let lowered_decl = self.function(f, span, ctx.reborrow())?;
@@ -1929,6 +1920,17 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                                 query,
                                 committed: true,
                             }
+                        }
+                        "RayDesc" => {
+                            let ty = ctx.module.generate_ray_desc_type();
+                            let handle = self.construct(
+                                span,
+                                &ast::ConstructorType::Type(ty),
+                                function.span,
+                                arguments,
+                                ctx.reborrow(),
+                            )?;
+                            return Ok(Some(handle));
                         }
                         _ => return Err(Error::UnknownIdent(function.span, function.name)),
                     }

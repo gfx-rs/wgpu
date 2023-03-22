@@ -26,12 +26,12 @@ OpMemberDecorate %19 9 MatrixStride 16
 OpMemberDecorate %19 10 Offset 112
 OpMemberDecorate %19 10 ColMajor
 OpMemberDecorate %19 10 MatrixStride 16
-OpMemberDecorate %21 0 Offset 0
-OpMemberDecorate %21 1 Offset 4
-OpMemberDecorate %21 2 Offset 8
-OpMemberDecorate %21 3 Offset 12
-OpMemberDecorate %21 4 Offset 16
-OpMemberDecorate %21 5 Offset 32
+OpMemberDecorate %22 0 Offset 0
+OpMemberDecorate %22 1 Offset 4
+OpMemberDecorate %22 2 Offset 8
+OpMemberDecorate %22 3 Offset 12
+OpMemberDecorate %22 4 Offset 16
+OpMemberDecorate %22 5 Offset 32
 OpDecorate %23 DescriptorSet 0
 OpDecorate %23 Binding 0
 OpDecorate %25 DescriptorSet 0
@@ -57,15 +57,15 @@ OpMemberDecorate %26 0 Offset 0
 %18 = OpTypeMatrix %14 4
 %19 = OpTypeStruct %8 %4 %8 %8 %8 %8 %8 %16 %17 %18 %18
 %20 = OpTypeVector %4 4
-%21 = OpTypeStruct %8 %8 %4 %4 %14 %14
-%22 = OpTypeRayQueryKHR
+%21 = OpTypeRayQueryKHR
+%22 = OpTypeStruct %8 %8 %4 %4 %14 %14
 %24 = OpTypePointer UniformConstant %13
 %23 = OpVariable  %24  UniformConstant
 %26 = OpTypeStruct %15
 %27 = OpTypePointer StorageBuffer %26
 %25 = OpVariable  %27  StorageBuffer
 %32 = OpTypeFunction %14 %14 %19
-%46 = OpTypePointer Function %22
+%46 = OpTypePointer Function %21
 %49 = OpTypeFunction %2
 %51 = OpTypePointer StorageBuffer %15
 %72 = OpConstant  %8  1
@@ -99,7 +99,7 @@ OpBranch %53
 %53 = OpLabel
 %54 = OpCompositeConstruct  %14  %6 %3 %6
 %55 = OpCompositeConstruct  %14  %6 %6 %6
-%56 = OpCompositeConstruct  %21  %7 %9 %10 %11 %55 %54
+%56 = OpCompositeConstruct  %22  %7 %9 %10 %11 %55 %54
 %57 = OpCompositeExtract  %8  %56 0
 %58 = OpCompositeExtract  %8  %56 1
 %59 = OpCompositeExtract  %4  %56 2
