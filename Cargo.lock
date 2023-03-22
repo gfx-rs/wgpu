@@ -3017,7 +3017,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-hal"
-version = "0.15.3"
+version = "0.15.4"
 dependencies = [
  "android_system_properties",
  "arrayvec 0.7.2",
