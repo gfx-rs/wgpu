@@ -40,7 +40,7 @@ pub struct CreateSamplerArgs {
     lod_min_clamp: f32,
     lod_max_clamp: f32,
     compare: Option<wgpu_types::CompareFunction>,
-    max_anisotropy: u8,
+    max_anisotropy: u16,
 }
 
 #[op]
@@ -67,7 +67,7 @@ pub fn op_webgpu_create_sampler(
         lod_min_clamp: args.lod_min_clamp,
         lod_max_clamp: args.lod_max_clamp,
         compare: args.compare,
-        anisotropy_clamp: std::num::NonZeroU8::new(args.max_anisotropy),
+        anisotropy_clamp: args.max_anisotropy,
         border_color: None, // native-only
     };
 

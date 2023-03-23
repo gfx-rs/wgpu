@@ -355,9 +355,9 @@ impl<A: hal::Api> Example<A> {
             mag_filter: wgt::FilterMode::Linear,
             min_filter: wgt::FilterMode::Nearest,
             mipmap_filter: wgt::FilterMode::Nearest,
-            lod_clamp: None,
+            lod_clamp: 0.0..32.0,
             compare: None,
-            anisotropy_clamp: None,
+            anisotropy_clamp: 1,
             border_color: None,
         };
         let sampler = unsafe { device.create_sampler(&sampler_desc).unwrap() };

@@ -19,7 +19,7 @@ use std::{
     fmt::{Debug, Display},
     future::Future,
     marker::PhantomData,
-    num::{NonZeroU32, NonZeroU8},
+    num::NonZeroU32,
     ops::{Bound, Deref, DerefMut, Range, RangeBounds},
     sync::Arc,
     thread,
@@ -1008,8 +1008,8 @@ pub struct SamplerDescriptor<'a> {
     pub lod_max_clamp: f32,
     /// If this is enabled, this is a comparison sampler using the given comparison function.
     pub compare: Option<CompareFunction>,
-    /// Valid values: 1, 2, 4, 8, and 16.
-    pub anisotropy_clamp: Option<NonZeroU8>,
+    /// Must be at least 1. If this is not 1, all filter modes must be linear.
+    pub anisotropy_clamp: u16,
     /// Border color to use when address_mode is [`AddressMode::ClampToBorder`]
     pub border_color: Option<SamplerBorderColor>,
 }
@@ -1026,9 +1026,9 @@ impl Default for SamplerDescriptor<'_> {
             min_filter: Default::default(),
             mipmap_filter: Default::default(),
             lod_min_clamp: 0.0,
-            lod_max_clamp: std::f32::MAX,
+            lod_max_clamp: 32.0,
             compare: None,
-            anisotropy_clamp: None,
+            anisotropy_clamp: 1,
             border_color: None,
         }
     }
@@ -1544,7 +1544,7 @@ impl Instance {
     /// # Safety
     ///
     /// - visual must be a valid IDCompositionVisual to create a surface upon.
-    #[cfg(target_os = "windows")]
+    #[cfg(all(feature = "dx12", windows))]
     pub unsafe fn create_surface_from_visual(&self, visual: *mut std::ffi::c_void) -> Surface {
         let surface = unsafe {
             self.context
@@ -1566,7 +1566,7 @@ impl Instance {
     /// # Safety
     ///
     /// - surface_handle must be a valid SurfaceHandle to create a surface upon.
-    #[cfg(target_os = "windows")]
+    #[cfg(all(feature = "dx12", windows))]
     pub unsafe fn create_surface_from_surface_handle(
         &self,
         surface_handle: *mut std::ffi::c_void,
