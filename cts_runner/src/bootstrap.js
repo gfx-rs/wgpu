@@ -155,6 +155,7 @@ const windowOrWorkerGlobalScope = {
   EventTarget: util.nonEnumerable(event.EventTarget),
   Navigator: util.nonEnumerable(Navigator),
   navigator: util.getterOnly(() => navigator),
+  MessageEvent: util.nonEnumerable(event.MessageEvent),
   Performance: util.nonEnumerable(performance.Performance),
   PerformanceEntry: util.nonEnumerable(performance.PerformanceEntry),
   PerformanceMark: util.nonEnumerable(performance.PerformanceMark),
