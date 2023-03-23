@@ -217,18 +217,18 @@ const mainRuntimeGlobalProperties = {
 
 const denoNs = {
   exit(code) {
-    core.opSync("op_exit", code);
+    core.ops.op_exit(code);
   },
   readFileSync(path) {
-    return core.opSync("op_read_file_sync", pathFromURL(path));
+    return core.ops.op_read_file_sync(pathFromURL(path));
   },
   readTextFileSync(path) {
-    const buf = core.opSync("op_read_file_sync", pathFromURL(path));
+    const buf = core.ops.op_read_file_sync(pathFromURL(path));
     const decoder = new TextDecoder();
     return decoder.decode(buf);
   },
   writeFileSync(path, buf) {
-    return core.opSync("op_write_file_sync", pathFromURL(path), buf);
+    return core.ops.op_write_file_sync(pathFromURL(path), buf);
   },
 };
 
