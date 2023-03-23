@@ -139,11 +139,15 @@ function normalizeGPUExtent3D(data) {
   if (ArrayIsArray(data)) {
     return {
       width: data[0],
-      height: data[1],
-      depthOrArrayLayers: data[2],
+      height: data[1] ?? 1,
+      depthOrArrayLayers: data[2] ?? 1,
     };
   } else {
-    return data;
+    return {
+      width: data.width,
+      height: data.height ?? 1,
+      depthOrArrayLayers: data.depthOrArrayLayers ?? 1,
+    };
   }
 }
 
@@ -1018,13 +1022,13 @@ class GPUDevice extends EventTarget {
     for (let i = 0; i < descriptor.entries.length; ++i) {
       const entry = descriptor.entries[i];
 
-      let i = 0;
-      if (entry.buffer) i++;
-      if (entry.sampler) i++;
-      if (entry.texture) i++;
-      if (entry.storageTexture) i++;
+      let j = 0;
+      if (entry.buffer) j++;
+      if (entry.sampler) j++;
+      if (entry.texture) j++;
+      if (entry.storageTexture) j++;
 
-      if (i !== 1) {
+      if (j !== 1) {
         throw new Error(); // TODO(@crowlKats): correct error
       }
     }
