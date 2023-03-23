@@ -116,7 +116,10 @@ impl<A: hal::Api> Example<A> {
             unsafe { adapter.surface_capabilities(&surface) }.ok_or(hal::InstanceError)?;
         log::info!("Surface caps: {:#?}", surface_caps);
 
-        let hal::OpenDevice { device, mut queue } = unsafe {
+        let hal::OpenDevice {
+            mut device,
+            mut queue,
+        } = unsafe {
             adapter
                 .open(wgt::Features::empty(), &wgt::Limits::default())
                 .unwrap()
