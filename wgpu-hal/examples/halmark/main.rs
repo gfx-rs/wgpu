@@ -264,12 +264,6 @@ impl<A: hal::Api> Example<A> {
         let pipeline = unsafe { device.create_render_pipeline(&pipeline_desc).unwrap() };
 
         let texture_data = vec![0xFFu8; 4];
-        let cmd_encoder_desc = hal::CommandEncoderDescriptor {
-            label: None,
-            queue: &queue,
-        };
-        let mut cmd_encoder = unsafe { device.create_command_encoder(&cmd_encoder_desc).unwrap() };
-        unsafe { cmd_encoder.begin_encoding(Some("init")).unwrap() };
 
         let staging_buffer_desc = hal::BufferDescriptor {
             label: Some("stage"),
@@ -277,11 +271,7 @@ impl<A: hal::Api> Example<A> {
             usage: hal::BufferUses::MAP_WRITE | hal::BufferUses::COPY_SRC,
             memory_flags: hal::MemoryFlags::TRANSIENT | hal::MemoryFlags::PREFER_COHERENT,
         };
-        let staging_buffer = unsafe {
-            device
-                .create_buffer(&mut cmd_encoder, &staging_buffer_desc)
-                .unwrap()
-        };
+        let staging_buffer = unsafe { device.create_buffer(&staging_buffer_desc).unwrap() };
         unsafe {
             let mapping = device
                 .map_buffer(&staging_buffer, 0..staging_buffer_desc.size)
@@ -312,6 +302,12 @@ impl<A: hal::Api> Example<A> {
         };
         let texture = unsafe { device.create_texture(&texture_desc).unwrap() };
 
+        let cmd_encoder_desc = hal::CommandEncoderDescriptor {
+            label: None,
+            queue: &queue,
+        };
+        let mut cmd_encoder = unsafe { device.create_command_encoder(&cmd_encoder_desc).unwrap() };
+        unsafe { cmd_encoder.begin_encoding(Some("init")).unwrap() };
         {
             let buffer_barrier = hal::BufferBarrier {
                 buffer: &staging_buffer,
@@ -385,9 +381,7 @@ impl<A: hal::Api> Example<A> {
             memory_flags: hal::MemoryFlags::PREFER_COHERENT,
         };
         let global_buffer = unsafe {
-            let buffer = device
-                .create_buffer(&mut cmd_encoder, &global_buffer_desc)
-                .unwrap();
+            let buffer = device.create_buffer(&global_buffer_desc).unwrap();
             let mapping = device
                 .map_buffer(&buffer, 0..global_buffer_desc.size)
                 .unwrap();
@@ -411,11 +405,7 @@ impl<A: hal::Api> Example<A> {
             usage: hal::BufferUses::MAP_WRITE | hal::BufferUses::UNIFORM,
             memory_flags: hal::MemoryFlags::PREFER_COHERENT,
         };
-        let local_buffer = unsafe {
-            device
-                .create_buffer(&mut cmd_encoder, &local_buffer_desc)
-                .unwrap()
-        };
+        let local_buffer = unsafe { device.create_buffer(&local_buffer_desc).unwrap() };
 
         let view_desc = hal::TextureViewDescriptor {
             label: None,

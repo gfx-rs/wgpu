@@ -251,7 +251,6 @@ impl<A: hal::Api> PendingWrites<A> {
 
 fn prepare_staging_buffer<A: HalApi>(
     device: &mut A::Device,
-    encoder: &mut A::CommandEncoder,
     size: wgt::BufferAddress,
 ) -> Result<(StagingBuffer<A>, *mut u8), DeviceError> {
     profiling::scope!("prepare_staging_buffer");
@@ -262,7 +261,7 @@ fn prepare_staging_buffer<A: HalApi>(
         memory_flags: hal::MemoryFlags::TRANSIENT,
     };
 
-    let buffer = unsafe { device.create_buffer(encoder, &stage_desc)? };
+    let buffer = unsafe { device.create_buffer(&stage_desc)? };
     let mapping = unsafe { device.map_buffer(&buffer, 0..size) }?;
 
     let staging_buffer = StagingBuffer {
@@ -361,7 +360,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         // freed, even if an error occurs. All paths from here must call
         // `device.pending_writes.consume`.
         let (staging_buffer, staging_buffer_ptr) =
-            prepare_staging_buffer(&mut device.raw, device.pending_writes.activate(), data_size)?;
+            prepare_staging_buffer(&mut device.raw, data_size)?;
 
         if let Err(flush_error) = unsafe {
             profiling::scope!("copy");
@@ -399,11 +398,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .get_mut(queue_id)
             .map_err(|_| DeviceError::Invalid)?;
 
-        let (staging_buffer, staging_buffer_ptr) = prepare_staging_buffer(
-            &mut device.raw,
-            device.pending_writes.activate(),
-            buffer_size.get(),
-        )?;
+        let (staging_buffer, staging_buffer_ptr) =
+            prepare_staging_buffer(&mut device.raw, buffer_size.get())?;
 
         let fid = hub.staging_buffers.prepare(id_in);
         let id = fid.assign(staging_buffer, device_token);
@@ -747,7 +743,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         // freed, even if an error occurs. All paths from here must call
         // `device.pending_writes.consume`.
         let (staging_buffer, staging_buffer_ptr) =
-            prepare_staging_buffer(&mut device.raw, encoder, stage_size)?;
+            prepare_staging_buffer(&mut device.raw, stage_size)?;
 
         if stage_bytes_per_row == bytes_per_row {
             profiling::scope!("copy aligned");

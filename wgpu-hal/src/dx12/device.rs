@@ -1,4 +1,5 @@
 use crate::auxil::{self, dxgi::result::HResult as _};
+use crate::{CommandEncoder as _, Queue as _};
 
 use super::{conv, descriptor, view};
 use parking_lot::Mutex;
@@ -147,7 +148,10 @@ impl super::Device {
 
         Ok(super::Device {
             raw,
-            present_queue,
+            present_queue: super::Queue {
+                raw: present_queue,
+                temp_lists: vec![],
+            },
             idler: super::Idler {
                 fence: idle_fence,
                 event: d3d12::Event::create(false, false),
@@ -173,6 +177,7 @@ impl super::Device {
             null_rtv_handle,
             mem_allocator,
             dxc_container,
+            encoder: None,
         })
     }
 
@@ -184,7 +189,7 @@ impl super::Device {
 
         let value = cur_value + 1;
         log::info!("Waiting for idle with value {}", value);
-        self.present_queue.signal(self.idler.fence, value);
+        self.present_queue.raw.signal(self.idler.fence, value);
         let hr = self
             .idler
             .fence
@@ -274,7 +279,7 @@ impl super::Device {
     }
 
     pub fn raw_queue(&self) -> &d3d12::CommandQueue {
-        &self.present_queue
+        &self.present_queue.raw
     }
 
     pub unsafe fn texture_from_raw(
@@ -311,8 +316,7 @@ impl crate::Device<super::Api> for super::Device {
     }
 
     unsafe fn create_buffer(
-        &self,
-        encoder: &mut super::CommandEncoder,
+        &mut self,
         desc: &crate::BufferDescriptor,
     ) -> Result<super::Buffer, crate::DeviceError> {
         let mut resource = d3d12::Resource::null();
@@ -345,10 +349,24 @@ impl crate::Device<super::Api> for super::Device {
             // Discard buffer
             // TODO: Should we check gpu model or driver
             unsafe {
+                if self.encoder.is_none() {
+                    self.encoder = Some(self.create_command_encoder(
+                        &crate::CommandEncoderDescriptor {
+                            label: None,
+                            queue: &self.present_queue,
+                        },
+                    )?);
+                }
+
+                let encoder = self.encoder.as_mut().unwrap();
+
+                encoder.begin_encoding(None)?;
                 encoder
                     .list
                     .unwrap()
                     .DiscardResource(resource.as_mut_ptr(), ptr::null_mut());
+                let cmd_buf = encoder.end_encoding()?;
+                self.present_queue.submit(&[&cmd_buf], None).unwrap();
             }
         }
 

@@ -248,7 +248,7 @@ impl DeviceShared {
 
 pub struct Device {
     raw: d3d12::Device,
-    present_queue: d3d12::CommandQueue,
+    present_queue: Queue,
     idler: Idler,
     private_caps: PrivateCapabilities,
     shared: Arc<DeviceShared>,
@@ -264,6 +264,7 @@ pub struct Device {
     null_rtv_handle: descriptor::Handle,
     mem_allocator: Option<Mutex<suballocation::GpuAllocatorWrapper>>,
     dxc_container: Option<shader_compilation::DxcContainer>,
+    encoder: Option<CommandEncoder>,
 }
 
 unsafe impl Send for Device {}
@@ -698,7 +699,7 @@ impl crate::Surface<Api> for Surface {
                         self.factory
                             .unwrap_factory2()
                             .create_swapchain_for_composition(
-                                device.present_queue.as_mut_ptr() as *mut _,
+                                device.present_queue.raw.as_mut_ptr() as *mut _,
                                 &desc,
                             )
                             .into_result()
@@ -710,7 +711,7 @@ impl crate::Surface<Api> for Surface {
                         self.factory_media
                             .ok_or(crate::SurfaceError::Other("IDXGIFactoryMedia not found"))?
                             .create_swapchain_for_composition_surface_handle(
-                                device.present_queue.as_mut_ptr() as *mut _,
+                                device.present_queue.raw.as_mut_ptr() as *mut _,
                                 handle,
                                 &desc,
                             )
@@ -722,7 +723,7 @@ impl crate::Surface<Api> for Surface {
                             .as_factory2()
                             .unwrap()
                             .create_swapchain_for_hwnd(
-                                device.present_queue.as_mut_ptr() as *mut _,
+                                device.present_queue.raw.as_mut_ptr() as *mut _,
                                 hwnd,
                                 &desc,
                             )

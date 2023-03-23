@@ -457,8 +457,7 @@ impl crate::Device<super::Api> for super::Device {
     }
 
     unsafe fn create_buffer(
-        &self,
-        _encoder: &mut super::CommandEncoder,
+        &mut self,
         desc: &crate::BufferDescriptor,
     ) -> Result<super::Buffer, crate::DeviceError> {
         let target = if desc.usage.contains(crate::BufferUses::INDEX) {

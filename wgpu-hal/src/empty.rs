@@ -122,11 +122,7 @@ impl crate::Queue<Api> for Context {
 
 impl crate::Device<Api> for Context {
     unsafe fn exit(self, queue: Context) {}
-    unsafe fn create_buffer(
-        &self,
-        _encoder: &mut Encoder,
-        desc: &crate::BufferDescriptor,
-    ) -> DeviceResult<Resource> {
+    unsafe fn create_buffer(&mut self, desc: &crate::BufferDescriptor) -> DeviceResult<Resource> {
         Ok(Resource)
     }
     unsafe fn destroy_buffer(&self, buffer: Resource) {}
