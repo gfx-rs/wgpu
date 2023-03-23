@@ -1,7 +1,7 @@
 use crate::auxil::{self, dxgi::result::HResult as _};
 
 use super::conv;
-use std::{mem, ops::Range, ptr, sync::atomic::Ordering};
+use std::{mem, ops::Range, ptr};
 use winapi::um::d3d12 as d3d12_ty;
 
 fn make_box(origin: &wgt::Origin3d, size: &crate::CopyExtent) -> d3d12_ty::D3D12_BOX {
@@ -312,15 +312,6 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 barrier.usage.start,
                 barrier.usage.end
             );
-
-            if !barrier.buffer.initialized.swap(true, Ordering::SeqCst) {
-                unsafe {
-                    self.list
-                        .unwrap()
-                        .DiscardResource(barrier.buffer.resource.as_mut_ptr(), ptr::null());
-                }
-            }
-
             let s0 = conv::map_buffer_usage_to_state(barrier.usage.start);
             let s1 = conv::map_buffer_usage_to_state(barrier.usage.end);
             if s0 != s1 {

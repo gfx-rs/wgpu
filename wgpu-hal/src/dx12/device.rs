@@ -6,7 +6,7 @@ use std::{
     ffi, mem,
     num::NonZeroU32,
     ptr,
-    sync::{atomic::AtomicBool, Arc},
+    sync::Arc,
 };
 use winapi::{
     shared::{dxgiformat, dxgitype, minwindef::BOOL, winerror},
@@ -317,6 +317,7 @@ impl crate::Device<super::Api> for super::Device {
 
     unsafe fn create_buffer(
         &self,
+        encoder: &mut super::CommandEncoder,
         desc: &crate::BufferDescriptor,
     ) -> Result<super::Buffer, crate::DeviceError> {
         let mut resource = d3d12::Resource::null();
@@ -345,6 +346,14 @@ impl crate::Device<super::Api> for super::Device {
         let (hr, allocation) =
             super::suballocation::create_buffer_resource(self, desc, raw_desc, &mut resource)?;
 
+        if allocation.is_some() {
+            // Discard buffer
+            // TODO: Should we check gpu model or driver
+            unsafe {
+                encoder.list.unwrap().DiscardResource(resource.as_mut_ptr(), ptr::null_mut());
+            }
+        }
+
         hr.into_device_result("Buffer creation")?;
         if let Some(label) = desc.label {
             let cwstr = conv::map_label(label);
@@ -354,7 +363,6 @@ impl crate::Device<super::Api> for super::Device {
         Ok(super::Buffer {
             resource,
             size,
-            initialized: AtomicBool::new(allocation.is_none()),
             allocation,
         })
     }

@@ -394,11 +394,12 @@ impl<A: HalApi> Device<A> {
             .acquire_encoder(&open.device, &open.queue)
             .map_err(|_| CreateDeviceError::OutOfMemory)?;
         let mut pending_writes = queue::PendingWrites::<A>::new(pending_encoder);
+        pending_writes.activate();
 
         // Create zeroed buffer used for texture clears.
         let zero_buffer = unsafe {
             open.device
-                .create_buffer(&hal::BufferDescriptor {
+                .create_buffer(&mut pending_writes.command_encoder, &hal::BufferDescriptor {
                     label: Some("(wgpu internal) zero init buffer"),
                     size: ZERO_BUFFER_SIZE,
                     usage: hal::BufferUses::COPY_SRC | hal::BufferUses::COPY_DST,
@@ -406,7 +407,6 @@ impl<A: HalApi> Device<A> {
                 })
                 .map_err(DeviceError::from)?
         };
-        pending_writes.activate();
         unsafe {
             pending_writes
                 .command_encoder
@@ -614,7 +614,7 @@ impl<A: HalApi> Device<A> {
     }
 
     fn create_buffer(
-        &self,
+        &mut self,
         self_id: id::DeviceId,
         desc: &resource::BufferDescriptor,
         transient: bool,
@@ -698,7 +698,7 @@ impl<A: HalApi> Device<A> {
             usage,
             memory_flags,
         };
-        let buffer = unsafe { self.raw.create_buffer(&hal_desc) }.map_err(DeviceError::from)?;
+        let buffer = unsafe { self.raw.create_buffer(self.pending_writes.activate(), &hal_desc) }.map_err(DeviceError::from)?;
 
         Ok(resource::Buffer {
             raw: Some(buffer),
@@ -3505,9 +3505,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut token = Token::root();
         let fid = hub.buffers.prepare(id_in);
 
-        let (device_guard, mut token) = hub.devices.read(&mut token);
+        let (mut device_guard, mut token) = hub.devices.write(&mut token);
         let error = loop {
-            let device = match device_guard.get(device_id) {
+            let device = match device_guard.get_mut(device_id) {
                 Ok(device) => device,
                 Err(_) => break DeviceError::Invalid.into(),
             };

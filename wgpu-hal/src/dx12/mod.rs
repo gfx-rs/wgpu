@@ -51,7 +51,7 @@ use parking_lot::Mutex;
 use std::{
     ffi, fmt, mem,
     num::NonZeroU32,
-    sync::{atomic::AtomicBool, Arc},
+    sync::Arc,
 };
 use winapi::{
     shared::{dxgi, dxgi1_4, dxgitype, windef, winerror},
@@ -404,7 +404,6 @@ unsafe impl Sync for CommandBuffer {}
 pub struct Buffer {
     resource: d3d12::Resource,
     size: wgt::BufferAddress,
-    initialized: AtomicBool,
     allocation: Option<suballocation::AllocationWrapper>,
 }
 
