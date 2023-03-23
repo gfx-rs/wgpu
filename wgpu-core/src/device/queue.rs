@@ -399,8 +399,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .get_mut(queue_id)
             .map_err(|_| DeviceError::Invalid)?;
 
-        let (staging_buffer, staging_buffer_ptr) =
-            prepare_staging_buffer(&mut device.raw, device.pending_writes.activate(), buffer_size.get())?;
+        let (staging_buffer, staging_buffer_ptr) = prepare_staging_buffer(
+            &mut device.raw,
+            device.pending_writes.activate(),
+            buffer_size.get(),
+        )?;
 
         let fid = hub.staging_buffers.prepare(id_in);
         let id = fid.assign(staging_buffer, device_token);

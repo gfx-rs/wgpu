@@ -246,7 +246,11 @@ pub trait Device<A: Api>: Send + Sync {
     /// Creates a new buffer.
     ///
     /// The initial usage is `BufferUses::empty()`.
-    unsafe fn create_buffer(&self, encoder: &mut A::CommandEncoder, desc: &BufferDescriptor) -> Result<A::Buffer, DeviceError>;
+    unsafe fn create_buffer(
+        &self,
+        encoder: &mut A::CommandEncoder,
+        desc: &BufferDescriptor,
+    ) -> Result<A::Buffer, DeviceError>;
     unsafe fn destroy_buffer(&self, buffer: A::Buffer);
     //TODO: clarify if zero-sized mapping is allowed
     unsafe fn map_buffer(

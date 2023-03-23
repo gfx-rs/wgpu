@@ -399,12 +399,15 @@ impl<A: HalApi> Device<A> {
         // Create zeroed buffer used for texture clears.
         let zero_buffer = unsafe {
             open.device
-                .create_buffer(&mut pending_writes.command_encoder, &hal::BufferDescriptor {
-                    label: Some("(wgpu internal) zero init buffer"),
-                    size: ZERO_BUFFER_SIZE,
-                    usage: hal::BufferUses::COPY_SRC | hal::BufferUses::COPY_DST,
-                    memory_flags: hal::MemoryFlags::empty(),
-                })
+                .create_buffer(
+                    &mut pending_writes.command_encoder,
+                    &hal::BufferDescriptor {
+                        label: Some("(wgpu internal) zero init buffer"),
+                        size: ZERO_BUFFER_SIZE,
+                        usage: hal::BufferUses::COPY_SRC | hal::BufferUses::COPY_DST,
+                        memory_flags: hal::MemoryFlags::empty(),
+                    },
+                )
                 .map_err(DeviceError::from)?
         };
         unsafe {
@@ -698,7 +701,11 @@ impl<A: HalApi> Device<A> {
             usage,
             memory_flags,
         };
-        let buffer = unsafe { self.raw.create_buffer(self.pending_writes.activate(), &hal_desc) }.map_err(DeviceError::from)?;
+        let buffer = unsafe {
+            self.raw
+                .create_buffer(self.pending_writes.activate(), &hal_desc)
+        }
+        .map_err(DeviceError::from)?;
 
         Ok(resource::Buffer {
             raw: Some(buffer),

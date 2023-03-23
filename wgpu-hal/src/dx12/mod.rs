@@ -48,11 +48,7 @@ use crate::auxil::{self, dxgi::result::HResult as _};
 
 use arrayvec::ArrayVec;
 use parking_lot::Mutex;
-use std::{
-    ffi, fmt, mem,
-    num::NonZeroU32,
-    sync::Arc,
-};
+use std::{ffi, fmt, mem, num::NonZeroU32, sync::Arc};
 use winapi::{
     shared::{dxgi, dxgi1_4, dxgitype, windef, winerror},
     um::{d3d12 as d3d12_ty, dcomp, synchapi, winbase, winnt},

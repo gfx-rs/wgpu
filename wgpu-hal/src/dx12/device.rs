@@ -2,12 +2,7 @@ use crate::auxil::{self, dxgi::result::HResult as _};
 
 use super::{conv, descriptor, view};
 use parking_lot::Mutex;
-use std::{
-    ffi, mem,
-    num::NonZeroU32,
-    ptr,
-    sync::Arc,
-};
+use std::{ffi, mem, num::NonZeroU32, ptr, sync::Arc};
 use winapi::{
     shared::{dxgiformat, dxgitype, minwindef::BOOL, winerror},
     um::{d3d12 as d3d12_ty, synchapi, winbase},
@@ -350,7 +345,10 @@ impl crate::Device<super::Api> for super::Device {
             // Discard buffer
             // TODO: Should we check gpu model or driver
             unsafe {
-                encoder.list.unwrap().DiscardResource(resource.as_mut_ptr(), ptr::null_mut());
+                encoder
+                    .list
+                    .unwrap()
+                    .DiscardResource(resource.as_mut_ptr(), ptr::null_mut());
             }
         }
 
