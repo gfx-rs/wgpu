@@ -5800,6 +5800,10 @@ impl<T: Copy> ImageCopyTextureTagged<T> {
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
+#[cfg_attr(
+    any(feature = "trace", feature = "replay"),
+    serde(rename_all = "camelCase")
+)]
 pub struct ImageSubresourceRange {
     /// Aspect of the texture. Color textures must be [`TextureAspect::All`][TAA].
     ///
