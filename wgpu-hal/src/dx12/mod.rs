@@ -176,6 +176,7 @@ struct PrivateCapabilities {
     #[allow(unused)] // TODO: Exists until windows-rs is standard, then it can probably be removed?
     heap_create_not_zeroed: bool,
     casting_fully_typed_format_supported: bool,
+    uninitialized_buffer_supported: bool,
 }
 
 #[derive(Default)]
@@ -264,7 +265,7 @@ pub struct Device {
     null_rtv_handle: descriptor::Handle,
     mem_allocator: Option<Mutex<suballocation::GpuAllocatorWrapper>>,
     dxc_container: Option<shader_compilation::DxcContainer>,
-    encoder: Option<CommandEncoder>,
+    encoder_and_fence: Option<(CommandEncoder, Fence, crate::FenceValue)>,
 }
 
 unsafe impl Send for Device {}

@@ -177,6 +177,7 @@ impl super::Adapter {
             },
             heap_create_not_zeroed: false, //TODO: winapi support for Options7
             casting_fully_typed_format_supported,
+            uninitialized_buffer_supported: !info.name.contains("Iris Xe"),
         };
 
         // Theoretically vram limited, but in practice 2^20 is the limit

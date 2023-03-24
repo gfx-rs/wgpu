@@ -177,7 +177,7 @@ impl super::Device {
             null_rtv_handle,
             mem_allocator,
             dxc_container,
-            encoder: None,
+            encoder_and_fence: None,
         })
     }
 
@@ -345,28 +345,38 @@ impl crate::Device<super::Api> for super::Device {
         let (hr, allocation) =
             super::suballocation::create_buffer_resource(self, desc, raw_desc, &mut resource)?;
 
-        if allocation.is_some() {
+        if !self.private_caps.uninitialized_buffer_supported && allocation.is_some() {
             // Discard buffer
-            // TODO: Should we check gpu model or driver
             unsafe {
-                if self.encoder.is_none() {
-                    self.encoder = Some(self.create_command_encoder(
-                        &crate::CommandEncoderDescriptor {
+                if self.encoder_and_fence.is_none() {
+                    self.encoder_and_fence = Some((
+                        self.create_command_encoder(&crate::CommandEncoderDescriptor {
                             label: None,
                             queue: &self.present_queue,
-                        },
-                    )?);
+                        })?,
+                        self.create_fence()?,
+                        0,
+                    ));
                 }
 
-                let encoder = self.encoder.as_mut().unwrap();
+                let (mut encoder, mut fence, mut fence_value) =
+                    self.encoder_and_fence.take().unwrap();
 
-                encoder.begin_encoding(None)?;
+                encoder.begin_encoding(None).unwrap();
                 encoder
                     .list
                     .unwrap()
                     .DiscardResource(resource.as_mut_ptr(), ptr::null_mut());
-                let cmd_buf = encoder.end_encoding()?;
-                self.present_queue.submit(&[&cmd_buf], None).unwrap();
+                let cmd_buf = encoder.end_encoding().unwrap();
+
+                fence_value += 1;
+                self.present_queue
+                    .submit(&[&cmd_buf], Some((&mut fence, fence_value)))
+                    .unwrap();
+
+                self.wait(&fence, fence_value, !0).unwrap();
+
+                self.encoder_and_fence = Some((encoder, fence, fence_value));
             }
         }
 
