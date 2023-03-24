@@ -210,7 +210,7 @@ mod allocation {
     use std::ptr;
     use winapi::{
         um::{
-            d3d12_ty::{self, ID3D12Resource},
+            d3d12::{self as d3d12_ty, ID3D12Resource},
             winnt::HRESULT,
         },
         Interface,
