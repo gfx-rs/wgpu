@@ -172,9 +172,9 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
 
     let blas_geo_size_desc = wgpu::BlasTriangleGeometrySizeDescriptor {
         vertex_format: wgpu::VertexFormat::Float32x4,
-        vertex_count: vertex_data.size(),
+        vertex_count: vertex_data.len() as u32,
         index_format: Some(wgpu::IndexFormat::Uint16),
-        index_count: Some(index_data.size()),
+        index_count: Some(index_data.len() as u32),
         flags: wgpu::AccelerationStructureGeometryFlags::OPAQUE,
     };
 
@@ -185,7 +185,7 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
             update_mode: wgpu::AccelerationStructureUpdateMode::Build,
         },
         wgpu::BlasGeometrySizeDescriptors::Triangles {
-            desc: [blas_geo_size_desc.clone()],
+            desc: vec![blas_geo_size_desc.clone()],
         },
     );
 

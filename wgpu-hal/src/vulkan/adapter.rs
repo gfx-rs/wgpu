@@ -570,7 +570,7 @@ impl PhysicalDeviceFeatures {
         features.set(F::DEPTH32FLOAT_STENCIL8, texture_d32_s8);
 
         features.set(
-            F::RAY_TRACING,
+            F::RAY_TRACING_ACCELERATION_STRUCTURE,
             caps.supports_extension(vk::KhrDeferredHostOperationsFn::name())
                 && caps.supports_extension(vk::KhrAccelerationStructureFn::name())
                 && caps.supports_extension(vk::KhrBufferDeviceAddressFn::name()),
@@ -741,7 +741,7 @@ impl PhysicalDeviceCapabilities {
         }
 
         // Require `VK_KHR_deferred_host_operations`, `VK_KHR_acceleration_structure` and `VK_KHR_buffer_device_address` if the feature `RAY_TRACING` was requested
-        if requested_features.contains(wgt::Features::RAY_TRACING) {
+        if requested_features.contains(wgt::Features::RAY_TRACING_ACCELERATION_STRUCTURE) {
             extensions.push(vk::KhrDeferredHostOperationsFn::name());
             extensions.push(vk::KhrAccelerationStructureFn::name());
             extensions.push(vk::KhrBufferDeviceAddressFn::name());
