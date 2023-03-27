@@ -2957,11 +2957,13 @@ impl crate::Context for Context {
         device: &Self::DeviceId,
         device_data: &Self::DeviceData,
         desc: &crate::CreateBlasDescriptor<'_>,
+        sizes: wgt::BlasGeometrySizeDescriptors,
     ) -> (Self::BlasId, Self::BlasData) {
         let global = &self.0;
         let (id, error) = wgc::gfx_select!(device => global.device_create_blas(
             *device,
             &desc.map_label(|l| l.map(Borrowed)),
+            sizes,
             ()
         ));
         if let Some(cause) = error {

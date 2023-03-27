@@ -3318,6 +3318,7 @@ impl<A: HalApi> Device<A> {
         &self,
         self_id: id::DeviceId,
         desc: &resource::BlasDescriptor,
+        sizes: wgt::BlasGeometrySizeDescriptors,
     ) -> Result<resource::Blas<A>, resource::CreateBlasError> {
         debug_assert_eq!(self_id.backend(), A::VARIANT);
 
@@ -6107,6 +6108,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         device_id: id::DeviceId,
         desc: &resource::BlasDescriptor,
+        sizes: wgt::BlasGeometrySizeDescriptors,
         id_in: Input<G, id::BlasId>,
     ) -> (id::BlasId, Option<resource::CreateBlasError>) {
         profiling::scope!("Device::create_blas");
@@ -6129,7 +6131,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             //         .add(trace::Action::CreateBlas(fid.id(), desc));
             // }
 
-            let mut blas = match device.create_blas(device_id, desc) {
+            let mut blas = match device.create_blas(device_id, desc, sizes) {
                 Ok(blas) => blas,
                 Err(e) => break e,
             };

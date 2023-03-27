@@ -6236,7 +6236,6 @@ impl<L> CreateTlasDescriptor<L> {
     }
 }
 
-// Todo let hal use these directly
 bitflags::bitflags!(
     /// Flags for acceleration structures
     pub struct AccelerationStructureFlags: u8 {
@@ -6254,10 +6253,12 @@ bitflags::bitflags!(
 );
 impl_bitflags!(AccelerationStructureFlags);
 
-// Todo let hal use these directly
 bitflags::bitflags!(
+    /// Flags for acceleration structure geometries
     pub struct AccelerationStructureGeometryFlags: u8 {
+        /// Is OPAQUE
         const OPAQUE = 1 << 0;
+        /// NO_DUPLICATE_ANY_HIT_INVOCATION
         const NO_DUPLICATE_ANY_HIT_INVOCATION = 1 << 1;
     }
 );

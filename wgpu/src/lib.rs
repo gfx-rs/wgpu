@@ -2244,9 +2244,18 @@ impl Device {
     }
 
     /// Creates a [`Blas`].
-    pub fn create_blas(&self, desc: &CreateBlasDescriptor) -> Blas {
-        let (id, data) =
-            DynContext::device_create_blas(&*self.context, &self.id, self.data.as_ref(), desc);
+    pub fn create_blas(
+        &self,
+        desc: &CreateBlasDescriptor,
+        sizes: wgt::BlasGeometrySizeDescriptors,
+    ) -> Blas {
+        let (id, data) = DynContext::device_create_blas(
+            &*self.context,
+            &self.id,
+            self.data.as_ref(),
+            desc,
+            sizes,
+        );
 
         Blas {
             context: Arc::clone(&self.context),
