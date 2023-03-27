@@ -1,10 +1,73 @@
-use std::{borrow::Cow, num::NonZeroU32};
+use bytemuck::{Pod, Zeroable};
+use std::{borrow::Cow, mem, num::NonZeroU32};
+use wgpu::util::DeviceExt;
 use winit::{
     dpi::{LogicalSize, PhysicalPosition},
     event::{Event, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
     window::Window,
 };
+
+// from cube
+#[repr(C)]
+#[derive(Clone, Copy, Pod, Zeroable)]
+struct Vertex {
+    _pos: [f32; 4],
+    _tex_coord: [f32; 2],
+}
+
+fn vertex(pos: [i8; 3], tc: [i8; 2]) -> Vertex {
+    Vertex {
+        _pos: [pos[0] as f32, pos[1] as f32, pos[2] as f32, 1.0],
+        _tex_coord: [tc[0] as f32, tc[1] as f32],
+    }
+}
+
+fn create_vertices() -> (Vec<Vertex>, Vec<u16>) {
+    let vertex_data = [
+        // top (0, 0, 1)
+        vertex([-1, -1, 1], [0, 0]),
+        vertex([1, -1, 1], [1, 0]),
+        vertex([1, 1, 1], [1, 1]),
+        vertex([-1, 1, 1], [0, 1]),
+        // bottom (0, 0, -1)
+        vertex([-1, 1, -1], [1, 0]),
+        vertex([1, 1, -1], [0, 0]),
+        vertex([1, -1, -1], [0, 1]),
+        vertex([-1, -1, -1], [1, 1]),
+        // right (1, 0, 0)
+        vertex([1, -1, -1], [0, 0]),
+        vertex([1, 1, -1], [1, 0]),
+        vertex([1, 1, 1], [1, 1]),
+        vertex([1, -1, 1], [0, 1]),
+        // left (-1, 0, 0)
+        vertex([-1, -1, 1], [1, 0]),
+        vertex([-1, 1, 1], [0, 0]),
+        vertex([-1, 1, -1], [0, 1]),
+        vertex([-1, -1, -1], [1, 1]),
+        // front (0, 1, 0)
+        vertex([1, 1, -1], [1, 0]),
+        vertex([-1, 1, -1], [0, 0]),
+        vertex([-1, 1, 1], [0, 1]),
+        vertex([1, 1, 1], [1, 1]),
+        // back (0, -1, 0)
+        vertex([1, -1, 1], [0, 0]),
+        vertex([-1, -1, 1], [1, 0]),
+        vertex([-1, -1, -1], [1, 1]),
+        vertex([1, -1, -1], [0, 1]),
+    ];
+
+    let index_data: &[u16] = &[
+        0, 1, 2, 2, 3, 0, // top
+        4, 5, 6, 6, 7, 4, // bottom
+        8, 9, 10, 10, 11, 8, // right
+        12, 13, 14, 14, 15, 12, // left
+        16, 17, 18, 18, 19, 16, // front
+        20, 21, 22, 22, 23, 20, // back
+    ];
+
+    (vertex_data.to_vec(), index_data.to_vec())
+}
 
 async fn run(event_loop: EventLoop<()>, window: Window) {
     let size = window.inner_size();
@@ -91,7 +154,48 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
         ..Default::default()
     });
 
-    // Load the shaders from disk
+    // Create the vertex and index buffers
+    let vertex_size = mem::size_of::<Vertex>();
+    let (vertex_data, index_data) = create_vertices();
+
+    let vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("Vertex Buffer"),
+        contents: bytemuck::cast_slice(&vertex_data),
+        usage: wgpu::BufferUsages::VERTEX,
+    });
+
+    let index_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("Index Buffer"),
+        contents: bytemuck::cast_slice(&index_data),
+        usage: wgpu::BufferUsages::INDEX,
+    });
+
+    let blas_geo_size_desc = wgpu::BlasTriangleGeometrySizeDescriptor {
+        vertex_format: wgpu::VertexFormat::Float32x4,
+        vertex_count: vertex_data.size(),
+        index_format: Some(wgpu::IndexFormat::Uint16),
+        index_count: Some(index_data.size()),
+        flags: wgpu::AccelerationStructureGeometryFlags::OPAQUE,
+    };
+
+    let blas = device.create_blas(
+        &wgpu::CreateBlasDescriptor {
+            label: None,
+            flags: wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE,
+            update_mode: wgpu::AccelerationStructureUpdateMode::Build,
+        },
+        wgpu::BlasGeometrySizeDescriptors::Triangles {
+            desc: [blas_geo_size_desc.clone()],
+        },
+    );
+
+    let tlas = device.create_tlas(&wgpu::CreateTlasDescriptor {
+        label: None,
+        flags: wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE,
+        update_mode: wgpu::AccelerationStructureUpdateMode::Build,
+        max_instances: 1,
+    });
+
     let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some("rt_computer"),
         source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
