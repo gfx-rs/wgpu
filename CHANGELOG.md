@@ -82,6 +82,21 @@ The following `Features` have been renamed.
 
 By @teoxoy in [#3534](https://github.com/gfx-rs/wgpu/pull/3534)
 
+#### Anisotropic Filtering
+
+Anisotropic filtering has been brought in line with the spec. The anisotropic clamp is now a u16 (was a `Option<u8>`) which must be at least 1.
+
+If the anisotropy clamp is not 1, all the filters in a sampler must be `Linear`.
+
+```diff
+SamplerDescriptor {
+-    anisotropic_clamp: None,
++    anisotropic_clamp: 1,
+}
+```
+
+By @cwfitzgerald in [#3610](https://github.com/gfx-rs/wgpu/pull/3610).
+
 #### General
 
 - Change type of `mip_level_count` and `array_layer_count` (members of `TextureViewDescriptor` and `ImageSubresourceRange`) from `Option<NonZeroU32>` to `Option<u32>`. By @teoxoy in [#3445](https://github.com/gfx-rs/wgpu/pull/3445)
@@ -128,6 +143,9 @@ By @teoxoy in [#3534](https://github.com/gfx-rs/wgpu/pull/3534)
 
 ### Bug Fixes
 
+#### Metal
+- Fix incorrect mipmap being sampled when using `MinLod <= 0.0` and `MaxLod >= 32.0` or when the fragment shader samples different Lods in the same quad. By @cwfitzgerald in [#3610](https://github.com/gfx-rs/wgpu/pull/3610).
+
 #### DX12
 
 - Fix DXC validation issues when using a custom `dxil_path`. By @Elabajaba in [#3434](https://github.com/gfx-rs/wgpu/pull/3434)
@@ -139,12 +157,16 @@ By @teoxoy in [#3534](https://github.com/gfx-rs/wgpu/pull/3534)
 - [gles] fix: Set FORCE_POINT_SIZE if it is vertex shader with mesh consist of point list. By @REASY in [3440](https://github.com/gfx-rs/wgpu/pull/3440)
 - [gles] fix: enable `WEBGL_debug_renderer_info` before querying unmasked vendor/renderer to avoid crashing on emscripten in [#3519](https://github.com/gfx-rs/wgpu/pull/3519)
 - Remove unwraps inside `surface.configure`. By @cwfitzgerald in [#3585](https://github.com/gfx-rs/wgpu/pull/3585)
+- Reset all queue state between command buffers in a submit. By @jleibs [#3589](https://github.com/gfx-rs/wgpu/pull/3589)
+- Reset the state of `SAMPLE_ALPHA_TO_COVERAGE` on queue reset. By @jleibs [#3589](https://github.com/gfx-rs/wgpu/pull/3589)
+- Fix `Vertex buffer is not big enough for the draw call.` for ANGLE/Web when rendering with instance attributes on a single instance. By @wumpf in [#3597](https://github.com/gfx-rs/wgpu/pull/3597)
 
 #### General
 
 - `copyTextureToTexture` src/dst aspects must both refer to all aspects of src/dst format. By @teoxoy in [#3431](https://github.com/gfx-rs/wgpu/pull/3431)
 - Validate before extracting texture selectors. By @teoxoy in [#3487](https://github.com/gfx-rs/wgpu/pull/3487)
 - Fix fatal errors (those which panic even if an error handler is set) not including all of the details. By @kpreid in [#3563](https://github.com/gfx-rs/wgpu/pull/3563)
+- Validate shader location clashes. By @emilk in [#3613](https://github.com/gfx-rs/wgpu/pull/3613)
 
 #### Vulkan
 
@@ -153,6 +175,7 @@ By @teoxoy in [#3534](https://github.com/gfx-rs/wgpu/pull/3534)
 #### Metal
 - `create_texture` returns an error if `new_texture` returns NULL. By @jinleili in [#3554](https://github.com/gfx-rs/wgpu/pull/3554)
 - Fix definition of `NSOperatingSystemVersion` to avoid potential crashes. By @grovesNL in [#3557](https://github.com/gfx-rs/wgpu/pull/3557)
+- Fix shader bounds checking being ignored. By @FL33TW00D in [#3603](https://github.com/gfx-rs/wgpu/pull/3603)
 
 ## wgpu-0.15.0 (2023-01-25)
 

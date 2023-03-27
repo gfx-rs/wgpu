@@ -75,11 +75,25 @@ impl super::Device {
             },
         };
 
+        let mut temp_options;
+        let options = if !stage.module.runtime_checks {
+            temp_options = layout.naga_options.clone();
+            temp_options.bounds_check_policies = naga::proc::BoundsCheckPolicies {
+                index: naga::proc::BoundsCheckPolicy::Unchecked,
+                buffer: naga::proc::BoundsCheckPolicy::Unchecked,
+                image: naga::proc::BoundsCheckPolicy::Unchecked,
+                binding_array: naga::proc::BoundsCheckPolicy::Unchecked,
+            };
+            &temp_options
+        } else {
+            &layout.naga_options
+        };
+
         let module = &stage.module.naga.module;
         let (source, info) = naga::back::msl::write_string(
             module,
             &stage.module.naga.info,
-            &layout.naga_options,
+            options,
             &pipeline_options,
         )
         .map_err(|e| crate::PipelineError::Linkage(stage_bit, format!("MSL: {:?}", e)))?;
@@ -409,14 +423,13 @@ impl crate::Device<super::Api> for super::Device {
         &self,
         desc: &crate::SamplerDescriptor,
     ) -> DeviceResult<super::Sampler> {
-        let caps = &self.shared.private_caps;
         objc::rc::autoreleasepool(|| {
             let descriptor = metal::SamplerDescriptor::new();
 
             descriptor.set_min_filter(conv::map_filter_mode(desc.min_filter));
             descriptor.set_mag_filter(conv::map_filter_mode(desc.mag_filter));
             descriptor.set_mip_filter(match desc.mipmap_filter {
-                wgt::FilterMode::Nearest if desc.lod_clamp.is_none() => {
+                wgt::FilterMode::Nearest if desc.lod_clamp == (0.0..0.0) => {
                     metal::MTLSamplerMipFilter::NotMipmapped
                 }
                 wgt::FilterMode::Nearest => metal::MTLSamplerMipFilter::Nearest,
@@ -428,18 +441,11 @@ impl crate::Device<super::Api> for super::Device {
             descriptor.set_address_mode_t(conv::map_address_mode(t));
             descriptor.set_address_mode_r(conv::map_address_mode(r));
 
-            if let Some(aniso) = desc.anisotropy_clamp {
-                descriptor.set_max_anisotropy(aniso.get() as _);
-            }
+            // Anisotropy is always supported on mac up to 16x
+            descriptor.set_max_anisotropy(desc.anisotropy_clamp as _);
 
-            if let Some(ref range) = desc.lod_clamp {
-                descriptor.set_lod_min_clamp(range.start);
-                descriptor.set_lod_max_clamp(range.end);
-            }
-
-            if caps.sampler_lod_average {
-                descriptor.set_lod_average(true); // optimization
-            }
+            descriptor.set_lod_min_clamp(desc.lod_clamp.start);
+            descriptor.set_lod_max_clamp(desc.lod_clamp.end);
 
             if let Some(fun) = desc.compare {
                 descriptor.set_compare_function(conv::map_compare_function(fun));
@@ -779,11 +785,14 @@ impl crate::Device<super::Api> for super::Device {
 
     unsafe fn create_shader_module(
         &self,
-        _desc: &crate::ShaderModuleDescriptor,
+        desc: &crate::ShaderModuleDescriptor,
         shader: crate::ShaderInput,
     ) -> Result<super::ShaderModule, crate::ShaderError> {
         match shader {
-            crate::ShaderInput::Naga(naga) => Ok(super::ShaderModule { naga }),
+            crate::ShaderInput::Naga(naga) => Ok(super::ShaderModule {
+                naga,
+                runtime_checks: desc.runtime_checks,
+            }),
             crate::ShaderInput::SpirV(_) => {
                 panic!("SPIRV_SHADER_PASSTHROUGH is not enabled for this backend")
             }

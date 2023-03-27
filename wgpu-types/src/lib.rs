@@ -5328,7 +5328,7 @@ pub enum TextureSampleType {
     /// Example WGSL syntax:
     /// ```rust,ignore
     /// @group(0) @binding(0)
-    /// var t: texure_2d<f32>;
+    /// var t: texture_2d<f32>;
     /// ```
     ///
     /// Example GLSL syntax:

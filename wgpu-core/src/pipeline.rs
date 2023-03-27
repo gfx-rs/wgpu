@@ -352,6 +352,8 @@ pub enum CreateRenderPipelineError {
         location: wgt::ShaderLocation,
         offset: wgt::BufferAddress,
     },
+    #[error("Two or more vertex attributes were assigned to the same location in the shader: {0}")]
+    ShaderLocationClash(u32),
     #[error("Strip index format was not set to None but to {strip_index_format:?} while using the non-strip topology {topology:?}")]
     StripIndexFormatForNonStripTopology {
         strip_index_format: Option<wgt::IndexFormat>,
