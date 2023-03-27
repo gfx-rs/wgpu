@@ -6162,3 +6162,103 @@ impl Default for InstanceDescriptor {
         }
     }
 }
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "trace", derive(serde::Serialize))]
+#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
+pub struct BlasTriangleGeometrySizeDescriptor {
+    pub vertex_format: VertexFormat,
+    pub vertex_count: u32,
+    pub index_format: Option<IndexFormat>,
+    pub index_count: Option<u32>,
+    pub flags: AccelerationStructureGeometryFlags,
+}
+
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "trace", derive(serde::Serialize))]
+#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
+pub enum BlasGeometrySizeDescriptors {
+    Triangles {
+        desc: Vec<BlasTriangleGeometrySizeDescriptor>,
+    },
+}
+
+#[repr(u8)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "trace", derive(serde::Serialize))]
+#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
+pub enum AccelerationStructureUpdateMode {
+    Build,
+    PreferUpdate,
+}
+
+#[repr(C)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "trace", derive(Serialize))]
+#[cfg_attr(feature = "replay", derive(Deserialize))]
+pub struct CreateBlasDescriptor<L> {
+    pub label: L,
+    pub flags: AccelerationStructureFlags,
+    pub update_mode: AccelerationStructureUpdateMode,
+}
+
+impl<L> CreateBlasDescriptor<L> {
+    /// Takes a closure and maps the label of the blas descriptor into another.
+    pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> CreateBlasDescriptor<K> {
+        CreateBlasDescriptor {
+            label: fun(&self.label),
+            flags: self.flags,
+            update_mode: self.update_mode,
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "trace", derive(Serialize))]
+#[cfg_attr(feature = "replay", derive(Deserialize))]
+pub struct CreateTlasDescriptor<L> {
+    pub label: L,
+    pub max_instances: u32,
+    pub flags: AccelerationStructureFlags,
+    pub update_mode: AccelerationStructureUpdateMode,
+}
+
+impl<L> CreateTlasDescriptor<L> {
+    /// Takes a closure and maps the label of the blas descriptor into another.
+    pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> CreateTlasDescriptor<K> {
+        CreateTlasDescriptor {
+            label: fun(&self.label),
+            flags: self.flags,
+            update_mode: self.update_mode,
+            max_instances: self.max_instances,
+        }
+    }
+}
+
+// Todo let hal use these directly
+bitflags::bitflags!(
+    /// Flags for acceleration structures
+    pub struct AccelerationStructureFlags: u8 {
+        /// Allow for incremental updates (no change in size)
+        const ALLOW_UPDATE = 1 << 0;
+        /// Allow the acceleration structure to be compacted in a copy operation
+        const ALLOW_COMPACTION = 1 << 1;
+        /// Optimize for fast ray tracing performance
+        const PREFER_FAST_TRACE = 1 << 2;
+        /// Optimize for fast build time
+        const PREFER_FAST_BUILD = 1 << 3;
+        /// Optimize for low memory footprint (scratch and output)
+        const LOW_MEMORY = 1 << 4;
+    }
+);
+impl_bitflags!(AccelerationStructureFlags);
+
+// Todo let hal use these directly
+bitflags::bitflags!(
+    pub struct AccelerationStructureGeometryFlags: u8 {
+        const OPAQUE = 1 << 0;
+        const NO_DUPLICATE_ANY_HIT_INVOCATION = 1 << 1;
+    }
+);
+impl_bitflags!(AccelerationStructureGeometryFlags);

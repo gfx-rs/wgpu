@@ -3313,6 +3313,44 @@ impl<A: HalApi> Device<A> {
             desc: desc.map_label(|_| ()),
         })
     }
+
+    fn create_blas(
+        &self,
+        self_id: id::DeviceId,
+        desc: &resource::BlasDescriptor,
+    ) -> Result<resource::Blas<A>, resource::CreateBlasError> {
+        debug_assert_eq!(self_id.backend(), A::VARIANT);
+
+        // TODO
+
+        Ok(resource::Blas {
+            raw: None,
+            device_id: Stored {
+                value: id::Valid(self_id),
+                ref_count: self.life_guard.add_ref(),
+            },
+            life_guard: LifeGuard::new(desc.label.borrow_or_default()),
+        })
+    }
+
+    fn create_tlas(
+        &self,
+        self_id: id::DeviceId,
+        desc: &resource::TlasDescriptor,
+    ) -> Result<resource::Tlas<A>, resource::CreateTlasError> {
+        debug_assert_eq!(self_id.backend(), A::VARIANT);
+
+        // TODO
+
+        Ok(resource::Tlas {
+            raw: None,
+            device_id: Stored {
+                value: id::Valid(self_id),
+                ref_count: self.life_guard.add_ref(),
+            },
+            life_guard: LifeGuard::new(desc.label.borrow_or_default()),
+        })
+    }
 }
 
 impl<A: HalApi> Device<A> {
@@ -6063,5 +6101,89 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             operation.callback.call(status);
         }
         Ok(())
+    }
+
+    pub fn device_create_blas<A: HalApi>(
+        &self,
+        device_id: id::DeviceId,
+        desc: &resource::BlasDescriptor,
+        id_in: Input<G, id::BlasId>,
+    ) -> (id::BlasId, Option<resource::CreateBlasError>) {
+        profiling::scope!("Device::create_blas");
+
+        let hub = A::hub(self);
+        let mut token = Token::root();
+        let fid = hub.blas_s.prepare(id_in);
+
+        let (device_guard, mut token) = hub.devices.read(&mut token);
+        let error = loop {
+            let device = match device_guard.get(device_id) {
+                Ok(device) => device,
+                Err(_) => break DeviceError::Invalid.into(),
+            };
+            // #[cfg(feature = "trace")]
+            // if let Some(ref trace) = device.trace {
+            //     let mut desc = desc.clone();
+            //     trace
+            //         .lock()
+            //         .add(trace::Action::CreateBlas(fid.id(), desc));
+            // }
+
+            let mut blas = match device.create_blas(device_id, desc) {
+                Ok(blas) => blas,
+                Err(e) => break e,
+            };
+            let ref_count = blas.life_guard.add_ref();
+
+            let id = fid.assign(blas, &mut token);
+            log::info!("Created blas {:?} with {:?}", id, desc);
+
+            return (id.0, None);
+        };
+
+        let id = fid.assign_error(desc.label.borrow_or_default(), &mut token);
+        (id, Some(error))
+    }
+
+    pub fn device_create_tlas<A: HalApi>(
+        &self,
+        device_id: id::DeviceId,
+        desc: &resource::TlasDescriptor,
+        id_in: Input<G, id::TlasId>,
+    ) -> (id::TlasId, Option<resource::CreateTlasError>) {
+        profiling::scope!("Device::create_tlas");
+
+        let hub = A::hub(self);
+        let mut token = Token::root();
+        let fid = hub.tlas_s.prepare(id_in);
+
+        let (device_guard, mut token) = hub.devices.read(&mut token);
+        let error = loop {
+            let device = match device_guard.get(device_id) {
+                Ok(device) => device,
+                Err(_) => break DeviceError::Invalid.into(),
+            };
+            // #[cfg(feature = "trace")]
+            // if let Some(ref trace) = device.trace {
+            //     let mut desc = desc.clone();
+            //     trace
+            //         .lock()
+            //         .add(trace::Action::CreateTlas(fid.id(), desc));
+            // }
+
+            let mut tlas = match device.create_tlas(device_id, desc) {
+                Ok(tlas) => tlas,
+                Err(e) => break e,
+            };
+            let ref_count = tlas.life_guard.add_ref();
+
+            let id = fid.assign(tlas, &mut token);
+            log::info!("Created blas {:?} with {:?}", id, desc);
+
+            return (id.0, None);
+        };
+
+        let id = fid.assign_error(desc.label.borrow_or_default(), &mut token);
+        (id, Some(error))
     }
 }

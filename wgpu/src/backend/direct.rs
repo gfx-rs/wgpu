@@ -470,6 +470,16 @@ pub struct CommandEncoder {
     open: bool,
 }
 
+#[derive(Debug)]
+pub struct Blas {
+    error_sink: ErrorSink,
+}
+
+#[derive(Debug)]
+pub struct Tlas {
+    error_sink: ErrorSink,
+}
+
 impl crate::Context for Context {
     type AdapterId = wgc::id::AdapterId;
     type AdapterData = ();
@@ -519,6 +529,11 @@ impl crate::Context for Context {
     type SubmissionIndexData = wgc::device::queue::WrappedSubmissionIndex;
 
     type RequestAdapterFuture = Ready<Option<(Self::AdapterId, Self::AdapterData)>>;
+
+    type BlasId = wgc::id::BlasId;
+    type BlasData = Blas;
+    type TlasId = wgc::id::TlasId;
+    type TlasData = Tlas;
 
     #[allow(clippy::type_complexity)]
     type RequestDeviceFuture = Ready<
@@ -2935,6 +2950,70 @@ impl crate::Context for Context {
                 temp_render_bundles.len(),
             )
         }
+    }
+
+    fn device_create_blas(
+        &self,
+        device: &Self::DeviceId,
+        device_data: &Self::DeviceData,
+        desc: &crate::CreateBlasDescriptor<'_>,
+    ) -> (Self::BlasId, Self::BlasData) {
+        let global = &self.0;
+        let (id, error) = wgc::gfx_select!(device => global.device_create_blas(
+            *device,
+            &desc.map_label(|l| l.map(Borrowed)),
+            ()
+        ));
+        if let Some(cause) = error {
+            self.handle_error(
+                &device_data.error_sink,
+                cause,
+                LABEL,
+                desc.label,
+                "Device::create_blas",
+            );
+        }
+        let x: Self::BufferData = Buffer {
+            error_sink: Arc::clone(&device_data.error_sink),
+        };
+        let x: Self::BlasData = Blas {
+            error_sink: Arc::clone(&device_data.error_sink),
+        };
+        (
+            id,
+            Blas {
+                error_sink: Arc::clone(&device_data.error_sink),
+            },
+        )
+    }
+
+    fn device_create_tlas(
+        &self,
+        device: &Self::DeviceId,
+        device_data: &Self::DeviceData,
+        desc: &crate::CreateTlasDescriptor<'_>,
+    ) -> (Self::TlasId, Self::TlasData) {
+        let global = &self.0;
+        let (id, error) = wgc::gfx_select!(device => global.device_create_tlas(
+            *device,
+            &desc.map_label(|l| l.map(Borrowed)),
+            ()
+        ));
+        if let Some(cause) = error {
+            self.handle_error(
+                &device_data.error_sink,
+                cause,
+                LABEL,
+                desc.label,
+                "Device::create_blas",
+            );
+        }
+        (
+            id,
+            Tlas {
+                error_sink: Arc::clone(&device_data.error_sink),
+            },
+        )
     }
 }
 

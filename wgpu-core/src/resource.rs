@@ -795,3 +795,54 @@ pub enum DestroyError {
     #[error("Resource is already destroyed")]
     AlreadyDestroyed,
 }
+
+pub type BlasDescriptor<'a> = wgt::CreateBlasDescriptor<Label<'a>>;
+pub type TlasDescriptor<'a> = wgt::CreateTlasDescriptor<Label<'a>>;
+
+pub struct Blas<A: hal::Api> {
+    pub(crate) raw: Option<A::Buffer>,
+    pub(crate) device_id: Stored<DeviceId>,
+    pub(crate) life_guard: LifeGuard,
+}
+
+impl<A: hal::Api> Resource for Blas<A> {
+    const TYPE: &'static str = "Blas";
+
+    fn life_guard(&self) -> &LifeGuard {
+        &self.life_guard
+    }
+}
+
+pub struct Tlas<A: hal::Api> {
+    pub(crate) raw: Option<A::Buffer>,
+    pub(crate) device_id: Stored<DeviceId>,
+    pub(crate) life_guard: LifeGuard,
+}
+
+impl<A: hal::Api> Resource for Tlas<A> {
+    const TYPE: &'static str = "Tlas";
+
+    fn life_guard(&self) -> &LifeGuard {
+        &self.life_guard
+    }
+}
+
+#[derive(Clone, Debug, Error)]
+pub enum CreateBlasError {
+    #[error(transparent)]
+    Device(#[from] DeviceError),
+    #[error(transparent)]
+    CreateBufferError(#[from] CreateBufferError),
+    #[error("Unimplemented Blas error: this error is not yet implemented")]
+    Unimplemented,
+}
+
+#[derive(Clone, Debug, Error)]
+pub enum CreateTlasError {
+    #[error(transparent)]
+    Device(#[from] DeviceError),
+    #[error(transparent)]
+    CreateBufferError(#[from] CreateBufferError),
+    #[error("Unimplemented Tlas error: this error is not yet implemented")]
+    Unimplemented,
+}

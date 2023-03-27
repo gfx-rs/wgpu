@@ -2243,6 +2243,30 @@ impl Device {
         DynContext::device_stop_capture(&*self.context, &self.id, self.data.as_ref())
     }
 
+    /// Creates a [`Blas`].
+    pub fn create_blas(&self, desc: &CreateBlasDescriptor) -> Blas {
+        let (id, data) =
+            DynContext::device_create_blas(&*self.context, &self.id, self.data.as_ref(), desc);
+
+        Blas {
+            context: Arc::clone(&self.context),
+            id,
+            data,
+        }
+    }
+
+    /// Creates a [`Blas`].
+    pub fn create_tlas(&self, desc: &CreateTlasDescriptor) -> Blas {
+        let (id, data) =
+            DynContext::device_create_tlas(&*self.context, &self.id, self.data.as_ref(), desc);
+
+        Blas {
+            context: Arc::clone(&self.context),
+            id,
+            data,
+        }
+    }
+
     /// Apply a callback to this `Device`'s underlying backend device.
     ///
     /// If this `Device` is implemented by the backend API given by `A` (Vulkan,
@@ -4477,3 +4501,53 @@ impl Display for Error {
         }
     }
 }
+
+pub type BlasTriangleGeometrySizeDescriptor = wgt::BlasTriangleGeometrySizeDescriptor;
+static_assertions::assert_impl_all!(BlasTriangleGeometrySizeDescriptor: Send, Sync);
+
+pub type BlasGeometrySizeDescriptors = wgt::BlasGeometrySizeDescriptors;
+static_assertions::assert_impl_all!(BlasGeometrySizeDescriptors: Send, Sync);
+
+pub type AccelerationStructureFlags = wgt::AccelerationStructureFlags;
+static_assertions::assert_impl_all!(AccelerationStructureFlags: Send, Sync);
+
+pub type AccelerationStructureGeometryFlags = wgt::AccelerationStructureGeometryFlags;
+static_assertions::assert_impl_all!(AccelerationStructureGeometryFlags: Send, Sync);
+
+pub type AccelerationStructureUpdateMode = wgt::AccelerationStructureUpdateMode;
+static_assertions::assert_impl_all!(AccelerationStructureUpdateMode: Send, Sync);
+
+pub type CreateBlasDescriptor<'a> = wgt::CreateBlasDescriptor<Label<'a>>;
+static_assertions::assert_impl_all!(CreateBlasDescriptor: Send, Sync);
+
+pub type CreateTlasDescriptor<'a> = wgt::CreateTlasDescriptor<Label<'a>>;
+static_assertions::assert_impl_all!(CreateTlasDescriptor: Send, Sync);
+
+#[derive(Debug)]
+pub struct BlasTriangleGeometry {
+    pub size: BlasTriangleGeometrySizeDescriptor,
+    pub vertex_buffer: Buffer,
+    pub first_vertex: u32,
+    pub vertex_stride: wgt::BufferAddress,
+    pub index_buffer: Option<Buffer>,
+    pub index_buffer_offset: Option<wgt::BufferAddress>,
+    pub transform_buffer: Option<Buffer>,
+    pub transform_buffer_offset: Option<wgt::BufferAddress>,
+}
+static_assertions::assert_impl_all!(BlasTriangleGeometry: Send, Sync);
+
+#[derive(Debug)]
+pub struct Blas {
+    context: Arc<C>,
+    id: ObjectId,
+    data: Box<Data>,
+}
+static_assertions::assert_impl_all!(Blas: Send, Sync);
+
+#[derive(Debug)]
+pub struct Tlas {
+    context: Arc<C>,
+    id: ObjectId,
+    data: Box<Data>,
+}
+static_assertions::assert_impl_all!(Tlas: Send, Sync);

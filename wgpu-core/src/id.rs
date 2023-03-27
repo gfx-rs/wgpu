@@ -229,6 +229,10 @@ pub type RenderBundleEncoderId = *mut crate::command::RenderBundleEncoder;
 pub type RenderBundleId = Id<crate::command::RenderBundle<Dummy>>;
 pub type QuerySetId = Id<crate::resource::QuerySet<Dummy>>;
 
+// Ray tracing
+pub type BlasId = Id<crate::resource::Blas<Dummy>>;
+pub type TlasId = Id<crate::resource::Tlas<Dummy>>;
+
 #[test]
 fn test_id_backend() {
     for &b in &[

@@ -8,14 +8,14 @@ use wgt::{
 };
 
 use crate::{
-    BindGroupDescriptor, BindGroupLayoutDescriptor, Buffer, BufferAsyncError, BufferDescriptor,
-    CommandEncoderDescriptor, ComputePassDescriptor, ComputePipelineDescriptor, DeviceDescriptor,
-    Error, ErrorFilter, ImageCopyBuffer, ImageCopyTexture, Maintain, MapMode,
-    PipelineLayoutDescriptor, QuerySetDescriptor, RenderBundleDescriptor,
-    RenderBundleEncoderDescriptor, RenderPassDescriptor, RenderPipelineDescriptor,
-    RequestAdapterOptions, RequestDeviceError, SamplerDescriptor, ShaderModuleDescriptor,
-    ShaderModuleDescriptorSpirV, Texture, TextureDescriptor, TextureViewDescriptor,
-    UncapturedErrorHandler,
+    BindGroupDescriptor, BindGroupLayoutDescriptor, Blas, Buffer, BufferAsyncError,
+    BufferDescriptor, CommandEncoderDescriptor, ComputePassDescriptor, ComputePipelineDescriptor,
+    CreateBlasDescriptor, CreateTlasDescriptor, DeviceDescriptor, Error, ErrorFilter,
+    ImageCopyBuffer, ImageCopyTexture, Maintain, MapMode, PipelineLayoutDescriptor,
+    QuerySetDescriptor, RenderBundleDescriptor, RenderBundleEncoderDescriptor,
+    RenderPassDescriptor, RenderPipelineDescriptor, RequestAdapterOptions, RequestDeviceError,
+    SamplerDescriptor, ShaderModuleDescriptor, ShaderModuleDescriptorSpirV, Texture,
+    TextureDescriptor, TextureViewDescriptor, Tlas, UncapturedErrorHandler,
 };
 
 /// Meta trait for an id tracked by a context.
@@ -73,6 +73,11 @@ pub trait Context: Debug + Send + Sized + Sync {
     type RenderBundleData: ContextData;
     type SurfaceId: ContextId + Send + Sync;
     type SurfaceData: ContextData;
+
+    type BlasId: ContextId + Send + Sync;
+    type BlasData: ContextData;
+    type TlasId: ContextId + Send + Sync;
+    type TlasData: ContextData;
 
     type SurfaceOutputDetail: Send + Sync + 'static;
     type SubmissionIndex: ContextId + Clone + Copy + Send + Sync;
@@ -989,6 +994,19 @@ pub trait Context: Debug + Send + Sized + Sync {
         pass_data: &mut Self::RenderPassData,
         render_bundles: Box<dyn Iterator<Item = Self::RenderBundleId> + 'a>,
     );
+
+    fn device_create_blas(
+        &self,
+        device: &Self::DeviceId,
+        device_data: &Self::DeviceData,
+        desc: &CreateBlasDescriptor,
+    ) -> (Self::BlasId, Self::BlasData);
+    fn device_create_tlas(
+        &self,
+        device: &Self::DeviceId,
+        device_data: &Self::DeviceData,
+        desc: &CreateTlasDescriptor,
+    ) -> (Self::TlasId, Self::TlasData);
 }
 
 /// Object id.
@@ -1904,6 +1922,18 @@ pub(crate) trait DynContext: Debug + Send + Sync {
         pass_data: &mut crate::Data,
         render_bundles: Box<dyn Iterator<Item = &'a ObjectId> + 'a>,
     );
+    fn device_create_blas(
+        &self,
+        device: &ObjectId,
+        device_data: &crate::Data,
+        desc: &crate::CreateBlasDescriptor,
+    ) -> (ObjectId, Box<crate::Data>);
+    fn device_create_tlas(
+        &self,
+        device: &ObjectId,
+        device_data: &crate::Data,
+        desc: &crate::CreateTlasDescriptor,
+    ) -> (ObjectId, Box<crate::Data>);
 }
 
 // Blanket impl of DynContext for all types which implement Context.
@@ -3853,6 +3883,30 @@ where
                 .map(|id| <T::RenderBundleId>::from(*id)),
         );
         Context::render_pass_execute_bundles(self, &mut pass, pass_data, render_bundles)
+    }
+
+    fn device_create_blas(
+        &self,
+        device: &ObjectId,
+        device_data: &crate::Data,
+        desc: &crate::CreateBlasDescriptor,
+    ) -> (ObjectId, Box<crate::Data>) {
+        let device = <T::DeviceId>::from(*device);
+        let device_data = downcast_ref(device_data);
+        let (blas, data) = Context::device_create_blas(self, &device, device_data, desc);
+        (blas.into(), Box::new(data) as _)
+    }
+
+    fn device_create_tlas(
+        &self,
+        device: &ObjectId,
+        device_data: &crate::Data,
+        desc: &crate::CreateTlasDescriptor,
+    ) -> (ObjectId, Box<crate::Data>) {
+        let device = <T::DeviceId>::from(*device);
+        let device_data = downcast_ref(device_data);
+        let (tlas, data) = Context::device_create_tlas(self, &device, device_data, desc);
+        (tlas.into(), Box::new(data) as _)
     }
 }
 

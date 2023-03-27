@@ -156,7 +156,10 @@ use crate::{
     id,
     instance::{Adapter, HalSurface, Instance, Surface},
     pipeline::{ComputePipeline, RenderPipeline, ShaderModule},
-    resource::{Buffer, QuerySet, Sampler, StagingBuffer, Texture, TextureClearMode, TextureView},
+    resource::{
+        Blas, Buffer, QuerySet, Sampler, StagingBuffer, Texture, TextureClearMode, TextureView,
+        Tlas,
+    },
     Epoch, Index,
 };
 
@@ -538,6 +541,11 @@ impl<A: HalApi> Access<Sampler<A>> for Root {}
 impl<A: HalApi> Access<Sampler<A>> for Device<A> {}
 impl<A: HalApi> Access<Sampler<A>> for TextureView<A> {}
 
+impl<A: HalApi> Access<Blas<A>> for Root {}
+impl<A: HalApi> Access<Blas<A>> for Device<A> {}
+impl<A: HalApi> Access<Tlas<A>> for Root {}
+impl<A: HalApi> Access<Tlas<A>> for Device<A> {}
+
 #[cfg(debug_assertions)]
 thread_local! {
     static ACTIVE_TOKEN: Cell<u8> = Cell::new(0);
@@ -668,6 +676,8 @@ pub trait GlobalIdentityHandlerFactory:
     + IdentityHandlerFactory<id::TextureViewId>
     + IdentityHandlerFactory<id::SamplerId>
     + IdentityHandlerFactory<id::SurfaceId>
+    + IdentityHandlerFactory<id::BlasId>
+    + IdentityHandlerFactory<id::TlasId>
 {
 }
 
@@ -855,6 +865,8 @@ pub struct Hub<A: HalApi, F: GlobalIdentityHandlerFactory> {
     pub textures: Registry<Texture<A>, id::TextureId, F>,
     pub texture_views: Registry<TextureView<A>, id::TextureViewId, F>,
     pub samplers: Registry<Sampler<A>, id::SamplerId, F>,
+    pub blas_s: Registry<Blas<A>, id::BlasId, F>,
+    pub tlas_s: Registry<Tlas<A>, id::TlasId, F>,
 }
 
 impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<A, F> {
@@ -876,6 +888,8 @@ impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<A, F> {
             textures: Registry::new(A::VARIANT, factory),
             texture_views: Registry::new(A::VARIANT, factory),
             samplers: Registry::new(A::VARIANT, factory),
+            blas_s: Registry::new(A::VARIANT, factory),
+            tlas_s: Registry::new(A::VARIANT, factory),
         }
     }
 
