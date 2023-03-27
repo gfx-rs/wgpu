@@ -708,7 +708,7 @@ bitflags::bitflags! {
         /// - Vulkan
         ///
         /// This is a native-only feature.
-        const RAY_TRACING = 1 << 54;
+        const RAY_TRACING_ACCELERATION_STRUCTURE = 1 << 54;
 
         // 55..59 available
 
