@@ -740,6 +740,7 @@ impl super::PrivateCapabilities {
             } else {
                 None
             },
+            supports_timestamp_period: version.at_least((10, 15), (14, 0), os_is_mac),
         }
     }
 
@@ -765,7 +766,10 @@ impl super::PrivateCapabilities {
             | F::TEXTURE_FORMAT_16BIT_NORM
             | F::SHADER_F16
             | F::DEPTH32FLOAT_STENCIL8
-            | F::MULTI_DRAW_INDIRECT;
+            | F::MULTI_DRAW_INDIRECT
+            | F::TIMESTAMP_QUERY;
+
+        //TODO: if not on apple silicon, we can do timestamps within pass.
 
         features.set(F::TEXTURE_COMPRESSION_ASTC, self.format_astc);
         features.set(F::TEXTURE_COMPRESSION_ASTC_HDR, self.format_astc_hdr);

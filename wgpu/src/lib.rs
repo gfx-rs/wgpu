@@ -1169,16 +1169,49 @@ pub struct RenderPipelineDescriptor<'a> {
 }
 static_assertions::assert_impl_all!(RenderPipelineDescriptor: Send, Sync);
 
+/// Describes the location of a timestamp in a compute pass.
+///
+/// For use with [`ComputePassTimestampWrite`].
+///
+/// Corresponds to [WebGPU `GPUComputePassTimestampLocation`](
+/// https://gpuweb.github.io/gpuweb/#enumdef-gpucomputepasstimestamplocation).
+#[derive(Clone)]
+pub enum ComputePassTimestampLocation {
+    /// The timestamp is at the start of the compute pass.
+    Beginning,
+    /// The timestamp is at the end of the compute pass.
+    End,
+}
+
+/// Describes the timestamp writes of a compute pass.
+///
+/// For use with [`ComputePassDescriptor`].
+///
+/// Corresponds to [WebGPU `GPUComputePassTimestampWrite`](
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpucomputepasstimestampwrite).
+#[derive(Clone)]
+pub struct ComputePassTimestampWrite<'a> {
+    /// The query set to write to.
+    pub query_set: &'a QuerySet,
+    /// The index of the query to write to.
+    pub query_index: u32,
+    /// The location of the timestamp.
+    pub location: ComputePassTimestampLocation,
+}
+static_assertions::assert_impl_all!(ComputePassTimestampWrite: Send, Sync);
+
 /// Describes the attachments of a compute pass.
 ///
 /// For use with [`CommandEncoder::begin_compute_pass`].
 ///
 /// Corresponds to [WebGPU `GPUComputePassDescriptor`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpucomputepassdescriptor).
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Default)]
 pub struct ComputePassDescriptor<'a> {
     /// Debug label of the compute pass. This will show up in graphics debuggers for easy identification.
     pub label: Label<'a>,
+    /// A sequence of ComputePassTimestampWrite values define where and when timestamp values will be written for this pass.
+    pub timestamp_writes: &'a [ComputePassTimestampWrite<'a>],
 }
 static_assertions::assert_impl_all!(ComputePassDescriptor: Send, Sync);
 

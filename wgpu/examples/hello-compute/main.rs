@@ -1,8 +1,11 @@
 use std::{borrow::Cow, str::FromStr};
 use wgpu::util::DeviceExt;
+use wgpu::Buffer;
 
 // Indicates a u32 overflow in an intermediate Collatz value
 const OVERFLOW: u32 = 0xffffffff;
+
+const NUM_SAMPLES: u64 = 2;
 
 async fn run() {
     let numbers = if std::env::args().len() <= 1 {
@@ -46,7 +49,7 @@ async fn execute_gpu(numbers: &[u32]) -> Option<Vec<u32>> {
         .request_device(
             &wgpu::DeviceDescriptor {
                 label: None,
-                features: wgpu::Features::empty(),
+                features: wgpu::Features::empty() | wgpu::Features::TIMESTAMP_QUERY,
                 limits: wgpu::Limits::downlevel_defaults(),
             },
             None,
@@ -68,6 +71,14 @@ async fn execute_gpu_inner(
     queue: &wgpu::Queue,
     numbers: &[u32],
 ) -> Option<Vec<u32>> {
+    //Create query set
+    let query_set = device.create_query_set(&wgpu::QuerySetDescriptor {
+        label: Some("Timestamp query set"),
+        count: NUM_SAMPLES as u32,
+        ty: wgpu::QueryType::Timestamp,
+    });
+    let timestamp_period = queue.get_timestamp_period();
+
     // Loads the shader from WGSL
     let cs_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: None,
@@ -127,12 +138,27 @@ async fn execute_gpu_inner(
         }],
     });
 
+    let beginning = wgpu::ComputePassTimestampWrite {
+        query_set: &query_set,
+        query_index: 0,
+        location: wgpu::ComputePassTimestampLocation::Beginning,
+    };
+
+    let end = wgpu::ComputePassTimestampWrite {
+        query_set: &query_set,
+        query_index: 1,
+        location: wgpu::ComputePassTimestampLocation::End,
+    };
+
     // A command encoder executes one or many pipelines.
     // It is to WebGPU what a command buffer is to Vulkan.
     let mut encoder =
         device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
     {
-        let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor { label: None });
+        let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+            label: None,
+            timestamp_writes: &vec![beginning, end],
+        });
         cpass.set_pipeline(&compute_pipeline);
         cpass.set_bind_group(0, &bind_group, &[]);
         cpass.insert_debug_marker("compute collatz iterations");
@@ -141,6 +167,14 @@ async fn execute_gpu_inner(
     // Sets adds copy operation to command encoder.
     // Will copy data from storage buffer on GPU to staging buffer on CPU.
     encoder.copy_buffer_to_buffer(&storage_buffer, 0, &staging_buffer, 0, size);
+
+    let destination_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("destination buffer"),
+        size: (std::mem::size_of::<u64>() * NUM_SAMPLES as usize) as wgpu::BufferAddress,
+        usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+        mapped_at_creation: false,
+    });
+    encoder.resolve_query_set(&query_set, 0..NUM_SAMPLES as u32, &destination_buffer, 0);
 
     // Submits command encoder for processing
     queue.submit(Some(encoder.finish()));
@@ -157,7 +191,7 @@ async fn execute_gpu_inner(
     device.poll(wgpu::Maintain::Wait);
 
     // Awaits until `buffer_future` can be read from
-    if let Some(Ok(())) = receiver.receive().await {
+    let res = if let Some(Ok(())) = receiver.receive().await {
         // Gets contents of buffer
         let data = buffer_slice.get_mapped_range();
         // Since contents are got in bytes, this converts these bytes back to u32
@@ -175,8 +209,27 @@ async fn execute_gpu_inner(
         // Returns data from buffer
         Some(result)
     } else {
-        panic!("failed to run compute on gpu!")
-    }
+        None
+    };
+
+    destination_buffer
+        .slice(..)
+        .map_async(wgpu::MapMode::Read, |_| ());
+    device.poll(wgpu::Maintain::Wait);
+    resolve_timestamps(&destination_buffer, timestamp_period);
+
+    res
+}
+
+fn resolve_timestamps(destination_buffer: &Buffer, timestamp_period: f32) {
+    let timestamp_view = destination_buffer
+        .slice(..(std::mem::size_of::<u64>() * 2) as wgpu::BufferAddress)
+        .get_mapped_range();
+
+    let timestamps: &[u64] = bytemuck::cast_slice(&timestamp_view);
+    log::info!("Timestamps: {:?}", timestamps);
+    let elapsed_ns = (timestamps[1] - timestamps[0]) as f64 * timestamp_period as f64;
+    log::info!("Elapsed time: {:.2} μs", elapsed_ns / 1000.0);
 }
 
 fn main() {

@@ -1033,7 +1033,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
 
     // compute
 
-    unsafe fn begin_compute_pass(&mut self, desc: &crate::ComputePassDescriptor) {
+    unsafe fn begin_compute_pass(&mut self, desc: &crate::ComputePassDescriptor<super::Api>) {
         if let Some(label) = desc.label {
             let range = self.cmd_buffer.add_marker(label);
             self.cmd_buffer.commands.push(C::PushDebugGroup(range));

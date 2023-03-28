@@ -1812,12 +1812,30 @@ impl crate::Context for Context {
         _encoder_data: &Self::CommandEncoderData,
         desc: &ComputePassDescriptor,
     ) -> (Self::ComputePassId, Self::ComputePassData) {
+        let timestamp_writes = desc
+            .timestamp_writes
+            .as_ref()
+            .iter()
+            .map(|t| wgc::command::ComputePassTimestampWrite {
+                query_set: t.query_set.id.into(),
+                query_index: t.query_index,
+                location: match t.location {
+                    crate::ComputePassTimestampLocation::Beginning => {
+                        wgc::command::ComputePassTimestampLocation::Beginning
+                    }
+                    crate::ComputePassTimestampLocation::End => {
+                        wgc::command::ComputePassTimestampLocation::End
+                    }
+                },
+            })
+            .collect::<Vec<_>>();
         (
             Unused,
             wgc::command::ComputePass::new(
                 *encoder,
                 &wgc::command::ComputePassDescriptor {
                     label: desc.label.map(Borrowed),
+                    timestamp_writes: Borrowed(&timestamp_writes),
                 },
             ),
         )

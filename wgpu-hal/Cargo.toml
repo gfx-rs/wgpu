@@ -102,7 +102,7 @@ d3d12 = { version = "0.6.0", git = "https://github.com/gfx-rs/d3d12-rs", rev = "
 block = { version = "0.1", optional = true }
 foreign-types = { version = "0.3", optional = true }
 
-metal = "0.24.0"
+metal = "0.25.0"
 objc = "0.2.5"
 core-graphics-types = "0.1"
 

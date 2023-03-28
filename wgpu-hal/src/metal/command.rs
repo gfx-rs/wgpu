@@ -1,5 +1,7 @@
+use crate::ComputePassTimestampLocation;
+
 use super::{conv, AsNative};
-use std::{borrow::Cow, mem, ops::Range};
+use std::{borrow::Cow, collections::HashMap, mem, ops::Range};
 
 // has to match `Temp::binding_sizes`
 const WORD_SIZE: usize = 4;
@@ -339,14 +341,27 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         _: wgt::BufferSize, // Metal doesn't support queries that are bigger than a single element are not supported
     ) {
         let encoder = self.enter_blit();
-        let size = (range.end - range.start) as u64 * crate::QUERY_SIZE;
-        encoder.copy_from_buffer(
-            &set.raw_buffer,
-            range.start as u64 * crate::QUERY_SIZE,
-            &buffer.raw,
-            offset,
-            size,
-        );
+        match set.ty {
+            wgt::QueryType::Occlusion => {
+                let size = (range.end - range.start) as u64 * crate::QUERY_SIZE;
+                encoder.copy_from_buffer(
+                    &set.raw_buffer,
+                    range.start as u64 * crate::QUERY_SIZE,
+                    &buffer.raw,
+                    offset,
+                    size,
+                );
+            }
+            wgt::QueryType::Timestamp => {
+                encoder.resolve_counters(
+                    &set.counter_sample_buffer.as_ref().unwrap(),
+                    metal::NSRange::new(range.start as u64, range.end as u64),
+                    &buffer.raw,
+                    offset,
+                );
+            }
+            wgt::QueryType::PipelineStatistics(_) => todo!(),
+        }
     }
 
     // render
@@ -906,15 +921,39 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
 
     // compute
 
-    unsafe fn begin_compute_pass(&mut self, desc: &crate::ComputePassDescriptor) {
+    unsafe fn begin_compute_pass(&mut self, desc: &crate::ComputePassDescriptor<super::Api>) {
         self.begin_pass();
 
         let raw = self.raw_cmd_buf.as_ref().unwrap();
+
         objc::rc::autoreleasepool(|| {
-            let encoder = raw.new_compute_command_encoder();
+            let descriptor = metal::ComputePassDescriptor::new();
+
+            let sba_descriptor = descriptor
+                .sample_buffer_attachments()
+                .object_at(0 as _) //TODO: move inside
+                .unwrap();
+            for (i, at) in desc.timestamp_writes.iter().enumerate() {
+                //Problem here is that we can't attach the same counter sample buffer
+                //to the pass descriptor twice.
+                sba_descriptor
+                    .set_sample_buffer(at.query_set.counter_sample_buffer.as_ref().unwrap());
+                match at.location {
+                    ComputePassTimestampLocation::BEGINNING => {
+                        sba_descriptor.set_start_of_encoder_sample_index(at.query_index as _);
+                    }
+                    ComputePassTimestampLocation::END => {
+                        sba_descriptor.set_end_of_encoder_sample_index(at.query_index as _);
+                    }
+                    _ => {}
+                }
+            }
+
+            let encoder = raw.compute_command_encoder_with_descriptor(&descriptor);
             if let Some(label) = desc.label {
                 encoder.set_label(label);
             }
+
             self.state.compute = Some(encoder.to_owned());
         });
     }

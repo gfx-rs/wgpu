@@ -29,6 +29,7 @@ use std::{
 
 use arrayvec::ArrayVec;
 use foreign_types::ForeignTypeRef as _;
+use metal::foreign_types::ForeignTypeRef as _;
 use parking_lot::Mutex;
 
 #[derive(Clone)]
@@ -232,6 +233,7 @@ struct PrivateCapabilities {
     supports_preserve_invariance: bool,
     supports_shader_primitive_index: bool,
     has_unified_memory: Option<bool>,
+    supports_timestamp_period: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -401,8 +403,21 @@ impl crate::Queue<Api> for Queue {
     }
 
     unsafe fn get_timestamp_period(&self) -> f32 {
-        // TODO: This is hard, see https://github.com/gpuweb/gpuweb/issues/1325
-        1.0
+        let queue = self.raw.lock();
+        let (mut cpu_timestamp0, mut gpu_timestamp0) = (0_u64, 0_u64);
+        let device = queue.device().to_owned();
+        device.sample_timestamps(&mut cpu_timestamp0, &mut gpu_timestamp0);
+        if cpu_timestamp0 == 0 || gpu_timestamp0 == 0 {
+            return 1.0;
+        }
+
+        let command_buffer = queue.new_command_buffer();
+        command_buffer.commit();
+        command_buffer.wait_until_scheduled();
+        let (mut cpu_timestamp1, mut gpu_timestamp1) = (0_u64, 0_u64);
+        device.sample_timestamps(&mut cpu_timestamp1, &mut gpu_timestamp1);
+
+        (cpu_timestamp1 - cpu_timestamp0) as f32 / (gpu_timestamp1 - gpu_timestamp0) as f32
     }
 }
 
@@ -696,6 +711,8 @@ unsafe impl Sync for ComputePipeline {}
 #[derive(Debug)]
 pub struct QuerySet {
     raw_buffer: metal::Buffer,
+    //Metal has a custom buffer for counters.
+    counter_sample_buffer: Option<metal::CounterSampleBuffer>,
     ty: wgt::QueryType,
 }
 

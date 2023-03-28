@@ -8,6 +8,7 @@ use std::{
 
 use super::conv;
 use crate::auxil::map_naga_stage;
+use metal::{foreign_types::ForeignTypeRef, MTLCounterSampleBufferDescriptor};
 
 type DeviceResult<T> = Result<T, crate::DeviceError>;
 
@@ -1093,11 +1094,43 @@ impl crate::Device<super::Api> for super::Device {
                     }
                     Ok(super::QuerySet {
                         raw_buffer,
+                        counter_sample_buffer: None,
                         ty: desc.ty,
                     })
                 }
-                wgt::QueryType::Timestamp | wgt::QueryType::PipelineStatistics(_) => {
-                    Err(crate::DeviceError::OutOfMemory)
+                wgt::QueryType::Timestamp => {
+                    let size = desc.count as u64 * crate::QUERY_SIZE;
+                    let device = self.shared.device.lock();
+                    let destination_buffer =
+                        device.new_buffer(size, metal::MTLResourceOptions::empty());
+
+                    let csb_desc = metal::CounterSampleBufferDescriptor::new();
+                    csb_desc.set_storage_mode(metal::MTLStorageMode::Shared);
+                    csb_desc.set_sample_count(desc.count as _);
+                    if let Some(label) = desc.label {
+                        csb_desc.set_label(label);
+                    }
+
+                    let counter_sets = device.counter_sets();
+                    let timestamp_counter = counter_sets
+                        .iter()
+                        .find(|cs| cs.name() == "timestamp")
+                        //TODO: better error type?
+                        .ok_or(crate::DeviceError::OutOfMemory)?;
+                    csb_desc.set_counter_set(&timestamp_counter);
+
+                    let counter_sample_buffer = device
+                        .new_counter_sample_buffer_with_descriptor(&csb_desc)
+                        .map_err(|e| crate::DeviceError::OutOfMemory)?;
+
+                    Ok(super::QuerySet {
+                        raw_buffer: destination_buffer,
+                        counter_sample_buffer: Some(counter_sample_buffer),
+                        ty: desc.ty,
+                    })
+                }
+                _ => {
+                    todo!()
                 }
             }
         })
