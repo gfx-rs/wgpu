@@ -93,7 +93,9 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                 features: wgpu::Features::all_webgpu_mask()
                     | wgpu::Features::TEXTURE_BINDING_ARRAY
                     | wgpu::Features::STORAGE_RESOURCE_BINDING_ARRAY
-                    | wgpu::Features::VERTEX_WRITABLE_STORAGE,
+                    | wgpu::Features::VERTEX_WRITABLE_STORAGE
+                    | wgpu::Features::RAY_QUERY
+                    | wgpu::Features::RAY_TRACING_ACCELERATION_STRUCTURE,
                 // Make sure we use the texture resolution limits from the adapter, so we can support images the size of the swapchain.
                 limits: wgpu::Limits::default(),
             },
@@ -313,6 +315,7 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                         })],
                         depth_stencil_attachment: None,
                     });
+
                     rpass.set_pipeline(&blit_pipeline);
                     rpass.set_bind_group(0, &blit_bind_group, &[]);
                     rpass.draw(0..3, 0..1);

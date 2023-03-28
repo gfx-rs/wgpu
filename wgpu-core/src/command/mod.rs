@@ -5,6 +5,7 @@ mod compute;
 mod draw;
 mod memory_init;
 mod query;
+mod ray_tracing;
 mod render;
 mod transfer;
 

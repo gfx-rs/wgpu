@@ -48,6 +48,7 @@ mod init_tracker;
 pub mod instance;
 pub mod pipeline;
 pub mod present;
+pub mod ray_tracing;
 pub mod resource;
 mod track;
 mod validation;

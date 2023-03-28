@@ -2,8 +2,8 @@ use crate::{
     context::{ObjectId, Unused},
     AdapterInfo, BindGroupDescriptor, BindGroupLayoutDescriptor, BindingResource, BufferBinding,
     CommandEncoderDescriptor, ComputePassDescriptor, ComputePipelineDescriptor,
-    DownlevelCapabilities, Features, Label, Limits, LoadOp, MapMode, Operations,
-    PipelineLayoutDescriptor, RenderBundleEncoderDescriptor, RenderPipelineDescriptor,
+    ContextBlasBuildEntry, DownlevelCapabilities, Features, Label, Limits, LoadOp, MapMode,
+    Operations, PipelineLayoutDescriptor, RenderBundleEncoderDescriptor, RenderPipelineDescriptor,
     SamplerDescriptor, ShaderModuleDescriptor, ShaderModuleDescriptorSpirV, ShaderSource,
     SurfaceStatus, TextureDescriptor, TextureViewDescriptor, UncapturedErrorHandler,
 };
@@ -3016,6 +3016,66 @@ impl crate::Context for Context {
                 error_sink: Arc::clone(&device_data.error_sink),
             },
         )
+    }
+
+    fn command_encoder_build_acceleration_structures_unsafe_tlas<'a>(
+        &'a self,
+        encoder: &Self::CommandEncoderId,
+        encoder_data: &Self::CommandEncoderData,
+        blas: impl Iterator<Item = crate::ContextBlasBuildEntry<'a, Self>>,
+        tlas: impl Iterator<Item = crate::ContextTlasBuildEntry<'a, Self>>,
+    ) {
+        let global = &self.0;
+
+        let blas = blas.map(|e: crate::ContextBlasBuildEntry<Self>| {
+            let geometries = match e.geometries {
+                crate::ContextBlasGeometries::TriangleGeometries(triangle_geometries) => {
+                    let iter = triangle_geometries.into_iter().map(|tg| {
+                        wgc::ray_tracing::BlasTriangleGeometry {
+                            vertex_buffer: tg.vertex_buffer.0,
+                            index_buffer: tg.index_buffer.map(|index_buffer| index_buffer.0),
+                            transform_buffer: tg
+                                .transform_buffer
+                                .map(|transform_buffer| transform_buffer.0),
+                            size: tg.size,
+                            transform_buffer_offset: tg.transform_buffer_offset,
+                            first_vertex: tg.first_vertex,
+                            vertex_stride: tg.vertex_stride,
+                            index_buffer_offset: tg.index_buffer_offset,
+                        }
+                    });
+                    wgc::ray_tracing::BlasGeometries::TriangleGeometries(Box::new(iter))
+                }
+            };
+            wgc::ray_tracing::BlasBuildEntry {
+                blas_id: e.blas_id,
+                geometries: geometries,
+            }
+        });
+
+        let tlas = tlas
+            .into_iter()
+            .map(
+                |e: crate::ContextTlasBuildEntry<Context>| wgc::ray_tracing::TlasBuildEntry {
+                    tlas_id: e.tlas_id,
+                    instance_buffer_id: e.instance_buffer_id,
+                    instance_count: e.instance_count,
+                },
+            );
+
+        if let Err(cause) = wgc::gfx_select!(encoder => global.command_encoder_build_acceleration_structures_unsafe_tlas(
+            *encoder,
+            {
+                blas
+            },
+            {tlas}
+        )) {
+            self.handle_error_nolabel(
+                &encoder_data.error_sink,
+                cause,
+                "CommandEncoder::build_acceleration_structures_unsafe_tlas",
+            );
+        }
     }
 }
 

@@ -2969,6 +2969,65 @@ impl CommandEncoder {
         let id = self.id.as_ref().unwrap();
         DynContext::command_encoder_pop_debug_group(&*self.context, id, self.data.as_ref());
     }
+
+    /// Build bottom and top level acceleration structures
+    pub unsafe fn build_acceleration_structures_unsafe_tlas<'a>(
+        &mut self,
+        blas: impl IntoIterator<Item = &'a BlasBuildEntry<'a>>,
+        tlas: impl IntoIterator<Item = &'a TlasBuildEntry<'a>>,
+    ) {
+        let id = self.id.as_ref().unwrap();
+
+        let mut blas = blas.into_iter().map(|e: &BlasBuildEntry| {
+            let geometries = match e.geometry {
+                BlasGeometries::TriangleGeometries(triangle_geometries) => {
+                    let iter = triangle_geometries.iter().map(|tg: &BlasTriangleGeometry| {
+                        DynContextBlasTriangleGeometry {
+                            size: tg.size,
+                            vertex_buffer: (tg.vertex_buffer.id, tg.vertex_buffer.data.as_ref()),
+
+                            index_buffer: tg
+                                .index_buffer
+                                .map(|index_buffer| (index_buffer.id, index_buffer.data.as_ref())),
+
+                            transform_buffer: tg.transform_buffer.map(|transform_buffer| {
+                                (transform_buffer.id, transform_buffer.data.as_ref())
+                            }),
+
+                            first_vertex: tg.first_vertex,
+                            vertex_stride: tg.vertex_stride,
+                            index_buffer_offset: tg.index_buffer_offset,
+                            transform_buffer_offset: tg.transform_buffer_offset,
+                        }
+                    });
+                    DynContextBlasGeometries::TriangleGeometries(Box::new(iter))
+                }
+            };
+            DynContextBlasBuildEntry {
+                blas_id: e.blas.id,
+                blas_data: e.blas.data.as_ref(),
+                geometries: geometries,
+            }
+        });
+
+        let mut tlas = tlas
+            .into_iter()
+            .map(|e: &TlasBuildEntry| DynContextTlasBuildEntry {
+                tlas_id: e.tlas.id,
+                tlas_data: e.tlas.data.as_ref(),
+                instance_buffer_id: e.instance_buffer.id,
+                instance_buffer_data: e.instance_buffer.data.as_ref(),
+                instance_count: e.instance_count,
+            });
+
+        DynContext::command_encoder_build_acceleration_structures_unsafe_tlas(
+            &*self.context,
+            id,
+            self.data.as_ref(),
+            &mut blas,
+            &mut tlas,
+        );
+    }
 }
 
 /// [`Features::TIMESTAMP_QUERY`] must be enabled on the device in order to call these functions.
@@ -4533,17 +4592,29 @@ pub type CreateTlasDescriptor<'a> = wgt::CreateTlasDescriptor<Label<'a>>;
 static_assertions::assert_impl_all!(CreateTlasDescriptor: Send, Sync);
 
 #[derive(Debug)]
-pub struct BlasTriangleGeometry {
-    pub size: BlasTriangleGeometrySizeDescriptor,
-    pub vertex_buffer: Buffer,
+pub struct BlasTriangleGeometry<'a> {
+    pub size: &'a BlasTriangleGeometrySizeDescriptor,
+    pub vertex_buffer: &'a Buffer,
     pub first_vertex: u32,
     pub vertex_stride: wgt::BufferAddress,
-    pub index_buffer: Option<Buffer>,
+    pub index_buffer: Option<&'a Buffer>,
     pub index_buffer_offset: Option<wgt::BufferAddress>,
-    pub transform_buffer: Option<Buffer>,
+    pub transform_buffer: Option<&'a Buffer>,
     pub transform_buffer_offset: Option<wgt::BufferAddress>,
 }
 static_assertions::assert_impl_all!(BlasTriangleGeometry: Send, Sync);
+
+#[derive(Debug)]
+pub enum BlasGeometries<'a> {
+    TriangleGeometries(&'a [BlasTriangleGeometry<'a>]),
+}
+static_assertions::assert_impl_all!(BlasGeometries: Send, Sync);
+
+pub struct BlasBuildEntry<'a> {
+    pub blas: &'a Blas,
+    pub geometry: &'a BlasGeometries<'a>,
+}
+static_assertions::assert_impl_all!(BlasBuildEntry: Send, Sync);
 
 #[derive(Debug)]
 pub struct Blas {
@@ -4560,3 +4631,68 @@ pub struct Tlas {
     data: Box<Data>,
 }
 static_assertions::assert_impl_all!(Tlas: Send, Sync);
+
+pub struct TlasBuildEntry<'a> {
+    pub tlas: &'a Tlas,
+    pub instance_buffer: &'a Buffer,
+    pub instance_count: u32,
+}
+static_assertions::assert_impl_all!(TlasBuildEntry: Send, Sync);
+
+pub(crate) struct DynContextBlasTriangleGeometry<'a> {
+    size: &'a BlasTriangleGeometrySizeDescriptor,
+    vertex_buffer: (ObjectId, &'a Data),
+    index_buffer: Option<(ObjectId, &'a Data)>,
+    transform_buffer: Option<(ObjectId, &'a Data)>,
+    first_vertex: u32,
+    vertex_stride: wgt::BufferAddress,
+    index_buffer_offset: Option<wgt::BufferAddress>,
+    transform_buffer_offset: Option<wgt::BufferAddress>,
+}
+
+pub(crate) enum DynContextBlasGeometries<'a> {
+    TriangleGeometries(Box<dyn Iterator<Item = DynContextBlasTriangleGeometry<'a>> + 'a>),
+}
+
+pub(crate) struct DynContextBlasBuildEntry<'a> {
+    blas_id: ObjectId,
+    blas_data: &'a crate::Data,
+    geometries: DynContextBlasGeometries<'a>,
+}
+
+pub(crate) struct DynContextTlasBuildEntry<'a> {
+    tlas_id: ObjectId,
+    tlas_data: &'a crate::Data,
+    instance_buffer_id: ObjectId,
+    instance_buffer_data: &'a crate::Data,
+    instance_count: u32,
+}
+
+pub struct ContextBlasTriangleGeometry<'a, T: Context> {
+    size: &'a BlasTriangleGeometrySizeDescriptor,
+    vertex_buffer: (T::BufferId, &'a T::BufferData),
+    index_buffer: Option<(T::BufferId, &'a T::BufferData)>,
+    transform_buffer: Option<(T::BufferId, &'a T::BufferData)>,
+    first_vertex: u32,
+    vertex_stride: wgt::BufferAddress,
+    index_buffer_offset: Option<wgt::BufferAddress>,
+    transform_buffer_offset: Option<wgt::BufferAddress>,
+}
+
+pub enum ContextBlasGeometries<'a, T: Context> {
+    TriangleGeometries(Box<dyn Iterator<Item = ContextBlasTriangleGeometry<'a, T>> + 'a>),
+}
+
+pub struct ContextBlasBuildEntry<'a, T: Context> {
+    blas_id: T::BlasId,
+    blas_data: &'a T::BlasData,
+    geometries: ContextBlasGeometries<'a, T>,
+}
+
+pub struct ContextTlasBuildEntry<'a, T: Context> {
+    tlas_id: T::TlasId,
+    tlas_data: &'a T::TlasData,
+    instance_buffer_id: T::BufferId,
+    instance_buffer_data: &'a T::BufferData,
+    instance_count: u32,
+}
