@@ -2958,9 +2958,9 @@ impl crate::Context for Context {
         device_data: &Self::DeviceData,
         desc: &crate::CreateBlasDescriptor<'_>,
         sizes: wgt::BlasGeometrySizeDescriptors,
-    ) -> (Self::BlasId, Self::BlasData) {
+    ) -> (Self::BlasId, Option<u64>, Self::BlasData) {
         let global = &self.0;
-        let (id, error) = wgc::gfx_select!(device => global.device_create_blas(
+        let (id, handle, error) = wgc::gfx_select!(device => global.device_create_blas(
             *device,
             &desc.map_label(|l| l.map(Borrowed)),
             sizes,
@@ -2975,14 +2975,9 @@ impl crate::Context for Context {
                 "Device::create_blas",
             );
         }
-        let x: Self::BufferData = Buffer {
-            error_sink: Arc::clone(&device_data.error_sink),
-        };
-        let x: Self::BlasData = Blas {
-            error_sink: Arc::clone(&device_data.error_sink),
-        };
         (
             id,
+            handle,
             Blas {
                 error_sink: Arc::clone(&device_data.error_sink),
             },

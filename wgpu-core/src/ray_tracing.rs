@@ -99,7 +99,7 @@ impl<A: HalApi> Device<A> {
         .map_err(DeviceError::from)?;
 
         Ok(resource::Blas {
-            raw: Some(raw),
+            raw: raw,
             device_id: Stored {
                 value: id::Valid(self_id),
                 ref_count: self.life_guard.add_ref(),
@@ -166,7 +166,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         desc: &resource::BlasDescriptor,
         sizes: wgt::BlasGeometrySizeDescriptors,
         id_in: Input<G, BlasId>,
-    ) -> (BlasId, Option<resource::CreateBlasError>) {
+    ) -> (BlasId, Option<u64>, Option<resource::CreateBlasError>) {
         profiling::scope!("Device::create_blas");
 
         let hub = A::hub(self);
@@ -191,6 +191,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(blas) => blas,
                 Err(e) => break e,
             };
+
+            let handle = unsafe{
+                device.raw.get_acceleration_structure_device_address(&blas.raw)
+            };
+
             let ref_count = blas.life_guard.add_ref();
 
             let id = fid.assign(blas, &mut token);
@@ -198,11 +203,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             device.trackers.lock().blas_s.insert_single(id, ref_count);
 
-            return (id.0, None);
+            return (id.0, Some(handle), None);
         };
 
         let id = fid.assign_error(desc.label.borrow_or_default(), &mut token);
-        (id, Some(error))
+        (id, None, Some(error))
     }
 
     pub fn device_create_tlas<A: HalApi>(

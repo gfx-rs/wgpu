@@ -2249,7 +2249,7 @@ impl Device {
         desc: &CreateBlasDescriptor,
         sizes: wgt::BlasGeometrySizeDescriptors,
     ) -> Blas {
-        let (id, data) = DynContext::device_create_blas(
+        let (id, handle, data) = DynContext::device_create_blas(
             &*self.context,
             &self.id,
             self.data.as_ref(),
@@ -2261,15 +2261,16 @@ impl Device {
             context: Arc::clone(&self.context),
             id,
             data,
+            handle
         }
     }
 
-    /// Creates a [`Blas`].
-    pub fn create_tlas(&self, desc: &CreateTlasDescriptor) -> Blas {
+    /// Creates a [`Tlas`].
+    pub fn create_tlas(&self, desc: &CreateTlasDescriptor) -> Tlas {
         let (id, data) =
             DynContext::device_create_tlas(&*self.context, &self.id, self.data.as_ref(), desc);
 
-        Blas {
+        Tlas {
             context: Arc::clone(&self.context),
             id,
             data,
@@ -4621,8 +4622,14 @@ pub struct Blas {
     context: Arc<C>,
     id: ObjectId,
     data: Box<Data>,
+    handle: Option<u64>,
 }
 static_assertions::assert_impl_all!(Blas: Send, Sync);
+impl Blas {
+    pub fn handle(&self) -> Option<u64>{
+        self.handle
+    }
+}
 
 #[derive(Debug)]
 pub struct Tlas {

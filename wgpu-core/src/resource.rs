@@ -800,7 +800,7 @@ pub type BlasDescriptor<'a> = wgt::CreateBlasDescriptor<Label<'a>>;
 pub type TlasDescriptor<'a> = wgt::CreateTlasDescriptor<Label<'a>>;
 
 pub struct Blas<A: hal::Api> {
-    pub(crate) raw: Option<A::AccelerationStructure>,
+    pub(crate) raw: A::AccelerationStructure,
     pub(crate) device_id: Stored<DeviceId>,
     pub(crate) life_guard: LifeGuard,
     pub(crate) size_info: hal::AccelerationStructureBuildSizes,

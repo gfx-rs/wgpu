@@ -1002,7 +1002,7 @@ pub trait Context: Debug + Send + Sized + Sync {
         device_data: &Self::DeviceData,
         desc: &CreateBlasDescriptor,
         sizes: wgt::BlasGeometrySizeDescriptors,
-    ) -> (Self::BlasId, Self::BlasData);
+    ) -> (Self::BlasId, Option<u64>, Self::BlasData);
     fn device_create_tlas(
         &self,
         device: &Self::DeviceId,
@@ -1937,7 +1937,7 @@ pub(crate) trait DynContext: Debug + Send + Sync {
         device_data: &crate::Data,
         desc: &crate::CreateBlasDescriptor,
         sizes: wgt::BlasGeometrySizeDescriptors,
-    ) -> (ObjectId, Box<crate::Data>);
+    ) -> (ObjectId, Option<u64>, Box<crate::Data>);
     fn device_create_tlas(
         &self,
         device: &ObjectId,
@@ -3908,11 +3908,11 @@ where
         device_data: &crate::Data,
         desc: &crate::CreateBlasDescriptor,
         sizes: wgt::BlasGeometrySizeDescriptors,
-    ) -> (ObjectId, Box<crate::Data>) {
+    ) -> (ObjectId, Option<u64>, Box<crate::Data>) {
         let device = <T::DeviceId>::from(*device);
         let device_data = downcast_ref(device_data);
-        let (blas, data) = Context::device_create_blas(self, &device, device_data, desc, sizes);
-        (blas.into(), Box::new(data) as _)
+        let (blas, handle, data) = Context::device_create_blas(self, &device, device_data, desc, sizes);
+        (blas.into(), handle, Box::new(data) as _)
     }
 
     fn device_create_tlas(
