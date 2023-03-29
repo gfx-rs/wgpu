@@ -337,7 +337,7 @@ pub struct Device<A: HalApi> {
     // TODO: move this behind another mutex. This would allow several methods to
     // switch to borrow Device immutably, such as `write_buffer`, `write_texture`,
     // and `buffer_unmap`.
-    pending_writes: queue::PendingWrites<A>,
+    pub(crate) pending_writes: queue::PendingWrites<A>,
     #[cfg(feature = "trace")]
     pub(crate) trace: Option<Mutex<trace::Trace>>,
 }

@@ -385,6 +385,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             None,
             None,
             Some(&*query_set_guard),
+            None,
+            None,
         );
 
         let hal_desc = hal::ComputePassDescriptor { label: base.label };

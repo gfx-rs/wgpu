@@ -543,8 +543,13 @@ impl<A: HalApi> Access<Sampler<A>> for TextureView<A> {}
 
 impl<A: HalApi> Access<Blas<A>> for Root {}
 impl<A: HalApi> Access<Blas<A>> for Device<A> {}
+impl<A: HalApi> Access<Blas<A>> for CommandBuffer<A> {}
+impl<A: HalApi> Access<Blas<A>> for Buffer<A> {}
 impl<A: HalApi> Access<Tlas<A>> for Root {}
 impl<A: HalApi> Access<Tlas<A>> for Device<A> {}
+impl<A: HalApi> Access<Tlas<A>> for CommandBuffer<A> {}
+impl<A: HalApi> Access<Tlas<A>> for Buffer<A> {}
+impl<A: HalApi> Access<Tlas<A>> for Blas<A> {}
 
 #[cfg(debug_assertions)]
 thread_local! {

@@ -1275,6 +1275,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Some(&*render_pipeline_guard),
                 Some(&*bundle_guard),
                 Some(&*query_set_guard),
+                None,
+                None,
             );
 
             let raw = &mut cmd_buf.encoder.raw;

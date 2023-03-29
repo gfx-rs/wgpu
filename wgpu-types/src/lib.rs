@@ -4233,6 +4233,8 @@ bitflags::bitflags! {
         const STORAGE = 1 << 7;
         /// Allow a buffer to be the indirect buffer in an indirect draw call.
         const INDIRECT = 1 << 8;
+        /// Allows a buffer to be used as input for a bottom level acceleration structure build
+        const BLAS_INPUT = 1 << 9;
     }
 }
 

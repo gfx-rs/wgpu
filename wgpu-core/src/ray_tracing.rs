@@ -28,6 +28,14 @@ use std::iter;
 pub enum BuildAccelerationStructureError {
     #[error(transparent)]
     Encoder(#[from] CommandEncoderError),
+    #[error("Buffer {0:?} is invalid or destroyed")]
+    InvalidBuffer(BufferId),
+    #[error("Buffer {0:?} is missing `BLAS_INPUT` usage flag")]
+    MissingBlasInputUsageFlag(BufferId),
+    #[error("Blas {0:?} is invalid or destroyed")]
+    InvalidBlas(BlasId),
+    #[error("Tlas {0:?} is invalid or destroyed")]
+    InvalidTlas(TlasId),
 }
 
 impl<A: HalApi> Device<A> {
@@ -96,6 +104,9 @@ impl<A: HalApi> Device<A> {
             },
             life_guard: LifeGuard::new(blas_desc.label.borrow_or_default()),
             size_info,
+            sizes,
+            flags: blas_desc.flags,
+            update_mode: blas_desc.update_mode,
         })
     }
 
@@ -181,6 +192,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let id = fid.assign(blas, &mut token);
             log::info!("Created blas {:?} with {:?}", id, desc);
 
+            device.trackers.lock().blas_s.insert_single(id, ref_count);
+
             return (id.0, None);
         };
 
@@ -223,6 +236,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let id = fid.assign(tlas, &mut token);
             log::info!("Created blas {:?} with {:?}", id, desc);
 
+            device.trackers.lock().tlas_s.insert_single(id, ref_count);
+
             return (id.0, None);
         };
 
@@ -231,6 +246,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 }
 
+#[derive(Debug)]
 pub struct BlasTriangleGeometry<'a> {
     pub size: &'a wgt::BlasTriangleGeometrySizeDescriptor,
     pub vertex_buffer: BufferId,
@@ -255,4 +271,13 @@ pub struct TlasBuildEntry {
     pub tlas_id: TlasId,
     pub instance_buffer_id: BufferId,
     pub instance_count: u32,
+}
+
+pub enum BlasGeometriesStorage<'a> {
+    TriangleGeometries(Vec<BlasTriangleGeometry<'a>>),
+}
+
+pub struct BlasBuildEntryStorage<'a> {
+    pub blas_id: BlasId,
+    pub geometries: BlasGeometriesStorage<'a>,
 }
