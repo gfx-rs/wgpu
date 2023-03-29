@@ -4235,6 +4235,8 @@ bitflags::bitflags! {
         const INDIRECT = 1 << 8;
         /// Allows a buffer to be used as input for a bottom level acceleration structure build
         const BLAS_INPUT = 1 << 9;
+        /// Allows a buffer to be used as input for a top level acceleration structure build
+        const TLAS_INPUT = 1 << 10;
     }
 }
 

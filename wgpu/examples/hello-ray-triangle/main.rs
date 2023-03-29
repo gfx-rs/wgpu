@@ -1,5 +1,6 @@
 use bytemuck::{Pod, Zeroable};
-use std::{borrow::Cow, mem, num::NonZeroU32};
+use std::{borrow::Cow, iter, mem, num::NonZeroU32};
+use wgc::ray_tracing::BlasBuildEntry;
 use wgpu::util::DeviceExt;
 use winit::{
     dpi::{LogicalSize, PhysicalPosition},
@@ -163,13 +164,13 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
     let vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("Vertex Buffer"),
         contents: bytemuck::cast_slice(&vertex_data),
-        usage: wgpu::BufferUsages::VERTEX,
+        usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::BLAS_INPUT,
     });
 
     let index_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("Index Buffer"),
         contents: bytemuck::cast_slice(&index_data),
-        usage: wgpu::BufferUsages::INDEX,
+        usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::BLAS_INPUT,
     });
 
     let blas_geo_size_desc = wgpu::BlasTriangleGeometrySizeDescriptor {
@@ -264,6 +265,30 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
             },
         ],
     });
+
+    let mut encoder =
+        device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+    unsafe {
+        encoder.build_acceleration_structures_unsafe_tlas(
+            iter::once(&wgpu::BlasBuildEntry {
+                blas: &blas,
+                geometry: &wgpu::BlasGeometries::TriangleGeometries(&[
+                    wgpu::BlasTriangleGeometry {
+                        size: &blas_geo_size_desc,
+                        vertex_buffer: &vertex_buf,
+                        first_vertex: 0,
+                        vertex_stride: mem::size_of::<Vertex>() as u64,
+                        index_buffer: Some(&index_buf),
+                        index_buffer_offset: Some(0),
+                        transform_buffer: None,
+                        transform_buffer_offset: None,
+                    },
+                ]),
+            }),
+            iter::empty(),
+        )
+    }
+    queue.submit(Some(encoder.finish()));
 
     event_loop.run(move |event, _, control_flow| {
         // Have the closure take ownership of the resources.

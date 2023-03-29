@@ -36,6 +36,8 @@ pub enum BuildAccelerationStructureError {
     InvalidBlas(BlasId),
     #[error("Tlas {0:?} is invalid or destroyed")]
     InvalidTlas(TlasId),
+    #[error("Buffer {0:?} is missing `TLAS_INPUT` usage flag")]
+    MissingTlasInputUsageFlag(BufferId),
 }
 
 impl<A: HalApi> Device<A> {
@@ -151,6 +153,8 @@ impl<A: HalApi> Device<A> {
             },
             life_guard: LifeGuard::new(desc.label.borrow_or_default()),
             size_info,
+            flags: desc.flags,
+            update_mode: desc.update_mode,
         })
     }
 }
