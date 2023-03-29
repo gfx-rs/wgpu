@@ -1,4 +1,5 @@
 use bytemuck::{Pod, Zeroable};
+use glam::{Affine3A, Mat4, Vec3};
 use std::{borrow::Cow, iter, mem, num::NonZeroU32};
 use wgc::ray_tracing::BlasBuildEntry;
 use wgpu::util::DeviceExt;
@@ -68,6 +69,158 @@ fn create_vertices() -> (Vec<Vertex>, Vec<u16>) {
     ];
 
     (vertex_data.to_vec(), index_data.to_vec())
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Pod, Zeroable)]
+struct Uniforms {
+    view_inverse: [[f32; 4]; 4],
+    proj_inverse: [[f32; 4]; 4],
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Pod, Zeroable)]
+struct AccelerationStructureInstance {
+    transform: [f32; 12],
+    custom_index_and_mask: u32,
+    shader_binding_table_record_offset_and_flags: u32,
+    acceleration_structure_reference: u64,
+}
+
+impl std::fmt::Debug for AccelerationStructureInstance {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Instance")
+            .field("transform", &self.transform)
+            .field("custom_index()", &self.custom_index())
+            .field("mask()", &self.mask())
+            .field(
+                "shader_binding_table_record_offset()",
+                &self.shader_binding_table_record_offset(),
+            )
+            .field("flags()", &self.flags())
+            .field(
+                "acceleration_structure_reference",
+                &self.acceleration_structure_reference,
+            )
+            .finish()
+    }
+}
+
+#[allow(dead_code)]
+impl AccelerationStructureInstance {
+    const LOW_24_MASK: u32 = 0x00ff_ffff;
+    const MAX_U24: u32 = (1u32 << 24u32) - 1u32;
+
+    #[inline]
+    fn affine_to_rows(mat: &Affine3A) -> [f32; 12] {
+        let row_0 = mat.matrix3.row(0);
+        let row_1 = mat.matrix3.row(1);
+        let row_2 = mat.matrix3.row(2);
+        let translation = mat.translation;
+        [
+            row_0.x,
+            row_0.y,
+            row_0.z,
+            translation.x,
+            row_1.x,
+            row_1.y,
+            row_1.z,
+            translation.y,
+            row_2.x,
+            row_2.y,
+            row_2.z,
+            translation.z,
+        ]
+    }
+
+    #[inline]
+    fn rows_to_affine(rows: &[f32; 12]) -> Affine3A {
+        Affine3A::from_cols_array(&[
+            rows[0], rows[3], rows[6], rows[9], rows[1], rows[4], rows[7], rows[10], rows[2],
+            rows[5], rows[8], rows[11],
+        ])
+    }
+
+    pub fn transform_as_affine(&self) -> Affine3A {
+        Self::rows_to_affine(&self.transform)
+    }
+    pub fn set_transform(&mut self, transform: &Affine3A) {
+        self.transform = Self::affine_to_rows(&transform);
+    }
+
+    pub fn custom_index(&self) -> u32 {
+        self.custom_index_and_mask & Self::LOW_24_MASK
+    }
+
+    pub fn mask(&self) -> u8 {
+        (self.custom_index_and_mask >> 24) as u8
+    }
+
+    pub fn shader_binding_table_record_offset(&self) -> u32 {
+        self.shader_binding_table_record_offset_and_flags & Self::LOW_24_MASK
+    }
+
+    pub fn flags(&self) -> u8 {
+        (self.shader_binding_table_record_offset_and_flags >> 24) as u8
+    }
+
+    pub fn set_custom_index(&mut self, custom_index: u32) {
+        debug_assert!(
+            custom_index <= Self::MAX_U24,
+            "custom_index uses more than 24 bits! {custom_index} > {}",
+            Self::MAX_U24
+        );
+        self.custom_index_and_mask =
+            (custom_index & Self::LOW_24_MASK) | (self.custom_index_and_mask & !Self::LOW_24_MASK)
+    }
+
+    pub fn set_mask(&mut self, mask: u8) {
+        self.custom_index_and_mask =
+            (self.custom_index_and_mask & Self::LOW_24_MASK) | (u32::from(mask) << 24)
+    }
+
+    pub fn set_shader_binding_table_record_offset(
+        &mut self,
+        shader_binding_table_record_offset: u32,
+    ) {
+        debug_assert!(shader_binding_table_record_offset <= Self::MAX_U24, "shader_binding_table_record_offset uses more than 24 bits! {shader_binding_table_record_offset} > {}", Self::MAX_U24);
+        self.shader_binding_table_record_offset_and_flags = (shader_binding_table_record_offset
+            & Self::LOW_24_MASK)
+            | (self.shader_binding_table_record_offset_and_flags & !Self::LOW_24_MASK)
+    }
+
+    pub fn set_flags(&mut self, flags: u8) {
+        self.shader_binding_table_record_offset_and_flags =
+            (self.shader_binding_table_record_offset_and_flags & Self::LOW_24_MASK)
+                | (u32::from(flags) << 24)
+    }
+
+    pub fn new(
+        transform: &Affine3A,
+        custom_index: u32,
+        mask: u8,
+        shader_binding_table_record_offset: u32,
+        flags: u8,
+        acceleration_structure_reference: u64,
+    ) -> Self {
+        debug_assert!(
+            custom_index <= Self::MAX_U24,
+            "custom_index uses more than 24 bits! {custom_index} > {}",
+            Self::MAX_U24
+        );
+        debug_assert!(
+            shader_binding_table_record_offset <= Self::MAX_U24,
+            "shader_binding_table_record_offset uses more than 24 bits! {shader_binding_table_record_offset} > {}", Self::MAX_U24
+        );
+        AccelerationStructureInstance {
+            transform: Self::affine_to_rows(transform),
+            custom_index_and_mask: (custom_index & Self::MAX_U24) | (u32::from(mask) << 24),
+            shader_binding_table_record_offset_and_flags: (shader_binding_table_record_offset
+                & Self::MAX_U24)
+                | (u32::from(flags) << 24),
+            acceleration_structure_reference,
+        }
+    }
 }
 
 async fn run(event_loop: EventLoop<()>, window: Window) {
@@ -157,7 +310,22 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
         ..Default::default()
     });
 
-    // Create the vertex and index buffers
+    let uniforms = {
+        let view = Mat4::look_at_rh(Vec3::new(0.0, 0.0, 2.5), Vec3::ZERO, Vec3::Y);
+        let proj = Mat4::perspective_rh(59.0_f32.to_radians(), 1.0, 0.001, 1000.0);
+
+        Uniforms {
+            view_inverse: view.inverse().to_cols_array_2d(),
+            proj_inverse: proj.inverse().to_cols_array_2d(),
+        }
+    };
+
+    let uniform_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("Uniform Buffer"),
+        contents: bytemuck::cast_slice(&[uniforms]),
+        usage: wgpu::BufferUsages::UNIFORM,
+    });
+
     let vertex_size = mem::size_of::<Vertex>();
     let (vertex_data, index_data) = create_vertices();
 
@@ -197,6 +365,25 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
         flags: wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE,
         update_mode: wgpu::AccelerationStructureUpdateMode::Build,
         max_instances: 1,
+    });
+
+    let instance = AccelerationStructureInstance::new(
+        &Affine3A::from_translation(Vec3 {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        }),
+        0,
+        0xff,
+        0,
+        0,
+        blas.handle().unwrap(),
+    );
+
+    let instance_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("Instance Buffer"),
+        contents: bytemuck::cast_slice(&[instance]),
+        usage: wgpu::BufferUsages::TLAS_INPUT,
     });
 
     let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -285,8 +472,12 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                     },
                 ]),
             }),
-            iter::empty(),
-        )
+            iter::once(&wgpu::TlasBuildEntry {
+                tlas: &tlas,
+                instance_buffer: &instance_buf,
+                instance_count: 1,
+            }),
+        );
     }
     queue.submit(Some(encoder.finish()));
 

@@ -140,7 +140,7 @@ impl<A: HalApi> Device<A> {
                 .create_acceleration_structure(&hal::AccelerationStructureDescriptor {
                     label: desc.label.borrow_option(),
                     size: size_info.acceleration_structure_size,
-                    format: hal::AccelerationStructureFormat::BottomLevel,
+                    format: hal::AccelerationStructureFormat::TopLevel,
                 })
         }
         .map_err(DeviceError::from)?;
@@ -192,8 +192,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Err(e) => break e,
             };
 
-            let handle = unsafe{
-                device.raw.get_acceleration_structure_device_address(&blas.raw)
+            let handle = unsafe {
+                device
+                    .raw
+                    .get_acceleration_structure_device_address(&blas.raw)
             };
 
             let ref_count = blas.life_guard.add_ref();

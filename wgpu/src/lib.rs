@@ -2261,7 +2261,7 @@ impl Device {
             context: Arc::clone(&self.context),
             id,
             data,
-            handle
+            handle,
         }
     }
 
@@ -4626,7 +4626,7 @@ pub struct Blas {
 }
 static_assertions::assert_impl_all!(Blas: Send, Sync);
 impl Blas {
-    pub fn handle(&self) -> Option<u64>{
+    pub fn handle(&self) -> Option<u64> {
         self.handle
     }
 }

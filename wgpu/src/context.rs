@@ -3911,7 +3911,8 @@ where
     ) -> (ObjectId, Option<u64>, Box<crate::Data>) {
         let device = <T::DeviceId>::from(*device);
         let device_data = downcast_ref(device_data);
-        let (blas, handle, data) = Context::device_create_blas(self, &device, device_data, desc, sizes);
+        let (blas, handle, data) =
+            Context::device_create_blas(self, &device, device_data, desc, sizes);
         (blas.into(), handle, Box::new(data) as _)
     }
 
