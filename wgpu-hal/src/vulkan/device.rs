@@ -2053,9 +2053,9 @@ impl crate::Device<super::Api> for super::Device {
         }
     }
 
-    unsafe fn get_acceleration_structure_build_sizes(
+    unsafe fn get_acceleration_structure_build_sizes<'a>(
         &self,
-        desc: &crate::GetAccelerationStructureBuildSizesDescriptor<super::Api>,
+        desc: &crate::GetAccelerationStructureBuildSizesDescriptor<'a, super::Api>,
     ) -> crate::AccelerationStructureBuildSizes {
         const CAPACITY: usize = 8;
 
@@ -2064,7 +2064,7 @@ impl crate::Device<super::Api> for super::Device {
             None => panic!("Feature `RAY_TRACING` not enabled"),
         };
 
-        let (geometries, primitive_counts) = match *desc.entries {
+        let (geometries, primitive_counts) = match desc.entries {
             crate::AccelerationStructureEntries::Instances(ref instances) => {
                 let instance_data = vk::AccelerationStructureGeometryInstancesDataKHR::default();
 
