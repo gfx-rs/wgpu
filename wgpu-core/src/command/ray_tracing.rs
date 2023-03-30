@@ -66,7 +66,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             })
             .collect();
 
-        let tlas_storage: Vec<_> = tlas_iter.collect();
+        // let tlas_storage: Vec<_> = tlas_iter.collect();
 
         // #[cfg(feature = "trace")]
         // if let Some(ref mut list) = cmd_buf.commands {
@@ -275,11 +275,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             blas_refs.push(blas);
         }
 
-        let mut tlas_refs = Vec::<&Tlas<A>>::new();
         let mut scratch_buffer_tlas_size = 0;
-        let mut scratch_buffer_tlas_offsets = Vec::<u64>::new();
-        let mut tlas_entry_storage = Vec::<hal::AccelerationStructureEntries<A>>::new();
-        for entry in &tlas_storage {
+
+        let mut tlas_storage = Vec::<(&Tlas<A>, hal::AccelerationStructureEntries<A>, u64)>::new();
+        for entry in tlas_iter {
             let instance_buffer = {
                 let (instance_buffer, instance_pending) = cmd_buf
                     .trackers
@@ -308,24 +307,24 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 instance_raw
             };
 
-            tlas_entry_storage.push(hal::AccelerationStructureEntries::Instances(
-                AccelerationStructureInstances {
-                    buffer: Some(instance_buffer),
-                    offset: 0,
-                    count: entry.instance_count,
-                },
-            ));
-
             let tlas = cmd_buf
                 .trackers
                 .tlas_s
                 .add_single(&tlas_guard, entry.tlas_id)
                 .ok_or(BuildAccelerationStructureError::InvalidTlas(entry.tlas_id))?;
 
-            scratch_buffer_tlas_offsets.push(scratch_buffer_tlas_size);
+            let scratch_buffer_offset = scratch_buffer_tlas_size;
             scratch_buffer_tlas_size += tlas.size_info.build_scratch_size; // TODO Alignment
 
-            tlas_refs.push(tlas);
+            tlas_storage.push((
+                tlas,
+                hal::AccelerationStructureEntries::Instances(AccelerationStructureInstances {
+                    buffer: Some(instance_buffer),
+                    offset: 0,
+                    count: entry.instance_count,
+                }),
+                scratch_buffer_offset,
+            ));
         }
 
         let scratch_buffer = unsafe {
@@ -368,10 +367,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let mut tlas_descriptors =
             Vec::<hal::BuildAccelerationStructureDescriptor<A>>::with_capacity(tlas_storage.len());
-        for (i, _entry) in tlas_storage.iter().enumerate() {
-            let tlas = tlas_refs[i];
+        for (tlas, entries, _scratch_buffer_offset) in &tlas_storage {
             tlas_descriptors.push(hal::BuildAccelerationStructureDescriptor {
-                entries: &tlas_entry_storage[i],
+                entries,
                 mode: hal::AccelerationStructureBuildMode::Build, // TODO
                 flags: tlas.flags,
                 source_acceleration_structure: None,
@@ -382,8 +380,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let mut tlas_descriptor_references =
             Vec::<&hal::BuildAccelerationStructureDescriptor<A>>::with_capacity(tlas_storage.len());
-        for (i, _entry) in tlas_storage.iter().enumerate() {
-            tlas_descriptor_references.push(&tlas_descriptors[i]);
+        for descriptor in &tlas_descriptors {
+            tlas_descriptor_references.push(descriptor);
         }
 
         let cmd_buf_raw = cmd_buf.encoder.open();
@@ -392,7 +390,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             if !blas_descriptor_references.is_empty() {
                 cmd_buf_raw.build_acceleration_structures(&blas_descriptor_references);
             }
-            cmd_buf_raw.transition_buffers(iter::once(scratch_buffer_barrier));
+            if !blas_descriptor_references.is_empty() && !tlas_descriptor_references.is_empty() {
+                cmd_buf_raw.transition_buffers(iter::once(scratch_buffer_barrier));
+            }
             if !tlas_descriptor_references.is_empty() {
                 cmd_buf_raw.build_acceleration_structures(&tlas_descriptor_references);
             }
