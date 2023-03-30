@@ -1,6 +1,6 @@
 use bytemuck::{Pod, Zeroable};
-use glam::{Affine3A, Mat4, Vec3};
-use std::{borrow::Cow, iter, mem, num::NonZeroU32};
+use glam::{Affine3A, Mat4, Quat, Vec3};
+use std::{borrow::Cow, iter, mem, num::NonZeroU32, time::Instant};
 use wgc::ray_tracing::BlasBuildEntry;
 use wgpu::util::DeviceExt;
 use winit::{
@@ -261,7 +261,7 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
     let swapchain_capabilities = surface.get_capabilities(&adapter);
     let swapchain_format = swapchain_capabilities.formats[0];
 
-    let config = wgpu::SurfaceConfiguration {
+    let mut config = wgpu::SurfaceConfiguration {
         usage: wgpu::TextureUsages::COPY_DST | wgpu::TextureUsages::RENDER_ATTACHMENT,
         format: swapchain_format,
         width: size.width,
@@ -367,11 +367,11 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
         max_instances: 1,
     });
 
-    let instance = AccelerationStructureInstance::new(
+    let mut instance = AccelerationStructureInstance::new(
         &Affine3A::from_translation(Vec3 {
             x: 0.0,
             y: 0.0,
-            z: 0.0,
+            z: -3.0,
         }),
         0,
         0xff,
@@ -383,7 +383,7 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
     let instance_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("Instance Buffer"),
         contents: bytemuck::cast_slice(&[instance]),
-        usage: wgpu::BufferUsages::TLAS_INPUT,
+        usage: wgpu::BufferUsages::TLAS_INPUT | wgpu::BufferUsages::COPY_DST,
     });
 
     let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -408,10 +408,20 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
     let compute_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: None,
         layout: &compute_bind_group_layout,
-        entries: &[wgpu::BindGroupEntry {
-            binding: 0,
-            resource: wgpu::BindingResource::TextureView(&rt_view),
-        }],
+        entries: &[
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::TextureView(&rt_view),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: uniform_buf.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 2,
+                resource: wgpu::BindingResource::AccelerationStructure(&tlas),
+            },
+        ],
     });
 
     let blit_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -481,6 +491,8 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
     }
     queue.submit(Some(encoder.finish()));
 
+    let mut start_inst = Instant::now();
+
     event_loop.run(move |event, _, control_flow| {
         // Have the closure take ownership of the resources.
         // `event_loop.run` never returns, therefore we must do this to ensure
@@ -494,12 +506,20 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
             &blit_pipeline,
         );
 
-        *control_flow = ControlFlow::Wait;
+        *control_flow = ControlFlow::Poll;
         match event {
+            winit::event::Event::RedrawEventsCleared => {
+                window.request_redraw();
+            }
             Event::WindowEvent {
                 event: WindowEvent::Resized(size),
                 ..
-            } => {}
+            } => {
+                config.width = size.width;
+                config.height = size.height;
+                surface.configure(&device, &config);
+                window.request_redraw();
+            }
             Event::RedrawRequested(_) => {
                 let frame = surface
                     .get_current_texture()
@@ -508,8 +528,50 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                     .texture
                     .create_view(&wgpu::TextureViewDescriptor::default());
 
+                let anim_time = start_inst.elapsed().as_secs_f64() as f32;
+                instance.set_transform(&Affine3A::from_rotation_translation(
+                    Quat::from_euler(
+                        glam::EulerRot::XYZ,
+                        anim_time * 0.342,
+                        anim_time * 0.254,
+                        anim_time * 0.832,
+                    ),
+                    Vec3 {
+                        x: 0.0,
+                        y: 0.0,
+                        z: -3.0,
+                    },
+                ));
+                queue.write_buffer(&instance_buf, 0, bytemuck::cast_slice(&[instance]));
+
                 let mut encoder =
                     device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+
+                unsafe {
+                    encoder.build_acceleration_structures_unsafe_tlas(
+                        iter::once(&wgpu::BlasBuildEntry {
+                            blas: &blas,
+                            geometry: &wgpu::BlasGeometries::TriangleGeometries(&[
+                                wgpu::BlasTriangleGeometry {
+                                    size: &blas_geo_size_desc,
+                                    vertex_buffer: &vertex_buf,
+                                    first_vertex: 0,
+                                    vertex_stride: mem::size_of::<Vertex>() as u64,
+                                    index_buffer: Some(&index_buf),
+                                    index_buffer_offset: Some(0),
+                                    transform_buffer: None,
+                                    transform_buffer_offset: None,
+                                },
+                            ]),
+                        }),
+                        iter::once(&wgpu::TlasBuildEntry {
+                            tlas: &tlas,
+                            instance_buffer: &instance_buf,
+                            instance_count: 1,
+                        }),
+                    );
+                }
+
                 {
                     let mut cpass =
                         encoder.begin_compute_pass(&wgpu::ComputePassDescriptor { label: None });
@@ -552,7 +614,7 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
 fn main() {
     let event_loop = EventLoop::new();
     let window = winit::window::Window::new(&event_loop).unwrap();
-    window.set_inner_size(LogicalSize::new(600, 400));
+    window.set_inner_size(LogicalSize::new(800, 800));
     window.set_outer_position(PhysicalPosition::new(-1000, 0));
     window.set_resizable(false);
 
