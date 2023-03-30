@@ -24,12 +24,12 @@ OpEntryPoint Vertex %18 "main"
 %19 = OpTypeFunction %2
 %27 = OpConstantComposite  %14  %5 %5 %5 %5
 %28 = OpConstantComposite  %14  %3 %3 %3 %3
+%31 = OpConstantNull  %7
 %42 = OpConstant  %9  32
 %50 = OpTypeVector %9 2
 %53 = OpConstantComposite  %50  %42 %42
 %65 = OpConstant  %7  31
 %71 = OpConstantComposite  %15  %65 %65
-%31 = OpConstantNull  %7
 %18 = OpFunction  %2  None %19
 %17 = OpLabel
 OpBranch %20

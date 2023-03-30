@@ -23,10 +23,10 @@ OpExecutionMode %74 LocalSize 1 1 1
 %15 = OpTypeVector %7 4
 %18 = OpTypeFunction %12
 %26 = OpTypeFunction %7
-%75 = OpTypeFunction %2
 %31 = OpConstantNull  %7
 %42 = OpConstantNull  %9
 %57 = OpConstantNull  %7
+%75 = OpTypeFunction %2
 %17 = OpFunction  %12  None %18
 %16 = OpLabel
 OpBranch %19

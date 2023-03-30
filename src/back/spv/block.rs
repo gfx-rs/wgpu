@@ -1627,12 +1627,7 @@ impl<'w> BlockContext<'w> {
         size: u32,
         block: &mut Block,
     ) {
-        let const_null = self.gen_id();
-        block
-            .body
-            .push(Instruction::constant_null(result_type_id, const_null));
-
-        let mut partial_sum = const_null;
+        let mut partial_sum = self.writer.write_constant_null(result_type_id);
         let last_component = size - 1;
         for index in 0..=last_component {
             // compute the product of the current components
