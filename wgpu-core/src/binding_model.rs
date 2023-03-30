@@ -444,7 +444,7 @@ pub(crate) type BindEntryMap = FastHashMap<u32, wgt::BindGroupLayoutEntry>;
 ///  - pipelines with implicit layouts
 #[derive(Debug)]
 pub struct BindGroupLayout<A: HalApi> {
-    pub(crate) raw: Option<Arc<A::BindGroupLayout>>,
+    pub(crate) raw: Option<A::BindGroupLayout>,
     pub(crate) device: Arc<Device<A>>,
     pub(crate) entries: BindEntryMap,
     pub(crate) count_validator: BindingTypeMaxCountValidator,
@@ -455,8 +455,7 @@ pub struct BindGroupLayout<A: HalApi> {
 
 impl<A: HalApi> Drop for BindGroupLayout<A> {
     fn drop(&mut self) {
-        let raw = self.raw.take().unwrap();
-        if let Ok(raw) = Arc::try_unwrap(raw) {
+        if let Some(raw) = self.raw.take() {
             unsafe {
                 use hal::Device;
                 self.device
@@ -465,8 +464,6 @@ impl<A: HalApi> Drop for BindGroupLayout<A> {
                     .unwrap()
                     .destroy_bind_group_layout(raw);
             }
-        } else {
-            panic!("BindGroupLayout raw cannot be destroyed because is still in use");
         }
     }
 }
@@ -582,7 +579,7 @@ pub struct PipelineLayoutDescriptor<'a> {
 
 #[derive(Debug)]
 pub struct PipelineLayout<A: HalApi> {
-    pub(crate) raw: Option<Arc<A::PipelineLayout>>,
+    pub(crate) raw: Option<A::PipelineLayout>,
     pub(crate) device: Arc<Device<A>>,
     pub(crate) info: ResourceInfo<PipelineLayoutId>,
     pub(crate) bind_group_layout_ids: ArrayVec<Valid<BindGroupLayoutId>, { hal::MAX_BIND_GROUPS }>,
@@ -591,8 +588,7 @@ pub struct PipelineLayout<A: HalApi> {
 
 impl<A: HalApi> Drop for PipelineLayout<A> {
     fn drop(&mut self) {
-        let raw = self.raw.take().unwrap();
-        if let Ok(raw) = Arc::try_unwrap(raw) {
+        if let Some(raw) = self.raw.take() {
             unsafe {
                 use hal::Device;
                 self.device
@@ -601,8 +597,6 @@ impl<A: HalApi> Drop for PipelineLayout<A> {
                     .unwrap()
                     .destroy_pipeline_layout(raw);
             }
-        } else {
-            panic!("PipelineLayout raw cannot be destroyed because is still in use");
         }
     }
 }
@@ -795,7 +789,7 @@ pub(crate) fn buffer_binding_type_alignment(
 
 #[derive(Debug)]
 pub struct BindGroup<A: HalApi> {
-    pub(crate) raw: Option<Arc<A::BindGroup>>,
+    pub(crate) raw: Option<A::BindGroup>,
     pub(crate) device: Arc<Device<A>>,
     pub(crate) layout_id: Valid<BindGroupLayoutId>,
     pub(crate) info: ResourceInfo<BindGroupId>,
@@ -810,15 +804,12 @@ pub struct BindGroup<A: HalApi> {
 
 impl<A: HalApi> Drop for BindGroup<A> {
     fn drop(&mut self) {
-        let raw = self.raw.take().unwrap();
-        if let Ok(raw) = Arc::try_unwrap(raw) {
+        if let Some(raw) = self.raw.take() {
             unsafe {
                 use hal::Device;
                 self.device.raw.as_ref().unwrap().destroy_bind_group(raw);
             }
-        } else {
-            panic!("BindGroup cannot be destroyed because is still in use");
-        }
+        } 
     }
 }
 

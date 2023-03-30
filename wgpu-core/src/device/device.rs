@@ -480,7 +480,7 @@ impl<A: HalApi> Device<A> {
             .map_err(DeviceError::from)?;
 
         Ok(Buffer {
-            raw: Some(Arc::new(buffer)),
+            raw: Some(buffer),
             device: self.clone(),
             usage: desc.usage,
             size: desc.size,
@@ -504,7 +504,7 @@ impl<A: HalApi> Device<A> {
 
         Texture {
             inner: Some(resource::TextureInner::Native {
-                raw: Some(Arc::new(hal_texture)),
+                raw: Some(hal_texture),
             }),
             device: self.clone(),
             desc: desc.map_label(|_| ()),
@@ -1011,7 +1011,7 @@ impl<A: HalApi> Device<A> {
         };
 
         Ok(TextureView {
-            raw: Some(Arc::new(raw)),
+            raw: Some(raw),
             parent_id: id::Valid(texture_id),
             device: self.clone(),
             desc: resource::HalTextureViewDescriptor {
@@ -1148,7 +1148,7 @@ impl<A: HalApi> Device<A> {
                 .map_err(DeviceError::from)?
         };
         Ok(Sampler {
-            raw: Some(Arc::new(raw)),
+            raw: Some(raw),
             device: self.clone(),
             info: ResourceInfo::new(desc.label.borrow_or_default()),
             comparison: desc.compare.is_some(),
@@ -1286,7 +1286,7 @@ impl<A: HalApi> Device<A> {
         };
 
         Ok(pipeline::ShaderModule {
-            raw: Some(Arc::new(raw)),
+            raw: Some(raw),
             device: self.clone(),
             interface: Some(interface),
             info: ResourceInfo::new(desc.label.borrow_or_default()),
@@ -1328,7 +1328,7 @@ impl<A: HalApi> Device<A> {
         };
 
         Ok(pipeline::ShaderModule {
-            raw: Some(Arc::new(raw)),
+            raw: Some(raw),
             device: self.clone(),
             interface: None,
             info: ResourceInfo::new(desc.label.borrow_or_default()),
@@ -1577,7 +1577,7 @@ impl<A: HalApi> Device<A> {
             .map_err(binding_model::CreateBindGroupLayoutError::TooManyBindings)?;
 
         Ok(binding_model::BindGroupLayout {
-            raw: Some(Arc::new(raw)),
+            raw: Some(raw),
             device: self.clone(),
             count_validator,
             entries: entry_map,
@@ -1708,7 +1708,7 @@ impl<A: HalApi> Device<A> {
         ));
 
         Ok(hal::BufferBinding {
-            buffer: raw_buffer.as_ref(),
+            buffer: raw_buffer,
             offset: bb.offset,
             size: bb.size,
         })
@@ -1918,7 +1918,7 @@ impl<A: HalApi> Device<A> {
                     )?;
                     let res_index = hal_textures.len();
                     hal_textures.push(hal::TextureBinding {
-                        view: view.raw.as_ref().unwrap().as_ref(),
+                        view: view.raw.as_ref().unwrap(),
                         usage: internal_use,
                     });
                     (res_index, 1)
@@ -1945,7 +1945,7 @@ impl<A: HalApi> Device<A> {
                             &mut used_texture_ranges,
                         )?;
                         hal_textures.push(hal::TextureBinding {
-                            view: view.raw.as_ref().unwrap().as_ref(),
+                            view: view.raw.as_ref().unwrap(),
                             usage: internal_use,
                         });
                     }
@@ -1971,11 +1971,11 @@ impl<A: HalApi> Device<A> {
         }
         let samplers = hal_samplers
             .iter()
-            .map(|&s| s.as_ref().unwrap().as_ref())
+            .map(|&s| s.as_ref().unwrap())
             .collect::<Vec<_>>();
         let hal_desc = hal::BindGroupDescriptor {
             label: desc.label.borrow_option(),
-            layout: layout.raw.as_ref().unwrap().as_ref(),
+            layout: layout.raw.as_ref().unwrap(),
             entries: &hal_entries,
             buffers: &hal_buffers,
             samplers: samplers.as_ref(),
@@ -1990,7 +1990,7 @@ impl<A: HalApi> Device<A> {
         };
 
         Ok(binding_model::BindGroup {
-            raw: Some(Arc::new(raw)),
+            raw: Some(raw),
             device: self.clone(),
             layout_id: id::Valid(desc.layout),
             info: ResourceInfo::new(desc.label.borrow_or_default()),
@@ -2240,7 +2240,7 @@ impl<A: HalApi> Device<A> {
         let bgl_vec = desc
             .bind_group_layouts
             .iter()
-            .map(|&id| bgl_guard.get(id).unwrap().raw.as_ref().unwrap().as_ref())
+            .map(|&id| bgl_guard.get(id).unwrap().raw.as_ref().unwrap())
             .collect::<Vec<_>>();
         let hal_desc = hal::PipelineLayoutDescriptor {
             label: desc.label.borrow_option(),
@@ -2258,7 +2258,7 @@ impl<A: HalApi> Device<A> {
         };
 
         Ok(binding_model::PipelineLayout {
-            raw: Some(Arc::new(raw)),
+            raw: Some(raw),
             device: self.clone(),
             info: ResourceInfo::new(desc.label.borrow_or_default()),
             bind_group_layout_ids: desc
@@ -2398,10 +2398,10 @@ impl<A: HalApi> Device<A> {
 
         let pipeline_desc = hal::ComputePipelineDescriptor {
             label: desc.label.borrow_option(),
-            layout: layout.raw.as_ref().unwrap().as_ref(),
+            layout: layout.raw.as_ref().unwrap(),
             stage: hal::ProgrammableStage {
                 entry_point: desc.stage.entry_point.as_ref(),
-                module: shader_module.raw.as_ref().unwrap().as_ref(),
+                module: shader_module.raw.as_ref().unwrap(),
             },
         };
 
@@ -2424,7 +2424,7 @@ impl<A: HalApi> Device<A> {
         })?;
 
         let pipeline = pipeline::ComputePipeline {
-            raw: Some(Arc::new(raw)),
+            raw: Some(raw),
             layout_id: id::Valid(pipeline_layout_id),
             device: self.clone(),
             late_sized_buffer_groups,
@@ -2743,7 +2743,7 @@ impl<A: HalApi> Device<A> {
             }
 
             hal::ProgrammableStage {
-                module: shader_module.raw.as_ref().unwrap().as_ref(),
+                module: shader_module.raw.as_ref().unwrap(),
                 entry_point: stage.entry_point.as_ref(),
             }
         };
@@ -2792,7 +2792,7 @@ impl<A: HalApi> Device<A> {
                 }
 
                 Some(hal::ProgrammableStage {
-                    module: shader_module.raw.as_ref().unwrap().as_ref(),
+                    module: shader_module.raw.as_ref().unwrap(),
                     entry_point: fragment.stage.entry_point.as_ref(),
                 })
             }
@@ -2874,7 +2874,7 @@ impl<A: HalApi> Device<A> {
 
         let pipeline_desc = hal::RenderPipelineDescriptor {
             label: desc.label.borrow_option(),
-            layout: layout.raw.as_ref().unwrap().as_ref(),
+            layout: layout.raw.as_ref().unwrap(),
             vertex_buffers: &vertex_buffers,
             vertex_stage,
             primitive: desc.primitive,
@@ -2939,7 +2939,7 @@ impl<A: HalApi> Device<A> {
         }
 
         let pipeline = pipeline::RenderPipeline {
-            raw: Some(Arc::new(raw)),
+            raw: Some(raw),
             layout_id: id::Valid(pipeline_layout_id),
             device: self.clone(),
             pass_context,
@@ -3034,13 +3034,13 @@ impl<A: HalApi> Device<A> {
 
         let hal_desc = desc.map_label(crate::LabelHelpers::borrow_option);
         Ok(QuerySet {
-            raw: Some(Arc::new(unsafe {
+            raw: Some(unsafe {
                 self.raw
                     .as_ref()
                     .unwrap()
                     .create_query_set(&hal_desc)
                     .unwrap()
-            })),
+            }),
             device: self.clone(),
             info: ResourceInfo::new(""),
             desc: desc.map_label(|_| ()),

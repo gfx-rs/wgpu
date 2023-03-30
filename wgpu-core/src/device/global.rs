@@ -2469,11 +2469,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     size,
                 });
                 let transition_src = hal::BufferBarrier {
-                    buffer: stage_buffer.raw.as_ref().unwrap().as_ref(),
+                    buffer: stage_buffer.raw.as_ref().unwrap(),
                     usage: hal::BufferUses::MAP_WRITE..hal::BufferUses::COPY_SRC,
                 };
                 let transition_dst = hal::BufferBarrier {
-                    buffer: raw_buf.as_ref(),
+                    buffer: raw_buf,
                     usage: hal::BufferUses::empty()..hal::BufferUses::COPY_DST,
                 };
                 let mut pending_writes = device.pending_writes.lock();
@@ -2485,7 +2485,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     );
                     if buffer.size > 0 {
                         encoder.copy_buffer_to_buffer(
-                            stage_buffer.raw.as_ref().unwrap().as_ref(),
+                            stage_buffer.raw.as_ref().unwrap(),
                             raw_buf,
                             region.into_iter(),
                         );

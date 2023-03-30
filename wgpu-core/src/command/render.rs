@@ -928,7 +928,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
 
             depth_stencil = Some(hal::DepthStencilAttachment {
                 target: hal::Attachment {
-                    view: view.raw.as_ref().unwrap().as_ref(),
+                    view: view.raw.as_ref().unwrap(),
                     usage,
                 },
                 depth_ops: at.depth.hal_ops(),
@@ -1039,7 +1039,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                     .push(resolve_view.to_render_attachment(hal::TextureUses::COLOR_TARGET));
 
                 hal_resolve_target = Some(hal::Attachment {
-                    view: resolve_view.raw.as_ref().unwrap().as_ref(),
+                    view: resolve_view.raw.as_ref().unwrap(),
                     usage: hal::TextureUses::COLOR_TARGET,
                 });
             }
@@ -1167,7 +1167,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                 color_attachments: &[],
                 depth_stencil_attachment: Some(hal::DepthStencilAttachment {
                     target: hal::Attachment {
-                        view: view.raw.as_ref().unwrap().as_ref(),
+                        view: view.raw.as_ref().unwrap(),
                         usage: hal::TextureUses::DEPTH_STENCIL_WRITE,
                     },
                     depth_ops,
@@ -1540,7 +1540,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         );
 
                         let bb = hal::BufferBinding {
-                            buffer: buf_raw.as_ref(),
+                            buffer: buf_raw,
                             offset,
                             size,
                         };
@@ -1591,7 +1591,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         );
 
                         let bb = hal::BufferBinding {
-                            buffer: buf_raw.as_ref(),
+                            buffer: buf_raw,
                             offset,
                             size,
                         };

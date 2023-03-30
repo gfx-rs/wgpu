@@ -42,7 +42,7 @@ pub struct ShaderModuleDescriptor<'a> {
 
 #[derive(Debug)]
 pub struct ShaderModule<A: HalApi> {
-    pub(crate) raw: Option<Arc<A::ShaderModule>>,
+    pub(crate) raw: Option<A::ShaderModule>,
     pub(crate) device: Arc<Device<A>>,
     pub(crate) interface: Option<validation::Interface>,
     pub(crate) info: ResourceInfo<ShaderModuleId>,
@@ -52,20 +52,17 @@ pub struct ShaderModule<A: HalApi> {
 
 impl<A: HalApi> Drop for ShaderModule<A> {
     fn drop(&mut self) {
-        #[cfg(feature = "trace")]
-        if let Some(ref trace) = self.device.trace {
-            trace
-                .lock()
-                .add(trace::Action::DestroyShaderModule(self.info.id()));
-        }
-        let raw = self.raw.take().unwrap();
-        if let Ok(raw) = Arc::try_unwrap(raw) {
+        if let Some(raw) = self.raw.take() {
+            #[cfg(feature = "trace")]
+            if let Some(ref trace) = self.device.trace {
+                trace
+                    .lock()
+                    .add(trace::Action::DestroyShaderModule(self.info.id()));
+            }
             unsafe {
                 use hal::Device;
                 self.device.raw.as_ref().unwrap().destroy_shader_module(raw);
             }
-        } else {
-            panic!("ShaderModule raw cannot be destroyed because is still in use");
         }
     }
 }
@@ -232,7 +229,7 @@ pub enum CreateComputePipelineError {
 
 #[derive(Debug)]
 pub struct ComputePipeline<A: HalApi> {
-    pub(crate) raw: Option<Arc<A::ComputePipeline>>,
+    pub(crate) raw: Option<A::ComputePipeline>,
     pub(crate) layout_id: Valid<PipelineLayoutId>,
     pub(crate) device: Arc<Device<A>>,
     pub(crate) late_sized_buffer_groups: ArrayVec<LateSizedBufferGroup, { hal::MAX_BIND_GROUPS }>,
@@ -241,8 +238,7 @@ pub struct ComputePipeline<A: HalApi> {
 
 impl<A: HalApi> Drop for ComputePipeline<A> {
     fn drop(&mut self) {
-        let raw = self.raw.take().unwrap();
-        if let Ok(raw) = Arc::try_unwrap(raw) {
+        if let Some(raw) = self.raw.take() {
             unsafe {
                 use hal::Device;
                 self.device
@@ -251,8 +247,6 @@ impl<A: HalApi> Drop for ComputePipeline<A> {
                     .unwrap()
                     .destroy_compute_pipeline(raw);
             }
-        } else {
-            panic!("ComputePipeline raw cannot be destroyed because is still in use");
         }
     }
 }
@@ -451,7 +445,7 @@ impl Default for VertexStep {
 
 #[derive(Debug)]
 pub struct RenderPipeline<A: HalApi> {
-    pub(crate) raw: Option<Arc<A::RenderPipeline>>,
+    pub(crate) raw: Option<A::RenderPipeline>,
     pub(crate) layout_id: Valid<PipelineLayoutId>,
     pub(crate) device: Arc<Device<A>>,
     pub(crate) pass_context: RenderPassContext,
@@ -464,8 +458,7 @@ pub struct RenderPipeline<A: HalApi> {
 
 impl<A: HalApi> Drop for RenderPipeline<A> {
     fn drop(&mut self) {
-        let raw = self.raw.take().unwrap();
-        if let Ok(raw) = Arc::try_unwrap(raw) {
+        if let Some(raw) = self.raw.take() {
             unsafe {
                 use hal::Device;
                 self.device
@@ -474,8 +467,6 @@ impl<A: HalApi> Drop for RenderPipeline<A> {
                     .unwrap()
                     .destroy_render_pipeline(raw);
             }
-        } else {
-            panic!("RenderPipeline raw cannot be destroyed because is still in use");
         }
     }
 }

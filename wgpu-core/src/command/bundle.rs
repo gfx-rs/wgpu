@@ -813,7 +813,7 @@ impl<A: HalApi> RenderBundle<A> {
                         .as_ref()
                         .ok_or(ExecutionError::DestroyedBuffer(buffer_id))?;
                     let bb = hal::BufferBinding {
-                        buffer: buffer.as_ref(),
+                        buffer,
                         offset,
                         size,
                     };
@@ -832,7 +832,7 @@ impl<A: HalApi> RenderBundle<A> {
                         .as_ref()
                         .ok_or(ExecutionError::DestroyedBuffer(buffer_id))?;
                     let bb = hal::BufferBinding {
-                        buffer: buffer.as_ref(),
+                        buffer,
                         offset,
                         size,
                     };

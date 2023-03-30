@@ -339,7 +339,7 @@ pub type BufferDescriptor<'a> = wgt::BufferDescriptor<Label<'a>>;
 
 #[derive(Debug)]
 pub struct Buffer<A: HalApi> {
-    pub(crate) raw: Option<Arc<A::Buffer>>,
+    pub(crate) raw: Option<A::Buffer>,
     pub(crate) device: Arc<Device<A>>,
     pub(crate) usage: wgt::BufferUsages,
     pub(crate) size: wgt::BufferAddress,
@@ -351,14 +351,10 @@ pub struct Buffer<A: HalApi> {
 
 impl<A: HalApi> Drop for Buffer<A> {
     fn drop(&mut self) {
-        if let Some(buffer) = self.raw.take() {
-            if let Ok(raw) = Arc::try_unwrap(buffer) {
-                unsafe {
-                    use hal::Device;
-                    self.device.raw.as_ref().unwrap().destroy_buffer(raw);
-                }
-            } else {
-                panic!("Buffer cannot be destroyed because is still in use");
+        if let Some(raw) = self.raw.take() {
+            unsafe {
+                use hal::Device;
+                self.device.raw.as_ref().unwrap().destroy_buffer(raw);
             }
         }
     }
@@ -434,7 +430,7 @@ pub type TextureDescriptor<'a> = wgt::TextureDescriptor<Label<'a>, Vec<wgt::Text
 #[derive(Debug)]
 pub(crate) enum TextureInner<A: HalApi> {
     Native {
-        raw: Option<Arc<A::Texture>>,
+        raw: Option<A::Texture>,
     },
     Surface {
         raw: A::SurfaceTexture,
@@ -488,13 +484,8 @@ impl<A: HalApi> Drop for Texture<A> {
         }
         if let Some(inner) = self.inner.take() {
             if let TextureInner::Native { raw: Some(raw) } = inner {
-                let raw = Arc::try_unwrap(raw);
                 unsafe {
-                    self.device
-                        .raw
-                        .as_ref()
-                        .unwrap()
-                        .destroy_texture(raw.unwrap());
+                    self.device.raw.as_ref().unwrap().destroy_texture(raw);
                 }
             }
         }
@@ -747,7 +738,7 @@ pub enum TextureViewNotRenderableReason {
 
 #[derive(Debug)]
 pub struct TextureView<A: HalApi> {
-    pub(crate) raw: Option<Arc<A::TextureView>>,
+    pub(crate) raw: Option<A::TextureView>,
     // The parent's refcount is held alive, but the parent may still be deleted
     // if it's a surface texture. TODO: make this cleaner.
     pub(crate) parent_id: Valid<TextureId>,
@@ -764,14 +755,11 @@ pub struct TextureView<A: HalApi> {
 
 impl<A: HalApi> Drop for TextureView<A> {
     fn drop(&mut self) {
-        use hal::Device;
-        let raw = Arc::try_unwrap(self.raw.take().unwrap());
-        unsafe {
-            self.device
-                .raw
-                .as_ref()
-                .unwrap()
-                .destroy_texture_view(raw.unwrap());
+        if let Some(raw) = self.raw.take() {
+            unsafe {
+                use hal::Device;
+                self.device.raw.as_ref().unwrap().destroy_texture_view(raw);
+            }
         }
     }
 }
@@ -865,7 +853,7 @@ pub struct SamplerDescriptor<'a> {
 
 #[derive(Debug)]
 pub struct Sampler<A: HalApi> {
-    pub(crate) raw: Option<Arc<A::Sampler>>,
+    pub(crate) raw: Option<A::Sampler>,
     pub(crate) device: Arc<Device<A>>,
     pub(crate) info: ResourceInfo<SamplerId>,
     /// `true` if this is a comparison sampler
@@ -876,14 +864,11 @@ pub struct Sampler<A: HalApi> {
 
 impl<A: HalApi> Drop for Sampler<A> {
     fn drop(&mut self) {
-        let raw = self.raw.take().unwrap();
-        if let Ok(raw) = Arc::try_unwrap(raw) {
+        if let Some(raw) = self.raw.take() {
             unsafe {
                 use hal::Device;
                 self.device.raw.as_ref().unwrap().destroy_sampler(raw);
             }
-        } else {
-            panic!("Sampler raw cannot be destroyed because is still in use");
         }
     }
 }
@@ -955,7 +940,7 @@ pub type QuerySetDescriptor<'a> = wgt::QuerySetDescriptor<Label<'a>>;
 
 #[derive(Debug)]
 pub struct QuerySet<A: HalApi> {
-    pub(crate) raw: Option<Arc<A::QuerySet>>,
+    pub(crate) raw: Option<A::QuerySet>,
     pub(crate) device: Arc<Device<A>>,
     pub(crate) info: ResourceInfo<QuerySetId>,
     pub(crate) desc: wgt::QuerySetDescriptor<()>,
@@ -963,14 +948,11 @@ pub struct QuerySet<A: HalApi> {
 
 impl<A: HalApi> Drop for QuerySet<A> {
     fn drop(&mut self) {
-        let raw = self.raw.take().unwrap();
-        if let Ok(raw) = Arc::try_unwrap(raw) {
+        if let Some(raw) = self.raw.take() {
             unsafe {
                 use hal::Device;
                 self.device.raw.as_ref().unwrap().destroy_query_set(raw);
             }
-        } else {
-            panic!("QuerySet raw cannot be destroyed because is still in use");
         }
     }
 }
