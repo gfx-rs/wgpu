@@ -8,14 +8,14 @@ use wgt::{
 };
 
 use crate::{
-    BindGroupDescriptor, BindGroupLayoutDescriptor, Blas, Buffer, BufferAsyncError,
-    BufferDescriptor, CommandEncoderDescriptor, ComputePassDescriptor, ComputePipelineDescriptor,
-    ContextBlasBuildEntry, ContextBlasTriangleGeometry, CreateBlasDescriptor, CreateTlasDescriptor,
-    DeviceDescriptor, Error, ErrorFilter, ImageCopyBuffer, ImageCopyTexture, Maintain, MapMode,
+    BindGroupDescriptor, BindGroupLayoutDescriptor, Buffer, BufferAsyncError, BufferDescriptor,
+    CommandEncoderDescriptor, ComputePassDescriptor, ComputePipelineDescriptor,
+    ContextBlasTriangleGeometry, CreateBlasDescriptor, CreateTlasDescriptor, DeviceDescriptor,
+    Error, ErrorFilter, ImageCopyBuffer, ImageCopyTexture, Maintain, MapMode,
     PipelineLayoutDescriptor, QuerySetDescriptor, RenderBundleDescriptor,
     RenderBundleEncoderDescriptor, RenderPassDescriptor, RenderPipelineDescriptor,
     RequestAdapterOptions, RequestDeviceError, SamplerDescriptor, ShaderModuleDescriptor,
-    ShaderModuleDescriptorSpirV, Texture, TextureDescriptor, TextureViewDescriptor, Tlas,
+    ShaderModuleDescriptorSpirV, Texture, TextureDescriptor, TextureViewDescriptor,
     UncapturedErrorHandler,
 };
 

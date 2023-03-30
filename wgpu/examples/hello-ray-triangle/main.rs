@@ -1,7 +1,7 @@
 use bytemuck::{Pod, Zeroable};
 use glam::{Affine3A, Mat4, Quat, Vec3};
-use std::{borrow::Cow, iter, mem, num::NonZeroU32, time::Instant};
-use wgc::ray_tracing::BlasBuildEntry;
+use std::{borrow::Cow, iter, mem, time::Instant};
+
 use wgpu::util::DeviceExt;
 use winit::{
     dpi::{LogicalSize, PhysicalPosition},
@@ -326,7 +326,6 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
         usage: wgpu::BufferUsages::UNIFORM,
     });
 
-    let vertex_size = mem::size_of::<Vertex>();
     let (vertex_data, index_data) = create_vertices();
 
     let vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -491,7 +490,7 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
     }
     queue.submit(Some(encoder.finish()));
 
-    let mut start_inst = Instant::now();
+    let start_inst = Instant::now();
 
     event_loop.run(move |event, _, control_flow| {
         // Have the closure take ownership of the resources.
