@@ -317,6 +317,7 @@ pub(crate) struct BindGroupStates<A: hub::HalApi> {
     pub textures: TextureBindGroupState<A>,
     pub views: StatelessBindGroupSate<resource::TextureView<A>, id::TextureViewId>,
     pub samplers: StatelessBindGroupSate<resource::Sampler<A>, id::SamplerId>,
+    pub acceleration_structures: StatelessBindGroupSate<resource::Tlas<A>, id::TlasId>,
 }
 
 impl<A: hub::HalApi> BindGroupStates<A> {
@@ -326,6 +327,7 @@ impl<A: hub::HalApi> BindGroupStates<A> {
             textures: TextureBindGroupState::new(),
             views: StatelessBindGroupSate::new(),
             samplers: StatelessBindGroupSate::new(),
+            acceleration_structures: StatelessBindGroupSate::new(),
         }
     }
 
@@ -338,6 +340,7 @@ impl<A: hub::HalApi> BindGroupStates<A> {
         self.textures.optimize();
         self.views.optimize();
         self.samplers.optimize();
+        self.acceleration_structures.optimize();
     }
 }
 

@@ -1059,6 +1059,9 @@ impl crate::Context for Context {
                             &remaining_arrayed_texture_views[array.len()..];
                         bm::BindingResource::TextureViewArray(Owned(views))
                     }
+                    BindingResource::AccelerationStructure(acceleration_structure) => {
+                        bm::BindingResource::AccelerationStructure(acceleration_structure.id.into())
+                    }
                 },
             })
             .collect::<Vec<_>>();

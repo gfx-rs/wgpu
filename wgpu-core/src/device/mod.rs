@@ -1493,6 +1493,10 @@ impl<A: HalApi> Device<A> {
                 .flags
                 .contains(wgt::DownlevelFlags::MULTISAMPLED_SHADING),
         );
+        caps.set(
+            Caps::RAY_QUERY,
+            self.features.contains(wgt::Features::RAY_QUERY),
+        );
 
         let info = naga::valid::Validator::new(naga::valid::ValidationFlags::all(), caps)
             .validate(&module)
@@ -1744,7 +1748,7 @@ impl<A: HalApi> Device<A> {
                         },
                     )
                 }
-                Bt::AccelerationStructure => todo!(),
+                Bt::AccelerationStructure => (None, WritableStorage::No),
             };
 
             // Validate the count parameter
@@ -2036,7 +2040,8 @@ impl<A: HalApi> Device<A> {
         let (buffer_guard, mut token) = hub.buffers.read(token);
         let (texture_guard, mut token) = hub.textures.read(&mut token); //skip token
         let (texture_view_guard, mut token) = hub.texture_views.read(&mut token);
-        let (sampler_guard, _) = hub.samplers.read(&mut token);
+        let (sampler_guard, mut token) = hub.samplers.read(&mut token);
+        let (tlas_guard, _) = hub.tlas_s.read(&mut token);
 
         let mut used_buffer_ranges = Vec::new();
         let mut used_texture_ranges = Vec::new();
@@ -2044,6 +2049,7 @@ impl<A: HalApi> Device<A> {
         let mut hal_buffers = Vec::new();
         let mut hal_samplers = Vec::new();
         let mut hal_textures = Vec::new();
+        let mut hal_tlas_s = Vec::new();
         for entry in desc.entries.iter() {
             let binding = entry.binding;
             // Find the corresponding declaration in the layout
@@ -2206,6 +2212,16 @@ impl<A: HalApi> Device<A> {
 
                     (res_index, num_bindings)
                 }
+                Br::AccelerationStructure(id) => {
+                    let tlas = used
+                        .acceleration_structures
+                        .add_single(&*&tlas_guard, id)
+                        .ok_or(Error::InvalidTlas(id))?;
+
+                    let res_index = hal_tlas_s.len();
+                    hal_tlas_s.push(&tlas.raw);
+                    (res_index, 1)
+                }
             };
 
             hal_entries.push(hal::BindGroupEntry {
@@ -2231,7 +2247,7 @@ impl<A: HalApi> Device<A> {
             buffers: &hal_buffers,
             samplers: &hal_samplers,
             textures: &hal_textures,
-            acceleration_structures: &[],
+            acceleration_structures: &hal_tlas_s,
         };
         let raw = unsafe {
             self.raw

@@ -550,6 +550,7 @@ impl<A: HalApi> Access<Tlas<A>> for Device<A> {}
 impl<A: HalApi> Access<Tlas<A>> for CommandBuffer<A> {}
 impl<A: HalApi> Access<Tlas<A>> for Buffer<A> {}
 impl<A: HalApi> Access<Tlas<A>> for Blas<A> {}
+impl<A: HalApi> Access<Tlas<A>> for Sampler<A> {}
 
 #[cfg(debug_assertions)]
 thread_local! {

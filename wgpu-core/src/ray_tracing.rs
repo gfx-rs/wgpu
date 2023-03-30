@@ -146,7 +146,7 @@ impl<A: HalApi> Device<A> {
         .map_err(DeviceError::from)?;
 
         Ok(resource::Tlas {
-            raw: Some(raw),
+            raw: raw,
             device_id: Stored {
                 value: id::Valid(self_id),
                 ref_count: self.life_guard.add_ref(),

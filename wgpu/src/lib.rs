@@ -760,6 +760,8 @@ pub enum BindingResource<'a> {
     /// Corresponds to [`wgt::BindingType::Texture`] and [`wgt::BindingType::StorageTexture`] with
     /// [`BindGroupLayoutEntry::count`] set to Some.
     TextureViewArray(&'a [&'a TextureView]),
+    /// Todo
+    AccelerationStructure(&'a Tlas),
 }
 static_assertions::assert_impl_all!(BindingResource: Send, Sync);
 

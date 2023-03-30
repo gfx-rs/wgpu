@@ -375,7 +375,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 mode: hal::AccelerationStructureBuildMode::Build, // TODO
                 flags: tlas.flags,
                 source_acceleration_structure: None,
-                destination_acceleration_structure: tlas.raw.as_ref().unwrap(),
+                destination_acceleration_structure: &tlas.raw,
                 scratch_buffer: &scratch_buffer,
             })
         }

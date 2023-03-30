@@ -2,7 +2,9 @@ use crate::{
     device::{DeviceError, MissingDownlevelFlags, MissingFeatures, SHADER_STAGE_COUNT},
     error::{ErrorFormatter, PrettyError},
     hub::{HalApi, Resource},
-    id::{BindGroupLayoutId, BufferId, DeviceId, SamplerId, TextureId, TextureViewId, Valid},
+    id::{
+        BindGroupLayoutId, BufferId, DeviceId, SamplerId, TextureId, TextureViewId, TlasId, Valid,
+    },
     init_tracker::{BufferInitTrackerAction, TextureInitTrackerAction},
     track::{BindGroupStates, UsageConflict},
     validation::{MissingBufferUsageError, MissingTextureUsageError},
@@ -169,6 +171,8 @@ pub enum CreateBindGroupError {
     StorageReadNotSupported(wgt::TextureFormat),
     #[error(transparent)]
     ResourceUsageConflict(#[from] UsageConflict),
+    #[error("Tlas {0:?} is invalid or destroyed")]
+    InvalidTlas(TlasId),
 }
 
 impl PrettyError for CreateBindGroupError {
@@ -295,6 +299,7 @@ pub(crate) struct BindingTypeMaxCountValidator {
     storage_buffers: PerStageBindingTypeCounter,
     storage_textures: PerStageBindingTypeCounter,
     uniform_buffers: PerStageBindingTypeCounter,
+    acceleration_structures: PerStageBindingTypeCounter,
 }
 
 impl BindingTypeMaxCountValidator {
@@ -330,7 +335,9 @@ impl BindingTypeMaxCountValidator {
             wgt::BindingType::StorageTexture { .. } => {
                 self.storage_textures.add(binding.visibility, count);
             }
-            wgt::BindingType::AccelerationStructure => todo!(),
+            wgt::BindingType::AccelerationStructure => {
+                self.acceleration_structures.add(binding.visibility, count);
+            }
         }
     }
 
@@ -680,6 +687,7 @@ pub enum BindingResource<'a> {
     SamplerArray(Cow<'a, [SamplerId]>),
     TextureView(TextureViewId),
     TextureViewArray(Cow<'a, [TextureViewId]>),
+    AccelerationStructure(TlasId),
 }
 
 #[derive(Clone, Debug, Error)]
