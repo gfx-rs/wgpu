@@ -81,14 +81,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let mut input_barriers = Vec::<hal::BufferBarrier<A>>::new();
 
-        let mut triangle_geometry_storage =
-            Vec::<Vec<hal::AccelerationStructureTriangles<A>>>::new();
+        let mut blas_entry_storage = Vec::<hal::AccelerationStructureEntries<A>>::new();
+
+        let mut scratch_buffer_blas_size = 0;
+        let mut scratch_buffer_blas_offsets = Vec::<u64>::new();
+
+        let mut blas_refs = Vec::<&Blas<A>>::new();
 
         for entry in &blas_storage {
             match &entry.geometries {
                 BlasGeometriesStorage::TriangleGeometries(triangle_geometries) => {
-                    triangle_geometry_storage
-                        .push(Vec::<hal::AccelerationStructureTriangles<A>>::new());
+                    let mut triangle_entries = Vec::<hal::AccelerationStructureTriangles<A>>::new();
 
                     for mesh in triangle_geometries {
                         let vertex_buffer = {
@@ -236,48 +239,30 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             }),
                             flags: mesh.size.flags,
                         };
-                        triangle_geometry_storage
-                            .last_mut()
-                            .unwrap()
-                            .push(triangles);
+
+                        triangle_entries.push(triangles);
                     }
-                }
-            };
-        }
-
-        let mut blas_entry_storage = Vec::<hal::AccelerationStructureEntries<A>>::new();
-
-        let mut scratch_buffer_blas_size = 0;
-        let mut scratch_buffer_blas_offsets = Vec::<u64>::new();
-
-        let mut blas_refs = Vec::<&Blas<A>>::new();
-
-        let mut triangel_geometrie_counter = 0;
-        for entry in &blas_storage {
-            match &entry.geometries {
-                BlasGeometriesStorage::TriangleGeometries(_) => {
                     blas_entry_storage.push(hal::AccelerationStructureEntries::Triangles(
-                        &triangle_geometry_storage[triangel_geometrie_counter],
+                        triangle_entries,
                     ));
-                    triangel_geometrie_counter += 1;
+
+                    let blas = cmd_buf
+                        .trackers
+                        .blas_s
+                        .add_single(&blas_guard, entry.blas_id)
+                        .ok_or(BuildAccelerationStructureError::InvalidBlas(entry.blas_id))?;
+
+                    scratch_buffer_blas_offsets.push(scratch_buffer_blas_size);
+                    scratch_buffer_blas_size += blas.size_info.build_scratch_size; // TODO Alignment
+
+                    blas_refs.push(blas);
                 }
             }
-
-            let blas = cmd_buf
-                .trackers
-                .blas_s
-                .add_single(&blas_guard, entry.blas_id)
-                .ok_or(BuildAccelerationStructureError::InvalidBlas(entry.blas_id))?;
-
-            scratch_buffer_blas_offsets.push(scratch_buffer_blas_size);
-            scratch_buffer_blas_size += blas.size_info.build_scratch_size; // TODO Alignment
-
-            blas_refs.push(blas);
         }
 
         let mut scratch_buffer_tlas_size = 0;
-
         let mut tlas_storage = Vec::<(&Tlas<A>, hal::AccelerationStructureEntries<A>, u64)>::new();
+
         for entry in tlas_iter {
             let instance_buffer = {
                 let (instance_buffer, instance_pending) = cmd_buf
@@ -356,18 +341,19 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 source_acceleration_structure: None,
                 destination_acceleration_structure: &blas.raw,
                 scratch_buffer: &scratch_buffer,
+                scratch_buffer_offset: scratch_buffer_blas_offsets[i],
             })
         }
 
         let mut blas_descriptor_references =
-            Vec::<&hal::BuildAccelerationStructureDescriptor<A>>::with_capacity(blas_storage.len());
-        for (i, _entry) in blas_storage.iter().enumerate() {
-            blas_descriptor_references.push(&blas_descriptors[i]);
+            Vec::<hal::BuildAccelerationStructureDescriptor<A>>::with_capacity(blas_storage.len());
+        for descriptor in blas_descriptors {
+            blas_descriptor_references.push(descriptor);
         }
 
         let mut tlas_descriptors =
             Vec::<hal::BuildAccelerationStructureDescriptor<A>>::with_capacity(tlas_storage.len());
-        for (tlas, entries, _scratch_buffer_offset) in &tlas_storage {
+        for (tlas, entries, scratch_buffer_offset) in &tlas_storage {
             tlas_descriptors.push(hal::BuildAccelerationStructureDescriptor {
                 entries,
                 mode: hal::AccelerationStructureBuildMode::Build, // TODO
@@ -375,26 +361,35 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 source_acceleration_structure: None,
                 destination_acceleration_structure: &tlas.raw,
                 scratch_buffer: &scratch_buffer,
+                scratch_buffer_offset: *scratch_buffer_offset,
             })
         }
 
         let mut tlas_descriptor_references =
-            Vec::<&hal::BuildAccelerationStructureDescriptor<A>>::with_capacity(tlas_storage.len());
-        for descriptor in &tlas_descriptors {
+            Vec::<hal::BuildAccelerationStructureDescriptor<A>>::with_capacity(tlas_storage.len());
+        for descriptor in tlas_descriptors {
             tlas_descriptor_references.push(descriptor);
         }
 
         let cmd_buf_raw = cmd_buf.encoder.open();
+        let scratch_buffer_barrier_needed =
+            !blas_descriptor_references.is_empty() && !tlas_descriptor_references.is_empty();
         unsafe {
             cmd_buf_raw.transition_buffers(input_barriers.into_iter());
             if !blas_descriptor_references.is_empty() {
-                cmd_buf_raw.build_acceleration_structures(&blas_descriptor_references);
+                cmd_buf_raw.build_acceleration_structures(
+                    blas_descriptor_references.len() as u32,
+                    blas_descriptor_references,
+                );
             }
-            if !blas_descriptor_references.is_empty() && !tlas_descriptor_references.is_empty() {
+            if scratch_buffer_barrier_needed {
                 cmd_buf_raw.transition_buffers(iter::once(scratch_buffer_barrier));
             }
             if !tlas_descriptor_references.is_empty() {
-                cmd_buf_raw.build_acceleration_structures(&tlas_descriptor_references);
+                cmd_buf_raw.build_acceleration_structures(
+                    tlas_descriptor_references.len() as u32,
+                    tlas_descriptor_references,
+                );
             }
         }
 

@@ -80,7 +80,7 @@ impl<A: HalApi> Device<A> {
                 unsafe {
                     self.raw.get_acceleration_structure_build_sizes(
                         &hal::GetAccelerationStructureBuildSizesDescriptor {
-                            entries: &hal::AccelerationStructureEntries::Triangles(&entries),
+                            entries: &hal::AccelerationStructureEntries::Triangles(entries),
                             flags: blas_desc.flags,
                         },
                     )
