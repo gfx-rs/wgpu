@@ -366,12 +366,14 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         };
     }
 
-    unsafe fn build_acceleration_structures(
-        &mut self,
-        descriptors: &[&crate::BuildAccelerationStructureDescriptor<super::Api>],
-    ) {
+    unsafe fn build_acceleration_structures<'a, T>(&mut self, descriptor_count: u32, descriptors: T)
+    where
+        super::Api: 'a,
+        T: IntoIterator<Item = crate::BuildAccelerationStructureDescriptor<'a, super::Api>>,
+    {
         const CAPACITY_OUTER: usize = 8;
         const CAPACITY_INNER: usize = 1;
+        let descriptor_count = descriptor_count as usize;
 
         let ray_tracing_functions = match self.device.extension_fns.ray_tracing {
             Some(ref functions) => functions,
@@ -393,22 +395,22 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         let mut ranges_storage = smallvec::SmallVec::<
             [smallvec::SmallVec<[vk::AccelerationStructureBuildRangeInfoKHR; CAPACITY_INNER]>;
                 CAPACITY_OUTER],
-        >::with_capacity(descriptors.len());
+        >::with_capacity(descriptor_count);
         let mut geometries_storage = smallvec::SmallVec::<
             [smallvec::SmallVec<[vk::AccelerationStructureGeometryKHR; CAPACITY_INNER]>;
                 CAPACITY_OUTER],
-        >::with_capacity(descriptors.len());
+        >::with_capacity(descriptor_count);
 
         // pointers to all the data required for cmd_build_acceleration_structures
         let mut geometry_infos = smallvec::SmallVec::<
             [vk::AccelerationStructureBuildGeometryInfoKHR; CAPACITY_OUTER],
-        >::with_capacity(descriptors.len());
+        >::with_capacity(descriptor_count);
         let mut ranges_ptrs = smallvec::SmallVec::<
             [&[vk::AccelerationStructureBuildRangeInfoKHR]; CAPACITY_OUTER],
-        >::with_capacity(descriptors.len());
+        >::with_capacity(descriptor_count);
 
         for desc in descriptors {
-            let (geometries, ranges) = match *desc.entries {
+            let (geometries, ranges) = match desc.entries {
                 crate::AccelerationStructureEntries::Instances(ref instances) => {
                     let instance_data = vk::AccelerationStructureGeometryInstancesDataKHR::builder(
                     )
@@ -529,9 +531,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
 
             ranges_storage.push(ranges);
             geometries_storage.push(geometries);
-        }
 
-        for (i, desc) in descriptors.iter().enumerate() {
             let scratch_device_address = unsafe {
                 ray_tracing_functions
                     .buffer_device_address
@@ -549,10 +549,9 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 .ty(ty)
                 .mode(conv::map_acceleration_structure_build_mode(desc.mode))
                 .flags(conv::map_acceleration_structure_flags(desc.flags))
-                .geometries(&geometries_storage[i]) // pointer must live
                 .dst_acceleration_structure(desc.destination_acceleration_structure.raw)
                 .scratch_data(vk::DeviceOrHostAddressKHR {
-                    device_address: scratch_device_address,
+                    device_address: scratch_device_address + desc.scratch_buffer_offset,
                 });
 
             if desc.mode == crate::AccelerationStructureBuildMode::Update {
@@ -563,6 +562,11 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             }
 
             geometry_infos.push(*geometry_info);
+        }
+
+        for (i, geometry_info) in geometry_infos.iter_mut().enumerate() {
+            geometry_info.geometry_count = geometries_storage[i].len() as u32;
+            geometry_info.p_geometries = geometries_storage[i].as_ptr();
             ranges_ptrs.push(&ranges_storage[i]);
         }
 

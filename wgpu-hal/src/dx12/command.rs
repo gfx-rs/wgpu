@@ -1141,10 +1141,14 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         };
     }
 
-    unsafe fn build_acceleration_structures(
+    unsafe fn build_acceleration_structures<'a, T>(
         &mut self,
-        _desc: &[&crate::BuildAccelerationStructureDescriptor<super::Api>],
-    ) {
+        _descriptor_count: u32,
+        _descriptors: T,
+    ) where
+        super::Api: 'a,
+        T: IntoIterator<Item = crate::BuildAccelerationStructureDescriptor<'a, super::Api>>,
+    {
         // Implement using `BuildRaytracingAccelerationStructure`:
         // https://microsoft.github.io/DirectX-Specs/d3d/Raytracing.html#buildraytracingaccelerationstructure
         todo!()

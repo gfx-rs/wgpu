@@ -575,10 +575,13 @@ pub trait CommandEncoder<A: Api>: Send + Sync + fmt::Debug {
     /// Consequences of this limitation:
     /// - scratch buffers need to be unique
     /// - a tlas can't be build in the same call with a blas it contains
-    unsafe fn build_acceleration_structures(
+    unsafe fn build_acceleration_structures<'a, T>(
         &mut self,
-        descriptors: &[&BuildAccelerationStructureDescriptor<A>],
-    );
+        descriptor_count: u32,
+        descriptors: T,
+    ) where
+        A: 'a,
+        T: IntoIterator<Item = BuildAccelerationStructureDescriptor<'a, A>>;
 }
 
 bitflags!(
@@ -1380,6 +1383,7 @@ pub struct BuildAccelerationStructureDescriptor<'a, A: Api> {
     pub source_acceleration_structure: Option<&'a A::AccelerationStructure>,
     pub destination_acceleration_structure: &'a A::AccelerationStructure,
     pub scratch_buffer: &'a A::Buffer,
+    pub scratch_buffer_offset: wgt::BufferAddress,
 }
 
 /// - All buffers, buffer addresses and offsets will be ignored.
@@ -1400,8 +1404,8 @@ pub struct GetAccelerationStructureBuildSizesDescriptor<'a, A: Api> {
 #[derive(Debug)]
 pub enum AccelerationStructureEntries<'a, A: Api> {
     Instances(AccelerationStructureInstances<'a, A>),
-    Triangles(&'a [AccelerationStructureTriangles<'a, A>]),
-    AABBs(&'a [AccelerationStructureAABBs<'a, A>]),
+    Triangles(Vec<AccelerationStructureTriangles<'a, A>>),
+    AABBs(Vec<AccelerationStructureAABBs<'a, A>>),
 }
 
 /// * `first_vertex` - offset in the vertex buffer (as number of vertices)

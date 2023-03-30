@@ -1590,9 +1590,9 @@ impl crate::Device<super::Api> for super::Device {
         }
     }
 
-    unsafe fn get_acceleration_structure_build_sizes(
+    unsafe fn get_acceleration_structure_build_sizes<'a>(
         &self,
-        _desc: &crate::GetAccelerationStructureBuildSizesDescriptor<super::Api>,
+        _desc: &crate::GetAccelerationStructureBuildSizesDescriptor<'a, super::Api>,
     ) -> crate::AccelerationStructureBuildSizes {
         // Implement using `GetRaytracingAccelerationStructurePrebuildInfo`:
         // https://microsoft.github.io/DirectX-Specs/d3d/Raytracing.html#getraytracingaccelerationstructureprebuildinfo

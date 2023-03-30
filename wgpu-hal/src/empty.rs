@@ -243,9 +243,9 @@ impl crate::Device<Api> for Context {
     ) -> DeviceResult<Resource> {
         Ok(Resource)
     }
-    unsafe fn get_acceleration_structure_build_sizes(
+    unsafe fn get_acceleration_structure_build_sizes<'a>(
         &self,
-        _desc: &crate::GetAccelerationStructureBuildSizesDescriptor<Api>,
+        _desc: &crate::GetAccelerationStructureBuildSizesDescriptor<'a, Api>,
     ) -> crate::AccelerationStructureBuildSizes {
         Default::default()
     }
@@ -431,9 +431,13 @@ impl crate::CommandEncoder<Api> for Encoder {
     unsafe fn dispatch(&mut self, count: [u32; 3]) {}
     unsafe fn dispatch_indirect(&mut self, buffer: &Resource, offset: wgt::BufferAddress) {}
 
-    unsafe fn build_acceleration_structures(
+    unsafe fn build_acceleration_structures<'a, T>(
         &mut self,
-        _desc: &[&crate::BuildAccelerationStructureDescriptor<Api>],
-    ) {
+        _descriptor_count: u32,
+        descriptors: T,
+    ) where
+        Api: 'a,
+        T: IntoIterator<Item = crate::BuildAccelerationStructureDescriptor<'a, Api>>,
+    {
     }
 }
