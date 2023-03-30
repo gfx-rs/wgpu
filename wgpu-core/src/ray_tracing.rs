@@ -283,12 +283,3 @@ pub struct TlasBuildEntry {
     pub instance_buffer_id: BufferId,
     pub instance_count: u32,
 }
-
-pub enum BlasGeometriesStorage<'a> {
-    TriangleGeometries(Vec<BlasTriangleGeometry<'a>>),
-}
-
-pub struct BlasBuildEntryStorage<'a> {
-    pub blas_id: BlasId,
-    pub geometries: BlasGeometriesStorage<'a>,
-}
