@@ -9,6 +9,7 @@ use ash::{
     extensions::{ext, khr},
     vk,
 };
+use parking_lot::RwLock;
 
 unsafe extern "system" fn debug_utils_messenger_callback(
     message_severity: vk::DebugUtilsMessageSeverityFlagsEXT,
@@ -465,7 +466,7 @@ impl super::Instance {
             raw: surface,
             functor,
             instance: Arc::clone(&self.shared),
-            swapchain: None,
+            swapchain: RwLock::new(None),
         }
     }
 }
@@ -707,33 +708,34 @@ impl crate::Instance<super::Api> for super::Instance {
 
 impl crate::Surface<super::Api> for super::Surface {
     unsafe fn configure(
-        &mut self,
+        &self,
         device: &super::Device,
         config: &crate::SurfaceConfiguration,
     ) -> Result<(), crate::SurfaceError> {
-        let old = self
-            .swapchain
+        let mut swap_chain = self.swapchain.write();
+        let old = swap_chain
             .take()
             .map(|sc| unsafe { sc.release_resources(&device.shared.raw) });
 
         let swapchain = unsafe { device.create_swapchain(self, config, old)? };
-        self.swapchain = Some(swapchain);
+        *swap_chain = Some(swapchain);
 
         Ok(())
     }
 
-    unsafe fn unconfigure(&mut self, device: &super::Device) {
-        if let Some(sc) = self.swapchain.take() {
+    unsafe fn unconfigure(&self, device: &super::Device) {
+        if let Some(sc) = self.swapchain.write().take() {
             let swapchain = unsafe { sc.release_resources(&device.shared.raw) };
             unsafe { swapchain.functor.destroy_swapchain(swapchain.raw, None) };
         }
     }
 
     unsafe fn acquire_texture(
-        &mut self,
+        &self,
         timeout: Option<std::time::Duration>,
     ) -> Result<Option<crate::AcquiredSurfaceTexture<super::Api>>, crate::SurfaceError> {
-        let sc = self.swapchain.as_mut().unwrap();
+        let mut swapchain = self.swapchain.write();
+        let sc = swapchain.as_mut().unwrap();
 
         let mut timeout_ns = match timeout {
             Some(duration) => duration.as_nanos() as u64,
@@ -820,5 +822,5 @@ impl crate::Surface<super::Api> for super::Surface {
         }))
     }
 
-    unsafe fn discard_texture(&mut self, _texture: super::SurfaceTexture) {}
+    unsafe fn discard_texture(&self, _texture: super::SurfaceTexture) {}
 }

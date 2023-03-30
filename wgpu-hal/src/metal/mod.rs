@@ -377,7 +377,7 @@ impl crate::Queue<Api> for Queue {
     }
     unsafe fn present(
         &mut self,
-        _surface: &mut Surface,
+        _surface: &Surface,
         texture: SurfaceTexture,
     ) -> Result<(), crate::SurfaceError> {
         let queue = &self.raw.lock();

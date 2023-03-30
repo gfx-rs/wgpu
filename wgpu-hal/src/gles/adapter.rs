@@ -1,5 +1,6 @@
 use glow::HasContext;
-use std::sync::Arc;
+use parking_lot::Mutex;
+use std::sync::{atomic::AtomicU8, Arc};
 use wgt::AstcChannel;
 
 use crate::auxil::db;
@@ -685,9 +686,9 @@ impl crate::Adapter<super::Api> for super::Adapter {
                 shader_clear_program,
                 shader_clear_program_color_uniform_location,
                 zero_buffer,
-                temp_query_results: Vec::new(),
-                draw_buffer_count: 1,
-                current_index_buffer: None,
+                temp_query_results: Mutex::new(Vec::new()),
+                draw_buffer_count: AtomicU8::new(1),
+                current_index_buffer: Mutex::new(None),
             },
         })
     }

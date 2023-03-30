@@ -171,7 +171,7 @@ impl super::Surface {
 
 impl crate::Surface<super::Api> for super::Surface {
     unsafe fn configure(
-        &mut self,
+        &self,
         device: &super::Device,
         config: &crate::SurfaceConfiguration,
     ) -> Result<(), crate::SurfaceError> {
@@ -233,12 +233,12 @@ impl crate::Surface<super::Api> for super::Surface {
         Ok(())
     }
 
-    unsafe fn unconfigure(&mut self, _device: &super::Device) {
+    unsafe fn unconfigure(&self, _device: &super::Device) {
         self.swapchain_format = None;
     }
 
     unsafe fn acquire_texture(
-        &mut self,
+        &self,
         _timeout_ms: Option<std::time::Duration>, //TODO
     ) -> Result<Option<crate::AcquiredSurfaceTexture<super::Api>>, crate::SurfaceError> {
         let render_layer = self.render_layer.lock();
@@ -274,5 +274,5 @@ impl crate::Surface<super::Api> for super::Surface {
         }))
     }
 
-    unsafe fn discard_texture(&mut self, _texture: super::SurfaceTexture) {}
+    unsafe fn discard_texture(&self, _texture: super::SurfaceTexture) {}
 }

@@ -90,16 +90,21 @@ use crate::{
         RenderPassCompatibilityCheckType, RenderPassContext, SHADER_STAGE_COUNT,
     },
     error::{ErrorFormatter, PrettyError},
-    hub::{GlobalIdentityHandlerFactory, HalApi, Hub, Resource, Storage, Token},
-    id,
+    hal_api::HalApi,
+    hub::Hub,
+    id::{self, RenderBundleId},
+    identity::GlobalIdentityHandlerFactory,
     init_tracker::{BufferInitTrackerAction, MemoryInitKind, TextureInitTrackerAction},
     pipeline::{self, PipelineFlags},
     resource,
+    resource::{Resource, ResourceInfo},
+    storage::Storage,
     track::RenderBundleScope,
     validation::check_buffer_usage,
-    Label, LabelHelpers, LifeGuard, Stored,
+    Label, LabelHelpers,
 };
 use arrayvec::ArrayVec;
+
 use std::{borrow::Cow, mem, num::NonZeroU32, ops::Range};
 use thiserror::Error;
 
@@ -253,14 +258,13 @@ impl RenderBundleEncoder {
         desc: &RenderBundleDescriptor,
         device: &Device<A>,
         hub: &Hub<A, G>,
-        token: &mut Token<Device<A>>,
     ) -> Result<RenderBundle<A>, RenderBundleError> {
-        let (pipeline_layout_guard, mut token) = hub.pipeline_layouts.read(token);
-        let (bind_group_guard, mut token) = hub.bind_groups.read(&mut token);
-        let (pipeline_guard, mut token) = hub.render_pipelines.read(&mut token);
-        let (query_set_guard, mut token) = hub.query_sets.read(&mut token);
-        let (buffer_guard, mut token) = hub.buffers.read(&mut token);
-        let (texture_guard, _) = hub.textures.read(&mut token);
+        let pipeline_layout_guard = hub.pipeline_layouts.read();
+        let bind_group_guard = hub.bind_groups.read();
+        let pipeline_guard = hub.render_pipelines.read();
+        let query_set_guard = hub.query_sets.read();
+        let buffer_guard = hub.buffers.read();
+        let texture_guard = hub.textures.read();
 
         let mut state = State {
             trackers: RenderBundleScope::new(
@@ -298,7 +302,7 @@ impl RenderBundleEncoder {
                         .add_single(&*bind_group_guard, bind_group_id)
                         .ok_or(RenderCommandError::InvalidBindGroup(bind_group_id))
                         .map_pass_err(scope)?;
-                    self.check_valid_to_use(bind_group.device_id.value)
+                    self.check_valid_to_use(bind_group.device.info.id())
                         .map_pass_err(scope)?;
 
                     let max_bind_groups = device.limits.max_bind_groups;
@@ -363,7 +367,7 @@ impl RenderBundleEncoder {
                         .add_single(&*pipeline_guard, pipeline_id)
                         .ok_or(RenderCommandError::InvalidPipeline(pipeline_id))
                         .map_pass_err(scope)?;
-                    self.check_valid_to_use(pipeline.device_id.value)
+                    self.check_valid_to_use(pipeline.device.info.id())
                         .map_pass_err(scope)?;
 
                     self.context
@@ -380,7 +384,7 @@ impl RenderBundleEncoder {
                             .map_pass_err(scope);
                     }
 
-                    let layout = &pipeline_layout_guard[pipeline.layout_id.value];
+                    let layout = &pipeline_layout_guard[pipeline.layout_id];
                     let pipeline_state = PipelineState::new(pipeline_id, pipeline, layout);
 
                     commands.push(command);
@@ -405,7 +409,7 @@ impl RenderBundleEncoder {
                         .buffers
                         .merge_single(&*buffer_guard, buffer_id, hal::BufferUses::INDEX)
                         .map_pass_err(scope)?;
-                    self.check_valid_to_use(buffer.device_id.value)
+                    self.check_valid_to_use(buffer.device.info.id())
                         .map_pass_err(scope)?;
                     check_buffer_usage(buffer.usage, wgt::BufferUsages::INDEX)
                         .map_pass_err(scope)?;
@@ -414,7 +418,7 @@ impl RenderBundleEncoder {
                         Some(s) => offset + s.get(),
                         None => buffer.size,
                     };
-                    buffer_memory_init_actions.extend(buffer.initialization_status.create_action(
+                    buffer_memory_init_actions.extend(buffer.initialization_status.read().create_action(
                         buffer_id,
                         offset..end,
                         MemoryInitKind::NeedsInitializedMemory,
@@ -433,7 +437,7 @@ impl RenderBundleEncoder {
                         .buffers
                         .merge_single(&*buffer_guard, buffer_id, hal::BufferUses::VERTEX)
                         .map_pass_err(scope)?;
-                    self.check_valid_to_use(buffer.device_id.value)
+                    self.check_valid_to_use(buffer.device.info.id())
                         .map_pass_err(scope)?;
                     check_buffer_usage(buffer.usage, wgt::BufferUsages::VERTEX)
                         .map_pass_err(scope)?;
@@ -442,7 +446,7 @@ impl RenderBundleEncoder {
                         Some(s) => offset + s.get(),
                         None => buffer.size,
                     };
-                    buffer_memory_init_actions.extend(buffer.initialization_status.create_action(
+                    buffer_memory_init_actions.extend(buffer.initialization_status.read().create_action(
                         buffer_id,
                         offset..end,
                         MemoryInitKind::NeedsInitializedMemory,
@@ -569,12 +573,12 @@ impl RenderBundleEncoder {
                         .buffers
                         .merge_single(&*buffer_guard, buffer_id, hal::BufferUses::INDIRECT)
                         .map_pass_err(scope)?;
-                    self.check_valid_to_use(buffer.device_id.value)
+                    self.check_valid_to_use(buffer.device.info.id())
                         .map_pass_err(scope)?;
                     check_buffer_usage(buffer.usage, wgt::BufferUsages::INDIRECT)
                         .map_pass_err(scope)?;
 
-                    buffer_memory_init_actions.extend(buffer.initialization_status.create_action(
+                    buffer_memory_init_actions.extend(buffer.initialization_status.read().create_action(
                         buffer_id,
                         offset..(offset + mem::size_of::<wgt::DrawIndirectArgs>() as u64),
                         MemoryInitKind::NeedsInitializedMemory,
@@ -607,12 +611,12 @@ impl RenderBundleEncoder {
                         .buffers
                         .merge_single(&*buffer_guard, buffer_id, hal::BufferUses::INDIRECT)
                         .map_pass_err(scope)?;
-                    self.check_valid_to_use(buffer.device_id.value)
+                    self.check_valid_to_use(buffer.device.info.id())
                         .map_pass_err(scope)?;
                     check_buffer_usage(buffer.usage, wgt::BufferUsages::INDIRECT)
                         .map_pass_err(scope)?;
 
-                    buffer_memory_init_actions.extend(buffer.initialization_status.create_action(
+                    buffer_memory_init_actions.extend(buffer.initialization_status.read().create_action(
                         buffer_id,
                         offset..(offset + mem::size_of::<wgt::DrawIndirectArgs>() as u64),
                         MemoryInitKind::NeedsInitializedMemory,
@@ -654,15 +658,12 @@ impl RenderBundleEncoder {
             },
             is_depth_read_only: self.is_depth_read_only,
             is_stencil_read_only: self.is_stencil_read_only,
-            device_id: Stored {
-                value: id::Valid(self.parent_id),
-                ref_count: device.life_guard.add_ref(),
-            },
+            device_id: id::Valid(self.parent_id),
             used: state.trackers,
             buffer_memory_init_actions,
             texture_memory_init_actions,
             context: self.context,
-            life_guard: LifeGuard::new(desc.label.borrow_or_default()),
+            info: ResourceInfo::new(desc.label.borrow_or_default()),
         })
     }
 
@@ -727,18 +728,19 @@ pub type RenderBundleDescriptor<'a> = wgt::RenderBundleDescriptor<Label<'a>>;
 //Note: here, `RenderBundle` is just wrapping a raw stream of render commands.
 // The plan is to back it by an actual Vulkan secondary buffer, D3D12 Bundle,
 // or Metal indirect command buffer.
+#[derive(Debug)]
 pub struct RenderBundle<A: HalApi> {
     // Normalized command stream. It can be executed verbatim,
     // without re-binding anything on the pipeline change.
     base: BasePass<RenderCommand>,
     pub(super) is_depth_read_only: bool,
     pub(super) is_stencil_read_only: bool,
-    pub(crate) device_id: Stored<id::DeviceId>,
+    pub(crate) device_id: id::Valid<id::DeviceId>,
     pub(crate) used: RenderBundleScope<A>,
     pub(super) buffer_memory_init_actions: Vec<BufferInitTrackerAction>,
     pub(super) texture_memory_init_actions: Vec<TextureInitTrackerAction>,
     pub(super) context: RenderPassContext,
-    pub(crate) life_guard: LifeGuard,
+    pub(crate) info: ResourceInfo<RenderBundleId>,
 }
 
 unsafe impl<A: HalApi> Send for RenderBundle<A> {}
@@ -781,9 +783,12 @@ impl<A: HalApi> RenderBundle<A> {
                     let bind_group = bind_group_guard.get(bind_group_id).unwrap();
                     unsafe {
                         raw.set_bind_group(
-                            &pipeline_layout_guard[pipeline_layout_id.unwrap()].raw,
+                            pipeline_layout_guard[pipeline_layout_id.unwrap()]
+                                .raw
+                                .as_ref()
+                                .unwrap(),
                             index as u32,
-                            &bind_group.raw,
+                            bind_group.raw.as_ref().unwrap(),
                             &offsets[..num_dynamic_offsets as usize],
                         )
                     };
@@ -791,9 +796,9 @@ impl<A: HalApi> RenderBundle<A> {
                 }
                 RenderCommand::SetPipeline(pipeline_id) => {
                     let pipeline = pipeline_guard.get(pipeline_id).unwrap();
-                    unsafe { raw.set_render_pipeline(&pipeline.raw) };
+                    unsafe { raw.set_render_pipeline(pipeline.raw.as_ref().unwrap()) };
 
-                    pipeline_layout_id = Some(pipeline.layout_id.value);
+                    pipeline_layout_id = Some(pipeline.layout_id);
                 }
                 RenderCommand::SetIndexBuffer {
                     buffer_id,
@@ -808,7 +813,7 @@ impl<A: HalApi> RenderBundle<A> {
                         .as_ref()
                         .ok_or(ExecutionError::DestroyedBuffer(buffer_id))?;
                     let bb = hal::BufferBinding {
-                        buffer,
+                        buffer: buffer.as_ref(),
                         offset,
                         size,
                     };
@@ -827,7 +832,7 @@ impl<A: HalApi> RenderBundle<A> {
                         .as_ref()
                         .ok_or(ExecutionError::DestroyedBuffer(buffer_id))?;
                     let bb = hal::BufferBinding {
-                        buffer,
+                        buffer: buffer.as_ref(),
                         offset,
                         size,
                     };
@@ -849,7 +854,12 @@ impl<A: HalApi> RenderBundle<A> {
                             [(values_offset as usize)..values_end_offset];
 
                         unsafe {
-                            raw.set_push_constants(&pipeline_layout.raw, stages, offset, data_slice)
+                            raw.set_push_constants(
+                                pipeline_layout.raw.as_ref().unwrap(),
+                                stages,
+                                offset,
+                                data_slice,
+                            )
                         }
                     } else {
                         super::push_constant_clear(
@@ -858,7 +868,7 @@ impl<A: HalApi> RenderBundle<A> {
                             |clear_offset, clear_data| {
                                 unsafe {
                                     raw.set_push_constants(
-                                        &pipeline_layout.raw,
+                                        pipeline_layout.raw.as_ref().unwrap(),
                                         stages,
                                         clear_offset,
                                         clear_data,
@@ -951,11 +961,11 @@ impl<A: HalApi> RenderBundle<A> {
     }
 }
 
-impl<A: HalApi> Resource for RenderBundle<A> {
+impl<A: HalApi> Resource<RenderBundleId> for RenderBundle<A> {
     const TYPE: &'static str = "RenderBundle";
 
-    fn life_guard(&self) -> &LifeGuard {
-        &self.life_guard
+    fn info(&self) -> &ResourceInfo<RenderBundleId> {
+        &self.info
     }
 }
 
@@ -1102,7 +1112,7 @@ impl PipelineState {
     ) -> Self {
         Self {
             id: pipeline_id,
-            layout_id: pipeline.layout_id.value,
+            layout_id: pipeline.layout_id,
             steps: pipeline.vertex_steps.to_vec(),
             push_constant_ranges: layout.push_constant_ranges.iter().cloned().collect(),
             used_bind_groups: layout.bind_group_layout_ids.len(),

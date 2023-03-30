@@ -21,22 +21,23 @@
 
 use super::{range::RangedStates, PendingTransition};
 use crate::{
-    hub,
+    hal_api::HalApi,
     id::{TextureId, TypedId, Valid},
     resource::Texture,
+    storage::Storage,
     track::{
         invalid_resource_state, skip_barrier, ResourceMetadata, ResourceMetadataProvider,
         ResourceUses, UsageConflict,
     },
-    LifeGuard, RefCount,
 };
 use hal::TextureUses;
 
 use arrayvec::ArrayVec;
 use naga::FastHashMap;
+
 use wgt::{strict_assert, strict_assert_eq};
 
-use std::{borrow::Cow, iter, marker::PhantomData, ops::Range, vec::Drain};
+use std::{borrow::Cow, iter, marker::PhantomData, ops::Range, sync::Arc, vec::Drain};
 
 /// Specifies a particular set of subresources in a texture.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -148,17 +149,18 @@ impl ComplexTextureState {
 }
 
 /// Stores all the textures that a bind group stores.
-pub(crate) struct TextureBindGroupState<A: hub::HalApi> {
+#[derive(Debug)]
+pub(crate) struct TextureBindGroupState<A: HalApi> {
     textures: Vec<(
         Valid<TextureId>,
         Option<TextureSelector>,
-        RefCount,
+        Arc<Texture<A>>,
         TextureUses,
     )>,
 
     _phantom: PhantomData<A>,
 }
-impl<A: hub::HalApi> TextureBindGroupState<A> {
+impl<A: HalApi> TextureBindGroupState<A> {
     pub fn new() -> Self {
         Self {
             textures: Vec::new(),
@@ -176,25 +178,25 @@ impl<A: hub::HalApi> TextureBindGroupState<A> {
             .sort_unstable_by_key(|&(id, _, _, _)| id.0.unzip().0);
     }
 
-    /// Returns a list of all buffers tracked. May contain duplicates.
-    pub fn used(&self) -> impl Iterator<Item = Valid<TextureId>> + '_ {
-        self.textures.iter().map(|&(id, _, _, _)| id)
+    /// Returns a list of all textures tracked. May contain duplicates.
+    pub fn used_resources(&self) -> impl Iterator<Item = &Arc<Texture<A>>> + '_ {
+        self.textures.iter().map(|(_, _, texture, _)| texture)
     }
 
     /// Adds the given resource with the given state.
     pub fn add_single<'a>(
         &mut self,
-        storage: &'a hub::Storage<Texture<A>, TextureId>,
+        storage: &'a Storage<Texture<A>, TextureId>,
         id: TextureId,
-        ref_count: RefCount,
         selector: Option<TextureSelector>,
         state: TextureUses,
     ) -> Option<&'a Texture<A>> {
-        let value = storage.get(id).ok()?;
+        let resource = storage.get(id).ok()?;
 
-        self.textures.push((Valid(id), selector, ref_count, state));
+        self.textures
+            .push((Valid(id), selector, resource.clone(), state));
 
-        Some(value)
+        Some(&resource)
     }
 }
 
@@ -219,13 +221,13 @@ impl TextureStateSet {
 
 /// Stores all texture state within a single usage scope.
 #[derive(Debug)]
-pub(crate) struct TextureUsageScope<A: hub::HalApi> {
+pub(crate) struct TextureUsageScope<A: HalApi> {
     set: TextureStateSet,
 
-    metadata: ResourceMetadata<A>,
+    metadata: ResourceMetadata<A, TextureId, Texture<A>>,
 }
 
-impl<A: hub::HalApi> TextureUsageScope<A> {
+impl<A: HalApi> TextureUsageScope<A> {
     pub fn new() -> Self {
         Self {
             set: TextureStateSet::new(),
@@ -258,8 +260,8 @@ impl<A: hub::HalApi> TextureUsageScope<A> {
     }
 
     /// Returns a list of all textures tracked.
-    pub fn used(&self) -> impl Iterator<Item = Valid<TextureId>> + '_ {
-        self.metadata.owned_ids()
+    pub(crate) fn used_resources(&self) -> impl Iterator<Item = &Arc<Texture<A>>> + '_ {
+        self.metadata.owned_resources()
     }
 
     /// Returns true if the tracker owns no resources.
@@ -278,7 +280,7 @@ impl<A: hub::HalApi> TextureUsageScope<A> {
     /// the vectors will be extended. A call to set_size is not needed.
     pub fn merge_usage_scope(
         &mut self,
-        storage: &hub::Storage<Texture<A>, TextureId>,
+        storage: &Storage<Texture<A>, TextureId>,
         scope: &Self,
     ) -> Result<(), UsageConflict> {
         let incoming_size = scope.set.simple.len();
@@ -292,10 +294,10 @@ impl<A: hub::HalApi> TextureUsageScope<A> {
             self.tracker_assert_in_bounds(index);
             scope.tracker_assert_in_bounds(index);
 
-            let texture_data = unsafe { texture_data_from_texture(storage, index32) };
+            let texture_selector = unsafe { texture_selector_from_texture(storage, index32) };
             unsafe {
                 insert_or_merge(
-                    texture_data,
+                    texture_selector,
                     &mut self.set,
                     &mut self.metadata,
                     index32,
@@ -325,11 +327,11 @@ impl<A: hub::HalApi> TextureUsageScope<A> {
     /// method is called.
     pub unsafe fn merge_bind_group(
         &mut self,
-        storage: &hub::Storage<Texture<A>, TextureId>,
+        storage: &Storage<Texture<A>, TextureId>,
         bind_group: &TextureBindGroupState<A>,
     ) -> Result<(), UsageConflict> {
-        for &(id, ref selector, ref ref_count, state) in &bind_group.textures {
-            unsafe { self.merge_single(storage, id, selector.clone(), ref_count, state)? };
+        for &(id, ref selector, ref _texture, state) in &bind_group.textures {
+            unsafe { self.merge_single(storage, id, selector.clone(), state)? };
         }
 
         Ok(())
@@ -350,21 +352,21 @@ impl<A: hub::HalApi> TextureUsageScope<A> {
     /// method is called.
     pub unsafe fn merge_single(
         &mut self,
-        storage: &hub::Storage<Texture<A>, TextureId>,
+        storage: &Storage<Texture<A>, TextureId>,
         id: Valid<TextureId>,
         selector: Option<TextureSelector>,
-        ref_count: &RefCount,
         new_state: TextureUses,
     ) -> Result<(), UsageConflict> {
         let (index32, epoch, _) = id.0.unzip();
         let index = index32 as usize;
+        let resource = storage.get(id.0).unwrap();
 
         self.tracker_assert_in_bounds(index);
 
-        let texture_data = unsafe { texture_data_from_texture(storage, index32) };
+        let texture_selector = unsafe { texture_selector_from_texture(storage, index32) };
         unsafe {
             insert_or_merge(
-                texture_data,
+                texture_selector,
                 &mut self.set,
                 &mut self.metadata,
                 index32,
@@ -372,7 +374,7 @@ impl<A: hub::HalApi> TextureUsageScope<A> {
                 TextureStateProvider::from_option(selector, new_state),
                 ResourceMetadataProvider::Direct {
                     epoch,
-                    ref_count: Cow::Borrowed(ref_count),
+                    resource: Cow::Borrowed(resource),
                 },
             )?
         };
@@ -382,17 +384,17 @@ impl<A: hub::HalApi> TextureUsageScope<A> {
 }
 
 /// Stores all texture state within a command buffer or device.
-pub(crate) struct TextureTracker<A: hub::HalApi> {
+pub(crate) struct TextureTracker<A: HalApi> {
     start_set: TextureStateSet,
     end_set: TextureStateSet,
 
-    metadata: ResourceMetadata<A>,
+    metadata: ResourceMetadata<A, TextureId, Texture<A>>,
 
     temp: Vec<PendingTransition<TextureUses>>,
 
     _phantom: PhantomData<A>,
 }
-impl<A: hub::HalApi> TextureTracker<A> {
+impl<A: HalApi> TextureTracker<A> {
     pub fn new() -> Self {
         Self {
             start_set: TextureStateSet::new(),
@@ -447,30 +449,13 @@ impl<A: hub::HalApi> TextureTracker<A> {
     }
 
     /// Returns a list of all textures tracked.
-    pub fn used(&self) -> impl Iterator<Item = Valid<TextureId>> + '_ {
-        self.metadata.owned_ids()
+    pub fn used_resources(&self) -> impl Iterator<Item = &Arc<Texture<A>>> + '_ {
+        self.metadata.owned_resources()
     }
 
     /// Drains all currently pending transitions.
     pub fn drain(&mut self) -> Drain<PendingTransition<TextureUses>> {
         self.temp.drain(..)
-    }
-
-    /// Get the refcount of the given resource.
-    ///
-    /// # Safety
-    ///
-    /// [`Self::set_size`] must be called with the maximum possible Buffer ID before this
-    /// method is called.
-    ///
-    /// The resource must be tracked by this tracker.
-    pub unsafe fn get_ref_count(&self, id: Valid<TextureId>) -> &RefCount {
-        let (index32, _, _) = id.0.unzip();
-        let index = index32 as usize;
-
-        self.tracker_assert_in_bounds(index);
-
-        unsafe { self.metadata.get_ref_count_unchecked(index) }
     }
 
     /// Inserts a single texture and a state into the resource tracker.
@@ -479,7 +464,7 @@ impl<A: hub::HalApi> TextureTracker<A> {
     ///
     /// If the ID is higher than the length of internal vectors,
     /// the vectors will be extended. A call to set_size is not needed.
-    pub fn insert_single(&mut self, id: TextureId, ref_count: RefCount, usage: TextureUses) {
+    pub fn insert_single(&mut self, id: TextureId, resource: Arc<Texture<A>>, usage: TextureUses) {
         let (index32, epoch, _) = id.unzip();
         let index = index32 as usize;
 
@@ -505,7 +490,7 @@ impl<A: hub::HalApi> TextureTracker<A> {
                 None,
                 ResourceMetadataProvider::Direct {
                     epoch,
-                    ref_count: Cow::Owned(ref_count),
+                    resource: Cow::Owned(resource.clone()),
                 },
             )
         };
@@ -520,7 +505,7 @@ impl<A: hub::HalApi> TextureTracker<A> {
     /// the vectors will be extended. A call to set_size is not needed.
     pub fn set_single(
         &mut self,
-        texture: &Texture<A>,
+        texture: &Arc<Texture<A>>,
         id: TextureId,
         selector: TextureSelector,
         new_state: TextureUses,
@@ -534,7 +519,7 @@ impl<A: hub::HalApi> TextureTracker<A> {
 
         unsafe {
             insert_or_barrier_update(
-                (&texture.life_guard, &texture.full_range),
+                &texture.full_range,
                 Some(&mut self.start_set),
                 &mut self.end_set,
                 &mut self.metadata,
@@ -545,7 +530,10 @@ impl<A: hub::HalApi> TextureTracker<A> {
                     state: new_state,
                 },
                 None,
-                ResourceMetadataProvider::Resource { epoch },
+                ResourceMetadataProvider::Resource {
+                    epoch,
+                    resource: texture.clone(),
+                },
                 &mut self.temp,
             )
         }
@@ -561,11 +549,7 @@ impl<A: hub::HalApi> TextureTracker<A> {
     ///
     /// If the ID is higher than the length of internal vectors,
     /// the vectors will be extended. A call to set_size is not needed.
-    pub fn set_from_tracker(
-        &mut self,
-        storage: &hub::Storage<Texture<A>, TextureId>,
-        tracker: &Self,
-    ) {
+    pub fn set_from_tracker(&mut self, storage: &Storage<Texture<A>, TextureId>, tracker: &Self) {
         let incoming_size = tracker.start_set.simple.len();
         if incoming_size > self.start_set.simple.len() {
             self.set_size(incoming_size);
@@ -577,8 +561,9 @@ impl<A: hub::HalApi> TextureTracker<A> {
             self.tracker_assert_in_bounds(index);
             tracker.tracker_assert_in_bounds(index);
             unsafe {
+                let texture_selector = texture_selector_from_texture(storage, index32);
                 insert_or_barrier_update(
-                    texture_data_from_texture(storage, index32),
+                    texture_selector,
                     Some(&mut self.start_set),
                     &mut self.end_set,
                     &mut self.metadata,
@@ -609,7 +594,7 @@ impl<A: hub::HalApi> TextureTracker<A> {
     /// the vectors will be extended. A call to set_size is not needed.
     pub fn set_from_usage_scope(
         &mut self,
-        storage: &hub::Storage<Texture<A>, TextureId>,
+        storage: &Storage<Texture<A>, TextureId>,
         scope: &TextureUsageScope<A>,
     ) {
         let incoming_size = scope.set.simple.len();
@@ -623,8 +608,9 @@ impl<A: hub::HalApi> TextureTracker<A> {
             self.tracker_assert_in_bounds(index);
             scope.tracker_assert_in_bounds(index);
             unsafe {
+                let texture_selector = texture_selector_from_texture(storage, index32);
                 insert_or_barrier_update(
-                    texture_data_from_texture(storage, index32),
+                    texture_selector,
                     Some(&mut self.start_set),
                     &mut self.end_set,
                     &mut self.metadata,
@@ -661,7 +647,7 @@ impl<A: hub::HalApi> TextureTracker<A> {
     /// method is called.
     pub unsafe fn set_and_remove_from_usage_scope_sparse(
         &mut self,
-        storage: &hub::Storage<Texture<A>, TextureId>,
+        storage: &Storage<Texture<A>, TextureId>,
         scope: &mut TextureUsageScope<A>,
         bind_group_state: &TextureBindGroupState<A>,
     ) {
@@ -678,10 +664,10 @@ impl<A: hub::HalApi> TextureTracker<A> {
             if unsafe { !scope.metadata.contains_unchecked(index) } {
                 continue;
             }
-            let texture_data = unsafe { texture_data_from_texture(storage, index32) };
+            let texture_selector = unsafe { texture_selector_from_texture(storage, index32) };
             unsafe {
                 insert_or_barrier_update(
-                    texture_data,
+                    texture_selector,
                     Some(&mut self.start_set),
                     &mut self.end_set,
                     &mut self.metadata,
@@ -755,7 +741,7 @@ impl<A: hub::HalApi> TextureTracker<A> {
                 let existing_epoch = self.metadata.get_epoch_unchecked(index);
                 let existing_ref_count = self.metadata.get_ref_count_unchecked(index);
 
-                if existing_epoch == epoch && existing_ref_count.load() == 1 {
+                if existing_epoch == epoch && existing_ref_count == 1 {
                     self.start_set.complex.remove(&index32);
                     self.end_set.complex.remove(&index32);
 
@@ -827,7 +813,7 @@ impl<'a> TextureStateProvider<'a> {
     ///
     /// # Panics
     ///
-    /// Panics if texture_data is None and this uses a Selector source.
+    /// Panics if texture_selector is None and this uses a Selector source.
     ///
     /// # Safety
     ///
@@ -835,7 +821,7 @@ impl<'a> TextureStateProvider<'a> {
     #[inline(always)]
     unsafe fn get_state(
         self,
-        texture_data: Option<(&LifeGuard, &TextureSelector)>,
+        texture_selector: Option<&TextureSelector>,
         index32: u32,
         index: usize,
     ) -> SingleOrManyStates<
@@ -849,7 +835,7 @@ impl<'a> TextureStateProvider<'a> {
                 // and if it is we promote to a simple state. This allows upstream
                 // code to specify selectors willy nilly, and all that are really
                 // single states are promoted here.
-                if *texture_data.unwrap().1 == selector {
+                if *texture_selector.unwrap() == selector {
                     SingleOrManyStates::Single(state)
                 } else {
                     SingleOrManyStates::Many(EitherIter::Left(iter::once((selector, state))))
@@ -875,12 +861,12 @@ impl<'a> TextureStateProvider<'a> {
 /// Helper function that gets what is needed from the texture storage
 /// out of the texture storage.
 #[inline(always)]
-unsafe fn texture_data_from_texture<A: hub::HalApi>(
-    storage: &hub::Storage<Texture<A>, TextureId>,
+unsafe fn texture_selector_from_texture<A: HalApi>(
+    storage: &Storage<Texture<A>, TextureId>,
     index32: u32,
-) -> (&LifeGuard, &TextureSelector) {
+) -> &TextureSelector {
     let texture = unsafe { storage.get_unchecked(index32) };
-    (&texture.life_guard, &texture.full_range)
+    &texture.full_range
 }
 
 /// Does an insertion operation if the index isn't tracked
@@ -893,21 +879,21 @@ unsafe fn texture_data_from_texture<A: hub::HalApi>(
 /// Indexes must be valid indexes into all arrays passed in
 /// to this function, either directly or via metadata or provider structs.
 #[inline(always)]
-unsafe fn insert_or_merge<A: hub::HalApi>(
-    texture_data: (&LifeGuard, &TextureSelector),
+unsafe fn insert_or_merge<A: HalApi>(
+    texture_selector: &TextureSelector,
     current_state_set: &mut TextureStateSet,
-    resource_metadata: &mut ResourceMetadata<A>,
+    resource_metadata: &mut ResourceMetadata<A, TextureId, Texture<A>>,
     index32: u32,
     index: usize,
     state_provider: TextureStateProvider<'_>,
-    metadata_provider: ResourceMetadataProvider<'_, A>,
+    metadata_provider: ResourceMetadataProvider<'_, A, TextureId, Texture<A>>,
 ) -> Result<(), UsageConflict> {
     let currently_owned = unsafe { resource_metadata.contains_unchecked(index) };
 
     if !currently_owned {
         unsafe {
             insert(
-                Some(texture_data),
+                Some(texture_selector),
                 None,
                 current_state_set,
                 resource_metadata,
@@ -923,7 +909,7 @@ unsafe fn insert_or_merge<A: hub::HalApi>(
 
     unsafe {
         merge(
-            texture_data,
+            texture_selector,
             current_state_set,
             index32,
             index,
@@ -951,16 +937,16 @@ unsafe fn insert_or_merge<A: hub::HalApi>(
 /// Indexes must be valid indexes into all arrays passed in
 /// to this function, either directly or via metadata or provider structs.
 #[inline(always)]
-unsafe fn insert_or_barrier_update<A: hub::HalApi>(
-    texture_data: (&LifeGuard, &TextureSelector),
+unsafe fn insert_or_barrier_update<A: HalApi>(
+    texture_selector: &TextureSelector,
     start_state: Option<&mut TextureStateSet>,
     current_state_set: &mut TextureStateSet,
-    resource_metadata: &mut ResourceMetadata<A>,
+    resource_metadata: &mut ResourceMetadata<A, TextureId, Texture<A>>,
     index32: u32,
     index: usize,
     start_state_provider: TextureStateProvider<'_>,
     end_state_provider: Option<TextureStateProvider<'_>>,
-    metadata_provider: ResourceMetadataProvider<'_, A>,
+    metadata_provider: ResourceMetadataProvider<'_, A, TextureId, Texture<A>>,
     barriers: &mut Vec<PendingTransition<TextureUses>>,
 ) {
     let currently_owned = unsafe { resource_metadata.contains_unchecked(index) };
@@ -968,7 +954,7 @@ unsafe fn insert_or_barrier_update<A: hub::HalApi>(
     if !currently_owned {
         unsafe {
             insert(
-                Some(texture_data),
+                Some(texture_selector),
                 start_state,
                 current_state_set,
                 resource_metadata,
@@ -985,7 +971,7 @@ unsafe fn insert_or_barrier_update<A: hub::HalApi>(
     let update_state_provider = end_state_provider.unwrap_or_else(|| start_state_provider.clone());
     unsafe {
         barrier(
-            texture_data,
+            texture_selector,
             current_state_set,
             index32,
             index,
@@ -997,7 +983,7 @@ unsafe fn insert_or_barrier_update<A: hub::HalApi>(
     let start_state_set = start_state.unwrap();
     unsafe {
         update(
-            texture_data,
+            texture_selector,
             start_state_set,
             current_state_set,
             index32,
@@ -1008,18 +994,18 @@ unsafe fn insert_or_barrier_update<A: hub::HalApi>(
 }
 
 #[inline(always)]
-unsafe fn insert<A: hub::HalApi>(
-    texture_data: Option<(&LifeGuard, &TextureSelector)>,
+unsafe fn insert<A: HalApi>(
+    texture_selector: Option<&TextureSelector>,
     start_state: Option<&mut TextureStateSet>,
     end_state: &mut TextureStateSet,
-    resource_metadata: &mut ResourceMetadata<A>,
+    resource_metadata: &mut ResourceMetadata<A, TextureId, Texture<A>>,
     index32: u32,
     index: usize,
     start_state_provider: TextureStateProvider<'_>,
     end_state_provider: Option<TextureStateProvider<'_>>,
-    metadata_provider: ResourceMetadataProvider<'_, A>,
+    metadata_provider: ResourceMetadataProvider<'_, A, TextureId, Texture<A>>,
 ) {
-    let start_layers = unsafe { start_state_provider.get_state(texture_data, index32, index) };
+    let start_layers = unsafe { start_state_provider.get_state(texture_selector, index32, index) };
     match start_layers {
         SingleOrManyStates::Single(state) => {
             // This should only ever happen with a wgpu bug, but let's just double
@@ -1038,7 +1024,7 @@ unsafe fn insert<A: hub::HalApi>(
             }
         }
         SingleOrManyStates::Many(state_iter) => {
-            let full_range = texture_data.unwrap().1.clone();
+            let full_range = texture_selector.unwrap().clone();
 
             let complex =
                 unsafe { ComplexTextureState::from_selector_state_iter(full_range, state_iter) };
@@ -1059,7 +1045,7 @@ unsafe fn insert<A: hub::HalApi>(
     }
 
     if let Some(end_state_provider) = end_state_provider {
-        match unsafe { end_state_provider.get_state(texture_data, index32, index) } {
+        match unsafe { end_state_provider.get_state(texture_selector, index32, index) } {
             SingleOrManyStates::Single(state) => {
                 // This should only ever happen with a wgpu bug, but let's just double
                 // check that resource states don't have any conflicts.
@@ -1072,7 +1058,7 @@ unsafe fn insert<A: hub::HalApi>(
                 unsafe { *end_state.simple.get_unchecked_mut(index) = state };
             }
             SingleOrManyStates::Many(state_iter) => {
-                let full_range = texture_data.unwrap().1.clone();
+                let full_range = texture_selector.unwrap().clone();
 
                 let complex = unsafe {
                     ComplexTextureState::from_selector_state_iter(full_range, state_iter)
@@ -1089,20 +1075,19 @@ unsafe fn insert<A: hub::HalApi>(
     }
 
     unsafe {
-        let (epoch, ref_count) =
-            metadata_provider.get_own(texture_data.map(|(life_guard, _)| life_guard), index);
-        resource_metadata.insert(index, epoch, ref_count);
+        let (epoch, resource) = metadata_provider.get_own(index);
+        resource_metadata.insert(index, epoch, resource);
     }
 }
 
 #[inline(always)]
-unsafe fn merge<A: hub::HalApi>(
-    texture_data: (&LifeGuard, &TextureSelector),
+unsafe fn merge<A: HalApi>(
+    texture_selector: &TextureSelector,
     current_state_set: &mut TextureStateSet,
     index32: u32,
     index: usize,
     state_provider: TextureStateProvider<'_>,
-    metadata_provider: ResourceMetadataProvider<'_, A>,
+    metadata_provider: ResourceMetadataProvider<'_, A, TextureId, Texture<A>>,
 ) -> Result<(), UsageConflict> {
     let current_simple = unsafe { current_state_set.simple.get_unchecked_mut(index) };
     let current_state = if *current_simple == TextureUses::COMPLEX {
@@ -1116,7 +1101,7 @@ unsafe fn merge<A: hub::HalApi>(
         SingleOrManyStates::Single(current_simple)
     };
 
-    let new_state = unsafe { state_provider.get_state(Some(texture_data), index32, index) };
+    let new_state = unsafe { state_provider.get_state(Some(texture_selector), index32, index) };
 
     match (current_state, new_state) {
         (SingleOrManyStates::Single(current_simple), SingleOrManyStates::Single(new_simple)) => {
@@ -1131,7 +1116,7 @@ unsafe fn merge<A: hub::HalApi>(
                         unsafe { metadata_provider.get_epoch(index) },
                         A::VARIANT,
                     ),
-                    texture_data.1.clone(),
+                    texture_selector.clone(),
                     *current_simple,
                     new_simple,
                 ));
@@ -1145,8 +1130,8 @@ unsafe fn merge<A: hub::HalApi>(
             // as there wasn't one before.
             let mut new_complex = unsafe {
                 ComplexTextureState::from_selector_state_iter(
-                    texture_data.1.clone(),
-                    iter::once((texture_data.1.clone(), *current_simple)),
+                    texture_selector.clone(),
+                    iter::once((texture_selector.clone(), *current_simple)),
                 )
             };
 
@@ -1275,7 +1260,7 @@ unsafe fn merge<A: hub::HalApi>(
 
 #[inline(always)]
 unsafe fn barrier(
-    texture_data: (&LifeGuard, &TextureSelector),
+    texture_selector: &TextureSelector,
     current_state_set: &TextureStateSet,
     index32: u32,
     index: usize,
@@ -1291,7 +1276,7 @@ unsafe fn barrier(
         SingleOrManyStates::Single(current_simple)
     };
 
-    let new_state = unsafe { state_provider.get_state(Some(texture_data), index32, index) };
+    let new_state = unsafe { state_provider.get_state(Some(texture_selector), index32, index) };
 
     match (current_state, new_state) {
         (SingleOrManyStates::Single(current_simple), SingleOrManyStates::Single(new_simple)) => {
@@ -1303,7 +1288,7 @@ unsafe fn barrier(
 
             barriers.push(PendingTransition {
                 id: index32,
-                selector: texture_data.1.clone(),
+                selector: texture_selector.clone(),
                 usage: current_simple..new_simple,
             });
         }
@@ -1398,7 +1383,7 @@ unsafe fn barrier(
 #[allow(clippy::needless_option_as_deref)] // we use this for reborrowing Option<&mut T>
 #[inline(always)]
 unsafe fn update(
-    texture_data: (&LifeGuard, &TextureSelector),
+    texture_selector: &TextureSelector,
     start_state_set: &mut TextureStateSet,
     current_state_set: &mut TextureStateSet,
     index32: u32,
@@ -1428,7 +1413,7 @@ unsafe fn update(
         SingleOrManyStates::Single(current_simple)
     };
 
-    let new_state = unsafe { state_provider.get_state(Some(texture_data), index32, index) };
+    let new_state = unsafe { state_provider.get_state(Some(texture_selector), index32, index) };
 
     match (current_state, new_state) {
         (SingleOrManyStates::Single(current_simple), SingleOrManyStates::Single(new_simple)) => {
@@ -1440,8 +1425,8 @@ unsafe fn update(
             // as there wasn't one before.
             let mut new_complex = unsafe {
                 ComplexTextureState::from_selector_state_iter(
-                    texture_data.1.clone(),
-                    iter::once((texture_data.1.clone(), *current_simple)),
+                    texture_selector.clone(),
+                    iter::once((texture_selector.clone(), *current_simple)),
                 )
             };
 

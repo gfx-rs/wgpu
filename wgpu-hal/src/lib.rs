@@ -87,7 +87,7 @@ pub mod api {
 use std::{
     borrow::{Borrow, Cow},
     fmt,
-    num::NonZeroU32,
+    num::{NonZeroU32},
     ops::{Range, RangeInclusive},
     ptr::NonNull,
     sync::atomic::AtomicBool,
@@ -161,7 +161,7 @@ pub trait Api: Clone + Sized {
 
     type Queue: Queue<Self>;
     type CommandEncoder: CommandEncoder<Self>;
-    type CommandBuffer: Send + Sync + fmt::Debug;
+    type CommandBuffer: fmt::Debug + Send + Sync;
 
     type Buffer: fmt::Debug + Send + Sync + 'static;
     type Texture: fmt::Debug + Send + Sync + 'static;
@@ -171,12 +171,12 @@ pub trait Api: Clone + Sized {
     type QuerySet: fmt::Debug + Send + Sync;
     type Fence: fmt::Debug + Send + Sync;
 
-    type BindGroupLayout: Send + Sync;
+    type BindGroupLayout: fmt::Debug + Send + Sync;
     type BindGroup: fmt::Debug + Send + Sync;
-    type PipelineLayout: Send + Sync;
+    type PipelineLayout: fmt::Debug + Send + Sync;
     type ShaderModule: fmt::Debug + Send + Sync;
-    type RenderPipeline: Send + Sync;
-    type ComputePipeline: Send + Sync;
+    type RenderPipeline: fmt::Debug + Send + Sync;
+    type ComputePipeline: fmt::Debug + Send + Sync;
 }
 
 pub trait Instance<A: Api>: Sized + Send + Sync {
@@ -192,12 +192,12 @@ pub trait Instance<A: Api>: Sized + Send + Sync {
 
 pub trait Surface<A: Api>: Send + Sync {
     unsafe fn configure(
-        &mut self,
+        &self,
         device: &A::Device,
         config: &SurfaceConfiguration,
     ) -> Result<(), SurfaceError>;
 
-    unsafe fn unconfigure(&mut self, device: &A::Device);
+    unsafe fn unconfigure(&self, device: &A::Device);
 
     /// Returns the next texture to be presented by the swapchain for drawing
     ///
@@ -210,10 +210,10 @@ pub trait Surface<A: Api>: Send + Sync {
     ///
     /// Returns `None` on timing out.
     unsafe fn acquire_texture(
-        &mut self,
+        &self,
         timeout: Option<std::time::Duration>,
     ) -> Result<Option<AcquiredSurfaceTexture<A>>, SurfaceError>;
-    unsafe fn discard_texture(&mut self, texture: A::SurfaceTexture);
+    unsafe fn discard_texture(&self, texture: A::SurfaceTexture);
 }
 
 pub trait Adapter<A: Api>: Send + Sync {
@@ -344,13 +344,13 @@ pub trait Queue<A: Api>: Send + Sync {
     ///   that are associated with this queue.
     /// - all of the command buffers had `CommadBuffer::finish()` called.
     unsafe fn submit(
-        &mut self,
+        &self,
         command_buffers: &[&A::CommandBuffer],
         signal_fence: Option<(&mut A::Fence, FenceValue)>,
     ) -> Result<(), DeviceError>;
     unsafe fn present(
-        &mut self,
-        surface: &mut A::Surface,
+        &self,
+        surface: &A::Surface,
         texture: A::SurfaceTexture,
     ) -> Result<(), SurfaceError>;
     unsafe fn get_timestamp_period(&self) -> f32;

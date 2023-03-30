@@ -1,10 +1,7 @@
 use core::fmt;
 use std::error::Error;
 
-use crate::{
-    gfx_select,
-    hub::{Global, IdentityManagerFactory},
-};
+use crate::{gfx_select, global::Global, identity::IdentityManagerFactory};
 
 pub struct ErrorFormatter<'a> {
     writer: &'a mut dyn fmt::Write,
@@ -20,7 +17,7 @@ impl<'a> ErrorFormatter<'a> {
         writeln!(self.writer, "      note: {note}").expect("Error formatting error");
     }
 
-    pub fn label(&mut self, label_key: &str, label_value: &str) {
+    pub fn label(&mut self, label_key: &str, label_value: &String) {
         if !label_key.is_empty() && !label_value.is_empty() {
             self.note(&format!("{label_key} = `{label_value}`"));
         }

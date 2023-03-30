@@ -1,10 +1,10 @@
 use crate::{
     binding_model::{BindGroup, LateMinBufferBindingSizeMismatch, PipelineLayout},
     device::SHADER_STAGE_COUNT,
-    hub::{HalApi, Storage},
+    hal_api::HalApi,
     id::{BindGroupId, BindGroupLayoutId, PipelineLayoutId, Valid},
     pipeline::LateSizedBufferGroup,
-    Stored,
+    storage::Storage,
 };
 
 use arrayvec::ArrayVec;
@@ -140,7 +140,7 @@ struct LateBufferBinding {
 
 #[derive(Debug, Default)]
 pub(super) struct EntryPayload {
-    pub(super) group_id: Option<Stored<BindGroupId>>,
+    pub(super) group_id: Option<Valid<BindGroupId>>,
     pub(super) dynamic_offsets: Vec<wgt::DynamicOffset>,
     late_buffer_bindings: Vec<LateBufferBinding>,
     /// Since `LateBufferBinding` may contain information about the bindings
@@ -236,10 +236,7 @@ impl Binder {
         debug_assert_eq!(A::VARIANT, bind_group_id.0.backend());
 
         let payload = &mut self.payloads[index];
-        payload.group_id = Some(Stored {
-            value: bind_group_id,
-            ref_count: bind_group.life_guard.add_ref(),
-        });
+        payload.group_id = Some(bind_group_id);
         payload.dynamic_offsets.clear();
         payload.dynamic_offsets.extend_from_slice(offsets);
 
@@ -271,7 +268,7 @@ impl Binder {
         let payloads = &self.payloads;
         self.manager
             .list_active()
-            .map(move |index| payloads[index].group_id.as_ref().unwrap().value)
+            .map(move |index| *payloads[index].group_id.as_ref().unwrap())
     }
 
     pub(super) fn invalid_mask(&self) -> BindGroupMask {

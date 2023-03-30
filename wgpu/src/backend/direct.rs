@@ -26,7 +26,7 @@ use wgc::id::TypedId;
 
 const LABEL: &str = "label";
 
-pub struct Context(wgc::hub::Global<wgc::hub::IdentityManagerFactory>);
+pub struct Context(wgc::global::Global<wgc::identity::IdentityManagerFactory>);
 
 impl Drop for Context {
     fn drop(&mut self) {
@@ -41,11 +41,11 @@ impl fmt::Debug for Context {
 }
 
 impl Context {
-    pub unsafe fn from_hal_instance<A: wgc::hub::HalApi>(hal_instance: A::Instance) -> Self {
+    pub unsafe fn from_hal_instance<A: wgc::hal_api::HalApi>(hal_instance: A::Instance) -> Self {
         Self(unsafe {
-            wgc::hub::Global::from_hal_instance::<A>(
+            wgc::global::Global::from_hal_instance::<A>(
                 "wgpu",
-                wgc::hub::IdentityManagerFactory,
+                wgc::identity::IdentityManagerFactory,
                 hal_instance,
             )
         })
@@ -54,17 +54,17 @@ impl Context {
     /// # Safety
     ///
     /// - The raw instance handle returned must not be manually destroyed.
-    pub unsafe fn instance_as_hal<A: wgc::hub::HalApi>(&self) -> Option<&A::Instance> {
+    pub unsafe fn instance_as_hal<A: wgc::hal_api::HalApi>(&self) -> Option<&A::Instance> {
         unsafe { self.0.instance_as_hal::<A>() }
     }
 
     pub unsafe fn from_core_instance(core_instance: wgc::instance::Instance) -> Self {
         Self(unsafe {
-            wgc::hub::Global::from_instance(wgc::hub::IdentityManagerFactory, core_instance)
+            wgc::global::Global::from_instance(wgc::identity::IdentityManagerFactory, core_instance)
         })
     }
 
-    pub(crate) fn global(&self) -> &wgc::hub::Global<wgc::hub::IdentityManagerFactory> {
+    pub(crate) fn global(&self) -> &wgc::global::Global<wgc::identity::IdentityManagerFactory> {
         &self.0
     }
 
@@ -73,14 +73,18 @@ impl Context {
             .enumerate_adapters(wgc::instance::AdapterInputs::Mask(backends, |_| ()))
     }
 
-    pub unsafe fn create_adapter_from_hal<A: wgc::hub::HalApi>(
+    pub unsafe fn create_adapter_from_hal<A: wgc::hal_api::HalApi>(
         &self,
         hal_adapter: hal::ExposedAdapter<A>,
     ) -> wgc::id::AdapterId {
         unsafe { self.0.create_adapter_from_hal(hal_adapter, ()) }
     }
 
-    pub unsafe fn adapter_as_hal<A: wgc::hub::HalApi, F: FnOnce(Option<&A::Adapter>) -> R, R>(
+    pub unsafe fn adapter_as_hal<
+        A: wgc::hal_api::HalApi,
+        F: FnOnce(Option<&A::Adapter>) -> R,
+        R,
+    >(
         &self,
         adapter: wgc::id::AdapterId,
         hal_adapter_callback: F,
@@ -91,7 +95,7 @@ impl Context {
         }
     }
 
-    pub unsafe fn create_device_from_hal<A: wgc::hub::HalApi>(
+    pub unsafe fn create_device_from_hal<A: wgc::hal_api::HalApi>(
         &self,
         adapter: &wgc::id::AdapterId,
         hal_device: hal::OpenDevice<A>,
@@ -124,7 +128,7 @@ impl Context {
         Ok((device, queue))
     }
 
-    pub unsafe fn create_texture_from_hal<A: wgc::hub::HalApi>(
+    pub unsafe fn create_texture_from_hal<A: wgc::hal_api::HalApi>(
         &self,
         hal_texture: A::Texture,
         device: &Device,
@@ -149,7 +153,7 @@ impl Context {
         }
     }
 
-    pub unsafe fn device_as_hal<A: wgc::hub::HalApi, F: FnOnce(Option<&A::Device>) -> R, R>(
+    pub unsafe fn device_as_hal<A: wgc::hal_api::HalApi, F: FnOnce(Option<&A::Device>) -> R, R>(
         &self,
         device: &Device,
         hal_device_callback: F,
@@ -160,9 +164,9 @@ impl Context {
         }
     }
 
-    pub unsafe fn surface_as_hal_mut<
-        A: wgc::hub::HalApi,
-        F: FnOnce(Option<&mut A::Surface>) -> R,
+    pub unsafe fn surface_as_hal<
+        A: wgc::hal_api::HalApi,
+        F: FnOnce(Option<&A::Surface>) -> R,
         R,
     >(
         &self,
@@ -171,11 +175,11 @@ impl Context {
     ) -> R {
         unsafe {
             self.0
-                .surface_as_hal_mut::<A, F, R>(surface.id, hal_surface_callback)
+                .surface_as_hal::<A, F, R>(surface.id, hal_surface_callback)
         }
     }
 
-    pub unsafe fn texture_as_hal<A: wgc::hub::HalApi, F: FnOnce(Option<&A::Texture>)>(
+    pub unsafe fn texture_as_hal<A: wgc::hal_api::HalApi, F: FnOnce(Option<&A::Texture>)>(
         &self,
         texture: &Texture,
         hal_texture_callback: F,
@@ -186,7 +190,7 @@ impl Context {
         }
     }
 
-    pub fn generate_report(&self) -> wgc::hub::GlobalReport {
+    pub fn generate_report(&self) -> wgc::global::GlobalReport {
         self.0.generate_report()
     }
 
@@ -536,9 +540,9 @@ impl crate::Context for Context {
     type PopErrorScopeFuture = Ready<Option<crate::Error>>;
 
     fn init(instance_desc: wgt::InstanceDescriptor) -> Self {
-        Self(wgc::hub::Global::new(
+        Self(wgc::global::Global::new(
             "wgpu",
-            wgc::hub::IdentityManagerFactory,
+            wgc::identity::IdentityManagerFactory,
             instance_desc,
         ))
     }
@@ -1273,7 +1277,7 @@ impl crate::Context for Context {
         let (id, error) = wgc::gfx_select!(device => global.device_create_texture(
             *device,
             &wgt_desc,
-            ()
+            (), ()
         ));
         if let Some(cause) = error {
             self.handle_error(

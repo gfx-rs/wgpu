@@ -1,3 +1,4 @@
+use parking_lot::RwLock;
 use winapi::shared::{dxgi1_5, minwindef};
 
 use super::SurfaceTarget;
@@ -95,7 +96,7 @@ impl crate::Instance<super::Api> for super::Instance {
                 factory_media: self.factory_media,
                 target: SurfaceTarget::WndHandle(handle.hwnd as *mut _),
                 supports_allow_tearing: self.supports_allow_tearing,
-                swap_chain: None,
+                swap_chain: RwLock::new(None),
             }),
             _ => Err(crate::InstanceError),
         }

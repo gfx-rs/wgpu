@@ -1,12 +1,16 @@
 use crate::{
-    device::{DeviceError, MissingDownlevelFlags, MissingFeatures, SHADER_STAGE_COUNT},
+    device::{Device, DeviceError, MissingDownlevelFlags, MissingFeatures, SHADER_STAGE_COUNT},
     error::{ErrorFormatter, PrettyError},
-    hub::{HalApi, Resource},
-    id::{BindGroupLayoutId, BufferId, DeviceId, SamplerId, TextureId, TextureViewId, Valid},
+    hal_api::HalApi,
+    id::{
+        BindGroupId, BindGroupLayoutId, BufferId, PipelineLayoutId, SamplerId, TextureId,
+        TextureViewId, Valid,
+    },
     init_tracker::{BufferInitTrackerAction, TextureInitTrackerAction},
+    resource::{Resource, ResourceInfo},
     track::{BindGroupStates, UsageConflict},
     validation::{MissingBufferUsageError, MissingTextureUsageError},
-    FastHashMap, Label, LifeGuard, MultiRefCount, Stored,
+    FastHashMap, Label,
 };
 
 use arrayvec::ArrayVec;
@@ -16,7 +20,7 @@ use serde::Deserialize;
 #[cfg(feature = "trace")]
 use serde::Serialize;
 
-use std::{borrow::Cow, ops::Range};
+use std::{borrow::Cow, ops::Range, sync::Arc};
 
 use thiserror::Error;
 
@@ -439,30 +443,46 @@ pub(crate) type BindEntryMap = FastHashMap<u32, wgt::BindGroupLayoutEntry>;
 ///  - produced pipeline layouts
 ///  - pipelines with implicit layouts
 #[derive(Debug)]
-pub struct BindGroupLayout<A: hal::Api> {
-    pub(crate) raw: A::BindGroupLayout,
-    pub(crate) device_id: Stored<DeviceId>,
-    pub(crate) multi_ref_count: MultiRefCount,
+pub struct BindGroupLayout<A: HalApi> {
+    pub(crate) raw: Option<Arc<A::BindGroupLayout>>,
+    pub(crate) device: Arc<Device<A>>,
     pub(crate) entries: BindEntryMap,
-    #[allow(unused)]
-    pub(crate) dynamic_count: usize,
     pub(crate) count_validator: BindingTypeMaxCountValidator,
+    pub(crate) info: ResourceInfo<BindGroupLayoutId>,
     #[cfg(debug_assertions)]
     pub(crate) label: String,
 }
 
-impl<A: hal::Api> Resource for BindGroupLayout<A> {
+impl<A: HalApi> Drop for BindGroupLayout<A> {
+    fn drop(&mut self) {
+        let raw = self.raw.take().unwrap();
+        if let Ok(raw) = Arc::try_unwrap(raw) {
+            unsafe {
+                use hal::Device;
+                self.device
+                    .raw
+                    .as_ref()
+                    .unwrap()
+                    .destroy_bind_group_layout(raw);
+            }
+        } else {
+            panic!("BindGroupLayout raw cannot be destroyed because is still in use");
+        }
+    }
+}
+
+impl<A: HalApi> Resource<BindGroupLayoutId> for BindGroupLayout<A> {
     const TYPE: &'static str = "BindGroupLayout";
 
-    fn life_guard(&self) -> &LifeGuard {
-        unreachable!()
+    fn info(&self) -> &ResourceInfo<BindGroupLayoutId> {
+        &self.info
     }
 
-    fn label(&self) -> &str {
+    fn label(&self) -> String {
         #[cfg(debug_assertions)]
-        return &self.label;
+        return self.label.clone();
         #[cfg(not(debug_assertions))]
-        return "";
+        return String::new("");
     }
 }
 
@@ -561,15 +581,33 @@ pub struct PipelineLayoutDescriptor<'a> {
 }
 
 #[derive(Debug)]
-pub struct PipelineLayout<A: hal::Api> {
-    pub(crate) raw: A::PipelineLayout,
-    pub(crate) device_id: Stored<DeviceId>,
-    pub(crate) life_guard: LifeGuard,
+pub struct PipelineLayout<A: HalApi> {
+    pub(crate) raw: Option<Arc<A::PipelineLayout>>,
+    pub(crate) device: Arc<Device<A>>,
+    pub(crate) info: ResourceInfo<PipelineLayoutId>,
     pub(crate) bind_group_layout_ids: ArrayVec<Valid<BindGroupLayoutId>, { hal::MAX_BIND_GROUPS }>,
     pub(crate) push_constant_ranges: ArrayVec<wgt::PushConstantRange, { SHADER_STAGE_COUNT }>,
 }
 
-impl<A: hal::Api> PipelineLayout<A> {
+impl<A: HalApi> Drop for PipelineLayout<A> {
+    fn drop(&mut self) {
+        let raw = self.raw.take().unwrap();
+        if let Ok(raw) = Arc::try_unwrap(raw) {
+            unsafe {
+                use hal::Device;
+                self.device
+                    .raw
+                    .as_ref()
+                    .unwrap()
+                    .destroy_pipeline_layout(raw);
+            }
+        } else {
+            panic!("PipelineLayout raw cannot be destroyed because is still in use");
+        }
+    }
+}
+
+impl<A: HalApi> PipelineLayout<A> {
     /// Validate push constants match up with expected ranges.
     pub(crate) fn validate_push_constant_ranges(
         &self,
@@ -649,11 +687,11 @@ impl<A: hal::Api> PipelineLayout<A> {
     }
 }
 
-impl<A: hal::Api> Resource for PipelineLayout<A> {
+impl<A: HalApi> Resource<PipelineLayoutId> for PipelineLayout<A> {
     const TYPE: &'static str = "PipelineLayout";
 
-    fn life_guard(&self) -> &LifeGuard {
-        &self.life_guard
+    fn info(&self) -> &ResourceInfo<PipelineLayoutId> {
+        &self.info
     }
 }
 
@@ -755,11 +793,12 @@ pub(crate) fn buffer_binding_type_alignment(
     }
 }
 
+#[derive(Debug)]
 pub struct BindGroup<A: HalApi> {
-    pub(crate) raw: A::BindGroup,
-    pub(crate) device_id: Stored<DeviceId>,
+    pub(crate) raw: Option<Arc<A::BindGroup>>,
+    pub(crate) device: Arc<Device<A>>,
     pub(crate) layout_id: Valid<BindGroupLayoutId>,
-    pub(crate) life_guard: LifeGuard,
+    pub(crate) info: ResourceInfo<BindGroupId>,
     pub(crate) used: BindGroupStates<A>,
     pub(crate) used_buffer_ranges: Vec<BufferInitTrackerAction>,
     pub(crate) used_texture_ranges: Vec<TextureInitTrackerAction>,
@@ -767,6 +806,20 @@ pub struct BindGroup<A: HalApi> {
     /// Actual binding sizes for buffers that don't have `min_binding_size`
     /// specified in BGL. Listed in the order of iteration of `BGL.entries`.
     pub(crate) late_buffer_binding_sizes: Vec<wgt::BufferSize>,
+}
+
+impl<A: HalApi> Drop for BindGroup<A> {
+    fn drop(&mut self) {
+        let raw = self.raw.take().unwrap();
+        if let Ok(raw) = Arc::try_unwrap(raw) {
+            unsafe {
+                use hal::Device;
+                self.device.raw.as_ref().unwrap().destroy_bind_group(raw);
+            }
+        } else {
+            panic!("BindGroup cannot be destroyed because is still in use");
+        }
+    }
 }
 
 impl<A: HalApi> BindGroup<A> {
@@ -819,11 +872,11 @@ impl<A: HalApi> BindGroup<A> {
     }
 }
 
-impl<A: HalApi> Resource for BindGroup<A> {
+impl<A: HalApi> Resource<BindGroupId> for BindGroup<A> {
     const TYPE: &'static str = "BindGroup";
 
-    fn life_guard(&self) -> &LifeGuard {
-        &self.life_guard
+    fn info(&self) -> &ResourceInfo<BindGroupId> {
+        &self.info
     }
 }
 

@@ -4,28 +4,26 @@
  * distinction between a usage scope and a full tracker.
 !*/
 
-use std::marker::PhantomData;
+use std::{marker::PhantomData, sync::Arc};
 
 use crate::{
-    hub,
+    hal_api::HalApi,
     id::{TypedId, Valid},
+    resource::Resource,
+    storage::Storage,
     track::ResourceMetadata,
-    RefCount,
 };
 
 /// Stores all the resources that a bind group stores.
-pub(crate) struct StatelessBindGroupSate<T, Id: TypedId> {
-    resources: Vec<(Valid<Id>, RefCount)>,
-
-    _phantom: PhantomData<T>,
+#[derive(Debug)]
+pub(crate) struct StatelessBindGroupSate<Id: TypedId, T: Resource<Id>> {
+    resources: Vec<(Valid<Id>, Arc<T>)>,
 }
 
-impl<T: hub::Resource, Id: TypedId> StatelessBindGroupSate<T, Id> {
+impl<Id: TypedId, T: Resource<Id>> StatelessBindGroupSate<Id, T> {
     pub fn new() -> Self {
         Self {
             resources: Vec::new(),
-
-            _phantom: PhantomData,
         }
     }
 
@@ -43,25 +41,30 @@ impl<T: hub::Resource, Id: TypedId> StatelessBindGroupSate<T, Id> {
         self.resources.iter().map(|&(id, _)| id)
     }
 
+    /// Returns a list of all resources tracked. May contain duplicates.
+    pub fn used_resources(&self) -> impl Iterator<Item = Arc<T>> + '_ {
+        self.resources.iter().map(|(_, resource)| resource.clone())
+    }
+
     /// Adds the given resource.
-    pub fn add_single<'a>(&mut self, storage: &'a hub::Storage<T, Id>, id: Id) -> Option<&'a T> {
+    pub fn add_single<'a>(&mut self, storage: &'a Storage<T, Id>, id: Id) -> Option<&'a T> {
         let resource = storage.get(id).ok()?;
 
-        self.resources
-            .push((Valid(id), resource.life_guard().add_ref()));
+        self.resources.push((Valid(id), resource.clone()));
 
-        Some(resource)
+        Some(&resource)
     }
 }
 
 /// Stores all resource state within a command buffer or device.
-pub(crate) struct StatelessTracker<A: hub::HalApi, T, Id: TypedId> {
-    metadata: ResourceMetadata<A>,
+#[derive(Debug)]
+pub(crate) struct StatelessTracker<A: HalApi, Id: TypedId, T: Resource<Id>> {
+    metadata: ResourceMetadata<A, Id, T>,
 
-    _phantom: PhantomData<(T, Id)>,
+    _phantom: PhantomData<Id>,
 }
 
-impl<A: hub::HalApi, T: hub::Resource, Id: TypedId> StatelessTracker<A, T, Id> {
+impl<A: HalApi, Id: TypedId, T: Resource<Id>> StatelessTracker<A, Id, T> {
     pub fn new() -> Self {
         Self {
             metadata: ResourceMetadata::new(),
@@ -90,8 +93,8 @@ impl<A: hub::HalApi, T: hub::Resource, Id: TypedId> StatelessTracker<A, T, Id> {
     }
 
     /// Returns a list of all resources tracked.
-    pub fn used(&self) -> impl Iterator<Item = Valid<Id>> + '_ {
-        self.metadata.owned_ids()
+    pub fn used_resources(&self) -> impl Iterator<Item = &Arc<T>> + '_ {
+        self.metadata.owned_resources()
     }
 
     /// Inserts a single resource into the resource tracker.
@@ -100,7 +103,7 @@ impl<A: hub::HalApi, T: hub::Resource, Id: TypedId> StatelessTracker<A, T, Id> {
     ///
     /// If the ID is higher than the length of internal vectors,
     /// the vectors will be extended. A call to set_size is not needed.
-    pub fn insert_single(&mut self, id: Valid<Id>, ref_count: RefCount) {
+    pub fn insert_single(&mut self, id: Valid<Id>, resource: Arc<T>) {
         let (index32, epoch, _) = id.0.unzip();
         let index = index32 as usize;
 
@@ -109,7 +112,7 @@ impl<A: hub::HalApi, T: hub::Resource, Id: TypedId> StatelessTracker<A, T, Id> {
         self.tracker_assert_in_bounds(index);
 
         unsafe {
-            self.metadata.insert(index, epoch, ref_count);
+            self.metadata.insert(index, epoch, resource);
         }
     }
 
@@ -117,8 +120,8 @@ impl<A: hub::HalApi, T: hub::Resource, Id: TypedId> StatelessTracker<A, T, Id> {
     ///
     /// If the ID is higher than the length of internal vectors,
     /// the vectors will be extended. A call to set_size is not needed.
-    pub fn add_single<'a>(&mut self, storage: &'a hub::Storage<T, Id>, id: Id) -> Option<&'a T> {
-        let item = storage.get(id).ok()?;
+    pub fn add_single<'a>(&mut self, storage: &'a Storage<T, Id>, id: Id) -> Option<&'a T> {
+        let resource = storage.get(id).ok()?;
 
         let (index32, epoch, _) = id.unzip();
         let index = index32 as usize;
@@ -128,11 +131,10 @@ impl<A: hub::HalApi, T: hub::Resource, Id: TypedId> StatelessTracker<A, T, Id> {
         self.tracker_assert_in_bounds(index);
 
         unsafe {
-            self.metadata
-                .insert(index, epoch, item.life_guard().add_ref());
+            self.metadata.insert(index, epoch, resource.clone());
         }
 
-        Some(item)
+        Some(&resource)
     }
 
     /// Adds the given resources from the given tracker.
@@ -153,8 +155,8 @@ impl<A: hub::HalApi, T: hub::Resource, Id: TypedId> StatelessTracker<A, T, Id> {
 
                 if !previously_owned {
                     let epoch = other.metadata.get_epoch_unchecked(index);
-                    let other_ref_count = other.metadata.get_ref_count_unchecked(index);
-                    self.metadata.insert(index, epoch, other_ref_count.clone());
+                    let other_resource = other.metadata.get_resource_unchecked(index);
+                    self.metadata.insert(index, epoch, other_resource.clone());
                 }
             }
         }
@@ -182,7 +184,7 @@ impl<A: hub::HalApi, T: hub::Resource, Id: TypedId> StatelessTracker<A, T, Id> {
                 let existing_epoch = self.metadata.get_epoch_unchecked(index);
                 let existing_ref_count = self.metadata.get_ref_count_unchecked(index);
 
-                if existing_epoch == epoch && existing_ref_count.load() == 1 {
+                if existing_epoch == epoch && existing_ref_count == 1 {
                     self.metadata.remove(index);
                     return true;
                 }

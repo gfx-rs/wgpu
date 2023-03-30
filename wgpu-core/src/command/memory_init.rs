@@ -4,10 +4,11 @@ use hal::CommandEncoder;
 
 use crate::{
     device::Device,
-    hub::{HalApi, Storage},
+    hal_api::HalApi,
     id::{self, TextureId},
     init_tracker::*,
     resource::{Buffer, Texture},
+    storage::Storage,
     track::{TextureTracker, Tracker},
     FastHashMap,
 };
@@ -49,7 +50,7 @@ impl CommandBufferTextureMemoryActions {
     // Returns previously discarded surface that need to be initialized *immediately* now.
     // Only returns a non-empty list if action is MemoryInitKind::NeedsInitializedMemory.
     #[must_use]
-    pub(crate) fn register_init_action<A: hal::Api>(
+    pub(crate) fn register_init_action<A: HalApi>(
         &mut self,
         action: &TextureInitTrackerAction,
         texture_guard: &Storage<Texture<A>, TextureId>,
@@ -65,7 +66,7 @@ impl CommandBufferTextureMemoryActions {
         // mean splitting up the action which is more than we'd win here.
         self.init_actions
             .extend(match texture_guard.get(action.id) {
-                Ok(texture) => texture.initialization_status.check_action(action),
+                Ok(texture) => texture.initialization_status.read().check_action(action),
                 Err(_) => return immediately_necessary_clears, // texture no longer exists
             });
 
@@ -108,7 +109,7 @@ impl CommandBufferTextureMemoryActions {
 
     // Shortcut for register_init_action when it is known that the action is an
     // implicit init, not requiring any immediate resource init.
-    pub(crate) fn register_implicit_init<A: hal::Api>(
+    pub(crate) fn register_implicit_init<A: HalApi>(
         &mut self,
         id: id::Valid<TextureId>,
         range: TextureInitRange,
@@ -151,7 +152,7 @@ pub(crate) fn fixup_discarded_surfaces<
             encoder,
             texture_tracker,
             &device.alignments,
-            &device.zero_buffer,
+            device.zero_buffer.as_ref().unwrap(),
         )
         .unwrap();
     }
@@ -163,7 +164,7 @@ impl<A: HalApi> BakedCommands<A> {
     pub(crate) fn initialize_buffer_memory(
         &mut self,
         device_tracker: &mut Tracker<A>,
-        buffer_guard: &mut Storage<Buffer<A>, id::BufferId>,
+        buffer_guard: &Storage<Buffer<A>, id::BufferId>,
     ) -> Result<(), DestroyedBufferError> {
         // Gather init ranges for each buffer so we can collapse them.
         // It is not possible to do this at an earlier point since previously
@@ -171,8 +172,9 @@ impl<A: HalApi> BakedCommands<A> {
         let mut uninitialized_ranges_per_buffer = FastHashMap::default();
         for buffer_use in self.buffer_memory_init_actions.drain(..) {
             let buffer = buffer_guard
-                .get_mut(buffer_use.id)
+                .get(buffer_use.id)
                 .map_err(|_| DestroyedBufferError(buffer_use.id))?;
+            let mut initialization_status = buffer.initialization_status.write();
 
             // align the end to 4
             let end_remainder = buffer_use.range.end % wgt::COPY_BUFFER_ALIGNMENT;
@@ -181,9 +183,7 @@ impl<A: HalApi> BakedCommands<A> {
             } else {
                 buffer_use.range.end + wgt::COPY_BUFFER_ALIGNMENT - end_remainder
             };
-            let uninitialized_ranges = buffer
-                .initialization_status
-                .drain(buffer_use.range.start..end);
+            let uninitialized_ranges = initialization_status.drain(buffer_use.range.start..end);
 
             match buffer_use.kind {
                 MemoryInitKind::ImplicitlyInitialized => {}
@@ -226,14 +226,14 @@ impl<A: HalApi> BakedCommands<A> {
                 .1;
 
             let buffer = buffer_guard
-                .get_mut(buffer_id)
+                .get(buffer_id)
                 .map_err(|_| DestroyedBufferError(buffer_id))?;
             let raw_buf = buffer.raw.as_ref().ok_or(DestroyedBufferError(buffer_id))?;
 
             unsafe {
                 self.encoder.transition_buffers(
                     transition
-                        .map(|pending| pending.into_hal(buffer))
+                        .map(|pending| pending.into_hal(&buffer))
                         .into_iter(),
                 );
             }
@@ -269,18 +269,17 @@ impl<A: HalApi> BakedCommands<A> {
     pub(crate) fn initialize_texture_memory(
         &mut self,
         device_tracker: &mut Tracker<A>,
-        texture_guard: &mut Storage<Texture<A>, TextureId>,
+        texture_guard: &Storage<Texture<A>, TextureId>,
         device: &Device<A>,
     ) -> Result<(), DestroyedTextureError> {
         let mut ranges: Vec<TextureInitRange> = Vec::new();
         for texture_use in self.texture_memory_actions.drain_init_actions() {
             let texture = texture_guard
-                .get_mut(texture_use.id)
+                .get(texture_use.id)
                 .map_err(|_| DestroyedTextureError(texture_use.id))?;
-
+            let mut initialization_status = texture.initialization_status.write();
             let use_range = texture_use.range;
-            let affected_mip_trackers = texture
-                .initialization_status
+            let affected_mip_trackers = initialization_status
                 .mips
                 .iter_mut()
                 .enumerate()
@@ -314,7 +313,7 @@ impl<A: HalApi> BakedCommands<A> {
                     &mut self.encoder,
                     &mut device_tracker.textures,
                     &device.alignments,
-                    &device.zero_buffer,
+                    device.zero_buffer.as_ref().unwrap(),
                 )
                 .unwrap();
             }
@@ -325,10 +324,11 @@ impl<A: HalApi> BakedCommands<A> {
         // after its execution.
         for surface_discard in self.texture_memory_actions.discards.iter() {
             let texture = texture_guard
-                .get_mut(surface_discard.texture)
+                .get(surface_discard.texture)
                 .map_err(|_| DestroyedTextureError(surface_discard.texture))?;
             texture
                 .initialization_status
+                .write()
                 .discard(surface_discard.mip_level, surface_discard.layer);
         }
 

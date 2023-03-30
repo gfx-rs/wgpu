@@ -3,7 +3,11 @@ use super::conv;
 use ash::{extensions::khr, vk};
 use parking_lot::Mutex;
 
-use std::{collections::BTreeMap, ffi::CStr, sync::Arc};
+use std::{
+    collections::BTreeMap,
+    ffi::CStr,
+    sync::{atomic::AtomicIsize, Arc},
+};
 
 fn depth_stencil_required_flags() -> vk::FormatFeatureFlags {
     vk::FormatFeatureFlags::SAMPLED_IMAGE | vk::FormatFeatureFlags::DEPTH_STENCIL_ATTACHMENT
@@ -1339,7 +1343,7 @@ impl super::Adapter {
             device: Arc::clone(&shared),
             family_index,
             relay_semaphores,
-            relay_index: None,
+            relay_index: AtomicIsize::new(-1),
         };
 
         let mem_allocator = {

@@ -15,7 +15,9 @@ use std::{borrow::Cow, fmt::Debug, fs, marker::PhantomData, path::Path};
 #[derive(Debug)]
 pub struct IdentityPassThrough<I>(PhantomData<I>);
 
-impl<I: Clone + Debug + wgc::id::TypedId> wgc::hub::IdentityHandler<I> for IdentityPassThrough<I> {
+impl<I: Clone + Debug + wgc::id::TypedId> wgc::identity::IdentityHandler<I>
+    for IdentityPassThrough<I>
+{
     type Input = I;
     fn process(&self, id: I, backend: wgt::Backend) -> I {
         let (index, epoch, _backend) = id.unzip();
@@ -26,7 +28,7 @@ impl<I: Clone + Debug + wgc::id::TypedId> wgc::hub::IdentityHandler<I> for Ident
 
 pub struct IdentityPassThroughFactory;
 
-impl<I: Clone + Debug + wgc::id::TypedId> wgc::hub::IdentityHandlerFactory<I>
+impl<I: Clone + Debug + wgc::id::TypedId> wgc::identity::IdentityHandlerFactory<I>
     for IdentityPassThroughFactory
 {
     type Filter = IdentityPassThrough<I>;
@@ -34,25 +36,25 @@ impl<I: Clone + Debug + wgc::id::TypedId> wgc::hub::IdentityHandlerFactory<I>
         IdentityPassThrough(PhantomData)
     }
 }
-impl wgc::hub::GlobalIdentityHandlerFactory for IdentityPassThroughFactory {}
+impl wgc::global::GlobalIdentityHandlerFactory for IdentityPassThroughFactory {}
 
 pub trait GlobalPlay {
-    fn encode_commands<A: wgc::hub::HalApi>(
+    fn encode_commands<A: wgc::hal_api::HalApi>(
         &self,
         encoder: wgc::id::CommandEncoderId,
         commands: Vec<trace::Command>,
     ) -> wgc::id::CommandBufferId;
-    fn process<A: wgc::hub::HalApi>(
+    fn process<A: wgc::hal_api::HalApi>(
         &self,
         device: wgc::id::DeviceId,
         action: trace::Action,
         dir: &Path,
-        comb_manager: &mut wgc::hub::IdentityManager,
+        comb_manager: &mut wgc::identity::IdentityManager,
     );
 }
 
-impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
-    fn encode_commands<A: wgc::hub::HalApi>(
+impl GlobalPlay for wgc::global::Global<IdentityPassThroughFactory> {
+    fn encode_commands<A: wgc::hal_api::HalApi>(
         &self,
         encoder: wgc::id::CommandEncoderId,
         commands: Vec<trace::Command>,
@@ -146,12 +148,12 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
         cmd_buf
     }
 
-    fn process<A: wgc::hub::HalApi>(
+    fn process<A: wgc::hal_api::HalApi>(
         &self,
         device: wgc::id::DeviceId,
         action: trace::Action,
         dir: &Path,
-        comb_manager: &mut wgc::hub::IdentityManager,
+        comb_manager: &mut wgc::identity::IdentityManager,
     ) {
         use wgc::device::trace::Action;
         log::info!("action {:?}", action);

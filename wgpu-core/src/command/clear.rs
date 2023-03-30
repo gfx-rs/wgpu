@@ -5,10 +5,13 @@ use crate::device::trace::Command as TraceCommand;
 use crate::{
     command::CommandBuffer,
     get_lowest_common_denom,
-    hub::{self, Global, GlobalIdentityHandlerFactory, HalApi, Token},
+    global::Global,
+    hal_api::HalApi,
     id::{BufferId, CommandEncoderId, DeviceId, TextureId, Valid},
+    identity::GlobalIdentityHandlerFactory,
     init_tracker::{MemoryInitKind, TextureInitRange},
     resource::{Texture, TextureClearMode},
+    storage::Storage,
     track::{TextureSelector, TextureTracker},
 };
 
@@ -75,18 +78,20 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("CommandEncoder::fill_buffer");
 
         let hub = A::hub(self);
-        let mut token = Token::root();
-        let (mut cmd_buf_guard, mut token) = hub.command_buffers.write(&mut token);
-        let cmd_buf = CommandBuffer::get_encoder_mut(&mut *cmd_buf_guard, command_encoder_id)
+
+        let cmd_buf_guard = hub.command_buffers.read();
+        let cmd_buf = CommandBuffer::get_encoder(&*cmd_buf_guard, command_encoder_id)
             .map_err(|_| ClearError::InvalidCommandEncoder(command_encoder_id))?;
-        let (buffer_guard, _) = hub.buffers.read(&mut token);
+        let mut cmd_buf_data = cmd_buf.data.lock();
+        let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
+        let buffer_guard = hub.buffers.read();
 
         #[cfg(feature = "trace")]
-        if let Some(ref mut list) = cmd_buf.commands {
+        if let Some(ref mut list) = cmd_buf_data.commands {
             list.push(TraceCommand::ClearBuffer { dst, offset, size });
         }
 
-        let (dst_buffer, dst_pending) = cmd_buf
+        let (dst_buffer, dst_pending) = cmd_buf_data
             .trackers
             .buffers
             .set_single(&*buffer_guard, dst, hal::BufferUses::COPY_DST)
@@ -127,16 +132,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         // Mark dest as initialized.
-        cmd_buf
-            .buffer_memory_init_actions
-            .extend(dst_buffer.initialization_status.create_action(
+        cmd_buf_data.buffer_memory_init_actions.extend(
+            dst_buffer.initialization_status.read().create_action(
                 dst,
                 offset..end,
                 MemoryInitKind::ImplicitlyInitialized,
-            ));
+            ),
+        );
         // actual hal barrier & operation
         let dst_barrier = dst_pending.map(|pending| pending.into_hal(dst_buffer));
-        let cmd_buf_raw = cmd_buf.encoder.open();
+        let cmd_buf_raw = cmd_buf_data.encoder.open();
         unsafe {
             cmd_buf_raw.transition_buffers(dst_barrier.into_iter());
             cmd_buf_raw.clear_buffer(dst_raw, offset..end);
@@ -153,16 +158,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("CommandEncoder::clear_texture");
 
         let hub = A::hub(self);
-        let mut token = Token::root();
-        let (device_guard, mut token) = hub.devices.write(&mut token);
-        let (mut cmd_buf_guard, mut token) = hub.command_buffers.write(&mut token);
-        let cmd_buf = CommandBuffer::get_encoder_mut(&mut *cmd_buf_guard, command_encoder_id)
+
+        let cmd_buf_guard = hub.command_buffers.read();
+        let cmd_buf = CommandBuffer::get_encoder(&*cmd_buf_guard, command_encoder_id)
             .map_err(|_| ClearError::InvalidCommandEncoder(command_encoder_id))?;
-        let (_, mut token) = hub.buffers.read(&mut token); // skip token
-        let (texture_guard, _) = hub.textures.read(&mut token);
+        let mut cmd_buf_data = cmd_buf.data.lock();
+        let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
+
+        let texture_guard = hub.textures.read();
 
         #[cfg(feature = "trace")]
-        if let Some(ref mut list) = cmd_buf.commands {
+        if let Some(ref mut list) = cmd_buf_data.commands {
             list.push(TraceCommand::ClearTexture {
                 dst,
                 subresource_range: *subresource_range,
@@ -211,8 +217,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             });
         }
 
-        let device = &device_guard[cmd_buf.device_id.value];
-
+        let device = &cmd_buf.device;
+        let (encoder, tracker) = cmd_buf_data.open_encoder_and_tracker();
         clear_texture(
             &*texture_guard,
             Valid(dst),
@@ -220,16 +226,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 mip_range: subresource_mip_range,
                 layer_range: subresource_layer_range,
             },
-            cmd_buf.encoder.open(),
-            &mut cmd_buf.trackers.textures,
+            encoder,
+            &mut tracker.textures,
             &device.alignments,
-            &device.zero_buffer,
+            device.zero_buffer.as_ref().unwrap(),
         )
     }
 }
 
 pub(crate) fn clear_texture<A: HalApi>(
-    storage: &hub::Storage<Texture<A>, TextureId>,
+    storage: &Storage<Texture<A>, TextureId>,
     dst_texture_id: Valid<TextureId>,
     range: TextureInitRange,
     encoder: &mut A::CommandEncoder,
@@ -241,11 +247,13 @@ pub(crate) fn clear_texture<A: HalApi>(
 
     let dst_raw = dst_texture
         .inner
+        .as_ref()
+        .unwrap()
         .as_raw()
         .ok_or(ClearError::InvalidTexture(dst_texture_id.0))?;
 
     // Issue the right barrier.
-    let clear_usage = match dst_texture.clear_mode {
+    let clear_usage = match *dst_texture.clear_mode.read() {
         TextureClearMode::BufferCopy => hal::TextureUses::COPY_DST,
         TextureClearMode::RenderPass {
             is_color: false, ..
@@ -283,7 +291,7 @@ pub(crate) fn clear_texture<A: HalApi>(
     }
 
     // Record actual clearing
-    match dst_texture.clear_mode {
+    match *dst_texture.clear_mode.read() {
         TextureClearMode::BufferCopy => clear_texture_via_buffer_copies::<A>(
             &dst_texture.desc,
             alignments,
@@ -302,7 +310,7 @@ pub(crate) fn clear_texture<A: HalApi>(
     Ok(())
 }
 
-fn clear_texture_via_buffer_copies<A: hal::Api>(
+fn clear_texture_via_buffer_copies<A: HalApi>(
     texture_desc: &wgt::TextureDescriptor<(), Vec<wgt::TextureFormat>>,
     alignments: &hal::Alignments,
     zero_buffer: &A::Buffer, // Buffer of size device::ZERO_BUFFER_SIZE
@@ -394,7 +402,7 @@ fn clear_texture_via_buffer_copies<A: hal::Api>(
     }
 }
 
-fn clear_texture_via_render_passes<A: hal::Api>(
+fn clear_texture_via_render_passes<A: HalApi>(
     dst_texture: &Texture<A>,
     range: TextureInitRange,
     is_color: bool,
@@ -407,6 +415,7 @@ fn clear_texture_via_render_passes<A: hal::Api>(
         height: dst_texture.desc.size.height,
         depth_or_array_layers: 1, // Only one layer is cleared at a time.
     };
+    let clear_mode = &dst_texture.clear_mode.read();
 
     for mip_level in range.mip_range {
         let extent = extent_base.mip_level_size(mip_level, dst_texture.desc.dimension);
@@ -415,7 +424,12 @@ fn clear_texture_via_render_passes<A: hal::Api>(
             let (color_attachments, depth_stencil_attachment) = if is_color {
                 color_attachments_tmp = [Some(hal::ColorAttachment {
                     target: hal::Attachment {
-                        view: dst_texture.get_clear_view(mip_level, depth_or_layer),
+                        view: Texture::get_clear_view(
+                            clear_mode,
+                            &dst_texture.desc,
+                            mip_level,
+                            depth_or_layer,
+                        ),
                         usage: hal::TextureUses::COLOR_TARGET,
                     },
                     resolve_target: None,
@@ -428,7 +442,12 @@ fn clear_texture_via_render_passes<A: hal::Api>(
                     &[][..],
                     Some(hal::DepthStencilAttachment {
                         target: hal::Attachment {
-                            view: dst_texture.get_clear_view(mip_level, depth_or_layer),
+                            view: Texture::get_clear_view(
+                                clear_mode,
+                                &dst_texture.desc,
+                                mip_level,
+                                depth_or_layer,
+                            ),
                             usage: hal::TextureUses::DEPTH_STENCIL_WRITE,
                         },
                         depth_ops: hal::AttachmentOps::STORE,

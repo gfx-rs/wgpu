@@ -1,17 +1,117 @@
 use crate::{
-    device::{DeviceError, HostMap, MissingDownlevelFlags, MissingFeatures},
-    hub::{Global, GlobalIdentityHandlerFactory, HalApi, Resource, Token},
-    id::{AdapterId, DeviceId, SurfaceId, TextureId, Valid},
+    device::{Device, DeviceError, HostMap, MissingDownlevelFlags, MissingFeatures},
+    global::Global,
+    hal_api::HalApi,
+    id::{
+        AdapterId, BufferId, DeviceId, QuerySetId, SamplerId, StagingBufferId, SurfaceId,
+        TextureId, TextureViewId, TypedId, Valid,
+    },
+    identity::GlobalIdentityHandlerFactory,
     init_tracker::{BufferInitTracker, TextureInitTracker},
     track::TextureSelector,
     validation::MissingBufferUsageError,
-    Label, LifeGuard, RefCount, Stored,
+    Label, SubmissionIndex,
 };
 
+use parking_lot::{Mutex, RwLock};
 use smallvec::SmallVec;
 use thiserror::Error;
 
-use std::{borrow::Borrow, ops::Range, ptr::NonNull};
+use std::{
+    borrow::Borrow,
+    fmt::Debug,
+    ops::Range,
+    ptr::NonNull,
+    sync::{
+        atomic::{AtomicBool, AtomicUsize, Ordering},
+        Arc,
+    },
+};
+
+/// Information about the wgpu-core resource.
+///
+/// Each type representing a `wgpu-core` resource, like [`Device`],
+/// [`Buffer`], etc., contains a `ResourceInfo` which contains
+/// its latest submission index and label.
+///
+/// A resource may need to be retained for any of several reasons:
+/// and any lifetime logic will be handled by Arc<Resource> refcount
+///
+/// - The user may hold a reference to it (via a `wgpu::Buffer`, say).
+///
+/// - Other resources may depend on it (a texture view's backing
+///   texture, for example).
+///
+/// - It may be used by commands sent to the GPU that have not yet
+///   finished execution.
+///
+/// [`Device`]: device::Device
+/// [`Buffer`]: resource::Buffer
+#[derive(Debug)]
+pub struct ResourceInfo<Id: TypedId> {
+    id: RwLock<Option<Valid<Id>>>,
+    /// The index of the last queue submission in which the resource
+    /// was used.
+    ///
+    /// Each queue submission is fenced and assigned an index number
+    /// sequentially. Thus, when a queue submission completes, we know any
+    /// resources used in that submission and any lower-numbered submissions are
+    /// no longer in use by the GPU.
+    submission_index: AtomicUsize,
+
+    /// The `label` from the descriptor used to create the resource.
+    #[cfg(debug_assertions)]
+    pub(crate) label: String,
+}
+
+impl<Id: TypedId> ResourceInfo<Id> {
+    #[allow(unused_variables)]
+    pub(crate) fn new(label: &str) -> Self {
+        Self {
+            id: RwLock::new(None),
+            submission_index: AtomicUsize::new(0),
+            #[cfg(debug_assertions)]
+            label: label.to_string(),
+        }
+    }
+
+    pub(crate) fn id(&self) -> Valid<Id> {
+        self.id.read().unwrap()
+    }
+
+    pub(crate) fn set_id(&self, id: Id) {
+        let mut value = self.id.write();
+        *value = Some(Valid(id));
+    }
+
+    /// Record that this resource will be used by the queue submission with the
+    /// given index.
+    pub(crate) fn use_at(&self, submit_index: SubmissionIndex) {
+        self.submission_index
+            .store(submit_index as _, Ordering::Release);
+    }
+
+    pub(crate) fn submission_index(&self) -> SubmissionIndex {
+        self.submission_index.load(Ordering::Acquire) as _
+    }
+}
+
+pub trait Resource<Id: TypedId> {
+    const TYPE: &'static str;
+    fn info(&self) -> &ResourceInfo<Id>;
+    fn label(&self) -> String {
+        #[cfg(debug_assertions)]
+        return self.info().label.clone();
+        #[cfg(not(debug_assertions))]
+        return String::new();
+    }
+    fn ref_count(self: &Arc<Self>) -> usize {
+        Arc::strong_count(self)
+    }
+    fn is_unique(self: &Arc<Self>) -> bool {
+        self.ref_count() == 1
+    }
+}
 
 /// The status code provided to the buffer mapping callback.
 ///
@@ -46,15 +146,16 @@ pub enum BufferMapAsyncStatus {
     InvalidUsageFlags,
 }
 
-pub(crate) enum BufferMapState<A: hal::Api> {
+#[derive(Debug)]
+pub(crate) enum BufferMapState<A: HalApi> {
     /// Mapped at creation.
     Init {
         ptr: NonNull<u8>,
-        stage_buffer: A::Buffer,
+        stage_buffer: Arc<Buffer<A>>,
         needs_flush: bool,
     },
     /// Waiting for GPU to be done before mapping
-    Waiting(BufferPendingMapping),
+    Waiting(BufferPendingMapping<A>),
     /// Mapped
     Active {
         ptr: NonNull<u8>,
@@ -65,8 +166,8 @@ pub(crate) enum BufferMapState<A: hal::Api> {
     Idle,
 }
 
-unsafe impl<A: hal::Api> Send for BufferMapState<A> {}
-unsafe impl<A: hal::Api> Sync for BufferMapState<A> {}
+unsafe impl<A: HalApi> Send for BufferMapState<A> {}
+unsafe impl<A: HalApi> Sync for BufferMapState<A> {}
 
 #[repr(C)]
 pub struct BufferMapCallbackC {
@@ -76,6 +177,7 @@ pub struct BufferMapCallbackC {
 
 unsafe impl Send for BufferMapCallbackC {}
 
+#[derive(Debug)]
 pub struct BufferMapCallback {
     // We wrap this so creating the enum in the C variant can be unsafe,
     // allowing our call function to be safe.
@@ -89,6 +191,15 @@ enum BufferMapCallbackInner {
     C {
         inner: BufferMapCallbackC,
     },
+}
+
+impl Debug for BufferMapCallbackInner {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            BufferMapCallbackInner::Rust { callback: _ } => f.debug_struct("Rust").finish(),
+            BufferMapCallbackInner::C { inner: _ } => f.debug_struct("C").finish(),
+        }
+    }
 }
 
 impl BufferMapCallback {
@@ -161,6 +272,7 @@ impl Drop for BufferMapCallback {
     }
 }
 
+#[derive(Debug)]
 pub struct BufferMapOperation {
     pub host: HostMap,
     pub callback: BufferMapCallback,
@@ -214,24 +326,42 @@ pub enum BufferAccessError {
 }
 
 pub type BufferAccessResult = Result<(), BufferAccessError>;
-pub(crate) struct BufferPendingMapping {
+
+#[derive(Debug)]
+pub(crate) struct BufferPendingMapping<A: HalApi> {
     pub range: Range<wgt::BufferAddress>,
     pub op: BufferMapOperation,
     // hold the parent alive while the mapping is active
-    pub _parent_ref_count: RefCount,
+    pub _parent_buffer: Arc<Buffer<A>>,
 }
 
 pub type BufferDescriptor<'a> = wgt::BufferDescriptor<Label<'a>>;
 
-pub struct Buffer<A: hal::Api> {
-    pub(crate) raw: Option<A::Buffer>,
-    pub(crate) device_id: Stored<DeviceId>,
+#[derive(Debug)]
+pub struct Buffer<A: HalApi> {
+    pub(crate) raw: Option<Arc<A::Buffer>>,
+    pub(crate) device: Arc<Device<A>>,
     pub(crate) usage: wgt::BufferUsages,
     pub(crate) size: wgt::BufferAddress,
-    pub(crate) initialization_status: BufferInitTracker,
-    pub(crate) sync_mapped_writes: Option<hal::MemoryRange>,
-    pub(crate) life_guard: LifeGuard,
-    pub(crate) map_state: BufferMapState<A>,
+    pub(crate) initialization_status: RwLock<BufferInitTracker>,
+    pub(crate) sync_mapped_writes: Mutex<Option<hal::MemoryRange>>,
+    pub(crate) info: ResourceInfo<BufferId>,
+    pub(crate) map_state: Mutex<BufferMapState<A>>,
+}
+
+impl<A: HalApi> Drop for Buffer<A> {
+    fn drop(&mut self) {
+        if let Some(buffer) = self.raw.take() {
+            if let Ok(raw) = Arc::try_unwrap(buffer) {
+                unsafe {
+                    use hal::Device;
+                    self.device.raw.as_ref().unwrap().destroy_buffer(raw);
+                }
+            } else {
+                panic!("Buffer cannot be destroyed because is still in use");
+            }
+        }
+    }
 }
 
 #[derive(Clone, Debug, Error)]
@@ -252,11 +382,11 @@ pub enum CreateBufferError {
     MissingDownlevelFlags(#[from] MissingDownlevelFlags),
 }
 
-impl<A: hal::Api> Resource for Buffer<A> {
+impl<A: HalApi> Resource<BufferId> for Buffer<A> {
     const TYPE: &'static str = "Buffer";
 
-    fn life_guard(&self) -> &LifeGuard {
-        &self.life_guard
+    fn info(&self) -> &ResourceInfo<BufferId> {
+        &self.info
     }
 }
 
@@ -279,42 +409,44 @@ impl<A: hal::Api> Resource for Buffer<A> {
 /// [`queue_write_staging_buffer`]: Global::queue_write_staging_buffer
 /// [`queue_write_texture`]: Global::queue_write_texture
 /// [`Device::pending_writes`]: crate::device::Device
-pub struct StagingBuffer<A: hal::Api> {
-    pub(crate) raw: A::Buffer,
+#[derive(Debug)]
+pub struct StagingBuffer<A: HalApi> {
+    pub(crate) raw: Arc<A::Buffer>,
     pub(crate) size: wgt::BufferAddress,
     pub(crate) is_coherent: bool,
+    pub(crate) info: ResourceInfo<StagingBufferId>,
 }
 
-impl<A: hal::Api> Resource for StagingBuffer<A> {
+impl<A: HalApi> Resource<StagingBufferId> for StagingBuffer<A> {
     const TYPE: &'static str = "StagingBuffer";
 
-    fn life_guard(&self) -> &LifeGuard {
-        unreachable!()
+    fn info(&self) -> &ResourceInfo<StagingBufferId> {
+        &self.info
     }
 
-    fn label(&self) -> &str {
-        "<StagingBuffer>"
+    fn label(&self) -> String {
+        String::from("<StagingBuffer>")
     }
 }
 
 pub type TextureDescriptor<'a> = wgt::TextureDescriptor<Label<'a>, Vec<wgt::TextureFormat>>;
 
 #[derive(Debug)]
-pub(crate) enum TextureInner<A: hal::Api> {
+pub(crate) enum TextureInner<A: HalApi> {
     Native {
-        raw: Option<A::Texture>,
+        raw: Option<Arc<A::Texture>>,
     },
     Surface {
         raw: A::SurfaceTexture,
         parent_id: Valid<SurfaceId>,
-        has_work: bool,
+        has_work: AtomicBool,
     },
 }
 
-impl<A: hal::Api> TextureInner<A> {
+impl<A: HalApi> TextureInner<A> {
     pub fn as_raw(&self) -> Option<&A::Texture> {
         match *self {
-            Self::Native { raw: Some(ref tex) } => Some(tex),
+            Self::Native { raw: Some(ref tex) } => Some(&tex),
             Self::Native { raw: None } => None,
             Self::Surface { ref raw, .. } => Some(raw.borrow()),
         }
@@ -322,11 +454,11 @@ impl<A: hal::Api> TextureInner<A> {
 }
 
 #[derive(Debug)]
-pub enum TextureClearMode<A: hal::Api> {
+pub enum TextureClearMode<A: HalApi> {
     BufferCopy,
     // View for clear via RenderPass for every subsurface (mip/layer/slice)
     RenderPass {
-        clear_views: SmallVec<[A::TextureView; 1]>,
+        clear_views: SmallVec<[Arc<TextureView<A>>; 1]>,
         is_color: bool,
     },
     // Texture can't be cleared, attempting to do so will cause panic.
@@ -335,21 +467,48 @@ pub enum TextureClearMode<A: hal::Api> {
 }
 
 #[derive(Debug)]
-pub struct Texture<A: hal::Api> {
-    pub(crate) inner: TextureInner<A>,
-    pub(crate) device_id: Stored<DeviceId>,
+pub struct Texture<A: HalApi> {
+    pub(crate) inner: Option<TextureInner<A>>,
+    pub(crate) device: Arc<Device<A>>,
     pub(crate) desc: wgt::TextureDescriptor<(), Vec<wgt::TextureFormat>>,
     pub(crate) hal_usage: hal::TextureUses,
     pub(crate) format_features: wgt::TextureFormatFeatures,
-    pub(crate) initialization_status: TextureInitTracker,
+    pub(crate) initialization_status: RwLock<TextureInitTracker>,
     pub(crate) full_range: TextureSelector,
-    pub(crate) life_guard: LifeGuard,
-    pub(crate) clear_mode: TextureClearMode<A>,
+    pub(crate) info: ResourceInfo<TextureId>,
+    pub(crate) clear_mode: RwLock<TextureClearMode<A>>,
 }
 
-impl<A: hal::Api> Texture<A> {
-    pub(crate) fn get_clear_view(&self, mip_level: u32, depth_or_layer: u32) -> &A::TextureView {
-        match self.clear_mode {
+impl<A: HalApi> Drop for Texture<A> {
+    fn drop(&mut self) {
+        use hal::Device;
+        let mut clear_mode = self.clear_mode.write();
+        if let TextureClearMode::RenderPass { clear_views, .. } = &mut *clear_mode {
+            clear_views.clear();
+        }
+        if let Some(inner) = self.inner.take() {
+            if let TextureInner::Native { raw: Some(raw) } = inner {
+                let raw = Arc::try_unwrap(raw);
+                unsafe {
+                    self.device
+                        .raw
+                        .as_ref()
+                        .unwrap()
+                        .destroy_texture(raw.unwrap());
+                }
+            }
+        }
+    }
+}
+
+impl<A: HalApi> Texture<A> {
+    pub(crate) fn get_clear_view<'a>(
+        clear_mode: &'a TextureClearMode<A>,
+        desc: &'a wgt::TextureDescriptor<(), Vec<wgt::TextureFormat>>,
+        mip_level: u32,
+        depth_or_layer: u32,
+    ) -> &'a A::TextureView {
+        match clear_mode {
             TextureClearMode::BufferCopy => {
                 panic!("Given texture is cleared with buffer copies, not render passes")
             }
@@ -359,14 +518,14 @@ impl<A: hal::Api> Texture<A> {
             TextureClearMode::RenderPass {
                 ref clear_views, ..
             } => {
-                let index = if self.desc.dimension == wgt::TextureDimension::D3 {
+                let index = if desc.dimension == wgt::TextureDimension::D3 {
                     (0..mip_level).fold(0, |acc, mip| {
-                        acc + (self.desc.size.depth_or_array_layers >> mip).max(1)
+                        acc + (desc.size.depth_or_array_layers >> mip).max(1)
                     })
                 } else {
-                    mip_level * self.desc.size.depth_or_array_layers
+                    mip_level * desc.size.depth_or_array_layers
                 } + depth_or_layer;
-                &clear_views[index as usize]
+                clear_views[index as usize].raw.as_ref().unwrap()
             }
         }
     }
@@ -384,10 +543,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("Texture::as_hal");
 
         let hub = A::hub(self);
-        let mut token = Token::root();
-        let (guard, _) = hub.textures.read(&mut token);
-        let texture = guard.try_get(id).ok().flatten();
-        let hal_texture = texture.and_then(|tex| tex.inner.as_raw());
+        let texture = { hub.textures.try_get(id).ok().flatten() };
+        let hal_texture = texture
+            .as_ref()
+            .and_then(|tex| tex.inner.as_ref().unwrap().as_raw());
 
         hal_texture_callback(hal_texture);
     }
@@ -403,11 +562,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("Adapter::as_hal");
 
         let hub = A::hub(self);
-        let mut token = Token::root();
-
-        let (guard, _) = hub.adapters.read(&mut token);
-        let adapter = guard.try_get(id).ok().flatten();
-        let hal_adapter = adapter.map(|adapter| &adapter.raw.adapter);
+        let adapter = hub.adapters.try_get(id).ok().flatten();
+        let hal_adapter = adapter.as_ref().map(|adapter| &adapter.raw.adapter);
 
         hal_adapter_callback(hal_adapter)
     }
@@ -423,29 +579,26 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("Device::as_hal");
 
         let hub = A::hub(self);
-        let mut token = Token::root();
-        let (guard, _) = hub.devices.read(&mut token);
-        let device = guard.try_get(id).ok().flatten();
-        let hal_device = device.map(|device| &device.raw);
+        let device = hub.devices.try_get(id).ok().flatten();
+        let hal_device = device.as_ref().map(|device| device.raw.as_ref().unwrap());
 
         hal_device_callback(hal_device)
     }
 
     /// # Safety
     /// - The raw surface handle must not be manually destroyed
-    pub unsafe fn surface_as_hal_mut<A: HalApi, F: FnOnce(Option<&mut A::Surface>) -> R, R>(
+    pub unsafe fn surface_as_hal<A: HalApi, F: FnOnce(Option<&A::Surface>) -> R, R>(
         &self,
         id: SurfaceId,
         hal_surface_callback: F,
     ) -> R {
-        profiling::scope!("Surface::as_hal_mut");
+        profiling::scope!("Surface::as_hal");
 
-        let mut token = Token::root();
-        let (mut guard, _) = self.surfaces.write(&mut token);
-        let surface = guard.get_mut(id).ok();
+        let surface = self.surfaces.get(id).ok();
         let hal_surface = surface
-            .and_then(|surface| A::get_surface_mut(surface))
-            .map(|surface| &mut surface.raw);
+            .as_ref()
+            .and_then(|surface| A::get_surface(&surface))
+            .map(|surface| &*surface.raw);
 
         hal_surface_callback(hal_surface)
     }
@@ -525,15 +678,15 @@ pub enum CreateTextureError {
     MissingDownlevelFlags(#[from] MissingDownlevelFlags),
 }
 
-impl<A: hal::Api> Resource for Texture<A> {
+impl<A: HalApi> Resource<TextureId> for Texture<A> {
     const TYPE: &'static str = "Texture";
 
-    fn life_guard(&self) -> &LifeGuard {
-        &self.life_guard
+    fn info(&self) -> &ResourceInfo<TextureId> {
+        &self.info
     }
 }
 
-impl<A: hal::Api> Borrow<TextureSelector> for Texture<A> {
+impl<A: HalApi> Borrow<TextureSelector> for Texture<A> {
     fn borrow(&self) -> &TextureSelector {
         &self.full_range
     }
@@ -593,12 +746,12 @@ pub enum TextureViewNotRenderableReason {
 }
 
 #[derive(Debug)]
-pub struct TextureView<A: hal::Api> {
-    pub(crate) raw: A::TextureView,
+pub struct TextureView<A: HalApi> {
+    pub(crate) raw: Option<Arc<A::TextureView>>,
     // The parent's refcount is held alive, but the parent may still be deleted
     // if it's a surface texture. TODO: make this cleaner.
-    pub(crate) parent_id: Stored<TextureId>,
-    pub(crate) device_id: Stored<DeviceId>,
+    pub(crate) parent_id: Valid<TextureId>,
+    pub(crate) device: Arc<Device<A>>,
     //TODO: store device_id for quick access?
     pub(crate) desc: HalTextureViewDescriptor,
     pub(crate) format_features: wgt::TextureFormatFeatures,
@@ -606,7 +759,21 @@ pub struct TextureView<A: hal::Api> {
     pub(crate) render_extent: Result<wgt::Extent3d, TextureViewNotRenderableReason>,
     pub(crate) samples: u32,
     pub(crate) selector: TextureSelector,
-    pub(crate) life_guard: LifeGuard,
+    pub(crate) info: ResourceInfo<TextureViewId>,
+}
+
+impl<A: HalApi> Drop for TextureView<A> {
+    fn drop(&mut self) {
+        use hal::Device;
+        let raw = Arc::try_unwrap(self.raw.take().unwrap());
+        unsafe {
+            self.device
+                .raw
+                .as_ref()
+                .unwrap()
+                .destroy_texture_view(raw.unwrap());
+        }
+    }
 }
 
 #[derive(Clone, Debug, Error)]
@@ -658,11 +825,11 @@ pub enum CreateTextureViewError {
 #[derive(Clone, Debug, Error)]
 pub enum TextureViewDestroyError {}
 
-impl<A: hal::Api> Resource for TextureView<A> {
+impl<A: HalApi> Resource<TextureViewId> for TextureView<A> {
     const TYPE: &'static str = "TextureView";
 
-    fn life_guard(&self) -> &LifeGuard {
-        &self.life_guard
+    fn info(&self) -> &ResourceInfo<TextureViewId> {
+        &self.info
     }
 }
 
@@ -697,14 +864,28 @@ pub struct SamplerDescriptor<'a> {
 }
 
 #[derive(Debug)]
-pub struct Sampler<A: hal::Api> {
-    pub(crate) raw: A::Sampler,
-    pub(crate) device_id: Stored<DeviceId>,
-    pub(crate) life_guard: LifeGuard,
+pub struct Sampler<A: HalApi> {
+    pub(crate) raw: Option<Arc<A::Sampler>>,
+    pub(crate) device: Arc<Device<A>>,
+    pub(crate) info: ResourceInfo<SamplerId>,
     /// `true` if this is a comparison sampler
     pub(crate) comparison: bool,
     /// `true` if this is a filtering sampler
     pub(crate) filtering: bool,
+}
+
+impl<A: HalApi> Drop for Sampler<A> {
+    fn drop(&mut self) {
+        let raw = self.raw.take().unwrap();
+        if let Ok(raw) = Arc::try_unwrap(raw) {
+            unsafe {
+                use hal::Device;
+                self.device.raw.as_ref().unwrap().destroy_sampler(raw);
+            }
+        } else {
+            panic!("Sampler raw cannot be destroyed because is still in use");
+        }
+    }
 }
 
 #[derive(Copy, Clone)]
@@ -714,7 +895,7 @@ pub enum SamplerFilterErrorType {
     MipmapFilter,
 }
 
-impl std::fmt::Debug for SamplerFilterErrorType {
+impl Debug for SamplerFilterErrorType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match *self {
             SamplerFilterErrorType::MagFilter => write!(f, "magFilter"),
@@ -750,11 +931,11 @@ pub enum CreateSamplerError {
     MissingFeatures(#[from] MissingFeatures),
 }
 
-impl<A: hal::Api> Resource for Sampler<A> {
+impl<A: HalApi> Resource<SamplerId> for Sampler<A> {
     const TYPE: &'static str = "Sampler";
 
-    fn life_guard(&self) -> &LifeGuard {
-        &self.life_guard
+    fn info(&self) -> &ResourceInfo<SamplerId> {
+        &self.info
     }
 }
 
@@ -773,18 +954,32 @@ pub enum CreateQuerySetError {
 pub type QuerySetDescriptor<'a> = wgt::QuerySetDescriptor<Label<'a>>;
 
 #[derive(Debug)]
-pub struct QuerySet<A: hal::Api> {
-    pub(crate) raw: A::QuerySet,
-    pub(crate) device_id: Stored<DeviceId>,
-    pub(crate) life_guard: LifeGuard,
+pub struct QuerySet<A: HalApi> {
+    pub(crate) raw: Option<Arc<A::QuerySet>>,
+    pub(crate) device: Arc<Device<A>>,
+    pub(crate) info: ResourceInfo<QuerySetId>,
     pub(crate) desc: wgt::QuerySetDescriptor<()>,
 }
 
-impl<A: hal::Api> Resource for QuerySet<A> {
+impl<A: HalApi> Drop for QuerySet<A> {
+    fn drop(&mut self) {
+        let raw = self.raw.take().unwrap();
+        if let Ok(raw) = Arc::try_unwrap(raw) {
+            unsafe {
+                use hal::Device;
+                self.device.raw.as_ref().unwrap().destroy_query_set(raw);
+            }
+        } else {
+            panic!("QuerySet raw cannot be destroyed because is still in use");
+        }
+    }
+}
+
+impl<A: HalApi> Resource<QuerySetId> for QuerySet<A> {
     const TYPE: &'static str = "QuerySet";
 
-    fn life_guard(&self) -> &LifeGuard {
-        &self.life_guard
+    fn info(&self) -> &ResourceInfo<QuerySetId> {
+        &self.info
     }
 }
 

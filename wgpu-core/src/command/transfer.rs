@@ -5,14 +5,17 @@ use crate::{
     conv,
     device::{Device, MissingDownlevelFlags},
     error::{ErrorFormatter, PrettyError},
-    hub::{Global, GlobalIdentityHandlerFactory, HalApi, Storage, Token},
+    global::Global,
+    hal_api::HalApi,
     id::{BufferId, CommandEncoderId, TextureId, Valid},
+    identity::GlobalIdentityHandlerFactory,
     init_tracker::{
         has_copy_partial_init_tracker_coverage, MemoryInitKind, TextureInitRange,
         TextureInitTrackerAction,
     },
     resource::{Texture, TextureErrorDimension},
-    track::TextureSelector,
+    storage::Storage,
+    track::{TextureSelector, Tracker},
 };
 
 use arrayvec::ArrayVec;
@@ -21,6 +24,8 @@ use thiserror::Error;
 use wgt::{BufferAddress, BufferUsages, Extent3d, TextureUsages};
 
 use std::iter;
+
+use super::{memory_init::CommandBufferTextureMemoryActions, CommandEncoder};
 
 pub type ImageCopyBuffer = wgt::ImageCopyBuffer<BufferId>;
 pub type ImageCopyTexture = wgt::ImageCopyTexture<TextureId>;
@@ -177,7 +182,7 @@ pub enum CopyError {
     Transfer(#[from] TransferError),
 }
 
-pub(crate) fn extract_texture_selector<A: hal::Api>(
+pub(crate) fn extract_texture_selector<A: HalApi>(
     copy_texture: &ImageCopyTexture,
     copy_size: &Extent3d,
     texture: &Texture<A>,
@@ -431,7 +436,9 @@ pub(crate) fn validate_texture_copy_range(
 
 fn handle_texture_init<A: HalApi>(
     init_kind: MemoryInitKind,
-    cmd_buf: &mut CommandBuffer<A>,
+    encoder: &mut CommandEncoder<A>,
+    trackers: &mut Tracker<A>,
+    texture_memory_actions: &mut CommandBufferTextureMemoryActions,
     device: &Device<A>,
     copy_texture: &ImageCopyTexture,
     copy_size: &Extent3d,
@@ -448,13 +455,12 @@ fn handle_texture_init<A: HalApi>(
     };
 
     // Register the init action.
-    let immediate_inits = cmd_buf
-        .texture_memory_actions
-        .register_init_action(&{ init_action }, texture_guard);
+    let immediate_inits =
+        texture_memory_actions.register_init_action(&{ init_action }, texture_guard);
 
     // In rare cases we may need to insert an init operation immediately onto the command buffer.
     if !immediate_inits.is_empty() {
-        let cmd_buf_raw = cmd_buf.encoder.open();
+        let cmd_buf_raw = encoder.open();
         for init in immediate_inits {
             clear_texture(
                 texture_guard,
@@ -464,9 +470,9 @@ fn handle_texture_init<A: HalApi>(
                     layer_range: init.layer..(init.layer + 1),
                 },
                 cmd_buf_raw,
-                &mut cmd_buf.trackers.textures,
+                &mut trackers.textures,
                 &device.alignments,
-                &device.zero_buffer,
+                device.zero_buffer.as_ref().unwrap(),
             )
             .unwrap();
         }
@@ -478,7 +484,9 @@ fn handle_texture_init<A: HalApi>(
 /// Ensure the source texture of a transfer is in the right initialization
 /// state, and record the state for after the transfer operation.
 fn handle_src_texture_init<A: HalApi>(
-    cmd_buf: &mut CommandBuffer<A>,
+    encoder: &mut CommandEncoder<A>,
+    trackers: &mut Tracker<A>,
+    texture_memory_actions: &mut CommandBufferTextureMemoryActions,
     device: &Device<A>,
     source: &ImageCopyTexture,
     copy_size: &Extent3d,
@@ -490,7 +498,9 @@ fn handle_src_texture_init<A: HalApi>(
 
     handle_texture_init(
         MemoryInitKind::NeedsInitializedMemory,
-        cmd_buf,
+        encoder,
+        trackers,
+        texture_memory_actions,
         device,
         source,
         copy_size,
@@ -504,7 +514,9 @@ fn handle_src_texture_init<A: HalApi>(
 /// Ensure the destination texture of a transfer is in the right initialization
 /// state, and record the state for after the transfer operation.
 fn handle_dst_texture_init<A: HalApi>(
-    cmd_buf: &mut CommandBuffer<A>,
+    encoder: &mut CommandEncoder<A>,
+    trackers: &mut Tracker<A>,
+    texture_memory_actions: &mut CommandBufferTextureMemoryActions,
     device: &Device<A>,
     destination: &ImageCopyTexture,
     copy_size: &Extent3d,
@@ -530,7 +542,9 @@ fn handle_dst_texture_init<A: HalApi>(
 
     handle_texture_init(
         dst_init_kind,
-        cmd_buf,
+        encoder,
+        trackers,
+        texture_memory_actions,
         device,
         destination,
         copy_size,
@@ -555,17 +569,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             return Err(TransferError::SameSourceDestinationBuffer.into());
         }
         let hub = A::hub(self);
-        let mut token = Token::root();
 
-        let (device_guard, mut token) = hub.devices.read(&mut token);
-        let (mut cmd_buf_guard, mut token) = hub.command_buffers.write(&mut token);
-        let cmd_buf = CommandBuffer::get_encoder_mut(&mut *cmd_buf_guard, command_encoder_id)?;
-        let (buffer_guard, _) = hub.buffers.read(&mut token);
+        let cmd_buf_guard = hub.command_buffers.read();
+        let cmd_buf = CommandBuffer::get_encoder(&*cmd_buf_guard, command_encoder_id)?;
+        let mut cmd_buf_data = cmd_buf.data.lock();
+        let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
+        let buffer_guard = hub.buffers.read();
 
-        let device = &device_guard[cmd_buf.device_id.value];
+        let device = &cmd_buf.device;
 
         #[cfg(feature = "trace")]
-        if let Some(ref mut list) = cmd_buf.commands {
+        if let Some(ref mut list) = cmd_buf_data.commands {
             list.push(TraceCommand::CopyBufferToBuffer {
                 src: source,
                 src_offset: source_offset,
@@ -575,7 +589,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             });
         }
 
-        let (src_buffer, src_pending) = cmd_buf
+        let (src_buffer, src_pending) = cmd_buf_data
             .trackers
             .buffers
             .set_single(&*buffer_guard, source, hal::BufferUses::COPY_SRC)
@@ -590,7 +604,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         // expecting only a single barrier
         let src_barrier = src_pending.map(|pending| pending.into_hal(src_buffer));
 
-        let (dst_buffer, dst_pending) = cmd_buf
+        let (dst_buffer, dst_pending) = cmd_buf_data
             .trackers
             .buffers
             .set_single(&*buffer_guard, destination, hal::BufferUses::COPY_DST)
@@ -661,27 +675,27 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         // Make sure source is initialized memory and mark dest as initialized.
-        cmd_buf
-            .buffer_memory_init_actions
-            .extend(dst_buffer.initialization_status.create_action(
+        cmd_buf_data.buffer_memory_init_actions.extend(
+            dst_buffer.initialization_status.read().create_action(
                 destination,
                 destination_offset..(destination_offset + size),
                 MemoryInitKind::ImplicitlyInitialized,
-            ));
-        cmd_buf
-            .buffer_memory_init_actions
-            .extend(src_buffer.initialization_status.create_action(
+            ),
+        );
+        cmd_buf_data.buffer_memory_init_actions.extend(
+            src_buffer.initialization_status.read().create_action(
                 source,
                 source_offset..(source_offset + size),
                 MemoryInitKind::NeedsInitializedMemory,
-            ));
+            ),
+        );
 
         let region = hal::BufferCopy {
             src_offset: source_offset,
             dst_offset: destination_offset,
             size: wgt::BufferSize::new(size).unwrap(),
         };
-        let cmd_buf_raw = cmd_buf.encoder.open();
+        let cmd_buf_raw = cmd_buf_data.encoder.open();
         unsafe {
             cmd_buf_raw.transition_buffers(src_barrier.into_iter().chain(dst_barrier));
             cmd_buf_raw.copy_buffer_to_buffer(src_raw, dst_raw, iter::once(region));
@@ -699,18 +713,20 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("CommandEncoder::copy_buffer_to_texture");
 
         let hub = A::hub(self);
-        let mut token = Token::root();
 
-        let (device_guard, mut token) = hub.devices.read(&mut token);
-        let (mut cmd_buf_guard, mut token) = hub.command_buffers.write(&mut token);
-        let cmd_buf = CommandBuffer::get_encoder_mut(&mut *cmd_buf_guard, command_encoder_id)?;
-        let (buffer_guard, mut token) = hub.buffers.read(&mut token);
-        let (texture_guard, _) = hub.textures.read(&mut token);
+        let cmd_buf_guard = hub.command_buffers.read();
+        let cmd_buf = CommandBuffer::get_encoder(&*cmd_buf_guard, command_encoder_id)?;
+        let mut cmd_buf_data = cmd_buf.data.lock();
+        let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
+        let (encoder, _, tracker, buffer_memory_init_actions, texture_memory_actions) =
+            cmd_buf_data.raw_mut();
+        let buffer_guard = hub.buffers.read();
+        let texture_guard = hub.textures.read();
 
-        let device = &device_guard[cmd_buf.device_id.value];
+        let device = &cmd_buf.device;
 
         #[cfg(feature = "trace")]
-        if let Some(ref mut list) = cmd_buf.commands {
+        if let Some(ref mut list) = cmd_buf_data.commands {
             list.push(TraceCommand::CopyBufferToTexture {
                 src: *source,
                 dst: *destination,
@@ -734,15 +750,22 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             copy_size,
         )?;
 
-        let (dst_range, dst_base) = extract_texture_selector(destination, copy_size, dst_texture)?;
+        let (dst_range, dst_base) = extract_texture_selector(destination, copy_size, &dst_texture)?;
 
         // Handle texture init *before* dealing with barrier transitions so we
         // have an easier time inserting "immediate-inits" that may be required
         // by prior discards in rare cases.
-        handle_dst_texture_init(cmd_buf, device, destination, copy_size, &texture_guard)?;
+        handle_dst_texture_init(
+            encoder,
+            tracker,
+            texture_memory_actions,
+            &device,
+            destination,
+            copy_size,
+            &texture_guard,
+        )?;
 
-        let (src_buffer, src_pending) = cmd_buf
-            .trackers
+        let (src_buffer, src_pending) = tracker
             .buffers
             .set_single(&*buffer_guard, source.buffer, hal::BufferUses::COPY_SRC)
             .ok_or(TransferError::InvalidBuffer(source.buffer))?;
@@ -755,11 +778,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
         let src_barrier = src_pending.map(|pending| pending.into_hal(src_buffer));
 
-        let dst_pending = cmd_buf
-            .trackers
+        let dst_pending = tracker
             .textures
             .set_single(
-                dst_texture,
+                &dst_texture,
                 destination.texture,
                 dst_range,
                 hal::TextureUses::COPY_DST,
@@ -767,6 +789,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .ok_or(TransferError::InvalidTexture(destination.texture))?;
         let dst_raw = dst_texture
             .inner
+            .as_ref()
+            .unwrap()
             .as_raw()
             .ok_or(TransferError::InvalidTexture(destination.texture))?;
         if !dst_texture.desc.usage.contains(TextureUsages::COPY_DST) {
@@ -774,7 +798,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 TransferError::MissingCopyDstUsageFlag(None, Some(destination.texture)).into(),
             );
         }
-        let dst_barrier = dst_pending.map(|pending| pending.into_hal(dst_texture));
+        let dst_barrier = dst_pending.map(|pending| pending.into_hal(&dst_texture));
 
         if !dst_base.aspect.is_one() {
             return Err(TransferError::CopyAspectNotOne.into());
@@ -804,13 +828,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .map_err(TransferError::from)?;
         }
 
-        cmd_buf
-            .buffer_memory_init_actions
-            .extend(src_buffer.initialization_status.create_action(
-                source.buffer,
-                source.layout.offset..(source.layout.offset + required_buffer_bytes_in_copy),
-                MemoryInitKind::NeedsInitializedMemory,
-            ));
+        buffer_memory_init_actions.extend(src_buffer.initialization_status.read().create_action(
+            source.buffer,
+            source.layout.offset..(source.layout.offset + required_buffer_bytes_in_copy),
+            MemoryInitKind::NeedsInitializedMemory,
+        ));
 
         let regions = (0..array_layer_count).map(|rel_array_layer| {
             let mut texture_base = dst_base.clone();
@@ -824,7 +846,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
         });
 
-        let cmd_buf_raw = cmd_buf.encoder.open();
+        let cmd_buf_raw = encoder.open();
         unsafe {
             cmd_buf_raw.transition_textures(dst_barrier.into_iter());
             cmd_buf_raw.transition_buffers(src_barrier.into_iter());
@@ -843,18 +865,21 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("CommandEncoder::copy_texture_to_buffer");
 
         let hub = A::hub(self);
-        let mut token = Token::root();
 
-        let (device_guard, mut token) = hub.devices.read(&mut token);
-        let (mut cmd_buf_guard, mut token) = hub.command_buffers.write(&mut token);
-        let cmd_buf = CommandBuffer::get_encoder_mut(&mut *cmd_buf_guard, command_encoder_id)?;
-        let (buffer_guard, mut token) = hub.buffers.read(&mut token);
-        let (texture_guard, _) = hub.textures.read(&mut token);
+        let cmd_buf_guard = hub.command_buffers.read();
+        let cmd_buf = CommandBuffer::get_encoder(&*cmd_buf_guard, command_encoder_id)?;
+        let mut cmd_buf_data = cmd_buf.data.lock();
+        let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
+        let (encoder, _, tracker, buffer_memory_init_actions, texture_memory_actions) =
+            cmd_buf_data.raw_mut();
 
-        let device = &device_guard[cmd_buf.device_id.value];
+        let buffer_guard = hub.buffers.read();
+        let texture_guard = hub.textures.read();
+
+        let device = &cmd_buf.device;
 
         #[cfg(feature = "trace")]
-        if let Some(ref mut list) = cmd_buf.commands {
+        if let Some(ref mut list) = cmd_buf_data.commands {
             list.push(TraceCommand::CopyTextureToBuffer {
                 src: *source,
                 dst: *destination,
@@ -874,18 +899,25 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (hal_copy_size, array_layer_count) =
             validate_texture_copy_range(source, &src_texture.desc, CopySide::Source, copy_size)?;
 
-        let (src_range, src_base) = extract_texture_selector(source, copy_size, src_texture)?;
+        let (src_range, src_base) = extract_texture_selector(source, copy_size, &src_texture)?;
 
         // Handle texture init *before* dealing with barrier transitions so we
         // have an easier time inserting "immediate-inits" that may be required
         // by prior discards in rare cases.
-        handle_src_texture_init(cmd_buf, device, source, copy_size, &texture_guard)?;
+        handle_src_texture_init(
+            encoder,
+            tracker,
+            texture_memory_actions,
+            &device,
+            source,
+            copy_size,
+            &texture_guard,
+        )?;
 
-        let src_pending = cmd_buf
-            .trackers
+        let src_pending = tracker
             .textures
             .set_single(
-                src_texture,
+                &src_texture,
                 source.texture,
                 src_range,
                 hal::TextureUses::COPY_SRC,
@@ -893,6 +925,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .ok_or(TransferError::InvalidTexture(source.texture))?;
         let src_raw = src_texture
             .inner
+            .as_ref()
+            .unwrap()
             .as_raw()
             .ok_or(TransferError::InvalidTexture(source.texture))?;
         if !src_texture.desc.usage.contains(TextureUsages::COPY_SRC) {
@@ -911,10 +945,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
             .into());
         }
-        let src_barrier = src_pending.map(|pending| pending.into_hal(src_texture));
+        let src_barrier = src_pending.map(|pending| pending.into_hal(&src_texture));
 
-        let (dst_buffer, dst_pending) = cmd_buf
-            .trackers
+        let (dst_buffer, dst_pending) = tracker
             .buffers
             .set_single(
                 &*buffer_guard,
@@ -961,14 +994,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .map_err(TransferError::from)?;
         }
 
-        cmd_buf
-            .buffer_memory_init_actions
-            .extend(dst_buffer.initialization_status.create_action(
-                destination.buffer,
-                destination.layout.offset
-                    ..(destination.layout.offset + required_buffer_bytes_in_copy),
-                MemoryInitKind::ImplicitlyInitialized,
-            ));
+        buffer_memory_init_actions.extend(dst_buffer.initialization_status.read().create_action(
+            destination.buffer,
+            destination.layout.offset..(destination.layout.offset + required_buffer_bytes_in_copy),
+            MemoryInitKind::ImplicitlyInitialized,
+        ));
 
         let regions = (0..array_layer_count).map(|rel_array_layer| {
             let mut texture_base = src_base.clone();
@@ -981,7 +1011,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 size: hal_copy_size,
             }
         });
-        let cmd_buf_raw = cmd_buf.encoder.open();
+        let cmd_buf_raw = encoder.open();
         unsafe {
             cmd_buf_raw.transition_buffers(dst_barrier.into_iter());
             cmd_buf_raw.transition_textures(src_barrier.into_iter());
@@ -1005,18 +1035,18 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("CommandEncoder::copy_texture_to_texture");
 
         let hub = A::hub(self);
-        let mut token = Token::root();
 
-        let (device_guard, mut token) = hub.devices.read(&mut token);
-        let (mut cmd_buf_guard, mut token) = hub.command_buffers.write(&mut token);
-        let cmd_buf = CommandBuffer::get_encoder_mut(&mut *cmd_buf_guard, command_encoder_id)?;
-        let (_, mut token) = hub.buffers.read(&mut token); // skip token
-        let (texture_guard, _) = hub.textures.read(&mut token);
+        let cmd_buf_guard = hub.command_buffers.read();
+        let cmd_buf = CommandBuffer::get_encoder(&*cmd_buf_guard, command_encoder_id)?;
+        let mut cmd_buf_data = cmd_buf.data.lock();
+        let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
+        let (encoder, _, tracker, _, texture_memory_actions) = cmd_buf_data.raw_mut();
+        let texture_guard = hub.textures.read();
 
-        let device = &device_guard[cmd_buf.device_id.value];
+        let device = &cmd_buf.device;
 
         #[cfg(feature = "trace")]
-        if let Some(ref mut list) = cmd_buf.commands {
+        if let Some(ref mut list) = cmd_buf_data.commands {
             list.push(TraceCommand::CopyTextureToTexture {
                 src: *source,
                 dst: *destination,
@@ -1057,9 +1087,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             copy_size,
         )?;
 
-        let (src_range, src_tex_base) = extract_texture_selector(source, copy_size, src_texture)?;
+        let (src_range, src_tex_base) = extract_texture_selector(source, copy_size, &src_texture)?;
         let (dst_range, dst_tex_base) =
-            extract_texture_selector(destination, copy_size, dst_texture)?;
+            extract_texture_selector(destination, copy_size, &dst_texture)?;
         let src_texture_aspects = hal::FormatAspects::from(src_texture.desc.format);
         let dst_texture_aspects = hal::FormatAspects::from(dst_texture.desc.format);
         if src_tex_base.aspect != src_texture_aspects {
@@ -1072,14 +1102,30 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         // Handle texture init *before* dealing with barrier transitions so we
         // have an easier time inserting "immediate-inits" that may be required
         // by prior discards in rare cases.
-        handle_src_texture_init(cmd_buf, device, source, copy_size, &texture_guard)?;
-        handle_dst_texture_init(cmd_buf, device, destination, copy_size, &texture_guard)?;
+        handle_src_texture_init(
+            encoder,
+            tracker,
+            texture_memory_actions,
+            &device,
+            source,
+            copy_size,
+            &texture_guard,
+        )?;
+        handle_dst_texture_init(
+            encoder,
+            tracker,
+            texture_memory_actions,
+            &device,
+            destination,
+            copy_size,
+            &texture_guard,
+        )?;
 
-        let src_pending = cmd_buf
+        let src_pending = cmd_buf_data
             .trackers
             .textures
             .set_single(
-                src_texture,
+                &src_texture,
                 source.texture,
                 src_range,
                 hal::TextureUses::COPY_SRC,
@@ -1087,6 +1133,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .ok_or(TransferError::InvalidTexture(source.texture))?;
         let src_raw = src_texture
             .inner
+            .as_ref()
+            .unwrap()
             .as_raw()
             .ok_or(TransferError::InvalidTexture(source.texture))?;
         if !src_texture.desc.usage.contains(TextureUsages::COPY_SRC) {
@@ -1096,14 +1144,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         //TODO: try to avoid this the collection. It's needed because both
         // `src_pending` and `dst_pending` try to hold `trackers.textures` mutably.
         let mut barriers: ArrayVec<_, 2> = src_pending
-            .map(|pending| pending.into_hal(src_texture))
+            .map(|pending| pending.into_hal(&src_texture))
             .collect();
 
-        let dst_pending = cmd_buf
+        let dst_pending = cmd_buf_data
             .trackers
             .textures
             .set_single(
-                dst_texture,
+                &dst_texture,
                 destination.texture,
                 dst_range,
                 hal::TextureUses::COPY_DST,
@@ -1111,6 +1159,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .ok_or(TransferError::InvalidTexture(destination.texture))?;
         let dst_raw = dst_texture
             .inner
+            .as_ref()
+            .unwrap()
             .as_raw()
             .ok_or(TransferError::InvalidTexture(destination.texture))?;
         if !dst_texture.desc.usage.contains(TextureUsages::COPY_DST) {
@@ -1119,7 +1169,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             );
         }
 
-        barriers.extend(dst_pending.map(|pending| pending.into_hal(dst_texture)));
+        barriers.extend(dst_pending.map(|pending| pending.into_hal(&dst_texture)));
 
         let hal_copy_size = hal::CopyExtent {
             width: src_copy_size.width.min(dst_copy_size.width),
@@ -1137,7 +1187,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 size: hal_copy_size,
             }
         });
-        let cmd_buf_raw = cmd_buf.encoder.open();
+        let cmd_buf_raw = cmd_buf_data.encoder.open();
         unsafe {
             cmd_buf_raw.transition_textures(barriers.into_iter());
             cmd_buf_raw.copy_texture_to_texture(

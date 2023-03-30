@@ -86,7 +86,7 @@ impl Instance {
         Ok(Surface {
             webgl2_context,
             srgb_present_program: None,
-            swapchain: None,
+            swapchain: RwLock::new(None),
             texture: None,
             presentable: true,
         })
@@ -162,7 +162,7 @@ impl crate::Instance<super::Api> for Instance {
 #[derive(Clone, Debug)]
 pub struct Surface {
     webgl2_context: web_sys::WebGl2RenderingContext,
-    pub(super) swapchain: Option<Swapchain>,
+    pub(super) swapchain: RwLock<Option<Swapchain>>,
     texture: Option<glow::Texture>,
     pub(super) presentable: bool,
     srgb_present_program: Option<glow::Program>,
@@ -183,13 +183,17 @@ pub struct Swapchain {
 
 impl Surface {
     pub(super) unsafe fn present(
-        &mut self,
+        &self,
         _suf_texture: super::Texture,
         gl: &glow::Context,
     ) -> Result<(), crate::SurfaceError> {
-        let swapchain = self.swapchain.as_ref().ok_or(crate::SurfaceError::Other(
-            "need to configure surface before presenting",
-        ))?;
+        let swapchain = self
+            .swapchain
+            .read()
+            .as_ref()
+            .ok_or(crate::SurfaceError::Other(
+                "need to configure surface before presenting",
+            ))?;
 
         if swapchain.format.is_srgb() {
             // Important to set the viewport since we don't know in what state the user left it.
@@ -266,13 +270,13 @@ impl Surface {
 
 impl crate::Surface<super::Api> for Surface {
     unsafe fn configure(
-        &mut self,
+        &self,
         device: &super::Device,
         config: &crate::SurfaceConfiguration,
     ) -> Result<(), crate::SurfaceError> {
         let gl = &device.shared.context.lock();
 
-        if let Some(swapchain) = self.swapchain.take() {
+        if let Some(swapchain) = self.swapchain.write().take() {
             // delete all frame buffers already allocated
             unsafe { gl.delete_framebuffer(swapchain.framebuffer) };
         }
@@ -332,7 +336,8 @@ impl crate::Surface<super::Api> for Surface {
         };
         unsafe { gl.bind_texture(glow::TEXTURE_2D, None) };
 
-        self.swapchain = Some(Swapchain {
+        let mut swapchain = self.swapchain.write();
+        *swapchain = Some(Swapchain {
             extent: config.extent,
             // channel: config.format.base_format().1,
             format: config.format,
@@ -342,9 +347,9 @@ impl crate::Surface<super::Api> for Surface {
         Ok(())
     }
 
-    unsafe fn unconfigure(&mut self, device: &super::Device) {
+    unsafe fn unconfigure(&self, device: &super::Device) {
         let gl = device.shared.context.lock();
-        if let Some(swapchain) = self.swapchain.take() {
+        if let Some(swapchain) = self.swapchain.write().take() {
             unsafe { gl.delete_framebuffer(swapchain.framebuffer) };
         }
         if let Some(renderbuffer) = self.texture.take() {
@@ -353,10 +358,10 @@ impl crate::Surface<super::Api> for Surface {
     }
 
     unsafe fn acquire_texture(
-        &mut self,
+        &self,
         _timeout_ms: Option<std::time::Duration>, //TODO
     ) -> Result<Option<crate::AcquiredSurfaceTexture<super::Api>>, crate::SurfaceError> {
-        let sc = self.swapchain.as_ref().unwrap();
+        let sc = self.swapchain.read().as_ref().unwrap();
         let texture = super::Texture {
             inner: super::TextureInner::Texture {
                 raw: self.texture.unwrap(),
@@ -380,5 +385,5 @@ impl crate::Surface<super::Api> for Surface {
         }))
     }
 
-    unsafe fn discard_texture(&mut self, _texture: super::Texture) {}
+    unsafe fn discard_texture(&self, _texture: super::Texture) {}
 }

@@ -14,16 +14,19 @@ use crate::{
         RenderPassCompatibilityCheckType, RenderPassCompatibilityError, RenderPassContext,
     },
     error::{ErrorFormatter, PrettyError},
-    hub::{Global, GlobalIdentityHandlerFactory, HalApi, Storage, Token},
+    global::Global,
+    hal_api::HalApi,
     id,
+    identity::GlobalIdentityHandlerFactory,
     init_tracker::{MemoryInitKind, TextureInitRange, TextureInitTrackerAction},
     pipeline::{self, PipelineFlags},
     resource::{self, Buffer, Texture, TextureView, TextureViewNotRenderableReason},
-    track::{TextureSelector, UsageConflict, UsageScope},
+    storage::Storage,
+    track::{TextureSelector, Tracker, UsageConflict, UsageScope},
     validation::{
         check_buffer_usage, check_texture_usage, MissingBufferUsageError, MissingTextureUsageError,
     },
-    Label, Stored,
+    Label,
 };
 
 use arrayvec::ArrayVec;
@@ -41,7 +44,9 @@ use serde::Serialize;
 
 use std::{borrow::Cow, fmt, iter, marker::PhantomData, mem, num::NonZeroU32, ops::Range, str};
 
-use super::{memory_init::TextureSurfaceDiscard, CommandBufferTextureMemoryActions};
+use super::{
+    memory_init::TextureSurfaceDiscard, CommandBufferTextureMemoryActions, CommandEncoder,
+};
 
 /// Operation to perform to the output attachment at the start of a renderpass.
 #[repr(C)]
@@ -637,12 +642,12 @@ where
 }
 
 struct RenderAttachment<'a> {
-    texture_id: &'a Stored<id::TextureId>,
+    texture_id: &'a id::Valid<id::TextureId>,
     selector: &'a TextureSelector,
     usage: hal::TextureUses,
 }
 
-impl<A: hal::Api> TextureView<A> {
+impl<A: HalApi> TextureView<A> {
     fn to_render_attachment(&self, usage: hal::TextureUses) -> RenderAttachment {
         RenderAttachment {
             texture_id: &self.parent_id,
@@ -681,7 +686,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
         if channel.load_op == LoadOp::Load {
             pending_discard_init_fixups.extend(texture_memory_actions.register_init_action(
                 &TextureInitTrackerAction {
-                    id: view.parent_id.value.0,
+                    id: view.parent_id.0,
                     range: TextureInitRange::from(view.selector.clone()),
                     // Note that this is needed even if the target is discarded,
                     kind: MemoryInitKind::NeedsInitializedMemory,
@@ -691,7 +696,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
         } else if channel.store_op == StoreOp::Store {
             // Clear + Store
             texture_memory_actions.register_implicit_init(
-                view.parent_id.value,
+                view.parent_id,
                 TextureInitRange::from(view.selector.clone()),
                 texture_guard,
             );
@@ -701,7 +706,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
             // discard right away be alright since the texture can't be used
             // during the pass anyways
             texture_memory_actions.discard(TextureSurfaceDiscard {
-                texture: view.parent_id.value.0,
+                texture: view.parent_id.0,
                 mip_level: view.selector.mips.start,
                 layer: view.selector.layers.start,
             });
@@ -713,7 +718,9 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
         label: Option<&str>,
         color_attachments: &[Option<RenderPassColorAttachment>],
         depth_stencil_attachment: Option<&RenderPassDepthStencilAttachment>,
-        cmd_buf: &mut CommandBuffer<A>,
+        encoder: &mut CommandEncoder<A>,
+        tracker: &mut Tracker<A>,
+        texture_memory_actions: &mut CommandBufferTextureMemoryActions,
         view_guard: &'a Storage<TextureView<A>, id::TextureViewId>,
         buffer_guard: &'a Storage<Buffer<A>, id::BufferId>,
         texture_guard: &'a Storage<Texture<A>, id::TextureId>,
@@ -806,8 +813,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
         let mut depth_stencil = None;
 
         if let Some(at) = depth_stencil_attachment {
-            let view: &TextureView<A> = cmd_buf
-                .trackers
+            let view: &TextureView<A> = tracker
                 .views
                 .add_single(view_guard, at.view)
                 .ok_or(RenderPassErrorInner::InvalidAttachment(at.view))?;
@@ -827,7 +833,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
             {
                 Self::add_pass_texture_init_actions(
                     &at.depth,
-                    &mut cmd_buf.texture_memory_actions,
+                    texture_memory_actions,
                     view,
                     texture_guard,
                     &mut pending_discard_init_fixups,
@@ -835,7 +841,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
             } else if !ds_aspects.contains(hal::FormatAspects::DEPTH) {
                 Self::add_pass_texture_init_actions(
                     &at.stencil,
-                    &mut cmd_buf.texture_memory_actions,
+                    texture_memory_actions,
                     view,
                     texture_guard,
                     &mut pending_discard_init_fixups,
@@ -866,9 +872,9 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                     at.depth.load_op == LoadOp::Load || at.stencil.load_op == LoadOp::Load;
                 if need_init_beforehand {
                     pending_discard_init_fixups.extend(
-                        cmd_buf.texture_memory_actions.register_init_action(
+                        texture_memory_actions.register_init_action(
                             &TextureInitTrackerAction {
-                                id: view.parent_id.value.0,
+                                id: view.parent_id.0,
                                 range: TextureInitRange::from(view.selector.clone()),
                                 kind: MemoryInitKind::NeedsInitializedMemory,
                             },
@@ -887,8 +893,8 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                 // (possible optimization: Delay and potentially drop this zeroing)
                 if at.depth.store_op != at.stencil.store_op {
                     if !need_init_beforehand {
-                        cmd_buf.texture_memory_actions.register_implicit_init(
-                            view.parent_id.value,
+                        texture_memory_actions.register_implicit_init(
+                            view.parent_id,
                             TextureInitRange::from(view.selector.clone()),
                             texture_guard,
                         );
@@ -904,7 +910,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                 } else if at.depth.store_op == StoreOp::Discard {
                     // Both are discarded using the regular path.
                     discarded_surfaces.push(TextureSurfaceDiscard {
-                        texture: view.parent_id.value.0,
+                        texture: view.parent_id.0,
                         mip_level: view.selector.mips.start,
                         layer: view.selector.layers.start,
                     });
@@ -922,7 +928,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
 
             depth_stencil = Some(hal::DepthStencilAttachment {
                 target: hal::Attachment {
-                    view: &view.raw,
+                    view: view.raw.as_ref().unwrap().as_ref(),
                     usage,
                 },
                 depth_ops: at.depth.hal_ops(),
@@ -938,8 +944,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                 colors.push(None);
                 continue;
             };
-            let color_view: &TextureView<A> = cmd_buf
-                .trackers
+            let color_view: &TextureView<A> = tracker
                 .views
                 .add_single(view_guard, at.view)
                 .ok_or(RenderPassErrorInner::InvalidAttachment(at.view))?;
@@ -964,7 +969,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
 
             Self::add_pass_texture_init_actions(
                 &at.channel,
-                &mut cmd_buf.texture_memory_actions,
+                texture_memory_actions,
                 color_view,
                 texture_guard,
                 &mut pending_discard_init_fixups,
@@ -974,8 +979,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
 
             let mut hal_resolve_target = None;
             if let Some(resolve_target) = at.resolve_target {
-                let resolve_view: &TextureView<A> = cmd_buf
-                    .trackers
+                let resolve_view: &TextureView<A> = tracker
                     .views
                     .add_single(view_guard, resolve_target)
                     .ok_or(RenderPassErrorInner::InvalidAttachment(resolve_target))?;
@@ -1026,8 +1030,8 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                     });
                 }
 
-                cmd_buf.texture_memory_actions.register_implicit_init(
-                    resolve_view.parent_id.value,
+                texture_memory_actions.register_implicit_init(
+                    resolve_view.parent_id,
                     TextureInitRange::from(resolve_view.selector.clone()),
                     texture_guard,
                 );
@@ -1035,14 +1039,14 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                     .push(resolve_view.to_render_attachment(hal::TextureUses::COLOR_TARGET));
 
                 hal_resolve_target = Some(hal::Attachment {
-                    view: &resolve_view.raw,
+                    view: resolve_view.raw.as_ref().unwrap().as_ref(),
                     usage: hal::TextureUses::COLOR_TARGET,
                 });
             }
 
             colors.push(Some(hal::ColorAttachment {
                 target: hal::Attachment {
-                    view: &color_view.raw,
+                    view: color_view.raw.as_ref().unwrap(),
                     usage: hal::TextureUses::COLOR_TARGET,
                 },
                 resolve_target: hal_resolve_target,
@@ -1087,7 +1091,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
             multiview,
         };
         unsafe {
-            cmd_buf.encoder.raw.begin_render_pass(&hal_desc);
+            encoder.raw.begin_render_pass(&hal_desc);
         };
 
         Ok(Self {
@@ -1115,10 +1119,10 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
         }
 
         for ra in self.render_attachments {
-            if !texture_guard.contains(ra.texture_id.value.0) {
+            if !texture_guard.contains(ra.texture_id.0) {
                 return Err(RenderPassErrorInner::SurfaceTextureDropped);
             }
-            let texture = &texture_guard[ra.texture_id.value];
+            let texture = &texture_guard[*ra.texture_id];
             check_texture_usage(texture.desc.usage, TextureUsages::RENDER_ATTACHMENT)?;
 
             // the tracker set of the pass is always in "extend" mode
@@ -1127,9 +1131,8 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                     .textures
                     .merge_single(
                         texture_guard,
-                        ra.texture_id.value,
+                        *ra.texture_id,
                         Some(ra.selector.clone()),
-                        &ra.texture_id.ref_count,
                         ra.usage,
                     )
                     .map_err(UsageConflict::from)?
@@ -1164,7 +1167,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                 color_attachments: &[],
                 depth_stencil_attachment: Some(hal::DepthStencilAttachment {
                     target: hal::Attachment {
-                        view: &view.raw,
+                        view: view.raw.as_ref().unwrap().as_ref(),
                         usage: hal::TextureUses::DEPTH_STENCIL_WRITE,
                     },
                     depth_ops,
@@ -1211,24 +1214,25 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let init_scope = PassErrorScope::Pass(encoder_id);
 
         let hub = A::hub(self);
-        let mut token = Token::root();
-        let (device_guard, mut token) = hub.devices.read(&mut token);
 
         let (scope, query_reset_state, pending_discard_init_fixups) = {
-            let (mut cmb_guard, mut token) = hub.command_buffers.write(&mut token);
+            let cmb_guard = hub.command_buffers.read();
 
             // Spell out the type, to placate rust-analyzer.
             // https://github.com/rust-lang/rust-analyzer/issues/12247
-            let cmd_buf: &mut CommandBuffer<A> =
-                CommandBuffer::get_encoder_mut(&mut *cmb_guard, encoder_id)
-                    .map_pass_err(init_scope)?;
+            let cmd_buf: &CommandBuffer<A> =
+                CommandBuffer::get_encoder(&*cmb_guard, encoder_id).map_pass_err(init_scope)?;
+            let mut cmd_buf_data = cmd_buf.data.lock();
+            let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
+            let (encoder, status, tracker, buffer_memory_init_actions, texture_memory_actions) =
+                cmd_buf_data.raw_mut();
             // close everything while the new command encoder is filled
-            cmd_buf.encoder.close();
+            encoder.close();
             // will be reset to true if recording is done without errors
-            cmd_buf.status = CommandEncoderStatus::Error;
+            *status = CommandEncoderStatus::Error;
 
             #[cfg(feature = "trace")]
-            if let Some(ref mut list) = cmd_buf.commands {
+            if let Some(ref mut list) = cmd_buf_data.commands {
                 list.push(crate::device::trace::Command::RunRenderPass {
                     base: BasePass::from_ref(base),
                     target_colors: color_attachments.to_vec(),
@@ -1236,17 +1240,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 });
             }
 
-            let device = &device_guard[cmd_buf.device_id.value];
-            cmd_buf.encoder.open_pass(base.label);
+            let device = &cmd_buf.device;
+            encoder.open_pass(base.label);
 
-            let (bundle_guard, mut token) = hub.render_bundles.read(&mut token);
-            let (pipeline_layout_guard, mut token) = hub.pipeline_layouts.read(&mut token);
-            let (bind_group_guard, mut token) = hub.bind_groups.read(&mut token);
-            let (render_pipeline_guard, mut token) = hub.render_pipelines.read(&mut token);
-            let (query_set_guard, mut token) = hub.query_sets.read(&mut token);
-            let (buffer_guard, mut token) = hub.buffers.read(&mut token);
-            let (texture_guard, mut token) = hub.textures.read(&mut token);
-            let (view_guard, _) = hub.texture_views.read(&mut token);
+            let bundle_guard = hub.render_bundles.read();
+            let pipeline_layout_guard = hub.pipeline_layouts.read();
+            let bind_group_guard = hub.bind_groups.read();
+            let render_pipeline_guard = hub.render_pipelines.read();
+            let query_set_guard = hub.query_sets.read();
+            let buffer_guard = hub.buffers.read();
+            let texture_guard = hub.textures.read();
+            let view_guard = hub.texture_views.read();
 
             log::trace!(
                 "Encoding render pass begin in command buffer {:?}",
@@ -1254,18 +1258,20 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             );
 
             let mut info = RenderPassInfo::start(
-                device,
+                &device,
                 base.label,
                 color_attachments,
                 depth_stencil_attachment,
-                cmd_buf,
+                encoder,
+                tracker,
+                texture_memory_actions,
                 &*view_guard,
                 &*buffer_guard,
                 &*texture_guard,
             )
             .map_pass_err(init_scope)?;
 
-            cmd_buf.trackers.set_size(
+            tracker.set_size(
                 Some(&*buffer_guard),
                 Some(&*texture_guard),
                 Some(&*view_guard),
@@ -1277,7 +1283,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Some(&*query_set_guard),
             );
 
-            let raw = &mut cmd_buf.encoder.raw;
+            let raw = &mut encoder.raw;
 
             let mut state = State {
                 pipeline_flags: PipelineFlags::empty(),
@@ -1319,8 +1325,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         );
                         dynamic_offset_count += num_dynamic_offsets as usize;
 
-                        let bind_group: &crate::binding_model::BindGroup<A> = cmd_buf
-                            .trackers
+                        let bind_group: &crate::binding_model::BindGroup<A> = tracker
                             .bind_groups
                             .add_single(&*bind_group_guard, bind_group_id)
                             .ok_or(RenderCommandError::InvalidBindGroup(bind_group_id))
@@ -1338,19 +1343,19 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         //Note: stateless trackers are not merged: the lifetime reference
                         // is held to the bind group itself.
 
-                        cmd_buf.buffer_memory_init_actions.extend(
+                        buffer_memory_init_actions.extend(
                             bind_group.used_buffer_ranges.iter().filter_map(|action| {
                                 match buffer_guard.get(action.id) {
-                                    Ok(buffer) => buffer.initialization_status.check_action(action),
+                                    Ok(buffer) => {
+                                        buffer.initialization_status.read().check_action(action)
+                                    }
                                     Err(_) => None,
                                 }
                             }),
                         );
                         for action in bind_group.used_texture_ranges.iter() {
                             info.pending_discard_init_fixups.extend(
-                                cmd_buf
-                                    .texture_memory_actions
-                                    .register_init_action(action, &texture_guard),
+                                texture_memory_actions.register_init_action(action, &texture_guard),
                             );
                         }
 
@@ -1362,12 +1367,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             &temp_offsets,
                         );
                         if !entries.is_empty() {
-                            let pipeline_layout =
-                                &pipeline_layout_guard[pipeline_layout_id.unwrap()].raw;
+                            let pipeline_layout = pipeline_layout_guard
+                                [pipeline_layout_id.unwrap()]
+                            .raw
+                            .as_ref()
+                            .unwrap();
                             for (i, e) in entries.iter().enumerate() {
-                                let raw_bg =
-                                    &bind_group_guard[e.group_id.as_ref().unwrap().value].raw;
-
+                                let raw_bg = bind_group_guard[*e.group_id.as_ref().unwrap()]
+                                    .raw
+                                    .as_ref()
+                                    .unwrap();
                                 unsafe {
                                     raw.set_bind_group(
                                         pipeline_layout,
@@ -1383,8 +1392,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         let scope = PassErrorScope::SetPipelineRender(pipeline_id);
                         state.pipeline = Some(pipeline_id);
 
-                        let pipeline: &pipeline::RenderPipeline<A> = cmd_buf
-                            .trackers
+                        let pipeline: &pipeline::RenderPipeline<A> = tracker
                             .render_pipelines
                             .add_single(&*render_pipeline_guard, pipeline_id)
                             .ok_or(RenderCommandError::InvalidPipeline(pipeline_id))
@@ -1414,7 +1422,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .require(pipeline.flags.contains(PipelineFlags::BLEND_CONSTANT));
 
                         unsafe {
-                            raw.set_render_pipeline(&pipeline.raw);
+                            raw.set_render_pipeline(pipeline.raw.as_ref().unwrap());
                         }
 
                         if pipeline.flags.contains(PipelineFlags::STENCIL_REFERENCE) {
@@ -1424,22 +1432,23 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         }
 
                         // Rebind resource
-                        if state.binder.pipeline_layout_id != Some(pipeline.layout_id.value) {
-                            let pipeline_layout = &pipeline_layout_guard[pipeline.layout_id.value];
+                        if state.binder.pipeline_layout_id != Some(pipeline.layout_id) {
+                            let pipeline_layout = &pipeline_layout_guard[pipeline.layout_id];
 
                             let (start_index, entries) = state.binder.change_pipeline_layout(
                                 &*pipeline_layout_guard,
-                                pipeline.layout_id.value,
+                                pipeline.layout_id,
                                 &pipeline.late_sized_buffer_groups,
                             );
                             if !entries.is_empty() {
                                 for (i, e) in entries.iter().enumerate() {
-                                    let raw_bg =
-                                        &bind_group_guard[e.group_id.as_ref().unwrap().value].raw;
-
+                                    let raw_bg = bind_group_guard[*e.group_id.as_ref().unwrap()]
+                                        .raw
+                                        .as_ref()
+                                        .unwrap();
                                     unsafe {
                                         raw.set_bind_group(
-                                            &pipeline_layout.raw,
+                                            pipeline_layout.raw.as_ref().unwrap(),
                                             start_index as u32 + i as u32,
                                             raw_bg,
                                             &e.dynamic_offsets,
@@ -1460,7 +1469,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                     size_bytes,
                                     |clear_offset, clear_data| unsafe {
                                         raw.set_push_constants(
-                                            &pipeline_layout.raw,
+                                            pipeline_layout.raw.as_ref().unwrap(),
                                             range.stages,
                                             clear_offset,
                                             clear_data,
@@ -1522,8 +1531,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         state.index.format = Some(index_format);
                         state.index.update_limit();
 
-                        cmd_buf.buffer_memory_init_actions.extend(
-                            buffer.initialization_status.create_action(
+                        buffer_memory_init_actions.extend(
+                            buffer.initialization_status.read().create_action(
                                 buffer_id,
                                 offset..end,
                                 MemoryInitKind::NeedsInitializedMemory,
@@ -1531,7 +1540,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         );
 
                         let bb = hal::BufferBinding {
-                            buffer: buf_raw,
+                            buffer: buf_raw.as_ref(),
                             offset,
                             size,
                         };
@@ -1573,8 +1582,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         };
                         vertex_state.bound = true;
 
-                        cmd_buf.buffer_memory_init_actions.extend(
-                            buffer.initialization_status.create_action(
+                        buffer_memory_init_actions.extend(
+                            buffer.initialization_status.read().create_action(
                                 buffer_id,
                                 offset..(offset + vertex_state.total_size),
                                 MemoryInitKind::NeedsInitializedMemory,
@@ -1582,7 +1591,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         );
 
                         let bb = hal::BufferBinding {
-                            buffer: buf_raw,
+                            buffer: buf_raw.as_ref(),
                             offset,
                             size,
                         };
@@ -1672,7 +1681,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .map_pass_err(scope)?;
 
                         unsafe {
-                            raw.set_push_constants(&pipeline_layout.raw, stages, offset, data_slice)
+                            raw.set_push_constants(
+                                pipeline_layout.raw.as_ref().unwrap(),
+                                stages,
+                                offset,
+                                data_slice,
+                            )
                         }
                     }
                     RenderCommand::SetScissor(ref rect) => {
@@ -1834,8 +1848,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .map_pass_err(scope);
                         }
 
-                        cmd_buf.buffer_memory_init_actions.extend(
-                            indirect_buffer.initialization_status.create_action(
+                        buffer_memory_init_actions.extend(
+                            indirect_buffer.initialization_status.read().create_action(
                                 buffer_id,
                                 offset..end_offset,
                                 MemoryInitKind::NeedsInitializedMemory,
@@ -1918,8 +1932,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             })
                             .map_pass_err(scope);
                         }
-                        cmd_buf.buffer_memory_init_actions.extend(
-                            indirect_buffer.initialization_status.create_action(
+                        buffer_memory_init_actions.extend(
+                            indirect_buffer.initialization_status.read().create_action(
                                 buffer_id,
                                 offset..end_offset,
                                 MemoryInitKind::NeedsInitializedMemory,
@@ -1936,8 +1950,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             })
                             .map_pass_err(scope);
                         }
-                        cmd_buf.buffer_memory_init_actions.extend(
-                            count_buffer.initialization_status.create_action(
+                        buffer_memory_init_actions.extend(
+                            count_buffer.initialization_status.read().create_action(
                                 count_buffer_id,
                                 count_buffer_offset..end_count_offset,
                                 MemoryInitKind::NeedsInitializedMemory,
@@ -2005,8 +2019,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .require_features(wgt::Features::TIMESTAMP_QUERY_INSIDE_PASSES)
                             .map_pass_err(scope)?;
 
-                        let query_set: &resource::QuerySet<A> = cmd_buf
-                            .trackers
+                        let query_set: &resource::QuerySet<A> = tracker
                             .query_sets
                             .add_single(&*query_set_guard, query_set_id)
                             .ok_or(RenderCommandError::InvalidQuerySet(query_set_id))
@@ -2027,8 +2040,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     } => {
                         let scope = PassErrorScope::BeginPipelineStatisticsQuery;
 
-                        let query_set: &resource::QuerySet<A> = cmd_buf
-                            .trackers
+                        let query_set: &resource::QuerySet<A> = tracker
                             .query_sets
                             .add_single(&*query_set_guard, query_set_id)
                             .ok_or(RenderCommandError::InvalidQuerySet(query_set_id))
@@ -2052,8 +2064,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     }
                     RenderCommand::ExecuteBundle(bundle_id) => {
                         let scope = PassErrorScope::ExecuteBundle;
-                        let bundle: &command::RenderBundle<A> = cmd_buf
-                            .trackers
+                        let bundle: &command::RenderBundle<A> = tracker
                             .bundles
                             .add_single(&*bundle_guard, bundle_id)
                             .ok_or(RenderCommandError::InvalidRenderBundle(bundle_id))
@@ -2081,20 +2092,20 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .map_pass_err(scope);
                         }
 
-                        cmd_buf.buffer_memory_init_actions.extend(
+                        buffer_memory_init_actions.extend(
                             bundle
                                 .buffer_memory_init_actions
                                 .iter()
                                 .filter_map(|action| match buffer_guard.get(action.id) {
-                                    Ok(buffer) => buffer.initialization_status.check_action(action),
+                                    Ok(buffer) => {
+                                        buffer.initialization_status.read().check_action(action)
+                                    }
                                     Err(_) => None,
                                 }),
                         );
                         for action in bundle.texture_memory_init_actions.iter() {
                             info.pending_discard_init_fixups.extend(
-                                cmd_buf
-                                    .texture_memory_actions
-                                    .register_init_action(action, &texture_guard),
+                                texture_memory_actions.register_init_action(action, &texture_guard),
                             );
                         }
 
@@ -2121,8 +2132,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             info.usage_scope
                                 .merge_render_bundle(&*texture_guard, &bundle.used)
                                 .map_pass_err(scope)?;
-                            cmd_buf
-                                .trackers
+                            tracker
                                 .add_from_render_bundle(&bundle.used)
                                 .map_pass_err(scope)?;
                         };
@@ -2135,39 +2145,42 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let (trackers, pending_discard_init_fixups) =
                 info.finish(raw, &*texture_guard).map_pass_err(init_scope)?;
 
-            cmd_buf.encoder.close();
+            encoder.close();
             (trackers, query_reset_state, pending_discard_init_fixups)
         };
 
-        let (mut cmb_guard, mut token) = hub.command_buffers.write(&mut token);
-        let (query_set_guard, mut token) = hub.query_sets.read(&mut token);
-        let (buffer_guard, mut token) = hub.buffers.read(&mut token);
-        let (texture_guard, _) = hub.textures.read(&mut token);
+        let cmb_guard = hub.command_buffers.read();
+        let query_set_guard = hub.query_sets.read();
+        let buffer_guard = hub.buffers.read();
+        let texture_guard = hub.textures.read();
 
-        let cmd_buf = cmb_guard.get_mut(encoder_id).unwrap();
+        let cmd_buf = cmb_guard.get(encoder_id).unwrap();
+        let mut cmd_buf_data = cmd_buf.data.lock();
+        let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
+        let (encoder, status, tracker, _, _) = cmd_buf_data.raw_mut();
         {
-            let transit = cmd_buf.encoder.open();
+            let transit = encoder.open();
 
             fixup_discarded_surfaces(
                 pending_discard_init_fixups.into_iter(),
                 transit,
                 &texture_guard,
-                &mut cmd_buf.trackers.textures,
-                &device_guard[cmd_buf.device_id.value],
+                &mut tracker.textures,
+                &cmd_buf.device,
             );
 
             query_reset_state
                 .reset_queries(
                     transit,
                     &query_set_guard,
-                    cmd_buf.device_id.value.0.backend(),
+                    cmd_buf.device.info.id().0.backend(),
                 )
                 .map_err(RenderCommandError::InvalidQuerySet)
                 .map_pass_err(PassErrorScope::QueryReset)?;
 
             super::CommandBuffer::insert_barriers_from_scope(
                 transit,
-                &mut cmd_buf.trackers,
+                tracker,
                 &scope,
                 &*buffer_guard,
                 &*texture_guard,
@@ -2179,10 +2192,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         //Note: we could just hold onto this raw pass while recording the
         // auxiliary encoder, but then handling errors and cleaning up
         // would be more complicated, so we re-use `open()`/`close()`.
-        let pass_raw = cmd_buf.encoder.list.pop().unwrap();
-        cmd_buf.encoder.close();
-        cmd_buf.encoder.list.push(pass_raw);
-        cmd_buf.status = CommandEncoderStatus::Recording;
+        let pass_raw = encoder.list.pop().unwrap();
+        encoder.close();
+        encoder.list.push(pass_raw);
+        *status = CommandEncoderStatus::Recording;
 
         Ok(())
     }
