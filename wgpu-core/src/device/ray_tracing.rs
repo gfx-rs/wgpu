@@ -1,27 +1,13 @@
-#[cfg(feature = "trace")]
-use crate::device::trace::Command as TraceCommand;
+// #[cfg(feature = "trace")]
+// use crate::device::trace::Command as TraceCommand;
 use crate::{
-    command::{clear_texture, CommandBuffer, CommandEncoderError},
-    conv,
-    device::{queue::TempResource, Device, DeviceError, MissingDownlevelFlags},
-    error::{ErrorFormatter, PrettyError},
-    hub::{Global, GlobalIdentityHandlerFactory, HalApi, Input, Storage, Token},
-    id::{self, BlasId, BufferId, CommandEncoderId, TlasId},
-    init_tracker::{
-        has_copy_partial_init_tracker_coverage, MemoryInitKind, TextureInitRange,
-        TextureInitTrackerAction,
-    },
-    resource::{self, Texture, TextureErrorDimension},
-    track::TextureSelector,
-    LabelHelpers, LifeGuard, Stored,
+    device::{queue::TempResource, Device, DeviceError},
+    hub::{Global, GlobalIdentityHandlerFactory, HalApi, Input, Token},
+    id::{self, BlasId, TlasId},
+    resource, LabelHelpers, LifeGuard, Stored,
 };
 
-use arrayvec::ArrayVec;
-use hal::{AccelerationStructureTriangleIndices, CommandEncoder as _, Device as _};
-use thiserror::Error;
-use wgt::{BufferAddress, BufferUsages, Extent3d, TextureUsages};
-
-use std::iter;
+use hal::{AccelerationStructureTriangleIndices, Device as _};
 
 impl<A: HalApi> Device<A> {
     // TODO:
@@ -36,7 +22,7 @@ impl<A: HalApi> Device<A> {
         debug_assert_eq!(self_id.backend(), A::VARIANT);
 
         let size_info = match &sizes {
-            wgt::BlasGeometrySizeDescriptors::Triangles { desc } => {
+            &wgt::BlasGeometrySizeDescriptors::Triangles { ref desc } => {
                 let mut entries =
                     Vec::<hal::AccelerationStructureTriangles<A>>::with_capacity(desc.len());
                 for x in desc {
@@ -58,7 +44,7 @@ impl<A: HalApi> Device<A> {
                         first_vertex: 0,
                         vertex_count: x.vertex_count,
                         vertex_stride: 0,
-                        indices: indices,
+                        indices,
                         transform: None,
                         flags: x.flags,
                     });

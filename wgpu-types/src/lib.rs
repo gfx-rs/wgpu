@@ -6170,19 +6170,28 @@ impl Default for InstanceDescriptor {
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
+/// TODO Docu
 pub struct BlasTriangleGeometrySizeDescriptor {
+    /// TODO Docu
     pub vertex_format: VertexFormat,
+    /// TODO Docu    
     pub vertex_count: u32,
+    /// TODO Docu
     pub index_format: Option<IndexFormat>,
+    /// TODO Docu
     pub index_count: Option<u32>,
+    /// TODO Docu
     pub flags: AccelerationStructureGeometryFlags,
 }
 
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
+/// TODO Docu
 pub enum BlasGeometrySizeDescriptors {
+    /// TODO Docu
     Triangles {
+        /// TODO Docu
         desc: Vec<BlasTriangleGeometrySizeDescriptor>,
     },
 }
@@ -6191,8 +6200,11 @@ pub enum BlasGeometrySizeDescriptors {
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
+/// TODO Docu
 pub enum AccelerationStructureUpdateMode {
+    /// TODO Docu
     Build,
+    /// TODO Docu
     PreferUpdate,
 }
 
@@ -6200,9 +6212,13 @@ pub enum AccelerationStructureUpdateMode {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
+/// TODO Docu
 pub struct CreateBlasDescriptor<L> {
+    /// TODO Docu
     pub label: L,
+    /// TODO Docu
     pub flags: AccelerationStructureFlags,
+    /// TODO Docu
     pub update_mode: AccelerationStructureUpdateMode,
 }
 
@@ -6221,10 +6237,15 @@ impl<L> CreateBlasDescriptor<L> {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
+/// TODO Docu
 pub struct CreateTlasDescriptor<L> {
+    /// TODO Docu
     pub label: L,
+    /// TODO Docu
     pub max_instances: u32,
+    /// TODO Docu
     pub flags: AccelerationStructureFlags,
+    /// TODO Docu
     pub update_mode: AccelerationStructureUpdateMode,
 }
 

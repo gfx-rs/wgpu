@@ -1014,7 +1014,7 @@ pub trait Context: Debug + Send + Sized + Sync {
         encoder: &Self::CommandEncoderId,
         encoder_data: &Self::CommandEncoderData,
         blas: impl Iterator<Item = crate::ContextBlasBuildEntry<'a, Self>>,
-        tlas: impl Iterator<Item = crate::ContextTlasBuildEntry<'a, Self>>,
+        tlas: impl Iterator<Item = crate::ContextTlasBuildEntry<Self>>,
     );
     fn blas_destroy(&self, blas: &Self::BlasId, blas_data: &Self::BlasData);
     fn blas_drop(&self, blas: &Self::BlasId, blas_data: &Self::BlasData);
@@ -1953,7 +1953,7 @@ pub(crate) trait DynContext: Debug + Send + Sync {
         encoder: &ObjectId,
         encoder_data: &crate::Data,
         blas: &mut dyn Iterator<Item = crate::DynContextBlasBuildEntry<'a>>,
-        tlas: &mut dyn Iterator<Item = crate::DynContextTlasBuildEntry<'a>>,
+        tlas: &mut dyn Iterator<Item = crate::DynContextTlasBuildEntry>,
     );
     fn blas_destroy(&self, blas: &ObjectId, blas_data: &crate::Data);
     fn blas_drop(&self, blas: &ObjectId, blas_data: &crate::Data);
@@ -3941,7 +3941,7 @@ where
         encoder: &ObjectId,
         encoder_data: &crate::Data,
         blas: &mut dyn Iterator<Item = crate::DynContextBlasBuildEntry<'a>>,
-        tlas: &mut dyn Iterator<Item = crate::DynContextTlasBuildEntry<'a>>,
+        tlas: &mut dyn Iterator<Item = crate::DynContextTlasBuildEntry>,
     ) {
         let encoder = <T::CommandEncoderId>::from(*encoder);
         let encoder_data = downcast_ref(encoder_data);
@@ -3953,22 +3953,13 @@ where
                         triangle_geometries
                             .into_iter()
                             .map(|tg| ContextBlasTriangleGeometry {
-                                vertex_buffer: (
-                                    <T::BufferId>::from(tg.vertex_buffer.0),
-                                    downcast_ref(tg.vertex_buffer.1),
-                                ),
-                                index_buffer: tg.index_buffer.map(|index_buffer| {
-                                    (
-                                        <T::BufferId>::from(index_buffer.0),
-                                        downcast_ref(index_buffer.1),
-                                    )
-                                }),
-                                transform_buffer: tg.transform_buffer.map(|transform_buffer| {
-                                    (
-                                        <T::BufferId>::from(transform_buffer.0),
-                                        downcast_ref(transform_buffer.1),
-                                    )
-                                }),
+                                vertex_buffer: <T::BufferId>::from(tg.vertex_buffer),
+                                index_buffer: tg
+                                    .index_buffer
+                                    .map(<T::BufferId>::from),
+                                transform_buffer: tg
+                                    .transform_buffer
+                                    .map(<T::BufferId>::from),
                                 size: tg.size,
                                 transform_buffer_offset: tg.transform_buffer_offset,
                                 first_vertex: tg.first_vertex,
@@ -3980,17 +3971,17 @@ where
             };
             crate::ContextBlasBuildEntry {
                 blas_id: <T::BlasId>::from(e.blas_id),
-                blas_data: downcast_ref(e.blas_data),
-                geometries: geometries,
+                // blas_data: downcast_ref(e.blas_data),
+                geometries,
             }
         });
 
         let tlas = tlas.into_iter().map(|e: crate::DynContextTlasBuildEntry| {
             crate::ContextTlasBuildEntry {
                 tlas_id: <T::TlasId>::from(e.tlas_id),
-                tlas_data: downcast_ref(e.tlas_data),
+                // tlas_data: downcast_ref(e.tlas_data),
                 instance_buffer_id: <T::BufferId>::from(e.instance_buffer_id),
-                instance_buffer_data: downcast_ref(e.instance_buffer_data),
+                // instance_buffer_data: downcast_ref(e.instance_buffer_data),
                 instance_count: e.instance_count,
             }
         });

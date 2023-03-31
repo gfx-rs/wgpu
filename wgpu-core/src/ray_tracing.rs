@@ -1,27 +1,10 @@
-#[cfg(feature = "trace")]
-use crate::device::trace::Command as TraceCommand;
 use crate::{
-    command::{clear_texture, CommandBuffer, CommandEncoderError},
-    conv,
-    device::{queue::TempResource, Device, DeviceError, MissingDownlevelFlags},
-    error::{ErrorFormatter, PrettyError},
-    hub::{Global, GlobalIdentityHandlerFactory, HalApi, Input, Storage, Token},
-    id::{self, BlasId, BufferId, CommandEncoderId, TlasId},
-    init_tracker::{
-        has_copy_partial_init_tracker_coverage, MemoryInitKind, TextureInitRange,
-        TextureInitTrackerAction,
-    },
-    resource::{self, Texture, TextureErrorDimension},
-    track::TextureSelector,
-    LabelHelpers, LifeGuard, Stored,
+    command::CommandEncoderError,
+    id::{BlasId, BufferId, TlasId},
 };
 
-use arrayvec::ArrayVec;
-use hal::{AccelerationStructureTriangleIndices, CommandEncoder as _, Device as _};
 use thiserror::Error;
-use wgt::{BufferAddress, BufferUsages, Extent3d, TextureUsages};
-
-use std::iter;
+use wgt::BufferAddress;
 
 /// Error encountered while attempting to do a copy on a command encoder.
 #[derive(Clone, Debug, Error)]

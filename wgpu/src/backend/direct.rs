@@ -472,12 +472,12 @@ pub struct CommandEncoder {
 
 #[derive(Debug)]
 pub struct Blas {
-    error_sink: ErrorSink,
+    // error_sink: ErrorSink,
 }
 
 #[derive(Debug)]
 pub struct Tlas {
-    error_sink: ErrorSink,
+    // error_sink: ErrorSink,
 }
 
 impl crate::Context for Context {
@@ -2982,7 +2982,7 @@ impl crate::Context for Context {
             id,
             handle,
             Blas {
-                error_sink: Arc::clone(&device_data.error_sink),
+                // error_sink: Arc::clone(&device_data.error_sink),
             },
         )
     }
@@ -3011,7 +3011,7 @@ impl crate::Context for Context {
         (
             id,
             Tlas {
-                error_sink: Arc::clone(&device_data.error_sink),
+                // error_sink: Arc::clone(&device_data.error_sink),
             },
         )
     }
@@ -3021,7 +3021,7 @@ impl crate::Context for Context {
         encoder: &Self::CommandEncoderId,
         encoder_data: &Self::CommandEncoderData,
         blas: impl Iterator<Item = crate::ContextBlasBuildEntry<'a, Self>>,
-        tlas: impl Iterator<Item = crate::ContextTlasBuildEntry<'a, Self>>,
+        tlas: impl Iterator<Item = crate::ContextTlasBuildEntry<Self>>,
     ) {
         let global = &self.0;
 
@@ -3030,11 +3030,9 @@ impl crate::Context for Context {
                 crate::ContextBlasGeometries::TriangleGeometries(triangle_geometries) => {
                     let iter = triangle_geometries.into_iter().map(|tg| {
                         wgc::ray_tracing::BlasTriangleGeometry {
-                            vertex_buffer: tg.vertex_buffer.0,
-                            index_buffer: tg.index_buffer.map(|index_buffer| index_buffer.0),
-                            transform_buffer: tg
-                                .transform_buffer
-                                .map(|transform_buffer| transform_buffer.0),
+                            vertex_buffer: tg.vertex_buffer,
+                            index_buffer: tg.index_buffer,
+                            transform_buffer: tg.transform_buffer,
                             size: tg.size,
                             transform_buffer_offset: tg.transform_buffer_offset,
                             first_vertex: tg.first_vertex,
@@ -3047,7 +3045,7 @@ impl crate::Context for Context {
             };
             wgc::ray_tracing::BlasBuildEntry {
                 blas_id: e.blas_id,
-                geometries: geometries,
+                geometries,
             }
         });
 

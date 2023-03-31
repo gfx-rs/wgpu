@@ -1,33 +1,21 @@
-#[cfg(feature = "trace")]
-use crate::device::trace::Command as TraceCommand;
+// #[cfg(feature = "trace")]
+// use crate::device::trace::Command as TraceCommand;
 use crate::{
-    command::{clear_texture, CommandBuffer, CommandEncoderError},
-    conv,
-    device::{queue::TempResource, Device, DeviceError, MissingDownlevelFlags},
-    error::{ErrorFormatter, PrettyError},
-    hub::{Global, GlobalIdentityHandlerFactory, HalApi, Input, Storage, Token},
-    id::{self, BlasId, BufferId, CommandEncoderId, TlasId},
-    init_tracker::{
-        has_copy_partial_init_tracker_coverage, MemoryInitKind, TextureInitRange,
-        TextureInitTrackerAction,
-    },
+    command::CommandBuffer,
+    device::queue::TempResource,
+    hub::{Global, GlobalIdentityHandlerFactory, HalApi, Token},
+    id::CommandEncoderId,
+    init_tracker::MemoryInitKind,
     ray_tracing::{
         BlasBuildEntry, BlasGeometries, BuildAccelerationStructureError, TlasBuildEntry,
     },
-    resource::{self, Blas, Texture, TextureErrorDimension, Tlas},
-    track::TextureSelector,
-    LabelHelpers, LifeGuard, Stored,
+    resource::{Blas, Tlas},
 };
 
-use arrayvec::ArrayVec;
-use hal::{
-    AccelerationStructureInstances, AccelerationStructureTriangleIndices,
-    AccelerationStructureTriangleTransform, CommandEncoder as _, Device as _,
-};
-use thiserror::Error;
+use hal::{Device, CommandEncoder};
 use wgt::BufferUsages;
 
-use std::{borrow::Borrow, cmp::max, iter};
+use std::{cmp::max, iter};
 
 // TODO:
 // tracing
@@ -84,7 +72,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                     for (i, mesh) in triangle_geometries.enumerate() {
                         let size_desc = match &blas.sizes {
-                            wgt::BlasGeometrySizeDescriptors::Triangles { desc } => desc,
+                            &wgt::BlasGeometrySizeDescriptors::Triangles { ref desc } => desc,
                             // _ => {
                             //     return Err(
                             //         BuildAccelerationStructureError::IncompatibleBlasBuildSizes(
@@ -147,7 +135,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             {
                                 input_barriers.push(barrier);
                             }
-                            if mesh.size.vertex_count - mesh.first_vertex <= 0 {
+                            if mesh.size.vertex_count as i64 - mesh.first_vertex as i64 <= 0 {
                                 return Err(BuildAccelerationStructureError::EmptyVertexBuffer(
                                     mesh.vertex_buffer,
                                 ));
@@ -325,7 +313,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             vertex_count: mesh.size.vertex_count,
                             vertex_stride: mesh.vertex_stride,
                             indices: index_buffer.map(|index_buffer| {
-                                AccelerationStructureTriangleIndices {
+                                hal::AccelerationStructureTriangleIndices {
                                     format: mesh.size.index_format.unwrap(),
                                     buffer: Some(index_buffer),
                                     offset: mesh.index_buffer_offset.unwrap() as u32,
@@ -333,7 +321,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 }
                             }),
                             transform: transform_buffer.map(|transform_buffer| {
-                                AccelerationStructureTriangleTransform {
+                                hal::AccelerationStructureTriangleTransform {
                                     buffer: transform_buffer,
                                     offset: mesh.transform_buffer_offset.unwrap() as u32,
                                 }
@@ -403,7 +391,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             tlas_storage.push((
                 tlas,
-                hal::AccelerationStructureEntries::Instances(AccelerationStructureInstances {
+                hal::AccelerationStructureEntries::Instances(hal::AccelerationStructureInstances {
                     buffer: Some(instance_buffer),
                     offset: 0,
                     count: entry.instance_count,
@@ -432,13 +420,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let blas_descriptors = blas_storage
             .iter()
-            .map(|(blas, entries, scratch_buffer_offset)| {
+            .map(|&(blas,ref entries,ref scratch_buffer_offset)| {
+                if blas.update_mode == wgt::AccelerationStructureUpdateMode::PreferUpdate {
+                    log::info!("only rebuild implemented")
+                }
                 hal::BuildAccelerationStructureDescriptor {
                     entries,
                     mode: hal::AccelerationStructureBuildMode::Build, // TODO
                     flags: blas.flags,
                     source_acceleration_structure: None,
-                    destination_acceleration_structure: &blas.raw.as_ref().unwrap(),
+                    destination_acceleration_structure: blas.raw.as_ref().unwrap(),
                     scratch_buffer: &scratch_buffer,
                     scratch_buffer_offset: *scratch_buffer_offset,
                 }
@@ -446,7 +437,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let tlas_descriptors = tlas_storage
             .iter()
-            .map(|(tlas, entries, scratch_buffer_offset)| {
+            .map(|&(tlas, ref entries, ref scratch_buffer_offset)| {
+                if tlas.update_mode == wgt::AccelerationStructureUpdateMode::PreferUpdate {
+                    log::info!("only rebuild implemented")
+                }
                 hal::BuildAccelerationStructureDescriptor {
                     entries,
                     mode: hal::AccelerationStructureBuildMode::Build, // TODO

@@ -18,7 +18,7 @@ use crate::{
 };
 
 use arrayvec::ArrayVec;
-use hal::{AccelerationStructureTriangleIndices, CommandEncoder as _, Device as _};
+use hal::{CommandEncoder as _, Device as _};
 use parking_lot::{Mutex, MutexGuard};
 use smallvec::SmallVec;
 use thiserror::Error;
@@ -2217,7 +2217,7 @@ impl<A: HalApi> Device<A> {
                 Br::AccelerationStructure(id) => {
                     let tlas = used
                         .acceleration_structures
-                        .add_single(&*&tlas_guard, id)
+                        .add_single(&tlas_guard, id)
                         .ok_or(Error::InvalidTlas(id))?;
 
                     let raw = tlas.raw.as_ref().ok_or(Error::InvalidTlas(id))?;
