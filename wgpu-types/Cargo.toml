@@ -27,7 +27,7 @@ replay = ["serde"]
 strict_asserts = []
 
 [dependencies]
-bitflags = "1"
+bitflags = "2"
 serde = { version = "1", features = ["serde_derive"], optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
