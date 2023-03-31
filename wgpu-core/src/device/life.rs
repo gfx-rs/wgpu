@@ -32,6 +32,8 @@ pub(super) struct SuspectedResources {
     pub(super) pipeline_layouts: Vec<Stored<id::PipelineLayoutId>>,
     pub(super) render_bundles: Vec<id::Valid<id::RenderBundleId>>,
     pub(super) query_sets: Vec<id::Valid<id::QuerySetId>>,
+    pub(super) blas_s: Vec<id::Valid<id::BlasId>>,
+    pub(super) tlas_s: Vec<id::Valid<id::TlasId>>,
 }
 
 impl SuspectedResources {
@@ -97,6 +99,7 @@ struct NonReferencedResources<A: hal::Api> {
     bind_group_layouts: Vec<A::BindGroupLayout>,
     pipeline_layouts: Vec<A::PipelineLayout>,
     query_sets: Vec<A::QuerySet>,
+    acceleration_structures: Vec<A::AccelerationStructure>,
 }
 
 impl<A: hal::Api> NonReferencedResources<A> {
@@ -112,6 +115,7 @@ impl<A: hal::Api> NonReferencedResources<A> {
             bind_group_layouts: Vec::new(),
             pipeline_layouts: Vec::new(),
             query_sets: Vec::new(),
+            acceleration_structures: Vec::new(),
         }
     }
 
@@ -124,6 +128,8 @@ impl<A: hal::Api> NonReferencedResources<A> {
         self.compute_pipes.extend(other.compute_pipes);
         self.render_pipes.extend(other.render_pipes);
         self.query_sets.extend(other.query_sets);
+        self.acceleration_structures
+            .extend(other.acceleration_structures);
         assert!(other.bind_group_layouts.is_empty());
         assert!(other.pipeline_layouts.is_empty());
     }
@@ -187,6 +193,12 @@ impl<A: hal::Api> NonReferencedResources<A> {
             profiling::scope!("destroy_query_sets");
             for raw in self.query_sets.drain(..) {
                 unsafe { device.destroy_query_set(raw) };
+            }
+        }
+        if !self.acceleration_structures.is_empty() {
+            profiling::scope!("destroy_acceleration_structures");
+            for raw in self.acceleration_structures.drain(..) {
+                unsafe { device.destroy_acceleration_structure(raw) };
             }
         }
     }
@@ -335,6 +347,9 @@ impl<A: hal::Api> LifetimeTracker<A> {
                     last_resources.textures.push(raw);
                     last_resources.texture_views.extend(views);
                 }
+                TempResource::AccelerationStructure(raw) => {
+                    last_resources.acceleration_structures.push(raw)
+                }
             }
         }
 
@@ -438,6 +453,7 @@ impl<A: hal::Api> LifetimeTracker<A> {
                 resources.texture_views.extend(views);
                 resources.textures.push(raw);
             }
+            TempResource::AccelerationStructure(raw) => resources.acceleration_structures.push(raw),
         }
     }
 

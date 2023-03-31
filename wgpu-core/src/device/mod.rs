@@ -31,6 +31,8 @@ pub mod queue;
 #[cfg(any(feature = "trace", feature = "replay"))]
 pub mod trace;
 
+pub mod ray_tracing;
+
 pub const SHADER_STAGE_COUNT: usize = 3;
 // Should be large enough for the largest possible texture row. This
 // value is enough for a 16k texture with float4 format.
@@ -2218,8 +2220,10 @@ impl<A: HalApi> Device<A> {
                         .add_single(&*&tlas_guard, id)
                         .ok_or(Error::InvalidTlas(id))?;
 
+                    let raw = tlas.raw.as_ref().ok_or(Error::InvalidTlas(id))?;
+
                     let res_index = hal_tlas_s.len();
-                    hal_tlas_s.push(&tlas.raw);
+                    hal_tlas_s.push(raw);
                     (res_index, 1)
                 }
             };

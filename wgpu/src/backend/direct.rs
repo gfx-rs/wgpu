@@ -3075,6 +3075,26 @@ impl crate::Context for Context {
             );
         }
     }
+
+    fn blas_destroy(&self, blas: &Self::BlasId, _blas_data: &Self::BlasData) {
+        let global = &self.0;
+        let _ = wgc::gfx_select!(blas => global.blas_destroy(*blas));
+    }
+
+    fn blas_drop(&self, blas: &Self::BlasId, _blas_data: &Self::BlasData) {
+        let global = &self.0;
+        wgc::gfx_select!(blas => global.blas_drop(*blas, false))
+    }
+
+    fn tlas_destroy(&self, tlas: &Self::TlasId, _tlas_data: &Self::TlasData) {
+        let global = &self.0;
+        let _ = wgc::gfx_select!(tlas => global.tlas_destroy(*tlas));
+    }
+
+    fn tlas_drop(&self, tlas: &Self::TlasId, _tlas_data: &Self::TlasData) {
+        let global = &self.0;
+        wgc::gfx_select!(tlas => global.tlas_drop(*tlas, false))
+    }
 }
 
 impl<T> From<ObjectId> for wgc::id::Id<T> {

@@ -4631,6 +4631,18 @@ impl Blas {
     pub fn handle(&self) -> Option<u64> {
         self.handle
     }
+
+    pub fn destroy(&self) {
+        DynContext::blas_destroy(&*self.context, &self.id, self.data.as_ref());
+    }
+}
+
+impl Drop for Blas {
+    fn drop(&mut self) {
+        if !thread::panicking() {
+            self.context.blas_drop(&self.id, self.data.as_ref());
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -4640,6 +4652,20 @@ pub struct Tlas {
     data: Box<Data>,
 }
 static_assertions::assert_impl_all!(Tlas: Send, Sync);
+
+impl Tlas {
+    pub fn destroy(&self) {
+        DynContext::tlas_destroy(&*self.context, &self.id, self.data.as_ref());
+    }
+}
+
+impl Drop for Tlas {
+    fn drop(&mut self) {
+        if !thread::panicking() {
+            self.context.tlas_drop(&self.id, self.data.as_ref());
+        }
+    }
+}
 
 pub struct TlasBuildEntry<'a> {
     pub tlas: &'a Tlas,

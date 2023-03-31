@@ -106,6 +106,7 @@ pub struct WrappedSubmissionIndex {
 pub enum TempResource<A: hal::Api> {
     Buffer(A::Buffer),
     Texture(A::Texture, SmallVec<[A::TextureView; 1]>),
+    AccelerationStructure(A::AccelerationStructure),
 }
 
 /// A queue execution for a particular command encoder.
@@ -179,6 +180,9 @@ impl<A: hal::Api> PendingWrites<A> {
                         device.destroy_texture_view(view);
                     }
                     device.destroy_texture(texture);
+                },
+                TempResource::AccelerationStructure(acceleration_structure) => unsafe {
+                    device.destroy_acceleration_structure(acceleration_structure);
                 },
             }
         }

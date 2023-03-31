@@ -25,12 +25,12 @@ use hal::{
     AccelerationStructureTriangleTransform, CommandEncoder as _, Device as _,
 };
 use thiserror::Error;
-use wgt::{BufferUsages};
+use wgt::BufferUsages;
 
 use std::{borrow::Borrow, cmp::max, iter};
 
 // TODO:
-// tracing 
+// tracing
 // automatic build splitting (if to big for spec or scratch buffer)
 // comments/documentation
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
@@ -73,6 +73,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .blas_s
                 .add_single(&blas_guard, entry.blas_id)
                 .ok_or(BuildAccelerationStructureError::InvalidBlas(entry.blas_id))?;
+
+            if blas.raw.is_none() {
+                return Err(BuildAccelerationStructureError::InvalidBlas(entry.blas_id));
+            }
 
             match entry.geometries {
                 BlasGeometries::TriangleGeometries(triangle_geometries) => {
@@ -390,6 +394,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .add_single(&tlas_guard, entry.tlas_id)
                 .ok_or(BuildAccelerationStructureError::InvalidTlas(entry.tlas_id))?;
 
+            if tlas.raw.is_none() {
+                return Err(BuildAccelerationStructureError::InvalidTlas(entry.tlas_id));
+            }
+
             let scratch_buffer_offset = scratch_buffer_tlas_size;
             scratch_buffer_tlas_size += tlas.size_info.build_scratch_size; // TODO Alignment
 
@@ -430,7 +438,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     mode: hal::AccelerationStructureBuildMode::Build, // TODO
                     flags: blas.flags,
                     source_acceleration_structure: None,
-                    destination_acceleration_structure: &blas.raw,
+                    destination_acceleration_structure: &blas.raw.as_ref().unwrap(),
                     scratch_buffer: &scratch_buffer,
                     scratch_buffer_offset: *scratch_buffer_offset,
                 }
@@ -444,7 +452,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     mode: hal::AccelerationStructureBuildMode::Build, // TODO
                     flags: tlas.flags,
                     source_acceleration_structure: None,
-                    destination_acceleration_structure: &tlas.raw,
+                    destination_acceleration_structure: tlas.raw.as_ref().unwrap(),
                     scratch_buffer: &scratch_buffer,
                     scratch_buffer_offset: *scratch_buffer_offset,
                 }

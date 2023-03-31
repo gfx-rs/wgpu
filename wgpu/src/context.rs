@@ -1016,6 +1016,10 @@ pub trait Context: Debug + Send + Sized + Sync {
         blas: impl Iterator<Item = crate::ContextBlasBuildEntry<'a, Self>>,
         tlas: impl Iterator<Item = crate::ContextTlasBuildEntry<'a, Self>>,
     );
+    fn blas_destroy(&self, blas: &Self::BlasId, blas_data: &Self::BlasData);
+    fn blas_drop(&self, blas: &Self::BlasId, blas_data: &Self::BlasData);
+    fn tlas_destroy(&self, tlas: &Self::TlasId, tlas_data: &Self::TlasData);
+    fn tlas_drop(&self, tlas: &Self::TlasId, tlas_data: &Self::TlasData);
 }
 
 /// Object id.
@@ -1951,6 +1955,10 @@ pub(crate) trait DynContext: Debug + Send + Sync {
         blas: &mut dyn Iterator<Item = crate::DynContextBlasBuildEntry<'a>>,
         tlas: &mut dyn Iterator<Item = crate::DynContextTlasBuildEntry<'a>>,
     );
+    fn blas_destroy(&self, blas: &ObjectId, blas_data: &crate::Data);
+    fn blas_drop(&self, blas: &ObjectId, blas_data: &crate::Data);
+    fn tlas_destroy(&self, tlas: &ObjectId, tlas_data: &crate::Data);
+    fn tlas_drop(&self, tlas: &ObjectId, tlas_data: &crate::Data);
 }
 
 // Blanket impl of DynContext for all types which implement Context.
@@ -3994,6 +4002,30 @@ where
             blas,
             tlas,
         )
+    }
+
+    fn blas_destroy(&self, blas: &ObjectId, blas_data: &crate::Data) {
+        let blas = <T::BlasId>::from(*blas);
+        let blas_data = downcast_ref(blas_data);
+        Context::blas_destroy(self, &blas, blas_data)
+    }
+
+    fn blas_drop(&self, blas: &ObjectId, blas_data: &crate::Data) {
+        let blas = <T::BlasId>::from(*blas);
+        let blas_data = downcast_ref(blas_data);
+        Context::blas_drop(self, &blas, blas_data)
+    }
+
+    fn tlas_destroy(&self, tlas: &ObjectId, tlas_data: &crate::Data) {
+        let tlas = <T::TlasId>::from(*tlas);
+        let tlas_data = downcast_ref(tlas_data);
+        Context::tlas_destroy(self, &tlas, tlas_data)
+    }
+
+    fn tlas_drop(&self, tlas: &ObjectId, tlas_data: &crate::Data) {
+        let tlas = <T::TlasId>::from(*tlas);
+        let tlas_data = downcast_ref(tlas_data);
+        Context::tlas_drop(self, &tlas, tlas_data)
     }
 }
 
