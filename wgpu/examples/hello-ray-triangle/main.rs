@@ -490,6 +490,8 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
     }
     queue.submit(Some(encoder.finish()));
 
+    vertex_buf.destroy();
+
     let start_inst = Instant::now();
 
     event_loop.run(move |event, _, control_flow| {
