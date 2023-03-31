@@ -28,19 +28,49 @@ use std::iter;
 pub enum BuildAccelerationStructureError {
     #[error(transparent)]
     Encoder(#[from] CommandEncoderError),
+
     #[error("Buffer {0:?} is invalid or destroyed")]
     InvalidBuffer(BufferId),
+
     #[error("Buffer {0:?} is missing `BLAS_INPUT` usage flag")]
     MissingBlasInputUsageFlag(BufferId),
+
+    #[error(
+        "Buffer {0:?} size is insufficient for provided size information (size: {1}, required: {2}"
+    )]
+    InsufficientBufferSize(BufferId, u64, u64),
+
+    #[error("Buffer {0:?} associated vertex buffer sizes invalid (no vertices)")]
+    EmptyVertexBuffer(BufferId),
+
+    #[error("Buffer {0:?} associated index buffer sizes invalid (less then three indices)")]
+    EmptyIndexBuffer(BufferId),
+
+    #[error("Buffer {0:?} associated index count not divisible by 3 (count: {1}")]
+    InvalidIndexCount(BufferId, u32),
+
+    #[error("Buffer {0:?} associated data contains None")]
+    MissingAssociatedData(BufferId),
+
+    #[error(
+        "Blas {0:?} build sizes to may be greater than the descriptor at build time specified"
+    )]
+    IncompatibleBlasBuildSizes(BlasId),
+
     #[error("Blas {0:?} is invalid or destroyed")]
     InvalidBlas(BlasId),
+
     #[error("Tlas {0:?} is invalid or destroyed")]
     InvalidTlas(TlasId),
+
     #[error("Buffer {0:?} is missing `TLAS_INPUT` usage flag")]
     MissingTlasInputUsageFlag(BufferId),
 }
 
 impl<A: HalApi> Device<A> {
+    // TODO:
+    // validation 
+    // comments/documentation
     fn create_blas(
         &self,
         self_id: id::DeviceId,
@@ -112,6 +142,9 @@ impl<A: HalApi> Device<A> {
         })
     }
 
+    // TODO:
+    // validation 
+    // comments/documentation
     fn create_tlas(
         &self,
         self_id: id::DeviceId,
@@ -160,6 +193,9 @@ impl<A: HalApi> Device<A> {
 }
 
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
+    // TODO:
+    // tracing 
+    // comments/documentation
     pub fn device_create_blas<A: HalApi>(
         &self,
         device_id: id::DeviceId,
@@ -212,6 +248,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         (id, None, Some(error))
     }
 
+    // TODO:
+    // tracing 
+    // comments/documentation
     pub fn device_create_tlas<A: HalApi>(
         &self,
         device_id: id::DeviceId,

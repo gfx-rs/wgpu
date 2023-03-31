@@ -548,21 +548,7 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
 
                 unsafe {
                     encoder.build_acceleration_structures_unsafe_tlas(
-                        iter::once(&wgpu::BlasBuildEntry {
-                            blas: &blas,
-                            geometry: &wgpu::BlasGeometries::TriangleGeometries(&[
-                                wgpu::BlasTriangleGeometry {
-                                    size: &blas_geo_size_desc,
-                                    vertex_buffer: &vertex_buf,
-                                    first_vertex: 0,
-                                    vertex_stride: mem::size_of::<Vertex>() as u64,
-                                    index_buffer: Some(&index_buf),
-                                    index_buffer_offset: Some(0),
-                                    transform_buffer: None,
-                                    transform_buffer_offset: None,
-                                },
-                            ]),
-                        }),
+                        iter::empty(),
                         iter::once(&wgpu::TlasBuildEntry {
                             tlas: &tlas,
                             instance_buffer: &instance_buf,

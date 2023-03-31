@@ -25,10 +25,14 @@ use hal::{
     AccelerationStructureTriangleTransform, CommandEncoder as _, Device as _,
 };
 use thiserror::Error;
-use wgt::{BufferAddress, BufferUsages, Extent3d, TextureUsages};
+use wgt::{BufferUsages};
 
 use std::{borrow::Borrow, cmp::max, iter};
 
+// TODO:
+// tracing 
+// automatic build splitting (if to big for spec or scratch buffer)
+// comments/documentation
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn command_encoder_build_acceleration_structures_unsafe_tlas<'a, A: HalApi>(
         &self,
@@ -50,16 +54,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let device = &mut device_guard[cmd_buf.device_id.value];
 
-        // #[cfg(feature = "trace")]
-        // if let Some(ref mut list) = cmd_buf.commands {
-        //     list.push(TraceCommand::CopyBufferToBuffer {
-        //         src: source,
-        //         src_offset: source_offset,
-        //         dst: destination,
-        //         dst_offset: destination_offset,
-        //         size,
-        //     });
-        // }
+        #[cfg(feature = "trace")]
+        let blas_iter: Box<dyn Iterator<Item = _>> = if let Some(ref mut _list) = cmd_buf.commands {
+            // Create temporary allocation, save trace and recreate iterator (same for tlas)
+            Box::new(blas_iter.map(|x| x))
+        } else {
+            Box::new(blas_iter)
+        };
 
         let mut input_barriers = Vec::<hal::BufferBarrier<A>>::new();
 
@@ -67,11 +68,54 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut blas_storage = Vec::<(&Blas<A>, hal::AccelerationStructureEntries<A>, u64)>::new();
 
         for entry in blas_iter {
+            let blas = cmd_buf
+                .trackers
+                .blas_s
+                .add_single(&blas_guard, entry.blas_id)
+                .ok_or(BuildAccelerationStructureError::InvalidBlas(entry.blas_id))?;
+
             match entry.geometries {
                 BlasGeometries::TriangleGeometries(triangle_geometries) => {
                     let mut triangle_entries = Vec::<hal::AccelerationStructureTriangles<A>>::new();
 
-                    for mesh in triangle_geometries {
+                    for (i, mesh) in triangle_geometries.enumerate() {
+                        let size_desc = match &blas.sizes {
+                            wgt::BlasGeometrySizeDescriptors::Triangles { desc } => desc,
+                            // _ => {
+                            //     return Err(
+                            //         BuildAccelerationStructureError::IncompatibleBlasBuildSizes(
+                            //             entry.blas_id,
+                            //         ),
+                            //     )
+                            // }
+                        };
+                        if i >= size_desc.len() {
+                            return Err(
+                                BuildAccelerationStructureError::IncompatibleBlasBuildSizes(
+                                    entry.blas_id,
+                                ),
+                            );
+                        }
+                        let size_desc = &size_desc[i];
+
+                        if size_desc.flags != mesh.size.flags
+                            || size_desc.vertex_count < mesh.size.vertex_count
+                            || size_desc.vertex_format != mesh.size.vertex_format
+                            || size_desc.index_count.is_none() != mesh.size.index_count.is_none()
+                            || (size_desc.index_count.is_none()
+                                || size_desc.index_count.unwrap() < mesh.size.index_count.unwrap())
+                            || size_desc.index_format.is_none() != mesh.size.index_format.is_none()
+                            || (size_desc.index_format.is_none()
+                                || size_desc.index_format.unwrap()
+                                    != mesh.size.index_format.unwrap())
+                        {
+                            return Err(
+                                BuildAccelerationStructureError::IncompatibleBlasBuildSizes(
+                                    entry.blas_id,
+                                ),
+                            );
+                        }
+
                         let vertex_buffer = {
                             let (vertex_buffer, vertex_pending) = cmd_buf
                                 .trackers
@@ -99,6 +143,24 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             {
                                 input_barriers.push(barrier);
                             }
+                            if mesh.size.vertex_count - mesh.first_vertex <= 0 {
+                                return Err(BuildAccelerationStructureError::EmptyVertexBuffer(
+                                    mesh.vertex_buffer,
+                                ));
+                            }
+                            if vertex_buffer.size
+                                < (mesh.size.vertex_count + mesh.first_vertex) as u64
+                                    * mesh.vertex_stride
+                            {
+                                return Err(
+                                    BuildAccelerationStructureError::InsufficientBufferSize(
+                                        mesh.vertex_buffer,
+                                        vertex_buffer.size,
+                                        (mesh.size.vertex_count + mesh.first_vertex) as u64
+                                            * mesh.vertex_stride,
+                                    ),
+                                );
+                            }
                             let vertex_buffer_offset =
                                 mesh.first_vertex as u64 * mesh.vertex_stride;
                             cmd_buf.buffer_memory_init_actions.extend(
@@ -113,6 +175,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             vertex_raw
                         };
                         let index_buffer = if let Some(index_id) = mesh.index_buffer {
+                            if mesh.index_buffer_offset.is_none()
+                                || mesh.size.index_count.is_none()
+                                || mesh.size.index_count.is_none()
+                            {
+                                return Err(
+                                    BuildAccelerationStructureError::MissingAssociatedData(
+                                        index_id,
+                                    ),
+                                );
+                            }
                             let (index_buffer, index_pending) = cmd_buf
                                 .trackers
                                 .buffers
@@ -138,11 +210,41 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             {
                                 input_barriers.push(barrier);
                             }
-                            let index_buffer_size = mesh.size.index_count.unwrap() as u64
-                                * match mesh.size.index_format.unwrap() {
-                                    wgt::IndexFormat::Uint16 => 2,
-                                    wgt::IndexFormat::Uint32 => 4,
-                                };
+                            let index_stride = match mesh.size.index_format.unwrap() {
+                                wgt::IndexFormat::Uint16 => 2,
+                                wgt::IndexFormat::Uint32 => 4,
+                            };
+                            let index_buffer_size =
+                                mesh.size.index_count.unwrap() as u64 * index_stride;
+
+                            if mesh.size.index_count.unwrap() as u64
+                                - mesh.index_buffer_offset.unwrap() / index_stride
+                                < 3
+                            {
+                                return Err(BuildAccelerationStructureError::EmptyIndexBuffer(
+                                    index_id,
+                                ));
+                            }
+                            if mesh.size.index_count.unwrap() % 3 != 0 {
+                                return Err(BuildAccelerationStructureError::InvalidIndexCount(
+                                    index_id,
+                                    mesh.size.index_count.unwrap(),
+                                ));
+                            }
+                            if index_buffer.size
+                                < mesh.size.index_count.unwrap() as u64 * index_stride
+                                    + mesh.index_buffer_offset.unwrap()
+                            {
+                                return Err(
+                                    BuildAccelerationStructureError::InsufficientBufferSize(
+                                        index_id,
+                                        index_buffer.size,
+                                        mesh.size.index_count.unwrap() as u64 * index_stride
+                                            + mesh.index_buffer_offset.unwrap(),
+                                    ),
+                                );
+                            }
+
                             cmd_buf.buffer_memory_init_actions.extend(
                                 index_buffer.initialization_status.create_action(
                                     index_id,
@@ -156,6 +258,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             None
                         };
                         let transform_buffer = if let Some(transform_id) = mesh.transform_buffer {
+                            if mesh.transform_buffer_offset.is_none() {
+                                return Err(
+                                    BuildAccelerationStructureError::MissingAssociatedData(
+                                        transform_id,
+                                    ),
+                                );
+                            }
                             let (transform_buffer, transform_pending) = cmd_buf
                                 .trackers
                                 .buffers
@@ -181,6 +290,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 transform_pending.map(|pending| pending.into_hal(transform_buffer))
                             {
                                 input_barriers.push(barrier);
+                            }
+
+                            if transform_buffer.size < 48 + mesh.transform_buffer_offset.unwrap() {
+                                return Err(
+                                    BuildAccelerationStructureError::InsufficientBufferSize(
+                                        transform_id,
+                                        transform_buffer.size,
+                                        48 + mesh.transform_buffer_offset.unwrap(),
+                                    ),
+                                );
                             }
                             cmd_buf.buffer_memory_init_actions.extend(
                                 transform_buffer.initialization_status.create_action(
@@ -220,12 +339,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                         triangle_entries.push(triangles);
                     }
-
-                    let blas = cmd_buf
-                        .trackers
-                        .blas_s
-                        .add_single(&blas_guard, entry.blas_id)
-                        .ok_or(BuildAccelerationStructureError::InvalidBlas(entry.blas_id))?;
 
                     let scratch_buffer_offset = scratch_buffer_blas_size;
                     scratch_buffer_blas_size += blas.size_info.build_scratch_size; // TODO Alignment
