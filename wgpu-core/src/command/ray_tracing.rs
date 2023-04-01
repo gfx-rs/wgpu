@@ -1,5 +1,3 @@
-// #[cfg(feature = "trace")]
-// use crate::device::trace::Command as TraceCommand;
 use crate::{
     command::CommandBuffer,
     device::queue::TempResource,
@@ -7,8 +5,9 @@ use crate::{
     id::{BlasId, CommandEncoderId, TlasId},
     init_tracker::MemoryInitKind,
     ray_tracing::{
-        BlasAction, BlasBuildEntry, BlasGeometries, BuildAccelerationStructureError, TlasAction,
-        TlasBuildEntry, ValidateBlasActionsError, ValidateTlasActionsError,
+        BlasAction, BlasBuildEntry, BlasGeometries, 
+        BuildAccelerationStructureError, TlasAction, TlasBuildEntry, ValidateBlasActionsError,
+        ValidateTlasActionsError,
     },
     resource::{Blas, Tlas},
     FastHashSet,
@@ -47,12 +46,74 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let device = &mut device_guard[cmd_buf.device_id.value];
 
         #[cfg(feature = "trace")]
-        let blas_iter: Box<dyn Iterator<Item = _>> = if let Some(ref mut _list) = cmd_buf.commands {
-            // Create temporary allocation, save trace and recreate iterator (same for tlas)
-            Box::new(blas_iter.map(|x| x))
-        } else {
-            Box::new(blas_iter)
-        };
+        let trace_blas: Vec<crate::ray_tracing::TraceBlasBuildEntry> = blas_iter
+            .map(|x| {
+                let geometries = match x.geometries {
+                    BlasGeometries::TriangleGeometries(triangle_geometries) => {
+                        crate::ray_tracing::TraceBlasGeometries::TriangleGeometries(
+                            triangle_geometries
+                                .map(|tg| crate::ray_tracing::TraceBlasTriangleGeometry {
+                                    size: tg.size.clone(),
+                                    vertex_buffer: tg.vertex_buffer,
+                                    index_buffer: tg.index_buffer,
+                                    transform_buffer: tg.transform_buffer,
+                                    first_vertex: tg.first_vertex,
+                                    vertex_stride: tg.vertex_stride,
+                                    index_buffer_offset: tg.index_buffer_offset,
+                                    transform_buffer_offset: tg.transform_buffer_offset,
+                                })
+                                .collect(),
+                        )
+                    }
+                };
+                crate::ray_tracing::TraceBlasBuildEntry {
+                    blas_id: x.blas_id,
+                    geometries,
+                }
+            })
+            .collect();
+
+        #[cfg(feature = "trace")]
+        let mut trace_tlas: Vec<TlasBuildEntry> = tlas_iter.collect();
+
+        #[cfg(feature = "trace")]
+        if let Some(ref mut list) = cmd_buf.commands {
+            list.push(
+                crate::device::trace::Command::BuildAccelerationStructuresUnsafeTlas {
+                    blas: trace_blas.clone(),
+                    tlas: trace_tlas.clone(),
+                },
+            );
+        }
+
+        #[cfg(feature = "trace")]
+        let blas_iter = (&trace_blas).into_iter().map(|x| {
+            let geometries = match &x.geometries {
+                crate::ray_tracing::TraceBlasGeometries::TriangleGeometries(triangle_geometries) => {
+                    let iter = triangle_geometries
+                        .into_iter()
+                        .map(|tg| crate::ray_tracing::BlasTriangleGeometry {
+                            size: &tg.size,
+                            vertex_buffer: tg.vertex_buffer,
+                            index_buffer: tg.index_buffer,
+                            transform_buffer: tg.transform_buffer,
+                            first_vertex: tg.first_vertex,
+                            vertex_stride: tg.vertex_stride,
+                            index_buffer_offset: tg.index_buffer_offset,
+                            transform_buffer_offset: tg.transform_buffer_offset,
+                        });
+                    BlasGeometries::TriangleGeometries(Box::new(iter))
+                }
+            };
+            BlasBuildEntry {
+                blas_id: x.blas_id,
+                geometries: geometries,
+            }
+        });
+
+        #[cfg(feature = "trace")]
+        let tlas_iter = (&mut trace_tlas).iter();
+
 
         let mut input_barriers = Vec::<hal::BufferBarrier<A>>::new();
 

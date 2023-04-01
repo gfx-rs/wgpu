@@ -89,6 +89,9 @@ pub struct BlasBuildEntry<'a> {
     pub geometries: BlasGeometries<'a>,
 }
 
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "trace", derive(serde::Serialize))]
+#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub struct TlasBuildEntry {
     pub tlas_id: TlasId,
     pub instance_buffer_id: BufferId,
@@ -111,4 +114,33 @@ pub(crate) struct BlasAction {
 pub(crate) struct TlasAction {
     pub id: TlasId,
     pub kind: AccelerationStructureActionKind,
+}
+
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "trace", derive(serde::Serialize))]
+#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
+pub struct TraceBlasTriangleGeometry {
+    pub size: wgt::BlasTriangleGeometrySizeDescriptor,
+    pub vertex_buffer: BufferId,
+    pub index_buffer: Option<BufferId>,
+    pub transform_buffer: Option<BufferId>,
+    pub first_vertex: u32,
+    pub vertex_stride: BufferAddress,
+    pub index_buffer_offset: Option<BufferAddress>,
+    pub transform_buffer_offset: Option<BufferAddress>,
+}
+
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "trace", derive(serde::Serialize))]
+#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
+pub enum TraceBlasGeometries {
+    TriangleGeometries(Vec<TraceBlasTriangleGeometry>),
+}
+
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "trace", derive(serde::Serialize))]
+#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
+pub struct TraceBlasBuildEntry {
+    pub blas_id: BlasId,
+    pub geometries: TraceBlasGeometries,
 }

@@ -136,6 +136,41 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
                     )
                     .unwrap();
                 }
+                trace::Command::BuildAccelerationStructuresUnsafeTlas { blas, tlas } => {
+                    println!("{blas:?}\n\n{tlas:?}\n\n");
+                    let blas_iter = (&blas).into_iter().map(|x| {
+                        let geometries = match &x.geometries {
+                            wgc::ray_tracing::TraceBlasGeometries::TriangleGeometries(
+                                triangle_geometries,
+                            ) => {
+                                let iter = triangle_geometries.into_iter().map(|tg| {
+                                    wgc::ray_tracing::BlasTriangleGeometry {
+                                        size: &tg.size,
+                                        vertex_buffer: tg.vertex_buffer,
+                                        index_buffer: tg.index_buffer,
+                                        transform_buffer: tg.transform_buffer,
+                                        first_vertex: tg.first_vertex,
+                                        vertex_stride: tg.vertex_stride,
+                                        index_buffer_offset: tg.index_buffer_offset,
+                                        transform_buffer_offset: tg.transform_buffer_offset,
+                                    }
+                                });
+                                wgc::ray_tracing::BlasGeometries::TriangleGeometries(Box::new(iter))
+                            }
+                        };
+                        wgc::ray_tracing::BlasBuildEntry {
+                            blas_id: x.blas_id,
+                            geometries: geometries,
+                        }
+                    });
+
+                    let tlas_iter = tlas.iter().cloned();
+
+                    self.command_encoder_build_acceleration_structures_unsafe_tlas::<A>(
+                        encoder, blas_iter, tlas_iter,
+                    )
+                    .unwrap();
+                }
             }
         }
         let (cmd_buf, error) = self
@@ -370,6 +405,7 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
                 self.queue_submit::<A>(device, &[]).unwrap();
             }
             Action::Submit(_index, commands) => {
+                println!("Submit");
                 let (encoder, error) = self.device_create_command_encoder::<A>(
                     device,
                     &wgt::CommandEncoderDescriptor { label: None },
@@ -380,6 +416,14 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
                 }
                 let cmdbuf = self.encode_commands::<A>(encoder, commands);
                 self.queue_submit::<A>(device, &[cmdbuf]).unwrap();
+            }
+            Action::CreateBlas { id, desc, sizes } => {
+                self.device_maintain_ids::<A>(device).unwrap();
+                self.device_create_blas::<A>(device, &desc, sizes, id);
+            }
+            Action::CreateTlas { id, desc } => {
+                self.device_maintain_ids::<A>(device).unwrap();
+                self.device_create_tlas::<A>(device, &desc, id);
             }
         }
     }

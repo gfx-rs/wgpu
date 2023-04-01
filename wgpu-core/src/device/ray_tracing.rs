@@ -1,5 +1,5 @@
-// #[cfg(feature = "trace")]
-// use crate::device::trace::Command as TraceCommand;
+#[cfg(feature = "trace")]
+use crate::device::trace;
 use crate::{
     device::{queue::TempResource, Device, DeviceError},
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Input, Token},
@@ -160,13 +160,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(device) => device,
                 Err(_) => break DeviceError::Invalid.into(),
             };
-            // #[cfg(feature = "trace")]
-            // if let Some(ref trace) = device.trace {
-            //     let mut desc = desc.clone();
-            //     trace
-            //         .lock()
-            //         .add(trace::Action::CreateBlas(fid.id(), desc));
-            // }
+            #[cfg(feature = "trace")]
+            if let Some(ref trace) = device.trace {
+                trace.lock().add(trace::Action::CreateBlas {
+                    id: fid.id(),
+                    desc: desc.clone(),
+                    sizes: sizes.clone(),
+                });
+            }
 
             let blas = match device.create_blas(device_id, desc, sizes) {
                 Ok(blas) => blas,
@@ -214,13 +215,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(device) => device,
                 Err(_) => break DeviceError::Invalid.into(),
             };
-            // #[cfg(feature = "trace")]
-            // if let Some(ref trace) = device.trace {
-            //     let mut desc = desc.clone();
-            //     trace
-            //         .lock()
-            //         .add(trace::Action::CreateTlas(fid.id(), desc));
-            // }
+            #[cfg(feature = "trace")]
+            if let Some(ref trace) = device.trace {
+                trace.lock().add(trace::Action::CreateTlas {
+                    id: fid.id(),
+                    desc: desc.clone(),
+                });
+            }
 
             let tlas = match device.create_tlas(device_id, desc) {
                 Ok(tlas) => tlas,

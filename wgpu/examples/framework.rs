@@ -222,6 +222,7 @@ async fn setup<E: Example>(title: &str) -> Setup {
     let needed_limits = E::required_limits().using_resolution(adapter.limits());
 
     let trace_dir = std::env::var("WGPU_TRACE");
+    dbg!(&trace_dir);
     let (device, queue) = adapter
         .request_device(
             &wgpu::DeviceDescriptor {
