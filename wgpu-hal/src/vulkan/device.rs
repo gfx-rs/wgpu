@@ -2064,7 +2064,7 @@ impl crate::Device<super::Api> for super::Device {
             None => panic!("Feature `RAY_TRACING` not enabled"),
         };
 
-        let (geometries, primitive_counts) = match desc.entries {
+        let (geometries, primitive_counts) = match *desc.entries {
             crate::AccelerationStructureEntries::Instances(ref instances) => {
                 let instance_data = vk::AccelerationStructureGeometryInstancesDataKHR::default();
 
@@ -2079,7 +2079,7 @@ impl crate::Device<super::Api> for super::Device {
                     smallvec::smallvec![instances.count],
                 )
             }
-            crate::AccelerationStructureEntries::Triangles(in_geometries) => {
+            crate::AccelerationStructureEntries::Triangles(ref in_geometries) => {
                 let mut primitive_counts =
                     smallvec::SmallVec::<[u32; CAPACITY]>::with_capacity(in_geometries.len());
                 let mut geometries = smallvec::SmallVec::<
@@ -2115,7 +2115,7 @@ impl crate::Device<super::Api> for super::Device {
                 }
                 (geometries, primitive_counts)
             }
-            crate::AccelerationStructureEntries::AABBs(in_geometries) => {
+            crate::AccelerationStructureEntries::AABBs(ref in_geometries) => {
                 let mut primitive_counts =
                     smallvec::SmallVec::<[u32; CAPACITY]>::with_capacity(in_geometries.len());
                 let mut geometries = smallvec::SmallVec::<

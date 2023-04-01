@@ -812,8 +812,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
 
         unsafe {
-            encoder
-                .transition_textures(transition.map(|pending| pending.into_hal(dst)).into_iter());
+            encoder.transition_textures(transition.map(|pending| pending.into_hal(dst)));
             encoder.transition_buffers(iter::once(barrier));
             encoder.copy_buffer_to_texture(&staging_buffer.raw, dst_raw, regions);
         }
