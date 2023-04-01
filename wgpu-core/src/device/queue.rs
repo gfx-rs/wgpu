@@ -1061,7 +1061,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     let (mut texture_guard, mut token) = hub.textures.write(&mut token);
                     let (texture_view_guard, mut token) = hub.texture_views.read(&mut token);
                     let (sampler_guard, mut token) = hub.samplers.read(&mut token);
-                    let (query_set_guard, _) = hub.query_sets.read(&mut token);
+                    let (query_set_guard, mut token) = hub.query_sets.read(&mut token);
+                    let (blas_guard, mut token) = hub.blas_s.read(&mut token);
+                    let (tlas_guard, _) = hub.tlas_s.read(&mut token);
 
                     //Note: locking the trackers has to be done after the storages
                     let mut trackers = device.trackers.lock();
@@ -1203,6 +1205,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             }
                             for sub_id in bundle.used.query_sets.used() {
                                 query_set_guard[sub_id].life_guard.use_at(submit_index);
+                            }
+                        }
+                        for id in cmdbuf.trackers.blas_s.used() {
+                            if !blas_guard[id].life_guard.use_at(submit_index) {
+                                device.temp_suspected.blas_s.push(id);
+                            }
+                        }
+                        for id in cmdbuf.trackers.tlas_s.used() {
+                            if !tlas_guard[id].life_guard.use_at(submit_index) {
+                                device.temp_suspected.tlas_s.push(id);
                             }
                         }
 

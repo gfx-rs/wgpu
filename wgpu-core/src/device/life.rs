@@ -49,6 +49,8 @@ impl SuspectedResources {
         self.pipeline_layouts.clear();
         self.render_bundles.clear();
         self.query_sets.clear();
+        self.blas_s.clear();
+        self.tlas_s.clear();
     }
 
     pub(super) fn extend(&mut self, other: &Self) {
@@ -67,6 +69,8 @@ impl SuspectedResources {
             .extend_from_slice(&other.pipeline_layouts);
         self.render_bundles.extend_from_slice(&other.render_bundles);
         self.query_sets.extend_from_slice(&other.query_sets);
+        self.blas_s.extend_from_slice(&other.blas_s);
+        self.tlas_s.extend_from_slice(&other.tlas_s);
     }
 
     pub(super) fn add_render_bundle_scope<A: HalApi>(&mut self, trackers: &RenderBundleScope<A>) {
@@ -83,6 +87,7 @@ impl SuspectedResources {
         self.textures.extend(trackers.textures.used());
         self.texture_views.extend(trackers.views.used());
         self.samplers.extend(trackers.samplers.used());
+        self.tlas_s.extend(trackers.acceleration_structures.used());
     }
 }
 
@@ -804,6 +809,56 @@ impl<A: HalApi> LifetimeTracker<A> {
                             .map_or(&mut self.free_resources, |a| &mut a.last_resources)
                             .query_sets
                             .push(res.raw);
+                    }
+                }
+            }
+        }
+
+        if !self.suspected_resources.blas_s.is_empty() {
+            let (mut guard, _) = hub.blas_s.write(token);
+            let mut trackers = trackers.lock();
+
+            for id in self.suspected_resources.blas_s.drain(..) {
+                if trackers.blas_s.remove_abandoned(id) {
+                    log::debug!("Blas {:?} will be destroyed", id);
+                    // #[cfg(feature = "trace")]
+                    // if let Some(t) = trace {
+                    //     t.lock().add(trace::Action::DestroyBlas(id.0));
+                    // }
+
+                    if let Some(res) = hub.blas_s.unregister_locked(id.0, &mut *guard) {
+                        let submit_index = res.life_guard.life_count();
+                        self.active
+                            .iter_mut()
+                            .find(|a| a.index == submit_index)
+                            .map_or(&mut self.free_resources, |a| &mut a.last_resources)
+                            .acceleration_structures
+                            .extend(res.raw);
+                    }
+                }
+            }
+        }
+
+        if !self.suspected_resources.tlas_s.is_empty() {
+            let (mut guard, _) = hub.tlas_s.write(token);
+            let mut trackers = trackers.lock();
+
+            for id in self.suspected_resources.tlas_s.drain(..) {
+                if trackers.tlas_s.remove_abandoned(id) {
+                    log::debug!("Blas {:?} will be destroyed", id);
+                    // #[cfg(feature = "trace")]
+                    // if let Some(t) = trace {
+                    //     t.lock().add(trace::Action::DestroyBlas(id.0));
+                    // }
+
+                    if let Some(res) = hub.tlas_s.unregister_locked(id.0, &mut *guard) {
+                        let submit_index = res.life_guard.life_count();
+                        self.active
+                            .iter_mut()
+                            .find(|a| a.index == submit_index)
+                            .map_or(&mut self.free_resources, |a| &mut a.last_resources)
+                            .acceleration_structures
+                            .extend(res.raw);
                     }
                 }
             }
