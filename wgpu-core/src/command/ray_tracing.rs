@@ -3,19 +3,23 @@
 use crate::{
     command::CommandBuffer,
     device::queue::TempResource,
-    hub::{Global, GlobalIdentityHandlerFactory, HalApi, Token},
-    id::CommandEncoderId,
+    hub::{Global, GlobalIdentityHandlerFactory, HalApi, Storage, Token},
+    id::{BlasId, CommandEncoderId, TlasId},
     init_tracker::MemoryInitKind,
     ray_tracing::{
-        BlasBuildEntry, BlasGeometries, BuildAccelerationStructureError, TlasBuildEntry,
+        BlasAction, BlasBuildEntry, BlasGeometries, BuildAccelerationStructureError, TlasAction,
+        TlasBuildEntry, ValidateBlasActionsError, ValidateTlasActionsError,
     },
     resource::{Blas, Tlas},
+    FastHashSet,
 };
 
-use hal::{Device, CommandEncoder};
+use hal::{CommandEncoder, Device};
 use wgt::BufferUsages;
 
 use std::{cmp::max, iter};
+
+use super::BakedCommands;
 
 // TODO:
 // tracing
@@ -64,6 +68,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             if blas.raw.is_none() {
                 return Err(BuildAccelerationStructureError::InvalidBlas(entry.blas_id));
+            }
+
+            if !*blas.built.lock() {
+                cmd_buf.blas_actions.push(BlasAction {
+                    id: entry.blas_id,
+                    kind: crate::ray_tracing::AccelerationStructureActionKind::Build,
+                });
             }
 
             match entry.geometries {
@@ -386,6 +397,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 return Err(BuildAccelerationStructureError::InvalidTlas(entry.tlas_id));
             }
 
+            if !*tlas.built.lock() {
+                cmd_buf.tlas_actions.push(TlasAction {
+                    id: entry.tlas_id,
+                    kind: crate::ray_tracing::AccelerationStructureActionKind::Build,
+                });
+            }
+
             let scratch_buffer_offset = scratch_buffer_tlas_size;
             scratch_buffer_tlas_size += tlas.size_info.build_scratch_size; // TODO Alignment
 
@@ -398,6 +416,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 }),
                 scratch_buffer_offset,
             ));
+        }
+
+        if max(scratch_buffer_blas_size, scratch_buffer_tlas_size) == 0 {
+            return Ok(());
         }
 
         let scratch_buffer = unsafe {
@@ -418,39 +440,43 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 ..hal::BufferUses::ACCELERATION_STRUCTURE_SCRATCH,
         };
 
-        let blas_descriptors = blas_storage
-            .iter()
-            .map(|&(blas,ref entries,ref scratch_buffer_offset)| {
-                if blas.update_mode == wgt::AccelerationStructureUpdateMode::PreferUpdate {
-                    log::info!("only rebuild implemented")
-                }
-                hal::BuildAccelerationStructureDescriptor {
-                    entries,
-                    mode: hal::AccelerationStructureBuildMode::Build, // TODO
-                    flags: blas.flags,
-                    source_acceleration_structure: None,
-                    destination_acceleration_structure: blas.raw.as_ref().unwrap(),
-                    scratch_buffer: &scratch_buffer,
-                    scratch_buffer_offset: *scratch_buffer_offset,
-                }
-            });
+        let blas_descriptors =
+            blas_storage
+                .iter()
+                .map(|&(blas, ref entries, ref scratch_buffer_offset)| {
+                    if blas.update_mode == wgt::AccelerationStructureUpdateMode::PreferUpdate {
+                        log::info!("only rebuild implemented")
+                    }
+                    *blas.built.lock() = true;
+                    hal::BuildAccelerationStructureDescriptor {
+                        entries,
+                        mode: hal::AccelerationStructureBuildMode::Build, // TODO
+                        flags: blas.flags,
+                        source_acceleration_structure: None,
+                        destination_acceleration_structure: blas.raw.as_ref().unwrap(),
+                        scratch_buffer: &scratch_buffer,
+                        scratch_buffer_offset: *scratch_buffer_offset,
+                    }
+                });
 
-        let tlas_descriptors = tlas_storage
-            .iter()
-            .map(|&(tlas, ref entries, ref scratch_buffer_offset)| {
-                if tlas.update_mode == wgt::AccelerationStructureUpdateMode::PreferUpdate {
-                    log::info!("only rebuild implemented")
-                }
-                hal::BuildAccelerationStructureDescriptor {
-                    entries,
-                    mode: hal::AccelerationStructureBuildMode::Build, // TODO
-                    flags: tlas.flags,
-                    source_acceleration_structure: None,
-                    destination_acceleration_structure: tlas.raw.as_ref().unwrap(),
-                    scratch_buffer: &scratch_buffer,
-                    scratch_buffer_offset: *scratch_buffer_offset,
-                }
-            });
+        let tlas_descriptors =
+            tlas_storage
+                .iter()
+                .map(|&(tlas, ref entries, ref scratch_buffer_offset)| {
+                    if tlas.update_mode == wgt::AccelerationStructureUpdateMode::PreferUpdate {
+                        log::info!("only rebuild implemented")
+                    }
+                    *tlas.built.lock() = true;
+                    hal::BuildAccelerationStructureDescriptor {
+                        entries,
+                        mode: hal::AccelerationStructureBuildMode::Build, // TODO
+                        flags: tlas.flags,
+                        source_acceleration_structure: None,
+                        destination_acceleration_structure: tlas.raw.as_ref().unwrap(),
+                        scratch_buffer: &scratch_buffer,
+                        scratch_buffer_offset: *scratch_buffer_offset,
+                    }
+                });
 
         let blas_present = !blas_storage.is_empty();
         let tlas_present = !tlas_storage.is_empty();
@@ -479,6 +505,60 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .temp_resources
             .push(TempResource::Buffer(scratch_buffer));
 
+        Ok(())
+    }
+}
+
+impl<A: HalApi> BakedCommands<A> {
+    // makes sure a blas is build before it is used
+    pub(crate) fn validate_blas_actions(
+        &mut self,
+        blas_guard: &Storage<Blas<A>, BlasId>,
+    ) -> Result<(), ValidateBlasActionsError> {
+        let mut built = FastHashSet::default();
+        for action in self.blas_actions.drain(..) {
+            match action.kind {
+                crate::ray_tracing::AccelerationStructureActionKind::Build => {
+                    built.insert(action.id);
+                }
+                crate::ray_tracing::AccelerationStructureActionKind::Use => {
+                    if !built.contains(&action.id) {
+                        let blas = blas_guard
+                            .get(action.id)
+                            .map_err(|_| ValidateBlasActionsError::InvalidBlas(action.id))?;
+                        if !*blas.built.lock() {
+                            return Err(ValidateBlasActionsError::UsedUnbuilt(action.id));
+                        }
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    // makes sure a tlas is build before it is used
+    pub(crate) fn validate_tlas_actions(
+        &mut self,
+        tlas_guard: &Storage<Tlas<A>, TlasId>,
+    ) -> Result<(), ValidateTlasActionsError> {
+        let mut built = FastHashSet::default();
+        for action in self.tlas_actions.drain(..) {
+            match action.kind {
+                crate::ray_tracing::AccelerationStructureActionKind::Build => {
+                    built.insert(action.id);
+                }
+                crate::ray_tracing::AccelerationStructureActionKind::Use => {
+                    if !built.contains(&action.id) {
+                        let tlas = tlas_guard
+                            .get(action.id)
+                            .map_err(|_| ValidateTlasActionsError::InvalidTlas(action.id))?;
+                        if !*tlas.built.lock() {
+                            return Err(ValidateTlasActionsError::UsedUnbuilt(action.id));
+                        }
+                    }
+                }
+            }
+        }
         Ok(())
     }
 }

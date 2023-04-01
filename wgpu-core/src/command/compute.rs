@@ -362,7 +362,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (pipeline_guard, mut token) = hub.compute_pipelines.read(&mut token);
         let (query_set_guard, mut token) = hub.query_sets.read(&mut token);
         let (buffer_guard, mut token) = hub.buffers.read(&mut token);
-        let (texture_guard, _) = hub.textures.read(&mut token);
+        let (texture_guard, mut token) = hub.textures.read(&mut token);
+        let (tlas_guard, _) = hub.tlas_s.read(&mut token);
 
         let mut state = State {
             binder: Binder::new(),
@@ -449,6 +450,19 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 .register_init_action(action, &texture_guard),
                         );
                     }
+
+                    cmd_buf.tlas_actions.extend(
+                        bind_group.used.acceleration_structures.used().filter_map(|id| {
+                            let tlas = &tlas_guard[id];
+                            if *tlas.built.lock() {
+                                None
+                            }
+                            else
+                            {
+                                Some(crate::ray_tracing::TlasAction{ id: id.0, kind: crate::ray_tracing::AccelerationStructureActionKind::Use })
+                            }
+                        }),
+                    );
 
                     let pipeline_layout_id = state.binder.pipeline_layout_id;
                     let entries = state.binder.assign_group(

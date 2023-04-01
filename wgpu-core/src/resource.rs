@@ -8,6 +8,7 @@ use crate::{
     Label, LifeGuard, RefCount, Stored,
 };
 
+use parking_lot::Mutex;
 use smallvec::SmallVec;
 use thiserror::Error;
 
@@ -807,6 +808,7 @@ pub struct Blas<A: hal::Api> {
     pub(crate) sizes: wgt::BlasGeometrySizeDescriptors,
     pub(crate) flags: wgt::AccelerationStructureFlags,
     pub(crate) update_mode: wgt::AccelerationStructureUpdateMode,
+    pub(crate) built: Mutex<bool>,
 }
 
 impl<A: hal::Api> Resource for Blas<A> {
@@ -824,6 +826,7 @@ pub struct Tlas<A: hal::Api> {
     pub(crate) size_info: hal::AccelerationStructureBuildSizes,
     pub(crate) flags: wgt::AccelerationStructureFlags,
     pub(crate) update_mode: wgt::AccelerationStructureUpdateMode,
+    pub(crate) built: Mutex<bool>,
 }
 
 impl<A: hal::Api> Resource for Tlas<A> {

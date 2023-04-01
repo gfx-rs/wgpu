@@ -3954,12 +3954,8 @@ where
                             .into_iter()
                             .map(|tg| ContextBlasTriangleGeometry {
                                 vertex_buffer: <T::BufferId>::from(tg.vertex_buffer),
-                                index_buffer: tg
-                                    .index_buffer
-                                    .map(<T::BufferId>::from),
-                                transform_buffer: tg
-                                    .transform_buffer
-                                    .map(<T::BufferId>::from),
+                                index_buffer: tg.index_buffer.map(<T::BufferId>::from),
+                                transform_buffer: tg.transform_buffer.map(<T::BufferId>::from),
                                 size: tg.size,
                                 transform_buffer_offset: tg.transform_buffer_offset,
                                 first_vertex: tg.first_vertex,

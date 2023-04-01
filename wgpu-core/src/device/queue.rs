@@ -319,6 +319,10 @@ pub enum QueueSubmitError {
     SurfaceUnconfigured,
     #[error("GPU got stuck :(")]
     StuckGpu,
+    #[error(transparent)]
+    ValidateBlasActionsError(#[from] crate::ray_tracing::ValidateBlasActionsError),
+    #[error(transparent)]
+    ValidateTlasActionsError(#[from] crate::ray_tracing::ValidateTlasActionsError),
 }
 
 //TODO: move out common parts of write_xxx.
@@ -1233,6 +1237,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         baked
                             .initialize_texture_memory(&mut *trackers, &mut *texture_guard, device)
                             .map_err(|err| QueueSubmitError::DestroyedTexture(err.0))?;
+
+                        baked.validate_blas_actions(&*blas_guard)?;
+                        baked.validate_tlas_actions(&*tlas_guard)?;
+
                         //Note: stateless trackers are not merged:
                         // device already knows these resources exist.
                         CommandBuffer::insert_barriers_from_tracker(

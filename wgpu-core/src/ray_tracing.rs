@@ -50,6 +50,24 @@ pub enum BuildAccelerationStructureError {
     MissingTlasInputUsageFlag(BufferId),
 }
 
+#[derive(Clone, Debug, Error)]
+pub enum ValidateBlasActionsError {
+    #[error("Blas {0:?} is invalid or destroyed")]
+    InvalidBlas(BlasId),
+
+    #[error("Blas {0:?} is used before it is build")]
+    UsedUnbuilt(BlasId),
+}
+
+#[derive(Clone, Debug, Error)]
+pub enum ValidateTlasActionsError {
+    #[error("Tlas {0:?} is invalid or destroyed")]
+    InvalidTlas(TlasId),
+
+    #[error("Tlas {0:?} is used before it is build")]
+    UsedUnbuilt(TlasId),
+}
+
 #[derive(Debug)]
 pub struct BlasTriangleGeometry<'a> {
     pub size: &'a wgt::BlasTriangleGeometrySizeDescriptor,
@@ -75,4 +93,22 @@ pub struct TlasBuildEntry {
     pub tlas_id: TlasId,
     pub instance_buffer_id: BufferId,
     pub instance_count: u32,
+}
+
+#[derive(Debug, Copy, Clone)]
+pub(crate) enum AccelerationStructureActionKind {
+    Build,
+    Use,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct BlasAction {
+    pub id: BlasId,
+    pub kind: AccelerationStructureActionKind,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct TlasAction {
+    pub id: TlasId,
+    pub kind: AccelerationStructureActionKind,
 }

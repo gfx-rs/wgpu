@@ -8,6 +8,7 @@ use crate::{
 };
 
 use hal::{AccelerationStructureTriangleIndices, Device as _};
+use parking_lot::Mutex;
 
 impl<A: HalApi> Device<A> {
     // TODO:
@@ -81,6 +82,7 @@ impl<A: HalApi> Device<A> {
             sizes,
             flags: blas_desc.flags,
             update_mode: blas_desc.update_mode,
+            built: Mutex::new(false),
         })
     }
 
@@ -130,6 +132,7 @@ impl<A: HalApi> Device<A> {
             size_info,
             flags: desc.flags,
             update_mode: desc.update_mode,
+            built: Mutex::new(false),
         })
     }
 }
