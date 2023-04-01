@@ -360,7 +360,7 @@ impl framework::Example for Example {
                 label: Some("query buffer"),
                 size: pipeline_statistics_offset()
                     + mem::size_of::<PipelineStatisticsQueries>() as wgpu::BufferAddress,
-                usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+                usage: wgpu::BufferUsages::QUERY_RESOLVE | wgpu::BufferUsages::MAP_READ,
                 mapped_at_creation: false,
             });
 

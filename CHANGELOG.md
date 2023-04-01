@@ -70,6 +70,22 @@ Additionally `sample_type` and `block_size` now take an optional `TextureAspect`
 
 By @teoxoy in [#3436](https://github.com/gfx-rs/wgpu/pull/3436)
 
+#### BufferUsages::QUERY_RESOLVE
+
+Buffers used as the `destination` argument of `CommandEncoder::resolve_query_set` now have to contain the `QUERY_RESOLVE` usage instead of the `COPY_DST` usage.
+
+```diff
+  let destination = device.create_buffer(&wgpu::BufferDescriptor {
+      // ...
+-     usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
++     usage: wgpu::BufferUsages::QUERY_RESOLVE | wgpu::BufferUsages::MAP_READ,
+      mapped_at_creation: false,
+  });
+  command_encoder.resolve_query_set(&query_set, query_range, &destination, destination_offset);
+```
+
+By @JolifantoBambla in [#3489](https://github.com/gfx-rs/wgpu/pull/3489)
+
 #### General
 
 - Change type of `mip_level_count` and `array_layer_count` (members of `TextureViewDescriptor` and `ImageSubresourceRange`) from `Option<NonZeroU32>` to `Option<u32>`. By @teoxoy in [#3445](https://github.com/gfx-rs/wgpu/pull/3445)
@@ -110,6 +126,10 @@ By @teoxoy in [#3436](https://github.com/gfx-rs/wgpu/pull/3436)
 
 - `copyTextureToTexture` src/dst aspects must both refer to all aspects of src/dst format. By @teoxoy in [#3431](https://github.com/gfx-rs/wgpu/pull/3431)
 - Validate before extracting texture selectors. By @teoxoy in [#3487](https://github.com/gfx-rs/wgpu/pull/3487)
+
+### Examples
+
+ - Use `BufferUsages::QUERY_RESOLVE` instead of `BufferUsages::COPY_DST` for buffers used in `CommandEncoder::resolve_query_set` calls in `mipmap` example. By @JolifantoBambla in [#3489](https://github.com/gfx-rs/wgpu/pull/3489)
 
 ## wgpu-0.15.0 (2023-01-25)
 
