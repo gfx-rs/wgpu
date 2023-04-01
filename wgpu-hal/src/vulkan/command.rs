@@ -410,7 +410,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         >::with_capacity(descriptor_count);
 
         for desc in descriptors {
-            let (geometries, ranges) = match desc.entries {
+            let (geometries, ranges) = match *desc.entries {
                 crate::AccelerationStructureEntries::Instances(ref instances) => {
                     let instance_data = vk::AccelerationStructureGeometryInstancesDataKHR::builder(
                     )
@@ -430,7 +430,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
 
                     (smallvec::smallvec![*geometry], smallvec::smallvec![*range])
                 }
-                crate::AccelerationStructureEntries::Triangles(in_geometries) => {
+                crate::AccelerationStructureEntries::Triangles(ref in_geometries) => {
                     let mut ranges = smallvec::SmallVec::<
                         [vk::AccelerationStructureBuildRangeInfoKHR; CAPACITY_INNER],
                     >::with_capacity(in_geometries.len());
@@ -497,7 +497,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                     }
                     (geometries, ranges)
                 }
-                crate::AccelerationStructureEntries::AABBs(in_geometries) => {
+                crate::AccelerationStructureEntries::AABBs(ref in_geometries) => {
                     let mut ranges = smallvec::SmallVec::<
                         [vk::AccelerationStructureBuildRangeInfoKHR; CAPACITY_INNER],
                     >::with_capacity(in_geometries.len());
