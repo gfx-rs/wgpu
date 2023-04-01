@@ -83,6 +83,8 @@ pub(super) fn compile_fxc(
 mod dxc {
     use std::path::PathBuf;
 
+    use hassle_rs::{DxcBlob, DxcOperationResult};
+
     // Destructor order should be fine since _dxil and _dxc don't rely on each other.
     pub(crate) struct DxcContainer {
         compiler: hassle_rs::DxcCompiler,
@@ -176,6 +178,12 @@ mod dxc {
             &[],
         );
 
+        let format_error_message = |e: DxcOperationResult| {
+            e.get_error_buffer()
+                .and_then(|e| dxc_container.library.get_blob_as_string(&DxcBlob::from(e)))
+                .unwrap_or_default()
+        };
+
         let (result, log_level) = match compiled {
             Ok(dxc_result) => match dxc_result.get_result() {
                 Ok(dxc_blob) => {
@@ -188,7 +196,11 @@ mod dxc {
                         Err(e) => (
                             Err(crate::PipelineError::Linkage(
                                 stage_bit,
-                                format!("DXC validation error: {:?}\n{:?}", e.0, e.1),
+                                format!(
+                                    "DXC validation error: {:?}\n{:?}",
+                                    format_error_message(e.0),
+                                    e.1
+                                ),
                             )),
                             log::Level::Error,
                         ),
@@ -205,7 +217,7 @@ mod dxc {
             Err(e) => (
                 Err(crate::PipelineError::Linkage(
                     stage_bit,
-                    format!("DXC compile error: {e:?}"),
+                    format!("DXC compile error: {:?}", format_error_message(e.0)),
                 )),
                 log::Level::Error,
             ),
