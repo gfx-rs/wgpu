@@ -1,4 +1,4 @@
-#[cfg(any(feature = "trace", feature = "replay"))]
+#[cfg(feature = "trace")]
 use crate::device::trace;
 use crate::{
     binding_model, command, conv,
