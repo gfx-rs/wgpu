@@ -279,6 +279,24 @@ pub struct Writer<'a, W> {
     /// Set of expressions that have associated temporary variables
     named_expressions: crate::NamedExpressions,
     wrapped: Wrapped,
+
+    /// A reference to some part of a global variable, lowered to a series of
+    /// byte offset calculations.
+    ///
+    /// See the [`storage`] module for background on why we need this.
+    ///
+    /// Each [`SubAccess`] in the vector is a lowering of some [`Access`] or
+    /// [`AccessIndex`] expression to the level of byte strides and offsets. See
+    /// [`SubAccess`] for details.
+    ///
+    /// This field is a member of [`Writer`] solely to allow re-use of
+    /// the `Vec`'s dynamic allocation. The value is no longer needed
+    /// once HLSL for the access has been generated.
+    ///
+    /// [`Storage`]: crate::AddressSpace::Storage
+    /// [`SubAccess`]: storage::SubAccess
+    /// [`Access`]: crate::Expression::Access
+    /// [`AccessIndex`]: crate::Expression::AccessIndex
     temp_access_chain: Vec<storage::SubAccess>,
     need_bake_expressions: back::NeedBakeExpressions,
 }
