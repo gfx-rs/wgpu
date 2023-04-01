@@ -79,8 +79,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let hub = A::hub(self);
 
-        let cmd_buf_guard = hub.command_buffers.read();
-        let cmd_buf = CommandBuffer::get_encoder(&*cmd_buf_guard, command_encoder_id)
+        let cmd_buf = CommandBuffer::get_encoder(hub, command_encoder_id)
             .map_err(|_| ClearError::InvalidCommandEncoder(command_encoder_id))?;
         let mut cmd_buf_data = cmd_buf.data.lock();
         let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
@@ -159,8 +158,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let hub = A::hub(self);
 
-        let cmd_buf_guard = hub.command_buffers.read();
-        let cmd_buf = CommandBuffer::get_encoder(&*cmd_buf_guard, command_encoder_id)
+        let cmd_buf = CommandBuffer::get_encoder(hub, command_encoder_id)
             .map_err(|_| ClearError::InvalidCommandEncoder(command_encoder_id))?;
         let mut cmd_buf_data = cmd_buf.data.lock();
         let cmd_buf_data = cmd_buf_data.as_mut().unwrap();

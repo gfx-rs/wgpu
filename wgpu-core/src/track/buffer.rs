@@ -72,7 +72,7 @@ impl<A: HalApi> BufferBindGroupState<A> {
 
     /// Returns a list of all buffers tracked. May contain duplicates.
     pub fn used_resources(&self) -> impl Iterator<Item = &Arc<Buffer<A>>> + '_ {
-        self.buffers.iter().map(|(_, buffer, _)| buffer)
+        self.buffers.iter().map(|&(_id, ref buffer, _u)| buffer)
     }
 
     /// Adds the given resource with the given state.
@@ -86,7 +86,7 @@ impl<A: HalApi> BufferBindGroupState<A> {
 
         self.buffers.push((Valid(id), buffer.clone(), state));
 
-        Some(&buffer)
+        Some(buffer)
     }
 }
 
@@ -248,7 +248,7 @@ impl<A: HalApi> BufferUsageScope<A> {
             )?;
         }
 
-        Ok(&buffer)
+        Ok(buffer)
     }
 }
 
@@ -342,7 +342,7 @@ impl<A: HalApi> BufferTracker<A> {
                 None,
                 ResourceMetadataProvider::Direct {
                     epoch,
-                    resource: Cow::Owned(resource.clone()),
+                    resource: Cow::Owned(resource),
                 },
             )
         }
@@ -389,7 +389,7 @@ impl<A: HalApi> BufferTracker<A> {
 
         strict_assert!(self.temp.len() <= 1);
 
-        Some((&buffer, self.temp.pop()))
+        Some((buffer, self.temp.pop()))
     }
 
     /// Sets the given state for all buffers in the given tracker.

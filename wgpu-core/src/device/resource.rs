@@ -1,3 +1,5 @@
+#[cfg(any(feature = "trace", feature = "replay"))]
+use crate::device::trace;
 use crate::{
     binding_model, command, conv,
     device::life::{LifetimeTracker, WaitIdleError},
@@ -91,7 +93,7 @@ pub struct Device<A: HalApi> {
     pub(crate) downlevel: wgt::DownlevelCapabilities,
     pub(crate) pending_writes: Mutex<Option<PendingWrites<A>>>,
     #[cfg(feature = "trace")]
-    pub(crate) trace: Option<Mutex<trace::Trace>>,
+    pub(crate) trace: Mutex<Option<trace::Trace>>,
 }
 
 impl<A: HalApi> std::fmt::Debug for Device<A> {
@@ -215,19 +217,19 @@ impl<A: HalApi> Device<A> {
             life_tracker: Mutex::new(life::LifetimeTracker::new()),
             temp_suspected: Mutex::new(life::SuspectedResources::new()),
             #[cfg(feature = "trace")]
-            trace: trace_path.and_then(|path| match trace::Trace::new(path) {
+            trace: Mutex::new(trace_path.and_then(|path| match trace::Trace::new(path) {
                 Ok(mut trace) => {
                     trace.add(trace::Action::Init {
                         desc: desc.clone(),
                         backend: A::VARIANT,
                     });
-                    Some(Mutex::new(trace))
+                    Some(trace)
                 }
                 Err(e) => {
                     log::error!("Unable to start a trace in '{:?}': {:?}", path, e);
                     None
                 }
-            }),
+            })),
             alignments,
             limits: desc.limits.clone(),
             features: desc.features,
@@ -275,7 +277,7 @@ impl<A: HalApi> Device<A> {
             hub,
             &self.trackers,
             #[cfg(feature = "trace")]
-            self.trace.as_ref(),
+            self.trace.lock().as_mut(),
         );
         life_tracker.triage_mapped();
 
@@ -2394,7 +2396,7 @@ impl<A: HalApi> Device<A> {
             .map_err(|_| pipeline::CreateComputePipelineError::InvalidLayout)?;
 
         let late_sized_buffer_groups =
-            Device::make_late_sized_buffer_groups(&shader_binding_sizes, &layout, &*bgl_guard);
+            Device::make_late_sized_buffer_groups(&shader_binding_sizes, layout, &*bgl_guard);
 
         let pipeline_desc = hal::ComputePipelineDescriptor {
             label: desc.label.borrow_option(),
@@ -2717,7 +2719,7 @@ impl<A: HalApi> Device<A> {
                         .get(pipeline_layout_id)
                         .map_err(|_| pipeline::CreateRenderPipelineError::InvalidLayout)?;
                     Some(Device::get_introspection_bind_group_layouts(
-                        &pipeline_layout,
+                        pipeline_layout,
                         &*bgl_guard,
                     ))
                 }
@@ -2870,7 +2872,7 @@ impl<A: HalApi> Device<A> {
         }
 
         let late_sized_buffer_groups =
-            Device::make_late_sized_buffer_groups(&shader_binding_sizes, &layout, &*bgl_guard);
+            Device::make_late_sized_buffer_groups(&shader_binding_sizes, layout, &*bgl_guard);
 
         let pipeline_desc = hal::RenderPipelineDescriptor {
             label: desc.label.borrow_option(),
@@ -3050,7 +3052,7 @@ impl<A: HalApi> Device<A> {
 
 impl<A: HalApi> Device<A> {
     pub(crate) fn destroy_command_buffer(&self, mut cmd_buf: command::CommandBuffer<A>) {
-        let mut baked = cmd_buf.into_baked();
+        let mut baked = cmd_buf.extract_baked_commands();
         unsafe {
             baked.encoder.reset_all(baked.list.into_iter());
         }
@@ -3083,7 +3085,7 @@ impl<A: HalApi> Device<A> {
         life_tracker.cleanup();
         #[cfg(feature = "trace")]
         {
-            self.trace = None;
+            *self.trace.lock() = None;
         }
     }
 }

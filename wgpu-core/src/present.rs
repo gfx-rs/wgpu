@@ -129,15 +129,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let (device, config) = match surface.presentation.lock().as_ref() {
             Some(present) => {
-                let device = hub.devices.get(present.device_id.0).unwrap().clone();
+                let device = hub.devices.get(present.device_id.0).unwrap();
                 (device, present.config.clone())
             }
             None => return Err(SurfaceError::NotConfigured),
         };
 
         #[cfg(feature = "trace")]
-        if let Some(ref trace) = device.trace {
-            trace.lock().add(Action::GetSurfaceTexture {
+        if let Some(ref mut trace) = *device.trace.lock() {
+            trace.add(Action::GetSurfaceTexture {
                 id: fid.id(),
                 parent_id: surface_id,
             });
@@ -281,11 +281,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             None => return Err(SurfaceError::NotConfigured),
         };
 
-        let device = hub.devices.get(present.device_id.0).unwrap().clone();
+        let device = hub.devices.get(present.device_id.0).unwrap();
 
         #[cfg(feature = "trace")]
-        if let Some(ref trace) = device.trace {
-            trace.lock().add(Action::Present(surface_id));
+        if let Some(ref mut trace) = *device.trace.lock() {
+            trace.add(Action::Present(surface_id));
         }
 
         let result = {
@@ -306,8 +306,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             if let Some(texture) = texture {
                 if let Ok(mut texture) = Arc::try_unwrap(texture) {
                     let mut clear_mode = texture.clear_mode.write();
-                    if let resource::TextureClearMode::RenderPass { clear_views, .. } =
-                        &mut *clear_mode
+                    let clear_mode = &mut *clear_mode;
+                    if let resource::TextureClearMode::RenderPass {
+                        ref mut clear_views,
+                        ..
+                    } = *clear_mode
                     {
                         clear_views.clear();
                     }
@@ -382,11 +385,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             None => return Err(SurfaceError::NotConfigured),
         };
 
-        let device = hub.devices.get(present.device_id.0).unwrap().clone();
+        let device = hub.devices.get(present.device_id.0).unwrap();
 
         #[cfg(feature = "trace")]
-        if let Some(ref trace) = device.trace {
-            trace.lock().add(Action::DiscardSurfaceTexture(surface_id));
+        if let Some(ref mut trace) = *device.trace.lock() {
+            trace.add(Action::DiscardSurfaceTexture(surface_id));
         }
 
         {

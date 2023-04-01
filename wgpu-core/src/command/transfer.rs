@@ -570,8 +570,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
         let hub = A::hub(self);
 
-        let cmd_buf_guard = hub.command_buffers.read();
-        let cmd_buf = CommandBuffer::get_encoder(&*cmd_buf_guard, command_encoder_id)?;
+        let cmd_buf = CommandBuffer::get_encoder(hub, command_encoder_id)?;
         let mut cmd_buf_data = cmd_buf.data.lock();
         let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
         let buffer_guard = hub.buffers.read();
@@ -714,16 +713,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let hub = A::hub(self);
 
-        let cmd_buf_guard = hub.command_buffers.read();
-        let cmd_buf = CommandBuffer::get_encoder(&*cmd_buf_guard, command_encoder_id)?;
+        let cmd_buf = CommandBuffer::get_encoder(hub, command_encoder_id)?;
         let mut cmd_buf_data = cmd_buf.data.lock();
         let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
-        let (encoder, _, tracker, buffer_memory_init_actions, texture_memory_actions) =
-            cmd_buf_data.raw_mut();
-        let buffer_guard = hub.buffers.read();
-        let texture_guard = hub.textures.read();
-
-        let device = &cmd_buf.device;
 
         #[cfg(feature = "trace")]
         if let Some(ref mut list) = cmd_buf_data.commands {
@@ -733,6 +725,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 size: *copy_size,
             });
         }
+        let (encoder, _, tracker, buffer_memory_init_actions, texture_memory_actions) =
+            cmd_buf_data.raw_mut();
+        let buffer_guard = hub.buffers.read();
+        let texture_guard = hub.textures.read();
+
+        let device = &cmd_buf.device;
 
         if copy_size.width == 0 || copy_size.height == 0 || copy_size.depth_or_array_layers == 0 {
             log::trace!("Ignoring copy_buffer_to_texture of size 0");
@@ -750,7 +748,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             copy_size,
         )?;
 
-        let (dst_range, dst_base) = extract_texture_selector(destination, copy_size, &dst_texture)?;
+        let (dst_range, dst_base) = extract_texture_selector(destination, copy_size, dst_texture)?;
 
         // Handle texture init *before* dealing with barrier transitions so we
         // have an easier time inserting "immediate-inits" that may be required
@@ -759,7 +757,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             encoder,
             tracker,
             texture_memory_actions,
-            &device,
+            device,
             destination,
             copy_size,
             &texture_guard,
@@ -781,7 +779,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let dst_pending = tracker
             .textures
             .set_single(
-                &dst_texture,
+                dst_texture,
                 destination.texture,
                 dst_range,
                 hal::TextureUses::COPY_DST,
@@ -798,7 +796,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 TransferError::MissingCopyDstUsageFlag(None, Some(destination.texture)).into(),
             );
         }
-        let dst_barrier = dst_pending.map(|pending| pending.into_hal(&dst_texture));
+        let dst_barrier = dst_pending.map(|pending| pending.into_hal(dst_texture));
 
         if !dst_base.aspect.is_one() {
             return Err(TransferError::CopyAspectNotOne.into());
@@ -866,17 +864,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let hub = A::hub(self);
 
-        let cmd_buf_guard = hub.command_buffers.read();
-        let cmd_buf = CommandBuffer::get_encoder(&*cmd_buf_guard, command_encoder_id)?;
+        let cmd_buf = CommandBuffer::get_encoder(hub, command_encoder_id)?;
         let mut cmd_buf_data = cmd_buf.data.lock();
         let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
-        let (encoder, _, tracker, buffer_memory_init_actions, texture_memory_actions) =
-            cmd_buf_data.raw_mut();
-
-        let buffer_guard = hub.buffers.read();
-        let texture_guard = hub.textures.read();
-
-        let device = &cmd_buf.device;
 
         #[cfg(feature = "trace")]
         if let Some(ref mut list) = cmd_buf_data.commands {
@@ -886,6 +876,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 size: *copy_size,
             });
         }
+        let (encoder, _, tracker, buffer_memory_init_actions, texture_memory_actions) =
+            cmd_buf_data.raw_mut();
+
+        let buffer_guard = hub.buffers.read();
+        let texture_guard = hub.textures.read();
+
+        let device = &cmd_buf.device;
 
         if copy_size.width == 0 || copy_size.height == 0 || copy_size.depth_or_array_layers == 0 {
             log::trace!("Ignoring copy_texture_to_buffer of size 0");
@@ -899,7 +896,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (hal_copy_size, array_layer_count) =
             validate_texture_copy_range(source, &src_texture.desc, CopySide::Source, copy_size)?;
 
-        let (src_range, src_base) = extract_texture_selector(source, copy_size, &src_texture)?;
+        let (src_range, src_base) = extract_texture_selector(source, copy_size, src_texture)?;
 
         // Handle texture init *before* dealing with barrier transitions so we
         // have an easier time inserting "immediate-inits" that may be required
@@ -908,7 +905,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             encoder,
             tracker,
             texture_memory_actions,
-            &device,
+            device,
             source,
             copy_size,
             &texture_guard,
@@ -917,7 +914,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let src_pending = tracker
             .textures
             .set_single(
-                &src_texture,
+                src_texture,
                 source.texture,
                 src_range,
                 hal::TextureUses::COPY_SRC,
@@ -945,7 +942,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
             .into());
         }
-        let src_barrier = src_pending.map(|pending| pending.into_hal(&src_texture));
+        let src_barrier = src_pending.map(|pending| pending.into_hal(src_texture));
 
         let (dst_buffer, dst_pending) = tracker
             .buffers
@@ -1036,14 +1033,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let hub = A::hub(self);
 
-        let cmd_buf_guard = hub.command_buffers.read();
-        let cmd_buf = CommandBuffer::get_encoder(&*cmd_buf_guard, command_encoder_id)?;
+        let cmd_buf = CommandBuffer::get_encoder(hub, command_encoder_id)?;
         let mut cmd_buf_data = cmd_buf.data.lock();
         let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
-        let (encoder, _, tracker, _, texture_memory_actions) = cmd_buf_data.raw_mut();
-        let texture_guard = hub.textures.read();
-
-        let device = &cmd_buf.device;
 
         #[cfg(feature = "trace")]
         if let Some(ref mut list) = cmd_buf_data.commands {
@@ -1053,6 +1045,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 size: *copy_size,
             });
         }
+        let (encoder, _, tracker, _, texture_memory_actions) = cmd_buf_data.raw_mut();
+        let texture_guard = hub.textures.read();
+
+        let device = &cmd_buf.device;
 
         if copy_size.width == 0 || copy_size.height == 0 || copy_size.depth_or_array_layers == 0 {
             log::trace!("Ignoring copy_texture_to_texture of size 0");
@@ -1087,9 +1083,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             copy_size,
         )?;
 
-        let (src_range, src_tex_base) = extract_texture_selector(source, copy_size, &src_texture)?;
+        let (src_range, src_tex_base) = extract_texture_selector(source, copy_size, src_texture)?;
         let (dst_range, dst_tex_base) =
-            extract_texture_selector(destination, copy_size, &dst_texture)?;
+            extract_texture_selector(destination, copy_size, dst_texture)?;
         let src_texture_aspects = hal::FormatAspects::from(src_texture.desc.format);
         let dst_texture_aspects = hal::FormatAspects::from(dst_texture.desc.format);
         if src_tex_base.aspect != src_texture_aspects {
@@ -1106,7 +1102,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             encoder,
             tracker,
             texture_memory_actions,
-            &device,
+            device,
             source,
             copy_size,
             &texture_guard,
@@ -1115,7 +1111,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             encoder,
             tracker,
             texture_memory_actions,
-            &device,
+            device,
             destination,
             copy_size,
             &texture_guard,
@@ -1125,7 +1121,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .trackers
             .textures
             .set_single(
-                &src_texture,
+                src_texture,
                 source.texture,
                 src_range,
                 hal::TextureUses::COPY_SRC,
@@ -1144,14 +1140,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         //TODO: try to avoid this the collection. It's needed because both
         // `src_pending` and `dst_pending` try to hold `trackers.textures` mutably.
         let mut barriers: ArrayVec<_, 2> = src_pending
-            .map(|pending| pending.into_hal(&src_texture))
+            .map(|pending| pending.into_hal(src_texture))
             .collect();
 
         let dst_pending = cmd_buf_data
             .trackers
             .textures
             .set_single(
-                &dst_texture,
+                dst_texture,
                 destination.texture,
                 dst_range,
                 hal::TextureUses::COPY_DST,
@@ -1169,7 +1165,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             );
         }
 
-        barriers.extend(dst_pending.map(|pending| pending.into_hal(&dst_texture)));
+        barriers.extend(dst_pending.map(|pending| pending.into_hal(dst_texture)));
 
         let hal_copy_size = hal::CopyExtent {
             width: src_copy_size.width.min(dst_copy_size.width),

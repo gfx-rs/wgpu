@@ -337,20 +337,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let hub = A::hub(self);
 
-        let cmd_buf_guard = hub.command_buffers.read();
-        // Spell out the type, to placate rust-analyzer.
-        // https://github.com/rust-lang/rust-analyzer/issues/12247
-        let cmd_buf: &CommandBuffer<A> =
-            CommandBuffer::get_encoder(&*cmd_buf_guard, encoder_id).map_pass_err(init_scope)?;
+        let cmd_buf = CommandBuffer::get_encoder(hub, encoder_id).map_pass_err(init_scope)?;
         let mut cmd_buf_data = cmd_buf.data.lock();
         let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
-        // will be reset to true if recording is done without errors
-        let (encoder, status, tracker, buffer_memory_init_actions, texture_memory_actions) =
-            cmd_buf_data.raw_mut();
-
-        *status = CommandEncoderStatus::Error;
-        let raw = encoder.open();
-        let device = &cmd_buf.device;
 
         #[cfg(feature = "trace")]
         if let Some(ref mut list) = cmd_buf_data.commands {
@@ -358,6 +347,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 base: BasePass::from_ref(base),
             });
         }
+
+        // will be reset to true if recording is done without errors
+        let (encoder, status, tracker, buffer_memory_init_actions, texture_memory_actions) =
+            cmd_buf_data.raw_mut();
+
+        *status = CommandEncoderStatus::Error;
+        let raw = encoder.open();
+        let device = &cmd_buf.device;
 
         let pipeline_layout_guard = hub.pipeline_layouts.read();
         let bind_group_guard = hub.bind_groups.read();
@@ -591,7 +588,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         raw,
                         &texture_guard,
                         &mut tracker.textures,
-                        &device,
+                        device,
                     );
 
                     state.is_ready().map_pass_err(scope)?;
@@ -780,7 +777,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             raw,
             &texture_guard,
             &mut tracker.textures,
-            &device,
+            device,
         );
 
         Ok(())

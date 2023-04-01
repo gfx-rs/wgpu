@@ -1216,20 +1216,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let hub = A::hub(self);
 
         let (scope, query_reset_state, pending_discard_init_fixups) = {
-            let cmb_guard = hub.command_buffers.read();
-
-            // Spell out the type, to placate rust-analyzer.
-            // https://github.com/rust-lang/rust-analyzer/issues/12247
-            let cmd_buf: &CommandBuffer<A> =
-                CommandBuffer::get_encoder(&*cmb_guard, encoder_id).map_pass_err(init_scope)?;
+            let cmd_buf = CommandBuffer::get_encoder(hub, encoder_id).map_pass_err(init_scope)?;
             let mut cmd_buf_data = cmd_buf.data.lock();
             let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
-            let (encoder, status, tracker, buffer_memory_init_actions, texture_memory_actions) =
-                cmd_buf_data.raw_mut();
-            // close everything while the new command encoder is filled
-            encoder.close();
-            // will be reset to true if recording is done without errors
-            *status = CommandEncoderStatus::Error;
 
             #[cfg(feature = "trace")]
             if let Some(ref mut list) = cmd_buf_data.commands {
@@ -1240,6 +1229,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 });
             }
 
+            let (encoder, status, tracker, buffer_memory_init_actions, texture_memory_actions) =
+                cmd_buf_data.raw_mut();
+            // close everything while the new command encoder is filled
+            encoder.close();
+            // will be reset to true if recording is done without errors
+            *status = CommandEncoderStatus::Error;
             let device = &cmd_buf.device;
             encoder.open_pass(base.label);
 
@@ -1258,7 +1253,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             );
 
             let mut info = RenderPassInfo::start(
-                &device,
+                device,
                 base.label,
                 color_attachments,
                 depth_stencil_attachment,

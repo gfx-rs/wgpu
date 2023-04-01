@@ -809,7 +809,7 @@ impl<A: HalApi> Drop for BindGroup<A> {
                 use hal::Device;
                 self.device.raw.as_ref().unwrap().destroy_bind_group(raw);
             }
-        } 
+        }
     }
 }
 

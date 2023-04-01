@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::{
-    device::{device::Device, DeviceDescriptor},
+    device::{resource::Device, DeviceDescriptor},
     global::Global,
     hal_api::HalApi,
     id::{AdapterId, DeviceId, SurfaceId, Valid},
@@ -767,7 +767,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 self.surfaces
                     .get(id)
                     .map_err(|_| RequestAdapterError::InvalidSurface(id))
-                    .map(|v| v)
             })
             .transpose()?;
         let compatible_surface = compatible_surface.as_ref().map(|surface| surface.as_ref());

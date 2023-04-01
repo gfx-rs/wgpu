@@ -36,7 +36,7 @@ impl<I: Clone + Debug + wgc::id::TypedId> wgc::identity::IdentityHandlerFactory<
         IdentityPassThrough(PhantomData)
     }
 }
-impl wgc::global::GlobalIdentityHandlerFactory for IdentityPassThroughFactory {}
+impl wgc::identity::GlobalIdentityHandlerFactory for IdentityPassThroughFactory {}
 
 pub trait GlobalPlay {
     fn encode_commands<A: wgc::hal_api::HalApi>(
@@ -180,9 +180,9 @@ impl GlobalPlay for wgc::global::Global<IdentityPassThroughFactory> {
             Action::DestroyBuffer(id) => {
                 self.buffer_drop::<A>(id, true);
             }
-            Action::CreateTexture(id, desc) => {
+            Action::CreateTexture(id, tv_id, desc) => {
                 self.device_maintain_ids::<A>(device).unwrap();
-                let (_, error) = self.device_create_texture::<A>(device, &desc, id);
+                let (_, error) = self.device_create_texture::<A>(device, &desc, id, tv_id);
                 if let Some(e) = error {
                     panic!("{:?}", e);
                 }

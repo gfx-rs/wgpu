@@ -98,7 +98,7 @@ impl<A: hal::Api> Example<A> {
             dx12_shader_compiler: wgt::Dx12Compiler::Fxc,
         };
         let instance = unsafe { A::Instance::init(&instance_desc)? };
-        let mut surface = unsafe {
+        let surface = unsafe {
             instance
                 .create_surface(window.raw_display_handle(), window.raw_window_handle())
                 .unwrap()
@@ -116,7 +116,7 @@ impl<A: hal::Api> Example<A> {
             unsafe { adapter.surface_capabilities(&surface) }.ok_or(hal::InstanceError)?;
         log::info!("Surface caps: {:#?}", surface_caps);
 
-        let hal::OpenDevice { device, mut queue } = unsafe {
+        let hal::OpenDevice { device, queue } = unsafe {
             adapter
                 .open(wgt::Features::empty(), &wgt::Limits::default())
                 .unwrap()
@@ -717,7 +717,7 @@ impl<A: hal::Api> Example<A> {
                 None
             };
             self.queue.submit(&[&cmd_buf], fence_param).unwrap();
-            self.queue.present(&mut self.surface, surface_tex).unwrap();
+            self.queue.present(&self.surface, surface_tex).unwrap();
             ctx.used_cmd_bufs.push(cmd_buf);
             ctx.used_views.push(surface_tex_view);
         };

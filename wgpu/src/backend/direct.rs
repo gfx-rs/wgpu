@@ -136,8 +136,9 @@ impl Context {
     ) -> Texture {
         let descriptor = desc.map_label_and_view_formats(|l| l.map(Borrowed), |v| v.to_vec());
         let global = &self.0;
-        let (id, error) =
-            unsafe { global.create_texture_from_hal::<A>(hal_texture, device.id, &descriptor, ()) };
+        let (id, error) = unsafe {
+            global.create_texture_from_hal::<A>(hal_texture, device.id, &descriptor, ())
+        };
         if let Some(cause) = error {
             self.handle_error(
                 &device.error_sink,
@@ -1277,7 +1278,7 @@ impl crate::Context for Context {
         let (id, error) = wgc::gfx_select!(device => global.device_create_texture(
             *device,
             &wgt_desc,
-            (), ()
+            (), Some(())
         ));
         if let Some(cause) = error {
             self.handle_error(

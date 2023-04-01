@@ -334,8 +334,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let data_size = data.len() as wgt::BufferAddress;
 
         #[cfg(feature = "trace")]
-        if let Some(ref trace) = device.trace {
-            let mut trace = trace.lock();
+        if let Some(ref mut trace) = *device.trace.lock() {
             let data_path = trace.make_binary("bin", data);
             trace.add(Action::WriteBuffer {
                 id: buffer_id,
@@ -597,8 +596,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .map_err(|_| DeviceError::Invalid)?;
 
         #[cfg(feature = "trace")]
-        if let Some(ref trace) = device.trace {
-            let mut trace = trace.lock();
+        if let Some(ref mut trace) = *device.trace.lock() {
             let data_path = trace.make_binary("bin", data);
             trace.add(Action::WriteTexture {
                 to: *destination,
@@ -629,7 +627,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (hal_copy_size, array_layer_count) =
             validate_texture_copy_range(destination, &dst.desc, CopySide::Destination, size)?;
 
-        let (selector, dst_base) = extract_texture_selector(destination, size, &dst)?;
+        let (selector, dst_base) = extract_texture_selector(destination, size, dst)?;
 
         if !dst_base.aspect.is_one() {
             return Err(TransferError::CopyAspectNotOne.into());
@@ -740,7 +738,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let transition = trackers
             .textures
             .set_single(
-                &dst,
+                dst,
                 destination.texture,
                 selector,
                 hal::TextureUses::COPY_DST,
@@ -829,7 +827,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
 
         unsafe {
-            encoder.transition_textures(transition.map(|pending| pending.into_hal(&dst)));
+            encoder.transition_textures(transition.map(|pending| pending.into_hal(dst)));
             encoder.transition_buffers(iter::once(barrier));
             encoder.copy_buffer_to_texture(&staging_buffer.raw, dst_raw, regions);
         }
@@ -1102,10 +1100,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             None => continue,
                         };
                         #[cfg(feature = "trace")]
-                        if let Some(ref trace) = device.trace {
-                            trace.lock().add(Action::Submit(
+                        if let Some(ref mut trace) = *device.trace.lock() {
+                            trace.add(Action::Submit(
                                 submit_index,
-                                cmdbuf.data.lock().commands.take().unwrap(),
+                                cmdbuf
+                                    .data
+                                    .lock()
+                                    .as_mut()
+                                    .unwrap()
+                                    .commands
+                                    .take()
+                                    .unwrap(),
                             ));
                         }
                         if !cmdbuf.is_finished() {
@@ -1128,7 +1133,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             // update submission IDs
                             for buffer in cmd_buf_trackers.buffers.used_resources() {
                                 let id = buffer.info.id();
-                                let raw_buf = match &buffer.raw {
+                                let raw_buf = match buffer.raw {
                                     Some(ref raw) => raw,
                                     None => {
                                         return Err(QueueSubmitError::DestroyedBuffer(id.0));
@@ -1154,7 +1159,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             }
                             for texture in cmd_buf_trackers.textures.used_resources() {
                                 let id = texture.info.id();
-                                let should_extend = match texture.inner.as_ref().unwrap() {
+                                let should_extend = match *texture.inner.as_ref().unwrap() {
                                     TextureInner::Native { raw: None } => {
                                         return Err(QueueSubmitError::DestroyedTexture(id.0));
                                     }
@@ -1305,7 +1310,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 .set_from_usage_scope(&*texture_guard, &used_surface_textures);
                             let texture_barriers = trackers.textures.drain().map(|pending| {
                                 let tex = unsafe { texture_guard.get_unchecked(pending.id) };
-                                pending.into_hal(&tex)
+                                pending.into_hal(tex)
                             });
                             let present = unsafe {
                                 baked.encoder.transition_textures(texture_barriers);
@@ -1330,7 +1335,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                     used_surface_textures.set_size(texture_guard.len());
                     for (&id, texture) in pending_writes.dst_textures.iter() {
-                        match texture.inner.as_ref().unwrap() {
+                        match *texture.inner.as_ref().unwrap() {
                             TextureInner::Native { raw: None } => {
                                 return Err(QueueSubmitError::DestroyedTexture(id));
                             }
@@ -1359,7 +1364,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .set_from_usage_scope(&*texture_guard, &used_surface_textures);
                         let texture_barriers = trackers.textures.drain().map(|pending| {
                             let tex = unsafe { texture_guard.get_unchecked(pending.id) };
-                            pending.into_hal(&tex)
+                            pending.into_hal(tex)
                         });
 
                         unsafe {

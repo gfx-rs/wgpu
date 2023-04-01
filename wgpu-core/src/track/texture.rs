@@ -148,24 +148,23 @@ impl ComplexTextureState {
     }
 }
 
+#[derive(Debug)]
+struct TextureBindGroupStateData<A: HalApi> {
+    id: Valid<TextureId>,
+    selector: Option<TextureSelector>,
+    texture: Arc<Texture<A>>,
+    usage: TextureUses,
+}
+
 /// Stores all the textures that a bind group stores.
 #[derive(Debug)]
 pub(crate) struct TextureBindGroupState<A: HalApi> {
-    textures: Vec<(
-        Valid<TextureId>,
-        Option<TextureSelector>,
-        Arc<Texture<A>>,
-        TextureUses,
-    )>,
-
-    _phantom: PhantomData<A>,
+    textures: Vec<TextureBindGroupStateData<A>>,
 }
 impl<A: HalApi> TextureBindGroupState<A> {
     pub fn new() -> Self {
         Self {
             textures: Vec::new(),
-
-            _phantom: PhantomData,
         }
     }
 
@@ -174,13 +173,12 @@ impl<A: HalApi> TextureBindGroupState<A> {
     /// When this list of states is merged into a tracker, the memory
     /// accesses will be in a constant assending order.
     pub(crate) fn optimize(&mut self) {
-        self.textures
-            .sort_unstable_by_key(|&(id, _, _, _)| id.0.unzip().0);
+        self.textures.sort_unstable_by_key(|v| v.id.0.unzip().0);
     }
 
     /// Returns a list of all textures tracked. May contain duplicates.
     pub fn used_resources(&self) -> impl Iterator<Item = &Arc<Texture<A>>> + '_ {
-        self.textures.iter().map(|(_, _, texture, _)| texture)
+        self.textures.iter().map(|v| &v.texture)
     }
 
     /// Adds the given resource with the given state.
@@ -193,10 +191,14 @@ impl<A: HalApi> TextureBindGroupState<A> {
     ) -> Option<&'a Texture<A>> {
         let resource = storage.get(id).ok()?;
 
-        self.textures
-            .push((Valid(id), selector, resource.clone(), state));
+        self.textures.push(TextureBindGroupStateData {
+            id: Valid(id),
+            selector,
+            texture: resource.clone(),
+            usage: state,
+        });
 
-        Some(&resource)
+        Some(resource)
     }
 }
 
@@ -330,8 +332,8 @@ impl<A: HalApi> TextureUsageScope<A> {
         storage: &Storage<Texture<A>, TextureId>,
         bind_group: &TextureBindGroupState<A>,
     ) -> Result<(), UsageConflict> {
-        for &(id, ref selector, ref _texture, state) in &bind_group.textures {
-            unsafe { self.merge_single(storage, id, selector.clone(), state)? };
+        for t in &bind_group.textures {
+            unsafe { self.merge_single(storage, t.id, t.selector.clone(), t.usage)? };
         }
 
         Ok(())
@@ -490,7 +492,7 @@ impl<A: HalApi> TextureTracker<A> {
                 None,
                 ResourceMetadataProvider::Direct {
                     epoch,
-                    resource: Cow::Owned(resource.clone()),
+                    resource: Cow::Owned(resource),
                 },
             )
         };
@@ -656,8 +658,8 @@ impl<A: HalApi> TextureTracker<A> {
             self.set_size(incoming_size);
         }
 
-        for &(id, _, _, _) in bind_group_state.textures.iter() {
-            let (index32, _, _) = id.0.unzip();
+        for t in bind_group_state.textures.iter() {
+            let (index32, _, _) = t.id.0.unzip();
             let index = index32 as usize;
             scope.tracker_assert_in_bounds(index);
 

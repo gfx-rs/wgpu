@@ -20,7 +20,9 @@ use self::memory_init::CommandBufferTextureMemoryActions;
 
 use crate::device::Device;
 use crate::error::{ErrorFormatter, PrettyError};
+use crate::hub::Hub;
 use crate::id::CommandBufferId;
+
 use crate::init_tracker::BufferInitTrackerAction;
 use crate::resource::{Resource, ResourceInfo};
 use crate::track::{Tracker, UsageScope};
@@ -153,7 +155,7 @@ impl<A: HalApi> Drop for CommandBuffer<A> {
         if self.data.lock().is_none() {
             return;
         }
-        let mut baked = self.into_baked();
+        let mut baked = self.extract_baked_commands();
         unsafe {
             baked.encoder.reset_all(baked.list.into_iter());
         }
@@ -249,11 +251,11 @@ impl<A: HalApi> CommandBuffer<A> {
 
         let buffer_barriers = base.buffers.drain().map(|pending| {
             let buf = unsafe { buffer_guard.get_unchecked(pending.id) };
-            pending.into_hal(&buf)
+            pending.into_hal(buf)
         });
         let texture_barriers = base.textures.drain().map(|pending| {
             let tex = unsafe { texture_guard.get_unchecked(pending.id) };
-            pending.into_hal(&tex)
+            pending.into_hal(tex)
         });
 
         unsafe {
@@ -264,13 +266,17 @@ impl<A: HalApi> CommandBuffer<A> {
 }
 
 impl<A: HalApi> CommandBuffer<A> {
-    fn get_encoder(
-        storage: &Storage<Self, id::CommandEncoderId>,
+    fn get_encoder<G>(
+        hub: &Hub<A, G>,
         id: id::CommandEncoderId,
-    ) -> Result<&Self, CommandEncoderError> {
+    ) -> Result<Arc<Self>, CommandEncoderError>
+    where
+        G: GlobalIdentityHandlerFactory,
+    {
+        let storage = hub.command_buffers.read();
         match storage.get(id) {
             Ok(cmd_buf) => match cmd_buf.data.lock().as_ref().unwrap().status {
-                CommandEncoderStatus::Recording => Ok(&cmd_buf),
+                CommandEncoderStatus::Recording => Ok(cmd_buf.clone()),
                 CommandEncoderStatus::Finished => Err(CommandEncoderError::NotRecording),
                 CommandEncoderStatus::Error => Err(CommandEncoderError::Invalid),
             },
@@ -285,7 +291,7 @@ impl<A: HalApi> CommandBuffer<A> {
         }
     }
 
-    pub(crate) fn into_baked(&mut self) -> BakedCommands<A> {
+    pub(crate) fn extract_baked_commands(&mut self) -> BakedCommands<A> {
         let data = self.data.lock().take().unwrap();
         BakedCommands {
             encoder: data.encoder.raw,
@@ -298,7 +304,7 @@ impl<A: HalApi> CommandBuffer<A> {
 
     pub(crate) fn from_arc_into_baked(self: Arc<Self>) -> BakedCommands<A> {
         if let Ok(mut command_buffer) = Arc::try_unwrap(self) {
-            command_buffer.into_baked()
+            command_buffer.extract_baked_commands()
         } else {
             panic!("CommandBuffer cannot be destroyed because is still in use");
         }
@@ -313,11 +319,11 @@ impl<A: HalApi> Resource<CommandBufferId> for CommandBuffer<A> {
     }
 
     fn label(&self) -> String {
-        if let Some(label) = &self.data.lock().as_ref().unwrap().encoder.label {
-            label.clone()
-        } else {
-            String::new()
-        }
+        let str = match self.data.lock().as_ref().unwrap().encoder.label.as_ref() {
+            Some(label) => label.clone(),
+            _ => String::new(),
+        };
+        str
     }
 }
 
@@ -462,8 +468,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let hub = A::hub(self);
 
-        let cmd_buf_guard = hub.command_buffers.read();
-        let cmd_buf = CommandBuffer::get_encoder(&*cmd_buf_guard, encoder_id)?;
+        let cmd_buf = CommandBuffer::get_encoder(hub, encoder_id)?;
         let mut cmd_buf_data = cmd_buf.data.lock();
         let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
         #[cfg(feature = "trace")]
@@ -487,8 +492,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let hub = A::hub(self);
 
-        let cmd_buf_guard = hub.command_buffers.read();
-        let cmd_buf = CommandBuffer::get_encoder(&*cmd_buf_guard, encoder_id)?;
+        let cmd_buf = CommandBuffer::get_encoder(hub, encoder_id)?;
         let mut cmd_buf_data = cmd_buf.data.lock();
         let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
 
@@ -512,8 +516,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let hub = A::hub(self);
 
-        let cmd_buf_guard = hub.command_buffers.read();
-        let cmd_buf = CommandBuffer::get_encoder(&*cmd_buf_guard, encoder_id)?;
+        let cmd_buf = CommandBuffer::get_encoder(hub, encoder_id)?;
         let mut cmd_buf_data = cmd_buf.data.lock();
         let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
 

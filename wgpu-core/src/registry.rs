@@ -76,10 +76,7 @@ impl<I: id::TypedId + Copy, T: Resource<I>, F: IdentityHandlerFactory<I>> Regist
         }
     }
     pub(crate) fn try_get(&self, id: I) -> Result<Option<Arc<T>>, InvalidId> {
-        self.storage
-            .read()
-            .try_get(id)
-            .map(|o| o.map(|v| v.clone()))
+        self.storage.read().try_get(id).map(|o| o.cloned())
     }
     pub(crate) fn get(&self, id: I) -> Result<Arc<T>, InvalidId> {
         self.storage.read().get(id).map(|v| v.clone())
@@ -115,7 +112,7 @@ impl<I: id::TypedId + Copy, T: Resource<I>, F: IdentityHandlerFactory<I>> Regist
                 if label.is_empty() {
                     format!("<{}-{:?}>", type_name, id.unzip())
                 } else {
-                    label.to_string()
+                    label
                 }
             }
             Err(_) => format!(

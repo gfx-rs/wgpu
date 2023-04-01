@@ -195,7 +195,7 @@ enum BufferMapCallbackInner {
 
 impl Debug for BufferMapCallbackInner {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
+        match *self {
             BufferMapCallbackInner::Rust { callback: _ } => f.debug_struct("Rust").finish(),
             BufferMapCallbackInner::C { inner: _ } => f.debug_struct("C").finish(),
         }
@@ -442,7 +442,7 @@ pub(crate) enum TextureInner<A: HalApi> {
 impl<A: HalApi> TextureInner<A> {
     pub fn as_raw(&self) -> Option<&A::Texture> {
         match *self {
-            Self::Native { raw: Some(ref tex) } => Some(&tex),
+            Self::Native { raw: Some(ref tex) } => Some(tex),
             Self::Native { raw: None } => None,
             Self::Surface { ref raw, .. } => Some(raw.borrow()),
         }
@@ -479,14 +479,21 @@ impl<A: HalApi> Drop for Texture<A> {
     fn drop(&mut self) {
         use hal::Device;
         let mut clear_mode = self.clear_mode.write();
-        if let TextureClearMode::RenderPass { clear_views, .. } = &mut *clear_mode {
+        let clear_mode = &mut *clear_mode;
+        if let TextureClearMode::RenderPass {
+            ref mut clear_views,
+            ..
+        } = *clear_mode
+        {
             clear_views.clear();
         }
-        if let Some(inner) = self.inner.take() {
-            if let TextureInner::Native { raw: Some(raw) } = inner {
-                unsafe {
-                    self.device.raw.as_ref().unwrap().destroy_texture(raw);
-                }
+        if self.inner.is_none() {
+            return;
+        }
+        let inner = self.inner.take().unwrap();
+        if let TextureInner::Native { raw: Some(raw) } = inner {
+            unsafe {
+                self.device.raw.as_ref().unwrap().destroy_texture(raw);
             }
         }
     }
@@ -499,7 +506,7 @@ impl<A: HalApi> Texture<A> {
         mip_level: u32,
         depth_or_layer: u32,
     ) -> &'a A::TextureView {
-        match clear_mode {
+        match *clear_mode {
             TextureClearMode::BufferCopy => {
                 panic!("Given texture is cleared with buffer copies, not render passes")
             }
@@ -588,7 +595,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let surface = self.surfaces.get(id).ok();
         let hal_surface = surface
             .as_ref()
-            .and_then(|surface| A::get_surface(&surface))
+            .and_then(|surface| A::get_surface(surface))
             .map(|surface| &*surface.raw);
 
         hal_surface_callback(hal_surface)

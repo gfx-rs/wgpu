@@ -87,72 +87,25 @@ impl<A: HalApi> SuspectedResources<A> {
     }
 
     pub(crate) fn add_render_bundle_scope(&mut self, trackers: &RenderBundleScope<A>) {
-        self.buffers.extend(
-            trackers
-                .buffers
-                .used_resources()
-                .map(|r| r.clone())
-                .into_iter(),
-        );
-        self.textures.extend(
-            trackers
-                .textures
-                .used_resources()
-                .map(|r| r.clone())
-                .into_iter(),
-        );
-        self.bind_groups.extend(
-            trackers
-                .bind_groups
-                .used_resources()
-                .map(|r| r.clone())
-                .into_iter(),
-        );
-        self.render_pipelines.extend(
-            trackers
-                .render_pipelines
-                .used_resources()
-                .map(|r| r.clone())
-                .into_iter(),
-        );
-        self.query_sets.extend(
-            trackers
-                .query_sets
-                .used_resources()
-                .map(|r| r.clone())
-                .into_iter(),
-        );
+        self.buffers
+            .extend(trackers.buffers.used_resources().cloned());
+        self.textures
+            .extend(trackers.textures.used_resources().cloned());
+        self.bind_groups
+            .extend(trackers.bind_groups.used_resources().cloned());
+        self.render_pipelines
+            .extend(trackers.render_pipelines.used_resources().cloned());
+        self.query_sets
+            .extend(trackers.query_sets.used_resources().cloned());
     }
 
     pub(crate) fn add_bind_group_states(&mut self, trackers: &BindGroupStates<A>) {
-        self.buffers.extend(
-            trackers
-                .buffers
-                .used_resources()
-                .map(|r| r.clone())
-                .into_iter(),
-        );
-        self.textures.extend(
-            trackers
-                .textures
-                .used_resources()
-                .map(|r| r.clone())
-                .into_iter(),
-        );
-        self.texture_views.extend(
-            trackers
-                .views
-                .used_resources()
-                .map(|r| r.clone())
-                .into_iter(),
-        );
-        self.samplers.extend(
-            trackers
-                .samplers
-                .used_resources()
-                .map(|r| r.clone())
-                .into_iter(),
-        );
+        self.buffers
+            .extend(trackers.buffers.used_resources().cloned());
+        self.textures
+            .extend(trackers.textures.used_resources().cloned());
+        self.texture_views.extend(trackers.views.used_resources());
+        self.samplers.extend(trackers.samplers.used_resources());
     }
 }
 
@@ -410,12 +363,10 @@ impl<A: HalApi> LifetimeTracker<A> {
     pub fn post_submit(&mut self) {
         self.suspected_resources
             .buffers
-            .extend(self.future_suspected_buffers.drain(..).map(|stored| stored));
-        self.suspected_resources.textures.extend(
-            self.future_suspected_textures
-                .drain(..)
-                .map(|stored| stored),
-        );
+            .append(&mut self.future_suspected_buffers);
+        self.suspected_resources
+            .textures
+            .append(&mut self.future_suspected_textures);
     }
 
     pub(crate) fn map(&mut self, value: &Arc<Buffer<A>>) {
@@ -560,7 +511,7 @@ impl<A: HalApi> LifetimeTracker<A> {
         &mut self,
         hub: &Hub<A, G>,
         trackers: &Mutex<Tracker<A>>,
-        #[cfg(feature = "trace")] trace: Option<&Mutex<trace::Trace>>,
+        #[cfg(feature = "trace")] mut trace: Option<&mut trace::Trace>,
     ) {
         profiling::scope!("triage_suspected");
 
@@ -573,8 +524,8 @@ impl<A: HalApi> LifetimeTracker<A> {
                 if trackers.bundles.remove_abandoned(id) {
                     log::debug!("Bundle {:?} will be destroyed", id);
                     #[cfg(feature = "trace")]
-                    if let Some(t) = trace {
-                        t.lock().add(trace::Action::DestroyRenderBundle(id));
+                    if let Some(ref mut t) = trace {
+                        t.add(trace::Action::DestroyRenderBundle(id.0));
                     }
 
                     if let Some(res) = hub
@@ -596,8 +547,8 @@ impl<A: HalApi> LifetimeTracker<A> {
                 if trackers.bind_groups.remove_abandoned(id) {
                     log::debug!("Bind group {:?} will be destroyed", id);
                     #[cfg(feature = "trace")]
-                    if let Some(t) = trace {
-                        t.lock().add(trace::Action::DestroyBindGroup(id));
+                    if let Some(ref mut t) = trace {
+                        t.add(trace::Action::DestroyBindGroup(id.0));
                     }
 
                     if let Some(res) = hub
@@ -633,8 +584,8 @@ impl<A: HalApi> LifetimeTracker<A> {
                 if trackers.views.remove_abandoned(id) {
                     log::debug!("Texture view {:?} will be destroyed", id);
                     #[cfg(feature = "trace")]
-                    if let Some(t) = trace {
-                        t.lock().add(trace::Action::DestroyTextureView(id));
+                    if let Some(ref mut t) = trace {
+                        t.add(trace::Action::DestroyTextureView(id.0));
                     }
 
                     if let Some(res) = hub
@@ -665,8 +616,8 @@ impl<A: HalApi> LifetimeTracker<A> {
                 if trackers.textures.remove_abandoned(id) {
                     log::debug!("Texture {:?} will be destroyed", id);
                     #[cfg(feature = "trace")]
-                    if let Some(t) = trace {
-                        t.lock().add(trace::Action::DestroyTexture(id));
+                    if let Some(ref mut t) = trace {
+                        t.add(trace::Action::DestroyTexture(id.0));
                     }
 
                     if let Some(res) = hub.textures.unregister_locked(id.0, &mut *textures_locked) {
@@ -677,8 +628,9 @@ impl<A: HalApi> LifetimeTracker<A> {
                             .find(|a| a.index == submit_index)
                             .map_or(&mut self.free_resources, |a| &mut a.last_resources);
 
-                        if let resource::TextureClearMode::RenderPass { clear_views, .. } =
-                            &*res.clear_mode.read()
+                        if let &resource::TextureClearMode::RenderPass {
+                            ref clear_views, ..
+                        } = &*res.clear_mode.read()
                         {
                             non_referenced_resources
                                 .texture_views
@@ -699,8 +651,8 @@ impl<A: HalApi> LifetimeTracker<A> {
                 if trackers.samplers.remove_abandoned(id) {
                     log::debug!("Sampler {:?} will be destroyed", id);
                     #[cfg(feature = "trace")]
-                    if let Some(t) = trace {
-                        t.lock().add(trace::Action::DestroySampler(id));
+                    if let Some(ref mut t) = trace {
+                        t.add(trace::Action::DestroySampler(id.0));
                     }
 
                     if let Some(res) = hub.samplers.unregister_locked(id.0, &mut *samplers_locked) {
@@ -725,14 +677,15 @@ impl<A: HalApi> LifetimeTracker<A> {
                 if trackers.buffers.remove_abandoned(id) {
                     log::debug!("Buffer {:?} will be destroyed", id);
                     #[cfg(feature = "trace")]
-                    if let Some(t) = trace {
-                        t.lock().add(trace::Action::DestroyBuffer(id));
+                    if let Some(ref mut t) = trace {
+                        t.add(trace::Action::DestroyBuffer(id.0));
                     }
 
                     if let Some(res) = hub.buffers.unregister_locked(id.0, &mut *buffers_locked) {
                         let submit_index = res.info.submission_index();
-                        if let resource::BufferMapState::Init { stage_buffer, .. } =
-                            &*res.map_state.lock()
+                        if let resource::BufferMapState::Init {
+                            ref stage_buffer, ..
+                        } = *res.map_state.lock()
                         {
                             self.free_resources.buffers.push(stage_buffer.clone());
                         }
@@ -756,8 +709,8 @@ impl<A: HalApi> LifetimeTracker<A> {
                 if trackers.compute_pipelines.remove_abandoned(id) {
                     log::debug!("Compute pipeline {:?} will be destroyed", id);
                     #[cfg(feature = "trace")]
-                    if let Some(t) = trace {
-                        t.lock().add(trace::Action::DestroyComputePipeline(id));
+                    if let Some(ref mut t) = trace {
+                        t.add(trace::Action::DestroyComputePipeline(id.0));
                     }
 
                     if let Some(res) = hub
@@ -785,8 +738,8 @@ impl<A: HalApi> LifetimeTracker<A> {
                 if trackers.render_pipelines.remove_abandoned(id) {
                     log::debug!("Render pipeline {:?} will be destroyed", id);
                     #[cfg(feature = "trace")]
-                    if let Some(t) = trace {
-                        t.lock().add(trace::Action::DestroyRenderPipeline(id));
+                    if let Some(ref mut t) = trace {
+                        t.add(trace::Action::DestroyRenderPipeline(id.0));
                     }
 
                     if let Some(res) = hub
@@ -814,8 +767,8 @@ impl<A: HalApi> LifetimeTracker<A> {
                 if pipeline_layouts_locked.is_unique(id.0).unwrap() {
                     log::debug!("Pipeline layout {:?} will be destroyed", id);
                     #[cfg(feature = "trace")]
-                    if let Some(t) = trace {
-                        t.lock().add(trace::Action::DestroyPipelineLayout(id));
+                    if let Some(ref mut t) = trace {
+                        t.add(trace::Action::DestroyPipelineLayout(id.0));
                     }
 
                     if let Some(lay) = hub
@@ -844,8 +797,8 @@ impl<A: HalApi> LifetimeTracker<A> {
                 if bind_group_layouts_locked.is_unique(id.0).unwrap() {
                     log::debug!("Bind group layout {:?} will be destroyed", id);
                     #[cfg(feature = "trace")]
-                    if let Some(t) = trace {
-                        t.lock().add(trace::Action::DestroyBindGroupLayout(id));
+                    if let Some(ref mut t) = trace {
+                        t.add(trace::Action::DestroyBindGroupLayout(id.0));
                     }
                     if let Some(lay) = hub
                         .bind_group_layouts
@@ -866,7 +819,7 @@ impl<A: HalApi> LifetimeTracker<A> {
                 if trackers.query_sets.remove_abandoned(id) {
                     log::debug!("Query set {:?} will be destroyed", id);
                     // #[cfg(feature = "trace")]
-                    // trace.map(|t| t.lock().add(trace::Action::DestroyComputePipeline(id.0)));
+                    // trace.map(|t| t.add(trace::Action::DestroyComputePipeline(id.0)));
                     if let Some(res) = hub
                         .query_sets
                         .unregister_locked(id.0, &mut *query_sets_locked)

@@ -302,13 +302,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     ) -> Result<(), QueryError> {
         let hub = A::hub(self);
 
-        let cmd_buf_guard = hub.command_buffers.read();
-
-        let cmd_buf = CommandBuffer::get_encoder(&cmd_buf_guard, command_encoder_id)?;
+        let cmd_buf = CommandBuffer::get_encoder(hub, command_encoder_id)?;
         let mut cmd_buf_data = cmd_buf.data.lock();
         let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
-        let (encoder, _, tracker, _, _) = cmd_buf_data.raw_mut();
-        let raw_encoder = encoder.open();
 
         #[cfg(feature = "trace")]
         if let Some(ref mut list) = cmd_buf_data.commands {
@@ -317,6 +313,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 query_index,
             });
         }
+
+        let (encoder, _, tracker, _, _) = cmd_buf_data.raw_mut();
+        let raw_encoder = encoder.open();
 
         let query_set_guard = hub.query_sets.read();
         let query_set = tracker
@@ -340,13 +339,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     ) -> Result<(), QueryError> {
         let hub = A::hub(self);
 
-        let cmd_buf_guard = hub.command_buffers.read();
-
-        let cmd_buf = CommandBuffer::get_encoder(&cmd_buf_guard, command_encoder_id)?;
+        let cmd_buf = CommandBuffer::get_encoder(hub, command_encoder_id)?;
         let mut cmd_buf_data = cmd_buf.data.lock();
         let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
-        let (encoder, _, tracker, buffer_memory_init_actions, _) = cmd_buf_data.raw_mut();
-        let raw_encoder = encoder.open();
 
         #[cfg(feature = "trace")]
         if let Some(ref mut list) = cmd_buf_data.commands {
@@ -358,6 +353,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 destination_offset,
             });
         }
+
+        let (encoder, _, tracker, buffer_memory_init_actions, _) = cmd_buf_data.raw_mut();
+        let raw_encoder = encoder.open();
 
         if destination_offset % wgt::QUERY_RESOLVE_BUFFER_ALIGNMENT != 0 {
             return Err(QueryError::Resolve(ResolveError::BufferOffsetAlignment));

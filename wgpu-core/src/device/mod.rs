@@ -18,13 +18,13 @@ use wgt::{BufferAddress, TextureFormat};
 
 use std::{iter, num::NonZeroU32, ptr};
 
-pub mod device;
 pub mod global;
 mod life;
 pub mod queue;
+pub mod resource;
 #[cfg(any(feature = "trace", feature = "replay"))]
 pub mod trace;
-pub use device::Device;
+pub use resource::Device;
 
 pub const SHADER_STAGE_COUNT: usize = 3;
 // Should be large enough for the largest possible texture row. This

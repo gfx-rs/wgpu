@@ -43,7 +43,9 @@ impl<Id: TypedId, T: Resource<Id>> StatelessBindGroupSate<Id, T> {
 
     /// Returns a list of all resources tracked. May contain duplicates.
     pub fn used_resources(&self) -> impl Iterator<Item = Arc<T>> + '_ {
-        self.resources.iter().map(|(_, resource)| resource.clone())
+        self.resources
+            .iter()
+            .map(|&(_, ref resource)| resource.clone())
     }
 
     /// Adds the given resource.
@@ -52,7 +54,7 @@ impl<Id: TypedId, T: Resource<Id>> StatelessBindGroupSate<Id, T> {
 
         self.resources.push((Valid(id), resource.clone()));
 
-        Some(&resource)
+        Some(resource)
     }
 }
 
@@ -134,7 +136,7 @@ impl<A: HalApi, Id: TypedId, T: Resource<Id>> StatelessTracker<A, Id, T> {
             self.metadata.insert(index, epoch, resource.clone());
         }
 
-        Some(&resource)
+        Some(resource)
     }
 
     /// Adds the given resources from the given tracker.

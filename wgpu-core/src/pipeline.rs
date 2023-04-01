@@ -1,3 +1,5 @@
+#[cfg(any(feature = "trace", feature = "replay"))]
+use crate::device::trace;
 use crate::{
     binding_model::{CreateBindGroupLayoutError, CreatePipelineLayoutError},
     command::ColorAttachmentError,
@@ -54,10 +56,8 @@ impl<A: HalApi> Drop for ShaderModule<A> {
     fn drop(&mut self) {
         if let Some(raw) = self.raw.take() {
             #[cfg(feature = "trace")]
-            if let Some(ref trace) = self.device.trace {
-                trace
-                    .lock()
-                    .add(trace::Action::DestroyShaderModule(self.info.id()));
+            if let Some(ref mut trace) = *self.device.trace.lock() {
+                trace.add(trace::Action::DestroyShaderModule(self.info.id().0));
             }
             unsafe {
                 use hal::Device;

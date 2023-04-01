@@ -78,9 +78,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     pub fn clear_backend<A: HalApi>(&self, _dummy: ()) {
         let hub = A::hub(self);
-        let mut surfaces_locked = self.surfaces.write();
+        let surfaces_locked = self.surfaces.read();
         // this is used for tests, which keep the adapter
-        hub.clear(&mut surfaces_locked, false);
+        hub.clear(&surfaces_locked, false);
     }
 
     pub fn generate_report(&self) -> GlobalReport {
@@ -129,7 +129,7 @@ impl<G: GlobalIdentityHandlerFactory> Drop for Global<G> {
         // destroy hubs before the instance gets dropped
         #[cfg(all(feature = "vulkan", not(target_arch = "wasm32")))]
         {
-            self.hubs.vulkan.clear(&mut surfaces_locked, true);
+            self.hubs.vulkan.clear(&surfaces_locked, true);
         }
         #[cfg(all(feature = "metal", any(target_os = "macos", target_os = "ios")))]
         {
@@ -137,15 +137,15 @@ impl<G: GlobalIdentityHandlerFactory> Drop for Global<G> {
         }
         #[cfg(all(feature = "dx12", windows))]
         {
-            self.hubs.dx12.clear(&mut surfaces_locked, true);
+            self.hubs.dx12.clear(&surfaces_locked, true);
         }
         #[cfg(all(feature = "dx11", windows))]
         {
-            self.hubs.dx11.clear(&mut surfaces_locked, true);
+            self.hubs.dx11.clear(&surfaces_locked, true);
         }
         #[cfg(feature = "gles")]
         {
-            self.hubs.gl.clear(&mut surfaces_locked, true);
+            self.hubs.gl.clear(&surfaces_locked, true);
         }
 
         // destroy surfaces
