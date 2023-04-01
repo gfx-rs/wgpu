@@ -1,5 +1,4 @@
 use crate::common::{initialize_test, TestParameters, TestingContext};
-use std::num::NonZeroU32;
 use wasm_bindgen_test::*;
 use wgpu::util::{align_to, DeviceExt};
 
@@ -230,7 +229,7 @@ fn capture_rgba_u8_texture(
             buffer: &output_buffer,
             layout: wgpu::ImageDataLayout {
                 offset: 0,
-                bytes_per_row: NonZeroU32::new(bytes_per_row),
+                bytes_per_row: Some(bytes_per_row),
                 rows_per_image: None,
             },
         },

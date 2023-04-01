@@ -11,13 +11,13 @@ pub(crate) use allocation::{
 // This is the fast path using gpu_allocator to suballocate buffers and textures.
 #[cfg(feature = "windows_rs")]
 mod allocation {
-    use native::WeakPtr;
+    use d3d12::WeakPtr;
     use parking_lot::Mutex;
     use std::ptr;
     use wgt::assertions::StrictAssertUnwrapExt;
     use winapi::{
         um::{
-            d3d12::{self, ID3D12Resource},
+            d3d12::{self as d3d12_ty, ID3D12Resource},
             winnt::HRESULT,
         },
         Interface,
@@ -39,7 +39,7 @@ mod allocation {
     }
 
     pub(crate) fn create_allocator_wrapper(
-        raw: &native::Device,
+        raw: &d3d12::Device,
     ) -> Result<Option<Mutex<GpuAllocatorWrapper>>, crate::DeviceError> {
         let device = raw.as_ptr();
 
@@ -58,7 +58,7 @@ mod allocation {
     pub(crate) fn create_buffer_resource(
         device: &crate::dx12::Device,
         desc: &crate::BufferDescriptor,
-        raw_desc: d3d12::D3D12_RESOURCE_DESC,
+        raw_desc: d3d12_ty::D3D12_RESOURCE_DESC,
         resource: &mut WeakPtr<ID3D12Resource>,
     ) -> Result<(HRESULT, Option<AllocationWrapper>), crate::DeviceError> {
         let is_cpu_read = desc.usage.contains(crate::BufferUses::MAP_READ);
@@ -95,9 +95,9 @@ mod allocation {
                 allocation.heap().as_winapi() as *mut _,
                 allocation.offset(),
                 &raw_desc,
-                d3d12::D3D12_RESOURCE_STATE_COMMON,
+                d3d12_ty::D3D12_RESOURCE_STATE_COMMON,
                 ptr::null(),
-                &d3d12::ID3D12Resource::uuidof(),
+                &d3d12_ty::ID3D12Resource::uuidof(),
                 resource.mut_void(),
             )
         };
@@ -108,7 +108,7 @@ mod allocation {
     pub(crate) fn create_texture_resource(
         device: &crate::dx12::Device,
         desc: &crate::TextureDescriptor,
-        raw_desc: d3d12::D3D12_RESOURCE_DESC,
+        raw_desc: d3d12_ty::D3D12_RESOURCE_DESC,
         resource: &mut WeakPtr<ID3D12Resource>,
     ) -> Result<(HRESULT, Option<AllocationWrapper>), crate::DeviceError> {
         let location = MemoryLocation::GpuOnly;
@@ -136,9 +136,9 @@ mod allocation {
                 allocation.heap().as_winapi() as *mut _,
                 allocation.offset(),
                 &raw_desc,
-                d3d12::D3D12_RESOURCE_STATE_COMMON,
+                d3d12_ty::D3D12_RESOURCE_STATE_COMMON,
                 ptr::null(), // clear value
-                &d3d12::ID3D12Resource::uuidof(),
+                &d3d12_ty::ID3D12Resource::uuidof(),
                 resource.mut_void(),
             )
         };
@@ -205,18 +205,18 @@ mod allocation {
 // Tracking issue for when it can be removed: https://github.com/gfx-rs/wgpu/issues/3207
 #[cfg(not(feature = "windows_rs"))]
 mod allocation {
-    use native::WeakPtr;
+    use d3d12::WeakPtr;
     use parking_lot::Mutex;
     use std::ptr;
     use winapi::{
         um::{
-            d3d12::{self, ID3D12Resource},
+            d3d12::{self as d3d12_ty, ID3D12Resource},
             winnt::HRESULT,
         },
         Interface,
     };
 
-    const D3D12_HEAP_FLAG_CREATE_NOT_ZEROED: u32 = d3d12::D3D12_HEAP_FLAG_NONE; // TODO: find the exact value
+    const D3D12_HEAP_FLAG_CREATE_NOT_ZEROED: u32 = d3d12_ty::D3D12_HEAP_FLAG_NONE; // TODO: find the exact value
 
     // Allocator isn't needed when not suballocating with gpu_allocator
     #[derive(Debug)]
@@ -227,7 +227,7 @@ mod allocation {
     pub(crate) struct AllocationWrapper {}
 
     pub(crate) fn create_allocator_wrapper(
-        _raw: &native::Device,
+        _raw: &d3d12::Device,
     ) -> Result<Option<Mutex<GpuAllocatorWrapper>>, crate::DeviceError> {
         Ok(None)
     }
@@ -235,26 +235,26 @@ mod allocation {
     pub(crate) fn create_buffer_resource(
         device: &crate::dx12::Device,
         desc: &crate::BufferDescriptor,
-        raw_desc: d3d12::D3D12_RESOURCE_DESC,
+        raw_desc: d3d12_ty::D3D12_RESOURCE_DESC,
         resource: &mut WeakPtr<ID3D12Resource>,
     ) -> Result<(HRESULT, Option<AllocationWrapper>), crate::DeviceError> {
         let is_cpu_read = desc.usage.contains(crate::BufferUses::MAP_READ);
         let is_cpu_write = desc.usage.contains(crate::BufferUses::MAP_WRITE);
 
-        let heap_properties = d3d12::D3D12_HEAP_PROPERTIES {
-            Type: d3d12::D3D12_HEAP_TYPE_CUSTOM,
+        let heap_properties = d3d12_ty::D3D12_HEAP_PROPERTIES {
+            Type: d3d12_ty::D3D12_HEAP_TYPE_CUSTOM,
             CPUPageProperty: if is_cpu_read {
-                d3d12::D3D12_CPU_PAGE_PROPERTY_WRITE_BACK
+                d3d12_ty::D3D12_CPU_PAGE_PROPERTY_WRITE_BACK
             } else if is_cpu_write {
-                d3d12::D3D12_CPU_PAGE_PROPERTY_WRITE_COMBINE
+                d3d12_ty::D3D12_CPU_PAGE_PROPERTY_WRITE_COMBINE
             } else {
-                d3d12::D3D12_CPU_PAGE_PROPERTY_NOT_AVAILABLE
+                d3d12_ty::D3D12_CPU_PAGE_PROPERTY_NOT_AVAILABLE
             },
             MemoryPoolPreference: match device.private_caps.memory_architecture {
                 crate::dx12::MemoryArchitecture::NonUnified if !is_cpu_read && !is_cpu_write => {
-                    d3d12::D3D12_MEMORY_POOL_L1
+                    d3d12_ty::D3D12_MEMORY_POOL_L1
                 }
-                _ => d3d12::D3D12_MEMORY_POOL_L0,
+                _ => d3d12_ty::D3D12_MEMORY_POOL_L0,
             },
             CreationNodeMask: 0,
             VisibleNodeMask: 0,
@@ -266,12 +266,12 @@ mod allocation {
                 if device.private_caps.heap_create_not_zeroed {
                     D3D12_HEAP_FLAG_CREATE_NOT_ZEROED
                 } else {
-                    d3d12::D3D12_HEAP_FLAG_NONE
+                    d3d12_ty::D3D12_HEAP_FLAG_NONE
                 },
                 &raw_desc,
-                d3d12::D3D12_RESOURCE_STATE_COMMON,
+                d3d12_ty::D3D12_RESOURCE_STATE_COMMON,
                 ptr::null(),
-                &d3d12::ID3D12Resource::uuidof(),
+                &d3d12_ty::ID3D12Resource::uuidof(),
                 resource.mut_void(),
             )
         };
@@ -282,15 +282,15 @@ mod allocation {
     pub(crate) fn create_texture_resource(
         device: &crate::dx12::Device,
         _desc: &crate::TextureDescriptor,
-        raw_desc: d3d12::D3D12_RESOURCE_DESC,
+        raw_desc: d3d12_ty::D3D12_RESOURCE_DESC,
         resource: &mut WeakPtr<ID3D12Resource>,
     ) -> Result<(HRESULT, Option<AllocationWrapper>), crate::DeviceError> {
-        let heap_properties = d3d12::D3D12_HEAP_PROPERTIES {
-            Type: d3d12::D3D12_HEAP_TYPE_CUSTOM,
-            CPUPageProperty: d3d12::D3D12_CPU_PAGE_PROPERTY_NOT_AVAILABLE,
+        let heap_properties = d3d12_ty::D3D12_HEAP_PROPERTIES {
+            Type: d3d12_ty::D3D12_HEAP_TYPE_CUSTOM,
+            CPUPageProperty: d3d12_ty::D3D12_CPU_PAGE_PROPERTY_NOT_AVAILABLE,
             MemoryPoolPreference: match device.private_caps.memory_architecture {
-                crate::dx12::MemoryArchitecture::NonUnified => d3d12::D3D12_MEMORY_POOL_L1,
-                crate::dx12::MemoryArchitecture::Unified { .. } => d3d12::D3D12_MEMORY_POOL_L0,
+                crate::dx12::MemoryArchitecture::NonUnified => d3d12_ty::D3D12_MEMORY_POOL_L1,
+                crate::dx12::MemoryArchitecture::Unified { .. } => d3d12_ty::D3D12_MEMORY_POOL_L0,
             },
             CreationNodeMask: 0,
             VisibleNodeMask: 0,
@@ -302,12 +302,12 @@ mod allocation {
                 if device.private_caps.heap_create_not_zeroed {
                     D3D12_HEAP_FLAG_CREATE_NOT_ZEROED
                 } else {
-                    d3d12::D3D12_HEAP_FLAG_NONE
+                    d3d12_ty::D3D12_HEAP_FLAG_NONE
                 },
                 &raw_desc,
-                d3d12::D3D12_RESOURCE_STATE_COMMON,
+                d3d12_ty::D3D12_RESOURCE_STATE_COMMON,
                 ptr::null(), // clear value
-                &d3d12::ID3D12Resource::uuidof(),
+                &d3d12_ty::ID3D12Resource::uuidof(),
                 resource.mut_void(),
             )
         };

@@ -87,7 +87,7 @@ pub mod api {
 use std::{
     borrow::{Borrow, Cow},
     fmt,
-    num::{NonZeroU32, NonZeroU8},
+    num::NonZeroU32,
     ops::{Range, RangeInclusive},
     ptr::NonNull,
     sync::atomic::AtomicBool,
@@ -113,15 +113,15 @@ pub type DropGuard = Box<dyn std::any::Any + Send + Sync>;
 
 #[derive(Clone, Debug, PartialEq, Eq, Error)]
 pub enum DeviceError {
-    #[error("out of memory")]
+    #[error("Out of memory")]
     OutOfMemory,
-    #[error("device is lost")]
+    #[error("Device is lost")]
     Lost,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Error)]
 pub enum ShaderError {
-    #[error("compilation failed: {0:?}")]
+    #[error("Compilation failed: {0:?}")]
     Compilation(String),
     #[error(transparent)]
     Device(#[from] DeviceError),
@@ -129,9 +129,9 @@ pub enum ShaderError {
 
 #[derive(Clone, Debug, Eq, PartialEq, Error)]
 pub enum PipelineError {
-    #[error("linkage failed for stage {0:?}: {1}")]
+    #[error("Linkage failed for stage {0:?}: {1}")]
     Linkage(wgt::ShaderStages, String),
-    #[error("entry point for stage {0:?} is invalid")]
+    #[error("Entry point for stage {0:?} is invalid")]
     EntryPoint(naga::ShaderStage),
     #[error(transparent)]
     Device(#[from] DeviceError),
@@ -139,13 +139,13 @@ pub enum PipelineError {
 
 #[derive(Clone, Debug, Eq, PartialEq, Error)]
 pub enum SurfaceError {
-    #[error("surface is lost")]
+    #[error("Surface is lost")]
     Lost,
-    #[error("surface is outdated, needs to be re-created")]
+    #[error("Surface is outdated, needs to be re-created")]
     Outdated,
     #[error(transparent)]
     Device(#[from] DeviceError),
-    #[error("other reason: {0}")]
+    #[error("Other reason: {0}")]
     Other(&'static str),
 }
 
@@ -919,9 +919,12 @@ pub struct SamplerDescriptor<'a> {
     pub mag_filter: wgt::FilterMode,
     pub min_filter: wgt::FilterMode,
     pub mipmap_filter: wgt::FilterMode,
-    pub lod_clamp: Option<Range<f32>>,
+    pub lod_clamp: Range<f32>,
     pub compare: Option<wgt::CompareFunction>,
-    pub anisotropy_clamp: Option<NonZeroU8>,
+    // Must in the range [1, 16].
+    //
+    // Anisotropic filtering must be supported if this is not 1.
+    pub anisotropy_clamp: u16,
     pub border_color: Option<wgt::SamplerBorderColor>,
 }
 

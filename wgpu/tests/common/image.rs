@@ -2,7 +2,6 @@ use std::{
     borrow::Cow,
     ffi::{OsStr, OsString},
     io,
-    num::NonZeroU32,
     path::Path,
     str::FromStr,
 };
@@ -282,10 +281,8 @@ fn copy_texture_to_buffer_with_aspect(
             },
             layout: ImageDataLayout {
                 offset: 0,
-                bytes_per_row: Some(
-                    NonZeroU32::new((texture.width() / block_width) * block_size).unwrap(),
-                ),
-                rows_per_image: Some(NonZeroU32::new(texture.height() / block_height).unwrap()),
+                bytes_per_row: Some((texture.width() / block_width) * block_size),
+                rows_per_image: Some(texture.height() / block_height),
             },
         },
         texture

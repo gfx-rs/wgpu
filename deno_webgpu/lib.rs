@@ -6,6 +6,7 @@ use deno_core::error::AnyError;
 use deno_core::include_js_files;
 use deno_core::op;
 use deno_core::Extension;
+use deno_core::ExtensionBuilder;
 use deno_core::OpState;
 use deno_core::Resource;
 use deno_core::ResourceId;
@@ -52,7 +53,7 @@ mod macros {
     macro_rules! gfx_put {
     ($id:expr => $global:ident.$method:ident( $($param:expr),* ) => $state:expr, $rc:expr) => {{
       let (val, maybe_err) = gfx_select!($id => $global.$method($($param),*));
-      let rid = $state.resource_table.add($rc(val));
+      let rid = $state.resource_table.add($rc($global.clone(), val));
       Ok(WebGpuResult::rid_err(rid, maybe_err))
     }};
   }
@@ -93,69 +94,74 @@ fn check_unstable(state: &OpState, api_name: &str) {
     }
 }
 
-pub type Instance = wgpu_core::hub::Global<wgpu_core::hub::IdentityManagerFactory>;
+pub type Instance = std::sync::Arc<wgpu_core::hub::Global<wgpu_core::hub::IdentityManagerFactory>>;
 
-struct WebGpuAdapter(wgpu_core::id::AdapterId);
+struct WebGpuAdapter(Instance, wgpu_core::id::AdapterId);
 impl Resource for WebGpuAdapter {
     fn name(&self) -> Cow<str> {
         "webGPUAdapter".into()
     }
+
+    fn close(self: Rc<Self>) {
+        let instance = &self.0;
+        gfx_select!(self.1 => instance.adapter_drop(self.1));
+    }
 }
 
-struct WebGpuDevice(wgpu_core::id::DeviceId);
+struct WebGpuDevice(Instance, wgpu_core::id::DeviceId);
 impl Resource for WebGpuDevice {
     fn name(&self) -> Cow<str> {
         "webGPUDevice".into()
     }
+
+    fn close(self: Rc<Self>) {
+        let instance = &self.0;
+        gfx_select!(self.1 => instance.device_drop(self.1));
+    }
 }
 
-struct WebGpuQuerySet(wgpu_core::id::QuerySetId);
+struct WebGpuQuerySet(Instance, wgpu_core::id::QuerySetId);
 impl Resource for WebGpuQuerySet {
     fn name(&self) -> Cow<str> {
         "webGPUQuerySet".into()
     }
+
+    fn close(self: Rc<Self>) {
+        let instance = &self.0;
+        gfx_select!(self.1 => instance.query_set_drop(self.1));
+    }
 }
 
-pub fn init(unstable: bool) -> Extension {
-    Extension::builder(env!("CARGO_PKG_NAME"))
-        .dependencies(vec!["deno_webidl", "deno_web"])
-        .js(include_js_files!(
-          prefix "deno:deno_webgpu",
-          "01_webgpu.js",
-          "02_idl_types.js",
-        ))
-        .ops(declare_webgpu_ops())
-        .state(move |state| {
-            // TODO: check & possibly streamline this
-            // Unstable might be able to be OpMiddleware
-            // let unstable_checker = state.borrow::<super::UnstableChecker>();
-            // let unstable = unstable_checker.unstable;
-            state.put(Unstable(unstable));
-            Ok(())
-        })
+fn ext() -> ExtensionBuilder {
+    Extension::builder_with_deps(env!("CARGO_PKG_NAME"), &["deno_webidl", "deno_web"])
+}
+
+fn ops(ext: &mut ExtensionBuilder, unstable: bool) -> &mut ExtensionBuilder {
+    ext.ops(declare_webgpu_ops()).state(move |state| {
+        // TODO: check & possibly streamline this
+        // Unstable might be able to be OpMiddleware
+        // let unstable_checker = state.borrow::<super::UnstableChecker>();
+        // let unstable = unstable_checker.unstable;
+        state.put(Unstable(unstable));
+    })
+}
+
+pub fn init_ops_and_esm(unstable: bool) -> Extension {
+    ops(&mut ext(), unstable)
+        .esm(include_js_files!("01_webgpu.js", "02_idl_types.js",))
         .build()
+}
+
+pub fn init_ops(unstable: bool) -> Extension {
+    ops(&mut ext(), unstable).build()
 }
 
 fn deserialize_features(features: &wgpu_types::Features) -> Vec<&'static str> {
     let mut return_features: Vec<&'static str> = vec![];
 
+    // api
     if features.contains(wgpu_types::Features::DEPTH_CLIP_CONTROL) {
         return_features.push("depth-clip-control");
-    }
-    if features.contains(wgpu_types::Features::DEPTH32FLOAT_STENCIL8) {
-        return_features.push("depth32float-stencil8");
-    }
-    if features.contains(wgpu_types::Features::PIPELINE_STATISTICS_QUERY) {
-        return_features.push("pipeline-statistics-query");
-    }
-    if features.contains(wgpu_types::Features::TEXTURE_COMPRESSION_BC) {
-        return_features.push("texture-compression-bc");
-    }
-    if features.contains(wgpu_types::Features::TEXTURE_COMPRESSION_ETC2) {
-        return_features.push("texture-compression-etc2");
-    }
-    if features.contains(wgpu_types::Features::TEXTURE_COMPRESSION_ASTC_LDR) {
-        return_features.push("texture-compression-astc");
     }
     if features.contains(wgpu_types::Features::TIMESTAMP_QUERY) {
         return_features.push("timestamp-query");
@@ -163,11 +169,43 @@ fn deserialize_features(features: &wgpu_types::Features) -> Vec<&'static str> {
     if features.contains(wgpu_types::Features::INDIRECT_FIRST_INSTANCE) {
         return_features.push("indirect-first-instance");
     }
-    if features.contains(wgpu_types::Features::SHADER_FLOAT16) {
+    // shader
+    if features.contains(wgpu_types::Features::SHADER_F16) {
         return_features.push("shader-f16");
+    }
+    // texture formats
+    if features.contains(wgpu_types::Features::DEPTH32FLOAT_STENCIL8) {
+        return_features.push("depth32float-stencil8");
+    }
+    if features.contains(wgpu_types::Features::TEXTURE_COMPRESSION_BC) {
+        return_features.push("texture-compression-bc");
+    }
+    if features.contains(wgpu_types::Features::TEXTURE_COMPRESSION_ETC2) {
+        return_features.push("texture-compression-etc2");
+    }
+    if features.contains(wgpu_types::Features::TEXTURE_COMPRESSION_ASTC) {
+        return_features.push("texture-compression-astc");
     }
 
     // extended from spec
+
+    // texture formats
+    if features.contains(wgpu_types::Features::TEXTURE_FORMAT_16BIT_NORM) {
+        return_features.push("texture-format-16-bit-norm");
+    }
+    if features.contains(wgpu_types::Features::TEXTURE_COMPRESSION_ASTC_HDR) {
+        return_features.push("texture-compression-astc-hdr");
+    }
+    if features.contains(wgpu_types::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES) {
+        return_features.push("texture-adapter-specific-format-features");
+    }
+    // api
+    if features.contains(wgpu_types::Features::PIPELINE_STATISTICS_QUERY) {
+        return_features.push("pipeline-statistics-query");
+    }
+    if features.contains(wgpu_types::Features::TIMESTAMP_QUERY_INSIDE_PASSES) {
+        return_features.push("timestamp-query-inside-passes");
+    }
     if features.contains(wgpu_types::Features::MAPPABLE_PRIMARY_BUFFERS) {
         return_features.push("mappable-primary-buffers");
     }
@@ -188,19 +226,34 @@ fn deserialize_features(features: &wgpu_types::Features) -> Vec<&'static str> {
     if features.contains(
         wgpu_types::Features::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
     ) {
-        return_features.push("uniform-buffer-and-storage-buffer-texture-non-uniform-indexing");
+        return_features.push("uniform-buffer-and-storage-texture-array-non-uniform-indexing");
+    }
+    if features.contains(wgpu_types::Features::PARTIALLY_BOUND_BINDING_ARRAY) {
+        return_features.push("partially-bound-binding-array");
+    }
+    if features.contains(wgpu_types::Features::MULTI_DRAW_INDIRECT) {
+        return_features.push("multi-draw-indirect");
+    }
+    if features.contains(wgpu_types::Features::MULTI_DRAW_INDIRECT_COUNT) {
+        return_features.push("multi-draw-indirect-count");
+    }
+    if features.contains(wgpu_types::Features::PUSH_CONSTANTS) {
+        return_features.push("push-constants");
+    }
+    if features.contains(wgpu_types::Features::ADDRESS_MODE_CLAMP_TO_ZERO) {
+        return_features.push("address-mode-clamp-to-zero");
     }
     if features.contains(wgpu_types::Features::ADDRESS_MODE_CLAMP_TO_BORDER) {
         return_features.push("address-mode-clamp-to-border");
     }
-    if features.contains(wgpu_types::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES) {
-        return_features.push("texture-adapter-specific-format-features");
+    if features.contains(wgpu_types::Features::POLYGON_MODE_LINE) {
+        return_features.push("polygon-mode-line");
     }
-    if features.contains(wgpu_types::Features::SHADER_FLOAT64) {
-        return_features.push("shader-float64");
+    if features.contains(wgpu_types::Features::POLYGON_MODE_POINT) {
+        return_features.push("polygon-mode-point");
     }
-    if features.contains(wgpu_types::Features::VERTEX_ATTRIBUTE_64BIT) {
-        return_features.push("vertex-attribute-64bit");
+    if features.contains(wgpu_types::Features::CONSERVATIVE_RASTERIZATION) {
+        return_features.push("conservative-rasterization");
     }
     if features.contains(wgpu_types::Features::VERTEX_WRITABLE_STORAGE) {
         return_features.push("vertex-writable-storage");
@@ -208,14 +261,27 @@ fn deserialize_features(features: &wgpu_types::Features) -> Vec<&'static str> {
     if features.contains(wgpu_types::Features::CLEAR_TEXTURE) {
         return_features.push("clear-texture");
     }
+    if features.contains(wgpu_types::Features::SPIRV_SHADER_PASSTHROUGH) {
+        return_features.push("spirv-shader-passthrough");
+    }
+    if features.contains(wgpu_types::Features::MULTIVIEW) {
+        return_features.push("multiview");
+    }
+    if features.contains(wgpu_types::Features::VERTEX_ATTRIBUTE_64BIT) {
+        return_features.push("vertex-attribute-64-bit");
+    }
+    // shader
+    if features.contains(wgpu_types::Features::SHADER_F64) {
+        return_features.push("shader-f64");
+    }
+    if features.contains(wgpu_types::Features::SHADER_I16) {
+        return_features.push("shader-i16");
+    }
     if features.contains(wgpu_types::Features::SHADER_PRIMITIVE_INDEX) {
         return_features.push("shader-primitive-index");
     }
-    if features.contains(wgpu_types::Features::PARTIALLY_BOUND_BINDING_ARRAY) {
-        return_features.push("shader-primitive-index");
-    }
-    if features.contains(wgpu_types::Features::SHADER_INT16) {
-        return_features.push("shader-i16");
+    if features.contains(wgpu_types::Features::SHADER_EARLY_DEPTH_TEST) {
+        return_features.push("shader-early-depth-test");
     }
 
     return_features
@@ -252,14 +318,14 @@ pub async fn op_webgpu_request_adapter(
     let instance = if let Some(instance) = state.try_borrow::<Instance>() {
         instance
     } else {
-        state.put(wgpu_core::hub::Global::new(
+        state.put(std::sync::Arc::new(wgpu_core::hub::Global::new(
             "webgpu",
             wgpu_core::hub::IdentityManagerFactory,
             wgpu_types::InstanceDescriptor {
                 backends,
                 dx12_shader_compiler: wgpu_types::Dx12Compiler::Fxc,
             },
-        ));
+        )));
         state.borrow::<Instance>()
     };
 
@@ -285,7 +351,9 @@ pub async fn op_webgpu_request_adapter(
     let features = deserialize_features(&adapter_features);
     let adapter_limits = gfx_select!(adapter => instance.adapter_limits(adapter))?;
 
-    let rid = state.resource_table.add(WebGpuAdapter(adapter));
+    let instance = instance.clone();
+
+    let rid = state.resource_table.add(WebGpuAdapter(instance, adapter));
 
     Ok(GpuAdapterDeviceOrErr::Features(GpuAdapterDevice {
         rid,
@@ -301,17 +369,28 @@ pub struct GpuRequiredFeatures(HashSet<String>);
 impl From<GpuRequiredFeatures> for wgpu_types::Features {
     fn from(required_features: GpuRequiredFeatures) -> wgpu_types::Features {
         let mut features: wgpu_types::Features = wgpu_types::Features::empty();
+        // api
         features.set(
             wgpu_types::Features::DEPTH_CLIP_CONTROL,
             required_features.0.contains("depth-clip-control"),
         );
         features.set(
-            wgpu_types::Features::DEPTH32FLOAT_STENCIL8,
-            required_features.0.contains("depth32float-stencil8"),
+            wgpu_types::Features::TIMESTAMP_QUERY,
+            required_features.0.contains("timestamp-query"),
         );
         features.set(
-            wgpu_types::Features::PIPELINE_STATISTICS_QUERY,
-            required_features.0.contains("pipeline-statistics-query"),
+            wgpu_types::Features::INDIRECT_FIRST_INSTANCE,
+            required_features.0.contains("indirect-first-instance"),
+        );
+        // shader
+        features.set(
+            wgpu_types::Features::SHADER_F16,
+            required_features.0.contains("shader-f16"),
+        );
+        // texture formats
+        features.set(
+            wgpu_types::Features::DEPTH32FLOAT_STENCIL8,
+            required_features.0.contains("depth32float-stencil8"),
         );
         features.set(
             wgpu_types::Features::TEXTURE_COMPRESSION_BC,
@@ -322,23 +401,38 @@ impl From<GpuRequiredFeatures> for wgpu_types::Features {
             required_features.0.contains("texture-compression-etc2"),
         );
         features.set(
-            wgpu_types::Features::TEXTURE_COMPRESSION_ASTC_LDR,
+            wgpu_types::Features::TEXTURE_COMPRESSION_ASTC,
             required_features.0.contains("texture-compression-astc"),
-        );
-        features.set(
-            wgpu_types::Features::TIMESTAMP_QUERY,
-            required_features.0.contains("timestamp-query"),
-        );
-        features.set(
-            wgpu_types::Features::INDIRECT_FIRST_INSTANCE,
-            required_features.0.contains("indirect-first-instance"),
-        );
-        features.set(
-            wgpu_types::Features::SHADER_FLOAT16,
-            required_features.0.contains("shader-f16"),
         );
 
         // extended from spec
+
+        // texture formats
+        features.set(
+            wgpu_types::Features::TEXTURE_FORMAT_16BIT_NORM,
+            required_features.0.contains("texture-format-16-bit-norm"),
+        );
+        features.set(
+            wgpu_types::Features::TEXTURE_COMPRESSION_ASTC_HDR,
+            required_features.0.contains("texture-compression-astc-hdr"),
+        );
+        features.set(
+            wgpu_types::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
+            required_features
+                .0
+                .contains("texture-adapter-specific-format-features"),
+        );
+        // api
+        features.set(
+            wgpu_types::Features::PIPELINE_STATISTICS_QUERY,
+            required_features.0.contains("pipeline-statistics-query"),
+        );
+        features.set(
+            wgpu_types::Features::TIMESTAMP_QUERY_INSIDE_PASSES,
+            required_features
+                .0
+                .contains("timestamp-query-inside-passes"),
+        );
         features.set(
             wgpu_types::Features::MAPPABLE_PRIMARY_BUFFERS,
             required_features.0.contains("mappable-primary-buffers"),
@@ -367,29 +461,45 @@ impl From<GpuRequiredFeatures> for wgpu_types::Features {
             wgpu_types::Features::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
             required_features
                 .0
-                .contains("uniform-buffer-and-storage-buffer-texture-non-uniform-indexing"),
+                .contains("uniform-buffer-and-storage-texture-array-non-uniform-indexing"),
+        );
+        features.set(
+            wgpu_types::Features::PARTIALLY_BOUND_BINDING_ARRAY,
+            required_features
+                .0
+                .contains("partially-bound-binding-array"),
+        );
+        features.set(
+            wgpu_types::Features::MULTI_DRAW_INDIRECT,
+            required_features.0.contains("multi-draw-indirect"),
+        );
+        features.set(
+            wgpu_types::Features::MULTI_DRAW_INDIRECT_COUNT,
+            required_features.0.contains("multi-draw-indirect-count"),
+        );
+        features.set(
+            wgpu_types::Features::PUSH_CONSTANTS,
+            required_features.0.contains("push-constants"),
+        );
+        features.set(
+            wgpu_types::Features::ADDRESS_MODE_CLAMP_TO_ZERO,
+            required_features.0.contains("address-mode-clamp-to-zero"),
         );
         features.set(
             wgpu_types::Features::ADDRESS_MODE_CLAMP_TO_BORDER,
             required_features.0.contains("address-mode-clamp-to-border"),
         );
         features.set(
-            wgpu_types::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
-            required_features
-                .0
-                .contains("texture-adapter-specific-format-features"),
+            wgpu_types::Features::POLYGON_MODE_LINE,
+            required_features.0.contains("polygon-mode-line"),
         );
         features.set(
-            wgpu_types::Features::SHADER_FLOAT64,
-            required_features.0.contains("shader-float64"),
+            wgpu_types::Features::POLYGON_MODE_POINT,
+            required_features.0.contains("polygon-mode-point"),
         );
         features.set(
-            wgpu_types::Features::SHADER_INT16,
-            required_features.0.contains("shader-i16"),
-        );
-        features.set(
-            wgpu_types::Features::VERTEX_ATTRIBUTE_64BIT,
-            required_features.0.contains("vertex-attribute-64bit"),
+            wgpu_types::Features::CONSERVATIVE_RASTERIZATION,
+            required_features.0.contains("conservative-rasterization"),
         );
         features.set(
             wgpu_types::Features::VERTEX_WRITABLE_STORAGE,
@@ -397,17 +507,36 @@ impl From<GpuRequiredFeatures> for wgpu_types::Features {
         );
         features.set(
             wgpu_types::Features::CLEAR_TEXTURE,
-            required_features.0.contains("clear-commands"),
+            required_features.0.contains("clear-texture"),
+        );
+        features.set(
+            wgpu_types::Features::SPIRV_SHADER_PASSTHROUGH,
+            required_features.0.contains("spirv-shader-passthrough"),
+        );
+        features.set(
+            wgpu_types::Features::MULTIVIEW,
+            required_features.0.contains("multiview"),
+        );
+        features.set(
+            wgpu_types::Features::VERTEX_ATTRIBUTE_64BIT,
+            required_features.0.contains("vertex-attribute-64-bit"),
+        );
+        // shader
+        features.set(
+            wgpu_types::Features::SHADER_F64,
+            required_features.0.contains("shader-f64"),
+        );
+        features.set(
+            wgpu_types::Features::SHADER_I16,
+            required_features.0.contains("shader-i16"),
         );
         features.set(
             wgpu_types::Features::SHADER_PRIMITIVE_INDEX,
             required_features.0.contains("shader-primitive-index"),
         );
         features.set(
-            wgpu_types::Features::PARTIALLY_BOUND_BINDING_ARRAY,
-            required_features
-                .0
-                .contains("partially-bound-binding-array"),
+            wgpu_types::Features::SHADER_EARLY_DEPTH_TEST,
+            required_features.0.contains("shader-early-depth-test"),
         );
 
         features
@@ -424,7 +553,7 @@ pub async fn op_webgpu_request_device(
 ) -> Result<GpuAdapterDevice, AnyError> {
     let mut state = state.borrow_mut();
     let adapter_resource = state.resource_table.get::<WebGpuAdapter>(adapter_rid)?;
-    let adapter = adapter_resource.0;
+    let adapter = adapter_resource.1;
     let instance = state.borrow::<Instance>();
 
     let descriptor = wgpu_types::DeviceDescriptor {
@@ -447,7 +576,8 @@ pub async fn op_webgpu_request_device(
     let features = deserialize_features(&device_features);
     let limits = gfx_select!(device => instance.device_limits(device))?;
 
-    let rid = state.resource_table.add(WebGpuDevice(device));
+    let instance = instance.clone();
+    let rid = state.resource_table.add(WebGpuDevice(instance, device));
 
     Ok(GpuAdapterDevice {
         rid,
@@ -474,7 +604,7 @@ pub async fn op_webgpu_request_adapter_info(
 ) -> Result<GPUAdapterInfo, AnyError> {
     let state = state.borrow_mut();
     let adapter_resource = state.resource_table.get::<WebGpuAdapter>(adapter_rid)?;
-    let adapter = adapter_resource.0;
+    let adapter = adapter_resource.1;
     let instance = state.borrow::<Instance>();
 
     let info = gfx_select!(adapter => instance.adapter_get_info(adapter))?;
@@ -548,8 +678,8 @@ pub fn op_webgpu_create_query_set(
     args: CreateQuerySetArgs,
 ) -> Result<WebGpuResult, AnyError> {
     let device_resource = state.resource_table.get::<WebGpuDevice>(args.device_rid)?;
-    let device = device_resource.0;
-    let instance = &state.borrow::<Instance>();
+    let device = device_resource.1;
+    let instance = state.borrow::<Instance>();
 
     let descriptor = wgpu_types::QuerySetDescriptor {
         label: args.label.map(Cow::from),

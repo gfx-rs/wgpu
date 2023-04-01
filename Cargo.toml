@@ -51,20 +51,21 @@ async-executor = "1.0"
 bitflags = "1"
 bit-vec = "0.6"
 bytemuck = "1.13"
-cargo-run-wasm = "0.3.0"
+cargo-run-wasm = "0.3.2"
 cfg_aliases = "0.1"
 cfg-if = "1"
 codespan-reporting = "0.11"
 ddsfile = "0.5"
 env_logger = "0.10"
 futures-intrusive = "0.4"
-fxhash = "0.2.1"
+rustc-hash = "1.1.0"
 glam = "0.21.3"
 image = { version = "0.24", default-features = false, features = ["png"] }
 libloading = "0.7"
 libc = "0.2"
 log = "0.4"
 nanorand = { version = "0.7", default-features = false }
+num-traits = { version = "0.2" }
 # Opt out of noise's "default-features" to avoid "image" feature as a dependency count optimization.
 # This will not be required in the next release since it has been removed from the default feature in https://github.com/Razaekel/noise-rs/commit/1af9e1522236b2c584fb9a02150c9c67a5e6bb04#diff-2e9d962a08321605940b5a657135052fbcef87b5e360662bb527c96d9a615542
 noise = { version = "0.7", default-features = false }
@@ -78,7 +79,7 @@ raw-window-handle = "0.5"
 renderdoc-sys = "1.0.0"
 ron = "0.8"
 serde = "1"
-serde_json = "1.0.85"
+serde_json = "1.0.94"
 smallvec = "1"
 static_assertions = "1.1.0"
 thiserror = "1"
@@ -88,7 +89,7 @@ winit = "0.27.1"
 # Metal dependencies
 block = "0.1"
 foreign-types = "0.3"
-mtl = { package = "metal", version = "0.24.0" }
+metal = "0.24.0"
 objc = "0.2.5"
 core-graphics-types = "0.1"
 
@@ -101,13 +102,13 @@ android_system_properties = "0.1.1"
 # DX dependencies
 bit-set = "0.5"
 gpu-allocator = { version = "0.21", default_features = false, features = ["d3d12", "windows", "public-winapi"] }
-native = { package = "d3d12", version = "0.5.0" }
+d3d12 = "0.5.0"
 range-alloc = "0.1"
 winapi = "0.3"
 hassle-rs = "0.10.0"
 
 # Gles dependencies
-egl = { package = "khronos-egl", version = "4.1" }
+khronos-egl = "4.1"
 glow = "0.12.1"
 glutin = "0.29.1"
 
@@ -121,13 +122,13 @@ wasm-bindgen-test = "0.3"
 web-sys = "0.3.61"
 
 # deno dependencies
-deno_console = "0.84.0"
-deno_core = "0.166.0"
-deno_url = "0.84.0"
-deno_web = "0.115.0"
-deno_webidl = "0.84.0"
+deno_console = "0.92.0"
+deno_core = "0.174.0"
+deno_url = "0.92.0"
+deno_web = "0.123.0"
+deno_webidl = "0.92.0"
 deno_webgpu = { path = "./deno_webgpu" }
-tokio = "1.19.0"
+tokio = "1.25.0"
 termcolor = "1.2.0"
 wgpu-core = { path = "./wgpu-core" }
 wgpu-types = { path = "./wgpu-types" }

@@ -1,5 +1,4 @@
 use crate::common::{image::calc_difference, initialize_test, TestParameters, TestingContext};
-use std::num::NonZeroU32;
 use wgpu::{util::DeviceExt, DownlevelFlags, Limits, TextureFormat};
 
 #[test]
@@ -166,7 +165,7 @@ fn reinterpret(
             buffer: &read_buffer,
             layout: wgpu::ImageDataLayout {
                 offset: 0,
-                bytes_per_row: NonZeroU32::new(wgpu::COPY_BYTES_PER_ROW_ALIGNMENT),
+                bytes_per_row: Some(wgpu::COPY_BYTES_PER_ROW_ALIGNMENT),
                 rows_per_image: None,
             },
         },

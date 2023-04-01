@@ -25,12 +25,12 @@ impl super::Texture {
                     let block_size = format
                         .block_size(Some(r.texture_base.aspect.map()))
                         .unwrap();
-                    block_width * (bpr.get() / block_size)
+                    block_width * (bpr / block_size)
                 }),
                 buffer_image_height: r
                     .buffer_layout
                     .rows_per_image
-                    .map_or(0, |rpi| rpi.get() * block_height),
+                    .map_or(0, |rpi| rpi * block_height),
                 image_subresource,
                 image_offset,
                 image_extent: conv::map_copy_extent(&extent),

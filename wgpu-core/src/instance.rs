@@ -235,10 +235,6 @@ impl<A: HalApi> Adapter<A> {
 
         let mut flags = wgt::TextureFormatFeatureFlags::empty();
         flags.set(
-            wgt::TextureFormatFeatureFlags::STORAGE_ATOMICS,
-            caps.contains(Tfc::STORAGE_ATOMIC),
-        );
-        flags.set(
             wgt::TextureFormatFeatureFlags::STORAGE_READ_WRITE,
             caps.contains(Tfc::STORAGE_READ_WRITE),
         );
@@ -370,38 +366,38 @@ impl<A: hal::Api> crate::hub::Resource for Adapter<A> {
 
 #[derive(Clone, Debug, Error)]
 pub enum IsSurfaceSupportedError {
-    #[error("invalid adapter")]
+    #[error("Invalid adapter")]
     InvalidAdapter,
-    #[error("invalid surface")]
+    #[error("Invalid surface")]
     InvalidSurface,
 }
 
 #[derive(Clone, Debug, Error)]
 pub enum GetSurfaceSupportError {
-    #[error("invalid adapter")]
+    #[error("Invalid adapter")]
     InvalidAdapter,
-    #[error("invalid surface")]
+    #[error("Invalid surface")]
     InvalidSurface,
-    #[error("surface is not supported by the adapter")]
+    #[error("Surface is not supported by the adapter")]
     Unsupported,
 }
 
 #[derive(Clone, Debug, Error)]
 /// Error when requesting a device from the adaptor
 pub enum RequestDeviceError {
-    #[error("parent adapter is invalid")]
+    #[error("Parent adapter is invalid")]
     InvalidAdapter,
-    #[error("connection to device was lost during initialization")]
+    #[error("Connection to device was lost during initialization")]
     DeviceLost,
-    #[error("device initialization failed due to implementation specific errors")]
+    #[error("Device initialization failed due to implementation specific errors")]
     Internal,
     #[error(transparent)]
     LimitsExceeded(#[from] FailedLimit),
-    #[error("device has no queue supporting graphics")]
+    #[error("Device has no queue supporting graphics")]
     NoGraphicsQueue,
-    #[error("not enough memory left")]
+    #[error("Not enough memory left")]
     OutOfMemory,
-    #[error("unsupported features were requested: {0:?}")]
+    #[error("Unsupported features were requested: {0:?}")]
     UnsupportedFeature(wgt::Features),
 }
 
@@ -426,14 +422,14 @@ impl<I: Clone> AdapterInputs<'_, I> {
 }
 
 #[derive(Clone, Debug, Error)]
-#[error("adapter is invalid")]
+#[error("Adapter is invalid")]
 pub struct InvalidAdapter;
 
 #[derive(Clone, Debug, Error)]
 pub enum RequestAdapterError {
-    #[error("no suitable adapter found")]
+    #[error("No suitable adapter found")]
     NotFound,
-    #[error("surface {0:?} is invalid")]
+    #[error("Surface {0:?} is invalid")]
     InvalidSurface(SurfaceId),
 }
 
