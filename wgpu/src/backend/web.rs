@@ -27,7 +27,7 @@ fn create_identified<T>(value: T) -> Identified<T> {
         if #[cfg(feature = "expose-ids")] {
             static NEXT_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
             let id = NEXT_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-            Identified(value, crate::Id(core::num::NonZeroU64::new(id).unwrap()))
+            Identified(value, core::num::NonZeroU64::new(id).unwrap())
         } else {
             Identified(value)
         }
@@ -43,8 +43,8 @@ fn create_identified<T>(value: T) -> Identified<T> {
 // is integrated (or not integrated) with values like those in webgpu, this may become unsound.
 
 impl<T: FromWasmAbi<Abi = u32> + JsCast> From<ObjectId> for Identified<T> {
-    fn from(id: ObjectId) -> Self {
-        let id = id.id().get() as u32;
+    fn from(object_id: ObjectId) -> Self {
+        let id = object_id.id().get() as u32;
         // SAFETY: wasm_bindgen says an ABI representation may only be cast to a wrapper type if it was created
         // using into_abi.
         //
@@ -55,18 +55,18 @@ impl<T: FromWasmAbi<Abi = u32> + JsCast> From<ObjectId> for Identified<T> {
         Self(
             wasm.unchecked_into(),
             #[cfg(feature = "expose-ids")]
-            id.global_id(),
+            object_id.global_id(),
         )
     }
 }
 
 impl<T: IntoWasmAbi<Abi = u32>> From<Identified<T>> for ObjectId {
-    fn from(id: Identified<T>) -> Self {
-        let id = core::num::NonZeroU64::new(id.0.into_abi() as u64).unwrap();
+    fn from(identified: Identified<T>) -> Self {
+        let id = core::num::NonZeroU64::new(identified.0.into_abi() as u64).unwrap();
         Self::new(
             id,
             #[cfg(feature = "expose-ids")]
-            id.1,
+            identified.1,
         )
     }
 }
@@ -77,7 +77,7 @@ unsafe impl<T> Send for Sendable<T> {}
 unsafe impl<T> Sync for Sendable<T> {}
 
 #[derive(Clone, Debug)]
-pub(crate) struct Identified<T>(T, #[cfg(feature = "expose-ids")] crate::Id);
+pub(crate) struct Identified<T>(T, #[cfg(feature = "expose-ids")] std::num::NonZeroU64);
 unsafe impl<T> Send for Identified<T> {}
 unsafe impl<T> Sync for Identified<T> {}
 

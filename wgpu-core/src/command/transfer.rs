@@ -1097,7 +1097,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         // `src_pending` and `dst_pending` try to hold `trackers.textures` mutably.
         let mut barriers: ArrayVec<_, 2> = src_pending
             .map(|pending| pending.into_hal(src_texture))
-            .into_iter()
             .collect();
 
         let dst_pending = cmd_buf

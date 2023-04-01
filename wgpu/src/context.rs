@@ -998,7 +998,7 @@ pub struct ObjectId {
     id: Option<NonZeroU64>,
     #[cfg(feature = "expose-ids")]
     /// ID that is unique at all times
-    global_id: Option<crate::Id>,
+    global_id: Option<NonZeroU64>,
 }
 
 impl ObjectId {
@@ -1008,7 +1008,7 @@ impl ObjectId {
         global_id: None,
     };
 
-    pub fn new(id: NonZeroU64, #[cfg(feature = "expose-ids")] global_id: crate::Id) -> Self {
+    pub fn new(id: NonZeroU64, #[cfg(feature = "expose-ids")] global_id: NonZeroU64) -> Self {
         Self {
             id: Some(id),
             #[cfg(feature = "expose-ids")]
@@ -1021,7 +1021,7 @@ impl ObjectId {
         Self {
             id: Some(global_id),
             #[cfg(feature = "expose-ids")]
-            global_id: Some(crate::Id(global_id)),
+            global_id: Some(global_id),
         }
     }
 
@@ -1031,7 +1031,7 @@ impl ObjectId {
 
     #[cfg(feature = "expose-ids")]
     #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
-    pub fn global_id(&self) -> crate::Id {
+    pub fn global_id(&self) -> NonZeroU64 {
         self.global_id.unwrap()
     }
 }
