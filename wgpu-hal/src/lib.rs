@@ -1261,6 +1261,20 @@ pub struct DepthStencilAttachment<'a, A: Api> {
     pub clear_value: (f32, u32),
 }
 
+bitflags!(
+    pub struct RenderPassTimestampLocation: u8 {
+        const BEGINNING = 1 << 0;
+        const END = 1 << 1;
+    }
+);
+
+#[derive(Clone, Debug)]
+pub struct RenderPassTimestampWrite<'a, A: Api> {
+    pub query_set: &'a A::QuerySet,
+    pub query_index: u32,
+    pub location: RenderPassTimestampLocation,
+}
+
 #[derive(Clone, Debug)]
 pub struct RenderPassDescriptor<'a, A: Api> {
     pub label: Label<'a>,
@@ -1269,6 +1283,7 @@ pub struct RenderPassDescriptor<'a, A: Api> {
     pub color_attachments: &'a [Option<ColorAttachment<'a, A>>],
     pub depth_stencil_attachment: Option<DepthStencilAttachment<'a, A>>,
     pub multiview: Option<NonZeroU32>,
+    pub timestamp_writes: &'a [RenderPassTimestampWrite<'a, A>],
 }
 
 bitflags!(

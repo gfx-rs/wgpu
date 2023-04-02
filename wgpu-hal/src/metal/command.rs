@@ -1,7 +1,5 @@
-use crate::ComputePassTimestampLocation;
-
 use super::{conv, AsNative};
-use std::{borrow::Cow, collections::HashMap, mem, ops::Range};
+use std::{borrow::Cow, mem, ops::Range};
 
 // has to match `Temp::binding_sizes`
 const WORD_SIZE: usize = 4;
@@ -438,6 +436,26 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                     };
                     at_descriptor.set_load_action(load_action);
                     at_descriptor.set_store_action(store_action);
+                }
+            }
+
+            let sba_descriptor = descriptor
+                .sample_buffer_attachments()
+                .object_at(0 as _) //TODO: move inside
+                .unwrap();
+            for (_i, at) in desc.timestamp_writes.iter().enumerate() {
+                //Problem here is that we can't attach the same counter sample buffer
+                //to the pass descriptor twice.
+                sba_descriptor
+                    .set_sample_buffer(at.query_set.counter_sample_buffer.as_ref().unwrap());
+                match at.location {
+                    crate::RenderPassTimestampLocation::BEGINNING => {
+                        sba_descriptor.set_start_of_vertex_sample_index(at.query_index as _);
+                    }
+                    crate::RenderPassTimestampLocation::END => {
+                        sba_descriptor.set_end_of_fragment_sample_index(at.query_index as _);
+                    }
+                    _ => {}
                 }
             }
 
@@ -939,10 +957,10 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 sba_descriptor
                     .set_sample_buffer(at.query_set.counter_sample_buffer.as_ref().unwrap());
                 match at.location {
-                    ComputePassTimestampLocation::BEGINNING => {
+                    crate::ComputePassTimestampLocation::BEGINNING => {
                         sba_descriptor.set_start_of_encoder_sample_index(at.query_index as _);
                     }
-                    ComputePassTimestampLocation::END => {
+                    crate::ComputePassTimestampLocation::END => {
                         sba_descriptor.set_end_of_encoder_sample_index(at.query_index as _);
                     }
                     _ => {}

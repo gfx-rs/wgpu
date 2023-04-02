@@ -175,6 +175,31 @@ impl RenderPassDepthStencilAttachment {
     }
 }
 
+/// Location to write a timestamp to (beginning or end of the pass).
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+#[cfg_attr(any(feature = "serial-pass", feature = "trace"), derive(Serialize))]
+#[cfg_attr(any(feature = "serial-pass", feature = "replay"), derive(Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
+pub enum RenderPassTimestampLocation {
+    Beginning = 0,
+    End = 1,
+}
+
+/// Describes the writing of a single timestamp value.
+#[repr(C)]
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(any(feature = "serial-pass", feature = "trace"), derive(Serialize))]
+#[cfg_attr(any(feature = "serial-pass", feature = "replay"), derive(Deserialize))]
+pub struct RenderPassTimestampWrite {
+    /// The query set to write the timestamp to.
+    pub query_set: id::QuerySetId,
+    /// The index of the query within the query set to write the timestamp to.
+    pub query_index: u32,
+    /// The location of the timestamp
+    pub location: RenderPassTimestampLocation,
+}
+
 /// Describes the attachments of a render pass.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct RenderPassDescriptor<'a> {
@@ -183,6 +208,8 @@ pub struct RenderPassDescriptor<'a> {
     pub color_attachments: Cow<'a, [Option<RenderPassColorAttachment>]>,
     /// The depth and stencil attachment of the render pass, if any.
     pub depth_stencil_attachment: Option<&'a RenderPassDepthStencilAttachment>,
+    /// Defines where and when timestamp values will be written for this pass.
+    pub timestamp_writes: Cow<'a, [RenderPassTimestampWrite]>,
 }
 
 #[cfg_attr(feature = "serial-pass", derive(Deserialize, Serialize))]
@@ -191,6 +218,7 @@ pub struct RenderPass {
     parent_id: id::CommandEncoderId,
     color_targets: ArrayVec<Option<RenderPassColorAttachment>, { hal::MAX_COLOR_ATTACHMENTS }>,
     depth_stencil_target: Option<RenderPassDepthStencilAttachment>,
+    timestamp_writes: Vec<RenderPassTimestampWrite>,
 
     // Resource binding dedupe state.
     #[cfg_attr(feature = "serial-pass", serde(skip))]
@@ -206,6 +234,7 @@ impl RenderPass {
             parent_id,
             color_targets: desc.color_attachments.iter().cloned().collect(),
             depth_stencil_target: desc.depth_stencil_attachment.cloned(),
+            timestamp_writes: desc.timestamp_writes.iter().cloned().collect(),
 
             current_bind_groups: BindGroupStateChange::new(),
             current_pipeline: StateChange::new(),
@@ -1086,6 +1115,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
             color_attachments: &colors,
             depth_stencil_attachment: depth_stencil,
             multiview,
+            timestamp_writes: &[], //TODO
         };
         unsafe {
             cmd_buf.encoder.raw.begin_render_pass(&hal_desc);
@@ -1173,6 +1203,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                     clear_value: (0.0, 0),
                 }),
                 multiview: self.multiview,
+                timestamp_writes: &[], //TODO
             };
             unsafe {
                 raw.begin_render_pass(&desc);
@@ -1197,6 +1228,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             pass.base.as_ref(),
             &pass.color_targets,
             pass.depth_stencil_target.as_ref(),
+            &pass.timestamp_writes,
         )
     }
 
@@ -1207,6 +1239,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         base: BasePassRef<RenderCommand>,
         color_attachments: &[Option<RenderPassColorAttachment>],
         depth_stencil_attachment: Option<&RenderPassDepthStencilAttachment>,
+        timestamp_writes: &[RenderPassTimestampWrite],
     ) -> Result<(), RenderPassError> {
         profiling::scope!("CommandEncoder::run_render_pass");
         let init_scope = PassErrorScope::Pass(encoder_id);

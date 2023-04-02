@@ -448,6 +448,7 @@ fn clear_texture_via_render_passes<A: hal::Api>(
                     color_attachments,
                     depth_stencil_attachment,
                     multiview: None,
+                    timestamp_writes: &[],
                 });
                 encoder.end_render_pass();
             }
