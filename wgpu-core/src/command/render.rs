@@ -18,7 +18,7 @@ use crate::{
     id,
     init_tracker::{MemoryInitKind, TextureInitRange, TextureInitTrackerAction},
     pipeline::{self, PipelineFlags},
-    resource::{self, Buffer, Texture, TextureView, TextureViewNotRenderableReason},
+    resource::{self, Buffer, QuerySet, Texture, TextureView, TextureViewNotRenderableReason},
     track::{TextureSelector, UsageConflict, UsageScope},
     validation::{
         check_buffer_usage, check_texture_usage, MissingBufferUsageError, MissingTextureUsageError,
@@ -614,6 +614,8 @@ pub enum RenderPassErrorInner {
         "Multiview pass texture views with more than one array layer must have D2Array dimension"
     )]
     MultiViewDimensionMismatch,
+    #[error("QuerySet {0:?} is invalid")]
+    InvalidQuerySet(id::QuerySetId),
 }
 
 impl PrettyError for RenderPassErrorInner {
@@ -743,10 +745,12 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
         label: Option<&str>,
         color_attachments: &[Option<RenderPassColorAttachment>],
         depth_stencil_attachment: Option<&RenderPassDepthStencilAttachment>,
+        timestamp_writes: &[RenderPassTimestampWrite],
         cmd_buf: &mut CommandBuffer<A>,
         view_guard: &'a Storage<TextureView<A>, id::TextureViewId>,
         buffer_guard: &'a Storage<Buffer<A>, id::BufferId>,
         texture_guard: &'a Storage<Texture<A>, id::TextureId>,
+        query_set_guard: &'a Storage<QuerySet<A>, id::QuerySetId>,
     ) -> Result<Self, RenderPassErrorInner> {
         profiling::scope!("RenderPassInfo::start");
 
@@ -1108,6 +1112,27 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
             multiview,
         };
 
+        let mut hal_timestamp_writes = Vec::with_capacity(timestamp_writes.len());
+        for (index, tw) in timestamp_writes.iter().enumerate() {
+            let query_set: &resource::QuerySet<A> = cmd_buf
+                .trackers
+                .query_sets
+                .add_single(&*query_set_guard, tw.query_set)
+                .ok_or(RenderPassErrorInner::InvalidQuerySet(tw.query_set))?;
+
+            let hal_tw = hal::RenderPassTimestampWrite {
+                query_set: &query_set.raw,
+                query_index: tw.query_index,
+                location: match tw.location {
+                    RenderPassTimestampLocation::Beginning => {
+                        hal::RenderPassTimestampLocation::BEGINNING
+                    }
+                    RenderPassTimestampLocation::End => hal::RenderPassTimestampLocation::END,
+                },
+            };
+            hal_timestamp_writes.push(hal_tw);
+        }
+
         let hal_desc = hal::RenderPassDescriptor {
             label,
             extent,
@@ -1115,7 +1140,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
             color_attachments: &colors,
             depth_stencil_attachment: depth_stencil,
             multiview,
-            timestamp_writes: &[], //TODO
+            timestamp_writes: &hal_timestamp_writes,
         };
         unsafe {
             cmd_buf.encoder.raw.begin_render_pass(&hal_desc);
@@ -1292,10 +1317,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 base.label,
                 color_attachments,
                 depth_stencil_attachment,
+                timestamp_writes,
                 cmd_buf,
                 &*view_guard,
                 &*buffer_guard,
                 &*texture_guard,
+                &*query_set_guard,
             )
             .map_pass_err(init_scope)?;
 
