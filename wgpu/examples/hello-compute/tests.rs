@@ -15,6 +15,7 @@ fn test_compute_1() {
         TestParameters::default()
             .downlevel_flags(wgpu::DownlevelFlags::COMPUTE_SHADERS)
             .limits(wgpu::Limits::downlevel_defaults())
+            .features(wgpu::Features::TIMESTAMP_QUERY)
             .specific_failure(None, None, Some("V3D"), true),
         |ctx| {
             let input = &[1, 2, 3, 4];
@@ -36,6 +37,7 @@ fn test_compute_2() {
         TestParameters::default()
             .downlevel_flags(wgpu::DownlevelFlags::COMPUTE_SHADERS)
             .limits(wgpu::Limits::downlevel_defaults())
+            .features(wgpu::Features::TIMESTAMP_QUERY)
             .specific_failure(None, None, Some("V3D"), true),
         |ctx| {
             let input = &[5, 23, 10, 9];
@@ -57,6 +59,7 @@ fn test_compute_overflow() {
         TestParameters::default()
             .downlevel_flags(wgpu::DownlevelFlags::COMPUTE_SHADERS)
             .limits(wgpu::Limits::downlevel_defaults())
+            .features(wgpu::Features::TIMESTAMP_QUERY)
             .specific_failure(None, None, Some("V3D"), true),
         |ctx| {
             let input = &[77031, 837799, 8400511, 63728127];
@@ -77,6 +80,7 @@ fn test_multithreaded_compute() {
         TestParameters::default()
             .downlevel_flags(wgpu::DownlevelFlags::COMPUTE_SHADERS)
             .limits(wgpu::Limits::downlevel_defaults())
+            .features(wgpu::Features::TIMESTAMP_QUERY)
             .specific_failure(None, None, Some("V3D"), true)
             // https://github.com/gfx-rs/wgpu/issues/3250
             .specific_failure(Some(wgpu::Backends::GL), None, Some("llvmpipe"), true),

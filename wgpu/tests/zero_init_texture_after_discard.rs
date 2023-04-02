@@ -160,6 +160,7 @@ impl<'ctx> TestCase<'ctx> {
                         store: true,
                     }),
                 }),
+                timestamp_writes: &[],
             });
             ctx.queue.submit([encoder.finish()]);
         } else {
@@ -243,6 +244,7 @@ impl<'ctx> TestCase<'ctx> {
                         }),
                     },
                 ),
+                timestamp_writes: &[],
             });
     }
 
@@ -266,6 +268,7 @@ impl<'ctx> TestCase<'ctx> {
                         }),
                     },
                 ),
+                timestamp_writes: &[],
             });
     }
 
@@ -289,6 +292,7 @@ impl<'ctx> TestCase<'ctx> {
                         }),
                     },
                 ),
+                timestamp_writes: &[],
             });
     }
 

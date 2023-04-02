@@ -286,6 +286,7 @@ impl framework::Example for Example {
             label: None,
             color_attachments: &color_attachments,
             depth_stencil_attachment: None,
+            timestamp_writes: &[],
         };
 
         // get command encoder
@@ -295,8 +296,10 @@ impl framework::Example for Example {
         command_encoder.push_debug_group("compute boid movement");
         {
             // compute pass
-            let mut cpass =
-                command_encoder.begin_compute_pass(&wgpu::ComputePassDescriptor { label: None });
+            let mut cpass = command_encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: None,
+                timestamp_writes: &[],
+            });
             cpass.set_pipeline(&self.compute_pipeline);
             cpass.set_bind_group(0, &self.particle_bind_groups[self.frame_num % 2], &[]);
             cpass.dispatch_workgroups(self.work_group_count, 1, 1);

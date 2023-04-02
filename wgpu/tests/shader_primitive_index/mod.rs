@@ -183,6 +183,7 @@ fn pulling_common(
         })],
         depth_stencil_attachment: None,
         label: None,
+        timestamp_writes: &[],
     });
 
     rpass.set_pipeline(&pipeline);

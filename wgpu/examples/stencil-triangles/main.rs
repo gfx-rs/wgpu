@@ -214,6 +214,7 @@ impl framework::Example for Triangles {
                         store: true,
                     }),
                 }),
+                timestamp_writes: &[],
             });
 
             rpass.set_stencil_reference(1);

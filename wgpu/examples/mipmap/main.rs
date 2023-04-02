@@ -163,6 +163,7 @@ impl Example {
                     },
                 })],
                 depth_stencil_attachment: None,
+                timestamp_writes: &[],
             });
             if let Some(ref query_sets) = query_sets {
                 rpass.write_timestamp(&query_sets.timestamp, timestamp_query_index_base);
@@ -474,6 +475,7 @@ impl framework::Example for Example {
                     },
                 })],
                 depth_stencil_attachment: None,
+                timestamp_writes: &[],
             });
             rpass.set_pipeline(&self.draw_pipeline);
             rpass.set_bind_group(0, &self.bind_group, &[]);

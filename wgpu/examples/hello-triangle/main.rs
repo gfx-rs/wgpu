@@ -182,13 +182,13 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
 
 fn resolve_timestamps(destination_buffer: &wgpu::Buffer, timestamp_period: f32) {
     {
-    let timestamp_view = destination_buffer
-        .slice(..(std::mem::size_of::<u64>() * 2) as wgpu::BufferAddress)
-        .get_mapped_range();
+        let timestamp_view = destination_buffer
+            .slice(..(std::mem::size_of::<u64>() * 2) as wgpu::BufferAddress)
+            .get_mapped_range();
 
-    let timestamps: &[u64] = bytemuck::cast_slice(&timestamp_view);
-    let elapsed_ns = (timestamps[1] - timestamps[0]) as f64 * timestamp_period as f64;
-    log::info!("Elapsed time: {:.2} μs", elapsed_ns / 1000.0);
+        let timestamps: &[u64] = bytemuck::cast_slice(&timestamp_view);
+        let elapsed_ns = (timestamps[1] - timestamps[0]) as f64 * timestamp_period as f64;
+        log::info!("Elapsed time: {:.2} μs", elapsed_ns / 1000.0);
     }
     destination_buffer.unmap();
 }

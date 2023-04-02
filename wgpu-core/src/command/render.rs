@@ -1228,7 +1228,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                     clear_value: (0.0, 0),
                 }),
                 multiview: self.multiview,
-                timestamp_writes: &[], //TODO
+                timestamp_writes: &[],
             };
             unsafe {
                 raw.begin_render_pass(&desc);

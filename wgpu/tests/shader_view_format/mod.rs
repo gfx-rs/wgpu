@@ -137,6 +137,7 @@ fn reinterpret(
         })],
         depth_stencil_attachment: None,
         label: None,
+        timestamp_writes: &[],
     });
     rpass.set_pipeline(&pipeline);
     rpass.set_bind_group(0, &bind_group, &[]);
