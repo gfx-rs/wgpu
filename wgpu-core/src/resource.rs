@@ -45,8 +45,8 @@ use std::{
 /// - It may be used by commands sent to the GPU that have not yet
 ///   finished execution.
 ///
-/// [`Device`]: device::Device
-/// [`Buffer`]: resource::Buffer
+/// [`Device`]: crate::device::resource::Device
+/// [`Buffer`]: crate::resource::Buffer
 #[derive(Debug)]
 pub struct ResourceInfo<Id: TypedId> {
     id: RwLock<Option<Valid<Id>>>,

@@ -7,7 +7,7 @@ resources of type `R`. For example, [`id::DeviceId`] is an alias for
 of course `Debug`.
 
 Each `Id` contains not only an index for the resource it denotes but
-also a [`Backend`] indicating which `wgpu` backend it belongs to. You
+also a Backend indicating which `wgpu` backend it belongs to. You
 can use the [`gfx_select`] macro to dynamically dispatch on an id's
 backend to a function specialized at compile time for a specific
 backend. See that macro's documentation for details.
@@ -57,13 +57,13 @@ itself to choose ids always pass `()`. In either case, the id
 ultimately assigned is returned as the first element of the tuple.
 
 Producing true identifiers from `id_in` values is the job of an
-[`IdentityHandler`] implementation, which has an associated type
+[`crate::identity::IdentityHandler`] implementation, which has an associated type
 [`Input`] saying what type of `id_in` values it accepts, and a
 [`process`] method that turns such values into true identifiers of
 type `I`. There are two kinds of `IdentityHandler`s:
 
 - Users that want `wgpu_core` to assign ids generally use
-  [`IdentityManager`] ([wrapped in a mutex]). Its `Input` type is
+  [`crate::identity::IdentityManager`] ([wrapped in a mutex]). Its `Input` type is
   `()`, and it tracks assigned ids and generation numbers as
   necessary. (This is what `wgpu` does.)
 
@@ -76,16 +76,16 @@ type `I`. There are two kinds of `IdentityHandler`s:
   but passes the rest of the id's content through unchanged.
 
 Because an `IdentityHandler<I>` can only create ids for a single
-resource type `I`, constructing a [`Global`] entails constructing a
+resource type `I`, constructing a [`crate::global::Global`] entails constructing a
 separate `IdentityHandler<I>` for each resource type `I` that the
 `Global` will manage: an `IdentityHandler<DeviceId>`, an
 `IdentityHandler<TextureId>`, and so on.
 
-The [`Global::new`] function could simply take a large collection of
+The [`crate::global::Global::new`] function could simply take a large collection of
 `IdentityHandler<I>` implementations as arguments, but that would be
 ungainly. Instead, `Global::new` expects a `factory` argument that
 implements the [`GlobalIdentityHandlerFactory`] trait, which extends
-[`IdentityHandlerFactory<I>`] for each resource id type `I`. This
+[`crate::identity::IdentityHandlerFactory<I>`] for each resource id type `I`. This
 trait, in turn, has a `spawn` method that constructs an
 `IdentityHandler<I>` for the `Global` to use.
 
@@ -104,7 +104,7 @@ Thus, its `id_in` type is:
 <<G as IdentityHandlerFactory<I>>::Filter as IdentityHandler<I>>::Input
 ```
 
-The [`Input<G, I>`] type is an alias for this construction.
+The [`crate::identity::Input<G, I>`] type is an alias for this construction.
 
 ## Id allocation and streaming
 
@@ -141,8 +141,8 @@ as much, allowing subsequent operations using that id to be properly
 flagged as errors as well.
 
 [`gfx_select`]: crate::gfx_select
-[`Input`]: IdentityHandler::Input
-[`process`]: IdentityHandler::process
+[`Input`]: crate::identity::IdentityHandler::Input
+[`process`]: crate::identity::IdentityHandler::process
 [`Id<R>`]: crate::id::Id
 [wrapped in a mutex]: trait.IdentityHandler.html#impl-IdentityHandler%3CI%3E-for-Mutex%3CIdentityManager%3E
 [WebGPU]: https://www.w3.org/TR/webgpu/
