@@ -20,7 +20,7 @@ use crate::{
     pipeline,
     resource::ResourceInfo,
     resource::{
-        self, Buffer, QuerySet, Resource, Sampler, Texture, TextureView,
+        self, Buffer, QuerySet, Resource, Sampler, Texture, TextureInner, TextureView,
         TextureViewNotRenderableReason,
     },
     storage::Storage,
@@ -1014,6 +1014,7 @@ impl<A: HalApi> Device<A> {
 
         Ok(TextureView {
             raw: Some(raw),
+            parent: None,
             parent_id: id::Valid(texture_id),
             device: self.clone(),
             desc: resource::HalTextureViewDescriptor {
@@ -1031,7 +1032,7 @@ impl<A: HalApi> Device<A> {
 
     pub(crate) fn create_texture_view(
         self: &Arc<Self>,
-        texture: &Texture<A>,
+        texture: &Arc<Texture<A>>,
         texture_id: id::TextureId,
         desc: &resource::TextureViewDescriptor,
     ) -> Result<TextureView<A>, resource::CreateTextureViewError> {
@@ -1042,14 +1043,20 @@ impl<A: HalApi> Device<A> {
             .as_raw()
             .ok_or(resource::CreateTextureViewError::InvalidTexture)?;
 
-        self.create_texture_inner_view(
+        let mut result = self.create_texture_inner_view(
             texture_raw,
             texture_id,
             &texture.desc,
             &texture.hal_usage,
             &texture.format_features,
             desc,
-        )
+        );
+        if let TextureInner::Native { .. } = *texture.inner.as_ref().unwrap() {
+            if let Ok(ref mut texture_view) = result {
+                texture_view.parent = Some(texture.clone());
+            }
+        }
+        result
     }
 
     pub(crate) fn create_sampler(

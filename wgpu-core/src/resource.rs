@@ -746,6 +746,8 @@ pub enum TextureViewNotRenderableReason {
 #[derive(Debug)]
 pub struct TextureView<A: HalApi> {
     pub(crate) raw: Option<A::TextureView>,
+    // if it's a surface texture - it's none
+    pub(crate) parent: Option<Arc<Texture<A>>>,
     // The parent's refcount is held alive, but the parent may still be deleted
     // if it's a surface texture. TODO: make this cleaner.
     pub(crate) parent_id: Valid<TextureId>,

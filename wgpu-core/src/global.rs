@@ -133,7 +133,7 @@ impl<G: GlobalIdentityHandlerFactory> Drop for Global<G> {
         }
         #[cfg(all(feature = "metal", any(target_os = "macos", target_os = "ios")))]
         {
-            self.hubs.metal.clear(&mut surface_guard, true);
+            self.hubs.metal.clear(&surfaces_locked, true);
         }
         #[cfg(all(feature = "dx12", windows))]
         {

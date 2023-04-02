@@ -584,53 +584,52 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let (id, resource) = fid.assign(texture);
             log::info!("Created texture {:?} with {:?}", id, desc);
 
-            if idtv_in.is_some() {
-                let dimension = match desc.dimension {
-                    wgt::TextureDimension::D1 => wgt::TextureViewDimension::D1,
-                    wgt::TextureDimension::D2 => wgt::TextureViewDimension::D2,
-                    wgt::TextureDimension::D3 => unreachable!(),
-                };
+            if let TextureClearMode::RenderPass {
+                ref mut clear_views,
+                is_color: _,
+            } = *resource.clear_mode.write()
+            {
+                if idtv_in.is_some() {
+                    let dimension = match desc.dimension {
+                        wgt::TextureDimension::D1 => wgt::TextureViewDimension::D1,
+                        wgt::TextureDimension::D2 => wgt::TextureViewDimension::D2,
+                        wgt::TextureDimension::D3 => unreachable!(),
+                    };
 
-                for mip_level in 0..desc.mip_level_count {
-                    for array_layer in 0..desc.size.depth_or_array_layers {
-                        let descriptor = resource::TextureViewDescriptor {
-                            label: Some(Cow::Borrowed("(wgpu internal) clear texture view")),
-                            format: Some(desc.format),
-                            dimension: Some(dimension),
-                            range: wgt::ImageSubresourceRange {
-                                aspect: wgt::TextureAspect::All,
-                                base_mip_level: mip_level,
-                                mip_level_count: Some(1),
-                                base_array_layer: array_layer,
-                                array_layer_count: Some(1),
-                            },
-                        };
+                    for mip_level in 0..desc.mip_level_count {
+                        for array_layer in 0..desc.size.depth_or_array_layers {
+                            let descriptor = resource::TextureViewDescriptor {
+                                label: Some(Cow::Borrowed("(wgpu internal) clear texture view")),
+                                format: Some(desc.format),
+                                dimension: Some(dimension),
+                                range: wgt::ImageSubresourceRange {
+                                    aspect: wgt::TextureAspect::All,
+                                    base_mip_level: mip_level,
+                                    mip_level_count: Some(1),
+                                    base_array_layer: array_layer,
+                                    array_layer_count: Some(1),
+                                },
+                            };
 
-                        let texture_view = device
-                            .create_texture_view(&resource, id.0, &descriptor)
-                            .unwrap();
-                        let fid_tv = if fid_tv.is_some() {
-                            fid_tv.take().unwrap()
-                        } else {
-                            hub.texture_views.prepare(idtv_in.clone().unwrap())
-                        };
-                        let (tv_id, texture_view) = fid_tv.assign(texture_view);
-                        log::info!("Created texture view {:?} for texture {:?}", tv_id, id);
+                            let texture_view = device
+                                .create_texture_view(&resource, id.0, &descriptor)
+                                .unwrap();
+                            let fid_tv = if fid_tv.is_some() {
+                                fid_tv.take().unwrap()
+                            } else {
+                                hub.texture_views.prepare(idtv_in.clone().unwrap())
+                            };
+                            let (tv_id, texture_view) = fid_tv.assign(texture_view);
+                            log::info!("Created texture view {:?} for texture {:?}", tv_id, id);
 
-                        let texture_clear_mode = &mut *resource.clear_mode.write();
-                        if let &mut TextureClearMode::RenderPass {
-                            ref mut clear_views,
-                            is_color: _,
-                        } = texture_clear_mode
-                        {
                             clear_views.push(texture_view.clone());
-                        }
 
-                        device
-                            .trackers
-                            .lock()
-                            .views
-                            .insert_single(tv_id, texture_view);
+                            device
+                                .trackers
+                                .lock()
+                                .views
+                                .insert_single(tv_id, texture_view);
+                        }
                     }
                 }
             }
@@ -2333,6 +2332,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 trackers
                     .buffers
                     .set_single(&*buffer_guard, buffer_id, internal_use);
+                //TODO: Check if draining ALL buffers is correct!
                 trackers.buffers.drain();
             }
 

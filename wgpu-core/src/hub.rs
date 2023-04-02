@@ -242,7 +242,7 @@ impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<A, F> {
         use hal::Surface;
 
         let mut devices = self.devices.write();
-        for element in devices.map.iter_mut() {
+        for element in devices.map.iter() {
             if let Element::Occupied(ref device, _) = *element {
                 device.prepare_to_die();
             }

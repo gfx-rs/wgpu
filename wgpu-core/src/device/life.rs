@@ -592,8 +592,11 @@ impl<A: HalApi> LifetimeTracker<A> {
                         .texture_views
                         .unregister_locked(id.0, &mut *texture_views_locked)
                     {
-                        let parent_texture = hub.textures.get(res.parent_id.0).unwrap();
-                        self.suspected_resources.textures.push(parent_texture);
+                        if let Some(parent_texture) = res.parent.as_ref() {
+                            self.suspected_resources
+                                .textures
+                                .push(parent_texture.clone());
+                        }
                         let submit_index = res.info.submission_index();
                         self.active
                             .iter_mut()

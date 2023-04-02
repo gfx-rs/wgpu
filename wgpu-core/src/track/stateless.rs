@@ -185,8 +185,8 @@ impl<A: HalApi, Id: TypedId, T: Resource<Id>> StatelessTracker<A, Id, T> {
             if self.metadata.contains_unchecked(index) {
                 let existing_epoch = self.metadata.get_epoch_unchecked(index);
                 let existing_ref_count = self.metadata.get_ref_count_unchecked(index);
-
-                if existing_epoch == epoch && existing_ref_count == 1 {
+                //3 ref count: Registry, Device Tracker and suspected resource itself
+                if existing_epoch == epoch && existing_ref_count <= 3 {
                     self.metadata.remove(index);
                     return true;
                 }

@@ -742,8 +742,8 @@ impl<A: HalApi> TextureTracker<A> {
             if self.metadata.contains_unchecked(index) {
                 let existing_epoch = self.metadata.get_epoch_unchecked(index);
                 let existing_ref_count = self.metadata.get_ref_count_unchecked(index);
-
-                if existing_epoch == epoch && existing_ref_count == 1 {
+                //3 ref count: Registry, Device Tracker and suspected resource itself
+                if existing_epoch == epoch && existing_ref_count <= 3 {
                     self.start_set.complex.remove(&index32);
                     self.end_set.complex.remove(&index32);
 

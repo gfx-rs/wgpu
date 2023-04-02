@@ -209,9 +209,7 @@ impl<A: HalApi, I: TypedId, T: Resource<I>> ResourceMetadataProvider<'_, A, I, T
     #[inline(always)]
     pub(super) unsafe fn get_own(self, index: usize) -> (Epoch, Arc<T>) {
         match self {
-            ResourceMetadataProvider::Direct { epoch, resource } => {
-                (epoch, resource.into_owned())
-            }
+            ResourceMetadataProvider::Direct { epoch, resource } => (epoch, resource.into_owned()),
             ResourceMetadataProvider::Indirect { metadata } => {
                 metadata.tracker_assert_in_bounds(index);
                 (unsafe { *metadata.epochs.get_unchecked(index) }, {
