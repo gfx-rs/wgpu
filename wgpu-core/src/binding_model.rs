@@ -479,7 +479,7 @@ impl<A: HalApi> Resource<BindGroupLayoutId> for BindGroupLayout<A> {
         #[cfg(debug_assertions)]
         return self.label.clone();
         #[cfg(not(debug_assertions))]
-        return String::new("");
+        return String::new();
     }
 }
 
