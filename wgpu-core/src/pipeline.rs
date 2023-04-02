@@ -78,7 +78,7 @@ impl<A: HalApi> Resource<ShaderModuleId> for ShaderModule<A> {
         #[cfg(debug_assertions)]
         return self.label.clone();
         #[cfg(not(debug_assertions))]
-        return String::new("");
+        return String::new();
     }
 }
 
