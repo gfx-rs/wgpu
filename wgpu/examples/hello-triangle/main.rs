@@ -5,6 +5,8 @@ use winit::{
     window::Window,
 };
 
+const NUM_SAMPLES: usize = 2;
+
 async fn run(event_loop: EventLoop<()>, window: Window) {
     let size = window.inner_size();
 
@@ -26,7 +28,7 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
         .request_device(
             &wgpu::DeviceDescriptor {
                 label: None,
-                features: wgpu::Features::empty(),
+                features: wgpu::Features::empty() | wgpu::Features::TIMESTAMP_QUERY,
                 // Make sure we use the texture resolution limits from the adapter, so we can support images the size of the swapchain.
                 limits: wgpu::Limits::downlevel_webgl2_defaults()
                     .using_resolution(adapter.limits()),
@@ -40,6 +42,12 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
     let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: None,
         source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
+    });
+
+    let query_set = device.create_query_set(&wgpu::QuerySetDescriptor {
+        label: Some("Timestamp query set"),
+        count: NUM_SAMPLES as u32,
+        ty: wgpu::QueryType::Timestamp,
     });
 
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -82,11 +90,20 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
 
     surface.configure(&device, &config);
 
+    let destination_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("destination buffer"),
+        size: (std::mem::size_of::<u64>() * NUM_SAMPLES as usize) as wgpu::BufferAddress,
+        usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+        mapped_at_creation: false,
+    });
+
+    let timestamp_period = queue.get_timestamp_period();
+
     event_loop.run(move |event, _, control_flow| {
         // Have the closure take ownership of the resources.
         // `event_loop.run` never returns, therefore we must do this to ensure
         // the resources are properly cleaned up.
-        let _ = (&instance, &adapter, &shader, &pipeline_layout);
+        let _ = (&instance, &adapter, &shader, &pipeline_layout, &query_set);
 
         *control_flow = ControlFlow::Wait;
         match event {
@@ -122,13 +139,37 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                             },
                         })],
                         depth_stencil_attachment: None,
+                        timestamp_writes: &[
+                            wgpu::RenderPassTimestampWrite {
+                                query_set: &query_set,
+                                query_index: 0,
+                                location: wgpu::RenderPassTimestampLocation::Beginning,
+                            },
+                            wgpu::RenderPassTimestampWrite {
+                                query_set: &query_set,
+                                query_index: 1,
+                                location: wgpu::RenderPassTimestampLocation::End,
+                            },
+                        ],
                     });
                     rpass.set_pipeline(&render_pipeline);
                     rpass.draw(0..3, 0..1);
                 }
 
+                encoder.resolve_query_set(
+                    &query_set,
+                    0..NUM_SAMPLES as u32,
+                    &destination_buffer,
+                    0,
+                );
                 queue.submit(Some(encoder.finish()));
                 frame.present();
+
+                destination_buffer
+                    .slice(..)
+                    .map_async(wgpu::MapMode::Read, |_| ());
+                device.poll(wgpu::Maintain::Wait);
+                resolve_timestamps(&destination_buffer, timestamp_period);
             }
             Event::WindowEvent {
                 event: WindowEvent::CloseRequested,
@@ -137,6 +178,19 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
             _ => {}
         }
     });
+}
+
+fn resolve_timestamps(destination_buffer: &wgpu::Buffer, timestamp_period: f32) {
+    {
+    let timestamp_view = destination_buffer
+        .slice(..(std::mem::size_of::<u64>() * 2) as wgpu::BufferAddress)
+        .get_mapped_range();
+
+    let timestamps: &[u64] = bytemuck::cast_slice(&timestamp_view);
+    let elapsed_ns = (timestamps[1] - timestamps[0]) as f64 * timestamp_period as f64;
+    log::info!("Elapsed time: {:.2} μs", elapsed_ns / 1000.0);
+    }
+    destination_buffer.unmap();
 }
 
 fn main() {
