@@ -1117,11 +1117,11 @@ impl crate::Device<super::Api> for super::Device {
                         .find(|cs| cs.name() == "timestamp")
                         //TODO: better error type?
                         .ok_or(crate::DeviceError::OutOfMemory)?;
-                    csb_desc.set_counter_set(&timestamp_counter);
+                    csb_desc.set_counter_set(timestamp_counter);
 
                     let counter_sample_buffer = device
                         .new_counter_sample_buffer_with_descriptor(&csb_desc)
-                        .map_err(|e| crate::DeviceError::OutOfMemory)?;
+                        .map_err(|_| crate::DeviceError::OutOfMemory)?;
 
                     Ok(super::QuerySet {
                         raw_buffer: destination_buffer,

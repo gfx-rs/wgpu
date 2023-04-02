@@ -151,7 +151,7 @@ pub enum ComputePassTimestampLocation {
 
 /// Describes the writing of a single timestamp value.
 #[repr(C)]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(any(feature = "serial-pass", feature = "trace"), derive(Serialize))]
 #[cfg_attr(any(feature = "serial-pass", feature = "replay"), derive(Deserialize))]
 pub struct ComputePassTimestampWrite {

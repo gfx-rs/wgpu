@@ -354,7 +354,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             }
             wgt::QueryType::Timestamp => {
                 encoder.resolve_counters(
-                    &set.counter_sample_buffer.as_ref().unwrap(),
+                    set.counter_sample_buffer.as_ref().unwrap(),
                     metal::NSRange::new(range.start as u64, range.end as u64),
                     &buffer.raw,
                     offset,
@@ -933,7 +933,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 .sample_buffer_attachments()
                 .object_at(0 as _) //TODO: move inside
                 .unwrap();
-            for (i, at) in desc.timestamp_writes.iter().enumerate() {
+            for (_i, at) in desc.timestamp_writes.iter().enumerate() {
                 //Problem here is that we can't attach the same counter sample buffer
                 //to the pass descriptor twice.
                 sba_descriptor
@@ -949,7 +949,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 }
             }
 
-            let encoder = raw.compute_command_encoder_with_descriptor(&descriptor);
+            let encoder = raw.compute_command_encoder_with_descriptor(descriptor);
             if let Some(label) = desc.label {
                 encoder.set_label(label);
             }
