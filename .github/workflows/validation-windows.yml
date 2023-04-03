@@ -4,6 +4,7 @@ on:
     paths:
       - '.github/workflows/validation-windows.yml'
       - 'tests/out/hlsl/*.hlsl'
+      - 'tests/out/hlsl/*.ron'
       - 'xtask/**'
 
 jobs:
