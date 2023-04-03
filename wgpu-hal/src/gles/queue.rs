@@ -393,6 +393,12 @@ impl super::Queue {
                 unsafe { gl.bind_texture(dst_target, Some(dst)) };
                 let format_desc = self.shared.describe_texture_format(dst_format);
                 if is_layered_target(dst_target) {
+                    let z_offset = if let glow::TEXTURE_2D_ARRAY = dst_target {
+                        copy.dst_base.array_layer as i32
+                    } else {
+                        copy.dst_base.origin.z as i32
+                    };
+
                     match src.source {
                         wgt::ExternalImageSource::ImageBitmap(ref b) => unsafe {
                             gl.tex_sub_image_3d_with_image_bitmap(
@@ -400,7 +406,7 @@ impl super::Queue {
                                 copy.dst_base.mip_level as i32,
                                 copy.dst_base.origin.x as i32,
                                 copy.dst_base.origin.y as i32,
-                                copy.dst_base.origin.z as i32,
+                                z_offset,
                                 copy.size.width as i32,
                                 copy.size.height as i32,
                                 copy.size.depth as i32,
@@ -415,7 +421,7 @@ impl super::Queue {
                                 copy.dst_base.mip_level as i32,
                                 copy.dst_base.origin.x as i32,
                                 copy.dst_base.origin.y as i32,
-                                copy.dst_base.origin.z as i32,
+                                z_offset,
                                 copy.size.width as i32,
                                 copy.size.height as i32,
                                 copy.size.depth as i32,
@@ -430,7 +436,7 @@ impl super::Queue {
                                 copy.dst_base.mip_level as i32,
                                 copy.dst_base.origin.x as i32,
                                 copy.dst_base.origin.y as i32,
-                                copy.dst_base.origin.z as i32,
+                                z_offset,
                                 copy.size.width as i32,
                                 copy.size.height as i32,
                                 copy.size.depth as i32,
@@ -442,6 +448,12 @@ impl super::Queue {
                         wgt::ExternalImageSource::OffscreenCanvas(_) => unreachable!(),
                     }
                 } else {
+                    let dst_target = if let glow::TEXTURE_CUBE_MAP = dst_target {
+                        CUBEMAP_FACES[copy.dst_base.array_layer as usize]
+                    } else {
+                        dst_target
+                    };
+
                     match src.source {
                         wgt::ExternalImageSource::ImageBitmap(ref b) => unsafe {
                             gl.tex_sub_image_2d_with_image_bitmap_and_width_and_height(
@@ -549,7 +561,11 @@ impl super::Queue {
                             copy.dst_base.mip_level as i32,
                             copy.dst_base.origin.x as i32,
                             copy.dst_base.origin.y as i32,
-                            copy.dst_base.origin.z as i32,
+                            if let glow::TEXTURE_2D_ARRAY = dst_target {
+                                copy.dst_base.array_layer as i32
+                            } else {
+                                copy.dst_base.origin.z as i32
+                            },
                             copy.src_base.origin.x as i32,
                             copy.src_base.origin.y as i32,
                             copy.size.width as i32,

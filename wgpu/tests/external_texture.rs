@@ -244,7 +244,7 @@ async fn image_bitmap_import() {
                         dest_layers = 2;
                     }
                     TestCase::SecondSliceCopy => {
-                        correct = false; // TODO: what?
+                        correct = true;
                         dest_origin.z = 1;
                         dest_data_layer = 1;
                         dest_layers = 2;
