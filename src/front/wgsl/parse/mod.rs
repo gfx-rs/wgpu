@@ -2213,7 +2213,7 @@ impl Parser {
                 let members = self.struct_body(lexer, ctx)?;
                 Some(ast::GlobalDeclKind::Struct(ast::Struct { name, members }))
             }
-            (Token::Word("type"), _) => {
+            (Token::Word("alias"), _) => {
                 let name = lexer.next_ident()?;
 
                 lexer.expect(Token::Operation('='))?;

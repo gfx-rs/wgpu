@@ -1,7 +1,7 @@
-type FVec3 = vec3<f32>;
-type IVec3 = vec3i;
-type Mat2 = mat2x2<f32>;
-type Mat3 = mat3x3f;
+alias FVec3 = vec3<f32>;
+alias IVec3 = vec3i;
+alias Mat2 = mat2x2<f32>;
+alias Mat3 = mat3x3f;
 
 fn main() {
     let a = FVec3(0.0, 0.0, 0.0);

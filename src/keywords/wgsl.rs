@@ -47,6 +47,7 @@ pub const RESERVED: &[&str] = &[
     "vec3",
     "vec4",
     // Other Keywords
+    "alias",
     "bitcast",
     "break",
     "case",

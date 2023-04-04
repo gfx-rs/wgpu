@@ -275,7 +275,7 @@ impl<'a> Error<'a> {
                     ExpectedToken::Assignment => "assignment or increment/decrement".to_string(),
                     ExpectedToken::SwitchItem => "switch item ('case' or 'default') or a closing curly bracket to signify the end of the switch statement ('}')".to_string(),
                     ExpectedToken::WorkgroupSizeSeparator => "workgroup size separator (',') or a closing parenthesis".to_string(),
-                    ExpectedToken::GlobalItem => "global item ('struct', 'const', 'var', 'type', ';', 'fn') or the end of the file".to_string(),
+                    ExpectedToken::GlobalItem => "global item ('struct', 'const', 'var', 'alias', ';', 'fn') or the end of the file".to_string(),
                     ExpectedToken::Type => "type".to_string(),
                     ExpectedToken::Variable => "variable access".to_string(),
                     ExpectedToken::Function => "function name".to_string(),

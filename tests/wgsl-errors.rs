@@ -912,9 +912,9 @@ fn validation_error(source: &str) -> Result<naga::valid::ModuleInfo, naga::valid
 #[test]
 fn invalid_arrays() {
     check_validation! {
-        "type Bad = array<array<f32>, 4>;",
-        "type Bad = array<sampler, 4>;",
-        "type Bad = array<texture_2d<f32>, 4>;":
+        "alias Bad = array<array<f32>, 4>;",
+        "alias Bad = array<sampler, 4>;",
+        "alias Bad = array<texture_2d<f32>, 4>;":
         Err(naga::valid::ValidationError::Type {
             source: naga::valid::TypeError::InvalidArrayBaseType(_),
             ..
@@ -922,10 +922,10 @@ fn invalid_arrays() {
     }
 
     check_validation! {
-        "type Bad = array<f32, true>;",
+        "alias Bad = array<f32, true>;",
         r#"
             const length: f32 = 2.718;
-            type Bad = array<f32, length>;
+            alias Bad = array<f32, length>;
         "#:
         Err(naga::valid::ValidationError::Type {
             source: naga::valid::TypeError::InvalidArraySizeConstant(_),
@@ -934,8 +934,8 @@ fn invalid_arrays() {
     }
 
     check_validation! {
-        "type Bad = array<f32, 0>;",
-        "type Bad = array<f32, -1>;":
+        "alias Bad = array<f32, 0>;",
+        "alias Bad = array<f32, -1>;":
         Err(naga::valid::ValidationError::Type {
             source: naga::valid::TypeError::NonPositiveArrayLength(_),
             ..

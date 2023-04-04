@@ -471,3 +471,13 @@ fn parse_storage_buffers() {
     )
     .unwrap();
 }
+
+#[test]
+fn parse_alias() {
+    parse_str(
+        "
+        alias Vec4 = vec4<f32>;
+        ",
+    )
+    .unwrap();
+}

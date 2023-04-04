@@ -23,4 +23,4 @@ var Texture: texture_2d<f32>;
 @group(0) @binding(1)
 var Sampler: sampler;
 
-type Vec2 = vec2<f32>;
+alias Vec2 = vec2<f32>;
