@@ -251,9 +251,7 @@ struct Example {
     vertex_buf: wgpu::Buffer,
     index_buf: wgpu::Buffer,
     blas: wgpu::Blas,
-    tlas: wgpu::Tlas,
-    instance: AccelerationStructureInstance,
-    instance_buf: wgpu::Buffer,
+    tlas_package: wgpu::TlasPackage,
     compute_pipeline: wgpu::ComputePipeline,
     compute_bind_group: wgpu::BindGroup,
     blit_pipeline: wgpu::RenderPipeline,
@@ -381,28 +379,6 @@ impl framework::Example for Example {
             max_instances: 1,
         });
 
-        let instance = AccelerationStructureInstance::new(
-            &Affine3A::from_rotation_translation(
-                Quat::from_rotation_x(45.9_f32.to_radians()),
-                Vec3 {
-                    x: 0.0,
-                    y: 0.0,
-                    z: -3.0,
-                },
-            ),
-            0,
-            0xff,
-            0,
-            0,
-            blas.handle().unwrap(),
-        );
-
-        let instance_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Instance Buffer"),
-            contents: bytemuck::cast_slice(&[instance]),
-            usage: wgpu::BufferUsages::TLAS_INPUT | wgpu::BufferUsages::COPY_DST,
-        });
-
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("rt_computer"),
             source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
@@ -480,10 +456,26 @@ impl framework::Example for Example {
             ],
         });
 
+        let mut tlas_package = wgpu::TlasPackage::new(tlas, 1);
+
+        *tlas_package.get_mut_single(0).unwrap() = Some(wgpu::TlasInstance::new(
+            &blas,
+            AccelerationStructureInstance::affine_to_rows(&Affine3A::from_rotation_translation(
+                Quat::from_rotation_x(45.9_f32.to_radians()),
+                Vec3 {
+                    x: 0.0,
+                    y: 0.0,
+                    z: -3.0,
+                },
+            )),
+            0,
+            0xff,
+        ));
+
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
         unsafe {
-            encoder.build_acceleration_structures_unsafe_tlas(
+            encoder.build_acceleration_structures(
                 iter::once(&wgpu::BlasBuildEntry {
                     blas: &blas,
                     geometry: &wgpu::BlasGeometries::TriangleGeometries(&[
@@ -499,12 +491,32 @@ impl framework::Example for Example {
                         },
                     ]),
                 }),
-                iter::once(&wgpu::TlasBuildEntry {
-                    tlas: &tlas,
-                    instance_buffer: &instance_buf,
-                    instance_count: 1,
-                }),
+                // iter::empty(),
+                iter::once(&tlas_package),
             );
+
+            // encoder.build_acceleration_structures_unsafe_tlas(
+            //     iter::once(&wgpu::BlasBuildEntry {
+            //         blas: &blas,
+            //         geometry: &wgpu::BlasGeometries::TriangleGeometries(&[
+            //             wgpu::BlasTriangleGeometry {
+            //                 size: &blas_geo_size_desc,
+            //                 vertex_buffer: &vertex_buf,
+            //                 first_vertex: 0,
+            //                 vertex_stride: mem::size_of::<Vertex>() as u64,
+            //                 index_buffer: Some(&index_buf),
+            //                 index_buffer_offset: Some(0),
+            //                 transform_buffer: None,
+            //                 transform_buffer_offset: None,
+            //             },
+            //         ]),
+            //     }),
+            //     iter::once(&wgpu::TlasBuildEntry {
+            //         tlas: &tlas,
+            //         instance_buffer: &instance_buf,
+            //         instance_count: 1,
+            //     }),
+            // );
         }
         queue.submit(Some(encoder.finish()));
 
@@ -518,9 +530,7 @@ impl framework::Example for Example {
             vertex_buf,
             index_buf,
             blas,
-            tlas,
-            instance,
-            instance_buf,
+            tlas_package,
             compute_pipeline,
             compute_bind_group,
             blit_pipeline,
@@ -551,8 +561,14 @@ impl framework::Example for Example {
         device.push_error_scope(wgpu::ErrorFilter::Validation);
 
         let anim_time = self.start_inst.elapsed().as_secs_f64() as f32;
-        self.instance
-            .set_transform(&Affine3A::from_rotation_translation(
+
+        self.tlas_package
+            .get_mut_single(0)
+            .unwrap()
+            .as_mut()
+            .unwrap()
+            .transform =
+            AccelerationStructureInstance::affine_to_rows(&Affine3A::from_rotation_translation(
                 Quat::from_euler(
                     glam::EulerRot::XYZ,
                     anim_time * 0.342,
@@ -565,24 +581,12 @@ impl framework::Example for Example {
                     z: -3.0,
                 },
             ));
-        queue.write_buffer(
-            &self.instance_buf,
-            0,
-            bytemuck::cast_slice(&[self.instance]),
-        );
 
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
         unsafe {
-            encoder.build_acceleration_structures_unsafe_tlas(
-                iter::empty(),
-                iter::once(&wgpu::TlasBuildEntry {
-                    tlas: &self.tlas,
-                    instance_buffer: &self.instance_buf,
-                    instance_count: 1,
-                }),
-            );
+            encoder.build_acceleration_structures(iter::empty(), iter::once(&self.tlas_package));
         }
 
         {
