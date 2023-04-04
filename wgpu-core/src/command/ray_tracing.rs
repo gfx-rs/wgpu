@@ -5,9 +5,8 @@ use crate::{
     id::{BlasId, CommandEncoderId, TlasId},
     init_tracker::MemoryInitKind,
     ray_tracing::{
-        BlasAction, BlasBuildEntry, BlasGeometries, 
-        BuildAccelerationStructureError, TlasAction, TlasBuildEntry, ValidateBlasActionsError,
-        ValidateTlasActionsError,
+        BlasAction, BlasBuildEntry, BlasGeometries, BuildAccelerationStructureError, TlasAction,
+        TlasBuildEntry, ValidateBlasActionsError, ValidateTlasActionsError,
     },
     resource::{Blas, Tlas},
     FastHashSet,
@@ -21,7 +20,6 @@ use std::{cmp::max, iter};
 use super::BakedCommands;
 
 // TODO:
-// tracing
 // automatic build splitting (if to big for spec or scratch buffer)
 // comments/documentation
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
@@ -84,15 +82,19 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     tlas: trace_tlas.clone(),
                 },
             );
+            if !trace_tlas.is_empty() {
+                log::warn!("a trace of command_encoder_build_acceleration_structures_unsafe_tlas containing a tlas build is not replayable!");
+            }
         }
 
         #[cfg(feature = "trace")]
         let blas_iter = (&trace_blas).into_iter().map(|x| {
             let geometries = match &x.geometries {
-                crate::ray_tracing::TraceBlasGeometries::TriangleGeometries(triangle_geometries) => {
-                    let iter = triangle_geometries
-                        .into_iter()
-                        .map(|tg| crate::ray_tracing::BlasTriangleGeometry {
+                crate::ray_tracing::TraceBlasGeometries::TriangleGeometries(
+                    triangle_geometries,
+                ) => {
+                    let iter = triangle_geometries.into_iter().map(|tg| {
+                        crate::ray_tracing::BlasTriangleGeometry {
                             size: &tg.size,
                             vertex_buffer: tg.vertex_buffer,
                             index_buffer: tg.index_buffer,
@@ -101,7 +103,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             vertex_stride: tg.vertex_stride,
                             index_buffer_offset: tg.index_buffer_offset,
                             transform_buffer_offset: tg.transform_buffer_offset,
-                        });
+                        }
+                    });
                     BlasGeometries::TriangleGeometries(Box::new(iter))
                 }
             };
@@ -113,7 +116,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         #[cfg(feature = "trace")]
         let tlas_iter = (&mut trace_tlas).iter();
-
 
         let mut input_barriers = Vec::<hal::BufferBarrier<A>>::new();
 

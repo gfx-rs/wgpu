@@ -85,6 +85,10 @@ test = true
 name = "stencil-triangles"
 test = true
 
+[[example]]
+name = "ray-cube"
+test = true
+
 [features]
 default = ["wgsl"]
 # Apply run-time checks, even in release builds. These are in addition

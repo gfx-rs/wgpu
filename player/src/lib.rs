@@ -137,7 +137,6 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
                     .unwrap();
                 }
                 trace::Command::BuildAccelerationStructuresUnsafeTlas { blas, tlas } => {
-                    println!("{blas:?}\n\n{tlas:?}\n\n");
                     let blas_iter = (&blas).into_iter().map(|x| {
                         let geometries = match &x.geometries {
                             wgc::ray_tracing::TraceBlasGeometries::TriangleGeometries(
@@ -163,11 +162,13 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
                             geometries: geometries,
                         }
                     });
-
-                    let tlas_iter = tlas.iter().cloned();
+                    
+                    if !tlas.is_empty() {
+                        log::error!("a trace of command_encoder_build_acceleration_structures_unsafe_tlas containing a tlas build is not replayable! skipping tlas build");
+                    }
 
                     self.command_encoder_build_acceleration_structures_unsafe_tlas::<A>(
-                        encoder, blas_iter, tlas_iter,
+                        encoder, blas_iter, std::iter::empty(),
                     )
                     .unwrap();
                 }
@@ -405,7 +406,6 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
                 self.queue_submit::<A>(device, &[]).unwrap();
             }
             Action::Submit(_index, commands) => {
-                println!("Submit");
                 let (encoder, error) = self.device_create_command_encoder::<A>(
                     device,
                     &wgt::CommandEncoderDescriptor { label: None },
