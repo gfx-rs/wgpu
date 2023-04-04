@@ -135,7 +135,8 @@ bitflags::bitflags! {
     pub struct Backends: u32 {
         /// Supported on Windows, Linux/Android, and macOS/iOS via Vulkan Portability (with the Vulkan feature enabled)
         const VULKAN = 1 << Backend::Vulkan as u32;
-        /// Currently unsupported
+        /// Supported on Linux/Android, the web through webassembly via WebGL, and Windows and
+        /// macOS/iOS via ANGLE
         const GL = 1 << Backend::Gl as u32;
         /// Supported on macOS/iOS
         const METAL = 1 << Backend::Metal as u32;
