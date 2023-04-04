@@ -170,6 +170,35 @@ nested `Block` is not available in the `Block`'s parents. Such a value would
 need to be stored in a local variable to be carried upwards in the statement
 tree.
 
+## Constant expressions
+
+A Naga *constant expression* is one of the following [`Expression`]
+variants, whose operands (if any) are also constant expressions:
+- [`Literal`]
+- [`Constant`], for [`Constant`s][const_type] whose [`override`] is [`None`]
+- [`ZeroValue`], for fixed-size types
+- [`Compose`]
+- [`Access`]
+- [`AccessIndex`]
+- [`Splat`]
+- [`Swizzle`]
+- [`Unary`]
+- [`Binary`]
+- [`Select`]
+- [`Relational`]
+- [`Math`]
+- [`As`]
+
+A constant expression can be evaluated at module translation time.
+
+## Override expressions
+
+A Naga *override expression* is the same as a [constant expression],
+except that it is also allowed to refer to [`Constant`s][const_type]
+whose [`override`] is something other than [`None`].
+
+An override expression can be evaluated at pipeline creation time.
+
 [`AtomicResult`]: Expression::AtomicResult
 [`RayQueryProceedResult`]: Expression::RayQueryProceedResult
 [`CallResult`]: Expression::CallResult
@@ -194,6 +223,26 @@ tree.
 
 [`Validator::validate`]: valid::Validator::validate
 [`ModuleInfo`]: valid::ModuleInfo
+
+[`Literal`]: Expression::Literal
+[`ZeroValue`]: Expression::ZeroValue
+[`Compose`]: Expression::Compose
+[`Access`]: Expression::Access
+[`AccessIndex`]: Expression::AccessIndex
+[`Splat`]: Expression::Splat
+[`Swizzle`]: Expression::Swizzle
+[`Unary`]: Expression::Unary
+[`Binary`]: Expression::Binary
+[`Select`]: Expression::Select
+[`Relational`]: Expression::Relational
+[`Math`]: Expression::Math
+[`As`]: Expression::As
+
+[const_type]: Constant
+[`override`]: Constant::override
+[`None`]: Override::None
+
+[constant expression]: index.html#constant-expressions
 */
 
 #![allow(
@@ -829,7 +878,20 @@ pub struct Constant {
     pub name: Option<String>,
     pub r#override: Override,
     pub ty: Handle<Type>,
-    /// Expression handle lives in const_expressions
+
+    /// The value of the constant.
+    ///
+    /// This [`Handle`] refers to [`Module::const_expressions`], not
+    /// any [`Function::expressions`] arena.
+    ///
+    /// If [`override`] is [`None`], then this must be a Naga
+    /// [constant expression]. Otherwise, this may be a Naga
+    /// [override expression] or [constant expression].
+    ///
+    /// [`override`]: Constant::override
+    /// [`None`]: Override::None
+    /// [constant expression]: index.html#constant-expressions
+    /// [override expression]: index.html#override-expressions
     pub init: Handle<Expression>,
 }
 
@@ -1927,10 +1989,13 @@ pub struct Module {
     pub constants: Arena<Constant>,
     /// Arena for the global variables defined in this module.
     pub global_variables: Arena<GlobalVariable>,
-    /// const/override-expressions used by this module.
+    /// [Constant expressions] and [override expressions] used by this module.
     ///
-    /// An `Expression` must occur before all other `Expression`s that use its
-    /// value.
+    /// Each `Expression` must occur in the arena before any
+    /// `Expression` that uses its value.
+    ///
+    /// [Constant expressions]: index.html#constant-expressions
+    /// [override expressions]: index.html#override-expressions
     pub const_expressions: Arena<Expression>,
     /// Arena for the functions defined in this module.
     ///
