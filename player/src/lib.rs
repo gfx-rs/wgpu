@@ -162,13 +162,15 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
                             geometries: geometries,
                         }
                     });
-                    
+
                     if !tlas.is_empty() {
                         log::error!("a trace of command_encoder_build_acceleration_structures_unsafe_tlas containing a tlas build is not replayable! skipping tlas build");
                     }
 
                     self.command_encoder_build_acceleration_structures_unsafe_tlas::<A>(
-                        encoder, blas_iter, std::iter::empty(),
+                        encoder,
+                        blas_iter,
+                        std::iter::empty(),
                     )
                     .unwrap();
                 }

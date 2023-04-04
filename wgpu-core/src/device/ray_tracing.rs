@@ -4,6 +4,7 @@ use crate::{
     device::{queue::TempResource, Device, DeviceError},
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Input, Token},
     id::{self, BlasId, TlasId},
+    ray_tracing::{getRawTlasInstanceSize, CreateBlasError, CreateTlasError},
     resource, LabelHelpers, LifeGuard, Stored,
 };
 
@@ -19,7 +20,7 @@ impl<A: HalApi> Device<A> {
         self_id: id::DeviceId,
         blas_desc: &resource::BlasDescriptor,
         sizes: wgt::BlasGeometrySizeDescriptors,
-    ) -> Result<resource::Blas<A>, resource::CreateBlasError> {
+    ) -> Result<resource::Blas<A>, CreateBlasError> {
         debug_assert_eq!(self_id.backend(), A::VARIANT);
 
         let size_info = match &sizes {
@@ -28,7 +29,7 @@ impl<A: HalApi> Device<A> {
                     Vec::<hal::AccelerationStructureTriangles<A>>::with_capacity(desc.len());
                 for x in desc {
                     if x.index_count.is_some() != x.index_format.is_some() {
-                        return Err(resource::CreateBlasError::Unimplemented);
+                        return Err(CreateBlasError::Unimplemented);
                     }
                     // TODO more validation
                     let indices =
@@ -71,6 +72,8 @@ impl<A: HalApi> Device<A> {
         }
         .map_err(DeviceError::from)?;
 
+        let handle = unsafe { self.raw.get_acceleration_structure_device_address(&raw) };
+
         Ok(resource::Blas {
             raw: Some(raw),
             device_id: Stored {
@@ -83,6 +86,7 @@ impl<A: HalApi> Device<A> {
             flags: blas_desc.flags,
             update_mode: blas_desc.update_mode,
             built: Mutex::new(false),
+            handle,
         })
     }
 
@@ -93,7 +97,7 @@ impl<A: HalApi> Device<A> {
         &self,
         self_id: id::DeviceId,
         desc: &resource::TlasDescriptor,
-    ) -> Result<resource::Tlas<A>, resource::CreateTlasError> {
+    ) -> Result<resource::Tlas<A>, CreateTlasError> {
         debug_assert_eq!(self_id.backend(), A::VARIANT);
 
         // TODO validate max_instances
@@ -122,6 +126,18 @@ impl<A: HalApi> Device<A> {
         }
         .map_err(DeviceError::from)?;
 
+        let instance_buffer_size = getRawTlasInstanceSize::<A>();
+        let instance_buffer = unsafe {
+            self.raw.create_buffer(&hal::BufferDescriptor {
+                label: Some("(wgpu-core) instances_buffer"),
+                size: instance_buffer_size as u64,
+                usage: hal::BufferUses::COPY_DST
+                    | hal::BufferUses::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT,
+                memory_flags: hal::MemoryFlags::PREFER_COHERENT,
+            })
+        }
+        .map_err(DeviceError::from)?;
+
         Ok(resource::Tlas {
             raw: Some(raw),
             device_id: Stored {
@@ -133,6 +149,7 @@ impl<A: HalApi> Device<A> {
             flags: desc.flags,
             update_mode: desc.update_mode,
             built: Mutex::new(false),
+            instance_buffer,
         })
     }
 }
@@ -147,7 +164,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         desc: &resource::BlasDescriptor,
         sizes: wgt::BlasGeometrySizeDescriptors,
         id_in: Input<G, BlasId>,
-    ) -> (BlasId, Option<u64>, Option<resource::CreateBlasError>) {
+    ) -> (BlasId, Option<u64>, Option<CreateBlasError>) {
         profiling::scope!("Device::create_blas");
 
         let hub = A::hub(self);
@@ -173,12 +190,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(blas) => blas,
                 Err(e) => break e,
             };
-
-            let handle = unsafe {
-                device
-                    .raw
-                    .get_acceleration_structure_device_address(blas.raw.as_ref().unwrap())
-            };
+            let handle = blas.handle;
 
             let ref_count = blas.life_guard.add_ref();
 
@@ -202,7 +214,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         device_id: id::DeviceId,
         desc: &resource::TlasDescriptor,
         id_in: Input<G, TlasId>,
-    ) -> (TlasId, Option<resource::CreateTlasError>) {
+    ) -> (TlasId, Option<CreateTlasError>) {
         profiling::scope!("Device::create_tlas");
 
         let hub = A::hub(self);

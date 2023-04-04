@@ -10,13 +10,13 @@ use wgt::{
 use crate::{
     BindGroupDescriptor, BindGroupLayoutDescriptor, Buffer, BufferAsyncError, BufferDescriptor,
     CommandEncoderDescriptor, ComputePassDescriptor, ComputePipelineDescriptor,
-    ContextBlasTriangleGeometry, CreateBlasDescriptor, CreateTlasDescriptor, DeviceDescriptor,
-    Error, ErrorFilter, ImageCopyBuffer, ImageCopyTexture, Maintain, MapMode,
-    PipelineLayoutDescriptor, QuerySetDescriptor, RenderBundleDescriptor,
-    RenderBundleEncoderDescriptor, RenderPassDescriptor, RenderPipelineDescriptor,
-    RequestAdapterOptions, RequestDeviceError, SamplerDescriptor, ShaderModuleDescriptor,
-    ShaderModuleDescriptorSpirV, Texture, TextureDescriptor, TextureViewDescriptor,
-    UncapturedErrorHandler,
+    ContextBlasTriangleGeometry, ContextTlasInstance, ContextTlasPackage, CreateBlasDescriptor,
+    CreateTlasDescriptor, DeviceDescriptor, DynContextTlasInstance, DynContextTlasPackage, Error,
+    ErrorFilter, ImageCopyBuffer, ImageCopyTexture, Maintain, MapMode, PipelineLayoutDescriptor,
+    QuerySetDescriptor, RenderBundleDescriptor, RenderBundleEncoderDescriptor,
+    RenderPassDescriptor, RenderPipelineDescriptor, RequestAdapterOptions, RequestDeviceError,
+    SamplerDescriptor, ShaderModuleDescriptor, ShaderModuleDescriptorSpirV, Texture,
+    TextureDescriptor, TextureViewDescriptor, UncapturedErrorHandler,
 };
 
 /// Meta trait for an id tracked by a context.
@@ -1016,6 +1016,13 @@ pub trait Context: Debug + Send + Sized + Sync {
         blas: impl Iterator<Item = crate::ContextBlasBuildEntry<'a, Self>>,
         tlas: impl Iterator<Item = crate::ContextTlasBuildEntry<Self>>,
     );
+    fn command_encoder_build_acceleration_structures<'a>(
+        &'a self,
+        encoder: &Self::CommandEncoderId,
+        encoder_data: &Self::CommandEncoderData,
+        blas: impl Iterator<Item = crate::ContextBlasBuildEntry<'a, Self>>,
+        tlas: impl Iterator<Item = crate::ContextTlasPackage<'a, Self>>,
+    );
     fn blas_destroy(&self, blas: &Self::BlasId, blas_data: &Self::BlasData);
     fn blas_drop(&self, blas: &Self::BlasId, blas_data: &Self::BlasData);
     fn tlas_destroy(&self, tlas: &Self::TlasId, tlas_data: &Self::TlasData);
@@ -1954,6 +1961,13 @@ pub(crate) trait DynContext: Debug + Send + Sync {
         encoder_data: &crate::Data,
         blas: &mut dyn Iterator<Item = crate::DynContextBlasBuildEntry<'a>>,
         tlas: &mut dyn Iterator<Item = crate::DynContextTlasBuildEntry>,
+    );
+    fn command_encoder_build_acceleration_structures<'a>(
+        &self,
+        encoder: &ObjectId,
+        encoder_data: &crate::Data,
+        blas: &mut dyn Iterator<Item = crate::DynContextBlasBuildEntry<'a>>,
+        tlas: &mut dyn Iterator<Item = crate::DynContextTlasPackage>,
     );
     fn blas_destroy(&self, blas: &ObjectId, blas_data: &crate::Data);
     fn blas_drop(&self, blas: &ObjectId, blas_data: &crate::Data);
@@ -3983,6 +3997,74 @@ where
         });
 
         Context::command_encoder_build_acceleration_structures_unsafe_tlas(
+            self,
+            &encoder,
+            encoder_data,
+            blas,
+            tlas,
+        )
+    }
+
+    fn command_encoder_build_acceleration_structures<'a>(
+        &self,
+        encoder: &ObjectId,
+        encoder_data: &crate::Data,
+        blas: &mut dyn Iterator<Item = crate::DynContextBlasBuildEntry<'a>>,
+        tlas: &mut dyn Iterator<Item = crate::DynContextTlasPackage>,
+    ) {
+        let encoder = <T::CommandEncoderId>::from(*encoder);
+        let encoder_data = downcast_ref(encoder_data);
+
+        let blas = blas.into_iter().map(|e| {
+            let geometries = match e.geometries {
+                crate::DynContextBlasGeometries::TriangleGeometries(triangle_geometries) => {
+                    let iter =
+                        triangle_geometries
+                            .into_iter()
+                            .map(|tg| ContextBlasTriangleGeometry {
+                                vertex_buffer: <T::BufferId>::from(tg.vertex_buffer),
+                                index_buffer: tg.index_buffer.map(<T::BufferId>::from),
+                                transform_buffer: tg.transform_buffer.map(<T::BufferId>::from),
+                                size: tg.size,
+                                transform_buffer_offset: tg.transform_buffer_offset,
+                                first_vertex: tg.first_vertex,
+                                vertex_stride: tg.vertex_stride,
+                                index_buffer_offset: tg.index_buffer_offset,
+                            });
+                    crate::ContextBlasGeometries::TriangleGeometries(Box::new(iter))
+                }
+            };
+            crate::ContextBlasBuildEntry {
+                blas_id: <T::BlasId>::from(e.blas_id),
+                // blas_data: downcast_ref(e.blas_data),
+                geometries,
+            }
+        });
+
+        let mut tlas = tlas.into_iter().map(|e: DynContextTlasPackage| {
+            let instances =
+                e.instances
+                    .into_iter()
+                    .map(|instance: Option<DynContextTlasInstance>| {
+                        if let Some(instance) = instance {
+                            Some(ContextTlasInstance {
+                                blas_id: <T::BlasId>::from(instance.blas),
+                                transform: instance.transform,
+                                custom_index: instance.custom_index,
+                                mask: instance.mask,
+                            })
+                        } else {
+                            None
+                        }
+                    });
+            ContextTlasPackage {
+                tlas_id: <T::TlasId>::from(e.tlas_id),
+                instances: Box::new(instances),
+                lowest_unmodified: e.lowest_unmodified,
+            }
+        });
+
+        Context::command_encoder_build_acceleration_structures(
             self,
             &encoder,
             encoder_data,

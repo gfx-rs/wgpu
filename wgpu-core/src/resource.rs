@@ -809,6 +809,7 @@ pub struct Blas<A: hal::Api> {
     pub(crate) flags: wgt::AccelerationStructureFlags,
     pub(crate) update_mode: wgt::AccelerationStructureUpdateMode,
     pub(crate) built: Mutex<bool>,
+    pub(crate) handle: u64,
 }
 
 impl<A: hal::Api> Resource for Blas<A> {
@@ -827,6 +828,7 @@ pub struct Tlas<A: hal::Api> {
     pub(crate) flags: wgt::AccelerationStructureFlags,
     pub(crate) update_mode: wgt::AccelerationStructureUpdateMode,
     pub(crate) built: Mutex<bool>,
+    pub(crate) instance_buffer: A::Buffer,
 }
 
 impl<A: hal::Api> Resource for Tlas<A> {
@@ -835,24 +837,4 @@ impl<A: hal::Api> Resource for Tlas<A> {
     fn life_guard(&self) -> &LifeGuard {
         &self.life_guard
     }
-}
-
-#[derive(Clone, Debug, Error)]
-pub enum CreateBlasError {
-    #[error(transparent)]
-    Device(#[from] DeviceError),
-    #[error(transparent)]
-    CreateBufferError(#[from] CreateBufferError),
-    #[error("Unimplemented Blas error: this error is not yet implemented")]
-    Unimplemented,
-}
-
-#[derive(Clone, Debug, Error)]
-pub enum CreateTlasError {
-    #[error(transparent)]
-    Device(#[from] DeviceError),
-    #[error(transparent)]
-    CreateBufferError(#[from] CreateBufferError),
-    #[error("Unimplemented Tlas error: this error is not yet implemented")]
-    Unimplemented,
 }

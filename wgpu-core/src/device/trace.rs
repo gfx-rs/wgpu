@@ -195,6 +195,10 @@ pub enum Command {
         blas: Vec<crate::ray_tracing::TraceBlasBuildEntry>,
         tlas: Vec<crate::ray_tracing::TlasBuildEntry>,
     },
+    BuildAccelerationStructures {
+        blas: Vec<crate::ray_tracing::TraceBlasBuildEntry>,
+        tlas: Vec<crate::ray_tracing::TraceTlasPackage>,
+    },
 }
 
 #[cfg(feature = "trace")]

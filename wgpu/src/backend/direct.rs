@@ -2,10 +2,11 @@ use crate::{
     context::{ObjectId, Unused},
     AdapterInfo, BindGroupDescriptor, BindGroupLayoutDescriptor, BindingResource, BufferBinding,
     CommandEncoderDescriptor, ComputePassDescriptor, ComputePipelineDescriptor,
-    DownlevelCapabilities, Features, Label, Limits, LoadOp, MapMode, Operations,
-    PipelineLayoutDescriptor, RenderBundleEncoderDescriptor, RenderPipelineDescriptor,
-    SamplerDescriptor, ShaderModuleDescriptor, ShaderModuleDescriptorSpirV, ShaderSource,
-    SurfaceStatus, TextureDescriptor, TextureViewDescriptor, UncapturedErrorHandler,
+    ContextTlasInstance, ContextTlasPackage, DownlevelCapabilities, Features, Label, Limits,
+    LoadOp, MapMode, Operations, PipelineLayoutDescriptor, RenderBundleEncoderDescriptor,
+    RenderPipelineDescriptor, SamplerDescriptor, ShaderModuleDescriptor,
+    ShaderModuleDescriptorSpirV, ShaderSource, SurfaceStatus, TextureDescriptor,
+    TextureViewDescriptor, UncapturedErrorHandler,
 };
 
 use arrayvec::ArrayVec;
@@ -3061,9 +3062,76 @@ impl crate::Context for Context {
 
         if let Err(cause) = wgc::gfx_select!(encoder => global.command_encoder_build_acceleration_structures_unsafe_tlas(
             *encoder,
-            {
-                blas
-            },
+            blas,
+            tlas
+        )) {
+            self.handle_error_nolabel(
+                &encoder_data.error_sink,
+                cause,
+                "CommandEncoder::build_acceleration_structures_unsafe_tlas",
+            );
+        }
+    }
+
+    fn command_encoder_build_acceleration_structures<'a>(
+        &'a self,
+        encoder: &Self::CommandEncoderId,
+        encoder_data: &Self::CommandEncoderData,
+        blas: impl Iterator<Item = crate::ContextBlasBuildEntry<'a, Self>>,
+        tlas: impl Iterator<Item = crate::ContextTlasPackage<'a, Self>>,
+    ) {
+        let global = &self.0;
+
+        let blas = blas.map(|e: crate::ContextBlasBuildEntry<Self>| {
+            let geometries = match e.geometries {
+                crate::ContextBlasGeometries::TriangleGeometries(triangle_geometries) => {
+                    let iter = triangle_geometries.into_iter().map(|tg| {
+                        wgc::ray_tracing::BlasTriangleGeometry {
+                            vertex_buffer: tg.vertex_buffer,
+                            index_buffer: tg.index_buffer,
+                            transform_buffer: tg.transform_buffer,
+                            size: tg.size,
+                            transform_buffer_offset: tg.transform_buffer_offset,
+                            first_vertex: tg.first_vertex,
+                            vertex_stride: tg.vertex_stride,
+                            index_buffer_offset: tg.index_buffer_offset,
+                        }
+                    });
+                    wgc::ray_tracing::BlasGeometries::TriangleGeometries(Box::new(iter))
+                }
+            };
+            wgc::ray_tracing::BlasBuildEntry {
+                blas_id: e.blas_id,
+                geometries,
+            }
+        });
+
+        let mut tlas = tlas.into_iter().map(|e| {
+            let instances =
+                e.instances
+                    .into_iter()
+                    .map(|instance: Option<ContextTlasInstance<_>>| {
+                        if let Some(instance) = instance {
+                            Some(wgc::ray_tracing::TlasInstance {
+                                blas_id: instance.blas_id,
+                                transform: instance.transform,
+                                custom_index: instance.custom_index,
+                                mask: instance.mask,
+                            })
+                        } else {
+                            None
+                        }
+                    });
+            wgc::ray_tracing::TlasPackage {
+                tlas_id: e.tlas_id,
+                instances: Box::new(instances),
+                lowest_unmodified: e.lowest_unmodified,
+            }
+        });
+
+        if let Err(cause) = wgc::gfx_select!(encoder => global.command_encoder_build_acceleration_structures(
+            *encoder,
+            blas,
             tlas
         )) {
             self.handle_error_nolabel(

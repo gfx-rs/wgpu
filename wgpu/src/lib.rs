@@ -3028,6 +3028,72 @@ impl CommandEncoder {
             &mut tlas,
         );
     }
+
+    /// Build bottom and top level acceleration structures
+    pub unsafe fn build_acceleration_structures<'a>(
+        &mut self,
+        blas: impl IntoIterator<Item = &'a BlasBuildEntry<'a>>,
+        tlas: impl IntoIterator<Item = &'a TlasPackage>,
+    ) {
+        let id = self.id.as_ref().unwrap();
+
+        let mut blas = blas.into_iter().map(|e: &BlasBuildEntry| {
+            let geometries = match e.geometry {
+                BlasGeometries::TriangleGeometries(triangle_geometries) => {
+                    let iter = triangle_geometries.iter().map(|tg: &BlasTriangleGeometry| {
+                        DynContextBlasTriangleGeometry {
+                            size: tg.size,
+                            vertex_buffer: tg.vertex_buffer.id,
+
+                            index_buffer: tg.index_buffer.map(|index_buffer| index_buffer.id),
+
+                            transform_buffer: tg
+                                .transform_buffer
+                                .map(|transform_buffer| transform_buffer.id),
+
+                            first_vertex: tg.first_vertex,
+                            vertex_stride: tg.vertex_stride,
+                            index_buffer_offset: tg.index_buffer_offset,
+                            transform_buffer_offset: tg.transform_buffer_offset,
+                        }
+                    });
+                    DynContextBlasGeometries::TriangleGeometries(Box::new(iter))
+                }
+            };
+            DynContextBlasBuildEntry {
+                blas_id: e.blas.id,
+                geometries,
+            }
+        });
+
+        let mut tlas = tlas.into_iter().map(|e: &TlasPackage| {
+            let instances = e.instances.iter().map(|instance: &Option<TlasInstance>| {
+                if let Some(instance) = instance {
+                    Some(DynContextTlasInstance {
+                        blas: instance.blas,
+                        transform: &instance.transform,
+                        custom_index: instance.custom_index,
+                        mask: instance.mask,
+                    })
+                } else {
+                    None
+                }
+            });
+            DynContextTlasPackage {
+                tlas_id: e.tlas.id,
+                instances: Box::new(instances),
+                lowest_unmodified: e.lowest_unmodified,
+            }
+        });
+
+        DynContext::command_encoder_build_acceleration_structures(
+            &*self.context,
+            id,
+            self.data.as_ref(),
+            &mut blas,
+            &mut tlas,
+        );
+    }
 }
 
 /// [`Features::TIMESTAMP_QUERY`] must be enabled on the device in order to call these functions.
@@ -4716,6 +4782,95 @@ pub struct TlasBuildEntry<'a> {
 }
 static_assertions::assert_impl_all!(TlasBuildEntry: Send, Sync);
 
+/// TODO Docu
+/// Very unstable
+#[derive(Debug, Clone)]
+pub struct TlasInstance {
+    blas: ObjectId,
+    pub transform: [f32; 12],
+    pub custom_index: u32,
+    pub mask: u8,
+}
+
+impl TlasInstance {
+    pub fn new(blas: &Blas, transform: [f32; 12], custom_index: u32, mask: u8) -> Self {
+        Self {
+            blas: blas.id,
+            transform,
+            custom_index,
+            mask,
+        }
+    }
+
+    pub fn set_blas(&mut self, blas: &Blas) {
+        self.blas = blas.id;
+    }
+}
+
+pub(crate) struct DynContextTlasInstance<'a> {
+    blas: ObjectId,
+    transform: &'a [f32; 12],
+    custom_index: u32,
+    mask: u8,
+}
+
+pub struct ContextTlasInstance<'a, T: Context> {
+    blas_id: T::BlasId,
+    transform: &'a [f32; 12],
+    custom_index: u32,
+    mask: u8,
+}
+
+pub struct TlasPackage {
+    tlas: Tlas,
+    instances: Vec<Option<TlasInstance>>,
+    lowest_unmodified: u32,
+}
+static_assertions::assert_impl_all!(TlasPackage: Send, Sync);
+
+impl TlasPackage {
+    /// TODO Docu
+    pub fn new(tlas: Tlas, max_instances: u32) -> Self {
+        Self::new_with_instances(tlas, vec![None; max_instances as usize])
+    }
+
+    /// TODO Docu
+    pub fn new_with_instances(tlas: Tlas, instances: Vec<Option<TlasInstance>>) -> Self {
+        Self {
+            tlas,
+            lowest_unmodified: instances.len() as u32,
+            instances,
+        }
+    }
+
+    /// TODO Docu
+    pub fn get(&self) -> &[Option<TlasInstance>] {
+        &self.instances
+    }
+
+    /// TODO Docu
+    pub fn get_mut_slice(&mut self, range: Range<usize>) -> Option<&mut [Option<TlasInstance>]> {
+        if range.end > self.instances.len() {
+            return None;
+        }
+        if range.end as u32 > self.lowest_unmodified {
+            self.lowest_unmodified = range.end as u32;
+        }
+        Some(&mut self.instances[range])
+    }
+
+    /// TODO Docu
+    pub fn get_mut_single(&mut self, index: usize) -> Option<&mut Option<TlasInstance>> {
+        if index >= self.instances.len() {
+            return None;
+        }
+        if index as u32 + 1 > self.lowest_unmodified {
+            self.lowest_unmodified = index as u32 + 1;
+        }
+        Some(&mut self.instances[index])
+    }
+}
+
 pub(crate) struct DynContextBlasTriangleGeometry<'a> {
     size: &'a BlasTriangleGeometrySizeDescriptor,
     vertex_buffer: ObjectId,
@@ -4740,6 +4895,12 @@ pub(crate) struct DynContextTlasBuildEntry {
     tlas_id: ObjectId,
     instance_buffer_id: ObjectId,
     instance_count: u32,
+}
+
+pub(crate) struct DynContextTlasPackage<'a> {
+    tlas_id: ObjectId,
+    instances: Box<dyn Iterator<Item = Option<DynContextTlasInstance<'a>>> + 'a>,
+    lowest_unmodified: u32,
 }
 
 /// TODO Docu
@@ -4774,4 +4935,11 @@ pub struct ContextTlasBuildEntry<T: Context> {
     instance_buffer_id: T::BufferId,
     // instance_buffer_data: &'a T::BufferData,
     instance_count: u32,
+}
+
+/// TODO Docu
+pub struct ContextTlasPackage<'a, T: Context> {
+    tlas_id: T::TlasId,
+    instances: Box<dyn Iterator<Item = Option<ContextTlasInstance<'a, T>>> + 'a>,
+    lowest_unmodified: u32,
 }

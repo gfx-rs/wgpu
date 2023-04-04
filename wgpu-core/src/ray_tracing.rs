@@ -1,16 +1,52 @@
+/// Ray tracing
+/// Major missing optimizations (no api surface changes needed):
+/// - use custom tracker to track build state instead of mutex
+/// - no forced rebuilt (build mode deduction)
+/// - lazy instance buffer allocation
+/// - maybe share scratch and instance staging buffer allocation
+/// - partial instance buffer uploads (api surface already designed with this in mind)
+/// - (non performance extract function in build (rust function extraction with guards is a pain))
+use std::{ptr, slice};
+
 use crate::{
     command::CommandEncoderError,
+    device::DeviceError,
+    hub::HalApi,
     id::{BlasId, BufferId, TlasId},
+    resource::CreateBufferError,
 };
 
 use thiserror::Error;
 use wgt::BufferAddress;
+
+#[derive(Clone, Debug, Error)]
+pub enum CreateBlasError {
+    #[error(transparent)]
+    Device(#[from] DeviceError),
+    #[error(transparent)]
+    CreateBufferError(#[from] CreateBufferError),
+    #[error("Unimplemented Blas error: this error is not yet implemented")]
+    Unimplemented,
+}
+
+#[derive(Clone, Debug, Error)]
+pub enum CreateTlasError {
+    #[error(transparent)]
+    Device(#[from] DeviceError),
+    #[error(transparent)]
+    CreateBufferError(#[from] CreateBufferError),
+    #[error("Unimplemented Tlas error: this error is not yet implemented")]
+    Unimplemented,
+}
 
 /// Error encountered while attempting to do a copy on a command encoder.
 #[derive(Clone, Debug, Error)]
 pub enum BuildAccelerationStructureError {
     #[error(transparent)]
     Encoder(#[from] CommandEncoderError),
+
+    #[error(transparent)]
+    Device(#[from] DeviceError),
 
     #[error("Buffer {0:?} is invalid or destroyed")]
     InvalidBuffer(BufferId),
@@ -42,6 +78,9 @@ pub enum BuildAccelerationStructureError {
 
     #[error("Blas {0:?} is invalid or destroyed")]
     InvalidBlas(BlasId),
+
+    #[error("Blas {0:?} is invalid or destroyed (for instance)")]
+    InvalidBlasForInstance(BlasId),
 
     #[error("Tlas {0:?} is invalid or destroyed")]
     InvalidTlas(TlasId),
@@ -98,6 +137,20 @@ pub struct TlasBuildEntry {
     pub instance_count: u32,
 }
 
+#[derive(Debug)]
+pub struct TlasInstance<'a> {
+    pub blas_id: BlasId,
+    pub transform: &'a [f32; 12],
+    pub custom_index: u32,
+    pub mask: u8,
+}
+
+pub struct TlasPackage<'a> {
+    pub tlas_id: TlasId,
+    pub instances: Box<dyn Iterator<Item = Option<TlasInstance<'a>>> + 'a>,
+    pub lowest_unmodified: u32,
+}
+
 #[derive(Debug, Copy, Clone)]
 pub(crate) enum AccelerationStructureActionKind {
     Build,
@@ -143,4 +196,68 @@ pub enum TraceBlasGeometries {
 pub struct TraceBlasBuildEntry {
     pub blas_id: BlasId,
     pub geometries: TraceBlasGeometries,
+}
+
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "trace", derive(serde::Serialize))]
+#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
+pub struct TraceTlasInstance {
+    pub blas_id: BlasId,
+    pub transform: [f32; 12],
+    pub custom_index: u32,
+    pub mask: u8,
+}
+
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "trace", derive(serde::Serialize))]
+#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
+pub struct TraceTlasPackage {
+    pub tlas_id: TlasId,
+    pub instances: Vec<Option<TraceTlasInstance>>,
+    pub lowest_unmodified: u32,
+}
+
+pub(crate) fn getRawTlasInstanceSize<A: HalApi>() -> usize {
+    match A::VARIANT {
+        wgt::Backend::Empty => 0,
+        wgt::Backend::Vulkan => 64,
+        _ => unimplemented!(),
+    }
+}
+
+#[derive(Clone)]
+#[repr(C)]
+struct RawTlasInstance {
+    transform: [f32; 12],
+    custom_index_and_mask: u32,
+    shader_binding_table_record_offset_and_flags: u32,
+    acceleration_structure_reference: u64,
+}
+
+pub(crate) fn tlas_instance_into_bytes<A: HalApi>(
+    instance: &TlasInstance,
+    blas_address: u64,
+) -> Vec<u8> {
+    match A::VARIANT {
+        wgt::Backend::Empty => vec![],
+        wgt::Backend::Vulkan => {
+            const MAX_U24: u32 = (1u32 << 24u32) - 1u32;
+            let temp = RawTlasInstance {
+                transform: instance.transform.clone(),
+                custom_index_and_mask: (instance.custom_index & MAX_U24)
+                    | (u32::from(instance.mask) << 24),
+                shader_binding_table_record_offset_and_flags: 0,
+                acceleration_structure_reference: blas_address,
+            };
+            let temp: *const _ = &temp;
+            unsafe {
+                slice::from_raw_parts::<u8>(
+                    temp as *const u8,
+                    std::mem::size_of::<RawTlasInstance>(),
+                )
+                .to_vec()
+            }
+        }
+        _ => unimplemented!(),
+    }
 }
