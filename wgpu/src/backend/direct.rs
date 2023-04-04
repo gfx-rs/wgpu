@@ -236,7 +236,7 @@ impl Context {
         })
     }
 
-    #[cfg(all(feature = "dx12", windows))]
+    #[cfg(target_os = "windows")]
     pub unsafe fn create_surface_from_visual(&self, visual: *mut std::ffi::c_void) -> Surface {
         let id = unsafe { self.0.instance_create_surface_from_visual(visual, ()) };
         Surface {
@@ -245,7 +245,7 @@ impl Context {
         }
     }
 
-    #[cfg(all(feature = "dx12", windows))]
+    #[cfg(target_os = "windows")]
     pub unsafe fn create_surface_from_surface_handle(
         &self,
         surface_handle: *mut std::ffi::c_void,
