@@ -12,7 +12,7 @@ use crate::{
     hal_api::HalApi,
     id,
     identity::{GlobalIdentityHandlerFactory, Input},
-    init_tracker::{has_copy_partial_init_tracker_coverage, TextureInitRange},
+    init_tracker::{has_copy_partial_init_tracker_coverage, BufferInitTracker, TextureInitRange},
     resource::{
         Buffer, BufferAccessError, BufferMapState, Resource, ResourceInfo, StagingBuffer, Texture,
         TextureInner, TextureView,
@@ -21,12 +21,15 @@ use crate::{
 };
 
 use hal::{CommandEncoder as _, Device as _, Queue as _};
+use parking_lot::{Mutex, RwLock};
 use smallvec::SmallVec;
 use std::{
     iter, mem, ptr,
     sync::{atomic::Ordering, Arc},
 };
 use thiserror::Error;
+
+use super::Device;
 
 /// Number of command buffers that we generate from the same pool
 /// for the write_xxx commands, before the pool is recycled.
@@ -112,7 +115,6 @@ pub struct WrappedSubmissionIndex {
 #[derive(Debug)]
 pub enum TempResource<A: HalApi> {
     Buffer(Arc<Buffer<A>>),
-    StagingBuffer(Arc<StagingBuffer<A>>),
     Texture(Arc<Texture<A>>, SmallVec<[Arc<TextureView<A>>; 1]>),
 }
 
@@ -184,9 +186,18 @@ impl<A: HalApi> PendingWrites<A> {
         self.temp_resources.push(resource);
     }
 
-    fn consume(&mut self, buffer: Arc<StagingBuffer<A>>) {
+    fn consume(&mut self, device: &Arc<Device<A>>, buffer: Arc<StagingBuffer<A>>) {
         self.temp_resources
-            .push(TempResource::StagingBuffer(buffer));
+            .push(TempResource::Buffer(Arc::new(Buffer::<A> {
+                raw: buffer.raw.lock().take(),
+                device: device.clone(),
+                usage: wgt::BufferUsages::empty(),
+                size: buffer.size,
+                initialization_status: RwLock::new(BufferInitTracker::new(buffer.size)),
+                sync_mapped_writes: Mutex::new(None),
+                map_state: Mutex::new(crate::resource::BufferMapState::Idle),
+                info: ResourceInfo::new(&buffer.info.label),
+            })));
     }
 
     #[must_use]
@@ -259,7 +270,7 @@ fn prepare_staging_buffer<A: HalApi>(
     let mapping = unsafe { device.map_buffer(&buffer, 0..size) }?;
 
     let staging_buffer = StagingBuffer {
-        raw: Arc::new(buffer),
+        raw: Mutex::new(Some(buffer)),
         size,
         info: ResourceInfo::new("<StagingBuffer>"),
         is_coherent: mapping.is_coherent,
@@ -271,9 +282,14 @@ fn prepare_staging_buffer<A: HalApi>(
 impl<A: HalApi> StagingBuffer<A> {
     unsafe fn flush(&self, device: &A::Device) -> Result<(), DeviceError> {
         if !self.is_coherent {
-            unsafe { device.flush_mapped_ranges(&self.raw, iter::once(0..self.size)) };
+            unsafe {
+                device.flush_mapped_ranges(
+                    self.raw.lock().as_ref().unwrap(),
+                    iter::once(0..self.size),
+                )
+            };
         }
-        unsafe { device.unmap_buffer(&self.raw)? };
+        unsafe { device.unmap_buffer(self.raw.lock().as_ref().unwrap())? };
         Ok(())
     }
 }
@@ -365,7 +381,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .lock()
                 .as_mut()
                 .unwrap()
-                .consume(Arc::new(staging_buffer));
+                .consume(&device, Arc::new(staging_buffer));
             return Err(flush_error.into());
         }
 
@@ -381,7 +397,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .lock()
             .as_mut()
             .unwrap()
-            .consume(Arc::new(staging_buffer));
+            .consume(&device, Arc::new(staging_buffer));
         result
     }
 
@@ -441,7 +457,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .lock()
                 .as_mut()
                 .unwrap()
-                .consume(staging_buffer);
+                .consume(&device, staging_buffer);
             return Err(flush_error.into());
         }
 
@@ -457,7 +473,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .lock()
             .as_mut()
             .unwrap()
-            .consume(staging_buffer);
+            .consume(&device, staging_buffer);
         result
     }
 
@@ -514,7 +530,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     fn queue_write_staging_buffer_impl<A: HalApi>(
         &self,
-        device: &super::Device<A>,
+        device: &Device<A>,
         staging_buffer: &StagingBuffer<A>,
         buffer_id: id::BufferId,
         buffer_offset: u64,
@@ -547,8 +563,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             dst_offset: buffer_offset,
             size,
         });
+        let inner_buffer = staging_buffer.raw.lock();
         let barriers = iter::once(hal::BufferBarrier {
-            buffer: staging_buffer.raw.as_ref(),
+            buffer: inner_buffer.as_ref().unwrap(),
             usage: hal::BufferUses::MAP_WRITE..hal::BufferUses::COPY_SRC,
         })
         .chain(transition.map(|pending| pending.into_hal(dst)));
@@ -557,7 +574,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let encoder = pending_writes.activate();
         unsafe {
             encoder.transition_buffers(barriers);
-            encoder.copy_buffer_to_buffer(&staging_buffer.raw, dst_raw, region.into_iter());
+            encoder.copy_buffer_to_buffer(
+                inner_buffer.as_ref().unwrap(),
+                dst_raw,
+                region.into_iter(),
+            );
         }
 
         pending_writes
@@ -802,7 +823,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         if let Err(e) = unsafe { staging_buffer.flush(device.raw.as_ref().unwrap()) } {
-            pending_writes.consume(Arc::new(staging_buffer));
+            pending_writes.consume(&device, Arc::new(staging_buffer));
             return Err(e.into());
         }
 
@@ -821,18 +842,22 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 size: hal_copy_size,
             }
         });
-        let barrier = hal::BufferBarrier {
-            buffer: staging_buffer.raw.as_ref(),
-            usage: hal::BufferUses::MAP_WRITE..hal::BufferUses::COPY_SRC,
-        };
 
-        unsafe {
-            encoder.transition_textures(transition.map(|pending| pending.into_hal(dst)));
-            encoder.transition_buffers(iter::once(barrier));
-            encoder.copy_buffer_to_texture(&staging_buffer.raw, dst_raw, regions);
+        {
+            let inner_buffer = staging_buffer.raw.lock();
+            let barrier = hal::BufferBarrier {
+                buffer: inner_buffer.as_ref().unwrap(),
+                usage: hal::BufferUses::MAP_WRITE..hal::BufferUses::COPY_SRC,
+            };
+
+            unsafe {
+                encoder.transition_textures(transition.map(|pending| pending.into_hal(dst)));
+                encoder.transition_buffers(iter::once(barrier));
+                encoder.copy_buffer_to_texture(inner_buffer.as_ref().unwrap(), dst_raw, regions);
+            }
         }
 
-        pending_writes.consume(Arc::new(staging_buffer));
+        pending_writes.consume(&device, Arc::new(staging_buffer));
         pending_writes
             .dst_textures
             .insert(destination.texture, dst.clone());

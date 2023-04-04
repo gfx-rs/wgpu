@@ -12,7 +12,7 @@ use crate::{
     id,
     identity::GlobalIdentityHandlerFactory,
     pipeline::{ComputePipeline, RenderPipeline},
-    resource::{self, Buffer, QuerySet, Resource, Sampler, StagingBuffer, Texture, TextureView},
+    resource::{self, Buffer, QuerySet, Resource, Sampler, Texture, TextureView},
     track::{BindGroupStates, RenderBundleScope, Tracker},
     SubmissionIndex,
 };
@@ -113,7 +113,6 @@ impl<A: HalApi> SuspectedResources<A> {
 #[derive(Debug)]
 struct NonReferencedResources<A: HalApi> {
     buffers: Vec<Arc<Buffer<A>>>,
-    staging_buffers: Vec<Arc<StagingBuffer<A>>>,
     textures: Vec<Arc<Texture<A>>>,
     texture_views: Vec<Arc<TextureView<A>>>,
     samplers: Vec<Arc<Sampler<A>>>,
@@ -129,7 +128,6 @@ impl<A: HalApi> NonReferencedResources<A> {
     fn new() -> Self {
         Self {
             buffers: Vec::new(),
-            staging_buffers: Vec::new(),
             textures: Vec::new(),
             texture_views: Vec::new(),
             samplers: Vec::new(),
@@ -144,7 +142,6 @@ impl<A: HalApi> NonReferencedResources<A> {
 
     fn extend(&mut self, other: Self) {
         self.buffers.extend(other.buffers);
-        self.staging_buffers.extend(other.staging_buffers);
         self.textures.extend(other.textures);
         self.texture_views.extend(other.texture_views);
         self.samplers.extend(other.samplers);
@@ -160,10 +157,6 @@ impl<A: HalApi> NonReferencedResources<A> {
         if !self.buffers.is_empty() {
             profiling::scope!("destroy_buffers");
             self.buffers.clear();
-        }
-        if !self.staging_buffers.is_empty() {
-            profiling::scope!("destroy_staging_buffers");
-            self.staging_buffers.clear();
         }
         if !self.textures.is_empty() {
             profiling::scope!("destroy_textures");
@@ -343,7 +336,6 @@ impl<A: HalApi> LifetimeTracker<A> {
         for res in temp_resources {
             match res {
                 TempResource::Buffer(raw) => last_resources.buffers.push(raw),
-                TempResource::StagingBuffer(raw) => last_resources.staging_buffers.push(raw),
                 TempResource::Texture(raw, views) => {
                     last_resources.textures.push(raw);
                     last_resources.texture_views.extend(views);
@@ -443,7 +435,6 @@ impl<A: HalApi> LifetimeTracker<A> {
             .map_or(&mut self.free_resources, |a| &mut a.last_resources);
         match temp_resource {
             TempResource::Buffer(raw) => resources.buffers.push(raw),
-            TempResource::StagingBuffer(raw) => resources.staging_buffers.push(raw),
             TempResource::Texture(raw, views) => {
                 resources.texture_views.extend(views);
                 resources.textures.push(raw);

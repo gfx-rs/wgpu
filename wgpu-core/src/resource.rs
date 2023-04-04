@@ -407,7 +407,7 @@ impl<A: HalApi> Resource<BufferId> for Buffer<A> {
 /// [`Device::pending_writes`]: crate::device::Device
 #[derive(Debug)]
 pub struct StagingBuffer<A: HalApi> {
-    pub(crate) raw: Arc<A::Buffer>,
+    pub(crate) raw: Mutex<Option<A::Buffer>>,
     pub(crate) size: wgt::BufferAddress,
     pub(crate) is_coherent: bool,
     pub(crate) info: ResourceInfo<StagingBufferId>,
