@@ -136,7 +136,6 @@ By @cwfitzgerald in [#3610](https://github.com/gfx-rs/wgpu/pull/3610).
 
 - Fix DXC validation issues when using a custom `dxil_path`. By @Elabajaba in [#3434](https://github.com/gfx-rs/wgpu/pull/3434)
 - Use typeless formats for textures that might be viewed as srgb or non-srgb. By @teoxoy in [#3555](https://github.com/gfx-rs/wgpu/pull/3555)
-- Fix conditional compilation for `dx12` feature. By @toastmod in [#3590](https://github.com/gfx-rs/wgpu/pull/3590)
 
 #### GLES
 
