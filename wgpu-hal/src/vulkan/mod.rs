@@ -173,6 +173,7 @@ struct PrivateCapabilities {
 
 bitflags::bitflags!(
     /// Workaround flags.
+    #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct Workarounds: u32 {
         /// Only generate SPIR-V for one entry point at a time.
         const SEPARATE_ENTRY_POINTS = 0x1;
