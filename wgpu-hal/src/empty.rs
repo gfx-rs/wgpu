@@ -440,4 +440,10 @@ impl crate::CommandEncoder<Api> for Encoder {
         T: IntoIterator<Item = crate::BuildAccelerationStructureDescriptor<'a, Api>>,
     {
     }
+
+    unsafe fn place_acceleration_structure_barrier(
+        &mut self,
+        _barriers: crate::AccelerationStructureBarrier,
+    ) {
+    }
 }

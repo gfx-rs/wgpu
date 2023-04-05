@@ -605,6 +605,30 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         // }
     }
 
+    unsafe fn place_acceleration_structure_barrier(
+        &mut self,
+        barrier: crate::AccelerationStructureBarrier,
+    ) {
+        let (src_stage, src_access) =
+            conv::map_acceleration_structure_usage_to_barrier(barrier.usage.start);
+        let (dst_stage, dst_access) =
+            conv::map_acceleration_structure_usage_to_barrier(barrier.usage.end);
+
+        unsafe {
+            self.device.raw.cmd_pipeline_barrier(
+                self.active,
+                src_stage | vk::PipelineStageFlags::TOP_OF_PIPE,
+                dst_stage | vk::PipelineStageFlags::BOTTOM_OF_PIPE,
+                vk::DependencyFlags::empty(),
+                &[vk::MemoryBarrier::builder()
+                    .src_access_mask(src_access)
+                    .dst_access_mask(dst_access)
+                    .build()],
+                &[],
+                &[],
+            )
+        };
+    }
     // render
 
     unsafe fn begin_render_pass(&mut self, desc: &crate::RenderPassDescriptor<super::Api>) {
