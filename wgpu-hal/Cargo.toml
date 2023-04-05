@@ -52,7 +52,7 @@ name = "raw-gles"
 required-features = ["gles"]
 
 [dependencies]
-bitflags = "1"
+bitflags = "2"
 parking_lot = ">=0.11,<0.13"
 profiling = { version = "1", default-features = false }
 raw-window-handle = "0.5"

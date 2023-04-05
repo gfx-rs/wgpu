@@ -113,10 +113,7 @@ async fn create_red_image_with_dimensions(
                 buffer: &output_buffer,
                 layout: wgpu::ImageDataLayout {
                     offset: 0,
-                    bytes_per_row: Some(
-                        std::num::NonZeroU32::new(buffer_dimensions.padded_bytes_per_row as u32)
-                            .unwrap(),
-                    ),
+                    bytes_per_row: Some(buffer_dimensions.padded_bytes_per_row as u32),
                     rows_per_image: None,
                 },
             },

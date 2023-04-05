@@ -27,7 +27,7 @@ fn create_identified<T>(value: T) -> Identified<T> {
         if #[cfg(feature = "expose-ids")] {
             static NEXT_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
             let id = NEXT_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-            Identified(value, crate::Id(core::num::NonZeroU64::new(id).unwrap()))
+            Identified(value, core::num::NonZeroU64::new(id).unwrap())
         } else {
             Identified(value)
         }
@@ -43,8 +43,8 @@ fn create_identified<T>(value: T) -> Identified<T> {
 // is integrated (or not integrated) with values like those in webgpu, this may become unsound.
 
 impl<T: FromWasmAbi<Abi = u32> + JsCast> From<ObjectId> for Identified<T> {
-    fn from(id: ObjectId) -> Self {
-        let id = id.id().get() as u32;
+    fn from(object_id: ObjectId) -> Self {
+        let id = object_id.id().get() as u32;
         // SAFETY: wasm_bindgen says an ABI representation may only be cast to a wrapper type if it was created
         // using into_abi.
         //
@@ -55,18 +55,18 @@ impl<T: FromWasmAbi<Abi = u32> + JsCast> From<ObjectId> for Identified<T> {
         Self(
             wasm.unchecked_into(),
             #[cfg(feature = "expose-ids")]
-            id.global_id(),
+            object_id.global_id(),
         )
     }
 }
 
 impl<T: IntoWasmAbi<Abi = u32>> From<Identified<T>> for ObjectId {
-    fn from(id: Identified<T>) -> Self {
-        let id = core::num::NonZeroU64::new(id.0.into_abi() as u64).unwrap();
+    fn from(identified: Identified<T>) -> Self {
+        let id = core::num::NonZeroU64::new(identified.0.into_abi() as u64).unwrap();
         Self::new(
             id,
             #[cfg(feature = "expose-ids")]
-            id.1,
+            identified.1,
         )
     }
 }
@@ -77,7 +77,7 @@ unsafe impl<T> Send for Sendable<T> {}
 unsafe impl<T> Sync for Sendable<T> {}
 
 #[derive(Clone, Debug)]
-pub(crate) struct Identified<T>(T, #[cfg(feature = "expose-ids")] crate::Id);
+pub(crate) struct Identified<T>(T, #[cfg(feature = "expose-ids")] std::num::NonZeroU64);
 unsafe impl<T> Send for Identified<T> {}
 unsafe impl<T> Sync for Identified<T> {}
 
@@ -460,10 +460,10 @@ fn map_buffer_copy_view(view: crate::ImageCopyBuffer) -> web_sys::GpuImageCopyBu
     let buffer = &<<Context as crate::Context>::BufferId>::from(view.buffer.id).0;
     let mut mapped = web_sys::GpuImageCopyBuffer::new(buffer);
     if let Some(bytes_per_row) = view.layout.bytes_per_row {
-        mapped.bytes_per_row(bytes_per_row.get());
+        mapped.bytes_per_row(bytes_per_row);
     }
     if let Some(rows_per_image) = view.layout.rows_per_image {
-        mapped.rows_per_image(rows_per_image.get());
+        mapped.rows_per_image(rows_per_image);
     }
     mapped.offset(view.layout.offset as f64);
     mapped
@@ -568,7 +568,7 @@ const FEATURES_MAPPING: [(wgt::Features, web_sys::GpuFeatureName); 8] = [
         web_sys::GpuFeatureName::TextureCompressionEtc2,
     ),
     (
-        wgt::Features::TEXTURE_COMPRESSION_ASTC_LDR,
+        wgt::Features::TEXTURE_COMPRESSION_ASTC,
         web_sys::GpuFeatureName::TextureCompressionAstc,
     ),
     (
@@ -580,7 +580,7 @@ const FEATURES_MAPPING: [(wgt::Features, web_sys::GpuFeatureName); 8] = [
         web_sys::GpuFeatureName::IndirectFirstInstance,
     ),
     (
-        wgt::Features::SHADER_FLOAT16,
+        wgt::Features::SHADER_F16,
         web_sys::GpuFeatureName::ShaderF16,
     ),
 ];
@@ -2225,17 +2225,23 @@ impl crate::context::Context for Context {
 
     fn command_encoder_resolve_query_set(
         &self,
-        _encoder: &Self::CommandEncoderId,
+        encoder: &Self::CommandEncoderId,
         _encoder_data: &Self::CommandEncoderData,
-        _query_set: &Self::QuerySetId,
+        query_set: &Self::QuerySetId,
         _query_set_data: &Self::QuerySetData,
-        _first_query: u32,
-        _query_count: u32,
-        _destination: &Self::BufferId,
+        first_query: u32,
+        query_count: u32,
+        destination: &Self::BufferId,
         _destination_data: &Self::BufferData,
-        _destination_offset: wgt::BufferAddress,
+        destination_offset: wgt::BufferAddress,
     ) {
-        unimplemented!();
+        encoder.0.resolve_query_set_with_u32(
+            &query_set.0,
+            first_query,
+            query_count,
+            &destination.0,
+            destination_offset as u32,
+        );
     }
 
     fn render_bundle_encoder_finish(
@@ -2369,10 +2375,10 @@ impl crate::context::Context for Context {
     ) {
         let mut mapped_data_layout = web_sys::GpuImageDataLayout::new();
         if let Some(bytes_per_row) = data_layout.bytes_per_row {
-            mapped_data_layout.bytes_per_row(bytes_per_row.get());
+            mapped_data_layout.bytes_per_row(bytes_per_row);
         }
         if let Some(rows_per_image) = data_layout.rows_per_image {
-            mapped_data_layout.rows_per_image(rows_per_image.get());
+            mapped_data_layout.rows_per_image(rows_per_image);
         }
         mapped_data_layout.offset(data_layout.offset as f64);
 
@@ -2520,7 +2526,7 @@ impl crate::context::Context for Context {
         _query_set_data: &Self::QuerySetData,
         _query_index: u32,
     ) {
-        panic!("WRITE_TIMESTAMP_INSIDE_PASSES feature must be enabled to call write_timestamp in a compute pass")
+        panic!("TIMESTAMP_QUERY_INSIDE_PASSES feature must be enabled to call write_timestamp in a compute pass")
     }
 
     fn compute_pass_begin_pipeline_statistics_query(
@@ -3073,7 +3079,7 @@ impl crate::context::Context for Context {
         _query_set_data: &Self::QuerySetData,
         _query_index: u32,
     ) {
-        panic!("WRITE_TIMESTAMP_INSIDE_PASSES feature must be enabled to call write_timestamp in a compute pass")
+        panic!("TIMESTAMP_QUERY_INSIDE_PASSES feature must be enabled to call write_timestamp in a compute pass")
     }
 
     fn render_pass_begin_pipeline_statistics_query(

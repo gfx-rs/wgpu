@@ -70,6 +70,7 @@ impl super::Queue {
         unsafe { gl.disable(glow::BLEND) };
         unsafe { gl.disable(glow::CULL_FACE) };
         unsafe { gl.disable(glow::POLYGON_OFFSET_FILL) };
+        unsafe { gl.disable(glow::SAMPLE_ALPHA_TO_COVERAGE) };
         if self.features.contains(wgt::Features::DEPTH_CLIP_CONTROL) {
             unsafe { gl.disable(glow::DEPTH_CLAMP) };
         }
@@ -164,18 +165,17 @@ impl super::Queue {
                 vertex_count,
                 instance_count,
             } => {
-                if instance_count == 1 {
-                    unsafe { gl.draw_arrays(topology, start_vertex as i32, vertex_count as i32) };
-                } else {
-                    unsafe {
-                        gl.draw_arrays_instanced(
-                            topology,
-                            start_vertex as i32,
-                            vertex_count as i32,
-                            instance_count as i32,
-                        )
-                    };
-                }
+                // Don't use `gl.draw_arrays` for `instance_count == 1`.
+                // Angle has a bug where it doesn't consider the instance divisor when `DYNAMIC_DRAW` is used in `draw_arrays`.
+                // See https://github.com/gfx-rs/wgpu/issues/3578
+                unsafe {
+                    gl.draw_arrays_instanced(
+                        topology,
+                        start_vertex as i32,
+                        vertex_count as i32,
+                        instance_count as i32,
+                    )
+                };
             }
             C::DrawIndexed {
                 topology,
@@ -184,44 +184,32 @@ impl super::Queue {
                 index_offset,
                 base_vertex,
                 instance_count,
-            } => match (base_vertex, instance_count) {
-                (0, 1) => unsafe {
-                    gl.draw_elements(
-                        topology,
-                        index_count as i32,
-                        index_type,
-                        index_offset as i32,
-                    )
-                },
-                (0, _) => unsafe {
-                    gl.draw_elements_instanced(
-                        topology,
-                        index_count as i32,
-                        index_type,
-                        index_offset as i32,
-                        instance_count as i32,
-                    )
-                },
-                (_, 1) => unsafe {
-                    gl.draw_elements_base_vertex(
-                        topology,
-                        index_count as i32,
-                        index_type,
-                        index_offset as i32,
-                        base_vertex,
-                    )
-                },
-                (_, _) => unsafe {
-                    gl.draw_elements_instanced_base_vertex(
-                        topology,
-                        index_count as _,
-                        index_type,
-                        index_offset as i32,
-                        instance_count as i32,
-                        base_vertex,
-                    )
-                },
-            },
+            } => {
+                match base_vertex {
+                    // Don't use `gl.draw_elements`/`gl.draw_elements_base_vertex` for `instance_count == 1`.
+                    // Angle has a bug where it doesn't consider the instance divisor when `DYNAMIC_DRAW` is used in `gl.draw_elements`/`gl.draw_elements_base_vertex`.
+                    // See https://github.com/gfx-rs/wgpu/issues/3578
+                    0 => unsafe {
+                        gl.draw_elements_instanced(
+                            topology,
+                            index_count as i32,
+                            index_type,
+                            index_offset as i32,
+                            instance_count as i32,
+                        )
+                    },
+                    _ => unsafe {
+                        gl.draw_elements_instanced_base_vertex(
+                            topology,
+                            index_count as _,
+                            index_type,
+                            index_offset as i32,
+                            instance_count as i32,
+                            base_vertex,
+                        )
+                    },
+                }
+            }
             C::DrawIndirect {
                 topology,
                 indirect_buf,
@@ -405,6 +393,13 @@ impl super::Queue {
                 unsafe { gl.bind_texture(dst_target, Some(dst)) };
                 let format_desc = self.shared.describe_texture_format(dst_format);
                 if is_layered_target(dst_target) {
+                    let z_offset =
+                        if let glow::TEXTURE_2D_ARRAY | glow::TEXTURE_CUBE_MAP_ARRAY = dst_target {
+                            copy.dst_base.array_layer as i32
+                        } else {
+                            copy.dst_base.origin.z as i32
+                        };
+
                     match src.source {
                         wgt::ExternalImageSource::ImageBitmap(ref b) => unsafe {
                             gl.tex_sub_image_3d_with_image_bitmap(
@@ -412,7 +407,7 @@ impl super::Queue {
                                 copy.dst_base.mip_level as i32,
                                 copy.dst_base.origin.x as i32,
                                 copy.dst_base.origin.y as i32,
-                                copy.dst_base.origin.z as i32,
+                                z_offset,
                                 copy.size.width as i32,
                                 copy.size.height as i32,
                                 copy.size.depth as i32,
@@ -427,7 +422,7 @@ impl super::Queue {
                                 copy.dst_base.mip_level as i32,
                                 copy.dst_base.origin.x as i32,
                                 copy.dst_base.origin.y as i32,
-                                copy.dst_base.origin.z as i32,
+                                z_offset,
                                 copy.size.width as i32,
                                 copy.size.height as i32,
                                 copy.size.depth as i32,
@@ -442,7 +437,7 @@ impl super::Queue {
                                 copy.dst_base.mip_level as i32,
                                 copy.dst_base.origin.x as i32,
                                 copy.dst_base.origin.y as i32,
-                                copy.dst_base.origin.z as i32,
+                                z_offset,
                                 copy.size.width as i32,
                                 copy.size.height as i32,
                                 copy.size.depth as i32,
@@ -454,6 +449,12 @@ impl super::Queue {
                         wgt::ExternalImageSource::OffscreenCanvas(_) => unreachable!(),
                     }
                 } else {
+                    let dst_target = if let glow::TEXTURE_CUBE_MAP = dst_target {
+                        CUBEMAP_FACES[copy.dst_base.array_layer as usize]
+                    } else {
+                        dst_target
+                    };
+
                     match src.source {
                         wgt::ExternalImageSource::ImageBitmap(ref b) => unsafe {
                             gl.tex_sub_image_2d_with_image_bitmap_and_width_and_height(
@@ -561,7 +562,13 @@ impl super::Queue {
                             copy.dst_base.mip_level as i32,
                             copy.dst_base.origin.x as i32,
                             copy.dst_base.origin.y as i32,
-                            copy.dst_base.origin.z as i32,
+                            if let glow::TEXTURE_2D_ARRAY | glow::TEXTURE_CUBE_MAP_ARRAY =
+                                dst_target
+                            {
+                                copy.dst_base.array_layer as i32
+                            } else {
+                                copy.dst_base.origin.z as i32
+                            },
                             copy.src_base.origin.x as i32,
                             copy.src_base.origin.y as i32,
                             copy.size.width as i32,
@@ -597,11 +604,11 @@ impl super::Queue {
                 let row_texels = copy
                     .buffer_layout
                     .bytes_per_row
-                    .map_or(0, |bpr| block_width * bpr.get() / block_size);
+                    .map_or(0, |bpr| block_width * bpr / block_size);
                 let column_texels = copy
                     .buffer_layout
                     .rows_per_image
-                    .map_or(0, |rpi| block_height * rpi.get());
+                    .map_or(0, |rpi| block_height * rpi);
 
                 unsafe { gl.bind_texture(dst_target, Some(dst)) };
                 unsafe { gl.pixel_store_i32(glow::UNPACK_ROW_LENGTH, row_texels as i32) };
@@ -622,102 +629,58 @@ impl super::Queue {
                             glow::PixelUnpackData::Slice(src_data)
                         }
                     };
-                    match dst_target {
-                        glow::TEXTURE_3D => {
-                            unsafe {
-                                gl.tex_sub_image_3d(
-                                    dst_target,
-                                    copy.texture_base.mip_level as i32,
-                                    copy.texture_base.origin.x as i32,
-                                    copy.texture_base.origin.y as i32,
-                                    copy.texture_base.origin.z as i32,
-                                    copy.size.width as i32,
-                                    copy.size.height as i32,
-                                    copy.size.depth as i32,
-                                    format_desc.external,
-                                    format_desc.data_type,
-                                    unpack_data,
-                                )
-                            };
-                        }
-                        glow::TEXTURE_2D_ARRAY => {
-                            unsafe {
-                                gl.tex_sub_image_3d(
-                                    dst_target,
-                                    copy.texture_base.mip_level as i32,
-                                    copy.texture_base.origin.x as i32,
-                                    copy.texture_base.origin.y as i32,
-                                    copy.texture_base.array_layer as i32,
-                                    copy.size.width as i32,
-                                    copy.size.height as i32,
-                                    copy.size.depth as i32,
-                                    format_desc.external,
-                                    format_desc.data_type,
-                                    unpack_data,
-                                )
-                            };
-                        }
-                        glow::TEXTURE_2D => {
-                            unsafe {
-                                gl.tex_sub_image_2d(
-                                    dst_target,
-                                    copy.texture_base.mip_level as i32,
-                                    copy.texture_base.origin.x as i32,
-                                    copy.texture_base.origin.y as i32,
-                                    copy.size.width as i32,
-                                    copy.size.height as i32,
-                                    format_desc.external,
-                                    format_desc.data_type,
-                                    unpack_data,
-                                )
-                            };
-                        }
-                        glow::TEXTURE_CUBE_MAP => {
-                            unsafe {
-                                gl.tex_sub_image_2d(
-                                    CUBEMAP_FACES[copy.texture_base.array_layer as usize],
-                                    copy.texture_base.mip_level as i32,
-                                    copy.texture_base.origin.x as i32,
-                                    copy.texture_base.origin.y as i32,
-                                    copy.size.width as i32,
-                                    copy.size.height as i32,
-                                    format_desc.external,
-                                    format_desc.data_type,
-                                    unpack_data,
-                                )
-                            };
-                        }
-                        glow::TEXTURE_CUBE_MAP_ARRAY => {
-                            //Note: not sure if this is correct!
-                            unsafe {
-                                gl.tex_sub_image_3d(
-                                    dst_target,
-                                    copy.texture_base.mip_level as i32,
-                                    copy.texture_base.origin.x as i32,
-                                    copy.texture_base.origin.y as i32,
-                                    copy.texture_base.origin.z as i32,
-                                    copy.size.width as i32,
-                                    copy.size.height as i32,
-                                    copy.size.depth as i32,
-                                    format_desc.external,
-                                    format_desc.data_type,
-                                    unpack_data,
-                                )
-                            };
-                        }
-                        _ => unreachable!(),
+                    if is_layered_target(dst_target) {
+                        unsafe {
+                            gl.tex_sub_image_3d(
+                                dst_target,
+                                copy.texture_base.mip_level as i32,
+                                copy.texture_base.origin.x as i32,
+                                copy.texture_base.origin.y as i32,
+                                if let glow::TEXTURE_2D_ARRAY | glow::TEXTURE_CUBE_MAP_ARRAY =
+                                    dst_target
+                                {
+                                    copy.texture_base.array_layer as i32
+                                } else {
+                                    copy.texture_base.origin.z as i32
+                                },
+                                copy.size.width as i32,
+                                copy.size.height as i32,
+                                copy.size.depth as i32,
+                                format_desc.external,
+                                format_desc.data_type,
+                                unpack_data,
+                            )
+                        };
+                    } else {
+                        unsafe {
+                            gl.tex_sub_image_2d(
+                                if let glow::TEXTURE_CUBE_MAP = dst_target {
+                                    CUBEMAP_FACES[copy.texture_base.array_layer as usize]
+                                } else {
+                                    dst_target
+                                },
+                                copy.texture_base.mip_level as i32,
+                                copy.texture_base.origin.x as i32,
+                                copy.texture_base.origin.y as i32,
+                                copy.size.width as i32,
+                                copy.size.height as i32,
+                                format_desc.external,
+                                format_desc.data_type,
+                                unpack_data,
+                            )
+                        };
                     }
                 } else {
                     let bytes_per_row = copy
                         .buffer_layout
                         .bytes_per_row
-                        .map_or(copy.size.width * block_size, |bpr| bpr.get());
+                        .unwrap_or(copy.size.width * block_size);
                     let minimum_rows_per_image =
                         (copy.size.height + block_height - 1) / block_height;
                     let rows_per_image = copy
                         .buffer_layout
                         .rows_per_image
-                        .map_or(minimum_rows_per_image, |rpi| rpi.get());
+                        .unwrap_or(minimum_rows_per_image);
 
                     let bytes_per_image = bytes_per_row * rows_per_image;
                     let minimum_bytes_per_image = bytes_per_row * minimum_rows_per_image;
@@ -742,54 +705,44 @@ impl super::Queue {
                         }
                     };
 
-                    match dst_target {
-                        glow::TEXTURE_3D
-                        | glow::TEXTURE_CUBE_MAP_ARRAY
-                        | glow::TEXTURE_2D_ARRAY => {
-                            unsafe {
-                                gl.compressed_tex_sub_image_3d(
-                                    dst_target,
-                                    copy.texture_base.mip_level as i32,
-                                    copy.texture_base.origin.x as i32,
-                                    copy.texture_base.origin.y as i32,
-                                    copy.texture_base.origin.z as i32,
-                                    copy.size.width as i32,
-                                    copy.size.height as i32,
-                                    copy.size.depth as i32,
-                                    format_desc.internal,
-                                    unpack_data,
-                                )
-                            };
-                        }
-                        glow::TEXTURE_2D => {
-                            unsafe {
-                                gl.compressed_tex_sub_image_2d(
-                                    dst_target,
-                                    copy.texture_base.mip_level as i32,
-                                    copy.texture_base.origin.x as i32,
-                                    copy.texture_base.origin.y as i32,
-                                    copy.size.width as i32,
-                                    copy.size.height as i32,
-                                    format_desc.internal,
-                                    unpack_data,
-                                )
-                            };
-                        }
-                        glow::TEXTURE_CUBE_MAP => {
-                            unsafe {
-                                gl.compressed_tex_sub_image_2d(
-                                    CUBEMAP_FACES[copy.texture_base.array_layer as usize],
-                                    copy.texture_base.mip_level as i32,
-                                    copy.texture_base.origin.x as i32,
-                                    copy.texture_base.origin.y as i32,
-                                    copy.size.width as i32,
-                                    copy.size.height as i32,
-                                    format_desc.internal,
-                                    unpack_data,
-                                )
-                            };
-                        }
-                        _ => unreachable!(),
+                    if is_layered_target(dst_target) {
+                        unsafe {
+                            gl.compressed_tex_sub_image_3d(
+                                dst_target,
+                                copy.texture_base.mip_level as i32,
+                                copy.texture_base.origin.x as i32,
+                                copy.texture_base.origin.y as i32,
+                                if let glow::TEXTURE_2D_ARRAY | glow::TEXTURE_CUBE_MAP_ARRAY =
+                                    dst_target
+                                {
+                                    copy.texture_base.array_layer as i32
+                                } else {
+                                    copy.texture_base.origin.z as i32
+                                },
+                                copy.size.width as i32,
+                                copy.size.height as i32,
+                                copy.size.depth as i32,
+                                format_desc.internal,
+                                unpack_data,
+                            )
+                        };
+                    } else {
+                        unsafe {
+                            gl.compressed_tex_sub_image_2d(
+                                if let glow::TEXTURE_CUBE_MAP = dst_target {
+                                    CUBEMAP_FACES[copy.texture_base.array_layer as usize]
+                                } else {
+                                    dst_target
+                                },
+                                copy.texture_base.mip_level as i32,
+                                copy.texture_base.origin.x as i32,
+                                copy.texture_base.origin.y as i32,
+                                copy.size.width as i32,
+                                copy.size.height as i32,
+                                format_desc.internal,
+                                unpack_data,
+                            )
+                        };
                     }
                 }
                 if unbind_unpack_buffer {
@@ -819,11 +772,11 @@ impl super::Queue {
                 let row_texels = copy
                     .buffer_layout
                     .bytes_per_row
-                    .map_or(copy.size.width, |bpr| bpr.get() / block_size);
+                    .map_or(copy.size.width, |bpr| bpr / block_size);
                 let column_texels = copy
                     .buffer_layout
                     .rows_per_image
-                    .map_or(copy.size.height, |bpr| bpr.get());
+                    .unwrap_or(copy.size.height);
 
                 unsafe { gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(self.copy_fbo)) };
 
@@ -1522,8 +1475,12 @@ impl crate::Queue<super::Api> for super::Queue {
     ) -> Result<(), crate::DeviceError> {
         let shared = Arc::clone(&self.shared);
         let gl = &shared.context.lock();
-        unsafe { self.reset_state(gl) };
         for cmd_buf in command_buffers.iter() {
+            // The command encoder assumes a default state when encoding the command buffer.
+            // Always reset the state between command_buffers to reflect this assumption. Do
+            // this at the beginning of the loop in case something outside of wgpu modified
+            // this state prior to commit.
+            unsafe { self.reset_state(gl) };
             #[cfg(not(target_arch = "wasm32"))]
             if let Some(ref label) = cmd_buf.label {
                 unsafe { gl.push_debug_group(glow::DEBUG_SOURCE_APPLICATION, DEBUG_ID, label) };

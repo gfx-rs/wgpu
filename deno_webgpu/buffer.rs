@@ -18,10 +18,18 @@ use wgpu_core::resource::BufferAccessResult;
 use super::error::DomExceptionOperationError;
 use super::error::WebGpuResult;
 
-pub(crate) struct WebGpuBuffer(pub(crate) wgpu_core::id::BufferId);
+pub(crate) struct WebGpuBuffer(
+    pub(crate) super::Instance,
+    pub(crate) wgpu_core::id::BufferId,
+);
 impl Resource for WebGpuBuffer {
     fn name(&self) -> Cow<str> {
         "webGPUBuffer".into()
+    }
+
+    fn close(self: Rc<Self>) {
+        let instance = &self.0;
+        gfx_select!(self.1 => instance.buffer_drop(self.1, true));
     }
 }
 
@@ -45,7 +53,7 @@ pub fn op_webgpu_create_buffer(
     let device_resource = state
         .resource_table
         .get::<super::WebGpuDevice>(device_rid)?;
-    let device = device_resource.0;
+    let device = device_resource.1;
 
     let descriptor = wgpu_core::resource::BufferDescriptor {
         label: label.map(Cow::from),
@@ -78,11 +86,11 @@ pub async fn op_webgpu_buffer_get_map_async(
         let state_ = state.borrow();
         let instance = state_.borrow::<super::Instance>();
         let buffer_resource = state_.resource_table.get::<WebGpuBuffer>(buffer_rid)?;
-        let buffer = buffer_resource.0;
+        let buffer = buffer_resource.1;
         let device_resource = state_
             .resource_table
             .get::<super::WebGpuDevice>(device_rid)?;
-        device = device_resource.0;
+        device = device_resource.1;
 
         let callback = Box::new(move |status| {
             sender.send(status).unwrap();
@@ -145,7 +153,7 @@ pub fn op_webgpu_buffer_get_mapped_range(
 ) -> Result<WebGpuResult, AnyError> {
     let instance = state.borrow::<super::Instance>();
     let buffer_resource = state.resource_table.get::<WebGpuBuffer>(buffer_rid)?;
-    let buffer = buffer_resource.0;
+    let buffer = buffer_resource.1;
 
     let (slice_pointer, range_size) = gfx_select!(buffer => instance.buffer_get_mapped_range(
       buffer,
@@ -176,7 +184,7 @@ pub fn op_webgpu_buffer_unmap(
         .take::<WebGpuBufferMapped>(mapped_rid)?;
     let instance = state.borrow::<super::Instance>();
     let buffer_resource = state.resource_table.get::<WebGpuBuffer>(buffer_rid)?;
-    let buffer = buffer_resource.0;
+    let buffer = buffer_resource.1;
 
     if let Some(buf) = buf {
         let slice = unsafe { std::slice::from_raw_parts_mut(mapped_resource.0, mapped_resource.1) };

@@ -406,20 +406,12 @@ impl crate::Device<super::Api> for super::Device {
             Height: desc.size.height,
             DepthOrArraySize: desc.size.depth_or_array_layers as u16,
             MipLevels: desc.mip_level_count as u16,
-            Format: if crate::FormatAspects::from(desc.format).contains(crate::FormatAspects::COLOR)
-                || !desc.usage.intersects(
-                    crate::TextureUses::RESOURCE
-                        | crate::TextureUses::STORAGE_READ
-                        | crate::TextureUses::STORAGE_READ_WRITE,
-                ) {
-                auxil::dxgi::conv::map_texture_format(desc.format)
-            } else {
-                // This branch is needed if it's a depth texture, and it's ever needed to be viewed as SRV or UAV,
-                // because then we'd create a non-depth format view of it.
-                // Note: we can skip this branch if
-                // `D3D12_FEATURE_D3D12_OPTIONS3::CastingFullyTypedFormatSupported`
-                auxil::dxgi::conv::map_texture_format_depth_stencil_typeless(desc.format)
-            },
+            Format: auxil::dxgi::conv::map_texture_format_for_resource(
+                desc.format,
+                desc.usage,
+                !desc.view_formats.is_empty(),
+                self.private_caps.casting_fully_typed_format_supported,
+            ),
             SampleDesc: dxgitype::DXGI_SAMPLE_DESC {
                 Count: desc.sample_count,
                 Quality: 0,
@@ -591,13 +583,14 @@ impl crate::Device<super::Api> for super::Device {
             Some(_) => d3d12_ty::D3D12_FILTER_REDUCTION_TYPE_COMPARISON,
             None => d3d12_ty::D3D12_FILTER_REDUCTION_TYPE_STANDARD,
         };
-        let filter = conv::map_filter_mode(desc.min_filter) << d3d12_ty::D3D12_MIN_FILTER_SHIFT
+        let mut filter = conv::map_filter_mode(desc.min_filter) << d3d12_ty::D3D12_MIN_FILTER_SHIFT
             | conv::map_filter_mode(desc.mag_filter) << d3d12_ty::D3D12_MAG_FILTER_SHIFT
             | conv::map_filter_mode(desc.mipmap_filter) << d3d12_ty::D3D12_MIP_FILTER_SHIFT
-            | reduction << d3d12_ty::D3D12_FILTER_REDUCTION_TYPE_SHIFT
-            | desc
-                .anisotropy_clamp
-                .map_or(0, |_| d3d12_ty::D3D12_FILTER_ANISOTROPIC);
+            | reduction << d3d12_ty::D3D12_FILTER_REDUCTION_TYPE_SHIFT;
+
+        if desc.anisotropy_clamp != 1 {
+            filter |= d3d12_ty::D3D12_FILTER_ANISOTROPIC;
+        };
 
         let border_color = conv::map_border_color(desc.border_color);
 
@@ -610,10 +603,10 @@ impl crate::Device<super::Api> for super::Device {
                 conv::map_address_mode(desc.address_modes[2]),
             ],
             0.0,
-            desc.anisotropy_clamp.map_or(0, |aniso| aniso.get() as u32),
+            desc.anisotropy_clamp as u32,
             conv::map_comparison(desc.compare.unwrap_or(wgt::CompareFunction::Always)),
             border_color,
-            desc.lod_clamp.clone().unwrap_or(0.0..16.0),
+            desc.lod_clamp.clone(),
         );
 
         Ok(super::Sampler { handle })

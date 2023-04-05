@@ -33,19 +33,16 @@ impl crate::BufferTextureCopy {
                 Height: self
                     .buffer_layout
                     .rows_per_image
-                    .map_or(self.size.height, |count| count.get() * block_height),
+                    .map_or(self.size.height, |count| count * block_height),
                 Depth: self.size.depth,
                 RowPitch: {
-                    let actual = match self.buffer_layout.bytes_per_row {
-                        Some(count) => count.get(),
+                    let actual = self.buffer_layout.bytes_per_row.unwrap_or_else(|| {
                         // this may happen for single-line updates
-                        None => {
-                            let block_size = format
-                                .block_size(Some(self.texture_base.aspect.map()))
-                                .unwrap();
-                            (self.size.width / block_width) * block_size
-                        }
-                    };
+                        let block_size = format
+                            .block_size(Some(self.texture_base.aspect.map()))
+                            .unwrap();
+                        (self.size.width / block_width) * block_size
+                    });
                     wgt::math::align_to(actual, d3d12_ty::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT)
                 },
             },

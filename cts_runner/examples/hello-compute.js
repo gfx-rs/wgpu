@@ -66,6 +66,7 @@ buf.set(numbers);
 storageBuffer.unmap();
 
 const computePipeline = device.createComputePipeline({
+  layout: "auto",
   compute: {
     module: shaderModule,
     entryPoint: "main",
@@ -91,7 +92,7 @@ const computePass = encoder.beginComputePass();
 computePass.setPipeline(computePipeline);
 computePass.setBindGroup(0, bindGroup);
 computePass.insertDebugMarker("compute collatz iterations");
-computePass.dispatch(numbers.length);
+computePass.dispatchWorkgroups(numbers.length);
 computePass.end();
 
 encoder.copyBufferToBuffer(storageBuffer, 0, stagingBuffer, 0, size);

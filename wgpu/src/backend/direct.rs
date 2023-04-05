@@ -299,12 +299,13 @@ impl Context {
         self.handle_error(sink_mutex, cause, "", None, string)
     }
 
+    #[track_caller]
     fn handle_error_fatal(
         &self,
         cause: impl Error + Send + Sync + 'static,
-        string: &'static str,
+        operation: &'static str,
     ) -> ! {
-        panic!("Error in {string}: {cause}");
+        panic!("Error in {operation}: {f}", f = self.format_error(&cause));
     }
 
     fn format_error(&self, err: &(impl Error + 'static)) -> String {
@@ -1548,9 +1549,8 @@ impl crate::Context for Context {
         (id, ())
     }
 
-    fn surface_drop(&self, _surface: &Self::SurfaceId, _surface_data: &Self::SurfaceData) {
-        //TODO: swapchain needs to hold the surface alive
-        //self.0.surface_drop(*surface)
+    fn surface_drop(&self, surface: &Self::SurfaceId, _surface_data: &Self::SurfaceData) {
+        self.0.surface_drop(*surface)
     }
 
     fn adapter_drop(&self, adapter: &Self::AdapterId, _adapter_data: &Self::AdapterData) {

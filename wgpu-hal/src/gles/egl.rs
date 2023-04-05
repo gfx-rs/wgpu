@@ -1222,7 +1222,10 @@ impl crate::Surface<super::Api> for Surface {
 
         let format_desc = device.shared.describe_texture_format(config.format);
         let gl = &device.shared.context.lock();
-        let renderbuffer = unsafe { gl.create_renderbuffer() }.unwrap();
+        let renderbuffer = unsafe { gl.create_renderbuffer() }.map_err(|error| {
+            log::error!("Internal swapchain renderbuffer creation failed: {error}");
+            crate::DeviceError::OutOfMemory
+        })?;
         unsafe { gl.bind_renderbuffer(glow::RENDERBUFFER, Some(renderbuffer)) };
         unsafe {
             gl.renderbuffer_storage(
@@ -1232,7 +1235,10 @@ impl crate::Surface<super::Api> for Surface {
                 config.extent.height as _,
             )
         };
-        let framebuffer = unsafe { gl.create_framebuffer() }.unwrap();
+        let framebuffer = unsafe { gl.create_framebuffer() }.map_err(|error| {
+            log::error!("Internal swapchain framebuffer creation failed: {error}");
+            crate::DeviceError::OutOfMemory
+        })?;
         unsafe { gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(framebuffer)) };
         unsafe {
             gl.framebuffer_renderbuffer(

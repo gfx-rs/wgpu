@@ -41,6 +41,7 @@ mod device;
 mod instance;
 mod shader_compilation;
 mod suballocation;
+mod types;
 mod view;
 
 use crate::auxil::{self, dxgi::result::HResult as _};
@@ -174,6 +175,7 @@ struct PrivateCapabilities {
     memory_architecture: MemoryArchitecture,
     #[allow(unused)] // TODO: Exists until windows-rs is standard, then it can probably be removed?
     heap_create_not_zeroed: bool,
+    casting_fully_typed_format_supported: bool,
 }
 
 #[derive(Default)]
@@ -517,6 +519,7 @@ pub struct BindGroup {
 }
 
 bitflags::bitflags! {
+    #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     struct TableTypes: u8 {
         const SRV_CBV_UAV = 1 << 0;
         const SAMPLERS = 1 << 1;

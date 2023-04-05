@@ -280,19 +280,30 @@ platform supports.";
 /// Define an exported macro named `$public` that expands to an expression if
 /// the feature `$feature` is enabled, or to a panic otherwise.
 ///
+/// This is used in the definition of `gfx_select!`, to dispatch the
+/// call to the appropriate backend, but panic if that backend was not
+/// compiled in.
+///
 /// For a call like this:
 ///
-///    define_backend_caller! { name, hidden_name, feature }
+/// ```ignore
+/// define_backend_caller! { name, private, "feature" if cfg_condition }
+/// ```
 ///
 /// define a macro `name`, used like this:
 ///
-///    name!(expr)
+/// ```ignore
+/// name!(expr)
+/// ```
 ///
-/// that expands to `expr` if `feature` is enabled, or a panic otherwise.
+/// that expands to `expr` if `#[cfg(cfg_condition)]` is enabled, or a
+/// panic otherwise. The panic message complains that `"feature"` is
+/// not enabled.
 ///
-/// Because of odd technical limitations on exporting macros expanded by other
-/// macros, you must supply both a public-facing name for the macro and a
-/// private name, which is never used outside this macro. For details:
+/// Because of odd technical limitations on exporting macros expanded
+/// by other macros, you must supply both a public-facing name for the
+/// macro and a private name, `$private`, which is never used
+/// outside this macro. For details:
 /// <https://github.com/rust-lang/rust/pull/52234#issuecomment-976702997>
 macro_rules! define_backend_caller {
     { $public:ident, $private:ident, $feature:literal if $cfg:meta } => {

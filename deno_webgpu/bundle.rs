@@ -1,6 +1,7 @@
 // Copyright 2018-2023 the Deno authors. All rights reserved. MIT license.
 
-use deno_core::error::{type_error, AnyError};
+use deno_core::error::type_error;
+use deno_core::error::AnyError;
 use deno_core::op;
 use deno_core::OpState;
 use deno_core::Resource;
@@ -20,10 +21,18 @@ impl Resource for WebGpuRenderBundleEncoder {
     }
 }
 
-pub(crate) struct WebGpuRenderBundle(pub(crate) wgpu_core::id::RenderBundleId);
+pub(crate) struct WebGpuRenderBundle(
+    pub(crate) super::Instance,
+    pub(crate) wgpu_core::id::RenderBundleId,
+);
 impl Resource for WebGpuRenderBundle {
     fn name(&self) -> Cow<str> {
         "webGPURenderBundle".into()
+    }
+
+    fn close(self: Rc<Self>) {
+        let instance = &self.0;
+        gfx_select!(self.1 => instance.render_bundle_drop(self.1));
     }
 }
 
@@ -47,7 +56,7 @@ pub fn op_webgpu_create_render_bundle_encoder(
     let device_resource = state
         .resource_table
         .get::<super::WebGpuDevice>(args.device_rid)?;
-    let device = device_resource.0;
+    let device = device_resource.1;
 
     let depth_stencil =
         args.depth_stencil_format
@@ -148,7 +157,7 @@ pub fn op_webgpu_render_bundle_encoder_set_bind_group(
         wgpu_core::command::bundle_ffi::wgpu_render_bundle_set_bind_group(
             &mut render_bundle_encoder_resource.0.borrow_mut(),
             index,
-            bind_group_resource.0,
+            bind_group_resource.1,
             dynamic_offsets_data.as_ptr(),
             dynamic_offsets_data.len(),
         );
@@ -234,7 +243,7 @@ pub fn op_webgpu_render_bundle_encoder_set_pipeline(
 
     wgpu_core::command::bundle_ffi::wgpu_render_bundle_set_pipeline(
         &mut render_bundle_encoder_resource.0.borrow_mut(),
-        render_pipeline_resource.0,
+        render_pipeline_resource.1,
     );
 
     Ok(WebGpuResult::empty())
@@ -262,7 +271,7 @@ pub fn op_webgpu_render_bundle_encoder_set_index_buffer(
     render_bundle_encoder_resource
         .0
         .borrow_mut()
-        .set_index_buffer(buffer_resource.0, index_format, offset, size);
+        .set_index_buffer(buffer_resource.1, index_format, offset, size);
 
     Ok(WebGpuResult::empty())
 }
@@ -294,7 +303,7 @@ pub fn op_webgpu_render_bundle_encoder_set_vertex_buffer(
     wgpu_core::command::bundle_ffi::wgpu_render_bundle_set_vertex_buffer(
         &mut render_bundle_encoder_resource.0.borrow_mut(),
         slot,
-        buffer_resource.0,
+        buffer_resource.1,
         offset,
         size,
     );
@@ -368,7 +377,7 @@ pub fn op_webgpu_render_bundle_encoder_draw_indirect(
 
     wgpu_core::command::bundle_ffi::wgpu_render_bundle_draw_indirect(
         &mut render_bundle_encoder_resource.0.borrow_mut(),
-        buffer_resource.0,
+        buffer_resource.1,
         indirect_offset,
     );
 

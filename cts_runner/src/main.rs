@@ -6,11 +6,10 @@ use std::{
 
 use deno_core::anyhow::anyhow;
 use deno_core::error::AnyError;
-use deno_core::located_script_name;
 use deno_core::op;
 use deno_core::resolve_url_or_path;
-use deno_core::serde_json;
 use deno_core::serde_json::json;
+use deno_core::v8;
 use deno_core::JsRuntime;
 use deno_core::RuntimeOptions;
 use deno_core::ZeroCopyBuf;
@@ -37,11 +36,11 @@ async fn run() -> Result<(), AnyError> {
         module_loader: Some(Rc::new(deno_core::FsModuleLoader)),
         get_error_class_fn: Some(&get_error_class_name),
         extensions: vec![
-            deno_webidl::init(),
-            deno_console::init(),
-            deno_url::init(),
-            deno_web::init::<Permissions>(BlobStore::default(), None),
-            deno_webgpu::init(true),
+            deno_webidl::init_esm(),
+            deno_console::init_esm(),
+            deno_url::init_ops_and_esm(),
+            deno_web::init_ops_and_esm::<Permissions>(BlobStore::default(), None),
+            deno_webgpu::init_ops_and_esm(true),
             extension(),
         ],
         ..Default::default()
@@ -49,8 +48,23 @@ async fn run() -> Result<(), AnyError> {
     let mut isolate = JsRuntime::new(options);
     let args = args_iter.collect::<Vec<String>>();
     let cfg = json!({"args": args, "cwd": env::current_dir().unwrap().to_string_lossy() });
-    let bootstrap_script = format!("globalThis.bootstrap({})", serde_json::to_string(&cfg)?);
-    isolate.execute_script(&located_script_name!(), &bootstrap_script)?;
+
+    {
+        let context = isolate.global_context();
+        let scope = &mut isolate.handle_scope();
+        let context_local = v8::Local::new(scope, context);
+        let global_obj = context_local.global(scope);
+        let bootstrap_str = v8::String::new(scope, "bootstrap").unwrap();
+        let bootstrap_fn = global_obj.get(scope, bootstrap_str.into()).unwrap();
+        let bootstrap_fn = v8::Local::<v8::Function>::try_from(bootstrap_fn).unwrap();
+
+        let options_v8 = deno_core::serde_v8::to_v8(scope, cfg).unwrap();
+        let bootstrap_fn = v8::Local::new(scope, bootstrap_fn);
+        let undefined = v8::undefined(scope);
+        bootstrap_fn
+            .call(scope, undefined.into(), &[options_v8])
+            .unwrap();
+    }
 
     isolate.op_state().borrow_mut().put(Permissions {});
 
@@ -71,16 +85,13 @@ async fn run() -> Result<(), AnyError> {
 }
 
 fn extension() -> deno_core::Extension {
-    deno_core::Extension::builder("bootstrap")
+    deno_core::Extension::builder(env!("CARGO_PKG_NAME"))
         .ops(vec![
             op_exit::decl(),
             op_read_file_sync::decl(),
             op_write_file_sync::decl(),
         ])
-        .js(deno_core::include_js_files!(
-          prefix "deno:cts_runner",
-          "bootstrap.js",
-        ))
+        .esm(deno_core::include_js_files!("bootstrap.js",))
         .build()
 }
 
