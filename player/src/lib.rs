@@ -137,12 +137,12 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
                     .unwrap();
                 }
                 trace::Command::BuildAccelerationStructuresUnsafeTlas { blas, tlas } => {
-                    let blas_iter = (&blas).into_iter().map(|x| {
+                    let blas_iter = blas.iter().map(|x| {
                         let geometries = match &x.geometries {
                             wgc::ray_tracing::TraceBlasGeometries::TriangleGeometries(
                                 triangle_geometries,
                             ) => {
-                                let iter = triangle_geometries.into_iter().map(|tg| {
+                                let iter = triangle_geometries.iter().map(|tg| {
                                     wgc::ray_tracing::BlasTriangleGeometry {
                                         size: &tg.size,
                                         vertex_buffer: tg.vertex_buffer,
@@ -159,7 +159,7 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
                         };
                         wgc::ray_tracing::BlasBuildEntry {
                             blas_id: x.blas_id,
-                            geometries: geometries,
+                            geometries,
                         }
                     });
 
@@ -175,12 +175,12 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
                     .unwrap();
                 }
                 trace::Command::BuildAccelerationStructures { blas, tlas } => {
-                    let blas_iter = (&blas).into_iter().map(|x| {
+                    let blas_iter = blas.iter().map(|x| {
                         let geometries = match &x.geometries {
                             wgc::ray_tracing::TraceBlasGeometries::TriangleGeometries(
                                 triangle_geometries,
                             ) => {
-                                let iter = triangle_geometries.into_iter().map(|tg| {
+                                let iter = triangle_geometries.iter().map(|tg| {
                                     wgc::ray_tracing::BlasTriangleGeometry {
                                         size: &tg.size,
                                         vertex_buffer: tg.vertex_buffer,
@@ -197,22 +197,20 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
                         };
                         wgc::ray_tracing::BlasBuildEntry {
                             blas_id: x.blas_id,
-                            geometries: geometries,
+                            geometries,
                         }
                     });
 
-                    let tlas_iter = (&tlas).into_iter().map(|x| {
+                    let tlas_iter = tlas.iter().map(|x| {
                         let instances = x.instances.iter().map(|instance| {
-                            if let Some(ref instance) = instance {
-                                Some(wgc::ray_tracing::TlasInstance {
+                            instance
+                                .as_ref()
+                                .map(|instance| wgc::ray_tracing::TlasInstance {
                                     blas_id: instance.blas_id,
                                     transform: &instance.transform,
                                     custom_index: instance.custom_index,
                                     mask: instance.mask,
                                 })
-                            } else {
-                                None
-                            }
                         });
                         wgc::ray_tracing::TlasPackage {
                             tlas_id: x.tlas_id,

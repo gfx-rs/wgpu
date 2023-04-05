@@ -4041,21 +4041,17 @@ where
             }
         });
 
-        let mut tlas = tlas.into_iter().map(|e: DynContextTlasPackage| {
+        let tlas = tlas.into_iter().map(|e: DynContextTlasPackage| {
             let instances =
                 e.instances
                     .into_iter()
                     .map(|instance: Option<DynContextTlasInstance>| {
-                        if let Some(instance) = instance {
-                            Some(ContextTlasInstance {
-                                blas_id: <T::BlasId>::from(instance.blas),
-                                transform: instance.transform,
-                                custom_index: instance.custom_index,
-                                mask: instance.mask,
-                            })
-                        } else {
-                            None
-                        }
+                        instance.map(|instance| ContextTlasInstance {
+                            blas_id: <T::BlasId>::from(instance.blas),
+                            transform: instance.transform,
+                            custom_index: instance.custom_index,
+                            mask: instance.mask,
+                        })
                     });
             ContextTlasPackage {
                 tlas_id: <T::TlasId>::from(e.tlas_id),

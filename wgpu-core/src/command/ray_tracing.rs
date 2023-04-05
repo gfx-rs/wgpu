@@ -6,11 +6,11 @@ use crate::{
     init_tracker::MemoryInitKind,
     ray_tracing::{
         tlas_instance_into_bytes, BlasAction, BlasBuildEntry, BlasGeometries,
-        BuildAccelerationStructureError, TlasAction, TlasBuildEntry, TlasInstance, TlasPackage,
-        TraceTlasInstance, ValidateBlasActionsError, ValidateTlasActionsError,
+        BuildAccelerationStructureError, TlasAction, TlasBuildEntry, TlasPackage,
+        ValidateBlasActionsError, ValidateTlasActionsError,
     },
-    resource::{Blas, StagingBuffer, Tlas},
-    FastHashMap, FastHashSet,
+    resource::{Blas, Tlas},
+    FastHashSet,
 };
 
 use hal::{CommandEncoder, Device};
@@ -79,7 +79,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .collect();
 
         #[cfg(feature = "trace")]
-        let mut trace_tlas: Vec<TlasBuildEntry> = tlas_iter.collect();
+        let trace_tlas: Vec<TlasBuildEntry> = tlas_iter.collect();
 
         #[cfg(feature = "trace")]
         if let Some(ref mut list) = cmd_buf.commands {
@@ -95,12 +95,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         #[cfg(feature = "trace")]
-        let blas_iter = (&trace_blas).into_iter().map(|x| {
+        let blas_iter = trace_blas.iter().map(|x| {
             let geometries = match &x.geometries {
-                crate::ray_tracing::TraceBlasGeometries::TriangleGeometries(
-                    triangle_geometries,
+                &crate::ray_tracing::TraceBlasGeometries::TriangleGeometries(
+                    ref triangle_geometries,
                 ) => {
-                    let iter = triangle_geometries.into_iter().map(|tg| {
+                    let iter = triangle_geometries.iter().map(|tg| {
                         crate::ray_tracing::BlasTriangleGeometry {
                             size: &tg.size,
                             vertex_buffer: tg.vertex_buffer,
@@ -117,12 +117,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             };
             BlasBuildEntry {
                 blas_id: x.blas_id,
-                geometries: geometries,
+                geometries,
             }
         });
 
         #[cfg(feature = "trace")]
-        let tlas_iter = (&mut trace_tlas).iter();
+        let tlas_iter = trace_tlas.iter();
 
         let mut input_barriers = Vec::<hal::BufferBarrier<A>>::new();
 
@@ -637,16 +637,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 let instances = x
                     .instances
                     .map(|instance| {
-                        if let Some(instance) = instance {
-                            Some(TraceTlasInstance {
-                                blas_id: instance.blas_id,
-                                transform: instance.transform.clone(),
-                                custom_index: instance.custom_index,
-                                mask: instance.mask,
-                            })
-                        } else {
-                            None
-                        }
+                        instance.map(|instance| crate::ray_tracing::TraceTlasInstance {
+                            blas_id: instance.blas_id,
+                            transform: *instance.transform,
+                            custom_index: instance.custom_index,
+                            mask: instance.mask,
+                        })
                     })
                     .collect();
                 crate::ray_tracing::TraceTlasPackage {
@@ -666,12 +662,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         #[cfg(feature = "trace")]
-        let blas_iter = (&trace_blas).into_iter().map(|x| {
+        let blas_iter = trace_blas.iter().map(|x| {
             let geometries = match &x.geometries {
-                crate::ray_tracing::TraceBlasGeometries::TriangleGeometries(
-                    triangle_geometries,
+                &crate::ray_tracing::TraceBlasGeometries::TriangleGeometries(
+                    ref triangle_geometries,
                 ) => {
-                    let iter = triangle_geometries.into_iter().map(|tg| {
+                    let iter = triangle_geometries.iter().map(|tg| {
                         crate::ray_tracing::BlasTriangleGeometry {
                             size: &tg.size,
                             vertex_buffer: tg.vertex_buffer,
@@ -688,25 +684,21 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             };
             BlasBuildEntry {
                 blas_id: x.blas_id,
-                geometries: geometries,
+                geometries,
             }
         });
 
-        // dbg!(&trace_tlas);
-
         #[cfg(feature = "trace")]
-        let tlas_iter = (&trace_tlas).into_iter().map(|x| {
+        let tlas_iter = trace_tlas.iter().map(|x| {
             let instances = x.instances.iter().map(|instance| {
-                if let Some(instance) = instance {
-                    Some(TlasInstance {
+                instance
+                    .as_ref()
+                    .map(|instance| crate::ray_tracing::TlasInstance {
                         blas_id: instance.blas_id,
                         transform: &instance.transform,
                         custom_index: instance.custom_index,
                         mask: instance.mask,
                     })
-                } else {
-                    None
-                }
             });
             TlasPackage {
                 tlas_id: x.tlas_id,
@@ -1042,29 +1034,27 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let mut dependencies = Vec::new();
 
             let mut instance_count = 0;
-            for instance in entry.instances {
-                if let Some(instance) = instance {
-                    // TODO validation
-                    let blas = cmd_buf
-                        .trackers
-                        .blas_s
-                        .add_single(&blas_guard, instance.blas_id)
-                        .ok_or(BuildAccelerationStructureError::InvalidBlasForInstance(
-                            instance.blas_id,
-                        ))?;
+            for instance in entry.instances.flatten() {
+                // TODO validation
+                let blas = cmd_buf
+                    .trackers
+                    .blas_s
+                    .add_single(&blas_guard, instance.blas_id)
+                    .ok_or(BuildAccelerationStructureError::InvalidBlasForInstance(
+                        instance.blas_id,
+                    ))?;
 
-                    instance_buffer_staging_source
-                        .extend(tlas_instance_into_bytes::<A>(&instance, blas.handle));
+                instance_buffer_staging_source
+                    .extend(tlas_instance_into_bytes::<A>(&instance, blas.handle));
 
-                    instance_count += 1;
+                instance_count += 1;
 
-                    dependencies.push(instance.blas_id);
+                dependencies.push(instance.blas_id);
 
-                    cmd_buf.blas_actions.push(BlasAction {
-                        id: instance.blas_id,
-                        kind: crate::ray_tracing::BlasActionKind::Use,
-                    });
-                }
+                cmd_buf.blas_actions.push(BlasAction {
+                    id: instance.blas_id,
+                    kind: crate::ray_tracing::BlasActionKind::Use,
+                });
             }
 
             cmd_buf.tlas_actions.push(TlasAction {
@@ -1103,7 +1093,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .map_err(crate::device::DeviceError::from)?
         };
 
-        let staging_buffer = if instance_buffer_staging_source.len() > 0 {
+        let staging_buffer = if !instance_buffer_staging_source.is_empty() {
             unsafe {
                 let staging_buffer = device
                     .raw
@@ -1225,7 +1215,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 }));
             }
 
-            for (tlas, _entries, _scratch_buffer_offset, range) in &tlas_storage {
+            for &(tlas, ref _entries, ref _scratch_buffer_offset, ref range) in &tlas_storage {
                 let size = (range.end - range.start) as u64;
                 if size == 0 {
                     continue;

@@ -6,7 +6,7 @@
 /// - maybe share scratch and instance staging buffer allocation
 /// - partial instance buffer uploads (api surface already designed with this in mind)
 /// - (non performance extract function in build (rust function extraction with guards is a pain))
-use std::{num::NonZeroU64, ptr, slice};
+use std::{num::NonZeroU64, slice};
 
 use crate::{
     command::CommandEncoderError,
@@ -235,7 +235,7 @@ pub struct TraceTlasPackage {
     pub lowest_unmodified: u32,
 }
 
-pub(crate) fn getRawTlasInstanceSize<A: HalApi>() -> usize {
+pub(crate) fn get_raw_tlas_instance_size<A: HalApi>() -> usize {
     match A::VARIANT {
         wgt::Backend::Empty => 0,
         wgt::Backend::Vulkan => 64,
@@ -261,7 +261,7 @@ pub(crate) fn tlas_instance_into_bytes<A: HalApi>(
         wgt::Backend::Vulkan => {
             const MAX_U24: u32 = (1u32 << 24u32) - 1u32;
             let temp = RawTlasInstance {
-                transform: instance.transform.clone(),
+                transform: *instance.transform,
                 custom_index_and_mask: (instance.custom_index & MAX_U24)
                     | (u32::from(instance.mask) << 24),
                 shader_binding_table_record_offset_and_flags: 0,

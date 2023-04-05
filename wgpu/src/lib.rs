@@ -3068,16 +3068,12 @@ impl CommandEncoder {
 
         let mut tlas = tlas.into_iter().map(|e: &TlasPackage| {
             let instances = e.instances.iter().map(|instance: &Option<TlasInstance>| {
-                if let Some(instance) = instance {
-                    Some(DynContextTlasInstance {
-                        blas: instance.blas,
-                        transform: &instance.transform,
-                        custom_index: instance.custom_index,
-                        mask: instance.mask,
-                    })
-                } else {
-                    None
-                }
+                instance.as_ref().map(|instance| DynContextTlasInstance {
+                    blas: instance.blas,
+                    transform: &instance.transform,
+                    custom_index: instance.custom_index,
+                    mask: instance.mask,
+                })
             });
             DynContextTlasPackage {
                 tlas_id: e.tlas.id,
@@ -4787,12 +4783,16 @@ static_assertions::assert_impl_all!(TlasBuildEntry: Send, Sync);
 #[derive(Debug, Clone)]
 pub struct TlasInstance {
     blas: ObjectId,
+    /// TODO Docu
     pub transform: [f32; 12],
+    /// TODO Docu
     pub custom_index: u32,
+    /// TODO Docu
     pub mask: u8,
 }
 
 impl TlasInstance {
+    /// TODO Docu
     pub fn new(blas: &Blas, transform: [f32; 12], custom_index: u32, mask: u8) -> Self {
         Self {
             blas: blas.id,
@@ -4802,6 +4802,7 @@ impl TlasInstance {
         }
     }
 
+    /// TODO Docu
     pub fn set_blas(&mut self, blas: &Blas) {
         self.blas = blas.id;
     }
@@ -4814,6 +4815,7 @@ pub(crate) struct DynContextTlasInstance<'a> {
     mask: u8,
 }
 
+/// TODO Docu
 pub struct ContextTlasInstance<'a, T: Context> {
     blas_id: T::BlasId,
     transform: &'a [f32; 12],
@@ -4821,6 +4823,7 @@ pub struct ContextTlasInstance<'a, T: Context> {
     mask: u8,
 }
 
+/// TODO Docu
 pub struct TlasPackage {
     tlas: Tlas,
     instances: Vec<Option<TlasInstance>>,

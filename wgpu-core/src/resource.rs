@@ -8,7 +8,6 @@ use crate::{
     Label, LifeGuard, RefCount, Stored,
 };
 
-use parking_lot::Mutex;
 use smallvec::SmallVec;
 use thiserror::Error;
 

@@ -2,11 +2,10 @@ use crate::{
     context::{ObjectId, Unused},
     AdapterInfo, BindGroupDescriptor, BindGroupLayoutDescriptor, BindingResource, BufferBinding,
     CommandEncoderDescriptor, ComputePassDescriptor, ComputePipelineDescriptor,
-    ContextTlasInstance, ContextTlasPackage, DownlevelCapabilities, Features, Label, Limits,
-    LoadOp, MapMode, Operations, PipelineLayoutDescriptor, RenderBundleEncoderDescriptor,
-    RenderPipelineDescriptor, SamplerDescriptor, ShaderModuleDescriptor,
-    ShaderModuleDescriptorSpirV, ShaderSource, SurfaceStatus, TextureDescriptor,
-    TextureViewDescriptor, UncapturedErrorHandler,
+    ContextTlasInstance, DownlevelCapabilities, Features, Label, Limits, LoadOp, MapMode,
+    Operations, PipelineLayoutDescriptor, RenderBundleEncoderDescriptor, RenderPipelineDescriptor,
+    SamplerDescriptor, ShaderModuleDescriptor, ShaderModuleDescriptorSpirV, ShaderSource,
+    SurfaceStatus, TextureDescriptor, TextureViewDescriptor, UncapturedErrorHandler,
 };
 
 use arrayvec::ArrayVec;
@@ -3106,7 +3105,7 @@ impl crate::Context for Context {
             }
         });
 
-        let mut tlas = tlas.into_iter().map(|e| {
+        let tlas = tlas.into_iter().map(|e| {
             let instances =
                 e.instances
                     .into_iter()

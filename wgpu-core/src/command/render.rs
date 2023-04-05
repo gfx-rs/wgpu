@@ -1246,8 +1246,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let (query_set_guard, mut token) = hub.query_sets.read(&mut token);
             let (buffer_guard, mut token) = hub.buffers.read(&mut token);
             let (texture_guard, mut token) = hub.textures.read(&mut token);
-            let (view_guard, mut token) = hub.texture_views.read(&mut token);
-            let (tlas_guard, _) = hub.tlas_s.read(&mut token);
+            let (view_guard, _) = hub.texture_views.read(&mut token);
 
             log::trace!(
                 "Encoding render pass begin in command buffer {:?}",
@@ -1359,7 +1358,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                         cmd_buf.tlas_actions.extend(
                             bind_group.used.acceleration_structures.used().map(|id| {
-                                let tlas = &tlas_guard[id];
                                 crate::ray_tracing::TlasAction {
                                     id: id.0,
                                     kind: crate::ray_tracing::TlasActionKind::Use,
